@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>opencmdb — documentation that corrects itself</title>
+<meta name="description" content="A self-hosted, single-binary reconciliation engine that continuously compares your network's observed state against your declared state. The gap is the product.">
+<meta property="og:title" content="opencmdb">
+<meta property="og:description" content="Documentation that corrects itself. Observed vs declared — the gap is the product.">
+<meta property="og:type" content="website">
+<style>
+  :root{
+    --bg:#0d1013; --bg-2:#14181d; --panel:#181d23; --border:#262d36;
+    --ink:#e8edf2; --ink-2:#aab4c0; --ink-3:#7c8896;
+    --accent:#f5a524; --accent-ink:#1a1205; --accent-soft:rgba(245,165,36,.12);
+    --link:#7cc4ff; --ok:#4ec9a3; --warn:#f5a524;
+    --radius:14px; --maxw:1080px;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  :root[data-theme="light"]{
+    --bg:#f7f8fa; --bg-2:#eef1f4; --panel:#ffffff; --border:#e0e5ea;
+    --ink:#161a1f; --ink-2:#48525d; --ink-3:#6b7783;
+    --accent:#b9740a; --accent-ink:#fff; --accent-soft:rgba(185,116,10,.10);
+    --link:#0a6ed1; --ok:#0a8f66; --warn:#b9740a;
+  }
+  @media (prefers-color-scheme:light){
+    :root:not([data-theme="dark"]){
+      --bg:#f7f8fa; --bg-2:#eef1f4; --panel:#ffffff; --border:#e0e5ea;
+      --ink:#161a1f; --ink-2:#48525d; --ink-3:#6b7783;
+      --accent:#b9740a; --accent-ink:#fff; --accent-soft:rgba(185,116,10,.10);
+      --link:#0a6ed1; --ok:#0a8f66; --warn:#b9740a;
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;-webkit-font-smoothing:antialiased;font-size:17px}
+  a{color:var(--link);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+  h1,h2,h3{line-height:1.15;letter-spacing:-.02em;font-weight:700}
+  code,kbd,.mono{font-family:var(--mono);font-size:.92em}
+  ::selection{background:var(--accent);color:var(--accent-ink)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+  /* nav */
+  header.nav{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 82%,transparent);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+  .nav .wrap{display:flex;align-items:center;gap:20px;height:60px}
+  .brand{font-weight:800;letter-spacing:-.03em;font-size:1.15rem;color:var(--ink)}
+  .brand .dot{color:var(--accent)}
+  .nav nav{margin-left:auto;display:flex;gap:22px;align-items:center}
+  .nav nav a{color:var(--ink-2);font-size:.93rem;font-weight:500}
+  .nav nav a:hover{color:var(--ink);text-decoration:none}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:10px;
+    font-weight:600;font-size:.92rem;border:1px solid var(--border);color:var(--ink);
+    background:var(--panel);cursor:pointer;transition:transform .08s ease,border-color .15s}
+  .btn:hover{text-decoration:none;border-color:var(--accent);transform:translateY(-1px)}
+  .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .btn.primary:hover{filter:brightness(1.06)}
+  .toggle{background:none;border:1px solid var(--border);border-radius:9px;width:38px;height:38px;
+    cursor:pointer;color:var(--ink-2);font-size:1.05rem;line-height:1}
+  .toggle:hover{color:var(--ink);border-color:var(--accent)}
+
+  /* hero */
+  .hero{padding:84px 0 64px;position:relative;overflow:hidden}
+  .hero::before{content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(60% 55% at 50% -8%,var(--accent-soft),transparent 70%)}
+  .hero .wrap{position:relative}
+  .pill{display:inline-flex;align-items:center;gap:8px;font-size:.8rem;font-weight:600;
+    padding:6px 13px;border-radius:999px;border:1px solid var(--border);background:var(--panel);
+    color:var(--ink-2);margin-bottom:26px}
+  .pill .live{width:8px;height:8px;border-radius:50%;background:var(--warn);
+    box-shadow:0 0 0 4px color-mix(in srgb,var(--warn) 20%,transparent)}
+  .hero h1{font-size:clamp(2.4rem,6vw,4rem);margin:0 0 20px;max-width:16ch;font-weight:800}
+  .hero h1 .grad{background:linear-gradient(120deg,var(--accent),#ffd27a);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:clamp(1.05rem,2.4vw,1.32rem);color:var(--ink-2);max-width:60ch;margin:0 0 34px}
+  .cta{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .cta .note{color:var(--ink-3);font-size:.86rem}
+
+  /* the gap visual */
+  .gap-viz{margin:64px 0 0;display:grid;grid-template-columns:1fr auto 1fr;gap:0;
+    border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--panel)}
+  .gap-col{padding:24px 22px}
+  .gap-col h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.12em;margin:0 0 16px;
+    color:var(--ink-3);font-weight:700}
+  .gap-row{font-family:var(--mono);font-size:.86rem;padding:9px 0;border-bottom:1px dashed var(--border);
+    color:var(--ink-2);display:flex;justify-content:space-between;gap:10px}
+  .gap-row:last-child{border-bottom:0}
+  .gap-row b{color:var(--ink);font-weight:600}
+  .gap-mid{background:var(--accent-soft);border-left:1px solid var(--border);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 18px;min-width:140px}
+  .gap-mid .label{font-size:.72rem;text-transform:uppercase;letter-spacing:.14em;color:var(--warn);font-weight:800;margin-bottom:6px}
+  .gap-mid .big{font-family:var(--mono);font-size:1.7rem;font-weight:700;color:var(--ink)}
+  .gap-mid .sub{font-size:.78rem;color:var(--ink-3);text-align:center;margin-top:6px}
+
+  /* sections */
+  section{padding:72px 0;border-top:1px solid var(--border)}
+  .eyebrow{font-size:.78rem;text-transform:uppercase;letter-spacing:.14em;color:var(--accent);font-weight:700;margin:0 0 12px}
+  section h2{font-size:clamp(1.6rem,3.6vw,2.3rem);margin:0 0 16px}
+  section .intro{color:var(--ink-2);max-width:64ch;font-size:1.06rem;margin:0 0 40px}
+
+  .grid{display:grid;gap:18px}
+  .cols-3{grid-template-columns:repeat(3,1fr)}
+  .cols-2{grid-template-columns:repeat(2,1fr)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:24px}
+  .card h3{font-size:1.08rem;margin:0 0 10px;display:flex;align-items:center;gap:10px}
+  .card p{margin:0;color:var(--ink-2);font-size:.97rem}
+  .card .ic{width:34px;height:34px;flex:0 0 34px;border-radius:9px;background:var(--accent-soft);
+    display:grid;place-items:center;color:var(--accent);font-size:1.05rem}
+
+  /* feature table */
+  .ftable{width:100%;border-collapse:collapse;font-size:.96rem;border:1px solid var(--border);
+    border-radius:var(--radius);overflow:hidden}
+  .ftable td{padding:13px 18px;border-top:1px solid var(--border);color:var(--ink-2)}
+  .ftable tr:first-child td{border-top:0}
+  .ftable td:first-child{color:var(--ink)}
+  .tag{font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap}
+  .tag.mvp{background:var(--accent-soft);color:var(--accent)}
+  .tag.growth{background:color-mix(in srgb,var(--link) 15%,transparent);color:var(--link)}
+  .tag.vision{background:var(--bg-2);color:var(--ink-3)}
+
+  /* code frontier */
+  pre.tree{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);
+    padding:22px;overflow-x:auto;font-family:var(--mono);font-size:.86rem;color:var(--ink-2);line-height:1.7;margin:0}
+  pre.tree b{color:var(--ink)}
+  pre.tree .c{color:var(--ink-3)}
+  pre.tree .a{color:var(--accent)}
+
+  .install{background:#0a0c0e;border:1px solid var(--border);border-radius:var(--radius);
+    padding:20px 22px;font-family:var(--mono);font-size:.9rem;color:#cfe0d6;overflow-x:auto}
+  :root[data-theme="light"] .install{background:#12151a;color:#cfe0d6}
+  .install .p{color:var(--accent)}
+  .install .cm{color:var(--ink-3)}
+
+  .status-banner{background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border));
+    border-radius:var(--radius);padding:22px 24px;display:flex;gap:16px;align-items:flex-start}
+  .status-banner .ic{font-size:1.3rem}
+  .status-banner p{margin:0;color:var(--ink-2);font-size:.98rem}
+  .status-banner b{color:var(--ink)}
+
+  ul.clean{list-style:none;padding:0;margin:0;display:grid;gap:14px}
+  ul.clean li{padding-left:26px;position:relative;color:var(--ink-2)}
+  ul.clean li::before{content:"→";position:absolute;left:0;color:var(--accent);font-weight:700}
+  ul.clean b{color:var(--ink)}
+
+  footer{border-top:1px solid var(--border);padding:44px 0;color:var(--ink-3);font-size:.9rem}
+  footer .wrap{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:center}
+  footer a{color:var(--ink-2)}
+
+  @media (max-width:820px){
+    .cols-3{grid-template-columns:1fr}.cols-2{grid-template-columns:1fr}
+    .gap-viz{grid-template-columns:1fr}
+    .gap-mid{flex-direction:row;gap:14px;border:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+    .nav nav a:not(.btn){display:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <span class="brand">open<span class="dot">cmdb</span></span>
+    <nav>
+      <a href="#idea">The idea</a>
+      <a href="#features">Scope</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#status">Status</a>
+      <a class="btn" href="https://github.com/guycorbaz/opencmdb">GitHub</a>
+      <button class="toggle" id="themeBtn" aria-label="Toggle light/dark theme" title="Toggle theme">◐</button>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <span class="pill"><span class="live"></span> Early development · planning complete · the skeleton builds</span>
+    <h1>Documentation that <span class="grad">corrects itself.</span></h1>
+    <p class="lede">A self-hosted, single-binary reconciliation engine that continuously compares your network's <b>observed</b> state against the <b>declared</b> state you documented — and turns the gap between them into something you can act on.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/guycorbaz/opencmdb">★ View on GitHub</a>
+      <a class="btn" href="#idea">How it works</a>
+      <span class="note">Rust · MariaDB · UniFi-first · AGPL-3.0</span>
+    </div>
+
+    <div class="gap-viz" aria-label="Observed versus declared, and the gap between them">
+      <div class="gap-col">
+        <h3>Observed · what's really there</h3>
+        <div class="gap-row"><span>device on <b>.53</b></span><span>seen 2 min ago</span></div>
+        <div class="gap-row"><span>unknown MAC</span><span><b>new</b></span></div>
+        <div class="gap-row"><span>two devices, one IP</span><span><b>conflict</b></span></div>
+      </div>
+      <div class="gap-mid">
+        <span class="label">the gap</span>
+        <span class="big">is the product</span>
+        <span class="sub">linked, never merged</span>
+      </div>
+      <div class="gap-col">
+        <h3>Declared · what you wrote down</h3>
+        <div class="gap-row"><span><b>.53</b> free</span><span>documented</span></div>
+        <div class="gap-row"><span>host <b>unseen 30d</b></span><span>stale?</span></div>
+        <div class="gap-row"><span>owner of <b>.1</b></span><span>which device?</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="idea">
+  <div class="wrap">
+    <p class="eyebrow">The core idea</p>
+    <h2>Every tool shows you one half. opencmdb holds both.</h2>
+    <p class="intro">Your controller and your scanner see the network as it <em>is</em> — live, but undocumented. Your spreadsheet and your IPAM hold what you <em>meant</em> — documented, but stale the moment reality moves. opencmdb keeps both side by side, links them, and never merges them. Every disagreement becomes a gap you resolve one gesture at a time.</p>
+    <div class="grid cols-3">
+      <div class="card"><h3><span class="ic">◎</span> It reconciles</h3><p>An unknown device appeared; a documented IP went quiet; two hosts fight over one address. Each becomes a triage-inbox item — with the one detail your controller's alarm omits: <b>which device.</b></p></div>
+      <div class="card"><h3><span class="ic">⊙</span> It abstains honestly</h3><p>When the engine genuinely cannot identify something, it <b>says so, visibly, and counts it</b> — grouped by cause — rather than guessing. A false merge is catastrophic and has no clean undo; the engine is built to never merge on doubt.</p></div>
+      <div class="card"><h3><span class="ic">◈</span> It never moralises</h3><p>A wall of gaps on first commissioning is normal, not a reproach. You decide what to document and what to accept — and the tool remembers, so effort falls week over week.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="why" style="background:var(--bg-2)">
+  <div class="wrap">
+    <p class="eyebrow">Why it exists</p>
+    <h2>The reconciliation engine you can actually run.</h2>
+    <div class="grid cols-2">
+      <ul class="clean">
+        <li><b>Reconciliation, unpaywalled.</b> The observed-vs-declared loop is a top-of-market <em>paid</em> feature elsewhere. Here it is the whole point, free and self-hosted.</li>
+        <li><b>Radically smaller footprint.</b> One binary + your MariaDB. No Redis, no workers, no queue, no reverse-proxy tax — two moving parts against the incumbents' five.</li>
+      </ul>
+      <ul class="clean">
+        <li><b>UniFi-first, zero privilege.</b> Reads clients, switch ports, SSIDs, VLANs and DHCP leases over plain outbound HTTP — no network privilege required.</li>
+        <li><b>For the operator who runs their own infrastructure</b> — the advanced home lab, the small business without a dedicated IT team — not the enterprise IPAM desk.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <p class="eyebrow">Scope, phased on purpose</p>
+    <h2>What it will do.</h2>
+    <p class="intro">The MVP is the reconciliation core, landed correct. Richer surfaces are deliberately deferred so the foundation is right before it is decorated.</p>
+    <table class="ftable">
+      <tr><td>Observed-vs-declared reconciliation with a triage inbox (document · accept-gap · attach · exclude · snooze)</td><td><span class="tag mvp">MVP</span></td></tr>
+      <tr><td>Composite <b>device identity</b> — survives MAC randomisation, multi-NIC hosts, shared-hardware VMs</td><td><span class="tag mvp">MVP</span></td></tr>
+      <tr><td>IPAM: per-subnet occupancy, find a free IP, <em>which device</em> owns a conflicting address</td><td><span class="tag mvp">MVP</span></td></tr>
+      <tr><td>First-class UniFi connector (zero privilege) + generic ARP/ping scanner</td><td><span class="tag mvp">MVP</span></td></tr>
+      <tr><td>Honest source state — blind vs merely reduced, never conflated</td><td><span class="tag mvp">MVP</span></td></tr>
+      <tr><td>Software &amp; applications, owner and criticality; "Hosted here" on a device record</td><td><span class="tag mvp">MVP</span></td></tr>
+      <tr><td>Alerts (unknown device · stale IP · IP conflict with identification) → in-app + webhook</td><td><span class="tag mvp">MVP</span></td></tr>
+      <tr><td>Read-only JSON API + authenticated Prometheus <code>/metrics</code>; bilingual EN/FR UI</td><td><span class="tag mvp">MVP</span></td></tr>
+      <tr><td>Blast-radius / impact view, interactive topology map, more connectors (Omada, Mikrotik, pfSense/OPNsense, hypervisors)</td><td><span class="tag growth">Growth</span></td></tr>
+      <tr><td>A stable, versioned public API</td><td><span class="tag vision">Vision</span></td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="principles" style="background:var(--bg-2)">
+  <div class="wrap">
+    <p class="eyebrow">Design principles</p>
+    <h2>Load-bearing, and enforced in code.</h2>
+    <div class="grid cols-2">
+      <div class="card"><h3>Composite identity, not a raw MAC</h3><p>A MAC identifies an <em>interface</em>; a device is a composite. Uniqueness is a decision the engine makes, not a database constraint — if it could be expressed in DDL, we misunderstood the problem.</p></div>
+      <div class="card"><h3>Linked, never merged</h3><p>Declared and observed data are joined by a link; neither overwrites the other. Documenting a value is a deliberate, field-by-field act.</p></div>
+      <div class="card"><h3>A source that goes blind cannot lie</h3><p>A faulted source can only <em>remove</em> knowledge, never invent it. Observation-derived alerts are suppressed rather than fabricated.</p></div>
+      <div class="card"><h3>No setting decides identity in SQL</h3><p>Comparison and normalisation happen in application code, never in the database — so a collation can never silently settle a question of identity.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="wrap">
+    <p class="eyebrow">Architecture</p>
+    <h2>A workspace with a deliberate frontier.</h2>
+    <p class="intro">The domain crate knows nothing of the outside world. An error inside it is domain data, not a string — and the boundary is a gate, not a guideline.</p>
+    <pre class="tree"><b>opencmdb/</b>
+├── <b>crates/</b>
+│   ├── <b>opencmdb-core/</b>   <span class="c"># the domain: identity, the verdict algebra, the gap.</span>
+│   │                    <span class="c"># no </span><span class="a">anyhow · axum · sqlx · askama</span><span class="c"> — by rule.</span>
+│   └── <b>opencmdb-bin/</b>    <span class="c"># everything that touches the outside world:</span>
+│                        <span class="c"># SQL, HTTP, HTML, files, the clock, secrets.</span>
+├── <b>xtask/</b>               <span class="c"># the dev-tool runner; a dependency of nobody.</span>
+└── <b>_bmad-output/</b>        <span class="c"># the complete planning record (D1–D66).</span></pre>
+    <div class="grid cols-2" style="margin-top:22px">
+      <div class="card"><h3>Stack</h3><p>Rust (edition 2024) · axum · askama templates · HTMX (committed, never a CDN) · Tailwind (standalone CLI, no Node) · sqlx · tokio. Server-rendered, polling not SSE at MVP — no SPA framework.</p></div>
+      <div class="card"><h3>One database, on purpose</h3><p><b>MariaDB 10.11+ only</b> — Synology ships it natively and backs it up. SQLite and MySQL are not supported; PostgreSQL is out at MVP. A single engine keeps the budget of unknowns spent on reconciliation, not portability.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="status" style="background:var(--bg-2)">
+  <div class="wrap">
+    <p class="eyebrow">Where it stands</p>
+    <h2>Honest about its own state.</h2>
+    <p class="intro">opencmdb's thesis is that documentation must not lie about reality. This page holds itself to the same rule.</p>
+    <div class="status-banner">
+      <span class="ic">◔</span>
+      <p><b>Planning is complete; the code has just begun.</b> A full product brief, PRD, UX specification and a ~5,000-line architecture with a decision register (D1–D66) are in the repo — each decision recording the argument it survived, and the ones rejected. What exists in code today is a <b>compiling three-crate Rust workspace skeleton</b>: the foundation, not the engine. There is no runnable product to deploy yet. It will get there in the open.</p>
+    </div>
+    <div style="margin-top:26px">
+      <p class="eyebrow" style="margin-bottom:14px">Build the skeleton</p>
+      <div class="install"><span class="cm"># requires a recent Rust toolchain (1.96+)</span>
+git clone https://github.com/guycorbaz/opencmdb.git
+cd opencmdb
+<span class="p">cargo</span> build --workspace --locked   <span class="cm"># Cargo.lock is committed; always --locked</span>
+<span class="p">cargo</span> test --workspace</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>open<b style="color:var(--accent)">cmdb</b> — built in the open, solo, AI-assisted. The name is lowercase, always.</span>
+    <span><a href="https://github.com/guycorbaz/opencmdb">GitHub</a> · <a href="https://github.com/guycorbaz/opencmdb/tree/master/_bmad-output/planning-artifacts">The design record</a> · AGPL-3.0-or-later</span>
+  </div>
+</footer>
+
+<script>
+  (function(){
+    var root=document.documentElement, btn=document.getElementById('themeBtn');
+    try{var s=localStorage.getItem('ocmdb-theme'); if(s){root.setAttribute('data-theme',s);}}catch(e){}
+    btn.addEventListener('click',function(){
+      var cur=root.getAttribute('data-theme');
+      var next = cur==='light' ? 'dark' : 'light';
+      root.setAttribute('data-theme',next);
+      try{localStorage.setItem('ocmdb-theme',next);}catch(e){}
+    });
+  })();
+</script>
+</body>
+</html>
