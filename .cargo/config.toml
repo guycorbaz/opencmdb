@@ -1,0 +1,5 @@
+# `cargo xtask <cmd>` — the dev-tool runner. All CI gates live in xtask, in Rust,
+# never in YAML (D56). The GitHub Actions workflow, when it exists, calls `cargo xtask
+# ci` and holds no logic of its own.
+[alias]
+xtask = "run --quiet --package xtask --"

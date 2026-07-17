@@ -5073,3 +5073,37 @@ history included. **Verified by fixed-string `git grep` across the commit: zero 
 coincidental substrings inside public Cargo.lock checksums). **The lesson, and it is a gate we do not yet
 have: a probe that emits shapes-not-values must bind its WRITE-UP too, exactly as D63 found that D27 must
 bind `xtask` too. A principle that does not bind its own documentation is a principle nobody believes.**
+
+---
+
+## Post-completion: 2026-07-17 — D65 GATES IMPLEMENTED in `cargo xtask ci`, and PROVEN to red.
+
+_Step (b) of the pre-story-1 sequence. The gates were specified and simulated (D65); they are now Rust in
+`xtask`, wired to `cargo xtask ci` (D56: gates in Rust, never YAML), with a `.cargo/config.toml` alias so
+`cargo xtask ci` runs them._
+
+- **`ddl-collation` (D64 cond. 1):** scans `crates/opencmdb-bin/migrations/**/*.sql` for a text column
+  lacking an explicit binary collation. **No allowlist — the absence is the mechanism.** A reflex heuristic
+  (D53), honest about being one; it bites on the first real migration. **Currently green vacuously — no
+  migrations yet.**
+- **`vocabulary` (D65):** volet A forbids the retired *code* identifiers (`pending_accept`, `reverting`,
+  `accept-as-declared`) in `crates/` — **`ignore` deliberately excluded (it is a real Rust token, `#[ignore]`;
+  its doc-level check rides co-presence).** Volet B is the CO-PRESENCE check over the seven planning docs
+  (body only — the frontmatter is a journal): a body holding a retired term with its live replacement
+  **nowhere** reds. **The cheap repair and the correct repair are the same act — mention the new word — so
+  the red has exactly one repair (D45).**
+- **`views-hash`:** compares `architecture.md`'s sha256 to `architecture-views.md`'s declared
+  `sourceSha256`. **INFORMATIONAL, not a hard gate** — per the milestone-cadence decision, views lags between
+  milestones by design, so a mismatch is reported (currently STALE) but does not fail CI.
+
+**🔴 PROVEN TO RED, not merely to pass — the discipline D45 demands.** Six unit tests exercise both the red
+and green sides (a stale body reds; a body that narrates its own rename is green; word-boundary rejects
+`ignored`≠`ignore`; frontmatter stripped but body `---` rules survive; a bare text column reds, a collated
+one passes). **Plus a live proof against the real harness:** a throwaway `.rs` carrying `pending_accept` made
+`cargo xtask ci` exit 1; removing it returned it to green. *A gate that cannot be shown to fail is
+decoration; this one was shown to fail and then to pass.*
+
+**State: `cargo xtask ci` green** (ddl vacuous, vocabulary green, views-hash informational-stale), `cargo
+test -p xtask` 6/6, `cargo clippy --workspace -D warnings` clean. **Next: (c) the DDL collation with the
+first migration — which is also the first thing that will exercise gate 1 against real input — then (d)
+story 1.**
