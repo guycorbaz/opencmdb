@@ -1,0 +1,159 @@
+# opencmdb
+
+**Your network documentation drifts from reality the moment you write it. opencmdb continuously compares the *observed* state of your network against the *declared* state you documented — and turns the gap between them into something you can act on.**
+
+A self-hosted, single-binary reconciliation engine for home labs and small businesses. Lightweight IPAM, a light application CMDB, and network topology, organised around one idea: **the gap is the product.**
+
+> An unknown device just appeared. A documented IP hasn't been seen in 30 days. Two devices are fighting over the same address — and unlike your controller's bare alarm, opencmdb tells you *which* devices. In short: **documentation that corrects itself**, because it is continuously checked against reality.
+
+---
+
+## ⚠️ Project status — early development, honest about it
+
+opencmdb is a product whose entire thesis is that documentation must not lie about reality. This README holds itself to the same rule.
+
+- **Planning is complete.** A full product brief, PRD, UX specification, and a ~5,000-line architecture with a decision register (D1–D66) live in [`_bmad-output/planning-artifacts/`](_bmad-output/planning-artifacts/). If you want to understand *why* every decision is the way it is, that is where the reasoning — including the dead ends and the recorded dissents — is written down.
+- **The code has just begun.** What exists today is a **compiling three-crate Rust workspace skeleton** — the foundation, not the engine. The reconciliation logic, the connectors, the web UI, and the persistence layer are the next work.
+- **Nothing here is production-ready yet.** There is no runnable product to deploy at this moment. If you are reading this expecting to `docker pull` and reconcile your network tonight — not yet. Watch or star the repo; it will get there in the open.
+
+Everything below describes what opencmdb **is designed to be**, with the current build state called out where it matters.
+
+---
+
+## The core idea
+
+Every network tool shows you *one* of two things:
+
+- **Observed state** — what your controller, your scanner, and your switches actually see right now. Live, but undocumented and unexplained.
+- **Declared state** — the spreadsheet, the wiki, the IPAM you maintain by hand. Documented, but stale the moment reality moves.
+
+opencmdb holds both, side by side, and **never merges them**. It *links* an observation to a declaration and continuously asks: do they still agree? Every disagreement — an unknown device, a stale IP, an address conflict, a documented host that vanished — becomes a **gap** in a triage inbox. You resolve gaps one gesture at a time, and the tool learns what you decided.
+
+**It does not moralise.** A wall of gaps on first commissioning is normal, not a reproach. And when opencmdb cannot tell (a device it genuinely cannot identify), it **says so, visibly, and counts it** — rather than guessing. Honest abstention is a first-class state, not a failure.
+
+---
+
+## Why opencmdb
+
+- **Reconciliation, unpaywalled.** The observed-vs-declared loop is the reason opencmdb exists. As of mid-2026 it is a top-of-market, *paid* feature elsewhere. opencmdb's framing: *the reconciliation engine you can actually run* — free, self-hosted, open source.
+- **Radically smaller footprint.** **One binary + your MariaDB. No Redis, no workers, no queue, no reverse-proxy tax.** Two moving parts against the incumbents' five. The heavy stack (PostgreSQL + Redis + Celery/RQ workers + a reverse proxy) is the biggest adoption barrier for tools like NetBox; opencmdb removes it.
+- **UniFi-first, zero privilege.** The first-class UniFi connector reads clients, switch ports, SSIDs, VLANs and DHCP leases over plain outbound HTTP with **no network privilege** required. Bring-your-own generic ARP/ping scanner for everything else.
+- **Built for the operator who runs their own infrastructure**, not for an enterprise with a dedicated IPAM team.
+
+---
+
+## What it will do
+
+Scope is phased. The MVP is the reconciliation core; richer surfaces are deliberately deferred so the core lands correct.
+
+| Capability | Phase |
+|---|---|
+| Observed-vs-declared reconciliation with a triage inbox (document / accept-gap / attach / create / exclude / snooze) | **MVP** |
+| Composite **device identity** (not raw MAC) — survives MAC randomisation, multi-NIC hosts, shared-hardware VMs | **MVP** |
+| IPAM: per-subnet occupancy, find a free IP, *which device* owns a conflicting address | **MVP** |
+| First-class **UniFi connector** (zero privilege) + generic ARP/ping scanner | **MVP** |
+| Honest **source state** — a source that has gone blind is shown as such; a source that simply sees less is a capability to unlock, not a fault | **MVP** |
+| Software & applications (with owner and criticality); "Hosted here" on a device record | **MVP** |
+| Alerts (unknown device, stale IP, IP conflict *with device identification*) → in-app + webhook, deep-linked | **MVP** |
+| Read-only JSON API + authenticated Prometheus `/metrics` | **MVP** |
+| Self-diagnostic dashboard; observation history + last-known-state retention | **MVP** |
+| Bilingual UI (English / French) | **MVP** |
+| Blast-radius / **impact view** (dependency traversal), interactive graphical topology, more connectors (Omada, Mikrotik, pfSense/OPNsense, hypervisors) | **Growth** |
+| A stable, versioned public API | **Vision** |
+
+---
+
+## Design principles
+
+These are load-bearing and enforced in code, not just documented:
+
+- **Composite device identity, not a raw MAC.** A MAC identifies an *interface*; a device is a composite. Uniqueness is a *decision the engine makes*, not a database constraint — if it could be expressed in DDL, we misunderstood the problem.
+- **Linked, never merged.** Declared and observed data are joined by a link; neither overwrites the other. Documenting a value is a deliberate, field-by-field act.
+- **Honest abstention.** When the engine cannot conclude, it abstains — displayed, counted, and grouped by cause. A false merge is catastrophic and has no clean undo; a false split is benign and correctable. The engine is built to never merge on doubt.
+- **The engine never lies about a source going blind.** A faulted or offline source can only *remove* knowledge, never invent it; observation-derived alerts are suppressed rather than fabricated.
+- **No configuration decides identity in SQL.** Value comparison and normalisation happen in application code, never in the database — so a collation setting can never silently settle a question of identity.
+
+---
+
+## Architecture
+
+A Cargo **workspace** with a deliberate dependency frontier:
+
+```
+opencmdb/
+├── crates/
+│   ├── opencmdb-core/   # the domain: identity, the verdict algebra, the gap predicate.
+│   │                    # An error here is domain data, not a string.
+│   │                    # It must NOT depend on anyhow, axum, sqlx, or askama.
+│   └── opencmdb-bin/    # the composition root: everything that touches the outside
+│                        # world — SQL, HTTP, HTML, files, the clock, secrets.
+├── xtask/               # the dev-tool runner (cargo xtask ci / css / recapture);
+│                        # a workspace member and a dependency of nobody.
+└── _bmad-output/        # the complete planning record (brief, PRD, UX, architecture).
+```
+
+**Stack:** Rust (edition 2024) · [axum](https://github.com/tokio-rs/axum) · [askama](https://github.com/askama-rs/askama) templates · [HTMX](https://htmx.org/) (committed, never a CDN) · Tailwind (standalone CLI, no Node) · [sqlx](https://github.com/launchbadge/sqlx) · [tokio](https://tokio.rs/). Polling, not SSE, at MVP. Server-rendered; no SPA framework.
+
+**One database, on purpose.** opencmdb supports **MariaDB 10.11+ only** — chosen because Synology ships it natively and includes it in DSM's automatic backups. SQLite and MySQL are not supported; PostgreSQL is not supported at MVP. This is a decision, not a limitation waiting to be lifted: a single engine keeps the whole "budget of unknowns" spent where the value is (reconciliation), not on portability.
+
+---
+
+## Requirements
+
+- **MariaDB 10.11+** reachable from opencmdb (Synology DSM 7 ships a suitable package).
+- A host that runs a Docker container, or the ability to run a native binary. **Synology Container Manager is the priority deployment target**; opencmdb is not Synology-exclusive.
+- For the generic ARP scanner: `network_mode: host` or the `NET_RAW` capability (it degrades to a ping-only sweep without it). The UniFi connector needs neither.
+
+---
+
+## Building from source
+
+The workspace builds today. You need a recent Rust toolchain (1.96+).
+
+```bash
+git clone https://github.com/guycorbaz/opencmdb.git
+cd opencmdb
+cargo build --workspace --locked      # Cargo.lock is committed; always --locked
+cargo test --workspace
+cargo clippy --workspace -- -D warnings
+```
+
+Project-specific gates live in `cargo xtask ci` (in Rust, never in YAML) — the DDL collation gate, the retired-vocabulary check, and the fixture/artifact hash checks. Some `xtask` subcommands are still stubs.
+
+> At this stage `cargo run` starts a placeholder binary — the walking skeleton, not the product.
+
+## Running (once there is something to run)
+
+opencmdb is designed to deploy as **two services**: the binary and a MariaDB instance, wired with a small `docker-compose.yml`. It is deliberately **not** advertised as a single `docker run` — the encryption key lives in a separate volume by design, and a network-mapping tool that lied about its own deployment would be contradicting its own reason to exist. A reference compose file will land with the first runnable release.
+
+---
+
+## Security posture (stated as non-guarantees where honest)
+
+opencmdb concentrates a full map of your network plus controller credentials, so security is a design constraint, not an afterthought — and the design is written to be *testable* rather than reassuring:
+
+- **All HTTP surfaces sit behind authentication** — the web UI, the JSON API, and the Prometheus `/metrics` endpoint (via a scrape token).
+- **Stored credentials are encrypted at rest** with an envelope scheme; the master key is required to live **outside** the data volume, and opencmdb refuses to start if it finds the key path inside it.
+- **What opencmdb does not promise** is written down as a non-promise, not hidden. It does not defend against an attacker who already has the host and the key together; it will say so plainly rather than imply a guarantee it cannot keep. The full threat model is in the architecture document.
+
+---
+
+## The planning record
+
+Unusually for a young repo, opencmdb's design is fully written down *before* most of the code: see [`_bmad-output/planning-artifacts/`](_bmad-output/planning-artifacts/). The architecture document carries a decision register (D1–D66) where each decision records not just the choice but the argument it survived — and the ones that were rejected. Start at its Decision Index. `architecture-views.md` is a cross-cutting digest (renunciations, measurements, dissents) derived from it.
+
+*(These documents describe the design; for the current state of any requirement, read the `editHistory` frontmatter of `prd.md`.)*
+
+---
+
+## Contributing
+
+Early days — the foundation is being laid. If the idea resonates, opening an issue to discuss a connector, a design decision, or a use case is the most useful thing right now. Please keep application code out of `_bmad*` and honour the `opencmdb-core` dependency frontier (no `anyhow`/`axum`/`sqlx`/`askama` in the domain crate); `cargo xtask ci` is meant to catch violations.
+
+## License
+
+opencmdb is licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later). See `Cargo.toml`; a full `LICENSE` file will accompany the first tagged release.
+
+---
+
+*opencmdb is built in the open by a solo developer with AI assistance. The name is lowercase, always.*

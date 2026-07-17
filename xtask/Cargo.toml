@@ -1,0 +1,15 @@
+# xtask — the dev-tool runner. A workspace member and a dependency of NOBODY (D56).
+# It carries `cargo xtask ci` (all gates, in Rust, not YAML — D56/D65), `cargo xtask css`
+# (the pinned Tailwind CLI, never build.rs — D55), and `cargo xtask recapture` (D56).
+# D63: a secret reaches a dev tool on STDIN only.
+[package]
+name = "xtask"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+anyhow = "1.0.103"
+sha2 = "0.11.0"
+walkdir = "2.5.0"

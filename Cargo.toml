@@ -1,0 +1,21 @@
+# opencmdb — workspace root.
+# D47/D55/D56b: three members. `opencmdb-core` is the domain (no anyhow, axum, sqlx,
+# askama); `opencmdb-bin` is everything that touches the outside world; `xtask` is a
+# workspace member and a dependency of NOBODY (D56).
+[workspace]
+resolver = "3"
+members = ["crates/opencmdb-core", "crates/opencmdb-bin", "xtask"]
+# A bare `cargo build` builds the product, never the dev tool (D56).
+default-members = ["crates/opencmdb-bin"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.96"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/guycorbaz/opencmdb"
+
+# Versions are declared here once and inherited via `.workspace = true`.
+# Cargo.lock is the pin; this file carries the requirement (D64 policy). sqlx is
+# exact-pinned (=0.9.0) by decision; the rest are caret and locked in Cargo.lock.
+[workspace.dependencies]
+opencmdb-core = { path = "crates/opencmdb-core" }

@@ -1,0 +1,18 @@
+# opencmdb-core — the domain. D47: an error here is DOMAIN DATA, not an `anyhow` string.
+# BANNED here, by the dependency graph and enforced by an xtask grep (D47/D53/D55):
+#   anyhow · axum · sqlx · askama. This crate cannot name what touches the outside world.
+[package]
+name = "opencmdb-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# default-features off drops chrono's `clock`/`wasmbind` (wasm-bindgen + windows-* cruft):
+# this is a Linux NAS binary, and time is bound as a parameter from Rust, not read via
+# chrono's Local (D10/D25). We keep only value types + serde.
+chrono = { version = "0.4.45", default-features = false, features = ["serde", "std"] }
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
+uuid = { version = "1.24.0", features = ["v7"] }
