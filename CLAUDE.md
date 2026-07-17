@@ -55,3 +55,4 @@ Use `bmad-help` when unsure which skill applies next.
 - **Communication language is French** (`config.user.toml`, user "Guy"). Converse with the user in French unless they switch.
 - **Document/artifact output language is English** (`config.toml` → `document_output_language`). Generated PRDs, specs, and docs should be written in English.
 - Application code, once it exists, should be placed at the project root (not under `_bmad*`). When a stack is chosen, add its build/lint/test commands to this file.
+- **Issue tracking: all bugs, change requests, and other issues are recorded as GitHub Issues** on `guycorbaz/opencmdb` — never tracked only in local notes, commit messages, or planning docs. Reference the issue number in the related commit/PR (e.g. `Fixes #12`). This is the single source of truth for work items outside the BMad story flow.
