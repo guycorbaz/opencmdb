@@ -1,0 +1,41 @@
+# cargo-deny — gates dependency risk in CI (Story 1.5). Scope: advisories + licenses.
+# Runnable identically locally: `cargo deny check advisories licenses`.
+# Not a bespoke YAML gate — a tool with config, like clippy has lints (D56).
+
+[advisories]
+version = 2
+# A dependency with a RustSec vulnerability fails the check (v2 default). Yanked crates too.
+yanked = "deny"
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+# Permissive licenses actually present in the dependency graph (tuned against the real tree).
+# A dependency under any OTHER license fails the check — that is the point (AC #2).
+# AGPL is deliberately NOT global: it is allowed only for our own first-party crates below,
+# so a future copyleft *dependency* still fails.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "CDLA-Permissive-2.0",
+    "CC0-1.0",
+]
+
+# `xtask` is `publish = false` (a dev tool, never shipped as a crate) — it needs no license
+# expression; skip private/unpublished workspace crates.
+private = { ignore = true }
+
+# opencmdb-core / opencmdb-bin are our own AGPL-3.0-or-later crates. Allow that license for
+# THEM specifically, not globally, so an AGPL dependency would still be rejected.
+[[licenses.exceptions]]
+crate = "opencmdb-core"
+allow = ["AGPL-3.0-or-later"]
+
+[[licenses.exceptions]]
+crate = "opencmdb-bin"
+allow = ["AGPL-3.0-or-later"]

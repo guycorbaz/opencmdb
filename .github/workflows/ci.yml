@@ -17,6 +17,28 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      # sqlx's `mysql` feature speaks the MariaDB wire protocol (D64) — this is the driver
+      # for the one engine, not a second backend. DB-touching tests (a later story) connect
+      # here with zero extra wiring; today the service is provisioned but idle.
+      DATABASE_URL: mysql://root:opencmdb@127.0.0.1:3306/opencmdb_test
+    services:
+      mariadb:
+        # The EXACT DSM 7 package version (D64) — pinned so dev == CI == prod. Never `10.11`
+        # or `latest`. MariaDB is the ONLY supported engine; SQLite and MySQL are OUT.
+        image: mariadb:10.11.11
+        env:
+          MARIADB_ROOT_PASSWORD: opencmdb
+          MARIADB_DATABASE: opencmdb_test
+        ports:
+          - 3306:3306
+        # Wait until the server accepts connections and InnoDB is up (the image ships
+        # `healthcheck.sh`), so the job only proceeds once the DB is reachable.
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +49,11 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
       - name: Format
         run: cargo fmt --all --check
 
@@ -35,6 +62,9 @@ jobs:
 
       - name: Project gates (cargo xtask ci)
         run: cargo xtask ci
+
+      - name: Dependency audit (cargo-deny)
+        run: cargo deny check advisories licenses
 
       - name: Tests
         run: cargo test --workspace --locked
