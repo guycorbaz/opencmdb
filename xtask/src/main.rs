@@ -610,6 +610,10 @@ mod tests {
         assert!(!body.contains("sourceSha256"));
     }
 
+    // The D45 prove-to-red for the `ddl-collation` gate (D64 cond. 1): a bare text column
+    // reds, a binary-collated one does not — the gate is trustworthy before any real
+    // migration exists to exercise it. Extended below with the other accepted form,
+    // the same-column toggle, and the remaining `is_text` variants.
     #[test]
     fn ddl_flags_bare_text_column_and_passes_a_collated_one() {
         assert!(
@@ -623,6 +627,42 @@ mod tests {
         );
         assert!(text_column_without_binary_collation("  count INTEGER NOT NULL,").is_none());
         assert!(text_column_without_binary_collation("  -- a comment about TEXT").is_none());
+    }
+
+    #[test]
+    fn ddl_accepts_the_collate_binary_form() {
+        // The heuristic accepts `_BIN` OR the literal `COLLATE BINARY`; lock the latter so a
+        // regression that drops it cannot pass silently.
+        assert!(text_column_without_binary_collation("  note TEXT COLLATE BINARY,").is_none());
+        assert!(
+            text_column_without_binary_collation("  tag VARCHAR(64) COLLATE BINARY NOT NULL,")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn ddl_same_varchar_column_toggles_on_the_collation() {
+        // AC #2 made literal: one column type, the binary collation is the only difference.
+        assert!(text_column_without_binary_collation("  email VARCHAR(320) NOT NULL,").is_some());
+        assert!(
+            text_column_without_binary_collation(
+                "  email VARCHAR(320) NOT NULL COLLATE latin1_bin,"
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn ddl_flags_text_and_clob_and_char_variants() {
+        // Guard the whole `is_text` set, not just VARCHAR: a bare TEXT / CLOB / leading CHAR
+        // column each reds.
+        assert!(text_column_without_binary_collation("  body TEXT,").is_some());
+        assert!(text_column_without_binary_collation("  payload CLOB,").is_some());
+        assert!(text_column_without_binary_collation("  CHAR(2) code NOT NULL,").is_some());
+        // Known reflex-gate boundary (D53): ENUM/SET carry a collation but are outside the
+        // current `is_text` set, so a bare ENUM is NOT flagged. Refining this is a D64
+        // concern for when the first real migration is written — not this story.
+        assert!(text_column_without_binary_collation("  kind ENUM('a','b') NOT NULL,").is_none());
     }
 
     // ── frontier gate (D47) ──────────────────────────────────────────────
