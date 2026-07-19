@@ -40,14 +40,12 @@ jobs:
           --health-timeout=5s
           --health-retries=5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Install Rust toolchain (stable, with clippy + rustfmt)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-
-      - uses: Swatinem/rust-cache@v2
+      # Reads rust-toolchain.toml and installs exactly that channel + its components
+      # (clippy, rustfmt), and sets up the build cache — so CI == the pinned MSRV.
+      - name: Set up Rust (pinned via rust-toolchain.toml) + build cache
+        uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Install cargo-deny
         uses: taiki-e/install-action@v2

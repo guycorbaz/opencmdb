@@ -1,0 +1,18 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "packageRules": [
+    {
+      "description": "Patch + minor updates: one grouped PR, auto-merged when CI is green.",
+      "matchUpdateTypes": ["patch", "minor"],
+      "groupName": "patch and minor dependencies",
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Major updates: a dedicated, non-grouped PR each; never auto-merged, so two breaking changes never share a commit.",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    }
+  ]
+}

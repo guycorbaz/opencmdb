@@ -1,0 +1,7 @@
+# Pins the toolchain to the declared MSRV (Cargo.toml: rust-version = "1.96"), so local,
+# CI, and prod builds all compile on exactly this version. Pinning the MSRV floor (not the
+# latest patch) makes CI fail on any accidental use of a newer-than-MSRV Rust feature.
+[toolchain]
+channel = "1.96"
+components = ["clippy", "rustfmt"]
+profile = "minimal"
