@@ -1,0 +1,170 @@
+% opencmdb — User Manual. Build: see ../Makefile (LuaLaTeX; TEXINPUTS -> ../common).
+\documentclass[11pt,oneside,listof=totoc,bibliography=totoc]{scrreprt}
+\usepackage{opencmdb-manual}
+\setmanualname{User Manual}
+
+\begin{document}
+\makemanualtitle{User Manual}{Understanding and operating opencmdb day to day}
+
+\tableofcontents
+
+\chapter{Introduction}
+\productname{} is a self-hosted, single-binary engine that helps you keep an accurate,
+living picture of your network. Its core idea is a comparison:
+
+\begin{itemize}
+  \item the \textbf{observed} state — what opencmdb \emph{discovers} automatically from
+        your network (devices, IP addresses, switch ports, DHCP leases, \ldots);
+  \item the \textbf{declared} state — what \emph{you} have documented as intended.
+\end{itemize}
+
+The difference between the two — the \textbf{gap} — is what opencmdb surfaces for you to
+review. Observed data is never allowed to overwrite what you declared: the two are kept as
+distinct, linked records.
+
+\begin{note}
+This manual is written for the person who \emph{uses} opencmdb — reviewing discoveries,
+documenting devices, and managing IP space. Installation, configuration, security, and
+backups live in the companion \textbf{Administrator Manual}.
+\end{note}
+
+\section{Who it is for}
+Advanced home labs and small organisations without a dedicated IT team, typically running
+on a Synology NAS. The reference scale is on the order of a few hundred hosts across a few
+dozen subnets.
+
+\section{What it is not}
+opencmdb does not reconfigure your network and does not require elevated network
+privileges to observe it. It documents and reconciles; it does not control.
+
+\chapter{Core concepts}
+\section{Declared vs.\ observed}
+Every entity in opencmdb has (up to) two faces: a \emph{declared} record you author, and an
+\emph{observed} record discovery produces. They are linked, never merged. Reconciliation
+\emph{links} an observation to the declaration it matches; it never rewrites your intent.
+
+\section{Device identity}
+A device is identified by a composite identity — not by its MAC address alone — so it stays
+recognisable across a changing IP or MAC. When the evidence is ambiguous, opencmdb
+\textbf{abstains} rather than guessing or merging: an unresolved match is a first-class,
+recorded outcome, presented with its supporting evidence.
+
+\begin{planned}
+The identity engine and reconciliation loop are the first implementation milestone. Until
+they land, the behaviour described here reflects the designed model.
+\end{planned}
+
+\section{Sources and liveness}
+Each discovery source reports on two independent axes: \emph{liveness}
+(\texttt{live} or \texttt{blind}, with a named cause) and \emph{capability} (what it can
+currently see). When a source goes blind, opencmdb freezes its last-known state and
+suppresses observation-derived alerts for that scope — it never fabricates a divergence from
+a source that cannot see.
+
+\section{Triage gestures}
+When you review a discovery, you choose one canonical gesture:
+\begin{itemize}
+  \item \textbf{Document} — close the gap by adopting the observed value into your
+        declaration, field by field. You document a \emph{value}.
+  \item \textbf{Accept-gap} — record that you have \emph{seen} the difference but are not
+        deciding yet. The gap stays open and keeps counting; a note is required. You accept a
+        \emph{gap}.
+  \item \textbf{Exclude} — this item is out of scope and should stop appearing.
+  \item \textbf{Attach}, \textbf{create}, \textbf{snooze} — link to an existing record,
+        create a new declaration, or defer.
+\end{itemize}
+
+\begin{note}
+opencmdb remembers your triage decisions (including exclusions), so a resolved item does not
+reappear on the next scan.
+\end{note}
+
+\chapter{Getting started}
+\begin{planned}
+A guided first-run walkthrough will appear here once the application is runnable. For now,
+deployment is covered in the Administrator Manual (Docker on Synology is the priority
+target).
+\end{planned}
+
+\section{First light}
+On first launch you will connect at least one discovery source and let opencmdb build its
+initial observed picture. Nothing is alarming on day one: undocumented discoveries simply
+wait for you in the triage inbox.
+
+\chapter{Discovering your network}
+\section{The UniFi source}
+If you run a UniFi controller, opencmdb can discover devices, IP addresses, switch ports,
+SSIDs, VLANs, and DHCP leases from it using only an API key — no elevated network access.
+
+\section{The ARP/ping scanner}
+For everything else, declare the subnets to scan and opencmdb will find active devices on
+them, enriching with hostnames where available.
+
+\begin{planned}
+Both sources are designed and specified; the ARP/ping scanner is the first source to be
+implemented, followed by the full UniFi connector.
+\end{planned}
+
+\chapter{The triage inbox}
+The inbox is where undocumented or changed discoveries wait for your decision. It shows, in
+priority order, what changed since your last visit — new devices and genuine conflicts
+first, routine churn last.
+
+\section{Documenting a discovery}
+\begin{itemize}
+  \item \textbf{Document-all} adopts a brand-new discovery in a single action.
+  \item \textbf{Document-field} lets you adopt specific fields of a device that has drifted
+        since you last documented it. The observed record itself is never modified.
+\end{itemize}
+
+\section{Working in bulk}
+You can triage many discoveries at once when they share a decision, keeping steady-state
+review fast.
+
+\begin{planned}
+The inbox, the document/accept-gap/exclude gestures, and bulk triage are specified in the UX
+design and will be implemented over several milestones.
+\end{planned}
+
+\chapter{IP address management}
+opencmdb manages subnets, VLANs, and DHCP ranges, and shows per-subnet occupancy — used,
+free, declared, and observed. It can find a free address within a subnet and detect
+conflicts (the same IP on two MACs, or a statically declared IP inside a DHCP range),
+identifying the devices involved. IPv6 addresses can be documented (observation-only at
+this stage).
+
+\chapter{Applications and hosted software}
+Beyond the network layer, you can record software instances (name, version, listening ports)
+hosted on a device, and group them into applications with an owner and a criticality. This
+is the ``light CMDB'' layer: enough to answer \emph{what runs where, and who owns it}.
+
+\begin{planned}
+The applications layer is planned for a later milestone, after the core reconciliation loop.
+\end{planned}
+
+\chapter{Alerts and notifications}
+opencmdb can notify you of the things that matter — new conflicts, a source going blind, a
+capability downgrade — without drowning you in routine change. Alerts derived from
+observation are suppressed for any source that is currently blind.
+
+\chapter{A bilingual interface}
+The user interface is available in English and French; documentation is English-only. A dark
+theme is the default, and key views target WCAG~2.1~AA accessibility.
+
+\appendix
+\chapter{Glossary}
+\begin{description}[style=nextline,leftmargin=0pt]
+  \item[Declared record] What you have documented as intended. Never overwritten by
+        discovery.
+  \item[Observed record] What discovery found. Linked to a declaration, never merged into it.
+  \item[Gap] A difference between a declaration and its linked observation — the unit of
+        work opencmdb surfaces.
+  \item[Document] Close a gap by adopting an observed value into your declaration.
+  \item[Accept-gap] Acknowledge a gap without resolving it; it stays open and keeps counting.
+  \item[Blind source] A source that currently cannot see; its last-known state is frozen and
+        its alerts suppressed.
+  \item[Abstention] A recorded ``unresolved'' outcome when identity is ambiguous — never a
+        guess or a merge.
+\end{description}
+
+\end{document}

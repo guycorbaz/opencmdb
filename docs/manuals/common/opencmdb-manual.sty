@@ -1,0 +1,130 @@
+% opencmdb-manual.sty — shared modern style for the opencmdb manuals.
+% Engine: LuaLaTeX (fontspec). Base class: KOMA-Script scrreprt.
+% Design goals: clean sans typography, an indigo accent, colored chapter heads,
+% modern admonition boxes (Note / Tip / Warning / Planned), a styled code listing.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{opencmdb-manual}[2026/07/19 opencmdb manual style]
+
+% ── Layout ──────────────────────────────────────────────────────────────────
+\RequirePackage[a4paper,margin=2.6cm,headsep=0.8cm]{geometry}
+\RequirePackage{microtype}
+\RequirePackage{xcolor}
+\RequirePackage{graphicx}
+\RequirePackage{enumitem}
+\setlist{itemsep=2pt,topsep=4pt}
+
+% ── Palette ─────────────────────────────────────────────────────────────────
+\definecolor{ocmdbInk}{HTML}{1F2430}      % body text
+\definecolor{ocmdbAccent}{HTML}{4F46E5}   % indigo — primary accent
+\definecolor{ocmdbAccentDk}{HTML}{3730A3} % darker indigo
+\definecolor{ocmdbMuted}{HTML}{6B7280}    % secondary text
+\definecolor{ocmdbRule}{HTML}{E5E7EB}     % hairlines
+\definecolor{ocmdbCodeBg}{HTML}{F6F7F9}   % code background
+\definecolor{ocmdbNote}{HTML}{2563EB}
+\definecolor{ocmdbTip}{HTML}{059669}
+\definecolor{ocmdbWarn}{HTML}{D97706}
+\definecolor{ocmdbPlan}{HTML}{7C3AED}
+\color{ocmdbInk}
+
+% ── Fonts (Noto Sans + Latin Modern Mono; all installed) ────────────────────
+\RequirePackage{fontspec}
+\setmainfont{Noto Sans}[
+  UprightFont = * Regular, BoldFont = * Bold,
+  ItalicFont = * Italic, BoldItalicFont = * Bold Italic,
+  Numbers = Lining ]
+\setsansfont{Noto Sans}[
+  UprightFont = * Regular, BoldFont = * Bold,
+  ItalicFont = * Italic, BoldItalicFont = * Bold Italic ]
+\setmonofont{Latin Modern Mono}[Scale=0.94]
+\linespread{1.06}
+
+% ── Headings (KOMA fonts) ───────────────────────────────────────────────────
+\setkomafont{disposition}{\sffamily\bfseries}
+\addtokomafont{chapter}{\color{ocmdbAccentDk}\fontsize{26}{30}\selectfont}
+\addtokomafont{section}{\color{ocmdbAccent}\Large}
+\addtokomafont{subsection}{\color{ocmdbInk}\large}
+\setkomafont{chapterprefix}{\normalfont\sffamily\bfseries\color{ocmdbMuted}}
+\RedeclareSectionCommand[beforeskip=-1.2\baselineskip,afterskip=0.9\baselineskip]{chapter}
+
+% ── Headers / footers ───────────────────────────────────────────────────────
+\RequirePackage[headsepline]{scrlayer-scrpage}
+\clearpairofpagestyles
+\setkomafont{pagehead}{\normalfont\sffamily\small\color{ocmdbMuted}}
+\setkomafont{pagenumber}{\sffamily\color{ocmdbAccentDk}}
+\setkomafont{pagefoot}{\normalfont\sffamily\footnotesize\color{ocmdbMuted}}
+\ihead{\leftmark}
+\ohead{\ocmdbmanualname}
+\ofoot*{\pagemark}
+\ifoot*{opencmdb}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+
+% ── Links ───────────────────────────────────────────────────────────────────
+\RequirePackage{hyperref}
+\hypersetup{
+  colorlinks=true, linkcolor=ocmdbAccentDk, urlcolor=ocmdbAccent,
+  citecolor=ocmdbAccentDk, pdfborder={0 0 0} }
+
+% ── Code listings ───────────────────────────────────────────────────────────
+\RequirePackage{listings}
+\lstdefinestyle{ocmdb}{
+  basicstyle=\ttfamily\small\color{ocmdbInk},
+  backgroundcolor=\color{ocmdbCodeBg},
+  keywordstyle=\color{ocmdbAccentDk}\bfseries,
+  commentstyle=\color{ocmdbMuted}\itshape,
+  stringstyle=\color{ocmdbTip},
+  frame=leftline, framerule=1.4pt, rulecolor=\color{ocmdbAccent},
+  framexleftmargin=6pt, xleftmargin=8pt, aboveskip=1em, belowskip=1em,
+  breaklines=true, showstringspaces=false, columns=fullflexible,
+  literate={é}{{\'e}}1 {è}{{\`e}}1 {→}{{$\rightarrow$}}1 }
+\lstset{style=ocmdb}
+
+% ── Admonition boxes ────────────────────────────────────────────────────────
+\RequirePackage[most]{tcolorbox}
+\newtcolorbox{ocmdbadmon}[2]{
+  enhanced, breakable, left=10pt, right=10pt, top=7pt, bottom=7pt,
+  colback=#1!5, colframe=#1, boxrule=0pt, leftrule=3pt, arc=2pt,
+  fonttitle=\sffamily\bfseries\color{#1}, coltitle=#1, title={#2} }
+\newenvironment{note}{\begin{ocmdbadmon}{ocmdbNote}{Note}}{\end{ocmdbadmon}}
+\newenvironment{tip}{\begin{ocmdbadmon}{ocmdbTip}{Tip}}{\end{ocmdbadmon}}
+\newenvironment{warning}{\begin{ocmdbadmon}{ocmdbWarn}{Warning}}{\end{ocmdbadmon}}
+% "Planned" — this feature is designed but not yet implemented (walking-skeleton stage).
+\newenvironment{planned}{\begin{ocmdbadmon}{ocmdbPlan}{Planned — not yet implemented}}{\end{ocmdbadmon}}
+
+% ── Product metadata + title page ───────────────────────────────────────────
+\newcommand{\productname}{opencmdb}
+\newcommand{\ocmdbversion}{0.1.0 (pre-release)}
+\newcommand{\ocmdbmanualname}{}
+\newcommand{\setmanualname}[1]{\renewcommand{\ocmdbmanualname}{#1}}
+
+\newcommand{\makemanualtitle}[2]{% #1 = manual title, #2 = subtitle
+  \begin{titlepage}
+  \sffamily
+  \color{ocmdbInk}
+  \noindent{\color{ocmdbAccent}\rule{\linewidth}{2pt}}\\[2pt]
+  {\small\color{ocmdbMuted}\MakeUppercase{\productname{} documentation}}\par
+  \vspace{5.2cm}
+  {\fontsize{40}{44}\selectfont\bfseries\color{ocmdbAccentDk} #1\par}
+  \vspace{0.6em}
+  {\LARGE\color{ocmdbMuted} #2\par}
+  \vspace{1.4em}
+  {\large A self-hosted network reconciliation engine — IPAM, a light application
+   CMDB, and topology. It continuously compares the \emph{observed} state
+   (auto-discovered) with the \emph{declared} state (documented by you); the gap is
+   the product.\par}
+  \vfill
+  \begin{tcolorbox}[enhanced,colback=ocmdbPlan!6,colframe=ocmdbPlan,boxrule=0pt,
+      leftrule=3pt,arc=2pt,left=10pt,fonttitle=\sffamily\bfseries\color{ocmdbPlan},
+      coltitle=ocmdbPlan,title={Early development}]
+    opencmdb is under active development. This manual documents the product's
+    \emph{designed} behaviour from the frozen planning artifacts; sections marked
+    \textbf{Planned} describe features not yet implemented. Details will be refined
+    as the software is built.
+  \end{tcolorbox}
+  \vspace{0.8em}
+  {\small\color{ocmdbMuted}Version \ocmdbversion\quad\textbullet\quad English\quad
+   \textbullet\quad \url{https://github.com/guycorbaz/opencmdb}\par}
+  \noindent{\color{ocmdbAccent}\rule{\linewidth}{2pt}}
+  \end{titlepage}}
+
+\endinput

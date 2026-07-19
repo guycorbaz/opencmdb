@@ -47,7 +47,7 @@ Use `bmad-help` when unsure which skill applies next.
 - `_bmad/` — BMad framework: agents, workflows, and skills for modules `core`, `bmm` (core dev lifecycle), `bmb` (builder), `cis` (creative intelligence), `tea` (test architect). **Installer-managed — treat as read-only.** Edits here are overwritten on the next install.
 - `_bmad/config.toml`, `_bmad/config.user.toml` — installer-generated config. **Do not edit directly.** To change values durably use `_bmad/custom/config.toml` (team, committed) or `_bmad/custom/config.user.toml` (personal, gitignored).
 - `_bmad-output/` — where BMad writes generated artifacts: `planning-artifacts/`, `implementation-artifacts/`, `test-artifacts/`.
-- `docs/` — project knowledge base (`modules.bmm.project_knowledge`); currently empty.
+- `docs/` — project knowledge base (`modules.bmm.project_knowledge`). Includes `docs/manuals/` — the LaTeX **User Manual** and **Administrator Manual** (English, LuaLaTeX; shared style in `docs/manuals/common/`, one folder per manual; build with `make` — see `docs/manuals/README.md`).
 - `.claude/skills/` — installed BMad skill definitions (SKILL.md, instructions.md, templates, checklists).
 
 ## Conventions
@@ -56,3 +56,4 @@ Use `bmad-help` when unsure which skill applies next.
 - **Document/artifact output language is English** (`config.toml` → `document_output_language`). Generated PRDs, specs, and docs should be written in English.
 - Application code, once it exists, should be placed at the project root (not under `_bmad*`). When a stack is chosen, add its build/lint/test commands to this file.
 - **Issue tracking: all bugs, change requests, and other issues are recorded as GitHub Issues** on `guycorbaz/opencmdb` — never tracked only in local notes, commit messages, or planning docs. Reference the issue number in the related commit/PR (e.g. `Fixes #12`). This is the single source of truth for work items outside the BMad story flow.
+- **Docs-current-before-push:** before any `git push`, make sure every affected document is updated and matches what is being pushed — the manuals (`docs/manuals/`), `README.md`, the GitHub Pages landing site (`gh-pages` branch), `docs/project-context.md`, and this file. A push whose docs contradict the code/state is not ready. If a change touches behaviour, stack, or layout that a document describes, update that document in the same push.

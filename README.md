@@ -144,6 +144,8 @@ Unusually for a young repo, opencmdb's design is fully written down *before* mos
 
 *(These documents describe the design; for the current state of any requirement, read the `editHistory` frontmatter of `prd.md`.)*
 
+Early-stage **User** and **Administrator** manuals (LaTeX, built with LuaLaTeX) are scaffolded in [`docs/manuals/`](docs/manuals/); sections describing not-yet-built features are marked *Planned*, in keeping with the same honesty this README holds itself to.
+
 ---
 
 ## Contributing

@@ -1,0 +1,167 @@
+% opencmdb — Administrator Manual. Build: see ../Makefile (LuaLaTeX; TEXINPUTS -> ../common).
+\documentclass[11pt,oneside,listof=totoc,bibliography=totoc]{scrreprt}
+\usepackage{opencmdb-manual}
+\setmanualname{Administrator Manual}
+
+\begin{document}
+\makemanualtitle{Administrator Manual}{Installing, configuring, securing, and operating opencmdb}
+
+\tableofcontents
+
+\chapter{Introduction}
+This manual is for the person who \emph{runs} opencmdb: installing it, configuring its data
+sources, securing it, and keeping it backed up. If you are looking to use opencmdb day to
+day — reviewing discoveries and documenting devices — see the companion \textbf{User Manual}.
+
+\begin{note}
+opencmdb ships as a \textbf{single binary}. There is no application server to manage, no
+external job queue, and no second database to keep in sync.
+\end{note}
+
+\chapter{Architecture at a glance}
+\begin{itemize}
+  \item \textbf{Language / runtime:} Rust, one statically-linked binary.
+  \item \textbf{Database:} MariaDB 10.11+ is the \emph{only} supported engine. SQLite and
+        MySQL are not supported; PostgreSQL is not supported at this stage.
+  \item \textbf{Web stack:} server-rendered HTML with lightweight interactivity; polling
+        rather than server-sent events; an internal scheduler (no cron, Redis, or external
+        workers).
+  \item \textbf{Discovery:} a zero-privilege UniFi connector and a generic ARP/ping scanner,
+        each isolated behind a contract-tested connector interface.
+\end{itemize}
+
+\begin{warning}
+MariaDB is a deliberate, load-bearing choice — it is the engine included in Synology DSM's
+automatic backups, so your opencmdb data is covered by the NAS backup you already run. Do
+not attempt to point opencmdb at SQLite, MySQL, or PostgreSQL.
+\end{warning}
+
+\chapter{Requirements}
+\begin{itemize}
+  \item A host running Docker — a Synology NAS (Container Manager) is the priority target; a
+        native binary is also supported.
+  \item \textbf{MariaDB 10.11.11} (the exact version validated in CI, matching the DSM~7
+        package, so development, CI, and production run the same engine).
+  \item Outbound access from opencmdb to your discovery sources (e.g.\ the UniFi controller).
+\end{itemize}
+
+\chapter{Installation}
+\begin{planned}
+Step-by-step installation — the Docker image, a Synology Container Manager walkthrough, and
+a native-binary path — will be documented here once the first release image is published to
+Docker Hub. The outline below reflects the intended deployment.
+\end{planned}
+
+\section{Docker (Synology Container Manager)}
+The intended flow: pull the published image, provide a MariaDB connection and an encryption
+key, map a data volume, and start the container behind your reverse proxy.
+
+\section{Native binary}
+The same single binary can run directly on a Linux host, reading its configuration from a
+file and the environment.
+
+\chapter{Configuration}
+opencmdb is configured through a layered configuration file plus environment overrides. The
+database connection is provided as a URL; because MariaDB speaks the MySQL wire protocol, the
+scheme is \texttt{mysql://}:
+
+\begin{lstlisting}[language=bash]
+# Example — placeholder values only (use your own).
+DATABASE_URL = "mysql://opencmdb:CHANGE_ME@127.0.0.1:3306/opencmdb"
+\end{lstlisting}
+
+\begin{note}
+Use RFC~5737 documentation addresses (\texttt{192.0.2.0/24}) and example hostnames in your
+own notes and screenshots — never paste real network data into shared documents.
+\end{note}
+
+\begin{planned}
+The full configuration reference (every key, its default, and its effect) will be generated
+from the code once the configuration surface is implemented.
+\end{planned}
+
+\chapter{The database}
+\section{Provisioning}
+Create a dedicated database and user for opencmdb on your MariaDB 10.11 instance. On a
+Synology NAS, this is the DSM-managed MariaDB package.
+
+\section{Migrations}
+Schema migrations are embedded in the binary and applied on startup; you do not run them by
+hand. Every text column uses a binary collation so that identity comparison is exact and
+never depends on the database's locale — a correctness rule enforced in CI.
+
+\chapter{Configuring discovery sources}
+\section{UniFi}
+Provide the controller URL and an API key. The connector reads devices, IPs, ports, SSIDs,
+VLANs, and DHCP leases without elevated privileges.
+
+\section{ARP/ping}
+Declare the subnets to scan and a cadence within allowed bounds; you can also trigger an
+on-demand scan. Where the host lacks the raw-socket capability, the scanner falls back to
+ping-only.
+
+\begin{planned}
+Source configuration screens and the per-source cadence controls are specified in the UX
+design and land with the respective connectors.
+\end{planned}
+
+\chapter{Security}
+\section{Threat model}
+opencmdb is designed to protect against a \emph{stolen database or backup} and against
+\emph{unauthenticated network access} — not against a local root attacker on the host.
+
+\section{Secrets at rest}
+Source API keys and other secrets are encrypted at rest. The encryption key is kept
+\textbf{separate from the database volume}, so a stolen database file alone does not reveal
+your source credentials. API-key rotation and an encrypted secret backup are supported.
+
+\section{Transport security}
+Terminate TLS at a reverse proxy in front of opencmdb; TLS termination is a deployment
+concern, not something opencmdb does itself.
+
+\begin{warning}
+Never store the encryption key on the same volume as the database. A backup that contains
+both defeats the entire at-rest protection.
+\end{warning}
+
+\chapter{Operations}
+\section{Health and observability}
+opencmdb exposes Prometheus metrics and a source-health view: for each source and scope, its
+liveness (\texttt{live}/\texttt{blind} with a named cause) and any capability downgrades,
+reported as notifiable events. A ``what changed since last visit'' summary highlights new and
+conflicting items over routine churn.
+
+\section{Scheduling}
+Discovery runs on an internal scheduler within the single binary. There is no external cron
+or job runner to configure.
+
+\begin{planned}
+The metrics catalogue and the operational dashboard are specified; the slice shipping first
+covers source health and the ``what changed'' summary.
+\end{planned}
+
+\chapter{Backup and restore}
+Because opencmdb stores its state in MariaDB, and MariaDB is included in DSM's automatic
+backups, your primary backup is the one your NAS already performs. Keep the separate
+encryption key backed up \emph{independently} of the database so a restore can decrypt
+secrets.
+
+\begin{planned}
+A tested backup-and-restore runbook (including the encryption-key handling) will be provided
+before the first stable release.
+\end{planned}
+
+\chapter{Upgrades}
+Upgrades are performed by replacing the binary or the container image; embedded migrations
+bring the schema forward on startup. Cargo.lock is committed and builds are reproducible, so
+a given release always resolves the same dependencies.
+
+\appendix
+\chapter{Troubleshooting}
+\begin{planned}
+A symptom-oriented troubleshooting guide will grow here as the software gains real failure
+modes to document. Until then, the source-health view is the first place to look: a scope
+that has gone \texttt{blind} explains why its data is frozen and its alerts are silent.
+\end{planned}
+
+\end{document}
