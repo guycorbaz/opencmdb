@@ -1,6 +1,6 @@
 # Story 1.6: Pinned toolchain and Renovate automation
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -36,7 +36,7 @@ so that builds are reproducible and dependencies stay current without manual toi
   - [x] `renovate.json` valid JSON (2 rules, extends config:recommended). `renovate-config-validator` not installed locally → JSON-parse + schema-shape check only.
   - [x] `.github/workflows/ci.yml` parses (8 steps; checkout@v5, setup-rust-toolchain@v1).
 - [ ] Task 6 — Push and verify the real CI run (AC: #1)
-  - [ ] After commit+push, watch the GitHub run: job installs 1.96 from the file, all steps green, Node-20 `checkout` annotation gone. (Verified post-push, as with 1.4/1.5.)
+  - [x] Pushed (`4a681a1`); GitHub run `29704381552` GREEN in 1m50s: `Set up Rust (pinned via rust-toolchain.toml)` installed 1.96, `checkout@v5` used, all steps green, and the run has NO annotations (Node-20 deprecation cleared).
   - [ ] Renovate activates only once its GitHub App is installed on `guycorbaz/opencmdb` — a one-time maintainer action (Guy). The config is the deliverable; AC #2/#3 are satisfied by config, live when the app is enabled.
 
 ## Dev Notes
@@ -121,3 +121,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-19 — Implemented Story 1.6 (pinned toolchain + Renovate). Added `rust-toolchain.toml` (channel 1.96, MSRV) and switched CI to `actions-rust-lang/setup-rust-toolchain@v1` so CI uses exactly the pinned toolchain; bumped `actions/checkout@v5`. Added `renovate.json`: patch/minor grouped + auto-merged, major isolated + non-auto-merged. Local: everything green on the pinned toolchain, renovate.json valid, YAML parses. Real GitHub run watched at push (Task 6); Renovate live once its app is installed. Closes Epic 1. Status → review.
+- 2026-07-19 — Pushed (`4a681a1`); **real GitHub CI run verified GREEN** (run 29704381552, 1m50s): pinned toolchain installed from `rust-toolchain.toml`, `checkout@v5`, and NO annotations (Node-20 deprecation cleared). Status → done. **Epic 1 complete.**
