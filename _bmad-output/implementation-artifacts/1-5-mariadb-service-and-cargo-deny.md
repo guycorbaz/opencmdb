@@ -1,6 +1,6 @@
 # Story 1.5: MariaDB service container and cargo-deny in CI
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -33,8 +33,8 @@ so that dev = CI = prod (ARCH-8) and advisories/licenses cannot slip in.
   - [x] Prove-to-red: removing `Unicode-3.0` from the allowlist → `error[rejected]: failed to satisfy license requirements` naming the license; restored → green.
   - [x] YAML parses (1 job, services: mariadb:10.11.11, 9 steps).
   - [x] The four existing commands still pass locally (fmt/xtask ci/tests ✓).
-- [ ] Task 5 — Push and verify the real CI run (AC: #1, #2)
-  - [ ] After commit+push, watch the GitHub run (`gh run watch`): the MariaDB service starts healthy and the `cargo deny` step is green. (Verified post-push, as with Story 1.4 — status moves to done once the real run is green.)
+- [x] Task 5 — Push and verify the real CI run (AC: #1, #2)
+  - [x] Pushed (`781a67c`); GitHub run `29703812968` GREEN in 56s: `Initialize containers` ✓ (MariaDB 10.11.11 started healthy — AC #1), `Dependency audit (cargo-deny)` ✓ (AC #2), all other steps green.
 
 ## Dev Notes
 
@@ -122,3 +122,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-19 — Implemented Story 1.5 (MariaDB service + cargo-deny, D64/ARCH-8). CI `ci` job now provisions a `mariadb:10.11.11` service (healthcheck + DATABASE_URL) and runs `cargo deny check advisories licenses` against a tree-tuned `deny.toml`. Local: cargo-deny green + proven-to-red (removing a license fails naming it), YAML parses, no regression. Real GitHub run watched at push (Task 5). Status → review.
+- 2026-07-19 — Pushed (`781a67c`); **real GitHub CI run verified GREEN** (run 29703812968, 56s): MariaDB 10.11.11 service initialized healthy (AC #1) and the cargo-deny step passed (AC #2). Status → done.
