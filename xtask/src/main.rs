@@ -12,6 +12,9 @@
 //!     identifiers (`pending_accept`, `reverting`, `accept-as-declared`) absent from
 //!     `crates/`. Volet B — CO-PRESENCE across the planning docs: a body that holds a
 //!     RETIRED term with its LIVE replacement nowhere is a stale document, and reds.
+//!   - **fixtures** (D56, scaffold): a lockfile for data. Every file listed in
+//!     `fixtures/MANIFEST` must match its recorded sha256, or the fixture drifted silently.
+//!     Vacuous until Epic 4 builds the trap corpus; the MANIFEST schema is PROVISIONAL.
 //!   - **views-hash** (informational): whether `architecture-views.md`'s `sourceSha256`
 //!     still matches `architecture.md`. A mismatch means the views file is stale and
 //!     should be regenerated at the next milestone — reported, never a hard failure.
@@ -68,6 +71,10 @@ fn run_ci() -> Result<bool> {
     let (g2, m2) = gate_vocabulary(&root)?;
     report("vocabulary", g2, &m2);
     ok &= g2;
+
+    let (g3, m3f) = gate_fixture_manifest(&root)?;
+    report("fixtures", g3, &m3f);
+    ok &= g3;
 
     let m3 = check_views_hash(&root)?;
     println!("  ℹ  {:<14} {m3}", "views-hash");
@@ -387,6 +394,132 @@ fn is_token_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_' || b == b'-'
 }
 
+// ── Gate 3: fixture MANIFEST sha256 (D56, scaffold) ─────────────────────────
+
+/// A lockfile for data (D56): every fixture listed in `fixtures/MANIFEST` must still hash
+/// to its recorded sha256. `fixtures/` lives at the workspace ROOT, outside every crate, so
+/// editing a trap reads as "I am changing the spec", not "I am fixing a test" (D45).
+/// Vacuous until Epic 4 commits the first fixtures.
+fn gate_fixture_manifest(root: &Path) -> Result<(bool, String)> {
+    let fixtures = root.join("fixtures");
+    if !fixtures.exists() {
+        return Ok((true, "no fixtures — skipped".into()));
+    }
+    let manifest = fixtures.join("MANIFEST");
+    if !manifest.exists() {
+        return Ok((
+            true,
+            "fixtures/ present but no MANIFEST — skipped (scaffold; Epic 4 freezes this)".into(),
+        ));
+    }
+    let text = std::fs::read_to_string(&manifest).with_context(|| "reading fixtures/MANIFEST")?;
+    let lines = parse_manifest(&text);
+    let findings = manifest_findings(&lines, &|p| std::fs::read(fixtures.join(p)));
+    if findings.is_empty() {
+        let n = lines
+            .iter()
+            .filter(|l| matches!(l, ManifestLine::Entry { .. }))
+            .count();
+        Ok((true, format!("{n} fixture(s) match their recorded sha256")))
+    } else {
+        Ok((
+            false,
+            format!(
+                "{} finding(s):\n      {}",
+                findings.len(),
+                findings.join("\n      ")
+            ),
+        ))
+    }
+}
+
+/// One parsed MANIFEST line: a valid `<sha256>  <path>` entry, or a line to flag. The gate
+/// fails CLOSED — a line it cannot parse, or a path that escapes `fixtures/`, becomes a
+/// finding rather than being silently dropped (a lockfile that ignores garbage is not a lock).
+#[derive(Debug, PartialEq)]
+enum ManifestLine {
+    Entry { sha: String, path: String },
+    Malformed { lineno: usize, reason: String },
+}
+
+/// Parse the PROVISIONAL scaffold MANIFEST: one `<sha256-hex>  <path>` per line, path
+/// relative to `fixtures/`. Blank lines and `#` comments are skipped; anything else must be
+/// exactly two whitespace-separated tokens with a relative, non-`..` path, or it is
+/// `Malformed` (fail closed — a spaced path or a truncated line does not pass silently).
+///
+/// **This format is a placeholder.** Epic 4 freezes the real one per D56:
+/// `fixtures/scenario/replay/MANIFEST.toml` carrying sha256 + seed + generator version per
+/// artefact, with a `capture/`↔`scenario/` split. The verify logic (recompute the sha256,
+/// compare case-insensitively, name the drifted file) is stable; only this parser changes.
+fn parse_manifest(text: &str) -> Vec<ManifestLine> {
+    let mut lines = Vec::new();
+    for (i, line) in text.lines().enumerate() {
+        let lineno = i + 1;
+        let l = line.trim();
+        if l.is_empty() || l.starts_with('#') {
+            continue;
+        }
+        let tokens: Vec<&str> = l.split_whitespace().collect();
+        match tokens.as_slice() {
+            [sha, path]
+                if !Path::new(path).is_absolute() && !path.split('/').any(|c| c == "..") =>
+            {
+                lines.push(ManifestLine::Entry {
+                    sha: sha.to_string(),
+                    path: path.to_string(),
+                });
+            }
+            [_, path] => lines.push(ManifestLine::Malformed {
+                lineno,
+                reason: format!("path '{path}' escapes fixtures/ (must be relative, no '..')"),
+            }),
+            _ => lines.push(ManifestLine::Malformed {
+                lineno,
+                reason: "expected `<sha256>  <path>` (two tokens; paths cannot contain spaces)"
+                    .to_string(),
+            }),
+        }
+    }
+    lines
+}
+
+/// The decision, factored out of I/O so it is unit-tested without touching disk (D45): for
+/// each entry, recompute the sha256 of the file's bytes and name it on a mismatch (compared
+/// case-insensitively — `sha256_hex` is lowercase, but a hand-authored MANIFEST may not be);
+/// name it too when it is listed but unreadable; surface malformed lines. `read` resolves a
+/// path to its bytes — production reads from `fixtures/`; tests inject bytes directly.
+fn manifest_findings(
+    lines: &[ManifestLine],
+    read: &dyn Fn(&str) -> std::io::Result<Vec<u8>>,
+) -> Vec<String> {
+    let mut findings = Vec::new();
+    for line in lines {
+        match line {
+            ManifestLine::Malformed { lineno, reason } => {
+                findings.push(format!("fixtures/MANIFEST:{lineno}: {reason}"));
+            }
+            ManifestLine::Entry { sha, path } => match read(path) {
+                Ok(bytes) => {
+                    let actual = sha256_hex(&bytes);
+                    if !actual.eq_ignore_ascii_case(sha) {
+                        // char-safe prefix: `sha` is unvalidated MANIFEST text, so never
+                        // byte-slice it (a multi-byte char at the boundary would panic).
+                        let e: String = sha.chars().take(12).collect();
+                        findings.push(format!(
+                            "fixtures/{path}: sha256 mismatch (manifest {e}… ≠ file {}…)",
+                            &actual[..12]
+                        ));
+                    }
+                }
+                Err(_) => {
+                    findings.push(format!("fixtures/{path}: listed in MANIFEST but missing"));
+                }
+            },
+        }
+    }
+    findings
+}
+
 // ── Check 3: views-hash staleness (informational) ───────────────────────────
 
 fn check_views_hash(root: &Path) -> Result<String> {
@@ -572,6 +705,103 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         for expected in ["root", "a", "b", "c"] {
             assert!(names.contains(expected), "missing {expected}");
         }
+    }
+
+    // ── fixture MANIFEST gate (D56, scaffold) ────────────────────────────
+
+    fn entry(sha: &str, path: &str) -> ManifestLine {
+        ManifestLine::Entry {
+            sha: sha.to_string(),
+            path: path.to_string(),
+        }
+    }
+
+    #[test]
+    fn fixtures_gate_reds_on_a_sha_mismatch() {
+        // A fixture whose recorded sha does not match its bytes -> RED naming the file.
+        let lines = vec![entry(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "traps/a.jsonl",
+        )];
+        let read = |_p: &str| Ok(b"actual bytes".to_vec());
+        let findings = manifest_findings(&lines, &read);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].contains("traps/a.jsonl"), "{}", findings[0]);
+        assert!(findings[0].contains("mismatch"));
+    }
+
+    #[test]
+    fn fixtures_gate_greens_when_bytes_match() {
+        // The recorded sha IS sha256(bytes) -> no finding.
+        let bytes = b"the trap corpus".to_vec();
+        let lines = vec![entry(&sha256_hex(&bytes), "traps/b.jsonl")];
+        let read = |_p: &str| Ok(bytes.clone());
+        assert!(manifest_findings(&lines, &read).is_empty());
+    }
+
+    #[test]
+    fn fixtures_gate_sha_compare_is_case_insensitive() {
+        // An uppercase-hex MANIFEST entry must NOT red a byte-correct file.
+        let bytes = b"case".to_vec();
+        let lines = vec![entry(&sha256_hex(&bytes).to_uppercase(), "traps/c.jsonl")];
+        let read = |_p: &str| Ok(bytes.clone());
+        assert!(manifest_findings(&lines, &read).is_empty());
+    }
+
+    #[test]
+    fn fixtures_gate_mismatch_prefix_is_char_safe() {
+        // A non-hex, multi-byte sha token must not panic the mismatch-report slice.
+        let lines = vec![entry("aaaaaaaaaaaéxxxxx", "traps/d.jsonl")];
+        let read = |_p: &str| Ok(b"bytes".to_vec());
+        let findings = manifest_findings(&lines, &read);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].contains("traps/d.jsonl"));
+    }
+
+    #[test]
+    fn fixtures_gate_flags_a_missing_file() {
+        // Listed in the MANIFEST but unreadable -> RED naming the file.
+        let lines = vec![entry("abc123", "traps/gone.jsonl")];
+        let read = |_p: &str| Err(std::io::Error::from(std::io::ErrorKind::NotFound));
+        let findings = manifest_findings(&lines, &read);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].contains("traps/gone.jsonl"));
+        assert!(findings[0].contains("missing"));
+    }
+
+    #[test]
+    fn parse_manifest_skips_comments_and_blanks() {
+        let text =
+            "# a provisional manifest\n\ndeadbeef  traps/a.jsonl\n  cafef00d  traps/b.jsonl  \n";
+        assert_eq!(
+            parse_manifest(text),
+            vec![
+                entry("deadbeef", "traps/a.jsonl"),
+                entry("cafef00d", "traps/b.jsonl")
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_manifest_fails_closed_on_malformed_and_escaping_lines() {
+        // A one-token line, a spaced path (3 tokens), and `..`/absolute paths all become
+        // findings — the gate does not silently drop what it cannot verify.
+        let text =
+            "deadbeef\ncafef00d traps/a b.jsonl\nbeefcafe ../secret\nbeefbeef /etc/hostname\n";
+        let lines = parse_manifest(text);
+        let findings = manifest_findings(&lines, &|_p| Ok(b"x".to_vec()));
+        assert_eq!(findings.len(), 4, "{findings:?}");
+        assert!(findings.iter().all(|f| f.starts_with("fixtures/MANIFEST:")));
+        assert!(findings[2].contains("escapes fixtures/"));
+        assert!(findings[3].contains("escapes fixtures/"));
+    }
+
+    #[test]
+    fn fixtures_gate_is_green_when_no_fixtures_dir() {
+        // AC #1: a root with no fixtures/ dir -> skipped, green.
+        let (ok, msg) = gate_fixture_manifest(Path::new("/nonexistent-root-xyz")).unwrap();
+        assert!(ok);
+        assert!(msg.contains("no fixtures"));
     }
 
     #[test]
