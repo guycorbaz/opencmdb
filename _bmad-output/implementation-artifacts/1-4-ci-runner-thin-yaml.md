@@ -1,6 +1,6 @@
 # Story 1.4: CI runner calls xtask only (thin YAML)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -106,3 +106,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-19 — Implemented Story 1.4 (CI runner thin YAML, D56). Added `.github/workflows/ci.yml`: checkout + stable toolchain (clippy/rustfmt) + rust-cache + the four commands (fmt --check, clippy --locked -D warnings, xtask ci, test --workspace --locked). No gate logic in YAML. YAML parses, all four commands green locally; AC #2 holds by construction (xtask exits non-zero + names the gate). Status → review.
+- 2026-07-19 — Committed + pushed (`3f375dd`). **Real CI run verified GREEN on GitHub** (run 29703461241, job `ci`, 2m7s): all four steps + xtask gates green. Non-blocking annotation: Node.js 20 deprecation for actions/checkout@v4 (bump to @v5 → Story 1.6 / Renovate scope). Status → done.
