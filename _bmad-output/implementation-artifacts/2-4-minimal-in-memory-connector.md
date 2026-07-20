@@ -1,6 +1,6 @@
 # Story 2.4: A minimal in-memory connector
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -110,3 +110,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-20 — Implemented Story 2.4 (minimal in-memory connector). `ScriptedConnector` behind a `test-support` feature: scriptable to emit observations then complete or fail, respecting cancellation (emitted observations survive). Never ships (bin builds without the feature). 4 tests; frontier green; clippy/fmt clean. Status → review.
+- 2026-07-20 — Committed + pushed (`0da8bc7`); real GitHub CI run green (29726455048). Status → done.
