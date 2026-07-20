@@ -1,6 +1,6 @@
 # Story 2.3: The `Connector` trait, `ObservationSink`, `PollSummary`, cancellation
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -123,3 +123,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-20 — Implemented Story 2.3 (Connector trait + ObservationSink + PollSummary + cancellation, D34). Native `async fn` in trait (no async-trait); incremental emission via a sync object-safe `ObservationSink`; `CancellationToken` cooperative cancellation with the already-emitted observations surviving; `is_blinding()`-consistent Cancelled. `tokio-util` prod dep (frontier stays green), `tokio` dev-dep for async tests. 14 tests. Status → review.
+- 2026-07-20 — Committed + pushed (`7a25efa`); real GitHub CI run green (29725561014). Status → done.
