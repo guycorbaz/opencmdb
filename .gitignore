@@ -89,3 +89,8 @@ Thumbs.db
 _bmad/
 !_bmad/custom/
 !_bmad/custom/**
+
+# ── RUNTIME LOGS ────────────────────────────────────────────────────────────
+# Daily-rotating file logs from the container (docker-compose mounts docker/log).
+# They carry observed IPs/hostnames — runtime artifacts, never committed.
+docker/log/

@@ -1,0 +1,67 @@
+# opencmdb release — publish the image to Docker Hub on a version tag.
+#
+# Triggered ONLY by a `v*.*.*` tag push, so cutting a release is a deliberate `git tag` + push,
+# never a side effect of merging to master. Reuses the Story 3.9 Dockerfile (static-musl →
+# distroless/nonroot), so the published artifact is exactly what was verified locally.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+# One release per tag; never cancel a publish in flight.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Derive tags from the git tag: `v0.1.0` -> `0.1.0` plus `latest`.
+      - name: Derive image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: gcorbaz/opencmdb
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Best-effort: the Docker Hub description API may require the account password rather than a
+      # push-scoped PAT, so a failure here must not fail the release (the image is already pushed).
+      - name: Sync Docker Hub description
+        continue-on-error: true
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: gcorbaz/opencmdb
+          readme-filepath: ./docker/README.dockerhub.md
+          short-description: "Self-hosted single-binary network reconciliation engine — IPAM + light CMDB + topology."

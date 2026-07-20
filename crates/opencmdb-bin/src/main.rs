@@ -51,7 +51,8 @@ impl Clock for SystemClock {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    init_tracing();
+    // Hold the file-log writer guard for the whole process (dropping it flushes + stops the writer).
+    let _log_guard = init_tracing();
     // Select the UI locale (default `en`); user-facing strings resolve through `t!()`.
     let locale = std::env::var("OPENCMDB_LOCALE").unwrap_or_else(|_| "en".to_string());
     rust_i18n::set_locale(&locale);
@@ -212,11 +213,79 @@ fn load_bind_address() -> anyhow::Result<String> {
     Ok(config.get_string("bind")?)
 }
 
-/// Log filtering from `OPENCMDB_LOG` (e.g. `info`, `opencmdb=debug,warn`), defaulting to `info`.
-fn init_tracing() {
-    let filter = tracing_subscriber::EnvFilter::try_from_env("OPENCMDB_LOG")
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
-    tracing_subscriber::fmt().with_env_filter(filter).init();
+/// Configure tracing: always to stdout (so `docker logs` works), and — when `OPENCMDB_LOG_DIR`
+/// is set — additionally to a DAILY-rotating file (`opencmdb.YYYY-MM-DD.log`) for on-NAS
+/// debugging. Level filtering comes from `OPENCMDB_LOG` (e.g. `info`, `opencmdb=debug,warn`),
+/// defaulting to `info`. Returns the non-blocking writer's guard, which must be held for the
+/// process's lifetime, or `None` when only stdout is active.
+///
+/// File logging degrades gracefully: if the directory cannot be written, it logs a warning to
+/// stderr and continues with stdout only — a missing/unwritable log mount never crashes startup.
+#[must_use]
+fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::{EnvFilter, Layer, Registry, fmt};
+
+    let directives = std::env::var("OPENCMDB_LOG").unwrap_or_else(|_| "info".to_string());
+    let mut layers: Vec<Box<dyn Layer<Registry> + Send + Sync>> = Vec::new();
+
+    // Always to stdout, so `docker logs` works.
+    layers.push(
+        fmt::layer()
+            .with_filter(EnvFilter::new(&directives))
+            .boxed(),
+    );
+
+    // Additionally to a daily-rotating file when `OPENCMDB_LOG_DIR` is set and writable.
+    let guard = match build_file_writer() {
+        Some((writer, guard)) => {
+            layers.push(
+                // No ANSI colour codes in files — they are read as plain text.
+                fmt::layer()
+                    .with_ansi(false)
+                    .with_writer(writer)
+                    .with_filter(EnvFilter::new(&directives))
+                    .boxed(),
+            );
+            Some(guard)
+        }
+        None => None,
+    };
+
+    Registry::default().with(layers).init();
+    guard
+}
+
+/// A non-blocking, DAILY-rotating file writer from `OPENCMDB_LOG_DIR` (retention
+/// `OPENCMDB_LOG_RETENTION` days, default 14). `None` — stdout only — when the dir is unset or
+/// unwritable; an unwritable log mount logs to stderr and never crashes startup.
+fn build_file_writer() -> Option<(
+    tracing_appender::non_blocking::NonBlocking,
+    tracing_appender::non_blocking::WorkerGuard,
+)> {
+    let dir = std::env::var("OPENCMDB_LOG_DIR").ok()?;
+    if dir.is_empty() {
+        return None;
+    }
+    let retention: usize = std::env::var("OPENCMDB_LOG_RETENTION")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(14);
+
+    match tracing_appender::rolling::Builder::new()
+        .rotation(tracing_appender::rolling::Rotation::DAILY)
+        .filename_prefix("opencmdb")
+        .filename_suffix("log")
+        .max_log_files(retention)
+        .build(&dir)
+    {
+        Ok(appender) => Some(tracing_appender::non_blocking(appender)),
+        Err(error) => {
+            eprintln!("opencmdb: file logging disabled — cannot use {dir:?}: {error}");
+            None
+        }
+    }
 }
 
 #[cfg(test)]

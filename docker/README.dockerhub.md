@@ -46,6 +46,8 @@ services:
     env_file: .env
     cap_add:
       - NET_RAW   # ARP upgrade path (Mac facts, a later release); ping-only works without it
+    volumes:
+      - ./log:/var/log/opencmdb   # daily-rotating file logs (host ./log must be writable by uid 65532)
     restart: unless-stopped
 ```
 
@@ -61,6 +63,9 @@ OPENCMDB_LOCALE=en
 OPENCMDB_SCAN_CIDR=192.0.2.0/24
 # Bearer token for the Prometheus /metrics endpoint (leave unset to keep it closed).
 OPENCMDB_METRICS_TOKEN=CHANGE_ME
+# Daily-rotating file logs to this in-container path (mounted from ./log); keep this many days.
+OPENCMDB_LOG_DIR=/var/log/opencmdb
+OPENCMDB_LOG_RETENTION=14
 ```
 
 > Use RFC 5737 documentation addresses (`192.0.2.0/24`) and example hostnames in anything you share — never paste your real network into a public place.

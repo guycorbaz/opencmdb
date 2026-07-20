@@ -17,4 +17,11 @@ services:
     # NET_RAW is the ARP upgrade path (Mac facts, a later story); ping-only works without it.
     cap_add:
       - NET_RAW
+    volumes:
+      # Daily-rotating file logs, readable on the host under docker/log for debugging. The
+      # container runs as nonroot (uid 65532), so this host directory must be writable by it:
+      #   mkdir -p log && sudo chown 65532:65532 log     (or: chmod 777 log)
+      # If it is not writable, opencmdb logs to stdout only (never crashes). OPENCMDB_LOG_DIR in
+      # .env selects the in-container path below.
+      - ./log:/var/log/opencmdb
     restart: unless-stopped
