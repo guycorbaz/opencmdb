@@ -1,6 +1,6 @@
 # Story 3.9: Packaging — Dockerfile, compose template, `.env.example`
 
-Status: review
+Status: done
 
 ## Story
 
