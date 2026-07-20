@@ -3,42 +3,63 @@
 //! The composition root (D55): SQL, HTTP, HTML, files, the clock, secrets. `anyhow` is
 //! legitimate here (D47) — nobody matches on the variant, and a `.context()` chain the
 //! operator reads on stderr is worth money. This is the walking-skeleton entry point; the
-//! `Repository` skeleton, the migrations, the askama surface and the reconciliation engine
-//! attach to the `app()` seam in the stories that follow.
+//! `Repository` skeleton, the askama surface and the reconciliation engine attach to the
+//! `app()` seam in the stories that follow.
 
 use anyhow::Context;
 use axum::Router;
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::get;
+use sqlx::MySqlPool;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     init_tracing();
     let bind = load_bind_address().context("loading configuration")?;
+    let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
+
+    let pool = MySqlPool::connect(&database_url)
+        .await
+        .context("connecting to MariaDB")?;
+    sqlx::migrate!("./migrations")
+        .run(&pool)
+        .await
+        .context("applying database migrations")?;
+    tracing::info!("database connected and migrations applied");
+
     let listener = tokio::net::TcpListener::bind(&bind)
         .await
         .with_context(|| format!("binding {bind}"))?;
     tracing::info!(%bind, "opencmdb listening");
-    axum::serve(listener, app())
+    axum::serve(listener, app(pool))
         .await
         .context("serving the HTTP app")?;
     Ok(())
 }
 
-/// The HTTP surface, factored out of `main` so it is testable without binding a socket.
-/// Later stories add routes here; today it is just liveness.
-fn app() -> Router {
-    Router::new().route("/healthz", get(healthz))
+/// The HTTP surface, factored out of `main` so it is testable without binding a socket. The
+/// database pool is carried in axum state. Later stories add routes here.
+fn app(pool: MySqlPool) -> Router {
+    Router::new()
+        .route("/healthz", get(healthz))
+        .with_state(pool)
 }
 
-/// Liveness only — the process is up and serving. Database reachability is Story 3.2.
-async fn healthz() -> StatusCode {
-    StatusCode::OK
+/// Readiness: `200 OK` when the database answers a trivial query, `503` when it does not.
+async fn healthz(State(pool): State<MySqlPool>) -> StatusCode {
+    // Static SQL — no `AssertSqlSafe` needed (that is for dynamic queries).
+    match sqlx::query("SELECT 1").fetch_one(&pool).await {
+        Ok(_) => StatusCode::OK,
+        Err(error) => {
+            tracing::warn!(%error, "healthz: database unreachable");
+            StatusCode::SERVICE_UNAVAILABLE
+        }
+    }
 }
 
 /// The address to bind, from `OPENCMDB_BIND` (default `0.0.0.0:8080` — a container binds all
-/// interfaces). Read as a string so this bootstrap needs no `serde` in `bin`; a typed config
-/// struct arrives when the configuration surface grows.
+/// interfaces). Read as a string so this bootstrap needs no `serde` in `bin`.
 fn load_bind_address() -> anyhow::Result<String> {
     let config = config::Config::builder()
         .set_default("bind", "0.0.0.0:8080")?
@@ -61,9 +82,20 @@ mod tests {
     use axum::http::Request;
     use tower::ServiceExt; // for `oneshot`
 
+    /// Readiness against a real MariaDB. Gated on `DATABASE_URL`: runs in CI (the MariaDB
+    /// service, Story 1.5) and locally against a `mariadb:10.11.11` container; no-ops otherwise.
     #[tokio::test]
-    async fn healthz_returns_200() {
-        let response = app()
+    async fn healthz_reports_200_when_database_answers() {
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping healthz DB test: DATABASE_URL unset");
+            return;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect to MariaDB");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("run migrations");
+        let response = app(pool)
             .oneshot(
                 Request::builder()
                     .uri("/healthz")
@@ -77,7 +109,6 @@ mod tests {
 
     #[test]
     fn default_bind_is_all_interfaces_port_8080() {
-        // The default applies when OPENCMDB_BIND is unset.
         let config = config::Config::builder()
             .set_default("bind", "0.0.0.0:8080")
             .unwrap()
