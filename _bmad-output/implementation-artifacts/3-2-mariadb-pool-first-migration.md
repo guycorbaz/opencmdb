@@ -1,6 +1,6 @@
 # Story 3.2: MariaDB pool and the first migration
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -102,3 +102,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-20 — Implemented Story 3.2 (MariaDB pool + first migration). `main` connects a sqlx `MySqlPool` from `DATABASE_URL` and applies the embedded `0001_initial.sql` (declared_attribute + observation_record, binary collation on every text column, D64) on startup; `/healthz` now reports DB readiness (200/503). Verified against a real MariaDB 10.11.11 (local container + CI service); the `ddl-collation` gate now bites on a real migration and passes. clippy/fmt green. Status → review.
+- 2026-07-20 — Committed + pushed (`2443c3e`); real GitHub CI run green (29735462983 — the DB test ran against CI's MariaDB service). Status → done.
