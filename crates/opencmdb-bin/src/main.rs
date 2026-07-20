@@ -6,6 +6,7 @@
 //! `Repository` skeleton, the askama surface and the reconciliation engine attach to the
 //! `app()` seam in the stories that follow.
 
+mod arp_ping;
 mod repo;
 
 /// Serializes the DB-touching tests: they share one MariaDB (CI's service) and would otherwise

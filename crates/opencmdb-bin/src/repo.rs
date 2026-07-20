@@ -127,6 +127,50 @@ where
     Ok(())
 }
 
+/// Insert one observation (immutable, linked-never-merged, FR11). `facts` serialize to JSON —
+/// the engine deserializes and compares in Rust; SQL never compares (D10). All values are bound
+/// as Strings (D48); `observed_at` as a MariaDB datetime literal.
+pub async fn insert_observation<'e, E>(
+    executor: E,
+    observation: &opencmdb_core::observation::Observation,
+) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let facts =
+        serde_json::to_string(&observation.facts).map_err(|e| sqlx::Error::Encode(Box::new(e)))?;
+    let observed_at = observation
+        .observed_at
+        .format("%Y-%m-%d %H:%M:%S%.6f")
+        .to_string();
+    sqlx::query(
+        "INSERT INTO observation_record \
+         (id, connector_id, observed_at, l2_domain, vantage, facts, raw) \
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(observation.obs_id.to_string())
+    .bind(observation.connector_id.to_string())
+    .bind(observed_at)
+    .bind(observation.scope.l2_domain.to_string())
+    .bind(observation.scope.vantage.to_string())
+    .bind(facts)
+    .bind(observation.raw.clone())
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
+/// Count observation records via any executor.
+pub async fn count_observations<'e, E>(executor: E) -> Result<i64, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM observation_record")
+        .fetch_one(executor)
+        .await?;
+    Ok(count)
+}
+
 /// Classify a `sqlx::Error` into the closed `RepositoryError` (D47) — the ONLY translation of
 /// a backend error, and the only place a MariaDB error code is named.
 pub fn classify(error: sqlx::Error) -> RepositoryError {
@@ -202,5 +246,59 @@ mod tests {
         // After commit, the read side sees the row.
         let read = MariaReadRepository::new(pool);
         assert_eq!(read.count_declared_attributes().await.unwrap(), 1);
+    }
+
+    /// Ingest a synthetic observation and read it back — the observed side round-trips (FR11).
+    #[tokio::test]
+    async fn ingest_observation_round_trip() {
+        use opencmdb_core::observation::{
+            ConnectorId, Fact, L2DomainId, MacAddr, ObsId, Observation, Scope, VantageId,
+        };
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping ingest round-trip: DATABASE_URL unset");
+            return;
+        };
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        sqlx::query("DELETE FROM observation_record")
+            .execute(&pool)
+            .await
+            .expect("clean");
+
+        let obs = Observation {
+            obs_id: ObsId::from_uuid(uuid::Uuid::now_v7()),
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::nil()),
+            observed_at: chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap(),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            },
+            facts: vec![
+                Fact::Mac {
+                    addr: MacAddr([0, 1, 2, 3, 4, 5]),
+                    locally_administered: false,
+                },
+                Fact::Rtt { millis: 3 },
+            ],
+            raw: None,
+        };
+
+        let repo = MariaRepository::new(pool.clone());
+        repo.transact(move |unit| {
+            let obs = obs.clone();
+            Box::pin(async move {
+                insert_observation(unit.executor(), &obs)
+                    .await
+                    .map_err(classify)
+            })
+        })
+        .await
+        .expect("ingest");
+
+        assert_eq!(count_observations(&pool).await.unwrap(), 1);
     }
 }

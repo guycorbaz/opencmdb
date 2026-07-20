@@ -27,9 +27,16 @@ opencmdb-core.workspace = true
 prometheus = "0.14.0"
 rust-embed = "8.12.0"
 rust-i18n = "4.2.1"
+serde_json = "1.0.145"
 sqlx = { version = "=0.9.0", default-features = false, features = ["runtime-tokio", "tls-rustls-ring", "mysql", "migrate", "macros"] }
+# Async ICMP. surge-ping defaults to a SOCK_DGRAM (unprivileged) socket — no NET_RAW where
+# net.ipv4.ping_group_range permits; CAP_NET_RAW is the container fallback (Story 3.9).
+surge-ping = "0.9"
 tokio = { version = "1.53.0", features = ["full"] }
+tokio-util = "0.7.16"
 tracing = "0.1.44"
+# Mint client-side obs_ids (UUIDv7 — sortable by creation time, D48).
+uuid = { version = "1.24.0", features = ["v7"] }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 zeroize = "1.9.0"
 
