@@ -1,6 +1,6 @@
 # Story 2.2: The closed `ConnectorError` taxonomy
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -122,3 +122,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-20 — Implemented Story 2.2 (closed `ConnectorError` taxonomy, D33). 7 decided variants, `is_blinding()` NFR7 safe default (only `Cancelled` non-blinding), no `anyhow`/`Other(String)`, deliberately NOT `#[non_exhaustive]` (exhaustiveness is the guardrail). 4 tests; frontier gate green; clippy/fmt clean. `scope` + 3 uncertain variants deferred. Status → review.
+- 2026-07-20 — Committed + pushed (`81f316d`); real GitHub CI run green (29724455041). Status → done.
