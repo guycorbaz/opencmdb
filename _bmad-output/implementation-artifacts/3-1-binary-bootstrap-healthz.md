@@ -1,6 +1,6 @@
 # Story 3.1: Binary bootstrap and `/healthz`
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -99,3 +99,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-20 — Implemented Story 3.1 (binary bootstrap + `/healthz`). `opencmdb-bin` now boots an axum server (config `bind`, tracing) and answers `GET /healthz` with 200; replaces the placeholder `main`. 2 tests + a real-socket smoke test (HTTP 200). Frontier unaffected; CI/clippy/fmt green. First real bin code — start of Epic 3. Status → review.
+- 2026-07-20 — Committed + pushed (`6a00fbe`); real GitHub CI run green (29729165011). Status → done.
