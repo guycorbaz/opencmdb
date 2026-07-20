@@ -1,6 +1,6 @@
 # Story 3.4: The `Clock` port, routed by the reader
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -98,3 +98,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-20 — Implemented Story 3.4 (the `Clock` port). `Clock` in core (the one seam for time); `FixedClock` in test-support; `SystemClock` in bin reading the wall clock via std::time + `DateTime::from_timestamp` (chrono `clock` feature stays OFF workspace-wide, so core still cannot read the clock — verified). Wired at the composition root (startup log). 24 core + 3 bin tests; frontier/clippy/fmt green. Status → review.
+- 2026-07-20 — Committed + pushed (`2e450b4`); real GitHub CI run green (29738086582). Status → done.
