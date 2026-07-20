@@ -1360,6 +1360,7 @@ dependencies = [
  "rust-i18n",
  "sqlx",
  "tokio",
+ "tower",
  "tracing",
  "tracing-subscriber",
  "zeroize",

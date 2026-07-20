@@ -120,7 +120,7 @@ cargo clippy --workspace -- -D warnings
 
 Project-specific gates live in `cargo xtask ci` (in Rust, never in YAML) — the DDL collation gate, the retired-vocabulary check, and the fixture/artifact hash checks. Some `xtask` subcommands are still stubs.
 
-> At this stage `cargo run` starts a placeholder binary — the walking skeleton, not the product.
+> At this stage `cargo run` starts a minimal axum server exposing a `/healthz` liveness probe — the walking skeleton, not the product.
 
 ## Running (once there is something to run)
 
