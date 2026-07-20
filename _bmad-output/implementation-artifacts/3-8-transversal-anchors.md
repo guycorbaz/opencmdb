@@ -1,6 +1,6 @@
 # Story 3.8: Transversal anchors
 
-Status: review
+Status: done
 
 ## Story
 
@@ -86,3 +86,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-20 — Implemented Story 3.8 (transversal anchors). Deny-by-default auth middleware (public UI allowlisted, `/metrics` behind a scrape Bearer token), raw-`prometheus` `/metrics` (build_info + request counter), and the `rust-i18n` `t!()` seam (EN/FR, page strings + cause labels). 65 tests green (auth + i18n covered without a DB); live smoke confirms all three anchors incl. FR rendering. Frontier/clippy(--all-targets)/fmt green. Status → review.
+- 2026-07-20 — CI GREEN (commit `cdcc424`) first push — clippy/gates/cargo-deny/tests all pass. Status → done.
