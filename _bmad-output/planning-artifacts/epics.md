@@ -8,14 +8,15 @@ resumePoint: >
   Step 3 (create-stories) IN PROGRESS, now JUST-IN-TIME (Guy, 2026-07-19): each
   epic is decomposed into stories only when its turn to be built comes, so the
   breakdown incorporates learnings from the epics already shipped.
-  EPIC 1 is COMPLETE — its 6 stories (1.1–1.6) were written, implemented,
-  reviewed, and SHIPPED to master (all real GitHub CI runs green), 2026-07-19/20.
-  NEXT: decompose Epic 2 (Le contrat de connecteur) into small stories — the
-  Connector trait (D34 final form: async poll + ObservationSink -> PollSummary),
-  the closed ConnectorError taxonomy (D33), the consumer-driven contract test,
-  and a minimal connector to exercise it. ⚠️ The `Reads` two-traits bomb (front-
-  matter note d) belongs to Epic 3's walking skeleton, not Epic 2. After all
-  epics: step-04 final validation.
+  EPICS 1 and 2 are COMPLETE — shipped to master, all real GitHub CI runs green
+  (2026-07-19/20). Epic 1 = the gates + CI. Epic 2 = the Connector contract
+  (observation types, ConnectorError, the Connector trait, a scripted connector,
+  the reusable contract test) in opencmdb-core.
+  EPIC 3 (Mon premier écart réel, v0.1) is DECOMPOSED into 10 small stories
+  (3.1–3.10) below — the walking skeleton + a 0.1.0 Docker Hub release. Create
+  and implement them one at a time (just-in-time); the riskiest (3.2 migration/
+  AssertSqlSafe, 3.3 the two-traits Repository / `Reads` bomb, 3.6 the gap
+  engine) get a design nod at story-creation time. After all epics: step-04.
 ---
 
 # opencmdb - Epic Breakdown
@@ -698,3 +699,128 @@ So that fixture, ARP, UniFi, and future connectors all honour the same behaviour
 **Then** it passes all five cases.
 
 **And** the harness is reusable — a function taking a connector factory — so a future connector plugs in with a single call.
+
+## Epic 3: Mon premier écart réel
+
+The walking skeleton: the whole stack holds (Askama + HTMX + Tailwind + sqlx + MariaDB), a real minimal ARP/ping source (implementing the E2 `Connector` trait, passing `run_connector_contract`) is ingested, and one page shows a real gap on a cardinality-1 perimeter while abstaining + counting everywhere else. Lands the compiling Repository skeleton (TWO traits, HRTB over GAT — the `Reads`-is-not-one-trait bomb), the first migration (binary collation, D64; sqlx 0.9 needs `AssertSqlSafe` for dynamic SQL), the `Clock` port routed by the reader, and the empty transversal anchors (auth-deny middleware, `/metrics`, i18n `t!()`, design tokens + focus `app.js`, `/healthz`). Closes with a **0.1.0 release published to Docker Hub** so live testing can start. FRs: FR10, FR11, FR16 (min), FR39 (min), FR3/FR4 (min). ARCH-2,30,31,32,33,37; UX-DR1,2,3,11,65,66; D66 (packaging). Slicing is many small vertical/horizontal slices (Guy). The riskiest slices (3.2, 3.3, 3.6) get a design nod at story-creation time.
+
+### Story 3.1: Binary bootstrap and `/healthz`
+
+As a maintainer,
+I want `opencmdb-bin` to boot an axum server with config, tracing, and a `/healthz` endpoint,
+So that the composition root exists and is observable before any feature is built.
+
+**Acceptance Criteria:**
+
+**Given** the binary, **when** it starts, **then** it loads configuration (via the `config` crate) and initialises `tracing`/`tracing-subscriber`, and serves an axum app.
+**Given** a running server, **when** `GET /healthz` is called, **then** it returns `200 OK` (liveness, no dependencies checked yet).
+**And** `cargo xtask ci`, clippy `-D warnings`, and fmt stay green; the frontier gate is unaffected (this is all `opencmdb-bin`).
+
+### Story 3.2: MariaDB pool and the first migration
+
+As a maintainer,
+I want a MariaDB connection pool and an embedded first migration for declared + observed records,
+So that the stack persists to the one supported engine, correctly.
+
+**Acceptance Criteria:**
+
+**Given** a `DATABASE_URL`, **when** the binary starts, **then** it builds a sqlx MariaDB pool (`mysql` + `tls-rustls-ring`) and applies the embedded migration(s) on startup.
+**Given** the first migration, **when** it is inspected, **then** every text column carries an explicit binary collation (D64) — so `cargo xtask ci`'s `ddl-collation` gate now bites on a real migration and passes.
+**Given** any dynamic SQL, **when** it is written, **then** it uses sqlx 0.9's `AssertSqlSafe` (the static `query*()` path takes `impl SqlSafeStr`).
+**And** `GET /healthz` reports database reachability; CI's MariaDB service container (Story 1.5) exercises this.
+
+### Story 3.3: The Repository skeleton — two traits
+
+As a maintainer,
+I want the read/write repository contract as TWO traits with a MariaDB adapter skeleton,
+So that the domain names persistence abstractly and `sqlx::Error` dies in the adapter (D47).
+
+**Acceptance Criteria:**
+
+**Given** `opencmdb-core`, **when** the repository contract is defined, **then** it is TWO traits — a `&self` read side (`ReadRepository`) and a `&mut self` write/unit side (`Unit<'u>`) — because a single `Reads` trait does not compile (HRTB over a GAT); `sqlx` is NOT named in core.
+**Given** the MariaDB adapter in `opencmdb-bin`, **when** it maps errors, **then** `sqlx::Error` is classified into the closed `RepositoryError` taxonomy (`Contention`/`Constraint`/`NotFound`/`Backend`) — never `#[from] sqlx::Error` leaking into core.
+**And** the skeleton compiles and is exercised by a minimal round-trip test against the CI MariaDB; the frontier gate stays green.
+
+### Story 3.4: The `Clock` port, routed by the reader
+
+As a maintainer,
+I want time to enter as a `Clock` port routed by the reader, never read inside the domain,
+So that the engine is a deterministic pure function (D10/D19/D25).
+
+**Acceptance Criteria:**
+
+**Given** the domain, **when** it needs "now", **then** it receives a `Timestamp` bound from a `Clock` port at the composition root — the domain never calls a wall clock (core's chrono has `clock` off, so it cannot).
+**Given** a test, **when** it supplies a fixed `Clock`, **then** behaviour is reproducible.
+**And** the `Clock` is wired through the reader path so a later replay/fixture can drive time.
+
+### Story 3.5: A minimal ARP/ping connector, ingested
+
+As a maintainer,
+I want a real minimal ARP/ping source that implements the `Connector` trait and whose observations are ingested,
+So that observed state comes from a genuine source, not a stub.
+
+**Acceptance Criteria:**
+
+**Given** a declared subnet (FR3), **when** the connector polls, **then** it discovers active hosts (FR4, ping-only fallback without `NET_RAW`) and emits `Observation`s through the `ObservationSink` — and it PASSES `run_connector_contract` (Story 2.5).
+**Given** a poll's observations, **when** ingestion runs, **then** they are persisted as observed records (linked-never-merged, FR11), dated by the source.
+**And** the connector lives in `opencmdb-bin` (it touches the network); no private network data is committed (tests use documentation ranges).
+
+### Story 3.6: A first real gap, abstaining elsewhere
+
+As a maintainer,
+I want the engine to compute one real gap on a cardinality-1 perimeter and abstain + count everywhere else,
+So that the product's core thesis — the gap — is demonstrated end to end.
+
+**Acceptance Criteria:**
+
+**Given** a declared record and a linked observation that differ on a cardinality-1 perimeter, **when** reconciliation runs, **then** it reconciles by identity (FR10) and surfaces exactly that gap.
+**Given** ambiguous or out-of-perimeter data, **when** the engine runs, **then** it ABSTAINS (never guesses/merges, FR16 min) and the abstention is counted and grouped by cause (reach, not debt).
+**And** the gap computation is a pure function (no clock, no SQL) and is unit-tested on synthetic inputs.
+
+### Story 3.7: One page shows the gap
+
+As a maintainer,
+I want a single web page that renders the real gap with Askama + HTMX + Tailwind,
+So that a human sees the observed-vs-declared difference.
+
+**Acceptance Criteria:**
+
+**Given** the running app, **when** the page is served, **then** it renders the declared record, the linked observation, and the gap between them (Askama template, HTMX interactivity, committed Tailwind CSS — no CDN).
+**Given** the UX baseline, **when** the page loads, **then** design tokens are applied and `app.js` manages focus on HTMX swaps (UX-DR accessibility); dark theme default.
+**And** the page shows the abstention count/reach honestly (FR39 min); it never presents an abstention as a reproach.
+
+### Story 3.8: Transversal anchors
+
+As a maintainer,
+I want the empty cross-cutting anchors in place — auth-deny middleware, `/metrics`, i18n `t!()`,
+So that later features attach to existing seams instead of inventing them.
+
+**Acceptance Criteria:**
+
+**Given** any HTTP route, **when** it is requested unauthenticated, **then** an auth-deny middleware refuses it by default (deny-by-default seam; real auth is later).
+**Given** the app, **when** `GET /metrics` is called, **then** it serves Prometheus metrics (raw `prometheus`), behind the scrape auth.
+**Given** any user-facing string, **when** it is rendered, **then** it goes through `rust-i18n`'s `t!()` (EN/FR scaffolding; the forbidden-word lint seam noted).
+
+### Story 3.9: Packaging — Dockerfile, compose template, `.env.example`
+
+As a maintainer,
+I want a Docker image and a reference compose that targets an external MariaDB,
+So that opencmdb can be deployed on the NAS without leaking secrets.
+
+**Acceptance Criteria:**
+
+**Given** the workspace, **when** the image is built, **then** a `Dockerfile` produces a distroless, static, non-root image of `opencmdb-bin` (D66), built `--locked`.
+**Given** the `docker/` directory, **when** it is inspected, **then** it holds a `docker-compose.yml` running ONLY the opencmdb service pointed at an EXISTING external MariaDB (not a bundled DB container), plus a `.env.example` with documented placeholders (RFC 5737 addresses, `CHANGE_ME`) — and the real `.env` is git-ignored.
+**And** no production secrets, no real hostnames, and no NAS path appear in any committed file (they live only on the NAS).
+
+### Story 3.10: Release 0.1.0 to Docker Hub
+
+As a maintainer,
+I want a `0.1.0` image published to Docker Hub via CI on a version tag,
+So that live testing can begin from a real published artifact.
+
+**Acceptance Criteria:**
+
+**Given** a pushed git tag `v0.1.0`, **when** the release workflow runs, **then** it builds the image and pushes `gcorbaz/opencmdb:0.1.0` (and `:latest`) to Docker Hub using the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repository secrets.
+**Given** the release workflow, **when** it completes, **then** it syncs `docker/README.dockerhub.md` to the Docker Hub repository description.
+**And** `docker pull gcorbaz/opencmdb:0.1.0` works and the container starts against a MariaDB; the release is reachable for live testing. Closes Epic 3 (v0.1).
