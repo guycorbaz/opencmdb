@@ -100,3 +100,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-20 — Implemented Story 3.6 (the first real gap). `gap::reconcile` computes one drift gap on a cardinality-1 perimeter and abstains + counts everywhere else (out-of-perimeter, conflicting, no-observed-value) — pure (no clock, no SQL, no origin/history). 5 synthetic tests; frontier/clippy/fmt green; full workspace green. Status → review.
+- 2026-07-20 — CI (29740442980) FAILED: an unused `MacAddr` import in the test module — CI compiles tests with `-D warnings`, but local `cargo clippy --workspace` (no `--all-targets`) does NOT lint test code, so it slipped through. FIX: removed the import; local gate hardened to `cargo clippy --workspace --all-targets --locked -- -D warnings` (lints test targets too). Re-pushed.

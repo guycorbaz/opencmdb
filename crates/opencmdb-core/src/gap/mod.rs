@@ -130,7 +130,7 @@ pub fn reconcile(
 mod tests {
     use super::*;
     use crate::observation::{
-        ConnectorId, Fact, HostnameSource, L2DomainId, MacAddr, ObsId, Scope, Timestamp, VantageId,
+        ConnectorId, Fact, HostnameSource, L2DomainId, ObsId, Scope, Timestamp, VantageId,
     };
     use std::net::Ipv4Addr;
     use uuid::Uuid;
