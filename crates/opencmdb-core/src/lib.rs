@@ -20,6 +20,9 @@ pub mod observation;
 #[cfg(any(test, feature = "test-support"))]
 pub mod testing;
 
+#[cfg(any(test, feature = "test-support"))]
+pub use testing::{ScriptedConnector, ScriptedOutcome, run_connector_contract};
+
 pub use connector::{Connector, ConnectorError, ObservationSink, PollSummary, VecSink};
 pub use observation::{
     Capabilities, ConnectorId, Fact, FactKind, HostnameSource, L2DomainId, MacAddr, MacParseError,
