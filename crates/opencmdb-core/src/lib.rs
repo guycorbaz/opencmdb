@@ -15,6 +15,11 @@
 pub mod connector;
 pub mod observation;
 
+/// Scripted in-memory connector + the contract test harness. Compiled for this crate's own
+/// tests and for consumers that enable the `test-support` feature; never in the shipped build.
+#[cfg(any(test, feature = "test-support"))]
+pub mod testing;
+
 pub use connector::{Connector, ConnectorError, ObservationSink, PollSummary, VecSink};
 pub use observation::{
     Capabilities, ConnectorId, Fact, FactKind, HostnameSource, L2DomainId, MacAddr, MacParseError,

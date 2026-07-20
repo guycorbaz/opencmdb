@@ -8,6 +8,12 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[features]
+# Exposes `opencmdb_core::testing` (the scripted connector + the connector contract test).
+# OFF by default, so `opencmdb-bin`'s normal build never ships these helpers; a consumer that
+# wants to run the contract against its own connector enables it as a dev-dependency feature.
+test-support = []
+
 [dependencies]
 # default-features off drops chrono's `clock`/`wasmbind` (wasm-bindgen + windows-* cruft):
 # this is a Linux NAS binary, and time is bound as a parameter from Rust, not read via
