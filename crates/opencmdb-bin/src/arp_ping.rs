@@ -38,6 +38,46 @@ impl ArpPingConnector {
             timeout: Duration::from_secs(1),
         }
     }
+
+    /// Build a connector for a declared IPv4 subnet in CIDR form (e.g. `192.0.2.0/24`).
+    pub fn from_cidr(id: ConnectorId, scope: Scope, cidr: &str) -> Result<Self, String> {
+        Ok(Self::new(id, scope, subnet_hosts(cidr)?))
+    }
+}
+
+/// Expand an IPv4 CIDR (`addr/prefix`) into its host addresses — excluding the network and
+/// broadcast addresses for prefixes `<= 30`. Rejects prefixes below `/22` so a fat-fingered
+/// subnet cannot launch a huge scan (bounds it to ~1024 hosts).
+pub fn subnet_hosts(cidr: &str) -> Result<Vec<Ipv4Addr>, String> {
+    let (addr, prefix) = cidr.split_once('/').ok_or("expected `address/prefix`")?;
+    let base: Ipv4Addr = addr
+        .parse()
+        .map_err(|_| format!("bad IPv4 address: {addr}"))?;
+    let prefix: u32 = prefix
+        .parse()
+        .map_err(|_| format!("bad prefix: {prefix}"))?;
+    if prefix > 32 {
+        return Err(format!("prefix /{prefix} exceeds /32"));
+    }
+    if prefix < 22 {
+        return Err(format!("subnet /{prefix} too large — use /22 or smaller"));
+    }
+    let mask = if prefix == 0 {
+        0
+    } else {
+        u32::MAX << (32 - prefix)
+    };
+    let network = u32::from(base) & mask;
+    let count = 1u32 << (32 - prefix);
+    let mut hosts = Vec::new();
+    for i in 0..count {
+        // Skip the network (.0) and broadcast (last) addresses on real subnets (prefix <= 30).
+        if prefix <= 30 && (i == 0 || i == count - 1) {
+            continue;
+        }
+        hosts.push(Ipv4Addr::from(network + i));
+    }
+    Ok(hosts)
 }
 
 impl Connector for ArpPingConnector {
@@ -51,6 +91,11 @@ impl Connector for ArpPingConnector {
         sink: &mut dyn ObservationSink,
         cancel: CancellationToken,
     ) -> Result<PollSummary, ConnectorError> {
+        // Cancellation point BEFORE any work — a pre-cancelled poll opens no socket and touches
+        // no network (also why this returns Cancelled, not Misconfigured, on a cancelled start).
+        if cancel.is_cancelled() {
+            return Err(ConnectorError::Cancelled);
+        }
         // Unprivileged ICMP: surge-ping defaults to a SOCK_DGRAM socket — no NET_RAW where the
         // kernel allows it (net.ipv4.ping_group_range).
         let config = Config::builder().kind(ICMP::V4).build();
@@ -105,6 +150,21 @@ mod tests {
 
     fn now() -> Timestamp {
         chrono::DateTime::from_timestamp(0, 0).unwrap()
+    }
+
+    #[test]
+    fn subnet_hosts_expands_and_bounds() {
+        // /30 → 2 usable hosts (.1, .2), skipping network/broadcast.
+        assert_eq!(
+            subnet_hosts("192.0.2.0/30").unwrap(),
+            vec![Ipv4Addr::new(192, 0, 2, 1), Ipv4Addr::new(192, 0, 2, 2)]
+        );
+        // /24 → 254 usable hosts.
+        assert_eq!(subnet_hosts("192.0.2.0/24").unwrap().len(), 254);
+        // A too-large subnet and malformed input are rejected.
+        assert!(subnet_hosts("10.0.0.0/8").is_err());
+        assert!(subnet_hosts("not-a-cidr").is_err());
+        assert!(subnet_hosts("192.0.2.0/33").is_err());
     }
 
     /// Universal contract invariant: a pre-cancelled poll emits nothing and returns cleanly.
