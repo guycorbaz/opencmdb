@@ -1,18 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-  "packageRules": [
-    {
-      "description": "Patch + minor updates: one grouped PR, auto-merged when CI is green.",
-      "matchUpdateTypes": ["patch", "minor"],
-      "groupName": "patch and minor dependencies",
-      "automerge": true,
-      "automergeType": "pr"
-    },
-    {
-      "description": "Major updates: a dedicated, non-grouped PR each; never auto-merged, so two breaking changes never share a commit.",
-      "matchUpdateTypes": ["major"],
-      "automerge": false
-    }
-  ]
+  "description": [
+    "Notify-only. Renovate records every available dependency update in the Dependency",
+    "Dashboard issue and opens NO branch or PR until the maintainer approves it there.",
+    "The operator keeps full control of the code; Renovate never modifies it automatically.",
+    "(Supersedes Story 1.6's grouped-auto-merge policy, at Guy's request 2026-07-20.)"
+  ],
+  "dependencyDashboard": true,
+  "dependencyDashboardApproval": true
 }
