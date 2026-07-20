@@ -7,8 +7,14 @@
 //! `app()` seam in the stories that follow.
 
 mod arp_ping;
+mod auth;
+mod metrics;
 mod page;
 mod repo;
+
+// The i18n seam (D39/D66): user-facing strings resolve through `t!()` against `locales/`. EN is
+// the fallback; the source YAML is greppable so the D65 vocabulary gate can later lint it.
+rust_i18n::i18n!("locales", fallback = "en");
 
 /// Serializes the DB-touching tests: they share one MariaDB (CI's service) and would otherwise
 /// race on `migrate!` — two concurrent migrations both insert version 1 into `_sqlx_migrations`,
@@ -46,6 +52,11 @@ impl Clock for SystemClock {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     init_tracing();
+    // Select the UI locale (default `en`); user-facing strings resolve through `t!()`.
+    let locale = std::env::var("OPENCMDB_LOCALE").unwrap_or_else(|_| "en".to_string());
+    rust_i18n::set_locale(&locale);
+    // Register the metrics so `/metrics` is non-empty on the first scrape.
+    metrics::init();
     // The one place the wall clock is read; the domain receives Timestamps, never a clock.
     let clock = SystemClock;
     tracing::info!(started_at = %clock.now(), "opencmdb starting");
@@ -85,7 +96,11 @@ fn app(pool: MySqlPool) -> Router {
         .route("/", get(page::index))
         .route("/gap", get(page::gap_fragment))
         .route("/assets/{*path}", get(page::asset))
+        .route("/metrics", get(metrics::handler))
         .route("/healthz", get(healthz))
+        // Deny-by-default seam over every route (Story 3.8): the public UI is allowlisted,
+        // `/metrics` sits behind the scrape token, everything else is refused.
+        .layer(axum::middleware::from_fn(auth::auth_deny))
         .with_state(pool)
 }
 
@@ -309,6 +324,72 @@ mod tests {
         assert!(html.contains("192.0.2.10"), "renders the entity");
         assert!(html.contains("nas"), "renders the declared hostname");
         assert!(html.contains("intruder"), "renders the observed hostname");
+    }
+
+    /// The auth-deny seam, exercised without a database (a lazy pool never connects because these
+    /// routes issue no query). Deny-by-default holds; `/metrics` sits behind the scrape token; the
+    /// public allowlist stays reachable.
+    #[tokio::test]
+    async fn auth_denies_by_default_and_gates_metrics() {
+        metrics::init();
+        let pool =
+            MySqlPool::connect_lazy("mysql://root:x@127.0.0.1:3306/none").expect("lazy pool");
+
+        let get = |uri: &str, bearer: Option<&str>| {
+            let mut builder = Request::builder().uri(uri.to_string());
+            if let Some(token) = bearer {
+                builder =
+                    builder.header(axum::http::header::AUTHORIZATION, format!("Bearer {token}"));
+            }
+            let request = builder.body(Body::empty()).unwrap();
+            app(pool.clone()).oneshot(request)
+        };
+
+        // No scrape token configured → `/metrics` is closed; an un-allowlisted path is denied.
+        unsafe { std::env::remove_var("OPENCMDB_METRICS_TOKEN") };
+        assert_eq!(
+            get("/metrics", None).await.unwrap().status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            get("/admin", None).await.unwrap().status(),
+            StatusCode::UNAUTHORIZED,
+            "deny by default"
+        );
+        // A public walking-skeleton surface stays reachable (no DB query).
+        assert_eq!(
+            get("/assets/app.css", None).await.unwrap().status(),
+            StatusCode::OK
+        );
+
+        // With a token, the correct Bearer scrapes; a wrong one is refused.
+        unsafe { std::env::set_var("OPENCMDB_METRICS_TOKEN", "s3cret") };
+        let ok = get("/metrics", Some("s3cret")).await.unwrap();
+        assert_eq!(ok.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(ok.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert!(
+            String::from_utf8_lossy(&body).contains("opencmdb_build_info"),
+            "the registry is non-empty"
+        );
+        assert_eq!(
+            get("/metrics", Some("wrong")).await.unwrap().status(),
+            StatusCode::UNAUTHORIZED
+        );
+        unsafe { std::env::remove_var("OPENCMDB_METRICS_TOKEN") };
+    }
+
+    /// The i18n `t!()` seam resolves EN and FR. Uses an explicit `locale =` so it never mutates the
+    /// global locale (no race with rendering tests).
+    #[test]
+    fn i18n_resolves_en_and_fr() {
+        assert_eq!(rust_i18n::t!("page.the_gap", locale = "en"), "The gap");
+        assert_eq!(rust_i18n::t!("page.the_gap", locale = "fr"), "L'écart");
+        assert_eq!(
+            rust_i18n::t!("cause.out_of_perimeter", locale = "fr"),
+            "Hors du périmètre"
+        );
     }
 
     #[test]

@@ -1,0 +1,56 @@
+# rust-i18n translation source (D39: greppable + diffable). One key, one translation per locale;
+# the D65 vocabulary/forbidden-word gate can later lint these strings. EN is the fallback.
+_version: 2
+
+page.tagline:
+  en: "observed vs declared — the gap is the product"
+  fr: "observé vs déclaré — l'écart est le produit"
+page.entity:
+  en: "Entity"
+  fr: "Entité"
+page.refresh:
+  en: "Refresh"
+  fr: "Rafraîchir"
+page.declared:
+  en: "Declared"
+  fr: "Déclaré"
+page.observed:
+  en: "Observed"
+  fr: "Observé"
+page.no_observation:
+  en: "No in-perimeter observation yet."
+  fr: "Aucune observation dans le périmètre pour l'instant."
+page.the_gap:
+  en: "The gap"
+  fr: "L'écart"
+page.no_drift:
+  en: "✓ No drift — declared and observed agree on every compared field."
+  fr: "✓ Aucun écart — le déclaré et l'observé concordent sur chaque champ comparé."
+page.arrow_observed:
+  en: "→ observed"
+  fr: "→ observé"
+page.reach:
+  en: "Reach"
+  fr: "Portée"
+page.reach_hint:
+  en: "What we saw but could not place — reach, not debt."
+  fr: "Ce que nous avons vu sans pouvoir le rattacher — portée, pas dette."
+page.nothing_unplaced:
+  en: "Nothing left unplaced."
+  fr: "Rien qui reste non rattaché."
+page.no_declared_title:
+  en: "No declared record yet"
+  fr: "Aucun enregistrement déclaré pour l'instant"
+page.no_declared_hint:
+  en: "Add a declared entity (with an ipv4 attribute) and let a scan observe it — the gap appears here."
+  fr: "Ajoutez une entité déclarée (avec un attribut ipv4) et laissez un scan l'observer — l'écart apparaît ici."
+
+cause.out_of_perimeter:
+  en: "Out of perimeter"
+  fr: "Hors du périmètre"
+cause.no_observed_value:
+  en: "No observed value"
+  fr: "Aucune valeur observée"
+cause.conflicting_observations:
+  en: "Conflicting observations"
+  fr: "Observations contradictoires"

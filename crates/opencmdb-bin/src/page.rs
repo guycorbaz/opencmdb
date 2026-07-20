@@ -52,27 +52,71 @@ struct ReconciledView {
     abstention_count: usize,
 }
 
+/// The user-facing strings, resolved through the i18n `t!()` seam (Story 3.8). The templates read
+/// these instead of literals, so every rendered string flows through `rust-i18n`.
+struct Strings {
+    tagline: String,
+    entity: String,
+    refresh: String,
+    declared: String,
+    observed: String,
+    no_observation: String,
+    the_gap: String,
+    no_drift: String,
+    arrow_observed: String,
+    reach: String,
+    reach_hint: String,
+    nothing_unplaced: String,
+    no_declared_title: String,
+    no_declared_hint: String,
+}
+
+fn strings() -> Strings {
+    use rust_i18n::t;
+    Strings {
+        tagline: t!("page.tagline").to_string(),
+        entity: t!("page.entity").to_string(),
+        refresh: t!("page.refresh").to_string(),
+        declared: t!("page.declared").to_string(),
+        observed: t!("page.observed").to_string(),
+        no_observation: t!("page.no_observation").to_string(),
+        the_gap: t!("page.the_gap").to_string(),
+        no_drift: t!("page.no_drift").to_string(),
+        arrow_observed: t!("page.arrow_observed").to_string(),
+        reach: t!("page.reach").to_string(),
+        reach_hint: t!("page.reach_hint").to_string(),
+        nothing_unplaced: t!("page.nothing_unplaced").to_string(),
+        no_declared_title: t!("page.no_declared_title").to_string(),
+        no_declared_hint: t!("page.no_declared_hint").to_string(),
+    }
+}
+
 #[derive(Template)]
 #[template(path = "gap.html")]
 struct GapPage {
     view: ReconciledView,
+    s: Strings,
 }
 
 #[derive(Template)]
 #[template(path = "_gap_card.html")]
 struct GapFragment {
     view: ReconciledView,
+    s: Strings,
 }
 
 // ── The pure view builder (unit-tested without a DB) ─────────────────
 
-/// A human label for an abstention cause — reach, never a reproach (FR39).
-fn cause_label(cause: AbstentionCause) -> &'static str {
+/// A human label for an abstention cause — reach, never a reproach (FR39). Routed through the
+/// i18n `t!()` seam (Story 3.8).
+fn cause_label(cause: AbstentionCause) -> String {
+    use rust_i18n::t;
     match cause {
-        AbstentionCause::OutOfPerimeter => "Out of perimeter",
-        AbstentionCause::NoObservedValue => "No observed value",
-        AbstentionCause::ConflictingObservations => "Conflicting observations",
+        AbstentionCause::OutOfPerimeter => t!("cause.out_of_perimeter"),
+        AbstentionCause::NoObservedValue => t!("cause.no_observed_value"),
+        AbstentionCause::ConflictingObservations => t!("cause.conflicting_observations"),
     }
+    .to_string()
 }
 
 /// Project a fact into a displayable `(label, value)` pair (a superset of the engine's projection —
@@ -188,7 +232,7 @@ fn build_view(
         .abstentions
         .iter()
         .map(|(cause, count)| AbstentionRow {
-            cause: cause_label(*cause).to_string(),
+            cause: cause_label(*cause),
             count: *count,
         })
         .collect();
@@ -227,7 +271,7 @@ fn server_error(error: sqlx::Error) -> Response {
 /// `GET /` — the full page.
 pub async fn index(State(pool): State<MySqlPool>) -> Response {
     match reconcile_view(&pool).await {
-        Ok(view) => render(GapPage { view }),
+        Ok(view) => render(GapPage { view, s: strings() }),
         Err(response) => response,
     }
 }
@@ -235,7 +279,7 @@ pub async fn index(State(pool): State<MySqlPool>) -> Response {
 /// `GET /gap` — just the card, for HTMX refresh swaps.
 pub async fn gap_fragment(State(pool): State<MySqlPool>) -> Response {
     match reconcile_view(&pool).await {
-        Ok(view) => render(GapFragment { view }),
+        Ok(view) => render(GapFragment { view, s: strings() }),
         Err(response) => response,
     }
 }
@@ -309,8 +353,9 @@ mod tests {
         assert_eq!(view.gaps[0].declared, "nas");
         assert_eq!(view.gaps[0].observed, "intruder");
         assert_eq!(view.abstention_count, 0);
-        // The card renders without error.
-        assert!(GapFragment { view }.render().unwrap().contains("intruder"));
+        // The card renders without error (through the i18n string seam).
+        let html = GapFragment { view, s: strings() }.render().unwrap();
+        assert!(html.contains("intruder"));
     }
 
     #[test]
@@ -340,8 +385,8 @@ mod tests {
     fn build_view_empty_when_no_declared_entity() {
         let view = build_view(Vec::new(), Vec::new(), None);
         assert!(!view.has_entity);
-        // The empty state renders honestly.
-        let html = GapPage { view }.render().unwrap();
+        // The empty state renders honestly (default locale `en`).
+        let html = GapPage { view, s: strings() }.render().unwrap();
         assert!(html.contains("No declared record yet"));
     }
 }

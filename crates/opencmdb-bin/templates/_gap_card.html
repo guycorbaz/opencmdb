@@ -1,13 +1,13 @@
 <section id="gap-card" class="card" tabindex="-1" aria-label="Reconciliation result">
 {% if view.has_entity %}
   <div class="entity">
-    <h1>Entity <span class="mono declared">{{ view.entity_ipv4 }}</span></h1>
-    <button class="refresh" hx-get="/gap" hx-target="#gap-card" hx-swap="outerHTML">Refresh</button>
+    <h1>{{ s.entity }} <span class="mono declared">{{ view.entity_ipv4 }}</span></h1>
+    <button class="refresh" hx-get="/gap" hx-target="#gap-card" hx-swap="outerHTML">{{ s.refresh }}</button>
   </div>
 
   <div class="cols">
     <div class="col">
-      <h2>Declared</h2>
+      <h2>{{ s.declared }}</h2>
       <dl class="rows declared">
       {% for row in view.declared %}
         <div class="row"><dt class="mono">{{ row.key }}</dt><dd class="mono">{{ row.value }}</dd></div>
@@ -15,9 +15,9 @@
       </dl>
     </div>
     <div class="col">
-      <h2>Observed</h2>
+      <h2>{{ s.observed }}</h2>
       {% if view.observed.is_empty() %}
-        <p class="muted">No in-perimeter observation yet.</p>
+        <p class="muted">{{ s.no_observation }}</p>
       {% else %}
       <dl class="rows observed">
       {% for row in view.observed %}
@@ -28,26 +28,26 @@
     </div>
   </div>
 
-  <h2>The gap</h2>
+  <h2>{{ s.the_gap }}</h2>
   {% if view.gaps.is_empty() %}
-    <p class="clear">✓ No drift — declared and observed agree on every compared field.</p>
+    <p class="clear">{{ s.no_drift }}</p>
   {% else %}
   <ul class="gaps">
   {% for g in view.gaps %}
     <li class="gap">
       <span class="field mono">{{ g.field }}</span>
       <span class="declared mono">{{ g.declared }}</span>
-      <span class="arrow">→ observed</span>
+      <span class="arrow">{{ s.arrow_observed }}</span>
       <span class="observed mono">{{ g.observed }}</span>
     </li>
   {% endfor %}
   </ul>
   {% endif %}
 
-  <h2>Reach <span class="count">{{ view.abstention_count }}</span></h2>
-  <p class="muted">What we saw but could not place — reach, not debt.</p>
+  <h2>{{ s.reach }} <span class="count">{{ view.abstention_count }}</span></h2>
+  <p class="muted">{{ s.reach_hint }}</p>
   {% if view.abstentions.is_empty() %}
-    <p class="muted">Nothing left unplaced.</p>
+    <p class="muted">{{ s.nothing_unplaced }}</p>
   {% else %}
   <ul class="abstentions">
   {% for a in view.abstentions %}
@@ -56,7 +56,7 @@
   </ul>
   {% endif %}
 {% else %}
-  <h1>No declared record yet</h1>
-  <p class="muted">Add a declared entity (with an <span class="mono">ipv4</span> attribute) and let a scan observe it — the gap appears here.</p>
+  <h1>{{ s.no_declared_title }}</h1>
+  <p class="muted">{{ s.no_declared_hint }}</p>
 {% endif %}
 </section>
