@@ -5,12 +5,17 @@ inputDocuments:
   - _bmad-output/planning-artifacts/architecture.md
   - _bmad-output/planning-artifacts/ux-design-specification.md
 resumePoint: >
-  Step 3 (create-stories) IN PROGRESS. Requirements inventory, FR coverage map,
-  and the approved 23-epic list (v4) are complete. Detailed stories written for
-  Epic 1 only. NEXT: write stories for Epic 2 (Le contrat de connecteur), then
-  Epics 3–23, one epic at a time (chosen cadence), each reviewed before append.
-  After all epics: step-04 final validation. Resume by invoking
-  bmad-create-epics-and-stories and continuing step-03 from Epic 2.
+  Step 3 (create-stories) IN PROGRESS, now JUST-IN-TIME (Guy, 2026-07-19): each
+  epic is decomposed into stories only when its turn to be built comes, so the
+  breakdown incorporates learnings from the epics already shipped.
+  EPIC 1 is COMPLETE — its 6 stories (1.1–1.6) were written, implemented,
+  reviewed, and SHIPPED to master (all real GitHub CI runs green), 2026-07-19/20.
+  NEXT: decompose Epic 2 (Le contrat de connecteur) into small stories — the
+  Connector trait (D34 final form: async poll + ObservationSink -> PollSummary),
+  the closed ConnectorError taxonomy (D33), the consumer-driven contract test,
+  and a minimal connector to exercise it. ⚠️ The `Reads` two-traits bomb (front-
+  matter note d) belongs to Epic 3's walking skeleton, not Epic 2. After all
+  epics: step-04 final validation.
 ---
 
 # opencmdb - Epic Breakdown
@@ -583,3 +588,113 @@ So that builds are reproducible and dependencies stay current without manual toi
 **Given** a breaking (major) dependency update
 **When** Renovate opens it
 **Then** it is a dedicated, non-grouped PR (never two breaking changes in one commit).
+
+## Epic 2: Le contrat de connecteur
+
+Define the generalized, source-agnostic `Connector` trait and its closed error taxonomy, plus the consumer-driven contract test every connector (fixture, ARP, UniFi, future) must satisfy. No throwaway readers — every source implements this one contract. First real domain code in `opencmdb-core`. Decisions: the `Connector` trait and all its types live in `opencmdb-core` (the domain contract; D19 — the fixture, a domain test double, IS the connector); native `async fn` in trait (Rust 1.96, no `async-trait`); cancellation via `tokio-util`'s `CancellationToken` (the frontier gate D47 forbids only `anyhow`/`axum`/`sqlx`/`askama`). Covers ARCH-19/20/21; refs D19, D33, D34, D35 (NFR7).
+
+### Story 2.1: Domain observation types
+
+As a maintainer,
+I want the core observation types (`Observation`, `Scope`, `ConnectorId`, a dated `Capabilities` descriptor),
+So that every connector emits the same shape and an observation can never express "gone".
+
+**Acceptance Criteria:**
+
+**Given** the `opencmdb-core` crate
+**When** the observation types are defined
+**Then** an `Observation` records what a source saw, dated by the source (an `observed_at: Timestamp`), and has NO variant or field meaning "absent" / "gone" / "disappeared" — absence is DERIVED by the engine, never emitted by a source (NFR7 / D35).
+
+**Given** a `Scope` on an `Observation`
+**When** an observation is emitted
+**Then** it carries the observation's `Scope { l2_domain: L2DomainId, vantage: VantageId }` (D19) — the MAC's uniqueness space and WHO saw it. (Note: this is the OBSERVATION scope of D19, distinct from D34 §3's liveness-blindness scope `(connector, scope)` — the "smallest set that can go blind" — which keys `source_state` and is built later with liveness, Epic 13. Do not conflate them.)
+
+**Given** a `Capabilities` descriptor
+**When** it is produced
+**Then** it is a DATED FACT (carries a `Timestamp`), able to travel with a batch — not a constant (D34 §1).
+
+**And** the types live in `opencmdb-core`, are unit-tested, and `cargo xtask ci` stays green (the frontier gate: no `anyhow`/`axum`/`sqlx`/`askama` in core).
+
+### Story 2.2: The closed `ConnectorError` taxonomy
+
+As a maintainer,
+I want a closed `ConnectorError` enum,
+So that alert suppression (FR5/FR8/FR19) can match on named causes and a connector failure is never an opaque `anyhow` string.
+
+**Acceptance Criteria:**
+
+**Given** `opencmdb-core`
+**When** `ConnectorError` is defined
+**Then** it is a `thiserror` enum with named variants covering the real failure causes (e.g. authentication, unreachable/transport, per-poll timeout, cancelled, protocol/parse) — with NO `anyhow` and NO `Other(String)` catch-all that would make FR5/FR8/FR19 inexpressible (D33).
+
+**Given** a `Cancelled` outcome
+**When** it is returned
+**Then** it is a distinct variant that leaves `source_state` unchanged — it produces no gap (NFR7).
+
+**And** each variant is exercised by a test, `Display` is meaningful, and the frontier gate stays green (`anyhow` absent from core by construction).
+
+### Story 2.3: The `Connector` trait, `ObservationSink`, `PollSummary`, cancellation
+
+As a maintainer,
+I want the generalized `Connector` trait with incremental emission and cooperative cancellation,
+So that every source implements one contract and a cut-short poll never throws away valid observations.
+
+**Acceptance Criteria:**
+
+**Given** `opencmdb-core`
+**When** the trait is defined
+**Then** `Connector` exposes `fn id(&self) -> ConnectorId` and `async fn poll(&mut self, now: Timestamp, sink: &mut dyn ObservationSink, cancel: CancellationToken) -> Result<PollSummary, ConnectorError>` (native `async fn` in trait, no `async-trait` crate).
+
+**Given** `ObservationSink`
+**When** a connector emits
+**Then** it emits observations INCREMENTALLY through the sink, so observations already emitted survive a later timeout or cancellation (no total loss — D34 §2).
+
+**Given** `PollSummary`
+**When** a poll completes
+**Then** it carries the batch's `Capabilities` and the `scopes_covered`.
+
+**Given** `cancel` fires mid-poll
+**When** the connector reaches a cancellation point
+**Then** it returns cleanly; already-emitted observations remain valid (their `observed_at` is the source's, they do not expire because the poll was cut).
+
+**And** cancellation uses `tokio-util`'s `CancellationToken`; `cargo xtask ci` stays green (`tokio-util` is not on the frontier denylist).
+
+### Story 2.4: A minimal in-memory connector
+
+As a maintainer,
+I want a trivial in-memory `Connector` implementation,
+So that the contract can be exercised before any real source or the JSONL fixture exists.
+
+**Acceptance Criteria:**
+
+**Given** a scripted batch of observations plus a `Capabilities` descriptor and scopes
+**When** `poll` runs to completion
+**Then** it emits them through the sink and returns a `PollSummary` carrying those capabilities and scopes.
+
+**Given** the connector is scripted to stop early or the `cancel` token fires
+**When** `poll` runs
+**Then** it stops at a cancellation point and returns cleanly with what it emitted so far.
+
+**Given** it can be scripted for the contract cases (empty batch; partial emission then an error)
+**When** the contract test drives it
+**Then** those behaviours are reproducible with zero mocks.
+
+**And** it is a pure, in-memory helper (no I/O) — NOT the JSONL `FixtureConnector` of Epic 4 — and it does not enter the shipped binary path.
+
+### Story 2.5: The consumer-driven contract test
+
+As a maintainer,
+I want a reusable contract test every connector must pass,
+So that fixture, ARP, UniFi, and future connectors all honour the same behaviour.
+
+**Acceptance Criteria:**
+
+**Given** any `Connector`
+**When** the contract test runs
+**Then** it exercises the five cases: (1) empty stream, (2) partial emission then error, (3) a missing/absent field — the observation is still valid, no "gone" is fabricated, (4) timeout — `tokio::time::timeout` wrapping `poll` drops the future, yet observations already emitted through the sink survive, (5) cancellation — the token fires, `poll` returns cleanly, emitted observations survive.
+
+**Given** the minimal in-memory connector (Story 2.4)
+**When** it is run through the contract test
+**Then** it passes all five cases.
+
+**And** the harness is reusable — a function taking a connector factory — so a future connector plugs in with a single call.

@@ -11,3 +11,10 @@
 //! asserts nothing about identity yet.
 
 #![forbid(unsafe_code)]
+
+pub mod observation;
+
+pub use observation::{
+    Capabilities, ConnectorId, Fact, FactKind, HostnameSource, L2DomainId, MacAddr, MacParseError,
+    ObsId, Observation, Scope, Timestamp, VantageId,
+};
