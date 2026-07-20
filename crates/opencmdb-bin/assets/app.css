@@ -1,0 +1,138 @@
+/* opencmdb — hand-authored design tokens (UX spec §Visual Design Foundation).
+   Dark is the default (home-lab audience); one token source drives both themes.
+   No Tailwind build step for the walking skeleton; no CDN — htmx is served locally. */
+
+:root,
+:root[data-theme="dark"] {
+  --bg: #0f1420;
+  --surface: #161c2b;
+  --border: #2a3346;
+  --text: #e2e8f0;
+  --muted: #8a94a8; /* observed = muted/grayed (factual, non-editable) */
+  --accent: #d99a4e; /* amber — reserved for the document action, never decorative */
+  --attention: #f0f4fa; /* severity by luminosity + weight, never hue (no red) */
+}
+
+:root[data-theme="light"] {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #dfe3ec;
+  --text: #1a2233;
+  --muted: #64708a;
+  --accent: #b5793a;
+  --attention: #0b1220;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.mono {
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Chrome ─────────────────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 600; letter-spacing: 0.02em; }
+.tagline { color: var(--muted); font-size: 12px; }
+
+.wrap { max-width: 860px; margin: 0 auto; padding: 24px; }
+
+/* ── Card (hairline elevation, 3px radius, no shadows) ───────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 24px;
+}
+.card:focus { outline: 2px solid var(--accent); outline-offset: 2px; } /* visible focus on HTMX swap */
+
+.entity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.entity h1 { font-size: 20px; font-weight: 600; margin: 0; }
+
+.refresh {
+  min-height: 44px; /* touch target ≥ 44px (NFR24) */
+  padding: 0 16px;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  font: inherit;
+  cursor: pointer;
+}
+.refresh:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* ── Declared (crisp) vs Observed (muted) ───────────────────────────── */
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 8px 0 8px; }
+@media (max-width: 620px) { .cols { grid-template-columns: 1fr; } }
+
+h2 { font-size: 14px; font-weight: 600; color: var(--muted); margin: 24px 0 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+.rows { margin: 0; }
+.rows .row { display: flex; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.rows dt { flex: 0 0 40%; color: var(--muted); margin: 0; }
+.rows dd { margin: 0; }
+
+.rows.declared dd { color: var(--text); font-weight: 500; } /* crisp */
+.rows.observed dt,
+.rows.observed dd { color: var(--muted); }                 /* muted/grayed */
+
+.muted { color: var(--muted); }
+.clear { color: var(--text); }
+
+/* ── The gap — emphasis by weight, never by red ─────────────────────── */
+.gaps { list-style: none; padding: 0; margin: 0; }
+.gaps .gap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 12px;
+  margin: 6px 0;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--attention); /* luminosity/weight, not hue */
+  border-radius: 3px;
+}
+.gaps .field { font-weight: 700; color: var(--attention); }
+.gaps .declared { color: var(--text); font-weight: 600; }
+.gaps .observed { color: var(--muted); }
+.gaps .arrow { color: var(--muted); font-size: 12px; }
+
+/* ── Reach (abstention) — coverage, not debt ────────────────────────── */
+.count {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: var(--border);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.abstentions { list-style: none; padding: 0; margin: 8px 0 0; }
+.abstentions li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.abstentions .cause { color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}

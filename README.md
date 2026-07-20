@@ -120,7 +120,7 @@ cargo clippy --workspace -- -D warnings
 
 Project-specific gates live in `cargo xtask ci` (in Rust, never in YAML) — the DDL collation gate, the retired-vocabulary check, and the fixture/artifact hash checks. Some `xtask` subcommands are still stubs.
 
-> At this stage `cargo run` starts a minimal axum server exposing a `/healthz` liveness probe — the walking skeleton, not the product.
+> At this stage `cargo run` (with a `DATABASE_URL` pointing at MariaDB) starts an axum server that serves a single page at `/` — the observed-vs-declared **gap**, reconciled from the declared records and the ingested observations — plus a `/healthz` liveness probe. Set `OPENCMDB_SCAN_CIDR` (e.g. `192.0.2.0/24`) to run a one-shot ARP/ping scan on startup so the page shows genuinely observed state. This is the walking skeleton, not the product.
 
 ## Running (once there is something to run)
 

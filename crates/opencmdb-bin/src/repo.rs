@@ -30,7 +30,7 @@ pub struct MariaUnit<'u> {
 
 impl MariaUnit<'_> {
     /// Lend the unit's connection as a sqlx `Executor` to the query bodies (read-your-own-writes).
-    fn executor(&mut self) -> &mut MySqlConnection {
+    pub(crate) fn executor(&mut self) -> &mut MySqlConnection {
         self.conn
     }
 }
@@ -169,6 +169,44 @@ where
         .fetch_one(executor)
         .await?;
     Ok(count)
+}
+
+/// Load every declared attribute as `(entity_id, attr_key, attr_value)`, ordered so a page groups
+/// them deterministically. Static SQL; the page reconciles in Rust (SQL never compares — D10).
+pub async fn load_declared_attributes<'e, E>(
+    executor: E,
+) -> Result<Vec<(String, String, String)>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT entity_id, attr_key, attr_value FROM declared_attribute \
+         ORDER BY entity_id, attr_key",
+    )
+    .fetch_all(executor)
+    .await?;
+    Ok(rows)
+}
+
+/// Load each observation's `facts` JSON, deserialized into `Vec<Fact>` (oldest first). The engine
+/// compares the facts in Rust — the JSON never round-trips through SQL comparison (D10).
+pub async fn load_observation_facts<'e, E>(
+    executor: E,
+) -> Result<Vec<Vec<opencmdb_core::observation::Fact>>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String,)> =
+        sqlx::query_as("SELECT facts FROM observation_record ORDER BY observed_at")
+            .fetch_all(executor)
+            .await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for (facts,) in rows {
+        let parsed: Vec<opencmdb_core::observation::Fact> =
+            serde_json::from_str(&facts).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        out.push(parsed);
+    }
+    Ok(out)
 }
 
 /// Classify a `sqlx::Error` into the closed `RepositoryError` (D47) — the ONLY translation of

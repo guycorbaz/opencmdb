@@ -7,6 +7,7 @@
 //! `app()` seam in the stories that follow.
 
 mod arp_ping;
+mod page;
 mod repo;
 
 /// Serializes the DB-touching tests: they share one MariaDB (CI's service) and would otherwise
@@ -60,6 +61,13 @@ async fn main() -> anyhow::Result<()> {
         .context("applying database migrations")?;
     tracing::info!("database connected and migrations applied");
 
+    // Optional one-shot startup scan: the real ARP/ping connector (Story 3.5) pings a declared
+    // subnet and ingests observations, so the page shows genuinely observed state. Unset → the
+    // page renders the declared side only. The periodic scheduler (FR6) is a later story.
+    if let Ok(cidr) = std::env::var("OPENCMDB_SCAN_CIDR") {
+        spawn_startup_scan(database_url.clone(), clock.now(), cidr);
+    }
+
     let listener = tokio::net::TcpListener::bind(&bind)
         .await
         .with_context(|| format!("binding {bind}"))?;
@@ -71,11 +79,100 @@ async fn main() -> anyhow::Result<()> {
 }
 
 /// The HTTP surface, factored out of `main` so it is testable without binding a socket. The
-/// database pool is carried in axum state. Later stories add routes here.
+/// database pool is carried in axum state.
 fn app(pool: MySqlPool) -> Router {
     Router::new()
+        .route("/", get(page::index))
+        .route("/gap", get(page::gap_fragment))
+        .route("/assets/{*path}", get(page::asset))
         .route("/healthz", get(healthz))
         .with_state(pool)
+}
+
+/// Run a one-shot scan off the request path: build the ARP/ping connector for `cidr`, poll it, and
+/// ingest each answered host as an immutable observation (FR11). Best-effort — a bad CIDR or a scan
+/// error is logged, never fatal; the page still serves whatever is already persisted.
+///
+/// It runs on a DEDICATED thread with its own current-thread runtime and its own pool. That is
+/// deliberate: `Connector::poll` holds a `&mut dyn ObservationSink` across an await, so its future
+/// is not `Send` and cannot be `tokio::spawn`ed onto the multi-thread runtime (Story 2.3 left the
+/// scheduler's Send story for later). `block_on` on a single-thread runtime imposes no `Send`
+/// bound, and a fresh pool avoids sharing connections across runtimes. The periodic scheduler
+/// (FR6) will supersede this.
+fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
+    use opencmdb_core::connector::{Connector, VecSink};
+    use opencmdb_core::observation::{ConnectorId, L2DomainId, Scope, VantageId};
+    use opencmdb_core::repo::WriteRepository;
+    use tokio_util::sync::CancellationToken;
+    use uuid::Uuid;
+
+    use crate::arp_ping::ArpPingConnector;
+    use crate::repo::{MariaRepository, classify, insert_observation};
+
+    std::thread::spawn(move || {
+        let runtime = match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                tracing::error!(%error, "could not build the scan runtime");
+                return;
+            }
+        };
+
+        runtime.block_on(async move {
+            let scope = Scope {
+                l2_domain: L2DomainId::from_uuid(Uuid::nil()),
+                vantage: VantageId::from_uuid(Uuid::nil()),
+            };
+            let connector_id = ConnectorId::from_uuid(Uuid::now_v7());
+            let mut connector = match ArpPingConnector::from_cidr(connector_id, scope, &cidr) {
+                Ok(connector) => connector,
+                Err(error) => {
+                    tracing::error!(%error, %cidr, "invalid OPENCMDB_SCAN_CIDR — skipping scan");
+                    return;
+                }
+            };
+
+            tracing::info!(%cidr, "startup scan: pinging subnet");
+            let mut sink = VecSink::default();
+            if let Err(error) = connector
+                .poll(now, &mut sink, CancellationToken::new())
+                .await
+            {
+                tracing::warn!(?error, "startup scan failed");
+                return;
+            }
+
+            let pool = match MySqlPool::connect(&database_url).await {
+                Ok(pool) => pool,
+                Err(error) => {
+                    tracing::warn!(%error, "startup scan: could not connect to ingest");
+                    return;
+                }
+            };
+            let repo = MariaRepository::new(pool);
+            let mut ingested = 0usize;
+            for observation in sink.observations {
+                let result = repo
+                    .transact(move |unit| {
+                        let observation = observation.clone();
+                        Box::pin(async move {
+                            insert_observation(unit.executor(), &observation)
+                                .await
+                                .map_err(classify)
+                        })
+                    })
+                    .await;
+                match result {
+                    Ok(()) => ingested += 1,
+                    Err(error) => tracing::warn!(?error, "ingesting a scanned observation failed"),
+                }
+            }
+            tracing::info!(ingested, "startup scan complete");
+        });
+    });
 }
 
 /// Readiness: `200 OK` when the database answers a trivial query, `503` when it does not.
@@ -138,6 +235,80 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    /// End-to-end: seed a declared entity and a linked-but-drifting observation, then `GET /`
+    /// and assert the rendered page carries the drift gap. Gated on `DATABASE_URL`, serialized.
+    #[tokio::test]
+    async fn index_renders_the_real_gap() {
+        use opencmdb_core::observation::{
+            ConnectorId, Fact, HostnameSource, L2DomainId, ObsId, Observation, Scope, VantageId,
+        };
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping index DB test: DATABASE_URL unset");
+            return;
+        };
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        // Do not let a stray env var steer the perimeter choice.
+        unsafe { std::env::remove_var("OPENCMDB_ENTITY_IPV4") };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        sqlx::query("DELETE FROM declared_attribute")
+            .execute(&pool)
+            .await
+            .expect("clean declared");
+        sqlx::query("DELETE FROM observation_record")
+            .execute(&pool)
+            .await
+            .expect("clean observations");
+
+        // Declared: entity 192.0.2.10 named `nas`.
+        let entity = "00000000-0000-0000-0000-0000000000aa";
+        repo::insert_declared_attribute(&pool, entity, "ipv4", "192.0.2.10")
+            .await
+            .expect("declare ipv4");
+        repo::insert_declared_attribute(&pool, entity, "hostname", "nas")
+            .await
+            .expect("declare hostname");
+        // Observed: same IP, a DIFFERENT hostname → a drift on `hostname`.
+        let observation = Observation {
+            obs_id: ObsId::from_uuid(uuid::Uuid::now_v7()),
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::nil()),
+            observed_at: chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap(),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            },
+            facts: vec![
+                Fact::IpV4 {
+                    addr: "192.0.2.10".parse().unwrap(),
+                },
+                Fact::Hostname {
+                    name: "intruder".into(),
+                    source: HostnameSource::Dns,
+                },
+            ],
+            raw: None,
+        };
+        repo::insert_observation(&pool, &observation)
+            .await
+            .expect("ingest observation");
+
+        let response = app(pool)
+            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let html = String::from_utf8(body.to_vec()).unwrap();
+        assert!(html.contains("192.0.2.10"), "renders the entity");
+        assert!(html.contains("nas"), "renders the declared hostname");
+        assert!(html.contains("intruder"), "renders the observed hostname");
     }
 
     #[test]
