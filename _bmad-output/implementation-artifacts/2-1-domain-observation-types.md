@@ -1,6 +1,6 @@
 # Story 2.1: Domain observation types
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -139,3 +139,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-20 — Implemented Story 2.1 (domain observation types, D19/D35). Added the `observation` module to `opencmdb-core`: `Observation`, `Scope`, `Fact`/`FactKind`, dated `Capabilities`, id newtypes, `MacAddr([u8;6])` — the vocabulary every connector speaks, structurally incapable of expressing "gone" (NFR7). 6 tests green, frontier gate stays clean (serde_json dev-only), clippy/fmt clean. First real domain code in core. Status → review.
+- 2026-07-20 — Committed + pushed (`d00b345`); real GitHub CI run green (29723646242). Status → done.
