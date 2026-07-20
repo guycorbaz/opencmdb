@@ -1,0 +1,13 @@
+# Keep the build context small and free of anything the image must not carry.
+/target
+/.git
+/.github
+/_bmad
+/_bmad-output
+/docs
+/.claude
+/docker/README.dockerhub.md
+# Never ship a real environment file into the build context.
+.env
+.env.*
+!.env.example

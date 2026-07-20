@@ -1,0 +1,20 @@
+# opencmdb — reference deployment.
+#
+# ONE service (opencmdb) pointed at an EXISTING external MariaDB — there is deliberately NO
+# database container here; opencmdb uses the MariaDB you already run. Copy `.env.example` to
+# `.env`, fill it in, then `docker compose up -d`. The real `.env` is git-ignored: no secrets,
+# no real hostnames, and no NAS paths belong in this committed file.
+
+services:
+  opencmdb:
+    image: gcorbaz/opencmdb:0.1.0
+    container_name: opencmdb
+    # Host networking: reach the NAS's MariaDB on 127.0.0.1, and give the ARP/ping scanner real
+    # LAN visibility — a bridge NAT breaks L2 ping/ARP. Under host mode, `OPENCMDB_BIND` (in .env)
+    # decides the listen address; published `ports:` are ignored.
+    network_mode: host
+    env_file: .env
+    # NET_RAW is the ARP upgrade path (Mac facts, a later story); ping-only works without it.
+    cap_add:
+      - NET_RAW
+    restart: unless-stopped

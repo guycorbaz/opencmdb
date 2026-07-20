@@ -39,22 +39,28 @@ opencmdb runs as a single service pointing at your MariaDB. A reference `docker-
 services:
   opencmdb:
     image: gcorbaz/opencmdb:0.1.0
-    restart: unless-stopped
+    container_name: opencmdb
+    # Host networking: reach the NAS's MariaDB on 127.0.0.1 and give the ARP/ping scanner real
+    # LAN visibility (a bridge NAT breaks L2 ping/ARP). OPENCMDB_BIND (in .env) sets the listener.
+    network_mode: host
     env_file: .env
-    ports:
-      - "8080:8080"
-    volumes:
-      # The encryption key lives OUTSIDE the database volume, by design.
-      - ./secrets:/secrets:ro
+    cap_add:
+      - NET_RAW   # ARP upgrade path (Mac facts, a later release); ping-only works without it
+    restart: unless-stopped
 ```
 
-Provide configuration through a `.env` file you keep **outside** version control:
+Provide configuration through a `.env` file you keep **outside** version control (see `docker/.env.example`):
 
 ```dotenv
 # Placeholders — set your own; never commit this file.
-DATABASE_URL=mysql://opencmdb:CHANGE_ME@192.0.2.10:3306/opencmdb
-OPENCMDB_ENCRYPTION_KEY_FILE=/secrets/encryption.key
+DATABASE_URL=mysql://opencmdb:CHANGE_ME@127.0.0.1:3306/opencmdb
+OPENCMDB_BIND=0.0.0.0:8080
 OPENCMDB_LOG=info
+OPENCMDB_LOCALE=en
+# Optional: ping-scan this CIDR on startup (use your real LAN, e.g. 192.168.x.0/24).
+OPENCMDB_SCAN_CIDR=192.0.2.0/24
+# Bearer token for the Prometheus /metrics endpoint (leave unset to keep it closed).
+OPENCMDB_METRICS_TOKEN=CHANGE_ME
 ```
 
 > Use RFC 5737 documentation addresses (`192.0.2.0/24`) and example hostnames in anything you share — never paste your real network into a public place.
