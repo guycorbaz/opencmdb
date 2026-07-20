@@ -12,8 +12,10 @@
 
 #![forbid(unsafe_code)]
 
+pub mod connector;
 pub mod observation;
 
+pub use connector::ConnectorError;
 pub use observation::{
     Capabilities, ConnectorId, Fact, FactKind, HostnameSource, L2DomainId, MacAddr, MacParseError,
     ObsId, Observation, Scope, Timestamp, VantageId,
