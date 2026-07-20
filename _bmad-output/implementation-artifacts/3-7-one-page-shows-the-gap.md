@@ -1,6 +1,6 @@
 # Story 3.7: One page shows the gap
 
-Status: review
+Status: done
 
 ## Story
 
@@ -106,3 +106,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-20 — Implemented Story 3.7 (one page shows the gap). Askama page + HTMX + hand-authored committed CSS (design tokens, dark default, observed/declared distinction, no red, Reach = abstention-as-coverage). Pure `build_view` reconciles persisted declared vs observed through the 3.6 engine; startup scan (`OPENCMDB_SCAN_CIDR`) finally wires the 3.5 connector in. 63 tests green (3 pure page + 1 DB HTTP round-trip); frontier/clippy(--all-targets)/fmt green; live smoke confirms page + assets. Status → review.
+- 2026-07-20 — CI GREEN (commit `89952fa`) on the first push — clippy/gates/cargo-deny/tests all pass (the DB-gated `index_renders_the_real_gap` ran against CI's MariaDB service). Status → done.
