@@ -1,6 +1,6 @@
 # Story 3.10: Release 0.1.0 to Docker Hub
 
-Status: review
+Status: done
 
 ## Story
 
@@ -19,9 +19,9 @@ so that live testing can begin from a real published artifact.
 - [x] Task 1 — The release workflow (AC: #1, #2)
   - [x] `.github/workflows/release.yml`, triggered on `push: tags: ['v*.*.*']`: checkout, Buildx, Docker Hub login (secrets), `docker/metadata-action` to derive `:{{version}}` + `:latest` from the tag, `docker/build-push-action` (context `.`, `linux/amd64`, push, gha cache).
   - [x] `peter-evans/dockerhub-description` syncs `docker/README.dockerhub.md` + a short description (best-effort — `continue-on-error`, since the Docker Hub description API may require the account password rather than a push PAT).
-- [ ] Task 2 — Cut the release (AC: #3) — **awaiting Guy's explicit go-ahead to publish**
-  - [ ] Tag `v0.1.0` on green master and push it → the workflow publishes `gcorbaz/opencmdb:0.1.0` + `:latest`.
-  - [ ] Verify `docker pull gcorbaz/opencmdb:0.1.0` and a container start against MariaDB.
+- [x] Task 2 — Cut the release (AC: #3) — **Guy approved 2026-07-20**
+  - [x] Tagged `v0.1.0` on green master (`1b456ed`) and pushed it → the release workflow (run 29756018138) built and pushed `gcorbaz/opencmdb:0.1.0` + `:latest`, and synced the Docker Hub description (both steps green).
+  - [x] `docker pull gcorbaz/opencmdb:0.1.0` works (18.1 MB); the pulled image starts against MariaDB (`/healthz` → 200, `/` → 200).
 - [x] Task 3 — Verify the workflow (AC: #1, #2)
   - [x] YAML parses; action versions pinned; the image already builds + runs (Story 3.9).
 - [x] Task 4 — Daily file logs for on-NAS debugging (Guy's request, 2026-07-20)
@@ -79,3 +79,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 
 - 2026-07-20 — Implemented Story 3.10 (release pipeline). `release.yml` builds and pushes `gcorbaz/opencmdb:{version,latest}` on a `v*.*.*` tag and syncs the Docker Hub description. The actual v0.1.0 cut (the tag) is held for Guy's explicit go-ahead — publishing a public image is a deliberate act. Status → review.
 - 2026-07-20 — Added daily-rotating file logs (Guy's request): `tracing-appender` writes `opencmdb.YYYY-MM-DD.log` to `OPENCMDB_LOG_DIR` (retention default 14) alongside stdout, degrading gracefully if the dir is unwritable. Compose mounts `docker/log`; verified end to end in the real image (log file owned by nonroot uid 65532). Frontier/clippy/fmt green; 65 tests.
+- 2026-07-20 — **RELEASED. Guy approved; tagged + pushed `v0.1.0`.** The release workflow (run 29756018138) built and pushed `gcorbaz/opencmdb:0.1.0` + `:latest` to Docker Hub and synced the overview (both green). `docker pull gcorbaz/opencmdb:0.1.0` verified (18.1 MB), pulled image serves `/healthz` + `/` = 200 against MariaDB. **Epic 3 (v0.1) COMPLETE — the release is live for NAS testing.** (Non-blocking: a GitHub annotation notes the docker actions run on Node 24 due to Node 20 deprecation — a future minor bump.) Status → done.
