@@ -1,6 +1,6 @@
 # Story 3.3: The Repository skeleton — two traits
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -117,3 +117,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 
 - 2026-07-20 — Implemented Story 3.3 (Repository skeleton, D49). The two-trait contract (WriteRepository GAT+transact HRTB, WriteUnit no-commit, ReadRepository) in core; a MariaDB adapter in bin with query bodies generic over `sqlx::Executor` and `sqlx::Error` classified into a closed `RepositoryError`. The `Reads` bomb defused; the HRTB-over-GAT compiled first try via a covariant `&mut Conn` unit (no `Box<dyn>` needed). Proven by a `transact` read-your-own-writes round-trip against real MariaDB. Frontier stays sqlx-free; clippy/fmt green. Status → review.
 - 2026-07-20 — CI (29736528783) FAILED: the two DB tests (3.2's healthz + 3.3's round-trip) run in parallel on CI's single MariaDB and raced on `migrate!` (`Duplicate entry '1' for key 'PRIMARY'` on `_sqlx_migrations`). Locally the round-trip had only been run filtered, so the race was never triggered. FIX: a crate-level `DB_TEST_LOCK` (`LazyLock<tokio::sync::Mutex>`) held for each DB test's duration serializes them. Reproduced + verified locally: both DB tests unfiltered, 3× on a fresh DB, all green. Re-pushed.
+- 2026-07-20 — Fix pushed (`b08707d`); real GitHub CI run green (29737639588). Status → done.
