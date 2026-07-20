@@ -166,6 +166,7 @@ mod tests {
             eprintln!("skipping repo round-trip: DATABASE_URL unset");
             return;
         };
+        let _guard = crate::DB_TEST_LOCK.lock().await; // serialize DB tests (see the static)
         let pool = MySqlPool::connect(&url).await.expect("connect");
         sqlx::migrate!("./migrations")
             .run(&pool)

@@ -8,6 +8,13 @@
 
 mod repo;
 
+/// Serializes the DB-touching tests: they share one MariaDB (CI's service) and would otherwise
+/// race on `migrate!` — two concurrent migrations both insert version 1 into `_sqlx_migrations`,
+/// a duplicate-PRIMARY-KEY error. Held for each DB test's duration.
+#[cfg(test)]
+pub(crate) static DB_TEST_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> =
+    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
+
 use anyhow::Context;
 use axum::Router;
 use axum::extract::State;
@@ -92,6 +99,7 @@ mod tests {
             eprintln!("skipping healthz DB test: DATABASE_URL unset");
             return;
         };
+        let _guard = crate::DB_TEST_LOCK.lock().await; // serialize DB tests (see the static)
         let pool = MySqlPool::connect(&url).await.expect("connect to MariaDB");
         sqlx::migrate!("./migrations")
             .run(&pool)
