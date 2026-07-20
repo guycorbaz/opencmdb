@@ -14,6 +14,7 @@
 
 pub mod connector;
 pub mod observation;
+pub mod repo;
 
 /// Scripted in-memory connector + the contract test harness. Compiled for this crate's own
 /// tests and for consumers that enable the `test-support` feature; never in the shipped build.
@@ -28,3 +29,4 @@ pub use observation::{
     Capabilities, ConnectorId, Fact, FactKind, HostnameSource, L2DomainId, MacAddr, MacParseError,
     ObsId, Observation, Scope, Timestamp, VantageId,
 };
+pub use repo::{BoxFuture, ReadRepository, RepositoryError, WriteRepository, WriteUnit};

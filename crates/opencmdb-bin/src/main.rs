@@ -6,6 +6,8 @@
 //! `Repository` skeleton, the askama surface and the reconciliation engine attach to the
 //! `app()` seam in the stories that follow.
 
+mod repo;
+
 use anyhow::Context;
 use axum::Router;
 use axum::extract::State;
