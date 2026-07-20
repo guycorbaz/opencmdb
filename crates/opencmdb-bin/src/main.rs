@@ -15,16 +15,38 @@ mod repo;
 pub(crate) static DB_TEST_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> =
     std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use anyhow::Context;
 use axum::Router;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::get;
+use opencmdb_core::Clock;
+use opencmdb_core::observation::Timestamp;
 use sqlx::MySqlPool;
+
+/// The real clock. It reads the wall clock through `std::time` (a composition-root privilege)
+/// and converts with `chrono::DateTime::from_timestamp` — NOT chrono's `clock` feature, which
+/// must stay off so `opencmdb-core` cannot read the clock (D19).
+struct SystemClock;
+
+impl Clock for SystemClock {
+    fn now(&self) -> Timestamp {
+        let since_epoch = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock is after the Unix epoch");
+        chrono::DateTime::from_timestamp(since_epoch.as_secs() as i64, since_epoch.subsec_nanos())
+            .expect("a current instant is representable")
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     init_tracing();
+    // The one place the wall clock is read; the domain receives Timestamps, never a clock.
+    let clock = SystemClock;
+    tracing::info!(started_at = %clock.now(), "opencmdb starting");
     let bind = load_bind_address().context("loading configuration")?;
     let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
 

@@ -8,8 +8,19 @@
 
 use tokio_util::sync::CancellationToken;
 
+use crate::clock::Clock;
 use crate::connector::{Connector, ConnectorError, ObservationSink, PollSummary, VecSink};
 use crate::observation::{Capabilities, ConnectorId, Observation, Scope, Timestamp};
+
+/// A [`Clock`] frozen at a fixed instant — deterministic time for tests and replays.
+#[derive(Debug, Clone, Copy)]
+pub struct FixedClock(pub Timestamp);
+
+impl Clock for FixedClock {
+    fn now(&self) -> Timestamp {
+        self.0
+    }
+}
 
 /// What a scripted poll does AFTER emitting its observations.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -271,6 +282,13 @@ mod tests {
             }],
             ..obs(0)
         }
+    }
+
+    #[test]
+    fn fixed_clock_is_reproducible() {
+        let clock = FixedClock(ts());
+        assert_eq!(clock.now(), ts());
+        assert_eq!(clock.now(), clock.now()); // never moves
     }
 
     #[tokio::test]

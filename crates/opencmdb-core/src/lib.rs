@@ -12,6 +12,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod clock;
 pub mod connector;
 pub mod observation;
 pub mod repo;
@@ -22,8 +23,9 @@ pub mod repo;
 pub mod testing;
 
 #[cfg(any(test, feature = "test-support"))]
-pub use testing::{ScriptedConnector, ScriptedOutcome, run_connector_contract};
+pub use testing::{FixedClock, ScriptedConnector, ScriptedOutcome, run_connector_contract};
 
+pub use clock::Clock;
 pub use connector::{Connector, ConnectorError, ObservationSink, PollSummary, VecSink};
 pub use observation::{
     Capabilities, ConnectorId, Fact, FactKind, HostnameSource, L2DomainId, MacAddr, MacParseError,

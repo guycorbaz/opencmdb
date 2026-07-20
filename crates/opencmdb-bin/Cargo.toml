@@ -18,6 +18,10 @@ argon2 = "0.5.3"
 askama = "0.16.0"
 axum = "0.8.9"
 chacha20poly1305 = "0.11.0"
+# `SystemClock` reads the wall clock via std::time and converts with DateTime::from_timestamp.
+# default-features = false keeps chrono's `clock` feature OFF workspace-wide — otherwise feature
+# unification would re-enable it in opencmdb-core and the domain could call Utc::now() (D19).
+chrono = { version = "0.4.45", default-features = false, features = ["std"] }
 config = "0.15.25"
 opencmdb-core.workspace = true
 prometheus = "0.14.0"
