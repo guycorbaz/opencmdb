@@ -1,6 +1,6 @@
 # Story 2.5: The consumer-driven contract test
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -106,3 +106,4 @@ claude-opus-4-8[1m] (Amelia / bmad-dev-story)
 ## Change Log
 
 - 2026-07-20 — Implemented Story 2.5 (consumer-driven contract test). Reusable `run_connector_contract` (tokio-util only) covers completion/empty/missing-field/cancellation for any connector in one call; partial-then-error and timeout are exercised against the scripted/yielding connectors in core's own tests. 5 tests; frontier green; clippy/fmt clean; bin builds without the feature. **Closes Epic 2.** Status → review.
+- 2026-07-20 — Committed + pushed (`da37af1`); real GitHub CI run green (29727455430). Status → done. **Epic 2 complete.**
