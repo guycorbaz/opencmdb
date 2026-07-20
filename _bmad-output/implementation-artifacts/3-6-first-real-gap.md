@@ -1,6 +1,6 @@
 # Story 3.6: A first real gap, abstaining elsewhere
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
