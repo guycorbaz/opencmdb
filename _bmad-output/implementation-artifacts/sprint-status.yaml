@@ -1,0 +1,192 @@
+# generated: 2026-07-21
+# last_updated: 2026-07-21
+# project: opencmdb
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+#
+# PROJECT NOTES (opencmdb):
+# =========================
+# - This file was created on 2026-07-21, AFTER epics 1-3 were already built and released. Their
+#   statuses are recorded from the artefacts on disk and from git history, not from live tracking.
+# - Story keys match the story FILE names on disk, which are shortened slugs of the epic titles
+#   (e.g. `1-5-mariadb-service-and-cargo-deny` for "MariaDB service container and cargo-deny in
+#   CI"). The files are the established identifiers; the keys follow them so status detection
+#   resolves.
+# - Epics 4-23 carry no story entries because epics.md defines them at epic level only — only
+#   epics 1-3 have a story breakdown. Story 4.1 exists as a file and is listed here, but is NOT
+#   yet in epics.md; the Epic 4 breakdown is outstanding.
+# - Retrospectives: only Epic 3's was held (the first of the project). Epics 1 and 2 remain
+#   'optional' and will not be back-filled.
+
+generated: 2026-07-21
+last_updated: 2026-07-21
+project: opencmdb
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # ── Epic 1: Les gates tiennent (foundation) ──────────────────────────────
+  epic-1: done
+  1-1-dependency-frontier-gate: done
+  1-2-fixture-manifest-sha256-gate: done
+  1-3-ddl-collation-prove-to-red: done
+  1-4-ci-runner-thin-yaml: done
+  1-5-mariadb-service-and-cargo-deny: done
+  1-6-pinned-toolchain-and-renovate: done
+  epic-1-retrospective: optional
+
+  # ── Epic 2: Le contrat de connecteur (foundation) ────────────────────────
+  epic-2: done
+  2-1-domain-observation-types: done
+  2-2-connector-error-taxonomy: done
+  2-3-connector-trait: done
+  2-4-minimal-in-memory-connector: done
+  2-5-connector-contract-test: done
+  epic-2-retrospective: optional
+
+  # ── Epic 3: Mon premier écart réel (v0.1) ────────────────────────────────
+  epic-3: done
+  3-1-binary-bootstrap-healthz: done
+  3-2-mariadb-pool-first-migration: done
+  3-3-repository-skeleton-two-traits: done
+  3-4-clock-port: done
+  3-5-arp-ping-connector: done
+  3-6-first-real-gap: done
+  3-7-one-page-shows-the-gap: done
+  3-8-transversal-anchors: done
+  3-9-packaging: done
+  3-10-release-0-1-0: done
+  epic-3-retrospective: done
+
+  # ── Epic 4: Infra fixtures & corpus de pièges (v0.2) ─────────────────────
+  # Build order is dictated by ARCH-24/D19: format → FixtureConnector →
+  # metrics harness BEFORE the engine → the trap families. 4.18 and 4.19 are
+  # authored here but only become executable with the UniFi parser (Epic 11).
+  epic-4: in-progress
+  4-1-jsonl-observation-stream: ready-for-dev
+  4-2-truth-labelling-format: backlog
+  4-3-manifest-lockfile-and-orphans: backlog
+  4-4-fixture-connector-replays-jsonl: backlog
+  4-5-fixture-connector-replays-outcomes: backlog
+  4-6-metrics-harness: backlog
+  4-7-trap-runner-asserts-the-rule: backlog
+  4-8-reality-debt-register: backlog
+  4-9-trap-randomized-mac: backlog
+  4-10-trap-multi-nic: backlog
+  4-11-trap-shared-hardware-vm: backlog
+  4-12-trap-cloned-mac: backlog
+  4-13-trap-dhcp-churn: backlog
+  4-14-trap-vrrp-hsrp-virtual-mac: backlog
+  4-15-trap-hostname-collision: backlog
+  4-16-trap-ephemeral-docker-veth: backlog
+  4-17-trap-hostname-absent-or-empty: backlog
+  4-18-wire-format-traps: backlog
+  4-19-mutation-fixtures: backlog
+  epic-4-retrospective: optional
+
+  # ── Epic 5: Identité d'interface fiable (v0.3) ───────────────────────────
+  epic-5: backlog
+  epic-5-retrospective: optional
+
+  # ── Epic 6: Ne pas compter deux fois la même boîte (v0.4) ────────────────
+  epic-6: backlog
+  epic-6-retrospective: optional
+
+  # ── Epic 7: La boucle se ferme (v0.5) ────────────────────────────────────
+  epic-7: backlog
+  epic-7-retrospective: optional
+
+  # ── Epic 8: Triage fluide (v0.6) ─────────────────────────────────────────
+  epic-8: backlog
+  epic-8-retrospective: optional
+
+  # ── Epic 9: Bootstrap jour-1 (v0.7) ──────────────────────────────────────
+  epic-9: backlog
+  epic-9-retrospective: optional
+
+  # ── Epic 10: Secrets au repos (minimal) (v0.8) ───────────────────────────
+  epic-10: backlog
+  epic-10-retrospective: optional
+
+  # ── Epic 11: Source UniFi complète (v0.9) ────────────────────────────────
+  epic-11: backlog
+  epic-11-retrospective: optional
+
+  # ── Epic 12: Scan ARP/ping complet (v0.10) ───────────────────────────────
+  epic-12: backlog
+  epic-12-retrospective: optional
+
+  # ── Epic 13: Ma source devient aveugle (v0.11) ───────────────────────────
+  epic-13: backlog
+  epic-13-retrospective: optional
+
+  # ── Epic 14: IPAM (v0.12) ────────────────────────────────────────────────
+  epic-14: backlog
+  epic-14-retrospective: optional
+
+  # ── Epic 15: Applications & « Hosted here » (v0.13) ──────────────────────
+  epic-15: backlog
+  epic-15-retrospective: optional
+
+  # ── Epic 16: Alertes & notifications (v0.14) ─────────────────────────────
+  epic-16: backlog
+  epic-16-retrospective: optional
+
+  # ── Epic 17: Retour après une absence (v0.15) ────────────────────────────
+  epic-17: backlog
+  epic-17-retrospective: optional
+
+  # ── Epic 18: Bulk steady-state (v0.16) ───────────────────────────────────
+  epic-18: backlog
+  epic-18-retrospective: optional
+
+  # ── Epic 19: Exposer sans risque (v0.17) ─────────────────────────────────
+  epic-19: backlog
+  epic-19-retrospective: optional
+
+  # ── Epic 20: Le réseau visible depuis ailleurs (v0.18) ───────────────────
+  epic-20: backlog
+  epic-20-retrospective: optional
+
+  # ── Epic 21: Maîtriser ses données (v0.19) ───────────────────────────────
+  epic-21: backlog
+  epic-21-retrospective: optional
+
+  # ── Epic 22: First-light soigné & bilingue complet (v0.20) ───────────────
+  epic-22: backlog
+  epic-22-retrospective: optional
+
+  # ── Epic 23: Prêt à installer (v1.0) ─────────────────────────────────────
+  epic-23: backlog
+  epic-23-retrospective: optional

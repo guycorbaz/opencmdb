@@ -824,3 +824,355 @@ So that live testing can begin from a real published artifact.
 **Given** a pushed git tag `v0.1.0`, **when** the release workflow runs, **then** it builds the image and pushes `gcorbaz/opencmdb:0.1.0` (and `:latest`) to Docker Hub using the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repository secrets.
 **Given** the release workflow, **when** it completes, **then** it syncs `docker/README.dockerhub.md` to the Docker Hub repository description.
 **And** `docker pull gcorbaz/opencmdb:0.1.0` works and the container starts against a MariaDB; the release is reachable for live testing. Closes Epic 3 (v0.1).
+
+---
+
+## Epic 4: Infra fixtures & corpus de pièges
+
+Build the substrate the identity engine is driven against: a frozen, committed fixture format, a `FixtureConnector` that replays it through the real trait, a metrics harness written **before** the engine, and the adversarial trap corpus of D18/NFR4 — each trap in **positive AND negative** form, each asserting the RULE rather than the outcome. No FRs; this epic realizes NFR4's infrastructure (ARCH-22, ARCH-24). It ships nothing a user can see, and Epic 5 cannot start without it.
+
+_Build order is dictated, not chosen (ARCH-24 / D19): types → the traps as SPEC → `FixtureConnector` → the metrics harness → (the L1 join is Epic 5). The order is the point: "a metric written after the engine is bent to fit the engine"._
+
+_Two sequencing facts, recorded so they are not rediscovered late:_
+- _**The wire-format traps are authored here but only become executable in Epic 11.** Layer B runs mutation fixtures under the REAL UniFi parser (D35), and that parser does not exist yet. D19 already says the traps are written "not tests yet — the spec"; the wire stories therefore deliver committed fixtures plus their expected variant, and the harness that runs them lands with the connector._
+- _**The seeded generator, the bulk fixture and the distributional diff are NOT in this epic.** ARCH-24 places them after the engine. The MANIFEST's `generator` field must therefore tolerate hand-authored artefacts._
+
+### Story 4.1: Freeze the JSONL observation stream
+
+As the engine's test infrastructure,
+I want the on-disk fixture format frozen as a committed JSONL stream of `Observation`s, resolved through a single path constant and locked by a sha256,
+So that every trap that follows is written against a format that cannot drift and cannot leak a real network.
+
+**Acceptance Criteria:**
+
+**Given** `fixtures/` at the workspace root with `scenario/` and `capture/`
+**When** a scenario fixture is committed
+**Then** each line is exactly one serialized `Observation` in the existing serde representation — no DTO, no wrapper, no hand-rolled format (D19: the fixture schema IS the Observation schema).
+
+**Given** a committed fixture
+**When** it is read
+**Then** `obs_id`, `connector_id`, `scope` ids and `observed_at` come from the FILE — nothing is generated and no clock is read (D19: `obs_id` stable so truth can point at it; the engine never touches the clock).
+
+**Given** the fixtures root must be located
+**When** any code resolves it
+**Then** it uses ONE constant, `concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures/")`, appearing exactly once in the tree (D56 path discipline).
+
+**Given** a fixture listed in `fixtures/MANIFEST`
+**When** `cargo xtask ci` runs
+**Then** the fixtures gate reports a real count instead of "no fixtures — skipped" — it stops being vacuous.
+
+**And** every value is synthetic: RFC 5737 addresses, locally-administered MACs, invented hostnames. Real captures in a public repo are disqualifying (D19).
+
+### Story 4.2: Freeze the truth-labelling format
+
+As the author of the trap corpus,
+I want the expectation format frozen alongside the observation stream,
+So that a trap states which RULE must fire and why, not merely what the answer was.
+
+**Acceptance Criteria:**
+
+**Given** a trap
+**When** its expectation is written
+**Then** it carries exactly one of the three D18 columns — `must-not-merge`, `must-merge`, `must-abstain` — and the column is what the gate counts.
+
+**Given** any expectation
+**When** it is authored
+**Then** a one-sentence `reason` is MANDATORY and the format rejects an expectation without one (D19: the oracle is the author, made explicit and versioned).
+
+**Given** an author who cannot state the reason in one sentence
+**When** the trap is classified
+**Then** it becomes `must-abstain` — the inability to state a reason IS the abstention label (D19), not a case to argue over.
+
+**Given** an expectation
+**When** it names the expected outcome
+**Then** it also names the expected `rule_id` (`expect_rule`), so a verdict reached by the wrong rule fails (D19: "a test that checks only the verdict goes green for the right answer reached by the wrong rule").
+
+**And** the format is committed, versioned and readable by a human in review — it is a spec, not test data.
+
+### Story 4.3: The MANIFEST becomes a lockfile for data
+
+As a maintainer,
+I want `fixtures/scenario/replay/MANIFEST.toml` carrying sha256, seed and generator version per artefact, and a gate that also catches files nobody listed,
+So that neither an edited fixture nor an unlisted one can enter the corpus silently.
+
+**Acceptance Criteria:**
+
+**Given** the provisional line-based `fixtures/MANIFEST`
+**When** this story lands
+**Then** it is replaced by the D56 `MANIFEST.toml` carrying, per artefact, its sha256, its seed and its generator version — with the generator field allowed to be absent for a hand-authored fixture.
+
+**Given** a fixture whose bytes no longer match its recorded sha256
+**When** the gate runs
+**Then** it exits RED naming the file, and the single repair is a deliberate manifest bump.
+
+**Given** a file present under `fixtures/` but absent from the manifest
+**When** the gate runs
+**Then** it exits RED naming the orphan (closes the drift-in-the-ADD-direction hole deferred from the story-1.2 review; proven-to-red test).
+
+**And** `capture/` and `scenario/` are documented as different rot risks with different treatment: captures are version-tagged, dated and re-captured; scenario traps do not rot — they are right or wrong, and the future re-capture job must be structurally unable to reach them (D56).
+
+### Story 4.4: `FixtureConnector` replays JSONL through the real trait
+
+As the engine's test infrastructure,
+I want a connector that replays a committed JSONL fixture and passes the connector contract test unchanged,
+So that "the fixture IS a connector" is a fact the compiler checks rather than a slogan.
+
+**Acceptance Criteria:**
+
+**Given** a committed fixture
+**When** `FixtureConnector` polls
+**Then** it emits exactly the fixture's observations, in file order, into the `ObservationSink` — zero mocks, zero network, zero I/O beyond reading the committed file.
+
+**Given** `FixtureConnector`
+**When** it is driven through `run_connector_contract`
+**Then** it passes the same contract as every other connector, with no special-casing.
+
+**Given** the trait cannot express what the fixture needs
+**When** that is discovered
+**Then** the TRAIT is wrong, not the fixture (D19) — and the finding is recorded rather than worked around.
+
+**And** it lives in the shipped crate beside the other connectors, not under `tests/` — under `tests/` it would not face the same compilation gates and "zero mocks" would become a slogan (D56).
+
+### Story 4.5: `FixtureConnector` replays outcomes, not only observations
+
+As the engine's test infrastructure,
+I want the fixture to replay a poll's OUTCOME — clean, failed, or partial-then-failed — from the file,
+So that layer-A fault injection needs no state outside the JSONL.
+
+**Acceptance Criteria:**
+
+**Given** a fixture scripting an error outcome
+**When** the connector polls
+**Then** it returns that `ConnectorError` variant, and any observations scripted before it are still emitted first — they are true (D34).
+
+**Given** a fixture scripting a mid-scan capability loss
+**When** it is replayed
+**Then** one line reproduces it, with no state held outside the file (D19: "the fixture replays it for free — one JSONL line reproduces a mid-scan NET_RAW loss, zero mocks").
+
+**And** injecting a fault may only REMOVE knowledge, never ADD an assertion, compared with the clean run of the same fixture.
+
+### Story 4.6: The metrics harness, written before the engine
+
+As the author of the release gate,
+I want the harness that scores a run against the trap corpus to exist before any engine does,
+So that the metric cannot be bent to fit the engine.
+
+**Acceptance Criteria:**
+
+**Given** the trap corpus and no engine at all
+**When** the harness runs
+**Then** it reports truth-table failures per D18 column and is GREEN vacuously — it must not require an engine to exist.
+
+**Given** a scored trap
+**When** its result is recorded
+**Then** the record carries `{verdict, reason, capability_snapshot, source_state, fixture_seq}` — a verdict without its capability snapshot is unfalsifiable (D36).
+
+**Given** two runs of the same corpus
+**When** they are compared
+**Then** they are comparable only under an identical capability snapshot; otherwise the harness says so rather than reporting a difference.
+
+**And** the number the gate publishes is one: truth-table failures = 0. No fraction, no threshold — at n=300 the only measurable threshold is zero (D18).
+
+### Story 4.7: The trap runner asserts the rule, not the outcome
+
+As the author of the release gate,
+I want each trap executed so that a right answer reached by the wrong rule FAILS,
+So that the gate cannot be satisfied by an engine that will break on the next trap.
+
+**Acceptance Criteria:**
+
+**Given** a trap whose expectation names a `rule_id`
+**When** the engine reaches the expected outcome via a different rule
+**Then** the trap FAILS, and the failure names both the expected and the actual rule.
+
+**Given** a rule that fires
+**When** it produces its verdict
+**Then** it leaves its `rule_id` and its evidence behind — a rule that fires without leaving its `rule_id` is a rule we cannot debug in production (D19).
+
+**And** every trap exists in positive AND negative form; a corpus where one form is missing is reported as incomplete rather than passing.
+
+### Story 4.8: Open the reality-debt register
+
+As a maintainer,
+I want a register of what the corpus does NOT cover, opened with the corpus itself,
+So that the gate's honest limit is written down rather than discovered by a user.
+
+**Acceptance Criteria:**
+
+**Given** the trap suite
+**When** the register is opened
+**Then** it states the limit in the architecture's own words: a trap suite proves nothing about what was not imagined; at v0.1 the gate is weak and honest rather than strong and false (D18).
+
+**Given** a real-world case the corpus cannot produce
+**When** it is met
+**Then** it is recorded in the register with its source, and the register is the queue from which trap #51 and beyond are drawn.
+
+**And** the register names Tier 2 (bulk observability) as the only discovery mechanism for the unimagined — blocking nothing, feeding the gate.
+
+### Story 4.9: Trap family — randomized MAC
+
+As the author of the trap corpus,
+I want the randomized-MAC family committed in positive and negative form,
+So that the engine is proven against the median case, not an exotic one.
+
+**Acceptance Criteria:**
+
+**Given** a locally-administered MAC (U/L bit set)
+**When** the trap is scored
+**Then** at L1 it IS a distinct interface — the positive form asserts no merge across two randomized presences of the same physical interface.
+
+**Given** the negative form
+**When** it is scored
+**Then** it asserts the case where merging WOULD be correct and abstaining is cowardice (D18's middle column).
+
+**And** every expectation carries its one-sentence reason.
+
+### Story 4.10: Trap family — multi-NIC
+
+As the author of the trap corpus,
+I want the multi-NIC family committed in positive and negative form,
+So that a false SPLIT at device level is caught where it actually lives.
+
+**Acceptance Criteria:**
+
+**Given** two interfaces of one host
+**When** the trap is scored
+**Then** L1 is correct to keep them distinct and L2 must group them — the failure being tested is L2's, not L1's (architecture.md:893).
+
+**And** the inverse form asserts that two genuinely different hosts are not grouped.
+
+### Story 4.11: Trap family — shared-hardware VM
+
+As the author of the trap corpus,
+I want the shared-hardware VM family committed in positive and negative form,
+So that virtual interfaces sharing a host are neither fused nor split wrongly.
+
+**Acceptance Criteria:**
+
+**Given** several virtual interfaces on one physical host
+**When** the trap is scored
+**Then** the expectation states explicitly which grouping is correct and why, in one sentence.
+
+**And** the ambiguous variant is labelled `must-abstain` rather than argued.
+
+### Story 4.12: Trap family — cloned/spoofed MAC (the inverse trap)
+
+As the author of the trap corpus,
+I want the cloned-MAC family committed,
+So that the catastrophic failure — a false MERGE — has its own dedicated traps.
+
+**Acceptance Criteria:**
+
+**Given** two distinct hosts presenting the same MAC
+**When** the trap is scored
+**Then** it is a `must-not-merge`: fusing them is the failure that makes an operator lose trust and uninstall (D10/D18).
+
+**And** the corpus records that no database CHECK can detect a false merge — the schema makes it revisable and traceable, not impossible (D18).
+
+### Story 4.13: Trap family — DHCP churn
+
+As the author of the trap corpus,
+I want DHCP churn expressed purely as replayed timestamps,
+So that time-dependent behaviour is tested without the engine ever reading a clock.
+
+**Acceptance Criteria:**
+
+**Given** an address reassigned between two observations
+**When** the trap is replayed
+**Then** the churn comes entirely from `observed_at` values in the file (D19: "DHCP churn is tested by replaying timestamps").
+
+**And** replaying the same fixture twice yields identical verdicts — reproducibility, which is not the same as stability (D36).
+
+### Story 4.14: Trap family — VRRP/HSRP shared virtual MAC
+
+As the author of the trap corpus,
+I want the shared virtual-MAC family committed,
+So that a redundancy protocol does not read as one device.
+
+**Acceptance Criteria:**
+
+**Given** two routers sharing a virtual MAC
+**When** the trap is scored
+**Then** the expectation states whether the correct answer is not-merge or abstain, with its reason.
+
+**And** the negative form covers the case where the same evidence legitimately belongs to one device.
+
+### Story 4.15: Trap family — hostname collision
+
+As the author of the trap corpus,
+I want hostname collisions committed as traps,
+So that a signal present on fewer than half the population cannot be over-trusted.
+
+**Acceptance Criteria:**
+
+**Given** two distinct hosts reporting the same hostname
+**When** the trap is scored
+**Then** it is a `must-not-merge`, and the expectation says why the hostname alone is insufficient.
+
+**And** the corpus records that hostname is unusable on nearly half of known clients, so the abstention rate is bounded below by the data, not by engine quality (F51).
+
+### Story 4.16: Trap family — ephemeral Docker veth
+
+As the author of the trap corpus,
+I want ephemeral container interfaces committed as traps,
+So that short-lived interfaces do not inflate the inventory or the gap.
+
+**Acceptance Criteria:**
+
+**Given** an interface that appears and disappears within the observation window
+**When** the trap is scored
+**Then** the expectation distinguishes "gone" from "never a device", and says which in one sentence.
+
+**And** the family is consistent with the dormant-interface lifecycle (a locally-administered MAC unobserved for the configured window becomes `dormant`, excluded from gap metrics, still queryable — F17).
+
+### Story 4.17: Trap family — absent and empty hostname (and never null)
+
+As the author of the trap corpus,
+I want the hostname-absence family encoded from measurement,
+So that the corpus tests what the source can actually produce and nothing it cannot.
+
+**Acceptance Criteria:**
+
+**Given** the measured behaviour of the source
+**When** the family is written
+**Then** it encodes MISSING and EMPTY — and **must NOT** encode `null`, which never occurs; a trap on a case the source cannot produce is a gate on a false truth (D45).
+
+**And** each form carries its expected outcome and reason.
+
+### Story 4.18: Wire-format traps written from measurement
+
+As the author of the trap corpus,
+I want the wire-format traps derived from the measured payload rather than from belief,
+So that their red can actually arrive.
+
+**Acceptance Criteria:**
+
+**Given** the measured field behaviours
+**When** the wire traps are written
+**Then** they encode: `mac` lowercase colon-separated (100%), `last_seen` as a 10-digit SECONDS epoch (not milliseconds), `oui` empty on a large share, `vlan` missing, and `network_id` fixed-length — each closed by measurement, not conjecture.
+
+**Given** a trap that cannot be produced by the real source
+**When** it is proposed
+**Then** it is rejected: a trap written from belief is a gate on a false truth whose red will never arrive (D45).
+
+**And** the traps are committed as fixtures plus their expected variant; the harness that runs them under the real parser lands with the UniFi connector (Epic 11).
+
+### Story 4.19: Mutation fixtures for silent schema drift
+
+As the author of the trap corpus,
+I want generated mutation fixtures covering field deleted, null, retyped and renamed,
+So that the failure that fails SILENTLY is covered rather than the one that fails loudly.
+
+**Acceptance Criteria:**
+
+**Given** a captured response body
+**When** the mutation fixtures are produced
+**Then** they are GENERATED from it — deleted, nulled, retyped, renamed — not hand-written (D35), and committed with their expected parse outcome.
+
+**Given** a renamed field
+**When** the parser meets it
+**Then** the expectation asserts an explicit error rather than a silently empty collection — `#[serde(default)]` is forbidden on any collection feeding presence.
+
+**And** the corpus records why this layer exists: injecting a drift error at layer A tests nothing — it asserts the engine handles an error you handed it, without proving the parser produces one. That is the most insidious theatre of all, because it looks like fault injection (D35).
+
+**And** it records the drift surface being defended: the payload carries 127 distinct keys where the `Fact` enum names 7.
