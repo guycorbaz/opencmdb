@@ -196,6 +196,20 @@ Declare the subnets to scan and a cadence within allowed bounds; you can also tr
 on-demand scan. Where the host lacks the raw-socket capability, the scanner falls back to
 ping-only.
 
+Probes overlap: up to 64 are in flight at once by default
+(\texttt{OPENCMDB\_SCAN\_CONCURRENCY}). This is a \emph{politeness} bound rather than a
+throughput one --- a probe sends sixteen bytes and then waits, so the scan is single-threaded
+whatever you set, and raising the limit costs no CPU. What it does raise is the load on your
+gateway's ARP table, which is why a \texttt{/22} does not simply fire all 1022 probes at once.
+Lower it on a fragile network.
+
+\begin{note}
+The wall-clock cost of a scan is driven by the addresses that \emph{do not} answer: each one
+waits out the full probe timeout. With overlapping probes a mostly-empty \texttt{/24} completes
+in seconds; scanning strictly one address at a time
+(\texttt{OPENCMDB\_SCAN\_CONCURRENCY=1}) would take several minutes for the same result.
+\end{note}
+
 \begin{planned}
 Source configuration screens and the per-source cadence controls are specified in the UX
 design and land with the respective connectors.

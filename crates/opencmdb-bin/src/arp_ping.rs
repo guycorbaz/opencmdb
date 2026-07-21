@@ -12,6 +12,7 @@ use std::collections::BTreeSet;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
+use futures_util::stream::{self, StreamExt};
 use opencmdb_core::connector::{Connector, ConnectorError, ObservationSink, PollSummary};
 use opencmdb_core::observation::{
     Capabilities, ConnectorId, Fact, FactKind, ObsId, Observation, Scope, Timestamp,
@@ -20,12 +21,18 @@ use surge_ping::{Client, Config, ICMP, PingIdentifier, PingSequence};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+/// How many probes are in flight at once by default. The scan is I/O-bound — a probe sends 16
+/// bytes and waits — so this is a politeness bound, not a throughput one: it caps how hard we
+/// hit the gateway's ARP table, which matters on a /22 (1022 hosts). See `with_concurrency`.
+pub const DEFAULT_CONCURRENCY: usize = 64;
+
 /// Pings a fixed set of IPv4 targets, emitting one observation per host that replies.
 pub struct ArpPingConnector {
     id: ConnectorId,
     scope: Scope,
     targets: Vec<Ipv4Addr>,
     timeout: Duration,
+    concurrency: usize,
 }
 
 impl ArpPingConnector {
@@ -36,12 +43,27 @@ impl ArpPingConnector {
             scope,
             targets,
             timeout: Duration::from_secs(1),
+            concurrency: DEFAULT_CONCURRENCY,
         }
     }
 
     /// Build a connector for a declared IPv4 subnet in CIDR form (e.g. `192.0.2.0/24`).
     pub fn from_cidr(id: ConnectorId, scope: Scope, cidr: &str) -> Result<Self, String> {
         Ok(Self::new(id, scope, subnet_hosts(cidr)?))
+    }
+
+    /// Cap the number of probes in flight. Zero is meaningless and is clamped to one, which
+    /// restores the fully sequential behaviour.
+    pub fn with_concurrency(mut self, concurrency: usize) -> Self {
+        self.concurrency = concurrency.max(1);
+        self
+    }
+
+    /// How long a single probe waits for its reply. This is what a scan of a mostly-empty
+    /// subnet actually costs, once probes overlap: `targets / concurrency` rounds of it.
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
     }
 }
 
@@ -103,23 +125,47 @@ impl Connector for ArpPingConnector {
             detail: format!("could not open an ICMP socket: {e}"),
         })?;
 
-        for (i, ip) in self.targets.iter().enumerate() {
-            // Cancellation point BETWEEN hosts — never mid-probe. Emitted observations survive.
-            if cancel.is_cancelled() {
-                return Err(ConnectorError::Cancelled);
-            }
-            let mut pinger = client
-                .pinger(IpAddr::V4(*ip), PingIdentifier((i as u16).wrapping_add(1)))
-                .await;
-            pinger.timeout(self.timeout);
-            if let Ok((_packet, rtt)) = pinger.ping(PingSequence(0), &[0u8; 16]).await {
+        // Probes overlap, up to `concurrency` of them in flight. This is NOT parallelism: a
+        // single `Client` multiplexes every probe over ONE socket and demultiplexes replies by
+        // `PingIdentifier`, so the whole scan runs on one thread. Sequentially, wall-clock was
+        // `dead_hosts * timeout` — a /24 with 44 live hosts took 3m33s in the field, and the
+        // cost grew with the SIZE OF THE SUBNET rather than with the number of devices found.
+        //
+        // `buffered` (not `buffer_unordered`) preserves target order, so the observations a
+        // scan emits are deterministic — the connector contract tests depend on it.
+        let timeout = self.timeout;
+        let client = &client;
+        let mut probes = stream::iter(self.targets.iter().copied().enumerate())
+            .map(move |(i, ip)| async move {
+                let mut pinger = client
+                    .pinger(IpAddr::V4(ip), PingIdentifier((i as u16).wrapping_add(1)))
+                    .await;
+                pinger.timeout(timeout);
+                match pinger.ping(PingSequence(0), &[0u8; 16]).await {
+                    Ok((_packet, rtt)) => Some((ip, rtt)),
+                    Err(_) => None,
+                }
+            })
+            .buffered(self.concurrency);
+
+        loop {
+            // Cancellation is now checked against the probe stream itself, so a cancelled scan
+            // stops promptly instead of running to the end of the current wave. Observations
+            // already emitted survive, exactly as before.
+            let next = tokio::select! {
+                biased;
+                () = cancel.cancelled() => return Err(ConnectorError::Cancelled),
+                next = probes.next() => next,
+            };
+            let Some(answer) = next else { break };
+            if let Some((ip, rtt)) = answer {
                 let millis = rtt.as_millis().min(u128::from(u32::MAX)) as u32;
                 sink.emit(Observation {
                     obs_id: ObsId::from_uuid(Uuid::now_v7()),
                     connector_id: self.id,
                     observed_at: now,
                     scope: self.scope,
-                    facts: vec![Fact::IpV4 { addr: *ip }, Fact::Rtt { millis }],
+                    facts: vec![Fact::IpV4 { addr: ip }, Fact::Rtt { millis }],
                     raw: None,
                 });
             }
@@ -181,6 +227,80 @@ mod tests {
         let err = c.poll(now(), &mut sink, token).await.unwrap_err();
         assert_eq!(err, ConnectorError::Cancelled);
         assert!(sink.observations.is_empty());
+    }
+
+    #[test]
+    fn concurrency_is_bounded_below_by_one() {
+        let c = ArpPingConnector::new(ConnectorId::from_uuid(Uuid::nil()), scope(), vec![])
+            .with_concurrency(0);
+        // Zero probes in flight would never make progress; it means "sequential", not "stall".
+        assert_eq!(c.concurrency, 1);
+    }
+
+    /// The point of issue #10: a scan of a mostly-dead subnet must cost roughly
+    /// `targets / concurrency` timeouts, NOT `targets` timeouts. Uses TEST-NET-1 addresses,
+    /// which are unroutable and therefore all time out — the worst case, and the one that made
+    /// a real /24 take 3m33s. Gated with the other network tests because it still needs an
+    /// ICMP socket.
+    #[tokio::test]
+    async fn dead_targets_overlap_instead_of_queueing() {
+        if std::env::var("OPENCMDB_NET_TESTS").as_deref() != Ok("1") {
+            eprintln!("skipping network test: set OPENCMDB_NET_TESTS=1 to run");
+            return;
+        }
+        let targets: Vec<Ipv4Addr> = (1..=128).map(|i| Ipv4Addr::new(192, 0, 2, i)).collect();
+        let mut c = ArpPingConnector::new(ConnectorId::from_uuid(Uuid::nil()), scope(), targets)
+            .with_concurrency(64)
+            .with_timeout(Duration::from_millis(200));
+        let mut sink = VecSink::default();
+        let started = std::time::Instant::now();
+        c.poll(now(), &mut sink, CancellationToken::new())
+            .await
+            .expect("poll");
+        let elapsed = started.elapsed();
+
+        assert!(sink.observations.is_empty(), "TEST-NET-1 must not answer");
+        // Sequentially this is 128 * 200ms = 25.6s. Overlapped it is 2 rounds ~= 400ms. The
+        // bound is deliberately loose (10x headroom) so a slow machine cannot make it flaky,
+        // while still failing outright if the probes ever go back to queueing.
+        assert!(
+            elapsed < Duration::from_secs(4),
+            "128 dead targets at 64 in flight took {elapsed:?} — probes are not overlapping"
+        );
+    }
+
+    /// Overlapping probes must not reorder the results: `buffered` preserves target order, and
+    /// the connector contract wants a deterministic scan. Every 127.0.0.0/8 address answers on
+    /// Linux, so this exercises the concurrent path with replies actually racing each other.
+    #[tokio::test]
+    async fn concurrent_probes_emit_in_target_order() {
+        if std::env::var("OPENCMDB_NET_TESTS").as_deref() != Ok("1") {
+            eprintln!("skipping network test: set OPENCMDB_NET_TESTS=1 to run");
+            return;
+        }
+        let targets: Vec<Ipv4Addr> = (1..=8).map(|i| Ipv4Addr::new(127, 0, 0, i)).collect();
+        let mut c = ArpPingConnector::new(
+            ConnectorId::from_uuid(Uuid::nil()),
+            scope(),
+            targets.clone(),
+        )
+        .with_concurrency(8);
+        let mut sink = VecSink::default();
+        c.poll(now(), &mut sink, CancellationToken::new())
+            .await
+            .expect("poll");
+
+        let seen: Vec<Ipv4Addr> = sink
+            .observations
+            .iter()
+            .filter_map(|o| {
+                o.facts.iter().find_map(|f| match f {
+                    Fact::IpV4 { addr } => Some(*addr),
+                    _ => None,
+                })
+            })
+            .collect();
+        assert_eq!(seen, targets, "observations must follow target order");
     }
 
     /// Live network: scan loopback, which always answers. Gated on `OPENCMDB_NET_TESTS=1`

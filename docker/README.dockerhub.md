@@ -79,6 +79,9 @@ OPENCMDB_LOG=info
 OPENCMDB_LOCALE=en
 # Optional: ping-scan this CIDR on startup (use your real LAN, e.g. 192.168.x.0/24).
 OPENCMDB_SCAN_CIDR=192.0.2.0/24
+# Probes in flight at once (default 64) — a politeness bound on your gateway's ARP table,
+# not a throughput setting. The scan is I/O-bound and single-threaded either way.
+OPENCMDB_SCAN_CONCURRENCY=64
 # Bearer token for the Prometheus /metrics endpoint (leave unset to keep it closed).
 OPENCMDB_METRICS_TOKEN=CHANGE_ME
 # Daily-rotating file logs to this in-container path (mounted from ./log); keep this many days.

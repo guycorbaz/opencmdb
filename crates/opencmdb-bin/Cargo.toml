@@ -23,6 +23,9 @@ chacha20poly1305 = "0.11.0"
 # unification would re-enable it in opencmdb-core and the domain could call Utc::now() (D19).
 chrono = { version = "0.4.45", default-features = false, features = ["std"] }
 config = "0.15.25"
+# `StreamExt::buffered` — bounded-concurrency probing in the ping scan (issue #10). Already in
+# the tree via sqlx/axum; taken as a direct dependency here, std-only.
+futures-util = { version = "0.3.32", default-features = false, features = ["std"] }
 opencmdb-core.workspace = true
 prometheus = "0.14.0"
 rust-embed = "8.12.0"

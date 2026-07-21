@@ -50,9 +50,27 @@ impl Clock for SystemClock {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // Hold the file-log writer guard for the whole process (dropping it flushes + stops the writer).
+async fn main() -> std::process::ExitCode {
+    // Hold the file-log writer guard for the whole process (dropping it flushes + stops the
+    // writer). It must outlive `run`, and be dropped only after the fatal error below is logged.
     let _log_guard = init_tracing();
+    match run().await {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(error) => {
+            // Returning `Err` from `main` prints through `Termination`, on stderr, bypassing the
+            // tracing subscriber entirely — so a crash-looping container left nothing in the
+            // daily log files but a column of `opencmdb starting` lines, and the actual cause
+            // was visible only to whoever happened to run in the foreground (issue #7).
+            // `{:#}` keeps the whole `.context()` chain on one line.
+            tracing::error!(error = format!("{error:#}"), "opencmdb failed to start");
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
+
+/// Everything that can fail on the way up. Split out of `main` so a failure is logged through
+/// `tracing` — reaching the log files — instead of being printed past the subscriber.
+async fn run() -> anyhow::Result<()> {
     // Select the UI locale (default `en`); user-facing strings resolve through `t!()`.
     let locale = std::env::var("OPENCMDB_LOCALE").unwrap_or_else(|_| "en".to_string());
     rust_i18n::set_locale(&locale);
@@ -143,15 +161,22 @@ fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
                 vantage: VantageId::from_uuid(Uuid::nil()),
             };
             let connector_id = ConnectorId::from_uuid(Uuid::now_v7());
-            let mut connector = match ArpPingConnector::from_cidr(connector_id, scope, &cidr) {
+            let connector = match ArpPingConnector::from_cidr(connector_id, scope, &cidr) {
                 Ok(connector) => connector,
                 Err(error) => {
                     tracing::error!(%error, %cidr, "invalid OPENCMDB_SCAN_CIDR — skipping scan");
                     return;
                 }
             };
+            // How many probes may be in flight at once. A politeness bound, not a throughput
+            // one: the scan is I/O-bound and runs on a single thread either way.
+            let concurrency = std::env::var("OPENCMDB_SCAN_CONCURRENCY")
+                .ok()
+                .and_then(|raw| raw.parse::<usize>().ok())
+                .unwrap_or(crate::arp_ping::DEFAULT_CONCURRENCY);
+            let mut connector = connector.with_concurrency(concurrency);
 
-            tracing::info!(%cidr, "startup scan: pinging subnet");
+            tracing::info!(%cidr, concurrency, "startup scan: pinging subnet");
             let mut sink = VecSink::default();
             if let Err(error) = connector
                 .poll(now, &mut sink, CancellationToken::new())
