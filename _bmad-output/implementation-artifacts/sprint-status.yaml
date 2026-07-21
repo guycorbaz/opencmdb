@@ -95,7 +95,7 @@ development_status:
   # authored here but only become executable with the UniFi parser (Epic 11).
   epic-4: in-progress
   4-1-jsonl-observation-stream: done
-  4-2-truth-labelling-format: ready-for-dev
+  4-2-truth-labelling-format: done
   4-3-manifest-lockfile-and-orphans: backlog
   4-4-fixture-connector-replays-jsonl: backlog
   4-5-fixture-connector-replays-outcomes: backlog

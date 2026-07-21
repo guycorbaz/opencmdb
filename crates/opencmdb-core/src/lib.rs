@@ -17,6 +17,7 @@ pub mod connector;
 pub mod gap;
 pub mod observation;
 pub mod repo;
+pub mod trap;
 
 /// Scripted in-memory connector + the contract test harness. Compiled for this crate's own
 /// tests and for consumers that enable the `test-support` feature; never in the shipped build.

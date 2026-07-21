@@ -18,6 +18,7 @@
 use std::path::{Path, PathBuf};
 
 use opencmdb_core::observation::Observation;
+use opencmdb_core::trap::{TrapError, TrapFile};
 
 /// The one and only expression of where the corpus lives (D56 path discipline).
 ///
@@ -40,10 +41,15 @@ pub fn fixtures_dir() -> PathBuf {
 /// configuration would read arbitrary files.
 pub fn fixture_path(relative: &str) -> Result<PathBuf, FixtureError> {
     let candidate = Path::new(relative);
+    // `CurDir` is refused alongside `ParentDir`: `./x` and `x` name one file but are two cache
+    // keys and two MANIFEST spellings, and only one of them is the spelling the lock records.
     if candidate.is_absolute()
-        || candidate
-            .components()
-            .any(|c| matches!(c, std::path::Component::ParentDir))
+        || candidate.components().any(|c| {
+            matches!(
+                c,
+                std::path::Component::ParentDir | std::path::Component::CurDir
+            )
+        })
     {
         return Err(FixtureError::OutsideCorpus {
             requested: relative.to_string(),
@@ -69,6 +75,20 @@ pub enum FixtureError {
     },
     /// The requested path would leave the corpus.
     OutsideCorpus { requested: String },
+    /// A trap file did not parse.
+    Toml {
+        path: PathBuf,
+        source: toml::de::Error,
+    },
+    /// A trap file parsed but is not admissible.
+    Trap { path: PathBuf, source: TrapError },
+    /// A trap judges an observation that its replay stream does not contain.
+    DanglingObservation {
+        path: PathBuf,
+        trap: String,
+        obs_id: String,
+        replay: String,
+    },
 }
 
 impl std::fmt::Display for FixtureError {
@@ -86,6 +106,20 @@ impl std::fmt::Display for FixtureError {
                 f,
                 "fixture path `{requested}` leaves the corpus (absolute paths and `..` are refused)"
             ),
+            FixtureError::Toml { path, source } => {
+                write!(f, "trap file {}: {source}", path.display())
+            }
+            FixtureError::Trap { path, source } => write!(f, "{}: {source}", path.display()),
+            FixtureError::DanglingObservation {
+                path,
+                trap,
+                obs_id,
+                replay,
+            } => write!(
+                f,
+                "{}: trap `{trap}` judges observation {obs_id}, which `{replay}` does not contain",
+                path.display()
+            ),
         }
     }
 }
@@ -96,6 +130,9 @@ impl std::error::Error for FixtureError {
             FixtureError::Io { source, .. } => Some(source),
             FixtureError::Line { source, .. } => Some(source),
             FixtureError::OutsideCorpus { .. } => None,
+            FixtureError::Toml { source, .. } => Some(source),
+            FixtureError::Trap { source, .. } => Some(source),
+            FixtureError::DanglingObservation { .. } => None,
         }
     }
 }
@@ -126,6 +163,53 @@ pub fn read_jsonl(path: &Path) -> Result<Vec<Observation>, FixtureError> {
         observations.push(observation);
     }
     Ok(observations)
+}
+
+/// Read a trap file, validate it, and check that every observation it judges actually exists in
+/// the replay stream it names.
+///
+/// The cross-check is the point: a trap that points at an `obs_id` absent from its stream is a
+/// trap that can never fire, and it would sit in the corpus looking like coverage. The gate
+/// counts traps, so a trap that cannot fail is worse than no trap at all.
+pub fn read_traps(path: &Path) -> Result<TrapFile, FixtureError> {
+    let text = std::fs::read_to_string(path).map_err(|source| FixtureError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let traps: TrapFile = toml::from_str(&text).map_err(|source| FixtureError::Toml {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    traps.validate().map_err(|source| FixtureError::Trap {
+        path: path.to_path_buf(),
+        source,
+    })?;
+
+    // One read per distinct replay stream, not one per trap.
+    let mut streams: std::collections::BTreeMap<String, std::collections::BTreeSet<uuid::Uuid>> =
+        std::collections::BTreeMap::new();
+    for trap in &traps.trap {
+        if !streams.contains_key(&trap.replay) {
+            let stream = read_jsonl(&fixture_path(&trap.replay)?)?;
+            // `Uuid`, not `String`: comparing formatted text would couple correctness to
+            // `Display` (hyphenation, case) on both sides, and allocate per observation.
+            let ids: std::collections::BTreeSet<uuid::Uuid> =
+                stream.iter().map(|o| o.obs_id.as_uuid()).collect();
+            streams.insert(trap.replay.clone(), ids);
+        }
+        let known = &streams[&trap.replay];
+        for obs_id in &trap.observations {
+            if !known.contains(&obs_id.as_uuid()) {
+                return Err(FixtureError::DanglingObservation {
+                    path: path.to_path_buf(),
+                    trap: trap.id.0.clone(),
+                    obs_id: obs_id.as_uuid().to_string(),
+                    replay: trap.replay.clone(),
+                });
+            }
+        }
+    }
+    Ok(traps)
 }
 
 #[cfg(test)]
@@ -359,6 +443,217 @@ mod tests {
             std::env::temp_dir().join(format!("opencmdb-fixtures-{}-{tag}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("scratch directory");
         dir
+    }
+
+    // ── Trap files (story 4.2) ───────────────────────────────────────────────
+
+    const EXAMPLE_TRAPS: &str = "scenario/traps/example.toml";
+
+    /// The committed example must parse, validate, and point only at observations that exist.
+    #[test]
+    fn the_committed_trap_file_reads_and_cross_checks() {
+        let traps = read_traps(&fixture_path(EXAMPLE_TRAPS).unwrap()).expect("the example reads");
+        // Coverage, not order: reordering the `[[trap]]` blocks is a no-op and must stay one.
+        let columns: std::collections::BTreeSet<&str> =
+            traps.trap.iter().map(|t| t.expect.column()).collect();
+        assert_eq!(
+            columns,
+            ["must-abstain", "must-merge", "must-not-merge"]
+                .into_iter()
+                .collect(),
+            "the example must exercise all three of D18's columns"
+        );
+        // Every decision names a rule, and it is not blank — the premise of `(verdict, rule)`.
+        for trap in &traps.trap {
+            if let Some(rule) = trap.expect.rule() {
+                assert!(
+                    !rule.0.trim().is_empty(),
+                    "trap {:?} names no rule",
+                    trap.id
+                );
+            }
+            assert!(!trap.reason.trim().is_empty());
+        }
+        // The traps span two streams: a trap names the stream it judges, and nothing assumes one.
+        let streams: std::collections::BTreeSet<&str> =
+            traps.trap.iter().map(|t| t.replay.as_str()).collect();
+        assert_eq!(
+            streams.len(),
+            2,
+            "the example must exercise more than one stream"
+        );
+    }
+
+    fn write_traps(tag: &str, body: &str) -> PathBuf {
+        let path = scratch_dir(tag).join("traps.toml");
+        std::fs::write(&path, body).unwrap();
+        path
+    }
+
+    /// The oracle rests on the author's reason. Its absence must stop the read, not warn.
+    #[test]
+    fn a_trap_without_a_reason_is_refused() {
+        let path = write_traps(
+            "no-reason",
+            r#"
+[[trap]]
+id = "nameless"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001"]
+reason = "   "
+expect = { must-abstain = { cause = "NoObservedValue" } }
+"#,
+        );
+        let err = read_traps(&path).expect_err("a reasonless trap must be refused");
+        assert!(matches!(err, FixtureError::Trap { .. }), "{err:?}");
+        let rendered = err.to_string();
+        assert!(
+            rendered.contains("nameless"),
+            "must name the trap: {rendered}"
+        );
+        // Assert the CAUSE, not a constant of the message: an earlier version checked for the
+        // literal "must-abstain", which every reason error contains and which therefore could not
+        // tell a correct message from a wrong one.
+        assert!(
+            matches!(
+                err,
+                FixtureError::Trap {
+                    source: opencmdb_core::trap::TrapError::ReasonMissing { .. },
+                    ..
+                }
+            ),
+            "an empty reason is ReasonMissing, not another reason error: {err:?}"
+        );
+    }
+
+    /// An ABSENT `reason` key must be refused by a message that names the TRAP — not by serde,
+    /// which can only name the field. That is why `reason` carries `#[serde(default)]`.
+    #[test]
+    fn a_trap_whose_reason_key_is_absent_names_the_trap() {
+        let path = write_traps(
+            "absent-reason",
+            r#"
+[[trap]]
+id = "keyless"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001"]
+expect = { must-abstain = { cause = "NoObservedValue" } }
+"#,
+        );
+        let err = read_traps(&path).expect_err("an absent reason must be refused");
+        assert!(matches!(err, FixtureError::Trap { .. }), "{err:?}");
+        assert!(
+            err.to_string().contains("keyless"),
+            "must name the trap, not just the field: {err}"
+        );
+    }
+
+    /// A `./` prefix names the same file under a spelling the MANIFEST never records.
+    #[test]
+    fn a_dot_slash_replay_is_refused() {
+        assert!(matches!(
+            fixture_path("./scenario/replay/minimal.jsonl")
+                .expect_err("a `./` prefix must be refused"),
+            FixtureError::OutsideCorpus { .. }
+        ));
+    }
+
+    /// A misspelled field must fail loudly rather than be ignored — the rule story 4.1
+    /// established for observations, applied to the labelling.
+    #[test]
+    fn an_unknown_field_in_a_trap_file_is_refused() {
+        let path = write_traps(
+            "unknown-field",
+            r#"
+[[trap]]
+id = "typo"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001"]
+reason = "a reason long enough to state something about this trap"
+resaon = "the misspelling that motivates deny_unknown_fields"
+expect = { must-abstain = { cause = "NoObservedValue" } }
+"#,
+        );
+        let err = read_traps(&path).expect_err("an unknown field must be refused");
+        assert!(matches!(err, FixtureError::Toml { .. }), "{err:?}");
+        let rendered = err.to_string();
+        assert!(
+            rendered.contains("resaon"),
+            "must name the field: {rendered}"
+        );
+        assert!(
+            rendered.contains("trap file"),
+            "must say what failed: {rendered}"
+        );
+    }
+
+    /// A decision carrying an abstention cause is not merely invalid, it is unrepresentable —
+    /// so the parse fails rather than a validator catching it later.
+    #[test]
+    fn a_decision_carrying_an_abstention_cause_is_refused() {
+        let path = write_traps(
+            "both",
+            r#"
+[[trap]]
+id = "confused"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001"]
+reason = "a reason long enough to state something about this trap"
+expect = { must-merge = { rule = "r", cause = "NoObservedValue" } }
+"#,
+        );
+        let err = read_traps(&path).expect_err("a column must carry only its own payload");
+        assert!(matches!(err, FixtureError::Toml { .. }), "{err:?}");
+        assert!(
+            err.to_string().contains("cause"),
+            "must name the offending key: {err}"
+        );
+    }
+
+    /// A trap pointing at an observation its stream does not contain can never fire, and would
+    /// sit in the corpus looking like coverage. The gate counts traps.
+    #[test]
+    fn a_trap_judging_an_absent_observation_is_refused() {
+        let path = write_traps(
+            "dangling",
+            r#"
+[[trap]]
+id = "points-at-nothing"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["ffffffff-0000-4000-8000-00000000dead"]
+reason = "this observation is deliberately absent from the stream it names"
+expect = { must-abstain = { cause = "NoObservedValue" } }
+"#,
+        );
+        let err = read_traps(&path).expect_err("a dangling reference must be refused");
+        match &err {
+            FixtureError::DanglingObservation { trap, replay, .. } => {
+                assert_eq!(trap, "points-at-nothing");
+                assert_eq!(replay, "scenario/replay/minimal.jsonl");
+            }
+            other => panic!("expected a dangling-observation error, got {other:?}"),
+        }
+        assert!(err.to_string().contains("does not contain"), "{err}");
+    }
+
+    /// A trap file may not reach outside the corpus through its `replay` field either.
+    #[test]
+    fn a_trap_replaying_outside_the_corpus_is_refused() {
+        let path = write_traps(
+            "escape",
+            r#"
+[[trap]]
+id = "escapes"
+replay = "../../etc/passwd"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001"]
+reason = "a reason long enough to state something about this trap"
+expect = { must-abstain = { cause = "NoObservedValue" } }
+"#,
+        );
+        assert!(matches!(
+            read_traps(&path).expect_err("a replay path leaving the corpus must be refused"),
+            FixtureError::OutsideCorpus { .. }
+        ));
     }
 
     /// D56: the corpus path is "a single constant, in one module, never copied. If it appears

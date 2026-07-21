@@ -13,3 +13,9 @@ perfect oracle, which a real capture can never have (D19).
 `replay/` holds the JSONL observation streams a `FixtureConnector` replays: one serialized
 `Observation` per line, in the domain types' own serde representation. The fixture schema IS the
 observation schema — there is no separate format to learn.
+
+`traps/` holds the truth labelling: which observations a case judges, which of D18's three
+columns is correct — `must-merge`, `must-not-merge`, `must-abstain` — and the author's mandatory
+one-sentence reason. A trap references observations by their stable `obs_id`, never by line
+number, and a reference to an observation its stream does not contain is refused: a trap that can
+never fire would sit in the corpus looking like coverage, and the gate counts traps.

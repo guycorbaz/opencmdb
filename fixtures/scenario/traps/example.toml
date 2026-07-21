@@ -1,0 +1,44 @@
+# An EXAMPLE of the trap format, not a trap family. The families arrive from story 4.9 onward;
+# this file exists so the format is exercised, locked and reviewable before fifty traps are
+# written against it.
+#
+# Every trap judges observations from a committed replay stream, by their stable `obs_id` — never
+# by line number, which a later edit would silently shift under the truth. The traps below span
+# TWO streams on purpose: a trap names the stream it judges, and nothing assumes there is one.
+#
+# The `reason` is MANDATORY and is the oracle: there is no external truth to appeal to, so the
+# author states theirs on the record and a later reader can check it. That is not decoration —
+# the first version of this file claimed two observations shared a MAC when the committed bytes
+# said otherwise, and a reader caught it precisely because the claim was written down.
+#
+# Every decision names a rule. A `must-merge` names the rule that FIRES; a `must-not-merge` names
+# the rule that OPPOSES the merge, not the one that was merely tempting — an engine that refuses
+# without saying why cannot be told apart from an engine that found nothing. Only an abstention
+# names a cause instead.
+
+[[trap]]
+id = "example-must-merge"
+replay = "scenario/replay/example-traps.jsonl"
+observations = [
+  "bbbbbbbb-0000-4000-8000-000000000001",
+  "bbbbbbbb-0000-4000-8000-000000000002",
+]
+reason = "both carry the identical MAC 02:00:5e:00:53:10 an hour apart, so only the lease moved."
+expect = { must-merge = { rule = "l1-exact-mac" } }
+
+[[trap]]
+id = "example-must-not-merge"
+replay = "scenario/replay/example-traps.jsonl"
+observations = [
+  "bbbbbbbb-0000-4000-8000-000000000001",
+  "bbbbbbbb-0000-4000-8000-000000000003",
+]
+reason = "their MACs differ in the final octet, which opposes the merge rather than merely failing to support it."
+expect = { must-not-merge = { rule = "l1-distinct-mac" } }
+
+[[trap]]
+id = "example-must-abstain"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000002"]
+reason = "this observation carries only an address and a round-trip time, so no identifying fact supports any conclusion."
+expect = { must-abstain = { cause = "NoObservedValue" } }
