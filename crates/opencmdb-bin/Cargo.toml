@@ -3,7 +3,7 @@
 # the reverse.
 [package]
 name = "opencmdb-bin"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -26,6 +26,7 @@ config = "0.15.25"
 # `StreamExt::buffered` — bounded-concurrency probing in the ping scan (issue #10). Already in
 # the tree via sqlx/axum; taken as a direct dependency here, std-only.
 futures-util = { version = "0.3.32", default-features = false, features = ["std"] }
+percent-encoding = "2.3.2"
 opencmdb-core.workspace = true
 prometheus = "0.14.0"
 rust-embed = "8.12.0"

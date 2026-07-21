@@ -90,6 +90,15 @@ attached to. If your database runs on that same host, connect to a \emph{differe
 it, or keep an ordinary bridge network.
 \end{note}
 
+\begin{note}
+Should you need host networking anyway, the published image carries the
+\texttt{cap\_net\_raw} file capability on its binary, so the scan works there too --- as the
+non-root user, with no host \texttt{sysctl} to set and persist --- provided the container is
+granted \texttt{NET\_RAW} (\texttt{cap\_add} in the compose file, which the reference deployment
+already does). Without that file capability, a non-root process loses the container's
+capabilities at \texttt{exec} and the socket is refused regardless.
+\end{note}
+
 \section{Native binary}
 The same single binary can run directly on a Linux host, reading its configuration from a
 file and the environment.
@@ -102,41 +111,46 @@ socket; either widen it or grant the binary the \texttt{cap\_net\_raw} file capa
 
 \chapter{Configuration}
 opencmdb is configured through a layered configuration file plus environment overrides. The
-database connection is provided as a URL; because MariaDB speaks the MySQL wire protocol, the
-scheme is \texttt{mysql://}:
+database connection is given as five separate values, and opencmdb assembles the connection URL
+itself:
 
 \begin{lstlisting}[language=bash]
 # Example — placeholder values only (use your own).
-DATABASE_URL = "mysql://opencmdb:CHANGE_ME@192.0.2.5:3306/opencmdb"
+DATABASE_HOST     = "192.0.2.5"
+DATABASE_PORT     = "3306"
+DATABASE_NAME     = "opencmdb"
+DATABASE_USERNAME = "opencmdb"
+DATABASE_PASSWORD = "CHANGE_ME"
 \end{lstlisting}
 
+Write the password \emph{exactly as it is}. Characters that are reserved inside a URL ---
+\texttt{@}, \texttt{:}, \texttt{/}, \texttt{\#}, \texttt{?}, \texttt{\%}, spaces --- need no
+treatment at all here, because opencmdb percent-encodes the user info when it builds the URL.
+Having to do that by hand, and the silent authentication failures that followed from forgetting
+it, is exactly why the connection is no longer configured as a single string.
+
 \begin{warning}
-A special character in the password is mangled by \emph{two independent mechanisms}, at two
-different moments. Confusing them costs hours, because both produce the same opaque
-``access denied'' at startup.
-
-\medskip
-\textbf{1. A \texttt{\$} must be doubled: \texttt{\$\$}.} Docker Compose interpolates the
-contents of your \texttt{.env} file, so a \texttt{\$} starts what it takes to be a variable
-reference and the rest of the value is discarded. A password written \texttt{pa\$word} reaches
-opencmdb as \texttt{pa}. This happens \emph{before} the process starts, so no amount of encoding
-inside the application can recover it. Measured: \texttt{abc\$def} arrives as \texttt{abc};
-\texttt{abc\$\$def} arrives as \texttt{abc\$def}.
-
-\medskip
-\textbf{2. URL-reserved characters must be percent-encoded.} Independently, the password sits
-inside a URL: \texttt{@}~$\rightarrow$~\texttt{\%40}, \texttt{:}~$\rightarrow$~\texttt{\%3A},
-\texttt{/}~$\rightarrow$~\texttt{\%2F}, \texttt{\#}~$\rightarrow$~\texttt{\%23},
-\texttt{?}~$\rightarrow$~\texttt{\%3F}, \texttt{\%}~$\rightarrow$~\texttt{\%25},
-space~$\rightarrow$~\texttt{\%20}. opencmdb percent-decodes the user info before connecting, so
-MariaDB still receives the original password.
-
-\medskip
-Both at once: the password \texttt{s3cr\$t@x} is written \texttt{s3cr\$\$t\%40x}.
+There is one mangling opencmdb cannot protect you from, because it happens \emph{before} the
+process starts: \textbf{a \texttt{\$} in the password must be doubled --- \texttt{\$\$}}. Docker
+Compose interpolates the contents of your \texttt{.env} file, so a \texttt{\$} begins what it
+takes to be a variable reference and the rest of the value is discarded. A password written
+\texttt{pa\$word} reaches opencmdb as \texttt{pa}, and you get an opaque ``access denied''.
+Measured: \texttt{abc\$def} arrives as \texttt{abc}; \texttt{abc\$\$def} arrives as
+\texttt{abc\$def}.
 \end{warning}
 
+\begin{note}
+A single \texttt{DATABASE\_URL} is still honoured when none of the \texttt{DATABASE\_*}
+variables is set, so existing deployments keep working, but it is \textbf{deprecated} and
+opencmdb warns on startup when it is used. With it, the manual percent-encoding above is back:
+\texttt{@}~$\rightarrow$~\texttt{\%40}, \texttt{:}~$\rightarrow$~\texttt{\%3A},
+\texttt{/}~$\rightarrow$~\texttt{\%2F}, \texttt{\#}~$\rightarrow$~\texttt{\%23},
+\texttt{?}~$\rightarrow$~\texttt{\%3F}, \texttt{\%}~$\rightarrow$~\texttt{\%25},
+space~$\rightarrow$~\texttt{\%20}.
+\end{note}
+
 \begin{warning}
-The host in the URL is the address of your database server \emph{as seen from inside the
+\texttt{DATABASE\_HOST} is the address of your database server \emph{as seen from inside the
 container}. It is not \texttt{127.0.0.1}: the container has its own network namespace, so
 loopback means the container itself.
 \end{warning}
@@ -275,13 +289,11 @@ Getting to that point is another matter. The table below collects the failures o
 real first deployments --- none of them faults in the reconciliation engine, all of them
 obstacles between a running MariaDB and a scanning opencmdb.
 
-\begin{warning}
-Run the first start in the \textbf{foreground} (\texttt{docker compose up}, not
-\texttt{up~-d}). A fatal startup error is currently written to standard output only and does not
-reach the log files, so a container that crash-loops under \texttt{restart: unless-stopped}
-leaves nothing in \texttt{opencmdb.YYYY-MM-DD.log} but a column of identical
-\texttt{opencmdb starting} lines.
-\end{warning}
+\begin{note}
+A fatal startup error is logged in full --- its whole cause chain --- to standard output
+\emph{and} to the daily log file, and the process then exits non-zero. If a container is
+restarting in a loop, \texttt{opencmdb.YYYY-MM-DD.log} says why.
+\end{note}
 
 \begin{center}
 \small
@@ -293,7 +305,7 @@ leaves nothing in \texttt{opencmdb.YYYY-MM-DD.log} but a column of identical
   & No grant for the identity MariaDB sees
   & Grant exactly the host named in the message \\
 \addlinespace
-\ldots\ and that host changes when you change the URL
+\ldots\ and that host changes when you change the address
   & Multi-homed database server: replies leave by another interface
   & Grant every address the client can present \\
 \addlinespace
@@ -313,9 +325,9 @@ The page loads but shows no observed data
   & The scan failed with a non-fatal warning
   & Look for \texttt{startup scan failed} in the log \\
 \addlinespace
-Log files contain only \texttt{opencmdb starting}
-  & The crash reason went to standard output
-  & Run in the foreground, or read \texttt{docker logs} \\
+The page shows no gap at all
+  & Observed state exists, but nothing is declared yet
+  & Declare an entity carrying an \texttt{ipv4} \\
 \bottomrule
 \end{tabular}
 \end{center}

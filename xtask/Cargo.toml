@@ -4,7 +4,7 @@
 # D63: a secret reaches a dev tool on STDIN only.
 [package]
 name = "xtask"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
 publish = false

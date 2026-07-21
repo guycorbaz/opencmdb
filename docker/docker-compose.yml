@@ -11,7 +11,7 @@
 
 services:
   opencmdb:
-    image: gcorbaz/opencmdb:0.1.0
+    image: gcorbaz/opencmdb:0.1.1
     container_name: opencmdb
     env_file: .env
     # The container keeps its OWN network namespace (see the note at the bottom of this file),

@@ -8,6 +8,7 @@
 
 mod arp_ping;
 mod auth;
+mod dburl;
 mod metrics;
 mod page;
 mod repo;
@@ -80,11 +81,29 @@ async fn run() -> anyhow::Result<()> {
     let clock = SystemClock;
     tracing::info!(started_at = %clock.now(), "opencmdb starting");
     let bind = load_bind_address().context("loading configuration")?;
-    let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
+    // Discrete DATABASE_* variables are the documented path; DATABASE_URL is the deprecated
+    // fallback that keeps CI and existing deployments working (issue #6).
+    let (database_url, source) = dburl::from_env(|key| std::env::var(key).ok())
+        .map_err(anyhow::Error::msg)
+        .context("loading the database configuration")?;
+    if source == dburl::Source::Url {
+        tracing::warn!(
+            "DATABASE_URL is deprecated — prefer DATABASE_HOST, DATABASE_PORT, DATABASE_NAME, \
+             DATABASE_USERNAME and DATABASE_PASSWORD, which need no manual percent-encoding"
+        );
+    }
 
-    let pool = MySqlPool::connect(&database_url)
-        .await
-        .context("connecting to MariaDB")?;
+    let pool = match MySqlPool::connect(&database_url).await {
+        Ok(pool) => pool,
+        Err(error) => {
+            // `1045 Access denied` is the costliest error in this product's deployment story:
+            // it points at the password, which is usually the one thing that is right (issue #5).
+            if let Some(hint) = dburl::explain_connect_error(&error) {
+                tracing::error!("{hint}");
+            }
+            return Err(anyhow::Error::new(error).context("connecting to MariaDB"));
+        }
+    };
     sqlx::migrate!("./migrations")
         .run(&pool)
         .await

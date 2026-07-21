@@ -3,7 +3,7 @@
 #   anyhow · axum · sqlx · askama. This crate cannot name what touches the outside world.
 [package]
 name = "opencmdb-core"
-version = "0.1.0"
+version = "0.1.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

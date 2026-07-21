@@ -14,7 +14,7 @@ opencmdb is being built in the open. This image is published starting at **`0.1.
 ## Image
 
 ```
-docker pull gcorbaz/opencmdb:0.1.0
+docker pull gcorbaz/opencmdb:0.1.1
 ```
 
 - Distroless, static, runs as a **non-root** user.
@@ -24,6 +24,7 @@ docker pull gcorbaz/opencmdb:0.1.0
 
 | Tag | Meaning |
 |-----|---------|
+| `0.1.1` | deployment fixes: overlapping ping probes, `DATABASE_*` variables, fatal errors logged, `cap_net_raw` on the binary |
 | `0.1.0` | first published pre-release (walking skeleton) |
 | `latest` | most recent published tag |
 
@@ -44,7 +45,7 @@ FLUSH PRIVILEGES;
 
 The binary collation is required — identity comparison must never depend on the database's locale. Narrow `'%'` once the connection works.
 
-> **Grants match the address the server *sees*, not the one you dial.** If authentication fails, read the error: `Access denied for user 'opencmdb'@'<host>'` names the exact identity you must grant. On a multi-homed machine these differ — traffic sent to one interface can leave by another, and MariaDB matches on the source it observes (or its reverse-resolved name). The tell-tale sign is that the host in the error message *changes* as you change the URL.
+> **Grants match the address the server *sees*, not the one you dial.** If authentication fails, read the error: `Access denied for user 'opencmdb'@'<host>'` names the exact identity you must grant. On a multi-homed machine these differ — traffic sent to one interface can leave by another, and MariaDB matches on the source it observes (or its reverse-resolved name). The tell-tale sign is that the host in the error message *changes* as you change the address you connect to.
 
 ## Running with Docker Compose
 
@@ -53,7 +54,7 @@ opencmdb runs as a single service pointing at your MariaDB. A reference `docker-
 ```yaml
 services:
   opencmdb:
-    image: gcorbaz/opencmdb:0.1.0
+    image: gcorbaz/opencmdb:0.1.1
     container_name: opencmdb
     env_file: .env
     ports:
@@ -71,9 +72,14 @@ Provide configuration through a `.env` file you keep **outside** version control
 
 ```dotenv
 # Placeholders — set your own; never commit this file.
-# The host is your database server as seen FROM INSIDE the container — not 127.0.0.1, which
-# would be the container itself.
-DATABASE_URL=mysql://opencmdb:CHANGE_ME@192.0.2.5:3306/opencmdb
+# DATABASE_HOST is your database server as seen FROM INSIDE the container — not 127.0.0.1,
+# which would be the container itself. Write the password exactly as it is; opencmdb builds
+# the connection URL and encodes it for you.
+DATABASE_HOST=192.0.2.5
+DATABASE_PORT=3306
+DATABASE_NAME=opencmdb
+DATABASE_USERNAME=opencmdb
+DATABASE_PASSWORD=CHANGE_ME
 OPENCMDB_BIND=0.0.0.0:8080
 OPENCMDB_LOG=info
 OPENCMDB_LOCALE=en
@@ -91,27 +97,23 @@ OPENCMDB_LOG_RETENTION=14
 
 > Use RFC 5737 documentation addresses (`192.0.2.0/24`) and example hostnames in anything you share — never paste your real network into a public place.
 
-> **Special characters in the DB password — two separate traps.**
+> **The `$` in a password still needs doubling: `$$`.** Docker Compose interpolates the contents of your `.env`, so a password written `pa$word` is silently truncated to `pa` and you get an opaque "access denied". This happens *before* opencmdb starts, so nothing the application can do will recover it. Measured: `abc$def` arrives as `abc`; `abc$$def` arrives as `abc$def`. Every other character — `@ : / # ? %`, spaces — is written exactly as it is: opencmdb assembles the connection URL and percent-encodes it for you.
 >
-> **1. A `$` must be doubled: `$$`.** Docker Compose interpolates the contents of your `.env`, so a password written `pa$word` is silently truncated to `pa` and you get an opaque "access denied". This happens *before* opencmdb starts, so nothing the application does can recover it. Measured: `abc$def` arrives as `abc`; `abc$$def` arrives as `abc$def`.
->
-> **2. URL-reserved characters must be percent-encoded.** Independently of the above, the password sits inside a URL: `@`→`%40`, `:`→`%3A`, `/`→`%2F`, `#`→`%23`, `?`→`%3F`, `%`→`%25`, space→`%20`. opencmdb percent-decodes the user info, so the database receives the original password.
->
-> Both at once: the password `s3cr$t@x` is written `s3cr$$t%40x`.
+> **`DATABASE_URL` is deprecated** but still honoured when none of the `DATABASE_*` variables above is set. With it, you must percent-encode the password by hand (`@`→`%40`, `:`→`%3A`, `/`→`%2F`, `#`→`%23`, `?`→`%3F`, `%`→`%25`, space→`%20`); forget one and authentication fails opaquely. That trap is the reason for the discrete variables.
 
 ## Troubleshooting the first start
 
-Run the first start in the **foreground** — `docker compose up`, not `up -d`. A fatal startup error is currently printed to stdout only and does not reach the log files, so with `restart: unless-stopped` a crash-looping container leaves you nothing but repeated `opencmdb starting` lines.
+A fatal startup error is logged in full — cause chain included — to both stdout and the daily log files, and the process exits non-zero. If a container is restarting in a loop, `docker logs` or `log/opencmdb.YYYY-MM-DD.log` will say why.
 
 | Symptom | Cause | Fix |
 |---|---|---|
 | `1045 Access denied for user 'opencmdb'@'<host>'` | No grant for the identity MariaDB *sees* | Grant exactly the `<host>` in the message — see above |
-| Same, and `<host>` changes when you change the URL | Multi-homed database server: replies leave by another interface | Grant every address it can present, or use `'%'` while testing |
+| Same, and `<host>` changes when you change the address | Multi-homed database server: replies leave by another interface | Grant every address it can present, or use `'%'` while testing |
 | Same, password looks correct | A `$` was eaten by Compose | Double it: `$$` |
 | `Address in use (os error 98)` | Another service already holds the port | Change the host side of `ports:` |
-| `startup scan failed … could not open an ICMP socket` | `network_mode: host` inherited an empty `ping_group_range` | Drop host mode — see the note above |
+| `startup scan failed … could not open an ICMP socket` | `network_mode: host` inherited an empty `ping_group_range` | Drop host mode; or keep it and grant `NET_RAW`, which the image's `cap_net_raw` binary capability then makes effective |
 | Page loads, but shows no observed data | The scan failed with a non-fatal warning | Check the logs for `startup scan failed` |
-| Log files contain only `opencmdb starting` | The crash reason went to stdout | Run in the foreground, or read `docker logs` |
+| The page shows no gap | Observed state exists but nothing is declared yet | Declare an entity carrying an `ipv4` |
 
 ## Security
 
