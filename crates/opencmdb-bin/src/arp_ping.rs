@@ -26,6 +26,15 @@ use uuid::Uuid;
 /// hit the gateway's ARP table, which matters on a /22 (1022 hosts). See `with_concurrency`.
 pub const DEFAULT_CONCURRENCY: usize = 64;
 
+/// How long a single probe waits for its reply, by default.
+///
+/// This is the knob that decides what a scan MISSES. Exactly one probe is sent per host and
+/// there is no retry yet, so a device that answers more slowly than this — a sleeping wireless
+/// client, a congested link — is recorded as absent rather than as unknown. It is also, together
+/// with the concurrency, what a scan of a mostly-empty subnet costs: `targets / concurrency`
+/// rounds of this timeout.
+pub const DEFAULT_TIMEOUT_MS: u64 = 1_000;
+
 /// Pings a fixed set of IPv4 targets, emitting one observation per host that replies.
 pub struct ArpPingConnector {
     id: ConnectorId,
@@ -42,7 +51,7 @@ impl ArpPingConnector {
             id,
             scope,
             targets,
-            timeout: Duration::from_secs(1),
+            timeout: Duration::from_millis(DEFAULT_TIMEOUT_MS),
             concurrency: DEFAULT_CONCURRENCY,
         }
     }

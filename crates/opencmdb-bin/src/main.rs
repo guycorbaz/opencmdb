@@ -193,9 +193,19 @@ fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
                 .ok()
                 .and_then(|raw| raw.parse::<usize>().ok())
                 .unwrap_or(crate::arp_ping::DEFAULT_CONCURRENCY);
-            let mut connector = connector.with_concurrency(concurrency);
+            // How long one probe waits for its reply. The knob that decides what the scan MISSES:
+            // one probe is sent per host and there is no retry yet, so a device slower than this
+            // is simply recorded as absent. Raise it on a congested or wireless network.
+            let timeout_ms = std::env::var("OPENCMDB_SCAN_TIMEOUT_MS")
+                .ok()
+                .and_then(|raw| raw.parse::<u64>().ok())
+                .filter(|ms| *ms > 0)
+                .unwrap_or(crate::arp_ping::DEFAULT_TIMEOUT_MS);
+            let mut connector = connector
+                .with_concurrency(concurrency)
+                .with_timeout(std::time::Duration::from_millis(timeout_ms));
 
-            tracing::info!(%cidr, concurrency, "startup scan: pinging subnet");
+            tracing::info!(%cidr, concurrency, timeout_ms, "startup scan: pinging subnet");
             let mut sink = VecSink::default();
             if let Err(error) = connector
                 .poll(now, &mut sink, CancellationToken::new())

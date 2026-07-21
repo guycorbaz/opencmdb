@@ -88,6 +88,9 @@ OPENCMDB_SCAN_CIDR=192.0.2.0/24
 # Probes in flight at once (default 64) — a politeness bound on your gateway's ARP table,
 # not a throughput setting. The scan is I/O-bound and single-threaded either way.
 OPENCMDB_SCAN_CONCURRENCY=64
+# How long one probe waits for its reply, in ms (default 1000). This decides what the scan
+# MISSES: one probe per host, no retry yet, so a slower device is recorded as absent.
+OPENCMDB_SCAN_TIMEOUT_MS=1000
 # Bearer token for the Prometheus /metrics endpoint (leave unset to keep it closed).
 OPENCMDB_METRICS_TOKEN=CHANGE_ME
 # Daily-rotating file logs to this in-container path (mounted from ./log); keep this many days.
@@ -97,7 +100,16 @@ OPENCMDB_LOG_RETENTION=14
 
 > Use RFC 5737 documentation addresses (`192.0.2.0/24`) and example hostnames in anything you share — never paste your real network into a public place.
 
-> **The `$` in a password still needs doubling: `$$`.** Docker Compose interpolates the contents of your `.env`, so a password written `pa$word` is silently truncated to `pa` and you get an opaque "access denied". This happens *before* opencmdb starts, so nothing the application can do will recover it. Measured: `abc$def` arrives as `abc`; `abc$$def` arrives as `abc$def`. Every other character — `@ : / # ? %`, spaces — is written exactly as it is: opencmdb assembles the connection URL and percent-encodes it for you.
+> **Single-quote the password if it contains a `$`.** Docker Compose interpolates the contents of your `.env`, so an unquoted `$` begins what it reads as a variable name and the rest of the value is dropped — an opaque "access denied", decided *before* opencmdb starts, so nothing the application can do will recover it. Measured:
+>
+> | written | arrives as | |
+> |---|---|---|
+> | `DATABASE_PASSWORD='pa$word'` | `pa$word` | ✅ single quotes are fully literal |
+> | `DATABASE_PASSWORD=pa$$word` | `pa$word` | ✅ doubling works, but rewrites your password |
+> | `DATABASE_PASSWORD=pa$word` | `pa` | ❌ |
+> | `DATABASE_PASSWORD="pa$word"` | `pa` | ❌ double quotes do **not** protect |
+>
+> The trap is sneakier than it looks: `abc$1def`, `abc$!def` and `abcdef$` all survive unquoted, because interpolation only fires on something resembling a variable name — so whether it bites depends on the character *after* the `$`. The one case single quotes cannot handle is a password containing a single quote, which makes Compose fail to parse the file; double the `$` there instead. Every other character — `@ : / # ? %`, spaces — is written exactly as it is: opencmdb assembles the connection URL and percent-encodes it for you.
 >
 > **`DATABASE_URL` is deprecated** but still honoured when none of the `DATABASE_*` variables above is set. With it, you must percent-encode the password by hand (`@`→`%40`, `:`→`%3A`, `/`→`%2F`, `#`→`%23`, `?`→`%3F`, `%`→`%25`, space→`%20`); forget one and authentication fails opaquely. That trap is the reason for the discrete variables.
 

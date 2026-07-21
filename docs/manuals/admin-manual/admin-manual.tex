@@ -131,12 +131,30 @@ it, is exactly why the connection is no longer configured as a single string.
 
 \begin{warning}
 There is one mangling opencmdb cannot protect you from, because it happens \emph{before} the
-process starts: \textbf{a \texttt{\$} in the password must be doubled --- \texttt{\$\$}}. Docker
-Compose interpolates the contents of your \texttt{.env} file, so a \texttt{\$} begins what it
-takes to be a variable reference and the rest of the value is discarded. A password written
-\texttt{pa\$word} reaches opencmdb as \texttt{pa}, and you get an opaque ``access denied''.
-Measured: \texttt{abc\$def} arrives as \texttt{abc}; \texttt{abc\$\$def} arrives as
-\texttt{abc\$def}.
+process starts: \textbf{put the password in single quotes if it contains a \texttt{\$}}. Docker
+Compose interpolates the contents of your \texttt{.env} file, so an unquoted \texttt{\$} begins
+what it takes to be a variable name and the rest of the value is discarded --- an opaque
+``access denied'' that no amount of care inside opencmdb can recover from.
+
+\medskip
+\begin{tabular}{@{}llp{0.42\linewidth}@{}}
+\toprule
+\textbf{Written} & \textbf{Arrives as} & \\
+\midrule
+\texttt{DATABASE\_PASSWORD='pa\$word'} & \texttt{pa\$word} & single quotes are fully literal \\
+\texttt{DATABASE\_PASSWORD=pa\$\$word} & \texttt{pa\$word} & works, but rewrites your password \\
+\texttt{DATABASE\_PASSWORD=pa\$word}  & \texttt{pa} & truncated \\
+\texttt{DATABASE\_PASSWORD="pa\$word"} & \texttt{pa} & double quotes do \emph{not} protect \\
+\bottomrule
+\end{tabular}
+
+\medskip
+The trap is sneakier than it first appears: \texttt{abc\$1def}, \texttt{abc\$!def} and
+\texttt{abcdef\$} all survive unquoted, because interpolation only fires on something resembling
+a variable name. Whether it bites you therefore depends on the character \emph{after} the
+\texttt{\$} --- which is why the problem is so often reported as not existing. The one case
+single quotes cannot handle is a password containing a single quote, which makes Compose fail to
+parse the file; double the \texttt{\$} instead.
 \end{warning}
 
 \begin{note}
@@ -211,11 +229,19 @@ on-demand scan. Where the host lacks the raw-socket capability, the scanner fall
 ping-only.
 
 Probes overlap: up to 64 are in flight at once by default
-(\texttt{OPENCMDB\_SCAN\_CONCURRENCY}). This is a \emph{politeness} bound rather than a
+(\texttt{OPENCMDB\_SCAN\_CONCURRENCY}), each waiting one second for its reply
+(\texttt{OPENCMDB\_SCAN\_TIMEOUT\_MS}). This is a \emph{politeness} bound rather than a
 throughput one --- a probe sends sixteen bytes and then waits, so the scan is single-threaded
 whatever you set, and raising the limit costs no CPU. What it does raise is the load on your
 gateway's ARP table, which is why a \texttt{/22} does not simply fire all 1022 probes at once.
 Lower it on a fragile network.
+
+\begin{warning}
+The timeout is the setting that decides what a scan \emph{misses}. Exactly one probe is sent per
+host and there is no retry, so a device that answers more slowly than the timeout --- a sleeping
+wireless client, a congested link --- is recorded as absent rather than as unknown. Raise it on a
+network where that matters.
+\end{warning}
 
 \begin{note}
 The wall-clock cost of a scan is driven by the addresses that \emph{do not} answer: each one
