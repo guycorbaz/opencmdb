@@ -1,6 +1,6 @@
 # Story 4.1: Freeze the JSONL observation stream
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -43,30 +43,59 @@ D19 decides the schema for us and the decision is not reopenable: *"the fixture 
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — the fixtures tree** (AC: 1)
-  - [ ] Create `fixtures/scenario/replay/` and `fixtures/capture/`.
-  - [ ] `fixtures/README.md`: what this directory is (a spec that precedes the code, not test data — D56/D45), and that editing a file here is a commit that says *"I am changing the spec"*.
-  - [ ] `fixtures/capture/README.md`: real, version-tagged, dated captures prove the **parser**; they rot and get re-captured. `fixtures/scenario/README.md`: synthetic, written to trap X, prove the **engine**; they do **not** rot — they are right or wrong, and the re-capture job must never reach them.
+- [x] **Task 1 — the fixtures tree** (AC: 1)
+  - [x] Create `fixtures/scenario/replay/` and `fixtures/capture/`.
+  - [x] `fixtures/README.md`: what this directory is (a spec that precedes the code, not test data — D56/D45), and that editing a file here is a commit that says *"I am changing the spec"*.
+  - [x] `fixtures/capture/README.md`: real, version-tagged, dated captures prove the **parser**; they rot and get re-captured. `fixtures/scenario/README.md`: synthetic, written to trap X, prove the **engine**; they do **not** rot — they are right or wrong, and the re-capture job must never reach them.
 
-- [ ] **Task 2 — write the fixture** (AC: 2, 3)
-  - [ ] Choose a small, boring content: 2–3 observations, at least one carrying more than one `Fact`, at least one `Mac` and one `IpV4` so the format is exercised beyond a single variant.
-  - [ ] Serialize by hand or by a throwaway test print — but **commit the file**; nothing generates it at build or test time (D19: the artefact is versioned; a generator bug must never rewrite truth silently).
-  - [ ] Verify every address is RFC 5737 and every MAC is locally-administered. **No real network data, ever** — D19 calls real captures in a public repo *"a privacy liability … disqualifying. Not debatable."*
+- [x] **Task 2 — write the fixture** (AC: 2, 3)
+  - [x] Choose a small, boring content: 2–3 observations, at least one carrying more than one `Fact`, at least one `Mac` and one `IpV4` so the format is exercised beyond a single variant.
+  - [x] Serialize by hand or by a throwaway test print — but **commit the file**; nothing generates it at build or test time (D19: the artefact is versioned; a generator bug must never rewrite truth silently).
+  - [x] Verify every address is RFC 5737 and every MAC is locally-administered. **No real network data, ever** — D19 calls real captures in a public repo *"a privacy liability … disqualifying. Not debatable."*
 
-- [ ] **Task 3 — path constant + reader** (AC: 4, 5)
-  - [ ] New module `crates/opencmdb-bin/src/fixtures.rs`: the single `FIXTURES_DIR` constant and `read_jsonl(path) -> Result<Vec<Observation>, …>`.
-  - [ ] Error carries the 1-indexed line number and the underlying serde message.
-  - [ ] Register the module in `main.rs` (alphabetical: after `dburl`, before `metrics`).
+- [x] **Task 3 — path constant + reader** (AC: 4, 5)
+  - [x] New module `crates/opencmdb-bin/src/fixtures.rs`: the single `FIXTURES_DIR` constant and `read_jsonl(path) -> Result<Vec<Observation>, …>`.
+  - [x] Error carries the 1-indexed line number and the underlying serde message.
+  - [x] Register the module in `main.rs` (alphabetical: after `dburl`, before `metrics`).
 
-- [ ] **Task 4 — tests** (AC: 6)
-  - [ ] Read the committed fixture; assert equality against a literally-constructed `Vec<Observation>`.
-  - [ ] Re-serialize and assert the bytes equal the committed file exactly.
-  - [ ] A malformed line yields an error naming the right line number.
+- [x] **Task 4 — tests** (AC: 6)
+  - [x] Read the committed fixture; assert equality against a literally-constructed `Vec<Observation>`.
+  - [x] Re-serialize and assert the bytes equal the committed file exactly.
+  - [x] A malformed line yields an error naming the right line number.
 
-- [ ] **Task 5 — lock it** (AC: 7, 8)
-  - [ ] `sha256sum` the fixture from inside `fixtures/` so the path is relative, and append the line to `fixtures/MANIFEST` (format: `<sha256>␠␠<path>`, exactly what `sha256sum` prints).
-  - [ ] Run `cargo xtask ci` and confirm the fixtures line now reports a real count.
-  - [ ] Run the full gate set.
+- [x] **Task 5 — lock it** (AC: 7, 8)
+  - [x] `sha256sum` the fixture from inside `fixtures/` so the path is relative, and append the line to `fixtures/MANIFEST` (format: `<sha256>␠␠<path>`, exactly what `sha256sum` prints).
+  - [x] Run `cargo xtask ci` and confirm the fixtures line now reports a real count.
+  - [x] Run the full gate set.
+
+### Review Findings
+
+_Code review 2026-07-21 — three parallel layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor). 7 of 8 ACs satisfied, AC4 partial. No scope violations, no architecture violations._
+
+- [x] [Review][Patch] Add `#[serde(deny_unknown_fields)]` to the domain types — a frozen oracle format must not silently accept an unknown or misspelled field. **Decided 2026-07-21 (Guy): fix now, not later** — the cost of tightening grows with every fixture written, and exactly one exists today. [crates/opencmdb-core/src/observation/mod.rs]
+
+- [x] [Review][Patch] `fixture_path` does not contain its argument to the corpus — an absolute path makes `join` discard the root, `..` escapes it; the MANIFEST parser refuses exactly this, so the reader is strictly weaker than its own lock [crates/opencmdb-bin/src/fixtures.rs:35]
+- [x] [Review][Patch] The privacy test asserts against the Rust literals, never the committed bytes, and its `_ => {}` arm ignores `DhcpLease` and `Uplink`, which carry an IP and a MAC [crates/opencmdb-bin/src/fixtures.rs:362]
+- [x] [Review][Patch] The malformed-line test writes a fixed, shared, never-cleaned temp path — races between concurrent runs, and panics as a parser failure if the directory is owned by another user [crates/opencmdb-bin/src/fixtures.rs:237]
+- [x] [Review][Patch] The tree walk follows directory symlinks with no visited set (a link to an ancestor hangs `cargo test`), swallows every read error, and would red spuriously on a git worktree or vendored copy [crates/opencmdb-bin/src/fixtures.rs:255]
+- [x] [Review][Patch] The uniqueness test counts files, not occurrences — the constant written twice in one file passes [crates/opencmdb-bin/src/fixtures.rs:271]
+- [x] [Review][Patch] No `.gitattributes`: a CRLF-normalizing checkout breaks the byte-equality test and the sha gate, and the failure reads as "the spec drifted" [.gitattributes]
+- [x] [Review][Patch] `fixtures/README.md` states that every artefact is locked, when a fixture absent from MANIFEST is not detected until story 4.3 [fixtures/README.md]
+- [x] [Review][Patch] `fixtures/capture/README.md` describes a structural guarantee in the present tense for a tool that does not exist yet [fixtures/capture/README.md]
+- [x] [Review][Patch] The RFC 5737 assertion names the standard but accepts only one of its three ranges [crates/opencmdb-bin/src/fixtures.rs:369]
+- [x] [Review][Patch] Whitespace-only lines are silently skipped, contradicting the module's stated rule [crates/opencmdb-bin/src/fixtures.rs:91]
+- [x] [Review][Patch] `FixtureError::Io` and the `Display`/`source` impls are entirely untested [crates/opencmdb-bin/src/fixtures.rs]
+- [x] [Review][Patch] The path constant omits the trailing slash the acceptance criterion froze [crates/opencmdb-bin/src/fixtures.rs:27]
+- [x] [Review][Patch] The File List omits `sprint-status.yaml`, which the change modifies [this file]
+
+- [x] [Review][Defer] Non-UTF-8 bytes pass the sha gate but fail the reader with no byte offset; a BOM is misreported as a JSON authoring error [xtask/src/main.rs:504] — deferred to 4.3, which reworks the gate
+- [x] [Review][Defer] Orphan fixtures (present on disk, absent from MANIFEST) are still undetected [xtask/src/main.rs:403] — deferred, already scoped as story 4.3
+- [x] [Review][Defer] `Fact::Mac.locally_administered` is derivable from the address yet stored, so a fixture line can contradict itself [crates/opencmdb-core/src/observation/mod.rs:144] — deferred, pre-existing Epic 2 domain design
+- [x] [Review][Defer] The reader stops at the first bad line; duplicate `obs_id`s and duplicate MANIFEST paths are undetected [crates/opencmdb-bin/src/fixtures.rs:93] — deferred, corpus-integrity work belongs with 4.2/4.3
+- [x] [Review][Defer] A fixture filename containing a space can never be locked (`split_whitespace` in the MANIFEST parser) while the reader accepts it [xtask/src/main.rs:471] — deferred, pre-existing
+- [x] [Review][Defer] No size cap on the file or on a single line — a multi-GB fixture is an OOM rather than a diagnosable error [crates/opencmdb-bin/src/fixtures.rs:88] — deferred, not reachable at corpus scale
+
+_Dismissed as noise (4): the claim that the fixtures module leaks the build path into the shipped binary — disproven by measurement, 0 occurrences in the release binary and 0 in the published image, and D56 requires `FixtureConnector` to live in `src/`; the blanket `#![allow(dead_code)]`, whose alleged consequence was the same disproven claim; the empty `OuiVendor`, which is grounded in the measured payload where `oui` is empty on a large share; and "an empty fixture reads as success", which the sha256 lock already catches._
 
 ## Dev Notes
 
@@ -141,8 +170,66 @@ D19: real captures are *"a privacy liability in a public repo — MACs, hostname
 
 ### Agent Model Used
 
+Claude Opus 4.8 (1M context) — `claude-opus-4-8[1m]`
+
 ### Debug Log References
+
+- Red phase confirmed before implementing: `read_jsonl` left as `todo!()`, the two tests that
+  depend on it failed with `not yet implemented` while the three that do not (byte-for-byte
+  render, synthetic-data assertion, path-uniqueness) already passed. Green after implementation.
+- Gate verified end to end, not only by unit test: appending one byte to the committed fixture
+  turned `cargo xtask ci` red — `fixtures/scenario/replay/minimal.jsonl: sha256 mismatch
+  (manifest c9d2cdc0d843… ≠ file f8a773949a65…)` — and restoring the file returned it to green.
 
 ### Completion Notes List
 
+- **The fixture was generated by real serialization, not authored by hand.** A throwaway test
+  constructed the observations and printed `serde_json::to_string` for each; its output became
+  the committed file and the test was deleted. Hand-writing the JSON would have risked committing
+  bytes that merely look like what serde produces.
+- **The corpus is stated twice, on purpose.** `expected()` restates in Rust what the committed
+  bytes mean, and `re_serializing_reproduces_the_committed_bytes` asserts the two agree exactly.
+  A round-trip test alone would not have caught a serde rename: the file would still parse, and
+  every future trap would silently mean something else.
+- **The path-discipline rule of D56 is enforced by a test, not by discipline.**
+  `the_fixtures_path_is_expressed_once` walks the tree and fails if `/../../fixtures` appears in
+  more than one `.rs` file. D56 says "if it appears more than once in the tree, it is already
+  broken" — that is checkable, so it is checked.
+- **Nothing new was added to `Cargo.toml`.** The types already derived `Serialize`/`Deserialize`
+  and `serde_json` was already a dependency of `opencmdb-bin`, exactly as the Dev Notes said.
+- **No new gate tests were written.** `xtask`'s prove-to-red coverage for sha mismatch, missing
+  files, malformed lines and case-insensitive comparison already existed; the only change is that
+  the gate stopped being vacuous — it now reports `1 fixture(s) match their recorded sha256`.
+- **`fixtures/MANIFEST` keeps the provisional line format.** Migrating it to the D56
+  `MANIFEST.toml` (sha256 + seed + generator version) is story 4.3, together with orphan-fixture
+  detection — deliberately left open and recorded as such, not forgotten.
+
 ### File List
+
+- `fixtures/README.md` (new)
+- `fixtures/scenario/README.md` (new)
+- `fixtures/capture/README.md` (new)
+- `fixtures/scenario/replay/minimal.jsonl` (new)
+- `fixtures/MANIFEST` (new)
+- `crates/opencmdb-bin/src/fixtures.rs` (new)
+- `crates/opencmdb-bin/src/main.rs` (modified — module declaration only)
+- `crates/opencmdb-core/src/observation/mod.rs` (modified — `deny_unknown_fields`, review patch)
+- `.gitattributes` (new — review patch)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified)
+- `_bmad-output/implementation-artifacts/deferred-work.md` (modified — six deferred findings)
+
+### Change Log
+
+- 2026-07-21 — Froze the JSONL observation stream: fixtures tree with the `scenario/` ↔
+  `capture/` split and its READMEs, the first committed scenario fixture, the single D56 path
+  constant, a line-numbering JSONL reader, five tests, and the MANIFEST entry that makes the
+  fixtures gate non-vacuous for the first time.
+- 2026-07-21 — Code review (three parallel layers): 14 patches applied, 6 findings deferred, 4
+  dismissed on evidence. The substantive fixes: `fixture_path` now contains its argument to the
+  corpus (it was more permissive than the MANIFEST parser that guards it); the privacy guard
+  reads the committed file instead of the Rust literal and is exhaustive over `Fact`, so a new
+  variant carrying an address breaks the test rather than slipping past a catch-all; the
+  path-discipline walk no longer follows symlinks, no longer swallows read errors, counts
+  occurrences rather than files, and is scoped to the source roots; and
+  `#[serde(deny_unknown_fields)]` was added to the domain types so a misspelled field in a
+  fixture fails loudly — decided by Guy as a hole not worth carrying into 19 more stories.

@@ -1,0 +1,5 @@
+# The fixture corpus is a lockfile for data: its bytes are hashed in fixtures/MANIFEST and
+# compared byte-for-byte by the reader's tests. A CRLF-normalizing checkout would rewrite those
+# bytes and produce a sha mismatch reading as "the spec drifted" — the worst possible diagnosis,
+# because it accuses the corpus of the very drift the lock exists to detect.
+fixtures/** -text

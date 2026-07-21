@@ -138,6 +138,10 @@ pub enum HostnameSource {
 /// One thing a source observed about a device. A positive statement only — there is
 /// deliberately no variant meaning "absent"/"gone" (NFR7/D35).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// A fixture is an ORACLE: an unknown or misspelled field must fail loudly rather than be
+// ignored. Without this, a line carrying `"gone":true` — or `locally_administred` beside the
+// correct spelling — parses silently and the corpus means something other than it says.
+#[serde(deny_unknown_fields)]
 #[non_exhaustive]
 pub enum Fact {
     /// A hardware address, plus the source's claim about whether it is locally administered.
@@ -203,6 +207,7 @@ impl Fact {
 /// (`(connector, scope)`, the smallest set that can go blind), which is a separate type
 /// built later with source liveness. They share a word, not a meaning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Scope {
     pub l2_domain: L2DomainId,
     pub vantage: VantageId,
@@ -213,6 +218,7 @@ pub struct Scope {
 /// none" from "no `Uplink` because this source is blind to topology" (false-merge
 /// prevention, D19), and so a capability downgrade is a diff `caps(N-1) -> caps(N)` (FR5).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Capabilities {
     pub as_of: Timestamp,
     pub kinds: BTreeSet<FactKind>,
@@ -230,6 +236,7 @@ impl Capabilities {
 /// decision ever reads (D19) — kept as a `String` so `opencmdb-core` need not depend on a
 /// JSON type for a field nothing inspects.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Observation {
     pub obs_id: ObsId,
     pub connector_id: ConnectorId,
@@ -356,6 +363,32 @@ mod tests {
         };
         assert!(caps.can_emit(FactKind::Mac));
         assert!(!caps.can_emit(FactKind::Uplink)); // blind to topology -> not "no uplink"
+    }
+
+    /// An unknown or misspelled field must FAIL, not be ignored. The fixture corpus is an
+    /// oracle: a line that parses while meaning something other than it says is worse than a
+    /// line that does not parse at all.
+    #[test]
+    fn an_unknown_field_is_refused_at_every_level() {
+        let obs = r#"{"obs_id":"00000000-0000-0000-0000-000000000000","connector_id":"00000000-0000-0000-0000-000000000000","observed_at":"1970-01-01T00:00:00Z","scope":{"l2_domain":"00000000-0000-0000-0000-000000000000","vantage":"00000000-0000-0000-0000-000000000000"},"facts":[],"raw":null,"gone":true}"#;
+        assert!(
+            serde_json::from_str::<Observation>(obs).is_err(),
+            "an unknown field on Observation must be refused"
+        );
+
+        let scope = r#"{"l2_domain":"00000000-0000-0000-0000-000000000000","vantage":"00000000-0000-0000-0000-000000000000","extra":1}"#;
+        assert!(
+            serde_json::from_str::<Scope>(scope).is_err(),
+            "an unknown field on Scope must be refused"
+        );
+
+        // The misspelling that motivated this: the correct field is missing, but a reader that
+        // tolerated the typo would report a confusing "missing field" instead of naming it.
+        let fact = r#"{"Mac":{"addr":[2,0,0,0,0,1],"locally_administered":true,"locally_administred":true}}"#;
+        assert!(
+            serde_json::from_str::<Fact>(fact).is_err(),
+            "an unknown field on a Fact variant must be refused"
+        );
     }
 
     #[test]
