@@ -3307,6 +3307,18 @@ has leaked into persistence.** The engine takes an `&Observation` and a per-batc
 
 ### Complete project directory structure
 
+> **This is the TARGET structure, not a description of the tree today.** Most of it is legitimately
+> unbuilt — `identity/`, `ipam/`, `alert/`, `http/`, `writer/`, `scheduler/`, `secret/` arrive with
+> their epics. Read it as where things GO, never as where things ARE.
+>
+> _Freshness pass 2026-07-21 (Epic 4, found while researching story 4.2). Corrected: the SQLite
+> migrations folder, the `repo/sqlite/` adapter, the `dual!` invariant pairing and the
+> `backend_specific/` SQLITE\_BUSY pack — all four invalidated by **D64**, which made MariaDB the
+> only engine; `fixtures/verdicts/expected.jsonl`, whose join **D46b** removed; the trap spec
+> format, now TOML; `compose.yaml`, which ships as `docker/`; and `paths.rs`, implemented as
+> `fixtures.rs` in story 4.1. **Two of these were found by a story doing something else — assume
+> more remain, and correct on sight rather than waiting for a sweep.**_
+
 ```
 opencmdb/
 ├── Cargo.toml                          # [workspace] members = ["crates/*", "xtask"]
@@ -3318,13 +3330,14 @@ opencmdb/
 ├── .cargo/config.toml                  # alias xtask = "run --package xtask --"
 ├── .github/workflows/ci.yml            # calls `cargo xtask ci`. Contains NO logic.
 │                                       #   services: mariadb:10.11.11  (D46, exact pin, ratchet)
-├── compose.yaml                        # reference deploy: secrets in a SEPARATE shared folder (D27)
+├── docker/                             # reference deploy: compose template, .env.example,
+│                                       #   Docker Hub README. Secrets stay OUT of the tree (D27)
 ├── Dockerfile                          # build --locked. Nothing resolves on the fly.
 │
 ├── fixtures/                           # ARTEFACTS, not tests. Outside every crate. (D19/D56)
 │   ├── README.md                       #   "versioned artefact — do not regenerate without a bump"
 │   ├── scenario/                       # ★ synthetic. Does NOT rot. Right or wrong.
-│   │   ├── traps/*.yaml                #     ~50 traps — THE SPEC, written before the engine
+│   │   ├── traps/*.toml                #     ~50 traps — THE SPEC, written before the engine
 │   │   │                               #     mandatory `reason` per expectation: the ORACLE
 │   │   └── replay/
 │   │       ├── traps.jsonl             #     committed. Never generated at test time.
@@ -3334,7 +3347,6 @@ opencmdb/
 │   │   ├── unifi-3.x/*.json            #     the ONLY folder `recapture` can reach (D56)
 │   │   ├── unifi-4.x/*.json
 │   │   └── mutations/*.json            #     ~30, GENERATED from a real body (D35 layer B)
-│   └── verdicts/expected.jsonl         # D46b — the (verdict, rule) join
 │
 ├── crates/
 │   ├── opencmdb-core/                  # NO anyhow. NO axum. NO sqlx. NO askama. (D47/D53/D55)
@@ -3378,8 +3390,8 @@ opencmdb/
 │       │                               #   NO build.rs — the CSS is `cargo xtask css` (D55)
 │       ├── askama.toml                 #   dirs = ["templates"]
 │       ├── migrations/                 # ← sqlx::migrate! resolves FROM THIS MANIFEST (D23/D55)
-│       │   ├── sqlite/*.sql
-│       │   └── mariadb/*.sql
+│       │   └── *.sql                   #   MariaDB only (D64) — one flat folder, there is no
+│       │                               #     second dialect to segregate.
 │       ├── templates/                  # ← askama resolves FROM THIS MANIFEST
 │       │   ├── layout.html
 │       │   ├── components/             #   the UX library: triage_card, gap_diff, evidence_chip,
@@ -3405,7 +3417,8 @@ opencmdb/
 │       │   ├── embed.rs                #   #[derive(RustEmbed)] #[folder = "assets/"]
 │       │   ├── render.rs               #   OUR Askama→Axum IntoResponse (~15 lines).
 │       │   │                           #     askama_web / askama_axum REFUSED (D34)
-│       │   ├── paths.rs                # ★ THE single FIXTURES constant. Never copied. (D56)
+│   │   ├── fixtures.rs                 # ★ THE single FIXTURES constant + the JSONL reader.
+│   │   │                               #     Never copied — a test counts occurrences. (D56)
 │       │   ├── http/
 │       │   │   ├── error.rs            # ★ Web(DomainError) / Api(DomainError) — private field,
 │       │   │   │                       #     From is the only entry. StatusCode::from_u16 only. (D53)
@@ -3413,9 +3426,8 @@ opencmdb/
 │       │   │   └── api/                #   FR43 JSON read-only + FR44 authenticated /metrics
 │       │   ├── repo/                   #   THE ONLY zone where `sqlx::` is legal (D47)
 │       │   │   ├── queries.rs          #     free fns generic over sqlx::Executor (D49)
-│       │   │   ├── sqlite/             #     open_sqlite() — THE SAME fn the fixtures call (D46)
-│       │   │   │                       #     after_connect: PRAGMA foreign_keys = ON (D21)
-│       │   │   └── mariadb/            #     sqlx::Error → RepositoryError dies here
+│       │   │   └── mariadb/            #     sqlx::Error → RepositoryError dies here. The ONLY
+│       │   │                           #     backend (D64): SQLite is a refusal, not a deferral.
 │       │   ├── connectors/
 │       │   │   ├── fixture.rs          #   FixtureConnector — the fixture IS a connector (D19)
 │       │   │   ├── unifi/              #   zero-privilege (FR1-8) + FixtureTransport (D35 layer B)
@@ -3427,9 +3439,11 @@ opencmdb/
 │       │   └── i18n/                   #   EN/FR — greppable + diffable format (D39)
 │       └── tests/                      # ← the invariants live HERE: they need the adapters (D56b)
 │           ├── harness.rs              #   harness::mariadb() PANICS if the DSN is absent (D46)
-│           ├── invariants/             #   fn inv<R: WriteRepository> + dual!(name)
+│           ├── invariants/             #   fn inv<R: WriteRepository> over the ONE backend —
+│           │                           #     `dual!` died with SQLite (D64); nothing to pair.
 │           │                           #     #[tokio::test] BANNED here (grep) + deny(dead_code)
-│           ├── backend_specific/       #   SQLITE_BUSY / 1213 — segregated BY SIGNATURE (D46)
+│           └── backend_specific/       #   MariaDB deadlock 1213 — segregated BY SIGNATURE.
+│                                       #     The SQLITE_BUSY half died with D64.
 │           └── traps/                  #   D18 Tier 1: ~50 traps, binary, zero tolerance
 │
 └── xtask/                              # workspace member, dependency of NOBODY (D56)
