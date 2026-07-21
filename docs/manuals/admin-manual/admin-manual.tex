@@ -56,9 +56,49 @@ Docker Hub. The outline below reflects the intended deployment.
 The intended flow: pull the published image, provide a MariaDB connection and an encryption
 key, map a data volume, and start the container behind your reverse proxy.
 
+\section{Container networking}
+\label{sec:container-networking}
+Leave the container in its \emph{own} network namespace --- the default for any ordinary Docker
+network. This matters more than it looks.
+
+\begin{warning}
+\textbf{Do not use \texttt{network\_mode: host}.} It is the intuitive choice for a network
+scanner and it is the wrong one, because it \emph{removes} a permission instead of granting one.
+
+Docker sets \texttt{net.ipv4.ping\_group\_range} to \texttt{0 2147483647} inside a container's
+own network namespace. That is precisely what allows opencmdb to open an unprivileged ICMP
+datagram socket and scan as a non-root user, with no capability whatsoever. Host networking
+shares the \emph{host's} namespace and inherits the host's value instead --- and many hosts,
+Synology DSM among them, ship \texttt{1 0}, an empty range. The socket is then refused.
+
+The failure is quiet: scanning is best-effort, so opencmdb logs a warning and carries on
+serving. The container looks healthy, \texttt{/healthz} returns 200, and the product observes
+nothing at all. Host mode additionally costs you port isolation --- a collision with an existing
+service surfaces only as \texttt{Address in use} late in startup --- and leaves the container
+without an address on any Docker network, which breaks reverse-proxy discovery.
+\end{warning}
+
+ICMP echo is routed and crosses a NAT without difficulty, so an ordinary bridge network scans a
+LAN correctly. If you would rather reach opencmdb at a fixed address with no port mapping,
+attach it to a \texttt{macvlan} or \texttt{ipvlan} network: it keeps a separate namespace, so
+ICMP still works, while gaining real layer-2 presence --- which is also what the future ARP and
+MAC discovery will want.
+
+\begin{note}
+With \texttt{macvlan}, a container normally cannot reach the address of the host interface it is
+attached to. If your database runs on that same host, connect to a \emph{different} interface of
+it, or keep an ordinary bridge network.
+\end{note}
+
 \section{Native binary}
 The same single binary can run directly on a Linux host, reading its configuration from a
 file and the environment.
+
+\begin{note}
+Running natively, opencmdb is subject to the host's own
+\texttt{net.ipv4.ping\_group\_range}. If it is empty (\texttt{1 0}) the scan cannot open its
+socket; either widen it or grant the binary the \texttt{cap\_net\_raw} file capability.
+\end{note}
 
 \chapter{Configuration}
 opencmdb is configured through a layered configuration file plus environment overrides. The
@@ -67,8 +107,39 @@ scheme is \texttt{mysql://}:
 
 \begin{lstlisting}[language=bash]
 # Example — placeholder values only (use your own).
-DATABASE_URL = "mysql://opencmdb:CHANGE_ME@127.0.0.1:3306/opencmdb"
+DATABASE_URL = "mysql://opencmdb:CHANGE_ME@192.0.2.5:3306/opencmdb"
 \end{lstlisting}
+
+\begin{warning}
+A special character in the password is mangled by \emph{two independent mechanisms}, at two
+different moments. Confusing them costs hours, because both produce the same opaque
+``access denied'' at startup.
+
+\medskip
+\textbf{1. A \texttt{\$} must be doubled: \texttt{\$\$}.} Docker Compose interpolates the
+contents of your \texttt{.env} file, so a \texttt{\$} starts what it takes to be a variable
+reference and the rest of the value is discarded. A password written \texttt{pa\$word} reaches
+opencmdb as \texttt{pa}. This happens \emph{before} the process starts, so no amount of encoding
+inside the application can recover it. Measured: \texttt{abc\$def} arrives as \texttt{abc};
+\texttt{abc\$\$def} arrives as \texttt{abc\$def}.
+
+\medskip
+\textbf{2. URL-reserved characters must be percent-encoded.} Independently, the password sits
+inside a URL: \texttt{@}~$\rightarrow$~\texttt{\%40}, \texttt{:}~$\rightarrow$~\texttt{\%3A},
+\texttt{/}~$\rightarrow$~\texttt{\%2F}, \texttt{\#}~$\rightarrow$~\texttt{\%23},
+\texttt{?}~$\rightarrow$~\texttt{\%3F}, \texttt{\%}~$\rightarrow$~\texttt{\%25},
+space~$\rightarrow$~\texttt{\%20}. opencmdb percent-decodes the user info before connecting, so
+MariaDB still receives the original password.
+
+\medskip
+Both at once: the password \texttt{s3cr\$t@x} is written \texttt{s3cr\$\$t\%40x}.
+\end{warning}
+
+\begin{warning}
+The host in the URL is the address of your database server \emph{as seen from inside the
+container}. It is not \texttt{127.0.0.1}: the container has its own network namespace, so
+loopback means the container itself.
+\end{warning}
 
 \begin{note}
 Use RFC~5737 documentation addresses (\texttt{192.0.2.0/24}) and example hostnames in your
@@ -83,7 +154,32 @@ from the code once the configuration surface is implemented.
 \chapter{The database}
 \section{Provisioning}
 Create a dedicated database and user for opencmdb on your MariaDB 10.11 instance. On a
-Synology NAS, this is the DSM-managed MariaDB package.
+Synology NAS, this is the DSM-managed MariaDB package. \textbf{Nothing in the image or the
+compose file does this for you} --- it is a prerequisite of the first start, and forgetting it
+is the most common cause of a failed first deployment:
+
+\begin{lstlisting}[language=sql]
+CREATE DATABASE opencmdb CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+CREATE USER 'opencmdb'@'%' IDENTIFIED BY 'your-password';
+GRANT ALL PRIVILEGES ON opencmdb.* TO 'opencmdb'@'%';
+FLUSH PRIVILEGES;
+\end{lstlisting}
+
+The binary collation is required: identity comparison must be exact and must never depend on
+the database's locale. Narrow the \texttt{'\%'} host to the address opencmdb actually connects
+from once the connection works --- but read the following before guessing what that address is.
+
+\begin{warning}
+\textbf{A grant matches the address the server \emph{sees}, not the address you dial.} When
+authentication fails, MariaDB names the exact identity it rejected:
+\texttt{Access denied for user 'opencmdb'@'\textit{host}'}. Grant \emph{that} \textit{host}.
+
+On a multi-homed machine the two differ, and the effect is thoroughly disorienting: traffic sent
+to one interface can leave by another, so MariaDB matches on the source address it observes ---
+or on the name that address reverse-resolves to --- rather than on the one you configured. The
+tell-tale sign is that the host in the error message \emph{changes} as you change the URL. Grant
+every address the client can present, or use \texttt{'\%'} while you are still finding out.
+\end{warning}
 
 \section{Migrations}
 Schema migrations are embedded in the binary and applied on startup; you do not run them by
@@ -158,10 +254,56 @@ a given release always resolves the same dependencies.
 
 \appendix
 \chapter{Troubleshooting}
-\begin{planned}
-A symptom-oriented troubleshooting guide will grow here as the software gains real failure
-modes to document. Until then, the source-health view is the first place to look: a scope
-that has gone \texttt{blind} explains why its data is frozen and its alerts are silent.
-\end{planned}
+The source-health view is the first place to look once opencmdb is running: a scope that has
+gone \texttt{blind} explains why its data is frozen and its alerts are silent.
+
+Getting to that point is another matter. The table below collects the failures observed during
+real first deployments --- none of them faults in the reconciliation engine, all of them
+obstacles between a running MariaDB and a scanning opencmdb.
+
+\begin{warning}
+Run the first start in the \textbf{foreground} (\texttt{docker compose up}, not
+\texttt{up~-d}). A fatal startup error is currently written to standard output only and does not
+reach the log files, so a container that crash-loops under \texttt{restart: unless-stopped}
+leaves nothing in \texttt{opencmdb.YYYY-MM-DD.log} but a column of identical
+\texttt{opencmdb starting} lines.
+\end{warning}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.36\linewidth}p{0.28\linewidth}p{0.30\linewidth}@{}}
+\toprule
+\textbf{Symptom} & \textbf{Cause} & \textbf{Fix} \\
+\midrule
+\texttt{1045 Access denied for user 'opencmdb'@'\ldots'}
+  & No grant for the identity MariaDB sees
+  & Grant exactly the host named in the message \\
+\addlinespace
+\ldots\ and that host changes when you change the URL
+  & Multi-homed database server: replies leave by another interface
+  & Grant every address the client can present \\
+\addlinespace
+\ldots\ and the password is definitely correct
+  & A \texttt{\$} was truncated by Docker Compose
+  & Double it: \texttt{\$\$} \\
+\addlinespace
+\texttt{Address in use (os error 98)}
+  & Another service already holds the port
+  & Change the host side of \texttt{ports:} \\
+\addlinespace
+\texttt{startup scan failed \ldots\ could not open an ICMP socket}
+  & Host networking inherited an empty \texttt{ping\_group\_range}
+  & Drop \texttt{network\_mode: host} (\S\ref{sec:container-networking}) \\
+\addlinespace
+The page loads but shows no observed data
+  & The scan failed with a non-fatal warning
+  & Look for \texttt{startup scan failed} in the log \\
+\addlinespace
+Log files contain only \texttt{opencmdb starting}
+  & The crash reason went to standard output
+  & Run in the foreground, or read \texttt{docker logs} \\
+\bottomrule
+\end{tabular}
+\end{center}
 
 \end{document}

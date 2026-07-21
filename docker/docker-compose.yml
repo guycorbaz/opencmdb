@@ -4,17 +4,23 @@
 # database container here; opencmdb uses the MariaDB you already run. Copy `.env.example` to
 # `.env`, fill it in, then `docker compose up -d`. The real `.env` is git-ignored: no secrets,
 # no real hostnames, and no NAS paths belong in this committed file.
+#
+# BEFORE THE FIRST START: create the database, the user and the grants yourself. Nothing here
+# provisions them. See `.env.example` and the administrator manual — a missing or mismatched
+# grant is the single most common first-deployment failure.
 
 services:
   opencmdb:
     image: gcorbaz/opencmdb:0.1.0
     container_name: opencmdb
-    # Host networking: reach the NAS's MariaDB on 127.0.0.1, and give the ARP/ping scanner real
-    # LAN visibility — a bridge NAT breaks L2 ping/ARP. Under host mode, `OPENCMDB_BIND` (in .env)
-    # decides the listen address; published `ports:` are ignored.
-    network_mode: host
     env_file: .env
-    # NET_RAW is the ARP upgrade path (Mac facts, a later story); ping-only works without it.
+    # The container keeps its OWN network namespace (see the note at the bottom of this file),
+    # which is precisely what makes the unprivileged ICMP scan work. `OPENCMDB_BIND` in .env
+    # sets the in-container listener; this maps it onto a host port.
+    ports:
+      - "8080:8080"
+    # Not required for the ping scan — an unprivileged ICMP datagram socket covers it — but
+    # already correct for the ARP/MAC upgrade in a later release.
     cap_add:
       - NET_RAW
     volumes:
@@ -25,3 +31,43 @@ services:
       # .env selects the in-container path below.
       - ./log:/var/log/opencmdb
     restart: unless-stopped
+
+# ── Networking: do NOT reach for `network_mode: host` ────────────────────────────────────────
+#
+# It is tempting — the scanner looks at the LAN, so surely it needs the host's network? No. Host
+# mode does not add a permission here, it REMOVES one:
+#
+#   * Docker sets `net.ipv4.ping_group_range=0 2147483647` inside a container's own network
+#     namespace, so opencmdb opens its unprivileged ICMP socket and scans as a non-root user
+#     with no capability at all.
+#   * `network_mode: host` shares the HOST's namespace and inherits the host's value instead.
+#     Many hosts — Synology DSM among them — ship `1 0`, an empty range, and the ICMP socket is
+#     refused. The scan then fails with a non-fatal WARN: the container looks healthy, /healthz
+#     returns 200, and it observes nothing at all.
+#   * Host mode also removes port isolation, so opencmdb collides with whatever already listens
+#     on its port, and it gets no address on a Docker network, which breaks reverse-proxy
+#     service discovery.
+#
+# ICMP echo is ROUTED and crosses a NAT perfectly well, so the default above scans a LAN fine.
+# (Raw layer 2 — ARP, and the MAC facts that come with it — is a later release; when it lands,
+# prefer a macvlan/ipvlan network, below, over host mode.)
+#
+# ── Variant: give opencmdb its own LAN address ───────────────────────────────────────────────
+# Useful when you want to reach it at a stable address with no port mapping, and it is also the
+# right answer for the future ARP work: a macvlan/ipvlan network keeps a separate namespace (so
+# ICMP still works) while giving real layer-2 presence. Create the network once, then:
+#
+#   services:
+#     opencmdb:
+#       networks:
+#         lan:
+#           ipv4_address: 192.0.2.10     # a free address on your LAN
+#       # no `ports:` — the container answers on its own address
+#   networks:
+#     lan:
+#       external: true
+#       name: <your-macvlan-network>
+#
+# Caveat: with macvlan a container usually cannot reach the address of the host interface it is
+# attached to. If your database runs on that same host, connect to a DIFFERENT interface of it,
+# or keep the default bridge above.

@@ -31,6 +31,21 @@ docker pull gcorbaz/opencmdb:0.1.0
 
 opencmdb supports **MariaDB 10.11+ only** (SQLite and MySQL are out; PostgreSQL is not supported at this stage). On a Synology NAS this is the DSM-managed MariaDB package — so your opencmdb data is covered by the NAS backup you already run. The container connects to your **existing** MariaDB; it does not bundle one.
 
+### Before the first start: provision the database yourself
+
+Nothing in the image or the compose file creates the database, the user or the grants. Do it first, as a MariaDB administrator:
+
+```sql
+CREATE DATABASE opencmdb CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
+CREATE USER 'opencmdb'@'%' IDENTIFIED BY 'your-password';
+GRANT ALL PRIVILEGES ON opencmdb.* TO 'opencmdb'@'%';
+FLUSH PRIVILEGES;
+```
+
+The binary collation is required — identity comparison must never depend on the database's locale. Narrow `'%'` once the connection works.
+
+> **Grants match the address the server *sees*, not the one you dial.** If authentication fails, read the error: `Access denied for user 'opencmdb'@'<host>'` names the exact identity you must grant. On a multi-homed machine these differ — traffic sent to one interface can leave by another, and MariaDB matches on the source it observes (or its reverse-resolved name). The tell-tale sign is that the host in the error message *changes* as you change the URL.
+
 ## Running with Docker Compose
 
 opencmdb runs as a single service pointing at your MariaDB. A reference `docker-compose.yml` and `.env.example` ship in the [repository](https://github.com/guycorbaz/opencmdb) under `docker/`. Sketch:
@@ -40,10 +55,9 @@ services:
   opencmdb:
     image: gcorbaz/opencmdb:0.1.0
     container_name: opencmdb
-    # Host networking: reach the NAS's MariaDB on 127.0.0.1 and give the ARP/ping scanner real
-    # LAN visibility (a bridge NAT breaks L2 ping/ARP). OPENCMDB_BIND (in .env) sets the listener.
-    network_mode: host
     env_file: .env
+    ports:
+      - "8080:8080"   # OPENCMDB_BIND (in .env) sets the in-container listener
     cap_add:
       - NET_RAW   # ARP upgrade path (Mac facts, a later release); ping-only works without it
     volumes:
@@ -51,11 +65,15 @@ services:
     restart: unless-stopped
 ```
 
+> **Do not use `network_mode: host`.** It is the intuitive choice for a network scanner and it is the wrong one — it *removes* a permission rather than granting one. Docker sets `net.ipv4.ping_group_range=0 2147483647` inside a container's own network namespace, which is exactly what lets opencmdb open its unprivileged ICMP socket and scan as a non-root user. Host mode inherits the *host's* value instead; many hosts (Synology DSM among them) ship an empty range, the socket is refused, and the scan fails with a non-fatal warning — the container looks healthy, `/healthz` returns 200, and it observes nothing. Host mode also costs you port isolation and reverse-proxy discovery. ICMP echo is routed and crosses a NAT fine, so the default above scans a LAN correctly.
+
 Provide configuration through a `.env` file you keep **outside** version control (see `docker/.env.example`):
 
 ```dotenv
 # Placeholders — set your own; never commit this file.
-DATABASE_URL=mysql://opencmdb:CHANGE_ME@127.0.0.1:3306/opencmdb
+# The host is your database server as seen FROM INSIDE the container — not 127.0.0.1, which
+# would be the container itself.
+DATABASE_URL=mysql://opencmdb:CHANGE_ME@192.0.2.5:3306/opencmdb
 OPENCMDB_BIND=0.0.0.0:8080
 OPENCMDB_LOG=info
 OPENCMDB_LOCALE=en
@@ -69,6 +87,28 @@ OPENCMDB_LOG_RETENTION=14
 ```
 
 > Use RFC 5737 documentation addresses (`192.0.2.0/24`) and example hostnames in anything you share — never paste your real network into a public place.
+
+> **Special characters in the DB password — two separate traps.**
+>
+> **1. A `$` must be doubled: `$$`.** Docker Compose interpolates the contents of your `.env`, so a password written `pa$word` is silently truncated to `pa` and you get an opaque "access denied". This happens *before* opencmdb starts, so nothing the application does can recover it. Measured: `abc$def` arrives as `abc`; `abc$$def` arrives as `abc$def`.
+>
+> **2. URL-reserved characters must be percent-encoded.** Independently of the above, the password sits inside a URL: `@`→`%40`, `:`→`%3A`, `/`→`%2F`, `#`→`%23`, `?`→`%3F`, `%`→`%25`, space→`%20`. opencmdb percent-decodes the user info, so the database receives the original password.
+>
+> Both at once: the password `s3cr$t@x` is written `s3cr$$t%40x`.
+
+## Troubleshooting the first start
+
+Run the first start in the **foreground** — `docker compose up`, not `up -d`. A fatal startup error is currently printed to stdout only and does not reach the log files, so with `restart: unless-stopped` a crash-looping container leaves you nothing but repeated `opencmdb starting` lines.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `1045 Access denied for user 'opencmdb'@'<host>'` | No grant for the identity MariaDB *sees* | Grant exactly the `<host>` in the message — see above |
+| Same, and `<host>` changes when you change the URL | Multi-homed database server: replies leave by another interface | Grant every address it can present, or use `'%'` while testing |
+| Same, password looks correct | A `$` was eaten by Compose | Double it: `$$` |
+| `Address in use (os error 98)` | Another service already holds the port | Change the host side of `ports:` |
+| `startup scan failed … could not open an ICMP socket` | `network_mode: host` inherited an empty `ping_group_range` | Drop host mode — see the note above |
+| Page loads, but shows no observed data | The scan failed with a non-fatal warning | Check the logs for `startup scan failed` |
+| Log files contain only `opencmdb starting` | The crash reason went to stdout | Run in the foreground, or read `docker logs` |
 
 ## Security
 

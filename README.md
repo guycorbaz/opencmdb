@@ -102,7 +102,7 @@ opencmdb/
 
 - **MariaDB 10.11+** reachable from opencmdb (Synology DSM 7 ships a suitable package).
 - A host that runs a Docker container, or the ability to run a native binary. **Synology Container Manager is the priority deployment target**; opencmdb is not Synology-exclusive.
-- For the generic ARP scanner: `network_mode: host` or the `NET_RAW` capability (it degrades to a ping-only sweep without it). The UniFi connector needs neither.
+- For the generic scanner: nothing special. A container in its own network namespace pings as a non-root user out of the box — Docker sets `net.ipv4.ping_group_range` for it. **Do not use `network_mode: host`**: it inherits the host's value instead, which is empty on Synology DSM, and the scan then fails silently. Raw layer-2 discovery (ARP, MAC facts) is a later release and will want `NET_RAW` plus a macvlan/ipvlan network. The UniFi connector needs neither.
 
 ---
 
