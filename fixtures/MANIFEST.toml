@@ -1,0 +1,26 @@
+# The corpus lock (D56): a lockfile for data.
+#
+# Two directions, and the corpus is frozen only when both hold — `cargo xtask ci` checks both:
+#   * EDITED — a listed artefact whose bytes changed is RED. The single repair is a deliberate
+#     bump, which reads in review as "I am changing the spec".
+#   * ADDED  — a file present under fixtures/ but absent here is RED. Without this the guarantee
+#     would only be "listed files are unchanged", which is a different and much weaker claim.
+#
+# `generator` is absent for a hand-authored artefact — which is every artefact today. The seeded
+# generator arrives after the engine (ARCH-24); until then, recording one would be a lie.
+#
+# Exempt from the orphan rule, deliberately and narrowly: this file (a lock cannot list itself)
+# and README.md files (prose about the corpus, not artefacts of it).
+
+[[artefact]]
+path = "scenario/replay/minimal.jsonl"
+sha256 = "c9d2cdc0d8432a83cba9008f5b6e4f95d920c0b14b8d230de14223d9391a6f42"
+
+[[artefact]]
+path = "scenario/replay/example-traps.jsonl"
+sha256 = "f7fc32a09ec3313838ee9af9ef7822951be18a34bd36fe8f37a841515f9672f4"
+
+[[artefact]]
+path = "scenario/traps/example.toml"
+sha256 = "d7200169f4afd21049f7f557832d875e0b23b0ce1dd6b4a23cd88ff9c9aae671"
+

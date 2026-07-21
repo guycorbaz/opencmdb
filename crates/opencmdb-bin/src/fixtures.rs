@@ -82,6 +82,13 @@ pub enum FixtureError {
     },
     /// A trap file parsed but is not admissible.
     Trap { path: PathBuf, source: TrapError },
+    /// A replay stream contains the same `obs_id` twice.
+    DuplicateObservationId {
+        path: PathBuf,
+        obs_id: String,
+        first_line: usize,
+        second_line: usize,
+    },
     /// A trap judges an observation that its replay stream does not contain.
     DanglingObservation {
         path: PathBuf,
@@ -110,6 +117,18 @@ impl std::fmt::Display for FixtureError {
                 write!(f, "trap file {}: {source}", path.display())
             }
             FixtureError::Trap { path, source } => write!(f, "{}: {source}", path.display()),
+            FixtureError::DuplicateObservationId {
+                path,
+                obs_id,
+                first_line,
+                second_line,
+            } => write!(
+                f,
+                "{}: observation {obs_id} appears on lines {first_line} and {second_line} — \
+                 within one stream an obs_id must name exactly one observation, or a trap \
+                 referencing it does not say which",
+                path.display()
+            ),
             FixtureError::DanglingObservation {
                 path,
                 trap,
@@ -132,6 +151,7 @@ impl std::error::Error for FixtureError {
             FixtureError::OutsideCorpus { .. } => None,
             FixtureError::Toml { source, .. } => Some(source),
             FixtureError::Trap { source, .. } => Some(source),
+            FixtureError::DuplicateObservationId { .. } => None,
             FixtureError::DanglingObservation { .. } => None,
         }
     }
@@ -147,19 +167,33 @@ pub fn read_jsonl(path: &Path) -> Result<Vec<Observation>, FixtureError> {
         source,
     })?;
     let mut observations = Vec::new();
+    let mut seen: std::collections::BTreeMap<uuid::Uuid, usize> = std::collections::BTreeMap::new();
     for (index, line) in text.lines().enumerate() {
         // Only a truly empty line is skipped. A whitespace-only line carries content, and this
         // module's rule is that content it cannot parse is named, never silently dropped.
         if line.is_empty() {
             continue;
         }
-        let observation = serde_json::from_str(line).map_err(|source| FixtureError::Line {
-            path: path.to_path_buf(),
-            // 1-indexed, counted over the raw lines: a blank line still occupies its number, so
-            // the message points at what an editor shows.
-            lineno: index + 1,
-            source,
-        })?;
+        let observation: Observation =
+            serde_json::from_str(line).map_err(|source| FixtureError::Line {
+                path: path.to_path_buf(),
+                // 1-indexed, counted over the raw lines: a blank line still occupies its number, so
+                // the message points at what an editor shows.
+                lineno: index + 1,
+                source,
+            })?;
+        // `obs_id` is the anchor the whole labelling format rests on — a trap points at one
+        // "never by line number" (story 4.2). Two lines sharing an id void that guarantee, and
+        // a trap referencing it would silently judge whichever one the reader happened to keep.
+        let id = observation.obs_id.as_uuid();
+        if let Some(first) = seen.insert(id, index + 1) {
+            return Err(FixtureError::DuplicateObservationId {
+                path: path.to_path_buf(),
+                obs_id: id.to_string(),
+                first_line: first,
+                second_line: index + 1,
+            });
+        }
         observations.push(observation);
     }
     Ok(observations)
@@ -446,6 +480,81 @@ mod tests {
     }
 
     // ── Trap files (story 4.2) ───────────────────────────────────────────────
+
+    /// `obs_id` is the anchor the labelling format rests on: a trap points at one, "never by
+    /// line number". Two lines sharing an id void that guarantee — a trap would silently judge
+    /// whichever the reader happened to keep.
+    #[test]
+    fn a_stream_repeating_an_obs_id_is_refused() {
+        let dir = scratch_dir("dup-obs");
+        let path = dir.join("dup.jsonl");
+        let line = serde_json::to_string(&expected()[0]).unwrap();
+        std::fs::write(&path, format!("{line}\n{line}\n")).unwrap();
+
+        let err = read_jsonl(&path).expect_err("a repeated obs_id must be refused");
+        match &err {
+            FixtureError::DuplicateObservationId {
+                first_line,
+                second_line,
+                ..
+            } => {
+                assert_eq!((*first_line, *second_line), (1, 2));
+            }
+            other => panic!("expected a duplicate-id error, got {other:?}"),
+        }
+        assert!(err.to_string().contains("appears on lines"), "{err}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Every trap file in the corpus must parse, validate and cross-check — DISCOVERED by
+    /// WALKING, not by listing one directory. Trap FAMILIES (story 4.9 onward) are exactly what
+    /// will introduce a subdirectory, and a non-recursive scan would hash them and never read
+    /// them — reintroducing the hole this test exists to close.
+    #[test]
+    fn every_trap_file_in_the_corpus_is_valid() {
+        let traps_dir = fixture_path("scenario/traps").unwrap();
+        let mut checked = 0usize;
+        let mut stack = vec![traps_dir.clone()];
+        while let Some(dir) = stack.pop() {
+            for entry in
+                std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("reading {}: {e}", dir.display()))
+            {
+                let entry = entry.expect("a directory entry must be readable");
+                let path = entry.path();
+                // `file_type()` does not follow symlinks, so a link can neither smuggle a file
+                // in nor be walked out of the corpus — but it must not pass unnoticed either.
+                let file_type = entry.file_type().expect("file type");
+                if file_type.is_symlink() {
+                    panic!(
+                        "{}: the corpus must contain its own bytes, not a symlink",
+                        path.display()
+                    );
+                }
+                if file_type.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                // Case-insensitive: a `broken.TOML` skipped silently would be hashed by the
+                // gate and read by nobody.
+                let is_toml = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.eq_ignore_ascii_case("toml"));
+                assert!(
+                    is_toml,
+                    "{}: only .toml trap files belong under scenario/traps/",
+                    path.display()
+                );
+                read_traps(&path).unwrap_or_else(|e| {
+                    panic!("corpus trap file {} is invalid: {e}", path.display())
+                });
+                checked += 1;
+            }
+        }
+        // A discovery test that finds nothing must not pass silently — the vacuity the fixtures
+        // gate carried from Epic 1 until story 4.1 put a file on disk.
+        assert!(checked > 0, "no trap file found in {}", traps_dir.display());
+    }
 
     const EXAMPLE_TRAPS: &str = "scenario/traps/example.toml";
 

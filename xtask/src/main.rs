@@ -12,9 +12,9 @@
 //!     identifiers (`pending_accept`, `reverting`, `accept-as-declared`) absent from
 //!     `crates/`. Volet B — CO-PRESENCE across the planning docs: a body that holds a
 //!     RETIRED term with its LIVE replacement nowhere is a stale document, and reds.
-//!   - **fixtures** (D56, scaffold): a lockfile for data. Every file listed in
-//!     `fixtures/MANIFEST` must match its recorded sha256, or the fixture drifted silently.
-//!     Vacuous until Epic 4 builds the trap corpus; the MANIFEST schema is PROVISIONAL.
+//!   - **fixtures** (D56): a lockfile for data, checked in BOTH directions — a listed
+//!     artefact whose bytes changed is red, and a file present under `fixtures/` that
+//!     nobody listed is red. `fixtures/MANIFEST.toml` carries sha256 + optional generator.
 //!   - **views-hash** (informational): whether `architecture-views.md`'s `sourceSha256`
 //!     still matches `architecture.md`. A mismatch means the views file is stale and
 //!     should be regenerated at the next milestone — reported, never a hard failure.
@@ -394,33 +394,62 @@ fn is_token_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_' || b == b'-'
 }
 
-// ── Gate 3: fixture MANIFEST sha256 (D56, scaffold) ─────────────────────────
+// ── Gate 3: the fixture MANIFEST, a lockfile for data (D56) ─────────────────
 
-/// A lockfile for data (D56): every fixture listed in `fixtures/MANIFEST` must still hash
-/// to its recorded sha256. `fixtures/` lives at the workspace ROOT, outside every crate, so
-/// editing a trap reads as "I am changing the spec", not "I am fixing a test" (D45).
-/// Vacuous until Epic 4 commits the first fixtures.
+/// A lockfile for data (D56). Two directions, and the corpus is frozen only when BOTH hold:
+///
+/// * **Edited** — every artefact listed in `fixtures/MANIFEST.toml` must still hash to its
+///   recorded sha256.
+/// * **Added** — every file present under `fixtures/` must be listed. Without this the gate's
+///   real guarantee is only "listed files are unchanged", which is not the same claim.
+///
+/// `fixtures/` lives at the workspace ROOT, outside every crate, so editing a trap reads as
+/// "I am changing the spec", not "I am fixing a test" (D45).
 fn gate_fixture_manifest(root: &Path) -> Result<(bool, String)> {
     let fixtures = root.join("fixtures");
+    let manifest = fixtures.join("MANIFEST.toml");
+    // Fail CLOSED in both directions. A corpus with no lock, and a lock with no corpus, are
+    // both states this gate exists to forbid — reporting "nothing to check" on the deletion of
+    // the thing being guarded is a guarantee the gate does not have.
     if !fixtures.exists() {
-        return Ok((true, "no fixtures — skipped".into()));
-    }
-    let manifest = fixtures.join("MANIFEST");
-    if !manifest.exists() {
         return Ok((
-            true,
-            "fixtures/ present but no MANIFEST — skipped (scaffold; Epic 4 freezes this)".into(),
+            false,
+            "fixtures/ is missing — the corpus this gate guards does not exist".into(),
         ));
     }
-    let text = std::fs::read_to_string(&manifest).with_context(|| "reading fixtures/MANIFEST")?;
-    let lines = parse_manifest(&text);
-    let findings = manifest_findings(&lines, &|p| std::fs::read(fixtures.join(p)));
+    if !manifest.exists() {
+        return Ok((
+            false,
+            "fixtures/ exists but fixtures/MANIFEST.toml is missing — the corpus is unlocked"
+                .into(),
+        ));
+    }
+    let text =
+        std::fs::read_to_string(&manifest).with_context(|| "reading fixtures/MANIFEST.toml")?;
+    let parsed: Manifest = match toml::from_str(&text) {
+        Ok(parsed) => parsed,
+        // A manifest that does not parse is RED, never "no entries, skipped".
+        Err(e) => return Ok((false, format!("fixtures/MANIFEST.toml does not parse: {e}"))),
+    };
+
+    let entries = corpus_entries(&fixtures)?;
+    let findings = corpus_findings(&parsed, &entries, &|p| read_regular_file(&fixtures, p));
+
     if findings.is_empty() {
-        let n = lines
+        // Named, not silent: the day a generated artefact enters the corpus, the gate says so.
+        let generated = parsed
+            .artefact
             .iter()
-            .filter(|l| matches!(l, ManifestLine::Entry { .. }))
+            .filter(|a| a.generator.is_some())
             .count();
-        Ok((true, format!("{n} fixture(s) match their recorded sha256")))
+        Ok((
+            true,
+            format!(
+                "{} fixture(s) match their recorded sha256 ({generated} generated, {} hand-authored)",
+                parsed.artefact.len(),
+                parsed.artefact.len() - generated
+            ),
+        ))
     } else {
         Ok((
             false,
@@ -433,88 +462,298 @@ fn gate_fixture_manifest(root: &Path) -> Result<(bool, String)> {
     }
 }
 
-/// One parsed MANIFEST line: a valid `<sha256>  <path>` entry, or a line to flag. The gate
-/// fails CLOSED — a line it cannot parse, or a path that escapes `fixtures/`, becomes a
-/// finding rather than being silently dropped (a lockfile that ignores garbage is not a lock).
-#[derive(Debug, PartialEq)]
-enum ManifestLine {
-    Entry { sha: String, path: String },
-    Malformed { lineno: usize, reason: String },
+/// Read a corpus file, refusing anything that is not a regular file.
+///
+/// `std::fs::read` on a FIFO BLOCKS FOREVER, which would hang the gate rather than fail it —
+/// a gate that never returns is worse than one that is wrong.
+fn read_regular_file(fixtures: &Path, rel: &str) -> std::io::Result<Vec<u8>> {
+    let path = fixtures.join(rel);
+    let meta = std::fs::symlink_metadata(&path)?;
+    if !meta.is_file() {
+        return Err(std::io::Error::other(format!(
+            "not a regular file ({:?})",
+            meta.file_type()
+        )));
+    }
+    std::fs::read(&path)
 }
 
-/// Parse the PROVISIONAL scaffold MANIFEST: one `<sha256-hex>  <path>` per line, path
-/// relative to `fixtures/`. Blank lines and `#` comments are skipped; anything else must be
-/// exactly two whitespace-separated tokens with a relative, non-`..` path, or it is
-/// `Malformed` (fail closed — a spaced path or a truncated line does not pass silently).
+/// The lock itself. `deny_unknown_fields` throughout: a lockfile that tolerates a misspelled
+/// key is not a lock (the rule stories 4.1 and 4.2 established for the corpus it guards).
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Manifest {
+    #[serde(default)]
+    artefact: Vec<Artefact>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Artefact {
+    /// Corpus-relative, e.g. `scenario/replay/minimal.jsonl`.
+    path: String,
+    sha256: String,
+    /// Absent for a hand-authored artefact — which is every artefact today. A format that
+    /// could not express "nobody generated this" would be filled with lies.
+    #[serde(default)]
+    generator: Option<Generator>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Generator {
+    name: String,
+    version: String,
+    /// The seed that reproduces the artefact byte for byte. Absent until a generator exists
+    /// (ARCH-24 places it after the engine).
+    #[serde(default)]
+    seed: Option<u64>,
+}
+
+/// One thing found while walking the corpus.
+#[derive(Debug, PartialEq, Eq)]
+enum CorpusEntry {
+    /// A regular file, corpus-relative.
+    File(String),
+    /// A symlink. Not followed (that would let the corpus reach outside itself), and NOT
+    /// silently skipped either — an unlisted file that the gate cannot see is the failure
+    /// mode this whole gate exists to prevent.
+    Symlink(String),
+    /// A path whose bytes are not valid UTF-8. It can never match a manifest entry, so saying
+    /// so explicitly beats emitting a `U+FFFD` string no entry can ever equal.
+    NotRepresentable(String),
+}
+
+/// Everything under `fixtures/`, without following symlinks and without swallowing errors.
 ///
-/// **This format is a placeholder.** Epic 4 freezes the real one per D56:
-/// `fixtures/scenario/replay/MANIFEST.toml` carrying sha256 + seed + generator version per
-/// artefact, with a `capture/`↔`scenario/` split. The verify logic (recompute the sha256,
-/// compare case-insensitively, name the drifted file) is stable; only this parser changes.
-fn parse_manifest(text: &str) -> Vec<ManifestLine> {
-    let mut lines = Vec::new();
-    for (i, line) in text.lines().enumerate() {
-        let lineno = i + 1;
-        let l = line.trim();
-        if l.is_empty() || l.starts_with('#') {
+/// A walk whose failure mode is "quietly saw less of the tree" is not a gate — the defect found
+/// in story 4.1's path-discipline test, and strictly worse here.
+///
+/// Dot-files are skipped (decided 2026-07-21): a `.DS_Store`, a `.gitkeep` or a live editor
+/// swap file would otherwise red a local run over files git does not track. **This is scoped to
+/// the corpus walk, which is rooted at `fixtures/`.** BMad's `_bmad/`, `_bmad-output/` and
+/// `.claude/` live at the REPOSITORY root and are unreachable from here — if this walk is ever
+/// re-rooted, that stops being true and the skip list has to be revisited.
+fn corpus_entries(fixtures: &Path) -> Result<Vec<CorpusEntry>> {
+    let mut entries = Vec::new();
+    let walk = walkdir::WalkDir::new(fixtures)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|e| {
+            // Skip dot-entries, but never the root itself (its own name may start with a dot).
+            e.depth() == 0 || !e.file_name().to_str().is_some_and(|n| n.starts_with('.'))
+        });
+    for entry in walk {
+        let entry = entry.with_context(|| "walking fixtures/")?;
+        if entry.depth() == 0 {
             continue;
         }
-        let tokens: Vec<&str> = l.split_whitespace().collect();
-        match tokens.as_slice() {
-            [sha, path]
-                if !Path::new(path).is_absolute() && !path.split('/').any(|c| c == "..") =>
-            {
-                lines.push(ManifestLine::Entry {
-                    sha: sha.to_string(),
-                    path: path.to_string(),
-                });
-            }
-            [_, path] => lines.push(ManifestLine::Malformed {
-                lineno,
-                reason: format!("path '{path}' escapes fixtures/ (must be relative, no '..')"),
-            }),
-            _ => lines.push(ManifestLine::Malformed {
-                lineno,
-                reason: "expected `<sha256>  <path>` (two tokens; paths cannot contain spaces)"
-                    .to_string(),
-            }),
+        let rel_path = entry
+            .path()
+            .strip_prefix(fixtures)
+            .with_context(|| "a walked path must sit under fixtures/")?;
+        // `to_string_lossy` would map two different byte sequences onto one `U+FFFD` string that
+        // no manifest entry can ever equal — a permanent, undiagnosable red.
+        let Some(rel) = rel_path.to_str() else {
+            entries.push(CorpusEntry::NotRepresentable(
+                rel_path.to_string_lossy().into_owned(),
+            ));
+            continue;
+        };
+        // Separators are `/` on the platforms this project builds for; a `\` in a path here is
+        // a filename BYTE, not a separator, and rewriting it would alias a smuggled `a\b.jsonl`
+        // onto a legitimately listed `a/b.jsonl`.
+        #[cfg(windows)]
+        let rel = rel.replace('\\', "/");
+        let rel = rel.to_string();
+
+        let file_type = entry.file_type();
+        if file_type.is_symlink() {
+            entries.push(CorpusEntry::Symlink(rel));
+        } else if file_type.is_file() {
+            entries.push(CorpusEntry::File(rel));
         }
+        // Directories carry no bytes to lock; anything else (fifo, socket) is caught on read.
     }
-    lines
+    entries.sort_by(|a, b| entry_path(a).cmp(entry_path(b)));
+    Ok(entries)
 }
 
-/// The decision, factored out of I/O so it is unit-tested without touching disk (D45): for
-/// each entry, recompute the sha256 of the file's bytes and name it on a mismatch (compared
-/// case-insensitively — `sha256_hex` is lowercase, but a hand-authored MANIFEST may not be);
-/// name it too when it is listed but unreadable; surface malformed lines. `read` resolves a
-/// path to its bytes — production reads from `fixtures/`; tests inject bytes directly.
+fn entry_path(e: &CorpusEntry) -> &str {
+    match e {
+        CorpusEntry::File(p) | CorpusEntry::Symlink(p) | CorpusEntry::NotRepresentable(p) => p,
+    }
+}
+
+/// Both directions of the lock, decided over already-gathered inputs so the whole gate is
+/// unit-testable without touching a disk (D45).
+fn corpus_findings(
+    manifest: &Manifest,
+    present: &[CorpusEntry],
+    read: &dyn Fn(&str) -> std::io::Result<Vec<u8>>,
+) -> Vec<String> {
+    let mut findings = manifest_findings(&manifest.artefact, read);
+
+    // A lock with zero entries is not a lock. The story holds its own discovery test to this
+    // standard (`checked > 0`); the gate must not hold itself to a lower one.
+    if manifest.artefact.is_empty() {
+        findings.push(
+            "fixtures/MANIFEST.toml lists no artefact — a lock with zero entries locks nothing"
+                .to_string(),
+        );
+    }
+
+    // A lockfile with a repeated key is malformed, and the success count would be a number the
+    // gate cannot substantiate.
+    let listed = manifest.listed_paths();
+    if listed.len() != manifest.artefact.len() {
+        let mut seen = std::collections::BTreeSet::new();
+        for a in &manifest.artefact {
+            if !seen.insert(&a.path) {
+                findings.push(format!(
+                    "fixtures/MANIFEST.toml: '{}' is listed more than once",
+                    quote_path(&a.path)
+                ));
+            }
+        }
+    }
+    findings.extend(orphan_findings(&listed, present));
+    findings
+}
+
+/// Files present in the corpus that nobody listed, plus what the walk could not classify.
+///
+/// The exemptions are explicit and are compared on the FILE NAME, not as a string suffix: a
+/// `NOT-A-README.md` must not inherit an exemption meant for `README.md`.
+///
+/// `MANIFEST.toml` is exempt because a lock cannot list itself — recording its own hash would
+/// change the file and therefore the hash. That is a second exemption beyond the one the
+/// acceptance criterion names; it is unavoidable, and it is recorded rather than assumed.
+fn orphan_findings(
+    listed: &std::collections::BTreeSet<String>,
+    present: &[CorpusEntry],
+) -> Vec<String> {
+    let mut findings = Vec::new();
+    for entry in present {
+        let path = entry_path(entry);
+        match entry {
+            CorpusEntry::Symlink(_) => findings.push(format!(
+                "fixtures/{}: is a symlink — the corpus must contain its own bytes, not point at \
+                 someone else's",
+                quote_path(path)
+            )),
+            CorpusEntry::NotRepresentable(_) => findings.push(format!(
+                "fixtures/{}: the path is not valid UTF-8, so it can never match a manifest entry",
+                quote_path(path)
+            )),
+            CorpusEntry::File(_) => {
+                let name = Path::new(path).file_name().and_then(|n| n.to_str());
+                let exempt = path == "MANIFEST.toml" || name == Some("README.md");
+                if !exempt && !listed.contains(path) {
+                    findings.push(format!(
+                        "fixtures/{}: present but absent from MANIFEST.toml (orphan)",
+                        quote_path(path)
+                    ));
+                }
+            }
+        }
+    }
+    findings
+}
+
+/// A path can contain a newline, which would otherwise inject a line into the report that reads
+/// like a separate, benign gate finding.
+fn quote_path(path: &str) -> String {
+    if path.chars().any(|c| c.is_control()) {
+        format!("{path:?}")
+    } else {
+        path.to_string()
+    }
+}
+
+impl Manifest {
+    fn listed_paths(&self) -> std::collections::BTreeSet<String> {
+        self.artefact.iter().map(|a| a.path.clone()).collect()
+    }
+}
+
+/// The edited direction, factored out of I/O so it is unit-tested without touching disk (D45):
+/// recompute each artefact's sha256 and name it on a mismatch (compared case-insensitively —
+/// `sha256_hex` is lowercase, but a hand-authored manifest may not be); name it too when it is
+/// listed but unreadable. `read` resolves a path to its bytes.
 fn manifest_findings(
-    lines: &[ManifestLine],
+    artefacts: &[Artefact],
     read: &dyn Fn(&str) -> std::io::Result<Vec<u8>>,
 ) -> Vec<String> {
     let mut findings = Vec::new();
-    for line in lines {
-        match line {
-            ManifestLine::Malformed { lineno, reason } => {
-                findings.push(format!("fixtures/MANIFEST:{lineno}: {reason}"));
+    for artefact in artefacts {
+        // A lockfile whose keys can escape the corpus is not a lock — the same containment
+        // `fixture_path` applies on the reading side. `\` is checked too: it is a filename byte
+        // on Unix, so `..\secret` must not slip through as an ordinary name.
+        let p = Path::new(&artefact.path);
+        let escapes = p.is_absolute()
+            || artefact
+                .path
+                .split(['/', '\\'])
+                .any(|c| c == ".." || c == ".");
+        if escapes {
+            findings.push(format!(
+                "fixtures/MANIFEST.toml: path '{}' escapes the corpus (must be relative, no '..' or '.')",
+                quote_path(&artefact.path)
+            ));
+            continue;
+        }
+        if artefact.path == "MANIFEST.toml" {
+            findings.push(
+                "fixtures/MANIFEST.toml: a lock cannot list itself — recording its own hash \
+                 changes the file, so the entry can never be satisfied"
+                    .to_string(),
+            );
+            continue;
+        }
+        // A lock that is itself corrupt and a fixture that was tampered with need opposite
+        // repairs, so they must not share a diagnosis.
+        if artefact.sha256.len() != 64 || !artefact.sha256.chars().all(|c| c.is_ascii_hexdigit()) {
+            findings.push(format!(
+                "fixtures/{}: recorded sha256 is not 64 hex characters — the LOCK is corrupt, \
+                 not the fixture",
+                quote_path(&artefact.path)
+            ));
+            continue;
+        }
+        // Decided 2026-07-21: a generator record exists to make the artefact REPRODUCIBLE, so
+        // recording who generated it while omitting the seed records a provenance claim nobody
+        // can check or re-run. This is a validation policy, adopted deliberately here rather
+        // than inherited by accident from the story that adds the generator.
+        if let Some(g) = &artefact.generator
+            && g.seed.is_none()
+        {
+            findings.push(format!(
+                "fixtures/{}: generator '{} {}' records no seed, so the artefact cannot be reproduced",
+                quote_path(&artefact.path),
+                g.name,
+                g.version
+            ));
+        }
+        match read(&artefact.path) {
+            Ok(bytes) => {
+                let actual = sha256_hex(&bytes);
+                if !actual.eq_ignore_ascii_case(&artefact.sha256) {
+                    // char-safe prefix: the recorded sha is unvalidated manifest text, so never
+                    // byte-slice it (a multi-byte char at the boundary would panic).
+                    let e: String = artefact.sha256.chars().take(12).collect();
+                    findings.push(format!(
+                        "fixtures/{}: sha256 mismatch (manifest {e}… ≠ file {}…)",
+                        quote_path(&artefact.path),
+                        &actual[..12]
+                    ));
+                }
             }
-            ManifestLine::Entry { sha, path } => match read(path) {
-                Ok(bytes) => {
-                    let actual = sha256_hex(&bytes);
-                    if !actual.eq_ignore_ascii_case(sha) {
-                        // char-safe prefix: `sha` is unvalidated MANIFEST text, so never
-                        // byte-slice it (a multi-byte char at the boundary would panic).
-                        let e: String = sha.chars().take(12).collect();
-                        findings.push(format!(
-                            "fixtures/{path}: sha256 mismatch (manifest {e}… ≠ file {}…)",
-                            &actual[..12]
-                        ));
-                    }
-                }
-                Err(_) => {
-                    findings.push(format!("fixtures/{path}: listed in MANIFEST but missing"));
-                }
-            },
+            Err(e) => findings.push(format!(
+                "fixtures/{}: listed in MANIFEST.toml but unreadable ({})",
+                quote_path(&artefact.path),
+                e.kind()
+            )),
         }
     }
     findings
@@ -747,101 +986,356 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         }
     }
 
-    // ── fixture MANIFEST gate (D56, scaffold) ────────────────────────────
+    // ── fixture MANIFEST gate: a lockfile for data (D56) ─────────────────
 
-    fn entry(sha: &str, path: &str) -> ManifestLine {
-        ManifestLine::Entry {
-            sha: sha.to_string(),
-            path: path.to_string(),
-        }
+    fn manifest(toml_text: &str) -> Manifest {
+        toml::from_str(toml_text).expect("the test manifest must parse")
+    }
+
+    /// sha256("hello") — the fixed vector every byte-level test below is anchored on.
+    const HELLO_SHA: &str = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+
+    fn entry_of(path: &str) -> Vec<CorpusEntry> {
+        vec![CorpusEntry::File(path.to_string())]
+    }
+
+    /// A private directory per test: a shared constant path races between concurrent runs and
+    /// leaves a stale corpus behind when an assertion fails.
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("opencmdb-xtask-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        dir
     }
 
     #[test]
     fn fixtures_gate_reds_on_a_sha_mismatch() {
-        // A fixture whose recorded sha does not match its bytes -> RED naming the file.
-        let lines = vec![entry(
-            "0000000000000000000000000000000000000000000000000000000000000000",
-            "traps/a.jsonl",
-        )];
-        let read = |_p: &str| Ok(b"actual bytes".to_vec());
-        let findings = manifest_findings(&lines, &read);
+        let m = manifest(&format!(
+            "[[artefact]]\npath = \"scenario/replay/a.jsonl\"\nsha256 = \"{HELLO_SHA}\"\n"
+        ));
+        let findings = manifest_findings(&m.artefact, &|_| Ok(b"tampered".to_vec()));
         assert_eq!(findings.len(), 1);
-        assert!(findings[0].contains("traps/a.jsonl"), "{}", findings[0]);
-        assert!(findings[0].contains("mismatch"));
+        assert!(
+            findings[0].contains("scenario/replay/a.jsonl"),
+            "{findings:?}"
+        );
+        assert!(findings[0].contains("sha256 mismatch"), "{findings:?}");
     }
 
     #[test]
     fn fixtures_gate_greens_when_bytes_match() {
-        // The recorded sha IS sha256(bytes) -> no finding.
-        let bytes = b"the trap corpus".to_vec();
-        let lines = vec![entry(&sha256_hex(&bytes), "traps/b.jsonl")];
-        let read = |_p: &str| Ok(bytes.clone());
-        assert!(manifest_findings(&lines, &read).is_empty());
+        let m = manifest(&format!(
+            "[[artefact]]\npath = \"a.jsonl\"\nsha256 = \"{HELLO_SHA}\"\n"
+        ));
+        assert!(manifest_findings(&m.artefact, &|_| Ok(b"hello".to_vec())).is_empty());
     }
 
     #[test]
     fn fixtures_gate_sha_compare_is_case_insensitive() {
-        // An uppercase-hex MANIFEST entry must NOT red a byte-correct file.
-        let bytes = b"case".to_vec();
-        let lines = vec![entry(&sha256_hex(&bytes).to_uppercase(), "traps/c.jsonl")];
-        let read = |_p: &str| Ok(bytes.clone());
-        assert!(manifest_findings(&lines, &read).is_empty());
+        let m = manifest(&format!(
+            "[[artefact]]\npath = \"a.jsonl\"\nsha256 = \"{}\"\n",
+            HELLO_SHA.to_uppercase()
+        ));
+        assert!(manifest_findings(&m.artefact, &|_| Ok(b"hello".to_vec())).is_empty());
     }
 
+    /// The recorded sha is unvalidated text: a multi-byte char at the 12-byte boundary must not
+    /// panic the gate, and the finding must still NAME the offender.
     #[test]
     fn fixtures_gate_mismatch_prefix_is_char_safe() {
-        // A non-hex, multi-byte sha token must not panic the mismatch-report slice.
-        let lines = vec![entry("aaaaaaaaaaaéxxxxx", "traps/d.jsonl")];
-        let read = |_p: &str| Ok(b"bytes".to_vec());
-        let findings = manifest_findings(&lines, &read);
+        let sixty_four_accents = "é".repeat(64);
+        let m = manifest(&format!(
+            "[[artefact]]\npath = \"traps/d.jsonl\"\nsha256 = \"{sixty_four_accents}\"\n"
+        ));
+        let findings = manifest_findings(&m.artefact, &|_| Ok(b"hello".to_vec()));
         assert_eq!(findings.len(), 1);
-        assert!(findings[0].contains("traps/d.jsonl"));
+        assert!(findings[0].contains("traps/d.jsonl"), "{findings:?}");
+    }
+
+    /// A corrupt lock and a tampered fixture need opposite repairs, so they must not share a
+    /// diagnosis.
+    #[test]
+    fn fixtures_gate_distinguishes_a_corrupt_lock_from_a_changed_fixture() {
+        for bad in ["deadbeef", "", &"z".repeat(64)] {
+            let m = manifest(&format!(
+                "[[artefact]]\npath = \"a.jsonl\"\nsha256 = \"{bad}\"\n"
+            ));
+            let findings = manifest_findings(&m.artefact, &|_| Ok(b"hello".to_vec()));
+            assert_eq!(findings.len(), 1, "{bad:?}");
+            assert!(findings[0].contains("LOCK is corrupt"), "{findings:?}");
+        }
     }
 
     #[test]
     fn fixtures_gate_flags_a_missing_file() {
-        // Listed in the MANIFEST but unreadable -> RED naming the file.
-        let lines = vec![entry("abc123", "traps/gone.jsonl")];
-        let read = |_p: &str| Err(std::io::Error::from(std::io::ErrorKind::NotFound));
-        let findings = manifest_findings(&lines, &read);
+        let m = manifest(&format!(
+            "[[artefact]]\npath = \"gone.jsonl\"\nsha256 = \"{HELLO_SHA}\"\n"
+        ));
+        let findings = manifest_findings(&m.artefact, &|_| {
+            Err(std::io::Error::from(std::io::ErrorKind::NotFound))
+        });
         assert_eq!(findings.len(), 1);
-        assert!(findings[0].contains("traps/gone.jsonl"));
-        assert!(findings[0].contains("missing"));
+        assert!(findings[0].contains("gone.jsonl"), "{findings:?}");
+        assert!(findings[0].contains("unreadable"), "{findings:?}");
+    }
+
+    /// A lockfile whose keys can escape the corpus is not a lock. `\` counts: it is a filename
+    /// byte on Unix, not a separator.
+    #[test]
+    fn fixtures_gate_refuses_a_path_that_escapes_the_corpus() {
+        for bad in ["/etc/passwd", "../outside.jsonl", "./a.jsonl", "..\\secret"] {
+            let m = manifest(&format!(
+                "[[artefact]]\npath = \"{}\"\nsha256 = \"{HELLO_SHA}\"\n",
+                bad.replace('\\', "\\\\")
+            ));
+            let findings = manifest_findings(&m.artefact, &|_| Ok(b"hello".to_vec()));
+            assert_eq!(findings.len(), 1, "{bad} must be refused");
+            assert!(findings[0].contains("escapes the corpus"), "{findings:?}");
+        }
+    }
+
+    /// Recording the lock's own hash changes the lock, so such an entry can never be satisfied.
+    #[test]
+    fn fixtures_gate_refuses_a_manifest_listing_itself() {
+        let m = manifest(&format!(
+            "[[artefact]]\npath = \"MANIFEST.toml\"\nsha256 = \"{HELLO_SHA}\"\n"
+        ));
+        let findings = manifest_findings(&m.artefact, &|_| Ok(b"hello".to_vec()));
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].contains("cannot list itself"), "{findings:?}");
     }
 
     #[test]
-    fn parse_manifest_skips_comments_and_blanks() {
-        let text =
-            "# a provisional manifest\n\ndeadbeef  traps/a.jsonl\n  cafef00d  traps/b.jsonl  \n";
-        assert_eq!(
-            parse_manifest(text),
-            vec![
-                entry("deadbeef", "traps/a.jsonl"),
-                entry("cafef00d", "traps/b.jsonl")
-            ]
+    fn fixtures_gate_manifest_refuses_an_unknown_key() {
+        let bad = format!("[[artefact]]\npath = \"a\"\nsha256 = \"{HELLO_SHA}\"\nsah256 = \"x\"\n");
+        assert!(toml::from_str::<Manifest>(&bad).is_err());
+    }
+
+    #[test]
+    fn fixtures_gate_manifest_records_an_optional_generator() {
+        let m = manifest(&format!(
+            "[[artefact]]\npath = \"a\"\nsha256 = \"{HELLO_SHA}\"\n\n\
+             [[artefact]]\npath = \"b\"\nsha256 = \"{HELLO_SHA}\"\n\
+             generator = {{ name = \"xtask gen-fixtures\", version = \"0.1.1\", seed = 42 }}\n"
+        ));
+        assert!(m.artefact[0].generator.is_none());
+        let g = m.artefact[1].generator.as_ref().expect("generator");
+        assert_eq!(g.seed, Some(42));
+        assert_eq!(g.name, "xtask gen-fixtures");
+        assert!(manifest_findings(&m.artefact, &|_| Ok(b"hello".to_vec())).is_empty());
+    }
+
+    /// A generator without a seed is a provenance claim nobody can check or re-run.
+    #[test]
+    fn fixtures_gate_reds_on_a_generator_without_a_seed() {
+        let m = manifest(&format!(
+            "[[artefact]]\npath = \"a\"\nsha256 = \"{HELLO_SHA}\"\n\
+             generator = {{ name = \"xtask gen-fixtures\", version = \"0.1.1\" }}\n"
+        ));
+        let findings = manifest_findings(&m.artefact, &|_| Ok(b"hello".to_vec()));
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(findings[0].contains("records no seed"), "{findings:?}");
+    }
+
+    /// The drift-in-the-ADD direction: a file nobody listed.
+    #[test]
+    fn fixtures_gate_reds_on_an_orphan_file() {
+        let listed: std::collections::BTreeSet<String> = ["scenario/replay/a.jsonl".to_string()]
+            .into_iter()
+            .collect();
+        let present = vec![
+            CorpusEntry::File("scenario/replay/a.jsonl".into()),
+            CorpusEntry::File("scenario/traps/sneaked-in.toml".into()),
+        ];
+        let findings = orphan_findings(&listed, &present);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].contains("sneaked-in.toml"), "{findings:?}");
+        assert!(findings[0].contains("orphan"), "{findings:?}");
+    }
+
+    /// The exemptions are compared on the FILE NAME, so a near-miss must NOT inherit them.
+    /// The previous version of this test only presented the two exempt names, which pinned
+    /// "these are exempt" rather than "only these are".
+    #[test]
+    fn fixtures_gate_orphan_exemptions_do_not_extend_to_near_misses() {
+        let listed = std::collections::BTreeSet::new();
+        let present: Vec<CorpusEntry> = [
+            "MANIFEST.toml",
+            "README.md",
+            "scenario/README.md",
+            // Every one of these must be an orphan.
+            "scenario/NOT-A-README.md",
+            "scenario/evil-README.md",
+            "scenario/README.md.bak",
+            "scenario/readme.md",
+            "nested/MANIFEST.toml",
+        ]
+        .into_iter()
+        .map(|p| CorpusEntry::File(p.to_string()))
+        .collect();
+        let findings = orphan_findings(&listed, &present);
+        assert_eq!(findings.len(), 5, "{findings:?}");
+        for expected in [
+            "NOT-A-README.md",
+            "evil-README.md",
+            "README.md.bak",
+            "readme.md",
+            "nested/MANIFEST.toml",
+        ] {
+            assert!(
+                findings.iter().any(|f| f.contains(expected)),
+                "{expected} must be an orphan: {findings:?}"
+            );
+        }
+    }
+
+    /// A symlink is not followed (it would let the corpus reach outside itself) and not skipped
+    /// either — an unlisted file the gate cannot see is the failure this gate exists to prevent.
+    #[test]
+    fn fixtures_gate_reds_on_a_symlink_even_when_listed() {
+        let listed: std::collections::BTreeSet<String> =
+            ["link.jsonl".to_string()].into_iter().collect();
+        let findings = orphan_findings(&listed, &[CorpusEntry::Symlink("link.jsonl".into())]);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(findings[0].contains("is a symlink"), "{findings:?}");
+    }
+
+    #[test]
+    fn fixtures_gate_reds_on_a_path_that_is_not_utf8() {
+        let findings = orphan_findings(
+            &std::collections::BTreeSet::new(),
+            &[CorpusEntry::NotRepresentable("bad\u{FFFD}name".into())],
+        );
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].contains("not valid UTF-8"), "{findings:?}");
+    }
+
+    /// A path can carry a newline, which would otherwise inject a line into the report that
+    /// reads like a separate, benign gate finding.
+    #[test]
+    fn fixtures_gate_quotes_a_control_character_in_a_path() {
+        let findings = orphan_findings(
+            &std::collections::BTreeSet::new(),
+            &entry_of("evil\n      all good.jsonl"),
+        );
+        assert_eq!(findings.len(), 1);
+        assert!(!findings[0].contains('\n'), "{findings:?}");
+    }
+
+    /// A repeated key makes the success count a number the gate cannot substantiate.
+    #[test]
+    fn fixtures_gate_reds_on_a_duplicate_manifest_path() {
+        let m = manifest(&format!(
+            "[[artefact]]\npath = \"a.jsonl\"\nsha256 = \"{HELLO_SHA}\"\n\n\
+             [[artefact]]\npath = \"a.jsonl\"\nsha256 = \"{HELLO_SHA}\"\n"
+        ));
+        let findings = corpus_findings(&m, &entry_of("a.jsonl"), &|_| Ok(b"hello".to_vec()));
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert!(
+            findings[0].contains("listed more than once"),
+            "{findings:?}"
         );
     }
 
-    #[test]
-    fn parse_manifest_fails_closed_on_malformed_and_escaping_lines() {
-        // A one-token line, a spaced path (3 tokens), and `..`/absolute paths all become
-        // findings — the gate does not silently drop what it cannot verify.
-        let text =
-            "deadbeef\ncafef00d traps/a b.jsonl\nbeefcafe ../secret\nbeefbeef /etc/hostname\n";
-        let lines = parse_manifest(text);
-        let findings = manifest_findings(&lines, &|_p| Ok(b"x".to_vec()));
-        assert_eq!(findings.len(), 4, "{findings:?}");
-        assert!(findings.iter().all(|f| f.starts_with("fixtures/MANIFEST:")));
-        assert!(findings[2].contains("escapes fixtures/"));
-        assert!(findings[3].contains("escapes fixtures/"));
+    // ── the gate itself, against a real corpus on disk ───────────────────
+    // Every test above exercises a helper. These exercise `gate_fixture_manifest`, so a wiring
+    // mistake between the two directions cannot ship green.
+
+    fn write_corpus(dir: &Path, manifest_body: &str, files: &[(&str, &str)]) {
+        let fixtures = dir.join("fixtures");
+        std::fs::create_dir_all(&fixtures).unwrap();
+        std::fs::write(fixtures.join("MANIFEST.toml"), manifest_body).unwrap();
+        for (rel, body) in files {
+            let p = fixtures.join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, body).unwrap();
+        }
     }
 
     #[test]
-    fn fixtures_gate_is_green_when_no_fixtures_dir() {
-        // AC #1: a root with no fixtures/ dir -> skipped, green.
-        let (ok, msg) = gate_fixture_manifest(Path::new("/nonexistent-root-xyz")).unwrap();
-        assert!(ok);
-        assert!(msg.contains("no fixtures"));
+    fn gate_greens_on_a_consistent_corpus() {
+        let dir = scratch("green");
+        write_corpus(
+            &dir,
+            &format!("[[artefact]]\npath = \"scenario/a.jsonl\"\nsha256 = \"{HELLO_SHA}\"\n"),
+            &[("scenario/a.jsonl", "hello")],
+        );
+        let (ok, msg) = gate_fixture_manifest(&dir).unwrap();
+        assert!(ok, "{msg}");
+        assert!(msg.contains("1 fixture(s)"), "{msg}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn gate_reds_on_an_orphan_on_disk() {
+        let dir = scratch("orphan");
+        write_corpus(
+            &dir,
+            &format!("[[artefact]]\npath = \"scenario/a.jsonl\"\nsha256 = \"{HELLO_SHA}\"\n"),
+            &[("scenario/a.jsonl", "hello"), ("scenario/b.jsonl", "hi")],
+        );
+        let (ok, msg) = gate_fixture_manifest(&dir).unwrap();
+        assert!(!ok, "{msg}");
+        assert!(msg.contains("scenario/b.jsonl"), "{msg}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Decided 2026-07-21: editor and OS droppings must not red a local run. The skip is scoped
+    /// to the corpus walk — BMad's directories live at the repository root, out of reach.
+    #[test]
+    fn gate_ignores_dot_files_in_the_corpus() {
+        let dir = scratch("dotfiles");
+        write_corpus(
+            &dir,
+            &format!("[[artefact]]\npath = \"scenario/a.jsonl\"\nsha256 = \"{HELLO_SHA}\"\n"),
+            &[
+                ("scenario/a.jsonl", "hello"),
+                (".DS_Store", "junk"),
+                ("scenario/.a.jsonl.swp", "vim"),
+            ],
+        );
+        let (ok, msg) = gate_fixture_manifest(&dir).unwrap();
+        assert!(ok, "{msg}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn gate_reds_when_the_manifest_does_not_parse() {
+        let dir = scratch("badtoml");
+        write_corpus(&dir, "[[artefact]\nbroken", &[]);
+        let (ok, msg) = gate_fixture_manifest(&dir).unwrap();
+        assert!(!ok, "{msg}");
+        assert!(msg.contains("does not parse"), "{msg}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A corpus with no lock, and a lock with no corpus, are both states the gate forbids.
+    #[test]
+    fn gate_reds_when_the_corpus_or_its_lock_is_missing() {
+        let dir = scratch("missing");
+        let (ok, msg) = gate_fixture_manifest(&dir).unwrap();
+        assert!(!ok, "deleting the corpus must not report success: {msg}");
+        assert!(msg.contains("fixtures/ is missing"), "{msg}");
+
+        std::fs::create_dir_all(dir.join("fixtures")).unwrap();
+        let (ok, msg) = gate_fixture_manifest(&dir).unwrap();
+        assert!(!ok, "{msg}");
+        assert!(msg.contains("unlocked"), "{msg}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A lock with zero entries over a corpus that exists is vacuous — the same standard the
+    /// trap-discovery test holds itself to.
+    #[test]
+    fn gate_reds_on_a_corpus_of_readmes_with_an_empty_lock() {
+        let dir = scratch("vacuous");
+        write_corpus(&dir, "# header only\n", &[("README.md", "prose")]);
+        let (ok, msg) = gate_fixture_manifest(&dir).unwrap();
+        assert!(
+            !ok,
+            "an empty lock over a real corpus must not be green: {msg}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

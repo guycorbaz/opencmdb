@@ -23,14 +23,21 @@ would offer to "update" a synthetic trap and **rewrite the truth to make the gat
 
 ## The lock
 
-Every artefact **listed** in `MANIFEST` carries its sha256, and `cargo xtask ci` recomputes it.
-A listed file modified without a manifest bump is RED, and the single repair is a deliberate
-bump. It is a lockfile for data.
+Every artefact is listed in `MANIFEST.toml` with its sha256, and `cargo xtask ci` checks **both
+directions** — the corpus is frozen only when both hold:
 
-**Mind the gap, until story 4.3 closes it:** the check runs over the MANIFEST's entries, not over
-the directory. A fixture committed *without* a MANIFEST line is therefore not hashed, not
-checked, and green. The guarantee today is "listed files are unchanged", not "the corpus is
-frozen".
+- **Edited** — a listed artefact whose bytes changed is RED. The single repair is a deliberate
+  bump, which reads in review as *"I am changing the spec"*.
+- **Added** — a file present here but absent from the manifest is RED. Without this the guarantee
+  would only be *"listed files are unchanged"*, which is a different and much weaker claim: a new
+  trap file would be neither hashed nor noticed.
+
+Exempt from the second rule, deliberately and narrowly: `MANIFEST.toml` itself (a lock cannot list
+itself) and `README.md` files (prose about the corpus, not artefacts of it).
+
+Bytes are not the whole story: a trap file that hashes correctly can still be nonsense. Every
+`scenario/traps/*.toml` is therefore discovered and parsed by the test suite — validated, and
+cross-checked against the observations it claims to judge.
 
 ## Never real network data
 
