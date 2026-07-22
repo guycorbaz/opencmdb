@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-`opencmdb` is a self-hosted, single-binary **Rust** network reconciliation engine (IPAM + light app CMDB + topology) for home-lab/SMB. Core thesis: continuously compare the **observed** state (auto-discovered) against the **declared** state (documented); the gap is the product. **Planning is COMPLETE** (product brief, PRD, UX spec, architecture — all in `_bmad-output/planning-artifacts/`, decision register D1–D66). **As of 2026-07-17 the code exists**: a three-crate Cargo workspace that builds. The identity engine / walking skeleton (story 1) is the next implementation work.
+`opencmdb` is a self-hosted, single-binary **Rust** network reconciliation engine (IPAM + light app CMDB + topology) for home-lab/SMB. Core thesis: continuously compare the **observed** state (auto-discovered) against the **declared** state (documented); the gap is the product. **Planning is COMPLETE** (product brief, PRD, UX spec, architecture — all in `_bmad-output/planning-artifacts/`, decision register D1–D66). **As of 2026-07-22 the code RUNS**: `v0.1.1` is tagged and published to Docker Hub as `gcorbaz/opencmdb`, and it scans a CIDR and shows a real observed-vs-declared gap on one page. Epics 1–3 of 23 are done (the walking skeleton shipped as v0.1); **Epic 4 — the fixture corpus and the metrics harness, both written BEFORE the identity engine — is in progress at 6 of 19 stories, and story 4.6 is next.** Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`; grounding is `docs/project-context.md`.
 
 ### Build / lint / test commands (the stack is chosen and building)
 
 - **Build:** `cargo build --workspace --locked` (Cargo.lock is committed; always `--locked`).
 - **Test:** `cargo test --workspace`.
 - **Lint:** `cargo clippy --workspace -- -D warnings` · **Format:** `cargo fmt --all`.
-- **Project gates:** `cargo xtask ci` — every gate lives here in Rust, never in YAML (D56/D65): the DDL binary-collation grep (D64 cond. 1), the retired-vocabulary check (D65), the fixture MANIFEST sha256, the `architecture-views.md` staleness hash. *(xtask commands are being implemented; some are stubs.)*
+- **Project gates:** `cargo xtask ci` — every gate lives here in Rust, never in YAML (D56/D65): the dependency-frontier check (D47), the DDL binary-collation grep (D64 cond. 1), the retired-vocabulary check (D65), and the fixture corpus lock (sha256 **and** orphan detection, both directions). The `architecture-views.md` staleness hash reports `ℹ STALE` and still exits 0 — that is by design, and **it must not be regenerated inside a story**; regenerate at a milestone. *(Some other xtask subcommands are still stubs.)*
 - **Toolchain:** Rust 1.96+, edition 2024. **Stack:** axum 0.8 · askama 0.16 · sqlx `=0.9.0` (MariaDB-only, `mysql`+`tls-rustls-ring`) · tokio · `config` · `rust-i18n` (YAML) · `prometheus` (raw) · Tailwind standalone CLI via `cargo xtask css`. **Never invent a version — pin from the real `Cargo.lock`.**
 
 ### The dependency frontier is load-bearing (D47), and it is a gate
