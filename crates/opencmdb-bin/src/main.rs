@@ -9,6 +9,7 @@
 mod arp_ping;
 mod auth;
 mod dburl;
+mod fixture_connector;
 mod fixtures;
 mod metrics;
 mod page;

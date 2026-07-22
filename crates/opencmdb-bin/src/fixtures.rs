@@ -17,7 +17,7 @@
 
 use std::path::{Path, PathBuf};
 
-use opencmdb_core::observation::Observation;
+use opencmdb_core::observation::{ConnectorId, FactKind, L2DomainId, Observation, VantageId};
 use opencmdb_core::trap::{TrapError, TrapFile};
 
 /// The one and only expression of where the corpus lives (D56 path discipline).
@@ -58,8 +58,15 @@ pub fn fixture_path(relative: &str) -> Result<PathBuf, FixtureError> {
     Ok(fixtures_dir().join(candidate))
 }
 
-/// Why a fixture could not be read. A malformed line names its own 1-indexed number: a corpus
-/// that silently skips a line it cannot parse is not an oracle.
+/// Why a fixture could not be read, or why a stream may not CLAIM what it claims. A malformed
+/// line names its own 1-indexed number: a corpus that silently skips a line it cannot parse is
+/// not an oracle.
+///
+/// Two shapes live here. The reading variants carry a `path: PathBuf` — they always come from a
+/// file. The four replay-admissibility variants added by story 4.4 carry an `origin: String`
+/// instead, because a stream handed to `FixtureConnector::from_observations` may never have been
+/// on disk; a fabricated `PathBuf::from("<in-memory>")` would be a lie in the type, told only to
+/// preserve a habit.
 #[derive(Debug)]
 pub enum FixtureError {
     /// The file could not be opened or read.
@@ -96,6 +103,35 @@ pub enum FixtureError {
         obs_id: String,
         replay: String,
     },
+
+    // ── Replay admissibility (story 4.4). These carry `origin`, not `path`. ──
+    /// A stream carries an observation attributed to a different connector than the one
+    /// replaying it. Emitting it would fabricate provenance.
+    ForeignConnectorId {
+        origin: String,
+        expected: ConnectorId,
+        found: ConnectorId,
+        obs_id: String,
+    },
+    /// A stream observes a scope the poll does not claim to have covered. The reverse —
+    /// covered and empty — stays legitimate: it is what makes an absence meaningful.
+    UncoveredScope {
+        origin: String,
+        l2_domain: L2DomainId,
+        vantage: VantageId,
+        obs_id: String,
+    },
+    /// A stream emits a fact of a kind its `Capabilities` say the source cannot emit. The
+    /// reverse — capable and unseen — stays legitimate: it is the whole point of the
+    /// descriptor (D34 §1).
+    UndeclaredFactKind {
+        origin: String,
+        kind: FactKind,
+        obs_id: String,
+    },
+    /// An in-memory stream repeats an `obs_id`. [`read_jsonl`] already refuses this for a
+    /// file, naming both lines; a `Vec` has no lines, so this variant names the id alone.
+    RepeatedObservationId { origin: String, obs_id: String },
 }
 
 impl std::fmt::Display for FixtureError {
@@ -139,6 +175,44 @@ impl std::fmt::Display for FixtureError {
                 "{}: trap `{trap}` judges observation {obs_id}, which `{replay}` does not contain",
                 path.display()
             ),
+            FixtureError::ForeignConnectorId {
+                origin,
+                expected,
+                found,
+                obs_id,
+            } => write!(
+                f,
+                "{origin}: observation {obs_id} is attributed to connector {found}, but this \
+                 replay is connector {expected} — one stream is one connector, and emitting \
+                 another's observations would fabricate provenance"
+            ),
+            FixtureError::UncoveredScope {
+                origin,
+                l2_domain,
+                vantage,
+                obs_id,
+            } => write!(
+                f,
+                "{origin}: observation {obs_id} is in scope (l2_domain {l2_domain}, vantage \
+                 {vantage}), which this poll does not claim to have covered — a poll may cover \
+                 more than it saw, never less"
+            ),
+            FixtureError::UndeclaredFactKind {
+                origin,
+                kind,
+                obs_id,
+            } => write!(
+                f,
+                "{origin}: observation {obs_id} emits a {kind:?} fact, which these capabilities \
+                 say the source cannot emit — a source may be capable and see nothing, never \
+                 the reverse"
+            ),
+            FixtureError::RepeatedObservationId { origin, obs_id } => write!(
+                f,
+                "{origin}: observation {obs_id} appears more than once — within one stream an \
+                 obs_id must name exactly one observation, or a trap referencing it does not \
+                 say which"
+            ),
         }
     }
 }
@@ -153,6 +227,10 @@ impl std::error::Error for FixtureError {
             FixtureError::Trap { source, .. } => Some(source),
             FixtureError::DuplicateObservationId { .. } => None,
             FixtureError::DanglingObservation { .. } => None,
+            FixtureError::ForeignConnectorId { .. } => None,
+            FixtureError::UncoveredScope { .. } => None,
+            FixtureError::UndeclaredFactKind { .. } => None,
+            FixtureError::RepeatedObservationId { .. } => None,
         }
     }
 }

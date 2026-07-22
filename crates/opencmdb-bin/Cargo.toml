@@ -52,5 +52,13 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 zeroize = "1.9.0"
 
 [dev-dependencies]
+# opencmdb-core is ALREADY a normal dependency above; this entry adds the `test-support` FEATURE
+# to that existing edge, for the connector contract harness (`run_connector_contract`).
+# Under resolver 3 a dev-dependency's features are unified only into builds that need dev-deps, so
+# `cargo build` still ships a core without `opencmdb_core::testing` — measured: a non-`cfg(test)`
+# reference to it fails with "found an item that was configured out". Note this does NOT hold for
+# `cargo test` or `cargo clippy --all-targets`, which DO build core with the feature; that gap is
+# the shape of the CI-only failures Epic 3's retrospective recorded, so run both locally.
+opencmdb-core = { workspace = true, features = ["test-support"] }
 # `ServiceExt::oneshot` to drive the axum router in tests without binding a socket.
 tower = { version = "0.5.2", features = ["util"] }
