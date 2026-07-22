@@ -5,10 +5,26 @@
 //! the engine is to edit it until the red goes away. At the root, changing one is a commit that
 //! says *"I am changing the spec"*.
 //!
-//! **The fixture schema IS the [`Observation`] schema** (D19) — one serialized `Observation` per
-//! line, in the domain types' own serde representation. There is no DTO, no wrapper and no
-//! second format to keep in step: *"the fixture is a serialised stream of Observations … write
-//! the fixture and the trait falls out."*
+//! **An observation line IS an [`Observation`]** (D19), in the domain types' own serde
+//! representation — no DTO, no wrapper, no second format to keep in step: *"the fixture is a
+//! serialised stream of Observations … write the fixture and the trait falls out."*
+//!
+//! **A stream is more than its observations, since story 4.5a.** It may also carry CONTROL
+//! records, which script the poll's outcome. That is not a departure from D19 but its other half:
+//! D34 §1 argued the descriptor must travel with the batch precisely because *"the fixture replays
+//! it for free — ONE JSONL LINE reproduces a mid-scan NET_RAW loss, zero mocks; with a separate
+//! getter the fixture would need state outside the JSONL."* The architecture sanctions the line
+//! and rules on nothing else, so the shape is decided here:
+//!
+//! - a line carrying `record` is a control record — `failure` (the poll ends with a
+//!   [`ConnectorError`]) or `capability` (the descriptor changes and the poll continues);
+//! - a line carrying `obs_id` is an [`Observation`], parsed exactly as it always was;
+//! - a line carrying neither, or both, is REFUSED by name and line number.
+//!
+//! **The discriminator is a positive marker, never the absence of `obs_id`** — an absence-based
+//! rule routes a line whose `obs_id` is misspelled into the control parser and reports an
+//! unknown-field error on a record the author never wrote, which is the opposite of what story 4.1
+//! fought for. [`read_jsonl`] still yields observations only, for the callers that want just those.
 //!
 //! Nothing here reads a clock or mints an id. `obs_id` is stable so truth can point at it, and
 //! `observed_at` comes from the file so the engine never touches the clock — determinism is what
@@ -17,8 +33,12 @@
 
 use std::path::{Path, PathBuf};
 
-use opencmdb_core::observation::{ConnectorId, FactKind, L2DomainId, Observation, VantageId};
+use opencmdb_core::connector::ConnectorError;
+use opencmdb_core::observation::{
+    Capabilities, ConnectorId, FactKind, L2DomainId, Observation, Timestamp, VantageId,
+};
 use opencmdb_core::trap::{TrapError, TrapFile};
+use serde::Deserialize;
 
 /// The one and only expression of where the corpus lives (D56 path discipline).
 ///
@@ -56,6 +76,62 @@ pub fn fixture_path(relative: &str) -> Result<PathBuf, FixtureError> {
         });
     }
     Ok(fixtures_dir().join(candidate))
+}
+
+/// One line of a replay stream: what the source saw, or what the poll DID.
+///
+/// The two kinds are not variants of one idea. An observation is a fact; a failure is the end of
+/// the poll. Story 4.5b adds a third kind — a capability change — which is neither, because it
+/// leaves the poll `Ok` with a different descriptor (D33: *"`CapabilityLost` is an event, not a
+/// state — ping-only is an `Ok` with a reduced descriptor, not an error"*).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Record {
+    /// What the source saw.
+    Observation(Observation),
+    /// The poll ends HERE, with this error. Everything emitted before it is still true (D34 §2).
+    Failure(ConnectorError),
+    /// The source's capability descriptor CHANGES here, and the poll continues.
+    ///
+    /// Not an error, deliberately: a source that lost NET_RAW is still `Live` — it is talking.
+    /// D33 settles it — *"`CapabilityLost` is an **event**, not a state — in steady state ping-only
+    /// is an `Ok` with a reduced descriptor, **not an error**"*. Every `ConnectorError` except
+    /// `Cancelled` blinds, and blinding a live source is the false-"gone" NFR7 makes impossible.
+    ///
+    /// The descriptor is DATED BY THE FILE. That is the whole point: D34 §1 argues the descriptor
+    /// is *"a dated fact, not a constant"*, and story 4.4 had to record that a caller-supplied
+    /// `as_of` could date it in a moment its own stream contradicts.
+    Capability(Capabilities),
+}
+
+impl Record {
+    /// The observation this record carries, if it is one.
+    pub fn as_observation(&self) -> Option<&Observation> {
+        match self {
+            Record::Observation(observation) => Some(observation),
+            Record::Failure(_) | Record::Capability(_) => None,
+        }
+    }
+}
+
+/// The on-disk shape of a control record: internally tagged on `record`.
+///
+/// Internally tagged, not externally: an externally tagged enum would render the line as
+/// `{"failure":{…}}`, whose only key is the variant name — leaving no fixed marker to discriminate
+/// on before parsing. `record` is that marker, and it is what makes the dispatch in
+/// [`read_records`] a positive test rather than a guess.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "record", rename_all = "snake_case", deny_unknown_fields)]
+enum ControlRecord {
+    /// `{"record":"failure","error":{"Unreachable":{"detail":"…"}}}`
+    Failure { error: ConnectorError },
+    /// `{"record":"capability","as_of":"2026-02-01T00:00:07Z","kinds":["IpV4","Mac"]}`
+    ///
+    /// Flattened, so the line IS a `Capabilities` plus the marker — no wrapper key to learn, and
+    /// the domain type stays the single definition of what a descriptor is.
+    Capability {
+        #[serde(flatten)]
+        capabilities: Capabilities,
+    },
 }
 
 /// Why a fixture could not be read, or why a stream may not CLAIM what it claims. A malformed
@@ -121,17 +197,69 @@ pub enum FixtureError {
         vantage: VantageId,
         obs_id: String,
     },
-    /// A stream emits a fact of a kind its `Capabilities` say the source cannot emit. The
+    /// A stream emits a fact of a kind the descriptor IN FORCE AT ITS POSITION denies. The
     /// reverse — capable and unseen — stays legitimate: it is the whole point of the
-    /// descriptor (D34 §1).
+    /// descriptor (D34 §1). `descriptor` names WHICH descriptor denied it, by its `as_of` — a
+    /// capability record has no `obs_id`, and story 4.2 forbids naming anything by line number.
     UndeclaredFactKind {
         origin: String,
         kind: FactKind,
         obs_id: String,
+        descriptor: String,
+    },
+    /// A capability record is dated BEFORE an observation that precedes it in the stream. A
+    /// descriptor cannot be dated before facts collected under it (D34 §1: it is a dated fact).
+    CapabilityPredatesObservation {
+        origin: String,
+        as_of: Timestamp,
+        observed_at: Timestamp,
+        obs_id: String,
+    },
+    /// Two capability records go backwards in time. The descriptor's history is a timeline, and
+    /// a timeline that goes backwards cannot say which descriptor was in force when.
+    CapabilityOutOfOrder {
+        origin: String,
+        as_of: Timestamp,
+        previous_as_of: Timestamp,
     },
     /// An in-memory stream repeats an `obs_id`. [`read_jsonl`] already refuses this for a
     /// file, naming both lines; a `Vec` has no lines, so this variant names the id alone.
     RepeatedObservationId { origin: String, obs_id: String },
+
+    // ── Record dispatch (story 4.5a). Read from a file, so `path` + `lineno`. ──
+    /// A line is neither an observation nor a control record. `found` says what was there
+    /// instead, because "unrecognised" alone sends the author looking in the wrong place.
+    UnrecognisedLine {
+        path: PathBuf,
+        lineno: usize,
+        found: String,
+    },
+    /// A line carries BOTH `obs_id` and `record`. A line that is two things is a line whose
+    /// meaning depends on which reader reads it.
+    AmbiguousLine { path: PathBuf, lineno: usize },
+    /// A control record did not deserialize. Distinct from [`FixtureError::Line`] so the message
+    /// says which of the two shapes was being read — the whole point of dispatching first.
+    ControlRecordLine {
+        path: PathBuf,
+        lineno: usize,
+        source: serde_json::Error,
+    },
+    /// A file scripts `ConnectorError::Cancelled`. Cancellation comes from the token, never from
+    /// the corpus: it is the only non-blinding variant, so a file able to mint it could claim
+    /// liveness was left unchanged when nothing cancelled anything.
+    CancellationScripted { path: PathBuf, lineno: usize },
+    /// A record follows a terminal failure, and would therefore never be reached. See
+    /// [`read_records`] for why an unreachable observation is worse than a missing one.
+    RecordAfterTerminalFailure {
+        path: PathBuf,
+        lineno: usize,
+        failure_line: usize,
+    },
+    /// An in-memory stream scripts `Cancelled`. [`read_records`] refuses this for a file, naming
+    /// the line; a `Vec` has no lines. The pairing mirrors
+    /// [`FixtureError::DuplicateObservationId`] / [`FixtureError::RepeatedObservationId`]: a
+    /// caller that wants to handle "this stream mints a cancellation" must match BOTH.
+    CancellationInStream { origin: String },
 }
 
 impl std::fmt::Display for FixtureError {
@@ -201,17 +329,81 @@ impl std::fmt::Display for FixtureError {
                 origin,
                 kind,
                 obs_id,
+                descriptor,
             } => write!(
                 f,
-                "{origin}: observation {obs_id} emits a {kind:?} fact, which these capabilities \
-                 say the source cannot emit — a source may be capable and see nothing, never \
-                 the reverse"
+                "{origin}: observation {obs_id} emits a {kind:?} fact, which {descriptor} says \
+                 the source cannot emit — a source may be capable and see nothing, never the \
+                 reverse"
+            ),
+            FixtureError::CapabilityPredatesObservation {
+                origin,
+                as_of,
+                observed_at,
+                obs_id,
+            } => write!(
+                f,
+                "{origin}: a capability record dated {as_of} follows observation {obs_id}, dated \
+                 {observed_at} — a descriptor cannot be dated before facts collected under it"
+            ),
+            FixtureError::CapabilityOutOfOrder {
+                origin,
+                as_of,
+                previous_as_of,
+            } => write!(
+                f,
+                "{origin}: a capability record dated {as_of} follows one dated {previous_as_of} — \
+                 the descriptor's history is a timeline, and it may not go backwards"
             ),
             FixtureError::RepeatedObservationId { origin, obs_id } => write!(
                 f,
                 "{origin}: observation {obs_id} appears more than once — within one stream an \
                  obs_id must name exactly one observation, or a trap referencing it does not \
                  say which"
+            ),
+            FixtureError::UnrecognisedLine {
+                path,
+                lineno,
+                found,
+            } => write!(
+                f,
+                "{}:{lineno}: {found} — every line must carry either `obs_id` (an observation) \
+                 or `record` (a control record)",
+                path.display()
+            ),
+            FixtureError::AmbiguousLine { path, lineno } => write!(
+                f,
+                "{}:{lineno}: carries both `obs_id` and `record` — a line is one or the other, \
+                 never both, or its meaning depends on which reader reads it",
+                path.display()
+            ),
+            FixtureError::ControlRecordLine {
+                path,
+                lineno,
+                source,
+            } => write!(f, "{}:{lineno}: control record: {source}", path.display()),
+            FixtureError::CancellationScripted { path, lineno } => write!(
+                f,
+                "{}:{lineno}: a stream may not script `Cancelled` — cancellation comes from the \
+                 token, and it is the only error that leaves liveness unchanged, so a file able \
+                 to mint it could claim nothing was blinded when nothing cancelled anything",
+                path.display()
+            ),
+            FixtureError::RecordAfterTerminalFailure {
+                path,
+                lineno,
+                failure_line,
+            } => write!(
+                f,
+                "{}:{lineno}: follows the terminal failure on line {failure_line} and could never \
+                 be reached — an unreachable observation still satisfies a trap's cross-check, so \
+                 it would yield a trap that can never fire",
+                path.display()
+            ),
+            FixtureError::CancellationInStream { origin } => write!(
+                f,
+                "{origin}: a stream may not script `Cancelled` — cancellation comes from the \
+                 token, never from the data"
             ),
         }
     }
@@ -230,51 +422,199 @@ impl std::error::Error for FixtureError {
             FixtureError::ForeignConnectorId { .. } => None,
             FixtureError::UncoveredScope { .. } => None,
             FixtureError::UndeclaredFactKind { .. } => None,
+            FixtureError::CapabilityPredatesObservation { .. } => None,
+            FixtureError::CapabilityOutOfOrder { .. } => None,
             FixtureError::RepeatedObservationId { .. } => None,
+            FixtureError::UnrecognisedLine { .. } => None,
+            FixtureError::AmbiguousLine { .. } => None,
+            FixtureError::ControlRecordLine { source, .. } => Some(source),
+            FixtureError::CancellationScripted { .. } => None,
+            FixtureError::RecordAfterTerminalFailure { .. } => None,
+            FixtureError::CancellationInStream { .. } => None,
         }
     }
 }
 
-/// Read a JSONL fixture into its observations, in file order.
+/// Read a JSONL fixture into its records, in file order.
 ///
-/// Blank lines are skipped; every other line must deserialize, or the read fails naming the
-/// line. Order is preserved because replay order is part of what a trap asserts.
-pub fn read_jsonl(path: &Path) -> Result<Vec<Observation>, FixtureError> {
+/// Blank lines are skipped; every other line is classified by a positive marker key BEFORE it is
+/// parsed, then parsed as what it claims to be, so each shape fails with its own diagnostic and
+/// the message story 4.1 froze for an observation is the message an observation still gets.
+///
+/// Order is preserved because replay order is part of what a trap asserts.
+///
+/// **Nothing may follow a terminal failure.** A trailing record would never be replayed, and
+/// [`read_traps`] cross-checks a trap's `obs_id`s against what the file CONTAINS, not against what
+/// is reachable — so an unreachable observation would satisfy the cross-check and yield a trap
+/// that can never fire. *"A trap that can never fire would sit in the corpus looking like
+/// coverage, and the gate counts traps."* That hole is the one stories 4.1 and 4.2 exist to close.
+pub fn read_records(path: &Path) -> Result<Vec<Record>, FixtureError> {
     let text = std::fs::read_to_string(path).map_err(|source| FixtureError::Io {
         path: path.to_path_buf(),
         source,
     })?;
-    let mut observations = Vec::new();
+    let mut records = Vec::new();
     let mut seen: std::collections::BTreeMap<uuid::Uuid, usize> = std::collections::BTreeMap::new();
+    let mut terminal: Option<usize> = None;
     for (index, line) in text.lines().enumerate() {
         // Only a truly empty line is skipped. A whitespace-only line carries content, and this
         // module's rule is that content it cannot parse is named, never silently dropped.
         if line.is_empty() {
             continue;
         }
-        let observation: Observation =
+        // 1-indexed, counted over the raw lines: a blank line still occupies its number, so the
+        // message points at what an editor shows.
+        let lineno = index + 1;
+
+        // Classify and parse BEFORE the terminality check. Order matters for the diagnosis: a line
+        // that both follows a terminal failure AND is itself inadmissible — a scripted `Cancelled`,
+        // a malformed line — must be reported for what it IS, not merely for where it sits.
+        // Reporting "unreachable" first costs the author two edit cycles to learn that the line
+        // they wrote was never admissible anywhere.
+        let value: serde_json::Value =
             serde_json::from_str(line).map_err(|source| FixtureError::Line {
                 path: path.to_path_buf(),
-                // 1-indexed, counted over the raw lines: a blank line still occupies its number, so
-                // the message points at what an editor shows.
-                lineno: index + 1,
+                lineno,
                 source,
             })?;
-        // `obs_id` is the anchor the whole labelling format rests on — a trap points at one
-        // "never by line number" (story 4.2). Two lines sharing an id void that guarantee, and
-        // a trap referencing it would silently judge whichever one the reader happened to keep.
-        let id = observation.obs_id.as_uuid();
-        if let Some(first) = seen.insert(id, index + 1) {
-            return Err(FixtureError::DuplicateObservationId {
+        let Some(object) = value.as_object() else {
+            return Err(FixtureError::UnrecognisedLine {
                 path: path.to_path_buf(),
-                obs_id: id.to_string(),
-                first_line: first,
-                second_line: index + 1,
+                lineno,
+                found: format!("a JSON {} is not a record", json_kind(&value)),
             });
+        };
+
+        match (object.contains_key("record"), object.contains_key("obs_id")) {
+            (true, true) => {
+                return Err(FixtureError::AmbiguousLine {
+                    path: path.to_path_buf(),
+                    lineno,
+                });
+            }
+            (false, false) => {
+                // Name the keys the author actually wrote. "An object with neither key" alone tells
+                // someone who misspelled `obs_id` nothing about which key is wrong.
+                let mut keys: Vec<&str> = object.keys().map(String::as_str).collect();
+                keys.sort_unstable();
+                let found = if keys.is_empty() {
+                    "an empty object".to_string()
+                } else {
+                    format!("an object whose keys are [{}]", keys.join(", "))
+                };
+                return Err(FixtureError::UnrecognisedLine {
+                    path: path.to_path_buf(),
+                    lineno,
+                    found,
+                });
+            }
+            (true, false) => {
+                // Re-parsed from the LINE, not from `value`: the error a control record reports
+                // must be the one serde produces for the bytes the author actually wrote.
+                let control: ControlRecord = serde_json::from_str(line).map_err(|source| {
+                    FixtureError::ControlRecordLine {
+                        path: path.to_path_buf(),
+                        lineno,
+                        source,
+                    }
+                })?;
+                match control {
+                    ControlRecord::Failure { error } => {
+                        if error == ConnectorError::Cancelled {
+                            return Err(FixtureError::CancellationScripted {
+                                path: path.to_path_buf(),
+                                lineno,
+                            });
+                        }
+                        reject_if_after_terminal(path, lineno, terminal)?;
+                        terminal = Some(lineno);
+                        records.push(Record::Failure(error));
+                    }
+                    ControlRecord::Capability { capabilities } => {
+                        reject_if_after_terminal(path, lineno, terminal)?;
+                        records.push(Record::Capability(capabilities));
+                    }
+                }
+            }
+            (false, true) => {
+                let observation: Observation =
+                    serde_json::from_str(line).map_err(|source| FixtureError::Line {
+                        path: path.to_path_buf(),
+                        lineno,
+                        source,
+                    })?;
+                reject_if_after_terminal(path, lineno, terminal)?;
+                // `obs_id` is the anchor the whole labelling format rests on — a trap points at
+                // one "never by line number" (story 4.2). Two lines sharing an id void that
+                // guarantee, and a trap referencing it would silently judge whichever one the
+                // reader happened to keep.
+                let id = observation.obs_id.as_uuid();
+                if let Some(first) = seen.insert(id, lineno) {
+                    return Err(FixtureError::DuplicateObservationId {
+                        path: path.to_path_buf(),
+                        obs_id: id.to_string(),
+                        first_line: first,
+                        second_line: lineno,
+                    });
+                }
+                records.push(Record::Observation(observation));
+            }
         }
-        observations.push(observation);
     }
-    Ok(observations)
+    Ok(records)
+}
+
+/// Refuse an otherwise-admissible record that follows a terminal failure.
+///
+/// Called AFTER the line has been parsed and found admissible on its own terms, so a line that is
+/// both unreachable and inadmissible is reported for what it is first.
+fn reject_if_after_terminal(
+    path: &Path,
+    lineno: usize,
+    terminal: Option<usize>,
+) -> Result<(), FixtureError> {
+    match terminal {
+        Some(failure_line) => Err(FixtureError::RecordAfterTerminalFailure {
+            path: path.to_path_buf(),
+            lineno,
+            failure_line,
+        }),
+        None => Ok(()),
+    }
+}
+
+/// What a JSON value is, for a message that has to say why a line is not a record.
+fn json_kind(value: &serde_json::Value) -> &'static str {
+    match value {
+        serde_json::Value::Null => "null",
+        serde_json::Value::Bool(_) => "boolean",
+        serde_json::Value::Number(_) => "number",
+        serde_json::Value::String(_) => "string",
+        serde_json::Value::Array(_) => "array",
+        serde_json::Value::Object(_) => "object",
+    }
+}
+
+/// Read a JSONL fixture into its OBSERVATIONS only, in file order.
+///
+/// Control records are dropped, deliberately and not silently: this is the entry point for callers
+/// that only ever wanted the observations — [`read_traps`]'s `obs_id` cross-check and story 4.1's
+/// round-trip test. It does not quietly see less **on the file path**: [`read_records`] refuses any
+/// record after a terminal failure, so every observation it returns is reachable. That guarantee is
+/// file-scoped — `FixtureConnector::from_records` deliberately admits observations after a failure
+/// — so do not carry this reasoning to an in-memory stream.
+///
+/// A caller that needs to know what the poll DID must call [`read_records`].
+pub fn read_jsonl(path: &Path) -> Result<Vec<Observation>, FixtureError> {
+    Ok(read_records(path)?
+        .into_iter()
+        .filter_map(|record| match record {
+            Record::Observation(observation) => Some(observation),
+            // Exhaustive, no `_` arm: a new record kind must break THIS match and force a decision
+            // about whether the observations-only view may keep ignoring it.
+            Record::Failure(_) | Record::Capability(_) => None,
+        })
+        .collect())
 }
 
 /// Read a trap file, validate it, and check that every observation it judges actually exists in
@@ -433,37 +773,92 @@ mod tests {
     /// Every value is synthetic: RFC 5737 addresses and locally-administered MACs. A real
     /// capture in a public repository is disqualifying (D19).
     ///
-    /// This reads the COMMITTED FILE, not `expected()`. The whole argument of this module is
+    /// This reads the COMMITTED FILES, not `expected()`. The whole argument of this module is
     /// that the file is the spec — a privacy guard that inspects a Rust literal would stay green
     /// while someone pasted a real MAC into the corpus.
+    ///
+    /// It WALKS the corpus rather than naming one file. Until story 4.5a it read `minimal.jsonl`
+    /// alone, so every other committed stream was locked by sha256 and inspected by nobody — a
+    /// privacy rule that cannot see the file it governs is not a rule.
+    ///
+    /// It reads RECORDS, not observations. `read_jsonl` drops control records, so routing the
+    /// privacy rule through it would leave a failure's hand-authored `detail` — free text, and the
+    /// obvious place a real hostname or address would land — inspected by nothing. That blind spot
+    /// was introduced by the very story that added control records, and found by the review.
     #[test]
     fn the_corpus_carries_no_real_network_data() {
-        for observation in read_jsonl(&fixture_path(MINIMAL).unwrap()).expect("the fixture reads") {
-            for fact in &observation.facts {
-                // Exhaustive on purpose — no `_` arm. `Fact` is `#[non_exhaustive]`, so a new
-                // variant carrying an address must break THIS test and force a decision, rather
-                // than slipping past a catch-all that asserts nothing.
-                match fact {
-                    Fact::IpV4 { addr } => assert_documentation_ip(*addr),
-                    Fact::DhcpLease { ip, .. } => assert_documentation_ip(*ip),
-                    Fact::Mac { addr, .. } => assert_synthetic_mac(*addr),
-                    Fact::Uplink { peer_mac, .. } => assert_synthetic_mac(*peer_mac),
-                    Fact::Hostname { name, .. } => assert!(
-                        name.starts_with("doc-"),
-                        "hostnames must be invented, not captured: {name}"
-                    ),
-                    Fact::OuiVendor { .. } | Fact::Rtt { .. } => {}
-                    other => panic!(
-                        "a new Fact variant reached the corpus with no privacy rule: {other:?}"
-                    ),
+        let checked = walk_replay_streams(&mut |path| {
+            for record in read_records(path).expect("a corpus stream must read") {
+                match record {
+                    Record::Observation(observation) => {
+                        assert_facts_are_synthetic(&observation.facts, path)
+                    }
+                    // Exhaustive on purpose — no `_` arm. A new record kind must break THIS match
+                    // and force a privacy decision rather than slip past. Story 4.5b's capability
+                    // record did exactly that, and the decision is the arm below.
+                    Record::Failure(error) => assert_text_is_synthetic(&error.to_string(), path),
+                    // A capability record carries a timestamp and a set of `FactKind` enum values —
+                    // no free text, no address, nothing an author can type a real hostname into.
+                    // Nothing to scan, stated rather than skipped.
+                    Record::Capability(_) => {}
                 }
+            }
+        });
+        assert!(checked > 0, "no replay stream found under scenario/replay/");
+    }
+
+    /// Free text authored by a fixture author must carry no real address.
+    ///
+    /// It scans for anything that PARSES as an IPv4 address or a MAC and holds it to the same rule
+    /// as a structured fact. That is deliberately narrower than "no private data" — a hostname in
+    /// prose cannot be recognised mechanically — so it is a floor, not a proof. The register
+    /// carries what it does not cover.
+    fn assert_text_is_synthetic(text: &str, path: &Path) {
+        let where_ = path.display();
+        for token in text.split(|c: char| !(c.is_ascii_hexdigit() || c == '.' || c == ':')) {
+            if let Ok(addr) = token.parse::<Ipv4Addr>() {
+                assert_documentation_ip(addr, path);
+            }
+            if let Ok(mac) = MacAddr::from_str(token) {
+                assert!(
+                    mac.is_locally_administered(),
+                    "{where_}: free text names {mac}, which is not locally administered — \
+                     a real vendor address must never be committed"
+                );
+            }
+        }
+    }
+
+    /// The privacy rule itself, applied to one observation's facts. `path` is carried so a
+    /// failure names WHICH committed stream broke the rule — with the walk, "a real MAC is in the
+    /// corpus" is not actionable unless it says where.
+    fn assert_facts_are_synthetic(facts: &[Fact], path: &Path) {
+        let where_ = path.display();
+        for fact in facts {
+            // Exhaustive on purpose — no `_` arm. `Fact` is `#[non_exhaustive]`, so a new
+            // variant carrying an address must break THIS test and force a decision, rather
+            // than slipping past a catch-all that asserts nothing.
+            match fact {
+                Fact::IpV4 { addr } => assert_documentation_ip(*addr, path),
+                Fact::DhcpLease { ip, .. } => assert_documentation_ip(*ip, path),
+                Fact::Mac { addr, .. } => assert_synthetic_mac(*addr, path),
+                Fact::Uplink { peer_mac, .. } => assert_synthetic_mac(*peer_mac, path),
+                Fact::Hostname { name, .. } => assert!(
+                    name.starts_with("doc-"),
+                    "{where_}: hostnames must be invented, not captured: {name}"
+                ),
+                Fact::OuiVendor { .. } | Fact::Rtt { .. } => {}
+                other => panic!(
+                    "{where_}: a new Fact variant reached the corpus with no privacy rule: {other:?}"
+                ),
             }
         }
     }
 
     /// RFC 5737 reserves three ranges for documentation. Accepting only one and blaming the
     /// standard in the message would send a future author looking for a defect that is not there.
-    fn assert_documentation_ip(addr: Ipv4Addr) {
+    fn assert_documentation_ip(addr: Ipv4Addr, path: &Path) {
+        let where_ = path.display();
         let o = addr.octets();
         let documentation = matches!(
             [o[0], o[1], o[2]],
@@ -471,15 +866,17 @@ mod tests {
         );
         assert!(
             documentation,
-            "{addr} is not in an RFC 5737 documentation range \
+            "{where_}: {addr} is not in an RFC 5737 documentation range \
              (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24)"
         );
     }
 
-    fn assert_synthetic_mac(addr: MacAddr) {
+    fn assert_synthetic_mac(addr: MacAddr, path: &Path) {
+        let where_ = path.display();
         assert!(
             addr.is_locally_administered(),
-            "{addr} is not locally administered — a real vendor address must never be committed"
+            "{where_}: {addr} is not locally administered — a real vendor address must never be \
+             committed"
         );
     }
 
@@ -555,6 +952,329 @@ mod tests {
             std::env::temp_dir().join(format!("opencmdb-fixtures-{}-{tag}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("scratch directory");
         dir
+    }
+
+    // ── Record dispatch and the failure record (story 4.5a) ──────────────────
+
+    /// Write a scratch stream and read it back as records.
+    fn read_scratch(tag: &str, body: &str) -> (PathBuf, Result<Vec<Record>, FixtureError>) {
+        let dir = scratch_dir(tag);
+        let path = dir.join("stream.jsonl");
+        std::fs::write(&path, body).unwrap();
+        let result = read_records(&path);
+        (dir, result)
+    }
+
+    /// One valid observation line, so every dispatch test can put its offending line SECOND.
+    /// With the offender first, a reader that stopped after line 1 would pass every one of them.
+    fn good_line() -> String {
+        serde_json::to_string(&expected()[0]).unwrap()
+    }
+
+    const UNREACHABLE: &str = r#"{"record":"failure","error":{"Unreachable":{"detail":"no route to the documentation net"}}}"#;
+
+    /// A failure record is a record, and `read_jsonl` drops it for the callers that only wanted
+    /// observations.
+    #[test]
+    fn a_failure_record_ends_the_stream_and_read_jsonl_ignores_it() {
+        let (dir, result) = read_scratch("failure", &format!("{}\n{UNREACHABLE}\n", good_line()));
+        let records = result.expect("a trailing failure record is admissible");
+        assert_eq!(records.len(), 2);
+        assert!(matches!(records[0], Record::Observation(_)));
+        match &records[1] {
+            Record::Failure(ConnectorError::Unreachable { detail }) => {
+                assert!(detail.contains("no route"), "{detail}")
+            }
+            other => panic!("expected an Unreachable failure, got {other:?}"),
+        }
+        let observations = read_jsonl(&dir.join("stream.jsonl")).expect("observations read");
+        assert_eq!(observations, vec![expected()[0].clone()]);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The message story 4.1 froze must be the message an observation still gets. This is the
+    /// case an absence-based discriminator inverts: no `obs_id` key would route this line to the
+    /// control parser and blame a record the author never wrote.
+    #[test]
+    fn an_observation_line_with_a_misspelled_field_still_reports_its_own_error() {
+        let typo = r#"{"obs_id":"aaaaaaaa-0000-4000-8000-0000000000ff","connector_id":"33333333-3333-4333-8333-333333333333","observed_at":"2026-01-01T00:00:00Z","scope":{"l2_domain":"11111111-1111-4111-8111-111111111111","vantage":"22222222-2222-4222-8222-222222222222"},"factz":[],"raw":null}"#;
+        let (dir, result) = read_scratch("obs-typo", &format!("{}\n{typo}\n", good_line()));
+        let err = result.expect_err("a misspelled field must be refused");
+        match &err {
+            FixtureError::Line { lineno, .. } => assert_eq!(*lineno, 2),
+            other => panic!("expected an observation line error, got {other:?}"),
+        }
+        assert!(
+            err.to_string().contains("factz"),
+            "must name the field: {err}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// …and a control record with a misspelled field is just as precise, on the control record.
+    #[test]
+    fn a_control_record_with_a_misspelled_field_names_the_control_record() {
+        let typo = r#"{"record":"failure","errro":{"Timeout":null}}"#;
+        let (dir, result) = read_scratch("ctl-typo", &format!("{}\n{typo}\n", good_line()));
+        let err = result.expect_err("a misspelled field must be refused");
+        match &err {
+            FixtureError::ControlRecordLine { lineno, .. } => assert_eq!(*lineno, 2),
+            other => panic!("expected a control-record error, got {other:?}"),
+        }
+        let rendered = err.to_string();
+        assert!(
+            rendered.contains("errro"),
+            "must name the field: {rendered}"
+        );
+        assert!(
+            rendered.contains("control record"),
+            "must say which shape failed: {rendered}"
+        );
+        assert!(std::error::Error::source(&err).is_some());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// An unknown `record` value is refused, never ignored: story 4.5b adds `capability`, and a
+    /// reader that skipped what it did not recognise would replay a downgrade as a clean poll.
+    #[test]
+    fn an_unknown_record_kind_is_refused() {
+        let (dir, result) = read_scratch(
+            "ctl-kind",
+            &format!("{}\n{{\"record\":\"reboot\"}}\n", good_line()),
+        );
+        let err = result.expect_err("an unknown record kind must be refused");
+        assert!(
+            matches!(err, FixtureError::ControlRecordLine { lineno: 2, .. }),
+            "{err:?}"
+        );
+        assert!(err.to_string().contains("reboot"), "must name it: {err}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A line carrying neither marker has no defined meaning, and must not acquire one by
+    /// falling through to whichever parser is tried first.
+    ///
+    /// The message must name the keys the author actually WROTE. Asserting only the template's own
+    /// literals (`obs_id`, `record`) would be true of every `UnrecognisedLine` ever produced, and
+    /// would not tell a correct message from a useless one.
+    #[test]
+    fn a_line_carrying_neither_marker_names_the_keys_it_found() {
+        let (dir, result) = read_scratch(
+            "neither",
+            &format!("{}\n{{\"hello\":\"world\",\"aardvark\":1}}\n", good_line()),
+        );
+        let err = result.expect_err("a line that is neither shape must be refused");
+        match &err {
+            FixtureError::UnrecognisedLine { lineno, found, .. } => {
+                assert_eq!(*lineno, 2);
+                assert!(found.contains("hello"), "must name the key found: {found}");
+                assert!(found.contains("aardvark"), "must name every key: {found}");
+            }
+            other => panic!("expected an unrecognised-line error, got {other:?}"),
+        }
+        let rendered = err.to_string();
+        assert!(rendered.contains("obs_id"), "{rendered}");
+        assert!(rendered.contains("record"), "{rendered}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The case Decision 2 is ARGUED from: an author misspells `obs_id` itself.
+    ///
+    /// Under an absence-based discriminator this line would be handed to the control-record parser
+    /// and blamed for a record nobody wrote. Under the positive marker it is an `UnrecognisedLine`
+    /// that NAMES the misspelling, which is the outcome the whole design exists to produce — and
+    /// until the review, the rationale's own example had no test.
+    #[test]
+    fn a_misspelled_obs_id_names_the_misspelling() {
+        let typo = r#"{"obs_di":"aaaaaaaa-0000-4000-8000-0000000000ff","facts":[]}"#;
+        let (dir, result) = read_scratch("obs-id-typo", &format!("{}\n{typo}\n", good_line()));
+        let err = result.expect_err("a misspelled obs_id must be refused");
+        match &err {
+            FixtureError::UnrecognisedLine { lineno, found, .. } => {
+                assert_eq!(*lineno, 2);
+                assert!(
+                    found.contains("obs_di"),
+                    "must name the misspelling: {found}"
+                );
+            }
+            other => panic!("expected an unrecognised-line error, got {other:?}"),
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A line that both follows a terminal failure AND is inadmissible on its own terms is
+    /// reported for what it IS. Reporting "unreachable" first would cost the author two edit
+    /// cycles to discover that the line they wrote was never admissible anywhere.
+    #[test]
+    fn an_inadmissible_line_after_a_failure_is_diagnosed_for_itself() {
+        let cancelled = r#"{"record":"failure","error":"Cancelled"}"#;
+        let (dir, result) = read_scratch(
+            "cancel-after-failure",
+            &format!("{}\n{UNREACHABLE}\n{cancelled}\n", good_line()),
+        );
+        let err = result.expect_err("a scripted cancellation must be refused");
+        assert!(
+            matches!(err, FixtureError::CancellationScripted { lineno: 3, .. }),
+            "the cancellation must win over the unreachability: {err:?}"
+        );
+
+        // A malformed line after a failure is likewise a parse error, not "unreachable".
+        let (dir2, result2) = read_scratch(
+            "malformed-after-failure",
+            &format!("{}\n{UNREACHABLE}\n{{ not json\n", good_line()),
+        );
+        assert!(
+            matches!(
+                result2.expect_err("a malformed line must be refused"),
+                FixtureError::Line { lineno: 3, .. }
+            ),
+            "a malformed line is a parse error, not an unreachable record"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::remove_dir_all(&dir2).ok();
+    }
+
+    /// Valid JSON that is not an object at all: `42`, `[]`, `"x"`, `null`. Each must be named for
+    /// what it is — "unrecognised" alone sends the author looking in the wrong place.
+    #[test]
+    fn a_line_that_is_not_an_object_is_named_for_what_it_is() {
+        for (body, kind) in [
+            ("42", "number"),
+            ("[]", "array"),
+            ("\"x\"", "string"),
+            ("null", "null"),
+            ("true", "boolean"),
+        ] {
+            let (dir, result) = read_scratch("not-object", &format!("{}\n{body}\n", good_line()));
+            let err = result.expect_err("a non-object line must be refused");
+            match &err {
+                FixtureError::UnrecognisedLine { lineno, found, .. } => {
+                    assert_eq!(*lineno, 2, "for {body}");
+                    assert!(found.contains(kind), "{found} must name `{kind}`");
+                }
+                other => panic!("expected an unrecognised-line error for {body}, got {other:?}"),
+            }
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
+    /// A line that is two things is a line whose meaning depends on which reader reads it.
+    #[test]
+    fn a_line_carrying_both_markers_is_refused() {
+        let both = r#"{"record":"failure","obs_id":"aaaaaaaa-0000-4000-8000-0000000000ff"}"#;
+        let (dir, result) = read_scratch("both", &format!("{}\n{both}\n", good_line()));
+        let err = result.expect_err("an ambiguous line must be refused");
+        assert!(
+            matches!(err, FixtureError::AmbiguousLine { lineno: 2, .. }),
+            "{err:?}"
+        );
+        assert!(err.to_string().contains("both"), "{err}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// `Cancelled` is the ONE variant that leaves liveness unchanged. A file able to mint it
+    /// could assert that nothing was blinded when nothing cancelled anything.
+    #[test]
+    fn a_stream_may_not_script_cancellation() {
+        let cancelled = r#"{"record":"failure","error":"Cancelled"}"#;
+        let (dir, result) = read_scratch("cancel", &format!("{}\n{cancelled}\n", good_line()));
+        let err = result.expect_err("a scripted cancellation must be refused");
+        assert!(
+            matches!(err, FixtureError::CancellationScripted { lineno: 2, .. }),
+            "{err:?}"
+        );
+        assert!(err.to_string().contains("token"), "{err}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Nothing may follow a terminal failure. An unreachable observation still satisfies a trap's
+    /// cross-check, so it would yield a trap that can never fire — the hole 4.1/4.2 exist to close.
+    #[test]
+    fn nothing_may_follow_a_terminal_failure() {
+        let (dir, result) = read_scratch(
+            "after-failure",
+            &format!("{}\n{UNREACHABLE}\n{}\n", good_line(), good_line()),
+        );
+        let err = result.expect_err("a record after a terminal failure must be refused");
+        match &err {
+            FixtureError::RecordAfterTerminalFailure {
+                lineno,
+                failure_line,
+                ..
+            } => assert_eq!((*lineno, *failure_line), (3, 2), "both lines are named"),
+            other => panic!("expected a record-after-failure error, got {other:?}"),
+        }
+        assert!(err.to_string().contains("never be reached"), "{err}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Every replay stream in the corpus is DISCOVERED by walking and read as records — the same
+    /// treatment `scenario/traps/` has had since story 4.1. Without it, a committed `.jsonl` would
+    /// be hashed by the gate and parsed by nobody.
+    #[test]
+    fn every_replay_stream_in_the_corpus_is_valid() {
+        let checked = walk_replay_streams(&mut |path| {
+            let records = read_records(path).unwrap_or_else(|e| {
+                panic!("corpus replay stream {} is invalid: {e}", path.display())
+            });
+            // A stream that parses to nothing is a file the gate hashes and the engine cannot
+            // use — the same vacuity the fixtures gate carried until story 4.1.
+            assert!(
+                !records.is_empty(),
+                "{}: a committed replay stream must carry at least one record",
+                path.display()
+            );
+        });
+        assert!(checked > 0, "no replay stream found under scenario/replay/");
+    }
+
+    /// Walk every `.jsonl` under `scenario/replay/`, recursively, refusing symlinks and any other
+    /// extension, and return how many were visited.
+    ///
+    /// Recursive on purpose: the trap FAMILIES (4.9+) are what will introduce a subdirectory, and
+    /// a flat scan would hash them and never read them. Read errors are not swallowed — an
+    /// unreadable subtree shrinking the search space into a false green was a real defect in 4.1.
+    fn walk_replay_streams(visit: &mut dyn FnMut(&Path)) -> usize {
+        let root = fixture_path("scenario/replay").unwrap();
+        let mut checked = 0usize;
+        let mut stack = vec![root.clone()];
+        while let Some(dir) = stack.pop() {
+            for entry in
+                std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("reading {}: {e}", dir.display()))
+            {
+                let entry = entry.expect("a directory entry must be readable");
+                let path = entry.path();
+                let file_type = entry.file_type().expect("file type");
+                if file_type.is_symlink() {
+                    panic!(
+                        "{}: the corpus must contain its own bytes, not a symlink",
+                        path.display()
+                    );
+                }
+                if file_type.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                // `README.md` is exempt at any depth, exactly as the corpus lock's orphan rule
+                // exempts it (`xtask/src/main.rs`). Two gates that disagree about what the corpus
+                // may contain would make documenting this directory red the test suite.
+                if path.file_name().and_then(|n| n.to_str()) == Some("README.md") {
+                    continue;
+                }
+                let is_jsonl = path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.eq_ignore_ascii_case("jsonl"));
+                assert!(
+                    is_jsonl,
+                    "{}: only .jsonl replay streams and README.md belong under scenario/replay/",
+                    path.display()
+                );
+                visit(&path);
+                checked += 1;
+            }
+        }
+        checked
     }
 
     // ── Trap files (story 4.2) ───────────────────────────────────────────────

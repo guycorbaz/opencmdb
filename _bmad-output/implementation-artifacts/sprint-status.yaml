@@ -42,9 +42,10 @@
 #   (e.g. `1-5-mariadb-service-and-cargo-deny` for "MariaDB service container and cargo-deny in
 #   CI"). The files are the established identifiers; the keys follow them so status detection
 #   resolves.
-# - Epics 4-23 carry no story entries because epics.md defines them at epic level only — only
-#   epics 1-3 have a story breakdown. Story 4.1 exists as a file and is listed here, but is NOT
-#   yet in epics.md; the Epic 4 breakdown is outstanding.
+# - Epics 5-23 carry no story entries because epics.md defines them at epic level only. Epics 1-4
+#   DO have a story breakdown in epics.md (Epic 4 at epics.md:830-1178, stories 4.1-4.19).
+#   (An earlier version of this note said the Epic 4 breakdown was outstanding — it is not;
+#   verified 2026-07-22 against epics.md.)
 # - Retrospectives: only Epic 3's was held (the first of the project). Epics 1 and 2 remain
 #   'optional' and will not be back-filled.
 
@@ -98,7 +99,13 @@ development_status:
   4-2-truth-labelling-format: done
   4-3-manifest-lockfile-and-orphans: done
   4-4-fixture-connector-replays-jsonl: done
-  4-5-fixture-connector-replays-outcomes: backlog
+  # 4.5 was split into 4.5a/4.5b at story preparation (2026-07-22) — see epics.md:936.
+  # The letter suffix follows the house idiom already used for inserted items (D56b, AC5b/7b/7c).
+  4-5a-fixture-connector-replays-failures: done
+  # 4.5b is contexted and its file is written, but it BUILDS ON 4.5a's record dispatcher —
+  # do not start it first. Marked ready-for-dev rather than backlog so a later create-story
+  # run does not treat it as uncreated and overwrite the file.
+  4-5b-fixture-connector-replays-capability-changes: review
   4-6-metrics-harness: backlog
   4-7-trap-runner-asserts-the-rule: backlog
   4-8-reality-debt-register: backlog

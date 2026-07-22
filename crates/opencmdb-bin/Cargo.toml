@@ -31,6 +31,11 @@ opencmdb-core.workspace = true
 prometheus = "0.14.0"
 rust-embed = "8.12.0"
 rust-i18n = "4.2.1"
+# `derive` for the fixture stream's control records (story 4.5a). Already in the tree via
+# opencmdb-core, serde_json, toml, config and sqlx; taken as a direct dependency here because this
+# crate now derives on its own types, and a crate that derives should say so. Adds NO crate to the
+# graph — same reasoning as `futures-util` above. Version tracks opencmdb-core's.
+serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 # Trap files (story 4.2). TOML rather than the YAML the architecture named: no YAML parser is in
 # the tree, `serde_yaml` is archived against a CI that audits advisories, and `toml` is already a

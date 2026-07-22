@@ -10,9 +10,44 @@ Truth here is an **input**, not an interpretation of an output: the case is cons
 then the observations that express it are written. That is what gives these fixtures a free and
 perfect oracle, which a real capture can never have (D19).
 
-`replay/` holds the JSONL observation streams a `FixtureConnector` replays: one serialized
-`Observation` per line, in the domain types' own serde representation. The fixture schema IS the
-observation schema — there is no separate format to learn.
+`replay/` holds the JSONL streams a `FixtureConnector` replays. A line is one of two things, and
+which one is decided by a **marker key**, never by guessing:
+
+- an **observation** — it carries `obs_id`, and it is a serialized `Observation` in the domain
+  types' own serde representation. There is no separate format to learn.
+- a **control record** — it carries `record`, and it scripts what the POLL did rather than what the
+  source saw. There are two kinds.
+
+  `failure` ends the poll with a `ConnectorError`; everything emitted before it is kept, because
+  those observations are true:
+
+  ```json
+  {"record":"failure","error":{"Unreachable":{"detail":"the subnet stopped answering mid-sweep"}}}
+  ```
+
+  `capability` changes the source's capability descriptor and the poll **continues** — a source that
+  lost NET_RAW is still live, not blind, so this is an `Ok` with a reduced descriptor and never an
+  error. The descriptor is dated by the file:
+
+  ```json
+  {"record":"capability","as_of":"2026-03-01T00:00:07Z","kinds":["Mac","IpV4","Hostname"]}
+  ```
+
+  A capability record may widen the descriptor as well as narrow it, and may empty it entirely. Its
+  `as_of` must not predate any observation before it, and successive records may not go backwards in
+  time. Each observation's facts are checked against the descriptor in force **at its own position**,
+  so a fact emitted before a downgrade stays legal — the past does not change status.
+
+A line carrying neither key, or both, is refused by name and line number.
+
+Two rules the reader enforces, both because a fixture is a spec and not test data:
+
+- **A stream may not script `Cancelled`.** Cancellation comes from the token, and it is the only
+  error that leaves liveness unchanged — a file able to mint it could assert that nothing was
+  blinded when nothing cancelled anything.
+- **Nothing may follow a terminal failure.** A trailing record would never be replayed, while a
+  trap's cross-check looks at what the file CONTAINS — so an unreachable observation would pass the
+  cross-check and yield a trap that can never fire.
 
 `traps/` holds the truth labelling: which observations a case judges, which of D18's three
 columns is correct — `must-merge`, `must-not-merge`, `must-abstain` — and the author's mandatory

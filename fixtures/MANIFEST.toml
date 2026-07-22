@@ -21,6 +21,18 @@ path = "scenario/replay/example-traps.jsonl"
 sha256 = "f7fc32a09ec3313838ee9af9ef7822951be18a34bd36fe8f37a841515f9672f4"
 
 [[artefact]]
+# Story 4.5a: four observations then a terminal failure record. The failure is LAST, because
+# nothing may follow one — an unreachable observation would still satisfy a trap's cross-check.
+path = "scenario/replay/partial-then-failed.jsonl"
+sha256 = "880a38dceca78d7ba7ab637a47771196d2b4fb8907bebe1611b156eeb2e2a259"
+
+[[artefact]]
+# Story 4.5b: two observations emitting `Rtt`, a capability record dropping it mid-stream, then
+# observations that no longer emit it. The NET_RAW case D34 §1 names, replayed from one line.
+path = "scenario/replay/capability-downgrade.jsonl"
+sha256 = "b82fe55e12c1a8b57dad9bea385e3050762457e240ef9a0dd1b10f26a46884ca"
+
+[[artefact]]
 path = "scenario/traps/example.toml"
 sha256 = "d7200169f4afd21049f7f557832d875e0b23b0ce1dd6b4a23cd88ff9c9aae671"
 

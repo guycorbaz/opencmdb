@@ -1388,6 +1388,7 @@ dependencies = [
  "prometheus",
  "rust-embed",
  "rust-i18n",
+ "serde",
  "serde_json",
  "sqlx",
  "surge-ping",

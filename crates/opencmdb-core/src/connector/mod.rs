@@ -11,6 +11,7 @@
 //!
 //! The `Connector` trait, `ObservationSink`, and `PollSummary` join this module in Story 2.3.
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 
@@ -25,7 +26,19 @@ use crate::observation::{Capabilities, ConnectorId, Observation, Scope};
 /// NOTE: a `scope` field (D33's "every variant carries scope") is deferred to Epic 13, where
 /// the liveness-blindness scope of D34 §3 is built and `source_state` exists; the scheduler
 /// (which polls per scope, D34) knows the scope until then. Adding it later is additive.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
+///
+/// **Serde (story 4.5a).** A fixture scripts a poll's failure by naming a variant in the file, so
+/// the taxonomy needs an on-disk representation. It is EXTERNALLY tagged (serde's default), which
+/// renders unit variants as bare strings (`"Timeout"`) and struct variants as one-key objects
+/// (`{"Unreachable":{"detail":"…"}}`) — a heterogeneous shape a fixture author must expect.
+/// `deny_unknown_fields` because the corpus is an oracle: a line that parses while meaning
+/// something other than it says is worse than a line that does not parse at all.
+///
+/// Deserializability does NOT make every variant scriptable: [`ConnectorError::Cancelled`] is
+/// refused by the fixture reader, because cancellation comes from the token and a file able to
+/// mint it could claim liveness was left unchanged when nothing cancelled anything.
+#[derive(Debug, Clone, PartialEq, Eq, Error, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub enum ConnectorError {
     /// Authentication was rejected — the source responds, but gives us nothing.
     /// Operator action: rotate the source's API key (Journey 4).
@@ -183,8 +196,34 @@ mod tests {
         }
     }
 
-    /// Every variant once, for exhaustive iteration in tests. If a variant is added, this
-    /// array stops compiling — the closed-taxonomy guardrail, exercised.
+    /// The variant's name, by an EXHAUSTIVE match with no `_` arm.
+    ///
+    /// **This function IS the closed-taxonomy guardrail.** Adding a variant to [`ConnectorError`]
+    /// stops it compiling, which forces a decision about how the new variant is written on disk
+    /// before it can reach the fixture corpus. Every use of it below is there to make that
+    /// compile-time break unavoidable.
+    ///
+    /// It exists because the guardrail was previously believed to live in [`one_of_each`], and did
+    /// not: that function is a `vec![…]` of constructor expressions, so a new variant compiles
+    /// straight past it. Measured during the story-4.5a code review by adding a variant — the
+    /// workspace built and all core tests passed.
+    fn variant_name(e: &ConnectorError) -> &'static str {
+        match e {
+            ConnectorError::Unauthorized { .. } => "Unauthorized",
+            ConnectorError::Unreachable { .. } => "Unreachable",
+            ConnectorError::SchemaMismatch { .. } => "SchemaMismatch",
+            ConnectorError::Timeout => "Timeout",
+            ConnectorError::Cancelled => "Cancelled",
+            ConnectorError::RemoteFault { .. } => "RemoteFault",
+            ConnectorError::Misconfigured { .. } => "Misconfigured",
+        }
+    }
+
+    /// Every variant once, for exhaustive iteration in tests.
+    ///
+    /// **This list does NOT stop compiling when a variant is added** — it is a `vec!` of
+    /// constructor expressions, not a `match`. [`variant_name`] is what breaks, and
+    /// `every_variant_is_listed_once` is what makes a variant missing from this list fail.
     fn one_of_each() -> Vec<ConnectorError> {
         vec![
             ConnectorError::Unauthorized {
@@ -221,6 +260,68 @@ mod tests {
         }
         assert!(!ConnectorError::Cancelled.is_blinding());
         assert!(ConnectorError::Timeout.is_blinding());
+    }
+
+    /// Every variant is in [`one_of_each`], exactly once.
+    ///
+    /// Together with [`variant_name`] — which stops compiling when a variant is added — this is
+    /// what closes the taxonomy against the fixture format: the compiler forces the new variant to
+    /// be named, and this test forces it to be exercised.
+    #[test]
+    fn every_variant_is_listed_once() {
+        let names: std::collections::BTreeSet<&'static str> =
+            one_of_each().iter().map(variant_name).collect();
+        assert_eq!(
+            names.len(),
+            one_of_each().len(),
+            "one_of_each lists a variant twice"
+        );
+        // Update BOTH this number and `variant_name` when the taxonomy changes — `variant_name`
+        // will not compile until you do, which is the point.
+        assert_eq!(names.len(), 7, "a variant is missing from one_of_each");
+    }
+
+    /// Every variant round-trips through JSON, and its serialized form NAMES it.
+    ///
+    /// The `variant_name` call is not decoration: it makes this test depend on the exhaustive
+    /// match, so a variant added to `ConnectorError` cannot reach the fixture format without
+    /// someone deciding how it is written.
+    #[test]
+    fn every_variant_round_trips_through_json() {
+        for e in one_of_each() {
+            let json = serde_json::to_string(&e).expect("every variant must serialize");
+            assert!(
+                json.contains(variant_name(&e)),
+                "the serialized form must name the variant: {json}"
+            );
+            let back: ConnectorError =
+                serde_json::from_str(&json).expect("every variant must deserialize");
+            assert_eq!(back, e, "round-trip changed the variant: {json}");
+        }
+        // The two shapes a fixture author will meet, pinned so a serde change is visible here
+        // rather than in a corpus file that silently stops meaning what it said.
+        assert_eq!(
+            serde_json::to_string(&ConnectorError::Timeout).unwrap(),
+            r#""Timeout""#
+        );
+        assert_eq!(
+            serde_json::to_string(&ConnectorError::Unreachable {
+                detail: "connection refused".into()
+            })
+            .unwrap(),
+            r#"{"Unreachable":{"detail":"connection refused"}}"#
+        );
+    }
+
+    /// A misspelled field must fail, not be ignored: the corpus is an oracle (story 4.1's rule,
+    /// applied to the error taxonomy now that it is authored in files).
+    #[test]
+    fn an_unknown_field_on_a_variant_is_refused() {
+        let json = r#"{"Unreachable":{"detail":"x","detial":"y"}}"#;
+        assert!(
+            serde_json::from_str::<ConnectorError>(json).is_err(),
+            "an unknown field must be refused"
+        );
     }
 
     #[test]

@@ -935,8 +935,17 @@ So that "the fixture IS a connector" is a fact the compiler checks rather than a
 
 ### Story 4.5: `FixtureConnector` replays outcomes, not only observations
 
+_Split into **4.5a** and **4.5b** during story preparation (2026-07-22). The two record kinds are not variants of one idea: a failure ends the poll with `Err`, a capability change leaves it `Ok` with a different descriptor (D33: "`CapabilityLost` is an event, not a state — ping-only is an `Ok` with a reduced descriptor, not an error"). 4.5a lands the format mechanism; 4.5b lands the meaning, and carries all the doctrinal risk. The criteria below are distributed between the two, and **sharpened**: the split added a
+positive-marker/diagnostic criterion and a "nothing may follow a terminal failure" criterion to
+4.5a, an `as_of` ordering criterion and a positional-containment criterion to 4.5b, and the clause
+requiring observations AFTER the failure record — without which the D35(a) assertion cannot fail.
+4.5a's story sentence names two outcomes rather than three because the capability change moved to
+4.5b. Nothing was dropped._
+
+#### Story 4.5a: `FixtureConnector` replays a terminal failure
+
 As the engine's test infrastructure,
-I want the fixture to replay a poll's OUTCOME — clean, failed, or partial-then-failed — from the file,
+I want the fixture to replay a poll's OUTCOME — clean or partial-then-failed — from the file,
 So that layer-A fault injection needs no state outside the JSONL.
 
 **Acceptance Criteria:**
@@ -945,11 +954,31 @@ So that layer-A fault injection needs no state outside the JSONL.
 **When** the connector polls
 **Then** it returns that `ConnectorError` variant, and any observations scripted before it are still emitted first — they are true (D34).
 
+**Given** a stream carrying a line that is not an observation
+**When** it is read
+**Then** it is classified by a POSITIVE marker key before parsing, and every malformed line is still named by its 1-indexed number with a message saying what is wrong — the diagnostic story 4.1 froze must not be traded for the new record.
+
+**And** injecting a fault may only REMOVE knowledge, never ADD an assertion, compared with the clean run of the same fixture (D35(a)/NFR8(a)) — and the fixture must place observations AFTER the failure record, or the assertion cannot fail.
+
+**And** nothing may follow a terminal failure record: an unreachable observation would pass `read_traps`' cross-check and yield a trap that can never fire, which is the hole 4.1/4.2 exist to close.
+
+#### Story 4.5b: `FixtureConnector` replays a capability change, dated by the file
+
+As the engine's test infrastructure,
+I want a mid-scan capability change to be one line of the fixture, with the descriptor dated by the file,
+So that a downgrade trap needs no state outside the JSONL and a verdict can be replayed under the capability that produced it (D36).
+
+**Acceptance Criteria:**
+
 **Given** a fixture scripting a mid-scan capability loss
 **When** it is replayed
-**Then** one line reproduces it, with no state held outside the file (D19: "the fixture replays it for free — one JSONL line reproduces a mid-scan NET_RAW loss, zero mocks").
+**Then** one line reproduces it, with no state held outside the file (D19: "the fixture replays it for free — one JSONL line reproduces a mid-scan NET_RAW loss, zero mocks"), and the poll still returns `Ok` — a source that lost NET_RAW is `Live`, not blind.
 
-**And** injecting a fault may only REMOVE knowledge, never ADD an assertion, compared with the clean run of the same fixture.
+**Given** a capability record
+**When** it is loaded
+**Then** its `as_of` comes from the FILE and is non-decreasing, never predating an observation it postdates — closing the recorded finding that a replay could otherwise date its descriptor in a moment its own stream contradicts.
+
+**And** fact-kind containment becomes POSITIONAL — each observation is checked against the descriptor in force at its own position, not against one set for the whole file, because otherwise "the past would change status" (D34 §1). This supersedes story 4.4's global containment rather than dropping it.
 
 ### Story 4.6: The metrics harness, written before the engine
 
