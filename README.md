@@ -13,8 +13,9 @@ A self-hosted, single-binary reconciliation engine for home labs and small busin
 opencmdb is a product whose entire thesis is that documentation must not lie about reality. This README holds itself to the same rule.
 
 - **Planning is complete.** A full product brief, PRD, UX specification, and a ~5,000-line architecture with a decision register (D1–D66) live in [`_bmad-output/planning-artifacts/`](_bmad-output/planning-artifacts/). If you want to understand *why* every decision is the way it is, that is where the reasoning — including the dead ends and the recorded dissents — is written down.
-- **The code has just begun.** What exists today is a **compiling three-crate Rust workspace skeleton** — the foundation, not the engine. The reconciliation logic, the connectors, the web UI, and the persistence layer are the next work.
-- **Nothing here is production-ready yet.** There is no runnable product to deploy at this moment. If you are reading this expecting to `docker pull` and reconcile your network tonight — not yet. Watch or star the repo; it will get there in the open.
+- **There is a running binary.** `v0.1.1` is tagged and published to Docker Hub as `gcorbaz/opencmdb`. It starts, connects to MariaDB, runs an ARP/ping scan over a CIDR you give it, and serves **one page** showing a real observed-vs-declared gap — reconciled from genuinely ingested observations, abstaining visibly where it cannot conclude. It has been deployed to a real Synology NAS, and everything that broke on the way is in the issue tracker and fixed in `0.1.1`.
+- **That is a walking skeleton, not the product.** One page, one connector, no triage inbox, no IPAM, no UniFi connector, no alerts, no admin UI — a scan perimeter is still set by an environment variable. Roughly a fifth of the planned work is done: epics 1–3 of 23 are complete and epic 4 is under way. If you `docker pull` this tonight you will see the idea working end-to-end on a small perimeter, not a tool you can run your network on.
+- **Nothing here is production-ready.** No upgrade path is promised between `0.x` tags, and the schema will move.
 
 Everything below describes what opencmdb **is designed to be**, with the current build state called out where it matters.
 
@@ -120,11 +121,20 @@ cargo clippy --workspace -- -D warnings
 
 Project-specific gates live in `cargo xtask ci` (in Rust, never in YAML) — the DDL collation gate, the retired-vocabulary check, and the fixture/artifact hash checks. Some `xtask` subcommands are still stubs.
 
-> At this stage `cargo run` (with a `DATABASE_URL` pointing at MariaDB) starts an axum server that serves a single page at `/` — the observed-vs-declared **gap**, reconciled from the declared records and the ingested observations — plus a `/healthz` liveness probe and an authenticated Prometheus `/metrics` endpoint (scrape token via `OPENCMDB_METRICS_TOKEN`, `Authorization: Bearer …`). A deny-by-default auth layer refuses any other route (the seam real auth attaches to). Set `OPENCMDB_SCAN_CIDR` (e.g. `192.0.2.0/24`) to run a one-shot ARP/ping scan on startup so the page shows genuinely observed state; `OPENCMDB_LOCALE=fr` renders the UI in French; `OPENCMDB_LOG_DIR` enables daily-rotating file logs (in addition to stdout) for debugging. This is the walking skeleton, not the product.
+> `cargo run` (with the database configured — `DATABASE_URL`, or the discrete `DATABASE_*` variables) starts an axum server serving a single page at `/`: the observed-vs-declared **gap**, reconciled from the declared records and the ingested observations. Alongside it, a `/healthz` liveness probe and an authenticated Prometheus `/metrics` endpoint (scrape token via `OPENCMDB_METRICS_TOKEN`, `Authorization: Bearer …`). A deny-by-default auth layer refuses every other route — the seam real authentication attaches to. Set `OPENCMDB_SCAN_CIDR` (e.g. `192.0.2.0/24`) to run a one-shot ARP/ping scan on startup so the page shows genuinely observed state; `OPENCMDB_LOCALE=fr` renders the UI in French; `OPENCMDB_LOG_DIR` enables daily-rotating file logs alongside stdout. **This is the walking skeleton, not the product** — see the status section above for what it is not.
 
-## Running (once there is something to run)
+## Running it
 
-opencmdb is designed to deploy as **two services**: the binary and a MariaDB instance, wired with a small `docker-compose.yml`. It is deliberately **not** advertised as a single `docker run` — the encryption key lives in a separate volume by design, and a network-mapping tool that lied about its own deployment would be contradicting its own reason to exist. A reference compose file will land with the first runnable release.
+opencmdb deploys as **two services**: the binary and a MariaDB instance. It is deliberately **not** advertised as a single `docker run` — the encryption key lives in a separate volume by design, and a network-mapping tool that lied about its own deployment would be contradicting its own reason to exist.
+
+A reference [`docker/docker-compose.yml`](docker/docker-compose.yml) and [`docker/.env.example`](docker/.env.example) ship in the repo:
+
+```bash
+cp docker/.env.example docker/.env    # set DATABASE_PASSWORD, OPENCMDB_SCAN_CIDR, …
+docker compose -f docker/docker-compose.yml up -d
+```
+
+Two deployment traps, both found the hard way on a real NAS and both worth reading before you start: **do not use `network_mode: host`** (see Requirements above — the ping scan fails silently), and **a `$` in a password inside `.env` is truncated by Compose interpolation**. Both are documented in the [Administrator manual](docs/manuals/) and in the closed issues.
 
 ---
 
@@ -140,7 +150,7 @@ opencmdb concentrates a full map of your network plus controller credentials, so
 
 ## The planning record
 
-Unusually for a young repo, opencmdb's design is fully written down *before* most of the code: see [`_bmad-output/planning-artifacts/`](_bmad-output/planning-artifacts/). The architecture document carries a decision register (D1–D66) where each decision records not just the choice but the argument it survived — and the ones that were rejected. Start at its Decision Index. `architecture-views.md` is a cross-cutting digest (renunciations, measurements, dissents) derived from it.
+Unusually for a young repo, opencmdb's design was fully written down *before* the code: see [`_bmad-output/planning-artifacts/`](_bmad-output/planning-artifacts/). The architecture document carries a decision register (D1–D66) where each decision records not just the choice but the argument it survived — and the ones that were rejected. Start at its Decision Index. `architecture-views.md` is a cross-cutting digest (renunciations, measurements, dissents) derived from it.
 
 *(These documents describe the design; for the current state of any requirement, read the `editHistory` frontmatter of `prd.md`.)*
 
@@ -150,11 +160,11 @@ Early-stage **User** and **Administrator** manuals (LaTeX, built with LuaLaTeX) 
 
 ## Contributing
 
-Early days — the foundation is being laid. If the idea resonates, opening an issue to discuss a connector, a design decision, or a use case is the most useful thing right now. Please keep application code out of `_bmad*` and honour the `opencmdb-core` dependency frontier (no `anyhow`/`axum`/`sqlx`/`askama` in the domain crate); `cargo xtask ci` is meant to catch violations.
+Early days — the reconciliation core is being built one vertical slice at a time. If the idea resonates, opening an issue to discuss a connector, a design decision, or a use case is the most useful thing right now. Please keep application code out of `_bmad*` and honour the `opencmdb-core` dependency frontier (no `anyhow`/`axum`/`sqlx`/`askama` in the domain crate); `cargo xtask ci` is meant to catch violations.
 
 ## License
 
-opencmdb is licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later). See `Cargo.toml`; a full `LICENSE` file will accompany the first tagged release.
+opencmdb is licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later), as declared in every crate's `Cargo.toml`. ⚠️ **A full `LICENSE` file is not yet in the repository** — an omission, not a hedge, and one that should have landed with `v0.1.0`.
 
 ---
 
