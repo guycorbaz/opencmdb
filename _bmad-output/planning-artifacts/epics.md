@@ -982,6 +982,18 @@ So that a downgrade trap needs no state outside the JSONL and a verdict can be r
 
 ### Story 4.6: The metrics harness, written before the engine
 
+_Split into **4.6a**, **4.6b** and **4.6c** during story preparation (2026-07-22), after a validation
+pass found the single story bundled three different review problems: a pure algebra, a file-reading
+harness, and a run-comparison surface. **4.6a** owns the scored outcome, the record and the pass/fail
+matrix — D18 names one failure condition per column, and the 3×3 has nine cells, so the remaining
+five are derived there and written down. **4.6b** owns the harness and its vacuity report. **4.6c**
+owns run comparability. The criteria below are distributed, not reduced._
+
+_One criterion was REMOVED from the family: a guard refusing cross-stream `obs_id` collisions. It
+closes an item from the story-4.1 review and touches only the corpus reader — corpus hygiene, not
+metrics — and it dragged the largest regression surface into the story that must be conceptually
+cleanest. It lands as its own change._
+
 As the author of the release gate,
 I want the harness that scores a run against the trap corpus to exist before any engine does,
 So that the metric cannot be bent to fit the engine.
