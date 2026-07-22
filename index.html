@@ -176,7 +176,7 @@
 
 <section class="hero">
   <div class="wrap">
-    <span class="pill"><span class="live"></span> Early development · planning complete · the skeleton builds</span>
+    <span class="pill"><span class="live"></span> v0.1.1 on Docker Hub · one page, one connector · ~1/5 of the plan built</span>
     <h1>Documentation that <span class="grad">corrects itself.</span></h1>
     <p class="lede">A self-hosted, single-binary reconciliation engine that continuously compares your network's <b>observed</b> state against the <b>declared</b> state you documented — and turns the gap between them into something you can act on.</p>
     <div class="cta">
@@ -297,15 +297,20 @@
     <p class="intro">opencmdb's thesis is that documentation must not lie about reality. This page holds itself to the same rule.</p>
     <div class="status-banner">
       <span class="ic">◔</span>
-      <p><b>Planning is complete; the code has just begun.</b> A full product brief, PRD, UX specification and a ~5,000-line architecture with a decision register (D1–D66) are in the repo — each decision recording the argument it survived, and the ones rejected. What exists in code today is a <b>compiling three-crate Rust workspace skeleton</b>: the foundation, not the engine. There is no runnable product to deploy yet. It will get there in the open.</p>
+      <p><b>There is a running binary, and it is a walking skeleton.</b> <b>v0.1.1</b> is tagged and published to Docker Hub. It starts, connects to MariaDB, scans a subnet you give it, and serves <b>one page</b> showing a real observed-vs-declared gap — reconciled from genuinely ingested observations, abstaining visibly where it cannot conclude. It has been deployed to a real Synology NAS, and everything that broke on the way is in the issue tracker and fixed.</p>
+    </div>
+    <div class="status-banner" style="margin-top:14px">
+      <span class="ic">⊘</span>
+      <p><b>What it is not, yet.</b> No triage inbox, no IPAM, no UniFi connector, no alerts, no admin UI — the scan perimeter is still an environment variable. Roughly <b>a fifth</b> of the planned work is done: epics 1–3 of 23 are complete and epic 4 is under way. No upgrade path is promised between <code>0.x</code> tags, and the schema will move. If you deploy this tonight you will see the idea working end to end on a small perimeter, not a tool you can run your network on.</p>
     </div>
     <div style="margin-top:26px">
-      <p class="eyebrow" style="margin-bottom:14px">Build the skeleton</p>
-      <div class="install"><span class="cm"># requires a recent Rust toolchain (1.96+)</span>
+      <p class="eyebrow" style="margin-bottom:14px">Run it</p>
+      <div class="install"><span class="cm"># two services: the binary and MariaDB — never a single docker run</span>
 git clone https://github.com/guycorbaz/opencmdb.git
 cd opencmdb
-<span class="p">cargo</span> build --workspace --locked   <span class="cm"># Cargo.lock is committed; always --locked</span>
-<span class="p">cargo</span> test --workspace</div>
+cp docker/.env.example docker/.env   <span class="cm"># set DATABASE_PASSWORD, OPENCMDB_SCAN_CIDR, …</span>
+<span class="p">docker</span> compose -f docker/docker-compose.yml up -d</div>
+      <p style="margin-top:10px;color:var(--ink-2);font-size:.92rem">Two traps found the hard way on a real NAS: do <b>not</b> use <code>network_mode: host</code> (the ping scan then fails silently), and a <code>$</code> in a password inside <code>.env</code> is truncated by Compose interpolation.</p>
     </div>
   </div>
 </section>
