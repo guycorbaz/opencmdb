@@ -164,7 +164,35 @@ Early days — the reconciliation core is being built one vertical slice at a ti
 
 ## License
 
-opencmdb is licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later), as declared in every crate's `Cargo.toml`. ⚠️ **A full `LICENSE` file is not yet in the repository** — an omission, not a hedge, and one that should have landed with `v0.1.0`.
+Copyright © 2026 Guy Corbaz.
+
+opencmdb is free software, licensed under the **GNU Affero General Public License v3.0 or later**
+(AGPL-3.0-or-later). The full text is in [`LICENSE`](LICENSE); the same identifier is declared in
+every crate's `Cargo.toml`.
+
+**Why the AGPL and not the MIT or the GPL.** opencmdb is a web application that concentrates a map
+of your network. The AGPL is the GPL plus one clause that matters here — **§13, Remote Network
+Interaction**: if you modify opencmdb and let other people use it *over a network*, you must offer
+them the source of your modified version. A plain GPL would let someone take this code, improve it,
+run it as a hosted service, and never give anything back; the AGPL closes that gap. It is the same
+reasoning that keeps the reconciliation loop unpaywalled: the feature exists to be run by the people
+who need it, not resold as a closed product.
+
+**What the AGPL does not do**, stated plainly rather than left to be assumed:
+
+- It does **not** stop anyone using or modifying opencmdb privately. Running a modified copy inside
+  your own organisation, forever, without publishing anything, is explicitly allowed — that is true
+  of every free-software licence and is not a loophole.
+- It does **not** forbid commercial use, or selling it.
+- It does **not** protect the *idea*. Nothing stops someone reimplementing the same design in their
+  own closed code.
+
+What it does guarantee is that **this code, and anything derived from it, stays open** — including
+when it is served over a network.
+
+_Note for anyone opening a pull request:_ contributions are accepted under the same licence. There
+is currently **no CLA**, so copyright stays with each contributor and the project could not be
+relicensed later without every contributor's agreement.
 
 ---
 
