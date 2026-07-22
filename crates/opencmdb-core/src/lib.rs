@@ -17,6 +17,7 @@ pub mod connector;
 pub mod gap;
 pub mod observation;
 pub mod repo;
+pub mod score;
 pub mod trap;
 
 /// Scripted in-memory connector + the contract test harness. Compiled for this crate's own
@@ -35,3 +36,6 @@ pub use observation::{
     ObsId, Observation, Scope, Timestamp, VantageId,
 };
 pub use repo::{BoxFuture, ReadRepository, RepositoryError, WriteRepository, WriteUnit};
+pub use score::{
+    Column, Outcome, Score, ScoredRecord, SourceState, Tally, VerdictVectorEntry, score,
+};

@@ -154,3 +154,71 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   force AT ITS OWN POSITION, so emitting a fact kind you just declared yourself blind to is
   impossible — which the global check could not express at all. Recorded because a reviewer reading
   only the diff sees a proved-to-red guarantee apparently deleted.
+
+## Deferred from: story-4.6a (2026-07-22)
+
+- **`AbstentionCause` cannot express the identity cascade's `Ambiguous`, and Epic 5 must decide.**
+  It is the RECONCILIATION vocabulary (`OutOfPerimeter | NoObservedValue | ConflictingObservations`,
+  story 3.6). The cascade's abstention arises from the verdict algebra — the cloned-MAC case — and
+  none of the three names it. 4.6a uses it on BOTH sides anyway, because story 4.2 froze the truth
+  format on it and the committed corpus already writes `cause = "NoObservedValue"`; a different type
+  on the outcome side would make comparison asymmetric against a locked format. **Not widened here**:
+  `reconcile` matches on it exhaustively and there is no producer yet. Epic 5 builds the cascade and
+  chooses — widen the enum, or give `Outcome::Abstained` its own cause type.
+- **`fixture_seq` is NOT implemented, and D36's five-field list is therefore not fully satisfied.**
+  It occurs exactly once in `architecture.md` (inside D36's list), zero times in the PRD, zero in
+  code — no type, no shape, no prose. The obvious reading, an ordinal into the stream, contradicts a
+  locked decision: stories 4.1/4.2 chose `obs_id` *because* a line number *"would silently shift
+  under the truth"*. `ScoredRecord` instead carries `trap: TrapId` + `replay: String`, the names the
+  corpus already froze. Recorded as a deliberate substitution so a reviewer comparing against D36
+  sees a decision rather than an omission.
+- **`(TrapId, replay)` is not a globally unique key.** `TrapError::DuplicateId` is enforced per FILE
+  — *"two traps in the same file share an id"* — so at ~50 traps across many files (4.9+), two files
+  could both define `mac-randomized-01` against the same stream. The record's key is **provisional**.
+  A cross-file `TrapId` guard belongs with the corpus-hygiene work, beside the cross-stream `obs_id`
+  guard that is still outstanding.
+- **`source_state` is `Option<SourceState>` where `SourceState` is UNINHABITED, until Epic 13.**
+  The field is provably `None` — witnessed by `size_of::<Option<SourceState>>() == 0`, not by an
+  `is_none()` assertion, which would pass for any inhabited type. ⚠️ **What survives Epic 13 is the
+  field's name and its `Option`-ness, not this type**: D32's `SourceState` is a STRUCT
+  (`{ liveness, capabilities }`), so Epic 13 will REPLACE the placeholder, not add variants to it.
+  (An earlier draft of the story claimed the opposite; corrected before implementation.)
+- **The complete verdict vector has no producer, and the field is provably empty.**
+  `architecture.md`'s *"the harness records… the COMPLETE VERDICT VECTOR… the anti-drift is not
+  discipline, it is a data requirement"* is a requirement on the harness that D36's five-field list
+  omits. Its element is `(rule, verdict, evidence)` and none exists before Epic 5, so
+  `VerdictVectorEntry` is uninhabited by the same standard as `SourceState` rather than the field
+  being empty by comment.
+
+## Deferred from: code review of story-4.6a (2026-07-22)
+
+- **`Tally::record` takes no `TrapId`, so one trap can be scored twice and inflate the gate.**
+  Probed: two identical `record` calls give `scored = 2, failures = 2`. Reachable, not theoretical —
+  `TrapError::DuplicateId` is enforced PER FILE, so `mac-randomized-01` defined in two corpus files
+  is legal today. **Owner: story 4.6b**, which owns the join between records and the tally and is the
+  first real producer.
+- **`ScoredRecord`'s `reason`, `replay` and `trap` are unvalidated `String`s that bypass
+  `Trap::validate`'s contract.** The corpus refuses an empty, multi-line or >300-character reason
+  (`REASON_MIN_CHARS = 20`, `trap.rs`); the record accepts all of them — every field is `pub`, there
+  is no constructor. In practice the harness will build records from an already-validated `Trap`, so
+  the value arrives validated; nothing enforces it. A constructor (and `#[non_exhaustive]`, below)
+  belongs with **4.6b**.
+- **`ScoredRecord` is not `#[non_exhaustive]` although it is designed to change shape.**
+  `fixture_seq` may return, `SourceState` is replaced by Epic 13, `VerdictVectorEntry` gains a real
+  element type. Every field is `pub` with no constructor, so each struct literal is a
+  breaking-change site. Pairs with the constructor above.
+- **The `size_of` uninhabitedness witness rests on a layout OPTIMISATION, not a language guarantee.**
+  The Reference specifies `Option<T>`'s layout only for the null-pointer cases; an `Option` of an
+  uninhabited type collapsing to zero bytes is the compiler's choice. Verified on rustc 1.97.1, and
+  verified benign in both directions: replacing `SourceState` with D32's struct still compiles
+  everywhere and fails **usefully** (`left: 48, right: 0`), and deriving serde later does not break
+  on an uninhabited field. Recorded so a future rustc layout change is diagnosed as what it is
+  rather than as a semantic regression.
+- **The cascade's `NoMatch` maps two ways onto `Outcome`, and only half of that is recorded.**
+  `architecture.md:967-974` makes `NoMatch` cover BOTH an active opposition (`any Disqualifying`) and
+  a mere absence of proof (`only Neutral / nothing`). `Outcome::Refused` requires a rule to name, so
+  absence-of-proof has to map to `Abstained`. **If Epic 5 maps `NoMatch → Refused` uniformly, every
+  honest `must-abstain` trap fails** — the exact case D18 says must NOT be gated (*"an engine that
+  abstains because there is NOT ENOUGH SIGNAL is being honest… We do not gate that"*). The
+  story-4.6a entry above records the `Ambiguous`-has-no-cause half; this is the other half.
+  **Owner: Epic 5**, with 4.7 as the first place it can bite.
