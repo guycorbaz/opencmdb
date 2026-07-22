@@ -106,7 +106,11 @@ development_status:
   # do not start it first. Marked ready-for-dev rather than backlog so a later create-story
   # run does not treat it as uncreated and overwrite the file.
   4-5b-fixture-connector-replays-capability-changes: review
-  4-6-metrics-harness: backlog
+  # 4.6 was split into 4.6a/4.6b/4.6c at story preparation (2026-07-22) after a validation pass —
+  # see epics.md. Build them in order: 4.6b depends on 4.6a, 4.6c on both.
+  4-6a-scoring-algebra: ready-for-dev
+  4-6b-metrics-harness: ready-for-dev
+  4-6c-run-comparability: ready-for-dev
   4-7-trap-runner-asserts-the-rule: backlog
   4-8-reality-debt-register: backlog
   4-9-trap-randomized-mac: backlog
