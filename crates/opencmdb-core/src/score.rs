@@ -17,14 +17,17 @@
 //! wearing a badge of authority"*. [`Tally`] breaks the failures down per column so a red gate is
 //! readable; the number that blocks is still [`Tally::failures`].
 //!
-//! # What this module deliberately does NOT do
+//! # `score` does not compare rules; [`run_trap`] layers that on top
 //!
-//! **It does not compare rules.** `(MustMerge { rule: A }, Merged { rule: B })` — the right answer
-//! reached by the wrong rule — is a **PASS** here. D64 revoked D46b but kept its first criterion
-//! and *"it changes owner: compare `(verdict, rule)`, never `verdict` alone… it becomes
-//! `assert_eq!(decision.rule, case.expect_rule)` **in the trap runner**"*, which is story 4.7.
-//! Deriving `PartialEq` between an expectation and an outcome would silently fail that cell and
-//! steal 4.7's criterion.
+//! [`score`] is rule-blind: `(MustMerge { rule: A }, Merged { rule: B })` — the right answer reached
+//! by the wrong rule — is a **PASS** to it. That is deliberate and it is D18's truth table, which is
+//! about the verdict alone. D64 revoked D46b but kept its first criterion and *"it changes owner:
+//! compare `(verdict, rule)`, never `verdict` alone… it becomes `assert_eq!(decision.rule,
+//! case.expect_rule)` **in the trap runner**"* — story 4.7a. That assertion lives in [`run_trap`],
+//! which calls [`score`] first and only then compares the rule, so the truth table's meaning is
+//! unchanged and a wrong rule is a **distinct** failure beside it, not a tenth cell. Deriving
+//! `PartialEq` between an expectation and an outcome would fold the two together and destroy that
+//! separation — so it is not derived.
 
 use std::collections::BTreeMap;
 
@@ -64,6 +67,22 @@ pub enum Outcome {
     Refused { rule: RuleId },
     /// The signal was insufficient; no decision was taken, for this cause.
     Abstained { cause: AbstentionCause },
+}
+
+impl Outcome {
+    /// The rule a DECISION fired, or `None` for an abstention — the mirror of
+    /// [`Expectation::rule`].
+    ///
+    /// A merge names the rule that fired; a refusal names the rule that OPPOSED the merge. An
+    /// abstention took no decision, so it carries a cause and no rule — the type says so, which is
+    /// what lets [`run_trap`] leave an abstention out of the `(verdict, rule)` assertion by
+    /// construction rather than by a runtime guard.
+    pub fn rule(&self) -> Option<&RuleId> {
+        match self {
+            Outcome::Merged { rule } | Outcome::Refused { rule } => Some(rule),
+            Outcome::Abstained { .. } => None,
+        }
+    }
 }
 
 /// One of D18's three columns — the unit the gate counts in.
@@ -169,6 +188,61 @@ pub fn score(expected: &Expectation, actual: &Outcome) -> Score {
     }
 }
 
+/// The verdict of RUNNING one trap: [`score`]'s truth table, plus the `(verdict, rule)` assertion.
+///
+/// D46b's surviving criterion (D64): *"compare `(verdict, rule)`, never `verdict` alone"*. [`score`]
+/// answers the verdict question and stays rule-blind; this adds the rule question ON TOP, so the two
+/// failure modes stay distinct — a wrong verdict and a right verdict by the wrong rule are not the
+/// same news, and D46b's whole point is that the second *"survives until the data changes"* and is
+/// *"the worst kind"*.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TrapVerdict {
+    /// The verdict is right AND (where a decision carries a rule) it fired the expected rule.
+    Pass,
+    /// The verdict itself is wrong — [`score`] failed. The rule is not consulted: a wrong answer
+    /// fails at the coarser question first, whatever rule it named.
+    VerdictFail,
+    /// The verdict is right but the DECISION fired the wrong rule. The right answer by the wrong
+    /// rule — D46b's *"same output, different reason… the worst kind"*. Names both rules so the
+    /// failure is debuggable without opening the corpus.
+    WrongRule {
+        /// The rule the trap's author said must fire (or oppose the merge).
+        expected: RuleId,
+        /// The rule the answer actually fired.
+        actual: RuleId,
+    },
+}
+
+/// Run one trap: score the verdict, then assert the rule — the trap runner's `(verdict, rule)` check.
+///
+/// The order is load-bearing. [`score`] is asked FIRST: a verdict that is not a [`Score::Pass`] is
+/// [`TrapVerdict::VerdictFail`] and the rule is never looked at, because the verdict is the coarser
+/// question and a wrong answer fails at it regardless of the rule it named. The gate is written on the
+/// POSITIVE (`!= Score::Pass`), not on `== Score::Fail`: only a proven pass may proceed to the rule
+/// check, so a verdict this function cannot prove right never falls through to a rule comparison.
+/// Only on a verdict pass is the rule compared, and only where a DECISION carries one on both sides:
+/// [`Expectation::rule`] and [`Outcome::rule`] are both `Some` exactly on the two decision cells
+/// (`must-merge → Merged`, `must-not-merge → Refused`), so [`TrapVerdict::WrongRule`] fires there and
+/// nowhere else. An abstention has no rule and passes — which keeps `must-not-merge → Abstained`,
+/// [`score`]'s load-bearing pass cell, a pass here too.
+pub fn run_trap(expected: &Expectation, actual: &Outcome) -> TrapVerdict {
+    if score(expected, actual) != Score::Pass {
+        return TrapVerdict::VerdictFail;
+    }
+    // Verdict is right. Now the rule, but only where a decision names one on both sides. An
+    // abstention on either side yields `None` and is therefore a pass — an abstention has no rule to
+    // be wrong (AC4).
+    match (expected.rule(), actual.rule()) {
+        (Some(expected_rule), Some(actual_rule)) if expected_rule != actual_rule => {
+            TrapVerdict::WrongRule {
+                expected: expected_rule.clone(),
+                actual: actual_rule.clone(),
+            }
+        }
+        _ => TrapVerdict::Pass,
+    }
+}
+
 /// The state of a source when an outcome was reached — **not buildable in Epic 4.**
 ///
 /// D32 specifies it as a struct: `{ liveness: Liveness, capabilities: Capabilities }`. Epic 13
@@ -196,6 +270,12 @@ pub enum SourceState {}
 /// The vector's element is `(rule, verdict, evidence)` and none of the three exists: rules arrive
 /// in Epic 5. Rather than invent the type, this placeholder is **uninhabited** — so the field is
 /// provably empty, by the same standard as [`SourceState`], instead of being empty by comment.
+///
+/// This is also what PINS story 4.7a's AC6 forward contract: [`run_trap`] asserts `(verdict, rule)`
+/// today, but the requirement that *a firing rule leave its `rule_id` and evidence behind* needs an
+/// engine to enforce. Until Epic 5 fills this vector, "the firing rule left its evidence" is a
+/// contract recorded (in `deferred-work.md`), not a mechanism — and the emptiness here is its proof
+/// that nothing yet produces one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerdictVectorEntry {}
 
@@ -812,6 +892,107 @@ mod tests {
             Column::MustMerge,
             "the column follows the expectation"
         );
+    }
+
+    // ── The (verdict, rule) assertion the trap runner owns (story 4.7a) ───────
+
+    /// [`Outcome::rule`] mirrors [`Expectation::rule`]: a decision names a rule, an abstention does
+    /// not. The `Merged`/`Refused` arms are proven-to-red (collapse either to `None` and the
+    /// `Some` assertions fail); the `Abstained → None` direction is by construction — an abstention
+    /// carries no `RuleId`, so no mutation could make it `Some` and compile.
+    #[test]
+    fn an_outcome_names_its_rule_only_when_it_is_a_decision() {
+        assert_eq!(merged().rule(), Some(&rule("l2-uplink-agrees")));
+        assert_eq!(refused().rule(), Some(&rule("l2-different-switch")));
+        assert_eq!(abstained().rule(), None);
+    }
+
+    /// The headline (AC1): a right verdict reached by the WRONG rule fails, naming both rules.
+    /// `must_merge` expects `l1-exact-mac`; `merged()` fires `l2-uplink-agrees` — right column,
+    /// wrong rule.
+    #[test]
+    fn a_right_verdict_by_the_wrong_rule_is_wrong_rule_naming_both() {
+        assert_eq!(
+            score(&must_merge(), &merged()),
+            Score::Pass,
+            "verdict is right"
+        );
+        assert_eq!(
+            run_trap(&must_merge(), &merged()),
+            TrapVerdict::WrongRule {
+                expected: rule("l1-exact-mac"),
+                actual: rule("l2-uplink-agrees"),
+            }
+        );
+    }
+
+    /// Both decision cells are pinned, not only `must-merge`: a `must-not-merge` refused by the
+    /// wrong OPPOSING rule is also `WrongRule`. `must_not_merge` expects `l1-distinct-mac`;
+    /// `refused()` cites `l2-different-switch`.
+    #[test]
+    fn a_wrong_opposing_rule_on_a_refusal_is_also_wrong_rule() {
+        assert_eq!(
+            score(&must_not_merge(), &refused()),
+            Score::Pass,
+            "a refusal is the right verdict for must-not-merge"
+        );
+        assert_eq!(
+            run_trap(&must_not_merge(), &refused()),
+            TrapVerdict::WrongRule {
+                expected: rule("l1-distinct-mac"),
+                actual: rule("l2-different-switch"),
+            }
+        );
+    }
+
+    /// The right verdict via the RIGHT rule PASSES (AC2) — the assertion tightens the gate, it does
+    /// not reject every correct answer. Built with matching rules on both sides.
+    #[test]
+    fn a_right_verdict_by_the_right_rule_passes() {
+        let expected = Expectation::MustMerge {
+            rule: rule("l1-exact-mac"),
+        };
+        let actual = Outcome::Merged {
+            rule: rule("l1-exact-mac"),
+        };
+        assert_eq!(run_trap(&expected, &actual), TrapVerdict::Pass);
+    }
+
+    /// AC3: a WRONG verdict is `VerdictFail`, and the rule is NOT consulted — even when the rule
+    /// ALSO differs. `must_merge` answered by `refused()` (wrong verdict) whose rule differs too
+    /// must read `VerdictFail`, never `WrongRule`. This is the case a "compare rules first" mutation
+    /// gets wrong, so it is the prove-to-red for the ordering.
+    #[test]
+    fn a_wrong_verdict_is_verdict_fail_even_when_the_rule_also_differs() {
+        assert_eq!(
+            score(&must_merge(), &refused()),
+            Score::Fail,
+            "must-merge answered by a refusal is a wrong verdict"
+        );
+        assert_ne!(
+            must_merge().rule(),
+            refused().rule(),
+            "and the rules differ too — so only the ORDER keeps this VerdictFail"
+        );
+        assert_eq!(
+            run_trap(&must_merge(), &refused()),
+            TrapVerdict::VerdictFail
+        );
+    }
+
+    /// AC4, the load-bearing cell: `must-not-merge` answered by an `Abstained` passes `score` and
+    /// has no rule to be wrong, so `run_trap` returns `Pass` — never `WrongRule`. An abstention on
+    /// either side is never a rule mismatch.
+    #[test]
+    fn an_abstention_on_a_passing_cell_is_never_a_wrong_rule() {
+        assert_eq!(
+            score(&must_not_merge(), &abstained()),
+            Score::Pass,
+            "abstaining on must-not-merge is a pass (the anti-cowardice argument rests on it)"
+        );
+        assert_eq!(run_trap(&must_not_merge(), &abstained()), TrapVerdict::Pass);
+        // And must-abstain answered correctly: no rule on either side, a plain pass.
+        assert_eq!(run_trap(&must_abstain(), &abstained()), TrapVerdict::Pass);
     }
 
     // ── Comparing two runs (story 4.6c) ──────────────────────────────────────

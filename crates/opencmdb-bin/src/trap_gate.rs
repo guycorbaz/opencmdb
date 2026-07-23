@@ -54,21 +54,41 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use opencmdb_core::score::{Outcome, Tally};
-use opencmdb_core::trap::TrapId;
+use opencmdb_core::score::{Column, Outcome, Tally, TrapVerdict, run_trap};
+use opencmdb_core::trap::{RuleId, TrapId};
 
 use crate::fixtures::{FixtureError, read_traps};
 
-/// What one run of the corpus established: how many traps were found, how many had an answer to
-/// score, and how many of those failed — per D18 column, inside the [`Tally`].
+/// One trap whose verdict was RIGHT but whose decision fired the WRONG rule (story 4.7a).
 ///
-/// The number that blocks a release is [`Report::failures`] and it must be zero. `discovered` and
-/// `scored` are not a fraction and are never divided — they exist so a reader can tell a passing
-/// gate from a gate that measured nothing.
+/// D46b's surviving criterion: *"same output, different reason… BOTH JOBS GREEN… the worst kind"*.
+/// The truth-table [`Tally`] passes this trap — its verdict is correct — so the mismatch is carried
+/// here, separately, and it names BOTH rules so a red gate is debuggable without opening the corpus.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuleMismatch {
+    /// The trap whose answer reached the right column by the wrong rule.
+    pub trap: TrapId,
+    /// The D18 column the trap belongs to — always a decision column (`must-merge`/`must-not-merge`),
+    /// because only a decision carries a rule to be wrong.
+    pub column: Column,
+    /// The rule the trap's author said must fire (or oppose the merge).
+    pub expected: RuleId,
+    /// The rule the answer actually fired.
+    pub actual: RuleId,
+}
+
+/// What one run of the corpus established: how many traps were found, how many had an answer to
+/// score, how many of those failed the truth table — per D18 column, inside the [`Tally`] — and
+/// which ones reached the right verdict by the wrong rule (story 4.7a).
+///
+/// The numbers that block a release are [`Report::failures`] AND [`Report::rule_mismatches`]; both
+/// must be empty. `discovered` and `scored` are not a fraction and are never divided — they exist so
+/// a reader can tell a passing gate from a gate that measured nothing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Report {
     discovered: usize,
     tally: Tally,
+    rule_mismatches: Vec<RuleMismatch>,
 }
 
 impl Report {
@@ -94,21 +114,35 @@ impl Report {
         &self.tally
     }
 
+    /// The traps that reached the right verdict by the wrong rule (story 4.7a). Empty is the
+    /// passing state; each entry names both rules. Separate from [`Self::failures`] on purpose — a
+    /// wrong rule is not a truth-table failure (the verdict passed), it is D46b's distinct
+    /// *"same output, different reason"* failure.
+    pub fn rule_mismatches(&self) -> &[RuleMismatch] {
+        &self.rule_mismatches
+    }
+
     /// The gate's verdict, as a method rather than a comment a caller must reconstruct.
     ///
-    /// D18's one number — truth-table failures = 0 — plus a floor: **a run that discovered NOTHING
-    /// does not pass.** An empty or wrong-but-present directory is vacuity, and `failures == 0` over
-    /// zero traps must not read as success. A real corpus with no engine yet (discovered > 0,
-    /// scored == 0) DOES pass — AC1 defines that as green; `scored()` is what tells a reader it was
-    /// vacuous, not this predicate.
+    /// D18's one number — truth-table failures = 0 — plus D46b's `(verdict, rule)` criterion (no
+    /// wrong-rule trap, story 4.7a), plus a floor: **a run that discovered NOTHING does not pass.**
+    /// An empty or wrong-but-present directory is vacuity, and `failures == 0` over zero traps must
+    /// not read as success. A real corpus with no engine yet (discovered > 0, scored == 0) DOES pass
+    /// — AC1 defines that as green; `scored()` is what tells a reader it was vacuous, not this
+    /// predicate.
     pub fn passed(&self) -> bool {
-        self.discovered > 0 && self.failures() == 0
+        self.discovered > 0 && self.failures() == 0 && self.rule_mismatches.is_empty()
     }
 }
 
 impl fmt::Display for Report {
     /// All three numbers on one line, so "0 failures" can never be read as "the gate passed" when
-    /// nothing was scored (AC3).
+    /// nothing was scored (4.6b AC3). When there are wrong-rule mismatches, a `", K wrong-rule
+    /// failure(s)"` count is appended to that same first line — so the line alone can never read as a
+    /// pass while [`Report::passed`] is false (the 4.6b hazard, for 4.7a's new failure mode). The
+    /// count is appended only when non-zero, so the nominal first line is byte-for-byte unchanged and
+    /// its 4.6b-asserted substrings are stable either way. Each mismatch then follows on its own line,
+    /// naming both rules (story 4.7a).
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -116,7 +150,25 @@ impl fmt::Display for Report {
             self.discovered,
             self.scored(),
             self.failures()
-        )
+        )?;
+        // A wrong rule is a distinct red, so it must also show on the first line: a reader — or a
+        // `grep` — that trusts only that line would otherwise read "0 truth-table failure(s)" as a
+        // pass while `passed()` is false. Appended only when non-empty; the substrings above are
+        // added-to, never rewritten, so the 4.6b regression guard holds.
+        if !self.rule_mismatches.is_empty() {
+            write!(f, ", {} wrong-rule failure(s)", self.rule_mismatches.len())?;
+        }
+        for mismatch in &self.rule_mismatches {
+            write!(
+                f,
+                "\n  wrong rule: trap `{}` ({}): expected rule `{}`, got `{}`",
+                mismatch.trap.0,
+                mismatch.column.as_str(),
+                mismatch.expected.0,
+                mismatch.actual.0
+            )?;
+        }
+        Ok(())
     }
 }
 
@@ -140,6 +192,7 @@ pub fn score_corpus(
     answers: &BTreeMap<TrapId, Outcome>,
 ) -> Result<Report, FixtureError> {
     let mut tally = Tally::default();
+    let mut rule_mismatches: Vec<RuleMismatch> = Vec::new();
     // Every trap id seen so far, and the file it came from. `TrapFile::validate` enforces
     // uniqueness WITHIN a file; a `TrapId` is the key an answer is scored against, so one id in two
     // files would score a single outcome twice — the mirror of the cross-stream `obs_id` rule.
@@ -159,7 +212,21 @@ pub fn score_corpus(
                 });
             }
             if let Some(outcome) = answers.get(&trap.id) {
+                // The truth-table path is UNCHANGED from 4.6b (story 4.7a AC3: the rule assertion is
+                // layered on, not folded in). `record` uses the rule-blind `score()`, so a wrong-rule
+                // trap — whose verdict is right — records a PASS here and never enters `failures`.
                 tally.record(&trap.expect, outcome);
+                // The `(verdict, rule)` assertion, beside the tally. It fires WrongRule only on a
+                // verdict pass with a decision on both sides, so a trap is never in both buckets.
+                if let TrapVerdict::WrongRule { expected, actual } = run_trap(&trap.expect, outcome)
+                {
+                    rule_mismatches.push(RuleMismatch {
+                        trap: trap.id.clone(),
+                        column: Column::of(&trap.expect),
+                        expected,
+                        actual,
+                    });
+                }
                 used.insert(trap.id.clone());
             }
         }
@@ -177,6 +244,7 @@ pub fn score_corpus(
     Ok(Report {
         discovered: seen.len(),
         tally,
+        rule_mismatches,
     })
 }
 
@@ -636,5 +704,122 @@ expect = {{ must-abstain = {{ cause = "NoObservedValue" }} }}
             }
             other => panic!("expected AnswerForUnknownTrap, got {other:?}"),
         }
+    }
+
+    // ── The (verdict, rule) assertion, at the harness (story 4.7a) ───────────
+
+    /// A right verdict by the WRONG rule turns the gate red — separately from a truth-table failure.
+    /// The offending trap is SECOND, behind one answered by the RIGHT rule, so a harness that
+    /// stopped after the first would still be caught. `failures()` stays 0 (the verdict passed);
+    /// the mismatch is carried on its own, naming both rules, and `passed()` is false (AC1, AC5).
+    #[test]
+    fn a_right_verdict_by_the_wrong_rule_reddens_the_gate_without_a_truth_table_failure() {
+        let dir = scratch_dir("trap-gate-wrong-rule");
+        write_scratch_traps(
+            &dir,
+            r#"
+[[trap]]
+id = "rule-correct"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000003"]
+reason = "a must-merge trap answered by a merge via the expected rule, so it stays green."
+expect = { must-merge = { rule = "l1-exact-mac" } }
+
+[[trap]]
+id = "rule-wrong"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000003"]
+reason = "a must-merge trap answered by a merge via a DIFFERENT rule, the right answer wrong reason."
+expect = { must-merge = { rule = "l1-exact-mac" } }
+"#,
+        );
+        let mut answers = BTreeMap::new();
+        // The right verdict via the RIGHT rule — no mismatch.
+        answers.insert(
+            TrapId("rule-correct".into()),
+            Outcome::Merged {
+                rule: RuleId("l1-exact-mac".into()),
+            },
+        );
+        // The right verdict via the WRONG rule — the mismatch.
+        answers.insert(
+            TrapId("rule-wrong".into()),
+            Outcome::Merged {
+                rule: RuleId("l2-uplink-agrees".into()),
+            },
+        );
+        let report = score_corpus(&dir, &answers).expect("the corpus reads");
+
+        assert_eq!(report.scored(), 2, "both merges are scored");
+        assert_eq!(
+            report.failures(),
+            0,
+            "both verdicts are RIGHT — a wrong rule is not a truth-table failure"
+        );
+        assert_eq!(
+            report.rule_mismatches().len(),
+            1,
+            "exactly the wrong-rule trap is a mismatch, not the correct one"
+        );
+        let mismatch = &report.rule_mismatches()[0];
+        assert_eq!(mismatch.trap, TrapId("rule-wrong".into()));
+        assert_eq!(mismatch.column, Column::MustMerge);
+        assert_eq!(mismatch.expected, RuleId("l1-exact-mac".into()));
+        assert_eq!(mismatch.actual, RuleId("l2-uplink-agrees".into()));
+        assert!(
+            !report.passed(),
+            "a wrong rule blocks a release exactly as a wrong verdict does (AC5)"
+        );
+        // And the Display names it, additively — the 4.6b substrings survive.
+        let rendered = report.to_string();
+        assert!(rendered.contains("2 scored"), "{rendered}");
+        // The first line SELF-SIGNALS the wrong-rule red: the count is appended right after the
+        // truth-table count, so the line alone can never read as a pass. Pinning them adjacent
+        // reds if the suffix is dropped (the review finding this test closes).
+        assert!(
+            rendered.contains("0 truth-table failure(s), 1 wrong-rule failure(s)"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("wrong rule: trap `rule-wrong` (must-merge): expected rule `l1-exact-mac`, got `l2-uplink-agrees`"),
+            "{rendered}"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The same trap answered by the EXPECTED rule is green (AC2): the rule assertion tightens the
+    /// gate, it does not reject a correct answer. This is the discriminating partner of the test
+    /// above — same trap, right rule, no mismatch.
+    #[test]
+    fn a_right_verdict_by_the_right_rule_leaves_the_gate_green() {
+        let dir = scratch_dir("trap-gate-right-rule");
+        write_scratch_traps(
+            &dir,
+            r#"
+[[trap]]
+id = "rule-right"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000003"]
+reason = "a must-merge trap answered by a merge via the very rule the author named, so it passes."
+expect = { must-merge = { rule = "l1-exact-mac" } }
+"#,
+        );
+        let mut answers = BTreeMap::new();
+        answers.insert(
+            TrapId("rule-right".into()),
+            Outcome::Merged {
+                rule: RuleId("l1-exact-mac".into()),
+            },
+        );
+        let report = score_corpus(&dir, &answers).expect("the corpus reads");
+        assert_eq!(report.scored(), 1);
+        assert_eq!(report.failures(), 0);
+        assert!(
+            report.rule_mismatches().is_empty(),
+            "the expected rule fired, so there is nothing to report"
+        );
+        assert!(report.passed(), "right verdict, right rule — green (AC2)");
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

@@ -1,5 +1,5 @@
 # generated: 2026-07-21
-# last_updated: 2026-07-22
+# last_updated: 2026-07-23
 # project: opencmdb
 # project_key: NOKEY
 # tracking_system: file-system
@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-22
+last_updated: 2026-07-23
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -111,7 +111,13 @@ development_status:
   4-6a-scoring-algebra: done
   4-6b-metrics-harness: done
   4-6c-run-comparability: done
-  4-7-trap-runner-asserts-the-rule: backlog
+  # 4.7 was split into 4.7a/4.7b at story preparation (2026-07-23), same idiom as 4.5/4.6 —
+  # see epics.md:1017. 4.7a is the (verdict, rule) assertion the trap runner owns (the criterion
+  # score() deliberately leaves it, per score.rs's module doc + D19/D46b), carrying AC1 and folding
+  # AC2's "a rule leaves its rule_id + evidence" as the Epic-5 contract it is pre-engine. 4.7b is
+  # the positive/negative completeness check (AC3), independent of the rule comparison.
+  4-7a-trap-runner-asserts-the-rule: done
+  4-7b-trap-corpus-positive-and-negative: backlog
   4-8-reality-debt-register: backlog
   4-9-trap-randomized-mac: backlog
   4-10-trap-multi-nic: backlog

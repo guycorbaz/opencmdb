@@ -271,3 +271,33 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   in, one `RunComparison` out. If a future story needs to compare runs from different processes, it
   serializes a run then (never under `fixtures/`, the locked oracle) and that is where the format
   decision lives.
+
+## Deferred from: story-4.7a (2026-07-23)
+
+- **The firing-rule contract (AC6) is RECORDED, not built.** D19/D46b: *"a rule that fires must
+  leave its `rule_id` and its evidence behind — a rule that fires without leaving its `rule_id` is
+  undebuggable in production."* There is no rule and no producer in Epic 4, so 4.7a's `run_trap`
+  ASSERTS `(verdict, rule)` on already-produced answers but cannot enforce that a firing rule records
+  its evidence — that is the Epic-5 engine's obligation. It is pinned today only by the uninhabited
+  `VerdictVectorEntry` placeholder (4.6a), whose element is the `(rule, verdict, evidence)` triple
+  D18's harness requires [architecture.md:1397]. **Owner: Epic 5** — when the identity cascade
+  produces verdicts, each rule must emit its `rule_id` and evidence into the verdict vector, and a
+  test must red if it does not. Inventing a producer to "satisfy" AC6 now would be the *"metric
+  written after the engine"* mistake in reverse.
+- **The `NoMatch → Refused` vs `Abstained` question is Epic 5's, not scored here.** `run_trap` scores
+  answers; it does not decide what an engine that finds no merging rule should return. Whether "no
+  rule matched" is a `Refused` (a decision, names an opposing rule) or an `Abstained` (no decision,
+  names a cause) is an engine-design question the identity cascade owns. Recorded so 4.7a's silence
+  on it reads as scope, not oversight.
+
+## Deferred from: code review of story-4.7a (2026-07-23)
+
+- **`(verdict, rule)` comparison is whitespace/case-sensitive, no normalization** — Owner: Epic 5.
+  `run_trap` compares `expected.rule() != actual.rule()` on the raw `RuleId` strings. The `Outcome`
+  side's `RuleId` is never validated; the `Expectation` side is only emptiness-checked, NOT trimmed or
+  lowercased the way `TrapId` is (`trap.rs`). So `rule = "l1-exact-mac "` (trailing space, passes
+  validation) versus a clean engine-emitted `l1-exact-mac`, or a casing difference, would be a
+  false-positive `WrongRule` — a red gate on a correct answer. Harmless pre-engine (no real rule
+  producer exists in Epic 4; rules come from hand-authored fixtures), but when Epic 5 supplies a
+  producer the rule identity must be normalized on both sides — or the trap corpus authoring rules
+  must be locked to a canonical form — before this comparison can be trusted.
