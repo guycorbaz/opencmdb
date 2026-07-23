@@ -19,6 +19,10 @@
 //!     still matches `architecture.md`. A mismatch means the views file is stale and
 //!     should be regenerated at the next milestone — reported, never a hard failure.
 
+// Documentation is a project rule (CLAUDE.md): every public item carries a doc comment.
+// `warn` for now, graduating to `-D missing_docs` once the tree is clean.
+#![deny(missing_docs)]
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -55,6 +59,82 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// The CODE-line ceiling per source file. Tests do not count (see [`code_line_count`]): the concern
+/// is a module doing too much, not a well-covered one, and the house convention keeps tests inline
+/// beside the code (D56b). A file that grows past this is asking to be split into modules.
+const MAX_CODE_LINES: usize = 2000;
+
+/// Count a Rust file's CODE lines — everything before the first top-level `#[cfg(test)]`.
+///
+/// The house convention (D56b) is exactly one trailing `#[cfg(test)] mod tests { … }` per file, so
+/// "code" is the prefix up to that attribute; a file with no test module counts in full. This is a
+/// heuristic, deliberately: it cannot be fooled by the convention it enforces, and a file that puts
+/// test code ABOVE the marker would over-count itself (fail earlier), never under-count.
+fn code_line_count(source: &str) -> usize {
+    match source
+        .lines()
+        .position(|line| line.trim_start().starts_with("#[cfg(test)]"))
+    {
+        Some(at) => at,
+        None => source.lines().count(),
+    }
+}
+
+/// Gate: no source file exceeds [`MAX_CODE_LINES`] lines of non-test code (D56b file-size rule).
+///
+/// Walks `crates/*/src` and `xtask/src` for `.rs` files. Returns `(green, message)`; RED names each
+/// offending file with its code-line count, so the fix — extract a module — is obvious.
+fn gate_file_size(root: &Path) -> Result<(bool, String)> {
+    let mut over: Vec<(String, usize)> = Vec::new();
+    let mut checked = 0usize;
+    let mut largest = 0usize;
+
+    for base in [root.join("crates"), root.join("xtask/src")] {
+        if !base.exists() {
+            continue;
+        }
+        for entry in walkdir::WalkDir::new(&base)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            let p = entry.path();
+            if p.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            let source =
+                std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?;
+            let lines = code_line_count(&source);
+            checked += 1;
+            largest = largest.max(lines);
+            if lines > MAX_CODE_LINES {
+                let shown = p.strip_prefix(root).unwrap_or(p);
+                over.push((shown.display().to_string(), lines));
+            }
+        }
+    }
+
+    if over.is_empty() {
+        Ok((
+            true,
+            format!("{checked} file(s) under {MAX_CODE_LINES} code lines (largest: {largest})"),
+        ))
+    } else {
+        over.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
+        let findings: Vec<String> = over
+            .iter()
+            .map(|(f, n)| format!("{f}: {n} code lines > {MAX_CODE_LINES} — extract a module"))
+            .collect();
+        Ok((
+            false,
+            format!(
+                "{} file(s) over the ceiling:\n      {}",
+                over.len(),
+                findings.join("\n      ")
+            ),
+        ))
+    }
+}
+
 fn run_ci() -> Result<bool> {
     let root = workspace_root();
     println!("cargo xtask ci — gates (D56/D65)\n");
@@ -75,6 +155,10 @@ fn run_ci() -> Result<bool> {
     let (g3, m3f) = gate_fixture_manifest(&root)?;
     report("fixtures", g3, &m3f);
     ok &= g3;
+
+    let (g4, m4) = gate_file_size(&root)?;
+    report("file-size", g4, &m4);
+    ok &= g4;
 
     let m3 = check_views_hash(&root)?;
     println!("  ℹ  {:<14} {m3}", "views-hash");
@@ -1346,5 +1430,55 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             Some("deadbeef")
         );
         assert_eq!(extract_frontmatter_field(fm, "missing"), None);
+    }
+
+    // ── The file-size gate (D56b) ────────────────────────────────────────────
+
+    #[test]
+    fn code_line_count_excludes_the_trailing_test_module() {
+        // Ten code lines, then a test module of arbitrary length — only the ten count.
+        let mut src = String::new();
+        for i in 0..10 {
+            src.push_str(&format!("fn f{i}() {{}}\n"));
+        }
+        src.push_str("#[cfg(test)]\nmod tests {\n");
+        for _ in 0..500 {
+            src.push_str("    // a very long test module\n");
+        }
+        src.push_str("}\n");
+        assert_eq!(code_line_count(&src), 10, "the test module must not count");
+    }
+
+    #[test]
+    fn code_line_count_counts_a_file_with_no_tests_in_full() {
+        let src = "fn a() {}\nfn b() {}\nfn c() {}\n";
+        assert_eq!(code_line_count(src), 3);
+    }
+
+    /// An indented `#[cfg(test)]` — a test module nested inside another item — still marks the
+    /// boundary, because `trim_start` sees past the indentation.
+    #[test]
+    fn code_line_count_finds_an_indented_test_marker() {
+        let src = "fn a() {}\n    #[cfg(test)]\n    mod inner { }\n";
+        assert_eq!(code_line_count(src), 1);
+    }
+
+    /// The gate is GREEN on the real tree today — and, more importantly, it can be shown to fail:
+    /// no gate that cannot fail is a gate (the discipline story 1.3 established).
+    #[test]
+    fn the_gate_is_green_now_and_can_be_shown_red() {
+        let root = workspace_root();
+        let (green, msg) = gate_file_size(&root).expect("the gate runs");
+        assert!(green, "every source file is under the ceiling today: {msg}");
+        assert!(msg.contains("under"), "{msg}");
+
+        // Proven red: a synthetic file of 2001 code lines is over the ceiling. Driving the pure
+        // counter is enough — `gate_file_size` is `code_line_count` plus a walk and a threshold.
+        let huge = "fn x() {}\n".repeat(MAX_CODE_LINES + 1);
+        assert!(
+            code_line_count(&huge) > MAX_CODE_LINES,
+            "a {}-line file must exceed the {MAX_CODE_LINES} ceiling",
+            MAX_CODE_LINES + 1
+        );
     }
 }

@@ -6,6 +6,10 @@
 //! `Repository` skeleton, the askama surface and the reconciliation engine attach to the
 //! `app()` seam in the stories that follow.
 
+// Documentation is a project rule (CLAUDE.md): every public item carries a doc comment.
+// `warn` for now, graduating to `-D missing_docs` once the tree is clean.
+#![deny(missing_docs)]
+
 mod arp_ping;
 mod auth;
 mod dburl;
