@@ -55,7 +55,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use opencmdb_core::score::{Column, Outcome, Tally, TrapVerdict, run_trap};
-use opencmdb_core::trap::{RuleId, TrapId};
+use opencmdb_core::trap::{IncompleteFamily, RuleId, Trap, TrapId, incomplete_families};
 
 use crate::fixtures::{FixtureError, read_traps};
 
@@ -78,17 +78,20 @@ pub struct RuleMismatch {
 }
 
 /// What one run of the corpus established: how many traps were found, how many had an answer to
-/// score, how many of those failed the truth table — per D18 column, inside the [`Tally`] — and
-/// which ones reached the right verdict by the wrong rule (story 4.7a).
+/// score, how many of those failed the truth table — per D18 column, inside the [`Tally`] — which
+/// ones reached the right verdict by the wrong rule (story 4.7a), and which trap FAMILIES were tested
+/// in only one decision form (story 4.7b).
 ///
-/// The numbers that block a release are [`Report::failures`] AND [`Report::rule_mismatches`]; both
-/// must be empty. `discovered` and `scored` are not a fraction and are never divided — they exist so
-/// a reader can tell a passing gate from a gate that measured nothing.
+/// The numbers that block a release are [`Report::failures`], [`Report::rule_mismatches`] AND
+/// [`Report::incomplete_families`]; all must be empty. `discovered` and `scored` are not a fraction
+/// and are never divided — they exist so a reader can tell a passing gate from a gate that measured
+/// nothing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Report {
     discovered: usize,
     tally: Tally,
     rule_mismatches: Vec<RuleMismatch>,
+    incomplete_families: Vec<IncompleteFamily>,
 }
 
 impl Report {
@@ -122,27 +125,39 @@ impl Report {
         &self.rule_mismatches
     }
 
+    /// The trap families tested in only one decision form (story 4.7b). Empty is the passing state;
+    /// each entry names the family and which pole it has. Separate from the two failure buckets above
+    /// — a one-sided family is a corpus-SHAPE defect, orthogonal to any answer: it means the gate was
+    /// never shown it can fail the family the other way.
+    pub fn incomplete_families(&self) -> &[IncompleteFamily] {
+        &self.incomplete_families
+    }
+
     /// The gate's verdict, as a method rather than a comment a caller must reconstruct.
     ///
     /// D18's one number — truth-table failures = 0 — plus D46b's `(verdict, rule)` criterion (no
-    /// wrong-rule trap, story 4.7a), plus a floor: **a run that discovered NOTHING does not pass.**
-    /// An empty or wrong-but-present directory is vacuity, and `failures == 0` over zero traps must
-    /// not read as success. A real corpus with no engine yet (discovered > 0, scored == 0) DOES pass
-    /// — AC1 defines that as green; `scored()` is what tells a reader it was vacuous, not this
-    /// predicate.
+    /// wrong-rule trap, story 4.7a), plus the corpus-completeness criterion (no one-sided family,
+    /// story 4.7b), plus a floor: **a run that discovered NOTHING does not pass.** An empty or
+    /// wrong-but-present directory is vacuity, and `failures == 0` over zero traps must not read as
+    /// success. A real corpus with no engine yet (discovered > 0, scored == 0) DOES pass — AC1 defines
+    /// that as green; `scored()` is what tells a reader it was vacuous, not this predicate.
     pub fn passed(&self) -> bool {
-        self.discovered > 0 && self.failures() == 0 && self.rule_mismatches.is_empty()
+        self.discovered > 0
+            && self.failures() == 0
+            && self.rule_mismatches.is_empty()
+            && self.incomplete_families.is_empty()
     }
 }
 
 impl fmt::Display for Report {
     /// All three numbers on one line, so "0 failures" can never be read as "the gate passed" when
-    /// nothing was scored (4.6b AC3). When there are wrong-rule mismatches, a `", K wrong-rule
-    /// failure(s)"` count is appended to that same first line — so the line alone can never read as a
-    /// pass while [`Report::passed`] is false (the 4.6b hazard, for 4.7a's new failure mode). The
-    /// count is appended only when non-zero, so the nominal first line is byte-for-byte unchanged and
-    /// its 4.6b-asserted substrings are stable either way. Each mismatch then follows on its own line,
-    /// naming both rules (story 4.7a).
+    /// nothing was scored (4.6b AC3). Two count suffixes follow on that SAME first line, in a fixed
+    /// order — `", K wrong-rule failure(s)"` (story 4.7a) then `", J incomplete-famil{y|ies}"` (story
+    /// 4.7b) — each appended only when non-zero, so the line alone can never read as a pass while
+    /// [`Report::passed`] is false, and the nominal first line stays byte-for-byte unchanged (its
+    /// 4.6b-asserted substrings are stable). The order is fixed so the rendered string is
+    /// deterministic. Each wrong-rule mismatch then follows on its own line (naming both rules), then
+    /// each incomplete family on its own line (naming the family and the missing pole).
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -151,12 +166,21 @@ impl fmt::Display for Report {
             self.scored(),
             self.failures()
         )?;
-        // A wrong rule is a distinct red, so it must also show on the first line: a reader — or a
-        // `grep` — that trusts only that line would otherwise read "0 truth-table failure(s)" as a
-        // pass while `passed()` is false. Appended only when non-empty; the substrings above are
-        // added-to, never rewritten, so the 4.6b regression guard holds.
+        // Each distinct red must also show on the first line, in a FIXED order (wrong-rule, then
+        // incomplete-family): a reader — or a `grep` — that trusts only that line would otherwise
+        // read "0 truth-table failure(s)" as a pass while `passed()` is false. Appended only when
+        // non-empty; the substrings above are added-to, never rewritten, so the 4.6b guard holds.
         if !self.rule_mismatches.is_empty() {
             write!(f, ", {} wrong-rule failure(s)", self.rule_mismatches.len())?;
+        }
+        if !self.incomplete_families.is_empty() {
+            let n = self.incomplete_families.len();
+            let noun = if n == 1 {
+                "incomplete-family"
+            } else {
+                "incomplete-families"
+            };
+            write!(f, ", {n} {noun}")?;
         }
         for mismatch in &self.rule_mismatches {
             write!(
@@ -167,6 +191,15 @@ impl fmt::Display for Report {
                 mismatch.expected.0,
                 mismatch.actual.0
             )?;
+        }
+        for family in &self.incomplete_families {
+            let poles = match (family.has_merge, family.has_not_merge) {
+                (true, false) => "has must-merge, missing must-not-merge".to_string(),
+                (false, true) => "has must-not-merge, missing must-merge".to_string(),
+                // The abstain-only case (DR1): a family with no decision pole at all.
+                _ => "has neither pole (needs must-merge and must-not-merge)".to_string(),
+            };
+            write!(f, "\n  incomplete family `{}`: {poles}", family.family.0)?;
         }
         Ok(())
     }
@@ -193,6 +226,11 @@ pub fn score_corpus(
 ) -> Result<Report, FixtureError> {
     let mut tally = Tally::default();
     let mut rule_mismatches: Vec<RuleMismatch> = Vec::new();
+    // Every discovered trap, OWNED — each file's `TrapFile` is a local that drops at the end of its
+    // loop iteration, so a borrow could not survive to the family check at the end of the walk. The
+    // family-completeness check (story 4.7b) is answer-INDEPENDENT: it is about corpus SHAPE, so it
+    // runs over every discovered trap regardless of the `answers` map.
+    let mut all_traps: Vec<Trap> = Vec::new();
     // Every trap id seen so far, and the file it came from. `TrapFile::validate` enforces
     // uniqueness WITHIN a file; a `TrapId` is the key an answer is scored against, so one id in two
     // files would score a single outcome twice — the mirror of the cross-stream `obs_id` rule.
@@ -229,6 +267,7 @@ pub fn score_corpus(
                 }
                 used.insert(trap.id.clone());
             }
+            all_traps.push(trap.clone());
         }
     }
 
@@ -245,6 +284,7 @@ pub fn score_corpus(
         discovered: seen.len(),
         tally,
         rule_mismatches,
+        incomplete_families: incomplete_families(&all_traps),
     })
 }
 
@@ -820,6 +860,159 @@ expect = { must-merge = { rule = "l1-exact-mac" } }
             "the expected rule fired, so there is nothing to report"
         );
         assert!(report.passed(), "right verdict, right rule — green (AC2)");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // ── The corpus is incomplete if a family is one-sided (story 4.7b) ───────
+
+    /// A family present in only ONE decision form reddens the gate — separately from any truth-table
+    /// or wrong-rule failure, and with NO answers at all (the check is corpus-shape, not scoring). The
+    /// one-sided family sits BESIDE a complete family, so a harness that stopped at the first family
+    /// would still be caught. `failures()` and `rule_mismatches()` stay empty; `incomplete_families()`
+    /// has exactly the one-sided family; `passed()` is false; and `Display` names it, on the first line
+    /// AND its own line (AC1, AC5, DR2).
+    #[test]
+    fn a_one_sided_family_reddens_the_gate_on_its_own() {
+        let dir = scratch_dir("trap-gate-one-sided-family");
+        write_scratch_traps(
+            &dir,
+            r#"
+[[trap]]
+id = "complete-merge"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000003"]
+reason = "the merge side of a family tested BOTH ways, so this family is complete."
+family = "complete-fam"
+expect = { must-merge = { rule = "l1-exact-mac" } }
+
+[[trap]]
+id = "complete-not-merge"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000003"]
+reason = "the not-merge side of the same family, so the complete family is never the one reported."
+family = "complete-fam"
+expect = { must-not-merge = { rule = "l1-distinct-mac" } }
+
+[[trap]]
+id = "lonely-merge"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000003"]
+reason = "a family tested only as a merge, so the corpus was never shown it can refuse the family."
+family = "one-sided-fam"
+expect = { must-merge = { rule = "l1-exact-mac" } }
+"#,
+        );
+        // No answers at all: the family check does not depend on scoring.
+        let report = score_corpus(&dir, &BTreeMap::new()).expect("the corpus reads");
+
+        assert_eq!(report.discovered(), 3);
+        assert_eq!(
+            report.failures(),
+            0,
+            "no answer scored, so no truth-table failure"
+        );
+        assert!(
+            report.rule_mismatches().is_empty(),
+            "a one-sided family is not a wrong-rule mismatch — distinct third condition"
+        );
+        assert_eq!(
+            report.incomplete_families(),
+            &[opencmdb_core::trap::IncompleteFamily {
+                family: opencmdb_core::trap::FamilyId("one-sided-fam".into()),
+                has_merge: true,
+                has_not_merge: false,
+            }],
+            "exactly the one-sided family, the complete one absent"
+        );
+        assert!(
+            !report.passed(),
+            "a one-sided family blocks a release exactly as a wrong verdict does (AC5)"
+        );
+        // The first line SELF-SIGNALS the red (DR2), adjacent to the truth-table count, and the
+        // family gets its own line naming the missing pole (AC1).
+        let rendered = report.to_string();
+        assert!(
+            rendered.contains("0 truth-table failure(s), 1 incomplete-family"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains(
+                "incomplete family `one-sided-fam`: has must-merge, missing must-not-merge"
+            ),
+            "{rendered}"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The discriminating partner (AC2): a family present in BOTH forms leaves the gate green. The
+    /// completeness check tightens the gate, it does not reject a corpus that is genuinely two-sided.
+    #[test]
+    fn a_two_sided_family_leaves_the_gate_green() {
+        let dir = scratch_dir("trap-gate-two-sided-family");
+        write_scratch_traps(
+            &dir,
+            r#"
+[[trap]]
+id = "pair-merge"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000003"]
+reason = "the merge side of the randomized-mac family, committed alongside its negative form."
+family = "randomized-mac"
+expect = { must-merge = { rule = "l1-exact-mac" } }
+
+[[trap]]
+id = "pair-not-merge"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000003"]
+reason = "the not-merge side of the randomized-mac family, so the family is tested both ways."
+family = "randomized-mac"
+expect = { must-not-merge = { rule = "l1-distinct-mac" } }
+"#,
+        );
+        let report = score_corpus(&dir, &BTreeMap::new()).expect("the corpus reads");
+        assert_eq!(report.discovered(), 2);
+        assert!(
+            report.incomplete_families().is_empty(),
+            "both poles present, so the family is complete"
+        );
+        assert!(
+            report.passed(),
+            "two-sided family, no failures — green (AC2)"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// An abstain-only family has NEITHER decision pole (DR1), so the gate is red and `Display` renders
+    /// the "has neither pole" line — pinning the exact DR1 rendering, which the struct-level core test
+    /// does not exercise.
+    #[test]
+    fn an_abstain_only_family_renders_the_neither_pole_line() {
+        let dir = scratch_dir("trap-gate-abstain-only-family");
+        write_scratch_traps(
+            &dir,
+            r#"
+[[trap]]
+id = "lonely-abstain"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000002"]
+reason = "an ambiguous case tagged with a family but carrying no decision pole at all."
+family = "ambiguous-cases"
+expect = { must-abstain = { cause = "NoObservedValue" } }
+"#,
+        );
+        let report = score_corpus(&dir, &BTreeMap::new()).expect("the corpus reads");
+        assert!(
+            !report.passed(),
+            "a family with no decision pole is incomplete (DR1)"
+        );
+        let rendered = report.to_string();
+        assert!(
+            rendered.contains(
+                "incomplete family `ambiguous-cases`: has neither pole (needs must-merge and must-not-merge)"
+            ),
+            "{rendered}"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 }
