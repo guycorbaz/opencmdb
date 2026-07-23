@@ -222,3 +222,28 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   abstains because there is NOT ENOUGH SIGNAL is being honest… We do not gate that"*). The
   story-4.6a entry above records the `Ambiguous`-has-no-cause half; this is the other half.
   **Owner: Epic 5**, with 4.7 as the first place it can bite.
+
+## Deferred from: story-4.6b (2026-07-22)
+
+- **The gate's number is NOT published by `cargo xtask ci`.** The harness lives in `opencmdb-bin`
+  beside `read_traps`, not at the architecture's `xtask/src/gen_metrics.rs`, because `xtask` cannot
+  reach `bin`'s corpus reader without depending on `opencmdb-bin` — which would drag sqlx, axum and
+  askama into the dev-tool runner (D56 makes `xtask` a dependency of nobody, and the reverse has
+  never been sanctioned). Two candidate resolutions, neither chosen here: **(a)** let `xtask` depend
+  on `opencmdb-bin` for the corpus reader only, or **(b)** move the corpus reader (`read_traps` /
+  `read_jsonl` / the walk) into a place `xtask` may depend on. Until then the release gate is
+  runnable and tested, but not wired into CI.
+- **The corpus reader is dev-only by construction, so the harness cannot ship in the binary.**
+  `fixtures.rs` carries `#![allow(dead_code)]` and bakes `FIXTURES_DIR` from `CARGO_MANIFEST_DIR` at
+  compile time; the path exists on no deployed machine. `trap_gate` inherits that: it is
+  `#![allow(dead_code)]`, exercised by tests, and reached by no runtime path. Making the gate a real
+  CI check (above) and making it shippable are the same unblocking work.
+- **`read_traps` resolves a trap's `replay` against the BAKED corpus root, not against the root the
+  harness was given.** So a scratch trap corpus may only reference replay streams that exist in the
+  committed corpus. It is enough for 4.6b's red-able demonstration (a scratch trap varies its
+  expectation, not its stream), and it means a future fully-independent scratch corpus — traps AND
+  streams under one scratch root — needs `read_traps` to take a root too. Not needed yet.
+- **Two committed replay streams are judged by no trap** (`partial-then-failed.jsonl`,
+  `capability-downgrade.jsonl`). The trap-gate walk scans `scenario/traps/`, not `scenario/replay/`,
+  so it never meets them; they are discovered by no trap and scored by nothing. Expected, owned by
+  **story 4.7** (the trap runner), recorded so nobody "fixes" it here.

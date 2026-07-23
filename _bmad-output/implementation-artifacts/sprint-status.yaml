@@ -109,7 +109,7 @@ development_status:
   # 4.6 was split into 4.6a/4.6b/4.6c at story preparation (2026-07-22) after a validation pass —
   # see epics.md. Build them in order: 4.6b depends on 4.6a, 4.6c on both.
   4-6a-scoring-algebra: done
-  4-6b-metrics-harness: ready-for-dev
+  4-6b-metrics-harness: done
   4-6c-run-comparability: ready-for-dev
   4-7-trap-runner-asserts-the-rule: backlog
   4-8-reality-debt-register: backlog
