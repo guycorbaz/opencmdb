@@ -260,6 +260,20 @@ pub enum FixtureError {
     /// [`FixtureError::DuplicateObservationId`] / [`FixtureError::RepeatedObservationId`]: a
     /// caller that wants to handle "this stream mints a cancellation" must match BOTH.
     CancellationInStream { origin: String },
+    /// Two trap files under one corpus root define a trap with the same `id`. `TrapFile::validate`
+    /// enforces id-uniqueness within ONE file only, so the metrics harness (story 4.6b) checks it
+    /// across the corpus: a `TrapId` is the key an answer is scored against, and one id naming two
+    /// traps would score a single outcome twice, in two files. Mirrors the cross-stream `obs_id`
+    /// rule for observations.
+    DuplicateTrapId {
+        trap: String,
+        first: PathBuf,
+        second: PathBuf,
+    },
+    /// An answer was supplied for a trap id that no discovered trap carries — a stale, renamed or
+    /// typo'd producer id. The gate refuses it rather than silently ignoring the outcome. `count`
+    /// is how many such answers there were; `trap` names one of them.
+    AnswerForUnknownTrap { trap: String, count: usize },
 }
 
 impl std::fmt::Display for FixtureError {
@@ -405,6 +419,22 @@ impl std::fmt::Display for FixtureError {
                 "{origin}: a stream may not script `Cancelled` — cancellation comes from the \
                  token, never from the data"
             ),
+            FixtureError::DuplicateTrapId {
+                trap,
+                first,
+                second,
+            } => write!(
+                f,
+                "trap `{trap}` is defined in both {} and {} — a trap id must name exactly one \
+                 trap across the whole corpus, or one answer would be scored twice",
+                first.display(),
+                second.display()
+            ),
+            FixtureError::AnswerForUnknownTrap { trap, count } => write!(
+                f,
+                "{count} answer(s) name no discovered trap — the first is `{trap}`; a producer \
+                 emitting an outcome the gate cannot place is a mismatch, not a no-op"
+            ),
         }
     }
 }
@@ -431,6 +461,8 @@ impl std::error::Error for FixtureError {
             FixtureError::CancellationScripted { .. } => None,
             FixtureError::RecordAfterTerminalFailure { .. } => None,
             FixtureError::CancellationInStream { .. } => None,
+            FixtureError::DuplicateTrapId { .. } => None,
+            FixtureError::AnswerForUnknownTrap { .. } => None,
         }
     }
 }

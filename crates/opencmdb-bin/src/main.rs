@@ -14,6 +14,7 @@ mod fixtures;
 mod metrics;
 mod page;
 mod repo;
+mod trap_gate;
 
 // The i18n seam (D39/D66): user-facing strings resolve through `t!()` against `locales/`. EN is
 // the fallback; the source YAML is greppable so the D65 vocabulary gate can later lint it.

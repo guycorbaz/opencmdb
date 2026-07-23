@@ -1,6 +1,6 @@
 # Story 4.6b: The harness runs the corpus, and cannot hide its own vacuity
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -72,25 +72,45 @@ Publishing the number from `cargo xtask ci` is **not** this story: it needs eith
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — the harness module** (AC: 1, 2, 3, 4, 8)
-  - [ ] A new module in `crates/opencmdb-bin/src/`. ⚠️ **`metrics` is taken** — `crates/opencmdb-bin/src/metrics.rs` is the Prometheus handler (`main.rs:14`). Name it something that cannot be confused with it, and add the `mod` line alphabetically.
-  - [ ] Entry point takes the corpus root; discovers trap files, reads them through `read_traps`, returns `{discovered, scored, failures}`.
-  - [ ] `#![allow(dead_code)]` with a stated reason, as `fixtures.rs` and `arp_ping.rs` do.
+- [x] **Task 1 — the harness module** (AC: 1, 2, 3, 4, 8)
+  - [x] A new module in `crates/opencmdb-bin/src/`. ⚠️ **`metrics` is taken** — `crates/opencmdb-bin/src/metrics.rs` is the Prometheus handler (`main.rs:14`). Name it something that cannot be confused with it, and add the `mod` line alphabetically.
+  - [x] Entry point takes the corpus root; discovers trap files, reads them through `read_traps`, returns `{discovered, scored, failures}`.
+  - [x] `#![allow(dead_code)]` with a stated reason, as `fixtures.rs` and `arp_ping.rs` do.
 
-- [ ] **Task 2 — discovery** (AC: 2, 4)
-  - [ ] Walk the trap directory under the given root. ⚠️ `walk_replay_streams` and the trap walk are both `#[cfg(test)]` (`fixtures.rs:667` opens the test module). **Decide and state**: promote one to `pub(crate)` taking a root, or write the harness's own walk. If you promote, the two existing tests that call it move too — name them in the File List.
-  - [ ] Recursive; refuses symlinks and foreign extensions; does not swallow read errors. *"Walks that quietly see less"* were the recurring defect of 4.1 and 4.3.
+- [x] **Task 2 — discovery** (AC: 2, 4)
+  - [x] Walk the trap directory under the given root. ⚠️ `walk_replay_streams` and the trap walk are both `#[cfg(test)]` (`fixtures.rs:667` opens the test module). **Decide and state**: promote one to `pub(crate)` taking a root, or write the harness's own walk. If you promote, the two existing tests that call it move too — name them in the File List.
+  - [x] Recursive; refuses symlinks and foreign extensions; does not swallow read errors. *"Walks that quietly see less"* were the recurring defect of 4.1 and 4.3.
 
-- [ ] **Task 3 — the tests** (AC: 1, 2, 3, 5, 6)
-  - [ ] The committed corpus: `discovered > 0`, `scored == 0`, `failures == 0`, and the report says so.
-  - [ ] AC6's three scratch-corpus failures, one per D18 column.
-  - [ ] AC5's discovered-but-not-scored distinction.
-  - [ ] **Prove-to-red on every new guard**, each mutation recorded. Offending item **second**, behind a valid one. **Do not write a comment asserting a coverage property you did not measure.**
+- [x] **Task 3 — the tests** (AC: 1, 2, 3, 5, 6)
+  - [x] The committed corpus: `discovered > 0`, `scored == 0`, `failures == 0`, and the report says so.
+  - [x] AC6's three scratch-corpus failures, one per D18 column.
+  - [x] AC5's discovered-but-not-scored distinction.
+  - [x] **Prove-to-red on every new guard**, each mutation recorded. Offending item **second**, behind a valid one. **Do not write a comment asserting a coverage property you did not measure.**
 
-- [ ] **Task 4 — the record and the gates** (AC: 7, 9, 10)
-  - [ ] Append the three entries of AC7 to `deferred-work.md`.
-  - [ ] Update `sprint-status.yaml`; put it in the File List.
-  - [ ] Run the four gates. **Name the command behind every claim in the completion record.**
+- [x] **Task 4 — the record and the gates** (AC: 7, 9, 10)
+  - [x] Append the three entries of AC7 to `deferred-work.md`.
+  - [x] Update `sprint-status.yaml`; put it in the File List.
+  - [x] Run the four gates. **Name the command behind every claim in the completion record.**
+
+### Review Findings
+
+_Code review 2026-07-22 — three parallel layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor). **All 10 ACs SATISFIED**, no violations; every measured claim in the completion record independently reproduced, including all four mutations. The auditor read D19 and judged the "answers map is not an engine" reasoning **sound, not a rationalisation**: the harness's shape is fixed by 4.6a's algebra, so a future engine must conform to `Outcome` — the metric is not bent to fit the engine, the engine must fit the metric. The Edge Case Hunter reproduced all four symlink cases (file, directory, loop, broken) and confirmed the walk errors before any recursion — no infinite loop, no escape. What follows is everything else._
+
+- [x] [Review][Patch] **The symlink guard — the one the module doc shouts about — has NO test.** It is CORRECT (the Edge Case Hunter reproduced all four cases), but "prove-to-red on every new guard" was claimed and this guard was not proven. A `return Err` no test exercises can silently become `continue`. Add a scratch-tree test with a symlink and assert the walk errors [crates/opencmdb-bin/src/trap_gate.rs:169]
+- [x] [Review][Patch] **Cross-file duplicate `TrapId` scores one answer against two traps.** Found independently by two layers. `read_traps` dedups ids per FILE only; two files under one root both defining `id = "X"`, with an answer for `X`, score both — potentially in two different columns from one outcome. This is the exact mirror of the cross-stream `obs_id` guard 4.6a already made me record for observations, unseen here for traps. `score_corpus` must detect a duplicate `TrapId` across the discovered corpus and error [crates/opencmdb-bin/src/trap_gate.rs:129]
+- [x] [Review][Patch] **An empty-but-present trap directory returns a vacuously-green `{0,0,0}`.** A MISSING root errors; an existing empty (or trap-less) directory returns `Ok` with `failures == 0`. `discovered` only annotates `Display` — nothing in `score_corpus` reds a run that discovered nothing, so the vacuity is caught solely by a test of the corpus, not by a property of the gate. `score_corpus` should refuse to report a run that discovered zero traps, or expose a `passed()` predicate that is false when `discovered == 0` [crates/opencmdb-bin/src/trap_gate.rs:122]
+- [x] [Review][Patch] **Answers with no matching discovered trap are silently dropped.** A producer id that is renamed, typo'd or stale emits an outcome the gate ignores and never reports — which contradicts the module's own "swallows nothing" ethos. `score_corpus` should surface unused answer keys (count them, or error) [crates/opencmdb-bin/src/trap_gate.rs:131]
+- [x] [Review][Patch] **`Report` has no gate predicate; "the number that blocks is `failures()`" lives only in prose.** The next caller must reconstruct the pass rule and could gate on `scored() == 0` or a fraction just as easily. Add `passed()` (false when `discovered == 0` OR `failures > 0`, closing the empty-corpus hole above) so the gate's verdict is a method, not a comment [crates/opencmdb-bin/src/trap_gate.rs:69]
+- [x] [Review][Patch] **The "answers map cannot be bent by an engine" claim is TEMPORAL, stated as STRUCTURAL.** It holds because the map is empty today; when Epic 5 populates it from engine output, that is the "metric computed from engine output" D19 warns against. The real structural guarantee is narrower and true — the harness never CALLS a producer, and `Outcome`'s shape is fixed by 4.6a so the engine conforms to the metric, not the reverse. State that, not "cannot be bent" [crates/opencmdb-bin/src/trap_gate.rs:8]
+- [x] [Review][Patch] **No test mixes a passing and a failing answer in one run.** One test is all-green, one all-red; the discriminating case — a correct answer stays out of `failures` while a wrong one enters it, in the same corpus — is never exercised, and the story's own "offending item second, behind a valid one" convention is not applied to the red test [crates/opencmdb-bin/src/trap_gate.rs:181]
+- [x] [Review][Patch] **`the_walk_exempts_readme_at_any_depth` tests depth 0; recursion is tested nowhere.** No test creates a nested subdirectory, so the recursive descent and the "at any depth" / "recursive" claims are unexercised. The recursion could break and every test stay green [crates/opencmdb-bin/src/trap_gate.rs:210]
+- [x] [Review][Patch] **`a_missing_root_is_an_error_not_an_empty_result` asserts only `matches!(err, Io { .. })`, which nearly every error satisfies.** It also matches a symlink refusal and a foreign-extension refusal. A read error and an authoring mistake are indistinguishable to a caller — worth a distinct signal, or at least an assertion on the message [crates/opencmdb-bin/src/trap_gate.rs:230]
+
+- [x] [Review][Defer] **A `traps_root` that is ITSELF a symlink is followed.** `read_dir(root)` follows a symlink at the path; the guard only inspects entries [crates/opencmdb-bin/src/trap_gate.rs:154] — deferred, low reachability: the root is supplied by the harness's caller (a test or, later, CI config), not discovered from the corpus, so it is not an author-controlled attack surface the way a corpus entry is. Revisit if the root ever comes from untrusted config.
+- [x] [Review][Defer] **A stray dot-file (`.DS_Store`) or `readme.md` (wrong case) reds the whole gate.** `.toml` is matched case-insensitively but `README.md` exactly, and an extensionless file falls into the foreign-extension error [crates/opencmdb-bin/src/trap_gate.rs:210] — deferred. The strictness is defensible for a spec corpus (an unexplained file IS a finding), but the asymmetry should be a deliberate, stated choice; fold it into the duplicate/empty-corpus patch rather than a separate pass.
+- [x] [Review][Defer] **Scratch dirs leak on a failing assertion, and are not cleared before use** [crates/opencmdb-bin/src/trap_gate.rs:203] — deferred, pre-existing pattern. Every test in the repo cleans up only on the success path (`fixtures.rs` does the same); a `Drop` guard would fix the whole codebase at once and is not this story's to introduce. PID-keyed tags differ per test, so no in-run collision today.
+
+_Dismissed as noise (2): `found.sort()` buys determinism for a value no caller observes (harmless, and cheap insurance if a future caller does consume the order) · unused `#[derive(Clone, PartialEq, Eq)]` on `Report` (a value type that will be compared/cloned the moment 4.6c consumes it; keeping it is cheaper than re-adding it)._
 
 ## Dev Notes
 
@@ -145,10 +165,89 @@ No new crate, no version bump. **Locked** (committed `Cargo.lock`, verified 2026
 
 ### Agent Model Used
 
+Claude Opus 4.8 — `claude-opus-4-8[1m]`
+
 ### Debug Log References
+
+Every claim below is a command that was run, not an inference.
+
+- **Four guards proven to red**, each mutation applied and reverted from a pre-mutation backup:
+  | Mutation | Tests reddened |
+  |---|---|
+  | `discovered += 1` → `+= 0` (the empty-body vacuity) | 5 tests, incl. every committed-corpus assertion |
+  | the harness ignores `answers` (never scores) | `each_column_can_be_driven_red`, `a_trap_with_no_answer_is_discovered_but_not_scored` |
+  | the walk swallows a foreign extension instead of refusing it | `the_walk_refuses_a_foreign_extension` |
+  | the walk swallows a `read_dir` error (quietly sees less) | `a_missing_root_is_an_error_not_an_empty_result` |
+
+  The second is the central guard: without it, an empty-body `score_corpus` would report `{0,0,0}`
+  and pass — the vacuity AC2 exists to forbid. `each_column_can_be_driven_red` is what fails.
+- **Gates:** `cargo fmt --all` clean · `cargo clippy --workspace --all-targets -- -D warnings` clean
+  · `cargo build --workspace` clean (no `dead_code` warning — the module-level `#![allow(dead_code)]`
+  carries it, as `fixtures.rs` does) · `cargo test --workspace` → **93 (bin, +7) + 59 (core) + 38
+  (xtask), 0 failed**.
+- `cargo xtask ci` → all gates green, `✅ fixtures 5/5`; `architecture-views.md` NOT regenerated.
+- **`Cargo.lock` did not move** — `git diff --stat Cargo.lock` empty; no dependency added.
+- **The MariaDB-backed tests did NOT run.** `DATABASE_URL` is unset; the four DB-backed tests return
+  early and pass either way. These counts say nothing about the database.
 
 ### Completion Notes List
 
+- **The harness scores answers, and never runs a producer — which is how AC1 and AC6 both hold.**
+  `score_corpus(traps_root, answers: &BTreeMap<TrapId, Outcome>)`. A map of outcomes is DATA, not an
+  engine: no `poll`, no trait to stub. It is empty for a real run today (nothing produces answers),
+  so every discovered trap is discovered and not scored; a test supplies contradicting answers to
+  drive the gate red. The metric therefore cannot be bent by an engine it never calls — D19's
+  reason for building it first.
+- **`discovered` is what makes the zeros honest.** The committed corpus has three traps; a real run
+  reports `discovered 3, scored 0, failures 0`, and `Display` puts all three on one line so "0
+  failures" can never read as a passing gate. An empty-body function reports `{0,0,0}` and fails
+  `the_committed_corpus_is_discovered_and_scored_by_nothing` on `discovered > 0`.
+- **The demonstration that the gate is red-able is at the harness level**, not just the algebra's: a
+  scratch trap corpus, one trap per D18 column, each paired with a contradicting answer, produces one
+  failure in each column. The scratch traps reference the committed `minimal.jsonl` so `read_traps`'
+  obs_id cross-check still validates.
+- **The walk is the harness's own, and it swallows nothing.** Recursive over `.toml`, refuses a
+  symlink and a foreign extension, exempts `README.md` at any depth (matching the corpus lock's
+  orphan rule so documenting a directory does not red the gate), and turns a `read_dir` failure into
+  an error rather than a smaller result — the *"walks that quietly see less"* defect of 4.1/4.3. I
+  wrote it rather than promote `fixtures.rs`'s `#[cfg(test)]` `walk_replay_streams`, which scans
+  replay streams (not traps) and whose promotion would move two existing tests for no gain.
+- **Naming:** module `trap_gate` (not `metrics`, taken by the Prometheus handler `metrics.rs`),
+  placed between `fixtures` and `metrics` in `main.rs`; `score_corpus`, `discover_trap_files`,
+  `Report`. A local `#[cfg(test)] scratch_dir` rather than promoting `fixtures.rs`'s — each test
+  module keeps its own, the house convention.
+- **`ScoredRecord` (4.6a) is not produced here**, and the module doc says so: the harness tallies;
+  it does not persist a record per trap. That join is later work.
+- **After the review, the harness refuses two corpus-integrity mismatches it silently tolerated:**
+  a `TrapId` repeated across files (`DuplicateTrapId`, the mirror of the cross-stream `obs_id` rule
+  4.6a already recorded for observations), and an answer for a trap that does not exist
+  (`AnswerForUnknownTrap`). And `Report::passed()` requires `discovered > 0`, so an empty directory
+  is vacuity rather than a green gate — while a real corpus with no engine yet still passes, which
+  is AC1's defined green. The symlink guard and the recursion, correct but previously unproven, now
+  have prove-to-red tests.
+- **Four findings recorded in `deferred-work.md`**: the number not yet published by `xtask ci` with
+  the two candidate resolutions; the reader being dev-only by construction; `read_traps` resolving
+  `replay` against the baked root (so a scratch corpus references committed streams); and the two
+  committed streams judged by no trap (owned by 4.7).
+
 ### File List
 
+- `crates/opencmdb-bin/src/trap_gate.rs` (new — `score_corpus`, `discover_trap_files`, `Report`
+  with a `passed()` gate predicate; 14 tests after the review's +7)
+- `crates/opencmdb-bin/src/fixtures.rs` (modified by the review — two `FixtureError` variants,
+  `DuplicateTrapId` and `AnswerForUnknownTrap`, with their `Display` and `source()` arms)
+- `crates/opencmdb-bin/src/main.rs` (modified — one `mod trap_gate;` line)
+- `_bmad-output/implementation-artifacts/deferred-work.md` (modified — four story-4.6b entries)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified)
+- `Cargo.lock` — **unchanged**, measured.
+
 ### Change Log
+
+- 2026-07-22 — The metrics harness exists before the engine. `score_corpus` walks the trap corpus
+  under a given root, reads each trap through `read_traps`, and scores it against a map of
+  already-produced outcomes — DATA, not an engine, so the metric cannot be bent by a producer it
+  never calls (D19). It reports `{discovered, scored, failures}`: with no answers it is green but
+  visibly vacuous, and a scratch corpus with contradicting answers drives one failure into each of
+  D18's three columns, proving the gate is red-able. The harness's own walk swallows nothing. Not
+  wired into `cargo xtask ci` — that needs `xtask` to reach `bin`'s reader, recorded rather than
+  forced.
