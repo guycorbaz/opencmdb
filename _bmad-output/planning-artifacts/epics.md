@@ -1020,17 +1020,53 @@ As the author of the release gate,
 I want each trap executed so that a right answer reached by the wrong rule FAILS,
 So that the gate cannot be satisfied by an engine that will break on the next trap.
 
+_Split into **4.7a** and **4.7b** during story preparation (2026-07-23), same idiom as 4.5/4.6. The
+two are independent: 4.7a is a change to the SCORING — the `(verdict, rule)` comparison the trap
+runner owns, which `score()` (4.6a) deliberately leaves it (its module doc: "compare `(verdict,
+rule)`, never `verdict` alone… it becomes `assert_eq!(decision.rule, case.expect_rule)` in the trap
+runner", D19/D46b). 4.7b is a check on the CORPUS — every trap present in positive AND negative form.
+AC1 and AC2 go to 4.7a (AC2 as the Epic-5 contract it is pre-engine: no rule fires until Epic 5, so
+4.7a records what a firing rule must leave behind rather than building a producer); AC3 goes to 4.7b.
+Nothing was dropped._
+
+#### Story 4.7a: A right verdict by the wrong rule fails
+
+As the author of the release gate,
+I want a trap scored on `(verdict, rule)` and not the verdict alone,
+So that an engine reaching the right answer by the wrong rule FAILS rather than passing.
+
 **Acceptance Criteria:**
 
 **Given** a trap whose expectation names a `rule_id`
-**When** the engine reaches the expected outcome via a different rule
+**When** the answer reaches the expected outcome via a DIFFERENT rule
 **Then** the trap FAILS, and the failure names both the expected and the actual rule.
 
-**Given** a rule that fires
-**When** it produces its verdict
-**Then** it leaves its `rule_id` and its evidence behind — a rule that fires without leaving its `rule_id` is a rule we cannot debug in production (D19).
+**And** a trap whose answer reaches the expected outcome via the EXPECTED rule still PASSES — the
+rule comparison tightens the gate, it does not reject every answer.
 
-**And** every trap exists in positive AND negative form; a corpus where one form is missing is reported as incomplete rather than passing.
+**And** the rule comparison is layered on the 4.6a truth table, not folded into it: `score()` stays
+rule-blind (a new failure mode is added beside it), so the 9-cell table's meaning is unchanged and
+the wrong-rule failure is a distinct, separately-counted condition.
+
+**Given** a rule that fires _(the Epic-5 contract — no rule fires in Epic 4)_
+**When** it produces its verdict
+**Then** it leaves its `rule_id` and its evidence behind — a rule that fires without leaving its
+`rule_id` is a rule we cannot debug in production (D19). At v0.1 this is recorded as the contract the
+Epic-5 producer must honour and pinned by the uninhabited `verdict_vector` placeholder (4.6a), not
+built against an engine that does not exist.
+
+#### Story 4.7b: Every trap exists in positive and negative form
+
+As the author of the trap corpus,
+I want a corpus missing one polarity of a trap reported as incomplete,
+So that the gate cannot pass on a family that was only ever tested one way.
+
+**Acceptance Criteria:**
+
+**Given** the trap suite
+**When** a trap family exists in only one form (positive OR negative, not both)
+**Then** the corpus is reported as INCOMPLETE rather than passing — a one-sided family is a gate that
+was never shown it can fail the other way.
 
 ### Story 4.8: Open the reality-debt register
 

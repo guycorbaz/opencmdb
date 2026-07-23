@@ -43,5 +43,5 @@ pub use observation::{
 pub use repo::{BoxFuture, ReadRepository, RepositoryError, WriteRepository, WriteUnit};
 pub use score::{
     Column, Outcome, RecordComparison, RunComparison, Score, ScoredRecord, SourceState, Tally,
-    VerdictVectorEntry, compare_records, compare_runs, score,
+    TrapVerdict, VerdictVectorEntry, compare_records, compare_runs, run_trap, score,
 };
