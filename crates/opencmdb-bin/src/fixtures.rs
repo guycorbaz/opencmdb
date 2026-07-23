@@ -1243,6 +1243,86 @@ mod tests {
     /// Every replay stream in the corpus is DISCOVERED by walking and read as records — the same
     /// treatment `scenario/traps/` has had since story 4.1. Without it, a committed `.jsonl` would
     /// be hashed by the gate and parsed by nobody.
+    /// The first `obs_id` that appears in two DIFFERENT streams, if any — pure, so it can be
+    /// proven to red on hand-built input instead of a scratch corpus.
+    ///
+    /// `streams` is `(stream label, its obs_ids)`. An `obs_id` is the anchor a trap points at
+    /// (story 4.2, never a line number), so across the whole corpus it must name exactly one
+    /// observation — or a failure report naming it cannot say which stream it meant. `read_records`
+    /// enforces this WITHIN a stream; this closes it ACROSS streams (the item open since the 4.1
+    /// review). A real collision existed until 2026-07-22 — `partial-then-failed.jsonl` reused
+    /// `example-traps.jsonl`'s ids — which is exactly why this guard exists.
+    fn first_cross_stream_obs_id(
+        streams: &[(String, Vec<Uuid>)],
+    ) -> Option<(Uuid, String, String)> {
+        let mut seen: std::collections::BTreeMap<Uuid, String> = std::collections::BTreeMap::new();
+        for (label, ids) in streams {
+            for id in ids {
+                if let Some(first) = seen.get(id) {
+                    // Skip a repeat WITHIN one stream — `read_records` already refuses that, and
+                    // this guard is only about two DIFFERENT streams.
+                    if first != label {
+                        return Some((*id, first.clone(), label.clone()));
+                    }
+                } else {
+                    seen.insert(*id, label.clone());
+                }
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn the_cross_stream_obs_id_detector_finds_a_collision_and_ignores_a_within_stream_repeat() {
+        let a = Uuid::from_u128(0xa);
+        let b = Uuid::from_u128(0xb);
+        // Two DIFFERENT streams sharing `a` -> a collision naming both.
+        let collide = vec![
+            ("first.jsonl".to_string(), vec![a, b]),
+            ("second.jsonl".to_string(), vec![Uuid::from_u128(0xc), a]),
+        ];
+        let (id, first, second) = first_cross_stream_obs_id(&collide).expect("a collision");
+        assert_eq!(id, a);
+        assert_eq!(
+            (first.as_str(), second.as_str()),
+            ("first.jsonl", "second.jsonl")
+        );
+
+        // Distinct ids across streams -> none.
+        let clean = vec![
+            ("first.jsonl".to_string(), vec![a, b]),
+            ("second.jsonl".to_string(), vec![Uuid::from_u128(0xc)]),
+        ];
+        assert!(first_cross_stream_obs_id(&clean).is_none());
+
+        // A repeat WITHIN one stream is NOT this guard's business (read_records owns it).
+        let within = vec![("only.jsonl".to_string(), vec![a, a])];
+        assert!(first_cross_stream_obs_id(&within).is_none());
+    }
+
+    /// No committed replay stream shares an `obs_id` with another — the corpus-wide anchor
+    /// uniqueness the 4.1 review left open. Walks the real corpus and runs the pure detector.
+    #[test]
+    fn no_obs_id_is_shared_across_replay_streams() {
+        let mut streams: Vec<(String, Vec<Uuid>)> = Vec::new();
+        let checked = walk_replay_streams(&mut |path| {
+            let ids = read_records(path)
+                .unwrap_or_else(|e| {
+                    panic!("corpus replay stream {} is invalid: {e}", path.display())
+                })
+                .into_iter()
+                .filter_map(|r| r.as_observation().map(|o| o.obs_id.as_uuid()))
+                .collect();
+            streams.push((path.display().to_string(), ids));
+        });
+        assert!(checked > 0, "no replay stream found under scenario/replay/");
+        if let Some((id, first, second)) = first_cross_stream_obs_id(&streams) {
+            panic!(
+                "obs_id {id} appears in both {first} and {second} — a trap pointing at it could not say which"
+            );
+        }
+    }
+
     #[test]
     fn every_replay_stream_in_the_corpus_is_valid() {
         let checked = walk_replay_streams(&mut |path| {
