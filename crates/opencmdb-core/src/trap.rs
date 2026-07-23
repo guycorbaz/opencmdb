@@ -42,6 +42,16 @@ pub struct RuleId(pub String);
 #[serde(transparent)]
 pub struct TrapId(pub String);
 
+/// The stable name that groups a trap FAMILY — a class of identity scenario (`randomized-mac`,
+/// `multi-nic`, …), each committed in both decision forms (stories 4.9 onward).
+///
+/// A trap declares its family (or none). Two traps in the same family are the positive and
+/// negative sides of one identity problem; [`incomplete_families`] uses this to check that a
+/// family was tested BOTH ways, never only one. The newtype sibling of [`TrapId`] / [`RuleId`].
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct FamilyId(pub String);
+
 /// One of D18's three columns, carrying exactly what that column needs.
 ///
 /// Modelled as an enum rather than a struct of optional fields, so "a merge that also names an
@@ -102,6 +112,15 @@ pub struct Trap {
     #[serde(default)]
     pub reason: String,
     pub expect: Expectation,
+    /// The family this trap belongs to, or `None` for a format/example trap that is part of no
+    /// family and is exempt from the completeness check ([`incomplete_families`]).
+    ///
+    /// A family groups the positive and negative decision forms of ONE identity scenario; both must
+    /// be present or the corpus is incomplete (story 4.7b). `#[serde(default)]` — the same idiom as
+    /// `reason` — so an absent key is `None` (exempt), never a serde error, which keeps every
+    /// family-less `.toml` valid and byte-unchanged under `deny_unknown_fields`.
+    #[serde(default)]
+    pub family: Option<FamilyId>,
 }
 
 /// A trap file is a list of traps. TOML renders this as `[[trap]]`.
@@ -138,6 +157,14 @@ pub enum TrapError {
     DuplicateObservation { trap: TrapId },
     /// Two traps in the same file share an id, so a failure could not say which one failed.
     DuplicateId { trap: TrapId },
+    /// A trap declares a `family` key that is blank or whitespace — a family with no name cannot
+    /// group anything. Absence is legal (`None`, exempt); a present-but-empty name is not.
+    FamilyEmpty { trap: TrapId },
+    /// A trap declares a `family` name that is not a clean token — it carries surrounding whitespace
+    /// or a control character. A control character (e.g. a newline) would inject into the gate's
+    /// one-line-per-family report; surrounding whitespace groups under a folded key but renders
+    /// padded. A family name must be a single clean token, the way `reason` refuses control chars.
+    FamilyMalformed { trap: TrapId },
     /// A trap file declares no trap at all.
     NoTraps,
 }
@@ -200,6 +227,18 @@ impl core::fmt::Display for TrapError {
                  a failure cannot say which one failed",
                 trap.0
             ),
+            TrapError::FamilyEmpty { trap } => write!(
+                f,
+                "trap `{}`: declares an empty family — omit the key to be family-exempt, or name \
+                 the family it belongs to",
+                trap.0
+            ),
+            TrapError::FamilyMalformed { trap } => write!(
+                f,
+                "trap `{}`: the family name carries surrounding whitespace or a control character \
+                 — a family name must be a single clean token",
+                trap.0
+            ),
             TrapError::NoTraps => f.write_str("trap file declares no trap"),
         }
     }
@@ -258,6 +297,17 @@ impl Trap {
         if distinct.len() != self.observations.len() {
             return Err(TrapError::DuplicateObservation { trap: id() });
         }
+        // A family is optional (None = exempt), but a PRESENT family must be a clean token: not
+        // blank (it would group nothing), and free of surrounding whitespace or control characters
+        // (a control char injects into the gate's one-line-per-family report; padding renders dirty).
+        if let Some(family) = &self.family {
+            if family.0.trim().is_empty() {
+                return Err(TrapError::FamilyEmpty { trap: id() });
+            }
+            if family.0.as_str() != family.0.trim() || family.0.chars().any(|c| c.is_control()) {
+                return Err(TrapError::FamilyMalformed { trap: id() });
+            }
+        }
         Ok(())
     }
 }
@@ -283,6 +333,62 @@ impl TrapFile {
     }
 }
 
+/// One family that was tested in only one decision form — or in neither (story 4.7b).
+///
+/// A family is complete only when exercised BOTH ways: at least one `must-merge` AND one
+/// `must-not-merge`. This record names which pole is present so a red gate is debuggable without
+/// opening the corpus. Constructed ONLY for a one-sided (or pole-less) family — the invariant
+/// `!(has_merge && has_not_merge)` holds by [`incomplete_families`]'s construction; a complete family
+/// is never reported.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IncompleteFamily {
+    /// The family's name in the author's ORIGINAL casing (the case-fold is only a grouping key).
+    pub family: FamilyId,
+    /// Whether a `must-merge` trap was seen in the family — the merge pole.
+    pub has_merge: bool,
+    /// Whether a `must-not-merge` trap was seen in the family — the not-merge pole.
+    pub has_not_merge: bool,
+}
+
+/// The families tested in only one decision form — the corpus-completeness check (story 4.7b).
+///
+/// Groups the traps that DECLARE a family by their case-folded name — the same `trim().to_lowercase()`
+/// normalization [`TrapFile::validate`] uses for [`TrapError::DuplicateId`], so a family split across
+/// files or casings is seen as one. Per family it records whether a `must-merge` and a `must-not-merge`
+/// were seen; a `must-abstain` is D18's orthogonal third column and counts for NEITHER pole (DR1). A
+/// family missing either pole is returned as an [`IncompleteFamily`], sorted by the folded key for a
+/// deterministic order. Traps with no family are skipped — they are format/example traps, exempt.
+///
+/// # Assumes validated input
+///
+/// Callers pass traps that already passed [`Trap::validate`], so no blank-after-trim family reaches
+/// here; this function does not re-guard the empty-name case.
+pub fn incomplete_families<'a>(traps: impl IntoIterator<Item = &'a Trap>) -> Vec<IncompleteFamily> {
+    // folded key -> (first-seen original name, saw must-merge, saw must-not-merge).
+    let mut families: std::collections::BTreeMap<String, (FamilyId, bool, bool)> =
+        std::collections::BTreeMap::new();
+    for trap in traps {
+        let Some(family) = &trap.family else { continue };
+        let entry = families
+            .entry(family.0.trim().to_lowercase())
+            .or_insert_with(|| (family.clone(), false, false));
+        match trap.expect {
+            Expectation::MustMerge { .. } => entry.1 = true,
+            Expectation::MustNotMerge { .. } => entry.2 = true,
+            Expectation::MustAbstain { .. } => {}
+        }
+    }
+    families
+        .into_values()
+        .filter(|(_, has_merge, has_not_merge)| !(*has_merge && *has_not_merge))
+        .map(|(family, has_merge, has_not_merge)| IncompleteFamily {
+            family,
+            has_merge,
+            has_not_merge,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,6 +409,7 @@ mod tests {
             expect: Expectation::MustAbstain {
                 cause: AbstentionCause::NoObservedValue,
             },
+            family: None,
         }
     }
 
@@ -487,5 +594,191 @@ mod tests {
         let rendered = serde_json::to_string(&file).unwrap();
         let back: TrapFile = serde_json::from_str(&rendered).unwrap();
         assert_eq!(back, file);
+    }
+
+    // ── The family field and the completeness check (story 4.7b) ─────────────
+
+    /// A valid trap with a chosen id, family and expectation — the builder for the family tests.
+    fn fam(id: &str, family: Option<&str>, expect: Expectation) -> Trap {
+        Trap {
+            id: TrapId(id.into()),
+            replay: "scenario/replay/minimal.jsonl".into(),
+            observations: vec![obs(1)],
+            reason: GOOD.into(),
+            expect,
+            family: family.map(|f| FamilyId(f.into())),
+        }
+    }
+    fn merge() -> Expectation {
+        Expectation::MustMerge {
+            rule: RuleId("l1-exact-mac".into()),
+        }
+    }
+    fn not_merge() -> Expectation {
+        Expectation::MustNotMerge {
+            rule: RuleId("l1-distinct-mac".into()),
+        }
+    }
+    fn abstain() -> Expectation {
+        Expectation::MustAbstain {
+            cause: AbstentionCause::NoObservedValue,
+        }
+    }
+
+    /// A family is optional: absent validates (exempt), present-and-named validates, present-but-blank
+    /// is `FamilyEmpty`. Prove-to-red on the blank case — dropping the guard lets `"  "` through.
+    #[test]
+    fn a_present_but_blank_family_is_refused_while_absent_or_named_is_ok() {
+        assert!(
+            fam("t", None, abstain()).validate().is_ok(),
+            "absent = exempt"
+        );
+        assert!(
+            fam("t", Some("randomized-mac"), abstain())
+                .validate()
+                .is_ok(),
+            "named = ok"
+        );
+        assert_eq!(
+            fam("t", Some("  "), abstain()).validate(),
+            Err(TrapError::FamilyEmpty {
+                trap: TrapId("t".into())
+            })
+        );
+    }
+
+    /// A family name must be a clean token: surrounding whitespace and any control character are
+    /// refused (a control char would inject into the gate's one-line-per-family report). A clean name
+    /// with an internal space is still fine. Prove-to-red — dropping the guard lets `"multi\nnic"` and
+    /// `" padded "` validate.
+    #[test]
+    fn a_family_name_with_whitespace_or_a_control_char_is_refused() {
+        let malformed = TrapError::FamilyMalformed {
+            trap: TrapId("t".into()),
+        };
+        assert_eq!(
+            fam("t", Some("multi\nnic"), abstain()).validate(),
+            Err(malformed.clone()),
+            "a newline (control char) is refused"
+        );
+        assert_eq!(
+            fam("t", Some(" padded "), abstain()).validate(),
+            Err(malformed),
+            "surrounding whitespace is refused"
+        );
+        assert!(
+            fam("t", Some("multi nic"), abstain()).validate().is_ok(),
+            "an internal space in an otherwise clean token is fine"
+        );
+    }
+
+    /// A family present in BOTH decision forms is complete (AC2): nothing reported.
+    #[test]
+    fn a_two_sided_family_is_complete() {
+        let traps = vec![
+            fam("a", Some("randomized-mac"), merge()),
+            fam("b", Some("randomized-mac"), not_merge()),
+        ];
+        assert!(incomplete_families(&traps).is_empty());
+    }
+
+    /// A one-sided family is reported, naming which pole is present (AC1). Both directions are pinned —
+    /// merge-only misses not-merge, and the mirror not-merge-only misses merge.
+    #[test]
+    fn a_one_sided_family_is_reported_with_the_missing_pole() {
+        assert_eq!(
+            incomplete_families(&[fam("a", Some("randomized-mac"), merge())]),
+            vec![IncompleteFamily {
+                family: FamilyId("randomized-mac".into()),
+                has_merge: true,
+                has_not_merge: false,
+            }]
+        );
+        assert_eq!(
+            incomplete_families(&[fam("a", Some("multi-nic"), not_merge())]),
+            vec![IncompleteFamily {
+                family: FamilyId("multi-nic".into()),
+                has_merge: false,
+                has_not_merge: true,
+            }]
+        );
+    }
+
+    /// DR1, load-bearing: a `must-abstain` counts for NEITHER pole, so `{must-merge, must-abstain}` is
+    /// still incomplete, missing `must-not-merge`. Prove-to-red — a mutation letting an abstention
+    /// satisfy the not-merge pole turns this green.
+    #[test]
+    fn an_abstention_in_a_family_satisfies_no_pole() {
+        let traps = vec![
+            fam("a", Some("randomized-mac"), merge()),
+            fam("b", Some("randomized-mac"), abstain()),
+        ];
+        assert_eq!(
+            incomplete_families(&traps),
+            vec![IncompleteFamily {
+                family: FamilyId("randomized-mac".into()),
+                has_merge: true,
+                has_not_merge: false,
+            }]
+        );
+    }
+
+    /// DR1 consequence: an abstain-only family has NEITHER pole — reported with both false.
+    #[test]
+    fn an_abstain_only_family_has_neither_pole() {
+        assert_eq!(
+            incomplete_families(&[fam("a", Some("ambiguous-cases"), abstain())]),
+            vec![IncompleteFamily {
+                family: FamilyId("ambiguous-cases".into()),
+                has_merge: false,
+                has_not_merge: false,
+            }]
+        );
+    }
+
+    /// A family-less trap is skipped entirely (AC4, the exemption): a corpus of only `None`-family
+    /// traps reports nothing, even when they are one-sided in aggregate.
+    #[test]
+    fn family_less_traps_are_exempt() {
+        let traps = vec![fam("a", None, merge()), fam("b", None, merge())];
+        assert!(
+            incomplete_families(&traps).is_empty(),
+            "no family declared -> nothing to check"
+        );
+    }
+
+    /// Grouping is case-folded and cross-input, the same fold `DuplicateId` uses: `Randomized-MAC` and
+    /// `randomized-mac` are ONE family, complete when one carries each pole. Prove-to-red — a raw-string
+    /// group makes two one-sided families.
+    #[test]
+    fn family_grouping_is_case_folded() {
+        let traps = vec![
+            fam("a", Some("Randomized-MAC"), merge()),
+            fam("b", Some("randomized-mac"), not_merge()),
+        ];
+        assert!(
+            incomplete_families(&traps).is_empty(),
+            "one family across two casings, both poles present"
+        );
+    }
+
+    /// A one-sided family split across two casings is reported ONCE (folded), and the reported name
+    /// keeps the FIRST-SEEN author casing — the fold is a grouping key, not the reported value. Here
+    /// both sides are `must-merge`, so the family is one-sided; `Randomized-MAC` is seen first.
+    #[test]
+    fn a_one_sided_family_keeps_the_first_seen_original_casing() {
+        let traps = vec![
+            fam("a", Some("Randomized-MAC"), merge()),
+            fam("b", Some("randomized-mac"), merge()),
+        ];
+        assert_eq!(
+            incomplete_families(&traps),
+            vec![IncompleteFamily {
+                family: FamilyId("Randomized-MAC".into()),
+                has_merge: true,
+                has_not_merge: false,
+            }],
+            "one folded family, reported with the first-seen casing"
+        );
     }
 }

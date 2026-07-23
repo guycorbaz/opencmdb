@@ -301,3 +301,17 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   producer exists in Epic 4; rules come from hand-authored fixtures), but when Epic 5 supplies a
   producer the rule identity must be normalized on both sides — or the trap corpus authoring rules
   must be locked to a canonical form — before this comparison can be trusted.
+
+## Deferred from: code review of story-4.7b (2026-07-23)
+
+- **Cross-file trap-id uniqueness is exact, not case/trim-folded — asymmetric with the within-file
+  guard.** PRE-EXISTING (the harness's `seen: BTreeMap<TrapId, PathBuf>` predates 4.7b; that story did
+  not touch it). `TrapFile::validate` folds ids `trim().to_lowercase()` for `DuplicateId` (trap.rs),
+  precisely because two ids "indistinguishable in a failure message" are a defect. But `score_corpus`'s
+  cross-file `seen` map matches `TrapId` EXACTLY, so `id = "randomized-mac"` in `a.toml` and
+  `"Randomized-MAC"` (or `"randomized-mac "`) in `b.toml` are both discovered with NO error. Exact
+  duplicates across files ARE caught (no double-scoring); the gap is the near-duplicate: message
+  confusability plus a near-twin left silently discovered-but-unscored if a future answer map keys only
+  one casing. Owner: whoever hardens the cross-file corpus guards — fold the cross-file `seen` key with
+  the SAME `trim().to_lowercase()` the within-file guard uses, and add a test with two files whose ids
+  differ only by case/whitespace.

@@ -117,7 +117,7 @@ development_status:
   # AC2's "a rule leaves its rule_id + evidence" as the Epic-5 contract it is pre-engine. 4.7b is
   # the positive/negative completeness check (AC3), independent of the rule comparison.
   4-7a-trap-runner-asserts-the-rule: done
-  4-7b-trap-corpus-positive-and-negative: backlog
+  4-7b-trap-corpus-positive-and-negative: done
   4-8-reality-debt-register: backlog
   4-9-trap-randomized-mac: backlog
   4-10-trap-multi-nic: backlog
