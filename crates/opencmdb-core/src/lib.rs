@@ -11,6 +11,11 @@
 //! asserts nothing about identity yet.
 
 #![forbid(unsafe_code)]
+// Documentation is a project rule (CLAUDE.md): every public item — structs, enums, fields,
+// variants and functions — carries a doc comment. This crate does NOT yet carry
+// `#![deny(missing_docs)]`: ~70 field/variant docs are outstanding (mostly in `observation`), and
+// the CI clippy gate runs `-D warnings`, which would promote a `#![warn]` straight to an error. The
+// lint lands here once that sweep is done — bin and xtask, already clean, deny it today.
 
 pub mod clock;
 pub mod connector;
