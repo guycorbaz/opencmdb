@@ -316,6 +316,188 @@ impl Tally {
     }
 }
 
+// ── Comparing two runs (story 4.6c) ─────────────────────────────────────────
+
+/// Comparing one trap's [`ScoredRecord`] across two runs.
+///
+/// D36 is the whole reason this is not just `before == after`: *"A verdict without its capability
+/// snapshot is UNFALSIFIABLE… Two verdicts are comparable only under an identical snapshot —
+/// otherwise they are not two answers, they are two questions."* So a difference in the snapshot is
+/// **refused**, never silently reported as "no change" — [`RecordComparison::IncomparableSnapshot`]
+/// is a distinct outcome from [`RecordComparison::Identical`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RecordComparison {
+    /// Same snapshot, same outcome — nothing changed.
+    Identical,
+    /// Same snapshot, DIFFERENT outcome — a change to investigate.
+    ///
+    /// This fires on a change of the RULE as well as the merge/no-merge/abstain answer, because
+    /// [`Outcome`] carries the rule and equality compares it. That is deliberate and it is the
+    /// D19/D46b case: *"same output, different reason… an engine divergence hiding behind a correct
+    /// result — the worst kind"*. `score` (the release gate) ignores the rule; a run-to-run
+    /// comparison does NOT, because a verdict reached by a different rule between two runs is
+    /// exactly the drift a comparison exists to surface.
+    Differing { before: Outcome, after: Outcome },
+    /// The two records were reached under DIFFERENT capability snapshots, so they are not two
+    /// answers to one question — they are two questions. Refused, and NEVER repaired: pinning or
+    /// defaulting a capability to force a comparison is *"break[ing] the product to make CI green"*.
+    ///
+    /// `Capabilities` equality includes `as_of`, so two descriptors with the same `kinds` at a
+    /// different `as_of` are also refused — a snapshot is a DATED fact (D34 §1), not a level. In
+    /// practice two runs of one corpus share `as_of` (4.5b dates it from the file, not a clock), so
+    /// this bites only a genuinely different descriptor.
+    IncomparableSnapshot {
+        before: Capabilities,
+        after: Capabilities,
+    },
+}
+
+/// The `(outcome, capability_snapshot)` a comparison looks at — extracted by ONE exhaustive
+/// destructure so the field list is written once.
+///
+/// The destructure has no `..`: a field added to [`ScoredRecord`] must break THIS and force a
+/// decision about whether it participates in a comparison — the mechanism 4.5b relied on. Every
+/// other field is named and ignored on purpose:
+/// - `trap`, `expected`, `replay` — identity; the caller matches on the trap, and the expectation
+///   and stream come from the corpus, identical for one trap across two runs.
+/// - `reason` — the trap author's sentence; same trap, same reason.
+/// - `source_state` — excluded (AC6): uninhabited until Epic 13, so comparing it is vacuous today
+///   and would silently start mattering the day it gains a type (this destructure forces that
+///   decision then).
+/// - `verdict_vector` — no producer until an engine; empty on both sides.
+fn comparable_fields(record: &ScoredRecord) -> (&Outcome, &Capabilities) {
+    let ScoredRecord {
+        trap: _,
+        expected: _,
+        replay: _,
+        outcome,
+        reason: _,
+        capability_snapshot,
+        source_state: _,
+        verdict_vector: _,
+    } = record;
+    (outcome, capability_snapshot)
+}
+
+/// Compare one trap's record across two runs — the primitive [`compare_runs`] is built from.
+///
+/// The two records must name the same trap; the caller matches them by [`TrapId`], and a
+/// `debug_assert` catches a direct caller that does not. The snapshot is checked FIRST: a difference
+/// there refuses the comparison before the outcomes are even looked at, because under different
+/// capabilities the two verdicts answer different questions — so a coincidental outcome match must
+/// NOT be reported as `Identical`.
+pub fn compare_records(before: &ScoredRecord, after: &ScoredRecord) -> RecordComparison {
+    debug_assert_eq!(
+        before.trap, after.trap,
+        "compare_records is for one trap across two runs; the caller matches by TrapId"
+    );
+    let (before_outcome, before_caps) = comparable_fields(before);
+    let (after_outcome, after_caps) = comparable_fields(after);
+
+    if before_caps != after_caps {
+        return RecordComparison::IncomparableSnapshot {
+            before: before_caps.clone(),
+            after: after_caps.clone(),
+        };
+    }
+    if before_outcome != after_outcome {
+        RecordComparison::Differing {
+            before: before_outcome.clone(),
+            after: after_outcome.clone(),
+        }
+    } else {
+        RecordComparison::Identical
+    }
+}
+
+/// The result of comparing two whole runs, trap by trap.
+///
+/// A run is a set of [`ScoredRecord`]s. Comparability is **pairwise, not run-level**: 4.5b made the
+/// capability descriptor positional, so two records in one run legitimately carry different
+/// snapshots and "the run's snapshot" is not well-defined. A run may therefore be *partly*
+/// comparable — some traps compared, others refused — and this report says which.
+///
+/// Every DISTINCT trap id lands in exactly one bucket. `incomparable` and `differing` are what a
+/// reader acts on; `only_before`/`only_after` mean the run MEMBERSHIP changed, itself a difference.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RunComparison {
+    /// Traps whose record was identical in both runs.
+    pub identical: Vec<TrapId>,
+    /// Traps whose verdict changed under an identical snapshot: `(trap, before, after)`.
+    pub differing: Vec<(TrapId, Outcome, Outcome)>,
+    /// Traps refused because their snapshots differ, carrying BOTH snapshots so the report names the
+    /// evidence D36 says is load-bearing — `(trap, before, after)`, not just the trap.
+    pub incomparable: Vec<(TrapId, Capabilities, Capabilities)>,
+    /// Traps present in the BEFORE run only — the membership changed.
+    pub only_before: Vec<TrapId>,
+    /// Traps present in the AFTER run only — the membership changed.
+    pub only_after: Vec<TrapId>,
+}
+
+impl RunComparison {
+    /// Whether the two runs are unchanged **in outcome and snapshot** — no differing verdict, no
+    /// refused pair, no membership change.
+    ///
+    /// It does NOT assert the runs are byte-identical: the comparison ignores `reason`, `expected`,
+    /// `replay`, `source_state` and `verdict_vector` (see [`comparable_fields`]), so two runs that
+    /// differ only there report unchanged. A refusal is NOT "no difference" (D36), so a run with any
+    /// `incomparable` pair is UNDECIDED, not unchanged, and this returns false.
+    ///
+    /// Note it is vacuously true for two EMPTY runs — "nothing to compare" reads as "unchanged". A
+    /// caller that needs to tell that apart from "compared 300 identical traps" reads `identical`,
+    /// the same way the harness reads `Tally::scored()`.
+    pub fn is_unchanged(&self) -> bool {
+        self.differing.is_empty()
+            && self.incomparable.is_empty()
+            && self.only_before.is_empty()
+            && self.only_after.is_empty()
+    }
+}
+
+/// Compare two runs trap by trap. Pure: no I/O, no clock — two in-memory sets of records in, one
+/// [`RunComparison`] out.
+///
+/// **Precondition: each run names every trap at most once.** Story 4.6b's `DuplicateTrapId` guard
+/// enforces that on a corpus-produced run; a `debug_assert` catches a malformed run here rather than
+/// silently keeping the last record and erasing the earlier one — the "never silent" rule this
+/// module lives by.
+pub fn compare_runs(before: &[ScoredRecord], after: &[ScoredRecord]) -> RunComparison {
+    let index = |run: &[ScoredRecord]| -> BTreeMap<TrapId, ScoredRecord> {
+        let by_trap: BTreeMap<TrapId, ScoredRecord> =
+            run.iter().map(|r| (r.trap.clone(), r.clone())).collect();
+        debug_assert_eq!(
+            by_trap.len(),
+            run.len(),
+            "a run names a trap more than once — the corpus guard (4.6b) should prevent this"
+        );
+        by_trap
+    };
+    let before_by_trap = index(before);
+    let after_by_trap = index(after);
+
+    let mut out = RunComparison::default();
+    for (trap, before_record) in &before_by_trap {
+        match after_by_trap.get(trap) {
+            None => out.only_before.push(trap.clone()),
+            Some(after_record) => match compare_records(before_record, after_record) {
+                RecordComparison::Identical => out.identical.push(trap.clone()),
+                RecordComparison::Differing { before, after } => {
+                    out.differing.push((trap.clone(), before, after))
+                }
+                RecordComparison::IncomparableSnapshot { before, after } => {
+                    out.incomparable.push((trap.clone(), before, after))
+                }
+            },
+        }
+    }
+    for trap in after_by_trap.keys() {
+        if !before_by_trap.contains_key(trap) {
+            out.only_after.push(trap.clone());
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -629,6 +811,240 @@ mod tests {
             record.column(),
             Column::MustMerge,
             "the column follows the expectation"
+        );
+    }
+
+    // ── Comparing two runs (story 4.6c) ──────────────────────────────────────
+
+    /// A record with a chosen trap id, snapshot and outcome, built from `a_record`.
+    fn record_with(trap: &str, caps: Capabilities, outcome: Outcome) -> ScoredRecord {
+        ScoredRecord {
+            trap: TrapId(trap.into()),
+            capability_snapshot: caps,
+            outcome,
+            ..a_record()
+        }
+    }
+
+    fn caps_full() -> Capabilities {
+        Capabilities {
+            as_of: ts(),
+            kinds: BTreeSet::from([FactKind::Mac, FactKind::IpV4, FactKind::Rtt]),
+        }
+    }
+
+    /// The NET_RAW-lost descriptor — the positional-downgrade case 4.5b introduced and
+    /// `capability-downgrade.jsonl` commits. A verdict reached under this is not comparable to one
+    /// reached under `caps_full`.
+    fn caps_downgraded() -> Capabilities {
+        Capabilities {
+            as_of: ts(),
+            kinds: BTreeSet::from([FactKind::Mac, FactKind::IpV4]),
+        }
+    }
+
+    #[test]
+    fn same_snapshot_same_outcome_is_identical() {
+        let a = record_with("t", caps_full(), merged());
+        let b = record_with("t", caps_full(), merged());
+        assert_eq!(compare_records(&a, &b), RecordComparison::Identical);
+    }
+
+    #[test]
+    fn same_snapshot_different_outcome_is_a_real_difference() {
+        let a = record_with("t", caps_full(), merged());
+        let b = record_with("t", caps_full(), refused());
+        assert_eq!(
+            compare_records(&a, &b),
+            RecordComparison::Differing {
+                before: merged(),
+                after: refused()
+            }
+        );
+    }
+
+    /// AC2's core: a differing snapshot is REFUSED, not reported as "no change".
+    ///
+    /// D36: two verdicts under different capabilities are two questions, not two answers. This is
+    /// the exact case `capability-downgrade.jsonl` produces — the same trap scored under NET_RAW and
+    /// under ping-only.
+    #[test]
+    fn a_differing_snapshot_is_refused_not_silently_equal() {
+        let a = record_with("t", caps_full(), merged());
+        let b = record_with("t", caps_downgraded(), merged());
+        let c = compare_records(&a, &b);
+        assert_eq!(
+            c,
+            RecordComparison::IncomparableSnapshot {
+                before: caps_full(),
+                after: caps_downgraded(),
+            }
+        );
+        // The assertion that makes AC2 non-vacuous: refusal is a DISTINCT outcome from "identical".
+        // A caller must be able to tell "the same answer" from "not comparable".
+        assert_ne!(c, RecordComparison::Identical);
+    }
+
+    /// Even when the OUTCOMES agree, a differing snapshot still refuses — the snapshot is checked
+    /// first, because under different capabilities the agreement is a coincidence, not a re-derivation.
+    #[test]
+    fn a_differing_snapshot_refuses_even_when_the_outcomes_match() {
+        let a = record_with("t", caps_full(), merged());
+        let b = record_with("t", caps_downgraded(), merged());
+        assert!(matches!(
+            compare_records(&a, &b),
+            RecordComparison::IncomparableSnapshot { .. }
+        ));
+    }
+
+    #[test]
+    fn compare_runs_buckets_every_trap_and_is_partly_comparable() {
+        // BEFORE: three traps under the full descriptor.
+        let before = vec![
+            record_with("identical", caps_full(), merged()),
+            record_with("differing", caps_full(), merged()),
+            record_with("downgraded", caps_full(), merged()),
+            record_with("gone", caps_full(), merged()),
+        ];
+        // AFTER: one identical, one with a changed verdict, one under a downgraded descriptor
+        // (refused), one new trap, and "gone" absent.
+        let after = vec![
+            record_with("identical", caps_full(), merged()),
+            record_with("differing", caps_full(), refused()),
+            record_with("downgraded", caps_downgraded(), merged()),
+            record_with("new", caps_full(), merged()),
+        ];
+        let cmp = compare_runs(&before, &after);
+        assert_eq!(cmp.identical, vec![TrapId("identical".into())]);
+        // The differing bucket carries the BEFORE and AFTER verdicts, not just the trap id — a
+        // reader must see what changed, so assert the whole `(trap, before, after)` payload.
+        assert_eq!(
+            cmp.differing,
+            vec![(TrapId("differing".into()), merged(), refused())]
+        );
+        // The incomparable bucket carries BOTH snapshots (D36's evidence), not just the trap id.
+        assert_eq!(
+            cmp.incomparable,
+            vec![(TrapId("downgraded".into()), caps_full(), caps_downgraded())]
+        );
+        assert_eq!(cmp.only_before, vec![TrapId("gone".into())]);
+        assert_eq!(cmp.only_after, vec![TrapId("new".into())]);
+        // A run with an incomparable pair is UNDECIDED, never "unchanged" (D36).
+        assert!(!cmp.is_unchanged());
+    }
+
+    #[test]
+    fn two_identical_runs_are_unchanged() {
+        let run = vec![
+            record_with("a", caps_full(), merged()),
+            record_with("b", caps_downgraded(), refused()),
+        ];
+        let cmp = compare_runs(&run, &run.clone());
+        assert!(cmp.is_unchanged(), "identical runs, every pair comparable");
+        assert_eq!(cmp.identical.len(), 2);
+    }
+
+    /// A run whose ONLY change is an incomparable pair is not unchanged — the refusal is a distinct
+    /// state from "no difference", one level up from the record comparison.
+    #[test]
+    fn a_run_with_only_an_incomparable_pair_is_not_unchanged() {
+        let before = vec![record_with("t", caps_full(), merged())];
+        let after = vec![record_with("t", caps_downgraded(), merged())];
+        let cmp = compare_runs(&before, &after);
+        assert_eq!(cmp.incomparable.len(), 1);
+        assert!(cmp.differing.is_empty());
+        assert!(
+            !cmp.is_unchanged(),
+            "an undecided comparison is not a passing one"
+        );
+    }
+
+    /// Same verdict COLUMN, different RULE, identical snapshot → `Differing`.
+    ///
+    /// This is the D19/D46b drift the review chose (option a) to keep sensitive to: `score` (the
+    /// gate) collapses these to one Pass because the rule is irrelevant to correctness, but a
+    /// run-to-run comparison surfaces it — *"same output, different reason… the worst kind"*. Two
+    /// `Merged` outcomes differing only in `RuleId` must NOT read as `Identical`.
+    #[test]
+    fn same_verdict_different_rule_is_differing_not_identical() {
+        let by_rule_a = Outcome::Merged { rule: rule("l2-a") };
+        let by_rule_b = Outcome::Merged { rule: rule("l2-b") };
+        let a = record_with("t", caps_full(), by_rule_a.clone());
+        let b = record_with("t", caps_full(), by_rule_b.clone());
+        assert_eq!(
+            compare_records(&a, &b),
+            RecordComparison::Differing {
+                before: by_rule_a,
+                after: by_rule_b,
+            },
+            "a verdict reached by a different rule between two runs is drift, not sameness"
+        );
+    }
+
+    /// Two snapshots with identical `kinds` at a DIFFERENT `as_of` are refused — a snapshot is a
+    /// dated fact (D34 §1), so `Capabilities` equality includes `as_of` and the comparison inherits
+    /// it. Guards the `IncomparableSnapshot` doc claim that `as_of` participates.
+    #[test]
+    fn same_kinds_different_as_of_is_incomparable() {
+        let later = ts() + chrono::Duration::seconds(1);
+        let a = record_with("t", caps_full(), merged());
+        let b_caps = Capabilities {
+            as_of: later,
+            kinds: caps_full().kinds,
+        };
+        let b = record_with("t", b_caps, merged());
+        assert!(
+            matches!(
+                compare_records(&a, &b),
+                RecordComparison::IncomparableSnapshot { .. }
+            ),
+            "a different as_of is a different dated fact, so the pair is two questions"
+        );
+    }
+
+    /// Two EMPTY runs compare as unchanged (vacuously): no differing pair, no refusal, no
+    /// membership change, and every bucket empty. Documents the `is_unchanged` edge the doc warns
+    /// a caller to disambiguate via `identical`.
+    #[test]
+    fn two_empty_runs_are_vacuously_unchanged() {
+        let cmp = compare_runs(&[], &[]);
+        assert!(cmp.is_unchanged());
+        assert!(cmp.identical.is_empty());
+        assert_eq!(cmp, RunComparison::default());
+    }
+
+    /// A trap present in only one of two runs lands in the right membership bucket even when the
+    /// other run is empty — the two halves of `compare_runs` (before-loop, after-loop) each stand
+    /// alone.
+    #[test]
+    fn a_trap_in_one_empty_sided_run_is_a_membership_change() {
+        let only = vec![record_with("t", caps_full(), merged())];
+        let forward = compare_runs(&only, &[]);
+        assert_eq!(forward.only_before, vec![TrapId("t".into())]);
+        assert!(!forward.is_unchanged());
+        let backward = compare_runs(&[], &only);
+        assert_eq!(backward.only_after, vec![TrapId("t".into())]);
+        assert!(!backward.is_unchanged());
+    }
+
+    /// Two traps can share one bucket — the buckets are `Vec`s, not single slots. A regression that
+    /// kept only the last trap per bucket (an easy indexing mistake) would red this.
+    #[test]
+    fn two_traps_can_share_a_bucket() {
+        let before = vec![
+            record_with("x", caps_full(), merged()),
+            record_with("y", caps_full(), merged()),
+        ];
+        let after = vec![
+            record_with("x", caps_full(), refused()),
+            record_with("y", caps_full(), refused()),
+        ];
+        let cmp = compare_runs(&before, &after);
+        assert_eq!(cmp.differing.len(), 2, "both traps changed, both reported");
+        let traps: BTreeSet<_> = cmp.differing.iter().map(|(t, _, _)| t.clone()).collect();
+        assert_eq!(
+            traps,
+            BTreeSet::from([TrapId("x".into()), TrapId("y".into())])
         );
     }
 }

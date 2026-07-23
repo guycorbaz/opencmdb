@@ -247,3 +247,27 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   `capability-downgrade.jsonl`). The trap-gate walk scans `scenario/traps/`, not `scenario/replay/`,
   so it never meets them; they are discovered by no trap and scored by nothing. Expected, owned by
   **story 4.7** (the trap runner), recorded so nobody "fixes" it here.
+
+## Deferred from: story-4.6c (2026-07-23)
+
+- **Lattice monotonicity is NOT implemented.** *"Losing a capability can only move a verdict TOWARD
+  doubt, never toward certainty. `C' ⊆ C ⟹ verdict(C') at least as doubtful`"* [architecture.md:2075-2077]
+  is the law that makes run comparison exhaustively testable (2^n capability subsets × the fixture
+  bank), and it needs an engine to produce verdicts across subsets. 4.6c refuses a differing-snapshot
+  comparison but does not yet check that a smaller capability only moves the verdict toward doubt.
+  **Owner: Epic 5**, as its *"monotone-honesty invariant trap family"*.
+- **`source_state` is EXCLUDED from the comparison key, deliberately.** `compare_records`
+  destructures it with `source_state: _` and never reads it, because it is uninhabited until Epic 13
+  (4.6a) — comparing it is vacuous today. **When Epic 13 fills it, this exclusion must be revisited:**
+  two verdicts under the same capability snapshot but different liveness (`Live` vs `Blind`) may or
+  may not be comparable, and that is a D34/D36 question Epic 13 owns. The exhaustive destructure (no
+  `..`) guarantees a compile error forces that decision the day the field gains a type.
+- **The comparison key is PAIRWISE, not run-level.** A run is a set of records; 4.5b made the
+  capability descriptor positional, so two records in one run legitimately carry different snapshots
+  and "the run's snapshot" is not well-defined. `compare_runs` therefore matches by `TrapId` and a
+  run may be *partly* comparable — some pairs compared, others refused. Run-level comparability was
+  rejected for this reason; recorded so the choice reads as a decision, not an accident. The
+  comparison is a PURE function in `opencmdb-core` (AC3): no persistence, no I/O — two in-memory runs
+  in, one `RunComparison` out. If a future story needs to compare runs from different processes, it
+  serializes a run then (never under `fixtures/`, the locked oracle) and that is where the format
+  decision lives.

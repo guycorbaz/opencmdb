@@ -1,6 +1,6 @@
 # Story 4.6c: Two runs are comparable only under an identical capability snapshot
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -67,26 +67,45 @@ So "two runs with identical snapshots" is not well-defined until this story defi
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — decide the key** (AC: 1, 3, 6)
-  - [ ] Pairwise or run-level, with the cost stated and the `capability-downgrade.jsonl` interaction addressed.
-  - [ ] Pure function vs persisted artefact; if pure, it belongs in `opencmdb-core` beside 4.6a's algebra.
-  - [ ] `source_state` excluded, with the reason in the code.
+- [x] **Task 1 — decide the key** (AC: 1, 3, 6)
+  - [x] Pairwise or run-level, with the cost stated and the `capability-downgrade.jsonl` interaction addressed.
+  - [x] Pure function vs persisted artefact; if pure, it belongs in `opencmdb-core` beside 4.6a's algebra.
+  - [x] `source_state` excluded, with the reason in the code.
 
-- [ ] **Task 2 — the comparison** (AC: 2, 4, 5)
-  - [ ] Three outcomes minimum, refusal distinct from no-difference.
-  - [ ] Exhaustive over the record's fields, no `_` arm.
-  - [ ] The D36 quote next to the code that refuses.
+- [x] **Task 2 — the comparison** (AC: 2, 4, 5)
+  - [x] Three outcomes minimum, refusal distinct from no-difference.
+  - [x] Exhaustive over the record's fields, no `_` arm.
+  - [x] The D36 quote next to the code that refuses.
 
-- [ ] **Task 3 — the tests** (AC: 2, 4)
-  - [ ] Differing snapshots → refused, naming both.
-  - [ ] Refusal `!=` no-difference — the assertion that makes AC2 non-vacuous.
-  - [ ] Identical snapshots → compared, and a real difference is reported.
-  - [ ] **Prove-to-red on every new guard**, each mutation recorded. Offending item **second** in any vector. **Do not write a comment asserting a coverage property you did not measure.**
+- [x] **Task 3 — the tests** (AC: 2, 4)
+  - [x] Differing snapshots → refused, naming both.
+  - [x] Refusal `!=` no-difference — the assertion that makes AC2 non-vacuous.
+  - [x] Identical snapshots → compared, and a real difference is reported.
+  - [x] **Prove-to-red on every new guard**, each mutation recorded. Offending item **second** in any vector. **Do not write a comment asserting a coverage property you did not measure.**
 
-- [ ] **Task 4 — the record and the gates** (AC: 7, 8)
-  - [ ] Append the three entries of AC7 to `deferred-work.md`.
-  - [ ] Update `sprint-status.yaml`; put it in the File List.
-  - [ ] Run the four gates. **Name the command behind every claim in the completion record.**
+- [x] **Task 4 — the record and the gates** (AC: 7, 8)
+  - [x] Append the three entries of AC7 to `deferred-work.md`.
+  - [x] Update `sprint-status.yaml`; put it in the File List.
+  - [x] Run the four gates. **Name the command behind every claim in the completion record.**
+
+### Review Findings
+
+_Code review 2026-07-23 — three parallel layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor). **All 8 ACs SATISFIED, no violations**; every measured claim reproduced (tests 102/66/42, E0027 destructure, `Cargo.lock` unmoved, gates green). The auditor judged pairwise the right call and the destructure a faithful "no `_` arm". The two hunters found robustness holes the spec did not require but the code should hold, and two errors in the completion record._
+
+- [x] [Review][Decision] **Should a rule-only outcome change (same verdict, different `rule`) be a `Differing`, or ignored like `score()` ignores it?** **RESOLVED → option (a): keep rule-sensitivity.** A rule change between two runs of one corpus is exactly the D19/D46b drift a run comparison exists to surface — *"same output, different reason… an engine divergence hiding behind a correct result — the worst kind"*. `score()` (the gate) ignores the rule because it does not bear on correctness; a run-to-run comparison does not, because it hunts drift. `RecordComparison::Differing`'s doc now states this and cites D19/D46b, and `same_verdict_different_rule_is_differing_not_identical` pins it. Option (b) — coarsening to the `Column` — was rejected: it would blind the comparison to the one signal it is best placed to catch [crates/opencmdb-core/src/score.rs:335,865]
+- [x] [Review][Patch] **`compare_runs` silently drops a duplicated `TrapId` (last-wins in the `BTreeMap`)** — resolved: `index` now `debug_assert!`s `by_trap.len() == run.len()` and the precondition is stated in the fn doc ("each run names every trap at most once", enforced upstream by 4.6b's `DuplicateTrapId`) [crates/opencmdb-core/src/score.rs:464]
+- [x] [Review][Patch] **The `incomparable` bucket discards both snapshots** — resolved: `RunComparison::incomparable` is now `Vec<(TrapId, Capabilities, Capabilities)>`, carrying D36's load-bearing evidence like `differing` carries the outcomes; `compare_runs` threads both snapshots through, and the bucket test asserts the full tuple [crates/opencmdb-core/src/score.rs:430,488]
+- [x] [Review][Patch] **`compare_records` never checks the two records name the same trap** — resolved: `debug_assert_eq!(before.trap, after.trap)` at the top of `compare_records`, with the doc stating the caller matches by `TrapId` [crates/opencmdb-core/src/score.rs:390]
+- [x] [Review][Patch] **The `differing` bucket's payload is never asserted** — resolved: the bucket test now asserts `cmp.differing == vec![(trap, merged(), refused())]`, the full `(trap, before, after)` in order [crates/opencmdb-core/src/score.rs:919]
+- [x] [Review][Patch] **`as_of`-only capability difference refuses the comparison, and nothing tests it.** — resolved: `IncomparableSnapshot`'s doc states `as_of` participates (a dated fact, D34 §1) and that same-corpus runs share it in practice; `same_kinds_different_as_of_is_incomparable` pins the refusal [crates/opencmdb-core/src/score.rs:373,979]
+- [x] [Review][Patch] **Empty-run boundaries untested, and `is_unchanged()` on two empty runs is a vacuous `true`.** — resolved: `is_unchanged`'s doc names the vacuous-true edge and points a caller at `identical` to disambiguate (the `Tally::scored()` pattern); `two_empty_runs_are_vacuously_unchanged` and `a_trap_in_one_empty_sided_run_is_a_membership_change` cover the boundaries [crates/opencmdb-core/src/score.rs:437,999]
+- [x] [Review][Patch] **Every bucket test uses a single-element vector — the "offending item second" convention is not honoured for the buckets.** — resolved: `two_traps_can_share_a_bucket` puts two traps in `differing` and asserts both are reported [crates/opencmdb-core/src/score.rs:1029]
+- [x] [Review][Patch] **`two_identical_runs_are_unchanged`'s downgraded record is decorative** — KEPT AS-IS, documented. Both sides being `run.clone()` is the point: the test proves a two-record run carrying a *mixed* snapshot (`caps_full` + `caps_downgraded`), each pair comparing equal, reports `is_unchanged` with two `identical`. It is not decorative — it guards that a downgraded snapshot on its own does not trip `is_unchanged` when nothing changed. The refusal-within-a-run case the finding wanted is now covered by `a_run_with_only_an_incomparable_pair_is_not_unchanged` and the mixed bucket test [crates/opencmdb-core/src/score.rs:929]
+- [x] [Review][Patch] **DRY: the 8-field destructure is duplicated verbatim for before/after.** — resolved: `fn comparable_fields(&ScoredRecord) -> (&Outcome, &Capabilities)` now holds the single `..`-free destructure (the E0027 guard, once), called twice by `compare_records` [crates/opencmdb-core/src/score.rs:353]
+- [x] [Review][Patch] **Three doc overclaims.** — resolved: `is_unchanged` now says "unchanged **in outcome and snapshot**" and lists the ignored fields; `Differing` no longer claims "a function of the data alone" — it states the rule-sensitivity as the deliberate D19 choice; the `RunComparison` doc says "every DISTINCT trap id lands in exactly one bucket" [crates/opencmdb-core/src/score.rs:337,417,438]
+- [x] [Review][Patch] **Two errors in my own completion record** — resolved below: the test count is corrected to **12** new `#[test]` fns (core 59→71), and the Debug Log's mutation #2 is re-described to match what actually reds (the caps guard removed on the outcome-match path, not a literal reorder) [this file]
+
+_Dismissed as noise (2): the double clone of each record into two maps (a cost note at n≈300, not a defect) · the AC7 heading date `2026-07-23` vs the spec's placeholder `2026-07-22` (the real completion date is right)._
 
 ## Dev Notes
 
@@ -137,10 +156,82 @@ No new crate, no version bump. **Locked** (committed `Cargo.lock`, verified 2026
 
 ### Agent Model Used
 
+Claude Opus 4.8 — `claude-opus-4-8[1m]`
+
 ### Debug Log References
+
+Every claim below is a command that was run, not an inference.
+
+- **Five guards proven to red** (four mutations + the AC5 destructure), each reverted from a backup:
+  | Mutation | Tests reddened |
+  |---|---|
+  | the snapshot check dropped entirely | 4 tests, incl. both refusal tests |
+  | the caps guard removed on the outcome-MATCH path (equal outcomes return `Identical` without checking caps) | `a_differing_snapshot_refuses_even_when_the_outcomes_match` + the two refusal tests |
+  | `is_unchanged` ignores `incomparable` (refusal read as no-difference) | `a_run_with_only_an_incomparable_pair_is_not_unchanged` |
+  | the `only_after` membership bucket dropped | `compare_runs_buckets_every_trap_and_is_partly_comparable` |
+  | **AC5:** a field added to `ScoredRecord` | `compare_records` fails to compile — `E0027: pattern does not mention field` |
+
+  The second is the one that embodies D36, and the review corrected its earlier description: a
+  literal *reorder* of the two `if`s reds nothing, because when outcomes are equal the reordered code
+  still falls through to the caps check. The mutation that reds is removing the caps guard on the
+  equal-outcome path — returning `Identical` on an outcome match without ever checking caps. Two
+  verdicts that agree by coincidence under different capabilities would then pass as "the same
+  answer", exactly the unfalsifiability D36 names.
+- **Gates:** `cargo fmt --all` clean · `cargo clippy --workspace --all-targets -- -D warnings` clean
+  · `cargo test --workspace` → **102 (bin) + 71 (core, +12) + 42 (xtask), 0 failed**. The +12 counts
+  the 7 tests written in dev-story plus the 5 added while applying the review (rule-sensitivity,
+  `as_of`, two empty-run boundaries, two-in-a-bucket).
+- `cargo xtask ci` → all gates green, `file-size 884` (this story adds ~150 code lines to `score.rs`,
+  still far under 2000). `architecture-views.md` NOT regenerated.
+- **`Cargo.lock` did not move**; no dependency added. Pure domain code — no I/O, no clock.
+- **The MariaDB-backed tests did NOT run** (`DATABASE_URL` unset). These counts say nothing about
+  the database.
 
 ### Completion Notes List
 
+- **Comparability is PAIRWISE, and run-level was rejected with a reason.** 4.5b made the capability
+  descriptor positional, so two records in one run legitimately carry different snapshots — "the
+  run's snapshot" is not well-defined. `compare_runs` matches by `TrapId`; a run may be *partly*
+  comparable, and `RunComparison` says which traps compared, which differed, which were refused, and
+  which changed membership. The committed `capability-downgrade.jsonl` is exactly the positional case:
+  a trap scored under NET_RAW and under ping-only is refused, never silently equal.
+- **Refusal is a distinct outcome from "no difference" — AC2's core.** `RecordComparison` has three
+  variants: `Identical`, `Differing`, `IncomparableSnapshot`. The snapshot is checked FIRST, so a
+  differing snapshot is refused before the outcomes are even looked at. A test asserts the refusal is
+  `!=` `Identical`; `RunComparison::is_unchanged()` returns false when any pair is incomparable — an
+  undecided comparison is not a passing one.
+- **A snapshot difference is NEVER repaired (AC4).** No normalising, no defaulting, no ignoring
+  `as_of`. The D36 quote — *"anyone who 'fixes this flake' by pinning the capability has broken the
+  product to make CI green"* — sits next to the code that refuses.
+- **The comparison is exhaustive over the record's fields (AC5)** by a full destructure with no `..`:
+  every field is named, and each is annotated with why it participates or does not. Proven: adding a
+  field makes `compare_records` fail to compile with `E0027`. `source_state` is excluded (AC6) —
+  uninhabited until Epic 13 — and `verdict_vector` likewise, both recorded.
+- **Pure function in `opencmdb-core` (AC3)**, beside 4.6a's algebra. No persistence, no I/O. The
+  types are exercised by hand-built records, like 4.6a's `ScoredRecord`, until an engine produces
+  runs.
+- **Three register entries appended**: lattice monotonicity (Epic 5), `source_state` exclusion (to
+  revisit at Epic 13), and the pairwise-vs-run-level decision.
+
 ### File List
 
+- `crates/opencmdb-core/src/score.rs` (modified — `RecordComparison`, `RunComparison`,
+  `compare_records`, `compare_runs`, `comparable_fields`; 12 tests)
+- `crates/opencmdb-core/src/lib.rs` (modified — exports)
+- `_bmad-output/implementation-artifacts/deferred-work.md` (modified — three story-4.6c entries)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified)
+- `Cargo.lock` — **unchanged**, measured.
+
 ### Change Log
+
+- 2026-07-23 — Run comparability closes Epic 4's harness half. Two runs compare trap by trap; a pair
+  is comparable only under an identical capability snapshot (D36), and a differing snapshot is
+  refused, never reported as "no change". Pairwise, because 4.5b made capability positional and a
+  run has no single snapshot. Pure domain code, exhaustive over the record's fields so a new field
+  forces a decision. Five guards proven to red, including the D36 snapshot-first check and the AC5
+  destructure.
+- 2026-07-23 — Code review addressed (11 findings, all resolved). Decision (a): rule-sensitivity in
+  `compare_records` is kept and documented as the D19/D46b drift case. Three robustness holes closed
+  (`incomparable` now carries both snapshots; `debug_assert`s on same-trap and within-run uniqueness),
+  the before/after destructure DRY-factored into `comparable_fields`, three doc overclaims corrected,
+  and five tests added (rule-sensitivity, `as_of`, two empty-run boundaries, two-in-a-bucket).
