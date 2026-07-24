@@ -1444,6 +1444,13 @@ mod tests {
                     stack.push(path);
                     continue;
                 }
+                // `README.md` is exempt at any depth, exactly as the corpus lock's orphan rule
+                // exempts it (`xtask/src/main.rs`) and the production walk `discover_trap_files`
+                // does — documenting this directory (e.g. the reality-debt register) must not red
+                // the test suite. Kept identical to the replay walk's exemption above.
+                if path.file_name().and_then(|n| n.to_str()) == Some("README.md") {
+                    continue;
+                }
                 // Case-insensitive: a `broken.TOML` skipped silently would be hashed by the
                 // gate and read by nobody.
                 let is_toml = path

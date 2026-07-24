@@ -1,5 +1,5 @@
 # generated: 2026-07-21
-# last_updated: 2026-07-23
+# last_updated: 2026-07-24
 # project: opencmdb
 # project_key: NOKEY
 # tracking_system: file-system
@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-23
+last_updated: 2026-07-24
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -102,10 +102,9 @@ development_status:
   # 4.5 was split into 4.5a/4.5b at story preparation (2026-07-22) — see epics.md:936.
   # The letter suffix follows the house idiom already used for inserted items (D56b, AC5b/7b/7c).
   4-5a-fixture-connector-replays-failures: done
-  # 4.5b is contexted and its file is written, but it BUILDS ON 4.5a's record dispatcher —
-  # do not start it first. Marked ready-for-dev rather than backlog so a later create-story
-  # run does not treat it as uncreated and overwrite the file.
-  4-5b-fixture-connector-replays-capability-changes: review
+  # 4.5b built on 4.5a's record dispatcher; both shipped together in commit 5887fb9
+  # ("Story 4.5a+4.5b") and are merged on master.
+  4-5b-fixture-connector-replays-capability-changes: done
   # 4.6 was split into 4.6a/4.6b/4.6c at story preparation (2026-07-22) after a validation pass —
   # see epics.md. Build them in order: 4.6b depends on 4.6a, 4.6c on both.
   4-6a-scoring-algebra: done
@@ -118,7 +117,7 @@ development_status:
   # the positive/negative completeness check (AC3), independent of the rule comparison.
   4-7a-trap-runner-asserts-the-rule: done
   4-7b-trap-corpus-positive-and-negative: done
-  4-8-reality-debt-register: backlog
+  4-8-reality-debt-register: done
   4-9-trap-randomized-mac: backlog
   4-10-trap-multi-nic: backlog
   4-11-trap-shared-hardware-vm: backlog

@@ -295,9 +295,10 @@ pub fn score_corpus(
 /// is an error, not a smaller result. `README.md` is exempt at any depth, exactly as the corpus
 /// lock's orphan rule exempts it, so documenting a directory does not turn the gate red.
 ///
-/// This is the harness's OWN walk, not the `#[cfg(test)]` walks in `fixtures.rs`: those are test
-/// helpers (`walk_replay_streams` scans replay streams, not traps), and promoting one would move
-/// its callers for no gain here.
+/// This is the harness's OWN walk, not the `#[cfg(test)]` walks in `fixtures.rs`: `walk_replay_streams`
+/// is a replay-stream helper (a different tree), and `every_trap_file_in_the_corpus_is_valid` is an
+/// inline corpus-integrity test that walks traps independently and — like this walk — exempts
+/// `README.md`. Promoting either would move its callers for no gain here.
 fn discover_trap_files(root: &Path) -> Result<Vec<PathBuf>, FixtureError> {
     let mut found = Vec::new();
     let mut stack = vec![root.to_path_buf()];

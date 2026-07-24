@@ -315,3 +315,20 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   one casing. Owner: whoever hardens the cross-file corpus guards — fold the cross-file `seen` key with
   the SAME `trim().to_lowercase()` the within-file guard uses, and add a test with two files whose ids
   differ only by case/whitespace.
+
+## Deferred from: code review of story-4.8 (2026-07-24)
+
+- **The reality-debt register is outside the privacy walk's reach.** The synthetic-data guard
+  (`assert_facts_are_synthetic` / `the_corpus_carries_no_real_network_data`, `crates/opencmdb-bin/src/fixtures.rs`)
+  scans `scenario/replay/` observation streams only; no automated check scans any `README.md`, including
+  the new register at `fixtures/scenario/traps/README.md`. **PRE-EXISTING** (no README was ever
+  scanned; the register did not create the gap) but now more pointed: the register is BY DESIGN the
+  corpus file most likely to tempt a pasted real MAC/hostname/IP, because every entry is sourced from a
+  real Tier-2 bulk run. Today the only guard is prose discipline — D19 plus the register's own "Never
+  real network data" section, which requires a recorded case to be a PATTERN (*"two randomized MACs,
+  one physical interface"*), never a capture. This is the same class as the already-recorded
+  *"a hostname written in prose — a machine cannot recognise the second"* residual (story-4.1 review):
+  a machine cannot reliably tell a synthetic pattern from a real one in free text. Owner: whoever
+  hardens corpus privacy — a lint that flags a non-RFC-5737 IPv4 or a non-locally-administered MAC
+  literal appearing in any committed corpus `README.md` would catch the obvious paste; the harder
+  hostname-in-prose case stays a review-discipline matter.
