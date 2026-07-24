@@ -53,4 +53,6 @@ Two rules the reader enforces, both because a fixture is a spec and not test dat
 columns is correct — `must-merge`, `must-not-merge`, `must-abstain` — and the author's mandatory
 one-sentence reason. A trap references observations by their stable `obs_id`, never by line
 number, and a reference to an observation its stream does not contain is refused: a trap that can
-never fire would sit in the corpus looking like coverage, and the gate counts traps.
+never fire would sit in the corpus looking like coverage, and the gate counts traps. `traps/README.md`
+is the **reality-debt register** — what the corpus does NOT cover, and the queue from which trap #51
+and beyond are drawn.
