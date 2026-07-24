@@ -118,7 +118,7 @@ development_status:
   4-7a-trap-runner-asserts-the-rule: done
   4-7b-trap-corpus-positive-and-negative: done
   4-8-reality-debt-register: done
-  4-9-trap-randomized-mac: backlog
+  4-9-trap-randomized-mac: done
   4-10-trap-multi-nic: backlog
   4-11-trap-shared-hardware-vm: backlog
   4-12-trap-cloned-mac: backlog
