@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-24
+last_updated: 2026-07-24  # story 4.11 reviewed → done (code-review, 2 LOW patches applied)
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -120,7 +120,7 @@ development_status:
   4-8-reality-debt-register: done
   4-9-trap-randomized-mac: done
   4-10-trap-multi-nic: done
-  4-11-trap-shared-hardware-vm: backlog
+  4-11-trap-shared-hardware-vm: done
   4-12-trap-cloned-mac: backlog
   4-13-trap-dhcp-churn: backlog
   4-14-trap-vrrp-hsrp-virtual-mac: backlog

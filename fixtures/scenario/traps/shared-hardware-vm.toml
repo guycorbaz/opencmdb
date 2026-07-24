@@ -1,0 +1,46 @@
+# The shared-hardware VM family (story 4.11) — several VMs on one hypervisor share the physical
+# uplink, so shared hardware TEMPTS a false merge while the VMs are genuinely different logical hosts
+# (architecture.md:891, D12: L2 groups by hostname/topology/DHCP, attacked by shared-hardware VMs).
+# This L2 family is distinguished by HOSTNAME, not uplink — the uplink is shared by construction (the
+# same `peer_mac` and `peer_port` on every observation). All three traps below judge
+# `scenario/replay/shared-hardware-vm.jsonl`; together they say: a shared physical host is no reason to
+# fuse distinct logical hosts, and a distinct virtual MAC is no reason to split one VM. It is the first
+# three-column family in the corpus — must-merge + must-not-merge (both poles keep it complete) plus a
+# must-abstain for the honestly-ambiguous edge of the SAME scenario (DR1: the abstain rides along,
+# satisfying neither pole). The two L2 rule ids are COINED here (l2-hostname-agrees /
+# l2-different-hostname): the uplink pair cannot express a shared uplink, so this records the Epic-5
+# contract that L2's cascade will have hostname-agreement and hostname-conflict rules
+# (architecture.md:891).
+
+[[trap]]
+id = "shared-hardware-vm-must-merge"
+replay = "scenario/replay/shared-hardware-vm.jsonl"
+family = "shared-hardware-vm"
+observations = [
+  "abababab-0000-4000-8000-000000000001",
+  "abababab-0000-4000-8000-000000000002",
+]
+reason = "these two virtual interfaces are one VM's NICs — their locally-administered MACs differ but they share the hostname doc-vm-alpha, so L2 groups them by the agreeing hostname, and the hypervisor's shared uplink is not what makes them one device."
+expect = { must-merge = { rule = "l2-hostname-agrees" } }
+
+[[trap]]
+id = "shared-hardware-vm-must-not-merge"
+replay = "scenario/replay/shared-hardware-vm.jsonl"
+family = "shared-hardware-vm"
+observations = [
+  "abababab-0000-4000-8000-000000000001",
+  "abababab-0000-4000-8000-000000000003",
+]
+reason = "these two virtual interfaces are different VMs co-tenant on one hypervisor — they share the physical uplink but report distinct hostnames doc-vm-alpha and doc-vm-beta, so the distinct hostnames oppose the L2 join and grouping them by shared hardware would be a false merge."
+expect = { must-not-merge = { rule = "l2-different-hostname" } }
+
+[[trap]]
+id = "shared-hardware-vm-must-abstain"
+replay = "scenario/replay/shared-hardware-vm.jsonl"
+family = "shared-hardware-vm"
+observations = [
+  "abababab-0000-4000-8000-000000000001",
+  "abababab-0000-4000-8000-000000000004",
+]
+reason = "this hostless virtual interface shares only the hypervisor's uplink with doc-vm-alpha and reports no hostname, so no observed value distinguishes a second NIC of that VM from a new co-tenant VM, and the engine must abstain rather than guess."
+expect = { must-abstain = { cause = "NoObservedValue" } }

@@ -5,7 +5,7 @@ columns is correct — `must-merge`, `must-not-merge`, `must-abstain` — and th
 one-sentence reason. A trap references observations by their stable `obs_id`, never by line number,
 and a reference to an observation its stream does not contain is refused. See `example.toml` for the
 format, `../README.md` for the `scenario/` vs `capture/` split, and `../../README.md` for the corpus
-lock. The trap FAMILIES arrive from story 4.9 onward; today only `example.toml` lives here.
+lock. The trap FAMILIES arrive from story 4.9 onward, each in its own `.toml` beside `example.toml`.
 
 This file is also the **reality-debt register** — the honest record of what these traps do NOT cover.
 
