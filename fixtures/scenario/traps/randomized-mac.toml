@@ -1,0 +1,27 @@
+# The randomized-MAC family (story 4.9) — the first real trap family. A locally-administered MAC
+# (the U/L bit set) is the MEDIAN identity case, not the exotic one (architecture.md:901): a laptop
+# with a per-SSID randomized Wi-Fi MAC is what the engine meets every day. Both decision poles below
+# judge `scenario/replay/randomized-mac.jsonl`, and together they pin one rule: L1 decides on MAC
+# equality, and "locally administered" changes nothing about that.
+
+[[trap]]
+id = "randomized-mac-must-not-merge"
+replay = "scenario/replay/randomized-mac.jsonl"
+family = "randomized-mac"
+observations = [
+  "eeeeeeee-0000-4000-8000-000000000001",
+  "eeeeeeee-0000-4000-8000-000000000003",
+]
+reason = "these two presences are one laptop's Wi-Fi interface after a per-SSID MAC re-randomization, yet their locally-administered MACs differ, which opposes an L1 merge — regrouping them onto one device is L2's topology join, never L1's."
+expect = { must-not-merge = { rule = "l1-distinct-mac" } }
+
+[[trap]]
+id = "randomized-mac-must-merge"
+replay = "scenario/replay/randomized-mac.jsonl"
+family = "randomized-mac"
+observations = [
+  "eeeeeeee-0000-4000-8000-000000000001",
+  "eeeeeeee-0000-4000-8000-000000000002",
+]
+reason = "both carry the identical locally-administered MAC 02:00:5e:00:53:20 an hour apart, so only the lease moved and the U/L bit is no licence to abstain on an exact-MAC match."
+expect = { must-merge = { rule = "l1-exact-mac" } }

@@ -36,3 +36,15 @@ sha256 = "b82fe55e12c1a8b57dad9bea385e3050762457e240ef9a0dd1b10f26a46884ca"
 path = "scenario/traps/example.toml"
 sha256 = "d7200169f4afd21049f7f557832d875e0b23b0ce1dd6b4a23cd88ff9c9aae671"
 
+[[artefact]]
+# Story 4.9: the randomized-MAC family's replay stream — three presences of one laptop's Wi-Fi
+# interface (C1/C2 the same locally-administered MAC an hour apart, C3 a re-randomized MAC).
+path = "scenario/replay/randomized-mac.jsonl"
+sha256 = "b271e11f1645a4b8baf1d214c18e998a7eee2e1cc3fc4e9e8b489f831966fc99"
+
+[[artefact]]
+# Story 4.9: the randomized-MAC family — the first real trap family, both decision poles
+# (must-not-merge on l1-distinct-mac, must-merge on l1-exact-mac).
+path = "scenario/traps/randomized-mac.toml"
+sha256 = "f0ded78e6aad778cacbe29091165431610f2a0f2a64e1364e92df9fc6655912b"
+
