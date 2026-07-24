@@ -1,0 +1,40 @@
+# The DHCP-churn family (story 4.13) — time enters as DATA (D19): "`observed_at` comes from the
+# fixture -> the engine NEVER touches the clock (determinism = testability; DHCP churn is tested by
+# replaying timestamps)". An IP address is the one signal in this corpus that moves between devices
+# as NORMAL operation — real captures rot because "DHCP moves" (architecture.md:1317), and D12's L2
+# signal row names DHCP. Every prior family's timestamps were scenery (cloned-mac's story said so of
+# its own); here they ARE the trap: the same address 192.0.2.120 observed at 00:00 and at 02:00
+# belongs to two different boxes, and the only thing in the bytes that says "recycled lease" rather
+# than "IP conflict in one scan" is observed_at. Both traps below judge
+# `scenario/replay/dhcp-churn.jsonl`, and together they pin one thing: an address is a lease, not an
+# identity — it neither fuses its successive holders nor splits the host that carried it. This
+# family coins no rule id: the refusal names l1-distinct-mac (the opposing exemplar) and the merge
+# names l1-exact-mac; the IP-continuity temptation is never named by any expectation.
+#
+# And the D36 record, in its own words: "we require REPRODUCIBILITY, not STABILITY. Replay
+# `(data, capability)` -> the same verdict, always." The verdict may legitimately change when
+# capability changes; the same (corpus, answers) may not. This stream is the corpus's first whose
+# timestamps carry the assertion, and the reproducibility test beside it in trap_gate.rs holds the
+# harness to exactly that.
+
+[[trap]]
+id = "dhcp-churn-must-not-merge"
+replay = "scenario/replay/dhcp-churn.jsonl"
+family = "dhcp-churn"
+observations = [
+  "adadadad-0000-4000-8000-000000000001",
+  "adadadad-0000-4000-8000-000000000003",
+]
+reason = "the address 192.0.2.120 that doc-host-golf held at 00:00 was recycled to a different box by 02:00 — the distinct MACs and the hostnames doc-host-golf vs doc-host-hotel oppose the merge the shared address tempts, because a DHCP lease moves between devices as normal operation."
+expect = { must-not-merge = { rule = "l1-distinct-mac" } }
+
+[[trap]]
+id = "dhcp-churn-must-merge"
+replay = "scenario/replay/dhcp-churn.jsonl"
+family = "dhcp-churn"
+observations = [
+  "adadadad-0000-4000-8000-000000000001",
+  "adadadad-0000-4000-8000-000000000002",
+]
+reason = "both presences carry the identical MAC 02:00:5e:00:53:78 and the hostname doc-host-golf one hour apart, so only the leased address moved from 192.0.2.120 to 192.0.2.121 — an address that churns is a lease doing its job, not a new device."
+expect = { must-merge = { rule = "l1-exact-mac" } }

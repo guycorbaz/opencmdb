@@ -361,3 +361,17 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   but distinct from, the story-4.10 round-trip byte-shape defer above. Owner: whoever hardens corpus
   byte-fidelity — the natural fix walks every committed stream through `FixtureConnector::load` in
   one test.
+
+## Deferred from: code review of story-4.13 (2026-07-24)
+
+- **The dhcp-churn byte-pin test pins MAC/hostname values relationally, never by value.** The
+  constants both `reason` strings cite (`02:00:5e:00:53:78`, `doc-host-golf`, `doc-host-hotel`)
+  are asserted by no test: `the_dhcp_churn_stream_moves_the_address_only_through_observed_at`
+  asserts equality/inequality BETWEEN observations (per AC3's own wording), not the authored
+  values themselves, so a re-authored stream with different (still-synthetic) MACs/hostnames and
+  a refreshed sha256 would strand the reason text while every test stays green. Pre-existing
+  class, not caused by 4.13 — exact-value pinning (`expected()`) and the round-trip witness cover
+  only `minimal.jsonl` (see the story-4.10 defer above); the review's patch items cover the values
+  the family premise depends on (the three `IpV4`s) and the fact-count, and leave whole-value
+  pinning to the same owner: whoever hardens corpus byte-fidelity, corpus-wide rather than
+  per-family.
