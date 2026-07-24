@@ -22,6 +22,27 @@ make the release gate binary and zero-tolerance (D18) — and they say nothing a
 author never pictured. Admitting that here is the point: a weakness written down is a weakness a
 maintainer can close, not one a user discovers first.
 
+## The schema is not a backstop
+
+The database cannot catch what these traps guard. D18 says so on the record:
+
+> *"no `CHECK` detects a false merge. The schema makes a false merge revisable and traceable; it
+> does not make it impossible."* — D18
+
+And the schema refuses to pretend otherwise: there is deliberately **no unique index on
+`interface.mac_canon`** (D21) — *"A cloned MAC = two real interfaces, same MAC. A UNIQUE would turn
+the exact case we must ABSTAIN on into a 500."* Expressing MAC uniqueness in DDL would misunderstand
+the problem: the uniqueness of a MAC is a decision, not a constraint.
+
+The consequence is stated plainly: **before a release, the false merge is guarded ONLY by this
+corpus** (the `cloned-mac` family, story 4.12); after one, by an operator's unlink — *"a bad link is
+UNLINKED, never erased"* (D14). And two shapes stay untrappable by construction: the
+**evidence-free clone** — the same MAC with no other signal at all — and the **perfect clone** —
+the MAC and its accompanying signals (the hostname) copied wholesale. Both are byte-identical to an
+honest re-sighting, so no trap can demand their detection without demanding clairvoyance — indeed
+the `cloned-mac` family's own `must-merge` mandates merging exactly that byte-shape, as it must.
+That is the residual fragility, and it is a release risk, not a test detail (D18).
+
 ## The register
 
 This register is the **queue** of real-world cases the corpus cannot yet produce. It is where a case

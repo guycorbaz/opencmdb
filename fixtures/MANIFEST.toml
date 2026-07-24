@@ -75,3 +75,16 @@ sha256 = "2981d3c1195bace9afde526a36ef270b590de7da1c73f543ac5d7f577e881a07"
 path = "scenario/traps/shared-hardware-vm.toml"
 sha256 = "47055cb70aac7b9b1b995d4bb3c45003f633299d4c8c2682b5fe58120054a4e6"
 
+[[artefact]]
+# Story 4.12: the cloned/spoofed-MAC family's replay stream — three presences carrying ONE
+# byte-identical cloned MAC (K1/K3 the original host doc-host-echo, K2 a second host doc-host-foxtrot
+# wearing the clone; the hostname is the discriminator, no Uplink).
+path = "scenario/replay/cloned-mac.jsonl"
+sha256 = "659e53771114d4516623567e2d46fcedab75b075799f7a08fc61f28246045a9e"
+
+[[artefact]]
+# Story 4.12: the cloned/spoofed-MAC family — the INVERSE trap, guarding the false MERGE (must-not-merge
+# on l2-different-hostname REUSED from 4.11, must-merge on l1-exact-mac). Its header carries D18's
+# "no CHECK detects a false merge" record with D21's no-UNIQUE-on-mac_canon renunciation.
+path = "scenario/traps/cloned-mac.toml"
+sha256 = "6b84620933e8bd3da5aadcb1a9961d48292fab58e2a3b96c25d1e175dffdfbcb"
