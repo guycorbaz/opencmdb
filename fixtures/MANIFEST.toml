@@ -88,3 +88,17 @@ sha256 = "659e53771114d4516623567e2d46fcedab75b075799f7a08fc61f28246045a9e"
 # "no CHECK detects a false merge" record with D21's no-UNIQUE-on-mac_canon renunciation.
 path = "scenario/traps/cloned-mac.toml"
 sha256 = "6b84620933e8bd3da5aadcb1a9961d48292fab58e2a3b96c25d1e175dffdfbcb"
+
+[[artefact]]
+# Story 4.13: the DHCP-churn family's replay stream — three presences around ONE recycled address
+# (N1 doc-host-golf holding 192.0.2.120, N2 the same host after its lease moved to .121, N3 a
+# different host doc-host-hotel wearing the recycled .120; the churn lives in `observed_at` alone).
+path = "scenario/replay/dhcp-churn.jsonl"
+sha256 = "ec4d1d1bf499a8120d661cb3cc42d0f3b2b7fe5575925e7376e84d1a434a8720"
+
+[[artefact]]
+# Story 4.13: the DHCP-churn family — time enters as data, D19 (must-not-merge on l1-distinct-mac
+# REUSED against the recycled address, must-merge on l1-exact-mac across the moved lease). Its
+# header carries D36's reproducibility-not-stability record; coins no rule id.
+path = "scenario/traps/dhcp-churn.toml"
+sha256 = "ce43dfb9abb052d58aad5b52b5f2c1e43e31fb08d1d54a1260e103716e287314"

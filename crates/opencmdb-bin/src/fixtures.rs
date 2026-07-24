@@ -1739,4 +1739,78 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             "the corpus path must be expressed once (plus this test's own needle); found {files:?}"
         );
     }
+
+    /// Story 4.13's byte-pin — the second, independent oracle over `dhcp-churn.jsonl`, in the
+    /// spirit of `expected()`: the two holders of the recycled address `192.0.2.120` are
+    /// separated by NOTHING but time (D19 — DHCP churn is tested by replaying timestamps; the
+    /// engine never touches the clock). Nothing else in the harness validates timestamps, so
+    /// their strict increase in this stream is pinned here or nowhere.
+    #[test]
+    fn the_dhcp_churn_stream_moves_the_address_only_through_observed_at() {
+        let observations = read_jsonl(&fixture_path("scenario/replay/dhcp-churn.jsonl").unwrap())
+            .expect("the dhcp-churn stream must read");
+        assert_eq!(observations.len(), 3, "three authored presences, exactly");
+        // Exactly 3 facts per line. Without this, `find()` below takes the FIRST match of each
+        // kind and a duplicated or extra fact would pass every assertion unnoticed; with it, the
+        // one-of-each extraction pins the fact list exactly.
+        for (n, observation) in observations.iter().enumerate() {
+            assert_eq!(
+                observation.facts.len(),
+                3,
+                "observation {n} carries exactly its three facts"
+            );
+        }
+
+        let fact = |n: usize, pick: fn(&Fact) -> bool| {
+            observations[n]
+                .facts
+                .iter()
+                .find(|f| pick(f))
+                .unwrap_or_else(|| panic!("observation {n} must carry the fact"))
+                .clone()
+        };
+        let mac = |n| fact(n, |f| matches!(f, Fact::Mac { .. }));
+        let ip = |n| fact(n, |f| matches!(f, Fact::IpV4 { .. }));
+        let hostname = |n| fact(n, |f| matches!(f, Fact::Hostname { .. }));
+
+        // N1 and N3 wear the recycled address — byte-identical `IpV4` facts, compared parsed.
+        assert_eq!(
+            ip(0),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 120)
+            },
+            "N1 holds the recycled address"
+        );
+        assert_eq!(ip(2), ip(0), "N3 holds the SAME address two hours later");
+
+        // N1 and N2 are one host — identical Mac AND Hostname; only the lease moved, and the
+        // address it moved TO is pinned: were N2 still holding `.120`, the must-merge pair would
+        // be a same-address re-sighting, not a moved lease — the family's premise.
+        assert_eq!(mac(0), mac(1), "N2 carries N1's exact MAC");
+        assert_eq!(hostname(0), hostname(1), "N2 carries N1's exact hostname");
+        assert_eq!(
+            ip(1),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 121)
+            },
+            "N2 holds the moved lease"
+        );
+
+        // N3 is a different box — it shares ONLY the IpV4 bytes with N1.
+        assert_ne!(mac(2), mac(0), "N3's MAC differs from N1's");
+        assert_ne!(hostname(2), hostname(0), "N3's hostname differs from N1's");
+
+        // The churn lives in `observed_at` alone: the three instants are exactly the three
+        // authored values, in strictly increasing order.
+        let instants: Vec<Timestamp> = observations.iter().map(|o| o.observed_at).collect();
+        assert_eq!(
+            instants,
+            vec![
+                ts("2026-01-06T00:00:00Z"),
+                ts("2026-01-06T01:00:00Z"),
+                ts("2026-01-06T02:00:00Z"),
+            ],
+            "the reassignment happens BETWEEN observations, as authored time"
+        );
+    }
 }

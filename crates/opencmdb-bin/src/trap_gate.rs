@@ -386,9 +386,9 @@ mod tests {
 
         // Discovered is what makes the zeros honest: `example.toml` carries three traps,
         // `randomized-mac.toml` (story 4.9) adds two, `multi-nic.toml` (story 4.10) two more,
-        // `shared-hardware-vm.toml` (story 4.11) three and `cloned-mac.toml` (story 4.12) two —
-        // twelve in the committed corpus.
-        assert_eq!(report.discovered(), 12, "the walk must open the corpus");
+        // `shared-hardware-vm.toml` (story 4.11) three, `cloned-mac.toml` (story 4.12) two and
+        // `dhcp-churn.toml` (story 4.13) two — fourteen in the committed corpus.
+        assert_eq!(report.discovered(), 14, "the walk must open the corpus");
         assert_eq!(
             report.scored(),
             0,
@@ -406,7 +406,7 @@ mod tests {
     fn the_report_says_plainly_that_nothing_was_scored() {
         let report = score_corpus(&committed_traps_root(), &BTreeMap::new()).unwrap();
         let rendered = report.to_string();
-        assert!(rendered.contains("12 trap(s) discovered"), "{rendered}");
+        assert!(rendered.contains("14 trap(s) discovered"), "{rendered}");
         assert!(rendered.contains("0 scored"), "{rendered}");
         assert!(rendered.contains("0 truth-table failure(s)"), "{rendered}");
     }
@@ -416,7 +416,7 @@ mod tests {
     #[test]
     fn a_trap_with_no_answer_is_discovered_but_not_scored() {
         let mut answers = BTreeMap::new();
-        // A correct answer for one trap, so `scored` is 1 while `discovered` stays 12.
+        // A correct answer for one trap, so `scored` is 1 while `discovered` stays 14.
         answers.insert(
             TrapId("example-must-abstain".into()),
             Outcome::Abstained {
@@ -424,7 +424,7 @@ mod tests {
             },
         );
         let report = score_corpus(&committed_traps_root(), &answers).unwrap();
-        assert_eq!(report.discovered(), 12);
+        assert_eq!(report.discovered(), 14);
         assert_eq!(report.scored(), 1, "only the answered trap is scored");
         assert_eq!(report.failures(), 0, "and its answer is correct");
     }
@@ -1018,5 +1018,49 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             "{rendered}"
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Story 4.13, D36: *"we require REPRODUCIBILITY, not STABILITY. Replay `(data, capability)`
+    /// -> the same verdict, always."* The lexical trap D36 names: the verdict may legitimately
+    /// change when CAPABILITY changes — that is 4.6c's snapshot comparability — but the same
+    /// `(corpus, answers)` may not. No engine exists at v0.2, so the answers map stands in for it
+    /// until Epic 5; what this proves is HARNESS determinism across two same-process runs, and it
+    /// reds only on nondeterminism visible at that scale — a per-instance-seeded `HashMap` swap,
+    /// an ambient-time read. It cannot red on a removal of sorted discovery alone (both walks
+    /// would replay the same readdir order); that property is held by `discover_trap_files`' own
+    /// sort, not here.
+    #[test]
+    fn replaying_the_same_corpus_twice_yields_identical_verdicts() {
+        let mut answers = BTreeMap::new();
+        answers.insert(
+            TrapId("dhcp-churn-must-merge".into()),
+            Outcome::Merged {
+                rule: RuleId("l1-exact-mac".into()),
+            },
+        );
+        answers.insert(
+            TrapId("dhcp-churn-must-not-merge".into()),
+            Outcome::Refused {
+                rule: RuleId("l1-distinct-mac".into()),
+            },
+        );
+
+        let first = score_corpus(&committed_traps_root(), &answers).expect("the corpus reads");
+        let second = score_corpus(&committed_traps_root(), &answers).expect("the corpus reads");
+
+        assert_eq!(
+            first, second,
+            "the same (corpus, answers) must replay to the same verdicts"
+        );
+        assert_eq!(
+            first.to_string(),
+            second.to_string(),
+            "and render to the same string"
+        );
+        // Both new traps answered correctly, so the equality above compares real verdicts,
+        // not two vacuities. `first == second` carries all three counts to `second`.
+        assert_eq!(first.scored(), 2, "both dhcp-churn traps are scored");
+        assert_eq!(first.failures(), 0);
+        assert!(first.rule_mismatches().is_empty());
     }
 }
