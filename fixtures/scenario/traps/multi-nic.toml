@@ -1,0 +1,29 @@
+# The multi-NIC family (story 4.10) — a device with several NICs is the MEDIAN, not the exotic
+# (architecture.md:898-901): the reference NAS is eth0+eth1 bonded + docker0 + N veth, one device with
+# ten interfaces. This family lives at L2 (device grouping), where a false SPLIT actually happens
+# (architecture.md:893: "multi-NIC false-split = L1 correct, L2 failed to group") — never at L1, which
+# is right to keep two distinct MACs apart. Both decision poles below judge
+# `scenario/replay/multi-nic.jsonl`, and together they pin one thing: L2 groups by topology, and a
+# distinct MAC is no reason to split one host into two devices.
+
+[[trap]]
+id = "multi-nic-must-merge"
+replay = "scenario/replay/multi-nic.jsonl"
+family = "multi-nic"
+observations = [
+  "ffffffff-0000-4000-8000-000000000001",
+  "ffffffff-0000-4000-8000-000000000002",
+]
+reason = "these two interfaces are one server's NICs dual-homed into the same access switch, so L1 is right to keep their distinct MACs apart while L2 groups them by their agreeing uplink — the false split this catches lives at L2, never L1."
+expect = { must-merge = { rule = "l2-uplink-agrees" } }
+
+[[trap]]
+id = "multi-nic-must-not-merge"
+replay = "scenario/replay/multi-nic.jsonl"
+family = "multi-nic"
+observations = [
+  "ffffffff-0000-4000-8000-000000000001",
+  "ffffffff-0000-4000-8000-000000000003",
+]
+reason = "these two interfaces sit on different access switches, so they are genuinely separate hosts and grouping them would be a false merge — different-switch topology opposes the L2 join rather than merely failing to support it."
+expect = { must-not-merge = { rule = "l2-different-switch" } }

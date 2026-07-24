@@ -48,3 +48,16 @@ sha256 = "b271e11f1645a4b8baf1d214c18e998a7eee2e1cc3fc4e9e8b489f831966fc99"
 path = "scenario/traps/randomized-mac.toml"
 sha256 = "f0ded78e6aad778cacbe29091165431610f2a0f2a64e1364e92df9fc6655912b"
 
+[[artefact]]
+# Story 4.10: the multi-NIC family's replay stream — three presences carrying the first corpus
+# use of the `Uplink` fact (M1/M2 two NICs of one host on the same access switch, M3 a NIC on a
+# different switch).
+path = "scenario/replay/multi-nic.jsonl"
+sha256 = "c5fc7dd5d41c1491e6c8d44ee11652b853f997eca3c5b1099ecff34b9bffdeeb"
+
+[[artefact]]
+# Story 4.10: the multi-NIC family — an L2 device-grouping family, both decision poles
+# (must-merge on l2-uplink-agrees, must-not-merge on l2-different-switch).
+path = "scenario/traps/multi-nic.toml"
+sha256 = "b7f5f03f31ba2d607e0d15487babaf55c2fd0bc7f0a3350ee7f47e961515a7be"
+

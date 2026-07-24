@@ -332,3 +332,20 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   hardens corpus privacy — a lint that flags a non-RFC-5737 IPv4 or a non-locally-administered MAC
   literal appearing in any committed corpus `README.md` would catch the obvious paste; the harder
   hostname-in-prose case stays a review-discipline matter.
+
+## Deferred from: code review of story-4.10 (2026-07-24)
+
+- **A new committed replay stream's serde byte-shape is not pinned by a round-trip test.** The
+  byte-exactness guard `re_serializing_reproduces_the_committed_bytes`
+  (`crates/opencmdb-bin/src/fixtures.rs`) round-trips only `minimal.jsonl`, so no other committed
+  stream — including `randomized-mac.jsonl`, `example-traps.jsonl`, and now `multi-nic.jsonl` — has its
+  exact serialized byte-shape (field order, `MacAddr` array encoding, `Uplink` field names) pinned by a
+  parse→re-serialize→compare test. **PRE-EXISTING** (true of every stream since the corpus began; the
+  multi-NIC family did not create the gap) but newly pointed because `multi-nic.jsonl` is the first
+  stream to carry the `Uplink` fact, whose byte-shape has no round-trip witness. Today the streams are
+  still gated for *parseability* by `every_replay_stream_in_the_corpus_is_valid` (a wrong field name or
+  a malformed `MacAddr` array would red it) and their bytes are frozen by `MANIFEST.toml`'s sha256 — so
+  a silent drift cannot land — but "these bytes are exactly what the type re-emits" is asserted for one
+  stream only. Owner: whoever hardens corpus byte-fidelity — extend the round-trip witness to walk every
+  committed stream (or at least one carrying each fact kind), so the assertion "the committed bytes are
+  the canonical serialization" holds corpus-wide, not just for `minimal.jsonl`.
