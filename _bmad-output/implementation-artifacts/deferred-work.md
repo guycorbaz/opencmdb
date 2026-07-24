@@ -349,3 +349,15 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   stream only. Owner: whoever hardens corpus byte-fidelity — extend the round-trip witness to walk every
   committed stream (or at least one carrying each fact kind), so the assertion "the committed bytes are
   the canonical serialization" holds corpus-wide, not just for `minimal.jsonl`.
+
+## Deferred from: code review of story-4.12 (2026-07-24)
+
+- **Family replay streams are never exercised through `FixtureConnector::load`'s admissibility
+  checks.** The 4.4 admissibility layer (foreign `connector_id`, uncovered scope, undeclared fact
+  kind, repeated `obs_id`) is only ever run against `minimal.jsonl`; every family stream since 4.9
+  (`randomized-mac`, `multi-nic`, `shared-hardware-vm`, `cloned-mac`) is gated for parseability and
+  corpus validity by the fixtures walks, but no test loads them through the connector. Pre-existing,
+  not caused by 4.12 (whose stream would pass those checks — verified during its review). Related to,
+  but distinct from, the story-4.10 round-trip byte-shape defer above. Owner: whoever hardens corpus
+  byte-fidelity — the natural fix walks every committed stream through `FixtureConnector::load` in
+  one test.

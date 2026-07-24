@@ -1,0 +1,39 @@
+# The cloned/spoofed-MAC family (story 4.12) — the INVERSE trap (architecture.md:521): every other
+# family so far guards a false split; this one guards the false MERGE, the direction D10 calls
+# catastrophic and asymmetric ("two hosts fused -> the operator loses trust and uninstalls;
+# false-split is benign"). The cloned-MAC false-merge is an L1 failure (D12), and it is D13's named
+# conflict case: "a Decisive, >=1 Opposes -> Ambiguous <- the cloned-MAC case". Both traps below
+# judge `scenario/replay/cloned-mac.jsonl` — one byte-identical MAC on three presences — and
+# together they pin one thing: an identical MAC is decisive ONLY when nothing opposes it. This
+# family coins no rule id: the refusal names l2-different-hostname (the hostname-conflict rule,
+# story 4.11) and the merge names l1-exact-mac.
+#
+# And the residual fragility, on the record in D18's own words: "no `CHECK` detects a false merge.
+# The schema makes a false merge revisable and traceable; it does not make it impossible." D21
+# enforces that stance: NO unique index on `interface.mac_canon`, deliberately — "A cloned MAC =
+# two real interfaces, same MAC. A UNIQUE would turn the exact case we must ABSTAIN on into a 500."
+# So this family is the only pre-release guard against the false merge — the schema cannot be one.
+# An evidence-free clone (same MAC, no opposing signal at all) is untrappable by construction; that
+# limit is recorded in README.md beside this file.
+
+[[trap]]
+id = "cloned-mac-must-not-merge"
+replay = "scenario/replay/cloned-mac.jsonl"
+family = "cloned-mac"
+observations = [
+  "acacacac-0000-4000-8000-000000000001",
+  "acacacac-0000-4000-8000-000000000002",
+]
+reason = "these two presences are different physical hosts, one wearing a clone of the other's MAC — the identical MAC tempts the L1 merge but the distinct hostnames doc-host-echo and doc-host-foxtrot oppose it, and fusing two real hosts is the false merge an operator never forgives."
+expect = { must-not-merge = { rule = "l2-different-hostname" } }
+
+[[trap]]
+id = "cloned-mac-must-merge"
+replay = "scenario/replay/cloned-mac.jsonl"
+family = "cloned-mac"
+observations = [
+  "acacacac-0000-4000-8000-000000000001",
+  "acacacac-0000-4000-8000-000000000003",
+]
+reason = "both presences carry the identical MAC and the same hostname doc-host-echo an hour apart, so only the lease moved — nothing opposes the exact-MAC match, and vigilance against cloned MACs is no licence to fear every identical MAC."
+expect = { must-merge = { rule = "l1-exact-mac" } }
