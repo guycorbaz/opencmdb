@@ -61,3 +61,17 @@ sha256 = "c5fc7dd5d41c1491e6c8d44ee11652b853f997eca3c5b1099ecff34b9bffdeeb"
 path = "scenario/traps/multi-nic.toml"
 sha256 = "b7f5f03f31ba2d607e0d15487babaf55c2fd0bc7f0a3350ee7f47e961515a7be"
 
+[[artefact]]
+# Story 4.11: the shared-hardware VM family's replay stream — four presences, the first corpus use
+# of `Hostname` as the L2 discriminator behind a SHARED `Uplink` (W1/W2 two NICs of one VM sharing
+# doc-vm-alpha, W3 a co-tenant VM doc-vm-beta, W4 a hostless interface — same hypervisor uplink).
+path = "scenario/replay/shared-hardware-vm.jsonl"
+sha256 = "2981d3c1195bace9afde526a36ef270b590de7da1c73f543ac5d7f577e881a07"
+
+[[artefact]]
+# Story 4.11: the shared-hardware VM family — the first three-column L2 family (must-merge on
+# l2-hostname-agrees, must-not-merge on l2-different-hostname, plus a must-abstain on NoObservedValue
+# for the honestly-ambiguous hostless edge). Both hostname rule ids are coined (Epic-5 contract).
+path = "scenario/traps/shared-hardware-vm.toml"
+sha256 = "47055cb70aac7b9b1b995d4bb3c45003f633299d4c8c2682b5fe58120054a4e6"
+
