@@ -1,8 +1,25 @@
 ---
 stepsCompleted: ['step-01-init', 'step-02-discovery', 'step-02b-vision', 'step-02c-executive-summary', 'step-03-success', 'step-04-journeys', 'step-05-domain', 'step-06-innovation', 'step-07-project-type', 'step-08-scoping', 'step-09-functional', 'step-10-nonfunctional', 'step-11-polish', 'step-12-complete', 'step-e-01-discovery', 'step-e-02-review', 'step-e-03-edit']
 workflow: 'edit'
-lastEdited: '2026-07-17'
+lastEdited: '2026-07-25'
 editHistory:
+  - date: '2026-07-25'
+    source: 'Paquet B scope decision (party mode, Guy arbitrated) — FR36 partial-MVP, RECONCILED into the PRD. The debt was recorded in the epics session notes and the Epic-3 retro; the epics carried the split from birth; the PRD alone still promised the full dashboard.'
+    changes: |
+      FR36 -> PARTIAL at MVP: the MVP ships a SLIM self-diagnostic surface = source health + the
+        "what changed since last visit" view (FR18). The rich analytics - reconciliation lag/queue,
+        declared-coverage and open-divergence TRENDS, inbox-health stat cards/sparklines - are GROWTH.
+        This matches what epics.md has said since the epics were written (E17 "Retour apres une
+        absence": "the slim self-diagnostic surface... rich stat-card/sparkline/trend analytics are
+        deferred to Growth"; the FR coverage map: "FR36: E17 (partial MVP: source health +
+        what-changed; rich trend/lag/queue analytics -> Growth)").
+
+      SITES EDITED: FR36 itself · MVP scope list item (11) · Domain-Specific Requirements bullet
+        ("Self-diagnostic dashboard (declared coverage, open divergences, inbox health)" was the
+        full-dashboard promise). NOT edited, deliberately: the Journey 5 narrative and its "reveals"
+        line still show a dashboard with a declared-coverage figure - a journey is a narrative of the
+        product's life (which includes Growth), not a scope commitment; the scope lives in the FRs
+        and the scope lists, which now agree.
   - date: '2026-07-17'
     source: 'architecture D57-scope (party mode: Winston, Murat, Amelia, John — decided by Guy). Items F55-F58. The impact graph leaves the MVP.'
     changes: |
@@ -543,7 +560,8 @@ source-availability-aware alerting** (never fabricate divergences when a source 
 down); (7) explicit, user-visible **source-capability limits** (non-UniFi is partial
 but honest); (8) deep-linked mobile+desktop alerts + generic webhook; (9) a
 **"what changed since last visit"** view; (10) applications/software with **containment
-relationships + "Hosted here"**; (11) self-diagnostic dashboard; (12) read-only JSON API
+relationships + "Hosted here"**; (11) slim self-diagnostic surface — source health +
+what-changed (FR36 partial; rich trend/lag/queue analytics → Growth); (12) read-only JSON API
 + authenticated Prometheus `/metrics`; (13) observation history + last-known-state
 retention.
 
@@ -776,7 +794,8 @@ multi-tenancy, and app-store concerns do not apply.
 - Applications/software + **containment relationships (`hosts`, `exposes`) only** + **"Hosted here" on the
   device record (FR39)**. _(D57-scope: `depends_on`/`connects_to` and the impact traversal are GROWTH.)_
 - Topology as a structured list/table (auto for UniFi, manual otherwise).
-- Self-diagnostic dashboard (declared coverage, open divergences, inbox health).
+- Slim self-diagnostic surface (source health + "what changed since last visit"; the
+  coverage/divergence/inbox-health trend analytics are Growth — FR36 partial).
 - Read-only JSON API + authenticated Prometheus `/metrics`.
 - Auth (session + tokens); credentials encrypted at rest; API-key rotation + encrypted secret
   backup/restore; security-event logging.
@@ -927,7 +946,7 @@ word Impact does not go on a one-hop screen** — FR7's `satisfaction` rule.)_
 - FR35: The operator can configure which alert types are delivered through which channel (in-app; generic webhook at MVP).
 
 ### Insight, History & Reporting
-- FR36: The operator can view a self-diagnostic dashboard reporting source health, reconciliation lag/queue, declared coverage, open-divergence trend, and inbox health.
+- FR36: **(partial at MVP — Paquet B scope decision, reconciled here 2026-07-25)** The operator can view a slim self-diagnostic surface reporting **source health** and led by the **"what changed since last visit"** view (FR18). The rich analytics — reconciliation lag/queue, declared-coverage and open-divergence **trends**, inbox-health stat cards/sparklines — are **Growth**. _(The epics have carried this split since they were written — E17: "the slim self-diagnostic surface led by 'what changed since last visit' plus source health… rich stat-card/sparkline/trend analytics are deferred to Growth" — but this FR still promised the full dashboard at MVP; the two documents now agree.)_
 - FR37: The system records timestamped observation history per device (first seen, last seen, IP↔MAC history).
 - FR38: The operator can configure **observation** retention (default 90 days); first/last-seen and IP-history rollups are retained indefinitely. **This governs OBSERVATIONS only — the lifecycle of inferred entities is FR38b. (Without that cross-reference the reader concludes, wrongly, that inferred entities are eternal.)**
 - FR38b: **Ephemeral-interface lifecycle.** An interface whose hardware address is locally administered — i.e. randomized by the device's operating system, a structural fact readable at ingestion, not an inference — and which has not been observed for a configurable window (default 30 days) moves to a **`dormant`** state: **excluded from divergence metrics and from automatic candidate generation, still queryable, retaining first/last-seen and address history indefinitely** (consistent with FR38), and **returning to active if the address is observed again — same entity, not a new one**.
