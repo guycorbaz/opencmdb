@@ -43,7 +43,7 @@ observations = [
   "bcbcbcbc-0000-4000-8000-000000000003",
   "bcbcbcbc-0000-4000-8000-000000000004",
 ]
-reason = "one name is empty and the other missing — the two shapes the source actually produces for no-hostname — so the grouping their shared port invites has no observed name on either side: an empty string counts as no observed value, not as a half-match."
+reason = "one name is empty and the other missing — the two shapes the source actually produces for no-hostname — so the grouping their shared uplink invites has no observed name on either side: an empty string counts as no observed value, not as a half-match."
 expect = { must-abstain = { cause = "NoObservedValue" } }
 
 [[trap]]

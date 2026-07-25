@@ -167,4 +167,4 @@ sha256 = "454b2d90254a71e9f852a7fc028fa3e616c82880d7df49945da2ad9e387ddbb6"
 # must-merge on l1-exact-mac (a name that fell silent opposes nothing). Its header carries the
 # measurement charter and the cause-is-recorded-truth honesty note.
 path = "scenario/traps/hostname-absence.toml"
-sha256 = "234f95fd789b6b19a20ca64578c221e09c1deb61c6e424930ea68c9b96429a30"
+sha256 = "294257bba146e62a64ea48c25f7a2612893662afde68a244f5d2808dc65a4ed7"
