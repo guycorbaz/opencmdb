@@ -1,0 +1,44 @@
+# The hostname-collision family (story 4.15) — the mirror of cloned-mac: that family judges the
+# same MAC under different hostnames; this one judges different MACs under the same hostname. The
+# two traps below judge `scenario/replay/hostname-collision.jsonl` — one factory-default name,
+# `doc-printer`, worn by two real boxes and by one of them re-seen — and together they hold the
+# false merge from the direction cloned-mac cannot: neither single signal outvotes the other's
+# opposition. The temptation here is hostname agreement (the rule 4.11 coined for it fires
+# legitimately behind a SHARED uplink — and note its must-merge pair's MACs differ too: what
+# separates that family from this one is the topology corroboration, which this stream refuses to
+# carry — no Uplink fact is authored, deliberately). No expectation names the tempting rule. The
+# must-merge below is byte-kin to cloned-mac's own must-merge — there the tested fear was clones,
+# here it is collisions; the corpus tests temptations, not byte-shapes, and each family's header
+# says which.
+#
+# And the F51 record, under the corpus lock — the first family arguing about the STATISTICS of a
+# signal, not just its bytes: `hostname` is unusable on nearly half of known clients (MISSING or
+# empty, never null — architecture.md's measurement), it is one of L2's three named signals (D12),
+# and therefore "the abstention rate is bounded below by this, not by the engine's quality" (F51).
+# F42's favourable majority over-estimates by exactly this margin. A signal that weak cannot
+# outvote L1. Scope split, stated so neither family is blamed for the other's coverage: THIS
+# family tests the present-but-colliding hostname; the absent-and-empty population F51 counts is
+# story 4.17's family, and null is deliberately encoded by neither (the source cannot produce it).
+# No must-abstain pole: the collision is not ambiguous — the MACs decide.
+
+[[trap]]
+id = "hostname-collision-must-not-merge"
+replay = "scenario/replay/hostname-collision.jsonl"
+family = "hostname-collision"
+observations = [
+  "afafafaf-0000-4000-8000-000000000001",
+  "afafafaf-0000-4000-8000-000000000002",
+]
+reason = "two printers of one model ship the same factory default doc-printer, but their distinct MACs and distinct addresses oppose the merge the shared name tempts — a hostname is unusable on nearly half of known clients, and a signal that weak cannot outvote L1."
+expect = { must-not-merge = { rule = "l1-distinct-mac" } }
+
+[[trap]]
+id = "hostname-collision-must-merge"
+replay = "scenario/replay/hostname-collision.jsonl"
+family = "hostname-collision"
+observations = [
+  "afafafaf-0000-4000-8000-000000000001",
+  "afafafaf-0000-4000-8000-000000000003",
+]
+reason = "both presences carry the identical MAC, the identical address and the same name doc-printer one hour apart — nothing opposes the exact-MAC match, and the existence of hostname collisions elsewhere is no licence to distrust this plain re-sighting."
+expect = { must-merge = { rule = "l1-exact-mac" } }

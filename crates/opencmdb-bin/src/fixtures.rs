@@ -2062,6 +2062,125 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         );
     }
 
+    /// Story 4.15's byte-pin — the second, independent oracle over `hostname-collision.jsonl`:
+    /// one factory-default hostname worn by two distinct boxes (the collision, H1/H2) and by
+    /// the same box re-seen an hour later (the plain re-sighting, H1/H3). Every value the two
+    /// reasons cite is pinned here (the 4.13/4.14 review lesson, applied up front): the shared
+    /// name, both MACs, both addresses, and the authored instants as an exact vector — a bare
+    /// increase check would leave the one-hour re-sighting gap unpinned.
+    #[test]
+    fn the_hostname_collision_stream_shares_one_name_across_two_boxes() {
+        let observations =
+            read_jsonl(&fixture_path("scenario/replay/hostname-collision.jsonl").unwrap())
+                .expect("the hostname-collision stream must read");
+        assert_eq!(observations.len(), 3, "three authored presences, exactly");
+        // Exactly 3 facts per line. Without this, `find()` below takes the FIRST match of each
+        // kind and a duplicated or extra fact would pass every assertion unnoticed (4.13's
+        // lesson, carried forward).
+        for (n, observation) in observations.iter().enumerate() {
+            assert_eq!(
+                observation.facts.len(),
+                3,
+                "observation {n} carries exactly its three facts"
+            );
+        }
+        // The obs_id ↔ line binding is pinned too (this story's review): the traps judge by
+        // obs_id, this test reads by index — without these three pins, swapping two lines'
+        // obs_ids (with a re-hashed manifest) would silently invert what each trap judges
+        // while every byte-level assertion stayed green.
+        for (n, suffix) in [(0usize, 1u32), (1, 2), (2, 3)] {
+            assert_eq!(
+                observations[n].obs_id.to_string(),
+                format!("afafafaf-0000-4000-8000-{suffix:012}"),
+                "line {n} carries its authored obs_id"
+            );
+        }
+
+        let fact = |n: usize, pick: fn(&Fact) -> bool| {
+            observations[n]
+                .facts
+                .iter()
+                .find(|f| pick(f))
+                .unwrap_or_else(|| panic!("observation {n} must carry the fact"))
+                .clone()
+        };
+        let mac = |n| fact(n, |f| matches!(f, Fact::Mac { .. }));
+        let ip = |n| fact(n, |f| matches!(f, Fact::IpV4 { .. }));
+        let hostname = |n| fact(n, |f| matches!(f, Fact::Hostname { .. }));
+
+        // The collision: one factory default on all three lines, value-pinned once and
+        // equality-carried to the others.
+        assert_eq!(
+            hostname(0),
+            Fact::Hostname {
+                name: "doc-printer".into(),
+                source: HostnameSource::Dhcp,
+            },
+            "H1 wears the factory default"
+        );
+        assert_eq!(
+            hostname(1),
+            hostname(0),
+            "H2 wears the SAME name — the collision"
+        );
+        assert_eq!(
+            hostname(2),
+            hostname(0),
+            "H3 wears the same name — the re-sighting"
+        );
+
+        // H1 and H2 are two real boxes: both ends value-pinned, and distinct.
+        assert_eq!(
+            mac(0),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 160]),
+                locally_administered: true,
+            },
+            "H1's own MAC"
+        );
+        assert_eq!(
+            mac(1),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 161]),
+                locally_administered: true,
+            },
+            "H2's own MAC"
+        );
+        assert_ne!(mac(1), mac(0), "the colliding boxes keep their own MACs");
+        assert_eq!(
+            ip(0),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 50)
+            },
+            "H1's own address"
+        );
+        assert_eq!(
+            ip(1),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 51)
+            },
+            "H2's own address"
+        );
+        assert_ne!(ip(1), ip(0), "and their own addresses");
+
+        // H3 is H1 re-seen: byte-identical MAC and address — nothing moved, nothing opposes.
+        assert_eq!(mac(2), mac(0), "H3 carries H1's exact MAC");
+        assert_eq!(ip(2), ip(0), "H3 holds H1's exact address");
+
+        // The instants, as an exact vector (pins the values AND the strict increase): the
+        // re-sighting is one full hour later — a plain re-sighting, not a moved lease.
+        let instants: Vec<Timestamp> = observations.iter().map(|o| o.observed_at).collect();
+        assert_eq!(
+            instants,
+            vec![
+                ts("2026-01-09T00:00:00Z"),
+                ts("2026-01-09T00:05:00Z"),
+                ts("2026-01-09T01:00:00Z"),
+            ],
+            "the collision and the re-sighting happen at the authored instants"
+        );
+    }
+
     /// Story 4.14's flag-vs-bytes guard, red-proven in memory: a locally-administered byte
     /// pattern whose authored flag lies (`false`) must panic. The mis-paired fact is built
     /// here and never committed — the committed corpus is walked by

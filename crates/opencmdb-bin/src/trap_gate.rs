@@ -387,9 +387,9 @@ mod tests {
         // Discovered is what makes the zeros honest: `example.toml` carries three traps,
         // `randomized-mac.toml` (story 4.9) adds two, `multi-nic.toml` (story 4.10) two more,
         // `shared-hardware-vm.toml` (story 4.11) three, `cloned-mac.toml` (story 4.12) two,
-        // `dhcp-churn.toml` (story 4.13) two and `vrrp-virtual-mac.toml` (story 4.14) three —
-        // seventeen in the committed corpus.
-        assert_eq!(report.discovered(), 17, "the walk must open the corpus");
+        // `dhcp-churn.toml` (story 4.13) two, `vrrp-virtual-mac.toml` (story 4.14) three and
+        // `hostname-collision.toml` (story 4.15) two — nineteen in the committed corpus.
+        assert_eq!(report.discovered(), 19, "the walk must open the corpus");
         assert_eq!(
             report.scored(),
             0,
@@ -407,7 +407,7 @@ mod tests {
     fn the_report_says_plainly_that_nothing_was_scored() {
         let report = score_corpus(&committed_traps_root(), &BTreeMap::new()).unwrap();
         let rendered = report.to_string();
-        assert!(rendered.contains("17 trap(s) discovered"), "{rendered}");
+        assert!(rendered.contains("19 trap(s) discovered"), "{rendered}");
         assert!(rendered.contains("0 scored"), "{rendered}");
         assert!(rendered.contains("0 truth-table failure(s)"), "{rendered}");
     }
@@ -417,7 +417,7 @@ mod tests {
     #[test]
     fn a_trap_with_no_answer_is_discovered_but_not_scored() {
         let mut answers = BTreeMap::new();
-        // A correct answer for one trap, so `scored` is 1 while `discovered` stays 17.
+        // A correct answer for one trap, so `scored` is 1 while `discovered` stays 19.
         answers.insert(
             TrapId("example-must-abstain".into()),
             Outcome::Abstained {
@@ -425,7 +425,7 @@ mod tests {
             },
         );
         let report = score_corpus(&committed_traps_root(), &answers).unwrap();
-        assert_eq!(report.discovered(), 17);
+        assert_eq!(report.discovered(), 19);
         assert_eq!(report.scored(), 1, "only the answered trap is scored");
         assert_eq!(report.failures(), 0, "and its answer is correct");
     }

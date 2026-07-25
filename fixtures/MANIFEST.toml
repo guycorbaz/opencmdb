@@ -119,3 +119,18 @@ sha256 = "cb560e12ea9e2ea9c0b65acd6739a8a34ec25ec4af2e21ec113c08b1f28738c1"
 # the coining argument, and the privacy record admitting the 5-octet IANA VRRP block.
 path = "scenario/traps/vrrp-virtual-mac.toml"
 sha256 = "e454665e24733e78afcc621e2242b1c7d25fd6e3f584254be56b002ca1052488"
+
+[[artefact]]
+# Story 4.15: the hostname-collision family's replay stream — one factory-default name doc-printer
+# worn by two distinct boxes (the collision) and by the first box re-seen an hour later (the plain
+# re-sighting); no Uplink is authored, so no topology corroborates the shared name.
+path = "scenario/replay/hostname-collision.jsonl"
+sha256 = "fd15e021d1bf3adc19c92baabcd91f26dc5085d51fc9aae9a7982fb40befc243"
+
+[[artefact]]
+# Story 4.15: the hostname-collision family — the mirror of cloned-mac (must-not-merge on
+# l1-distinct-mac REUSED against the shared default, must-merge on l1-exact-mac across the plain
+# re-sighting). Its header carries F51's population bound under the corpus lock: hostname unusable
+# on nearly half, the abstention rate bounded below by this, not by the engine's quality.
+path = "scenario/traps/hostname-collision.toml"
+sha256 = "557c7e80e6126ffd8434a1fe382ccc5d18f0291b66a7c86de614084c301e940c"
