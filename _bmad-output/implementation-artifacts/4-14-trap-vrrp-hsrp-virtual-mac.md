@@ -1,6 +1,6 @@
 # Story 4.14: Trap family — VRRP/HSRP shared virtual MAC
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -291,6 +291,31 @@ decision, not a debate; the epic-end report to Guy carries the full positions.
         conflated-VIP-and-master sibling family Murat sketched goes to the epic report, not the
         register).
 
+### Review Findings
+
+- [x] [Review][Patch] The byte-pin test pinned only V2's uplink octet-exact — V1/A's end was
+      asserted relationally (`uplink(0)==uplink(1)`, `!=uplink(3)`), so a re-authored stream
+      putting V1/A on the second switch with a different port would stay green while dissolving
+      the "different switch, not merely port" premise, and the test's doc overclaimed "pinned
+      here or nowhere". Both ends now pinned octet-exact (Edge Case Hunter #1 / Auditor #1 —
+      the 4.13 `.121` lesson, mirrored) [crates/opencmdb-bin/src/fixtures.rs]
+- [x] [Review][Patch] A's and B's own addresses (`192.0.2.2`/`.3`) were unasserted scenery —
+      the bearers' reason claims "distinct addresses" and the primary's premise needs the VIP to
+      be nobody's own address; both now value-pinned (Edge Case Hunter #2 / Blind Hunter #2)
+      [crates/opencmdb-bin/src/fixtures.rs]
+- [x] [Review][Patch] "the whole last octet is the VRID — any value is in-range" asserted a
+      protocol falsehood (VRID 0 is not deployable, RFC 9568 says 1–255); weakened to the true
+      sentence (Blind Hunter #1 / Edge Case Hunter #3) [crates/opencmdb-bin/src/fixtures.rs]
+- [x] [Review][Patch] sprint-status.yaml's `last_updated` comment still said "→ ready-for-dev"
+      while the binding status field said review (Auditor #2)
+- [x] [Review][Defer] Trap-file text (headers, reasons) is scanned by no privacy rule — its only
+      call site is the `Record::Failure` walk; pre-existing since 4.2, honestly stated by this
+      story's own scanner-wiring test doc → registered in deferred-work.md under
+      "code review of story-4.14"
+- [x] [Review][Defer] The free-text scanner's named evasions (trailing-punctuation tokens,
+      dash-form MACs, the U/L-bit rule admitting IPv6-multicast-shaped strings) — pre-existing
+      "floor, not a proof", not aggravated here → same register entry
+
 ## Dev Notes
 
 ### The shape of this story in one paragraph
@@ -574,3 +599,4 @@ claude-fable-5 (Claude Fable 5)
 | 2026-07-25 | Story 4.14 drafted (create-story, autonomous run): the VRRP shared-virtual-MAC family. Two party-mode decisions recorded (Winston/Amelia/Murat): (1) the privacy walk admits exactly the 5-octet IANA VRRP range `00:00:5e:00:01` through one shared helper, boundaries proven red — a stand-in MAC would be a spec faking its load-bearing bytes; HSRP stays out (Cisco OUI) until a fixture commits it; plus Amelia's flag-vs-bytes cross-check guard. (2) Three traps, no must-abstain (D16's rejection is the assertion): primary must-not-merge [V1,A] naming the COINED `l2-virtual-mac-prefix` (multi-nic's must-merge defeats every existing opposer — the arbitrated point), transitive must-not-merge [A,B] on `l2-different-hostname`, and must-merge [V1,V2] on `l1-exact-mac` across a failover-moved uplink — the corpus's first must-merge overcoming a committed opposing L2 signal. Counts 14 → 17, manifest 15 → 17. Status → ready-for-dev. |
 | 2026-07-25 | Validated (two fresh-context agents: fact-check + gap-hunt). Fact-check 1 HIGH / 1 MED / 2 LOW; gap-hunt 2 HIGH / 3 MED / 5 LOW; all applied. The two structural HIGHs: (1) NO committed trap text ever reaches `assert_text_is_synthetic` (sole call site = the `Record::Failure` walk, fixtures.rs:831) — the "header exercises the scanner" claim was deleted and replaced by two DIRECT scanner-wiring tests, and the no-octets-in-reasons rule is now honestly labeled review-held (dhcp-churn's committed reason names a raw MAC and nothing reds); (2) V1/V2 on the same switch with different ports was the AGREEING shape per multi-nic's own must-merge — B/V2 moved to the second switch `[2,0,94,0,96,11]` so the must-merge overcomes a TRUE committed `l2-different-switch` contradiction. Also: "first coin" corrected (4.10/4.11 coined the l2-* ids), `#[should_panic]` prescribed for the flag red (no bool form exists), verbatim V1/A JSON lines + `"source":"Dhcp"` pinned, `00:11:22:33:44:55` named as the vendor boundary case, amended panic-message text prescribed, byte-level-not-position-level invariant stated (covers `Uplink::peer_mac`), architecture.md:1139 → :1139-1140. |
 | 2026-07-25 | Implemented (dev-story): all 7 tasks complete, ATDD order held — byte-pin RED (`FixtureError::Io`), stream landed, privacy walk's natural RED recorded naming `00:00:5e:00:01:0a`, helper + rewiring + boundary tests (mutation to 3-octet proven red, reverted) + scanner-wiring tests + flag-vs-bytes `#[should_panic]`, trap file landed, count coupling proven RED at `left: 17, right: 14` then updated. Two artefacts locked (manifest 15 → 17, sha256 after final byte); reasons 286/280/275 chars. Full gates green: fmt, clippy `-D warnings`, `cargo test --workspace` (114+86+42), `xtask ci` ("17 fixture(s) match their recorded sha256"). No production-path code; `Cargo.lock`/README/`architecture-views.md` untouched. Status → review. |
+| 2026-07-25 | Code review (3 fresh-context layers: Blind Hunter / Edge Case Hunter / Acceptance Auditor). **Auditor: PASS 9/10 AC** (AC6 partial — see patch 1) — every Dev Agent Record claim reproduced by re-measurement (both sha256 recomputed, reasons 286/280/275, tests 114+86+42, fixtures-gate wording verbatim, the 3-octet mutation and the natural red both REPLAYED by the auditor, tree left clean). 0 CRITICAL/HIGH surviving triage; **4 patches applied** (tests/comment/status only, no hashed artefact touched): V1's uplink now pinned octet-exact alongside V2's (the "different switch" premise was half-pinned), A/B's own addresses value-pinned, the VRID-0 comment weakened to the true sentence, the sprint-status comment refreshed; **2 defers registered** in deferred-work.md (trap-file text unscanned — pre-existing since 4.2; the scanner's named evasions — pre-existing floor). Gates re-run green post-patch (114+86+42; "17 fixture(s) match their recorded sha256"). Status → done. |

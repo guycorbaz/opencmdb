@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-25  # story 4.14 drafted (create-story, autonomous run) → ready-for-dev
+last_updated: 2026-07-25  # story 4.14 reviewed (3-layer, 2 test patches applied) → done
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -123,7 +123,7 @@ development_status:
   4-11-trap-shared-hardware-vm: done
   4-12-trap-cloned-mac: done
   4-13-trap-dhcp-churn: done
-  4-14-trap-vrrp-hsrp-virtual-mac: review
+  4-14-trap-vrrp-hsrp-virtual-mac: done
   4-15-trap-hostname-collision: backlog
   4-16-trap-ephemeral-docker-veth: backlog
   4-17-trap-hostname-absent-or-empty: backlog

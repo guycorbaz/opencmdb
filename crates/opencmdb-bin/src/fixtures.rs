@@ -1924,6 +1924,23 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             }
         }
         assert_ne!(mac(1), mac(2), "the two routers keep their own MACs");
+        // The routers' own addresses are pinned too: the bearers' reason claims "distinct
+        // addresses", and the primary's premise needs the VIP to be nobody's own address — a
+        // drift giving A the VIP would change both traps' geometry while staying green here.
+        assert_eq!(
+            ip(1),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 2)
+            },
+            "A owns its own address"
+        );
+        assert_eq!(
+            ip(2),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 3)
+            },
+            "B owns its own address"
+        );
         assert_eq!(
             hostname(1),
             Fact::Hostname {
@@ -1946,6 +1963,18 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         // `l2-different-switch`), not merely ports.
         assert_eq!(uplink(0), uplink(1), "V1 shares A's exact uplink");
         assert_eq!(uplink(3), uplink(2), "V2 shares B's exact uplink");
+        // BOTH ends of the failover are pinned octet-exact (the 4.13 review's lesson, applied
+        // by this story's own review): without V1's pin, a re-authored stream putting V1/A on
+        // the second switch with a different port would stay green while dissolving the
+        // "different switch, not merely port" premise the must-merge depends on.
+        assert_eq!(
+            uplink(0),
+            Fact::Uplink {
+                peer_mac: MacAddr([2, 0, 94, 0, 96, 10]),
+                peer_port: "swport-11".into(),
+            },
+            "V1 sits on the first switch, at A's port"
+        );
         assert_eq!(
             uplink(3),
             Fact::Uplink {
@@ -1988,7 +2017,9 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         );
         assert!(
             is_synthetic_mac(MacAddr([0, 0, 94, 0, 1, 0])),
-            "the whole last octet is the VRID — any value is in-range"
+            "the last octet is the VRID field — every byte value there is equally protocol-\
+             defined and privacy-safe (VRID 0 is not a deployable VRID, which is exactly why \
+             nothing real can wear it)"
         );
         assert!(
             !is_synthetic_mac(MacAddr([0, 0, 94, 0, 0, 10])),
