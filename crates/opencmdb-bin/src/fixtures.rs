@@ -2203,7 +2203,8 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     /// (E3 — the authored evidence that the window stayed open and the first veth failed to
     /// reappear; NFR7 forbids an absence fact, so disappearance can only be authored this way).
     /// Every value the two reasons cite is pinned, the obs_id ↔ line binding included (4.15's
-    /// rule), and E3 is pinned byte-identical to E1 fact-by-fact so it cannot drift into a
+    /// rule), and E3 is pinned VALUE-identical to E1 fact-by-fact (parsed equality per kind —
+    /// fact order and raw bytes are the corpus lock's business) so it cannot drift into a
     /// third device.
     #[test]
     fn the_docker_veth_stream_replaces_its_veth_without_replacing_its_host() {
@@ -2275,7 +2276,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             "the host's own switch port"
         );
 
-        // E3 is the host RE-SEEN — byte-identical fact-by-fact, so the unreferenced
+        // E3 is the host RE-SEEN — value-identical fact-by-fact, so the unreferenced
         // observation cannot drift into a third device.
         assert_eq!(mac(2), mac(0), "E3 carries the host's exact MAC");
         assert_eq!(ip(2), ip(0), "E3 holds the host's exact address");

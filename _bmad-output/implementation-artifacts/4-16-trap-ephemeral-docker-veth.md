@@ -1,6 +1,6 @@
 # Story 4.16: Trap family — ephemeral Docker veth
 
-Status: review
+Status: done
 
 ## Story
 
@@ -148,6 +148,27 @@ successor veth wearing the recycled container address is a NEW interface, not a 
       21/21 message). Residual grep `"19 trap"` / `discovered(), 19` / `stays 19` / `nineteen`
       → no hits. `Cargo.lock` unchanged; `architecture-views.md` and `traps/README.md`
       untouched.
+
+### Review Findings
+
+- [x] [Review][Patch] `Expectation::MustNotMerge`'s doc comment (opencmdb-core, trap.rs) said
+      "These observations describe different devices" — now contradicted by this family's
+      committed L1-scoped refusal (both members share ONE device). Doc widened to the true
+      sentence: the refusal is scoped by the NAMED RULE's level (`l1-*` interface, `l2-*`
+      device), with docker-veth cited as the committed counter-example (Edge Case Hunter #1 —
+      a DOC-ONLY change to a production file; no logic touched; a false doc is a defect)
+- [x] [Review][Patch] Change Log lacked the "Implemented (dev-story)" row — the same finding as
+      4.15's review; added, and the lesson is now written into the dev checklist of the NEXT
+      story to break the recidive (Auditor #1)
+- [x] [Review][Patch] MANIFEST comment mis-attributed "gone-not-never-a-device" to the
+      SUCCESSOR veth (it is the predecessor's predicate); reworded — MANIFEST comments are not
+      hashed, no re-hash (Blind Hunter #1)
+- [x] [Review][Patch] The byte-pin's doc claimed "byte-identical fact-by-fact" — the test pins
+      parsed VALUES (order and raw bytes are the corpus lock's business); weakened to
+      "value-identical" in both doc and inner comment (Blind Hunter #2)
+- [x] [Review][Defer] `Observation.raw` is scanned by no privacy rule (minimal.jsonl's third
+      observation already carries uninspected prose) — pre-existing since 4.1 → registered in
+      deferred-work.md under "code review of story-4.16" (Edge Case Hunter #2)
 
 ## Dev Notes
 
@@ -336,3 +357,5 @@ claude-fable-5 (Claude Fable 5)
 |------------|------------------------------------------------------------------------|
 | 2026-07-25 | Story 4.16 drafted (create-story, autonomous run): ephemeral Docker veth — the third mutual-check family. must-merge [host, veth] on `l2-uplink-agrees` (the shape 4.14 refuses — the IANA prefix is the only difference); must-not-merge [veth1, veth2] on `l1-distinct-mac` across the recycled container address (4.13's kin, slot-continuity temptation), its reason carrying the epic's gone-not-never-a-device sentence. Header records F17/D17 consistency while stating no trap can test the sweep. E3 (host re-seen, feeds no trap) is the authored evidence of disappearance — NFR7 forbids an absence fact. 4-obs stream `babababa`, `doc-dockerhost`, counts 19 → 21. Status → ready-for-dev. |
 | 2026-07-25 | Validated (two fresh-context agents: fact-check + gap-hunt). 1 HIGH / 5 MED / 8 LOW, all applied. The HIGH: the must-not-merge [E2,E4] is the corpus's first must-not-merge whose two members belong to ONE L2 device — the header must scope the refusal to L1 explicitly (multi-nic's duality), else the family reads self-contradictory when Epic 5 groups both veths into the host. Also: "exact firing shape" weakened (multi-nic's committed pair agrees across DIFFERENT ports; same-port is a stronger agreement the header defends); "same entity" re-attributed to D17 property 1 (not F17); D17 quote made verbatim; reasons precision (no MAC octets review-held, descriptive address, no spec ids in reasons, 269-char draft validated); E3 legality precedent (minimal.jsonl) cited; E1/E3 template = vrrp's own 4-fact line; corpus UUIDs written out; ":392 comment tail" → ":387-391"; Trap 5 clarified (forbid the affirmation, require the negation). |
+| 2026-07-25 | Implemented (dev-story): all 6 tasks, ATDD held — byte-pin RED (`FixtureError::Io`), stream landed and greened, trap file landed (header carrying the L1-scoping sentence, the two mutual checks, the F17/D17 record with honest attribution, E3's why + minimal.jsonl precedent), count RED `left: 21, right: 19` then 19 → 21, manifest 19 → 21 (sha256 after final byte: `9cf1569e…`, `2c2a5407…`). Reasons 269/269, octet-free, no spec ids. Gates green: fmt, clippy `-D warnings`, `cargo test --workspace` (116+86+42), `xtask ci` ("21 fixture(s) match their recorded sha256"). Status → review. |
+| 2026-07-25 | Code review (3 fresh-context layers). **Auditor: PASS 8/8** — every Dev Record claim reproduced (suite 116+86+42, xtask message verbatim, both sha256, reasons 269/269, count-RED replayed with the stale-binary `touch` guard). 0 CRITICAL/HIGH; **4 patches applied**: `Expectation::MustNotMerge`'s core doc widened to the rule-scoped truth (the committed corpus now contains an L1-scoped refusal whose members share one device — doc-only production change), the missing "Implemented" Change Log row (4.15's recidive), the MANIFEST comment's predicate mis-attribution, the byte-pin doc weakened to "value-identical". **1 defer registered** (`Observation.raw` unscanned by the privacy walk — pre-existing since 4.1). Gates re-run green post-patch. Status → done. |

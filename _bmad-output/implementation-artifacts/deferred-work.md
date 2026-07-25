@@ -405,3 +405,13 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   manifest) would invert what those families' traps judge while every byte-level assertion stayed
   green. Pre-existing pattern since 4.13, not aggravated by 4.15. Owner: whoever hardens corpus
   byte-fidelity — three `assert_eq!` per older test, same shape as 4.15's.
+
+## Deferred from: code review of story-4.16 (2026-07-25)
+
+- **`Observation.raw` is scanned by no privacy rule.** The corpus walk
+  `the_corpus_carries_no_real_network_data` inspects `facts` (and `Failure` detail text), never
+  the free-text `raw` payload — and `minimal.jsonl`'s third observation already carries prose in
+  `raw` that nothing inspects. `raw` is documented as "never read by a decision", but the privacy
+  rule's charter is the COMMITTED BYTES, not what decisions read. Pre-existing since 4.1, not
+  aggravated by 4.16 (its four lines carry `raw: null`). Owner: whoever hardens corpus privacy —
+  route `raw` through `assert_text_is_synthetic` in the same walk arm.

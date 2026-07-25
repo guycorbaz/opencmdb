@@ -146,8 +146,8 @@ sha256 = "9cf1569e0711948ad0da324303091994ba250031a5d978a3075c9126c57cb09a"
 [[artefact]]
 # Story 4.16: the ephemeral Docker-veth family — two traps at two levels, scoped in the header
 # (must-merge on l2-uplink-agrees REUSED: a living veth groups into its host; must-not-merge on
-# l1-distinct-mac REUSED at interface level only: a successor veth is gone-not-never-a-device,
-# never a re-sighting). Its header carries the F17/D17 dormant-lifecycle record and the two
+# l1-distinct-mac REUSED at interface level only: the predecessor veth is gone-not-never-a-device,
+# and its successor is a new interface, never a re-sighting). Its header carries the F17/D17 dormant-lifecycle record and the two
 # mutual-check kinships (vrrp shared-uplink primary, dhcp-churn recycled address).
 path = "scenario/traps/docker-veth.toml"
 sha256 = "2c2a5407d1a7aeb98dbd0b9340fd8c403f46f9b43f9b9d523015bb153b3782b8"
