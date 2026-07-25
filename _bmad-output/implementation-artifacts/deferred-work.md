@@ -375,3 +375,22 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   the family premise depends on (the three `IpV4`s) and the fact-count, and leave whole-value
   pinning to the same owner: whoever hardens corpus byte-fidelity, corpus-wide rather than
   per-family.
+
+## Deferred from: code review of story-4.14 (2026-07-25)
+
+- **Trap-file text is scanned by no privacy rule.** `assert_text_is_synthetic`'s only corpus call
+  site is the `Record::Failure` walk over replay streams (fixtures.rs); the headers and `reason`
+  strings of `fixtures/scenario/traps/*.toml` reach it never — `example.toml`, `randomized-mac.toml`
+  and `dhcp-churn.toml` have carried raw (synthetic) MAC strings in reasons since they landed, and
+  4.14's header commits the first full universally-administered MAC string. Pre-existing since 4.2,
+  stated honestly by 4.14's own scanner-wiring test doc; the 4.14 story holds its no-octets-in-reasons
+  rule by review, not by gate. Owner: whoever hardens corpus privacy — the natural fix walks trap
+  files' raw text through the same scanner (comments included, before TOML parsing discards them).
+- **The free-text scanner is a floor with named evasions.** Its own doc says "a floor, not a proof";
+  the review named the specific gaps: a MAC/IP immediately followed by kept punctuation (`.`/`:`)
+  tokenizes unparseable and evades; dash-form MACs (`00-00-5e-…`) are never seen (`MacAddr::from_str`
+  is colon-only); and the U/L-bit rule reads any `x2/x3/x6/x7/xa/xb/xe/xf`-first-octet MAC as
+  synthetic, which admits IPv6-multicast-shaped strings (`33:33:ff:…`) that can embed real interface
+  identifier bytes while refusing IPv4-multicast (`01:00:5e:…`) — an inconsistency, not a leak, in
+  committed synthetic data. Pre-existing, not aggravated by 4.14. Owner: same as above, one scanner
+  hardening pass.

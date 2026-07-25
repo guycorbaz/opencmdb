@@ -853,12 +853,29 @@ mod tests {
             }
             if let Ok(mac) = MacAddr::from_str(token) {
                 assert!(
-                    mac.is_locally_administered(),
-                    "{where_}: free text names {mac}, which is not locally administered — \
-                     a real vendor address must never be committed"
+                    is_synthetic_mac(mac),
+                    "{where_}: free text names {mac}, which is neither locally administered nor \
+                     in the IANA VRRP virtual-router range 00:00:5e:00:01:xx — a real vendor \
+                     address must never be committed"
                 );
             }
         }
+    }
+
+    /// The one rule saying which MAC bytes may be committed, shared by every site that checks a
+    /// MAC (`Fact::Mac`, `Uplink::peer_mac`, free text) — the invariant is byte-level, not
+    /// position-level: an allowance on the bytes cannot be a hole in one position and not
+    /// another.
+    ///
+    /// The invariant was never "U/L bit set" — that was the approximation. It is "no committed
+    /// byte can identify a real network". Two byte shapes satisfy it: a locally-administered
+    /// address (the synthetic corpus idiom), and the IANA VRRP IPv4 virtual-router block
+    /// `00:00:5e:00:01:xx` — a PROTOCOL address, identical on every VRRP deployment on earth
+    /// with that VRID, the MAC analog of an RFC 5737 documentation IP (story 4.14). The list is
+    /// CLOSED and 5-octet exact; a new range (HSRP's `00:00:0c:07:ac` is a Cisco OUI, not IANA)
+    /// enters only alongside a committed fixture that exercises it, with its own prove-to-red.
+    fn is_synthetic_mac(addr: MacAddr) -> bool {
+        addr.is_locally_administered() || addr.0[..5] == [0, 0, 94, 0, 1]
     }
 
     /// The privacy rule itself, applied to one observation's facts. `path` is carried so a
@@ -873,7 +890,23 @@ mod tests {
             match fact {
                 Fact::IpV4 { addr } => assert_documentation_ip(*addr, path),
                 Fact::DhcpLease { ip, .. } => assert_documentation_ip(*ip, path),
-                Fact::Mac { addr, .. } => assert_synthetic_mac(*addr, path),
+                Fact::Mac {
+                    addr,
+                    locally_administered,
+                } => {
+                    assert_synthetic_mac(*addr, path);
+                    // The serde flag is the connector's READING; the bytes are the ground truth
+                    // (`MacAddr::is_locally_administered`'s doc names this cross-check as its
+                    // purpose). Until story 4.14 every corpus flag was `true`, so a lying flag
+                    // was unobservable — the day the first honest `false` entered, this became
+                    // an invariant worth holding.
+                    assert_eq!(
+                        *locally_administered,
+                        addr.is_locally_administered(),
+                        "{where_}: {addr}'s authored locally_administered flag contradicts its \
+                         own U/L bit"
+                    );
+                }
                 Fact::Uplink { peer_mac, .. } => assert_synthetic_mac(*peer_mac, path),
                 Fact::Hostname { name, .. } => assert!(
                     name.starts_with("doc-"),
@@ -906,8 +939,9 @@ mod tests {
     fn assert_synthetic_mac(addr: MacAddr, path: &Path) {
         let where_ = path.display();
         assert!(
-            addr.is_locally_administered(),
-            "{where_}: {addr} is not locally administered — a real vendor address must never be \
+            is_synthetic_mac(addr),
+            "{where_}: {addr} is neither locally administered nor in the IANA VRRP \
+             virtual-router range 00:00:5e:00:01:xx — a real vendor address must never be \
              committed"
         );
     }
@@ -1811,6 +1845,236 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 ts("2026-01-06T02:00:00Z"),
             ],
             "the reassignment happens BETWEEN observations, as authored time"
+        );
+    }
+
+    /// Story 4.14's byte-pin — the second, independent oracle over `vrrp-virtual-mac.jsonl`, in
+    /// the spirit of `expected()`: one IANA VRRP virtual MAC (the corpus's only
+    /// universally-administered byte pattern, admitted by name in `is_synthetic_mac`) carries one
+    /// VIP across two sightings whose uplink moves from router A's switch to router B's — while
+    /// the two routers themselves keep their own MACs, hostnames and addresses. The harness
+    /// validates no uplink geometry anywhere else, so the failover (a DIFFERENT peer switch, not
+    /// merely a different port — multi-nic's must-merge treats same-switch-different-port as an
+    /// uplink that AGREES) is pinned here or nowhere.
+    #[test]
+    fn the_vrrp_stream_shares_one_virtual_mac_and_moves_its_uplink() {
+        let observations =
+            read_jsonl(&fixture_path("scenario/replay/vrrp-virtual-mac.jsonl").unwrap())
+                .expect("the vrrp-virtual-mac stream must read");
+        assert_eq!(observations.len(), 4, "four authored presences, exactly");
+        // Exact fact counts per line: V1/V2 are ARP-shaped sightings (Mac, IpV4, Uplink — no
+        // Hostname: a VIP answers, nobody resolves it), A/B are full router presences. Without
+        // these, `find()` below takes the FIRST match of each kind and an extra or duplicated
+        // fact would pass unnoticed.
+        for (n, expected_len) in [(0, 3), (1, 4), (2, 4), (3, 3)] {
+            assert_eq!(
+                observations[n].facts.len(),
+                expected_len,
+                "observation {n} carries exactly its facts"
+            );
+        }
+
+        let fact = |n: usize, pick: fn(&Fact) -> bool| {
+            observations[n]
+                .facts
+                .iter()
+                .find(|f| pick(f))
+                .unwrap_or_else(|| panic!("observation {n} must carry the fact"))
+                .clone()
+        };
+        let mac = |n| fact(n, |f| matches!(f, Fact::Mac { .. }));
+        let ip = |n| fact(n, |f| matches!(f, Fact::IpV4 { .. }));
+        let hostname = |n| fact(n, |f| matches!(f, Fact::Hostname { .. }));
+        let uplink = |n| fact(n, |f| matches!(f, Fact::Uplink { .. }));
+
+        // V1 and V2 are the virtual gateway — byte-identical virtual Mac (flag honestly
+        // `false`: the IANA range is universally administered) and byte-identical VIP.
+        assert_eq!(
+            mac(0),
+            Fact::Mac {
+                addr: MacAddr([0, 0, 94, 0, 1, 10]),
+                locally_administered: false,
+            },
+            "V1 wears the authentic IANA VRRP MAC 00:00:5e:00:01:0a"
+        );
+        assert_eq!(mac(3), mac(0), "V2 wears V1's exact virtual MAC");
+        assert_eq!(
+            ip(0),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 1)
+            },
+            "V1 answers for the VIP"
+        );
+        assert_eq!(ip(3), ip(0), "V2 answers for the SAME VIP an hour later");
+
+        // A and B are two real routers — distinct locally-administered MACs (flags honestly
+        // `true`), distinct hostnames, distinct addresses.
+        for n in [1, 2] {
+            match mac(n) {
+                Fact::Mac {
+                    addr,
+                    locally_administered,
+                } => {
+                    assert!(
+                        addr.is_locally_administered() && locally_administered,
+                        "observation {n}'s physical MAC is locally administered, flag and bytes"
+                    );
+                }
+                other => panic!("observation {n} must carry a Mac, got {other:?}"),
+            }
+        }
+        assert_ne!(mac(1), mac(2), "the two routers keep their own MACs");
+        // The routers' own addresses are pinned too: the bearers' reason claims "distinct
+        // addresses", and the primary's premise needs the VIP to be nobody's own address — a
+        // drift giving A the VIP would change both traps' geometry while staying green here.
+        assert_eq!(
+            ip(1),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 2)
+            },
+            "A owns its own address"
+        );
+        assert_eq!(
+            ip(2),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 3)
+            },
+            "B owns its own address"
+        );
+        assert_eq!(
+            hostname(1),
+            Fact::Hostname {
+                name: "doc-rtr-alpha".into(),
+                source: HostnameSource::Dhcp,
+            },
+            "A is doc-rtr-alpha"
+        );
+        assert_eq!(
+            hostname(2),
+            Fact::Hostname {
+                name: "doc-rtr-bravo".into(),
+                source: HostnameSource::Dhcp,
+            },
+            "B is doc-rtr-bravo"
+        );
+
+        // The failover, in uplink geometry: V1 sits where A sits; V2 sits where B sits — and B
+        // hangs off the SECOND switch, so the move crosses switches (the committed shape of
+        // `l2-different-switch`), not merely ports.
+        assert_eq!(uplink(0), uplink(1), "V1 shares A's exact uplink");
+        assert_eq!(uplink(3), uplink(2), "V2 shares B's exact uplink");
+        // BOTH ends of the failover are pinned octet-exact (the 4.13 review's lesson, applied
+        // by this story's own review): without V1's pin, a re-authored stream putting V1/A on
+        // the second switch with a different port would stay green while dissolving the
+        // "different switch, not merely port" premise the must-merge depends on.
+        assert_eq!(
+            uplink(0),
+            Fact::Uplink {
+                peer_mac: MacAddr([2, 0, 94, 0, 96, 10]),
+                peer_port: "swport-11".into(),
+            },
+            "V1 sits on the first switch, at A's port"
+        );
+        assert_eq!(
+            uplink(3),
+            Fact::Uplink {
+                peer_mac: MacAddr([2, 0, 94, 0, 96, 11]),
+                peer_port: "swport-12".into(),
+            },
+            "the failover moved the VIP to the second switch's port"
+        );
+        assert_ne!(
+            uplink(0),
+            uplink(3),
+            "the two VIP sightings disagree on uplink — the contradiction the must-merge overcomes"
+        );
+
+        // The four instants are exactly the authored values, strictly increasing: the failover
+        // happens BETWEEN observations, as authored time.
+        let instants: Vec<Timestamp> = observations.iter().map(|o| o.observed_at).collect();
+        assert_eq!(
+            instants,
+            vec![
+                ts("2026-01-08T00:00:00Z"),
+                ts("2026-01-08T00:05:00Z"),
+                ts("2026-01-08T00:10:00Z"),
+                ts("2026-01-08T01:00:00Z"),
+            ],
+            "the failover happens BETWEEN observations, as authored time"
+        );
+    }
+
+    /// The closed allowlist's edges (story 4.14). The VRRP block is admitted 5-octet exact;
+    /// every neighbour stays out: the block below it, VRRP IPv6 above it (NOT admitted until a
+    /// fixture commits it), a first-octet near-miss, and a plain vendor-style address. Widening
+    /// the helper's match to the 3-octet `00:00:5e` prefix reds this test (the recorded
+    /// mutation).
+    #[test]
+    fn the_vrrp_allowance_is_five_octets_exact() {
+        assert!(
+            is_synthetic_mac(MacAddr([0, 0, 94, 0, 1, 10])),
+            "00:00:5e:00:01:0a is the admitted IANA VRRP range"
+        );
+        assert!(
+            is_synthetic_mac(MacAddr([0, 0, 94, 0, 1, 0])),
+            "the last octet is the VRID field — every byte value there is equally protocol-\
+             defined and privacy-safe (VRID 0 is not a deployable VRID, which is exactly why \
+             nothing real can wear it)"
+        );
+        assert!(
+            !is_synthetic_mac(MacAddr([0, 0, 94, 0, 0, 10])),
+            "00:00:5e:00:00:0a sits below the block and stays out"
+        );
+        assert!(
+            !is_synthetic_mac(MacAddr([0, 0, 94, 0, 2, 10])),
+            "00:00:5e:00:02:0a is VRRP IPv6 — not admitted until a fixture commits it"
+        );
+        assert!(
+            !is_synthetic_mac(MacAddr([0, 0, 95, 0, 1, 10])),
+            "00:00:5f:00:01:0a is outside the IANA OUI and stays out"
+        );
+        assert!(
+            !is_synthetic_mac(MacAddr([0, 0x11, 0x22, 0x33, 0x44, 0x55])),
+            "a plain universally-administered vendor-style address stays out"
+        );
+    }
+
+    /// The free-text scanner's WIRING onto the shared helper, proven directly: no committed
+    /// trap text ever reaches `assert_text_is_synthetic` (its only call site is the
+    /// `Record::Failure` walk), so without this test the scanner's MAC leg could silently keep
+    /// the old locally-administered-only rule and nothing would red.
+    #[test]
+    fn the_text_scanner_admits_the_vrrp_range() {
+        assert_text_is_synthetic(
+            "the virtual gateway answers as 00:00:5e:00:01:0a on the shared VIP",
+            Path::new("in-memory"),
+        );
+    }
+
+    /// The scanner kept its teeth: a universally-administered MAC OUTSIDE the admitted block
+    /// still panics in free text.
+    #[test]
+    #[should_panic(expected = "neither locally administered nor in the IANA VRRP")]
+    fn the_text_scanner_still_refuses_a_mac_outside_the_block() {
+        assert_text_is_synthetic(
+            "a stray note naming 00:00:5e:00:00:0a must never be committed",
+            Path::new("in-memory"),
+        );
+    }
+
+    /// Story 4.14's flag-vs-bytes guard, red-proven in memory: a locally-administered byte
+    /// pattern whose authored flag lies (`false`) must panic. The mis-paired fact is built
+    /// here and never committed — the committed corpus is walked by
+    /// `the_corpus_carries_no_real_network_data`, where this same assertion holds every stream.
+    #[test]
+    #[should_panic(expected = "authored locally_administered flag contradicts its own U/L bit")]
+    fn a_mac_whose_flag_contradicts_its_bytes_is_refused() {
+        assert_facts_are_synthetic(
+            &[Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 99]),
+                locally_administered: false,
+            }],
+            Path::new("in-memory"),
         );
     }
 }
