@@ -65,11 +65,18 @@ pub struct FamilyId(pub String);
 pub enum Expectation {
     /// These observations describe one device: the engine must merge them, by this rule.
     MustMerge { rule: RuleId },
-    /// These observations describe different devices: the engine must not merge them, and must
-    /// say WHY by naming the rule that OPPOSES the merge (`l1-distinct-mac`, not the rule that
-    /// was tempting). Decided 2026-07-21: a refusal without a named rule cannot be told apart
-    /// from an engine that simply found nothing, and that is undebuggable in production. Every
-    /// decision names a rule; only an abstention names a cause.
+    /// These observations must not be merged, and the engine must say WHY by naming the rule
+    /// that OPPOSES the merge (`l1-distinct-mac`, not the rule that was tempting). Decided
+    /// 2026-07-21: a refusal without a named rule cannot be told apart from an engine that
+    /// simply found nothing, and that is undebuggable in production. Every decision names a
+    /// rule; only an abstention names a cause.
+    ///
+    /// The refusal is scoped by the NAMED RULE's level, not always "different devices": an
+    /// `l1-*` rule refuses at interface identity, an `l2-*` rule at device grouping. Most
+    /// families' refusals are device-level; `docker-veth` (story 4.16) is the committed
+    /// counter-example — its two veths belong to ONE device at L2, and its `l1-distinct-mac`
+    /// refusal asserts only that the successor veth is not the first one re-seen. Its family
+    /// header carries the argument.
     MustNotMerge { rule: RuleId },
     /// The signal is genuinely insufficient: the engine must refuse to decide, for this cause.
     MustAbstain { cause: AbstentionCause },

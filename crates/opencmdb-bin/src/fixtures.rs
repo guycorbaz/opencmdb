@@ -2196,4 +2196,158 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             Path::new("in-memory"),
         );
     }
+
+    /// Story 4.16's byte-pin — the second, independent oracle over `docker-veth.jsonl`: a
+    /// docker host whose container veth appears (E2), vanishes, and is SUCCEEDED by a new veth
+    /// wearing the recycled container address (E4), while the host itself is re-seen unchanged
+    /// (E3 — the authored evidence that the window stayed open and the first veth failed to
+    /// reappear; NFR7 forbids an absence fact, so disappearance can only be authored this way).
+    /// Every value the two reasons cite is pinned, the obs_id ↔ line binding included (4.15's
+    /// rule), and E3 is pinned VALUE-identical to E1 fact-by-fact (parsed equality per kind —
+    /// fact order and raw bytes are the corpus lock's business) so it cannot drift into a
+    /// third device.
+    #[test]
+    fn the_docker_veth_stream_replaces_its_veth_without_replacing_its_host() {
+        let observations = read_jsonl(&fixture_path("scenario/replay/docker-veth.jsonl").unwrap())
+            .expect("the docker-veth stream must read");
+        assert_eq!(observations.len(), 4, "four authored presences, exactly");
+        // Exact fact counts per line (the `find()` guard, 4.13's lesson): the host lines carry
+        // Mac+IpV4+Hostname+Uplink, the veth lines Mac+IpV4+Uplink — a veth answers ARP, it
+        // resolves no name.
+        for (n, expected_len) in [(0, 4), (1, 3), (2, 4), (3, 3)] {
+            assert_eq!(
+                observations[n].facts.len(),
+                expected_len,
+                "observation {n} carries exactly its facts"
+            );
+        }
+        // The obs_id ↔ line binding (4.15's review rule): the traps judge by obs_id.
+        for (n, suffix) in [(0usize, 1u32), (1, 2), (2, 3), (3, 4)] {
+            assert_eq!(
+                observations[n].obs_id.to_string(),
+                format!("babababa-0000-4000-8000-{suffix:012}"),
+                "line {n} carries its authored obs_id"
+            );
+        }
+
+        let fact = |n: usize, pick: fn(&Fact) -> bool| {
+            observations[n]
+                .facts
+                .iter()
+                .find(|f| pick(f))
+                .unwrap_or_else(|| panic!("observation {n} must carry the fact"))
+                .clone()
+        };
+        let mac = |n| fact(n, |f| matches!(f, Fact::Mac { .. }));
+        let ip = |n| fact(n, |f| matches!(f, Fact::IpV4 { .. }));
+        let hostname = |n| fact(n, |f| matches!(f, Fact::Hostname { .. }));
+        let uplink = |n| fact(n, |f| matches!(f, Fact::Uplink { .. }));
+
+        // E1, the docker host — all four facts value-pinned.
+        assert_eq!(
+            mac(0),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 180]),
+                locally_administered: true,
+            },
+            "the host's stable MAC"
+        );
+        assert_eq!(
+            ip(0),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 60)
+            },
+            "the host's own address"
+        );
+        assert_eq!(
+            hostname(0),
+            Fact::Hostname {
+                name: "doc-dockerhost".into(),
+                source: HostnameSource::Dhcp,
+            },
+            "the host's name"
+        );
+        assert_eq!(
+            uplink(0),
+            Fact::Uplink {
+                peer_mac: MacAddr([2, 0, 94, 0, 96, 10]),
+                peer_port: "swport-21".into(),
+            },
+            "the host's own switch port"
+        );
+
+        // E3 is the host RE-SEEN — value-identical fact-by-fact, so the unreferenced
+        // observation cannot drift into a third device.
+        assert_eq!(mac(2), mac(0), "E3 carries the host's exact MAC");
+        assert_eq!(ip(2), ip(0), "E3 holds the host's exact address");
+        assert_eq!(
+            hostname(2),
+            hostname(0),
+            "E3 resolves the host's exact name"
+        );
+        assert_eq!(uplink(2), uplink(0), "E3 sits on the host's exact port");
+
+        // E2, the first veth — its own MAC, the container address, the HOST's uplink (bridged
+        // traffic exits through the host's own port).
+        assert_eq!(
+            mac(1),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 181]),
+                locally_administered: true,
+            },
+            "the first veth's fresh MAC"
+        );
+        assert_eq!(
+            ip(1),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 61)
+            },
+            "the container address"
+        );
+        assert_eq!(
+            uplink(1),
+            uplink(0),
+            "the veth shares the host's exact uplink"
+        );
+
+        // E4, the successor veth — a NEW MAC, the RECYCLED container address, the same uplink.
+        assert_eq!(
+            mac(3),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 182]),
+                locally_administered: true,
+            },
+            "the successor's fresh MAC"
+        );
+        assert_ne!(
+            mac(3),
+            mac(1),
+            "the successor is not the first veth re-seen"
+        );
+        assert_eq!(
+            ip(3),
+            ip(1),
+            "the successor wears the recycled container address"
+        );
+        assert_eq!(
+            uplink(3),
+            uplink(1),
+            "the successor exits through the same port"
+        );
+
+        // The instants, as an exact vector: the first veth appears at 00:05 and by 01:00 the
+        // host is re-seen WITHOUT it — the disappearance happens inside an observably open
+        // window; the successor arrives an hour after the first.
+        let instants: Vec<Timestamp> = observations.iter().map(|o| o.observed_at).collect();
+        assert_eq!(
+            instants,
+            vec![
+                ts("2026-01-10T00:00:00Z"),
+                ts("2026-01-10T00:05:00Z"),
+                ts("2026-01-10T01:00:00Z"),
+                ts("2026-01-10T01:05:00Z"),
+            ],
+            "the succession happens at the authored instants"
+        );
+    }
 }
