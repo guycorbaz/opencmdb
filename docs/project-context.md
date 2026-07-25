@@ -39,8 +39,8 @@ Docker Hub; the binary runs and scans on Guy's NAS (frontend on macvlan, no Trae
 | **E1** Les gates tiennent | ✅ done (6 stories) |
 | **E2** Le contrat de connecteur | ✅ done (5 stories) |
 | **E3** Mon premier écart réel — **v0.1** | ✅ done (10 stories), retrospective held |
-| **E4** Infra fixtures & corpus de pièges — v0.2 | 🚧 **in progress — 6 of 19** (4.1, 4.2, 4.3, 4.4, 4.5a, 4.5b done; **4.6 is next**) |
-| **E5–E23** | backlog |
+| **E4** Infra fixtures & corpus de pièges — v0.2 | ✅ **done 2026-07-25** (19/19 authored; 4.19 split — see below) |
+| **E5–E23** | backlog — **E5 (identity engine) is next and unblocked** |
 
 Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`, not this file.
 
@@ -52,7 +52,25 @@ and its consumer-driven contract test). `opencmdb-bin` holds everything touching
 MariaDB pool + migrations, axum/askama/HTMX pages, an ARP/ping connector, the fixture reader and
 `FixtureConnector`. Test counts as of this commit: **86 (bin) + 46 (core) + 38 (xtask)**.
 
-**The fixture corpus is the current centre of gravity.** `fixtures/` at the workspace root is a
+**Epic 4 closed on 2026-07-25.** The corpus is committed and locked: **25 artefacts, 24 traps
+across nine families** (randomized-mac, multi-nic, shared-hardware-vm, cloned-mac, dhcp-churn,
+vrrp-virtual-mac, hostname-collision, docker-veth, hostname-absence — each in positive AND
+negative form, each naming the RULE rather than the outcome), the scoring algebra, the metrics
+harness, the trap runner, the reality-debt register, and the wire-format spec. Test counts on
+master: **119 (bin) + 86 (core) + 42 (xtask)**. Two deliberate privacy-walk amendments landed
+with their families (the IANA VRRP MAC range in 4.14, the honestly-empty hostname in 4.17),
+each proven red at its boundary. **Story 4.19 was SPLIT at closure**: 4.19a (the drift-surface
+record and the binding layer charter) shipped in `fixtures/scenario/wire/README.md`; **4.19b
+(the mutation generator, ~30 generated fixtures, expected parse outcomes) moved to Epic 11** —
+expected outcomes for an error taxonomy that does not exist would be written from belief (D45).
+The promise is carried by **GitHub issue #34**, the wire charter, `CONSUMER PENDING` markers in
+the MANIFEST, dated notes in `epics.md`, and
+`_bmad-output/implementation-artifacts/epic-4-correct-course-2026-07-25.md`. ⚠️ **The one
+milestone task now DUE and not done: regenerating `architecture-views.md`** (its `sourceSha256`
+has not matched since commit `da23f9f`, which predates Epic 4 — the staleness is inherited, not
+caused by this epic; the end of Epic 4 is the milestone the project chose for it).
+
+**The fixture corpus was the epic's centre of gravity.** `fixtures/` at the workspace root is a
 SPEC, not test data, locked by `MANIFEST.toml` in both directions. A replay stream carries
 observation lines (`obs_id`) and control records (`record`) — `failure` ends a poll with a
 `ConnectorError`, `capability` changes the source's descriptor mid-stream and the poll continues.
