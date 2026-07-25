@@ -1,0 +1,71 @@
+# The VRRP shared-virtual-MAC family (story 4.14) — the corpus's first VIRTUAL identity family:
+# one IANA protocol MAC borne in turn by two real routers. Architecture.md:894 states the geometry
+# in five words: "VRRP/HSRP = 1 interface, 2 devices" — an L2 problem. D16 settles what the VIP IS:
+# its own device, kind='virtual', created on a STRUCTURAL FACT (the IANA prefix read at ingestion,
+# "a reading, not an inference", architecture.md:999-1002) — and D16 REJECTED both easy outs: folding
+# the VIP into its master ("choosing a winner between two legitimate owners is merging") and
+# abstaining ("a SEMANTIC DUSTBIN... this is not an ambiguity, it is a topology fact"). That second
+# rejection is why this family has NO must-abstain pole: the absent third column is itself a spec
+# assertion, not an omission. The three traps below judge `scenario/replay/vrrp-virtual-mac.jsonl`
+# and together they pin D16's whole geometry: do not fold the VIP into its master, do not fuse the
+# two bearers, DO track the one virtual gateway across a failover.
+#
+# One rule id is COINED here, and the header owes the argument. The primary refusal names
+# l2-virtual-mac-prefix — the structural reading that disqualifies an IANA virtual-router MAC as a
+# grouping anchor. No existing id can oppose that pair: multi-nic's own must-merge REWARDS grouping
+# distinct-MAC interfaces whose uplink agrees (l2-uplink-agrees), and V1 shares doc-rtr-alpha's
+# exact uplink — an engine following the committed vocabulary to the letter would fold the VIP into
+# its master. Only the prefix reading stops it. D16's "no new rule, no score" stands: this id names
+# an ingestion READING, not a scored rule (the earlier L2 ids were coined by 4.10/4.11; this is the
+# corpus's first structural id). The must-merge deliberately does NOT cite it: L1 is deterministic
+# on (l2_domain, mac) — architecture.md:985, "not a probabilistic problem" — so l1-exact-mac fires
+# for a virtual MAC exactly as for any other; the virtual-device recognition is a separate act
+# layered on top.
+#
+# The must-merge is this family's teeth, held against cloned-mac: that family taught "same MAC,
+# different hostnames -> refuse"; an engine that generalizes it to "suspicious MAC -> refuse"
+# is demolished HERE, by the corpus's first must-merge that overcomes a committed OPPOSING L2
+# signal — the VIP's uplink moves to a different switch (the committed shape of
+# l2-different-switch), because a failover crossing switches is the redundancy doing its job, not a
+# second device. The two families hold each other in check.
+#
+# Privacy record: the walk admits the 5-octet IANA VRRP IPv4 block with this family — the MAC
+# below identifies a PROTOCOL, not a network (the same bytes on every VRRP deployment on earth
+# with VRID 10), the MAC analog of an RFC 5737 documentation address. The allowlist is CLOSED:
+# HSRP (00:00:0c:07:ac — a Cisco OUI, not IANA) and HSRPv2 stay out until a fixture commits those
+# octets, each with its own prove-to-red. The virtual MAC in this file's stream:
+# 00:00:5e:00:01:0a
+# (kept whole on its line — a hyphen-broken id greps as absent, story 4.11's lesson).
+
+[[trap]]
+id = "vrrp-virtual-mac-must-not-merge-master"
+replay = "scenario/replay/vrrp-virtual-mac.jsonl"
+family = "vrrp-virtual-mac"
+observations = [
+  "aeaeaeae-0000-4000-8000-000000000001",
+  "aeaeaeae-0000-4000-8000-000000000002",
+]
+reason = "the VIP sighting shares doc-rtr-alpha's exact uplink, which is the temptation — but its MAC sits in the IANA virtual-router range, a protocol address disqualified as a grouping anchor, and folding the VIP into its master of the minute is choosing a winner between two legitimate owners."
+expect = { must-not-merge = { rule = "l2-virtual-mac-prefix" } }
+
+[[trap]]
+id = "vrrp-virtual-mac-must-not-merge-bearers"
+replay = "scenario/replay/vrrp-virtual-mac.jsonl"
+family = "vrrp-virtual-mac"
+observations = [
+  "aeaeaeae-0000-4000-8000-000000000002",
+  "aeaeaeae-0000-4000-8000-000000000003",
+]
+reason = "doc-rtr-alpha and doc-rtr-bravo are two real routers with distinct MACs, hostnames and addresses that merely take turns bearing one virtual gateway — fusing the redundancy pair through its shared VIP is the two-hop transitive false merge, the direction an operator never forgives."
+expect = { must-not-merge = { rule = "l2-different-hostname" } }
+
+[[trap]]
+id = "vrrp-virtual-mac-must-merge"
+replay = "scenario/replay/vrrp-virtual-mac.jsonl"
+family = "vrrp-virtual-mac"
+observations = [
+  "aeaeaeae-0000-4000-8000-000000000001",
+  "aeaeaeae-0000-4000-8000-000000000004",
+]
+reason = "both sightings carry the byte-identical virtual MAC and the same VIP 192.0.2.1 in one l2_domain an hour apart, so this is the one virtual gateway re-seen — the uplink that moved from swport-11 to the second switch's swport-12 is a failover doing its job, not a second device."
+expect = { must-merge = { rule = "l1-exact-mac" } }
