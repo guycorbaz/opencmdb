@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-25  # story 4.16 reviewed (3-layer, 4 patches applied) → done
+last_updated: 2026-07-25  # story 4.17 implemented (dev-story, autonomous run) → review
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -126,7 +126,7 @@ development_status:
   4-14-trap-vrrp-hsrp-virtual-mac: done
   4-15-trap-hostname-collision: done
   4-16-trap-ephemeral-docker-veth: done
-  4-17-trap-hostname-absent-or-empty: backlog
+  4-17-trap-hostname-absent-or-empty: review
   4-18-wire-format-traps: backlog
   4-19-mutation-fixtures: backlog
   epic-4-retrospective: optional

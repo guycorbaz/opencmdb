@@ -1,0 +1,58 @@
+# The hostname-absence family (story 4.17) — encoded from measurement, closing the hostname
+# triptych: hostname-collision (4.15) tests the present-but-colliding name, THIS family tests the
+# two absence shapes, and F51's population bound sits recorded in the collision family's header.
+# The measurement is the charter: "MISSING and empty both occur · null NEVER — the trap set must
+# encode absent and empty — and must NOT encode null, or it tests a case the source cannot
+# produce". D45 says why encoding belief instead would be worse than nothing: such traps "are a
+# gate on a false truth; their red has no repair, because it will never arrive". And null is
+# refused STRUCTURALLY, not by discipline: Fact::Hostname's name is a String, not an
+# Option<String> — the format cannot even represent the non-case, the strongest form of
+# "must NOT encode". (The WIRE-level behaviours — the JSON field missing vs "" under the real
+# parser — are story 4.18/Epic 11's layer; here they arrive already normalized into fact-missing
+# vs fact-empty.)
+#
+# The three traps below judge `scenario/replay/hostname-absence.jsonl` and pin ONE equivalence —
+# MISSING and EMPTY are both the absence of a signal: an empty string is not a matchable value
+# ("" == "" is not hostname agreement), a byte-present empty name counts as NO observed value,
+# and a name that stops resolving opposes nothing. Each trap follows its committed column
+# precedent: the refusal is hostname-collision's shape (no topology, distinct MACs decide); the
+# abstention is shared-hardware-vm's shape (an identical uplink makes the hostname the needed
+# discriminator, and it is absent on both sides — cause NoObservedValue, the assertion that
+# empty COUNTS AS absent); the merge is the plain re-sighting (nothing opposes — absence is
+# derived, never observed, so absence can never oppose). No expectation names the tempting rule.
+# The abstention cause is RECORDED truth: the gate compares rules, never causes — an engine that
+# DECIDES on the abstain pair is demolished; one abstaining for the wrong reason answers to the
+# recorded truth when Epic 5's cascade lands, not to this gate.
+
+[[trap]]
+id = "hostname-absence-must-not-merge"
+replay = "scenario/replay/hostname-absence.jsonl"
+family = "hostname-absence"
+observations = [
+  "bcbcbcbc-0000-4000-8000-000000000001",
+  "bcbcbcbc-0000-4000-8000-000000000002",
+]
+reason = "both boxes report an honestly EMPTY name — the absence of a signal wearing a value's clothes — and the equality of two empty strings is not hostname agreement, while their distinct MACs and distinct addresses oppose the merge."
+expect = { must-not-merge = { rule = "l1-distinct-mac" } }
+
+[[trap]]
+id = "hostname-absence-must-abstain"
+replay = "scenario/replay/hostname-absence.jsonl"
+family = "hostname-absence"
+observations = [
+  "bcbcbcbc-0000-4000-8000-000000000003",
+  "bcbcbcbc-0000-4000-8000-000000000004",
+]
+reason = "one name is empty and the other missing — the two shapes the source actually produces for no-hostname — so the grouping their shared port invites has no observed name on either side: an empty string counts as no observed value, not as a half-match."
+expect = { must-abstain = { cause = "NoObservedValue" } }
+
+[[trap]]
+id = "hostname-absence-must-merge"
+replay = "scenario/replay/hostname-absence.jsonl"
+family = "hostname-absence"
+observations = [
+  "bcbcbcbc-0000-4000-8000-000000000005",
+  "bcbcbcbc-0000-4000-8000-000000000006",
+]
+reason = "both presences carry the identical MAC and the identical address, and doc-host-india's name simply stopped resolving forty minutes later — a signal that fell silent is not a contradiction, and absence can never oppose an exact-MAC match."
+expect = { must-merge = { rule = "l1-exact-mac" } }
