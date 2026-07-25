@@ -168,3 +168,20 @@ sha256 = "454b2d90254a71e9f852a7fc028fa3e616c82880d7df49945da2ad9e387ddbb6"
 # measurement charter and the cause-is-recorded-truth honesty note.
 path = "scenario/traps/hostname-absence.toml"
 sha256 = "294257bba146e62a64ea48c25f7a2612893662afde68a244f5d2808dc65a4ed7"
+
+[[artefact]]
+# Story 4.18: the synthetic wire body — D35 layer B's spec half, every MEASURED field behaviour
+# encoded (lowercase-colon mac, 10-digit seconds epoch, oui mostly empty, no vlan, len-24 single
+# network_id, hostname present/empty/missing never null, sw_port on wired only). CONSUMER
+# PENDING: Epic 11 (issue #34) — until its harness runs this under the real parser, the shape
+# test the_wire_spec_encodes_the_measured_field_behaviours is the only reader.
+path = "scenario/wire/unifi-clients.json"
+sha256 = "a5239e155be8d69a0d96a6cb5afc5a4648b25dec7041e9e600d0534192b9024c"
+
+[[artefact]]
+# Story 4.18: the Observations the future UniFi parser MUST produce from the wire body — the
+# oracle written before the code it judges (facts + observed_at are the contract; ids/scope are
+# pinned placeholders, harness context). The named holes live in scenario/wire/README.md.
+# CONSUMER PENDING: Epic 11 (issue #34).
+path = "scenario/wire/unifi-clients.expected.jsonl"
+sha256 = "707f4443768733b152977a937edf266ad8a48698d8bb1d9125246806db385d2f"
