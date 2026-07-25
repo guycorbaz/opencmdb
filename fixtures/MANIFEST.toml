@@ -134,3 +134,20 @@ sha256 = "fd15e021d1bf3adc19c92baabcd91f26dc5085d51fc9aae9a7982fb40befc243"
 # on nearly half, the abstention rate bounded below by this, not by the engine's quality.
 path = "scenario/traps/hostname-collision.toml"
 sha256 = "557c7e80e6126ffd8434a1fe382ccc5d18f0291b66a7c86de614084c301e940c"
+
+[[artefact]]
+# Story 4.16: the ephemeral Docker-veth family's replay stream — a docker host, its container's
+# veth sharing the host's exact uplink port, the host re-seen while the veth fails to reappear
+# (the authored evidence of disappearance — NFR7 forbids an absence fact), and a successor veth
+# wearing the recycled container address.
+path = "scenario/replay/docker-veth.jsonl"
+sha256 = "9cf1569e0711948ad0da324303091994ba250031a5d978a3075c9126c57cb09a"
+
+[[artefact]]
+# Story 4.16: the ephemeral Docker-veth family — two traps at two levels, scoped in the header
+# (must-merge on l2-uplink-agrees REUSED: a living veth groups into its host; must-not-merge on
+# l1-distinct-mac REUSED at interface level only: a successor veth is gone-not-never-a-device,
+# never a re-sighting). Its header carries the F17/D17 dormant-lifecycle record and the two
+# mutual-check kinships (vrrp shared-uplink primary, dhcp-churn recycled address).
+path = "scenario/traps/docker-veth.toml"
+sha256 = "2c2a5407d1a7aeb98dbd0b9340fd8c403f46f9b43f9b9d523015bb153b3782b8"

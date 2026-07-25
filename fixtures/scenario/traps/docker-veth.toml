@@ -1,0 +1,64 @@
+# The ephemeral Docker-veth family (story 4.16) — short-lived interfaces must inflate neither the
+# inventory nor the gap. The reference NAS IS its veths: "eth0+eth1 bonded + docker0 + N veth (one
+# device, ten interfaces)" (architecture.md:898). The two traps below judge
+# `scenario/replay/docker-veth.jsonl` — a docker host, its container's veth, the host re-seen, and
+# a successor veth wearing the recycled container address — and they speak at two different levels,
+# deliberately: the must-merge asserts the L2 grouping of a LIVING veth into its host; the
+# must-not-merge asserts L1's refusal to read the SUCCESSOR as the first veth re-seen. Both veths
+# legitimately group into doc-dockerhost's device at L2 — the must-merge itself mandates it — so
+# the refusal below is scoped to INTERFACE identity only, and the L2 grouping of the two veths into
+# the host is correct and deliberately asserted by no trap (multi-nic's own duality: L1 is right to
+# keep distinct MACs apart while L2 groups them). Without this sentence the family would read as
+# self-contradictory the day the engine groups both veths into the host.
+#
+# Two byte-kinships, held in mutual check. (a) The must-merge pair (host+veth, shared uplink, SAME
+# port) is the shape vrrp-virtual-mac's PRIMARY refuses — the IANA virtual-router prefix (and its
+# entailed flag) is the only difference in the pair shape: an engine that generalizes 4.14's
+# refusal to every shared-uplink pair is demolished here, and one that generalizes THIS grouping
+# to protocol MACs is demolished there. Note the uplink agreement here is even STRONGER than
+# multi-nic's committed exemplar (different ports of one switch): bridged container traffic exits
+# through the host's own port — same switch, same port is the honest veth form, an agreement more
+# complete, not different in kind. (b) The must-not-merge pair (recycled address, distinct MACs)
+# is dhcp-churn's kin — there the temptation was IP-continuity across two boxes, here it is
+# container-slot continuity across one host's ephemeral interfaces.
+#
+# The F17/D17 record — this family is CONSISTENT WITH the dormant lifecycle, and no trap can test
+# it (the corpus has no clock and no engine; the sweep is Epic 5+'s): a locally-administered MAC
+# unobserved for the configured window becomes dormant — excluded from gap metrics and automatic
+# candidate generation, still queryable, first/last-seen and IP history retained, "returning to
+# active if the MAC is re-observed" (F17), and it is the same entity when it does (D17 property 1).
+# Only mac_kind='local' goes dormant: a universal MAC's absence is information the operator wants
+# (D17 property 2). Left active, dead veths make the gap drift "monotonically upward and never
+# comes back down. Within a year, the product's central indicator is noise" (D17). The first veth
+# below is exactly such an interface: GONE — real, dormant-bound, still queryable — never
+# "never a device".
+#
+# The third observation feeds no trap, deliberately: it is the authored evidence that the window
+# stayed open and the first veth FAILED to reappear — NFR7 forbids an absence fact, so
+# disappearance can only be authored as a later sweep that sees the host and not the veth
+# (unreferenced observations have precedent: minimal.jsonl carries two). The veths carry no
+# hostname — a veth answers ARP and resolves no name; the hostname-absence SIGNAL is story 4.17's
+# family, not this one's. No must-abstain pole: the living veth's grouping is a topology fact and
+# the succession's split is L1's determinism — nothing here is ambiguous.
+
+[[trap]]
+id = "docker-veth-must-merge"
+replay = "scenario/replay/docker-veth.jsonl"
+family = "docker-veth"
+observations = [
+  "babababa-0000-4000-8000-000000000001",
+  "babababa-0000-4000-8000-000000000002",
+]
+reason = "the veth is a real interface of doc-dockerhost while it lives — it shares the host's exact uplink port and nothing opposes the grouping — and its ephemerality is no licence to refuse it: the reference NAS is one device wearing its bonded NICs, its bridge and its veths."
+expect = { must-merge = { rule = "l2-uplink-agrees" } }
+
+[[trap]]
+id = "docker-veth-must-not-merge"
+replay = "scenario/replay/docker-veth.jsonl"
+family = "docker-veth"
+observations = [
+  "babababa-0000-4000-8000-000000000002",
+  "babababa-0000-4000-8000-000000000004",
+]
+reason = "the recycled container address and the unchanged uplink tempt slot continuity, but the distinct MACs oppose it: the first veth is gone — a real interface, dormant-bound and still queryable, not never-a-device — and its successor is a new interface, not its re-sighting."
+expect = { must-not-merge = { rule = "l1-distinct-mac" } }
