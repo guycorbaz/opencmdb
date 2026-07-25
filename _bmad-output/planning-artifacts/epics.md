@@ -421,6 +421,20 @@ Minimal encrypted credential storage (the envelope skeleton) with a minimal NFR1
 The real UniFi connector implementing the trait: the dated capability descriptor, the bounded test-connection interaction, the tested version matrix, and record mode — plus the story that freezes N raw captures into version-drift traps.
 **FRs covered:** FR1, FR2, FR5, FR6, FR7. NFR7b,8,23; UX-DR27.
 
+_**Inherited from Epic 4 (2026-07-25 re-scope — see its closure note and GitHub issue #34):**_
+- _**Run the 4.18 wire spec under the REAL parser** (D35 layer B — raw bytes, no mocks):
+  `fixtures/scenario/wire/unifi-clients.json` must yield the facts and `observed_at` of
+  `unifi-clients.expected.jsonl` (ids/scope are harness context — the runner injects its own).
+  The charter at `fixtures/scenario/wire/README.md` lists the NAMED HOLES (the envelope, the
+  `ip` key, `Hostname.source`, the OuiVendor empty-vs-absent mapping, the absent `Uplink`,
+  `sw_port` on wireless) to CONFIRM or bump deliberately against the first real capture._
+- _**Implement 4.19b**: the mutation generator (the MANIFEST's `generator` field gets its first
+  real use), its ~30 generated fixtures under `capture/mutations/`, and their expected parse
+  outcomes — all of which needed the parser to exist before they could be anything but belief._
+- _**Bound by 4.19a's charter**: a renamed field must produce an explicit error, never a
+  silently empty collection; `#[serde(default)]` is FORBIDDEN on any collection feeding
+  presence; injecting a drift error at layer A is theatre._
+
 ### Epic 12: Scan ARP/ping complet (v0.10)
 Extend the E3 connector into the full generic scanner: hostname enrichment, the NET_RAW → ping-only fallback, capability reduction as a notifiable event, on-demand scan — plus its own drift-capture story. Additive extension, no rewrite.
 **FRs covered:** FR3, FR4, FR5, FR8. UX-DR35,36.
@@ -836,6 +850,24 @@ _Build order is dictated, not chosen (ARCH-24 / D19): types → the traps as SPE
 _Two sequencing facts, recorded so they are not rediscovered late:_
 - _**The wire-format traps are authored here but only become executable in Epic 11.** Layer B runs mutation fixtures under the REAL UniFi parser (D35), and that parser does not exist yet. D19 already says the traps are written "not tests yet — the spec"; the wire stories therefore deliver committed fixtures plus their expected variant, and the harness that runs them lands with the connector._
 - _**The seeded generator, the bulk fixture and the distributional diff are NOT in this epic.** ARCH-24 places them after the engine. The MANIFEST's `generator` field must therefore tolerate hand-authored artefacts._
+
+> **CLOSURE NOTE — 2026-07-25.** Epic 4 is DONE at 19/19 authored, with **story 4.19 SPLIT** and
+> the split recorded rather than silent (party-mode decision: Winston, Murat, John; full record
+> in `_bmad-output/implementation-artifacts/epic-4-correct-course-2026-07-25.md`).
+> **4.18 shipped in full** as a spec: a synthetic body whose every field behaviour is a
+> measurement, plus the Observations the future parser must produce from it, plus a shape test
+> and a charter naming every hole — at `fixtures/scenario/wire/` (a declared deviation from the
+> architecture tree's `capture/mutations/` placement, forced by the privacy rule: a spec is not
+> a capture and does not rot). **4.19a shipped with it** — the drift-surface record (127 payload
+> keys vs 7 `Fact` variants) and the layer charter as binding constraints on Epic 11.
+> **4.19b — the mutation generator, its ~30 generated fixtures and their expected parse
+> outcomes — moved to Epic 11**, because expected outcomes for an error taxonomy that does not
+> exist would be written from belief (D45) and a generator has no test that reds without the
+> parser it attacks. The promise is carried by **GitHub issue #34**, by the wire charter, and by
+> `CONSUMER PENDING: Epic 11` markers on both MANIFEST entries — not by this paragraph alone.
+> _The lesson, for the next decomposition: a story belongs to the epic of its CONSUMER, not the
+> epic of its theme. The clause above ("authored here but only become executable in Epic 11")
+> was that admission, half made._
 
 ### Story 4.1: Freeze the JSONL observation stream
 

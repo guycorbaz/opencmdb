@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-25  # story 4.18 reviewed (1 layer — Auditor PASS 7/7; Blind/Edge cut off) → done
+last_updated: 2026-07-25  # EPIC 4 CLOSED — 4.19 split (4.19a shipped, 4.19b → Epic 11), re-scope recorded
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -94,7 +94,7 @@ development_status:
   # Build order is dictated by ARCH-24/D19: format → FixtureConnector →
   # metrics harness BEFORE the engine → the trap families. 4.18 and 4.19 are
   # authored here but only become executable with the UniFi parser (Epic 11).
-  epic-4: in-progress
+  epic-4: done
   4-1-jsonl-observation-stream: done
   4-2-truth-labelling-format: done
   4-3-manifest-lockfile-and-orphans: done
@@ -127,8 +127,20 @@ development_status:
   4-15-trap-hostname-collision: done
   4-16-trap-ephemeral-docker-veth: done
   4-17-trap-hostname-absent-or-empty: done
+  # 4.18 shipped IN FULL as a spec (synthetic measured body + expected Observations + shape
+  # test + charter naming every hole) at fixtures/scenario/wire/ — a declared deviation from
+  # the architecture's capture/ placement, forced by the privacy rule. Nothing runs it under a
+  # parser yet; its first real red arrives with Epic 11 (issue #34).
   4-18-wire-format-traps: done
-  4-19-mutation-fixtures: backlog
+  # 4.19 was SPLIT at the epic's close (2026-07-25, party-mode decision — full record in
+  # epic-4-correct-course-2026-07-25.md). 4.19a — the drift-surface record (127 payload keys
+  # vs 7 Fact variants) and the binding layer charter for Epic 11 — SHIPPED inside
+  # fixtures/scenario/wire/README.md with story 4.18. 4.19b — the mutation generator, its ~30
+  # generated fixtures and their expected parse outcomes — MOVED to Epic 11: expected outcomes
+  # for an error taxonomy that does not exist would be written from belief (D45), and a
+  # generator has no test that reds without the parser it attacks. Carried by GitHub issue #34,
+  # by the wire charter, and by CONSUMER PENDING markers on both MANIFEST entries.
+  4-19-mutation-fixtures: done-partial  # 4.19a shipped; 4.19b → Epic 11 (issue #34)
   epic-4-retrospective: optional
 
   # ── Epic 5: Identité d'interface fiable (v0.3) ───────────────────────────
@@ -156,6 +168,8 @@ development_status:
   epic-10-retrospective: optional
 
   # ── Epic 11: Source UniFi complète (v0.9) ────────────────────────────────
+  # ⚠️ INHERITS from Epic 4's 2026-07-25 re-scope (issue #34): run the 4.18 wire spec under the
+  # REAL parser, and implement 4.19b (mutation generator + ~30 fixtures + expected outcomes).
   epic-11: backlog
   epic-11-retrospective: optional
 
