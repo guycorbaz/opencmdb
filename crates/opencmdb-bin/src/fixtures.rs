@@ -908,9 +908,15 @@ mod tests {
                     );
                 }
                 Fact::Uplink { peer_mac, .. } => assert_synthetic_mac(*peer_mac, path),
+                // An EMPTY name is trivially synthetic — it identifies nothing — and it is one
+                // of the two shapes the measured source actually produces for "no hostname"
+                // (MISSING and empty, never null), so the corpus must be able to commit it
+                // (story 4.17). Whitespace-only names stay refused, deliberately: the
+                // measurement records `""`, not padding.
                 Fact::Hostname { name, .. } => assert!(
-                    name.starts_with("doc-"),
-                    "{where_}: hostnames must be invented, not captured: {name}"
+                    name.is_empty() || name.starts_with("doc-"),
+                    "{where_}: hostnames must be invented (doc-…) or honestly empty, not \
+                     captured: {name}"
                 ),
                 Fact::OuiVendor { .. } | Fact::Rtt { .. } => {}
                 other => panic!(
@@ -2197,6 +2203,21 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         );
     }
 
+    /// Story 4.17's boundary on the amended hostname rule: an empty name is admitted (the
+    /// measured EMPTY form), but a non-empty, non-`doc-` name still reds — the expected
+    /// substring guards against a pass-for-the-wrong-panic. In-memory only, never committed.
+    #[test]
+    #[should_panic(expected = "hostnames must be invented")]
+    fn a_captured_looking_hostname_is_still_refused() {
+        assert_facts_are_synthetic(
+            &[Fact::Hostname {
+                name: "printer-salon".into(),
+                source: HostnameSource::Dhcp,
+            }],
+            Path::new("in-memory"),
+        );
+    }
+
     /// Story 4.16's byte-pin — the second, independent oracle over `docker-veth.jsonl`: a
     /// docker host whose container veth appears (E2), vanishes, and is SUCCEEDED by a new veth
     /// wearing the recycled container address (E4), while the host itself is re-seen unchanged
@@ -2348,6 +2369,202 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 ts("2026-01-10T01:05:00Z"),
             ],
             "the succession happens at the authored instants"
+        );
+    }
+
+    /// Story 4.17's byte-pin — the second, independent oracle over `hostname-absence.jsonl`:
+    /// the two shapes the measured source actually produces for "no hostname" — a byte-present
+    /// EMPTY name and a MISSING `Hostname` fact — and never `null`, which `Fact::Hostname`'s
+    /// `String` cannot even represent. Three pairs pin one equivalence: `"" == ""` is not
+    /// agreement (G1/G2), empty counts as no-observed-value (G3/G4), and a name that fell
+    /// silent opposes nothing (G5/G6). Every value the reasons cite is pinned, the MISSING
+    /// form is an assertion (not an accident), and the obs_id ↔ line binding holds.
+    #[test]
+    fn the_hostname_absence_stream_encodes_empty_and_missing_and_never_null() {
+        let observations =
+            read_jsonl(&fixture_path("scenario/replay/hostname-absence.jsonl").unwrap())
+                .expect("the hostname-absence stream must read");
+        assert_eq!(observations.len(), 6, "six authored presences, exactly");
+        // Exact fact counts per line (the `find()` guard): together with the per-kind
+        // extractions below, each line's fact multiset is fully determined.
+        for (n, expected_len) in [(0, 3), (1, 3), (2, 4), (3, 3), (4, 3), (5, 2)] {
+            assert_eq!(
+                observations[n].facts.len(),
+                expected_len,
+                "observation {n} carries exactly its facts"
+            );
+        }
+        // The obs_id ↔ line binding (the standing rule): the traps judge by obs_id.
+        for (n, suffix) in [(0usize, 1u32), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)] {
+            assert_eq!(
+                observations[n].obs_id.to_string(),
+                format!("bcbcbcbc-0000-4000-8000-{suffix:012}"),
+                "line {n} carries its authored obs_id"
+            );
+        }
+
+        let fact = |n: usize, pick: fn(&Fact) -> bool| {
+            observations[n]
+                .facts
+                .iter()
+                .find(|f| pick(f))
+                .unwrap_or_else(|| panic!("observation {n} must carry the fact"))
+                .clone()
+        };
+        let mac = |n| fact(n, |f| matches!(f, Fact::Mac { .. }));
+        let ip = |n| fact(n, |f| matches!(f, Fact::IpV4 { .. }));
+        let hostname = |n| fact(n, |f| matches!(f, Fact::Hostname { .. }));
+        let uplink = |n| fact(n, |f| matches!(f, Fact::Uplink { .. }));
+        let has_no_hostname = |n: usize| {
+            observations[n]
+                .facts
+                .iter()
+                .all(|f| !matches!(f, Fact::Hostname { .. }))
+        };
+
+        // The EMPTY form, three times: value-pinned once, equality-carried to the others.
+        assert_eq!(
+            hostname(0),
+            Fact::Hostname {
+                name: "".into(),
+                source: HostnameSource::Dhcp,
+            },
+            "G1 reports the honestly empty name"
+        );
+        assert_eq!(hostname(1), hostname(0), "G2 reports the SAME empty name");
+        assert_eq!(hostname(2), hostname(0), "G3 reports the same empty name");
+
+        // The MISSING form is an assertion, not an accident.
+        assert!(has_no_hostname(3), "G4 carries NO Hostname fact — MISSING");
+        assert!(
+            has_no_hostname(5),
+            "G6 carries NO Hostname fact — the name fell silent"
+        );
+
+        // G1/G2 — the false-agreement pair: both ends value-pinned, and distinct.
+        assert_eq!(
+            mac(0),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 200]),
+                locally_administered: true,
+            },
+            "G1's own MAC"
+        );
+        assert_eq!(
+            mac(1),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 201]),
+                locally_administered: true,
+            },
+            "G2's own MAC"
+        );
+        assert_ne!(
+            mac(1),
+            mac(0),
+            "the two empty-named boxes keep their own MACs"
+        );
+        assert_eq!(
+            ip(0),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 70)
+            },
+            "G1's own address"
+        );
+        assert_eq!(
+            ip(1),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 71)
+            },
+            "G2's own address"
+        );
+        assert_ne!(ip(1), ip(0), "and their own addresses");
+
+        // G3/G4 — the equivalence pair: MACs and IPs pinned and distinct too (an accidental
+        // shared MAC would collapse the abstain pair into an exact-MAC pair), and the WHOLE
+        // Uplink fact identical and pinned — the shared port is what makes the hostname the
+        // needed discriminator.
+        assert_eq!(
+            mac(2),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 202]),
+                locally_administered: true,
+            },
+            "G3's own MAC"
+        );
+        assert_eq!(
+            mac(3),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 203]),
+                locally_administered: true,
+            },
+            "G4's own MAC"
+        );
+        assert_ne!(mac(3), mac(2), "the abstain pair is two boxes, not one");
+        assert_eq!(
+            ip(2),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 72)
+            },
+            "G3's own address"
+        );
+        assert_eq!(
+            ip(3),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 73)
+            },
+            "G4's own address"
+        );
+        assert_ne!(ip(3), ip(2), "and their own addresses");
+        assert_eq!(
+            uplink(2),
+            Fact::Uplink {
+                peer_mac: MacAddr([2, 0, 94, 0, 96, 10]),
+                peer_port: "swport-31".into(),
+            },
+            "G3 sits behind the shared port"
+        );
+        assert_eq!(uplink(3), uplink(2), "G4 sits behind the SAME port");
+
+        // G5/G6 — the silence pair: the named box, then the same box with no name at all.
+        assert_eq!(
+            mac(4),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 204]),
+                locally_administered: true,
+            },
+            "G5's own MAC"
+        );
+        assert_eq!(
+            ip(4),
+            Fact::IpV4 {
+                addr: Ipv4Addr::new(192, 0, 2, 74)
+            },
+            "G5's own address"
+        );
+        assert_eq!(
+            hostname(4),
+            Fact::Hostname {
+                name: "doc-host-india".into(),
+                source: HostnameSource::Dhcp,
+            },
+            "G5 resolves its name"
+        );
+        assert_eq!(mac(5), mac(4), "G6 carries G5's exact MAC");
+        assert_eq!(ip(5), ip(4), "G6 holds G5's exact address");
+
+        // The instants, as an exact vector: the silence arrives forty minutes after the name.
+        let instants: Vec<Timestamp> = observations.iter().map(|o| o.observed_at).collect();
+        assert_eq!(
+            instants,
+            vec![
+                ts("2026-01-11T00:00:00Z"),
+                ts("2026-01-11T00:05:00Z"),
+                ts("2026-01-11T00:10:00Z"),
+                ts("2026-01-11T00:15:00Z"),
+                ts("2026-01-11T00:20:00Z"),
+                ts("2026-01-11T01:00:00Z"),
+            ],
+            "the absences happen at the authored instants"
         );
     }
 }
