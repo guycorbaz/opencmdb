@@ -394,3 +394,14 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   identifier bytes while refusing IPv4-multicast (`01:00:5e:…`) — an inconsistency, not a leak, in
   committed synthetic data. Pre-existing, not aggravated by 4.14. Owner: same as above, one scanner
   hardening pass.
+
+## Deferred from: code review of story-4.15 (2026-07-25)
+
+- **The older byte-pin tests do not pin the obs_id ↔ line binding.** The trap files judge by
+  `obs_id`; the byte-pin tests read by index. 4.15's own test now pins its three obs_ids (the
+  review's patch), but the sibling byte-pins (`the_dhcp_churn_stream_moves_the_address_only_
+  through_observed_at`, `the_vrrp_stream_shares_one_virtual_mac_and_moves_its_uplink`) still
+  read purely by index: a deliberate re-authoring that swaps two lines' obs_ids (with a re-hashed
+  manifest) would invert what those families' traps judge while every byte-level assertion stayed
+  green. Pre-existing pattern since 4.13, not aggravated by 4.15. Owner: whoever hardens corpus
+  byte-fidelity — three `assert_eq!` per older test, same shape as 4.15's.

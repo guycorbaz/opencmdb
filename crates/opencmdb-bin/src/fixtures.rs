@@ -2074,11 +2074,25 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             read_jsonl(&fixture_path("scenario/replay/hostname-collision.jsonl").unwrap())
                 .expect("the hostname-collision stream must read");
         assert_eq!(observations.len(), 3, "three authored presences, exactly");
+        // Exactly 3 facts per line. Without this, `find()` below takes the FIRST match of each
+        // kind and a duplicated or extra fact would pass every assertion unnoticed (4.13's
+        // lesson, carried forward).
         for (n, observation) in observations.iter().enumerate() {
             assert_eq!(
                 observation.facts.len(),
                 3,
                 "observation {n} carries exactly its three facts"
+            );
+        }
+        // The obs_id ↔ line binding is pinned too (this story's review): the traps judge by
+        // obs_id, this test reads by index — without these three pins, swapping two lines'
+        // obs_ids (with a re-hashed manifest) would silently invert what each trap judges
+        // while every byte-level assertion stayed green.
+        for (n, suffix) in [(0usize, 1u32), (1, 2), (2, 3)] {
+            assert_eq!(
+                observations[n].obs_id.to_string(),
+                format!("afafafaf-0000-4000-8000-{suffix:012}"),
+                "line {n} carries its authored obs_id"
             );
         }
 

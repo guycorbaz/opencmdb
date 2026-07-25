@@ -6,7 +6,10 @@
 # opposition. The temptation here is hostname agreement (the rule 4.11 coined for it fires
 # legitimately behind a SHARED uplink — and note its must-merge pair's MACs differ too: what
 # separates that family from this one is the topology corroboration, which this stream refuses to
-# carry — no Uplink fact is authored, deliberately). No expectation names the tempting rule.
+# carry — no Uplink fact is authored, deliberately). No expectation names the tempting rule. The
+# must-merge below is byte-kin to cloned-mac's own must-merge — there the tested fear was clones,
+# here it is collisions; the corpus tests temptations, not byte-shapes, and each family's header
+# says which.
 #
 # And the F51 record, under the corpus lock — the first family arguing about the STATISTICS of a
 # signal, not just its bytes: `hostname` is unusable on nearly half of known clients (MISSING or

@@ -1,6 +1,6 @@
 # Story 4.15: Trap family — hostname collision
 
-Status: review
+Status: done
 
 ## Story
 
@@ -134,6 +134,23 @@ merge the plain re-sighting the corpus puts beside it.
       grep `"17 trap"` / `discovered(), 17` / `stays 17` / `seventeen` → no hits.
       `Cargo.lock` unchanged; `architecture-views.md` NOT regenerated; `traps/README.md`
       untouched (AC3's argued choice).
+
+### Review Findings
+
+- [x] [Review][Patch] AC2's prescribed header sentence (the cloned-mac must-merge byte-kinship —
+      "the corpus tests temptations, not byte-shapes") was missing from the committed header;
+      added, file re-hashed (`557c7e80…940c`), MANIFEST updated (Auditor #1)
+- [x] [Review][Patch] The byte-pin read by index while the traps judge by obs_id — a deliberate
+      obs_id swap with a re-hashed manifest would invert both traps silently; the three obs_ids
+      are now pinned (Edge Case Hunter #1). The same hole in 4.13/4.14's byte-pins → registered
+      in deferred-work.md under "code review of story-4.15" (pre-existing pattern)
+- [x] [Review][Patch] The `facts.len()==3` justification comment (4.13's lesson) restored
+      (Edge Case Hunter #2)
+- [x] [Review][Patch] Change Log lacked the "Implemented (dev-story)" row; added (Auditor #2).
+      Completion note weakened to the true sentence — the header REFERS to the tempting rule
+      descriptively, it does not name the literal id (Auditor #3)
+- [x] [Review][Note] Blind Hunter's stale-test-binary observation (Synology mount mtime) is
+      environmental, recorded for [[local-gate-must-mirror-ci]] — no repo change
 
 ## Dev Notes
 
@@ -278,8 +295,8 @@ claude-fable-5 (Claude Fable 5)
 - The family landed exactly as scoped: two NEW locked artefacts (3-obs stream, 2-trap file),
   manifest 17 → 19, three count literals 17 → 19, ONE new byte-pin test. No harness change,
   nothing coined — `l1-distinct-mac` opposes the collision, `l1-exact-mac` fires the
-  re-sighting; `l2-hostname-agrees` is named by the header prose only, never by an
-  expectation.
+  re-sighting; the tempting rule is REFERRED TO by the header prose ("the rule 4.11 coined for
+  it") and its literal id appears nowhere in the file — no expectation names it.
 - **AC1**: `hostname-collision-must-not-merge` judges [H1,H2] — distinct MACs/addresses,
   same `doc-printer`; the reason names the factory-default story, the opposers descriptively,
   and F51's weakness.
@@ -313,3 +330,5 @@ claude-fable-5 (Claude Fable 5)
 |------------|------------------------------------------------------------------------|
 | 2026-07-25 | Story 4.15 drafted (create-story, autonomous run): hostname collision — the mirror of cloned-mac (different MACs, same hostname) and the first family carrying a population bound (F51: hostname unusable on ~half, abstention rate bounded by data). Two traps, nothing coined: must-not-merge [H1,H2] on `l1-distinct-mac` (temptation `l2-hostname-agrees` never named), must-merge [H1,H3] on `l1-exact-mac` (plain re-sighting, anti-cowardice). F51 record in the family HEADER, not the register (argued in AC3). 3-obs stream `afafafaf`, `doc-printer`, no Uplink. Counts 17 → 19, manifest 17 → 19. Byte-pin prescribes all value pins up front (4.14's review lesson pre-applied). Status → ready-for-dev. |
 | 2026-07-25 | Validated (two fresh-context agents: fact-check + gap-hunt). 0 HIGH / 4 MED / 6 LOW, all applied: F51's TRUE verbatim distinguished from the epic's paraphrase ("bounded below by this, not by the engine's quality"; "nearly half" not "fewer than half"); shared-hardware-vm kinship corrected (its must-merge pair's MACs DIFFER — the family distinguisher is topology corroboration, not MAC absence); instants pinned as a VECTOR equality (dhcp-churn shape), not a bare increase check; "never named" scoped to expectations (header prose may name the temptation); orphan-red ATDD note restored; breakdown-comment tail REPLACED not appended; reason phrasing template pointed at vrrp-virtual-mac (octet-free), dhcp-churn explicitly NOT the template; "four siblings"; header records F51 "under the corpus lock". |
+| 2026-07-25 | Implemented (dev-story): all 6 tasks, ATDD order held — byte-pin RED (`FixtureError::Io`), stream landed and greened, trap file landed, count coupling RED at `left: 19, right: 17` then 17 → 19, manifest 17 → 19 (sha256 after final byte). Reasons 255/246 chars, octet-free. Gates green: fmt, clippy `-D warnings`, `cargo test --workspace` (115+86+42), `xtask ci` ("19 fixture(s) match their recorded sha256"). Nothing coined, no harness change, `Cargo.lock`/README untouched. Status → review. |
+| 2026-07-25 | Code review (3 fresh-context layers: Blind Hunter / Edge Case Hunter / Acceptance Auditor). **Auditor: PASS 7/8** (AC2 partial — the header lacked its prescribed cloned-mac kinship sentence). 0 CRITICAL/HIGH; **4 patches applied**: the kinship sentence added to the header (file re-hashed `557c7e80…940c`, MANIFEST updated — the one hashed-artefact patch), the byte-pin now pins the obs_id ↔ line binding (Edge's MED: an obs_id swap would have inverted both traps silently) plus the restored `facts.len()` justification comment, the missing Change Log row, and the completion-note overclaim weakened ("referred to, never named"). **1 defer registered** (the 4.13/4.14 byte-pins share the obs_id-binding hole — pre-existing pattern). Blind Hunter: 0 defects in the change (2 environmental notes, incl. the Synology-mount stale-binary trap for [[local-gate-must-mirror-ci]]). Gates re-run green post-patch (115+86+42; "19 fixture(s) match their recorded sha256"). Status → done. |

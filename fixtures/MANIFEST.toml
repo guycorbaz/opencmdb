@@ -133,4 +133,4 @@ sha256 = "fd15e021d1bf3adc19c92baabcd91f26dc5085d51fc9aae9a7982fb40befc243"
 # re-sighting). Its header carries F51's population bound under the corpus lock: hostname unusable
 # on nearly half, the abstention rate bounded below by this, not by the engine's quality.
 path = "scenario/traps/hostname-collision.toml"
-sha256 = "e7dfb190f3369f11e581035565377cd00080b7eecd4705c4831fa690f6dd9dcf"
+sha256 = "557c7e80e6126ffd8434a1fe382ccc5d18f0291b66a7c86de614084c301e940c"
