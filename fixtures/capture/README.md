@@ -17,4 +17,7 @@ Two rules that are not negotiable:
 2. **Nothing here may carry real private data into a public repository.** Captures must be
    scrubbed — addresses, MACs, hostnames — before they are committed (D19).
 
-Empty until the first real connector exists (Epic 11).
+Empty until the first real connector exists (Epic 11). *(2026-07-25: the synthetic wire SPEC
+half of D35 layer B lives at `../scenario/wire/` — a spec does not rot, so it is not a capture;
+this directory still receives only real, scrubbed, version-tagged payloads, plus the
+`mutations/` the Epic-11 generator will derive from them — issue #34.)*

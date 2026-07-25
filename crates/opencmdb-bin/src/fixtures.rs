@@ -2567,4 +2567,229 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             "the absences happen at the authored instants"
         );
     }
+
+    /// Story 4.18's shape guard — the wire spec's only test until Epic 11's harness runs it
+    /// under the real parser. It holds three things: the synthetic BODY to the measured field
+    /// behaviours (lowercase-colon mac, 10-digit seconds epoch, no vlan key, len-24 single
+    /// network_id, hostname present/empty/missing and null never, oui mostly empty, is_wired
+    /// both ways, sw_port on wired only — the unmeasured wireless case deliberately absent);
+    /// the EXPECTED Observations to their authored values (ids, context UUIDs, facts,
+    /// instants); and the DERIVATION between them (mac string → Mac bytes, ip → IpV4, oui →
+    /// OuiVendor, hostname key state mirrored, last_seen → observed_at) — the spec as
+    /// executable connection, so the pair cannot drift apart while both halves stay
+    /// internally consistent. This directory sits outside every corpus walk, so this test is
+    /// also its PRIVACY coverage: the raw body text and the expected facts are routed through
+    /// the corpus privacy rules here.
+    #[test]
+    fn the_wire_spec_encodes_the_measured_field_behaviours() {
+        let body_path = fixture_path("scenario/wire/unifi-clients.json").unwrap();
+        let raw = std::fs::read_to_string(&body_path).expect("the wire body must read");
+        assert_text_is_synthetic(&raw, &body_path);
+        let body: serde_json::Value = serde_json::from_str(&raw).expect("the body must parse");
+        let data = body["data"].as_array().expect("the data array");
+        assert_eq!(data.len(), 4, "four authored clients, exactly");
+
+        let mut network_ids = std::collections::BTreeSet::new();
+        let mut empty_ouis = 0;
+        let mut wired = [false; 4];
+        for (n, client) in data.iter().enumerate() {
+            let obj = client.as_object().expect("a client is an object");
+
+            // mac: lowercase colon-separated, 100% (the measurement's closed trap).
+            let mac = obj["mac"].as_str().expect("mac is a string");
+            assert!(
+                mac.len() == 17
+                    && mac.split(':').count() == 6
+                    && mac
+                        .chars()
+                        .all(|c| c == ':' || c.is_ascii_digit() || c.is_ascii_lowercase()),
+                "client {n}: mac must be lowercase colon-separated, got {mac}"
+            );
+
+            // last_seen: a 10-digit SECONDS epoch, not milliseconds.
+            let last_seen = obj["last_seen"].as_i64().expect("last_seen is an integer");
+            assert!(
+                (1_000_000_000..10_000_000_000).contains(&last_seen),
+                "client {n}: last_seen must be a 10-digit seconds epoch, got {last_seen}"
+            );
+
+            // vlan: MISSING, 100%.
+            assert!(
+                !obj.contains_key("vlan"),
+                "client {n}: the measured payload never carries a vlan key"
+            );
+
+            // network_id: fixed-length 24, one distinct value across entries.
+            let network_id = obj["network_id"].as_str().expect("network_id is a string");
+            assert_eq!(
+                network_id.chars().count(),
+                24,
+                "client {n}: network_id is fixed-length 24"
+            );
+            network_ids.insert(network_id.to_owned());
+
+            // hostname: present, empty and missing all occur — null NEVER (walked per entry:
+            // if the key exists its value is a string, never Value::Null).
+            if let Some(hostname) = obj.get("hostname") {
+                assert!(
+                    hostname.is_string(),
+                    "client {n}: a present hostname is a string, never null"
+                );
+            }
+
+            // oui: present on all.
+            let oui = obj["oui"].as_str().expect("oui is a string on every entry");
+            if oui.is_empty() {
+                empty_ouis += 1;
+            }
+
+            // is_wired: bool, 100%; sw_port present iff wired (the wireless presence rate was
+            // never measured — the certain case only).
+            wired[n] = obj["is_wired"].as_bool().expect("is_wired is a bool");
+            match obj.get("sw_port") {
+                Some(port) if wired[n] => {
+                    let port = port.as_i64().expect("sw_port is an integer");
+                    assert!(
+                        (1..100).contains(&port),
+                        "client {n}: sw_port is 1-2 digits, got {port}"
+                    );
+                }
+                None if !wired[n] => {}
+                other => panic!(
+                    "client {n}: sw_port must be present iff wired (wired={}, sw_port={other:?})",
+                    wired[n]
+                ),
+            }
+        }
+        assert_eq!(
+            network_ids.len(),
+            1,
+            "one distinct network_id across entries"
+        );
+        assert_eq!(
+            empty_ouis, 3,
+            "oui is empty on the measured large share (3 of 4)"
+        );
+        assert!(
+            wired.contains(&true) && wired.contains(&false),
+            "both is_wired values occur"
+        );
+        let hostname_states: Vec<Option<&str>> = data
+            .iter()
+            .map(|c| c.get("hostname").map(|h| h.as_str().unwrap()))
+            .collect();
+        assert!(
+            hostname_states
+                .iter()
+                .any(|s| matches!(s, Some(h) if !h.is_empty()))
+                && hostname_states.iter().any(|s| matches!(s, Some("")))
+                && hostname_states.iter().any(|s| s.is_none()),
+            "hostname present, empty and missing all occur"
+        );
+
+        // The expected Observations — the parser's output contract, authored before the
+        // parser (D19: the fixture schema IS the Observation schema).
+        let expected_path = fixture_path("scenario/wire/unifi-clients.expected.jsonl").unwrap();
+        let observations = read_jsonl(&expected_path).expect("the expected stream must read");
+        assert_eq!(observations.len(), 4, "one expected observation per client");
+        let scope = Scope {
+            l2_domain: L2DomainId::from_uuid(u("11111111-1111-4111-8111-111111111111")),
+            vantage: VantageId::from_uuid(u("22222222-2222-4222-8222-222222222222")),
+        };
+        let connector_id = ConnectorId::from_uuid(u("33333333-3333-4333-8333-333333333333"));
+        for (n, expected_len) in [(0usize, 4usize), (1, 4), (2, 3), (3, 4)] {
+            let obs = &observations[n];
+            assert_eq!(
+                obs.facts.len(),
+                expected_len,
+                "observation {n}'s fact count"
+            );
+            assert_eq!(
+                obs.obs_id.to_string(),
+                format!("bdbdbdbd-0000-4000-8000-{:012}", n + 1),
+                "line {n} carries its placeholder obs_id"
+            );
+            // The context UUIDs are PLACEHOLDERS (harness context, not expectations) — pinned
+            // so they cannot drift silently either.
+            assert_eq!(
+                obs.connector_id, connector_id,
+                "line {n}'s placeholder connector"
+            );
+            assert_eq!(obs.scope, scope, "line {n}'s placeholder scope");
+            assert_facts_are_synthetic(&obs.facts, &expected_path);
+        }
+
+        // The DERIVATION, per index: the expected facts re-derived from the body's strings.
+        for (n, client) in data.iter().enumerate() {
+            let obs = &observations[n];
+            let find = |pick: fn(&Fact) -> bool| obs.facts.iter().find(|f| pick(f)).cloned();
+
+            let wire_mac = MacAddr::from_str(client["mac"].as_str().unwrap()).unwrap();
+            assert_eq!(
+                find(|f| matches!(f, Fact::Mac { .. })),
+                Some(Fact::Mac {
+                    addr: wire_mac,
+                    locally_administered: wire_mac.is_locally_administered(),
+                }),
+                "line {n}: the expected Mac is the wire mac, flag from its own U/L bit"
+            );
+
+            let wire_ip: Ipv4Addr = client["ip"].as_str().unwrap().parse().unwrap();
+            assert_eq!(
+                find(|f| matches!(f, Fact::IpV4 { .. })),
+                Some(Fact::IpV4 { addr: wire_ip }),
+                "line {n}: the expected IpV4 is the wire ip"
+            );
+
+            // hostname: wire "" -> fact with "", wire key MISSING -> no fact (4.17's
+            // committed doctrine; the source attribution Dhcp is a charter-named hole).
+            let expected_hostname = client.get("hostname").map(|h| Fact::Hostname {
+                name: h.as_str().unwrap().into(),
+                source: HostnameSource::Dhcp,
+            });
+            assert_eq!(
+                find(|f| matches!(f, Fact::Hostname { .. })),
+                expected_hostname,
+                "line {n}: the expected hostname mirrors the wire key's state and value"
+            );
+
+            // oui: mapped by the same doctrine ("" stays an empty fact) — a charter-named
+            // recorded-bump candidate.
+            assert_eq!(
+                find(|f| matches!(f, Fact::OuiVendor { .. })),
+                Some(Fact::OuiVendor {
+                    vendor: client["oui"].as_str().unwrap().into(),
+                }),
+                "line {n}: the expected OuiVendor is the wire oui"
+            );
+
+            // observed_at = last_seen read as epoch SECONDS, exactly.
+            let expected_at =
+                chrono::DateTime::from_timestamp(client["last_seen"].as_i64().unwrap(), 0).unwrap();
+            assert_eq!(
+                obs.observed_at, expected_at,
+                "line {n}: observed_at is the wire last_seen in seconds"
+            );
+
+            // No Uplink anywhere: sw_mac was never measured — the hole is an omission, not an
+            // accident.
+            assert!(
+                obs.facts.iter().all(|f| !matches!(f, Fact::Uplink { .. })),
+                "line {n}: no Uplink may be expected — sw_mac was never measured"
+            );
+        }
+
+        // The instants restated as authored values (the second oracle over the derivation).
+        let instants: Vec<Timestamp> = observations.iter().map(|o| o.observed_at).collect();
+        assert_eq!(
+            instants,
+            vec![
+                ts("2026-01-12T00:00:00Z"),
+                ts("2026-01-12T00:05:00Z"),
+                ts("2026-01-12T00:10:00Z"),
+                ts("2026-01-12T00:15:00Z"),
+            ],
+            "the four last_seen epochs are the four authored instants"
+        );
+    }
 }

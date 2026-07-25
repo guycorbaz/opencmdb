@@ -14,7 +14,7 @@ fixing a test"*. Review it that way.
 
 | Directory | Holds | Rots? |
 |---|---|---|
-| `scenario/` | synthetic traps, written to trap a named case — they prove the **engine** | **No.** They are right or wrong. |
+| `scenario/` | synthetic traps, written to trap a named case — they prove the **engine** (`scenario/wire/` is the one exception: a synthetic wire SPEC that proves the **parser**, run by Epic 11's harness — it lives here rather than in `capture/` because it is a spec, not a rotting capture; story 4.18) | **No.** They are right or wrong. |
 | `capture/` | real, version-tagged, dated source payloads — they prove the **parser** | **Yes.** A re-capture job diffs them against the live schema. |
 
 The split is not tidying. It is the domain of definition of a destructive tool: the re-capture
@@ -35,8 +35,10 @@ directions** — the corpus is frozen only when both hold:
 Exempt from the second rule, deliberately and narrowly: `MANIFEST.toml` itself (a lock cannot list
 itself) and `README.md` files (prose about the corpus, not artefacts of it).
 
-Bytes are not the whole story: a file that hashes correctly can still be nonsense. So both halves
-of `scenario/` are **discovered by walking** and read by the test suite, not merely hashed:
+Bytes are not the whole story: a file that hashes correctly can still be nonsense. So the
+`replay/` and `traps/` halves of `scenario/` are **discovered by walking** and read by the test
+suite, not merely hashed (`scenario/wire/` sits outside the walks — its dedicated shape test is
+its reader and its privacy coverage; see its README):
 
 - every `scenario/traps/*.toml` is parsed, validated, and cross-checked against the observations it
   claims to judge;

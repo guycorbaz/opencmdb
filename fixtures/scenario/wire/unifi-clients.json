@@ -1,0 +1,42 @@
+{
+  "meta": { "rc": "ok" },
+  "data": [
+    {
+      "mac": "02:00:5e:00:53:dc",
+      "ip": "192.0.2.90",
+      "hostname": "doc-host-juliett",
+      "oui": "doc-vendor",
+      "last_seen": 1768176000,
+      "is_wired": true,
+      "sw_port": 7,
+      "network_id": "doc-network-000000000001"
+    },
+    {
+      "mac": "02:00:5e:00:53:dd",
+      "ip": "192.0.2.91",
+      "hostname": "",
+      "oui": "",
+      "last_seen": 1768176300,
+      "is_wired": false,
+      "network_id": "doc-network-000000000001"
+    },
+    {
+      "mac": "02:00:5e:00:53:de",
+      "ip": "192.0.2.92",
+      "oui": "",
+      "last_seen": 1768176600,
+      "is_wired": true,
+      "sw_port": 3,
+      "network_id": "doc-network-000000000001"
+    },
+    {
+      "mac": "02:00:5e:00:53:df",
+      "ip": "192.0.2.93",
+      "hostname": "doc-host-kilo",
+      "oui": "",
+      "last_seen": 1768176900,
+      "is_wired": false,
+      "network_id": "doc-network-000000000001"
+    }
+  ]
+}

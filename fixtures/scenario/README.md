@@ -10,6 +10,13 @@ Truth here is an **input**, not an interpretation of an output: the case is cons
 then the observations that express it are written. That is what gives these fixtures a free and
 perfect oracle, which a real capture can never have (D19).
 
+`wire/` holds the one deliberate exception to "they prove the engine": a synthetic wire-format
+SPEC (a measured UniFi-shaped body plus the Observations the future parser must produce from
+it — story 4.18). It still does not rot and is still out of the re-capture job's reach — that
+is exactly why it lives under `scenario/` and not `capture/` — but it proves the **parser**,
+and only Epic 11's harness will run it; until then its shape test guards it. See
+`wire/README.md` for the charter and the named holes.
+
 `replay/` holds the JSONL streams a `FixtureConnector` replays. A line is one of two things, and
 which one is decided by a **marker key**, never by guessing:
 
