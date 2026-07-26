@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-26  # Epic 4 RETROSPECTIVE held (epic-4-retro-2026-07-26.md); Epic 5 breakdown is next
+last_updated: 2026-07-26  # Story 5.1 file created — Epic 5 opens (in-progress)
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -150,17 +150,25 @@ development_status:
   epic-4-retrospective: done
 
   # ── Epic 5: Identité d'interface fiable (v0.3) ───────────────────────────
-  # Decomposed 2026-07-26 into 14 stories (epics.md). Stays `backlog` until the first story
-  # FILE is created — create-story flips it to in-progress. Build order is the numbering:
-  # the two inherited debt stories first (this epic bumps the corpus), then the engine's
-  # vocabulary, the pure join, the blocker, the corpus wiring, persistence, the invariants,
-  # and last the operator-visible abstention surface.
+  # Decomposed 2026-07-26 into 14 stories (epics.md); story 5.2b was INSERTED the same day,
+  # bringing it to 15. Build order is the numbering: the THREE inherited debt stories first
+  # (this epic bumps the corpus), then the engine's vocabulary, the pure join, the blocker,
+  # the corpus wiring, persistence, the invariants, and last the operator-visible abstention
+  # surface.
   # ⚠️ NFR4 CANNOT go green here — D18 gates at the DEVICE level (Epic 6). Of the 24 committed
   # traps, 13 name an l1-* rule, 8 an l2-* rule, 3 a cause. Story 5.8 keeps the 8 unanswerable
   # ones IN the denominator so a green gate can never mean "we did not ask".
-  epic-5: backlog
-  5-1-corpus-pins-obs-id-binding: backlog
+  epic-5: in-progress
+  5-1-corpus-pins-obs-id-binding: ready-for-dev
   5-2-privacy-floor-reaches-the-bytes: backlog
+  # 5.2b was INSERTED on 2026-07-26, one day after the decomposition and before any Epic 5 code
+  # existed — surfaced while preparing story 5.1, which could not absorb it (its AC1 strengthens
+  # byte-pins that EXIST; randomized-mac / multi-nic / shared-hardware-vm / cloned-mac have none,
+  # verified by grep). The letter suffix is the house idiom for an inserted item (D56b, AC5b/7b/7c)
+  # and keeps 5.3-5.14 at their numbers. It sits in the debt block ahead of 5.5 deliberately: the
+  # corpus is the oracle the L1 join is judged against. It closes the LAST two corpus byte-fidelity
+  # entries in deferred-work.md (story-4.13's and the one story 5.1 raises).
+  5-2b-four-families-byte-pins: backlog
   5-3-engine-abstention-cause: backlog
   5-4-decision-and-ruleset-version: backlog
   5-5-l1-join-pure: backlog
