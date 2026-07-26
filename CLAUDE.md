@@ -38,7 +38,11 @@ Typical greenfield lifecycle (each step is a skill — see the skills list, pref
 1. `bmad-product-brief` / `bmad-domain-research` → `bmad-create-prd` → `bmad-validate-prd`
 2. `bmad-create-ux-design` → `bmad-create-architecture`
 3. `bmad-create-epics-and-stories` → `bmad-sprint-planning`
-4. Per story: `bmad-create-story` → `bmad-dev-story` (or `bmad-quick-dev`) → `bmad-code-review` → `bmad-retrospective`
+4. Per story: `bmad-create-story` → **`bmad-create-story validate` (MANDATORY, see below)** → `bmad-dev-story` (or `bmad-quick-dev`) → `bmad-code-review` → `bmad-retrospective`
+
+**`create-story validate` is NOT optional here** (Guy's decision, Epic 4 retrospective 2026-07-26 — it overrides the story template's "Validation is optional" banner). Every story gets a validation pass by **two fresh-context agents** (fact-check + gap-hunt) *before* `dev-story`. Self-review finds nothing; the measured payoff over the 9 Epic-4 stories that had it was **6 HIGH findings on 4 stories**, two of which would otherwise have shipped a trap that passed for the wrong reason.
+
+**A cause needs a check, not a plausible story.** A symptom may be recorded from observation; a *cause* may not be written down without naming the check that would have failed if the cause were wrong. This is the code rule ("name the test behind every claim") extended to environment and infrastructure diagnoses — Epic 4 recorded a confident Synology-Drive explanation for a flaky local suite that measurement later refuted, and four documents carried it (issue #38).
 
 Use `bmad-help` when unsure which skill applies next.
 

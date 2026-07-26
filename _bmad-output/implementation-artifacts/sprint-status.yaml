@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-25  # EPIC 4 CLOSED — 4.19 split (4.19a shipped, 4.19b → Epic 11), re-scope recorded
+last_updated: 2026-07-26  # Epic 4 RETROSPECTIVE held (epic-4-retro-2026-07-26.md); Epic 5 breakdown is next
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -141,7 +141,13 @@ development_status:
   # generator has no test that reds without the parser it attacks. Carried by GitHub issue #34,
   # by the wire charter, and by CONSUMER PENDING markers on both MANIFEST entries.
   4-19-mutation-fixtures: done-partial  # 4.19a shipped; 4.19b → Epic 11 (issue #34)
-  epic-4-retrospective: optional
+  # Held 2026-07-26 with Guy — record: epic-4-retro-2026-07-26.md. Three decisions carried
+  # forward: `create-story validate` is now MANDATORY; Epic 3's `cargo xtask verify` action item
+  # is CLOSED as obsolete (47/47 green CI runs, the failure class did not recur); the two corpus
+  # debt themes (byte-fidelity, privacy) move INTO Epic 5 at its head. The Synology-Drive
+  # explanation for the local suite's non-determinism was REFUTED by measurement during the
+  # retro — the cause is open and carries its own issue.
+  epic-4-retrospective: done
 
   # ── Epic 5: Identité d'interface fiable (v0.3) ───────────────────────────
   epic-5: backlog
