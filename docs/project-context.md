@@ -11,8 +11,10 @@ _Auto-loaded by BMad workflows. Concise grounding + resume point. Full detail li
   *"the code has just begun… a skeleton"* and *"there is no runnable product to deploy"* while
   `v0.1.0`/`v0.1.1` were tagged and on Docker Hub. It now states what runs (one page, one connector,
   a real gap on a small perimeter), what does NOT (triage inbox, IPAM, UniFi, alerts, admin UI), and
-  that ~1/5 of the planned work is done. ⚠️ **Still outstanding: there is no `LICENSE` file** —
-  AGPL-3.0-or-later is declared only in the `Cargo.toml`s. The README now says so plainly.
+  that ~1/5 of the planned work is done. **The `LICENSE` file EXISTS** — AGPL-3.0-or-later, verbatim,
+  committed 2026-07-22 (`135ff46`); the README references it and the same identifier is declared in
+  the `Cargo.toml`s. _(This line read "Still outstanding: there is no LICENSE file" until 2026-07-26 —
+  false for four days, in the file BMad auto-loads first. Found in Epic 4's retrospective.)_
 - **Docker Hub image is `gcorbaz/opencmdb`** — the SYSTEM-user handle, *not* the GitHub handle
   `guycorbaz`. The two differ; do not "correct" either one into the other.
 - **`docker/docker-compose.yml` and `docker/.env.example` DO exist** (under `docker/`, not at the
@@ -183,15 +185,28 @@ one. The two sqlx traps it warned about were both real and are both handled in t
 Guy works in **French**; decisive; uses BMad **Party Mode** heavily at each step; guiding mantra
 **"on affinera à l'usage"** — freeze durable *principles*, calibrate *details/values* in V1.
 
-**Story flow, as actually practised:** `create-story` → (optionally `validate`, which is worth it —
-a fresh-context adversarial pass on story 4.5 found eleven defects the author could not see) →
-`dev-story` → `code-review` → next story. Stories are sliced FINE: prefer many small ones over few
-big ones, and split a story when its halves turn out not to be variants of one idea (4.5 → 4.5a/4.5b).
+**Story flow, as actually practised:** `create-story` → **`validate` (MANDATORY since 2026-07-26 —
+Guy's decision at Epic 4's retrospective; two fresh-context agents, fact-check + gap-hunt)** →
+`dev-story` → `code-review` → next story. It is not optional and the story template's
+"Validation is optional" banner is wrong: measured over the 9 Epic-4 stories that had it, validation
+produced **6 HIGH findings on 4 stories**, two of which would have shipped a trap that passed for the
+wrong reason. Stories are sliced FINE: prefer many small ones over few big ones, and split a story
+when its halves turn out not to be variants of one idea (4.5 → 4.5a/4.5b).
 
-**Commits:** one per story, landing the story file AND its review together, directly on `master`
-(no PR flow). Message names what changed and what was measured. Run the full local gate before
-pushing — `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`,
-`cargo test --workspace`, `cargo xtask ci` — because Epic 3's retrospective recorded four CI-only
-failures from skipping exactly that. ⚠️ `DATABASE_URL` is usually unset locally, and the
-MariaDB-backed tests `return` early and pass either way: a green suite says **nothing** about the
-database.
+**Commits: one per story, on a BRANCH → PR → green CI → squash merge. Never straight to `master`**
+(adopted mid-Epic 4 at PR #15 and held since: 22 PRs, zero direct pushes, 47/47 green CI runs).
+`enforce_admins` is false, so honouring this is on the author, not on GitHub. Message names what
+changed and what was measured. Run the full local gate before pushing — `cargo fmt --all`,
+`cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo xtask ci`
+— because Epic 3's retrospective recorded four CI-only failures from skipping exactly that.
+_(This paragraph said "directly on `master` (no PR flow)" until 2026-07-26 — true of Epic 3, false
+for all of Epic 4. Found in Epic 4's retrospective.)_
+⚠️ `DATABASE_URL` is usually unset locally, and the MariaDB-backed tests `return` early and pass
+either way: a green suite says **nothing** about the database.
+
+⚠️ **The local test suite has shown unexplained non-determinism** (8 failures across 5 runs,
+identical sha256, clean `git status`, then 15+ green — stories 4.15/4.17). The recorded cause
+("Synology Drive replaced the corpus with a stale server state") is **REFUTED by measurement**: Drive
+has never synced this tree — the repo was created five days after Guy deliberately stopped syncing
+`devel`, and Drive's history holds zero rows touching `opencmdb`. **The cause is OPEN**; CI (clean
+checkout) has never reproduced it. Do not re-adopt the refuted explanation.
