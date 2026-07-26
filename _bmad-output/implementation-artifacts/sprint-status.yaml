@@ -150,7 +150,29 @@ development_status:
   epic-4-retrospective: done
 
   # ── Epic 5: Identité d'interface fiable (v0.3) ───────────────────────────
+  # Decomposed 2026-07-26 into 14 stories (epics.md). Stays `backlog` until the first story
+  # FILE is created — create-story flips it to in-progress. Build order is the numbering:
+  # the two inherited debt stories first (this epic bumps the corpus), then the engine's
+  # vocabulary, the pure join, the blocker, the corpus wiring, persistence, the invariants,
+  # and last the operator-visible abstention surface.
+  # ⚠️ NFR4 CANNOT go green here — D18 gates at the DEVICE level (Epic 6). Of the 24 committed
+  # traps, 13 name an l1-* rule, 8 an l2-* rule, 3 a cause. Story 5.8 keeps the 8 unanswerable
+  # ones IN the denominator so a green gate can never mean "we did not ask".
   epic-5: backlog
+  5-1-corpus-pins-obs-id-binding: backlog
+  5-2-privacy-floor-reaches-the-bytes: backlog
+  5-3-engine-abstention-cause: backlog
+  5-4-decision-and-ruleset-version: backlog
+  5-5-l1-join-pure: backlog
+  5-6-blocker-and-recall-assertion: backlog
+  5-7-trap-runner-stops-scoring-nothing: backlog
+  5-8-unimplemented-level-counts-as-not-passing: backlog
+  5-9-persist-interface-and-identity-link: backlog
+  5-10-purge-test: backlog
+  5-11-order-independence: backlog
+  5-12-never-overwrite-anti-regression: backlog
+  5-13-monotone-honesty-trap-family: backlog
+  5-14-abstention-displayed-by-cause: backlog
   epic-5-retrospective: optional
 
   # ── Epic 6: Ne pas compter deux fois la même boîte (v0.4) ────────────────

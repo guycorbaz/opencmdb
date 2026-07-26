@@ -16,7 +16,22 @@ resumePoint: >
   (3.1–3.10) below — the walking skeleton + a 0.1.0 Docker Hub release. Create
   and implement them one at a time (just-in-time); the riskiest (3.2 migration/
   AssertSqlSafe, 3.3 the two-traits Repository / `Reads` bomb, 3.6 the gap
-  engine) get a design nod at story-creation time. After all epics: step-04.
+  engine) get a design nod at story-creation time.
+  EPICS 3 and 4 are COMPLETE (Epic 4 closed 2026-07-25, retrospective held
+  2026-07-26; story 4.19 was SPLIT, 4.19b re-scoped to Epic 11 via issue #34).
+  EPIC 5 (Identité d'interface fiable, v0.3) is DECOMPOSED into 14 stories
+  (5.1–5.14) below, on 2026-07-26 with Guy. Three arbitrations were taken at
+  decomposition time and live in the stories that carry them: (a) NFR4 CANNOT go
+  green in Epic 5 — D18 gates at the DEVICE level, and of the 24 committed traps
+  13 name an `l1-*` rule, 8 an `l2-*` rule and 3 a cause; the Epic List entry was
+  corrected rather than left over-promising, and story 5.8 keeps unanswerable
+  traps in the denominator; (b) the identity engine gets its OWN abstention cause,
+  with `Expectation` and the sha256-locked corpus untouched (5.3); (c) Epic 5
+  creates `interface`/`identity_link`/`link_candidate` but NOT `device`, which is
+  Epic 6's (5.9). Stories 5.1–5.2 are inherited debt placed at the HEAD on Guy's
+  decision, because this epic bumps the corpus and hardening after the bump costs
+  more. Create and implement them one at a time (just-in-time). Epics 6–23 remain
+  at epic level only. After all epics: step-04.
 ---
 
 # opencmdb - Epic Breakdown
@@ -394,8 +409,10 @@ Freeze the JSONL fixture schema, build the `FixtureConnector` (replay, zero mock
 **FRs covered:** none (realizes NFR4 infrastructure). ARCH-22,24.
 
 ### Epic 5: Identité d'interface fiable (v0.3)
-The L1 interface-identity join, built one trap at a time until the NFR4 binary gate is green (truth-table failures = 0, three columns must-not-merge/must-merge/must-abstain). Abstention is a first-class persisted outcome, displayed and counted by cause. Includes the monotone-honesty invariant trap family.
-**FRs covered:** FR9 (interface level), FR16, FR16b. NFR4,5,6.
+The L1 interface-identity join — the deterministic `(l2_domain, mac) -> interface` lookup of D13 — built one trap at a time until **every trap whose expected rule is `l1-*` passes**. Abstention is a first-class persisted outcome, displayed and counted by cause. Includes the monotone-honesty invariant trap family.
+**FRs covered:** FR9 (interface level), FR16, FR16b. NFR5,6. **NFR4: advanced, NOT met — see below.**
+
+> **⚠️ NFR4 CANNOT go green in this epic, by construction — and the epic says so rather than discovering it late.** D18 places the gate **at the device level**, deliberately: *"my zero-tolerance was at the interface level, my float was at the device level. L1 is a lookup — I put zero tolerance where it is easy. L2 is the inference, where the promise lives — I put a float where it is hard. **I gated the easy and hedged the hard: exactly the cowardice I accuse the engine of, applied to myself.**"* Declaring the gate green on the L1 subset would replay that exact move. Measured against the committed corpus (24 traps): **13 name an `l1-*` rule, 8 name an `l2-*` rule, 3 are `must-abstain` and name a cause instead.** Four families are pure L1 (randomized-mac, dhcp-churn, hostname-collision, hostname-absence), two are pure L2 (multi-nic, shared-hardware-vm), and **three are MIXED** (cloned-mac, docker-veth, vrrp-virtual-mac) — their poles live in different epics and they do not move as a block. **Epic 5's commitment is the 13 L1-ruled traps; NFR4 stays RED and is closed by Epic 6.** _(This paragraph replaces "built one trap at a time until the NFR4 binary gate is green", which promised what the level split makes impossible — the same half-made admission as Epic 4's "authored here but only become executable in Epic 11". Finished 2026-07-26 at the Epic 5 decomposition.)_
 
 ### Epic 6: Ne pas compter deux fois la même boîte (v0.4)
 Device grouping (L2): the cascade one rule per story, the seeded generator, the bulk fixture, the distributional diff, and the ephemeral-interface dormant lifecycle. Closes with the minimal actionable gesture — a one-click promote of an observed value into a declared record, so the loop becomes actionable one release before the rich inbox.
@@ -1285,3 +1302,299 @@ So that the failure that fails SILENTLY is covered rather than the one that fail
 **And** the corpus records why this layer exists: injecting a drift error at layer A tests nothing — it asserts the engine handles an error you handed it, without proving the parser produces one. That is the most insidious theatre of all, because it looks like fault injection (D35).
 
 **And** it records the drift surface being defended: the payload carries 127 distinct keys where the `Fact` enum names 7.
+
+## Epic 5: Identité d'interface fiable
+
+Build the L1 interface-identity join and drive it against the corpus Epic 4 froze. L1 is **pure A** (D13): a deterministic lookup on the scope-qualified key `(l2_domain, mac) -> interface`. It is not a probabilistic problem — no score, no threshold, no float. The epic's product-visible promise is FR16/FR16b: **abstention is a persisted, displayable, counted-by-cause outcome**, not an error path.
+
+_Decomposed 2026-07-26 with Guy, immediately after the Epic 4 retrospective. Three arbitrations were taken at decomposition time and are recorded in the stories that carry them: the NFR4 level boundary (see the Epic List entry above and story 5.8), the engine's own abstention cause (5.3), and what persistence Epic 5 does and does not create (5.9)._
+
+_Two of the fourteen stories are **inherited debt**, placed at the HEAD on Guy's decision: the corpus byte-fidelity and corpus privacy themes had each accumulated three to four unowned entries in `deferred-work.md`. They come first because **this epic bumps the corpus**, and hardening after the bump means replaying every entry against artefacts that have moved._
+
+_Build order: the two debt stories -> the engine's vocabulary (5.3, 5.4) -> the pure join (5.5) -> the blocker (5.6) -> wiring it to the corpus (5.7, 5.8) -> persistence (5.9, 5.10) -> the invariants (5.11, 5.12, 5.13) -> the operator-visible surface (5.14). No story depends on a later one._
+
+### Story 5.1: The corpus pins the obs_id-to-line binding, and every stream goes through the connector
+
+As the owner of the corpus,
+I want each byte-pin test to assert the `obs_id` of the line it reads, and every committed stream to be loaded through `FixtureConnector::load`,
+So that a re-authored stream cannot invert what its traps judge while every assertion stays green.
+
+**Acceptance Criteria:**
+
+**Given** the byte-pin tests of the dhcp-churn and vrrp families, which read observations by INDEX while their traps judge by `obs_id`
+**When** the pins are strengthened
+**Then** each pinned observation asserts its `obs_id`, so a deliberate swap of two lines' ids with a re-hashed manifest reds instead of silently inverting the family (registered in `deferred-work.md` under story 4.15's review; 4.15 fixed its own).
+
+**Given** the committed replay streams, of which only `minimal.jsonl` is exercised through the connector's admissibility checks
+**When** the corpus walk runs
+**Then** every stream under `scenario/replay/` is loaded through `FixtureConnector::load`, so corpus-level parseability and connector-level admissibility stop being two different claims (registered under story 4.12's review).
+
+**And** the round-trip byte-shape witness covers every committed stream, not `minimal.jsonl` alone (registered under story 4.10's review).
+
+**And** each strengthened guard is proven to red before it passes — the mutation is recorded (house rule, story 1.3).
+
+### Story 5.2: The privacy floor reaches the bytes it always claimed to cover
+
+As the owner of the corpus,
+I want trap-file text and the `Observation.raw` field routed through the synthetic-text scanner, and the scanner's named evasions closed,
+So that the privacy rule covers the COMMITTED BYTES rather than only the fields a decision happens to read.
+
+**Acceptance Criteria:**
+
+**Given** `assert_text_is_synthetic`, whose only corpus call site is the `Record::Failure` walk over replay streams
+**When** the walk runs
+**Then** the headers and `reason` strings of `fixtures/scenario/traps/*.toml` are scanned too, comments included, before TOML parsing discards them (registered under story 4.14's review; the rule is held by review today, not by a gate).
+
+**Given** `Observation.raw`, documented as "never read by a decision" and carrying uninspected prose in `minimal.jsonl`
+**When** the corpus privacy walk runs
+**Then** `raw` is scanned by the same rule — the charter is the committed bytes, not what decisions read (registered under story 4.16's review).
+
+**Given** the scanner's evasions, named by its own doc as "a floor, not a proof"
+**When** they are closed
+**Then** a MAC or IP followed by kept punctuation no longer tokenizes unparseable, dash-form MACs are seen, and the U/L-bit rule stops admitting IPv6-multicast-shaped strings while refusing IPv4-multicast ones (registered under story 4.14's review).
+
+**And** each closure is proven to red on a committed-shaped input before it passes.
+
+### Story 5.3: The identity engine gets its own abstention cause
+
+As the identity engine,
+I want an abstention cause vocabulary of my own rather than the reconciliation engine's,
+So that `Ambiguous` — which emerges from the verdict algebra and which none of the three reconciliation causes names — can be produced and displayed honestly.
+
+**Acceptance Criteria:**
+
+**Given** `AbstentionCause { OutOfPerimeter, NoObservedValue, ConflictingObservations }`, which `reconcile` matches exhaustively and which `score.rs` records as inadequate for the cascade
+**When** the engine abstains
+**Then** it names a cause from its OWN enum, and `Ambiguous` — a `Decisive` verdict with at least one `Opposes`, the cloned-MAC case (D13) — is one of its variants.
+
+**Given** the committed corpus, which writes `must-abstain = { cause = "NoObservedValue" }` in three sha256-locked trap files
+**When** the new type lands
+**Then** `Expectation::MustAbstain` keeps `AbstentionCause` and **no corpus artefact is re-hashed** — the change is confined to `Outcome::Abstained`.
+
+**Given** that the two sides of a trap now carry DIFFERENT cause types
+**When** a reader meets them
+**Then** both types document the asymmetry and why it is sound: nothing ever compares the two — `score` is cause-blind by construction — so the gate cannot go asymmetric. An undocumented asymmetry would read as a defect, which is the class of finding this project's reviews keep catching.
+
+**And** `reconcile` is not widened with a variant it can never produce.
+
+### Story 5.4: `Decision` — the engine's return type, and its ruleset version
+
+As the identity engine,
+I want a return type carrying the verdict, the rule that produced it, its evidence and the ruleset version,
+So that the explanation is free (D13) and improving the engine is not a silent data migration (D14).
+
+**Acceptance Criteria:**
+
+**Given** the name `Decision`, which `score.rs` deliberately left unclaimed ("taking it here would squat a type Epic 5 has to define")
+**When** the type is defined
+**Then** it carries the `(rule, verdict, evidence)` triple that IS the explanation, and an abstention carries a cause and no rule — the same shape `Outcome` mirrors, so `run_trap`'s existing assertion needs no runtime guard.
+
+**Given** D13's refusal of `rule -> confidence: f64` ("if the output is a float, B has won in disguise")
+**When** the type is reviewed
+**Then** no float crosses a decision boundary; any ranking value is an INTEGER in milli-units and may order candidates for display only.
+
+**Given** D14's "`ruleset_version` is mandatory"
+**When** a decision is produced
+**Then** it carries the version of the ruleset that produced it.
+
+**And** the verdict algebra of D13 (`Decisive` / `Supports` / `Neutral` / `Opposes` / `Disqualifying`) is expressed as an enumeration, and combining verdicts is an algebra, never a sum.
+
+### Story 5.5: The L1 join, as a pure function
+
+As the identity engine,
+I want the interface-identity join expressed as a pure function over observations,
+So that the deterministic part of identity is testable without a database, a clock, or an ingestion order.
+
+**Acceptance Criteria:**
+
+**Given** a set of observations carrying `Scope { l2_domain, vantage }` and `Fact::Mac`
+**When** the join runs
+**Then** it resolves `(l2_domain, mac) -> interface` deterministically — D13's "L1 = pure A… it is not a probabilistic problem" — with no clock read, no SQL, and no consultation of how a declared value was obtained.
+
+**Given** two observations carrying the same MAC in DIFFERENT `l2_domain`s
+**When** the join runs
+**Then** they are not the same interface: the key is scope-qualified, not the bare address.
+
+**Given** structural facts about an address — locally administered (the U/L bit), or an IANA redundancy-protocol prefix
+**When** they are met
+**Then** they are read at ingestion and never scored (D13: "everything structurally knowable must be known at ingestion… confusing an IANA fact with scoring turns a fact into a probability, and that is how weights get invented").
+
+**And** the function is tested against synthetic inputs directly, independently of the corpus harness.
+
+### Story 5.6: The blocker, and the recall assertion nobody writes
+
+As the identity engine,
+I want candidate generation to be an explicit component with a measured recall floor,
+So that false splits cannot be born silently before any rule has a chance to speak.
+
+**Acceptance Criteria:**
+
+**Given** D13's named blind spot — *"if the candidate generator does not propose the pair, no downstream logic can ever group. That is where false-splits are born silently, and nobody tests blockers"*
+**When** the blocker is built
+**Then** a dedicated assertion measures `blocking_recall >= 0.999` in unit tests, and it exists BEFORE the scoring that consumes it.
+
+**Given** that at 300 hosts 90k pairs is not a performance concern on the reference NAS
+**When** the blocker's purpose is documented
+**Then** it states that the blocker exists for SEMANTICS: it defines the universe of plausible candidates, hence what "ambiguous" means — *"without blocking, abstention has no denominator."*
+
+**And** the assertion is proven to red by a blocker that drops a pair the corpus requires.
+
+### Story 5.7: The trap runner stops scoring nothing
+
+As the release gate,
+I want the L1 engine wired into the corpus harness,
+So that the committed traps become a gate that runs instead of data that is merely discovered and parsed.
+
+**Acceptance Criteria:**
+
+**Given** `score_corpus`, which today discovers, reads and validates the corpus while every trap is "scored by nothing"
+**When** the harness runs
+**Then** each trap whose expected rule is `l1-*` is answered by the real engine, and the resulting `(verdict, rule)` is compared by `run_trap` — the assertion story 4.7a built and left waiting.
+
+**Given** the four pure-L1 families — randomized-mac, dhcp-churn, hostname-collision, hostname-absence
+**When** the gate runs
+**Then** their traps pass in BOTH poles, and a failure is readable per column through the existing `Tally`.
+
+**Given** a right verdict reached by the WRONG rule
+**When** it is scored
+**Then** it fails in `Report.rule_mismatches`, distinct from a truth-table failure — the separation story 4.7a established is preserved.
+
+**And** replaying the corpus twice yields an identical `Report` (D36 reproducibility, pinned by story 4.13's test).
+
+### Story 5.8: A trap whose level the engine does not implement counts as NOT PASSING
+
+As the release gate,
+I want traps expecting a rule level the current engine does not implement to be counted in a named bucket,
+So that a green gate can never mean "we did not ask the question".
+
+**Acceptance Criteria:**
+
+**Given** the 8 traps whose expected rule is `l2-*`, which the L1 engine cannot answer
+**When** the corpus is scored
+**Then** they are counted as NOT PASSING in a fourth named bucket, beside truth-table failures, rule mismatches and incomplete families — they never silently leave the denominator.
+
+**Given** D18's rejection of decoration — *"a loose threshold on a benign defect is a gate that can never fall, and a gate that cannot fall is decoration"*
+**When** the gate reports
+**Then** its output states plainly how many traps were unanswerable at this level and why, and `passed()` is blocked by that bucket exactly as it is by the other three.
+
+**Given** the three MIXED families (cloned-mac, docker-veth, vrrp-virtual-mac), each holding both an `l1-*` and an `l2-*` pole
+**When** they are scored
+**Then** the L1 pole is answered and the L2 pole is bucketed — the family does not move as a block, and its completeness check is not read as a failure of Epic 5.
+
+**And** the gate's own report names NFR4 as NOT MET at this epic, at the device level, closed by Epic 6.
+
+### Story 5.9: The interface and its identity link are persisted, ambiguity included
+
+As the operator,
+I want interfaces and their identity links stored as revisable records carrying their evidence,
+So that "present the candidate matches with their evidence" (FR16) is something the product can actually do.
+
+**Acceptance Criteria:**
+
+**Given** a schema holding only `declared_attribute` and `observation_record`
+**When** this story lands
+**Then** it creates `interface`, `identity_link` and `link_candidate` — and **NOT** `device`: the grouping level is Epic 6, and a table this epic would not populate is speculation (the "create tables only when the story needs them" rule).
+
+**Given** D14's "the link is an ENTITY, not a foreign key"
+**When** a link is written
+**Then** it is SCD2 (append plus a single closing stamp), carrying the rule applied, the evidence, when, by whom, and `ruleset_version` — *"a bad link is UNLINKED, never erased."*
+
+**Given** an ambiguous outcome
+**When** it is persisted
+**Then** it is a LINK with its `link_candidate` rows and their evidence, never an absence — *"the ambiguity is DATA, not a hole; otherwise there is nothing to display and FR16 is vapour."*
+
+**And** every text column carries an explicit binary collation (D64), and the DDL gate stays green.
+
+### Story 5.10: The purge test proves the link is a cache of attention, not of truth
+
+As the architect of the invariant,
+I want engine-decided links to be reproducible bit for bit after deletion,
+So that D14 and D4 ("doubt is never persisted") are reconciled by a test rather than by an argument.
+
+**Acceptance Criteria:**
+
+**Given** persisted links, some `decided_by = 'ENGINE'` and some `decided_by = 'OPERATOR'`
+**When** `TRUNCATE ... WHERE decided_by = 'ENGINE'` is run and the engine re-runs
+**Then** the engine-decided links are reproduced identically, bit for bit (D14's stated test).
+
+**Given** operator-decided rows
+**When** the purge runs
+**Then** they are untouched — they are INPUTS, not derivations, on a par with an observation. *"Two natures in one table — and if that frontier is fuzzy in the code, the invariant is dead."*
+
+**And** the test reds if any engine decision is made to depend on state the purge removes.
+
+### Story 5.11: Reconciliation is independent of the order observations arrive in
+
+As the operator,
+I want the same observations to produce the same identity decisions regardless of arrival order,
+So that a scan's timing cannot change what the product believes (NFR6).
+
+**Acceptance Criteria:**
+
+**Given** a corpus replay stream
+**When** its observations are presented in a fuzzed arrival order
+**Then** the resulting decisions are identical to the in-order run.
+
+**Given** the same stream replayed twice into an already-populated store
+**When** the second run completes
+**Then** it is idempotent — no new link version is written for an unchanged decision.
+
+**And** the fuzzing is seeded and the seed recorded, so a failure is reproducible rather than anecdotal.
+
+### Story 5.12: No code path writes a declared field without a human author
+
+As the operator,
+I want the never-overwrite invariant covered by explicit anti-regression tests,
+So that the product's central promise — linked, never merged — cannot erode by accident (NFR5).
+
+**Acceptance Criteria:**
+
+**Given** the identity engine, now writing to the database for the first time
+**When** the anti-regression tests run
+**Then** no code path writes a `declared_attribute` with a non-human author, and the test reds if one is introduced.
+
+**Given** a divergence computation
+**When** it runs
+**Then** it never consults HOW a declared value was obtained (FR13's invariant, NFR5's second clause).
+
+**And** the tests are written as guards that red on removal, not as assertions over current behaviour.
+
+### Story 5.13: The monotone-honesty trap family — a faulted run cannot invent a fact
+
+As the operator,
+I want a fault to be able to REMOVE knowledge and never to ADD any,
+So that degradation is honest rather than creative (NFR8's first falsifiable assertion).
+
+**Acceptance Criteria:**
+
+**Given** a run under fault injection — a source blinded mid-scan, a poll failing, a capability reduced
+**When** its output is compared with the clean run
+**Then** the faulted run's facts are a SUBSET: it may know less, it may never assert something the clean run did not.
+
+**Given** the replay format's control records, which already express a failed poll and a mid-stream capability change (stories 4.5a/4.5b)
+**When** the family is authored
+**Then** it uses them rather than inventing a new mechanism, and each trap is committed in positive AND negative form, naming the RULE rather than the outcome — the corpus doctrine.
+
+**And** the family is added to `MANIFEST.toml` as a deliberate bump, and the corpus lock reports the new count.
+
+### Story 5.14: Abstention is displayed, counted and grouped by cause — and never as a reproach
+
+As the operator,
+I want to see how many interfaces the product could NOT place, broken down by why,
+So that the number measures the product's reach rather than my debt (FR16b).
+
+**Acceptance Criteria:**
+
+**Given** a population of interfaces, some of which the engine abstained on
+**When** the page renders
+**Then** it shows, beside the evaluated population, the count NOT evaluated, **grouped by cause** — each cause one line, not N failures.
+
+**Given** the UX spec's backlog bans (*Dignity*)
+**When** the counter is styled
+**Then** it does not redden, does not grow bold, carries no gauge and no badge, and does not age visibly: after six months of inaction it reads the same number, in the same grey. *"It measures the product's REACH, not the operator's debt."*
+
+**Given** an abstention whose cause is `Ambiguous`
+**When** it is displayed
+**Then** its candidates and their evidence are shown from the persisted `link_candidate` rows (FR16) — the abstention explains itself.
+
+**And** the measured floor is stated where it is displayed: the abstention rate is bounded below by DATA AVAILABILITY, not by engine quality (FR9, NFR30) — hostname is unusable on nearly half of known clients, and no amount of correctness recovers a signal the source never sent.
