@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-26  # Story 5.1 file created — Epic 5 opens (in-progress)
+last_updated: 2026-07-27  # Story 5.1 implemented → review (see its block under Epic 5)
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -159,7 +159,21 @@ development_status:
   # traps, 13 name an l1-* rule, 8 an l2-* rule, 3 a cause. Story 5.8 keeps the 8 unanswerable
   # ones IN the denominator so a green gate can never mean "we did not ask".
   epic-5: in-progress
-  5-1-corpus-pins-obs-id-binding: ready-for-dev
+  # 5.1 DELIVERED (2026-07-27): the `obs_id` ↔ line binding is pinned on `dhcp-churn` and
+  # `vrrp-virtual-mac` through one shared `assert_obs_ids` helper (four existing copies folded in,
+  # six call sites total); all 13 committed streams now load through `FixtureConnector::load` with a
+  # hand-authored context table checked in BOTH directions; all 13 round-trip to their committed
+  # bytes line by line, control records included (`ControlRecord` gained `Serialize` — no
+  # mirror-struct fallback needed). Corpus bytes UNCHANGED, `MANIFEST.toml` untouched. 247 → 249
+  # tests. Five mutations proven to red and recorded in the story file.
+  # WHAT MOVED, and did not close: the FOURTH corpus byte-fidelity register entry (story-4.13's
+  # review — the dhcp-churn byte-pin pins MAC/hostname RELATIONALLY, never by value) is annotated
+  # STILL OPEN, deliberately: 5.1's round-trip starts from the FILE, so it pins byte-SHAPE and never
+  # authored values. And a new `## Deferred from: story-5.1` entry records that four committed
+  # families (randomized-mac, multi-nic, shared-hardware-vm, cloned-mac) are named by NO test —
+  # owned by story 5.2b, not a deferral.
+  # `review`, not `done`: code-review has not run. Not yet pushed, no PR open.
+  5-1-corpus-pins-obs-id-binding: review
   5-2-privacy-floor-reaches-the-bytes: backlog
   # 5.2b was INSERTED on 2026-07-26, one day after the decomposition and before any Epic 5 code
   # existed — surfaced while preparing story 5.1, which could not absorb it (its AC1 strengthens

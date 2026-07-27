@@ -335,7 +335,15 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
 
 ## Deferred from: code review of story-4.10 (2026-07-24)
 
-- **A new committed replay stream's serde byte-shape is not pinned by a round-trip test.** The
+- ✅ **CLOSED by story 5.1.** `every_committed_stream_re_serializes_to_its_committed_bytes`
+  (`crates/opencmdb-bin/src/fixtures.rs`) walks every `.jsonl` under `scenario/replay/`, re-serializes
+  record by record and compares to the committed bytes line by line, naming the file and its 1-indexed
+  line on failure. CONTROL records are covered too — `ControlRecord` gained `Serialize` for exactly
+  that, so the internally-tagged `record` marker is pinned as well. Proven to red twice: a space
+  inserted after a colon on line 1 of `dhcp-churn.jsonl`, and the same on the capability line
+  (line 3) of `capability-downgrade.jsonl`. What it pins is the SHAPE, starting from the file —
+  never the authored values; see the story-4.13 entry below, which stays open for that reason.
+  ~~A new committed replay stream's serde byte-shape is not pinned by a round-trip test.~~ The
   byte-exactness guard `re_serializing_reproduces_the_committed_bytes`
   (`crates/opencmdb-bin/src/fixtures.rs`) round-trips only `minimal.jsonl`, so no other committed
   stream — including `randomized-mac.jsonl`, `example-traps.jsonl`, and now `multi-nic.jsonl` — has its
@@ -352,8 +360,18 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
 
 ## Deferred from: code review of story-4.12 (2026-07-24)
 
-- **Family replay streams are never exercised through `FixtureConnector::load`'s admissibility
-  checks.** The 4.4 admissibility layer (foreign `connector_id`, uncovered scope, undeclared fact
+- ✅ **CLOSED by story 5.1.** `every_committed_replay_stream_is_admissible_to_the_connector`
+  (`crates/opencmdb-bin/src/fixture_connector.rs`) loads all 13 committed streams through
+  `FixtureConnector::load` with a HAND-AUTHORED per-stream context table (path, `ConnectorId`,
+  `scopes_covered`, initial `Capabilities`) — never derived from the observations, which would make
+  `ForeignConnectorId` and `UncoveredScope` vacuous by construction. Checked in both directions: a
+  walked stream with no entry reds, and an entry naming no file reds. All three guards proven to red.
+  **What it does NOT prove** is stated in the test's own doc: the walk shows every stream is
+  ADMISSIBLE and never observes `UndeclaredFactKind` firing; the fact-kind check is non-vacuous only
+  on `partial-then-failed.jsonl` and on both sides of `capability-downgrade.jsonl`'s record, and is
+  vacuous on the eleven `corpus_*` streams because `corpus_caps()` declares all seven kinds.
+  ~~Family replay streams are never exercised through `FixtureConnector::load`'s admissibility
+  checks.~~ The 4.4 admissibility layer (foreign `connector_id`, uncovered scope, undeclared fact
   kind, repeated `obs_id`) is only ever run against `minimal.jsonl`; every family stream since 4.9
   (`randomized-mac`, `multi-nic`, `shared-hardware-vm`, `cloned-mac`) is gated for parseability and
   corpus validity by the fixtures walks, but no test loads them through the connector. Pre-existing,
@@ -375,6 +393,12 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   the family premise depends on (the three `IpV4`s) and the fact-count, and leave whole-value
   pinning to the same owner: whoever hardens corpus byte-fidelity, corpus-wide rather than
   per-family.
+- ↺ **STILL OPEN after story 5.1** — the entry above is NOT closed by it, deliberately. 5.1's
+  corpus-wide round-trip witness starts from the FILE, so it pins the byte-SHAPE and never the
+  authored values; its `obs_id` helper pins ids only. A re-authored `dhcp-churn.jsonl` with
+  different-but-still-synthetic MACs/hostnames and a refreshed sha256 would still strand the two
+  `reason` strings while every test stays green. Owner unchanged: whoever pins the authored VALUES
+  corpus-wide.
 
 ## Deferred from: code review of story-4.14 (2026-07-25)
 
@@ -397,7 +421,15 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
 
 ## Deferred from: code review of story-4.15 (2026-07-25)
 
-- **The older byte-pin tests do not pin the obs_id ↔ line binding.** The trap files judge by
+- ✅ **CLOSED by story 5.1.** Both named byte-pins now assert their `obs_id`s
+  (`dhcp-churn` → `adadadad-…001`…`003`, `vrrp-virtual-mac` → `aeaeaeae-…001`…`004`), through a
+  single test helper `assert_obs_ids(observations, prefix)` into which the four existing copies of
+  the loop were folded — six call sites of one mechanical loop was accidental duplication, and all
+  four already COMPUTED their ids rather than restating them, so no second oracle was lost. Proven to
+  red by swapping two `obs_id`s between lines of `dhcp-churn.jsonl`. **This covers only streams that
+  HAVE a byte-pin test:** `randomized-mac`, `multi-nic`, `shared-hardware-vm` and `cloned-mac` have
+  none — see the story-5.1 section at the end of this file, owned by story 5.2b.
+  ~~The older byte-pin tests do not pin the obs_id ↔ line binding.~~ The trap files judge by
   `obs_id`; the byte-pin tests read by index. 4.15's own test now pins its three obs_ids (the
   review's patch), but the sibling byte-pins (`the_dhcp_churn_stream_moves_the_address_only_
   through_observed_at`, `the_vrrp_stream_shares_one_virtual_mac_and_moves_its_uplink`) still
@@ -415,3 +447,29 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   rule's charter is the COMMITTED BYTES, not what decisions read. Pre-existing since 4.1, not
   aggravated by 4.16 (its four lines carry `raw: null`). Owner: whoever hardens corpus privacy —
   route `raw` through `assert_text_is_synthetic` in the same walk arm.
+
+## Deferred from: story-5.1 (2026-07-27)
+
+_Raised BY the story while scoping it, not by its review — hence no "code review of" in the heading.
+It is the one finding 5.1 surfaced and deliberately did not fix._
+
+- **Four committed family streams are named by NO test at all.** `randomized-mac.jsonl` (4.9),
+  `multi-nic.jsonl` (4.10), `shared-hardware-vm.jsonl` (4.11) and `cloned-mac.jsonl` (4.12) have no
+  byte-pin test — verified by `grep -rn "<name>.jsonl" --include=*.rs crates xtask`, which returns
+  nothing for all four. So their `obs_id` ↔ line binding and their authored values are asserted by
+  nothing narrower than the corpus walks and the sha256 lock, and their binding is WEAKER than
+  `dhcp-churn`'s was before this story: `read_traps`'s cross-check only asserts that a trap's
+  `obs_id`s EXIST in the stream, so swapping two ids inside one of those four files inverts what its
+  traps judge and nothing reds. **Story 5.1 could not close it:** AC1 strengthens byte-pins that
+  exist, and here there is no test to strengthen. What 5.1 does give them is admissibility
+  (`every_committed_replay_stream_is_admissible_to_the_connector`) and byte-SHAPE
+  (`every_committed_stream_re_serializes_to_its_committed_bytes`) — **not** value pins.
+  **Owner: story 5.2b**, inserted on 2026-07-26 in Epic 5's debt block, immediately after 5.2 and
+  ahead of the L1 join at 5.5 — the corpus is the oracle that join is judged against. A register item
+  with a named owner and a slot is not a deferral, and writing it as one would misstate the plan.
+  The `assert_obs_ids` helper 5.1 introduces is what 5.2b builds on: it takes four more families
+  without change.
+  _This stays here and does NOT become a GitHub issue: the register is the established home for
+  review-surfaced corpus debt (every entry since 4.1), and an issue is reserved for scope that MOVES
+  between epics (the 4.19b precedent, #34). Nothing moves — the work stays in Epic 5, three stories
+  later._

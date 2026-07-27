@@ -119,7 +119,11 @@ impl Record {
 /// `{"failure":{…}}`, whose only key is the variant name — leaving no fixed marker to discriminate
 /// on before parsing. `record` is that marker, and it is what makes the dispatch in
 /// [`read_records`] a positive test rather than a guess.
-#[derive(Debug, Clone, Deserialize)]
+/// `Serialize` since story 5.1, so the corpus-wide round-trip witness
+/// (`every_committed_stream_re_serializes_to_its_committed_bytes`) can render a control record
+/// back to its committed line. Without it the witness would silently skip every control record —
+/// exactly the two lines whose byte-shape nothing else pins.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 #[serde(tag = "record", rename_all = "snake_case", deny_unknown_fields)]
 enum ControlRecord {
     /// `{"record":"failure","error":{"Unreachable":{"detail":"…"}}}`
@@ -696,6 +700,68 @@ pub fn read_traps(path: &Path) -> Result<TrapFile, FixtureError> {
     Ok(traps)
 }
 
+/// Walk every `.jsonl` under `scenario/replay/`, recursively, refusing symlinks and any other
+/// extension, and return how many were visited.
+///
+/// Recursive on purpose: the trap FAMILIES (4.9+) are what will introduce a subdirectory, and
+/// a flat scan would hash them and never read them. Read errors are not swallowed — an
+/// unreadable subtree shrinking the search space into a false green was a real defect in 4.1.
+///
+/// **Test-only, and `pub(crate)` since story 5.1.** It lives outside `mod tests` for one reason:
+/// two claims about the corpus are made at two different LAYERS and must walk the same tree, or
+/// "every stream" quietly means two different sets. Its callers are the privacy walk, the
+/// stream-validity walk and the cross-stream `obs_id` detector (all in this file's test module),
+/// the corpus-wide round-trip witness (also here), and the connector-admissibility walk in
+/// `fixture_connector.rs`'s test module — the last one is what forced the hoist.
+///
+/// The paths it yields are ABSOLUTE (rooted through [`FIXTURES_DIR`], `..` components included).
+/// A caller needing the corpus-RELATIVE spelling that [`fixture_path`] and `MANIFEST.toml` use
+/// must derive it with `strip_prefix(fixtures_dir())` — never by writing the `fixtures/` prefix
+/// again, which `the_fixtures_path_is_expressed_once` refuses.
+#[cfg(test)]
+pub(crate) fn walk_replay_streams(visit: &mut dyn FnMut(&Path)) -> usize {
+    let root = fixture_path("scenario/replay").unwrap();
+    let mut checked = 0usize;
+    let mut stack = vec![root.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in
+            std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("reading {}: {e}", dir.display()))
+        {
+            let entry = entry.expect("a directory entry must be readable");
+            let path = entry.path();
+            let file_type = entry.file_type().expect("file type");
+            if file_type.is_symlink() {
+                panic!(
+                    "{}: the corpus must contain its own bytes, not a symlink",
+                    path.display()
+                );
+            }
+            if file_type.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            // `README.md` is exempt at any depth, exactly as the corpus lock's orphan rule
+            // exempts it (`xtask/src/main.rs`). Two gates that disagree about what the corpus
+            // may contain would make documenting this directory red the test suite.
+            if path.file_name().and_then(|n| n.to_str()) == Some("README.md") {
+                continue;
+            }
+            let is_jsonl = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| e.eq_ignore_ascii_case("jsonl"));
+            assert!(
+                is_jsonl,
+                "{}: only .jsonl replay streams and README.md belong under scenario/replay/",
+                path.display()
+            );
+            visit(&path);
+            checked += 1;
+        }
+    }
+    checked
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -790,6 +856,12 @@ mod tests {
     /// Re-serializing must reproduce the committed bytes. This is what freezes the FORMAT and
     /// not merely the values: a serde rename would still round-trip in memory while silently
     /// changing what every future trap file means.
+    ///
+    /// **Not a duplicate of `every_committed_stream_re_serializes_to_its_committed_bytes`, and a
+    /// future DRY pass must not collapse the two.** This one starts from `expected()` — an
+    /// independently authored Rust literal — so it pins the VALUES as well as the shape, over one
+    /// file. The corpus-wide witness starts from the FILE, so it pins the shape only, over all
+    /// thirteen. Deliberate redundancy of exactly the kind the house DRY rule protects.
     #[test]
     fn re_serializing_reproduces_the_committed_bytes() {
         let path = fixture_path(MINIMAL).unwrap();
@@ -800,6 +872,93 @@ mod tests {
             rendered.push('\n');
         }
         assert_eq!(rendered, on_disk);
+    }
+
+    /// Render a parsed [`Record`] back to the line it came from.
+    ///
+    /// [`Record`] holds a [`ConnectorError`] / [`Capabilities`] directly, NOT a [`ControlRecord`];
+    /// the on-disk shape is the latter, so rendering re-wraps. Both inner types are `Clone`.
+    fn render_record(record: &Record) -> String {
+        match record {
+            Record::Observation(observation) => {
+                serde_json::to_string(observation).expect("an observation serializes")
+            }
+            // Exhaustive, no `_` arm: a new record kind must break THIS match rather than be
+            // rendered as nothing and silently pass the round-trip.
+            Record::Failure(error) => serde_json::to_string(&ControlRecord::Failure {
+                error: error.clone(),
+            })
+            .expect("a failure record serializes"),
+            Record::Capability(capabilities) => serde_json::to_string(&ControlRecord::Capability {
+                capabilities: capabilities.clone(),
+            })
+            .expect("a capability record serializes"),
+        }
+    }
+
+    /// EVERY committed stream round-trips to its committed bytes, line by line — observations and
+    /// CONTROL records alike.
+    ///
+    /// Until story 5.1 only `minimal.jsonl` had this, so no other stream and no control record at
+    /// all had its exact serialized byte-shape pinned — field order, the `MacAddr` array encoding,
+    /// `Uplink`'s field names, the internally-tagged `record` marker (registered under story 4.10's
+    /// review). A serde rename anywhere in the domain types would have kept every stream parsing
+    /// while changing what the corpus MEANS.
+    ///
+    /// What it pins is the SHAPE, never the authored values: it starts from the file, so a stream
+    /// re-authored with different-but-well-formed values round-trips happily. Value pins are each
+    /// family's byte-pin test, and four families still have none (register,
+    /// `deferred-work.md#Deferred from: story-5.1`, owned by story 5.2b).
+    #[test]
+    fn every_committed_stream_re_serializes_to_its_committed_bytes() {
+        let checked = walk_replay_streams(&mut |path| {
+            let text = std::fs::read_to_string(path)
+                .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
+            let records = read_records(path).expect("a corpus stream must read");
+
+            // `read_records` discards line numbers, and it SKIPS truly empty lines while still
+            // counting them, so a positional zip against `records` would report the wrong number
+            // the day a stream carries a blank line (none does today, which is precisely why a
+            // positional zip would be invisibly wrong). Re-derive the raw 1-indexed number here.
+            // The filter is `trim`-based while `read_records` skips only `is_empty()` lines: the
+            // two agree on every file that parses, because a whitespace-only line is not skipped
+            // there — it fails to parse and the `expect` above has already panicked.
+            let mut committed = text
+                .lines()
+                .enumerate()
+                .filter(|(_, line)| !line.trim().is_empty());
+
+            for record in &records {
+                let (index, line) = committed.next().unwrap_or_else(|| {
+                    panic!(
+                        "{}: more records than non-blank lines — the two iterators must exhaust \
+                         together",
+                        path.display()
+                    )
+                });
+                assert_eq!(
+                    render_record(record),
+                    line,
+                    "{}:{}: re-serializing does not reproduce the committed bytes",
+                    path.display(),
+                    index + 1
+                );
+            }
+            if let Some((index, _)) = committed.next() {
+                panic!(
+                    "{}:{}: more non-blank lines than records — the two iterators must exhaust \
+                     together",
+                    path.display(),
+                    index + 1
+                );
+            }
+            assert!(
+                !records.is_empty(),
+                "{}: a committed stream with no record proves nothing",
+                path.display()
+            );
+        });
+        assert!(checked > 0, "no replay stream found under scenario/replay/");
     }
 
     /// Every value is synthetic: RFC 5737 addresses and locally-administered MACs. A real
@@ -1380,55 +1539,6 @@ mod tests {
         assert!(checked > 0, "no replay stream found under scenario/replay/");
     }
 
-    /// Walk every `.jsonl` under `scenario/replay/`, recursively, refusing symlinks and any other
-    /// extension, and return how many were visited.
-    ///
-    /// Recursive on purpose: the trap FAMILIES (4.9+) are what will introduce a subdirectory, and
-    /// a flat scan would hash them and never read them. Read errors are not swallowed — an
-    /// unreadable subtree shrinking the search space into a false green was a real defect in 4.1.
-    fn walk_replay_streams(visit: &mut dyn FnMut(&Path)) -> usize {
-        let root = fixture_path("scenario/replay").unwrap();
-        let mut checked = 0usize;
-        let mut stack = vec![root.clone()];
-        while let Some(dir) = stack.pop() {
-            for entry in
-                std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("reading {}: {e}", dir.display()))
-            {
-                let entry = entry.expect("a directory entry must be readable");
-                let path = entry.path();
-                let file_type = entry.file_type().expect("file type");
-                if file_type.is_symlink() {
-                    panic!(
-                        "{}: the corpus must contain its own bytes, not a symlink",
-                        path.display()
-                    );
-                }
-                if file_type.is_dir() {
-                    stack.push(path);
-                    continue;
-                }
-                // `README.md` is exempt at any depth, exactly as the corpus lock's orphan rule
-                // exempts it (`xtask/src/main.rs`). Two gates that disagree about what the corpus
-                // may contain would make documenting this directory red the test suite.
-                if path.file_name().and_then(|n| n.to_str()) == Some("README.md") {
-                    continue;
-                }
-                let is_jsonl = path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .is_some_and(|e| e.eq_ignore_ascii_case("jsonl"));
-                assert!(
-                    is_jsonl,
-                    "{}: only .jsonl replay streams and README.md belong under scenario/replay/",
-                    path.display()
-                );
-                visit(&path);
-                checked += 1;
-            }
-        }
-        checked
-    }
-
     // ── Trap files (story 4.2) ───────────────────────────────────────────────
 
     /// `obs_id` is the anchor the labelling format rests on: a trap points at one, "never by
@@ -1780,6 +1890,34 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         );
     }
 
+    /// Pin the `obs_id` ↔ LINE binding of a committed stream: line `n` (0-indexed) carries
+    /// `{prefix}-0000-4000-8000-{n+1:012}`.
+    ///
+    /// The traps judge by `obs_id` while every byte-pin reads by INDEX. Without this, a deliberate
+    /// re-authoring that swaps two lines' ids (with a re-hashed manifest) would invert what a
+    /// family's traps judge while every byte-level assertion stayed green — registered under story
+    /// 4.15's review, closed by story 5.1.
+    ///
+    /// **Why folding six call sites into one is DRY and not a lost oracle.** The house rule protects
+    /// redundancy a test pins on purpose — `expected()` restates the corpus VALUES in Rust and must
+    /// survive any DRY pass. The loops folded here restate nothing: all four that already existed
+    /// COMPUTED their ids with `format!("…{suffix:012}")`, so what is removed is mechanical
+    /// duplication of one loop, not a second statement of anything.
+    ///
+    /// What this helper does encode, in one place, are two CORPUS CONVENTIONS: the fixed
+    /// `-0000-4000-8000-` middle segment, and sequential numbering from 1. Both hold for all 13
+    /// committed streams as of story 5.1. A future stream numbered otherwise gets its OWN
+    /// assertion — it is not re-authored to satisfy this helper.
+    fn assert_obs_ids(observations: &[Observation], prefix: &str) {
+        for (n, observation) in observations.iter().enumerate() {
+            assert_eq!(
+                observation.obs_id.to_string(),
+                format!("{prefix}-0000-4000-8000-{:012}", n + 1),
+                "line {n} carries its authored obs_id"
+            );
+        }
+    }
+
     /// Story 4.13's byte-pin — the second, independent oracle over `dhcp-churn.jsonl`, in the
     /// spirit of `expected()`: the two holders of the recycled address `192.0.2.120` are
     /// separated by NOTHING but time (D19 — DHCP churn is tested by replaying timestamps; the
@@ -1800,6 +1938,9 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "observation {n} carries exactly its three facts"
             );
         }
+        // This test predates the `obs_id` ↔ line rule (story 4.15's review) and read purely by
+        // index; story 5.1 back-fills the binding, since `dhcp-churn.toml` judges by `obs_id`.
+        assert_obs_ids(&observations, "adadadad");
 
         let fact = |n: usize, pick: fn(&Fact) -> bool| {
             observations[n]
@@ -1879,6 +2020,9 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "observation {n} carries exactly its facts"
             );
         }
+        // This test predates the `obs_id` ↔ line rule (story 4.15's review) and read purely by
+        // index; story 5.1 back-fills the binding, since `vrrp-virtual-mac.toml` judges by `obs_id`.
+        assert_obs_ids(&observations, "aeaeaeae");
 
         let fact = |n: usize, pick: fn(&Fact) -> bool| {
             observations[n]
@@ -2091,16 +2235,10 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             );
         }
         // The obs_id ↔ line binding is pinned too (this story's review): the traps judge by
-        // obs_id, this test reads by index — without these three pins, swapping two lines'
-        // obs_ids (with a re-hashed manifest) would silently invert what each trap judges
-        // while every byte-level assertion stayed green.
-        for (n, suffix) in [(0usize, 1u32), (1, 2), (2, 3)] {
-            assert_eq!(
-                observations[n].obs_id.to_string(),
-                format!("afafafaf-0000-4000-8000-{suffix:012}"),
-                "line {n} carries its authored obs_id"
-            );
-        }
+        // obs_id, this test reads by index — without these pins, swapping two lines' obs_ids
+        // (with a re-hashed manifest) would silently invert what each trap judges while every
+        // byte-level assertion stayed green.
+        assert_obs_ids(&observations, "afafafaf");
 
         let fact = |n: usize, pick: fn(&Fact) -> bool| {
             observations[n]
@@ -2243,13 +2381,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             );
         }
         // The obs_id ↔ line binding (4.15's review rule): the traps judge by obs_id.
-        for (n, suffix) in [(0usize, 1u32), (1, 2), (2, 3), (3, 4)] {
-            assert_eq!(
-                observations[n].obs_id.to_string(),
-                format!("babababa-0000-4000-8000-{suffix:012}"),
-                "line {n} carries its authored obs_id"
-            );
-        }
+        assert_obs_ids(&observations, "babababa");
 
         let fact = |n: usize, pick: fn(&Fact) -> bool| {
             observations[n]
@@ -2395,13 +2527,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             );
         }
         // The obs_id ↔ line binding (the standing rule): the traps judge by obs_id.
-        for (n, suffix) in [(0usize, 1u32), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6)] {
-            assert_eq!(
-                observations[n].obs_id.to_string(),
-                format!("bcbcbcbc-0000-4000-8000-{suffix:012}"),
-                "line {n} carries its authored obs_id"
-            );
-        }
+        assert_obs_ids(&observations, "bcbcbcbc");
 
         let fact = |n: usize, pick: fn(&Fact) -> bool| {
             observations[n]
@@ -2697,17 +2823,15 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             vantage: VantageId::from_uuid(u("22222222-2222-4222-8222-222222222222")),
         };
         let connector_id = ConnectorId::from_uuid(u("33333333-3333-4333-8333-333333333333"));
+        // The `obs_id` ↔ line binding — hoisted out of the loop below into the shared helper
+        // (story 5.1); the placeholder-context pins that were fused with it stay where they are.
+        assert_obs_ids(&observations, "bdbdbdbd");
         for (n, expected_len) in [(0usize, 4usize), (1, 4), (2, 3), (3, 4)] {
             let obs = &observations[n];
             assert_eq!(
                 obs.facts.len(),
                 expected_len,
                 "observation {n}'s fact count"
-            );
-            assert_eq!(
-                obs.obs_id.to_string(),
-                format!("bdbdbdbd-0000-4000-8000-{:012}", n + 1),
-                "line {n} carries its placeholder obs_id"
             );
             // The context UUIDs are PLACEHOLDERS (harness context, not expectations) — pinned
             // so they cannot drift silently either.

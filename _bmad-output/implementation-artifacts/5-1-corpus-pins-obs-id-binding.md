@@ -1,6 +1,6 @@
 # Story 5.1: The corpus pins the obs_id-to-line binding, and every stream goes through the connector
 
-Status: ready-for-dev
+Status: review
 
 <!-- Validation is MANDATORY here (Guy's decision, Epic 4 retrospective 2026-07-26): two
      fresh-context agents (fact-check + gap-hunt) before dev-story. The template banner saying
@@ -190,95 +190,84 @@ not move here").
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — the `obs_id` pin helper (AC1)**
-  - [ ] Add `assert_obs_ids(observations: &[Observation], prefix: &str)` to `fixtures.rs`'s test
+- [x] **Task 1 — the `obs_id` pin helper (AC1)**
+  - [x] Add `assert_obs_ids(observations: &[Observation], prefix: &str)` to `fixtures.rs`'s test
         module, with the doc comment stating WHY (traps judge by `obs_id`, byte-pins read by index).
-  - [ ] Call it from `the_dhcp_churn_stream_moves_the_address_only_through_observed_at` (`adadadad`)
+  - [x] Call it from `the_dhcp_churn_stream_moves_the_address_only_through_observed_at` (`adadadad`)
         and `the_vrrp_stream_shares_one_virtual_mac_and_moves_its_uplink` (`aeaeaeae`).
-  - [ ] Fold the four existing copies (`:2093-2103`, `:2245-2252`, `:2397-2404`, `:2700-2711`) into
-        the helper, and record the DRY argument from AC1 in its doc.
-  - [ ] Prove-to-red per AC4, record the message.
+  - [x] Fold the four existing copies (`:2093-2103`, `:2245-2252`, `:2397-2404`, `:2700-2711`) into
+        the helper, and record the DRY argument from AC1 in its doc. **All four folded, none left
+        inline.** The wire-spec site (`:2700-2711`) kept its fused placeholder-context pins and lost
+        only its `obs_id` half, exactly as AC1 prescribes.
+  - [x] Prove-to-red per AC4, record the message.
 
-- [ ] **Task 2 — share the replay walk across the two test modules (AC2, AC3)**
-  - [ ] Hoist `walk_replay_streams` (`fixtures.rs:1389`) out of `mod tests` to module scope as
+- [x] **Task 2 — share the replay walk across the two test modules (AC2, AC3)**
+  - [x] Hoist `walk_replay_streams` (`fixtures.rs:1389`) out of `mod tests` to module scope as
         `#[cfg(test)] pub(crate) fn`, placed immediately BEFORE `#[cfg(test)] mod tests`. Its doc
         comment is kept and extended with the new callers.
-  - [ ] Confirm the `file-size` gate stays green — and do NOT claim a reduction. The gate counts the
-        lines before the FIRST line whose `trim_start()` begins with `#[cfg(test)]`
-        (`xtask/src/main.rs:72-81`), which today is line 699, giving **698** code lines (ceiling
-        2000). The hoisted block's doc comment sits ABOVE its `#[cfg(test)]` attribute, so the first
-        marker moves later and the count **RISES** by roughly the doc comment's length — expected,
-        harmless, and the completion record must say "rose to N, far under 2000", never "lowered".
-  - [ ] Do not touch `trap_gate.rs`'s `discover_trap_files` — it is a deliberately separate walk
-        over a different tree and says so (`trap_gate.rs:291-301`). Its sentence *"promoting either
-        would move its callers for no gain here"* stays TRUE after the hoist: `walk_replay_streams`
-        remains `#[cfg(test)]` and `trap_gate` gains no caller. Leave it verbatim; do not "fix" it.
+  - [x] Confirm the `file-size` gate stays green — and do NOT claim a reduction. **Measured: 698 →
+        720 code lines, a RISE of 22** (the hoisted doc comment plus its blank separator, counted
+        after `cargo fmt`), far under the 2000 ceiling. The gate reports
+        `✅ file-size 20 file(s) under 2000 code lines (largest: 884)` — `fixtures.rs` is not the
+        largest file in the tree.
+  - [x] Do not touch `trap_gate.rs`'s `discover_trap_files`. **Not touched, not read for editing.**
+        Its sentence stays true: `walk_replay_streams` is still `#[cfg(test)]` and `trap_gate` gained
+        no caller.
 
-- [ ] **Task 3 — the connector admissibility walk (AC2)**
-  - [ ] In `fixture_connector.rs`'s test module, build the per-stream table from the THREE contexts
-        that already exist there — `corpus_id/corpus_scope/corpus_caps` (`:358-386`),
-        `partial_id/partial_scope/partial_caps` (`:454-475`),
-        `downgrade_id/downgrade_scope/downgrade_initial_caps` (`:683-706`). Reuse them; do not
-        author a fourth copy of the same UUIDs.
-  - [ ] 13 entries, exactly (the measured mapping is in Dev Notes → "The corpus as measured").
-  - [ ] **Convert the walked path correctly.** `walk_replay_streams` yields ABSOLUTE paths (rooted
-        at `<manifest>/../../fixtures/…`, `..` components included) while `load` takes the
-        corpus-RELATIVE string — and `fixture_path` (`fixtures.rs:60-77`) REFUSES an absolute path
-        or one carrying `..`. Derive it with `path.strip_prefix(fixtures_dir())`, never by writing
-        the `fixtures/` prefix again: `the_fixtures_path_is_expressed_once` (`fixtures.rs:1734`)
-        counts occurrences of `/../../fixtures` and reds with a path-discipline message that would
-        say nothing about what you actually did. Key the table by that same relative string, so
-        `ForeignConnectorId`'s `origin` names the stream the way `MANIFEST.toml` spells it.
-  - [ ] Walk `scenario/replay/`, `load` each stream with its table entry, `expect` `Ok`.
-  - [ ] Assert both directions: no stream without an entry, no entry without a file.
-  - [ ] Doc comment states the honest limit (AC2's last clause) AND that the table's `as_of` values
-        are not validated for the INITIAL descriptor — `from_records` compares only capability
-        RECORDS against preceding observations (`fixture_connector.rs:187-206`), so re-using
-        `corpus_caps()`'s `2026-01-01T00:00:10Z` across streams dated as late as 2026-01-11 is
-        admissible and means nothing.
-  - [ ] **Update two stale doc comments.** `corpus_id()` (`:350-357`) opens *"the … set the committed
-        `minimal.jsonl` needs"* and `corpus_caps()` (`:371-386`) says *"deliberately WIDER than what
-        `minimal.jsonl` emits"*. After this story they are the declared context of ELEVEN streams,
-        and `corpus_caps()`'s wideness is exactly why the fact-kind check is vacuous for those
-        eleven. Say so. "Preserve the helpers" means their VALUES and call sites, not stale prose —
-        a doc narrower than the code is the defect class this project's reviews keep catching.
-  - [ ] Prove-to-red per AC4 (both mutations).
+- [x] **Task 3 — the connector admissibility walk (AC2)**
+  - [x] Build the per-stream table from the THREE contexts that already exist there. Reused via a
+        `corpus(relative_path)` closure for the eleven; `partial_*` and `downgrade_*` spelled out.
+        **No fourth copy of any UUID was authored.**
+  - [x] 13 entries, exactly.
+  - [x] **Convert the walked path correctly** — `path.strip_prefix(fixtures_dir())`, the `fixtures/`
+        prefix never re-written. `the_fixtures_path_is_expressed_once` stays green (still exactly two
+        occurrences).
+  - [x] Walk `scenario/replay/`, `load` each stream with its table entry, `expect` `Ok`.
+  - [x] Assert both directions: no stream without an entry, no entry without a file. **Three guards
+        in total** — plus `checked == table.len()`, which also catches a duplicated entry.
+  - [x] Doc comment states the honest limit (AC2's last clause) AND the `as_of` caveat.
+  - [x] **Update two stale doc comments** — `corpus_id()` and `corpus_caps()` now say they are the
+        declared context of ELEVEN streams, and `corpus_caps()` says its wideness is exactly why the
+        fact-kind check is vacuous for those eleven.
+  - [x] Prove-to-red per AC4 (both mutations) — **plus a third**, for the entry-without-a-file
+        direction, which AC4 did not name but which is its own guard.
 
-- [ ] **Task 4 — the corpus-wide round-trip witness (AC3)**
-  - [ ] Add `Serialize` to `ControlRecord`'s derive (`fixtures.rs:122`); measured to compile and to
-        reproduce both committed control lines byte-exactly, so the mirror-struct fallback should
-        not be needed — if you take it, say why.
-  - [ ] Add the render path (`Record` → committed line, via the `ControlRecord` mapping in AC3) and
-        the walking test in `fixtures.rs`'s test module — this is a fixtures-layer claim, so it
-        lives beside `re_serializing_reproduces_the_committed_bytes`.
-  - [ ] **Get the line number right.** `read_records` (`fixtures.rs:483`) returns `Vec<Record>` with
-        line numbers DISCARDED, and it skips truly empty lines while still counting them
-        (`:493-500`: *"a blank line still occupies its number, so the message points at what an
-        editor shows"*). Zip its output against
-        `text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty())` so the reported number is
-        the raw 1-indexed file line, matching what `read_records`'s own errors report — and assert
-        the two iterators exhaust together (a length mismatch is itself a finding). No committed
-        stream carries a blank line today, so a positional zip would be invisibly wrong.
-  - [ ] Compare line by line; the panic message names file + 1-indexed line + both strings.
-  - [ ] Leave `re_serializing_reproduces_the_committed_bytes` in place and add the
+- [x] **Task 4 — the corpus-wide round-trip witness (AC3)**
+  - [x] Add `Serialize` to `ControlRecord`'s derive. **The mirror-struct fallback was NOT needed** —
+        the derive compiles under `tag` + `rename_all` + `deny_unknown_fields` + the flattened
+        `Capabilities`, emits the tag first, and reproduces both committed control lines byte-exactly,
+        confirming the story's measurement.
+  - [x] Add the render path and the walking test in `fixtures.rs`'s test module, beside
+        `re_serializing_reproduces_the_committed_bytes`. The `match` in `render_record` is exhaustive
+        with no `_` arm.
+  - [x] **Get the line number right** — zipped against
+        `text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty())`, both exhaustion directions
+        asserted with their own message.
+  - [x] Compare line by line; the panic message names file + 1-indexed line + both strings.
+  - [x] Leave `re_serializing_reproduces_the_committed_bytes` in place and add the
         "not-a-duplicate" comment (AC3).
-  - [ ] Prove-to-red per AC4 (observation line AND control line).
+  - [x] Prove-to-red per AC4 (observation line AND control line).
 
-- [ ] **Task 5 — the register (AC6)**
-  - [ ] Mark the three entries closed in place, appending, never rewriting.
-  - [ ] Add the `## Deferred from: story-5.1` section with the four-unpinned-families finding.
+- [x] **Task 5 — the register (AC6)**
+  - [x] Mark the three entries closed in place, appending, never rewriting. The idiom used is the
+        file's own (`✅ **CLOSED by story 5.1.** … ~~original headline struck~~ …`), with the body
+        prose of each entry left intact and readable.
+  - [x] Annotate the FOURTH entry (story-4.13's review) `↺ **STILL OPEN after story 5.1**`, not
+        struck.
+  - [x] Add the `## Deferred from: story-5.1` section with the four-unpinned-families finding, its
+        owner (story 5.2b) and the reason it is not a GitHub issue.
 
-- [ ] **Task 6 — the gate and the branch (AC5)**
-  - [ ] Full local gate: `cargo fmt --all` · `cargo clippy --workspace --all-targets -- -D warnings`
-        · `cargo test --workspace` · `cargo xtask ci`.
-  - [ ] `git status` clean under `fixtures/`; `MANIFEST.toml` unchanged.
-  - [ ] Update `_bmad-output/implementation-artifacts/sprint-status.yaml`:
-        `5-1-corpus-pins-obs-id-binding: done` plus `last_updated` — with a comment saying what was
-        delivered AND what moved, never a bare `done` (4.18's rule). Name the fourth byte-fidelity
-        entry left open.
-  - [ ] Branch → PR → green CI → squash merge. **Never push straight to `master`** — the discipline
-        has held since PR #15 (22 PRs; `git log` shows one post-#15 commit, story 4.13 `85860fd`,
-        with no PR marker, unverified either way).
+- [x] **Task 6 — the gate and the branch (AC5)**
+  - [x] Full local gate: all four commands run, all green (see Completion Notes).
+  - [x] `git status` clean under `fixtures/`; `MANIFEST.toml` unchanged.
+  - [x] Update `sprint-status.yaml` with a comment saying what was delivered AND what moved.
+        **Set to `review`, not `done`** — `code-review` has not run, and this project's flow is
+        `dev-story → code-review → merge`. Writing `done` here would claim a review that has not
+        happened; `done` is the merge's business. Flagged for Guy in the completion message.
+  - [ ] Branch → PR → green CI → squash merge. **NOT DONE — deliberately deferred, and this box
+        stays unchecked.** The work is committed on `story/5-1-corpus-byte-pins` and has NOT been
+        pushed; no PR is open. `code-review` runs first (project-context.md's flow, and it is
+        recommended on a fresh context / different LLM), then push + PR + green CI + squash merge.
 
 ## Dev Notes
 
@@ -483,8 +472,170 @@ No new dependency, no version to research. Rust 1.96+, edition 2024; `serde`/`se
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`, via `bmad-dev-story`, 2026-07-27.
+
 ### Debug Log References
+
+**The five prove-to-red observations (AC4).** Every mutation was reverted; `git status` under
+`fixtures/` is empty and `MANIFEST.toml` was never re-hashed.
+
+1. **AC1 — swap two `obs_id`s between lines 1 and 2 of `dhcp-churn.jsonl`.**
+   `cargo test -p opencmdb-bin the_dhcp_churn_stream` →
+   ```
+   panicked at crates/opencmdb-bin/src/fixtures.rs:1803:13:
+   assertion `left == right` failed: line 0 carries its authored obs_id
+     left: "adadadad-0000-4000-8000-000000000002"
+    right: "adadadad-0000-4000-8000-000000000001"
+   ```
+   Restored with `git checkout`; the test re-ran green.
+
+2. **AC2 (a) — point the `dhcp-churn` table entry's `ConnectorId` at
+   `30303030-3030-4030-8030-303030303030`.** Test-side only; the corpus was not touched. →
+   ```
+   scenario/replay/dhcp-churn.jsonl: inadmissible to the connector with its declared context:
+   scenario/replay/dhcp-churn.jsonl: observation adadadad-0000-4000-8000-000000000001 is
+   attributed to connector 33333333-3333-4333-8333-333333333333, but this replay is connector
+   30303030-3030-4030-8030-303030303030 — one stream is one connector, and emitting another's
+   observations would fabricate provenance
+   ```
+   `ForeignConnectorId`, naming the stream AND the offending `obs_id`, as AC4 requires.
+
+3. **AC2 (b) — delete the `cloned-mac.jsonl` table entry** (the orphan direction: a walked stream
+   with no entry) →
+   ```
+   scenario/replay/cloned-mac.jsonl: committed under scenario/replay/ but absent from this test's
+   context table — a new stream must state its connector_id, scope and capabilities there
+   ```
+
+4. **AC2 (c), not named by AC4 but its own guard — add a table entry
+   `scenario/replay/no-such-stream.jsonl`** (an entry naming no file) →
+   ```
+   scenario/replay/no-such-stream.jsonl: named by the context table but not found under
+   scenario/replay/
+   ```
+   Recorded because the house rule is that a new guard does not ship without a test that reds when
+   it is removed, and AC2's "both directions" is two guards, not one.
+
+5. **AC3 (a) — insert one space after the first colon on line 1 of `dhcp-churn.jsonl`** (NOT
+   `minimal.jsonl`, per AC4: an edit there also reds two older tests, so the new guard would be
+   observed for the wrong reason) →
+   ```
+   panicked at crates/opencmdb-bin/src/fixtures.rs:941:17:
+   assertion `left == right` failed: …/fixtures/scenario/replay/dhcp-churn.jsonl:1:
+   re-serializing does not reproduce the committed bytes
+     left: "{\"obs_id\":\"adadadad-…\",…}"
+    right: "{\"obs_id\": \"adadadad-…\",…}"
+   ```
+   The file and its 1-indexed line are named, and both strings are printed.
+
+6. **AC3 (b) — the same edit on the CONTROL line (line 3) of `capability-downgrade.jsonl`** →
+   ```
+   …/fixtures/scenario/replay/capability-downgrade.jsonl:3: re-serializing does not reproduce the
+   committed bytes
+     left: "{\"record\":\"capability\",\"as_of\":\"2026-03-01T00:00:07Z\",\"kinds\":[…]}"
+    right: "{\"record\": \"capability\",…}"
+   ```
+   This is the observation that the control half is genuinely covered: a round-trip silently
+   skipping control records would have passed mutation 5 and failed here.
+
+**Gate output (AC5).**
+`cargo fmt --all` clean · `cargo clippy --workspace --all-targets -- -D warnings` clean ·
+`cargo test --workspace` → **121 (bin) + 86 (core) + 42 (xtask) = 249 passed, 0 failed**
+(247 before this story; +2 are the two new walks) · `cargo xtask ci` →
+```
+✅ frontier · ✅ ddl-collation · ✅ vocabulary
+✅ fixtures       25 fixture(s) match their recorded sha256 (0 generated, 25 hand-authored)
+✅ file-size      20 file(s) under 2000 code lines (largest: 884)
+ℹ  views-hash     STALE — regenerate at next milestone
+✅ all gates green
+```
+The `views-hash STALE` line is expected and exits 0. **`architecture-views.md` was NOT regenerated**
+— it is a milestone task, not a story task.
+
+⚠️ **What the green suite does not say.** `DATABASE_URL` was unset, so the MariaDB-backed tests
+returned early. Nothing in this story touches the database, but the suite is not evidence about it.
 
 ### Completion Notes List
 
+**What was implemented, in the weaker true sentence.**
+
+- **AC1.** `assert_obs_ids(observations, prefix)` lives in `fixtures.rs`'s test module. It is called
+  from six sites: the two byte-pins that read purely by index and now assert their ids
+  (`dhcp-churn` → `adadadad`, `vrrp-virtual-mac` → `aeaeaeae`), and the four that already had the
+  loop inline (`hostname-collision` `afafafaf`, `docker-veth` `babababa`, `hostname-absence`
+  `bcbcbcbc`, the wire spec `bdbdbdbd`). **No call site was left inline.** The DRY argument is in the
+  helper's doc: all four existing loops already COMPUTED their ids with `format!`, so what was
+  removed is mechanical duplication and not a second oracle — and the helper is explicit that it
+  encodes two corpus CONVENTIONS (the fixed `-0000-4000-8000-` middle segment, sequential numbering
+  from 1, both true of all 13 streams today) and that a future stream numbered otherwise gets its own
+  assertion rather than being re-authored to fit.
+
+- **AC2.** `every_committed_replay_stream_is_admissible_to_the_connector` in
+  `fixture_connector.rs`. All 13 committed streams load through `FixtureConnector::load` with a
+  hand-authored `StreamContext` table — never derived from the observations. Both orphan directions
+  are checked and both were proven to red. **The honest limit is written into the test's own doc and
+  is repeated here:** the walk shows every committed stream is ADMISSIBLE; it never observes
+  `UndeclaredFactKind` firing. The fact-kind check is non-vacuous only on `partial-then-failed.jsonl`
+  and on both sides of `capability-downgrade.jsonl`'s record; it is vacuous on the eleven `corpus_*`
+  streams because `corpus_caps()` declares all seven kinds. This is **not** "connector-level
+  admissibility now holds corpus-wide with fact-kind coverage" — the temptation the story named
+  explicitly.
+
+- **AC3.** `every_committed_stream_re_serializes_to_its_committed_bytes` in `fixtures.rs`, plus
+  `render_record`. `ControlRecord` gained `Serialize`; **the `#[cfg(test)]` mirror-struct fallback was
+  not needed**, confirming the story's measurement. What it pins is the byte-SHAPE, starting from the
+  file — never the authored values. `re_serializing_reproduces_the_committed_bytes` survives
+  unchanged and carries the "not a duplicate, do not collapse" comment.
+
+- **AC4.** Six mutations observed and recorded above (AC4 asked for four; two extra were taken —
+  the entry-without-a-file direction, and the control-line half of AC3).
+
+- **AC5.** Green, and `git status` under `fixtures/` is empty.
+
+- **AC6.** Three register entries closed in place by appending; the fourth annotated STILL OPEN and
+  not struck; a new `## Deferred from: story-5.1` section names the four unpinned families and their
+  owner, story 5.2b.
+
+**Two deviations from the task list, both stated rather than silent.**
+
+1. **`sprint-status.yaml` says `review`, not `done`** (Task 6 asked for `done`). `code-review` has not
+   run, and this project's own flow is `dev-story → code-review → merge`. `done` before review would
+   be a claim the work has not earned. Guy's call whether to overrule.
+2. **The story was NOT pushed and no PR was opened**; the last Task 6 checkbox is left unchecked. The
+   commit sits on `story/5-1-corpus-byte-pins`. Pushing before `code-review` inverts the flow, and a
+   push is outward-facing on a public repo.
+
+**One measurement worth carrying forward.** `fixtures.rs` went from **698 to 720** code lines — a
+RISE of 22, caused by the hoisted doc comment sitting above its `#[cfg(test)]` attribute. Predicted by
+the story; recorded here so nobody records it as a reduction.
+
+**Nothing found that contradicts the corpus.** Task 4's round-trip is the real Rust check the story's
+Dev Notes said had not yet been run against the committed bytes. It passes on all 13 streams and both
+control lines with no re-authoring — so the Dev Notes' out-of-Rust canonicalization measurement is
+confirmed by the serializer itself.
+
 ### File List
+
+- `crates/opencmdb-bin/src/fixtures.rs` (MODIFIED) — `Serialize` on `ControlRecord`;
+  `walk_replay_streams` hoisted to `#[cfg(test)] pub(crate)` module scope with an extended doc;
+  new test helpers `assert_obs_ids` and `render_record`; new test
+  `every_committed_stream_re_serializes_to_its_committed_bytes`; two byte-pins gained their `obs_id`
+  pins; four inline loops folded into the helper;
+  `re_serializing_reproduces_the_committed_bytes` gained its "not a duplicate" doc.
+- `crates/opencmdb-bin/src/fixture_connector.rs` (MODIFIED) — test module only: `StreamContext`,
+  `committed_stream_contexts()`, new test
+  `every_committed_replay_stream_is_admissible_to_the_connector`; `corpus_id()` and `corpus_caps()`
+  doc comments corrected. `load` and `from_records` are UNCHANGED.
+- `_bmad-output/implementation-artifacts/deferred-work.md` (MODIFIED) — three entries closed in
+  place, one annotated still-open, one new `## Deferred from: story-5.1` section. Append-only
+  discipline held.
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (MODIFIED) — `5.1` → `review`, with the
+  delivered/moved comment.
+- `_bmad-output/implementation-artifacts/5-1-corpus-pins-obs-id-binding.md` (MODIFIED) — this record.
+- **Nothing under `fixtures/`.** No bytes, no `MANIFEST.toml`.
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-07-27 | Story implemented. `obs_id` ↔ line binding pinned on `dhcp-churn` and `vrrp-virtual-mac` via one shared helper (six call sites); all 13 committed streams walked through `FixtureConnector::load` with a hand-authored context table checked both directions; all 13 round-tripped to their committed bytes line by line, control records included. Six mutations proven to red. 247 → 249 tests, all gates green, corpus bytes unchanged. Status → `review`. |
