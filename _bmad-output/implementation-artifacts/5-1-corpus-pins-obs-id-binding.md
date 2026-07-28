@@ -1,6 +1,6 @@
 # Story 5.1: The corpus pins the obs_id-to-line binding, and every stream goes through the connector
 
-Status: review
+Status: done
 
 <!-- Validation is MANDATORY here (Guy's decision, Epic 4 retrospective 2026-07-26): two
      fresh-context agents (fact-check + gap-hunt) before dev-story. The template banner saying
@@ -264,10 +264,12 @@ not move here").
         **Set to `review`, not `done`** — `code-review` has not run, and this project's flow is
         `dev-story → code-review → merge`. Writing `done` here would claim a review that has not
         happened; `done` is the merge's business. Flagged for Guy in the completion message.
-  - [ ] Branch → PR → green CI → squash merge. **NOT DONE — deliberately deferred, and this box
-        stays unchecked.** The work is committed on `story/5-1-corpus-byte-pins` and has NOT been
-        pushed; no PR is open. `code-review` runs first (project-context.md's flow, and it is
-        recommended on a fresh context / different LLM), then push + PR + green CI + squash merge.
+  - [x] Branch → PR → green CI → squash merge. **DONE 2026-07-28, after `code-review`, not before.**
+        The order held: the two commits (`fbffdd2` implementation, `ff6b402` review fixes) sat
+        unpushed on `story/5-1-corpus-byte-pins` until the review's 12 patches were applied, then
+        went up together. **PR #41** → CI green in 58s → squash-merged as **`c84e14a`**, branch
+        deleted. Story → `done`; the sprint file's `done` is this merge, exactly as its own comment
+        said it would be.
 
 ### Review Findings
 
@@ -861,5 +863,6 @@ confirmed by the serializer itself.
 
 | Date | Change |
 |---|---|
+| 2026-07-28 | **Merged.** PR #41, CI green (58s), squash-merged as `c84e14a`, branch deleted. Status → `done`. The order the story argued for held: nothing was pushed until `code-review` had run and its patches were applied. |
 | 2026-07-28 | Code review findings addressed — **12 of 12 `[Review][Patch]` items resolved**, 5 `[Review][Defer]` items registered. Restored a tree that did not compile (`records` binding lost when the byte-level guards were inserted). `assert_obs_ids` gained `expected_len`; the round-trip gained newline-termination and CRLF guards and was renamed to `every_replay_stream_re_serializes_to_its_committed_bytes`; the walker gained a dot-entry skip and its own non-emptiness assertion. **Six more mutations proven to red (12 total), and the whole prove-to-red log re-observed on the final tree** — two citations had pointed at code that was not in it. The falsified `grep` check corrected in all three documents that carried it, including `epics.md`'s `Given` clause for story 5.2b. Gate re-run in full: clippy clean, 249 tests, all `xtask ci` gates green, corpus bytes unchanged. |
 | 2026-07-27 | Story implemented. `obs_id` ↔ line binding pinned on `dhcp-churn` and `vrrp-virtual-mac` via one shared helper (six call sites); all 13 committed streams walked through `FixtureConnector::load` with a hand-authored context table checked both directions; all 13 round-tripped to their committed bytes line by line, control records included. Six mutations proven to red. 247 → 249 tests, all gates green, corpus bytes unchanged. Status → `review`. |

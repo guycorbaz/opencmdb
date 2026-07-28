@@ -42,7 +42,7 @@ Docker Hub; the binary runs and scans on Guy's NAS (frontend on macvlan, no Trae
 | **E2** Le contrat de connecteur | ✅ done (5 stories) |
 | **E3** Mon premier écart réel — **v0.1** | ✅ done (10 stories), retrospective held |
 | **E4** Infra fixtures & corpus de pièges — v0.2 | ✅ **done 2026-07-25** (19/19 authored; 4.19 split — see below) |
-| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — 15 stories; **5.1 is at `review`** (reviewed, its 12 patches applied, not yet merged) |
+| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — 15 stories; **5.1 done** (PR #41, merged 2026-07-28); next is 5.2 |
 | **E6–E23** | backlog |
 
 Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`, not this file.
@@ -60,8 +60,9 @@ across nine families** (randomized-mac, multi-nic, shared-hardware-vm, cloned-ma
 vrrp-virtual-mac, hostname-collision, docker-veth, hostname-absence — each in positive AND
 negative form, each naming the RULE rather than the outcome), the scoring algebra, the metrics
 harness, the trap runner, the reality-debt register, and the wire-format spec. Test counts on
-master: **119 (bin) + 86 (core) + 42 (xtask)** — **121 + 86 + 42 = 249** on Epic 5's branch, story
-5.1 having added the two corpus-wide walks. Two deliberate privacy-walk amendments landed
+master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **249** on master today
+(121 + 86 + 42), story 5.1 having added the two corpus-wide walks. Two deliberate privacy-walk
+amendments landed
 with their families (the IANA VRRP MAC range in 4.14, the honestly-empty hostname in 4.17),
 each proven red at its boundary. **Story 4.19 was SPLIT at closure**: 4.19a (the drift-surface
 record and the binding layer charter) shipped in `fixtures/scenario/wire/README.md`; **4.19b
