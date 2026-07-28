@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-28  # Story 5.1 reviewed; 12/12 review patches applied (see its block under Epic 5)
+last_updated: 2026-07-28  # Story 5.1 DONE — PR #41 merged (c84e14a); see its block under Epic 5
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -193,9 +193,10 @@ development_status:
   # authored values. And a new `## Deferred from: story-5.1` entry records that four committed
   # families (randomized-mac, multi-nic, shared-hardware-vm, cloned-mac) are named by NO test —
   # owned by story 5.2b, not a deferral.
-  # STILL `review`, not `done`: code-review HAS now run and its 12 patches are applied, but `done`
-  # is the MERGE's business in this project's flow. Not yet pushed, no PR open — Guy's call.
-  5-1-corpus-pins-obs-id-binding: review
+  # `done` 2026-07-28: PR #41 squash-merged as c84e14a after a green CI run (58s). `done` is the
+  # MERGE's business in this project's flow, which is why this sat at `review` from the end of
+  # dev-story until the merge, through the code review and its 12 patches.
+  5-1-corpus-pins-obs-id-binding: done
   5-2-privacy-floor-reaches-the-bytes: backlog
   # 5.2b was INSERTED on 2026-07-26, one day after the decomposition and before any Epic 5 code
   # existed — surfaced while preparing story 5.1, which could not absorb it (its AC1 strengthens
