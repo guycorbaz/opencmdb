@@ -1,6 +1,6 @@
 # Story 5.2b: The four unpinned families — and dhcp-churn's authored values — state their premise in a test, not only in prose
 
-Status: review
+Status: done
 
 <!-- Validation is MANDATORY here (Guy's decision, Epic 4 retrospective 2026-07-26): two
      fresh-context agents (fact-check + gap-hunt) before dev-story. The template banner saying
@@ -361,10 +361,10 @@ to fit whatever the corpus happens to say.
   - [x] Update `sprint-status.yaml` and `docs/project-context.md`'s test count. **Set `review`, not
         `done`** — `done` is the merge's business (5.1 established it; 5.2's review confirmed it,
         and 5.2's own code-review workflow would have set `done` wrongly).
-  - [ ] Branch → `code-review` → push → PR → green CI → squash merge, **in that order**.
-        *(NOT done by `dev-story` — the work is still on `master` in the working tree, uncommitted.
-        This is the next workflow's business, and `done` is the merge's. Left unchecked rather than
-        marked complete.)*
+  - [x] Branch → `code-review` → push → PR → green CI → squash merge, **in that order**.
+        Done in that order: branch `story-5.2b-four-families-byte-pins` → three-layer code review
+        (1 decision + 10 patches applied, 5 deferred, 1 dismissed) → **PR #46** → CI green in 52s →
+        squash merged as `fe6a19e` on 2026-07-28. `done` was set only after the merge.
 
 ### Review Findings (code review, 2026-07-28)
 
