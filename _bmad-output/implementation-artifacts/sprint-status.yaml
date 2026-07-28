@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-28  # Story 5.2 DONE — PR #44 merged (4d2044b); next is 5.2b
+last_updated: 2026-07-28  # Story 5.2b implemented → review (258 → 263 tests; code-review next)
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -279,7 +279,83 @@ development_status:
   # and keeps 5.3-5.14 at their numbers. It sits in the debt block ahead of 5.5 deliberately: the
   # corpus is the oracle the L1 join is judged against. It closes the LAST two corpus byte-fidelity
   # entries in deferred-work.md (story-4.13's and the one story 5.1 raises).
-  5-2b-four-families-byte-pins: backlog
+  # 5.2b CONTEXTED 2026-07-28. All five streams read verbatim off the committed corpus at 95d4d69
+  # and tabulated in the story, together with the obs_ids each of the NINE traps judges — so the dev
+  # re-derives nothing and a surprise reads as a FINDING. THREE traps measured for the dev, each of
+  # which would otherwise cost an hour and a false diagnosis:
+  #   · `shared-hardware-vm`'s fact count is NOT uniform — 4, 4, 4, 3. W4 is the must-abstain pole
+  #     and carries no Hostname, so the dhcp-churn idiom's per-line `assert_eq!(facts.len(), N)`
+  #     REDS on it and reads as a corpus defect. It is the premise, not a defect;
+  #   · instants are NOT strictly increasing in three of the four families (multi-nic W1/W2,
+  #     shared-hardware-vm W1/W2, cloned-mac K1/K2 each share one) — two NICs seen in one sweep
+  #     SHOULD share an instant. dhcp-churn asserts strict increase only because its churn lives in
+  #     time alone; copying that line reds;
+  #   · ONE CORRECTION to the epic: epics.md:1391 says "both `reason` strings cite" the MAC,
+  #     doc-host-golf and doc-host-hotel. Counted: the MAC is in ONE reason, hotel in ONE, golf in
+  #     BOTH. The union cites all three; neither reason does. Conclusion unchanged.
+  # Also corrected during contexting, before any dev sees it: the four-families register bullet is
+  # under `## Deferred from: story-5.1` (:516, raised BY the story), NOT under `## Deferred from:
+  # code review of story-5.1` (:556) — two similarly-named sections, and striking the wrong one is
+  # exactly the class of error this project's reviews keep catching.
+  # VALIDATED 2026-07-28 by two fresh-context agents (fact-check + gap-hunt) — 3 HIGH, 6 MED, 3 LOW,
+  # ALL APPLIED. The measured corpus data in the story survived fact-checking intact (every byte
+  # array, hex rendering, IP, hostname, peer_port, obs_id prefix, instant, fact count and all nine
+  # trap→obs_id rows VERIFIED). The three HIGH findings were all about what the story CLAIMED:
+  #   · **A NEW AC (AC4b) was added.** Every pin the story asked for lives on the .jsonl — but the
+  #     inversion is available entirely from the .toml. Exchanging the two `observations` vectors in
+  #     `cloned-mac.toml` (three characters, no stream byte touched) makes the corpus DEMAND the
+  #     FALSE MERGE, and `cargo test --workspace` in that state reports 130+86+42, ZERO failures.
+  #     Reproduced independently before the AC was written; file restored, md5 verified. AC4 had
+  #     claimed `assert_obs_ids` closed that hole — it closes only the stream-side half. This is
+  #     D10's catastrophic-and-asymmetric direction, in the family the corpus calls its ONLY
+  #     pre-release guard against the false merge;
+  #   · the story's closing promise (inherited from epics.md:1397, "the corpus byte-fidelity theme
+  #     carries no open item") is STALE — 5.1's own review registered `unifi-clients.expected.jsonl`
+  #     as having no round-trip pin ONE DAY after the epic was written (owner Epic 11, issue #34) —
+  #     and validation surfaced a SIXTH unpinned stream, `example-traps.jsonl`, whose reason cites
+  #     `02:00:5e:00:53:10`, verbatim the 4.13 shape. The story now writes the narrow true claim and
+  #     forces an explicit decision on the sixth stream;
+  #   · AC3 had offered a choice between the exact fact-count vector and `>= 3`; the second branch is
+  #     MEASURED vacuous (a second contradicting Uplink on W4 reds nothing under it) and was
+  #     withdrawn.
+  # MED/LOW applied: the story-4.13 register section has TWO bullets and closing one leaves a
+  # "STILL OPEN" bullet standing; the false reason-distribution sentence is in the register too, not
+  # only the epic; the W4 mutation must REPLACE not ADD (adding reds the count loop FIRST, so the
+  # recorded red would name the wrong guard) and needs the `doc-` prefix and exact HostnameSource
+  # spelling or it reds two tests; `cargo xtask ci` DOES consult MANIFEST.toml and must never run
+  # mid-mutation; every MAC now given in DECIMAL with the `:40`=64 transcription trap named; STOP now
+  # has a procedure; three line ranges corrected.
+  # IMPLEMENTED 2026-07-28 → review. 258 → 263 tests (135 bin + 86 core + 42 xtask), all four local
+  # gates green, NO byte moved under fixtures/ (git status verified empty before the gate ran).
+  # FIVE new byte-pin tests + the dhcp-churn one EXTENDED, all in the trailing test module — the
+  # file-size gate number for fixtures.rs is UNCHANGED at 728 code lines, as the story predicted.
+  #   · the four unpinned families each got a test in the dhcp-churn idiom (length → exact per-line
+  #     fact count → assert_obs_ids → authored values → instants vector). Three of them pin an
+  #     instants vector that is NOT strictly increasing, as measured;
+  #   · AC4b's `assert_trap_binds` pins, per trap id, the exact `observations` vector IN ORDER and
+  #     the whole `Expectation` — all ELEVEN committed traps across the five families and the
+  #     example file. The measured inversion (exchange the two vectors in cloned-mac.toml, no
+  #     stream byte touched) now REDS; before this it left the whole suite green while the corpus
+  #     DEMANDED the false merge;
+  #   · AC7's open question was DECIDED: `example-traps.jsonl` was PINNED as a sixth test rather
+  #     than registered — closing the theme while leaving a known instance open would have made the
+  #     closure claim narrower than it read.
+  # SEVEN mutations recorded, each the SOLE red and each naming its line (AC6 asked for six).
+  # The dhcp-churn one is two-sided and is the justification for closing 4.13: with doc-host-hotel
+  # renamed, the PRE-STORY tree reported 130+86+42 zero failures (the relational assert_ne! never
+  # noticed) while the extended test reds. One test-internal ORDERING change was needed: W4's
+  # hostname-absence assertion moved AHEAD of the shared-uplink loop, because the loop's one-of-each
+  # find() PANICS on a line whose Uplink was replaced — with it first, AC6's mutation would have red
+  # the wrong guard. Reasoned in the test's own comment.
+  # REGISTER: both story-4.13 bullets and the story-5.1 four-families bullet closed by append-and-
+  # strike; the false "both `reason` strings cite" distribution corrected IN the closure note (it
+  # was in the register, not only in epics.md:1391). New `## Deferred from: story-5.2b` opens ONE
+  # item — a trap's `reason` prose is still not mechanically tied to the values it cites — and the
+  # narrow true claim was verified by RE-READING the register after the last edit: it names both
+  # things that stay open (unifi-clients.expected.jsonl, owner Epic 11 / issue #34, and the new
+  # item this story itself opened), so the claim is not falsified by its own commit.
+  # ⚠️ NEXT: `code-review` 5.2b — preferably on a DIFFERENT model than the one that implemented it.
+  5-2b-four-families-byte-pins: review
   5-3-engine-abstention-cause: backlog
   5-4-decision-and-ruleset-version: backlog
   5-5-l1-join-pure: backlog

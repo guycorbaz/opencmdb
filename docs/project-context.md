@@ -42,7 +42,7 @@ Docker Hub; the binary runs and scans on Guy's NAS (frontend on macvlan, no Trae
 | **E2** Le contrat de connecteur | ✅ done (5 stories) |
 | **E3** Mon premier écart réel — **v0.1** | ✅ done (10 stories), retrospective held |
 | **E4** Infra fixtures & corpus de pièges — v0.2 | ✅ **done 2026-07-25** (19/19 authored; 4.19 split — see below) |
-| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — 15 stories; **5.1 and 5.2 done** (PR #41 and #44, both merged 2026-07-28); next is 5.2b |
+| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — 15 stories; **5.1 and 5.2 done** (PR #41 and #44, both merged 2026-07-28); **5.2b in review** — it closes the last inherited-debt story |
 | **E6–E23** | backlog |
 
 Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`, not this file.
@@ -61,8 +61,12 @@ vrrp-virtual-mac, hostname-collision, docker-veth, hostname-absence — each in 
 negative form, each naming the RULE rather than the outcome), the scoring algebra, the metrics
 harness, the trap runner, the reality-debt register, and the wire-format spec. Test counts on
 master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **258** on master today
-(130 + 86 + 42) — story 5.1 added the two corpus-wide walks, story 5.2 the trap-text scan, the
-`raw` scan and the scanner's six closed evasions. **Three** deliberate privacy-walk amendments have
+(130 + 86 + 42), **263 with story 5.2b in review** (135 + 86 + 42) — story 5.1 added the two
+corpus-wide walks, story 5.2 the trap-text scan, the `raw` scan and the scanner's six closed
+evasions, and story 5.2b five byte-pin tests over the streams that had none (the four unpinned
+families plus `example-traps.jsonl`) together with the trap→`obs_id` binding pin that closed a
+measured hole: exchanging two `observations` vectors in `cloned-mac.toml` made the corpus DEMAND
+the false merge while the whole suite stayed green. **Three** deliberate privacy-walk amendments have
 landed: two ADMITTING a byte shape with its family (the IANA VRRP MAC range in 4.14, the
 honestly-empty hostname in 4.17) and one REFUSING one with no family behind it (multicast MACs, 5.2
 — measured against all 39 committed MACs first, none of which has the I/G bit set, so it reddened

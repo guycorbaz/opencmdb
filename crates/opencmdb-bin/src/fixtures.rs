@@ -921,9 +921,11 @@ pub(crate) fn walk_trap_files(visit: &mut dyn FnMut(&Path)) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opencmdb_core::gap::AbstentionCause;
     use opencmdb_core::observation::{
         ConnectorId, Fact, HostnameSource, L2DomainId, MacAddr, ObsId, Scope, Timestamp, VantageId,
     };
+    use opencmdb_core::trap::{Expectation, RuleId};
     use std::net::Ipv4Addr;
     use std::str::FromStr;
     use uuid::Uuid;
@@ -2302,6 +2304,60 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         }
     }
 
+    /// Pin ONE trap's binding: which observations it judges, **in order**, and under which
+    /// column and rule — story 5.2b's AC4b.
+    ///
+    /// **Why this exists, measured.** Every byte-pin in this module lives on the `.jsonl`, but a
+    /// family's premise is stated across TWO files: the stream holds the values, the `.toml`
+    /// declares WHICH pair of `obs_id`s is judged and under which column. Nothing asserted the
+    /// second half. `read_traps` cross-checks only that a trap's `obs_id`s EXIST in the stream
+    /// (a `BTreeSet` membership test), and `trap_gate`'s completeness check only asks that both
+    /// poles of a family are present — which any EXCHANGE of the two poles' observation vectors
+    /// preserves. Measured during this story's validation pass: exchanging the two `observations`
+    /// vectors in `fixtures/scenario/traps/cloned-mac.toml` — three characters, no stream byte
+    /// touched — makes the corpus DEMAND the false merge (`doc-host-echo` + `doc-host-foxtrot`
+    /// under `must-merge`/`l1-exact-mac`), and the whole workspace suite stayed green.
+    ///
+    /// The sha256 lock is not the backstop: this corpus's stated threat model is *"a DELIBERATE
+    /// re-authoring, which refreshes `MANIFEST.toml` by definition"*.
+    ///
+    /// ORDER is pinned, not membership: `must-merge` on `[001, 002]` and on `[002, 001]` are the
+    /// same judgement today, but a set comparison would also accept the exchanged file above
+    /// whenever two poles happen to share one endpoint. Comparing the vector costs nothing and
+    /// closes that.
+    fn assert_trap_binds(traps: &TrapFile, id: &str, observations: &[&str], expect: Expectation) {
+        let trap = traps
+            .trap
+            .iter()
+            .find(|t| t.id.0 == id)
+            .unwrap_or_else(|| panic!("the trap file must declare `{id}`"));
+        let judged: Vec<String> = trap.observations.iter().map(|o| o.to_string()).collect();
+        let authored: Vec<String> = observations.iter().map(|s| (*s).to_owned()).collect();
+        assert_eq!(
+            judged, authored,
+            "trap `{id}` judges exactly these observations, in this order"
+        );
+        assert_eq!(
+            trap.expect, expect,
+            "trap `{id}` judges under exactly this column and rule"
+        );
+    }
+
+    /// The `must-merge` / `must-not-merge` shorthands the bindings below read with. They take the
+    /// rule id as a `&str` so a call site states the rule verbatim, the way the `.toml` does.
+    fn merge(rule: &str) -> Expectation {
+        Expectation::MustMerge {
+            rule: RuleId(rule.to_owned()),
+        }
+    }
+
+    /// The refusal pole — see [`merge`].
+    fn not_merge(rule: &str) -> Expectation {
+        Expectation::MustNotMerge {
+            rule: RuleId(rule.to_owned()),
+        }
+    }
+
     /// Story 4.13's byte-pin — the second, independent oracle over `dhcp-churn.jsonl`, in the
     /// spirit of `expected()`: the two holders of the recycled address `192.0.2.120` are
     /// separated by NOTHING but time (D19 — DHCP churn is tested by replaying timestamps; the
@@ -2353,6 +2409,44 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         // be a same-address re-sighting, not a moved lease — the family's premise.
         assert_eq!(mac(0), mac(1), "N2 carries N1's exact MAC");
         assert_eq!(hostname(0), hostname(1), "N2 carries N1's exact hostname");
+
+        // Story 5.2b (AC5) — the three authored values the trap `reason`s CITE, pinned by value
+        // rather than only relationally. The assertions above are relational (`mac(0) == mac(1)`,
+        // `hostname(2) != hostname(0)`) and stay green under a wholesale re-authoring that gives
+        // this stream different synthetic values — at which point both reasons cite constants the
+        // bytes no longer hold and the family's prose is stranded. Registered under story 4.13's
+        // review; closed here.
+        //
+        // Counted on the committed file, because the epic (`epics.md:1391`) and the register
+        // bullet both say "both `reason` strings cite" all three and that is FALSE: the MAC
+        // appears in ONE reason (`dhcp-churn.toml:39`), `doc-host-hotel` in ONE (`:28`), and
+        // `doc-host-golf` in BOTH. The union of the two reasons cites all three; neither reason
+        // does. The conclusion is unchanged — all three are cited by prose and asserted by no
+        // test until now.
+        assert_eq!(
+            mac(0),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 120]),
+                locally_administered: true,
+            },
+            "N1 wears the MAC 02:00:5e:00:53:78 that the must-merge reason cites"
+        );
+        assert_eq!(
+            hostname(0),
+            Fact::Hostname {
+                name: "doc-host-golf".into(),
+                source: HostnameSource::Dhcp,
+            },
+            "N1 answers to doc-host-golf, the name BOTH reasons cite"
+        );
+        assert_eq!(
+            hostname(2),
+            Fact::Hostname {
+                name: "doc-host-hotel".into(),
+                source: HostnameSource::Dhcp,
+            },
+            "N3 answers to doc-host-hotel, the name the must-not-merge reason cites"
+        );
         assert_eq!(
             ip(1),
             Fact::IpV4 {
@@ -2376,6 +2470,36 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 ts("2026-01-06T02:00:00Z"),
             ],
             "the reassignment happens BETWEEN observations, as authored time"
+        );
+
+        // Story 5.2b (AC4b) — the TOML side of the same premise. Everything above pins the
+        // stream; this pins which pair each pole judges. Exchanging the two vectors would pair
+        // the two doc-host-golf presences under `must-not-merge` and the golf/hotel pair under
+        // `must-merge`, inverting the family without moving a stream byte.
+        let traps = read_traps(&fixture_path("scenario/traps/dhcp-churn.toml").unwrap())
+            .expect("the dhcp-churn trap file must read");
+        assert_eq!(
+            traps.trap.len(),
+            2,
+            "the family declares exactly its two poles"
+        );
+        assert_trap_binds(
+            &traps,
+            "dhcp-churn-must-not-merge",
+            &[
+                "adadadad-0000-4000-8000-000000000001",
+                "adadadad-0000-4000-8000-000000000003",
+            ],
+            not_merge("l1-distinct-mac"),
+        );
+        assert_trap_binds(
+            &traps,
+            "dhcp-churn-must-merge",
+            &[
+                "adadadad-0000-4000-8000-000000000001",
+                "adadadad-0000-4000-8000-000000000002",
+            ],
+            merge("l1-exact-mac"),
         );
     }
 
@@ -3222,6 +3346,685 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 ts("2026-01-11T01:00:00Z"),
             ],
             "the absences happen at the authored instants"
+        );
+    }
+
+    /// Story 5.2b's byte-pin over `randomized-mac.jsonl` — the family whose entire
+    /// discrimination rests on ONE octet, in the spirit of `expected()`. Its `must-merge` pole
+    /// (`l1-exact-mac`, judging 001+002) and its `must-not-merge` pole (`l1-distinct-mac`,
+    /// judging 001+003) differ by the last byte of one MAC and nothing else.
+    ///
+    /// **Why every MAC is pinned by VALUE and not by `assert_eq!(mac(0), mac(1))`.** A relational
+    /// pin stays green if BOTH N1 and N2 are re-authored to `…:21` — at which point the
+    /// `must-not-merge` pair becomes a same-MAC pair, the corpus demands the opposite decision,
+    /// and nothing says so. That is the failure this test exists to stop, and it is why story
+    /// 4.13's relational-only pin was an open register item.
+    ///
+    /// Before this test the stream was named by no value test at all: its only mention was the
+    /// per-stream context table story 5.1 added (`fixture_connector.rs`), which states the
+    /// stream's declared CONTEXT and asserts nothing about its contents, while `read_traps`
+    /// checks only that a trap's `obs_id`s EXIST — never which line they name.
+    #[test]
+    fn the_randomized_mac_stream_rests_on_one_octet() {
+        let observations =
+            read_jsonl(&fixture_path("scenario/replay/randomized-mac.jsonl").unwrap())
+                .expect("the randomized-mac stream must read");
+        assert_eq!(observations.len(), 3, "three authored presences, exactly");
+        // Exactly 2 facts per line (the `find()` guard): uniform here, which is what lets the
+        // one-of-each extraction below pin each line's fact multiset exactly. Without it, a
+        // duplicated or extra fact would pass every assertion unnoticed.
+        for (n, observation) in observations.iter().enumerate() {
+            assert_eq!(
+                observation.facts.len(),
+                2,
+                "observation {n} carries exactly its two facts"
+            );
+        }
+        // The obs_id ↔ line binding (the standing rule): the traps judge by obs_id.
+        assert_obs_ids(&observations, "eeeeeeee", 3);
+
+        let fact = |n: usize, pick: fn(&Fact) -> bool| {
+            observations[n]
+                .facts
+                .iter()
+                .find(|f| pick(f))
+                .unwrap_or_else(|| panic!("observation {n} must carry the fact"))
+                .clone()
+        };
+        let mac = |n| fact(n, |f| matches!(f, Fact::Mac { .. }));
+        let ip = |n| fact(n, |f| matches!(f, Fact::IpV4 { .. }));
+
+        // The one octet, pinned on EACH of the three lines — not pairwise.
+        let re_randomized = Fact::Mac {
+            addr: MacAddr([2, 0, 94, 0, 83, 32]),
+            locally_administered: true,
+        };
+        assert_eq!(
+            mac(0),
+            re_randomized,
+            "N1 wears 02:00:5e:00:53:20, the MAC the must-merge reason cites"
+        );
+        assert_eq!(
+            mac(1),
+            re_randomized,
+            "N2 wears the byte-identical 02:00:5e:00:53:20 an hour later"
+        );
+        assert_eq!(
+            mac(2),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 33]),
+                locally_administered: true,
+            },
+            "N3 wears 02:00:5e:00:53:21 — the ONE octet the must-not-merge pole rests on"
+        );
+
+        // Three distinct leases, value-pinned.
+        for (n, last) in [(0, 30u8), (1, 31), (2, 32)] {
+            assert_eq!(
+                ip(n),
+                Fact::IpV4 {
+                    addr: Ipv4Addr::new(192, 0, 2, last)
+                },
+                "observation {n} holds its authored address 192.0.2.{last}"
+            );
+        }
+
+        // The authored instants, an hour apart. Strictly increasing HERE — unlike the three
+        // families below, where two NICs seen in one sweep deliberately share an instant.
+        let instants: Vec<Timestamp> = observations.iter().map(|o| o.observed_at).collect();
+        assert_eq!(
+            instants,
+            vec![
+                ts("2026-01-02T00:00:00Z"),
+                ts("2026-01-02T01:00:00Z"),
+                ts("2026-01-02T02:00:00Z"),
+            ],
+            "the re-randomization happens BETWEEN observations, as authored time"
+        );
+
+        // AC4b — the TOML side: which pair each pole judges, and under which column and rule.
+        let traps = read_traps(&fixture_path("scenario/traps/randomized-mac.toml").unwrap())
+            .expect("the randomized-mac trap file must read");
+        assert_eq!(
+            traps.trap.len(),
+            2,
+            "the family declares exactly its two poles"
+        );
+        assert_trap_binds(
+            &traps,
+            "randomized-mac-must-not-merge",
+            &[
+                "eeeeeeee-0000-4000-8000-000000000001",
+                "eeeeeeee-0000-4000-8000-000000000003",
+            ],
+            not_merge("l1-distinct-mac"),
+        );
+        assert_trap_binds(
+            &traps,
+            "randomized-mac-must-merge",
+            &[
+                "eeeeeeee-0000-4000-8000-000000000001",
+                "eeeeeeee-0000-4000-8000-000000000002",
+            ],
+            merge("l1-exact-mac"),
+        );
+    }
+
+    /// Story 5.2b's byte-pin over `multi-nic.jsonl` — the family whose premise is entirely
+    /// geometric, and which the harness validated NOWHERE. The VRRP byte-pin's own doc says
+    /// uplink geometry is pinned *"here or nowhere"*, and that was true precisely because VRRP
+    /// had a byte-pin; this stream had none.
+    ///
+    /// **BOTH halves of the `Uplink` fact are pinned on every line.** The two poles are
+    /// `must-merge`/`l2-uplink-agrees` on 001+002 (same switch, DIFFERENT port — an uplink that
+    /// AGREES) and `must-not-merge`/`l2-different-switch` on 001+003. Pinning only `peer_mac`
+    /// would let *"same switch, different port = agrees"* and *"different switch = opposes"* be
+    /// silently exchanged. And collapsing M2's port onto M1's must RED: that edit turns this
+    /// family into the `shared-hardware-vm` shape, where an identical uplink is exactly what does
+    /// NOT discriminate.
+    #[test]
+    fn the_multi_nic_stream_pins_both_halves_of_its_uplink() {
+        let observations = read_jsonl(&fixture_path("scenario/replay/multi-nic.jsonl").unwrap())
+            .expect("the multi-nic stream must read");
+        assert_eq!(observations.len(), 3, "three authored presences, exactly");
+        // Exactly 3 facts per line (the `find()` guard) — see the randomized-mac pin.
+        for (n, observation) in observations.iter().enumerate() {
+            assert_eq!(
+                observation.facts.len(),
+                3,
+                "observation {n} carries exactly its three facts"
+            );
+        }
+        assert_obs_ids(&observations, "ffffffff", 3);
+
+        let fact = |n: usize, pick: fn(&Fact) -> bool| {
+            observations[n]
+                .facts
+                .iter()
+                .find(|f| pick(f))
+                .unwrap_or_else(|| panic!("observation {n} must carry the fact"))
+                .clone()
+        };
+        let mac = |n| fact(n, |f| matches!(f, Fact::Mac { .. }));
+        let ip = |n| fact(n, |f| matches!(f, Fact::IpV4 { .. }));
+        let uplink = |n| fact(n, |f| matches!(f, Fact::Uplink { .. }));
+
+        // The geometry, both halves, on each line. M1 and M2 share the access switch and differ
+        // by PORT — that pair is the `must-merge` pole. M3 hangs off another switch entirely.
+        assert_eq!(
+            uplink(0),
+            Fact::Uplink {
+                peer_mac: MacAddr([2, 0, 94, 0, 96, 10]),
+                peer_port: "swport-1".into(),
+            },
+            "M1 hangs off 02:00:5e:00:60:0a port swport-1"
+        );
+        assert_eq!(
+            uplink(1),
+            Fact::Uplink {
+                peer_mac: MacAddr([2, 0, 94, 0, 96, 10]),
+                peer_port: "swport-2".into(),
+            },
+            "M2 hangs off the SAME switch on a DIFFERENT port — the uplink that agrees"
+        );
+        assert_eq!(
+            uplink(2),
+            Fact::Uplink {
+                peer_mac: MacAddr([2, 0, 94, 0, 96, 11]),
+                peer_port: "swport-7".into(),
+            },
+            "M3 hangs off 02:00:5e:00:60:0b — a different switch, which OPPOSES the L2 join"
+        );
+
+        // The three host NICs keep their own distinct MACs — L1 is right to hold them apart, and
+        // the false split this family catches lives at L2.
+        for (n, last) in [(0, 64u8), (1, 65), (2, 66)] {
+            assert_eq!(
+                mac(n),
+                Fact::Mac {
+                    addr: MacAddr([2, 0, 94, 0, 83, last]),
+                    locally_administered: true,
+                },
+                "observation {n} wears its own authored MAC"
+            );
+        }
+        for (n, last) in [(0, 40u8), (1, 41), (2, 42)] {
+            assert_eq!(
+                ip(n),
+                Fact::IpV4 {
+                    addr: Ipv4Addr::new(192, 0, 2, last)
+                },
+                "observation {n} holds its authored address 192.0.2.{last}"
+            );
+        }
+
+        // The authored instants — M1 and M2 SHARE one, deliberately: two NICs of one host seen in
+        // the same sweep should. Pin the vector as authored; do NOT assert strict increase, which
+        // is dhcp-churn's assertion and specific to a family whose churn lives in time alone.
+        let instants: Vec<Timestamp> = observations.iter().map(|o| o.observed_at).collect();
+        assert_eq!(
+            instants,
+            vec![
+                ts("2026-01-03T00:00:00Z"),
+                ts("2026-01-03T00:00:00Z"),
+                ts("2026-01-03T00:05:00Z"),
+            ],
+            "M1 and M2 are seen in one sweep, as authored"
+        );
+
+        // AC4b — the TOML side.
+        let traps = read_traps(&fixture_path("scenario/traps/multi-nic.toml").unwrap())
+            .expect("the multi-nic trap file must read");
+        assert_eq!(
+            traps.trap.len(),
+            2,
+            "the family declares exactly its two poles"
+        );
+        assert_trap_binds(
+            &traps,
+            "multi-nic-must-merge",
+            &[
+                "ffffffff-0000-4000-8000-000000000001",
+                "ffffffff-0000-4000-8000-000000000002",
+            ],
+            merge("l2-uplink-agrees"),
+        );
+        assert_trap_binds(
+            &traps,
+            "multi-nic-must-not-merge",
+            &[
+                "ffffffff-0000-4000-8000-000000000001",
+                "ffffffff-0000-4000-8000-000000000003",
+            ],
+            not_merge("l2-different-switch"),
+        );
+    }
+
+    /// Story 5.2b's byte-pin over `shared-hardware-vm.jsonl` — the family whose trap header
+    /// declares the uplink *"shared by construction (the same `peer_mac` and `peer_port` on every
+    /// observation)"*, prose that no test asserted.
+    ///
+    /// **Pinning the identical uplink is what keeps the discriminator the HOSTNAME.** Were the
+    /// uplink allowed to drift, the `must-merge` pole could start passing for a topological
+    /// reason this family explicitly denies — it is distinguished by hostname, and the shared
+    /// hypervisor uplink is the temptation, not the evidence.
+    ///
+    /// **W4's ABSENT hostname is an assertion, not an accident** — story 4.17's idiom, asserted
+    /// directly rather than inferred from a fact count. W4 is the `must-abstain` pole: no
+    /// observed value distinguishes a second NIC of `doc-vm-alpha` from a new co-tenant VM.
+    ///
+    /// ⚠️ The fact count here is NOT uniform — 4, 4, 4, 3 — so the per-line vector is asserted
+    /// exactly. `>= 3` would be vacuous, and that is measured: adding a SECOND, contradicting
+    /// `Uplink` to W4 reds nothing under it, because the one-of-each `find()` returns the FIRST
+    /// match — the authored one — so the value pin passes while *"shared by construction"* is
+    /// false on the very pole that depends on it. The non-uniform count is the REASON the exact
+    /// vector is needed, not a reason to relax it.
+    #[test]
+    fn the_shared_hardware_vm_stream_shares_one_uplink_and_falls_silent_on_the_abstain_pole() {
+        let observations =
+            read_jsonl(&fixture_path("scenario/replay/shared-hardware-vm.jsonl").unwrap())
+                .expect("the shared-hardware-vm stream must read");
+        assert_eq!(observations.len(), 4, "four authored presences, exactly");
+        // Exact fact counts per line: W1–W3 are full VM presences (Mac, IpV4, Hostname, Uplink),
+        // W4 is the hostless abstain pole. A blanket `assert_eq!(len, 4)` REDS on W4 and reads as
+        // a corpus defect; it is not one, it is the premise.
+        for (n, expected_len) in [(0, 4), (1, 4), (2, 4), (3, 3)] {
+            assert_eq!(
+                observations[n].facts.len(),
+                expected_len,
+                "observation {n} carries exactly its facts"
+            );
+        }
+        assert_obs_ids(&observations, "abababab", 4);
+
+        let fact = |n: usize, pick: fn(&Fact) -> bool| {
+            observations[n]
+                .facts
+                .iter()
+                .find(|f| pick(f))
+                .unwrap_or_else(|| panic!("observation {n} must carry the fact"))
+                .clone()
+        };
+        let mac = |n| fact(n, |f| matches!(f, Fact::Mac { .. }));
+        let ip = |n| fact(n, |f| matches!(f, Fact::IpV4 { .. }));
+        let hostname = |n| fact(n, |f| matches!(f, Fact::Hostname { .. }));
+        let uplink = |n| fact(n, |f| matches!(f, Fact::Uplink { .. }));
+
+        // The MISSING form is an assertion, not an accident (story 4.17's idiom). It is asserted
+        // FIRST, ahead of the uplink loop below, on purpose: W4's silence is what makes this
+        // family's third column exist, and the loop's one-of-each `find()` PANICS on a line whose
+        // `Uplink` was replaced — so with the loop first, the mutation that removes W4's uplink in
+        // favour of a hostname would red the uplink pin and never reach this one. Ordered this
+        // way, that mutation reds THIS assertion and nothing else, which is what proves it has
+        // teeth (story 5.2b, AC6).
+        assert!(
+            observations[3]
+                .facts
+                .iter()
+                .all(|f| !matches!(f, Fact::Hostname { .. })),
+            "W4 carries NO Hostname fact — it is the must-abstain pole, and its silence is the premise"
+        );
+
+        // The hypervisor's uplink, byte-identical on ALL FOUR lines — shared by construction.
+        let hypervisor = Fact::Uplink {
+            peer_mac: MacAddr([2, 0, 94, 0, 96, 10]),
+            peer_port: "swport-1".into(),
+        };
+        for n in 0..4 {
+            assert_eq!(
+                uplink(n),
+                hypervisor,
+                "observation {n} hangs off the shared hypervisor uplink, by construction"
+            );
+        }
+
+        // The discriminator: two VMs, one of them dual-homed.
+        let alpha = Fact::Hostname {
+            name: "doc-vm-alpha".into(),
+            source: HostnameSource::Dhcp,
+        };
+        assert_eq!(hostname(0), alpha, "W1 answers to doc-vm-alpha");
+        assert_eq!(
+            hostname(1),
+            alpha,
+            "W2 answers to the SAME doc-vm-alpha — the must-merge pole"
+        );
+        assert_eq!(
+            hostname(2),
+            Fact::Hostname {
+                name: "doc-vm-beta".into(),
+                source: HostnameSource::Dhcp,
+            },
+            "W3 answers to doc-vm-beta — the co-tenant the must-not-merge pole names"
+        );
+
+        // Four distinct virtual MACs and four distinct addresses.
+        for (n, last) in [(0, 80u8), (1, 81), (2, 82), (3, 83)] {
+            assert_eq!(
+                mac(n),
+                Fact::Mac {
+                    addr: MacAddr([2, 0, 94, 0, 83, last]),
+                    locally_administered: true,
+                },
+                "observation {n} wears its own authored virtual MAC"
+            );
+            assert_eq!(
+                ip(n),
+                Fact::IpV4 {
+                    addr: Ipv4Addr::new(192, 0, 2, last)
+                },
+                "observation {n} holds its authored address 192.0.2.{last}"
+            );
+        }
+
+        // The authored instants — W1 and W2 share one: one VM's two NICs, one sweep.
+        let instants: Vec<Timestamp> = observations.iter().map(|o| o.observed_at).collect();
+        assert_eq!(
+            instants,
+            vec![
+                ts("2026-01-04T00:00:00Z"),
+                ts("2026-01-04T00:00:00Z"),
+                ts("2026-01-04T00:05:00Z"),
+                ts("2026-01-04T00:10:00Z"),
+            ],
+            "W1 and W2 are seen in one sweep, as authored"
+        );
+
+        // AC4b — the TOML side. This is the corpus's first three-column family: both poles keep
+        // it complete, and the abstain rides along on the SAME scenario (DR1).
+        let traps = read_traps(&fixture_path("scenario/traps/shared-hardware-vm.toml").unwrap())
+            .expect("the shared-hardware-vm trap file must read");
+        assert_eq!(
+            traps.trap.len(),
+            3,
+            "the family declares exactly its three traps"
+        );
+        assert_trap_binds(
+            &traps,
+            "shared-hardware-vm-must-merge",
+            &[
+                "abababab-0000-4000-8000-000000000001",
+                "abababab-0000-4000-8000-000000000002",
+            ],
+            merge("l2-hostname-agrees"),
+        );
+        assert_trap_binds(
+            &traps,
+            "shared-hardware-vm-must-not-merge",
+            &[
+                "abababab-0000-4000-8000-000000000001",
+                "abababab-0000-4000-8000-000000000003",
+            ],
+            not_merge("l2-different-hostname"),
+        );
+        assert_trap_binds(
+            &traps,
+            "shared-hardware-vm-must-abstain",
+            &[
+                "abababab-0000-4000-8000-000000000001",
+                "abababab-0000-4000-8000-000000000004",
+            ],
+            Expectation::MustAbstain {
+                cause: AbstentionCause::NoObservedValue,
+            },
+        );
+    }
+
+    /// Story 5.2b's byte-pin over `cloned-mac.jsonl` — the INVERSE family, and the corpus's ONLY
+    /// pre-release guard against the false MERGE. D21 refuses a unique index on
+    /// `interface.mac_canon` deliberately (*"a UNIQUE would turn the exact case we must ABSTAIN
+    /// on into a 500"*), so the schema cannot be that guard; D10 calls the false merge
+    /// catastrophic and asymmetric.
+    ///
+    /// **The one MAC is pinned on each of the three lines, not pairwise.** A one-octet edit to
+    /// any line would turn the `must-not-merge` pole into a tautology any engine passes — a
+    /// pairwise pin cannot reach that, a per-line one does.
+    ///
+    /// **And the second inversion is reached from the TOML, where nothing reached it before.**
+    /// Exchanging the two poles' `observations` vectors makes the corpus DEMAND the false merge:
+    /// the echo/foxtrot pair — two real hosts, one wearing a clone of the other's MAC — becomes
+    /// `must-merge`/`l1-exact-mac`, and the two genuine `doc-host-echo` presences become
+    /// `must-not-merge`. Measured green across the whole workspace before [`assert_trap_binds`]
+    /// existed. See that helper.
+    #[test]
+    fn the_cloned_mac_stream_wears_one_mac_on_every_line() {
+        let observations = read_jsonl(&fixture_path("scenario/replay/cloned-mac.jsonl").unwrap())
+            .expect("the cloned-mac stream must read");
+        assert_eq!(observations.len(), 3, "three authored presences, exactly");
+        // Exactly 3 facts per line (the `find()` guard) — see the randomized-mac pin.
+        for (n, observation) in observations.iter().enumerate() {
+            assert_eq!(
+                observation.facts.len(),
+                3,
+                "observation {n} carries exactly its three facts"
+            );
+        }
+        assert_obs_ids(&observations, "acacacac", 3);
+
+        let fact = |n: usize, pick: fn(&Fact) -> bool| {
+            observations[n]
+                .facts
+                .iter()
+                .find(|f| pick(f))
+                .unwrap_or_else(|| panic!("observation {n} must carry the fact"))
+                .clone()
+        };
+        let mac = |n| fact(n, |f| matches!(f, Fact::Mac { .. }));
+        let ip = |n| fact(n, |f| matches!(f, Fact::IpV4 { .. }));
+        let hostname = |n| fact(n, |f| matches!(f, Fact::Hostname { .. }));
+
+        // The clone, on EVERY line — pinned by value three times, never `mac(1) == mac(0)`.
+        let cloned = Fact::Mac {
+            addr: MacAddr([2, 0, 94, 0, 83, 112]),
+            locally_administered: true,
+        };
+        for n in 0..3 {
+            assert_eq!(
+                mac(n),
+                cloned,
+                "observation {n} wears 02:00:5e:00:53:70 — the one cloned MAC, byte-identical"
+            );
+        }
+
+        // The opposing signal: K1 and K3 are one host re-seen, K2 is the impostor.
+        let echo = Fact::Hostname {
+            name: "doc-host-echo".into(),
+            source: HostnameSource::Dhcp,
+        };
+        assert_eq!(hostname(0), echo, "K1 answers to doc-host-echo");
+        assert_eq!(
+            hostname(1),
+            Fact::Hostname {
+                name: "doc-host-foxtrot".into(),
+                source: HostnameSource::Dhcp,
+            },
+            "K2 answers to doc-host-foxtrot — the hostname that OPPOSES the tempting merge"
+        );
+        assert_eq!(
+            hostname(2),
+            echo,
+            "K3 answers to the SAME doc-host-echo an hour later — the must-merge pole"
+        );
+
+        // Three distinct addresses, value-pinned.
+        for (n, last) in [(0, 112u8), (1, 113), (2, 114)] {
+            assert_eq!(
+                ip(n),
+                Fact::IpV4 {
+                    addr: Ipv4Addr::new(192, 0, 2, last)
+                },
+                "observation {n} holds its authored address 192.0.2.{last}"
+            );
+        }
+
+        // The authored instants — K1 and K2 share one: the clone answers in the same sweep.
+        let instants: Vec<Timestamp> = observations.iter().map(|o| o.observed_at).collect();
+        assert_eq!(
+            instants,
+            vec![
+                ts("2026-01-05T00:00:00Z"),
+                ts("2026-01-05T00:00:00Z"),
+                ts("2026-01-05T01:00:00Z"),
+            ],
+            "the impostor answers in K1's own sweep, as authored"
+        );
+
+        // AC4b — the TOML side, and the measured one: this is the exchange that makes the corpus
+        // demand the false merge without moving a stream byte.
+        let traps = read_traps(&fixture_path("scenario/traps/cloned-mac.toml").unwrap())
+            .expect("the cloned-mac trap file must read");
+        assert_eq!(
+            traps.trap.len(),
+            2,
+            "the family declares exactly its two poles"
+        );
+        assert_trap_binds(
+            &traps,
+            "cloned-mac-must-not-merge",
+            &[
+                "acacacac-0000-4000-8000-000000000001",
+                "acacacac-0000-4000-8000-000000000002",
+            ],
+            not_merge("l2-different-hostname"),
+        );
+        assert_trap_binds(
+            &traps,
+            "cloned-mac-must-merge",
+            &[
+                "acacacac-0000-4000-8000-000000000001",
+                "acacacac-0000-4000-8000-000000000003",
+            ],
+            merge("l1-exact-mac"),
+        );
+    }
+
+    /// Story 5.2b's byte-pin over `example-traps.jsonl` — the SIXTH committed stream named by no
+    /// value test, surfaced by this story's validation pass and closed here rather than
+    /// registered.
+    ///
+    /// It is not a family (its traps declare no `family` and are exempt from the completeness
+    /// check), but it carries exactly the shape story 4.13's register entry is about:
+    /// `example.toml`'s first reason cites `02:00:5e:00:53:10` and its second cites *"their MACs
+    /// differ in the final octet"* — claims no test asserted. That file's own header records why
+    /// this matters in its own words: *"the first version of this file claimed two observations
+    /// shared a MAC when the committed bytes said otherwise, and a reader caught it precisely
+    /// because the claim was written down."* A reader caught it once; nothing would catch it
+    /// twice.
+    ///
+    /// **Not a duplicate of `the_committed_trap_file_reads_and_cross_checks`**, which asserts that
+    /// the example exercises all three of D18's columns and more than one stream — that the FORMAT
+    /// is exercised. This one asserts the VALUES and the bindings. The two answer different
+    /// questions over one file, which is the deliberate redundancy the house rule protects, not
+    /// the accidental duplication it forbids.
+    #[test]
+    fn the_example_trap_stream_carries_the_values_its_reasons_cite() {
+        let observations =
+            read_jsonl(&fixture_path("scenario/replay/example-traps.jsonl").unwrap())
+                .expect("the example-traps stream must read");
+        assert_eq!(observations.len(), 3, "three authored presences, exactly");
+        // Exactly 2 facts per line (the `find()` guard) — see the randomized-mac pin.
+        for (n, observation) in observations.iter().enumerate() {
+            assert_eq!(
+                observation.facts.len(),
+                2,
+                "observation {n} carries exactly its two facts"
+            );
+        }
+        assert_obs_ids(&observations, "bbbbbbbb", 3);
+
+        let fact = |n: usize, pick: fn(&Fact) -> bool| {
+            observations[n]
+                .facts
+                .iter()
+                .find(|f| pick(f))
+                .unwrap_or_else(|| panic!("observation {n} must carry the fact"))
+                .clone()
+        };
+        let mac = |n| fact(n, |f| matches!(f, Fact::Mac { .. }));
+        let ip = |n| fact(n, |f| matches!(f, Fact::IpV4 { .. }));
+
+        // The MAC the first reason CITES, on both lines it judges — and the final octet the
+        // second reason claims differs.
+        let cited = Fact::Mac {
+            addr: MacAddr([2, 0, 94, 0, 83, 16]),
+            locally_administered: true,
+        };
+        assert_eq!(
+            mac(0),
+            cited,
+            "E1 wears 02:00:5e:00:53:10, the MAC the must-merge reason cites"
+        );
+        assert_eq!(
+            mac(1),
+            cited,
+            "E2 wears the byte-identical 02:00:5e:00:53:10 an hour later"
+        );
+        assert_eq!(
+            mac(2),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 17]),
+                locally_administered: true,
+            },
+            "E3 differs in the FINAL octet, exactly as the must-not-merge reason claims"
+        );
+
+        for (n, last) in [(0, 20u8), (1, 21), (2, 22)] {
+            assert_eq!(
+                ip(n),
+                Fact::IpV4 {
+                    addr: Ipv4Addr::new(192, 0, 2, last)
+                },
+                "observation {n} holds its authored address 192.0.2.{last}"
+            );
+        }
+
+        // "an hour apart" is the merge reason's own words.
+        let instants: Vec<Timestamp> = observations.iter().map(|o| o.observed_at).collect();
+        assert_eq!(
+            instants,
+            vec![
+                ts("2026-01-02T00:00:00Z"),
+                ts("2026-01-02T01:00:00Z"),
+                ts("2026-01-02T02:00:00Z"),
+            ],
+            "the sightings are an hour apart, as the merge reason states"
+        );
+
+        // AC4b — the TOML side. The third trap deliberately judges ANOTHER stream (`minimal`,
+        // whose bytes `expected()` already pins), because a trap names the stream it judges and
+        // nothing assumes there is one.
+        let traps = read_traps(&fixture_path(EXAMPLE_TRAPS).unwrap())
+            .expect("the example trap file must read");
+        assert_eq!(
+            traps.trap.len(),
+            3,
+            "the example declares exactly its three"
+        );
+        assert_trap_binds(
+            &traps,
+            "example-must-merge",
+            &[
+                "bbbbbbbb-0000-4000-8000-000000000001",
+                "bbbbbbbb-0000-4000-8000-000000000002",
+            ],
+            merge("l1-exact-mac"),
+        );
+        assert_trap_binds(
+            &traps,
+            "example-must-not-merge",
+            &[
+                "bbbbbbbb-0000-4000-8000-000000000001",
+                "bbbbbbbb-0000-4000-8000-000000000003",
+            ],
+            not_merge("l1-distinct-mac"),
+        );
+        assert_trap_binds(
+            &traps,
+            "example-must-abstain",
+            &["aaaaaaaa-0000-4000-8000-000000000002"],
+            Expectation::MustAbstain {
+                cause: AbstentionCause::NoObservedValue,
+            },
         );
     }
 
