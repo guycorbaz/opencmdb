@@ -63,10 +63,15 @@ harness, the trap runner, the reality-debt register, and the wire-format spec. T
 master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **258** on master today
 (130 + 86 + 42), **263 with story 5.2b in review** (135 + 86 + 42) — story 5.1 added the two
 corpus-wide walks, story 5.2 the trap-text scan, the `raw` scan and the scanner's six closed
-evasions, and story 5.2b five byte-pin tests over the streams that had none (the four unpinned
-families plus `example-traps.jsonl`) together with the trap→`obs_id` binding pin that closed a
-measured hole: exchanging two `observations` vectors in `cloned-mac.toml` made the corpus DEMAND
-the false merge while the whole suite stayed green. **Three** deliberate privacy-walk amendments have
+evasions, and story 5.2b five byte-pin tests over six of the eight streams that had none (the four
+unpinned families plus `example-traps.jsonl`, `dhcp-churn`'s existing pin extended) together with
+the trap→`obs_id` binding pin. That pin closed a hole measured TWICE: exchanging two `observations`
+vectors in `cloned-mac.toml`, and later in `hostname-collision.toml`, each made the corpus DEMAND a
+false merge while the whole suite stayed green. **All 24 committed traps across all ten trap files
+now have their `observations` vector, `Expectation` and `family` pinned** — the scope grew from
+five families to ten on the story's own code review, which counted 14 of 24 and measured the
+residue. ⚠️ `partial-then-failed.jsonl` and `capability-downgrade.jsonl` still have no value pin
+(registered, owner named). **Three** deliberate privacy-walk amendments have
 landed: two ADMITTING a byte shape with its family (the IANA VRRP MAC range in 4.14, the
 honestly-empty hostname in 4.17) and one REFUSING one with no family behind it (multicast MACs, 5.2
 — measured against all 39 committed MACs first, none of which has the I/G bit set, so it reddened

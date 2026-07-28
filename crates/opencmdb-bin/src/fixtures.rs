@@ -2321,11 +2321,33 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     /// The sha256 lock is not the backstop: this corpus's stated threat model is *"a DELIBERATE
     /// re-authoring, which refreshes `MANIFEST.toml` by definition"*.
     ///
-    /// ORDER is pinned, not membership: `must-merge` on `[001, 002]` and on `[002, 001]` are the
-    /// same judgement today, but a set comparison would also accept the exchanged file above
-    /// whenever two poles happen to share one endpoint. Comparing the vector costs nothing and
-    /// closes that.
-    fn assert_trap_binds(traps: &TrapFile, id: &str, observations: &[&str], expect: Expectation) {
+    /// ORDER is pinned, not membership — but **not** because a set comparison would miss the
+    /// exchange above. It would not: `cloned-mac`'s poles are `[001, 002]` and `[001, 003]`, which
+    /// differ AS SETS, so a set comparison reds on that exchange too. *(An earlier draft of this
+    /// doc claimed the opposite and its own example refuted it — corrected on this story's code
+    /// review, in the house idiom of preferring the weaker true sentence.)* The narrower true
+    /// reason: a set comparison is blind exactly when two poles judge the SAME pair in a different
+    /// order — `[001, 002]` against `[002, 001]` — which is a judgement no engine can tell apart
+    /// today, but which a later `observations`-order-sensitive rule would. Comparing the vector
+    /// costs nothing and keeps the pin honest ahead of that.
+    ///
+    /// `family` is pinned too, and that is measured: deleting BOTH `family` lines from a trap file
+    /// left the whole suite green while silently exempting the family from `incomplete_families`
+    /// (`family` is `Option`, and a family-less trap is *"exempt from the completeness check"* by
+    /// design) — after which the family could be reduced to ONE pole with the gate still green.
+    /// Deleting only ONE line already reds `trap_gate`; deleting both did not, until this.
+    ///
+    /// What is deliberately NOT pinned here: `replay` and `reason`. `replay` is reached indirectly
+    /// — each family's `obs_id` prefix is unique to its stream and
+    /// `no_obs_id_is_shared_across_replay_streams` holds that — and `reason` is prose, whose
+    /// mechanical tie to the values it cites is registered as open, not claimed here.
+    fn assert_trap_binds(
+        traps: &TrapFile,
+        id: &str,
+        observations: &[&str],
+        expect: Expectation,
+        family: Option<&str>,
+    ) {
         let trap = traps
             .trap
             .iter()
@@ -2340,6 +2362,12 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         assert_eq!(
             trap.expect, expect,
             "trap `{id}` judges under exactly this column and rule"
+        );
+        assert_eq!(
+            trap.family.as_ref().map(|f| f.0.as_str()),
+            family,
+            "trap `{id}` declares exactly its authored family — a family-less trap is EXEMPT from \
+             the completeness check, so losing the key is not a cosmetic edit"
         );
     }
 
@@ -2431,6 +2459,27 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             },
             "N1 wears the MAC 02:00:5e:00:53:78 that the must-merge reason cites"
         );
+        // N2 and N3's MACs too, added on this story's code review: the closure note claims all five
+        // families "assert their authored MACs by value", and pinning only line 0 made that
+        // sentence wider than the code. The COLLAPSE is already caught by `assert_ne!(mac(2),
+        // mac(0))` below — what these reach is a wholesale re-authoring to a DIFFERENT distinct
+        // pair, which leaves every relational assertion green.
+        assert_eq!(
+            mac(1),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 120]),
+                locally_administered: true,
+            },
+            "N2 wears N1's exact authored MAC — same box, moved lease"
+        );
+        assert_eq!(
+            mac(2),
+            Fact::Mac {
+                addr: MacAddr([2, 0, 94, 0, 83, 121]),
+                locally_administered: true,
+            },
+            "N3 wears 02:00:5e:00:53:79 — the distinct MAC the must-not-merge pole rests on"
+        );
         assert_eq!(
             hostname(0),
             Fact::Hostname {
@@ -2491,6 +2540,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "adadadad-0000-4000-8000-000000000003",
             ],
             not_merge("l1-distinct-mac"),
+            Some("dhcp-churn"),
         );
         assert_trap_binds(
             &traps,
@@ -2500,6 +2550,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "adadadad-0000-4000-8000-000000000002",
             ],
             merge("l1-exact-mac"),
+            Some("dhcp-churn"),
         );
     }
 
@@ -2659,6 +2710,48 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 ts("2026-01-08T01:00:00Z"),
             ],
             "the failover happens BETWEEN observations, as authored time"
+        );
+
+        // Story 5.2b (AC4b), extended to this family by its code review — the TOML side. Everything
+        // above pins the stream; this pins which pair each pole judges. Three poles here, and the
+        // two `must-not-merge`s name DIFFERENT rules, so an exchange between them would swap the
+        // virtual-MAC-prefix refusal for the hostname one without moving a byte.
+        let traps = read_traps(&fixture_path("scenario/traps/vrrp-virtual-mac.toml").unwrap())
+            .expect("the vrrp-virtual-mac trap file must read");
+        assert_eq!(
+            traps.trap.len(),
+            3,
+            "the family declares exactly its three traps"
+        );
+        assert_trap_binds(
+            &traps,
+            "vrrp-virtual-mac-must-not-merge-master",
+            &[
+                "aeaeaeae-0000-4000-8000-000000000001",
+                "aeaeaeae-0000-4000-8000-000000000002",
+            ],
+            not_merge("l2-virtual-mac-prefix"),
+            Some("vrrp-virtual-mac"),
+        );
+        assert_trap_binds(
+            &traps,
+            "vrrp-virtual-mac-must-not-merge-bearers",
+            &[
+                "aeaeaeae-0000-4000-8000-000000000002",
+                "aeaeaeae-0000-4000-8000-000000000003",
+            ],
+            not_merge("l2-different-hostname"),
+            Some("vrrp-virtual-mac"),
+        );
+        assert_trap_binds(
+            &traps,
+            "vrrp-virtual-mac-must-merge",
+            &[
+                "aeaeaeae-0000-4000-8000-000000000001",
+                "aeaeaeae-0000-4000-8000-000000000004",
+            ],
+            merge("l1-exact-mac"),
+            Some("vrrp-virtual-mac"),
         );
     }
 
@@ -2978,6 +3071,39 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             ],
             "the collision and the re-sighting happen at the authored instants"
         );
+
+        // Story 5.2b (AC4b), extended to this family by its code review — and this is the family
+        // the review MEASURED. Exchanging the two `observations` vectors here left the whole
+        // workspace suite green (135 + 86 + 42) while the corpus DEMANDED `must-merge`/`l1-exact-mac`
+        // on two DIFFERENT MACs — two physically distinct boxes that merely share a hostname. That
+        // is D10's catastrophic direction, and it was reachable from the `.toml` alone.
+        let traps = read_traps(&fixture_path("scenario/traps/hostname-collision.toml").unwrap())
+            .expect("the hostname-collision trap file must read");
+        assert_eq!(
+            traps.trap.len(),
+            2,
+            "the family declares exactly its two poles"
+        );
+        assert_trap_binds(
+            &traps,
+            "hostname-collision-must-not-merge",
+            &[
+                "afafafaf-0000-4000-8000-000000000001",
+                "afafafaf-0000-4000-8000-000000000002",
+            ],
+            not_merge("l1-distinct-mac"),
+            Some("hostname-collision"),
+        );
+        assert_trap_binds(
+            &traps,
+            "hostname-collision-must-merge",
+            &[
+                "afafafaf-0000-4000-8000-000000000001",
+                "afafafaf-0000-4000-8000-000000000003",
+            ],
+            merge("l1-exact-mac"),
+            Some("hostname-collision"),
+        );
     }
 
     /// Story 4.14's flag-vs-bytes guard, red-proven in memory: a locally-administered byte
@@ -3156,6 +3282,37 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 ts("2026-01-10T01:05:00Z"),
             ],
             "the succession happens at the authored instants"
+        );
+
+        // Story 5.2b (AC4b), extended to this family by its code review — the TOML side. This
+        // family's two poles do NOT share an endpoint (`[001,002]` vs `[002,004]`), which is why
+        // the ORDER pin matters less here than the vector pin: an exchange moves both endpoints.
+        let traps = read_traps(&fixture_path("scenario/traps/docker-veth.toml").unwrap())
+            .expect("the docker-veth trap file must read");
+        assert_eq!(
+            traps.trap.len(),
+            2,
+            "the family declares exactly its two poles"
+        );
+        assert_trap_binds(
+            &traps,
+            "docker-veth-must-merge",
+            &[
+                "babababa-0000-4000-8000-000000000001",
+                "babababa-0000-4000-8000-000000000002",
+            ],
+            merge("l2-uplink-agrees"),
+            Some("docker-veth"),
+        );
+        assert_trap_binds(
+            &traps,
+            "docker-veth-must-not-merge",
+            &[
+                "babababa-0000-4000-8000-000000000002",
+                "babababa-0000-4000-8000-000000000004",
+            ],
+            not_merge("l1-distinct-mac"),
+            Some("docker-veth"),
         );
     }
 
@@ -3347,6 +3504,50 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             ],
             "the absences happen at the authored instants"
         );
+
+        // Story 5.2b (AC4b), extended to this family by its code review — the TOML side. Three
+        // DISJOINT pairs here (G1/G2, G3/G4, G5/G6), one per column, so an exchange between any two
+        // poles re-points a whole pair at the wrong equivalence: the false-agreement pair judged as
+        // an abstention, or the honestly-silent pair judged as a refusal.
+        let traps = read_traps(&fixture_path("scenario/traps/hostname-absence.toml").unwrap())
+            .expect("the hostname-absence trap file must read");
+        assert_eq!(
+            traps.trap.len(),
+            3,
+            "the family declares exactly its three traps"
+        );
+        assert_trap_binds(
+            &traps,
+            "hostname-absence-must-not-merge",
+            &[
+                "bcbcbcbc-0000-4000-8000-000000000001",
+                "bcbcbcbc-0000-4000-8000-000000000002",
+            ],
+            not_merge("l1-distinct-mac"),
+            Some("hostname-absence"),
+        );
+        assert_trap_binds(
+            &traps,
+            "hostname-absence-must-abstain",
+            &[
+                "bcbcbcbc-0000-4000-8000-000000000003",
+                "bcbcbcbc-0000-4000-8000-000000000004",
+            ],
+            Expectation::MustAbstain {
+                cause: AbstentionCause::NoObservedValue,
+            },
+            Some("hostname-absence"),
+        );
+        assert_trap_binds(
+            &traps,
+            "hostname-absence-must-merge",
+            &[
+                "bcbcbcbc-0000-4000-8000-000000000005",
+                "bcbcbcbc-0000-4000-8000-000000000006",
+            ],
+            merge("l1-exact-mac"),
+            Some("hostname-absence"),
+        );
     }
 
     /// Story 5.2b's byte-pin over `randomized-mac.jsonl` — the family whose entire
@@ -3394,19 +3595,21 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         let mac = |n| fact(n, |f| matches!(f, Fact::Mac { .. }));
         let ip = |n| fact(n, |f| matches!(f, Fact::IpV4 { .. }));
 
-        // The one octet, pinned on EACH of the three lines — not pairwise.
-        let re_randomized = Fact::Mac {
+        // The one octet, pinned on EACH of the three lines — not pairwise. The shared constant is
+        // the MAC N1 and N2 wear BEFORE the re-randomization; N3 is the re-randomized one, which
+        // is why it is named for what it holds rather than for the event.
+        let before_re_randomization = Fact::Mac {
             addr: MacAddr([2, 0, 94, 0, 83, 32]),
             locally_administered: true,
         };
         assert_eq!(
             mac(0),
-            re_randomized,
+            before_re_randomization,
             "N1 wears 02:00:5e:00:53:20, the MAC the must-merge reason cites"
         );
         assert_eq!(
             mac(1),
-            re_randomized,
+            before_re_randomization,
             "N2 wears the byte-identical 02:00:5e:00:53:20 an hour later"
         );
         assert_eq!(
@@ -3458,6 +3661,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "eeeeeeee-0000-4000-8000-000000000003",
             ],
             not_merge("l1-distinct-mac"),
+            Some("randomized-mac"),
         );
         assert_trap_binds(
             &traps,
@@ -3467,6 +3671,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "eeeeeeee-0000-4000-8000-000000000002",
             ],
             merge("l1-exact-mac"),
+            Some("randomized-mac"),
         );
     }
 
@@ -3588,6 +3793,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "ffffffff-0000-4000-8000-000000000002",
             ],
             merge("l2-uplink-agrees"),
+            Some("multi-nic"),
         );
         assert_trap_binds(
             &traps,
@@ -3597,6 +3803,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "ffffffff-0000-4000-8000-000000000003",
             ],
             not_merge("l2-different-switch"),
+            Some("multi-nic"),
         );
     }
 
@@ -3698,7 +3905,11 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             "W3 answers to doc-vm-beta — the co-tenant the must-not-merge pole names"
         );
 
-        // Four distinct virtual MACs and four distinct addresses.
+        // Four distinct virtual MACs and four distinct addresses. TWO loops, not one: the MAC's
+        // final octet (0x50..0x53 = 80..83) and the address's (.80..83) coincide here only by
+        // accident of authoring — every other family in this module has them differ. Driving both
+        // from one variable would encode a relationship the corpus does not promise, and these
+        // pins are a second oracle over the bytes, not a restatement of one number.
         for (n, last) in [(0, 80u8), (1, 81), (2, 82), (3, 83)] {
             assert_eq!(
                 mac(n),
@@ -3708,6 +3919,8 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 },
                 "observation {n} wears its own authored virtual MAC"
             );
+        }
+        for (n, last) in [(0, 80u8), (1, 81), (2, 82), (3, 83)] {
             assert_eq!(
                 ip(n),
                 Fact::IpV4 {
@@ -3747,6 +3960,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "abababab-0000-4000-8000-000000000002",
             ],
             merge("l2-hostname-agrees"),
+            Some("shared-hardware-vm"),
         );
         assert_trap_binds(
             &traps,
@@ -3756,6 +3970,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "abababab-0000-4000-8000-000000000003",
             ],
             not_merge("l2-different-hostname"),
+            Some("shared-hardware-vm"),
         );
         assert_trap_binds(
             &traps,
@@ -3767,6 +3982,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             Expectation::MustAbstain {
                 cause: AbstentionCause::NoObservedValue,
             },
+            Some("shared-hardware-vm"),
         );
     }
 
@@ -3886,6 +4102,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "acacacac-0000-4000-8000-000000000002",
             ],
             not_merge("l2-different-hostname"),
+            Some("cloned-mac"),
         );
         assert_trap_binds(
             &traps,
@@ -3895,6 +4112,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "acacacac-0000-4000-8000-000000000003",
             ],
             merge("l1-exact-mac"),
+            Some("cloned-mac"),
         );
     }
 
@@ -4008,6 +4226,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "bbbbbbbb-0000-4000-8000-000000000002",
             ],
             merge("l1-exact-mac"),
+            None,
         );
         assert_trap_binds(
             &traps,
@@ -4017,6 +4236,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 "bbbbbbbb-0000-4000-8000-000000000003",
             ],
             not_merge("l1-distinct-mac"),
+            None,
         );
         assert_trap_binds(
             &traps,
@@ -4025,6 +4245,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             Expectation::MustAbstain {
                 cause: AbstentionCause::NoObservedValue,
             },
+            None,
         );
     }
 

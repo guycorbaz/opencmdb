@@ -366,6 +366,90 @@ to fit whatever the corpus happens to say.
         This is the next workflow's business, and `done` is the merge's. Left unchecked rather than
         marked complete.)*
 
+### Review Findings (code review, 2026-07-28)
+
+Three parallel layers (Blind Hunter — diff only; Edge Case Hunter — diff + project; Acceptance
+Auditor — diff + spec + context). **All three converged on the same two HIGH findings, and two of
+them MEASURED the first one independently.** Every finding below was re-verified against the
+committed files before being written here.
+
+- [x] **[Review][Decision] RESOLVED — Guy chose to BIND the four families (close the class, not the instance).**
+      ~~ The measured `.toml` inversion AC4b exists to close is still OPEN on four
+      families — 10 of the corpus's 24 committed traps are bound by nothing.** `assert_trap_binds`
+      is called from six trap files (14 traps); `docker-veth.toml` (2), `hostname-absence.toml` (3),
+      `hostname-collision.toml` (2) and `vrrp-virtual-mac.toml` (3) are read by no test.
+      **Measured by two reviewers independently:** exchanging the two `observations` vectors in
+      `hostname-collision.toml` — the same three-character edit this story measured on
+      `cloned-mac.toml` — leaves `cargo test --workspace` at **135 + 86 + 42, zero failures**, while
+      the corpus DEMANDS `must-merge`/`l1-exact-mac` on two *different* MACs. That is D10's
+      catastrophic direction, still open. AC7 says anything surfaced and not fixed goes under
+      `## Deferred from: story-5.2b` with a named owner; the section as written registers only the
+      `reason`-prose item. **Choice: bind the remaining four families now (grows scope beyond
+      AC4b's five) or register with a named owner.**
+
+- [x] [Review][Patch] **"All ELEVEN committed traps are bound" is false and self-contradictory** —
+      its own enumeration reads 9 + 2 + 3 = **14**, and the corpus holds **24**. The claim appears in
+      four files [`5-2b-four-families-byte-pins.md` Completion Note 4 + Change Log;
+      `deferred-work.md` story-5.1 closure; `sprint-status.yaml`]
+- [x] [Review][Patch] **`assert_trap_binds`'s doc gives a FALSE reason for pinning order.** It says a
+      set comparison "would also accept the exchanged file above whenever two poles happen to share
+      one endpoint" — but `cloned-mac`'s poles are `[001,002]` and `[001,003]`, which differ AS SETS,
+      so a set comparison reds. The true condition is narrower: set comparison is blind only when the
+      two poles judge the SAME pair in a different order [`crates/opencmdb-bin/src/fixtures.rs`,
+      `assert_trap_binds` doc]
+- [x] [Review][Patch] **`assert_trap_binds` does not pin `family`** — measured: deleting BOTH
+      `family = "cloned-mac"` lines leaves the suite green while silently exempting the family from
+      `incomplete_families`, so it could later be reduced to one pole with the gate still green
+      [`crates/opencmdb-bin/src/fixtures.rs`, `assert_trap_binds`]
+- [x] [Review][Patch] **"all six committed streams that had none" is false.** There are 13 streams
+      under `scenario/replay/`; eight had no value pin, and `partial-then-failed.jsonl` and
+      `capability-downgrade.jsonl` still have none [`deferred-work.md`; `docs/project-context.md`]
+- [x] [Review][Patch] **`dhcp-churn`'s D2/D3 MACs are still not value-pinned** while the closure note
+      claims all five families "assert their authored MACs … by value". The collapse IS caught by the
+      pre-existing `assert_ne!(mac(2), mac(0))`, so this is an over-claim, not an open hole — but a
+      wholesale re-authoring to a different distinct pair stays green [`fixtures.rs`, dhcp-churn pin]
+- [x] [Review][Patch] **The mutation tally disagrees across three files** — the register says "Six
+      mutations recorded", the story says "seven (AC6 asked for six)", and AC6 actually enumerates
+      seven while its preamble says "five, at minimum" [`deferred-work.md`; story Debug Log;
+      `sprint-status.yaml`]
+- [x] [Review][Patch] **The narrow claim's enumeration is incomplete** — two further entries carry the
+      same owner (`code review of story-4.12`, `code review of story-4.15`), both closed by 5.1. The
+      universal claim is still TRUE; the list after the colon is not complete [`deferred-work.md`]
+- [x] [Review][Patch] **`re_randomized` names the MAC that has NOT been re-randomized** — N1/N2 carry
+      the pre-randomization MAC; N3 is the re-randomized one [`fixtures.rs`, randomized-mac pin]
+- [x] [Review][Patch] **`shared-hardware-vm` pins a MAC octet and an IPv4 octet from ONE loop
+      variable** — they coincide by accident of authoring (80..83 both ways). Every other new test
+      uses two loops because they do not coincide. A single number standing for two independent
+      authored facts is the wrong shape for a second independent oracle [`fixtures.rs`]
+- [x] [Review][Patch] **`sprint-status.yaml` labels `multi-nic`'s shared instant "W1/W2"** — `W` is
+      `shared-hardware-vm`'s prefix; multi-nic's lines are M1/M2 everywhere else
+
+- [x] [Review][Defer] **The `fact()` closure's panic names the line but never the fact KIND**
+      [`fixtures.rs`, all byte-pin tests] — deferred, pre-existing: this is the house idiom copied
+      from the dhcp-churn and VRRP pins, shared by five older tests. Fixing it in this story alone
+      would leave the idiom split.
+- [x] [Review][Defer] **`N1/N2/N3` labels two different streams** (`randomized-mac` and, in the
+      pre-existing dhcp-churn pin, `dhcp-churn` — whose Dev Notes call them D1/D2/D3)
+      [`fixtures.rs`] — deferred, pre-existing: the dhcp-churn test already used N1/N2/N3 before this
+      story; the new assertions followed its convention rather than inventing a second one inside one
+      test.
+- [x] [Review][Defer] **`raw` is pinned by nothing on the five newly-pinned streams**
+      [`fixtures.rs`] — deferred, pre-existing class: only `expected()` restates `raw`, and only for
+      `minimal.jsonl`. Story 5.2's `raw` scan reddens on address-shaped payloads but not on arbitrary
+      text.
+- [x] [Review][Defer] **Each test's trap-binding block is terminal**, so a combined stream+TOML
+      re-authoring panics on the byte and never names the inversion [`fixtures.rs`] — deferred:
+      inherent to Task 5b's explicit "fold it in" choice, and the alternative (a separate test)
+      re-opens the gap where "the family" means two sets.
+- [x] [Review][Defer] **`the_dhcp_churn_stream_moves_the_address_only_through_observed_at` no longer
+      describes all it does** (it now also pins three authored values and the trap bindings)
+      [`fixtures.rs`] — deferred: renaming a test the register cites by name in two closed bullets
+      costs more than it returns.
+
+**Dismissed as noise (1):** the Blind Hunter's claim that collapsing `dhcp-churn` D3's MAC onto D1's
+would red nothing — **false**, the pre-existing `assert_ne!(mac(2), mac(0))` catches exactly that.
+The weaker true residue was kept as a patch item above rather than dropped with it.
+
 ## Dev Notes
 
 ### What was measured, before the story was written
@@ -583,7 +667,12 @@ added). `fixtures.rs`: 3450 → 4253 total lines, first `#[cfg(test)]` still at 
 story predicted. The `file-size` gate's largest file is 884 (a different file); fixtures.rs is not
 the offender and did not move.
 
-**The seven recorded mutations (AC6 asked for six).** Each was the SOLE failure, each named the
+**Nine recorded mutations across eight artefacts — seven in the story, two more on its code
+review.** *(This heading read "seven (AC6 asked for six)" until the review counted it: AC6
+enumerates SEVEN mutations while its preamble says "five, at minimum" and the House-rules section
+says "five mutations, six observations", so no single figure in the story matched. Six of the nine
+are aimed at a stream no other value test reads; three are aimed at a trap `.toml`.)* Each was the
+SOLE failure, each named the
 offending line, and after each: `git checkout <artefact>` then `git status --porcelain fixtures/`
 verified EMPTY before the next one. `cargo xtask ci` was never run with a mutation in place.
 
@@ -596,6 +685,8 @@ verified EMPTY before the next one. `cargo xtask ci` was never run with a mutati
 | 5 | `cloned-mac.jsonl` K2 MAC last octet `112` → `113` | RED, sole — *"observation 1 wears 02:00:5e:00:53:70 — the one cloned MAC, byte-identical"* |
 | 6 | **`cloned-mac.toml`: the two poles' `observations` vectors EXCHANGED** (no stream byte touched) | RED, sole — *"trap `cloned-mac-must-not-merge` judges exactly these observations, in this order"*. **This is the AC4b hole; before this story it left the whole suite green while the corpus DEMANDED the false merge.** |
 | 7 | `example-traps.jsonl` E3 final octet `17` → `16` | RED, sole — *"E3 differs in the FINAL octet, exactly as the must-not-merge reason claims"* |
+| 8 | **CODE REVIEW** — `hostname-collision.toml`: the two poles' `observations` vectors EXCHANGED | RED, sole — *"trap `hostname-collision-must-not-merge` judges exactly these observations, in this order"*. **Two review layers measured this GREEN before the fix**, with the corpus demanding `must-merge`/`l1-exact-mac` on two DIFFERENT MACs |
+| 9 | **CODE REVIEW** — BOTH `family = "cloned-mac"` lines deleted from `cloned-mac.toml` | RED, sole — *"trap `cloned-mac-must-not-merge` declares exactly its authored family — a family-less trap is EXEMPT from the completeness check"*, `left: None`. Measured GREEN before the fix; note `trap_gate` already reddens if only ONE line is deleted, which is why deleting both was the blind spot |
 
 **The dhcp-churn TWO-SIDED observation (AC5/AC6), the justification for closing 4.13.** With
 `doc-host-hotel` → `doc-host-india` in the committed stream:
@@ -637,9 +728,16 @@ not mechanically tied to the values it cites.* That last clause is registered, n
 4. **AC4b — `assert_trap_binds`.** Pins, per trap id, the exact `observations` vector *in order*
    and the whole `Expectation` (which covers column, rule, and the abstain pole's cause in one
    comparison). Each call site also pins the file's trap COUNT first, so an added trap cannot slip
-   past — length first, values second, the vacuity lesson from 5.1. All **eleven** committed traps
-   are bound: 9 from the story's table + `dhcp-churn`'s 2, plus `example.toml`'s 3.
-   Order is pinned rather than membership, and the doc comment says why.
+   past — length first, values second, the vacuity lesson from 5.1. Order is pinned rather than
+   membership, and `family` is pinned too.
+   **Scope, as it stands after the code review: ALL 24 committed traps across all ten trap files.**
+   The story itself shipped 14 — the five families' 11 plus `example.toml`'s 3 — while four
+   documents claimed *"all eleven committed traps"*, a figure that contradicted its own enumeration
+   (9 + 2 + 3 = 14) and the corpus total (24). Two review layers independently MEASURED the
+   residue on `hostname-collision.toml`; Guy's call was to close the class. `docker-veth`,
+   `hostname-absence`, `hostname-collision` and `vrrp-virtual-mac` are now bound too, folded into
+   their existing byte-pins — so the test COUNT did not move, and what speaks for them is the two
+   recorded reds, not the count.
 5. **AC7's open question was DECIDED, and the branch taken is the pin.** `example-traps.jsonl` —
    surfaced by validation as a SIXTH unpinned stream — is now pinned by
    `the_example_trap_stream_carries_the_values_its_reasons_cite` rather than registered with an
@@ -697,6 +795,6 @@ carries the correction that supersedes it.
 
 | Date | Change |
 |---|---|
-| 2026-07-28 | **Implemented — status `review`.** 258 → 263 tests (135 + 86 + 42); all four local gates green; **no byte moved under `fixtures/`**, verified empty before the gate ran. Five new byte-pin tests (`randomized-mac`, `multi-nic`, `shared-hardware-vm`, `cloned-mac`, `example-traps`) plus the `dhcp-churn` pin EXTENDED with its three cited values. `fixtures.rs` code-line count **unchanged at 728** — every line landed after the first `#[cfg(test)]`. **AC4b's `assert_trap_binds` binds all ELEVEN committed traps** (per trap id: the exact `observations` vector in order + the whole `Expectation`, with the file's trap count pinned first so an added trap cannot slip past). **Seven mutations recorded, AC6 asked for six** — each the SOLE red, each naming its line, `git checkout` + clean `git status fixtures/` between every one. The measured AC4b hole is closed: exchanging the two `observations` vectors in `cloned-mac.toml` now reds, where before it left the whole suite green while the corpus DEMANDED the false merge. The dhcp-churn observation is two-sided as required — the PRE-STORY tree reported **130 + 86 + 42 zero failures** under a renamed `doc-host-hotel` (the relational `assert_ne!` never noticed) while the extended test reds naming N3. **AC7's open question was DECIDED: `example-traps.jsonl` was PINNED, not registered.** One test-internal ordering change was necessary and is reasoned in the code — W4's absence assertion moved ahead of the shared-uplink loop, because that loop's `find()` panics on a line whose `Uplink` was replaced, so with it first AC6's mutation would have red the wrong guard. Register: both story-4.13 bullets and the story-5.1 four-families bullet closed by append-and-strike, with the counted `reason` distribution carried INTO the closure note (the false sentence was in the register, not only in `epics.md:1391`); new `## Deferred from: story-5.2b` opens ONE item (a trap's `reason` prose is still not mechanically tied to the values it cites). **The narrow claim's first draft was falsified by this story's own commit** — it said every entry owned by *"whoever hardens corpus byte-fidelity"* is closed while the same edit opened a new one with that owner; corrected before commit by scoping it to entries owned WHEN THIS STORY OPENED and naming both items that stay open. `architecture-views.md` NOT regenerated. |
+| 2026-07-28 | **Implemented — status `review`.** 258 → 263 tests (135 + 86 + 42); all four local gates green; **no byte moved under `fixtures/`**, verified empty before the gate ran. Five new byte-pin tests (`randomized-mac`, `multi-nic`, `shared-hardware-vm`, `cloned-mac`, `example-traps`) plus the `dhcp-churn` pin EXTENDED with its three cited values. `fixtures.rs` code-line count **unchanged at 728** — every line landed after the first `#[cfg(test)]`. **AC4b's `assert_trap_binds` binds all 24 committed traps** (14 in the story, the rest on its code review) (per trap id: the exact `observations` vector in order + the whole `Expectation`, with the file's trap count pinned first so an added trap cannot slip past). **Seven mutations recorded, AC6 asked for six** — each the SOLE red, each naming its line, `git checkout` + clean `git status fixtures/` between every one. The measured AC4b hole is closed: exchanging the two `observations` vectors in `cloned-mac.toml` now reds, where before it left the whole suite green while the corpus DEMANDED the false merge. The dhcp-churn observation is two-sided as required — the PRE-STORY tree reported **130 + 86 + 42 zero failures** under a renamed `doc-host-hotel` (the relational `assert_ne!` never noticed) while the extended test reds naming N3. **AC7's open question was DECIDED: `example-traps.jsonl` was PINNED, not registered.** One test-internal ordering change was necessary and is reasoned in the code — W4's absence assertion moved ahead of the shared-uplink loop, because that loop's `find()` panics on a line whose `Uplink` was replaced, so with it first AC6's mutation would have red the wrong guard. Register: both story-4.13 bullets and the story-5.1 four-families bullet closed by append-and-strike, with the counted `reason` distribution carried INTO the closure note (the false sentence was in the register, not only in `epics.md:1391`); new `## Deferred from: story-5.2b` opens ONE item (a trap's `reason` prose is still not mechanically tied to the values it cites). **The narrow claim's first draft was falsified by this story's own commit** — it said every entry owned by *"whoever hardens corpus byte-fidelity"* is closed while the same edit opened a new one with that owner; corrected before commit by scoping it to entries owned WHEN THIS STORY OPENED and naming both items that stay open. `architecture-views.md` NOT regenerated. |
 | 2026-07-28 | **Validated by two fresh-context agents** (fact-check + gap-hunt), per the Epic 4 retrospective. **3 HIGH, 6 MED, 3 LOW — all applied.** The load-bearing one **added AC4b** and it is measured, not argued: every pin the story asked for lives on the `.jsonl`, but the inversion is available entirely from the `.toml`. Exchanging the two `observations` vectors in `cloned-mac.toml` — three characters, no stream byte touched — makes the corpus DEMAND the false merge (echo+foxtrot under `must-merge`/`l1-exact-mac`), and `cargo test --workspace` was run in that state and reported **130 + 86 + 42, zero failures**. AC4 had claimed `assert_obs_ids` closed that hole; it closes only the stream-side half. *(Reproduced independently by the reviewer before the AC was written; file restored, md5 verified, `git status fixtures/` empty.)* Second HIGH: the story's closing promise — inherited from `epics.md:1397` — is **stale**, because 5.1's own review registered `unifi-clients.expected.jsonl` as having no round-trip pin one day after the epic was written; and validation surfaced a SIXTH unpinned stream, `example-traps.jsonl`, whose `example.toml:26` reason cites `02:00:5e:00:53:10` — verbatim the 4.13 shape. Both are now named, with the narrow claim the story may make. Third HIGH: AC3 had offered a choice between the exact fact-count vector and `>= 3`; the second branch is **measured vacuous** (a second contradicting `Uplink` on W4 reds nothing under it) and was withdrawn. Also applied: the story-4.13 register section has TWO bullets and closing one leaves a "STILL OPEN" bullet standing; the false `reason`-distribution sentence is in the register too, not only in the epic; the W4 mutation must REPLACE not ADD (adding reds the count loop first) and needs a `doc-` prefix and the exact `HostnameSource` spelling or it reds two tests; `cargo xtask ci` DOES consult `MANIFEST.toml` and must never be run mid-mutation; every MAC is now given in decimal bytes with the `:40` = `64` trap named; and STOP now has a procedure. Three line ranges corrected. |
 | 2026-07-28 | Story contexted. All five streams read verbatim off the committed corpus at `95d4d69` and tabulated, together with the `obs_id`s each of the nine traps judges. **Three traps measured for the dev:** `shared-hardware-vm`'s fact count is NOT uniform (4, 4, 4, 3 — W4 is the abstain pole and has no `Hostname`), instants are NOT strictly increasing in three of the four families (multi-nic, shared-hardware-vm and cloned-mac each have a shared instant, because two NICs seen in one sweep should share one), and dhcp-churn's byte-pin asserts strict increase only because that family's churn lives in time alone. **One correction to the epic:** epics.md:1391 says "both `reason` strings cite" all three dhcp-churn values; counted, the MAC appears in one reason, `doc-host-hotel` in one, `doc-host-golf` in both — the union cites all three, neither reason does. Conclusion unchanged. |

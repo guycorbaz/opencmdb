@@ -286,7 +286,7 @@ development_status:
   #   · `shared-hardware-vm`'s fact count is NOT uniform — 4, 4, 4, 3. W4 is the must-abstain pole
   #     and carries no Hostname, so the dhcp-churn idiom's per-line `assert_eq!(facts.len(), N)`
   #     REDS on it and reads as a corpus defect. It is the premise, not a defect;
-  #   · instants are NOT strictly increasing in three of the four families (multi-nic W1/W2,
+  #   · instants are NOT strictly increasing in three of the four families (multi-nic M1/M2,
   #     shared-hardware-vm W1/W2, cloned-mac K1/K2 each share one) — two NICs seen in one sweep
   #     SHOULD share an instant. dhcp-churn asserts strict increase only because its churn lives in
   #     time alone; copying that line reds;
@@ -332,15 +332,15 @@ development_status:
   #   · the four unpinned families each got a test in the dhcp-churn idiom (length → exact per-line
   #     fact count → assert_obs_ids → authored values → instants vector). Three of them pin an
   #     instants vector that is NOT strictly increasing, as measured;
-  #   · AC4b's `assert_trap_binds` pins, per trap id, the exact `observations` vector IN ORDER and
-  #     the whole `Expectation` — all ELEVEN committed traps across the five families and the
-  #     example file. The measured inversion (exchange the two vectors in cloned-mac.toml, no
-  #     stream byte touched) now REDS; before this it left the whole suite green while the corpus
-  #     DEMANDED the false merge;
+  #   · AC4b's `assert_trap_binds` pins, per trap id, the exact `observations` vector IN ORDER, the
+  #     whole `Expectation`, and the declared `family` — ALL 24 committed traps across all TEN trap
+  #     files. The measured inversion (exchange the two vectors in cloned-mac.toml, no stream byte
+  #     touched) now REDS; before this it left the whole suite green while the corpus DEMANDED the
+  #     false merge;
   #   · AC7's open question was DECIDED: `example-traps.jsonl` was PINNED as a sixth test rather
   #     than registered — closing the theme while leaving a known instance open would have made the
   #     closure claim narrower than it read.
-  # SEVEN mutations recorded, each the SOLE red and each naming its line (AC6 asked for six).
+  # NINE mutations recorded across eight artefacts, each the SOLE red and each naming its line.
   # The dhcp-churn one is two-sided and is the justification for closing 4.13: with doc-host-hotel
   # renamed, the PRE-STORY tree reported 130+86+42 zero failures (the relational assert_ne! never
   # noticed) while the extended test reds. One test-internal ORDERING change was needed: W4's
@@ -354,7 +354,32 @@ development_status:
   # narrow true claim was verified by RE-READING the register after the last edit: it names both
   # things that stay open (unifi-clients.expected.jsonl, owner Epic 11 / issue #34, and the new
   # item this story itself opened), so the claim is not falsified by its own commit.
-  # ⚠️ NEXT: `code-review` 5.2b — preferably on a DIFFERENT model than the one that implemented it.
+  # CODE REVIEW HELD 2026-07-28 — three parallel layers, 1 decision + 10 patches + 5 defers + 1
+  # dismissed. All three layers CONVERGED on the same two HIGH findings and two of them MEASURED
+  # the first one independently:
+  #   · the trap-binding pin covered 14 of the corpus's 24 traps, while FOUR documents claimed
+  #     "all ELEVEN committed traps" — a figure contradicting its own enumeration (9+2+3=14) and
+  #     the corpus total. Exchanging the two `observations` vectors in hostname-collision.toml left
+  #     the suite at 135+86+42 ZERO failures while the corpus DEMANDED must-merge/l1-exact-mac on
+  #     two DIFFERENT MACs. **Guy's call: close the CLASS, not the instance** — docker-veth,
+  #     hostname-absence, hostname-collision and vrrp-virtual-mac are now bound too, folded into
+  #     their existing byte-pins. ALL 24 traps bound; the hostname-collision exchange REDS, proven;
+  #   · `assert_trap_binds` did not pin `family`. Measured: deleting BOTH family keys from
+  #     cloned-mac.toml left the suite green while silently exempting the family from
+  #     incomplete_families (deleting ONE already reddened trap_gate; both did not). Now pinned
+  #     and proven red.
+  # Also fixed: the helper's doc gave a FALSE reason for pinning order (a set comparison DOES catch
+  # the cloned-mac exchange — its poles differ as sets); dhcp-churn's D2/D3 MACs were not
+  # value-pinned while the closure claimed they were; "all six committed streams that had none" was
+  # false (13 streams, 8 had none, 2 still do — now registered); the narrow claim's enumeration
+  # omitted two entries whose owner phrase wraps across a line break; the mutation tally disagreed
+  # across three files (counted: NINE across eight artefacts); `re_randomized` named the MAC that
+  # has NOT been re-randomized; shared-hardware-vm drove a MAC octet and an IP octet from one loop
+  # variable. FIVE items deferred under `## Deferred from: code review of story-5.2b`.
+  # Test COUNT is unchanged at 263 (135+86+42) — the four new bindings were FOLDED INTO the four
+  # existing family byte-pins rather than added as tests, so the count says nothing about them;
+  # what says something is the two recorded reds. ⚠️ NEXT: push → PR → green CI → squash merge.
+  # `done` is the MERGE's business, not the review's.
   5-2b-four-families-byte-pins: review
   5-3-engine-abstention-cause: backlog
   5-4-decision-and-ruleset-version: backlog
