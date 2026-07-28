@@ -464,7 +464,7 @@ than absorbed. The procedure is in Dev Notes.
   - [x] No manual, README or gh-pages change is expected: this story ships nothing a user can see.
         If that turns out to be wrong, the doc moves in the same push.
 
-- [ ] **Task 10 — Branch → PR → green CI → squash merge** (AC7). Never straight to `master`
+- [x] **Task 10 — Branch → PR → green CI → squash merge** (AC7). Never straight to `master`
       (`enforce_admins` is false; honouring it is on the author). `review`, not `done`, at the end of
       dev-story — **`done` is the MERGE's business** in this project's flow, confirmed by 5.1, 5.2 and
       5.2b. The `code-review` workflow's own default (setting `done` at the end of the review) is
@@ -852,6 +852,11 @@ relate to issue #38** — that would be a cause without a check, which this proj
 recorded because they make a bare `git status` misread as a dirty tree.
 
 **Nothing under `fixtures/` moved**, so the STOP procedure was never entered and no issue was opened.
+
+**Task 10, honestly:** branch `story-5.3-engine-abstention-cause` → **PR #48** → **CI green in
+1m00s** (run 30389174367). The squash merge is NOT done and is not dev-story's to do: this project's
+flow puts `code-review` between here and the merge, and `done` is the MERGE's business — established
+by 5.1 and confirmed by 5.2 and 5.2b. Status is `review`.
 
 ### File List
 

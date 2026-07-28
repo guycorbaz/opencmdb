@@ -458,7 +458,8 @@ development_status:
   # `NoMatch` bullets are annotated ↺ PARTLY closed, NOT struck: the vocabulary exists, the mapping
   # has no producer until 5.4/5.5. A new `## Deferred from: story-5.3` section appended at the END
   # (the file is chronological) opens FIVE items, each with a named owner.
-  # ⚠️ NEXT: code-review → push → PR → green CI → squash merge. `done` is the MERGE's business.
+  # PUSHED 2026-07-28: PR #48, CI GREEN in 1m00s (run 30389174367). NOT merged — `done` is the
+  # MERGE's business and `code-review` comes first. ⚠️ NEXT: code-review 5.3 → squash merge.
   5-3-engine-abstention-cause: review
   5-4-decision-and-ruleset-version: backlog
   5-5-l1-join-pure: backlog
