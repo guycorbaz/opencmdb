@@ -1,6 +1,6 @@
 # Story 5.2: The privacy floor reaches the bytes it always claimed to cover
 
-Status: review
+Status: done
 
 <!-- Validation is MANDATORY here (Guy's decision, Epic 4 retrospective 2026-07-26): two
      fresh-context agents (fact-check + gap-hunt) before dev-story. The template banner saying
