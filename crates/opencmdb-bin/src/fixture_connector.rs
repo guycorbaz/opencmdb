@@ -1604,11 +1604,19 @@ mod tests {
                 panic!("{relative}: inadmissible to the connector with its declared context: {e}")
             });
 
+            // `walked` is what the orphan-entry loop below reads, so the insert is load-bearing.
+            // Its assertion is NOT: a stack walk that panics on symlinks cannot yield one path
+            // twice, so this can never be observed red and is defence-in-depth by admission
+            // (story 5.1's review — the house rule is that a guard ships with a mutation, and one
+            // that cannot have a mutation says so instead of implying it had one).
             assert!(walked.insert(relative.clone()), "{relative}: walked twice");
         });
 
-        assert!(checked > 0, "no replay stream found under scenario/replay/");
-        // The orphan direction: an entry naming a file the walk never saw.
+        // Non-emptiness is asserted inside `walk_replay_streams` itself since story 5.1's review —
+        // it used to be five verbatim copies whose shared message never said which walk was empty.
+        //
+        // The orphan direction: an entry naming a file the walk never saw. PROVEN RED (story 5.1,
+        // mutation AC2(c)).
         for context in &table {
             assert!(
                 walked.contains(context.relative_path),
@@ -1616,6 +1624,10 @@ mod tests {
                 context.relative_path
             );
         }
+        // Catches a DUPLICATED entry, which neither orphan direction sees: 14 entries over 13
+        // files leaves every file matched and every entry walked. True by construction, and
+        // OBSERVED red rather than merely claimed — story 5.1's review-fix pass duplicated the
+        // `dhcp-churn` entry and watched this line report `left: 13, right: 14` (mutation 10).
         assert_eq!(
             checked,
             table.len(),

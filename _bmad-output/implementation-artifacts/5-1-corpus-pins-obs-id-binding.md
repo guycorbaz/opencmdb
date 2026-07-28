@@ -269,6 +269,45 @@ not move here").
         pushed; no PR is open. `code-review` runs first (project-context.md's flow, and it is
         recommended on a fresh context / different LLM), then push + PR + green CI + squash merge.
 
+### Review Findings
+
+_Code review held 2026-07-27 — three parallel layers (Blind Hunter, diff only · Edge Case Hunter,
+diff + read access · Acceptance Auditor, diff + spec + context docs). Every factual claim below was
+re-verified against the tree by the reviewer, not taken from a layer's word. AC verdict: **AC1 MET ·
+AC2 MET · AC3 MET · AC4 PARTIAL · AC5 MET (gate reproduced independently: clippy clean, 249 tests,
+all `xtask ci` gates green, first `#[cfg(test)]` at line 721 → the 698→720 measurement is correct) ·
+AC6 PARTIAL**._
+
+> **Resolution, 2026-07-28** — all **12 `[Review][Patch]` items applied**; the 5 `[Review][Defer]`
+> items are registered in `deferred-work.md` under `## Deferred from: code review of story-5.1`.
+> **AC4 and AC6 now stand MET**: AC4's citations were re-observed on the final tree and six further
+> mutations were taken (12 total, one assertion named as unfalsifiable rather than credited with a
+> red), and AC6's register entry no longer rests on a check its own commit falsified. Two of Guy's
+> three arbitrations knowingly revise the story's own text — the `assert_obs_ids` shape and the
+> `done`-vs-`review` instruction — and both revisions are annotated in the Dev Notes rather than
+> rewritten over. See Completion Notes → "The review-fix pass" for what changed and for the one
+> thing deliberately NOT recorded (the scratch directories are not a cause for issue #38).
+
+- [x] [Review][Patch] **`assert_obs_ids` pins `obs_id` ↔ observation INDEX, not ↔ file LINE, and asserts no count** — **RESOLVED 2026-07-27 (Guy): strengthen the helper.** It gains an `expected_len: usize` parameter and asserts the count itself, so it is non-vacuous by construction and story 5.2b inherits a shape that cannot pass on a truncated stream; the doc is reworded to *"the n-th OBSERVATION (0-indexed)"* and names `capability-downgrade.jsonl` as the counter-example where observation index ≠ file line. This knowingly revises the Dev Notes' *"a shape four more families can call without change"* — the shape changes, and 5.2b's four call sites pass their length instead of restating it beside the call. Costs six call-site edits and one prove-to-red. Detail — its doc (`fixtures.rs:1893`) says *"line `n` (0-indexed) carries `{prefix}-…-{n+1:012}`"* and *"Both hold for all 13 committed streams"*. **Verified false for `capability-downgrade.jsonl`**: its capability record is on file line 3, so `obs_id …0003` sits on file **line 4**. The slice always comes from `read_jsonl`, which drops control records, so file lines are invisible to the helper by construction. Separately, the body is one bare `for` loop with no length assertion — `assert_obs_ids(&[], "afafafaf")` is green, whereas the four folded loops hard-indexed fixed positions and would panic on a truncated stream. All six call sites happen to assert `observations.len()` first (`:1930/2011/2226/2372/2519/2820`), so AC1's counts hold today — but the guard lives at the call site, not in the helper, and story 5.2b adds four call sites to streams with no such sibling assert. **This is the vacuity story 5.1 exists to close, re-introduced in the helper that closes it.** Choice: change the helper's shape (take an expected count, or take line numbers) versus keep the shape 5.2b was promised and weaken the doc + push the count onto the call sites by convention.
+- [x] [Review][Patch] **The corpus-wide round-trip pins per-line CONTENT, never the bytes between or after lines** — **RESOLVED 2026-07-27 (Guy): add the two guards, with a prove-to-red each.** `assert!(text.ends_with('\n'))` and a `\r` refusal go into the witness, so its name stops overstating what it pins and the story's own threat model — a deliberate re-authoring WITH a refreshed manifest, the one case where the sha256 lock is not the backstop — is actually covered. Mutations: truncate the final newline of `dhcp-churn.jsonl`, then convert it to CRLF; `git checkout` after each, no `MANIFEST.toml` re-hash. Detail — `fixtures.rs:926-929` compares `text.lines()` output, and `str::lines()` strips a trailing `\r`; there is no `ends_with('\n')` check and no CR rejection. So a stream re-authored with CRLF, without its final newline, or with a blank line inserted round-trips green — for 12 of 13 streams, since only `minimal.jsonl` has the older whole-file `assert_eq!(rendered, on_disk)` (`:874`). **Measured: all 13 committed streams are LF-only and newline-terminated today, so nothing is currently wrong** — but the test is named `…re_serializes_to_its_committed_bytes` and its doc states the shape-vs-values limit while omitting this one. The threat model the story cites is a deliberate re-authoring *with a refreshed manifest*, which is exactly the case where the sha256 lock stops being the backstop. Choice: add the two guards (costs a prove-to-red) versus state the limit in the doc and register it for 5.2b.
+- [x] [Review][Patch] **`fixtures/scenario/replay/.claude/.cc-writes` exists in the working tree and the walk descends into it** — **RESOLVED 2026-07-27 (Guy): exempt dot-entries in the walk.** `walk_replay_streams` skips any entry whose name starts with `.`, file or directory, which closes the class rather than the instance — whatever the next tool writes under `fixtures/`. The cost is named rather than hidden: a `.hidden.jsonl` would no longer be seen by the walk, which is acceptable because the corpus never hides an artefact (`MANIFEST.toml` lists every one by its visible name, and the xtask lock walks the same tree from the manifest side). The existing empty directories are left in place — the walk no longer cares. Detail — verified present, created 2026-07-26 20:29, currently **empty**, which is the only reason the suite is green. `walk_replay_streams` (`fixtures.rs:739-753`) pushes every subdirectory and then asserts `is_jsonl` with only an exact-name `README.md` exemption, so the first file any tool writes under there reds four tests in `fixtures.rs` plus the new connector walk, with the message *"only .jsonl replay streams and README.md belong under scenario/replay/"* pointing at a tooling artefact. The diff widened the blast radius: the new `assert_eq!(checked, table.len())` (`fixture_connector.rs:1618`) makes such a failure read as *"the context table is wrong"*. ⚠️ **This is NOT a cause for issue #38 and must not be recorded as one** — the directories postdate stories 4.15/4.17 by a day and are empty; *a cause needs a check, not a plausible story*. Choice: exempt dot-entries in the walk (slightly weakens the "only .jsonl belongs here" gate) versus `.gitignore` + remove the directories (leaves the walk fragile to the next tool).
+- [x] [Review][Patch] **The cited verification is falsified by this very commit** — `deferred-work.md:458`, this story `:336` and `epics.md:1371` all state the four families are *"named by NO test in the tree — verified by `grep -rn "<name>.jsonl" --include=*.rs crates xtask`, which returns nothing for all four"*. **I re-ran that exact grep: four hits**, `fixture_connector.rs:1519-1522`. The entry's *conclusion* (no byte-pin/value test) still holds; its named *check* no longer does. Worst placement is `epics.md`, where it is the **Given** clause of story 5.2b — the next story's premise. Weaker true sentence: *"named by no VALUE test; their only mention is the context table added in 5.1."* [`deferred-work.md:458`, `5-1-…md:336`, `epics.md:1371`]
+- [x] [Review][Patch] **Both quoted panic locations in the Debug Log point at code that is not in the tree** — mutation 1 is recorded as `fixtures.rs:1803:13`, but the `assert_eq!` bearing *"line {n} carries its authored obs_id"* is at **`:1913:13`** (`:1803` is an unrelated trap literal, `id = "points-at-nothing"`); mutation 5 is recorded as `:941:17`, but the round-trip `assert_eq!` opens at **`:939`** (`:941` is its `line,` argument). The messages match the shipped code and both guards demonstrably exist and pass — the citations were taken at intermediate states and not refreshed, so nobody can reproduce the recorded observation from the committed tree. [`5-1-…md:485`, `:523`]
+- [x] [Review][Patch] **The record contradicts itself on how many mutations were taken** — *"five"* at `5-1-…md:479` and at `sprint-status.yaml:168` (**the live source of truth**) versus *"six"* at `:590`, `:641` and in the commit message. Six are enumerated. And `:590`'s parenthetical is wrong in the other direction: AC4 *required* the control-line mutation on `capability-downgrade.jsonl:3`, so only **one** was surplus (the entry-without-a-file direction), not two. [`sprint-status.yaml:168`, `5-1-…md:479`, `:590`]
+- [x] [Review][Patch] **A new doc comment asserts a failure mode the code structurally cannot have** — `fixtures.rs:124`: *"Without it the witness would silently skip every control record."* Without `Serialize`, `render_record`'s `match` (`:895-908`, exhaustive, no `_` arm, deliberately) would not **compile** — a build error, not a silent skip. The stated counterfactual describes a design the code refuses. Weaker true sentence: *"so control records are covered rather than excluded from the witness."* [`crates/opencmdb-bin/src/fixtures.rs:124`]
+- [x] [Review][Patch] **Three guards ship in the connector walk with no recorded red, and one can never have one** — `fixture_connector.rs:1607` `assert!(walked.insert(…), "walked twice")` is **unfalsifiable**: a stack walk that panics on symlinks cannot yield one path twice. (The `insert` itself is load-bearing — `walked` is what the orphan-entry loop reads — only the assertion is dead.) `:1610` `checked > 0` and `:1618` `checked == table.len()` also ship unproven, while Task 3 credits the latter with *"which also catches a duplicated entry"* (true by construction — 14 entries vs 13 files — but never observed) and `deferred-work.md:368` says *"All three guards proven to red"* over a walk that ships more than three assertions. Either record a mutation or say plainly which assertions are defence-in-depth that cannot be proven red. [`crates/opencmdb-bin/src/fixture_connector.rs:1607`]
+- [x] [Review][Patch] **`"no replay stream found under scenario/replay/"` is now verbatim in five places across two files** — `fixtures.rs:961, 998, 1517, 1539` and `fixture_connector.rs:1610`. So the panic never says WHICH walk found nothing, against this file's own testing standard (*a message must name the offending thing, or it is not actionable*). Four are pre-existing; **the diff added the fifth**, and the hoist created the obvious single home: assert non-emptiness inside `walk_replay_streams`, which already returns the count, and the invariant becomes unskippable for the callers 5.2b adds. [`crates/opencmdb-bin/src/fixture_connector.rs:1610`]
+- [x] [Review][Patch] **Three doc comments overstate or will decay** — (a) the round-trip's name and doc say *"every committed stream"* while `scenario/wire/unifi-clients.expected.jsonl` is a committed `.jsonl` deliberately outside the walk: say *"every stream under `scenario/replay/`"*; (b) the hoisted walker's doc (`fixtures.rs:712-715`) enumerates **five callers** — an inventory nothing checks and that 5.2b falsifies, while the load-bearing sentence (*"two claims … must walk the same tree"*) needs no inventory to be true; (c) the helper's doc scopes its conventions to *"all 13 committed streams"* while its sixth call site is the wire artefact, a 14th. [`crates/opencmdb-bin/src/fixtures.rs:712`, `:900`, `:1908`]
+- [x] [Review][Patch] **`epics.md` story 5.2b contradicts its own arity** — the randomized-mac AC opens *"**Given** `randomized-mac.jsonl` — 3 presences"*, names N1/N2/N3, then constrains *"**both lines** carry exactly 2 facts"*. N3's fact count is left unspecified in the one spec whose entire purpose is that a family cannot state a premise its bytes contradict. Also the title (*"The four unpinned families"*) undercounts: the story's fifth Given extends `dhcp-churn`'s existing pin — the body's *"I want"* does say so, but the title is what the tracker carries. [`_bmad-output/planning-artifacts/epics.md`, Story 5.2b]
+- [x] [Review][Patch] **The story mandates in one section what it refuses in another** — Dev Notes: *"It is `ready-for-dev` today and **must reach `done`** in this story's File List"*, versus Completion Notes deviation 1 setting `review`. The deviation is correctly declared and is the right call; annotate the Dev Notes line so the document has a single answer to *"what was required"*. [`5-1-…md:372`]
+- [x] [Review][Defer] **`walk_replay_streams` never symlink-checks its own root** [`crates/opencmdb-bin/src/fixtures.rs:723`] — deferred, pre-existing.
+- [x] [Review][Defer] **No `is_file()` check: a FIFO named `x.jsonl` makes the suite HANG rather than fail** [`crates/opencmdb-bin/src/fixtures.rs:733`] — deferred, pre-existing.
+- [x] [Review][Defer] **The walk yields unsorted `read_dir` order while its sibling `trap_gate.rs` sorts for determinism** [`crates/opencmdb-bin/src/fixtures.rs:726`] — deferred, pre-existing.
+- [x] [Review][Defer] **`scenario/wire/unifi-clients.expected.jsonl` has no round-trip byte-shape pin at all** [`fixtures/scenario/wire/unifi-clients.expected.jsonl`] — deferred, deliberately outside AC3's scope.
+- [x] [Review][Defer] **Four nits: unconditional `Serialize`, a doubled path in a panic, `{:012}` decimal in a hex field, an inline `serde::` path** [`crates/opencmdb-bin/src/fixtures.rs:126`] — deferred, cosmetic.
+
+_Dismissed as noise (2): **AC2's banned sentence "is present"** — it appears only at `fixture_connector.rs:1559` as an explicit denial (`This is not "the walk proves fact-kind coverage corpus-wide".`); letter, not intent, and the denial is clearer than a paraphrase would be. **`strip_prefix` string comparison is platform-separator dependent** — Linux/Docker-only project (D64, MariaDB on DSM), no Windows CI, not a live path._
+
 ## Dev Notes
 
 ### The corpus does not move here
@@ -332,8 +371,14 @@ the walk to reach it; do not move it.
 ### Found while scoping — out of scope HERE, and owned by story 5.2b
 
 `randomized-mac.jsonl` (4.9), `multi-nic.jsonl` (4.10), `shared-hardware-vm.jsonl` (4.11) and
-`cloned-mac.jsonl` (4.12) are named by **no test in the tree** — verified by
-`grep -rn "<name>.jsonl" --include=*.rs crates xtask`, which returns nothing for all four. They have
+`cloned-mac.jsonl` (4.12) are named by **no VALUE test in the tree**: their only mention is the
+per-stream context table this story adds (`fixture_connector.rs`, `committed_stream_contexts()`),
+which states each stream's declared context and asserts nothing about its contents.
+_(Annotated 2026-07-27 by this story's own code review. This paragraph read "named by **no test in
+the tree** — verified by `grep -rn "<name>.jsonl" --include=*.rs crates xtask`, which returns
+nothing for all four". **The commit that implemented this story falsified its own check**: that grep
+now returns four hits, all in the new table. The conclusion held; the named check did not, and a
+cause needs a check that still holds.)_ They have
 no byte-pin test, so AC1 has nothing to strengthen there, and their `obs_id` ↔ line binding is
 weaker than dhcp-churn's was: `read_traps`'s cross-check only asserts that a trap's `obs_id`s EXIST
 in the stream, so swapping two ids inside one of those four files inverts what its traps judge and
@@ -345,6 +390,12 @@ ahead of the L1 join at 5.5). Two consequences for THIS story: the `assert_obs_i
 introduces is what 5.2b builds on, so give it a shape that four more families can call without
 change; and do not pre-empt 5.2b by adding value pins here — its ACs are written and its
 prove-to-red budget is its own.
+_(⚠️ **The first consequence was overruled on 2026-07-27**, by Guy, on this story's code review. The
+helper as first shipped asserted no length, so an empty or truncated slice passed it — the vacuity
+this story exists to close, re-introduced in the helper that closes it, and worse for 5.2b's four
+families because they have no sibling length assertion to inherit. The shape therefore CHANGED: it
+takes `expected_len` and asserts the count itself. 5.2b's call sites pass their length; that is one
+argument, not a redesign.)_
 
 ### What this touches, and what it must not break
 
@@ -371,6 +422,11 @@ prove-to-red budget is its own.
 - **`_bmad-output/implementation-artifacts/sprint-status.yaml`** (UPDATE) — the live source of truth
   (CLAUDE.md). It is `ready-for-dev` today and must reach `done` in this story's File List, with a
   comment saying what moved.
+  _(⚠️ **Superseded 2026-07-27, on this story's code review.** `done` was the wrong target and the
+  implementation was right to refuse it (Completion Notes, deviation 1): this project's flow is
+  `dev-story → code-review → merge`, so `review` is what a dev-story may claim and `done` is the
+  merge's business. The document had two answers to "what was required"; this is the one that
+  stands. The instruction is left readable rather than rewritten.)_
 - **Nothing under `fixtures/`.** No bytes, no `MANIFEST.toml`.
 
 ### House rules that bind this story
@@ -476,18 +532,26 @@ Claude Opus 5 (1M context) — `claude-opus-5[1m]`, via `bmad-dev-story`, 2026-0
 
 ### Debug Log References
 
-**The five prove-to-red observations (AC4).** Every mutation was reverted; `git status` under
-`fixtures/` is empty and `MANIFEST.toml` was never re-hashed.
+**TWELVE prove-to-red observations: six for AC4, six more for the review-fix pass.** Every mutation
+was reverted; `git status` under `fixtures/` is empty and `MANIFEST.toml` was never re-hashed.
+
+> **Every line number and message below was RE-OBSERVED on the final tree** (after `cargo fmt`, on
+> 2026-07-28), not carried over from the run that first took the mutation. The review found that two
+> citations pointed at code that was not in the tree — taken at intermediate states and never
+> refreshed — so the whole log was re-run rather than patched. Mutations 2, 3 and 4 quote a message
+> and no line, which is what the panic prints; their messages are unchanged in the code.
 
 1. **AC1 — swap two `obs_id`s between lines 1 and 2 of `dhcp-churn.jsonl`.**
    `cargo test -p opencmdb-bin the_dhcp_churn_stream` →
    ```
-   panicked at crates/opencmdb-bin/src/fixtures.rs:1803:13:
-   assertion `left == right` failed: line 0 carries its authored obs_id
+   panicked at crates/opencmdb-bin/src/fixtures.rs:1993:13:
+   assertion `left == right` failed: observation 0 carries its authored obs_id
      left: "adadadad-0000-4000-8000-000000000002"
     right: "adadadad-0000-4000-8000-000000000001"
    ```
-   Restored with `git checkout`; the test re-ran green.
+   Restored with `git checkout`; the test re-ran green. _(Recorded as `:1803:13` and "line 0" until
+   2026-07-28: the line was wrong from the start — `:1803` is an unrelated trap literal — and the
+   message then changed with the helper's rewording. Both re-measured.)_
 
 2. **AC2 (a) — point the `dhcp-churn` table entry's `ConnectorId` at
    `30303030-3030-4030-8030-303030303030`.** Test-side only; the corpus was not touched. →
@@ -520,16 +584,18 @@ Claude Opus 5 (1M context) — `claude-opus-5[1m]`, via `bmad-dev-story`, 2026-0
    `minimal.jsonl`, per AC4: an edit there also reds two older tests, so the new guard would be
    observed for the wrong reason) →
    ```
-   panicked at crates/opencmdb-bin/src/fixtures.rs:941:17:
+   panicked at crates/opencmdb-bin/src/fixtures.rs:994:17:
    assertion `left == right` failed: …/fixtures/scenario/replay/dhcp-churn.jsonl:1:
    re-serializing does not reproduce the committed bytes
      left: "{\"obs_id\":\"adadadad-…\",…}"
     right: "{\"obs_id\": \"adadadad-…\",…}"
    ```
-   The file and its 1-indexed line are named, and both strings are printed.
+   The file and its 1-indexed line are named, and both strings are printed. _(Recorded as `:941:17`
+   until 2026-07-28 — the assertion's ARGUMENT line, not the line the panic prints.)_
 
 6. **AC3 (b) — the same edit on the CONTROL line (line 3) of `capability-downgrade.jsonl`** →
    ```
+   panicked at crates/opencmdb-bin/src/fixtures.rs:994:17:
    …/fixtures/scenario/replay/capability-downgrade.jsonl:3: re-serializing does not reproduce the
    committed bytes
      left: "{\"record\":\"capability\",\"as_of\":\"2026-03-01T00:00:07Z\",\"kinds\":[…]}"
@@ -538,17 +604,100 @@ Claude Opus 5 (1M context) — `claude-opus-5[1m]`, via `bmad-dev-story`, 2026-0
    This is the observation that the control half is genuinely covered: a round-trip silently
    skipping control records would have passed mutation 5 and failed here.
 
-**Gate output (AC5).**
+**The review-fix pass (2026-07-28) — six more.** Every guard the code review added, or found
+shipping unproven, is observed here. They are numbered on from AC4's six because the code comments
+cite them by number.
+
+7. **The helper's `expected_len` count guard** — hand
+   `the_dhcp_churn_stream_moves_the_address_only_through_observed_at` a two-observation slice of the
+   three-observation stream (`&observations[..2]`). Test-side only. →
+   ```
+   panicked at crates/opencmdb-bin/src/fixtures.rs:1987:9:
+   assertion `left == right` failed: the stream must carry exactly 3 observations
+     left: 2
+    right: 3
+   ```
+   This is the guard the review found MISSING: before it, `assert_obs_ids(&[], "adadadad")` was
+   green, so an empty or truncated slice passed the very check the story exists to make
+   non-vacuous.
+
+8. **The newline-termination guard** — `truncate -s -1 fixtures/scenario/replay/dhcp-churn.jsonl` →
+   ```
+   panicked at crates/opencmdb-bin/src/fixtures.rs:962:13:
+   …/fixtures/scenario/replay/dhcp-churn.jsonl: a committed stream must be newline-terminated
+   ```
+
+9. **The CRLF guard** — convert every `\n` in `dhcp-churn.jsonl` to `\r\n` →
+   ```
+   panicked at crates/opencmdb-bin/src/fixtures.rs:967:13:
+   …/fixtures/scenario/replay/dhcp-churn.jsonl: a committed stream must use LF endings, never CR or CRLF
+   ```
+   8 and 9 both round-tripped **GREEN** before this pass: the comparison runs on `str::lines()`,
+   which strips a trailing `\r` along with the `\n`. `git checkout` after each, no `MANIFEST.toml`
+   re-hash — and the threat model is a deliberate re-authoring, which refreshes the manifest by
+   definition, so the sha256 lock was never the backstop here.
+
+10. **`checked == table.len()`, which shipped unproven** — duplicate the `dhcp-churn` entry in the
+    context table (14 entries over 13 files: every file matched, every entry walked, so neither
+    orphan direction sees it) →
+    ```
+    panicked at crates/opencmdb-bin/src/fixture_connector.rs:1632:9:
+    assertion `left == right` failed: the context table must have exactly one entry per committed stream
+      left: 13
+     right: 14
+    ```
+
+11. **`checked > 0`, hoisted into `walk_replay_streams` and previously five verbatim copies** —
+    suppress the `checked += 1;` increment inside the walker →
+    ```
+    panicked at crates/opencmdb-bin/src/fixtures.rs:788:5:
+    no replay stream found under scenario/replay/ — every caller of this walk would otherwise pass
+    by proving nothing
+    ```
+    The message now names the walk. The five copies it replaced all printed the same sentence, so a
+    reader could not tell WHICH walk had found nothing.
+
+12. **The dot-entry skip — observed on BOTH sides**, because a skip has no assertion of its own and
+    its "red" is the counterfactual. Write `probe.txt` under
+    `fixtures/scenario/replay/.claude/.cc-writes/` (git-ignored, so `git status` stays clean), then:
+    - **with** the skip → `test result: ok. 1 passed`;
+    - **without** it (`continue;` commented out) →
+      ```
+      panicked at crates/opencmdb-bin/src/fixtures.rs:779:13:
+      …/fixtures/scenario/replay/.claude/.cc-writes/probe.txt: only .jsonl replay streams and
+      README.md belong under scenario/replay/
+      ```
+    So the review's finding is confirmed by measurement rather than by argument: without the skip,
+    the first file any tool writes under that scratch directory makes the suite accuse the CORPUS of
+    a defect it does not have. The probe was deleted afterwards.
+
+**One assertion is defence-in-depth and CANNOT be proven red, and says so in its own comment:**
+`walked.insert(relative.clone())` (`fixture_connector.rs`). A stack walk that panics on symlinks
+cannot yield one path twice. The `insert` is load-bearing — the orphan-entry loop reads `walked` —
+but its assertion is dead, and the house rule is that a guard which cannot have a mutation states
+that instead of implying it had one.
+
+**Gate output (AC5), re-run in full after the review-fix pass on 2026-07-28.**
 `cargo fmt --all` clean · `cargo clippy --workspace --all-targets -- -D warnings` clean ·
 `cargo test --workspace` → **121 (bin) + 86 (core) + 42 (xtask) = 249 passed, 0 failed**
-(247 before this story; +2 are the two new walks) · `cargo xtask ci` →
+(247 before this story; +2 are the two new walks — the review-fix pass added guards INSIDE existing
+tests, so the count is unchanged by it) · `cargo xtask ci` →
 ```
-✅ frontier · ✅ ddl-collation · ✅ vocabulary
+✅ frontier       domain graph clean; xtask depended on by nobody
+✅ ddl-collation  every text column carries an explicit binary collation
+✅ vocabulary     co-presence green across docs; code clean
 ✅ fixtures       25 fixture(s) match their recorded sha256 (0 generated, 25 hand-authored)
 ✅ file-size      20 file(s) under 2000 code lines (largest: 884)
 ℹ  views-hash     STALE — regenerate at next milestone
 ✅ all gates green
 ```
+
+⚠️ **The state the review handed back did not COMPILE**, and that is recorded rather than quietly
+fixed. The two byte-level guards (mutations 8 and 9) had been inserted into
+`every_replay_stream_re_serializes_to_its_committed_bytes` in place of its
+`let records = read_records(path)…` binding, so the crate failed with two `E0425 cannot find value
+records` before this pass restored it. Nothing had been run against that state — which is why the
+gate is re-run here in full rather than cited from the implementation pass.
 The `views-hash STALE` line is expected and exits 0. **`architecture-views.md` was NOT regenerated**
 — it is a milestone task, not a story task.
 
@@ -559,7 +708,13 @@ returned early. Nothing in this story touches the database, but the suite is not
 
 **What was implemented, in the weaker true sentence.**
 
-- **AC1.** `assert_obs_ids(observations, prefix)` lives in `fixtures.rs`'s test module. It is called
+- **AC1.** `assert_obs_ids(observations, prefix, expected_len)` lives in `fixtures.rs`'s test module.
+  _(The signature gained `expected_len` on 2026-07-28, on Guy's call at the code review: as first
+  shipped the helper asserted no count, so an empty or truncated slice passed it — the vacuity this
+  story exists to close, re-introduced in the helper that closes it. Its doc also said "line `n`"
+  when the slice comes from `read_jsonl`, which DROPS control records: in `capability-downgrade.jsonl`
+  the capability record sits on file line 3, so `obs_id …0003` is on file LINE 4. It now says
+  OBSERVATION order and names that counter-example.)_ It is called
   from six sites: the two byte-pins that read purely by index and now assert their ids
   (`dhcp-churn` → `adadadad`, `vrrp-virtual-mac` → `aeaeaeae`), and the four that already had the
   loop inline (`hostname-collision` `afafafaf`, `docker-veth` `babababa`, `hostname-absence`
@@ -581,20 +736,62 @@ returned early. Nothing in this story touches the database, but the suite is not
   admissibility now holds corpus-wide with fact-kind coverage" — the temptation the story named
   explicitly.
 
-- **AC3.** `every_committed_stream_re_serializes_to_its_committed_bytes` in `fixtures.rs`, plus
+- **AC3.** `every_replay_stream_re_serializes_to_its_committed_bytes` in `fixtures.rs`, plus
   `render_record`. `ControlRecord` gained `Serialize`; **the `#[cfg(test)]` mirror-struct fallback was
   not needed**, confirming the story's measurement. What it pins is the byte-SHAPE, starting from the
   file — never the authored values. `re_serializing_reproduces_the_committed_bytes` survives
   unchanged and carries the "not a duplicate, do not collapse" comment.
 
-- **AC4.** Six mutations observed and recorded above (AC4 asked for four; two extra were taken —
-  the entry-without-a-file direction, and the control-line half of AC3).
+- **AC4.** **Twelve** mutations observed and recorded above. Six for AC4 itself: it asked for four,
+  and exactly **ONE** was surplus — the entry-without-a-file direction. _(This said "two extra …
+  the entry-without-a-file direction, and the control-line half of AC3", and elsewhere said "five".
+  Both wrong, and in opposite directions: AC4's third bullet REQUIRES the control-line mutation on
+  `capability-downgrade.jsonl:3`, so it was never surplus; and six were enumerated all along.
+  Corrected 2026-07-28.)_ Six more come from the review-fix pass — the `expected_len` count guard,
+  the newline and CRLF guards, `checked == table.len()`, `checked > 0`, and the two-sided
+  observation of the dot-entry skip. One assertion is named as unfalsifiable defence-in-depth
+  instead of being credited with a red it cannot have.
 
-- **AC5.** Green, and `git status` under `fixtures/` is empty.
+- **AC5.** Green, and `git status` under `fixtures/` is empty. Re-run in full on 2026-07-28, after
+  the review-fix pass restored a tree that did not compile.
 
 - **AC6.** Three register entries closed in place by appending; the fourth annotated STILL OPEN and
   not struck; a new `## Deferred from: story-5.1` section names the four unpinned families and their
-  owner, story 5.2b.
+  owner, story 5.2b. _(That new section stated a check the same commit falsified: it cited
+  `grep -rn "<name>.jsonl" --include=*.rs crates xtask` "returns nothing for all four" while the
+  context table AC2 adds names all four. The conclusion held — no test asserts their values — so the
+  CHECK was restated, not the conclusion re-asserted, in all three places that carried it:
+  `deferred-work.md`, this story's Dev Notes, and `epics.md`'s Given clause for story 5.2b, where it
+  was the next story's premise. Corrected 2026-07-28.)_
+
+**The review-fix pass (2026-07-28) — what changed, and one thing that is not a fix.**
+
+All **12 `[Review][Patch]` items are resolved**; the 5 `[Review][Defer]` items stay deferred and are
+recorded in `deferred-work.md` under `## Deferred from: code review of story-5.1`. What the pass
+actually changed, beyond the annotations already noted per-AC above:
+
+- **It restored a tree that did not compile.** See the AC5 note. Nothing had been measured against
+  that state, so the whole gate and the whole prove-to-red log were re-run rather than cited.
+- **`every_committed_stream_re_serializes_to_its_committed_bytes` was RENAMED** to
+  `every_replay_stream_re_serializes_to_its_committed_bytes`. Its name claimed every committed
+  stream while `scenario/wire/unifi-clients.expected.jsonl` is a committed `.jsonl` deliberately
+  outside the walk. Fixing the doc alone would have left the name — which is what a reader greps —
+  making the wider claim.
+- **The hoisted walker's doc lost its caller inventory.** It enumerated five callers; nothing checks
+  such a list, and story 5.2b would have falsified it silently. The load-bearing sentence — two
+  claims at two layers must walk the same tree — needs no inventory to be true.
+- **Two deviations from the story's own text are declared, not absorbed:** the `assert_obs_ids`
+  shape changed (Dev Notes had promised 5.2b a shape "four more families can call without change"),
+  and the Dev Notes line requiring `sprint-status.yaml` to reach `done` is annotated as superseded.
+  Both annotations sit in the Dev Notes rather than rewriting it.
+- **`_bmad-output/planning-artifacts/epics.md` was edited** — outside a story's usual reach, and
+  deliberate: two of the corrections land in story 5.2b's spec, one of them in its `Given` clause.
+  A next story whose premise is false is the defect this project keeps catching.
+
+**What is NOT recorded, on purpose.** The `.claude/.cc-writes` directories under `fixtures/` are
+**not** a cause for issue #38. They were created 2026-07-26, a day after the stories that flaked,
+they are empty, and they are git-ignored. Mutation 12 measures what they WOULD have done to the walk;
+it measures nothing about #38. *A cause needs a check, not a plausible story.*
 
 **Two deviations from the task list, both stated rather than silent.**
 
@@ -607,7 +804,10 @@ returned early. Nothing in this story touches the database, but the suite is not
 
 **One measurement worth carrying forward.** `fixtures.rs` went from **698 to 720** code lines — a
 RISE of 22, caused by the hoisted doc comment sitting above its `#[cfg(test)]` attribute. Predicted by
-the story; recorded here so nobody records it as a reduction.
+the story; recorded here so nobody records it as a reduction. The review-fix pass took it to **728**
+(first `#[cfg(test)]` now at line 729), the extra 8 being the dot-entry skip and the walker's own
+non-emptiness assertion, both of which live in the hoisted function. Ceiling is 2000 and the largest
+file in the tree is 884.
 
 **Nothing found that contradicts the corpus.** Task 4's round-trip is the real Rust check the story's
 Dev Notes said had not yet been run against the committed bytes. It passes on all 13 streams and both
@@ -619,23 +819,47 @@ confirmed by the serializer itself.
 - `crates/opencmdb-bin/src/fixtures.rs` (MODIFIED) — `Serialize` on `ControlRecord`;
   `walk_replay_streams` hoisted to `#[cfg(test)] pub(crate)` module scope with an extended doc;
   new test helpers `assert_obs_ids` and `render_record`; new test
-  `every_committed_stream_re_serializes_to_its_committed_bytes`; two byte-pins gained their `obs_id`
+  `every_replay_stream_re_serializes_to_its_committed_bytes`; two byte-pins gained their `obs_id`
   pins; four inline loops folded into the helper;
   `re_serializing_reproduces_the_committed_bytes` gained its "not a duplicate" doc.
+  **Review-fix pass:** the missing `let records = read_records(path)` restored (the crate did not
+  compile); `assert_obs_ids` gained `expected_len` and its doc corrected from "line" to
+  "observation"; the round-trip gained a newline-termination and a CRLF refusal and was RENAMED to
+  `every_replay_stream_re_serializes_to_its_committed_bytes`; the walker gained a dot-entry skip and
+  its own non-emptiness assertion (five verbatim copies removed from the call sites) and lost its
+  caller inventory; `ControlRecord`'s doc corrected — a missing `Serialize` would not compile, it
+  would not "silently skip".
 - `crates/opencmdb-bin/src/fixture_connector.rs` (MODIFIED) — test module only: `StreamContext`,
   `committed_stream_contexts()`, new test
   `every_committed_replay_stream_is_admissible_to_the_connector`; `corpus_id()` and `corpus_caps()`
   doc comments corrected. `load` and `from_records` are UNCHANGED.
+  **Review-fix pass:** the duplicate-entry and unfalsifiable-assertion comments now state which
+  guard was observed red and which one cannot be.
 - `_bmad-output/implementation-artifacts/deferred-work.md` (MODIFIED) — three entries closed in
-  place, one annotated still-open, one new `## Deferred from: story-5.1` section. Append-only
-  discipline held.
+  place, one annotated still-open, one new `## Deferred from: story-5.1` section, one new
+  `## Deferred from: code review of story-5.1` section (5 items). Append-only discipline held.
+  **Review-fix pass:** the story-4.10 entry records the newline/CRLF strengthening; the story-4.12
+  entry's "All three guards proven to red" corrected to the measured tally; the story-5.1 entry's
+  falsified grep check restated.
+- `_bmad-output/planning-artifacts/epics.md` (MODIFIED, review-fix pass only) — story 5.2b: the
+  falsified grep in its `Given` clause restated, the randomized-mac AC's fact-count constraint
+  corrected from "both lines" to all three (measured: 3 observations, 2 facts each — `Mac` +
+  `IpV4`), and the title widened to name dhcp-churn's value pins, which its fifth `Given` already
+  required.
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` (MODIFIED) — `5.1` → `review`, with the
-  delivered/moved comment.
+  delivered/moved comment. **Review-fix pass:** the comment corrected (mutation count) and extended
+  with what the review changed.
 - `_bmad-output/implementation-artifacts/5-1-corpus-pins-obs-id-binding.md` (MODIFIED) — this record.
-- **Nothing under `fixtures/`.** No bytes, no `MANIFEST.toml`.
+- `docs/project-context.md` and `CLAUDE.md` (MODIFIED, at push time) — the docs-current-before-push
+  rule: both still said Epic 5 was backlog and "next", and `project-context.md` carried master's
+  test counts. Epic 5 is in-progress and this branch runs 249. Minimal factual alignment, no other
+  claim touched.
+- **Nothing under `fixtures/`.** No bytes, no `MANIFEST.toml`. Mutations 8, 9 and 12 touched
+  `fixtures/` transiently and every one was reverted; `git status` under `fixtures/` is empty.
 
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-07-28 | Code review findings addressed — **12 of 12 `[Review][Patch]` items resolved**, 5 `[Review][Defer]` items registered. Restored a tree that did not compile (`records` binding lost when the byte-level guards were inserted). `assert_obs_ids` gained `expected_len`; the round-trip gained newline-termination and CRLF guards and was renamed to `every_replay_stream_re_serializes_to_its_committed_bytes`; the walker gained a dot-entry skip and its own non-emptiness assertion. **Six more mutations proven to red (12 total), and the whole prove-to-red log re-observed on the final tree** — two citations had pointed at code that was not in it. The falsified `grep` check corrected in all three documents that carried it, including `epics.md`'s `Given` clause for story 5.2b. Gate re-run in full: clippy clean, 249 tests, all `xtask ci` gates green, corpus bytes unchanged. |
 | 2026-07-27 | Story implemented. `obs_id` ↔ line binding pinned on `dhcp-churn` and `vrrp-virtual-mac` via one shared helper (six call sites); all 13 committed streams walked through `FixtureConnector::load` with a hand-authored context table checked both directions; all 13 round-tripped to their committed bytes line by line, control records included. Six mutations proven to red. 247 → 249 tests, all gates green, corpus bytes unchanged. Status → `review`. |

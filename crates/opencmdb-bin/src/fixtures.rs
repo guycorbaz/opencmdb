@@ -120,9 +120,12 @@ impl Record {
 /// on before parsing. `record` is that marker, and it is what makes the dispatch in
 /// [`read_records`] a positive test rather than a guess.
 /// `Serialize` since story 5.1, so the corpus-wide round-trip witness
-/// (`every_committed_stream_re_serializes_to_its_committed_bytes`) can render a control record
-/// back to its committed line. Without it the witness would silently skip every control record —
-/// exactly the two lines whose byte-shape nothing else pins.
+/// (`every_replay_stream_re_serializes_to_its_committed_bytes`) can render a control record
+/// back to its committed line — the two control lines are covered by that witness rather than
+/// excluded from it. _(This doc claimed "without it the witness would silently skip every control
+/// record" until story 5.1's review: false. `render_record`'s `match` is exhaustive with no `_` arm
+/// precisely so a record kind cannot be rendered as nothing — without this derive the witness would
+/// not COMPILE. A build error is not a silent skip.)_
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 #[serde(tag = "record", rename_all = "snake_case", deny_unknown_fields)]
 enum ControlRecord {
@@ -709,10 +712,15 @@ pub fn read_traps(path: &Path) -> Result<TrapFile, FixtureError> {
 ///
 /// **Test-only, and `pub(crate)` since story 5.1.** It lives outside `mod tests` for one reason:
 /// two claims about the corpus are made at two different LAYERS and must walk the same tree, or
-/// "every stream" quietly means two different sets. Its callers are the privacy walk, the
-/// stream-validity walk and the cross-stream `obs_id` detector (all in this file's test module),
-/// the corpus-wide round-trip witness (also here), and the connector-admissibility walk in
-/// `fixture_connector.rs`'s test module — the last one is what forced the hoist.
+/// "every stream" quietly means two different sets. That sentence is the whole reason for the
+/// hoist; the caller list is deliberately NOT enumerated here — an inventory in a doc comment has
+/// no guard behind it, and the first story to add a caller makes it false silently (story 5.1's
+/// review).
+///
+/// It asserts its own non-emptiness, so a caller cannot pass vacuously by walking nothing. That
+/// assertion used to be five verbatim copies at the call sites, whose identical message never said
+/// WHICH walk found nothing (story 5.1's review). Proven red by suppressing the `checked`
+/// increment below (story 5.1, mutation 11).
 ///
 /// The paths it yields are ABSOLUTE (rooted through [`FIXTURES_DIR`], `..` components included).
 /// A caller needing the corpus-RELATIVE spelling that [`fixture_path`] and `MANIFEST.toml` use
@@ -735,6 +743,24 @@ pub(crate) fn walk_replay_streams(visit: &mut dyn FnMut(&Path)) -> usize {
                     "{}: the corpus must contain its own bytes, not a symlink",
                     path.display()
                 );
+            }
+            // Tooling scratch is not corpus. `fixtures/scenario/replay/.claude/.cc-writes` already
+            // exists in a working tree (created 2026-07-26, empty — which is the only reason the
+            // suite stayed green), and the assertion below would have accused the CORPUS of a
+            // defect the moment any tool wrote a file under it. Skipping dot-entries closes the
+            // class rather than that one instance. The cost is named: a `.hidden.jsonl` is no
+            // longer walked — acceptable because the corpus never hides an artefact, and
+            // `MANIFEST.toml` lists every one by its visible name (story 5.1's review).
+            // Observed on BOTH sides (story 5.1, mutation 12): with a file written under
+            // `.claude/.cc-writes/`, the walk stays green WITH this skip and reds without it,
+            // naming the scratch file — so the skip is what stands between a tooling artefact and
+            // a panic accusing the corpus.
+            if entry
+                .file_name()
+                .to_str()
+                .is_some_and(|n| n.starts_with('.'))
+            {
+                continue;
             }
             if file_type.is_dir() {
                 stack.push(path);
@@ -759,6 +785,11 @@ pub(crate) fn walk_replay_streams(visit: &mut dyn FnMut(&Path)) -> usize {
             checked += 1;
         }
     }
+    assert!(
+        checked > 0,
+        "no replay stream found under scenario/replay/ — every caller of this walk would \
+         otherwise pass by proving nothing"
+    );
     checked
 }
 
@@ -857,7 +888,7 @@ mod tests {
     /// not merely the values: a serde rename would still round-trip in memory while silently
     /// changing what every future trap file means.
     ///
-    /// **Not a duplicate of `every_committed_stream_re_serializes_to_its_committed_bytes`, and a
+    /// **Not a duplicate of `every_replay_stream_re_serializes_to_its_committed_bytes`, and a
     /// future DRY pass must not collapse the two.** This one starts from `expected()` — an
     /// independently authored Rust literal — so it pins the VALUES as well as the shape, over one
     /// file. The corpus-wide witness starts from the FILE, so it pins the shape only, over all
@@ -896,8 +927,14 @@ mod tests {
         }
     }
 
-    /// EVERY committed stream round-trips to its committed bytes, line by line — observations and
-    /// CONTROL records alike.
+    /// EVERY stream under `scenario/replay/` round-trips to its committed bytes, line by line —
+    /// observations and CONTROL records alike.
+    ///
+    /// "Every stream under `scenario/replay/`", not "every committed stream": the corpus also holds
+    /// `scenario/wire/unifi-clients.expected.jsonl`, a committed `.jsonl` of observations that sits
+    /// outside every corpus walk on purpose and has no round-trip pin at all (registered under
+    /// story 5.1's review, owned by Epic 11's parser). Widening the walk to reach it is not a
+    /// tidy-up — it is a scope change.
     ///
     /// Until story 5.1 only `minimal.jsonl` had this, so no other stream and no control record at
     /// all had its exact serialized byte-shape pinned — field order, the `MacAddr` array encoding,
@@ -910,10 +947,28 @@ mod tests {
     /// family's byte-pin test, and four families still have none (register,
     /// `deferred-work.md#Deferred from: story-5.1`, owned by story 5.2b).
     #[test]
-    fn every_committed_stream_re_serializes_to_its_committed_bytes() {
-        let checked = walk_replay_streams(&mut |path| {
+    fn every_replay_stream_re_serializes_to_its_committed_bytes() {
+        walk_replay_streams(&mut |path| {
             let text = std::fs::read_to_string(path)
                 .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
+            // The bytes BETWEEN and AFTER the lines, which the line-by-line comparison below
+            // cannot see: `str::lines()` strips a trailing `\r` as well as the `\n`, so without
+            // these two a stream re-authored with CRLF endings or with its final newline dropped
+            // round-tripped green (story 5.1's review). Only `minimal.jsonl` had whole-file byte
+            // equality, via `re_serializing_reproduces_the_committed_bytes`. The sha256 lock is
+            // not the backstop for this: the threat model is a DELIBERATE re-authoring, which
+            // refreshes `MANIFEST.toml` by definition. Both proven red on `dhcp-churn.jsonl`
+            // (story 5.1, mutations 8 and 9) — final newline truncated, then LF converted to CRLF.
+            assert!(
+                text.ends_with('\n'),
+                "{}: a committed stream must be newline-terminated",
+                path.display()
+            );
+            assert!(
+                !text.contains('\r'),
+                "{}: a committed stream must use LF endings, never CR or CRLF",
+                path.display()
+            );
             let records = read_records(path).expect("a corpus stream must read");
 
             // `read_records` discards line numbers, and it SKIPS truly empty lines while still
@@ -958,7 +1013,6 @@ mod tests {
                 path.display()
             );
         });
-        assert!(checked > 0, "no replay stream found under scenario/replay/");
     }
 
     /// Every value is synthetic: RFC 5737 addresses and locally-administered MACs. A real
@@ -978,7 +1032,7 @@ mod tests {
     /// was introduced by the very story that added control records, and found by the review.
     #[test]
     fn the_corpus_carries_no_real_network_data() {
-        let checked = walk_replay_streams(&mut |path| {
+        walk_replay_streams(&mut |path| {
             for record in read_records(path).expect("a corpus stream must read") {
                 match record {
                     Record::Observation(observation) => {
@@ -995,7 +1049,6 @@ mod tests {
                 }
             }
         });
-        assert!(checked > 0, "no replay stream found under scenario/replay/");
     }
 
     /// Free text authored by a fixture author must carry no real address.
@@ -1504,7 +1557,7 @@ mod tests {
     #[test]
     fn no_obs_id_is_shared_across_replay_streams() {
         let mut streams: Vec<(String, Vec<Uuid>)> = Vec::new();
-        let checked = walk_replay_streams(&mut |path| {
+        walk_replay_streams(&mut |path| {
             let ids = read_records(path)
                 .unwrap_or_else(|e| {
                     panic!("corpus replay stream {} is invalid: {e}", path.display())
@@ -1514,7 +1567,6 @@ mod tests {
                 .collect();
             streams.push((path.display().to_string(), ids));
         });
-        assert!(checked > 0, "no replay stream found under scenario/replay/");
         if let Some((id, first, second)) = first_cross_stream_obs_id(&streams) {
             panic!(
                 "obs_id {id} appears in both {first} and {second} — a trap pointing at it could not say which"
@@ -1524,7 +1576,7 @@ mod tests {
 
     #[test]
     fn every_replay_stream_in_the_corpus_is_valid() {
-        let checked = walk_replay_streams(&mut |path| {
+        walk_replay_streams(&mut |path| {
             let records = read_records(path).unwrap_or_else(|e| {
                 panic!("corpus replay stream {} is invalid: {e}", path.display())
             });
@@ -1536,7 +1588,6 @@ mod tests {
                 path.display()
             );
         });
-        assert!(checked > 0, "no replay stream found under scenario/replay/");
     }
 
     // ── Trap files (story 4.2) ───────────────────────────────────────────────
@@ -1890,8 +1941,30 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         );
     }
 
-    /// Pin the `obs_id` ↔ LINE binding of a committed stream: line `n` (0-indexed) carries
-    /// `{prefix}-0000-4000-8000-{n+1:012}`.
+    /// Pin the `obs_id` ↔ OBSERVATION-ORDER binding of a committed stream, and its length: the
+    /// stream carries exactly `expected_len` observations, and the `n`-th of them (0-indexed)
+    /// carries `{prefix}-0000-4000-8000-{n+1:012}`.
+    ///
+    /// **Observation order, NOT the file line.** The slice comes from [`read_jsonl`], which DROPS
+    /// control records, so the two diverge the moment a stream carries one: in
+    /// `capability-downgrade.jsonl` the `capability` record is on file line 3, which puts `obs_id`
+    /// `…0003` on file LINE 4. This doc said "line `n`" until story 5.1's review measured it. A
+    /// byte-pin that needs the file line must read the file, not this slice.
+    ///
+    /// **`expected_len` is not ceremony.** Without it the helper asserts only the ids of whatever it
+    /// was handed, so an empty or truncated slice passes: `assert_obs_ids(&[], "afafafaf", 0)` is
+    /// the only way to say "nothing here" out loud. The four inline loops this replaced iterated a
+    /// FIXED index list and panicked on a short stream; folding them into a bare `enumerate()` lost
+    /// that, and every call site happened to assert its own length beside the call — a guard living
+    /// at the call site, which the four families story 5.2b points here have no sibling to inherit
+    /// (story 5.1's review). Proven red by handing it a two-observation slice of the
+    /// three-observation `dhcp-churn` stream (story 5.1, mutation 7).
+    ///
+    /// The call sites keep their own `observations.len()` assertion, and that redundancy is
+    /// DELIBERATE — do not collapse it. Several of them index `observations[n]` with a fixed list
+    /// BEFORE reaching this helper, so their length assertion is what turns a truncated stream into
+    /// a named failure instead of an out-of-bounds panic. This one makes the helper self-sufficient
+    /// for a caller that has no such loop.
     ///
     /// The traps judge by `obs_id` while every byte-pin reads by INDEX. Without this, a deliberate
     /// re-authoring that swaps two lines' ids (with a re-hashed manifest) would invert what a
@@ -1905,15 +1978,22 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     /// duplication of one loop, not a second statement of anything.
     ///
     /// What this helper does encode, in one place, are two CORPUS CONVENTIONS: the fixed
-    /// `-0000-4000-8000-` middle segment, and sequential numbering from 1. Both hold for all 13
-    /// committed streams as of story 5.1. A future stream numbered otherwise gets its OWN
-    /// assertion — it is not re-authored to satisfy this helper.
-    fn assert_obs_ids(observations: &[Observation], prefix: &str) {
+    /// `-0000-4000-8000-` middle segment, and sequential numbering from 1 rendered in DECIMAL into
+    /// a hexadecimal field (invisible until a stream passes nine observations — the longest today
+    /// carries six). All three hold for the 13 streams under `scenario/replay/` and for the wire
+    /// artefact, the 14th, which is this helper's sixth call site. A future stream numbered
+    /// otherwise gets its OWN assertion — it is not re-authored to satisfy this helper.
+    fn assert_obs_ids(observations: &[Observation], prefix: &str, expected_len: usize) {
+        assert_eq!(
+            observations.len(),
+            expected_len,
+            "the stream must carry exactly {expected_len} observations"
+        );
         for (n, observation) in observations.iter().enumerate() {
             assert_eq!(
                 observation.obs_id.to_string(),
                 format!("{prefix}-0000-4000-8000-{:012}", n + 1),
-                "line {n} carries its authored obs_id"
+                "observation {n} carries its authored obs_id"
             );
         }
     }
@@ -1940,7 +2020,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         }
         // This test predates the `obs_id` ↔ line rule (story 4.15's review) and read purely by
         // index; story 5.1 back-fills the binding, since `dhcp-churn.toml` judges by `obs_id`.
-        assert_obs_ids(&observations, "adadadad");
+        assert_obs_ids(&observations, "adadadad", 3);
 
         let fact = |n: usize, pick: fn(&Fact) -> bool| {
             observations[n]
@@ -2022,7 +2102,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         }
         // This test predates the `obs_id` ↔ line rule (story 4.15's review) and read purely by
         // index; story 5.1 back-fills the binding, since `vrrp-virtual-mac.toml` judges by `obs_id`.
-        assert_obs_ids(&observations, "aeaeaeae");
+        assert_obs_ids(&observations, "aeaeaeae", 4);
 
         let fact = |n: usize, pick: fn(&Fact) -> bool| {
             observations[n]
@@ -2238,7 +2318,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         // obs_id, this test reads by index — without these pins, swapping two lines' obs_ids
         // (with a re-hashed manifest) would silently invert what each trap judges while every
         // byte-level assertion stayed green.
-        assert_obs_ids(&observations, "afafafaf");
+        assert_obs_ids(&observations, "afafafaf", 3);
 
         let fact = |n: usize, pick: fn(&Fact) -> bool| {
             observations[n]
@@ -2381,7 +2461,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             );
         }
         // The obs_id ↔ line binding (4.15's review rule): the traps judge by obs_id.
-        assert_obs_ids(&observations, "babababa");
+        assert_obs_ids(&observations, "babababa", 4);
 
         let fact = |n: usize, pick: fn(&Fact) -> bool| {
             observations[n]
@@ -2527,7 +2607,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             );
         }
         // The obs_id ↔ line binding (the standing rule): the traps judge by obs_id.
-        assert_obs_ids(&observations, "bcbcbcbc");
+        assert_obs_ids(&observations, "bcbcbcbc", 6);
 
         let fact = |n: usize, pick: fn(&Fact) -> bool| {
             observations[n]
@@ -2825,7 +2905,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         let connector_id = ConnectorId::from_uuid(u("33333333-3333-4333-8333-333333333333"));
         // The `obs_id` ↔ line binding — hoisted out of the loop below into the shared helper
         // (story 5.1); the placeholder-context pins that were fused with it stay where they are.
-        assert_obs_ids(&observations, "bdbdbdbd");
+        assert_obs_ids(&observations, "bdbdbdbd", 4);
         for (n, expected_len) in [(0usize, 4usize), (1, 4), (2, 3), (3, 4)] {
             let obs = &observations[n];
             assert_eq!(

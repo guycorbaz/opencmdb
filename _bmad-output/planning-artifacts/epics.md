@@ -1358,7 +1358,7 @@ So that the privacy rule covers the COMMITTED BYTES rather than only the fields 
 
 **And** each closure is proven to red on a committed-shaped input before it passes.
 
-### Story 5.2b: The four unpinned families state their premise in a test, not only in prose
+### Story 5.2b: The four unpinned families — and dhcp-churn's authored values — state their premise in a test, not only in prose
 
 _Inserted 2026-07-26 with Guy, one day after the decomposition and before any Epic 5 code was written — surfaced while preparing story 5.1, which could not absorb it (its AC1 strengthens byte-pins that EXIST; these four families have none). The letter suffix follows the house idiom for an INSERTED item (D56b, AC5b/7b/7c) so that 5.3–5.14 keep their numbers. It sits HERE, in the inherited-debt block and ahead of 5.5, deliberately: the corpus is the oracle the L1 join will be judged against, and hardening an oracle after its first consumer exists means bending the engine to fit whatever the corpus happens to say._
 
@@ -1368,13 +1368,13 @@ So that no committed family can state a premise its own bytes contradict, and no
 
 **Acceptance Criteria:**
 
-**Given** that `randomized-mac.jsonl`, `multi-nic.jsonl`, `shared-hardware-vm.jsonl` and `cloned-mac.jsonl` are named by NO test in the tree (`grep -rn "<name>.jsonl" --include=*.rs crates xtask` returns nothing for all four), so their authored values and their `obs_id` ↔ line binding are asserted by nothing narrower than the corpus walks and the sha256 lock — and `read_traps` only checks that a trap's `obs_id`s EXIST, never which line they name
+**Given** that `randomized-mac.jsonl`, `multi-nic.jsonl`, `shared-hardware-vm.jsonl` and `cloned-mac.jsonl` are named by no VALUE test in the tree — their only mention is the per-stream context table story 5.1 added (`fixture_connector.rs`, `committed_stream_contexts()`), which states each stream's declared context and asserts nothing about its contents — so their authored values and their `obs_id` ↔ line binding are asserted by nothing narrower than the corpus walks and the sha256 lock, and `read_traps` only checks that a trap's `obs_id`s EXIST, never which line they name _(this clause read "named by NO test in the tree (`grep -rn "<name>.jsonl" --include=*.rs crates xtask` returns nothing for all four)" until 2026-07-27: story 5.1's own commit falsified that grep — it now returns four hits, all in the table above. The conclusion is unchanged; only the check that establishes it is.)_
 **When** each family gains a byte-pin, in the shape 4.15–4.18 established (stream length · fact count per line · `assert_obs_ids` from story 5.1 · value pins on the premise)
 **Then** a deliberate re-authoring with a refreshed manifest can no longer invert what the family judges while every assertion stays green.
 
 **Given** `randomized-mac.jsonl` — 3 presences whose whole family rests on ONE octet
 **When** it is pinned
-**Then** N1 and N2 carry the byte-identical MAC `02:00:5e:00:53:20` (value-pinned, not merely asserted equal), N3's differs and is value-pinned too, the three addresses `192.0.2.30/.31/.32` are pinned, both lines carry exactly 2 facts, and the instants are the authored vector — so a one-octet edit that turns the `l1-exact-mac` pair into a distinct-MAC pair reds HERE rather than at the engine's first run, where it would read as the engine's fault.
+**Then** N1 and N2 carry the byte-identical MAC `02:00:5e:00:53:20` (value-pinned, not merely asserted equal), N3's differs and is value-pinned too, the three addresses `192.0.2.30/.31/.32` are pinned, ALL THREE lines carry exactly 2 facts (`Mac` + `IpV4` — measured 2026-07-27; this read "both lines" until story 5.1's review caught a three-presence premise constrained for two), and the instants are the authored vector — so a one-octet edit that turns the `l1-exact-mac` pair into a distinct-MAC pair reds HERE rather than at the engine's first run, where it would read as the engine's fault.
 
 **Given** `multi-nic.jsonl`, whose premise is entirely geometric and which the harness validates nowhere (the VRRP byte-pin's own doc says uplink geometry is pinned "here or nowhere" — true precisely because VRRP HAS a byte-pin)
 **When** it is pinned

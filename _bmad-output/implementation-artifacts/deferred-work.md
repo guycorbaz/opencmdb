@@ -335,7 +335,7 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
 
 ## Deferred from: code review of story-4.10 (2026-07-24)
 
-- ✅ **CLOSED by story 5.1.** `every_committed_stream_re_serializes_to_its_committed_bytes`
+- ✅ **CLOSED by story 5.1.** `every_replay_stream_re_serializes_to_its_committed_bytes`
   (`crates/opencmdb-bin/src/fixtures.rs`) walks every `.jsonl` under `scenario/replay/`, re-serializes
   record by record and compares to the committed bytes line by line, naming the file and its 1-indexed
   line on failure. CONTROL records are covered too — `ControlRecord` gained `Serialize` for exactly
@@ -343,6 +343,12 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   inserted after a colon on line 1 of `dhcp-churn.jsonl`, and the same on the capability line
   (line 3) of `capability-downgrade.jsonl`. What it pins is the SHAPE, starting from the file —
   never the authored values; see the story-4.13 entry below, which stays open for that reason.
+  _(Strengthened 2026-07-27, on this story's own code review: the line-by-line comparison ran on
+  `str::lines()`, which strips a trailing `\r` as well as the `\n`, so a stream re-authored with
+  CRLF endings or with its final newline dropped round-tripped GREEN — for 12 of the 13 streams,
+  since only `minimal.jsonl` carried whole-file byte equality. The witness now refuses both, each
+  proven red on `dhcp-churn.jsonl`. The sha256 lock is not the backstop here: the threat model this
+  entry exists for is a DELIBERATE re-authoring, which refreshes `MANIFEST.toml` by definition.)_
   ~~A new committed replay stream's serde byte-shape is not pinned by a round-trip test.~~ The
   byte-exactness guard `re_serializing_reproduces_the_committed_bytes`
   (`crates/opencmdb-bin/src/fixtures.rs`) round-trips only `minimal.jsonl`, so no other committed
@@ -365,7 +371,15 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   `FixtureConnector::load` with a HAND-AUTHORED per-stream context table (path, `ConnectorId`,
   `scopes_covered`, initial `Capabilities`) — never derived from the observations, which would make
   `ForeignConnectorId` and `UncoveredScope` vacuous by construction. Checked in both directions: a
-  walked stream with no entry reds, and an entry naming no file reds. All three guards proven to red.
+  walked stream with no entry reds, and an entry naming no file reds.
+  _(This read "All three guards proven to red" until the story's own code review on 2026-07-27,
+  which counted the assertions the walk actually ships and found more than three. The true tally,
+  after the review-fix pass: **four proven red** — admissibility itself (a foreign `ConnectorId`),
+  the stream-without-an-entry direction, the entry-without-a-file direction, and
+  `checked == table.len()` against a duplicated entry — plus `checked > 0`, which moved into
+  `walk_replay_streams` and was proven red there, and ONE that is defence-in-depth and says so in
+  its own comment: `walked.insert(...)` is unfalsifiable, because a stack walk that panics on
+  symlinks cannot yield the same path twice.)_
   **What it does NOT prove** is stated in the test's own doc: the walk shows every stream is
   ADMISSIBLE and never observes `UndeclaredFactKind` firing; the fact-kind check is non-vacuous only
   on `partial-then-failed.jsonl` and on both sides of `capability-downgrade.jsonl`'s record, and is
@@ -453,23 +467,91 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
 _Raised BY the story while scoping it, not by its review — hence no "code review of" in the heading.
 It is the one finding 5.1 surfaced and deliberately did not fix._
 
-- **Four committed family streams are named by NO test at all.** `randomized-mac.jsonl` (4.9),
+- **Four committed family streams are named by no VALUE test.** `randomized-mac.jsonl` (4.9),
   `multi-nic.jsonl` (4.10), `shared-hardware-vm.jsonl` (4.11) and `cloned-mac.jsonl` (4.12) have no
-  byte-pin test — verified by `grep -rn "<name>.jsonl" --include=*.rs crates xtask`, which returns
-  nothing for all four. So their `obs_id` ↔ line binding and their authored values are asserted by
+  byte-pin test; their only mention anywhere in the tree is the context table story 5.1 added
+  (`fixture_connector.rs`, `committed_stream_contexts()`), which states each stream's declared
+  context and asserts nothing about its contents.
+  _(This bullet's headline read "**named by NO test at all**" and cited
+  `grep -rn "<name>.jsonl" --include=*.rs crates xtask`, "which returns nothing for all four", until
+  the story's own code review on 2026-07-27. **The named check was falsified by the very commit that
+  wrote it**: that grep now returns four hits, all in the table above. The CONCLUSION is unchanged —
+  no test asserts these four streams' values or their `obs_id` order — but a cause needs a check that
+  still holds, so the check is restated rather than the conclusion re-asserted.)_
+  So their `obs_id` ↔ line binding and their authored values are asserted by
   nothing narrower than the corpus walks and the sha256 lock, and their binding is WEAKER than
   `dhcp-churn`'s was before this story: `read_traps`'s cross-check only asserts that a trap's
   `obs_id`s EXIST in the stream, so swapping two ids inside one of those four files inverts what its
   traps judge and nothing reds. **Story 5.1 could not close it:** AC1 strengthens byte-pins that
   exist, and here there is no test to strengthen. What 5.1 does give them is admissibility
   (`every_committed_replay_stream_is_admissible_to_the_connector`) and byte-SHAPE
-  (`every_committed_stream_re_serializes_to_its_committed_bytes`) — **not** value pins.
+  (`every_replay_stream_re_serializes_to_its_committed_bytes`) — **not** value pins.
   **Owner: story 5.2b**, inserted on 2026-07-26 in Epic 5's debt block, immediately after 5.2 and
   ahead of the L1 join at 5.5 — the corpus is the oracle that join is judged against. A register item
   with a named owner and a slot is not a deferral, and writing it as one would misstate the plan.
-  The `assert_obs_ids` helper 5.1 introduces is what 5.2b builds on: it takes four more families
-  without change.
+  The `assert_obs_ids` helper 5.1 introduces is what 5.2b builds on: each of the four families calls
+  it with its prefix and its observation count.
+  _(This read "it takes four more families **without change**" until story 5.1's code review: the
+  review found the helper asserted no length, so an empty or truncated slice passed it silently —
+  the exact vacuity 5.1 exists to close, re-introduced in the helper that closes it. Guy's call was
+  to change the shape rather than keep the promise: it now takes `expected_len` and asserts the
+  count itself, so 5.2b's four call sites pass their length instead of restating it beside the
+  call.)_
   _This stays here and does NOT become a GitHub issue: the register is the established home for
   review-surfaced corpus debt (every entry since 4.1), and an issue is reserved for scope that MOVES
   between epics (the 4.19b precedent, #34). Nothing moves — the work stays in Epic 5, three stories
   later._
+
+## Deferred from: code review of story-5.1 (2026-07-27)
+
+_Five items the review raised and did not fix. The first four are pre-existing behaviour of
+`walk_replay_streams`, which story 5.1 did not change — but the hoist made that one function the
+shared definition of "every committed stream" across TWO test modules, so each item's blast radius
+grew even though its code did not. Recorded here because a walk that quietly sees less, or sees a
+different set per run, was the recurring defect of 4.1/4.3._
+
+- **`walk_replay_streams` never symlink-checks its own root.** `fixtures.rs:723` takes
+  `fixture_path("scenario/replay")` and pushes it straight onto the stack; the `is_symlink` panic at
+  `:733` only ever inspects entries found INSIDE an already-opened directory, and `read_dir` follows
+  a symlinked root silently. So the doc's promise at `:720` — *"refusing symlinks"* — does not hold
+  for `fixtures/`, `fixtures/scenario/` or `fixtures/scenario/replay/` themselves: the whole corpus
+  could be a link to bytes outside the repository while every walk, and now the corpus-wide
+  admissibility and round-trip claims, reported success. Owner: whoever next touches the walker.
+
+- **No `is_file()` check, so a non-regular entry makes the suite HANG instead of fail.**
+  `fixtures.rs:733-758` tests only `is_symlink()` and `is_dir()`, then calls `visit(&path)`, and
+  every caller immediately does `std::fs::read_to_string` (`:915`, `:982`, `:1508`, `:1528`). A FIFO
+  or device node named `x.jsonl` under `scenario/replay/` therefore blocks forever — the one failure
+  mode with no diagnostic at all. The sibling walk in the same file already guards this
+  (`fixtures.rs:1872`, `file_type.is_file() && path.extension()…`), so the fix is one condition and
+  the precedent is local.
+
+- **The walk yields unsorted `read_dir` order while its documented sibling sorts.**
+  `fixtures.rs:726-761` pushes and pops a stack with no ordering, versus `trap_gate.rs:355`
+  `found.sort();` — *"Sorted so a discovery run is deterministic regardless of readdir order."* With
+  a corpus carrying two defects, WHICH stream's panic surfaces first varies run to run and machine to
+  machine, so the connector walk and the round-trip witness can report a different failure on each
+  run of the same broken corpus. ⚠️ Relevant to open issue **#38** (unexplained local
+  non-determinism) as a thing to RULE OUT, **not** as a cause: nothing has been measured here, and
+  *a cause needs a check, not a plausible story*. Owner: whoever next touches the walker; one
+  `sort()` closes it and makes any future #38 observation reproducible.
+
+- **`scenario/wire/unifi-clients.expected.jsonl` has no round-trip byte-shape pin at all.** It is a
+  committed `.jsonl` of `Observation`s, but it sits outside `scenario/replay/`, so story 5.1's
+  corpus-wide witness cannot reach it (deliberately — AC3 scoped the walk to `scenario/replay/` and
+  the story's Dev Notes say so explicitly). Its own test `:2818` asserts facts, `obs_id`s and
+  privacy, but never re-serializes. It is therefore the ONE committed stream whose per-line
+  serialized shape and field order are pinned by nothing but the sha256 lock — a hand edit to its
+  key order is invisible to every other gate. Owner: Epic 11's wire parser (`CONSUMER PENDING`,
+  issue #34), which is when the file gains a real consumer and the pin stops being speculative.
+
+- **Four cosmetic nits, grouped so none is lost.** (1) `ControlRecord` gained an **unconditional**
+  `Serialize` (`fixtures.rs:126`) for a need its own doc calls `#[cfg(test)]`-only;
+  `#[cfg_attr(test, derive(serde::Serialize))]` expresses the actual requirement — low stakes, the
+  type is private. (2) The same derive uses an inline `serde::Serialize` path beside an imported
+  `Deserialize`. (3) `fixture_connector.rs:1605` prefixes the panic with `{relative}` when
+  `FixtureError`'s `Display` already carries the path, so the recorded red names the file twice —
+  defensible as belt-and-braces, but the diff itself contains the evidence it is redundant.
+  (4) `format!("{prefix}-0000-4000-8000-{:012}", n + 1)` renders a DECIMAL sequence into a
+  hexadecimal UUID field; invisible until a stream exceeds nine lines (the longest today is six), and
+  the helper's doc lists two conventions without naming this third one.

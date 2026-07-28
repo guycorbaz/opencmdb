@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-27  # Story 5.1 implemented → review (see its block under Epic 5)
+last_updated: 2026-07-28  # Story 5.1 reviewed; 12/12 review patches applied (see its block under Epic 5)
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -165,14 +165,36 @@ development_status:
   # hand-authored context table checked in BOTH directions; all 13 round-trip to their committed
   # bytes line by line, control records included (`ControlRecord` gained `Serialize` — no
   # mirror-struct fallback needed). Corpus bytes UNCHANGED, `MANIFEST.toml` untouched. 247 → 249
-  # tests. Five mutations proven to red and recorded in the story file.
+  # tests. SIX mutations proven to red and recorded in the story file.
+  # (This line said "Five" until 2026-07-28 — six were enumerated all along, and this file is the
+  # live source of truth, so it was the worst place to carry the wrong number.)
+  #
+  # CODE REVIEW held 2026-07-27, three parallel layers; the fixes landed 2026-07-28.
+  # 12 of 12 `[Review][Patch]` items resolved, 5 `[Review][Defer]` items registered in
+  # deferred-work.md. What it actually caught, beyond wording:
+  #   · the tree handed back by the review pass DID NOT COMPILE — the two byte-level guards had
+  #     replaced the `let records = read_records(path)` binding, so nothing had been measured
+  #     against that state; the whole gate and the whole prove-to-red log were re-run, not cited.
+  #   · `assert_obs_ids` asserted no COUNT, so an empty or truncated slice passed it — the vacuity
+  #     the story exists to close, re-introduced in the helper that closes it. It now takes
+  #     `expected_len` (Guy's call; this knowingly revises what story 5.2b was promised).
+  #   · the round-trip compared `str::lines()`, which strips a trailing `\r`, so a stream
+  #     re-authored as CRLF or with its final newline dropped round-tripped GREEN. Two guards added.
+  #   · the register, this story and epics.md all cited a `grep` that story 5.1's OWN commit
+  #     falsified. Worst placement was epics.md, where it was story 5.2b's `Given` — its premise.
+  # SIX more mutations taken (12 total), and every citation in the log re-observed on the final
+  # tree: two had pointed at code that was not in it. One assertion is named as unfalsifiable
+  # defence-in-depth rather than credited with a red it cannot have.
+  # Gate re-run in full 2026-07-28: clippy clean · 249 tests · all xtask ci gates green · corpus
+  # bytes unchanged (`git status` under fixtures/ empty).
   # WHAT MOVED, and did not close: the FOURTH corpus byte-fidelity register entry (story-4.13's
   # review — the dhcp-churn byte-pin pins MAC/hostname RELATIONALLY, never by value) is annotated
   # STILL OPEN, deliberately: 5.1's round-trip starts from the FILE, so it pins byte-SHAPE and never
   # authored values. And a new `## Deferred from: story-5.1` entry records that four committed
   # families (randomized-mac, multi-nic, shared-hardware-vm, cloned-mac) are named by NO test —
   # owned by story 5.2b, not a deferral.
-  # `review`, not `done`: code-review has not run. Not yet pushed, no PR open.
+  # STILL `review`, not `done`: code-review HAS now run and its 12 patches are applied, but `done`
+  # is the MERGE's business in this project's flow. Not yet pushed, no PR open — Guy's call.
   5-1-corpus-pins-obs-id-binding: review
   5-2-privacy-floor-reaches-the-bytes: backlog
   # 5.2b was INSERTED on 2026-07-26, one day after the decomposition and before any Epic 5 code
