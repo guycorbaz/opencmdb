@@ -295,10 +295,14 @@ pub fn score_corpus(
 /// is an error, not a smaller result. `README.md` is exempt at any depth, exactly as the corpus
 /// lock's orphan rule exempts it, so documenting a directory does not turn the gate red.
 ///
-/// This is the harness's OWN walk, not the `#[cfg(test)]` walks in `fixtures.rs`: `walk_replay_streams`
-/// is a replay-stream helper (a different tree), and `every_trap_file_in_the_corpus_is_valid` is an
-/// inline corpus-integrity test that walks traps independently and — like this walk — exempts
-/// `README.md`. Promoting either would move its callers for no gain here.
+/// This is the harness's OWN walk, not one of the `#[cfg(test)]` walks in `fixtures.rs`. The trap
+/// tree's test-side walk is `fixtures::walk_trap_files` (story 5.2 hoisted it out of
+/// `every_trap_file_in_the_corpus_is_valid`, which had walked inline). The two stay SEPARATE
+/// deliberately — this one is the scoring harness's discovery path and returns `Result` where the
+/// test walk panics — but they are held to the same RULES, and a change to any of them belongs in
+/// both: dot-entries skipped, `README.md` exempt at any depth, symlinks refused, foreign
+/// extensions refused, sorted order. Promoting either into the other would move its callers for no
+/// gain here.
 fn discover_trap_files(root: &Path) -> Result<Vec<PathBuf>, FixtureError> {
     let mut found = Vec::new();
     let mut stack = vec![root.to_path_buf()];
@@ -327,6 +331,28 @@ fn discover_trap_files(root: &Path) -> Result<Vec<PathBuf>, FixtureError> {
                         path.display()
                     )),
                 });
+            }
+            // Tooling scratch is not corpus. `fixtures/scenario/traps/.claude/.cc-writes` already
+            // exists in a working tree (created 2026-07-26, empty — the only reason discovery
+            // stayed green), and the foreign-extension refusal below would have accused the CORPUS
+            // of a defect the moment any tool wrote a file under it. Measured before the skip
+            // landed (story 5.2): one `probe.txt` there reds `every_trap_file_in_the_corpus_is_valid`
+            // AND six tests in this module — including `an_answer_for_an_unknown_trap_is_refused`,
+            // which expects an error and got `Io` instead of `AnswerForUnknownTrap`, because
+            // discovery fails before `score_corpus` ever validates an answer.
+            //
+            // Story 5.1 closed this class on the REPLAY tree only; this is the same one line on
+            // the trap tree, in both of its walks. The cost is named as 5.1 named it: a
+            // `.hidden.toml` is no longer discovered — acceptable because the corpus never hides
+            // an artefact and `MANIFEST.toml` lists every one by its visible name. `xtask`'s own
+            // corpus walk has skipped dot-entries since 2026-07-21, so the lock and the orphan
+            // check stay consistent with both walks in both directions.
+            if entry
+                .file_name()
+                .to_str()
+                .is_some_and(|n| n.starts_with('.'))
+            {
+                continue;
             }
             if file_type.is_dir() {
                 stack.push(path);

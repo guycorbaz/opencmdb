@@ -793,6 +793,131 @@ pub(crate) fn walk_replay_streams(visit: &mut dyn FnMut(&Path)) -> usize {
     checked
 }
 
+/// Walk every `.toml` under `scenario/traps/`, recursively, in SORTED order, refusing symlinks
+/// and any other extension, and return how many were visited.
+///
+/// **Test-only, and hoisted by story 5.2** out of `every_trap_file_in_the_corpus_is_valid`, for
+/// the reason that hoisted the replay walk: two claims about the trap tree — that every file
+/// parses, and that no file's TEXT carries a real address — are made at two layers and must walk
+/// the same tree, or "every trap file" quietly means two different sets. A third hand-written walk
+/// would have been accidental duplication.
+///
+/// The production walk `trap_gate::discover_trap_files` is deliberately NOT this function and is
+/// not promoted into it: that one is the scoring harness's own discovery path, returns `Result`
+/// rather than panicking, and its doc argues the separation. The two are held to the same RULES
+/// (dot-entries skipped, `README.md` exempt at any depth, entry symlinks refused, foreign
+/// extensions refused, sorted order) — that agreement is the point, not a shared body. **The
+/// agreement is not total, and the two exceptions are named rather than implied:** the production
+/// walk checks no ROOT symlink and refuses no non-file entry. Both are registered under
+/// `deferred-work.md#Deferred from: code review of story-5.2` with an owner.
+///
+/// It asserts its own non-emptiness, so a caller cannot pass vacuously by walking nothing. That
+/// is the shallow half of the vacuity question story 5.1's review raised; the deep half — a scan
+/// over ten files carrying zero ADDRESSES — counting files cannot reach, and is answered by the
+/// caller's own coverage assertion.
+///
+/// Three defects the register recorded against `walk_replay_streams` are closed here rather than
+/// inherited (`deferred-work.md#Deferred from: code review of story-5.1`): the ROOT is
+/// symlink-checked, not only its entries; a non-file entry (a FIFO named `x.toml` would make
+/// `read_to_string` block, with no diagnostic at all) is refused by name; and the yielded order is
+/// SORTED, so with two broken files WHICH one panics does not vary per run.
+///
+/// **Closed HERE means closed in this walk, and the distinction is load-bearing:** the production
+/// walk still has no `is_file()` refusal, so a FIFO under `scenario/traps/` continues to hang the
+/// SUITE through `discover_trap_files`'s callers — this walk fails by name, and the six
+/// `trap_gate` tests that drive the other one block. Measured by story 5.2's code review:
+/// `timeout 90 cargo test -p opencmdb-bin` returns 143 with no output even with the guard below in
+/// place; only a filtered run surfaces the named failure. Registered, not fixed here (story 5.2's
+/// ACs scope it to the test walk).
+///
+/// The paths it yields are ABSOLUTE, exactly as [`walk_replay_streams`]'s are.
+#[cfg(test)]
+pub(crate) fn walk_trap_files(visit: &mut dyn FnMut(&Path)) -> usize {
+    let root = fixture_path("scenario/traps").unwrap();
+    // The root itself, not only what is under it: a walk whose doc says "refuses symlinks" while
+    // its own starting point could be one is a doc comment asserting more than the code does.
+    let root_meta =
+        std::fs::symlink_metadata(&root).unwrap_or_else(|e| panic!("stat {}: {e}", root.display()));
+    assert!(
+        !root_meta.file_type().is_symlink(),
+        "{}: the corpus must contain its own bytes, not a symlink",
+        root.display()
+    );
+    let mut found = Vec::new();
+    let mut stack = vec![root.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in
+            std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("reading {}: {e}", dir.display()))
+        {
+            let entry = entry.expect("a directory entry must be readable");
+            let path = entry.path();
+            // `file_type()` does not follow symlinks, so a link can neither smuggle a file in nor
+            // be walked out of the corpus — but it must not pass unnoticed either.
+            let file_type = entry.file_type().expect("file type");
+            if file_type.is_symlink() {
+                panic!(
+                    "{}: the corpus must contain its own bytes, not a symlink",
+                    path.display()
+                );
+            }
+            // Tooling scratch is not corpus — see `discover_trap_files` for the measurement that
+            // put this line in both trap walks (story 5.2), and `walk_replay_streams` for the
+            // replay-tree twin story 5.1 landed.
+            if entry
+                .file_name()
+                .to_str()
+                .is_some_and(|n| n.starts_with('.'))
+            {
+                continue;
+            }
+            if file_type.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            // `README.md` is exempt at any depth, exactly as the corpus lock's orphan rule exempts
+            // it (`xtask/src/main.rs`) and as both sibling walks do — documenting this directory
+            // (e.g. the reality-debt register) must not red the test suite.
+            if path.file_name().and_then(|n| n.to_str()) == Some("README.md") {
+                continue;
+            }
+            // Neither a file nor a directory: a FIFO named `x.toml` passes the extension check and
+            // then blocks `read_to_string` forever, so THIS walk's callers would hang instead of
+            // failing. The register calls that "the one failure mode with no diagnostic at all".
+            // It refuses the entry here only — `discover_trap_files` has no such guard, so the
+            // suite still hangs through its six callers (registered, story 5.2's review).
+            assert!(
+                file_type.is_file(),
+                "{}: only regular files belong under scenario/traps/",
+                path.display()
+            );
+            // Case-insensitive: a `broken.TOML` skipped silently would be hashed by the gate and
+            // read by nobody.
+            let is_toml = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| e.eq_ignore_ascii_case("toml"));
+            assert!(
+                is_toml,
+                "{}: only .toml trap files belong under scenario/traps/",
+                path.display()
+            );
+            found.push(path);
+        }
+    }
+    // Sorted so that with two broken files, WHICH one panics is the same on every run — the
+    // property `discover_trap_files` already has, and the reason the two walks now agree.
+    found.sort();
+    for path in &found {
+        visit(path);
+    }
+    assert!(
+        !found.is_empty(),
+        "no trap file found under scenario/traps/ — every caller of this walk would otherwise \
+         pass by proving nothing"
+    );
+    found.len()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1034,22 +1159,74 @@ mod tests {
     fn the_corpus_carries_no_real_network_data() {
         walk_replay_streams(&mut |path| {
             for record in read_records(path).expect("a corpus stream must read") {
-                match record {
-                    Record::Observation(observation) => {
-                        assert_facts_are_synthetic(&observation.facts, path)
-                    }
-                    // Exhaustive on purpose — no `_` arm. A new record kind must break THIS match
-                    // and force a privacy decision rather than slip past. Story 4.5b's capability
-                    // record did exactly that, and the decision is the arm below.
-                    Record::Failure(error) => assert_text_is_synthetic(&error.to_string(), path),
-                    // A capability record carries a timestamp and a set of `FactKind` enum values —
-                    // no free text, no address, nothing an author can type a real hostname into.
-                    // Nothing to scan, stated rather than skipped.
-                    Record::Capability(_) => {}
-                }
+                assert_record_is_synthetic(&record, path);
             }
         });
     }
+
+    /// The privacy rule applied to ONE record, whichever kind it is.
+    ///
+    /// Extracted from the walk above by story 5.2 so the `raw` guard can drive exactly the code
+    /// the corpus walk drives, rather than a re-typed copy of it that could agree with a bug. The
+    /// walk's fixed root is what forced the extraction: `walk_replay_streams` hardcodes
+    /// `scenario/replay`, that root is load-bearing for story 5.1's callers, and a `scratch_dir`
+    /// tree therefore cannot be walked into the rule.
+    ///
+    /// The `match` stays exhaustive with NO `_` arm, which is the property the extraction had to
+    /// preserve: a new `Record` variant must break THIS match and force a privacy decision rather
+    /// than slip past. Story 4.5b's capability record did exactly that, and the decision is its
+    /// arm below.
+    fn assert_record_is_synthetic(record: &Record, path: &Path) {
+        match record {
+            Record::Observation(observation) => {
+                assert_facts_are_synthetic(&observation.facts, path);
+                // `raw` is opaque provenance that no decision reads (D19) — which is precisely why
+                // it went unscanned until story 5.2: the walk passed only `facts` to the rule, so
+                // the one field whose whole purpose is "whatever the source sent" was the one
+                // field a pasted capture could land in unseen.
+                //
+                // **This call site is VACUOUS on today's committed corpus, and saying so is the
+                // point.** Across all 13 replay streams and the wire artefact, exactly ONE
+                // observation carries a non-null `raw` — `minimal.jsonl` line 3,
+                // `{"provenance":"never read by a decision"}` — and it holds no address. So no
+                // committed `raw` currently exercises this; deleting this line reds nothing in the
+                // corpus. That is exactly why it does not defend itself and ships with a permanent
+                // guard, `an_observations_raw_payload_is_scanned`, whose mutation is record-side
+                // BECAUSE the corpus has no `raw` to break.
+                if let Some(raw) = &observation.raw {
+                    assert_text_is_synthetic(raw, path);
+                }
+            }
+            Record::Failure(error) => {
+                assert_text_is_synthetic(&error.to_string(), path);
+            }
+            // A capability record carries a timestamp and a set of `FactKind` enum values —
+            // no free text, no address, nothing an author can type a real hostname into.
+            // Nothing to scan, stated rather than skipped.
+            Record::Capability(_) => {}
+        }
+    }
+
+    /// The addresses one text scan actually inspected, in the order it met them.
+    ///
+    /// Returned rather than tallied privately because a scan that finds NOTHING is vacuous and
+    /// its caller cannot tell. Counting FILES does not catch it — that is the level story 5.1's
+    /// review reached, and the level below it is a scan over ten files carrying zero addresses.
+    /// `walk_trap_files`'s caller asserts on these values.
+    #[derive(Default)]
+    struct ScannedText {
+        /// Every IPv4 address the scan recognised; duplicates kept, so the caller decides
+        /// whether it cares about occurrences or distinct values.
+        ips: Vec<Ipv4Addr>,
+        /// Every MAC the scan recognised; duplicates kept, same reason.
+        macs: Vec<MacAddr>,
+    }
+
+    /// The longest text an address can occupy: `00:11:22:33:44:55` is 17 bytes, and
+    /// `Ipv4Addr::from_str` refuses leading zeros so `255.255.255.255` (15) is its ceiling.
+    /// Bounding the longest-match search by it keeps the scan linear in the text rather than
+    /// quadratic in a long hex run.
+    const LONGEST_ADDRESS: usize = 17;
 
     /// Free text authored by a fixture author must carry no real address.
     ///
@@ -1057,21 +1234,100 @@ mod tests {
     /// as a structured fact. That is deliberately narrower than "no private data" — a hostname in
     /// prose cannot be recognised mechanically — so it is a floor, not a proof. The register
     /// carries what it does not cover.
-    fn assert_text_is_synthetic(text: &str, path: &Path) {
+    ///
+    /// **The tokenizer is boundary-anchored longest-match** (story 5.2). It normalises `-` to `:`,
+    /// splits into maximal runs of `[0-9a-fA-F.:]`, and inside a run tries a candidate only at the
+    /// run start or immediately after a `.` or `:`, taking the LONGEST prefix that parses and
+    /// resuming after it. That shape is what sees an address wearing punctuation on either side
+    /// (`198.18.0.1.`, `00:11:22:33:44:55:`), an INTERIOR separator (`198.18.0.1:8080`) and the
+    /// dash form (`00-11-22-33-44-55`) — three evasions the previous split-on-punctuation
+    /// tokenizer let through, each observed green before it was closed.
+    ///
+    /// **Enumerating every SUBSTRING instead reds the committed corpus** — `Ipv4Addr::from_str`
+    /// rejects only leading zeros, so `92.0.2.90` parses out of the documentation address
+    /// `192.0.2.90`. That is not a citation: dropping the resume below and advancing one byte at a
+    /// time was run, and `the_wire_spec_encodes_the_measured_field_behaviours` reds naming
+    /// `92.0.2.90` (story 5.2, mutation 6).
+    ///
+    /// **Which of the two conjuncts earns that, measured rather than assumed:** it is the RESUME
+    /// (`i += matched.max(1)`), not the start anchor — with longest-match-and-resume in place, an
+    /// interior start inside an address is never reached anyway. Removing the anchor alone was
+    /// observed to leave the whole suite green **at the time it was run, 127 tests, before the
+    /// blindness guard below existed** (story 5.2, mutation 5); in the delivered tree it reds that
+    /// guard and nothing else (mutation 7). The anchor is kept as specified because it is what
+    /// bounds the scan to address-shaped positions rather than sliding through arbitrary hex, but
+    /// its contribution to CORPUS safety is unfalsifiable and is not claimed.
+    ///
+    /// **What remains a floor, named rather than elided.** The list is longer than the anchor's own
+    /// limit, and a short list read as a complete one is how an owner stops being assigned:
+    /// - a hostname in prose still cannot be recognised mechanically;
+    /// - an address glued to a HEXDIGIT prefix is invisible — `ab198.18.0.1`, but equally
+    ///   `1198.18.0.1`, since the rule is "neither a run start nor preceded by `.` or `:`" and a
+    ///   digit is as much a hexdigit as a letter. Pinned by
+    ///   `the_text_scanner_is_blind_to_an_address_glued_to_hex`, so the sentence you are reading
+    ///   has a check behind it;
+    /// - **IPv6 is not scanned at all.** Only `Ipv4Addr` and `MacAddr` are attempted, so an IPv6
+    ///   literal — pure hex and colons, collected as a run and then discarded — passes clean. That
+    ///   matters most on `Observation.raw`, the field whose whole purpose is "whatever the source
+    ///   sent"; and this rule's own multicast argument below invokes real IPv6 interface-identifier
+    ///   bytes as the thing worth refusing;
+    /// - **zero-padded IPv4** (`010.001.002.003`) is invisible, the mirror image of the
+    ///   leading-zero rejection that makes the substring route unusable above;
+    /// - **MAC notations other than colon and dash** — the Cisco dotted form (`0011.2233.4455`,
+    ///   which every IOS/Aruba/HP CLI emits) and the bare form (`001122334455`) — are the same
+    ///   address the dash row closes, in a shape `MacAddr::from_str` cannot read;
+    /// - **the resume can swallow a real address adjacent to an accepted one.** Longest-match is
+    ///   committed and never backtracks, so `0a:00:11:22:33:44:55` matches the synthetic
+    ///   `0a:00:11:22:33:44` and skips the vendor MAC starting three bytes in, and
+    ///   `192.0.2.110.0.0.1` matches the documentation `192.0.2.110` and skips `10.0.0.1`. This one
+    ///   is a limit of the mechanism story 5.2 introduced, not an inherited one.
+    ///
+    /// All of the above are registered under `deferred-work.md#Deferred from: code review of
+    /// story-5.2`. None is closed here; the story's title is a direction, not a completion claim.
+    fn assert_text_is_synthetic(text: &str, path: &Path) -> ScannedText {
         let where_ = path.display();
-        for token in text.split(|c: char| !(c.is_ascii_hexdigit() || c == '.' || c == ':')) {
-            if let Ok(addr) = token.parse::<Ipv4Addr>() {
-                assert_documentation_ip(addr, path);
-            }
-            if let Ok(mac) = MacAddr::from_str(token) {
-                assert!(
-                    is_synthetic_mac(mac),
-                    "{where_}: free text names {mac}, which is neither locally administered nor \
-                     in the IANA VRRP virtual-router range 00:00:5e:00:01:xx — a real vendor \
-                     address must never be committed"
-                );
+        let mut seen = ScannedText::default();
+        // `-` separates a MAC in the wild but SPLIT tokens here, so the dash form shattered into
+        // six two-character fragments before anything could parse it. Normalising in the scanner
+        // keeps `MacAddr::from_str` colon-only: widening a domain parser for a test's convenience
+        // is a frontier violation (D47) and would change what the shipped connectors accept off
+        // the wire.
+        let normalised = text.replace('-', ":");
+        for run in normalised.split(|c: char| !(c.is_ascii_hexdigit() || c == '.' || c == ':')) {
+            // Every byte of a run is ASCII by construction of the predicate above, so byte
+            // indices and char boundaries coincide and `run[i..end]` cannot split a character.
+            let bytes = run.as_bytes();
+            let mut i = 0usize;
+            while i < bytes.len() {
+                if i > 0 && bytes[i - 1] != b'.' && bytes[i - 1] != b':' {
+                    i += 1;
+                    continue;
+                }
+                let mut matched = 0usize;
+                let ceiling = bytes.len().min(i + LONGEST_ADDRESS);
+                for end in (i + 1..=ceiling).rev() {
+                    let candidate = &run[i..end];
+                    if let Ok(mac) = MacAddr::from_str(candidate) {
+                        assert!(
+                            is_synthetic_mac(mac),
+                            "{where_}: free text names {mac}, which is {}",
+                            mac_refusal_reason(mac)
+                        );
+                        seen.macs.push(mac);
+                        matched = end - i;
+                        break;
+                    }
+                    if let Ok(addr) = candidate.parse::<Ipv4Addr>() {
+                        assert_documentation_ip(addr, path);
+                        seen.ips.push(addr);
+                        matched = end - i;
+                        break;
+                    }
+                }
+                i += matched.max(1);
             }
         }
+        seen
     }
 
     /// The one rule saying which MAC bytes may be committed, shared by every site that checks a
@@ -1081,13 +1337,51 @@ mod tests {
     ///
     /// The invariant was never "U/L bit set" — that was the approximation. It is "no committed
     /// byte can identify a real network". Two byte shapes satisfy it: a locally-administered
-    /// address (the synthetic corpus idiom), and the IANA VRRP IPv4 virtual-router block
+    /// UNICAST address (the synthetic corpus idiom), and the IANA VRRP IPv4 virtual-router block
     /// `00:00:5e:00:01:xx` — a PROTOCOL address, identical on every VRRP deployment on earth
     /// with that VRID, the MAC analog of an RFC 5737 documentation IP (story 4.14). The list is
     /// CLOSED and 5-octet exact; a new range (HSRP's `00:00:0c:07:ac` is a Cisco OUI, not IANA)
     /// enters only alongside a committed fixture that exercises it, with its own prove-to-red.
+    ///
+    /// **Multicast is refused whatever its U/L bit says** (story 5.2). A multicast address names
+    /// no interface, so "locally administered" tells nothing about whether its bytes came from a
+    /// real network — and an IPv6 solicited-node multicast MAC (`33:33:ff:xx:xx:xx`) embeds the
+    /// low three bytes of a real IPv6 address, i.e. real interface-identifier bytes, while
+    /// wearing a set U/L bit that admitted it. `01:00:5e:…` was already refused and still is by the
+    /// same leg as before — its U/L bit is clear, so `&&` short-circuits and the I/G test never
+    /// runs on it. What the two now share is the stated REASON, not the branch that refuses them:
+    /// `mac_refusal_reason` gives both the multicast sentence. Measured
+    /// against every committed MAC before the change — 39 distinct addresses across `Fact::Mac`
+    /// and `Uplink::peer_mac` in all 14 committed `.jsonl` files — **not one has the I/G bit set**,
+    /// so the tightening reds no committed byte.
     fn is_synthetic_mac(addr: MacAddr) -> bool {
-        addr.is_locally_administered() || addr.0[..5] == [0, 0, 94, 0, 1]
+        (addr.is_locally_administered() && !is_multicast_mac(addr))
+            || addr.0[..5] == [0, 0, 94, 0, 1]
+    }
+
+    /// The I/G bit — bit 0 of the first octet. Set means the address is a group (multicast or
+    /// broadcast) address, which names no interface.
+    fn is_multicast_mac(addr: MacAddr) -> bool {
+        addr.0[0] & 1 == 1
+    }
+
+    /// Why a MAC is refused, as the clause following *"which is …"* / *"… is …"*.
+    ///
+    /// One function so the two refusal sites cannot drift apart, and SPLIT because the tightening
+    /// above made the single old sentence false: `33:33:…` IS locally administered and is refused
+    /// for being multicast, so saying it is *"neither locally administered nor …"* would be a
+    /// message asserting something untrue — held to the same bar as a doc comment. The
+    /// non-multicast wording is kept verbatim from before the split, so the guard that pins it
+    /// (`the_text_scanner_still_refuses_a_mac_outside_the_block`) still matches and was not
+    /// quietly re-pointed.
+    fn mac_refusal_reason(addr: MacAddr) -> &'static str {
+        if is_multicast_mac(addr) {
+            "a MULTICAST address and names no interface — an IPv6 solicited-node multicast MAC \
+             embeds real interface-identifier bytes, so a set U/L bit says nothing about it"
+        } else {
+            "neither locally administered nor in the IANA VRRP virtual-router range \
+             00:00:5e:00:01:xx — a real vendor address must never be committed"
+        }
     }
 
     /// The privacy rule itself, applied to one observation's facts. `path` is carried so a
@@ -1154,13 +1448,14 @@ mod tests {
         );
     }
 
+    /// The structured-fact refusal site. It shares `mac_refusal_reason` with the free-text
+    /// scanner so the two can never disagree about WHY a byte pattern is out.
     fn assert_synthetic_mac(addr: MacAddr, path: &Path) {
         let where_ = path.display();
         assert!(
             is_synthetic_mac(addr),
-            "{where_}: {addr} is neither locally administered nor in the IANA VRRP \
-             virtual-router range 00:00:5e:00:01:xx — a real vendor address must never be \
-             committed"
+            "{where_}: {addr} is {}",
+            mac_refusal_reason(addr)
         );
     }
 
@@ -1621,57 +1916,66 @@ mod tests {
     /// WALKING, not by listing one directory. Trap FAMILIES (story 4.9 onward) are exactly what
     /// will introduce a subdirectory, and a non-recursive scan would hash them and never read
     /// them — reintroducing the hole this test exists to close.
+    ///
+    /// The walk itself moved to `walk_trap_files` in story 5.2, so this test and the privacy scan
+    /// below cannot disagree about which files "every trap file" names.
     #[test]
     fn every_trap_file_in_the_corpus_is_valid() {
-        let traps_dir = fixture_path("scenario/traps").unwrap();
-        let mut checked = 0usize;
-        let mut stack = vec![traps_dir.clone()];
-        while let Some(dir) = stack.pop() {
-            for entry in
-                std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("reading {}: {e}", dir.display()))
-            {
-                let entry = entry.expect("a directory entry must be readable");
-                let path = entry.path();
-                // `file_type()` does not follow symlinks, so a link can neither smuggle a file
-                // in nor be walked out of the corpus — but it must not pass unnoticed either.
-                let file_type = entry.file_type().expect("file type");
-                if file_type.is_symlink() {
-                    panic!(
-                        "{}: the corpus must contain its own bytes, not a symlink",
-                        path.display()
-                    );
-                }
-                if file_type.is_dir() {
-                    stack.push(path);
-                    continue;
-                }
-                // `README.md` is exempt at any depth, exactly as the corpus lock's orphan rule
-                // exempts it (`xtask/src/main.rs`) and the production walk `discover_trap_files`
-                // does — documenting this directory (e.g. the reality-debt register) must not red
-                // the test suite. Kept identical to the replay walk's exemption above.
-                if path.file_name().and_then(|n| n.to_str()) == Some("README.md") {
-                    continue;
-                }
-                // Case-insensitive: a `broken.TOML` skipped silently would be hashed by the
-                // gate and read by nobody.
-                let is_toml = path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .is_some_and(|e| e.eq_ignore_ascii_case("toml"));
-                assert!(
-                    is_toml,
-                    "{}: only .toml trap files belong under scenario/traps/",
-                    path.display()
-                );
-                read_traps(&path).unwrap_or_else(|e| {
-                    panic!("corpus trap file {} is invalid: {e}", path.display())
-                });
-                checked += 1;
-            }
-        }
-        // A discovery test that finds nothing must not pass silently — the vacuity the fixtures
-        // gate carried from Epic 1 until story 4.1 put a file on disk.
-        assert!(checked > 0, "no trap file found in {}", traps_dir.display());
+        walk_trap_files(&mut |path| {
+            read_traps(path)
+                .unwrap_or_else(|e| panic!("corpus trap file {} is invalid: {e}", path.display()));
+        });
+    }
+
+    /// The privacy rule reaches trap-file TEXT, comments included (story 5.2).
+    ///
+    /// It reads the raw bytes with `read_to_string` and scans them BEFORE `toml::from_str` — the
+    /// point of the whole AC. A parse-then-inspect rule cannot see a header comment, and a header
+    /// comment is exactly where an author narrating a real capture would paste it. That idiom is
+    /// not invented here: story 4.18 already reads and scans `scenario/wire/unifi-clients.json`
+    /// the same way, because that directory sits outside every corpus walk.
+    ///
+    /// Until this test, `assert_text_is_synthetic` reached NO committed trap text — its corpus
+    /// call sites were the `Record::Failure` arm of the replay walk and the wire body. Story
+    /// 4.14's own "no octets in a trap reason" rule was held by code review, not by a gate; the
+    /// register carried that from 4.14's review to here.
+    ///
+    /// **It asserts its own COVERAGE, not just that it ran.** `walk_trap_files` already refuses to
+    /// pass over zero files, but ten files carrying zero addresses would be just as vacuous and no
+    /// file count can see it — the level below the one story 5.1's review reached. Measured on the
+    /// committed corpus at `e846836`: 4 distinct MACs (`00:00:5e:00:01:0a`, `02:00:5e:00:53:10`,
+    /// `02:00:5e:00:53:20`, `02:00:5e:00:53:78`) and 3 distinct IPs (`192.0.2.1`, `192.0.2.120`,
+    /// `192.0.2.121`). Those values live in `reason` strings AND in header COMMENTS —
+    /// `00:00:5e:00:01:0a` is a comment in `vrrp-virtual-mac.toml` and appears nowhere else in that
+    /// file — which is the AC working: the scan reads bytes, so a comment counts.
+    ///
+    /// **What the floor below actually guarantees, stated no wider than it is.** It is a GLOBAL
+    /// count over distinct values, so it catches a re-authoring that drops addresses (story 5.2b
+    /// touches these very families) and does NOT catch one that drops some while adding others
+    /// elsewhere. The distribution is uneven — `dhcp-churn.toml` 1 MAC + 2 IPs, `example.toml`
+    /// 1 MAC, `randomized-mac.toml` 1 MAC, `vrrp-virtual-mac.toml` 1 MAC + 1 IP, the other six
+    /// files nothing — and that sentence is an inventory with no guard behind it, which is exactly
+    /// what the register warns about. Pinning per file is the stronger check and is not taken here;
+    /// the floor is the cheap half that stops the scan going silently empty.
+    #[test]
+    fn the_committed_trap_text_carries_no_real_network_data() {
+        let mut macs = std::collections::BTreeSet::new();
+        let mut ips = std::collections::BTreeSet::new();
+        walk_trap_files(&mut |path| {
+            let raw = std::fs::read_to_string(path)
+                .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
+            let seen = assert_text_is_synthetic(&raw, path);
+            macs.extend(seen.macs);
+            ips.extend(seen.ips);
+        });
+        assert!(
+            macs.len() >= 4 && ips.len() >= 3,
+            "the trap-text scan inspected {} distinct MAC(s) and {} distinct IP(s); it was \
+             measured at 4 and 3, so a scan finding fewer has stopped exercising the rule it \
+             claims to enforce rather than proving the corpus clean",
+            macs.len(),
+            ips.len()
+        );
     }
 
     const EXAMPLE_TRAPS: &str = "scenario/traps/example.toml";
@@ -2267,12 +2571,36 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             !is_synthetic_mac(MacAddr([0, 0x11, 0x22, 0x33, 0x44, 0x55])),
             "a plain universally-administered vendor-style address stays out"
         );
+        // Story 5.2. This row is the only place the tightened rule's TWO conjuncts can be pinned
+        // independently of the tokenizer: `0x33` has the U/L bit set, so the old
+        // locally-administered leg admitted it, and only the I/G test refuses it. Dropping
+        // `&& !is_multicast_mac(addr)` from `is_synthetic_mac` reds exactly this assertion (the
+        // recorded mutation).
+        assert!(
+            !is_synthetic_mac(MacAddr([0x33, 0x33, 0xff, 0, 0x60, 0x0a])),
+            "33:33:ff:00:60:0a is locally administered AND multicast — an IPv6 solicited-node \
+             MAC embeds real interface-identifier bytes and names no interface"
+        );
     }
 
-    /// The free-text scanner's WIRING onto the shared helper, proven directly: no committed
-    /// trap text ever reaches `assert_text_is_synthetic` (its only call site is the
-    /// `Record::Failure` walk), so without this test the scanner's MAC leg could silently keep
-    /// the old locally-administered-only rule and nothing would red.
+    /// The free-text scanner's WIRING onto the shared helper, proven directly and in isolation:
+    /// one address, one rule, no corpus in the way — so a scanner whose MAC leg drifted from
+    /// `assert_synthetic_mac`'s would red HERE, naming the address, rather than somewhere inside a
+    /// walk over ten files.
+    ///
+    /// **It is no longer the only thing that would red, and saying so is the honest version.**
+    /// This doc claimed, for one story, that *"no COMMITTED text exercises the VRRP allowance
+    /// through the scanner"* — false the moment it was written, and false BECAUSE of story 5.2:
+    /// `scenario/traps/vrrp-virtual-mac.toml` carries `00:00:5e:00:01:0a` in a header comment, and
+    /// that story's own `the_committed_trap_text_carries_no_real_network_data` reads and scans it.
+    /// `0x00 & 0x02 == 0`, so the address is admitted ONLY by the VRRP leg: dropping
+    /// `|| addr.0[..5] == [0, 0, 94, 0, 1]` reds that test too (measured, story 5.2's code review).
+    /// This test keeps its value as the ISOLATED pin, not as the sole one.
+    ///
+    /// Before that, the doc said the scanner's *"only call site is the `Record::Failure` walk"* —
+    /// true when story 4.14 wrote it, false from 4.18 onward. Twice now an inventory in a doc
+    /// comment has rotted, both times within one story of being written; the lesson recorded here
+    /// is to state what THIS test proves and let the register count call sites.
     #[test]
     fn the_text_scanner_admits_the_vrrp_range() {
         assert_text_is_synthetic(
@@ -2288,6 +2616,129 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     fn the_text_scanner_still_refuses_a_mac_outside_the_block() {
         assert_text_is_synthetic(
             "a stray note naming 00:00:5e:00:00:0a must never be committed",
+            Path::new("in-memory"),
+        );
+    }
+
+    // ── The three named evasions, closed (story 5.2, AC3) ────────────────────
+    //
+    // Six rows, one test each, every `expected` naming the EXACT address the row asserts rather
+    // than the generic tail of the message: a tokenizer that finds `98.18.0.1` inside
+    // `198.18.0.1` also panics, and a loose substring would credit that bug with a pass.
+    //
+    // Rows (a)-(d) were observed GREEN before the fix — the scanner did NOT panic, so each of
+    // these tests failed with *"test did not panic as expected"*. That two-sided observation is
+    // what makes "the hole existed" a measurement rather than a claim (story 5.1, mutation 12).
+
+    /// Row (a) — a trailing sentence period does not hide an address.
+    #[test]
+    #[should_panic(expected = "198.18.0.1 is not in an RFC 5737")]
+    fn the_text_scanner_sees_an_ip_followed_by_a_period() {
+        assert_text_is_synthetic("the host was seen at 198.18.0.1.", Path::new("in-memory"));
+    }
+
+    /// Row (b) — a trailing colon does not hide an address.
+    #[test]
+    #[should_panic(expected = "names 00:11:22:33:44:55, which is neither")]
+    fn the_text_scanner_sees_a_mac_followed_by_a_colon() {
+        assert_text_is_synthetic(
+            "the port answers as 00:11:22:33:44:55: see the note below",
+            Path::new("in-memory"),
+        );
+    }
+
+    /// Row (c) — INTERIOR punctuation does not hide an address. This is the row an edge-trim
+    /// does not reach: `198.18.0.1:8080` keeps its `:` inside the token.
+    #[test]
+    #[should_panic(expected = "198.18.0.1 is not in an RFC 5737")]
+    fn the_text_scanner_sees_an_ip_carrying_a_port() {
+        assert_text_is_synthetic(
+            "the service is reachable at 198.18.0.1:8080 from the lab",
+            Path::new("in-memory"),
+        );
+    }
+
+    /// Row (d) — the dash form of a MAC is the same address. Closed by normalising `-` to `:`
+    /// INSIDE the scanner: `MacAddr::from_str` stays colon-only (D47 — widening a domain parser
+    /// for a test's convenience would change what the shipped connectors accept off the wire).
+    #[test]
+    #[should_panic(expected = "names 00:11:22:33:44:55, which is neither")]
+    fn the_text_scanner_sees_a_dash_separated_mac() {
+        assert_text_is_synthetic(
+            "the port learned 00-11-22-33-44-55 on vlan 12",
+            Path::new("in-memory"),
+        );
+    }
+
+    /// `Observation.raw` is scanned by the same rule as everything else (story 5.2, AC2).
+    ///
+    /// This guard is PERMANENT rather than a recorded mutation, and the difference matters. The
+    /// call site it defends is vacuous on the committed corpus — one non-null `raw` corpus-wide,
+    /// carrying no address — so deleting that call site after merge would red nothing, and a
+    /// mutation record is not a guard. The same reasoning put
+    /// `the_text_scanner_admits_the_vrrp_range` in the tree for story 4.14.
+    ///
+    /// It drives `assert_record_is_synthetic`, the function the corpus walk drives, rather than
+    /// re-typing the rule: a hand-built record walked through a hand-built copy of the check could
+    /// agree with a bug in both. The record is hand-built because it MUST be — the walk's root is
+    /// hardcoded and must stay so (story 5.1's callers depend on it), and `scratch_dir` produces a
+    /// path under `std::env::temp_dir()` that no corpus walk can be pointed at.
+    #[test]
+    #[should_panic(expected = "198.18.0.1 is not in an RFC 5737")]
+    fn an_observations_raw_payload_is_scanned() {
+        let mut observation = expected()[0].clone();
+        observation.raw = Some(r#"{"provenance":"seen at 198.18.0.1"}"#.into());
+        assert_record_is_synthetic(&Record::Observation(observation), Path::new("in-memory"));
+    }
+
+    /// The floor the boundary anchor leaves, stated as a CHECK rather than as a doc sentence.
+    ///
+    /// `ab198.18.0.1` hides a non-documentation address from the scanner: `1` is neither a run
+    /// start nor preceded by `.` or `:`, so no candidate ever begins there. This test is the only
+    /// place the anchor's behaviour is observable — dropping the anchor reds it (the scanner would
+    /// then see `198.18.0.1` and panic), while dropping it changes nothing else in the suite. An
+    /// admitted limit with a guard behind it cannot rot into a false claim of coverage.
+    ///
+    /// **The control address is what makes this a check rather than a shrug.** A test that only
+    /// says "this does not panic" is satisfied by a scanner that does nothing at all — the vacuity
+    /// this story's own review found in it. `192.0.2.1` sits in the same string, unglued, and the
+    /// assertion below says the scan saw THAT one and only that one: the glued address is invisible
+    /// *while the scanner is demonstrably working*.
+    #[test]
+    fn the_text_scanner_is_blind_to_an_address_glued_to_hex() {
+        let seen = assert_text_is_synthetic(
+            "the label reads ab198.18.0.1 on the port, next to 192.0.2.1",
+            Path::new("in-memory"),
+        );
+        assert_eq!(
+            seen.ips,
+            vec![Ipv4Addr::new(192, 0, 2, 1)],
+            "the scan must have found the unglued control address and nothing else — finding \
+             nothing would mean the tokenizer is dead, not that the anchor is working"
+        );
+    }
+
+    /// Row (e) — an IPv6 solicited-node multicast MAC is locally administered (`0x33` has the
+    /// U/L bit set) and was therefore ADMITTED. Its low THREE bytes are the low three bytes of a
+    /// real IPv6 address, i.e. real interface-identifier bytes (the fourth from the end is the
+    /// constant `ff`), so admitting it was a hole.
+    #[test]
+    #[should_panic(expected = "names 33:33:ff:00:60:0a, which is a MULTICAST address")]
+    fn the_text_scanner_refuses_an_ipv6_multicast_mac() {
+        assert_text_is_synthetic(
+            "the capture shows 33:33:ff:00:60:0a on the segment",
+            Path::new("in-memory"),
+        );
+    }
+
+    /// Row (f) — an IPv4 multicast MAC was ALREADY refused (its U/L bit is clear), but for an
+    /// unrelated reason. Only the stated reason changes here, so the `expected` substring names
+    /// the NEW multicast sentence: matched against the old message this test proves nothing.
+    #[test]
+    #[should_panic(expected = "names 01:00:5e:00:00:0a, which is a MULTICAST address")]
+    fn the_text_scanner_refuses_an_ipv4_multicast_mac_for_the_stated_reason() {
+        assert_text_is_synthetic(
+            "the capture shows 01:00:5e:00:00:0a on the segment",
             Path::new("in-memory"),
         );
     }

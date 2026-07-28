@@ -95,7 +95,25 @@ contains a case Y we never wrote a trap for" belongs here.
 
 ## Never real network data
 
-Synthetic values only: RFC 5737 documentation addresses (`192.0.2.0/24`), locally-administered MACs,
-invented hostnames. A recorded case describes the PATTERN — *"two randomized MACs, one physical
-interface"* — never a captured MAC, hostname or IP. This repository is public, and a real capture
-would carry the topology of someone's network. That is disqualifying, not a preference (D19).
+Synthetic values only: RFC 5737 documentation addresses (`192.0.2.0/24`), locally-administered
+UNICAST MACs (multicast is refused whatever its U/L bit says, plus the IANA VRRP block
+`00:00:5e:00:01:xx` by name), invented hostnames. A recorded case describes the PATTERN — *"two
+randomized MACs, one physical interface"* — never a captured MAC, hostname or IP. This repository is
+public, and a real capture would carry the topology of someone's network. That is disqualifying, not
+a preference (D19).
+
+**Since story 5.2 this is a TEST, not a review habit.** Every `.toml` in this directory has its raw
+text — header comments included, read before TOML parsing throws them away — scanned for anything
+that parses as an IPv4 address or a MAC, and held to the rule above. Until then no committed trap
+text reached the scanner at all, and story 4.14's *"no octets in a `reason`"* rule was enforced by
+whoever happened to read the diff. The scan also asserts its own coverage: it is pinned to the 4
+distinct MACs and 3 distinct IPs the committed files carry today — some in a `reason`, some in a
+header comment — so a re-authoring that drops them cannot leave the check green and empty. The pin
+is a GLOBAL floor, not a per-file one: it catches a net loss, not a loss in one file paid for by a
+gain in another.
+
+Two things it still does not see, both by construction: a hostname written in prose, and **this
+file** — every `README.md` is exempt at any depth, because the corpus lock's orphan rule exempts the
+same name and two gates disagreeing about what may live here would make documenting this directory
+turn the suite red. So the prose you are reading is the largest un-scanned text in the corpus; keep
+it to patterns.
