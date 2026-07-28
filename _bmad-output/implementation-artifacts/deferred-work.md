@@ -157,7 +157,24 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
 
 ## Deferred from: story-4.6a (2026-07-22)
 
-- **`AbstentionCause` cannot express the identity cascade's `Ambiguous`, and Epic 5 must decide.**
+- ✅ **CLOSED by story 5.3**, which is the owner this bullet names. The branch taken is the SECOND
+  of the two it offers: **a separate cause type**, `identity::cascade::IdentityAbstentionCause`
+  (`Ambiguous` | `AbsenceOfProof`, each traced to a row of D13's table), carried by
+  `Outcome::Abstained`. `AbstentionCause`'s variant list is byte-unchanged and
+  `Expectation::MustAbstain` still carries it, so no committed artefact was re-hashed.
+  ~~`AbstentionCause` cannot express the identity cascade's `Ambiguous`, and Epic 5 must decide.~~
+  ⚠️ **One sentence below is now FALSE and is corrected here rather than struck silently** — the
+  register is append-and-strike, so a wrong sentence survives unless its correction travels with the
+  closure. It says a different type on the outcome side *"would make comparison asymmetric against a
+  locked format"*. There is no comparison to go asymmetric: `score`'s 3×3 matches
+  `Outcome::Abstained { .. }` and cannot reach the payload, and `run_trap` compares rules only where
+  both sides are `Some`, which an abstention never is. The tests that hold it are
+  `the_two_abstention_vocabularies_are_never_compared` and
+  `scoring_is_blind_to_the_abstention_cause_whatever_it_is` (`score.rs`), both proven red by
+  flipping the `(must-abstain, Abstained)` cell. The *cost* half of the sentence was real and was
+  measured the other way round: adding `Ambiguous` to `AbstentionCause` produces exactly one
+  `error[E0004]`, at `page.rs:114:11`, and nothing else in the workspace breaks — so widening buys a
+  user-facing label and two locale strings for a variant `reconcile` can never produce.
   It is the RECONCILIATION vocabulary (`OutOfPerimeter | NoObservedValue | ConflictingObservations`,
   story 3.6). The cascade's abstention arises from the verdict algebra — the cloned-MAC case — and
   none of the three names it. 4.6a uses it on BOTH sides anyway, because story 4.2 froze the truth
@@ -214,6 +231,12 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   everywhere and fails **usefully** (`left: 48, right: 0`), and deriving serde later does not break
   on an uninhabited field. Recorded so a future rustc layout change is diagnosed as what it is
   rather than as a semantic regression.
+- ↺ **PARTLY closed by story 5.3, and deliberately NOT struck.** 5.3 created the cause that
+  absence-of-proof will carry (`IdentityAbstentionCause::AbsenceOfProof`, traced to
+  architecture.md:974's row) and wrote its variant doc around this very entry. **The MAPPING still
+  has no producer**: nothing decides what the cascade returns, because there is no cascade. Owner
+  stays **stories 5.4/5.5** — the `Decision` type and the L1 join. Striking this would claim a
+  behaviour that exists nowhere.
 - **The cascade's `NoMatch` maps two ways onto `Outcome`, and only half of that is recorded.**
   `architecture.md:967-974` makes `NoMatch` cover BOTH an active opposition (`any Disqualifying`) and
   a mere absence of proof (`only Neutral / nothing`). `Outcome::Refused` requires a rule to name, so
@@ -284,6 +307,12 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   produces verdicts, each rule must emit its `rule_id` and evidence into the verdict vector, and a
   test must red if it does not. Inventing a producer to "satisfy" AC6 now would be the *"metric
   written after the engine"* mistake in reverse.
+- ↺ **PARTLY closed by story 5.3, and deliberately NOT struck.** The VOCABULARY half is decided: an
+  absence of proof has a name to abstain with (`IdentityAbstentionCause::AbsenceOfProof`) that is
+  not a refusal, so the failure mode this entry's sibling warns about — mapping `NoMatch → Refused`
+  uniformly and failing every honest `must-abstain` trap — now has a type-level alternative. The
+  QUESTION itself is untouched: no engine decides which half of `NoMatch` it is in. Owner stays
+  **stories 5.4/5.5**.
 - **The `NoMatch → Refused` vs `Abstained` question is Epic 5's, not scored here.** `run_trap` scores
   answers; it does not decide what an engine that finds no merging rule should return. Whether "no
   rule matched" is a `Refused` (a decision, names an opposing rule) or an `Abstained` (no decision,
@@ -937,3 +966,38 @@ collapsing dhcp-churn D3's MAC onto D1's would red nothing — the pre-existing
 - **The trap `reason` prose is still not mechanically tied to the values it cites** — see the
   `## Deferred from: story-5.2b` section above, where this was already registered by the story
   itself. Repeated here only so this section is not read as the complete review residue.
+
+## Deferred from: story-5.3 (2026-07-28)
+
+_The story wrote a TYPE and its tests, and no engine. Everything below is open because it needs a
+producer, a consumer, or a decision that no code yet forces — not because it was skipped._
+
+- **Whether `IdentityAbstentionCause::Ambiguous` must SPLIT into its three D13 rows.** The variant
+  covers three conditions over the verdict set — *"a `Decisive`, >=1 `Opposes`"* (the cloned-MAC
+  case, architecture.md:971), *"no `Decisive`, >=1 `Supports`, no `Opposes`"* (weak evidence,
+  `:972`) and *"`Supports` AND `Opposes`"* (conflict, `:973`) — and an operator reading "ambiguous"
+  cannot tell which fired. Not split here because a split with no consumer is symmetry, not
+  information, and D16 warns about the opposite failure only (*"if `Ambiguous` means both 'real
+  conflict' and 'unmodelled case', it means nothing"*). **Owner: story 5.14**, which owns the
+  operator-facing grouping and is the first place a consumer can justify one; 5.5's evidence vector
+  is where the distinguishing data would come from.
+- **`IdentityAbstentionCause` derives no `Serialize`/`Deserialize`.** Nothing persists a cause: the
+  identity link table does not exist. Deriving a wire format for a domain type with no consumer is a
+  finding this project has already recorded once (`ScoredRecord`, 4.6a). **Owner: story 5.9**, which
+  persists the interface and the identity link, if it persists a cause at all.
+- **It derives no `PartialOrd`/`Ord` and has no `Display`.** Nothing orders or keys one — the
+  precedent for `Ord` is `Reconciliation::abstentions: BTreeMap<AbstentionCause, usize>`, and no such
+  map exists on the identity side. Rendering goes through `page.rs`'s `cause_label` + `t!()` seam
+  (Story 3.8), never through `Display`; writing one now would build the wrong seam. **Owner: story
+  5.14** for both, together with the two locale keys per variant it would need.
+- **`error[E0004]` on a new variant is the mechanism, so `#[non_exhaustive]` is refused — and that
+  refusal has a cost worth naming.** `opencmdb-bin` is a different crate, so the attribute would
+  force a `_` arm on every downstream match and a new variant would stop breaking its consumers.
+  The price is that this enum is a semver hazard for any out-of-workspace consumer. There is none,
+  and the workspace is the product. **Owner: nobody** — recorded so a reviewer reading `#[derive]`
+  and no attribute sees a decision rather than an omission.
+- **No `From`/`Into` bridge between `gap::AbstentionCause` and `IdentityAbstentionCause`, and none
+  should appear silently.** The corpus's cause is the trap author's note about the SHAPE of the
+  case; the engine's is what the cascade concluded. Mapping one onto the other is a decision about
+  the truth format, not a convenience. **Owner: whoever needs the comparison** — as a story, with a
+  `must-abstain` corpus consequence spelled out first.

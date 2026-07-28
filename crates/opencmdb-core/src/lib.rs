@@ -20,6 +20,7 @@
 pub mod clock;
 pub mod connector;
 pub mod gap;
+pub mod identity;
 pub mod observation;
 pub mod repo;
 pub mod score;
@@ -36,6 +37,7 @@ pub use testing::{FixedClock, ScriptedConnector, ScriptedOutcome, run_connector_
 pub use clock::Clock;
 pub use connector::{Connector, ConnectorError, ObservationSink, PollSummary, VecSink};
 pub use gap::{AbstentionCause, Gap, Reconciliation, reconcile};
+pub use identity::cascade::IdentityAbstentionCause;
 pub use observation::{
     Capabilities, ConnectorId, Fact, FactKind, HostnameSource, L2DomainId, MacAddr, MacParseError,
     ObsId, Observation, Scope, Timestamp, VantageId,

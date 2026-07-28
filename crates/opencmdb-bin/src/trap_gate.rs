@@ -386,7 +386,7 @@ fn discover_trap_files(root: &Path) -> Result<Vec<PathBuf>, FixtureError> {
 mod tests {
     use super::*;
     use crate::fixtures::fixtures_dir;
-    use opencmdb_core::gap::AbstentionCause;
+    use opencmdb_core::identity::cascade::IdentityAbstentionCause;
     use opencmdb_core::score::Column;
     use opencmdb_core::trap::RuleId;
 
@@ -448,7 +448,7 @@ mod tests {
         answers.insert(
             TrapId("example-must-abstain".into()),
             Outcome::Abstained {
-                cause: AbstentionCause::NoObservedValue,
+                cause: IdentityAbstentionCause::Ambiguous,
             },
         );
         let report = score_corpus(&committed_traps_root(), &answers).unwrap();
@@ -506,7 +506,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         answers.insert(
             TrapId("red-must-merge".into()),
             Outcome::Abstained {
-                cause: AbstentionCause::NoObservedValue,
+                cause: IdentityAbstentionCause::Ambiguous,
             },
         );
         // must-not-merge, answered with a merge → the false merge.
@@ -650,13 +650,13 @@ expect = { must-merge = { rule = "l1-exact-mac" } }
         answers.insert(
             TrapId("mixed-correct".into()),
             Outcome::Abstained {
-                cause: AbstentionCause::NoObservedValue,
+                cause: IdentityAbstentionCause::Ambiguous,
             },
         );
         answers.insert(
             TrapId("mixed-wrong".into()),
             Outcome::Abstained {
-                cause: AbstentionCause::NoObservedValue,
+                cause: IdentityAbstentionCause::Ambiguous,
             },
         );
         let report = score_corpus(&dir, &answers).expect("the mixed corpus reads");

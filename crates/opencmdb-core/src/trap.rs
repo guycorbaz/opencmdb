@@ -78,7 +78,14 @@ pub enum Expectation {
     /// refusal asserts only that the successor veth is not the first one re-seen. Its family
     /// header carries the argument.
     MustNotMerge { rule: RuleId },
-    /// The signal is genuinely insufficient: the engine must refuse to decide, for this cause.
+    /// The signal is genuinely insufficient: the engine must refuse to decide.
+    ///
+    /// The cause is the TRAP AUTHOR's note about the shape of the case, not the cause the engine
+    /// answers with. Since story 5.3 an abstaining outcome carries
+    /// [`crate::identity::cascade::IdentityAbstentionCause`], a different type, and nothing
+    /// compares the two — scoring reads neither. This field keeps [`AbstentionCause`] because
+    /// story 4.2 froze it into the truth format and three committed, sha256-locked trap files
+    /// write its PascalCase spelling.
     MustAbstain { cause: AbstentionCause },
 }
 
