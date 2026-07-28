@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-28  # Story 5.1 DONE — PR #41 merged (c84e14a); see its block under Epic 5
+last_updated: 2026-07-28  # Story 5.2 code-reviewed — 9 patches applied, still `review` (merge pending)
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -197,7 +197,79 @@ development_status:
   # MERGE's business in this project's flow, which is why this sat at `review` from the end of
   # dev-story until the merge, through the code review and its 12 patches.
   5-1-corpus-pins-obs-id-binding: done
-  5-2-privacy-floor-reaches-the-bytes: backlog
+  # 5.2 contexted 2026-07-28. Four measurements were taken against master (e846836) BEFORE the
+  # story was written, so the dev does not re-derive them and a surprise reads as a finding:
+  #   · trap text already carries 4 distinct MACs and 3 distinct IPs across 4 of the 10 .toml files
+  #     (six carry none) — the new scan is non-vacuous, and all 7 values pass today;
+  #   · `Observation.raw` has exactly ONE committed value corpus-wide (minimal.jsonl:3) and it
+  #     holds no address — so that new call site is VACUOUS and the story says so, with its
+  #     prove-to-red on a scratch fixture rather than on the corpus;
+  #   · 39 distinct committed MACs, ZERO with the I/G bit set, so refusing multicast (which is what
+  #     makes the 33:33:… / 01:00:5e:… inconsistency go away) reds nothing;
+  #   · a probe file under fixtures/scenario/traps/.claude/ reds `every_trap_file_in_the_corpus_is_valid`
+  #     AND six trap_gate tests — story 5.1 closed that dot-entry class on the REPLAY tree only,
+  #     and on the trap tree it reaches the PRODUCTION walk (`discover_trap_files`), not just a test.
+  #     ⚠️ NOT a cause for issue #38: the directories postdate the flaky runs and are empty.
+  # ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
+  #
+  # 5.2 DELIVERED (2026-07-28, branch `story-5.2-privacy-floor-reaches-the-bytes`). What holds, in
+  # the weaker true sentence: trap-file TEXT (header comments included, scanned before TOML parsing
+  # discards them) and `Observation.raw` go through the same address-shaped rule as everything else,
+  # and the scanner's three named evasions are closed. A hostname in prose, `OuiVendor.vendor`,
+  # `Uplink.peer_port` and every `README.md` are STILL invisible, and NO committed `raw` exercises
+  # the new call site. 249 → 258 tests (130 bin + 86 core + 42 xtask). Corpus bytes UNCHANGED —
+  # `MANIFEST.toml` untouched, only the two orphan-exempt `README.md` files moved under `fixtures/`.
+  # `fixtures.rs` still 728 code lines (the hoist sits after the first `#[cfg(test)]`, so the gate's
+  # count moved by zero).
+  # TWELVE mutations proven to red, plus two run measurements: the trap-text scan really does find
+  # 4 distinct MACs / 3 distinct IPs (the story's pre-written number, reproduced by the new
+  # tokenizer), and the FIFO case really does HANG — `timeout 60 cargo test` returned 143 (SIGTERM)
+  # with no output without the `is_file()` guard, and a named failure with it.
+  # ONE FINDING, recorded rather than smoothed over: AC3's boundary ANCHOR is NOT what keeps the
+  # corpus green. Removing it alone leaves all tests green; only removing the RESUME too reds the
+  # corpus (`92.0.2.90` out of `192.0.2.90` in `unifi-clients.json` — the story's measured trap,
+  # reproduced). The specified shape was kept, but the doc now says which conjunct earns the safety,
+  # and the anchor's one observable consequence (`ab198.18.0.1` stays invisible) was turned from a
+  # doc sentence into a guard.
+  # ONE CORRECTION to the story: AC6 cites a "review-enforced" sentence at
+  # `scenario/traps/README.md:96-101` that is not in that file — it is in `deferred-work.md`'s 4.14
+  # bullet. What IS false there is the MAC rule, narrowed by the multicast tightening; fixed.
+  # WHAT MOVED, and did not close: all three walk items the hoist inherited were closed IN
+  # `walk_trap_files` (root symlink check, `is_file()`, `sort()`) — including (i), which AC5 allowed
+  # registering instead. The consequence is named: the two sibling walks now DIFFER on three points
+  # because the REPLAY-side twins stay open, registered under `## Deferred from: story-5.2` with an
+  # owner. Also registered there: the three surfaces the privacy floor still does not see.
+  # `review`, not `done` — `done` is the MERGE's business in this project's flow (5.1 established
+  # this and its own review confirmed it). Next: `code-review` → push → PR → green CI → squash merge.
+  #
+  # CODE REVIEW HELD 2026-07-28 (three parallel layers; every claim re-verified against the tree).
+  # AC1 PARTIAL · AC2 MET · AC3 PARTIAL · AC4 MET · AC5 PARTIAL · AC6 MET · AC7 PARTIAL.
+  # 9 patches APPLIED, 4 items deferred, 6 dismissed as refuted. The code was sound and the corpus
+  # never moved; what the review caught is that four documents this story wrote asserted more than
+  # the tree does — in a story whose stated bar is "a doc comment must be TRUE".
+  # The two load-bearing findings, both MEASURED rather than argued:
+  #   · the sentence written to REPLACE the removed "only call site" claim is falsified by this very
+  #     commit — `vrrp-virtual-mac.toml:37` carries 00:00:5e:00:01:0a in a header COMMENT that this
+  #     story's own trap-text scan reads, so dropping the VRRP leg reds it. Two rotted inventories in
+  #     one doc block, one story apart;
+  #   · the FIFO hang is closed in `walk_trap_files` ONLY. `discover_trap_files` never gained the
+  #     guard, six trap_gate tests drive it, and `timeout 90 cargo test -p opencmdb-bin` still
+  #     returns 143 with NO output — the Debug Log's two-sided claim compared a FILTERED run to a
+  #     full one. Resolved as (b) on Guy's call: production code untouched, four sentences narrowed,
+  #     the production walk's hang registered with an owner.
+  # Also patched: a doc contradicting itself about the anchor two paragraphs apart, plus two wrong
+  # mutation citations and a stale "127 tests"; the coverage doc crediting `reason` strings for a MAC
+  # that lives only in a comment; `fixtures/README.md` promising an owner the register denies; and a
+  # residual-floor enumeration presented as complete that missed FIVE measured shapes — IPv6
+  # unscanned entirely, zero-padded IPv4, the Cisco dotted and bare MAC forms, the glue limit being
+  # any hexdigit not just a hex letter, and the resume swallowing an address adjacent to an accepted
+  # one. A 13th mutation was recorded: the new blindness guard asserted NOTHING and passed on a
+  # gutted scanner; it now carries a control address and reds.
+  # Gate re-run WHOLE after the patches: fmt, clippy -D warnings, 258 tests, xtask ci all green,
+  # fixtures.rs still 728 code lines, MANIFEST.toml untouched, only the two READMEs moved.
+  # STILL `review`, deliberately: the code-review workflow's default would set `done` here, and this
+  # project does not — `done` is the MERGE's business. Next: push → PR → green CI → squash merge.
+  5-2-privacy-floor-reaches-the-bytes: review
   # 5.2b was INSERTED on 2026-07-26, one day after the decomposition and before any Epic 5 code
   # existed — surfaced while preparing story 5.1, which could not absorb it (its AC1 strengthens
   # byte-pins that EXIST; randomized-mac / multi-nic / shared-hardware-vm / cloned-mac have none,

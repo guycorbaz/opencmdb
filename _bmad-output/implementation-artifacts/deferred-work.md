@@ -416,7 +416,21 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
 
 ## Deferred from: code review of story-4.14 (2026-07-25)
 
-- **Trap-file text is scanned by no privacy rule.** `assert_text_is_synthetic`'s only corpus call
+- ✅ **CLOSED by story 5.2.** `the_committed_trap_text_carries_no_real_network_data` reads every
+  trap file's raw bytes with `read_to_string` and scans them through `assert_text_is_synthetic`
+  BEFORE `read_traps`, so header comments — which TOML parsing discards — are covered. Proven to
+  red by putting `00:11:22:33:44:55` into `example.toml`'s header COMMENT: the panic names the
+  file. It also asserts its own COVERAGE (4 distinct MACs, 3 distinct IPs — the measured values),
+  because ten files carrying zero addresses would be as vacuous as zero files and the walk's
+  `checked > 0` counts only files.
+  ⚠️ **This bullet's own premise was FALSE when it was closed, and is corrected rather than struck
+  silently:** it says the scanner's *"only corpus call site is the `Record::Failure` walk"*. Story
+  4.18 falsified that on 2026-07-25 by adding a second one (`fixtures.rs`, the wire body
+  `scenario/wire/unifi-clients.json`, whose directory sits outside every corpus walk) — one day
+  BEFORE this entry was written. Closing an item on a check its own tree falsifies is the failure
+  story 5.1's review named; the false sentence in the 4.14 wiring test's doc that said the same
+  thing was removed in this story rather than re-enumerated.
+  ~~Trap-file text is scanned by no privacy rule.~~ `assert_text_is_synthetic`'s only corpus call
   site is the `Record::Failure` walk over replay streams (fixtures.rs); the headers and `reason`
   strings of `fixtures/scenario/traps/*.toml` reach it never — `example.toml`, `randomized-mac.toml`
   and `dhcp-churn.toml` have carried raw (synthetic) MAC strings in reasons since they landed, and
@@ -424,7 +438,30 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   stated honestly by 4.14's own scanner-wiring test doc; the 4.14 story holds its no-octets-in-reasons
   rule by review, not by gate. Owner: whoever hardens corpus privacy — the natural fix walks trap
   files' raw text through the same scanner (comments included, before TOML parsing discards them).
-- **The free-text scanner is a floor with named evasions.** Its own doc says "a floor, not a proof";
+- ✅ **CLOSED by story 5.2** — all three named evasions, each with its own guard and its own
+  recorded red. The tokenizer became **boundary-anchored longest-match**: `-` is normalised to `:`
+  inside the scanner (`MacAddr::from_str` stays colon-only — widening a domain parser for a test's
+  convenience is a D47 frontier violation), the text splits into maximal `[0-9a-fA-F.:]` runs, and
+  inside a run the LONGEST prefix that parses is taken and the scan resumes after it. That sees a
+  trailing `.` or `:`, an INTERIOR separator (`198.18.0.1:8080` — the row an edge-trim cannot
+  reach) and the dash form. `is_synthetic_mac` now refuses MULTICAST (`addr.0[0] & 1`) whatever the
+  U/L bit says, which makes `33:33:…` and `01:00:5e:…` consistent, and the refusal MESSAGE was
+  split so it does not assert the false sentence *"neither locally administered nor …"* about an
+  address that IS locally administered. All six rows were observed on both sides: rows (a)–(e) were
+  GREEN before the fix (the `should_panic` tests failed with *"test did not panic as expected"*) and
+  row (f) panicked with the OLD wording, so only its stated reason changed.
+  **Two things were MEASURED here and are worth more than the closure:** enumerating every
+  substring instead — the obvious fix — reds the committed corpus, because `Ipv4Addr::from_str`
+  rejects only leading zeros and `92.0.2.90` parses out of `192.0.2.90` (run: the wire test reds
+  naming it). And of the shape's two conjuncts, it is the RESUME that earns that, not the start
+  anchor: removing the anchor alone leaves the whole suite green. The anchor is kept, but its
+  contribution is NOT claimed — its one observable consequence is the residual limit
+  (`ab198.18.0.1` stays invisible), which now has a guard,
+  `the_text_scanner_is_blind_to_an_address_glued_to_hex`.
+  **What did NOT close, and is re-registered under `## Deferred from: story-5.2` below:** a hostname
+  in prose, `Fact::OuiVendor { vendor }`, `Fact::Uplink { peer_port }` and every `README.md`. The
+  scanner is still a floor; three of its four remaining holes now have an owner.
+  ~~The free-text scanner is a floor with named evasions.~~ Its own doc says "a floor, not a proof";
   the review named the specific gaps: a MAC/IP immediately followed by kept punctuation (`.`/`:`)
   tokenizes unparseable and evades; dash-form MACs (`00-00-5e-…`) are never seen (`MacAddr::from_str`
   is colon-only); and the U/L-bit rule reads any `x2/x3/x6/x7/xa/xb/xe/xf`-first-octet MAC as
@@ -454,7 +491,21 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
 
 ## Deferred from: code review of story-4.16 (2026-07-25)
 
-- **`Observation.raw` is scanned by no privacy rule.** The corpus walk
+- ✅ **CLOSED by story 5.2** — with the weaker true sentence, not the stronger one. `raw` now goes
+  through `assert_text_is_synthetic` in the `Record::Observation` arm, which story 5.2 extracted
+  into `assert_record_is_synthetic` (the `match` stays exhaustive with no `_` arm — a new `Record`
+  variant must still break it). **The call site is VACUOUS on today's corpus and says so in its own
+  doc:** across all 13 replay streams and the wire artefact exactly ONE observation carries a
+  non-null `raw` — `minimal.jsonl:3`, `{"provenance":"never read by a decision"}` — and it holds no
+  address. So this is *"`raw` is scanned by the same rule"*, never *"`raw` is now covered
+  corpus-wide"*. Because it is vacuous it does not defend itself, so it ships with a PERMANENT
+  guard rather than only a mutation record: `an_observations_raw_payload_is_scanned` drives a
+  hand-built record whose `raw` names `198.18.0.1` through the very function the walk drives.
+  Deleting the call site reds exactly that one test and nothing else — which IS the vacuity,
+  measured. The mutation is record-side BECAUSE the corpus has no `raw` to break, and a scratch
+  tree cannot substitute: `walk_replay_streams` hardcodes its root and must keep it (story 5.1's
+  callers depend on it).
+  ~~`Observation.raw` is scanned by no privacy rule.~~ The corpus walk
   `the_corpus_carries_no_real_network_data` inspects `facts` (and `Failure` detail text), never
   the free-text `raw` payload — and `minimal.jsonl`'s third observation already carries prose in
   `raw` that nothing inspects. `raw` is documented as "never read by a decision", but the privacy
@@ -555,3 +606,146 @@ different set per run, was the recurring defect of 4.1/4.3._
   (4) `format!("{prefix}-0000-4000-8000-{:012}", n + 1)` renders a DECIMAL sequence into a
   hexadecimal UUID field; invisible until a stream exceeds nine lines (the longest today is six), and
   the helper's doc lists two conventions without naming this third one.
+
+## Deferred from: story-5.2 (2026-07-28)
+
+_Raised BY the story, not by its review. Three surfaces the story explicitly did not close, plus
+the disposal of the register items its hoist inherited._
+
+### The register items the trap-walk hoist inherited — DISPOSED OF, not carried
+
+The three `walk_replay_streams` items above (root symlink, `is_file()`, `sort()`) were recorded
+against the REPLAY walk with the rationale that a hoist grows an item's blast radius even when its
+code does not change. Story 5.2 hoisted the TRAP walk the same way, and had all three. All three
+are **CLOSED in `walk_trap_files`** rather than inherited:
+
+- the root is `symlink_metadata`-checked before the stack is seeded, so the doc's "refuses
+  symlinks" now covers `scenario/traps/` itself;
+- `file_type.is_file()` is asserted by name. **Measured, because the register calls this "the one
+  failure mode with no diagnostic at all":** a FIFO named `fifo.toml` under `scenario/traps/` makes
+  the guarded walk fail with *"only regular files belong under scenario/traps/"* naming the path,
+  and makes the unguarded walk HANG — a 60-second run was killed by SIGTERM with no output. Not a
+  plausible story; a check that was run.
+  ⚠️ **Corrected by story 5.2's own code review, because the sentence above compared a FILTERED run
+  to a full one:** the guard closes the class in `walk_trap_files` and NOWHERE ELSE. The production
+  walk `discover_trap_files` has no `is_file()` refusal, six `trap_gate` tests drive it against the
+  committed root, and `read_traps` reads with `read_to_string` — so **the SUITE still hangs**. Run
+  on the finished tree, twice: `timeout 90 cargo test -p opencmdb-bin` returns **143 (SIGTERM) with
+  no output** WITH the guard in place; only `cargo test -p opencmdb-bin
+  every_trap_file_in_the_corpus_is_valid` surfaces the named failure. The remedy was scoped out
+  deliberately rather than taken in review (Guy's call, 2026-07-28): story 5.2's ACs cover the test
+  walk, and widening it to production code would need its own prove-to-red. **Owner: whoever next
+  touches `discover_trap_files`** — the fix is the foreign-extension arm's `FixtureError` idiom
+  three lines below the gap;
+- `found.sort()` before `visit`, matching `discover_trap_files`, so with two broken files WHICH one
+  panics is the same on every run. ⚠️ Its own red is **not observable** — nondeterminism has no
+  failing test — so no red is claimed for it. And as the 5.1 entry says: for issue **#38** this is a
+  thing to RULE OUT, never to record as a cause.
+
+**The replay-side twins stay OPEN**, deliberately and with the divergence named: `walk_replay_streams`
+still has no root symlink check, no `is_file()` and no `sort()`, so the two sibling walks now differ
+on three points. Fixing them is one line each and the precedent is now local — owner: whoever next
+touches the replay walker. This story did not take them because its own AC scoped it to the trap
+tree, and widening a story to a second tree is how a diff stops being reviewable.
+
+### The dot-entry class is now closed on BOTH trees
+
+Story 5.1 closed it for `scenario/replay/` and only there; 5.2 closed it for `scenario/traps/`, in
+BOTH of that tree's walks (`walk_trap_files` and the production `discover_trap_files`). Measured
+before and after: one `probe.txt` under `fixtures/scenario/traps/.claude/.cc-writes/` red
+`every_trap_file_in_the_corpus_is_valid` **and six `trap_gate` tests** — including
+`an_answer_for_an_unknown_trap_is_refused`, which expects an error and got `Io` instead of
+`AnswerForUnknownTrap` because discovery fails before `score_corpus` validates anything — and is
+green with the probe still in place afterwards. `cargo xtask ci` was GREEN throughout; its own
+corpus walk has skipped dot-entries since 2026-07-21. ⚠️ **NOT a cause for issue #38** — the
+directories were created 2026-07-26, they are empty, and #38's failures predate them.
+
+### What the privacy floor still does not see — three surfaces, one owner each
+
+Story 5.2's title is a direction, not a completion claim. The scanner covers address-shaped tokens
+in trap text, control-record free text, the wire body and `Observation.raw`. It does not cover:
+
+- **`Fact::OuiVendor { vendor }`** — free author-typed text that `assert_facts_are_synthetic`
+  discards by construction (its `Fact::OuiVendor { .. } | Fact::Rtt { .. } => {}` arm). A real
+  vendor string is not an address, so the address scanner would not catch it even if routed; the
+  fix is a rule of its own. Owner: whoever next hardens corpus privacy — the natural moment is
+  Epic 11, when the UniFi parser starts producing `oui` values from a real payload shape.
+- **`Fact::Uplink { peer_port }`** — same shape, same arm (`Fact::Uplink { peer_mac, .. }` binds
+  only the MAC). Same owner.
+- **Every `README.md`, exempt at any depth in all three corpus walks.**
+  `fixtures/scenario/traps/README.md` is 6 KB of prose — the largest un-scanned text in the corpus.
+  The exemption is deliberate and load-bearing (the corpus lock's orphan rule exempts the same name,
+  and two gates disagreeing about what the corpus may contain would make documenting a directory red
+  the suite), so this is not a defect to fix by deleting the exemption. Owner: whoever decides
+  whether a README is scanned by a rule of its own — note that a README legitimately quotes
+  addresses when explaining the corpus, so the rule cannot be the current one.
+
+A fourth hole is named but has no owner because it is not mechanically closable: **a hostname in
+prose** cannot be recognised as private text. The scanner's own doc has said so since 4.2 and still
+does.
+
+## Deferred from: code review of story-5.2 (2026-07-28)
+
+_Four items the review surfaced and did not fix. All four are pre-existing shapes the story
+inherited or relocated rather than created — which is why they are registered rather than patched.
+The review's substantive findings against the story itself were patched in place and are listed in
+the story file's `### Review Findings`._
+
+- **The `Record::Failure` scan call site is as vacuous as `raw`, and unlike `raw` it got no
+  permanent guard.** Story 5.2's own argument, written into `assert_record_is_synthetic`'s
+  neighbourhood, is that a vacuous call site *"does not defend itself, so it ships with a PERMANENT
+  guard rather than only a mutation record"* — and that is why
+  `an_observations_raw_payload_is_scanned` exists. The arm three lines below has the same property
+  and no such guard. **Measured by the review:** the committed corpus holds exactly ONE failure text
+  — `"the documentation subnet stopped answering mid-sweep"` — and it carries no address, so
+  emptying the `Record::Failure` arm reds nothing. The fix is the one-line twin of the `raw` guard
+  (a hand-built `Record::Failure` whose detail names `198.18.0.1`, driven through
+  `assert_record_is_synthetic` under `should_panic`). Not taken here because the wiring predates
+  story 5.2 — 4.x put it there and 5.2 only relocated it into the extracted helper. Owner: whoever
+  next touches the replay-side privacy walk, alongside the three `walk_replay_streams` items above.
+- **The dot-entry skip is evaluated AFTER the symlink refusal, in all three corpus walks.** A
+  tooling scratch entry materialised as a SYMLINK rather than a real directory (`.cache` →
+  elsewhere, which is how a worktree or isolation harness would most plausibly create it) is refused
+  by `entry.file_type().is_symlink()` before the skip's `continue` is ever reached, so the walk
+  accuses the corpus of a defect it does not have — the very outcome the skip was added to prevent.
+  The class is therefore closed for real dot-directories only. Not taken here because the ordering
+  copies story 5.1's replay walk verbatim: fixing it in one walk would open a fourth divergence
+  between siblings that this story worked to make agree. Owner: whoever next touches the walkers —
+  it is one reordering in three places, and it belongs with the replay-side twins.
+- **A non-UTF-8 filename bypasses the dot-entry skip.** All three walks test
+  `entry.file_name().to_str().is_some_and(|n| n.starts_with('.'))`, which yields `false` — not
+  `true` — when the name is not valid UTF-8 (legal on Linux). So `.cache-\xFF` is NOT skipped, falls
+  through to the foreign-extension refusal, and reds the suite naming the corpus. The intent
+  ("tooling scratch is not corpus") calls for the byte-level test
+  `entry.file_name().as_encoded_bytes().starts_with(b".")`. Exotic, but it fails on exactly the
+  class of name a tool is most likely to emit byte-wise, and it is one decision across three walks
+  rather than three. Same owner as the item above.
+- **The scanner's residual floor is longer than the story named — five more shapes pass clean.**
+  Story 5.2's `## Deferred from: story-5.2` section above names three surfaces plus the
+  hostname-in-prose hole, and the scanner's doc named one tokenizer limit (the glued prefix). The
+  review measured five more against the shipped tokenizer, and they are added to the doc rather
+  than left to be re-discovered: **IPv6 literals** are attempted by no branch at all (pure hex and
+  colons, so they are collected as runs and discarded) — the sharpest one, because
+  `Observation.raw` is the surface this story just wired and a real capture's global-unicast IPv6
+  is more identifying than the IPv4 the rule guards; **zero-padded IPv4** (`010.001.002.003`), the
+  mirror of the leading-zero rejection that makes the substring route unusable; **the Cisco dotted
+  MAC** (`0011.2233.4455`) and **the bare form** (`001122334455`), the same address row (d) closed,
+  in the notations an IOS/Aruba/HP CLI actually prints; **the glue limit is any HEXDIGIT**, so
+  `1198.18.0.1` is as invisible as `ab198.18.0.1` while the doc and the guard's name framed it as a
+  hex-LETTER case; and **the resume can swallow a real address adjacent to an accepted one** —
+  longest-match never backtracks, so `0a:00:11:22:33:44:55` matches the synthetic
+  `0a:00:11:22:33:44` and skips the vendor MAC three bytes in, and `192.0.2.110.0.0.1` matches the
+  documentation `192.0.2.110` and skips `10.0.0.1`. That last one is a limit of the mechanism story
+  5.2 introduced, not an inherited one, which is why it is named beside the anchor's. None is
+  closed: closing IPv6 is a rule of its own, and the notation gaps would each need a prove-to-red
+  and a corpus fixture. Owner: whoever next hardens corpus privacy — IPv6 first, since it is the
+  only one of the five that hides a whole address family rather than a spelling of one.
+- **`Fact::Hostname { name }` is prefix-checked, never text-scanned.** The privacy arm asserts
+  `name.is_empty() || name.starts_with("doc-")`, so `doc-192.168.1.1` satisfies the hostname rule
+  and its address never reaches `assert_text_is_synthetic`. This is the same shape as the
+  `Fact::OuiVendor { vendor }` and `Fact::Uplink { peer_port }` surfaces story 5.2 registered above
+  — author-typed text a structured rule waves through — and it belongs beside them rather than in a
+  section of its own. Unlike those two, the fix here is cheap and does not need a new rule: route
+  `name` through the address scanner in addition to the prefix check. The rule predates story 5.2
+  (4.17 last shaped it), which is why this is registered and not patched. Owner: whoever next
+  hardens corpus privacy.

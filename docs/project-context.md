@@ -60,11 +60,13 @@ across nine families** (randomized-mac, multi-nic, shared-hardware-vm, cloned-ma
 vrrp-virtual-mac, hostname-collision, docker-veth, hostname-absence — each in positive AND
 negative form, each naming the RULE rather than the outcome), the scoring algebra, the metrics
 harness, the trap runner, the reality-debt register, and the wire-format spec. Test counts on
-master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **249** on master today
-(121 + 86 + 42), story 5.1 having added the two corpus-wide walks. Two deliberate privacy-walk
-amendments landed
-with their families (the IANA VRRP MAC range in 4.14, the honestly-empty hostname in 4.17),
-each proven red at its boundary. **Story 4.19 was SPLIT at closure**: 4.19a (the drift-surface
+master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **258** on the story-5.2 branch
+(130 + 86 + 42) — story 5.1 added the two corpus-wide walks, story 5.2 the trap-text scan, the
+`raw` scan and the scanner's six closed evasions. **Three** deliberate privacy-walk amendments have
+landed: two ADMITTING a byte shape with its family (the IANA VRRP MAC range in 4.14, the
+honestly-empty hostname in 4.17) and one REFUSING one with no family behind it (multicast MACs, 5.2
+— measured against all 39 committed MACs first, none of which has the I/G bit set, so it reddened
+nothing). Each was proven red at its boundary. **Story 4.19 was SPLIT at closure**: 4.19a (the drift-surface
 record and the binding layer charter) shipped in `fixtures/scenario/wire/README.md`; **4.19b
 (the mutation generator, ~30 generated fixtures, expected parse outcomes) moved to Epic 11** —
 expected outcomes for an error taxonomy that does not exist would be written from belief (D45).
