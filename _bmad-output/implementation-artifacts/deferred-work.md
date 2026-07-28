@@ -396,7 +396,25 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
 
 ## Deferred from: code review of story-4.13 (2026-07-24)
 
-- **The dhcp-churn byte-pin test pins MAC/hostname values relationally, never by value.** The
+- ✅ **CLOSED by story 5.2b.** ~~The dhcp-churn byte-pin test pins MAC/hostname values relationally,
+  never by value.~~ `the_dhcp_churn_stream_moves_the_address_only_through_observed_at` was EXTENDED
+  — not duplicated — to pin `02:00:5e:00:53:78` = `MacAddr([2, 0, 94, 0, 83, 120])`,
+  `doc-host-golf` and `doc-host-hotel` by VALUE, alongside every relational assertion it already
+  carried. Proven to red TWO-SIDED, which is this entry's whole justification: with
+  `doc-host-hotel` renamed to `doc-host-india` in the committed stream, the PRE-STORY tree reported
+  **130 + 86 + 42, zero failures** — the relational `assert_ne!(hostname(2), hostname(0))` stayed
+  green because golf ≠ india — while the extended test reds naming N3 and the value it expected.
+  Both halves were run (`git stash push` on `fixtures.rs`, then `pop`); the artefact was restored
+  and `git status fixtures/` verified empty.
+  ⚠️ **This bullet's own next sentence is FALSE, and is corrected here rather than struck
+  silently — the register is append-and-strike, so a wrong sentence survives unless its correction
+  travels with the closure.** It says the three constants are cited by *"both `reason` strings"*.
+  Counted on the committed file: the MAC appears in ONE reason (`dhcp-churn.toml:39`),
+  `doc-host-hotel` in ONE (`:28`), and `doc-host-golf` in BOTH. The UNION of the two reasons cites
+  all three; NEITHER reason does. The conclusion the entry rests on is unchanged — all three are
+  cited by prose and were asserted by no test. The same false distribution is in `epics.md:1391`
+  and was not repeated by the story that closed this.
+  The
   constants both `reason` strings cite (`02:00:5e:00:53:78`, `doc-host-golf`, `doc-host-hotel`)
   are asserted by no test: `the_dhcp_churn_stream_moves_the_address_only_through_observed_at`
   asserts equality/inequality BETWEEN observations (per AC3's own wording), not the authored
@@ -407,7 +425,28 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   the family premise depends on (the three `IpV4`s) and the fact-count, and leave whole-value
   pinning to the same owner: whoever hardens corpus byte-fidelity, corpus-wide rather than
   per-family.
-- ↺ **STILL OPEN after story 5.1** — the entry above is NOT closed by it, deliberately. 5.1's
+- ✅ **CLOSED by story 5.2b**, which is the owner this bullet names. ~~↺ STILL OPEN after story
+  5.1~~ — the authored VALUES the two `reason` strings cite are now pinned, and so are those of
+  every other family whose prose cites constants: `randomized-mac`, `multi-nic`,
+  `shared-hardware-vm`, `cloned-mac` and `dhcp-churn`, plus the `example-traps` stream, assert
+  their authored MACs, addresses, hostnames, uplinks and instants by value.
+  ⚠️ **"Corpus-wide" would be too strong and is not claimed** — corrected on this story's code
+  review, which counted it. There are **13** streams under `scenario/replay/`; eight had no value
+  pin, and **two still have none**: `partial-then-failed.jsonl` and `capability-downgrade.jsonl`
+  (their facts — `[2,0,94,0,84,1]`, `doc-host-c`, `[2,0,94,0,85,1]`, `198.51.100.10`, `doc-host-d`
+  — appear in no `.rs` file; `fixture_connector.rs` READS those streams rather than restating them,
+  so it is not a second oracle for them). They carry control records rather than a trap family,
+  which is why no `reason` prose strands on them — but the sentence "all committed streams" would
+  have been false. Registered under `## Deferred from: story-5.2b`. The re-authoring this bullet describes — different-but-still-synthetic values with a
+  refreshed sha256 — now reds. **Nine mutations recorded across eight artefacts** (seven in the
+  story, two more on its code review), each the SOLE red; six of the nine are aimed at a stream no
+  other value test reads, and three at a trap `.toml` rather than a stream. *(That count was
+  "six" here and "seven" in the story until the code review; AC6 enumerates seven and its preamble
+  says "five, at minimum", so no single figure matched. The counted one is recorded rather than a
+  third guess.)* *(Both bullets in this section are closed together on purpose: closing only the first
+  would leave the section ending on a bullet asserting the item is open and naming an unfilled
+  owner.)*
+  ↺ ~~**STILL OPEN after story 5.1**~~ — the entry above is NOT closed by it, deliberately. 5.1's
   corpus-wide round-trip witness starts from the FILE, so it pins the byte-SHAPE and never the
   authored values; its `obs_id` helper pins ids only. A re-authored `dhcp-churn.jsonl` with
   different-but-still-synthetic MACs/hostnames and a refreshed sha256 would still strand the two
@@ -518,7 +557,42 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
 _Raised BY the story while scoping it, not by its review — hence no "code review of" in the heading.
 It is the one finding 5.1 surfaced and deliberately did not fix._
 
-- **Four committed family streams are named by no VALUE test.** `randomized-mac.jsonl` (4.9),
+- ✅ **CLOSED by story 5.2b**, the owner this bullet names. ~~Four committed family streams are
+  named by no VALUE test.~~ Each of the four now has its own byte-pin test in
+  `crates/opencmdb-bin/src/fixtures.rs`, in the `dhcp-churn` idiom — length, exact per-line fact
+  count, `assert_obs_ids` with its prefix and length, then the authored values, then the instants
+  vector: `the_randomized_mac_stream_rests_on_one_octet`,
+  `the_multi_nic_stream_pins_both_halves_of_its_uplink`,
+  `the_shared_hardware_vm_stream_shares_one_uplink_and_falls_silent_on_the_abstain_pole`,
+  `the_cloned_mac_stream_wears_one_mac_on_every_line`. Five explicit tests, not one table-driven
+  loop — a table restates the corpus in one place and stops being independent of it.
+  **And the `obs_id`↔line binding this bullet asks for turned out to be only HALF the hole.** Every
+  pin above lives on the `.jsonl`; a trap file declares which pair of `obs_id`s it judges and under
+  which column and rule, and nothing asserted that. `read_traps` cross-checks only that a trap's
+  `obs_id`s EXIST (a `BTreeSet` membership test) and `trap_gate`'s completeness check only asks
+  that both poles of a family are present — which an EXCHANGE of the two poles' vectors preserves.
+  Measured during this story's validation pass and reproduced during its implementation: exchanging
+  the two `observations` vectors in `fixtures/scenario/traps/cloned-mac.toml` — no stream byte
+  touched — makes the corpus DEMAND the false merge (`doc-host-echo` + `doc-host-foxtrot` under
+  `must-merge`/`l1-exact-mac`, the two genuine `doc-host-echo` presences under `must-not-merge`),
+  and the whole workspace suite stayed green. The new `assert_trap_binds` helper pins, per trap id,
+  the exact `observations` vector *in order*, the whole `Expectation`, and the declared `family`.
+  **All 24 committed traps across all ten trap files are bound.** That exchange now reds.
+  _(Scope corrected on this story's CODE REVIEW, and the correction is the substantive part.
+  The story shipped the helper against only the five families it pinned — **14 of the 24 traps** —
+  while four documents claimed "all eleven committed traps", a figure that contradicted its own
+  enumeration (9 + 2 + 3 = 14) and the corpus total (24). Two review layers independently MEASURED
+  the residue: exchanging the two `observations` vectors in `hostname-collision.toml` left the
+  suite at 135 + 86 + 42, zero failures, while the corpus DEMANDED `must-merge`/`l1-exact-mac` on
+  two DIFFERENT MACs — two physically distinct boxes that merely share a hostname, D10's
+  catastrophic direction. Guy's call was to close the CLASS rather than register the instance:
+  `docker-veth`, `hostname-absence`, `hostname-collision` and `vrrp-virtual-mac` are now bound
+  too, folded into their existing byte-pins. The `hostname-collision` exchange reds, proven.)_
+  _(`family` was added to the helper by the same review, also measured: deleting BOTH `family`
+  lines from `cloned-mac.toml` left the suite green while silently exempting the family from
+  `incomplete_families` — after which it could be reduced to one pole with `trap_gate` still
+  green. Deleting only ONE line already reddened the gate; deleting both did not, until now.)_
+  Four committed family streams ~~are named by no VALUE test~~. `randomized-mac.jsonl` (4.9),
   `multi-nic.jsonl` (4.10), `shared-hardware-vm.jsonl` (4.11) and `cloned-mac.jsonl` (4.12) have no
   byte-pin test; their only mention anywhere in the tree is the context table story 5.1 added
   (`fixture_connector.rs`, `committed_stream_contexts()`), which states each stream's declared
@@ -749,3 +823,117 @@ the story file's `### Review Findings`._
   `name` through the address scanner in addition to the prefix check. The rule predates story 5.2
   (4.17 last shaped it), which is why this is registered and not patched. Owner: whoever next
   hardens corpus privacy.
+
+## Deferred from: story-5.2b (2026-07-28)
+
+_Raised BY the story while implementing it, not by its review. One item deferred; one decided and
+closed in the story rather than deferred, recorded here because the story was required to say which
+branch it took._
+
+- **A trap's `reason` prose is still not mechanically tied to the values it cites.** This story
+  pins the authored VALUES of all six committed streams that had none, and pins each trap's
+  `observations` vector and `Expectation`. What it does NOT do is connect the two: a `reason` may
+  still cite a constant the stream does not hold, and only a human reader would notice. The
+  concrete residue is measurable — `example.toml:36` says *"their MACs differ in the final octet"*
+  and `dhcp-churn.toml:39` names `02:00:5e:00:53:78`; both are true today because this story
+  asserted the bytes beside them, but neither reason is checked AGAINST the bytes. That is what
+  this family of tests can reach and this story deliberately did not attempt: it needs a
+  value-extraction pass over free-form English, which is a rule of its own rather than another
+  pin. The file that names the risk best is `example.toml`'s own header — *"the first version of
+  this file claimed two observations shared a MAC when the committed bytes said otherwise, and a
+  reader caught it precisely because the claim was written down."* A reader caught it once.
+  Owner: whoever next hardens corpus byte-fidelity — and it should be weighed against simply
+  accepting that `reason` is prose, since a scanner over English is the kind of check that fails
+  in the direction of false confidence.
+- ✅ **DECIDED and closed in the story, not deferred: `example-traps.jsonl` is now pinned.** The
+  story's validation pass surfaced it as a SIXTH committed stream named by no value test —
+  previously unregistered, and carrying exactly the shape the story-4.13 entry above is about
+  (`example.toml:26`'s reason cites `02:00:5e:00:53:10`, asserted by nothing). The story offered
+  two branches, pin it or register it with a named owner; the pin was taken, because it is three
+  lines of corpus and closing the theme while leaving a known instance of it open would have made
+  the closure claim above narrower than it reads. The test is
+  `the_example_trap_stream_carries_the_values_its_reasons_cite`, proven to red by collapsing E3's
+  final octet onto E1's. It also binds all three of `example.toml`'s traps, including the one that
+  judges `minimal.jsonl` — a trap names the stream it judges, and nothing assumes there is one.
+- **Two committed streams still have no value pin: `partial-then-failed.jsonl` and
+  `capability-downgrade.jsonl`.** Counted on this story's code review: 13 streams under
+  `scenario/replay/`, eight had none, six gained one here. These two hold real authored facts
+  (`Mac [2,0,94,0,84,1]`, `doc-host-c`, `192.0.2.30/.31/.32`; `Mac [2,0,94,0,85,1]`,
+  `198.51.100.10`, `doc-host-d`) that appear in no `.rs` file. `fixture_connector.rs`'s
+  `partial_observations()` READS the stream rather than restating it, so it is not a second
+  oracle — it pins `connector_id`, `scope`, capabilities and `obs_id`s, never a `Fact` value.
+  They are the two streams built around CONTROL records (`failure`, `capability`) rather than a
+  trap family, so no `reason` prose strands on them and the pressure is lower than it was for the
+  six closed here — which is why this is registered rather than fixed. Owner: whoever next hardens
+  corpus byte-fidelity, alongside the `reason`-prose item above.
+- **`raw` is pinned by nothing on the six newly-pinned streams.** `expected()` restates
+  `raw: None` for every line of `minimal.jsonl` — which is what "a second oracle in the spirit of
+  `expected()`" leads a reader to expect — but the new pins read `facts`, `obs_id` and
+  `observed_at` only. Story 5.2's `raw` scan reddens on an address- or MAC-shaped payload, so a
+  privacy leak is caught; an arbitrary non-address string appearing in `raw` is not. Pre-existing
+  class, not caused by this story. Owner: whoever next hardens corpus byte-fidelity.
+
+**Still open after this story, and deliberately so — the narrow true claim.** Every register entry
+that was owned by *"whoever hardens corpus byte-fidelity"* **when this story opened** is now
+closed. The complete list is four entries, not the three an earlier draft of this paragraph gave:
+the `code review of story-4.10`, `code review of story-4.12` and `code review of story-4.15` defers
+(all three closed by 5.1) and both `code review of story-4.13` bullets (closed here). *(The
+enumeration omitted 4.12 and 4.15 until this story's own code review — the owner phrase wraps
+across a line break there, so a single-line `grep` misses it. The universal claim was true either
+way; the list after the colon was not, and an incomplete inventory is the failure Dev Notes lesson
+3 names.)* Verified by re-reading the register AFTER the last edit, not before — story 5.1's review
+found a citation its own diff had falsified, and 5.2's replaced a false sentence with another its
+own commit falsified.
+
+That is NOT the same sentence as `epics.md:1397`'s *"the corpus byte-fidelity theme carries no open
+item"*, which was true when written on 2026-07-26 and false by the next day. **Two things in this
+area read open after this story, and both must keep reading open:**
+
+- `scenario/wire/unifi-clients.expected.jsonl` has **no round-trip byte-shape pin at all** — see
+  the code-review-of-story-5.1 section above. It sits outside `scenario/replay/`, so 5.1's
+  corpus-wide witness cannot reach it by design. Owner: **Epic 11's wire parser** (`CONSUMER
+  PENDING`, issue #34). Not this story's, and untouched by it.
+- the `reason`-prose item this story opened at the top of this very section, whose owner reads
+  *"whoever next hardens corpus byte-fidelity"*. It is NEW — it did not exist when the claim above
+  was scoped — and naming it here is what keeps that claim from being falsified by its own commit.
+
+## Deferred from: code review of story-5.2b (2026-07-28)
+
+_Three parallel layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor). Two HIGH findings and
+three MED were FIXED in the story rather than deferred — the trap-binding scope (14 → 24 traps,
+Guy's call to close the class), the `family` pin, the false order-rationale doc, the "eleven traps"
+figure, and the dhcp-churn D2/D3 MAC pins; those are recorded at their register entries above. Five
+items were deferred, all pre-existing or inherent. One finding was dismissed: the claim that
+collapsing dhcp-churn D3's MAC onto D1's would red nothing — the pre-existing
+`assert_ne!(mac(2), mac(0))` catches exactly that._
+
+- **The `fact()` closure's panic names the observation but never the fact KIND.** `panic!(
+  "observation {n} must carry the fact")` is the only signal for a whole class of corpus edits —
+  substituting one fact kind for another keeps the per-line count intact and dies here — but it
+  does not say whether the missing fact was the `Mac`, `IpV4`, `Hostname` or `Uplink`, so a
+  maintainer must read the test to find out which of four closures fired. It is load-bearing rather
+  than incidental: `shared-hardware-vm`'s assertion ORDER is chosen specifically so this panic does
+  NOT fire before the absence pin. Deferred as pre-existing: the idiom is copied verbatim from the
+  4.13 and 4.14 pins and is now shared by ten tests, so fixing it in one story would split it.
+  Owner: whoever next touches the byte-pin idiom — thread a `&'static str` label through `fact()`.
+- **`N1/N2/N3` labels two different streams.** The pre-existing `dhcp-churn` pin calls its lines
+  N1/N2/N3 (the story's own Dev Notes call them D1/D2/D3), and the new `randomized-mac` pin uses
+  the same three labels for a different stream. With ten streams pinned, a CI log reading
+  `N3 answers to doc-host-hotel` beside `N3 wears 02:00:5e:00:53:21` is the ambiguity the Testing
+  standards section exists to prevent. Deferred: the collision predates this story, whose new
+  assertions followed the convention already inside that test rather than inventing a second one
+  within one function. Owner: whoever next touches the dhcp-churn pin — relabel it D1/D2/D3.
+- **Each test's trap-binding block is terminal.** The `read_traps` block is last in every test, so
+  a combined stream+`.toml` re-authoring panics on the byte and the binding pin is never evaluated
+  — the recorded red names the value, not the inversion. Within one test the second
+  `assert_trap_binds` is likewise unreachable once the first reds, which is exactly what this
+  story's mutation 6 shows. Deferred: inherent to Task 5b's explicit "fold it in" choice, and the
+  alternative (a separate binding test) re-opens the gap where "the family" means two sets. Owner:
+  nobody yet — recorded so the next reader does not mistake a single red for a single defect.
+- **`the_dhcp_churn_stream_moves_the_address_only_through_observed_at` no longer describes all it
+  does** — it now also pins three authored values and the family's two trap bindings. Deferred:
+  the register cites that test by name in two closed bullets, so renaming it costs more than it
+  returns. Owner: whoever next renames a cited test, together with the citations.
+- **The trap `reason` prose is still not mechanically tied to the values it cites** — see the
+  `## Deferred from: story-5.2b` section above, where this was already registered by the story
+  itself. Repeated here only so this section is not read as the complete review residue.
