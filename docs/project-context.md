@@ -42,7 +42,7 @@ Docker Hub; the binary runs and scans on Guy's NAS (frontend on macvlan, no Trae
 | **E2** Le contrat de connecteur | ✅ done (5 stories) |
 | **E3** Mon premier écart réel — **v0.1** | ✅ done (10 stories), retrospective held |
 | **E4** Infra fixtures & corpus de pièges — v0.2 | ✅ **done 2026-07-25** (19/19 authored; 4.19 split — see below) |
-| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — 15 stories; **5.1 and 5.2 done** (PR #41 and #44, both merged 2026-07-28); **5.2b in review** — it closes the last inherited-debt story |
+| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — 15 stories; **5.1, 5.2 and 5.2b done** (PR #41, #44, #46, all merged 2026-07-28). Epic 5's **three inherited-debt stories are closed**; the L1 engine starts at 5.3 |
 | **E6–E23** | backlog |
 
 Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`, not this file.

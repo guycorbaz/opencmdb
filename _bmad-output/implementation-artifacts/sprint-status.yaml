@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-28  # Story 5.2b implemented → review (258 → 263 tests; code-review next)
+last_updated: 2026-07-28  # Story 5.2b DONE — PR #46 merged (fe6a19e); Epic 5's debt block closed
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -380,7 +380,10 @@ development_status:
   # existing family byte-pins rather than added as tests, so the count says nothing about them;
   # what says something is the two recorded reds. ⚠️ NEXT: push → PR → green CI → squash merge.
   # `done` is the MERGE's business, not the review's.
-  5-2b-four-families-byte-pins: review
+  # ✅ MERGED 2026-07-28 — PR #46, CI green in 52s, squashed as `fe6a19e`. Epic 5's THREE inherited
+  # debt stories (5.1, 5.2, 5.2b) are now all done; the corpus byte-fidelity and privacy themes
+  # both carry only entries with named owners. NEXT = `create-story` 5.3.
+  5-2b-four-families-byte-pins: done
   5-3-engine-abstention-cause: backlog
   5-4-decision-and-ruleset-version: backlog
   5-5-l1-join-pure: backlog
