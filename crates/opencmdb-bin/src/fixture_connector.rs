@@ -338,7 +338,7 @@ impl Connector for FixtureConnector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fixtures::{Record, read_jsonl, read_records};
+    use crate::fixtures::{Record, fixtures_dir, read_jsonl, read_records, walk_replay_streams};
     use opencmdb_core::connector::VecSink;
     use opencmdb_core::observation::{Fact, FactKind, L2DomainId, MacAddr, ObsId, VantageId};
     use opencmdb_core::testing::run_connector_contract;
@@ -348,11 +348,14 @@ mod tests {
 
     const MINIMAL: &str = "scenario/replay/minimal.jsonl";
 
-    /// The `connector_id`, scope and capability set the committed `minimal.jsonl` needs.
+    /// The `connector_id`, scope and capability set of the CORPUS context — the one eleven of the
+    /// thirteen committed streams were authored in (`minimal.jsonl` and every trap family since
+    /// 4.9). Story 5.1 widened its reach from one file to eleven; only `partial-then-failed.jsonl`
+    /// and `capability-downgrade.jsonl` carry their own.
     ///
-    /// These ARE a restatement of the file's ids — a second, independent statement of them, in the
+    /// These ARE a restatement of the files' ids — a second, independent statement of them, in the
     /// same spirit as `fixtures.rs`'s `expected()`. The consequence is worth knowing: regenerate
-    /// the fixture with fresh ids and these tests red with a `ForeignConnectorId`, which names the
+    /// a fixture with fresh ids and these tests red with a `ForeignConnectorId`, which names the
     /// mismatch but does not say "the corpus moved". What must NOT be restated here is the
     /// OBSERVATIONS — those come from `read_jsonl`, which is what AC2 rests on.
     fn corpus_id() -> ConnectorId {
@@ -366,10 +369,16 @@ mod tests {
         }
     }
 
-    /// Deliberately WIDER than what `minimal.jsonl` emits: it declares `Uplink` and `DhcpLease`
-    /// which the stream never carries. *Capable and unseen* must stay legal — that is the whole
-    /// reason the descriptor exists (D34 §1), and a capability set trimmed to what was observed
-    /// would be the derivation this story refuses.
+    /// All seven [`FactKind`]s — deliberately WIDER than what the streams it covers emit.
+    /// `minimal.jsonl` carries no `Uplink` and the corpus as a whole never emits `DhcpLease` at
+    /// all. *Capable and unseen* must stay legal — that is the whole reason the descriptor exists
+    /// (D34 §1), and a capability set trimmed to what was observed would be the derivation this
+    /// module refuses.
+    ///
+    /// That wideness has a consequence story 5.1 made load-bearing: because this descriptor admits
+    /// every kind, `every_committed_replay_stream_is_admissible_to_the_connector` proves nothing
+    /// about fact-kind coverage on the eleven streams it covers. The check is non-vacuous only
+    /// where a descriptor is tight — see that test's doc.
     fn corpus_caps() -> Capabilities {
         Capabilities {
             as_of: ts("2026-01-01T00:00:10Z"),
@@ -1471,5 +1480,158 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ── Every committed stream, at the connector layer (story 5.1) ───────────
+
+    /// The declared context of one committed replay stream.
+    struct StreamContext {
+        /// The corpus-RELATIVE path, spelled as `MANIFEST.toml` spells it.
+        relative_path: &'static str,
+        /// The `connector_id` every observation in the stream must carry.
+        id: ConnectorId,
+        /// The scopes the source claims to cover.
+        scopes_covered: Vec<Scope>,
+        /// The INITIAL descriptor — the one in force before any record.
+        capabilities: Capabilities,
+    }
+
+    /// The declared context of all 13 committed replay streams — HAND-AUTHORED, never derived.
+    ///
+    /// This is a second, independent statement of each stream's context, in `expected()`'s idiom.
+    /// Deriving it from the observations would make [`FixtureError::ForeignConnectorId`] and
+    /// [`FixtureError::UncoveredScope`] vacuous by construction, and a capability set read off what
+    /// was seen cannot express *capable of hostnames, saw none* — the move this module's doc
+    /// refuses.
+    ///
+    /// The three contexts are reused, not re-authored: every family stream since 4.9 was written in
+    /// the corpus context, so eleven entries share it.
+    fn committed_stream_contexts() -> Vec<StreamContext> {
+        let corpus = |relative_path| StreamContext {
+            relative_path,
+            id: corpus_id(),
+            scopes_covered: vec![corpus_scope()],
+            capabilities: corpus_caps(),
+        };
+        vec![
+            corpus(MINIMAL),
+            corpus("scenario/replay/example-traps.jsonl"),
+            corpus("scenario/replay/randomized-mac.jsonl"),
+            corpus("scenario/replay/multi-nic.jsonl"),
+            corpus("scenario/replay/shared-hardware-vm.jsonl"),
+            corpus("scenario/replay/cloned-mac.jsonl"),
+            corpus("scenario/replay/dhcp-churn.jsonl"),
+            corpus("scenario/replay/vrrp-virtual-mac.jsonl"),
+            corpus("scenario/replay/hostname-collision.jsonl"),
+            corpus("scenario/replay/docker-veth.jsonl"),
+            corpus("scenario/replay/hostname-absence.jsonl"),
+            StreamContext {
+                relative_path: PARTIAL,
+                id: partial_id(),
+                scopes_covered: vec![partial_scope()],
+                capabilities: partial_caps(),
+            },
+            StreamContext {
+                relative_path: DOWNGRADE,
+                id: downgrade_id(),
+                scopes_covered: vec![downgrade_scope()],
+                capabilities: downgrade_initial_caps(),
+            },
+        ]
+    }
+
+    /// Every committed replay stream loads through [`FixtureConnector::load`] with its declared
+    /// context — so corpus-level PARSEABILITY and connector-level ADMISSIBILITY stop being two
+    /// different claims.
+    ///
+    /// Until story 5.1 the admissibility layer (story 4.4: foreign `connector_id`, uncovered scope,
+    /// undeclared fact kind, repeated `obs_id`, scripted cancellation, capability ordering) was
+    /// exercised against three streams; every FAMILY stream since 4.9 was gated for parseability by
+    /// `fixtures.rs`'s walks and by nobody else (registered under story 4.12's review).
+    ///
+    /// **What this does NOT prove.** It shows every committed stream is ADMISSIBLE; it never
+    /// observes [`FixtureError::UndeclaredFactKind`] FIRING. The fact-kind check is non-vacuous on
+    /// `partial-then-failed.jsonl` (`partial_caps()` declares exactly the four kinds that stream
+    /// emits — a fifth would red) and on `capability-downgrade.jsonl` on BOTH sides of its
+    /// capability record (`downgrade_initial_caps()` declares four; the record narrows to three).
+    /// It is VACUOUS on the eleven `corpus_*` streams, because `corpus_caps()` declares all seven
+    /// [`FactKind`]s — deliberately wider than what is emitted, which is the whole reason the
+    /// descriptor exists. This is not "the walk proves fact-kind coverage corpus-wide".
+    ///
+    /// One more thing it does not check: the table's `as_of` values for the INITIAL descriptor.
+    /// `from_records` compares only capability RECORDS against preceding observations, so re-using
+    /// `corpus_caps()`'s `2026-01-01T00:00:10Z` across streams dated as late as 2026-01-11 is
+    /// admissible and means nothing.
+    ///
+    /// Checked in BOTH directions, mirroring the corpus lock's own rule: a walked stream with no
+    /// table entry is RED, and a table entry naming no file is RED. A new committed stream must
+    /// state its context here, or the suite reds.
+    #[test]
+    fn every_committed_replay_stream_is_admissible_to_the_connector() {
+        let table = committed_stream_contexts();
+        // The walk yields ABSOLUTE paths; `load` takes the corpus-relative string and
+        // `fixture_path` refuses anything absolute or carrying `..`. Derive it — never write the
+        // `fixtures/` prefix again (`the_fixtures_path_is_expressed_once`).
+        let root = fixtures_dir();
+        let mut walked: BTreeSet<String> = BTreeSet::new();
+
+        let checked = walk_replay_streams(&mut |path| {
+            let relative = path
+                .strip_prefix(&root)
+                .unwrap_or_else(|e| panic!("{}: not under the corpus root: {e}", path.display()))
+                .to_str()
+                .unwrap_or_else(|| panic!("{}: a corpus path must be UTF-8", path.display()))
+                .to_string();
+
+            let context = table
+                .iter()
+                .find(|c| c.relative_path == relative)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{relative}: committed under scenario/replay/ but absent from this test's \
+                         context table — a new stream must state its connector_id, scope and \
+                         capabilities there"
+                    )
+                });
+
+            FixtureConnector::load(
+                context.id,
+                context.capabilities.clone(),
+                context.scopes_covered.clone(),
+                &relative,
+            )
+            .unwrap_or_else(|e| {
+                panic!("{relative}: inadmissible to the connector with its declared context: {e}")
+            });
+
+            // `walked` is what the orphan-entry loop below reads, so the insert is load-bearing.
+            // Its assertion is NOT: a stack walk that panics on symlinks cannot yield one path
+            // twice, so this can never be observed red and is defence-in-depth by admission
+            // (story 5.1's review — the house rule is that a guard ships with a mutation, and one
+            // that cannot have a mutation says so instead of implying it had one).
+            assert!(walked.insert(relative.clone()), "{relative}: walked twice");
+        });
+
+        // Non-emptiness is asserted inside `walk_replay_streams` itself since story 5.1's review —
+        // it used to be five verbatim copies whose shared message never said which walk was empty.
+        //
+        // The orphan direction: an entry naming a file the walk never saw. PROVEN RED (story 5.1,
+        // mutation AC2(c)).
+        for context in &table {
+            assert!(
+                walked.contains(context.relative_path),
+                "{}: named by the context table but not found under scenario/replay/",
+                context.relative_path
+            );
+        }
+        // Catches a DUPLICATED entry, which neither orphan direction sees: 14 entries over 13
+        // files leaves every file matched and every entry walked. True by construction, and
+        // OBSERVED red rather than merely claimed — story 5.1's review-fix pass duplicated the
+        // `dhcp-churn` entry and watched this line report `left: 13, right: 14` (mutation 10).
+        assert_eq!(
+            checked,
+            table.len(),
+            "the context table must have exactly one entry per committed stream"
+        );
     }
 }

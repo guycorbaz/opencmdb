@@ -19,8 +19,9 @@ resumePoint: >
   engine) get a design nod at story-creation time.
   EPICS 3 and 4 are COMPLETE (Epic 4 closed 2026-07-25, retrospective held
   2026-07-26; story 4.19 was SPLIT, 4.19b re-scoped to Epic 11 via issue #34).
-  EPIC 5 (Identité d'interface fiable, v0.3) is DECOMPOSED into 14 stories
-  (5.1–5.14) below, on 2026-07-26 with Guy. Three arbitrations were taken at
+  EPIC 5 (Identité d'interface fiable, v0.3) is DECOMPOSED into 15 stories
+  (5.1–5.14 on 2026-07-26 with Guy, plus 5.2b INSERTED the same day — see the
+  Epic 5 preamble) below. Three arbitrations were taken at
   decomposition time and live in the stories that carry them: (a) NFR4 CANNOT go
   green in Epic 5 — D18 gates at the DEVICE level, and of the 24 committed traps
   13 name an `l1-*` rule, 8 an `l2-*` rule and 3 a cause; the Epic List entry was
@@ -28,9 +29,9 @@ resumePoint: >
   traps in the denominator; (b) the identity engine gets its OWN abstention cause,
   with `Expectation` and the sha256-locked corpus untouched (5.3); (c) Epic 5
   creates `interface`/`identity_link`/`link_candidate` but NOT `device`, which is
-  Epic 6's (5.9). Stories 5.1–5.2 are inherited debt placed at the HEAD on Guy's
-  decision, because this epic bumps the corpus and hardening after the bump costs
-  more. Create and implement them one at a time (just-in-time). Epics 6–23 remain
+  Epic 6's (5.9). Stories 5.1, 5.2 and 5.2b are inherited debt placed at the HEAD
+  on Guy's decision, because this epic bumps the corpus and hardening after the
+  bump costs more. Create and implement them one at a time (just-in-time). Epics 6–23 remain
   at epic level only. After all epics: step-04.
 ---
 
@@ -1309,9 +1310,11 @@ Build the L1 interface-identity join and drive it against the corpus Epic 4 froz
 
 _Decomposed 2026-07-26 with Guy, immediately after the Epic 4 retrospective. Three arbitrations were taken at decomposition time and are recorded in the stories that carry them: the NFR4 level boundary (see the Epic List entry above and story 5.8), the engine's own abstention cause (5.3), and what persistence Epic 5 does and does not create (5.9)._
 
-_Two of the fourteen stories are **inherited debt**, placed at the HEAD on Guy's decision: the corpus byte-fidelity and corpus privacy themes had each accumulated three to four unowned entries in `deferred-work.md`. They come first because **this epic bumps the corpus**, and hardening after the bump means replaying every entry against artefacts that have moved._
+_**Three** of the fifteen stories are **inherited debt**, placed at the HEAD on Guy's decision: the corpus byte-fidelity and corpus privacy themes had each accumulated three to four unowned entries in `deferred-work.md`. They come first because **this epic bumps the corpus**, and hardening after the bump means replaying every entry against artefacts that have moved._
 
-_Build order: the two debt stories -> the engine's vocabulary (5.3, 5.4) -> the pure join (5.5) -> the blocker (5.6) -> wiring it to the corpus (5.7, 5.8) -> persistence (5.9, 5.10) -> the invariants (5.11, 5.12, 5.13) -> the operator-visible surface (5.14). No story depends on a later one._
+_**Story 5.2b was INSERTED on 2026-07-26**, one day after the decomposition and before any Epic 5 code existed. It was surfaced while preparing story 5.1: four committed trap families (randomized-mac, multi-nic, shared-hardware-vm, cloned-mac) turned out to be named by no test at all, so 5.1's AC1 — which strengthens byte-pins that EXIST — could not reach them. It was neither absorbed into 5.1 nor left in the register, because the corpus is the oracle the L1 join is about to be judged against: hardening it after its first consumer exists means bending the engine to fit whatever the corpus happens to say. The letter suffix is the house idiom for an inserted item (D56b, AC5b/7b/7c), chosen so 5.3–5.14 keep their numbers._
+
+_Build order: the three debt stories (5.1, 5.2, 5.2b) -> the engine's vocabulary (5.3, 5.4) -> the pure join (5.5) -> the blocker (5.6) -> wiring it to the corpus (5.7, 5.8) -> persistence (5.9, 5.10) -> the invariants (5.11, 5.12, 5.13) -> the operator-visible surface (5.14). No story depends on a later one._
 
 ### Story 5.1: The corpus pins the obs_id-to-line binding, and every stream goes through the connector
 
@@ -1354,6 +1357,46 @@ So that the privacy rule covers the COMMITTED BYTES rather than only the fields 
 **Then** a MAC or IP followed by kept punctuation no longer tokenizes unparseable, dash-form MACs are seen, and the U/L-bit rule stops admitting IPv6-multicast-shaped strings while refusing IPv4-multicast ones (registered under story 4.14's review).
 
 **And** each closure is proven to red on a committed-shaped input before it passes.
+
+### Story 5.2b: The four unpinned families — and dhcp-churn's authored values — state their premise in a test, not only in prose
+
+_Inserted 2026-07-26 with Guy, one day after the decomposition and before any Epic 5 code was written — surfaced while preparing story 5.1, which could not absorb it (its AC1 strengthens byte-pins that EXIST; these four families have none). The letter suffix follows the house idiom for an INSERTED item (D56b, AC5b/7b/7c) so that 5.3–5.14 keep their numbers. It sits HERE, in the inherited-debt block and ahead of 5.5, deliberately: the corpus is the oracle the L1 join will be judged against, and hardening an oracle after its first consumer exists means bending the engine to fit whatever the corpus happens to say._
+
+As the owner of the corpus,
+I want a byte-pin test for the randomized-mac, multi-nic, shared-hardware-vm and cloned-mac families, and the authored values of dhcp-churn pinned by value,
+So that no committed family can state a premise its own bytes contradict, and no trap can pass for the wrong reason.
+
+**Acceptance Criteria:**
+
+**Given** that `randomized-mac.jsonl`, `multi-nic.jsonl`, `shared-hardware-vm.jsonl` and `cloned-mac.jsonl` are named by no VALUE test in the tree — their only mention is the per-stream context table story 5.1 added (`fixture_connector.rs`, `committed_stream_contexts()`), which states each stream's declared context and asserts nothing about its contents — so their authored values and their `obs_id` ↔ line binding are asserted by nothing narrower than the corpus walks and the sha256 lock, and `read_traps` only checks that a trap's `obs_id`s EXIST, never which line they name _(this clause read "named by NO test in the tree (`grep -rn "<name>.jsonl" --include=*.rs crates xtask` returns nothing for all four)" until 2026-07-27: story 5.1's own commit falsified that grep — it now returns four hits, all in the table above. The conclusion is unchanged; only the check that establishes it is.)_
+**When** each family gains a byte-pin, in the shape 4.15–4.18 established (stream length · fact count per line · `assert_obs_ids` from story 5.1 · value pins on the premise)
+**Then** a deliberate re-authoring with a refreshed manifest can no longer invert what the family judges while every assertion stays green.
+
+**Given** `randomized-mac.jsonl` — 3 presences whose whole family rests on ONE octet
+**When** it is pinned
+**Then** N1 and N2 carry the byte-identical MAC `02:00:5e:00:53:20` (value-pinned, not merely asserted equal), N3's differs and is value-pinned too, the three addresses `192.0.2.30/.31/.32` are pinned, ALL THREE lines carry exactly 2 facts (`Mac` + `IpV4` — measured 2026-07-27; this read "both lines" until story 5.1's review caught a three-presence premise constrained for two), and the instants are the authored vector — so a one-octet edit that turns the `l1-exact-mac` pair into a distinct-MAC pair reds HERE rather than at the engine's first run, where it would read as the engine's fault.
+
+**Given** `multi-nic.jsonl`, whose premise is entirely geometric and which the harness validates nowhere (the VRRP byte-pin's own doc says uplink geometry is pinned "here or nowhere" — true precisely because VRRP HAS a byte-pin)
+**When** it is pinned
+**Then** M1 and M2 carry the SAME `peer_mac` and DIFFERENT `peer_port` (`swport-1` / `swport-2`) — the whole `Uplink` fact value-pinned, both halves — and M3 carries a DIFFERENT `peer_mac` with `swport-7`, so neither "same switch, different port = agrees" nor "different switch = opposes" can be silently exchanged, and collapsing the two ports into one (which would make this the shared-hardware-vm shape) reds.
+
+**Given** `shared-hardware-vm.jsonl`, whose trap header declares the uplink "shared by construction (the same `peer_mac` and `peer_port` on every observation)" — prose that no test asserts
+**When** it is pinned
+**Then** all FOUR observations carry the byte-identical `Uplink` (peer `[2,0,94,0,96,10]`, port `swport-1`), W1/W2 share `doc-vm-alpha` and W3 carries `doc-vm-beta` (all value-pinned), W4 carries NO `Hostname` fact as an assertion rather than an accident (`.iter().all(|f| !matches!(f, Fact::Hostname { .. }))`, story 4.17's idiom), and the four MACs are distinct and value-pinned — so the discriminator stays the hostname and cannot silently become the topology.
+
+**Given** `cloned-mac.jsonl`, the corpus's ONLY pre-release guard against the false merge — D21 refuses a unique index on `interface.mac_canon` deliberately, so the schema cannot be one, and D10 calls the false merge catastrophic and asymmetric
+**When** it is pinned
+**Then** all THREE presences carry the one byte-identical MAC `02:00:5e:00:53:70` (value-pinned on each line, not pairwise), K1 and K3 carry the identical hostname `doc-host-echo` while K2 carries `doc-host-foxtrot` (value-pinned), the three addresses are pinned and distinct, and the three `obs_id`s are pinned — so neither a one-octet edit (which would turn the `must-not-merge` into a tautology any engine passes) nor an `obs_id` permutation (which would make the corpus DEMAND the false merge) can land unseen.
+
+**Given** `dhcp-churn.jsonl`, whose byte-pin asserts its MACs and hostnames only RELATIONALLY while both `reason` strings cite `02:00:5e:00:53:78`, `doc-host-golf` and `doc-host-hotel` — values no test asserts (registered under story 4.13's review, the last open corpus byte-fidelity entry)
+**When** the existing byte-pin is extended
+**Then** those three values are pinned by value, so a re-authored stream carrying different synthetic values can no longer strand its own reasons.
+
+**And** every pin is proven to red before it passes, one recorded mutation per family, each aimed at a stream no OTHER value test reads so the red cannot be observed for the wrong reason (story 5.1's lesson).
+
+**And** the register is closed by appending, never rewriting: `deferred-work.md`'s story-4.13 entry and the story-5.1 entry are both marked `✅ CLOSED by story 5.2b` — after which the corpus byte-fidelity theme carries no open item.
+
+**And** nothing under `fixtures/` moves: no bytes, no `MANIFEST.toml`. A pin that requires re-authoring an artefact is a FINDING, reported rather than absorbed.
 
 ### Story 5.3: The identity engine gets its own abstention cause
 
