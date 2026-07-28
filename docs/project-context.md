@@ -42,7 +42,7 @@ Docker Hub; the binary runs and scans on Guy's NAS (frontend on macvlan, no Trae
 | **E2** Le contrat de connecteur | ✅ done (5 stories) |
 | **E3** Mon premier écart réel — **v0.1** | ✅ done (10 stories), retrospective held |
 | **E4** Infra fixtures & corpus de pièges — v0.2 | ✅ **done 2026-07-25** (19/19 authored; 4.19 split — see below) |
-| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — 15 stories; **5.1 done** (PR #41, merged 2026-07-28); next is 5.2 |
+| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — 15 stories; **5.1 and 5.2 done** (PR #41 and #44, both merged 2026-07-28); next is 5.2b |
 | **E6–E23** | backlog |
 
 Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`, not this file.
@@ -60,7 +60,7 @@ across nine families** (randomized-mac, multi-nic, shared-hardware-vm, cloned-ma
 vrrp-virtual-mac, hostname-collision, docker-veth, hostname-absence — each in positive AND
 negative form, each naming the RULE rather than the outcome), the scoring algebra, the metrics
 harness, the trap runner, the reality-debt register, and the wire-format spec. Test counts on
-master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **258** on the story-5.2 branch
+master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **258** on master today
 (130 + 86 + 42) — story 5.1 added the two corpus-wide walks, story 5.2 the trap-text scan, the
 `raw` scan and the scanner's six closed evasions. **Three** deliberate privacy-walk amendments have
 landed: two ADMITTING a byte shape with its family (the IANA VRRP MAC range in 4.14, the

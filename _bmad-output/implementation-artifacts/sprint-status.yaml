@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-28  # Story 5.2 code-reviewed — 9 patches applied, still `review` (merge pending)
+last_updated: 2026-07-28  # Story 5.2 DONE — PR #44 merged (4d2044b); next is 5.2b
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -267,9 +267,11 @@ development_status:
   # gutted scanner; it now carries a control address and reds.
   # Gate re-run WHOLE after the patches: fmt, clippy -D warnings, 258 tests, xtask ci all green,
   # fixtures.rs still 728 code lines, MANIFEST.toml untouched, only the two READMEs moved.
-  # STILL `review`, deliberately: the code-review workflow's default would set `done` here, and this
-  # project does not — `done` is the MERGE's business. Next: push → PR → green CI → squash merge.
-  5-2-privacy-floor-reaches-the-bytes: review
+  # `done` 2026-07-28: PR #44 squash-merged as 4d2044b after a green CI run (1m03s). It sat at
+  # `review` from the end of dev-story until the merge, through the code review and its 9 patches —
+  # `done` is the MERGE's business here, and the code-review workflow's own default (which would
+  # have set `done` at the end of the review) is WRONG for this project. Same shape as 5.1.
+  5-2-privacy-floor-reaches-the-bytes: done
   # 5.2b was INSERTED on 2026-07-26, one day after the decomposition and before any Epic 5 code
   # existed — surfaced while preparing story 5.1, which could not absorb it (its AC1 strengthens
   # byte-pins that EXIST; randomized-mac / multi-nic / shared-hardware-vm / cloned-mac have none,
