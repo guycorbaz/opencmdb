@@ -86,7 +86,14 @@ the MANIFEST, dated notes in `epics.md`, and
 `_bmad-output/implementation-artifacts/epic-4-correct-course-2026-07-25.md`. ⚠️ **The one
 milestone task now DUE and not done: regenerating `architecture-views.md`** (its `sourceSha256`
 has not matched since commit `da23f9f`, which predates Epic 4 — the staleness is inherited, not
-caused by this epic; the end of Epic 4 is the milestone the project chose for it).
+caused by this epic; the end of Epic 4 is the milestone the project chose for it, and it passed).
+**Now tracked as GitHub issue #50** rather than in these notes alone. The drift was MEASURED on
+2026-07-29 and is smaller than the hash suggests: **two commits, 59 insertions / 11 deletions**, and
+neither touches a decision body, a dissent or a renunciation — one corrects the source-tree diagram
+(D64 fallout), the other adds a D65 post-completion section. ⚠️ **There is no generator** — `cargo
+xtask` exposes only `ci`, whose `views-hash` check merely VERIFIES the frontmatter hash. The bulk of
+the real work is re-checking that the 883 view file's line citations still resolve, since the source
+grew by 236 lines.
 
 **The fixture corpus was the epic's centre of gravity.** `fixtures/` at the workspace root is a
 SPEC, not test data, locked by `MANIFEST.toml` in both directions. A replay stream carries
@@ -142,8 +149,11 @@ one. The two sqlx traps it warned about were both real and are both handled in t
 
 > **Note on `architecture-views.md`:** it is STILL stale, deliberately — `cargo xtask ci` reports
 > `ℹ views-hash STALE` and exits 0, because the mismatch IS the staleness signal. Regenerate it at a
-> MILESTONE (the end of Epic 4 is the natural one), not per-decision or per-story. **Do not
-> regenerate it inside a story**; several story files say so explicitly.
+> MILESTONE, not per-decision or per-story. **Do not regenerate it inside a story**; several story
+> files say so explicitly. **Tracked as GitHub issue #50**, which carries the measured scope.
+> _(This note named "the end of Epic 4" as the natural milestone. Epic 4 closed on 2026-07-25 and
+> the regeneration did not happen, so that sentence had become a plan rather than a fact — which is
+> exactly why it is now an issue and not only a note.)_
 
 ## Locked, non-negotiable decisions (do not reopen)
 
