@@ -50,8 +50,8 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-29  # 5.4 reviewed (22 patches) -> review, PR #52 open + CI green. 5.4b
-                          # contexted + validated -> ready-for-dev. NEXT = merge #52, THEN dev-story 5.4b
+last_updated: 2026-07-29  # 5.4 done (PR #52 merged). 5.4b IMPLEMENTED -> review; the algebra and
+                          # the float-free gate. 280 tests. NEXT = code-review 5.4b
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -703,7 +703,66 @@ development_status:
   # not five; and the story cited `cascade.rs:42` for the f64 token when it is `:52` — a number
   # inherited from the register without re-measuring, which is the story's own inherited lesson #1
   # committed by the story that quotes it. Caught before dev this time.
-  5-4b-verdict-algebra-and-float-gate: in-progress
+  #
+  # 5.4b IMPLEMENTED 2026-07-29 → review (branch `story-5.4b-verdict-algebra-and-float-gate`).
+  # In the weaker true sentence: `identity/cascade.rs` gains `decide(Vec<RuleVerdict>,
+  # RulesetVersion) -> Decision`, a TOTAL pure function over D13's table, plus `smallest_rule_with`;
+  # `xtask` gains a SIXTH gate, `float-free`. SIX new core tests + THREE new xtask tests.
+  # NOTHING produces a `Verdict`, so nothing calls `decide` outside its own tests: no rule, no join,
+  # no blocker, no persistence, no corpus wiring.
+  # 271 → 280 tests (135 bin + 100 core + 45 xtask), zero failures. Both clippy forms green.
+  # `cargo xtask ci`: SIX gates green + `ℹ views-hash STALE` exit 0 (issue #50, NOT regenerated).
+  # THE DESIGN: `decide` returns a `Decision`, not a bare `Conclusion`, so the returned
+  # verdict_vector IS the input and the rule is selected FROM it — which makes "a conclusion naming
+  # a rule absent from its own vector" and "a Match with an empty vector" unreachable THROUGH THE
+  # FUNCTION rather than merely unenforced. A struct literal elsewhere is still free (owner 5.9).
+  # THE ARMS are a `match` on the presence tuple, not an `if`-chain, and that is load-bearing:
+  # M2 (delete the arbitration arm) gives `error[E0004]: non-exhaustive patterns:
+  # (false, false, false, true) not covered` — the compiler NAMES the missing class. Validation had
+  # measured that an `if`-chain swallows the same deletion with all 16 classes keeping their answer.
+  # FIVE mutations run, and TWO predictions were corrected BY MEASUREMENT:
+  #   · M1 (swap the conflict arm's cause) → exactly 2 of 32 subsets, as predicted — but only after
+  #     the 32-walk was made CUMULATIVE. With a bare assert_eq! inside the loop it aborts on the
+  #     first mismatch and the count is unobservable; the fix is what makes "2 of 32" a measurement;
+  #   · M2 → `error[E0004]`, naming the class. As predicted, because of the match construct;
+  #   · M3 (min() → next(), i.e. "first in the vector") → ONLY the permutation test reds; the 32-walk
+  #     stays green, confirming validation's finding that the walk gives the tiebreak zero coverage;
+  #   · M4 (remove the comment-stripping) → **47 offenders on the real tree, not 1**. The prediction
+  #     said "reds on the committed citation". The extra 46 are STORY REFERENCES in prose — `5.4b`,
+  #     `4.6a`, `4.7a` are literally digit-dot-digit, and the gate also matches BARE float literals
+  #     because `let confidence = 0.85;` carries no f32/f64 token at all. Recorded, not smoothed;
+  #   · M5 (a real float in code) → 2 reds naming file and line (the type AND the literal), not 1.
+  # ⚠️ ONE of the five reds is compiler-carried and four are not: M2 is `error[E0004]`, which would
+  # fire on a test body of `assert_eq!(1, 1)`. M1 and M3 red through the assertions of the 32-walk and
+  # the permutation test; M4 reds through the gate's three xtask tests. M5 was observed through
+  # `cargo xtask ci`'s own output rather than through a test run, and saying so is the honest form —
+  # it is the gate reporting, not a test asserting. (Story 5.4's record claimed two of four were
+  # assertion-carried when only one was, and its review measured it; this is the corrected shape.)
+  # ⚠️ A PROCESS DEFECT, recorded because it cost the implementation once: the first mutation pass
+  # ran against an UNCOMMITTED baseline and used `git checkout` to restore, which reverted to HEAD
+  # and destroyed `decide` and its tests. Re-applied, then COMMITTED (1ced9e2) before re-running the
+  # pass. A mutation pass needs a committed baseline to restore TO — the story's own warning
+  # ("restore after every mutation and verify with git status") named the symptom, not the mechanism.
+  # TWELVE doc locations corrected, found by `grep -rn '5\.4b' crates/ xtask/` on the final tree
+  # rather than from the story's list of five — nine of the twelve name 5.4b, three do not:
+  # `AbsenceOfProof`'s doc (it said "nothing argues either way", falsified by the arbitrated class,
+  # which carries an Opposes — validation caught this one), `IdentityAbstentionCause`'s "six rows"
+  # (seven classes now), and the test module's inventory.
+  # REGISTER: EIGHT entries annotated across FOUR sections (validation corrected "six in one"): the
+  # coherence invariant ✅ CLOSED by construction with the residue moved to 5.9; the D13 table gap
+  # ✅ CLOSED in code with the architecture.md correction moved to **GitHub issue #54**; the
+  # duplicate-rule entry ↺ PARTLY closed (totality yes, refusal → 5.5); the f64-token entry
+  # ✅ CLOSED; the owner/spec-gap entry ✅ CLOSED; and the four `NoMatch` annotation lines in the
+  # 4.6a/4.7a sections ↺ CLOSED IN PART, whose "nothing decides which side" sentences `decide`
+  # falsifies (the `Outcome` mapping half moves to 5.7). The empty-vector-literals entry is CLOSED by
+  # its own prediction being REFUTED: the four literals compiled untouched, and its count was wrong
+  # (four sites, not six).
+  # A new `## Deferred from: story-5.4b` section opens NINE items — six name a story, two name a
+  # condition, one names a MILESTONE (issue #54); one of the six also names Epic 6 as a second owner.
+  # Counted after the last edit: a first draft of that preamble added to nine only by counting the
+  # epic as its own item and forgetting the milestone.
+  # `epics.md` VERIFIED and NOT edited, as AC9 requires.
+  5-4b-verdict-algebra-and-float-gate: review
   5-5-l1-join-pure: backlog
   5-6-blocker-and-recall-assertion: backlog
   5-7-trap-runner-stops-scoring-nothing: backlog

@@ -250,6 +250,13 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   (`identity/cascade.rs`) and its `Conclusion` carries both halves of `NoMatch` as distinct variants
   — a refusal that names a rule, and an abstention that cannot. **The mapping still has no
   producer.** Story 5.4b writes the function that chooses. Still not struck.
+  ↺ **CLOSED IN PART by story 5.4b, 2026-07-29 — the CHOOSING now exists.**
+  `identity::cascade::decide` implements D13's table and picks the side: a `Disqualifying` present
+  lands on `NoMatch { rule }` naming the smallest qualifying rule; its absence, with nothing arguing
+  FOR the pair, lands on `Abstained { AbsenceOfProof }`. All 32 verdict subsets are exercised against
+  an oracle written from D13 itself. ⚠️ **What is still open is the mapping onto `Outcome`** — nothing
+  converts a `Decision` into what the trap harness records, and no rule produces a `Verdict`. **Owner
+  of the remaining half: story 5.7** (the trap runner consuming a real engine). Not struck.
 - **The cascade's `NoMatch` maps two ways onto `Outcome`, and only half of that is recorded.**
   `architecture.md:967-974` makes `NoMatch` cover BOTH an active opposition (`any Disqualifying`) and
   a mere absence of proof (`only Neutral / nothing`). `Outcome::Refused` requires a rule to name, so
@@ -262,6 +269,10 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   and `Conclusion::Abstained { cause }` are now two distinct variants, so the two halves have
   somewhere to land. **The MAPPING still has no producer** — nothing decides which side an input
   falls on. Owner of that decision: **story 5.4b**. Not struck.
+  ↺ **CLOSED IN PART by story 5.4b, 2026-07-29:** `decide` decides. `any Disqualifying` →
+  `NoMatch { rule }`; `only Neutral / nothing` AND the class D13's table does not cover →
+  `Abstained { AbsenceOfProof }`. **The `Outcome` mapping remains unbuilt — owner story 5.7.** Not
+  struck.
 
 ## Deferred from: story-4.6b (2026-07-22)
 
@@ -351,6 +362,10 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   { cause: AbsenceOfProof }` for the half with no rule to name — and `Conclusion::NoMatch`'s own doc
   carries the argument. **Which side an input falls on is still decided by nothing**: story 5.4b
   writes the combining function. Still not struck.
+  ↺ **CLOSED IN PART by story 5.4b, 2026-07-29:** the combining function exists
+  (`identity::cascade::decide`) and chooses the half by the presence of a `Disqualifying`. **The
+  `NoMatch → Refused` vs `Abstained` mapping onto `Outcome` is still nobody's code — owner story
+  5.7.** Not struck.
 - **The `NoMatch → Refused` vs `Abstained` question is Epic 5's, not scored here.** `run_trap` scores
   answers; it does not decide what an engine that finds no merging rule should return. Whether "no
   rule matched" is a `Refused` (a decision, names an opposing rule) or an `Abstained` (no decision,
@@ -359,6 +374,9 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   ↺ **Story 5.4 built the FORK at the type level and nothing more:** the cascade can now say
   `NoMatch { rule }` or `Abstained { cause }` and the two are different types of answer. **Which one
   a given input gets is still undecided and unproduced** — owner **story 5.4b**. Not struck.
+  ↺ **CLOSED IN PART by story 5.4b, 2026-07-29:** which one a given input gets is now decided, by
+  `decide`, over every one of D13's input classes. **Producing one still needs a rule (story 5.5) and
+  mapping one onto `Outcome` still needs story 5.7.** Not struck.
 
 ## Deferred from: code review of story-4.7a (2026-07-23)
 
@@ -1165,6 +1183,14 @@ says *"Not struck"* two lines later, meaning the ENTRY is not struck. Both appea
   explanation"* — exactly what D13's *"the list of `(rule, verdict, evidence)` IS the explanation"*
   exists to prevent. Not fixed here because the conclusion and the vector are first built together by
   the combining function, which is the only place a test could red. **Owner: story 5.4b.**
+  ✅ **CLOSED by story 5.4b, 2026-07-29 — by CONSTRUCTION, and the mechanism is named.**
+  `decide(Vec<RuleVerdict>, RulesetVersion) -> Decision` selects the named rule FROM the vector it
+  then returns, so a conclusion naming a rule absent from its own vector is unreachable through it;
+  and `decide(vec![], _)` falls into the absence-of-proof arm, so a `Match` with an empty vector
+  cannot be produced at all. `a_named_rule_is_always_present_in_the_vector_it_travels_with` walks all
+  32 verdict subsets and asserts both. ⚠️ **A struct literal built elsewhere is still unconstrained**
+  — the fields are `pub` and there is no constructor. **That residue moves to story 5.9**, the first
+  story that reconstructs a `Decision` from anywhere other than `decide`.
   *(Raised by the gap-hunt validation agent, 2026-07-29; no AC, doc or register entry had covered it.)*
 - **None of the five new types derives `Serialize`/`Deserialize`.** Nothing persists a decision: the
   identity link table does not exist. Deriving a wire format for a domain type with no consumer is a
@@ -1223,6 +1249,14 @@ says *"Not struck"* two lines later, meaning the ENTRY is not struck. Both appea
   confirmed by both validation agents. **Owner: story 5.4b**, which writes the function that must be
   total; the correction to D13 itself belongs to a milestone edit of `architecture.md`, never to a
   story.
+  ✅ **CLOSED by story 5.4b, 2026-07-29 — implemented, and the compiler now guards the totality.**
+  `decide`'s arms are a `match` on the presence tuple `(disqualifying, decisive, supports, opposes)`,
+  so a missing class is `error[E0004]` rather than a silent fallthrough. **Measured**: deleting the
+  arbitration arm gives *"non-exhaustive patterns: `(false, false, false, true)` not covered"* — the
+  compiler NAMES the class. An `if`-chain was measured to swallow the same deletion with all 16
+  classes keeping their answer, which is why the construct is binding rather than stylistic.
+  ⚠️ **The correction to D13's own table is NOT closed and is not a story's to make.** It is now
+  **GitHub issue #54**, alongside #50 — the register is no longer its only record.
 - **`Verdict` derives no `PartialOrd`/`Ord`, and that is D20's business, not a story's.** D20:
   *"if strength returns, it returns as an ORDINAL, not a weight: `Opposes(Weak) | Opposes(Strong)`"*
   [architecture.md:1374-1376], under four conjoint conditions demonstrated **before any code**
@@ -1250,6 +1284,13 @@ the story shipped._
   produce. Same shape and same reason as the sibling entry above (a conclusion naming a rule absent
   from its own vector): `pub` fields, no constructor, and the only place a test could red is where
   the vector and the conclusion are first built together. **Owner: story 5.4b.**
+  ↺ **PARTLY closed by story 5.4b, 2026-07-29 — TOTALITY yes, REFUSAL no.** `decide` answers for a
+  vector naming the same rule twice, deterministically, and a test pins it with the register's own
+  example: `("a", Decisive)` + `("a", Opposes)` → `Abstained { Ambiguous }`, one rule fabricating
+  D13's conflict row on its own. **Refusing it is not closed and cannot be here**: a refusal needs a
+  PRODUCER that emits one verdict per rule, and no rule exists. **Owner of that half moves to story
+  5.5.** Likewise an `Abstained { Ambiguous }` with an empty vector stays representable via a struct
+  literal (story 5.9's residue, above). Not struck.
   *(Found by the Edge Case Hunter at story 5.4's code review; no AC, doc or register entry covered
   it, whereas both neighbouring representable states were already owned.)*
 - **Story 5.4 introduced the workspace's FIRST `f32`/`f64` token, and it sits in the subtree story
@@ -1264,6 +1305,15 @@ the story shipped._
   gate strips `///`/`//!` lines is a design question for the story that writes it, deliberately not
   answered here. **Guy's call, 2026-07-29: record it, do not pre-write the AC.** This line is the
   gate's committed test case either way.
+  ✅ **CLOSED by story 5.4b, 2026-07-29.** The `float-free` gate strips from the first `//` to end of
+  line before matching, so the citation (now `cascade.rs:52`) is tolerated and is the gate's committed
+  negative test case, asserted by name. ⚠️ **The stripping turned out to do far more work than
+  tolerating one citation, and the number is worth keeping**: removing it makes the gate report **47**
+  offenders on the committed tree, because a story reference in prose — `5.4b`, `4.6a`, `4.7a` — is
+  literally a digit-dot-digit, and the gate also matches BARE float literals (`let confidence = 0.85;`
+  has no `f32`/`f64` token at all and is the likeliest shape a weight takes). The gate's own doc
+  carries its limits, including two false-POSITIVE directions: a float in a block comment, and a
+  decimal inside a string literal in code. Neither occurs under `identity/` today.
 - **Three documents name story 5.4b owner of the conclusion↔`verdict_vector` coherence invariant,
   and 5.4b's acceptance criteria do not mention it.** The owner is assigned in
   `identity/cascade.rs`'s `Decision` doc, in the sibling entry of this section, and in
@@ -1275,6 +1325,11 @@ the story shipped._
   minus its version?) and who supplies `ruleset_version`. **Owner: story 5.4b**, at its contexting.
   **Guy's call, 2026-07-29: hand it over, do not pre-write the AC** — writing 5.4b's criteria from
   inside 5.4 would be the same act 5.4 refused when it declined to write `decide()`.
+  ✅ **CLOSED by story 5.4b, 2026-07-29**, which is where the answers were written: `decide` takes
+  `(Vec<RuleVerdict>, RulesetVersion)` and returns a `Decision` (its AC1), the version arrives as a
+  parameter and is passed through unvalidated, and the coherence invariant is its AC5. The hand-off
+  worked as intended — the gap was answered at the contexting that owned it, and `epics.md` was not
+  edited by story 5.4.
   *(Found by the Blind Hunter, which had no access to `epics.md`'s history.)*
 
 ## Deferred from: code review of story-5.4 (2026-07-29)
@@ -1296,3 +1351,73 @@ is deferred, because it has nothing to fix today.**_
   and a test suite that has to be rewritten by the story that adds a guard is the kind of surprise
   this register exists to remove. Recorded so 5.4b budgets it rather than discovers it.
   **Owner: story 5.4b.** *(Raised by the Blind Hunter, which had no access to 5.4b's charter.)*
+  ✅ **CLOSED by story 5.4b, 2026-07-29 — and its own prediction was REFUTED by measurement, which is
+  why this says so instead of quietly striking it.** The entry predicted the literals *"must be
+  rewritten the day 5.4b enforces the invariant"*. They were not touched: `decide` constrains what IT
+  returns, and constrains nothing about a hand-built struct literal, so all four sites compiled
+  unchanged and their tests still pass. ⚠️ **The count was also wrong**: the entry says "six"; there
+  are **FOUR** literal sites carrying an empty `verdict_vector`, two of them inside loops, giving
+  seven constructions at runtime. Neither number is six. Corrected here rather than in place, since a
+  bullet is never rewritten.
+
+## Deferred from: story-5.4b (2026-07-29)
+
+_The story wrote the verdict algebra and one gate. It wrote no rule and no producer: nothing emits a
+`Verdict`, so nothing calls `decide` outside its own tests. Everything below is open because it needs
+a producer, a consumer, or a decision no code yet forces._
+
+**NINE items: SIX name a story, TWO name the CONDITION that would produce an owner, and ONE names a
+MILESTONE (GitHub issue #54).** One of the six additionally names **`Epic 6`** as a second owner
+alongside story 5.5 — the `l2-*` half of the tiebreak — so "an epic is named" is true while "an item
+is owned by an epic" is not; the two are different claims and only the first holds here.
+
+Counted bullet by bullet after the last edit. The split is spelled out to this precision because
+story 5.4 shipped *"thirteen name a story"* when one of the thirteen named an epic, in the very
+sentence forbidding that — and because a first draft of THIS preamble said "six name a story, one
+names an epic, two name the condition", which adds to nine only by counting the epic as its own item
+and forgetting the milestone entirely. The arithmetic was wrong before it was measured.
+
+- **`decide` carries no `#[must_use]`.** Discarding its result is always a bug, and the attribute
+  would say so — but the workspace carries **exactly one** `#[must_use]` in total
+  (`opencmdb-bin/src/main.rs`), so adding one here is the deviation, not the convention. Measured, not
+  assumed. **Owner: whoever revisits the workspace's `must_use` policy** — a condition, not a story:
+  the decision is about all of `crates/`, not about this function.
+- **`Abstained { Ambiguous }` does not record WHICH of D13's three rows produced it.** Three rows
+  collapse onto one variant — `a Decisive with >=1 Opposes` (the cloned-MAC case, `:971`), weak
+  evidence (`:972`) and `Supports AND Opposes` (conflict, `:973`) — and `decide` throws the
+  distinction away. Splitting it would invent a vocabulary D13 does not have. **Owner: story 5.14**,
+  the first story that groups abstentions for an operator and so the first with a consumer that could
+  justify the split.
+- **The lexicographic tiebreak is a placeholder, and it has no semantic content.** When several rules
+  are `Disqualifying` (or several `Decisive`), the one named is the smallest `RuleId`. That is
+  order-independent and invents nothing, which is why it was chosen — but `l1-distinct-mac` is not
+  "more disqualifying" than `l1-exact-mac`, and the day rules have a DESIGNED priority it replaces
+  this. **Owner: story 5.5** for the L1 rules, **Epic 6** for the `l2-*` half — this is the item that
+  names an epic.
+- **The float gate's limits are documented, not closed.** Two false-POSITIVE directions: a float
+  inside a block comment `/* … */`, and a decimal inside a string literal in code (`"0.1.1"`). One
+  false negative: a `//` inside a string literal truncates the line early. Measured: none of the three
+  occurs under `crates/opencmdb-core/src/identity/` today. **Owner: whoever meets one of them on a
+  real tree** — a condition, and deliberately so: inventing a Rust-aware scanner for a case that does
+  not exist would be the over-engineering the reflex-gate idiom (D53) refuses.
+- **The gate scopes to `identity/` and no wider.** `opencmdb-bin` may legitimately want a float for a
+  UI ranking one day — D13 permits *"floats may RANK, never DECIDE"* [architecture.md:988-990] — so
+  widening this gate to the workspace is a different decision with a different blast radius.
+  **Owner: story 5.14**, the first story with a ranking surface.
+- **No milli-unit type, constant or field exists.** D13's corollary — *"`confidence` is an INTEGER in
+  milli-units (0..1000), never `REAL`/`DOUBLE`"* [architecture.md:991-993] — binds the day a ranking
+  value appears. Epic 5's L1 is a deterministic lookup with nothing to rank, so a `0..1000` integer
+  here would be a value asserting that a ranking exists. **Owner: story 5.14**, the Resolve panel.
+- **An incoherent `Decision` is still buildable by struct literal.** `decide` makes "a conclusion
+  naming a rule absent from its own vector" and "a `Match` with an empty vector" unreachable *through
+  the function*; the fields are `pub` with no constructor, so a literal built anywhere else is
+  unconstrained. **Owner: story 5.9**, the first story that reconstructs a `Decision` from somewhere
+  other than `decide` (persistence).
+- **Refusing a `verdict_vector` that names the same rule twice needs a producer.** `decide` is TOTAL
+  over it — measured and tested — but total is not the same as validated: "one verdict per rule" is a
+  claim about what a PRODUCER emits, and no rule exists to emit anything. **Owner: story 5.5.**
+- **D13's own table in `architecture.md` is still short one row.** The arbitration is implemented and
+  documented at `decide`, but the decision body has not been corrected, and correcting a locked
+  planning document is a MILESTONE act, never a story task (`epics.md:1461`). **Owner: a milestone
+  edit, carried by GitHub issue #54** — which also records that `architecture-views.md` must be
+  regenerated in the same pass (issue #50). Not a condition and not a story: an issue.

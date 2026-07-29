@@ -1,6 +1,6 @@
 # Story 5.4b: The verdict algebra is a total function, and no float can reach it
 
-Status: ready-for-dev
+Status: review
 
 <!-- Validation is MANDATORY here (Guy's decision, Epic 4 retrospective 2026-07-26): two
      fresh-context agents (fact-check + gap-hunt) BEFORE dev-story. The template banner saying
@@ -467,19 +467,19 @@ re-open it.**
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Read before writing** (AC1–AC6)
-  - [ ] `crates/opencmdb-core/src/identity/cascade.rs` **in full** (690 lines, first `#[cfg(test)]` at
+- [x] **Task 1 — Read before writing** (AC1–AC6)
+  - [x] `crates/opencmdb-core/src/identity/cascade.rs` **in full** (690 lines, first `#[cfg(test)]` at
         `:457`). Specifically: the module doc and its four-judgement table (`:1-30`), `Verdict` and its
         five variant docs (`:39-105`), `Verdict::all()` and its witness (`:107-150`), `RuleVerdict`
         (`:174-212`), `RulesetVersion` (`:214-232`), `Conclusion` (`:234-296`), `Decision` and
         `Decision::rule()` (`:298-330`), `IdentityAbstentionCause` (`:377-397`) and its `all()` and witness
         (`:399-436`), and **the test module's placement convention** — *a test lives with the item
         whose CLAIM it pins* — which decides where every test in this story goes.
-  - [ ] `crates/opencmdb-core/src/trap.rs:31-45` — `RuleId`, its corrected doc, and **its derives at
+  - [x] `crates/opencmdb-core/src/trap.rs:31-45` — `RuleId`, its corrected doc, and **its derives at
         `:39` including `Ord`**, which AC4 depends on and which must not be re-derived.
-  - [ ] `crates/opencmdb-core/src/identity/mod.rs` (23 lines) — it says *"story 5.4b writes that
+  - [x] `crates/opencmdb-core/src/identity/mod.rs` (23 lines) — it says *"story 5.4b writes that
         algebra"*. After this story that sentence is false and Task 6 rewrites it.
-  - [ ] `xtask/src/main.rs`: the module doc listing the gates (`:1-40`), `main()`'s gate block
+  - [x] `xtask/src/main.rs`: the module doc listing the gates (`:1-40`), `main()`'s gate block
         (`run_ci()`'s, `:138-166` — NOT `main()`'s, which only dispatches), `fn report` and its
         `✅`/`🔴` glyphs (`:177-179`), `gate_ddl_collation` (`:289-327`), `gate_vocabulary`
         (`:384-441`),
@@ -488,65 +488,65 @@ re-open it.**
         (`:1330`, `:1404`) — that, not the two string-helper tests, is the idiom for testing a gate
         that WALKS a directory. **Copy the idiom, including
         how a gate reports its offender.**
-  - [ ] `architecture.md` **D13** (`:929-1011`) — start from the Decision Index near the top (F56),
+  - [x] `architecture.md` **D13** (`:929-1011`) — start from the Decision Index near the top (F56),
         not from a grep. Read **D20** (`:1348-1399`) for the ordinal clause, and **D14**
         (`:1013-1049`) for why the version is a parameter.
-  - [ ] `_bmad-output/implementation-artifacts/deferred-work.md` — **run `grep -n '5\.4b'` on it and
+  - [x] `_bmad-output/implementation-artifacts/deferred-work.md` — **run `grep -n '5\.4b'` on it and
         read every hit.** There are **eight** entries across **four** sections (AC8 lists them), not
         six in one. **Locate them by title; the line numbers in this file will have moved by the time
         you read it.**
-  - [ ] Story 5.4's file, `### Review Findings` section — the 22 patches, and especially the three
+  - [x] Story 5.4's file, `### Review Findings` section — the 22 patches, and especially the three
         findings handed forward to this story.
 
-- [ ] **Task 2 — `decide`** (AC1, AC2, AC3, AC4)
-  - [ ] The signature of AC1, in `cascade.rs`, below `Decision`'s `impl` block.
-  - [ ] A `///` doc that: states the D13 contract and attributes it; carries the input-class
+- [x] **Task 2 — `decide`** (AC1, AC2, AC3, AC4)
+  - [x] The signature of AC1, in `cascade.rs`, below `Decision`'s `impl` block.
+  - [x] A `///` doc that: states the D13 contract and attributes it; carries the input-class
         enumeration of *The finding this story FIXES* so the gap is re-derivable; names the
         arbitration as Guy's and dates it; states the tiebreak IS a tiebreak with no semantic content
         and names who replaces it; and says **what `decide` does not do** — it does not refuse a
         duplicated rule, and it does not validate the version.
-  - [ ] 🚨 **A `match` on the presence tuple `(has_disqualifying, has_decisive, has_supports,
+  - [x] 🚨 **A `match` on the presence tuple `(has_disqualifying, has_decisive, has_supports,
         has_opposes)` — NOT an `if`/`else if` chain.** AC2 carries the measurement behind this; it is
         what makes Task 5's M2 an `error[E0004]` instead of a silent no-op.
-  - [ ] Arms in D13's order with the `Disqualifying = true` arms **first** (binding the other three
+  - [x] Arms in D13's order with the `Disqualifying = true` arms **first** (binding the other three
         with `_`), each citing its architecture line, and the arbitration arm labelled as such and
         citing no line.
-  - [ ] The rule choice: lexicographic min `RuleId` **among the verdicts that QUALIFIED FOR THAT ARM**
+  - [x] The rule choice: lexicographic min `RuleId` **among the verdicts that QUALIFIED FOR THAT ARM**
         — the `Disqualifying` ones for the refusal, the `Decisive` ones for the match. **Not the min
         over the whole vector** (AC5 carries the failing case). **No new derive.**
-  - [ ] ⚠️ **No `_` catch-all arm that swallows an unhandled class.** Every one of the sixteen presence
+  - [x] ⚠️ **No `_` catch-all arm that swallows an unhandled class.** Every one of the sixteen presence
         tuples is written out or covered by an arm a reader can check against the table. A wildcard
         would restore exactly the hole this story exists to close.
 
-- [ ] **Task 3 — The tests** (AC5, AC4) — inline in `cascade.rs`'s trailing `#[cfg(test)] mod tests`
+- [x] **Task 3 — The tests** (AC5, AC4) — inline in `cascade.rs`'s trailing `#[cfg(test)] mod tests`
       (D56b, one per file), placed by the convention that module already states.
-  - [ ] **The 32-subset totality walk.** Bitmask `0..32` over `Verdict::all()`; one `RuleVerdict` per
+  - [x] **The 32-subset totality walk.** Bitmask `0..32` over `Verdict::all()`; one `RuleVerdict` per
         present verdict with a distinct `RuleId`; assert the conclusion against an **independently
         written** expectation function. Assertion message names the subset.
-  - [ ] **The second oracle is written from D13's table, not from `decide`.** Deliberate redundancy —
+  - [x] **The second oracle is written from D13's table, not from `decide`.** Deliberate redundancy —
         label it as such in a comment so a later DRY pass does not collapse it (CLAUDE.md protects
         exactly this).
-  - [ ] **The uncovered class, named as its own test** — `≥1 Opposes` alone → `Abstained {
+  - [x] **The uncovered class, named as its own test** — `≥1 Opposes` alone → `Abstained {
         AbsenceOfProof }`. It is inside the 32-walk already; it gets its own named test anyway,
         because it is the one answer no architecture line backs and a reader must find it by name.
-  - [ ] **Order independence**: three verdicts **all carrying the SAME rule-naming verdict** (three
+  - [x] **Order independence**: three verdicts **all carrying the SAME rule-naming verdict** (three
         `Disqualifying`, or three `Decisive` with no `Opposes`), with `RuleId`s supplied in an order
         that differs from their lexicographic order (e.g. `"c", "a", "b"`), **all six permutations**,
         same `conclusion` — asserted as `Conclusion::NoMatch { rule: rule("a") }`, the rule spelled
         out. ⚠️ Assert on `.conclusion`, **not** on the whole `Decision`. ⚠️ **A mixed vector whose
         conclusion is an `Abstained` makes this test VACUOUS** — an abstention names no rule, so no
         tiebreak can change it. Both traps are in AC4.
-  - [ ] **A named rule must have qualified**: `a_disqualifying_names_the_disqualifying_rule_not_the_smallest_one`
+  - [x] **A named rule must have qualified**: `a_disqualifying_names_the_disqualifying_rule_not_the_smallest_one`
         on `[("a", Decisive), ("z", Disqualifying)]` → `NoMatch { rule: rule("z") }` (AC5).
-  - [ ] **Coherence**: for every subset whose conclusion names a rule, that `RuleId` is present in the
+  - [x] **Coherence**: for every subset whose conclusion names a rule, that `RuleId` is present in the
         returned `verdict_vector`. And `decide(Vec::new(), _)` → `Abstained { AbsenceOfProof }`,
         never `Match`.
-  - [ ] **Totality under a duplicated `RuleId`**: use `("a", Decisive)` + `("a", Opposes)` — the
+  - [x] **Totality under a duplicated `RuleId`**: use `("a", Decisive)` + `("a", Opposes)` — the
         register's own example, and the pair that shows ONE rule fabricating D13's conflict row, so
         the expected conclusion is `Abstained { Ambiguous }`. *(`("a", Neutral)` + `("a", Supports)`
         is deterministic too and shows nothing — name the pair, do not leave it to taste.)* The test's
         doc says this pins TOTALITY, not refusal.
-  - [ ] ⚠️ **Minting an `ObsId` in a test: `ObsId::from_uuid(Uuid::from_u128(n))` with distinct `n`**
+  - [x] ⚠️ **Minting an `ObsId` in a test: `ObsId::from_uuid(Uuid::from_u128(n))` with distinct `n`**
         — the crate's idiom (`trap.rs:416-418`), **already present in the very test module you are
         writing in, as `fn obs(n: u128) -> ObsId` at `cascade.rs:463-465` with `use uuid::Uuid;` at
         `:461`. REUSE it; re-adding it is the accidental duplication DRY forbids**. **`Uuid::new_v4()` does NOT compile**:
@@ -554,129 +554,129 @@ re-open it.**
         Evidence may be empty here — a `Neutral` legitimately has none — so prefer empty over
         inventing observations the algebra never reads.
 
-- [ ] **Task 4 — The float gate** (AC6) — `xtask/src/main.rs`
-  - [ ] `fn gate_float_free(root: &Path) -> Result<(bool, String)>` in the idiom of its two
+- [x] **Task 4 — The float gate** (AC6) — `xtask/src/main.rs`
+  - [x] `fn gate_float_free(root: &Path) -> Result<(bool, String)>` in the idiom of its two
         neighbours, **walking `crates/opencmdb-core/src/identity/` RECURSIVELY** (`walkdir`, as
         `gate_ddl_collation` does — already an `xtask` dependency), **stripping from the first `//`
         to end of line before matching**, and matching **both** a word-bounded `f32`/`f64` **and a
         float LITERAL** (`[0-9]+\.[0-9]`, or an `f32`/`f64` suffix on a numeric literal). AC6 carries
         the measured table showing why the word-boundary match alone misses `0.85f64` and
         `let confidence = 0.85;`.
-  - [ ] **Fail CLOSED if the directory is absent** — the fixture gate's precedent, not the DDL gate's.
+  - [x] **Fail CLOSED if the directory is absent** — the fixture gate's precedent, not the DDL gate's.
         AC6 says why.
-  - [ ] Register it in **`run_ci()`** as `g5` and print it through `report`. ⚠️ **The module doc's gate
+  - [x] Register it in **`run_ci()`** as `g5` and print it through `report`. ⚠️ **The module doc's gate
         list at `:1-21` is ALREADY missing `file-size`** — it names frontier, ddl-collation,
         vocabulary, fixtures and views-hash only. **Add BOTH bullets**, so the enumeration matches the
         six gates `run_ci()` prints. *"A doc that enumerates is a claim"*, and this one is already
         false before you touch it.
-  - [ ] Inline `#[cfg(test)]` tests at both levels (AC6): the line helper, **and `gate_float_free`
+  - [x] Inline `#[cfg(test)]` tests at both levels (AC6): the line helper, **and `gate_float_free`
         itself against a `scratch(tag)` temp tree** — float in code, float in a comment, a nested
         subdirectory, and the directory absent.
-  - [ ] Verify no `#[doc = "…"]` attribute and no `/* */` block comment under `identity/` carries a
+  - [x] Verify no `#[doc = "…"]` attribute and no `/* */` block comment under `identity/` carries a
         float token before claiming the gate is clean on the real tree (both measured absent at
         contexting — re-verify, do not assume).
         `grep -rn '#\[doc\|/\*' crates/opencmdb-core/src/identity/`.
 
-- [ ] **Task 5 — Prove to red** (AC5, AC6; house rule, story 1.3). Run each, **quote the observed
+- [x] **Task 5 — Prove to red** (AC5, AC6; house rule, story 1.3). Run each, **quote the observed
       failure**, restore, re-run green. These are predictions to check against, **not a licence to
       skip running**: if the observed set differs, the DIFFERENCE is the finding and it goes in the
       Completion Notes. **A mutation with several reds is expected and is not a defect** — a record
       naming one red where four fired is the under-reporting this project's reviews keep catching.
-  - [ ] **M1 — swap one arm's CAUSE**: make the `Supports AND Opposes` row return
+  - [x] **M1 — swap one arm's CAUSE**: make the `Supports AND Opposes` row return
         `Abstained { AbsenceOfProof }` instead of `Abstained { Ambiguous }`. A one-token edit that
         needs no rule and reds purely by ASSERTION. Predicted: **2 of 32** subsets. **Name how many
         fired**, not just that it failed — that count is the walk's coverage, measured.
         ⚠️ *(Do NOT mutate this arm to `Match`: `Conclusion::Match` requires a `rule` and that arm has
         no `Decisive` to name, so the "mutation" becomes a rewrite and measures nothing clean.)*
-  - [ ] **M2 — delete the arbitration arm** for the uncovered class. Predicted: **`error[E0004]`,
+  - [x] **M2 — delete the arbitration arm** for the uncovered class. Predicted: **`error[E0004]`,
         non-exhaustive `match`** — and that prediction holds **only because AC2 binds the arms to a
         `match` on the presence tuple**. ⚠️ **If you built an `if`/`else if` chain instead, this
         mutation is a silent no-op** (measured at validation: *"0 of 16 input classes changed
         answer"*) and the story's central claim ships unproven. **If M2 does not red, that is a
         finding about YOUR construct, not about the prediction** — go back to AC2.
-  - [ ] **M3 — replace the lexicographic tiebreak with "first in the vector"**. Predicted: the
+  - [x] **M3 — replace the lexicographic tiebreak with "first in the vector"**. Predicted: the
         permutation test reds and the 32-walk does NOT (single-qualifier subsets are unaffected).
         **This is the mutation that proves the permutation test earns its place**; if the 32-walk also
         reds, say so.
-  - [ ] **M4 — remove the comment-stripping from the gate.** Predicted: the gate reds on the committed
+  - [x] **M4 — remove the comment-stripping from the gate.** Predicted: the gate reds on the committed
         `cascade.rs:52` citation, and `cargo xtask ci` fails on a clean tree. Quote it.
-  - [ ] **M5 — a real float under `identity/`.** Predicted: the gate reds and names the file and line.
-  - [ ] ⚠️ **Say which reds are carried by the COMPILER and which by an ASSERTION.** Story 5.4's
+  - [x] **M5 — a real float under `identity/`.** Predicted: the gate reds and names the file and line.
+  - [x] ⚠️ **Say which reds are carried by the COMPILER and which by an ASSERTION.** Story 5.4's
         record claimed two of four were assertion-carried when only one was, and its review measured
         it. Classify honestly: a red that would fire on a test body of `assert_eq!(1, 1)` is
         compiler-carried.
-  - [ ] ⚠️ **Restore after every mutation and verify with `git status` before the next one.** Local
+  - [x] ⚠️ **Restore after every mutation and verify with `git status` before the next one.** Local
         flakiness (issue #38) and a forgotten revert look identical.
 
-- [ ] **Task 6 — Docs that this story falsifies** (AC2, AC9) — all doc-only; **re-read every rewritten
+- [x] **Task 6 — Docs that this story falsifies** (AC2, AC9) — all doc-only; **re-read every rewritten
       sentence against the FINAL tree after the last edit**.
-  - [ ] `identity/mod.rs:10-11` — *"nothing combines a verdict set into a conclusion: story 5.4b
+  - [x] `identity/mod.rs:10-11` — *"nothing combines a verdict set into a conclusion: story 5.4b
         writes that algebra"*. After this story it does. One sentence, naming what is still absent
         (no rule, no producer, no join — 5.5).
-  - [ ] `cascade.rs`'s module doc (`:1-13`) — it says *"It does not hold the algebra… That is story
+  - [x] `cascade.rs`'s module doc (`:1-13`) — it says *"It does not hold the algebra… That is story
         5.4b's"*. Same correction.
-  - [ ] `Verdict`'s doc (`:39-77`) — *"the six-row table… is implemented by story 5.4b, and no rule
+  - [x] `Verdict`'s doc (`:39-77`) — *"the six-row table… is implemented by story 5.4b, and no rule
         produces a `Verdict` until story 5.5"*. The first half is now false; the second is still true.
         ⚠️ The paragraph naming the uncovered class must now point at `decide` for the answer rather
         than saying 5.4b arbitrates it.
-  - [ ] `Conclusion::NoMatch`'s doc — it attributes the choice of side to 5.4b. It is made now.
-  - [ ] 🚨 **`IdentityAbstentionCause::AbsenceOfProof`'s doc (`cascade.rs:389-390`) becomes FALSE.** It
+  - [x] `Conclusion::NoMatch`'s doc — it attributes the choice of side to 5.4b. It is made now.
+  - [x] 🚨 **`IdentityAbstentionCause::AbsenceOfProof`'s doc (`cascade.rs:389-390`) becomes FALSE.** It
         reads *"Nothing in the verdict set argues either way — the row `only Neutral / nothing →
         NoMatch (absence of proof)`"*. AC3 routes the arbitration class onto that same variant, and an
         `Opposes` **does** argue — against. Rewrite it to name **BOTH** producing classes: D13's
         `only Neutral / nothing` row, and the arbitrated `Opposes`-alone class, where nothing argues
         **FOR** the merge. *(Found by the gap-hunt agent. Shipping the story without this ships a doc
         comment falsified by the function it documents.)*
-  - [ ] `Decision`'s doc (`cascade.rs:287-297`) — *"# What is representable and not refused… Nothing
+  - [x] `Decision`'s doc (`cascade.rs:287-297`) — *"# What is representable and not refused… Nothing
         refuses either… Registered, owner story 5.4b"* and *"Story 5.4b **adds** the `cargo xtask ci`
         gate"*. Both are now shipped, not future.
-  - [ ] `RuleVerdict`'s doc (`cascade.rs:160-166`) — *"the two validations… Both need story 5.4b or
+  - [x] `RuleVerdict`'s doc (`cascade.rs:160-166`) — *"the two validations… Both need story 5.4b or
         5.5 to have something that could red"*. One of the two now has a place that reds.
-  - [ ] `IdentityAbstentionCause`'s type doc (`cascade.rs:331-345`) — *"Six rows, four of them
+  - [x] `IdentityAbstentionCause`'s type doc (`cascade.rs:331-345`) — *"Six rows, four of them
         abstentions, two variants"*. There are seven classes now, not six.
-  - [ ] The test module's doc (`cascade.rs:438-456`) — it is an explicit INVENTORY of which tests live
+  - [x] The test module's doc (`cascade.rs:438-456`) — it is an explicit INVENTORY of which tests live
         there and why; Task 3 adds several.
-  - [ ] `xtask/src/main.rs`'s module doc — the gate list (**already missing `file-size`**, Task 4).
-  - [ ] 🚨 **The list above is the MINIMUM, not the set. Before counting, run
+  - [x] `xtask/src/main.rs`'s module doc — the gate list (**already missing `file-size`**, Task 4).
+  - [x] 🚨 **The list above is the MINIMUM, not the set. Before counting, run
         `grep -rn '5\.4b' crates/ xtask/` on the FINAL tree and rewrite every hit** — every stale
         sentence names 5.4b, so that grep is exact. **Then count the doc locations and state the
         number ONCE.** *"A count in a doc is a claim"* — story 5.4 shipped "five doc blocks" where six
         changed, and its own review caught it. **This story's first draft listed five where eleven
         were falsified**, which is the same defect one level up; the validation pass caught it.
 
-- [ ] **Task 7 — The register** (AC8) — append-and-strike, never rewrite a bullet. Cite by TITLE.
-  - [ ] **`grep -n '5\.4b' deferred-work.md` FIRST**, then annotate all **eight** entries across the
+- [x] **Task 7 — The register** (AC8) — append-and-strike, never rewrite a bullet. Cite by TITLE.
+  - [x] **`grep -n '5\.4b' deferred-work.md` FIRST**, then annotate all **eight** entries across the
         **four** sections per AC8, each saying which half moved and which did not — including the two
         `NoMatch` entries in the 4.6a and 4.7a sections, whose annotations still say nothing decides
         which side an input falls on.
-  - [ ] Check the empty-vector-literals prediction and record whether it held.
-  - [ ] Open `## Deferred from: story-5.4b` at the END with its items; **count them mechanically after
+  - [x] Check the empty-vector-literals prediction and record whether it held.
+  - [x] Open `## Deferred from: story-5.4b` at the END with its items; **count them mechanically after
         the last edit** and state the story/epic/condition split.
-  - [ ] **Open the GitHub issue for D13's milestone correction** (AC3) and reference its number in the
+  - [x] **Open the GitHub issue for D13's milestone correction** (AC3) and reference its number in the
         register entry and the PR.
 
-- [ ] **Task 8 — The full local gate, run WHOLE** (AC9; mirrors CI — Epic 3's retrospective recorded
+- [x] **Task 8 — The full local gate, run WHOLE** (AC9; mirrors CI — Epic 3's retrospective recorded
       four CI-only failures from skipping exactly this)
-  - [ ] `cargo fmt --all` · `cargo clippy --workspace --locked --all-targets -- -D warnings` ·
+  - [x] `cargo fmt --all` · `cargo clippy --workspace --locked --all-targets -- -D warnings` ·
         **`cargo clippy --workspace --locked -- -D warnings`** (the CI form) ·
         `cargo test --workspace --locked` · `cargo xtask ci`. **`--locked` everywhere.**
-  - [ ] Report the test count as three numbers (bin + core + xtask). **Baseline on `3d63544`:
+  - [x] Report the test count as three numbers (bin + core + xtask). **Baseline on `3d63544`:
         135 + 94 + 42 = 271, zero failures.** `core` and `xtask` should both move.
-  - [ ] `cargo xtask ci` must now print **six** gates plus the informational `views-hash`.
-  - [ ] `git status` under `fixtures/` **empty**; `MANIFEST.toml` untouched.
-  - [ ] Re-measure `cascade.rs` and `xtask/src/main.rs` code lines on the final tree (baselines:
+  - [x] `cargo xtask ci` must now print **six** gates plus the informational `views-hash`.
+  - [x] `git status` under `fixtures/` **empty**; `MANIFEST.toml` untouched.
+  - [x] Re-measure `cascade.rs` and `xtask/src/main.rs` code lines on the final tree (baselines:
         **456** and **884**, ceiling 2000).
 
-- [ ] **Task 9 — Docs current before push** (AC9; project rule)
-  - [ ] `sprint-status.yaml` — the `5-4b-…` entry and its narrative block.
-  - [ ] `docs/project-context.md` — the Epic 5 line and the test count.
-  - [ ] `CLAUDE.md` — the Epic 5 sentence. **Not conditional**: this story changes what "the engine
+- [x] **Task 9 — Docs current before push** (AC9; project rule)
+  - [x] `sprint-status.yaml` — the `5-4b-…` entry and its narrative block.
+  - [x] `docs/project-context.md` — the Epic 5 line and the test count.
+  - [x] `CLAUDE.md` — the Epic 5 sentence. **Not conditional**: this story changes what "the engine
         proper" has shipped, so the sentence naming 5.4 as the last engine story goes stale on merge.
-  - [ ] `epics.md` — **verify only, do not edit.** Story 5.4b is present at `:1445`, `:22` and `:1313`
+  - [x] `epics.md` — **verify only, do not edit.** Story 5.4b is present at `:1445`, `:22` and `:1313`
         read sixteen, `:1317`'s build order names 5.4b as its own step. **An edit here is a finding.**
-  - [ ] No manual, README or gh-pages change is expected: this story ships nothing a user can see.
+  - [x] No manual, README or gh-pages change is expected: this story ships nothing a user can see.
 
-- [ ] **Task 10 — Branch → PR → green CI** (AC9). ⚠️ **Only after PR #52 is merged** (see the
+- [x] **Task 10 — Branch → PR → green CI** (AC9). ⚠️ **Only after PR #52 is merged** (see the
       prerequisite at the top). Branch `story-5.4b-verdict-algebra-and-float-gate`. **The story ends
       at status `review` with the PR open and CI green.** The merge is a separate act.
 
@@ -893,11 +893,142 @@ No new dependency, no version to research. `uuid` is already a dependency of `op
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`.
+
 ### Debug Log References
+
+⚠️ **One process defect, recorded because it destroyed the implementation once.** The first mutation
+pass ran against an **uncommitted** baseline and used `git checkout <file>` to restore M1 — which
+reverts to `HEAD`, not to the pre-mutation state, so `decide` and its six tests were wiped. The
+backup `cp` had also failed silently (its target directory did not exist and the exit code was never
+checked). The code was re-applied from scratch, then **committed (`1ced9e2`) before the pass was
+re-run**, after which every restore was verified by `md5sum` against the committed baseline
+(`3958dd4bd844f5582fae55b9454eea16`) and by `git status`.
+
+The story's own warning — *"restore after every mutation and verify with `git status` before the next
+one"* — named the symptom and not the mechanism. **A mutation pass needs a committed baseline to
+restore TO**; that is the sentence worth carrying forward.
 
 ### Completion Notes List
 
+**In the weaker true sentence:** `identity/cascade.rs` gains `decide(Vec<RuleVerdict>,
+RulesetVersion) -> Decision` — a total pure function implementing D13's six rows plus the one input
+class the table leaves uncovered — and its private helper `smallest_rule_with`. `xtask` gains a sixth
+gate, `float-free`. Six new core tests and three new xtask tests pin their claims. **Nothing produces
+a `Verdict`, so nothing calls `decide` outside its own tests**: no rule, no join, no blocker, no
+persistence, no corpus wiring. No byte moved under `fixtures/`.
+
+**Counts re-measured on the FINAL tree** (a count in a doc is a claim):
+
+- **271 → 280 tests: 135 bin + 100 core + 45 xtask**, zero failures. `core` +6, `xtask` +3.
+- `cascade.rs`: **1154 lines, first `#[cfg(test)]` at `:631` → 630 CODE lines**, ceiling 2000.
+- `xtask/src/main.rs`: **1748 lines, first `#[cfg(test)]` at `:1027` → 1026 CODE lines**; still the
+  workspace's largest, and `file-size` reports `largest: 1026`.
+- `cargo doc --workspace --no-deps` → **the same three pre-existing warnings** (`ing`,
+  `comparable_fields`, `ScoredRecord`); none of the new intra-doc links is broken.
+- ⚠️ **`f32`/`f64` workspace-wide is no longer 1 — it is 22**, because the gate's own implementation
+  and tests name the tokens they hunt. The number that matters is **under `identity/`: 3, all in
+  `///` doc comments** (D13's citation at `:53`, and two lines describing the gate at `:290-291`),
+  all stripped, **zero in code**. The story's Dev Notes predicted 1 there; the two extra are its own
+  doc.
+
+**The design decision, and what it buys.** `decide` returns a `Decision`, not a bare `Conclusion`, so
+the returned `verdict_vector` **is** the input and the named rule is selected **from** it. That makes
+*"a conclusion naming a rule absent from its own vector"* and *"a `Match` with an empty vector"*
+unreachable **through the function** rather than merely unenforced — `a_named_rule_is_always_present_in_the_vector_it_travels_with`
+walks all 32 subsets and asserts it. A struct literal built elsewhere is still unconstrained; that
+residue moved to story 5.9.
+
+**The arms are a `match` on the presence tuple, and it is load-bearing.** M2 gives
+`error[E0004]: non-exhaustive patterns: (false, false, false, true) not covered` — **the compiler
+names the missing class**. Validation had measured that an `if`-chain swallows the same deletion with
+all 16 classes keeping their answer, which is why the construct is binding rather than stylistic.
+
+**FIVE mutations run. Two predictions were corrected BY MEASUREMENT, and both are recorded rather
+than smoothed:**
+
+- **M1** (the conflict arm's cause) → **exactly 2 of 32** subsets, `01010` and `01110`. ⚠️ That count
+  is only observable because the 32-walk was made **cumulative**: a bare `assert_eq!` inside the loop
+  aborts on the first mismatch, so the first run reported one subset where two had moved. The loop
+  now collects every mismatch and reports them together — the difference between *"M1 reds"* and
+  *"M1 reds on exactly 2 of 32"*, which is the walk's coverage measured.
+- **M2** (delete the arbitration arm) → `error[E0004]`, naming `(false, false, false, true)`.
+- **M3** (`min()` → `next()`, i.e. "first in the vector") → **only** the permutation test reds; the
+  32-walk stays green. This confirms validation's finding that the walk gives the tiebreak **zero**
+  coverage and that the permutation test is its only guard.
+- **M4** (remove the comment-stripping) → **47 offenders on the real tree, not 1.** The prediction was
+  *"reds on the committed citation"*. The other 46 are **story references in prose** — `5.4b`,
+  `4.6a`, `4.7a` are literally digit-dot-digit — because the gate also matches **bare float
+  literals**, `let confidence = 0.85;` carrying no `f32`/`f64` token at all. All three xtask gate
+  tests red too, not just the one the story named. **The stripping and the literal rule are
+  load-bearing together**, and the gate's doc now says so with the number.
+- **M5** (a real float in code under `identity/`) → **2** reds naming file and line, the type AND the
+  literal, where the story predicted one.
+
+⚠️ **ONE of the five reds is compiler-carried, four are not.** M2 is `error[E0004]` and would fire on
+a test body of `assert_eq!(1, 1)`. M1 and M3 red through assertions; M4 reds through the gate's three
+xtask tests. **M5 was observed through `cargo xtask ci`'s own output rather than a test run** — that
+is the gate reporting, not a test asserting, and saying so is the honest form.
+
+**TWELVE doc locations corrected**, found by `grep -rn '5\.4b' crates/ xtask/` on the final tree
+rather than from the story's list of five. Nine name 5.4b; **three do not and would have been missed
+by that list**: `IdentityAbstentionCause::AbsenceOfProof`'s doc (it read *"nothing in the verdict set
+argues either way"*, which the arbitrated class — carrying an `Opposes` — falsifies; the gap-hunt
+agent caught this before dev), `IdentityAbstentionCause`'s *"six rows… two variants"* (seven input
+classes now), and the test module's inventory. Three sentences naming 5.4b were left standing because
+they are **still true**, chiefly the `#[non_exhaustive]` note whose *"5.4b's table lives in this
+one"* is exactly right.
+
+**The register.** Eight entries annotated across four sections — validation corrected the story's
+*"six, all in one section"*. The coherence invariant ✅ **CLOSED by construction**, residue to 5.9;
+the D13 table gap ✅ **CLOSED in code**, with the `architecture.md` correction moved to **GitHub issue
+\#54** (a milestone act, never a story task); the duplicate-rule entry ↺ **PARTLY closed** (totality
+yes, refusal → 5.5); the `f64`-token entry ✅ CLOSED; the owner/spec-gap entry ✅ CLOSED; and the four
+`NoMatch` annotation lines in the 4.6a/4.7a sections ↺ **CLOSED IN PART** — their *"nothing decides
+which side an input falls on"* is what `decide` falsifies, and the `Outcome`-mapping half moves to
+5.7. The empty-vector-literals entry is closed **by its own prediction being refuted**: the four
+literals compiled untouched, and its count was wrong (four sites, not six).
+
+A new `## Deferred from: story-5.4b` section opens **nine** items — **six name a story, two name a
+condition, one names a milestone (issue #54)**; one of the six also names **Epic 6** as a second owner.
+⚠️ Counted after the last edit: a first draft of that preamble summed to nine only by counting the
+epic as its own item and forgetting the milestone. The arithmetic was wrong before it was measured,
+which is why the section states the split to that precision.
+
+**Scope held.** No rule, no join, no blocker, no producer (5.5/5.6) · no `From<Decision> for Outcome`,
+`VerdictVectorEntry` untouched and still uninhabited (5.7) · no serde, no persistence (5.9) · no
+`Display`, no `cause()`, no grouping (5.14) · `RuleId` not closed into an enum (Epic 6) · no
+milli-unit type, constant or field · `architecture.md` **not edited** · `epics.md` **verified and not
+edited** · `page.rs`, `locales/app.yml`, `fixtures.rs`, `trap_gate.rs`, `score.rs`, `trap.rs`,
+`gap/mod.rs` and everything under `fixtures/` untouched.
+
 ### File List
+
+**Modified — code:**
+
+- `crates/opencmdb-core/src/identity/cascade.rs` — `decide`, the private `smallest_rule_with`, six
+  new tests with their independent oracle, and eight doc blocks corrected.
+- `crates/opencmdb-core/src/identity/mod.rs` — module doc: the algebra now lives here. **Doc only.**
+- `crates/opencmdb-core/src/lib.rs` — `decide` joins the flat `identity::cascade` re-export, in the
+  idiom `gap` already uses for `reconcile` (a function, last in the braces). The cost is recorded on
+  the existing re-export entry rather than in a new one.
+- `xtask/src/main.rs` — `IDENTITY_DIR`, `line_has_float`, `has_float_literal`, `gate_float_free`,
+  its registration in `run_ci()` as `g5`, three inline tests, and the module doc's gate list (which
+  was **already** missing `file-size` before this story — both bullets added).
+
+**Modified — documents:**
+
+- `_bmad-output/implementation-artifacts/deferred-work.md` — eight entries annotated across four
+  sections, plus a new `## Deferred from: story-5.4b` section of nine items.
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- `docs/project-context.md`, `CLAUDE.md`
+
+**Untouched, verified:** `_bmad-output/planning-artifacts/epics.md` and `architecture.md`, everything
+under `fixtures/` (including `MANIFEST.toml`), `Cargo.lock`, all of `crates/opencmdb-bin/`,
+`crates/opencmdb-core/src/score.rs`, `trap.rs` and `gap/mod.rs`.
+
+**Created outside the tree:** GitHub issue **#54** — D13's table is short one input class; the
+correction to `architecture.md` is a milestone act (AC3).
 
 ## Change Log
 
@@ -905,3 +1036,4 @@ No new dependency, no version to research. `uuid` is already a dependency of `op
 |---|---|
 | 2026-07-29 | Story contexted against `3d63544` (story-5.4 branch, post-code-review), PR #52 still open — the deviation from "merge before contexting" is recorded at the top. Answers the three findings story 5.4's review handed forward: `decide`'s signature, the coherence invariant's owner, and the pre-existing `f64` token in the gate's own subtree. |
 | 2026-07-29 | Validated by two fresh-context agents (fact-check + gap-hunt); **9 HIGH + 12 MEDIUM/LOW applied**. Four findings changed the DESIGN, not the prose, and each was **measured rather than argued**: (1) the arms are now bound to a `match` on the presence tuple — the gap-hunt agent compiled all three permitted shapes and found that with an `if`-chain, deleting the arbitration arm *"compiles and changes 0 of 16 input classes"*, making M2 a silent no-op; (2) the permutation test now requires three verdicts of the SAME rule-naming kind, because an `Abstained` names no rule and the test was vacuous as written, giving AC4 zero coverage; (3) an implementation taking `min()` over the whole vector satisfied every specified test while naming the rule that argued FOR a refusal — a named test and a full-`Conclusion` oracle now close it; (4) the float gate was built and run, and missed `0.85f64` and `let confidence = 0.85;` — the likeliest shapes a weight takes. Bookkeeping: the register set is **eight entries across four sections**, not six in one; **eleven** doc blocks are falsified, not five; and `cascade.rs:42` was the pre-review coordinate for the `f64` citation — it is `:52`, an error inherited from the register without re-measuring, which is the story's own inherited lesson #1. |
+| 2026-07-29 | Implemented: `decide` + `smallest_rule_with`, the `float-free` gate, 6 core tests + 3 xtask tests, 12 doc locations, 5 mutations run, 8 register entries annotated + 9 new items, GitHub issue #54 opened. 271 → 280 tests. Two mutation predictions corrected by measurement (M4 → 47 offenders not 1; M1's count only observable once the 32-walk was made cumulative). One process defect recorded: a mutation restored with `git checkout` against an uncommitted baseline destroyed the implementation once. Status → `review`. |

@@ -321,7 +321,17 @@ const IDENTITY_DIR: &str = "crates/opencmdb-core/src/identity";
 ///   exists under the guarded subtree today; if one appears, that is the sentence to revisit.
 /// - a `//` inside a **string literal** truncates the line early, so a float after it is missed — a
 ///   false negative, and a harmless one: a float inside a string is not a float.
+/// - a decimal inside a **string literal in code** (`"0.1.1"`) reds — a false POSITIVE. None exists
+///   under the guarded subtree today.
 /// - `#[doc = "…"]` is not stripped and would red. None exists under the guarded subtree today.
+///
+/// ⚠️ **The stripping does far more work than "tolerate one citation", and that was MEASURED.**
+/// Removing it makes this gate report **47** offenders on the committed tree, not one: a story
+/// reference in prose — `5.4b`, `4.6a`, `4.7a` — is literally a digit-dot-digit, so the
+/// bare-literal rule that catches `let confidence = 0.85;` also catches every story number this
+/// project writes in a doc comment. The two features are load-bearing together: the literal rule is
+/// what makes the gate catch an untyped weight, and the stripping is what makes the literal rule
+/// usable at all.
 fn line_has_float(line: &str) -> Option<&'static str> {
     let code = match line.find("//") {
         Some(i) => &line[..i],

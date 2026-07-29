@@ -1,12 +1,13 @@
-//! The identity cascade — and, today, the vocabulary it speaks and the type it returns.
+//! The identity cascade — the vocabulary it speaks, the type it returns, and the algebra between.
 //!
 //! D13 fixes the cascade's shape: **all rules are evaluated** (never first-match-wins), each yields
 //! an enumerated verdict, and the verdicts combine by an **algebra, never a sum** — *"if the output
-//! is a float, B has won in disguise"* [architecture.md:956-965]. This file holds the vocabulary
-//! that algebra reads and writes — [`Verdict`], [`RuleVerdict`], [`Conclusion`], [`Decision`],
-//! [`RulesetVersion`] and [`IdentityAbstentionCause`]. **It does not hold the algebra: nothing here
-//! combines a verdict set into a conclusion. That is story 5.4b's**, and no rule produces a
-//! [`Verdict`] yet.
+//! is a float, B has won in disguise"* [architecture.md:956-965]. This file holds that vocabulary —
+//! [`Verdict`], [`RuleVerdict`], [`Conclusion`], [`Decision`], [`RulesetVersion`] and
+//! [`IdentityAbstentionCause`] — **and the algebra itself, [`decide`]**, which combines a verdict set
+//! into a conclusion over D13's six-row table plus the one input class that table leaves uncovered.
+//! **No rule produces a [`Verdict`] yet**, so nothing calls `decide` outside its own tests; story 5.5
+//! writes the join and the first firing rule.
 //!
 //! The vocabulary is chosen before the engine on purpose — the same order D19 imposed on the metrics
 //! harness in Epic 4, *"a metric written after the engine is bent to fit the engine"* — and because
@@ -46,19 +47,20 @@ use crate::trap::RuleId;
 /// This is what ONE RULE says about ONE candidate pair. The two names are four letters apart and
 /// the judgements are not comparable; the module doc above tabulates all four.
 ///
-/// # This type is the vocabulary; combining is story 5.4b's
+/// # This type is the vocabulary; [`decide`] is what combines it
 ///
 /// D13's contract is that **all rules are evaluated** and that *"verdicts combine by an **algebra,
 /// not a sum**"* [architecture.md:960-961], because *"REFUSED: `rule -> confidence: f64` … if the
-/// output is a float, B has won in disguise"* [architecture.md:956-958]. **Nothing in this file
-/// combines anything** — the six-row table at [architecture.md:967-974] is implemented by story
-/// 5.4b, and no rule produces a `Verdict` until story 5.5.
+/// output is a float, B has won in disguise"* [architecture.md:956-958]. The six-row table at
+/// [architecture.md:967-974] is implemented by [`decide`], in this file. **No rule produces a
+/// `Verdict` until story 5.5**, so nothing calls it outside its own tests.
 ///
 /// ⚠️ **The six rows do not cover every input.** Enumerated over the PRESENCE of each variant, the
 /// table leaves exactly one class unanswered: at least one `Opposes`, with no `Decisive`, no
 /// `Supports` and no `Disqualifying`. It is not *"only `Neutral` / nothing"* and it is not
-/// *"`Supports` AND `Opposes`"*. **Story 5.4b arbitrates it**; this doc names the gap so a reader
-/// does not mistake five variants and six rows for a complete specification.
+/// *"`Supports` AND `Opposes`"*. **[`decide`] carries the enumeration and Guy's arbitration of it**
+/// (2026-07-29: it abstains for absence of proof); this doc names the gap so a reader does not
+/// mistake five variants and six rows for a complete specification.
 ///
 /// # Why there is no ordering
 ///
@@ -160,10 +162,11 @@ impl Verdict {
 /// # Nothing produces one, and nothing validates one
 ///
 /// There is no rule, so every `RuleVerdict` in the tree today is a test literal. The fields are
-/// `pub` with no constructor — the [`crate::score::ScoredRecord`] precedent — and the two
-/// validations a producer would want are **registered rather than invented**: that a verdict which
-/// ARGUES leaves non-empty evidence, and that a [`Decision`]'s conclusion names a rule its own
-/// vector contains. Both need story 5.4b or 5.5 to have something that could red.
+/// `pub` with no constructor — the [`crate::score::ScoredRecord`] precedent — and of the two
+/// validations a producer would want, **one now has a place that reds and one does not**: that a
+/// [`Decision`]'s conclusion names a rule its own vector contains holds by construction for
+/// everything [`decide`] returns, and a test says so; that a verdict which ARGUES leaves non-empty
+/// evidence still needs a firing rule to state, and stays registered with story 5.5.
 ///
 /// # Its relationship to [`crate::score::VerdictVectorEntry`]
 ///
@@ -248,8 +251,8 @@ pub enum Conclusion {
     /// [`Self::Abstained`] with [`IdentityAbstentionCause::AbsenceOfProof`]. That fork is why this
     /// variant carries a rule and cannot be given an optional one: an engine that mapped all of
     /// `NoMatch` onto a refusal *"would fail every honest `must-abstain` trap"*, the exact case D18
-    /// says must NOT be gated. **This story builds the fork; story 5.4b decides which side an input
-    /// falls on.**
+    /// says must NOT be gated. **[`decide`] is what chooses the side**: a `Disqualifying` present
+    /// lands here and names its rule; its absence, with nothing arguing for the pair, abstains.
     NoMatch {
         /// The rule that opposed the pair — never the rule that was merely tempting.
         rule: RuleId,
@@ -284,7 +287,8 @@ pub enum Conclusion {
 /// is a float and none is a magnitude: [`RulesetVersion`] is an identifier, [`Verdict`] is
 /// enumerated and unordered. There is no ranking value at all, because L1 is a deterministic lookup
 /// with nothing to rank; D13's milli-units corollary [architecture.md:991-993] binds the day one
-/// appears. Story 5.4b adds the `cargo xtask ci` gate that holds this mechanically.
+/// appears. **`cargo xtask ci`'s `float-free` gate holds this mechanically** — it reds on an `f32`,
+/// an `f64` or a bare float literal in code anywhere under `identity/`.
 ///
 /// # What is representable and not refused
 ///
@@ -292,9 +296,14 @@ pub enum Conclusion {
 /// `Decision` whose [`Self::conclusion`] names a rule **absent from its own
 /// [`Self::verdict_vector`]** compiles, and so does a [`Conclusion::Match`] with an empty vector —
 /// *"merged, with no explanation"*, which is what D13's *"the list … IS the explanation"* exists to
-/// prevent. Nothing refuses either, and the reason is a missing producer rather than a preference:
-/// story 5.4b's combining function is the first place a conclusion and a vector are built together,
-/// hence the first place a test could red. Registered, owner story 5.4b.
+/// prevent.
+///
+/// **Through [`decide`] both are unreachable, and that is by construction rather than by a check**:
+/// it selects the named rule FROM the vector it then returns, and an empty vector abstains rather
+/// than matching. A test walks all 32 verdict subsets and asserts it. ⚠️ **A struct literal built
+/// anywhere else is still unconstrained**, because the fields are `pub` and there is no constructor;
+/// that residue is registered with story 5.9, the first story that reconstructs a `Decision` from
+/// somewhere other than `decide`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Decision {
     /// What the cascade concluded.
@@ -482,7 +491,12 @@ fn smallest_rule_with(verdicts: &[RuleVerdict], wanted: Verdict) -> Option<RuleI
 ///
 /// `NoMatch` is therefore reached by two different rows — the `Disqualifying` one just named, which
 /// is a decision, and the absence-of-proof one below — and **exactly one of them has no rule to
-/// name**: that row is [`Self::AbsenceOfProof`]. Six rows, four of them abstentions, two variants.
+/// name**: that row is [`Self::AbsenceOfProof`].
+///
+/// ⚠️ **Seven input classes, not six.** D13's table has six rows, but enumerated over the PRESENCE of
+/// each verdict it leaves one class uncovered — `>=1 Opposes` alone — which Guy arbitrated onto
+/// [`Self::AbsenceOfProof`] on 2026-07-29. So: seven classes, five of them abstentions, two variants.
+/// [`decide`] carries the enumeration and is where the arbitration lives.
 ///
 /// A third variant is a **finding**, not a tidy-up. In particular this enum does not reproduce
 /// `OutOfPerimeter`: the cascade's table has no such row, and D16 names the failure mode of
@@ -526,8 +540,18 @@ pub enum IdentityAbstentionCause {
     /// 5.14 owns the operator-facing grouping and is the first place a split can be justified by a
     /// consumer rather than by symmetry. Registered in `deferred-work.md`.
     Ambiguous,
-    /// Nothing in the verdict set argues either way — the row *"only `Neutral` / nothing →
-    /// `NoMatch` (absence of proof)"* [architecture.md:974].
+    /// Nothing argues FOR the pair — so there is no merge to refuse and none to make.
+    ///
+    /// **Two input classes produce it, and only one of them is a D13 row:**
+    /// - *"only `Neutral` / nothing → `NoMatch` (absence of proof)"* [architecture.md:974], where
+    ///   nothing argues either way;
+    /// - **`>=1 Opposes` with no `Decisive`, no `Supports` and no `Disqualifying`** — the class D13's
+    ///   table leaves uncovered, arbitrated onto this variant by Guy on 2026-07-29. Here something
+    ///   *does* argue, against; what is absent is anything arguing FOR, which is why the answer is an
+    ///   abstention and not a refusal. See [`decide`], which carries the enumeration.
+    ///
+    /// *(This doc read "nothing in the verdict set argues either way" until [`decide`] existed —
+    /// true of the D13 row alone, and falsified by the arbitrated class the same function serves.)*
     ///
     /// It is a separate variant because it is the half of `NoMatch` with no rule to name, and D18
     /// is explicit that this case must NOT be gated: *"an engine that abstains because there is NOT
@@ -591,9 +615,19 @@ impl IdentityAbstentionCause {
 ///   VOCABULARY — *"an abstention has no rule to name, for EVERY cause"* — and reads
 ///   `Outcome::rule()` as the mechanism that expresses it. Its subject is
 ///   [`IdentityAbstentionCause`], so it stays here too, by the convention rather than by fiat.
+/// - Story 5.4b's six tests of [`decide`] pin claims about a function defined in this file, so the
+///   convention places them here without a judgement call. [`crate::score::Outcome`] is not read by
+///   any of them.
 ///
 /// The truth-table tests of `score()` stay in `score.rs` under the same rule: their subject is
 /// `score`, and this module's types are what they read.
+///
+/// # The oracle is deliberate redundancy
+///
+/// `expected_conclusion` restates D13's table independently of [`decide`]. That is the protected kind
+/// of duplication this project names by hand (`fixtures.rs`'s `expected()`, `score.rs`'s
+/// `Column::as_str()`), and a DRY pass must not collapse it: an expectation computed by calling the
+/// code under test proves nothing.
 #[cfg(test)]
 mod tests {
     use super::*;
