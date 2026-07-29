@@ -50,7 +50,8 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-29  # Story 5.4 IMPLEMENTED -> review; PR open. NEXT = code-review 5.4
+last_updated: 2026-07-29  # 5.4 reviewed (22 patches) -> review, PR #52 open + CI green. 5.4b
+                          # contexted + validated -> ready-for-dev. NEXT = merge #52, THEN dev-story 5.4b
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -652,7 +653,11 @@ development_status:
   # review counted them: the thirteenth was `Epic 6`, an epic being called a story in the sentence
   # that forbids exactly that. The review then added three items (a duplicate-`RuleId` vector, the
   # first `f64` token, and 5.4b's owner/spec gap), which is where eighteen comes from.
-  5-4-decision-and-ruleset-version: review
+  # ✅ MERGED 2026-07-29 — PR #52 squash-merged as `da87b62`, CI green on both commits (the story and
+  # its 22 review patches). `review` → `done` at the MERGE, which is what makes a story done here;
+  # the code-review workflow's default of setting it at the end of the review was again NOT applied.
+  # Master re-verified after the merge: 135 + 94 + 42 = 271, zero failures.
+  5-4-decision-and-ruleset-version: done
   #
   # 5.4b INSERTED 2026-07-29 with Guy, at 5.4's contexting and before any Epic 5 engine code existed
   # — the same shape as 5.2b's insertion, and for the same reason: the thing being split out is the
@@ -662,7 +667,43 @@ development_status:
   # 5.11), and the `cargo xtask ci` gate that reds on any `f32`/`f64` under `identity/` — in the
   # idiom of the existing DDL-collation and retired-vocabulary greps (D56/D65: every gate lives in
   # Rust, never in YAML). The letter suffix keeps 5.5–5.14 at their numbers (D56b idiom).
-  5-4b-verdict-algebra-and-float-gate: backlog
+  #
+  # 5.4b CONTEXTED + VALIDATED 2026-07-29 → ready-for-dev.
+  # ⚠️ PREREQUISITE: PR #52 must be MERGED before dev-story. This is the first Epic 5 story contexted
+  # while its predecessor's PR was still open (the four before it were each merged first); every
+  # `cascade.rs` line number in the story was measured on `3d63544`, the post-code-review tree, which
+  # is what master holds once #52 merges. The deviation is recorded at the top of the story, not
+  # smoothed.
+  # It answers the THREE findings story 5.4's code review handed forward on purpose: what `decide`
+  # RETURNS, who owns the conclusion↔verdict_vector invariant, and the pre-existing `f64` token
+  # sitting in the very subtree this story's gate greps.
+  # THE DESIGN DECISION: `decide(Vec<RuleVerdict>, RulesetVersion) -> Decision` returns a Decision,
+  # NOT a bare Conclusion — so the returned verdict_vector IS the input, and "a Match with an empty
+  # vector" / "a conclusion naming a rule absent from its own vector" become unrepresentable THROUGH
+  # THE FUNCTION rather than merely unenforced. That is what makes the invariant testable at all.
+  # VALIDATED by two fresh-context agents (fact-check + gap-hunt): 9 HIGH + 12 MEDIUM/LOW applied.
+  # FOUR of them changed the DESIGN and every one was MEASURED, not argued:
+  #   · the arms are now bound to a `match` on the presence tuple — the gap-hunt agent COMPILED all
+  #     three shapes the story permitted and found that with an `if`-chain, deleting the arbitration
+  #     arm "compiles and changes 0 of 16 input classes". M2 would have been a silent no-op and the
+  #     story's central claim would have shipped unproven;
+  #   · the permutation test was VACUOUS as written: three mixed verdicts conclude `Abstained`, which
+  #     names no rule, so no tiebreak can change it — and the 32-subset walk gives AC4 ZERO coverage
+  #     (one RuleVerdict per verdict means `min()` over a singleton). It now requires three verdicts
+  #     of the same rule-naming kind with lex order ≠ vector order;
+  #   · an implementation taking `min()` over the WHOLE vector passed every specified test while
+  #     returning `NoMatch { rule }` naming the rule that argued FOR the merge. Closed by a named
+  #     test and by requiring the oracle to return a full Conclusion (assert_eq, never matches!);
+  #   · the float gate was BUILT AND RUN: the specified word-boundary match misses `0.85f64` and
+  #     `let confidence = 0.85;` — the likeliest shapes a weight takes — and reds on a block comment,
+  #     a FALSE POSITIVE, the one direction the draft said could not happen.
+  # BOOKKEEPING corrected before dev rather than after: the register set is EIGHT entries across FOUR
+  # sections (not six in one — two `NoMatch` entries in the 4.6a/4.7a sections still say "nothing
+  # decides which side an input falls on", which `decide` falsifies); ELEVEN doc blocks are falsified,
+  # not five; and the story cited `cascade.rs:42` for the f64 token when it is `:52` — a number
+  # inherited from the register without re-measuring, which is the story's own inherited lesson #1
+  # committed by the story that quotes it. Caught before dev this time.
+  5-4b-verdict-algebra-and-float-gate: ready-for-dev
   5-5-l1-join-pure: backlog
   5-6-blocker-and-recall-assertion: backlog
   5-7-trap-runner-stops-scoring-nothing: backlog
