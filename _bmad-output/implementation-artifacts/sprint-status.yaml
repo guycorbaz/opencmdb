@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-29  # Story 5.3 code review held — 18 patches applied, 1 decision, 6 defers; still `review`
+last_updated: 2026-07-29  # Story 5.3 DONE — PR #48 merged as 62f9c83; NEXT = create-story 5.4
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -498,9 +498,14 @@ development_status:
   # Test count UNCHANGED at 267 (135 + 90 + 42) — the widened test is still one test, so the number
   # says nothing about the patches; the re-run red set does. `CLAUDE.md`'s Epic 5 line, stale since
   # 5.2/5.2b merged, was fixed here rather than deferred.
-  # ⚠️ NEXT: push the patches → green CI → squash merge. `done` is the MERGE's business, and this
-  # workflow's own default of setting `done` at the end of a review is WRONG for this project.
-  5-3-engine-abstention-cause: review
+  # ✅ MERGED 2026-07-29 — PR #48, CI green (56s on the review patches, three green runs on the
+  # branch), squashed as `62f9c83`. Epic 5's engine proper has its first story in: the identity
+  # engine speaks its own abstention vocabulary, and NOTHING produces one yet. `done` is the MERGE's
+  # business — the `code-review` workflow's default of setting it at the end of the review was again
+  # not applied, as for 5.1/5.2/5.2b.
+  # NEXT = `create-story` 5.4 (`Decision` and `ruleset_version`), then its MANDATORY validation pass
+  # by two fresh-context agents before dev-story.
+  5-3-engine-abstention-cause: done
   5-4-decision-and-ruleset-version: backlog
   5-5-l1-join-pure: backlog
   5-6-blocker-and-recall-assertion: backlog

@@ -1,6 +1,6 @@
 # Story 5.3: The identity engine gets its own abstention cause
 
-Status: review
+Status: done
 
 <!-- Validation is MANDATORY here (Guy's decision, Epic 4 retrospective 2026-07-26): two
      fresh-context agents (fact-check + gap-hunt) BEFORE dev-story. The template banner saying
@@ -1051,6 +1051,11 @@ by 5.1 and confirmed by 5.2 and 5.2b. Status is `review`.
   One count in the story's Dev Notes is now stale by this story's own commit and is corrected in
   the Completion Notes: `Outcome::Abstained` has **nine** construction sites, not six. All nine are
   still in test modules. Status → `review`.
+- 2026-07-29 — **`done`.** PR #48 squash-merged as `62f9c83` after a green CI run (56s on the review
+  patches; three green runs on the branch in total). The story sat at `review` from the end of
+  dev-story until the merge, through the code review and its 18 patches — **`done` is the MERGE's
+  business** in this project's flow, which is why the `code-review` workflow's own default of
+  setting `done` at the end of the review was not applied. Same shape as 5.1, 5.2 and 5.2b.
 - 2026-07-29 — **Code review held** (`bmad-code-review`, three parallel layers). 1 decision + 18
   patches applied + 6 defers + 3 dismissed. **No behavioural defect was found in any layer**; what
   fell was documentation truth, in a story built to guard it. The Acceptance Auditor reproduced SIX
