@@ -157,14 +157,38 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
 
 ## Deferred from: story-4.6a (2026-07-22)
 
-- **`AbstentionCause` cannot express the identity cascade's `Ambiguous`, and Epic 5 must decide.**
+- ✅ **CLOSED by story 5.3**, which is the owner this bullet names. The branch taken is the SECOND
+  of the two it offers: **a separate cause type**, `identity::cascade::IdentityAbstentionCause`
+  (`Ambiguous` | `AbsenceOfProof`, each traced to a row of D13's table), carried by
+  `Outcome::Abstained`. `AbstentionCause`'s variant list is byte-unchanged and
+  `Expectation::MustAbstain` still carries it, so no committed artefact was re-hashed.
+  ~~`AbstentionCause` cannot express the identity cascade's `Ambiguous`, and Epic 5 must decide.~~
+  ⚠️ **TWO sentences below are FALSE. They are struck in place AND corrected here** — striking alone
+  loses the reason, and correcting alone leaves a reader who lands on the sentence in isolation
+  reading a false one. (This note said "One sentence" and struck nothing until the code review of
+  2026-07-29 measured the second and caught the omission.)
+  **(a)** A different type on the outcome side *"would make comparison asymmetric against a
+  locked format"*. There is no comparison to go asymmetric: `score`'s 3×3 matches
+  `Outcome::Abstained { .. }` and cannot reach the payload, and `run_trap` compares rules only where
+  both sides are `Some`, which an abstention never is. The tests that hold it are
+  `the_two_abstention_vocabularies_are_never_compared` and
+  `scoring_is_blind_to_the_abstention_cause_whatever_it_is` (`score.rs`), both proven red by
+  flipping the `(must-abstain, Abstained)` cell. The *cost* half of the sentence was real and was
+  measured the other way round: adding `Ambiguous` to `AbstentionCause` produces exactly one
+  `error[E0004]`, at `page.rs:114:11`, and nothing else in the workspace breaks — so widening buys a
+  user-facing label and two locale strings for a variant `reconcile` can never produce.
+  **(b)** *"`reconcile` matches on it exhaustively"*. It does not: `reconcile` only ever
+  CONSTRUCTS a cause (`gap/mod.rs`, three `abstain(...)` calls). The sole value-level `match` on
+  `AbstentionCause` in the workspace is `page.rs`'s `cause_label`, which is what M4 measured —
+  widening the enum yields one `error[E0004]`, there and nowhere else. The claim was inherited
+  verbatim into story 5.3's AC1 and is corrected in that story's Completion Notes too.
   It is the RECONCILIATION vocabulary (`OutOfPerimeter | NoObservedValue | ConflictingObservations`,
   story 3.6). The cascade's abstention arises from the verdict algebra — the cloned-MAC case — and
   none of the three names it. 4.6a uses it on BOTH sides anyway, because story 4.2 froze the truth
-  format on it and the committed corpus already writes `cause = "NoObservedValue"`; a different type
-  on the outcome side would make comparison asymmetric against a locked format. **Not widened here**:
-  `reconcile` matches on it exhaustively and there is no producer yet. Epic 5 builds the cascade and
-  chooses — widen the enum, or give `Outcome::Abstained` its own cause type.
+  format on it and the committed corpus already writes `cause = "NoObservedValue"`; ~~a different type
+  on the outcome side would make comparison asymmetric against a locked format~~ (a). **Not widened
+  here**: ~~`reconcile` matches on it exhaustively~~ (b) and there is no producer yet. Epic 5 builds
+  the cascade and chooses — widen the enum, or give `Outcome::Abstained` its own cause type.
 - **`fixture_seq` is NOT implemented, and D36's five-field list is therefore not fully satisfied.**
   It occurs exactly once in `architecture.md` (inside D36's list), zero times in the PRD, zero in
   code — no type, no shape, no prose. The obvious reading, an ordinal into the stream, contradicts a
@@ -214,6 +238,14 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   everywhere and fails **usefully** (`left: 48, right: 0`), and deriving serde later does not break
   on an uninhabited field. Recorded so a future rustc layout change is diagnosed as what it is
   rather than as a semantic regression.
+- ↺ **PARTLY closed by story 5.3 — this annotation belongs to the entry BELOW** (*"The cascade's
+  `NoMatch` maps two ways onto `Outcome`"*), **not to the `size_of` entry above it**, **and is
+  deliberately NOT struck.** 5.3 created the cause that
+  absence-of-proof will carry (`IdentityAbstentionCause::AbsenceOfProof`, traced to
+  architecture.md:974's row) and wrote its variant doc around this very entry. **The MAPPING still
+  has no producer**: nothing decides what the cascade returns, because there is no cascade. Owner
+  stays **stories 5.4/5.5** — the `Decision` type and the L1 join. Striking this would claim a
+  behaviour that exists nowhere.
 - **The cascade's `NoMatch` maps two ways onto `Outcome`, and only half of that is recorded.**
   `architecture.md:967-974` makes `NoMatch` cover BOTH an active opposition (`any Disqualifying`) and
   a mere absence of proof (`only Neutral / nothing`). `Outcome::Refused` requires a rule to name, so
@@ -284,6 +316,15 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   produces verdicts, each rule must emit its `rule_id` and evidence into the verdict vector, and a
   test must red if it does not. Inventing a producer to "satisfy" AC6 now would be the *"metric
   written after the engine"* mistake in reverse.
+- ↺ **PARTLY closed by story 5.3 — this annotation belongs to the entry BELOW** (*"The
+  `NoMatch → Refused` vs `Abstained` question is Epic 5's"*), **not to the firing-rule/evidence
+  entry above it, which story 5.3 deliberately did not touch** (AC6). **Not struck.**
+  The VOCABULARY half is decided: an
+  absence of proof has a name to abstain with (`IdentityAbstentionCause::AbsenceOfProof`) that is
+  not a refusal, so the failure mode this entry's sibling warns about — mapping `NoMatch → Refused`
+  uniformly and failing every honest `must-abstain` trap — now has a type-level alternative. The
+  QUESTION itself is untouched: no engine decides which half of `NoMatch` it is in. Owner stays
+  **stories 5.4/5.5**.
 - **The `NoMatch → Refused` vs `Abstained` question is Epic 5's, not scored here.** `run_trap` scores
   answers; it does not decide what an engine that finds no merging rule should return. Whether "no
   rule matched" is a `Refused` (a decision, names an opposing rule) or an `Abstained` (no decision,
@@ -937,3 +978,105 @@ collapsing dhcp-churn D3's MAC onto D1's would red nothing — the pre-existing
 - **The trap `reason` prose is still not mechanically tied to the values it cites** — see the
   `## Deferred from: story-5.2b` section above, where this was already registered by the story
   itself. Repeated here only so this section is not read as the complete review residue.
+
+## Deferred from: story-5.3 (2026-07-28)
+
+_The story wrote a TYPE and its tests, and no engine. Everything below is open because it needs a
+producer, a consumer, or a decision that no code yet forces — not because it was skipped._
+
+- **Whether `IdentityAbstentionCause::Ambiguous` must SPLIT into its three D13 rows.** The variant
+  covers three conditions over the verdict set — *"a `Decisive`, >=1 `Opposes`"* (the cloned-MAC
+  case, architecture.md:971), *"no `Decisive`, >=1 `Supports`, no `Opposes`"* (weak evidence,
+  `:972`) and *"`Supports` AND `Opposes`"* (conflict, `:973`) — and an operator reading "ambiguous"
+  cannot tell which fired. Not split here because a split with no consumer is symmetry, not
+  information, and D16 warns about the opposite failure only (*"if `Ambiguous` means both 'real
+  conflict' and 'unmodelled case', it means nothing"*). **Owner: story 5.14**, which owns the
+  operator-facing grouping and is the first place a consumer can justify one; 5.5's evidence vector
+  is where the distinguishing data would come from.
+- **`IdentityAbstentionCause` derives no `Serialize`/`Deserialize`.** Nothing persists a cause: the
+  identity link table does not exist. Deriving a wire format for a domain type with no consumer is a
+  finding this project has already recorded once (`ScoredRecord`, 4.6a). **Owner: story 5.9**, which
+  persists the interface and the identity link, if it persists a cause at all.
+- **It derives no `PartialOrd`/`Ord` and has no `Display`.** Nothing orders or keys one — the
+  precedent for `Ord` is `Reconciliation::abstentions: BTreeMap<AbstentionCause, usize>`, and no such
+  map exists on the identity side. Rendering goes through `page.rs`'s `cause_label` + `t!()` seam
+  (Story 3.8), never through `Display`; writing one now would build the wrong seam. **Owner: story
+  5.14** for both, together with the two locale keys per variant it would need.
+- **`error[E0004]` on a new variant is the mechanism, so `#[non_exhaustive]` is refused — and that
+  refusal has a cost worth naming.** `opencmdb-bin` is a different crate, so the attribute would
+  force a `_` arm on every downstream match and a new variant would stop breaking its consumers.
+  The price is that this enum is a semver hazard for any out-of-workspace consumer. There is none,
+  and the workspace is the product. **Owner: nobody** — recorded so a reviewer reading `#[derive]`
+  and no attribute sees a decision rather than an omission.
+- **No `From`/`Into` bridge between `gap::AbstentionCause` and `IdentityAbstentionCause`, and none
+  should appear silently.** The corpus's cause is the trap author's note about the SHAPE of the
+  case; the engine's is what the cascade concluded. Mapping one onto the other is a decision about
+  the truth format, not a convenience. **Owner: whoever needs the comparison** — as a story, with a
+  `must-abstain` corpus consequence spelled out first.
+
+## Deferred from: code review of story-5.3 (2026-07-29)
+
+_Three parallel layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor). All three converged on
+a false row count in the enum's guard paragraph, and TWO independently attacked `all()`'s witness —
+the Edge Case Hunter by RUNNING the lazy-repair path. The Acceptance Auditor reproduced SIX of the
+seven mutations and found not one observed red set differing from the record. Those items were
+PATCHED in the story, not deferred; what follows is the residue._
+
+- **`IdentityAbstentionCause::all()`'s witness stops the build on a new variant but does not force
+  the variant into the list — MEASURED, and deliberately left open.** Adding a third variant and
+  repairing only the `error[E0004]` (a bare `Self::NewThing => {}` arm) leaves `all()` returning the
+  old two-element list while `cargo test -p opencmdb-core` reports **90 passed**. No `error[E0308]`
+  fires, because repairing the match never touches the literal. **Guy's call, 2026-07-29: keep the
+  mechanism, tell the truth about it, register the residue.** Two closures were built and measured
+  before deciding, and both were REJECTED:
+  · an `ordinal()`/`slot()` witness — **measured GREEN with the variant missing (91 passed)**, so it
+    closes nothing: `slot()` is never called on a variant that is not already in `all()`. (This was
+    the reviewer's first recommendation and it was withdrawn after measurement, not after argument.)
+  · a `macro_rules!` emitting the enum and the list from ONE variant list — **measured to work**
+    (`all().len() = 3`, contains the new variant) — but it violates story 5.3's AC1, which binds the
+    return type to a literal `[Self; 2]` and forbids `[Self; N]` behind a const; and it makes adding
+    a variant *frictionless*, which is the opposite of what AC1b wants (a third variant is a
+    FINDING). A `strum` dependency in `opencmdb-core` was refused as disproportionate for a
+    two-variant enum (D47 makes that crate's dependency list a decision).
+  What shipped instead: `all()`'s doc states the guarantee and its limit, and the witness carries a
+  comment naming the wrong repair, so the developer who arrives on the `error[E0004]` reads it.
+  **Owner: story 5.14** — the first story with a real reason to add or split a variant, and the
+  first place a mechanism would earn its keep.
+- **Two of story 5.3's four new tests are carried by the type system, not by their assertions.**
+  `the_vocabulary_is_exactly_ambiguous_and_absence_of_proof` red under M1 only because it SPELLS
+  `Ambiguous` (an `E0599`), and `an_abstention_names_no_rule_whatever_its_cause` red under M5 only
+  because the field type changed (`E0308`) — an error that would fire identically if its body were
+  `assert_eq!(1, 1)`. `Outcome::Abstained` carries no rule field, so no mutation short of fabricating
+  a `RuleId` can make the second assertion fail. AC5 blesses a compile error as a red, so this is not
+  a violation; it is recorded because "four tests pin its claims" is carried, for two of the four, by
+  the compiler. Owner: story 5.5 — the first story with a producer, where an abstention becomes
+  reachable from something other than a literal.
+- **`an_abstention_names_no_rule_whatever_its_cause` inverts the test-placement convention its own
+  story invoked.** Task 5 established that *"a test module tests the items of its own file, importing
+  other modules only as dependencies"* and used it to keep the truth-table tests in `score.rs`; this
+  test lives in `cascade.rs` and asserts a property of `crate::score::Outcome::rule()`. The SPEC bound
+  the placement, so the implementation is conformant and moving it now would deviate from an approved
+  AC. Owner: whoever next adds a test to `cascade.rs` — decide the convention once, in one place.
+- **A trap file may declare `must-abstain = { cause = "OutOfPerimeter" }` and nothing refuses it.**
+  `TrapFile::validate` has no arm for the cause's SEMANTICS, so a sha256-locked corpus artefact can
+  commit an abstention cause the identity cascade has no row for. Harmless today — scoring is
+  cause-blind and no committed trap does it (all three write `NoObservedValue`) — but the field is an
+  oracle no code reads. PRE-EXISTING: the hole predates 5.3, which only made the two vocabularies
+  distinct enough to notice it. Owner: whoever adds semantic validation to the truth format; it is a
+  corpus-format decision, not a code fix.
+- **`lib.rs`'s flat `pub use identity::cascade::IdentityAbstentionCause;` has no consumer.** The one
+  downstream importer, `trap_gate.rs`, uses the long path. Story 5.3 refuses `Serialize` and `Ord` on
+  an explicit "no consumer" argument and then ships a crate-root re-export nothing consumes — the
+  same argument, not applied. PRE-EXISTING idiom: `lib.rs` re-exports every module's public surface
+  flat, and deviating for one type would be the inconsistency. Recorded so the asymmetry reads as
+  inherited rather than chosen. Owner: whoever revisits the crate's re-export policy.
+- **AC7's drafting requires a squash merge inside a workflow that must end at `review`.** It reads
+  *"branch → PR → green CI → squash merge, ending at status `review`, never `done`"* — the two halves
+  cannot both hold, because the merge is what makes a story `done` in this project. Every Epic 5
+  story inherits the wording. Owner: whoever writes 5.4's AC7 — require the PR and stop.
+- **CI runs no `cargo doc`, so broken intra-doc links are gated by nothing.** `cargo clippy` does not
+  check them, and story 5.3 added many full-path `[`crate::...`]` links precisely to avoid unused
+  imports. The tree is clean (verified twice, three pre-existing warnings, none in new code) — but by
+  measurement on a developer's machine, not by a mechanism. Owner: whoever next touches
+  `.github/workflows/ci.yml`; a `cargo doc --workspace --no-deps` with
+  `-D rustdoc::broken_intra_doc_links` would need the three pre-existing warnings fixed first.

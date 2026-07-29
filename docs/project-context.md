@@ -42,7 +42,7 @@ Docker Hub; the binary runs and scans on Guy's NAS (frontend on macvlan, no Trae
 | **E2** Le contrat de connecteur | ✅ done (5 stories) |
 | **E3** Mon premier écart réel — **v0.1** | ✅ done (10 stories), retrospective held |
 | **E4** Infra fixtures & corpus de pièges — v0.2 | ✅ **done 2026-07-25** (19/19 authored; 4.19 split — see below) |
-| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — 15 stories; **5.1, 5.2 and 5.2b done** (PR #41, #44, #46, all merged 2026-07-28). Epic 5's **three inherited-debt stories are closed**; the L1 engine starts at 5.3 |
+| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — 15 stories; **5.1, 5.2 and 5.2b done** (PR #41, #44, #46, all merged 2026-07-28). Epic 5's **three inherited-debt stories are closed**; the engine proper starts at **5.3, in `review`** — it ships the identity engine's own abstention vocabulary and NO engine |
 | **E6–E23** | backlog |
 
 Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`, not this file.
@@ -60,12 +60,14 @@ across nine families** (randomized-mac, multi-nic, shared-hardware-vm, cloned-ma
 vrrp-virtual-mac, hostname-collision, docker-veth, hostname-absence — each in positive AND
 negative form, each naming the RULE rather than the outcome), the scoring algebra, the metrics
 harness, the trap runner, the reality-debt register, and the wire-format spec. Test counts on
-master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **258** on master today
-(130 + 86 + 42), **263 with story 5.2b in review** (135 + 86 + 42) — story 5.1 added the two
+master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **263** on master today
+(135 + 86 + 42), **267 with story 5.3 in review** (135 + 90 + 42) — story 5.1 added the two
 corpus-wide walks, story 5.2 the trap-text scan, the `raw` scan and the scanner's six closed
 evasions, and story 5.2b five byte-pin tests over six of the eight streams that had none (the four
 unpinned families plus `example-traps.jsonl`, `dhcp-churn`'s existing pin extended) together with
-the trap→`obs_id` binding pin. That pin closed a hole measured TWICE: exchanging two `observations`
+the trap→`obs_id` binding pin; story **5.3** the four tests of the identity engine's own abstention
+vocabulary (`IdentityAbstentionCause`, two variants, in the new `opencmdb-core/src/identity/`) — a
+TYPE and no engine. **5.2b's trap→`obs_id` binding pin** closed a hole measured TWICE: exchanging two `observations`
 vectors in `cloned-mac.toml`, and later in `hostname-collision.toml`, each made the corpus DEMAND a
 false merge while the whole suite stayed green. **All 24 committed traps across all ten trap files
 now have their `observations` vector, `Expectation` and `family` pinned** — the scope grew from

@@ -31,7 +31,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::gap::AbstentionCause;
+use crate::identity::cascade::IdentityAbstentionCause;
 use crate::observation::Capabilities;
 use crate::trap::{Expectation, RuleId, TrapId};
 
@@ -46,19 +46,25 @@ use crate::trap::{Expectation, RuleId, TrapId};
 /// **Not named `Decision`.** The architecture reserves that name for the engine's real return type
 /// and never lists its fields; taking it here would squat a type Epic 5 has to define.
 ///
-/// # The abstention cause is known to be inadequate, and that is recorded rather than fixed
+/// # The two sides of a trap speak different abstention vocabularies (story 5.3)
 ///
-/// [`AbstentionCause`] is the RECONCILIATION vocabulary — `OutOfPerimeter`, `NoObservedValue`,
-/// `ConflictingObservations`. The identity cascade's abstention is `Ambiguous`, which arises from
-/// the verdict algebra (the cloned-MAC case), and **none of the three names it.**
+/// An outcome abstains in the ENGINE's vocabulary,
+/// [`crate::identity::cascade::IdentityAbstentionCause`] — `Ambiguous`, which arises from the
+/// verdict algebra (the cloned-MAC case), and `AbsenceOfProof`. The expectation abstains in the
+/// CORPUS's, [`crate::gap::AbstentionCause`], which story 4.2 froze into the truth format and
+/// which three committed trap files write as `must-abstain = { cause = "NoObservedValue" }`.
 ///
-/// It is used anyway, on both sides, because story 4.2 froze the truth format on it: the committed
-/// corpus already writes `must-abstain = { cause = "NoObservedValue" }`, and reusing it keeps one
-/// vocabulary for one concept. **Nothing here compares causes** — [`score`] ignores them — so this
-/// is about naming, not about a comparison that could go asymmetric. **Epic 5 builds the
-/// cascade and should decide** whether to widen this enum or give the outcome its own cause type;
-/// it is not widened here, because `reconcile` matches on it exhaustively and there is no producer
-/// yet. Recorded in `deferred-work.md`.
+/// Story 4.6a used the corpus vocabulary on both sides and recorded that it cannot name
+/// `Ambiguous`; story 5.3 took the second of the two branches it left open — a separate cause type
+/// rather than a widened `AbstentionCause`, because a variant added there is one the corpus format
+/// can express, that `cause_label` must label and that two locales must translate, for something
+/// `reconcile` can never produce.
+///
+/// **Nothing compares the two, and that is structural rather than promised:** [`score`]'s 3×3
+/// matches `Outcome::Abstained { .. }` and cannot reach the payload, and [`run_trap`] compares
+/// rules only where both sides are `Some`, which an abstention never is ([`Outcome::rule`] returns
+/// `None` for one by type). So two different types on the two sides cannot make the gate
+/// asymmetric — there is no comparison to go asymmetric.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
     /// These observations describe one device, by this rule.
@@ -66,7 +72,7 @@ pub enum Outcome {
     /// These observations describe different devices, and this rule opposes the merge.
     Refused { rule: RuleId },
     /// The signal was insufficient; no decision was taken, for this cause.
-    Abstained { cause: AbstentionCause },
+    Abstained { cause: IdentityAbstentionCause },
 }
 
 impl Outcome {
@@ -581,6 +587,11 @@ pub fn compare_runs(before: &[ScoredRecord], after: &[ScoredRecord]) -> RunCompa
 #[cfg(test)]
 mod tests {
     use super::*;
+    // The CORPUS's abstention vocabulary, which lives on the `Expectation` side only (story 5.3).
+    // `use super::*` no longer brings it in: production `score` names the ENGINE's type, and an
+    // import kept alive solely by this module would be an unused import in the lib build CI
+    // compiles (`cargo clippy --workspace` without `--all-targets`).
+    use crate::gap::AbstentionCause;
     use crate::observation::{FactKind, Timestamp};
     use std::collections::BTreeSet;
 
@@ -610,11 +621,15 @@ mod tests {
         }
     }
 
-    /// The outcomes deliberately carry rules and a cause that DO NOT match the expectations above.
+    /// The outcomes deliberately carry rules that DO NOT match the expectations above — and, since
+    /// story 5.3, a cause that CANNOT match, because the two sides no longer share a type.
     ///
-    /// If they matched, an implementation that compared `(outcome, rule)` — story 4.7's criterion,
-    /// not this module's — would pass every cell test, and the module's headline design decision
-    /// would rest on a single guard. With them mismatched, all nine cell assertions defend it.
+    /// If the rules matched, an implementation that compared `(outcome, rule)` — story 4.7's
+    /// criterion, not this module's — would pass every cell test, and the module's headline design
+    /// decision would rest on a single guard. With them mismatched, all nine cell assertions defend
+    /// it. On the cause the mismatch was a choice until 5.3 retyped
+    /// [`Outcome::Abstained`]; it is now a type-level fact, and the deliberate part is which
+    /// variant each helper carries — see `other_cause` below.
     fn merged() -> Outcome {
         Outcome::Merged {
             rule: rule("l2-uplink-agrees"),
@@ -627,7 +642,7 @@ mod tests {
     }
     fn abstained() -> Outcome {
         Outcome::Abstained {
-            cause: AbstentionCause::ConflictingObservations,
+            cause: IdentityAbstentionCause::Ambiguous,
         }
     }
 
@@ -709,15 +724,98 @@ mod tests {
         };
         assert_eq!(score(&expected, &by_another_rule), Score::Pass);
 
-        // Same on the refusal side, and same for a mismatched abstention cause.
+        // Same on the refusal side. And the abstention leg, which since story 5.3 proves something
+        // stronger than it used to: the mismatch is no longer between two values of one enum but
+        // ACROSS the two vocabularies — `must_abstain()` carries the corpus's
+        // `AbstentionCause::NoObservedValue`, this outcome carries the engine's
+        // `IdentityAbstentionCause`, and scoring still passes because it reads neither.
+        // The variant DIFFERS from `abstained()`'s so the two helpers stay distinguishable at a
+        // glance. It is no longer the load-bearing reason it once was: since 5.3,
+        // `scoring_is_blind_to_the_abstention_cause_whatever_it_is` asserts this same pair inside
+        // its loop, so the sub-claim survives either way. Kept different because two helpers that
+        // are value-identical but differently named are a trap for the next reader.
         let refused_other = Outcome::Refused {
             rule: rule("something-else"),
         };
         assert_eq!(score(&must_not_merge(), &refused_other), Score::Pass);
         let other_cause = Outcome::Abstained {
-            cause: AbstentionCause::ConflictingObservations,
+            cause: IdentityAbstentionCause::AbsenceOfProof,
         };
         assert_eq!(score(&must_abstain(), &other_cause), Score::Pass);
+    }
+
+    // ── The two abstention vocabularies (story 5.3) ──────────────────────────
+
+    /// Scoring reads no cause, for EVERY cause the engine can name.
+    ///
+    /// The three abstention cells are asserted per variant rather than once: `score`'s blindness is
+    /// structural (it matches `Outcome::Abstained { .. }`), and this is what says so at the value
+    /// level — including the load-bearing `(must-not-merge, Abstained) → Pass` cell, which D18's own
+    /// anti-cowardice argument rests on.
+    ///
+    /// The loop is over `all()` rather than two hand-written blocks: one behaviour, one source of
+    /// truth. `all()` itself is the deliberate redundancy — its exhaustive match is what makes a new
+    /// variant a compile error — and it must not be collapsed into a bare literal.
+    #[test]
+    fn scoring_is_blind_to_the_abstention_cause_whatever_it_is() {
+        for cause in IdentityAbstentionCause::all() {
+            let abstained = Outcome::Abstained { cause };
+            assert_eq!(
+                score(&must_abstain(), &abstained),
+                Score::Pass,
+                "(must-abstain, Abstained{{{cause:?}}}) is the column's passing cell"
+            );
+            assert_eq!(
+                score(&must_not_merge(), &abstained),
+                Score::Pass,
+                "(must-not-merge, Abstained{{{cause:?}}}) is the load-bearing pass cell (D18)"
+            );
+            assert_eq!(
+                score(&must_merge(), &abstained),
+                Score::Fail,
+                "(must-merge, Abstained{{{cause:?}}}) is cowardice, and it fails"
+            );
+        }
+    }
+
+    /// The claim of story 5.3, made executable: the two sides of a trap carry DIFFERENT cause types
+    /// and nothing compares them.
+    ///
+    /// The expectation carries a `AbstentionCause` — including `NoObservedValue`, the spelling the
+    /// three committed `must-abstain` trap files write — and the outcome carries an
+    /// `IdentityAbstentionCause`, which no `AbstentionCause` can even name. Every pair passes,
+    /// because [`score`] reads neither payload and [`run_trap`] finds no rule on either side.
+    ///
+    /// **All SIX pairs, not one.** The corpus side is enumerated by hand because `AbstentionCause`
+    /// belongs to another module and has no `all()`; that literal is the redundancy — if a variant
+    /// is added there, this list does not follow, which is a gap the reconciliation enum's own
+    /// exhaustive consumers (`page.rs`'s `cause_label`) catch first.
+    #[test]
+    fn the_two_abstention_vocabularies_are_never_compared() {
+        let corpus_causes = [
+            AbstentionCause::OutOfPerimeter,
+            AbstentionCause::NoObservedValue,
+            AbstentionCause::ConflictingObservations,
+        ];
+        for corpus_cause in corpus_causes {
+            let corpus_side = Expectation::MustAbstain {
+                cause: corpus_cause,
+            };
+            for cause in IdentityAbstentionCause::all() {
+                let engine_side = Outcome::Abstained { cause };
+                assert_eq!(
+                    score(&corpus_side, &engine_side),
+                    Score::Pass,
+                    "a corpus {corpus_cause:?} expectation answered by the engine's {cause:?} passes"
+                );
+                assert_eq!(
+                    run_trap(&corpus_side, &engine_side),
+                    TrapVerdict::Pass,
+                    "and ({corpus_cause:?}, {cause:?}) is a plain Pass, never a WrongRule — \
+                     neither side names a rule"
+                );
+            }
+        }
     }
 
     // ── The tally (AC5, AC6) ─────────────────────────────────────────────────

@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-28  # Story 5.2b DONE — PR #46 merged (fe6a19e); Epic 5's debt block closed
+last_updated: 2026-07-29  # Story 5.3 code review held — 18 patches applied, 1 decision, 6 defers; still `review`
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -384,7 +384,123 @@ development_status:
   # debt stories (5.1, 5.2, 5.2b) are now all done; the corpus byte-fidelity and privacy themes
   # both carry only entries with named owners. NEXT = `create-story` 5.3.
   5-2b-four-families-byte-pins: done
-  5-3-engine-abstention-cause: backlog
+  # 5.3 CONTEXTED 2026-07-28 — the FIRST story of Epic 5's engine proper; the three inherited-debt
+  # stories are all merged. It writes a TYPE and its tests, and NO engine: no cascade, no rule, no
+  # `Decision`, no join, no producer (5.4/5.5/5.6 own those). The arbitration it carries was taken
+  # at the epic's decomposition (epics.md:1311): the identity engine gets its OWN abstention cause,
+  # `Expectation` and the sha256-locked corpus untouched.
+  # FIVE measurements taken against master (12be2fc) BEFORE the story was written, so the dev
+  # re-derives nothing and a surprise reads as a FINDING:
+  #   · `cargo test --workspace` → 135 bin + 86 core + 42 xtask = 263, zero failures — the baseline;
+  #   · `Outcome::Abstained` has exactly SIX construction sites and EVERY one is in a test module
+  #     (score.rs:628, :717; trap_gate.rs:450, :508, :652, :658). Production code constructs an
+  #     abstention NOWHERE — which is why retyping it is cheap today and will not be after 5.5;
+  #   · `Expectation::MustAbstain` has THREE committed occurrences (example.toml:44,
+  #     hostname-absence.toml:47, shared-hardware-vm.toml:46) and keeps `AbstentionCause`. A diff
+  #     touching one is a mistake, not a consequence;
+  #   · `page.rs:112-119`'s `cause_label` match is exhaustive with NO `_` arm and `locales/app.yml`
+  #     carries exactly three `cause.*` keys — which is what makes AC4's mutation (add a variant to
+  #     the reconciliation enum → error[E0004]) a real red rather than a story;
+  #   · `crates/opencmdb-core/src/identity/` DOES NOT EXIST. This story creates the subtree the
+  #     architecture's source tree has described since planning (architecture.md:3365-3373).
+  # DECISIONS taken at contexting, so they are not re-litigated at review: name
+  # `IdentityAbstentionCause` (NOT `AbstentionCause` — lib.rs:38 re-exports the reconciliation type
+  # FLAT at the crate root, so a homonym is error[E0252]); location `identity/cascade.rs`
+  # (architecture.md:3369); exactly TWO variants, `Ambiguous` and `AbsenceOfProof`, each traced to a
+  # ROW of D13's table (architecture.md:969-974), a third is a FINDING; NO serde, NO `Ord`, NO
+  # `Display`, NO `#[non_exhaustive]` (the last would force a `_` arm downstream and destroy the
+  # E0004 mechanism AC4 rests on); NO `From` bridge between the two cause types.
+  # The register: the story-4.6a bullet (deferred-work.md:160-167) is CLOSED by this story; the two
+  # `NoMatch` bullets (:217-224, :287-291) are annotated PARTLY closed only — the mapping has no
+  # producer until 5.4/5.5, and striking them would be the over-claim the reviews keep catching.
+  # VALIDATED 2026-07-28 by two fresh-context agents (fact-check + gap-hunt), 28 findings applied.
+  # The two that would have broken the build: BOTH import instructions were inverted —
+  # trap_gate.rs:389 must be REPLACED (zero uses remain after the retype → unused_imports under
+  # -D warnings), and score.rs:34 must be replaced AND re-added inside `mod tests`, because a
+  # SEVENTH `MustAbstain` site (score.rs:608, `fn must_abstain()`) still needs it while CI's clippy
+  # compiles the lib without cfg(test). Also: AC5's "SOLE red" was unsatisfiable (M2/M3 red five or
+  # more tests each — the story now requires the complete OBSERVED set), `all()` as specified was
+  # not implementable, and AC1's naming evidence cited a co-presence that does not exist in
+  # trap_gate.rs. Scope confirmed correct: nothing squatted from 5.4/5.5/5.9/5.14.
+  #
+  # 5.3 IMPLEMENTED 2026-07-28 → review (branch `story-5.3-engine-abstention-cause`).
+  # In the weaker true sentence: `Outcome::Abstained` carries `IdentityAbstentionCause`
+  # (`identity/cascade.rs`, variants `Ambiguous` and `AbsenceOfProof`, each traced to a D13 row);
+  # four tests pin its claims; nothing compares the two abstention vocabularies and a test says so;
+  # NO engine produces one yet — no cascade, no rule, no `Decision`, no join. `Expectation::
+  # MustAbstain` and `gap::AbstentionCause` are unchanged in substance (two doc-only edits) and NO
+  # byte moved under fixtures/ (`git status fixtures/` and `MANIFEST.toml` both verified empty).
+  # 263 → 267 tests (135 bin + 90 core + 42 xtask); all four gates green INCLUDING the CI form of
+  # clippy (no `--all-targets`), which is the only one that catches an import kept alive by a test
+  # module. `cargo doc` was also run — its three warnings are all pre-existing, so none of the new
+  # full-path doc links is broken.
+  # SEVEN mutations run, not the five specified. The two additions are the point:
+  #   · `all()`'s doc asserts TWO mechanisms (E0004 on a new variant, E0308 on a widened literal)
+  #     and the five specified mutations could only measure the first. M1b and M1c measure both,
+  #     rather than shipping half a doc sentence as a prediction;
+  #   · M1 does NOT behave as the story predicted, and that is recorded, not smoothed: deleting a
+  #     variant gives `E0599`, never the predicted `E0308`, and `trap_gate.rs`'s four sites never
+  #     red at all because opencmdb-core fails to compile first, so opencmdb-bin is never compiled;
+  #   · M2 reds EIGHT tests, not the seven predicted — the story missed
+  #     `scoring_ignores_the_rule_because_the_trap_runner_owns_it`, whose last assertion IS that
+  #     cell. M3's five-red set matched the prediction exactly.
+  # M4 is AC4's evidence and was measured on both sides: adding `Ambiguous` to `gap::AbstentionCause`
+  # gives exactly ONE `error[E0004]` at `page.rs:114:11` — and under that mutation core still reports
+  # 90 passed and xtask 42, so the cost of widening is precisely a label plus two locale strings for
+  # a variant `reconcile` can never produce.
+  # ONE count in the story's own Dev Notes is falsified by this story's commit and is corrected in
+  # the Completion Notes rather than left standing: `Outcome::Abstained` now has NINE construction
+  # sites, not six (three were added by the new test loops). ALL NINE are still in test modules —
+  # M5 measured that independently: reverting the field type broke only the `lib test` target.
+  # REGISTER: the story-4.6a bullet is CLOSED by append-and-strike, naming the branch taken and the
+  # two tests that hold it — and correcting, in the closure note, its own sentence claiming a
+  # different outcome-side type "would make comparison asymmetric" (there is no comparison). The two
+  # `NoMatch` bullets are annotated ↺ PARTLY closed, NOT struck: the vocabulary exists, the mapping
+  # has no producer until 5.4/5.5. A new `## Deferred from: story-5.3` section appended at the END
+  # (the file is chronological) opens FIVE items. THREE name a story (5.9, 5.14 twice); the other
+  # two name the condition that would produce an owner rather than a person — `Owner: nobody` for
+  # the `#[non_exhaustive]` refusal, which is a decision recorded so it is not re-litigated, and
+  # `Owner: whoever needs the comparison` for the absent `From` bridge. The register's own idiom
+  # allows both. (This line read "each with a named owner" until the code review counted them.)
+  # PUSHED 2026-07-28: PR #48, CI GREEN in 1m00s (run 30389174367). NOT merged — `done` is the
+  # MERGE's business and `code-review` comes first.
+  #
+  # CODE REVIEW HELD 2026-07-29 — three parallel layers, 1 decision + 18 patches + 6 defers + 1
+  # orchestration defect of the reviewer's own. NO behavioural defect in any layer; the code was
+  # sound. What fell is documentation truth, in a story built to guard it. The Acceptance Auditor
+  # reproduced SIX of the seven mutations and NOT ONE observed red set differed from the record —
+  # including both places where the spec's own predictions were wrong.
+  #   · THE DECISION: `all()`'s witness stops the build on a new variant (`error[E0004]`) but does
+  #     NOT force the variant into the list. MEASURED by running the lazy repair — a bare match arm
+  #     leaves `all()` returning 2 of 3 with 90 tests GREEN. Guy's call: keep the mechanism, state
+  #     its limit truthfully, register the residue (owner 5.14). Two closures were BUILT and
+  #     MEASURED before deciding and both rejected: an `ordinal()` witness is GREEN with the variant
+  #     missing (91 passed — it closes nothing, and it was the reviewer's own first recommendation,
+  #     withdrawn on measurement not on argument); a single-source `macro_rules!` works but violates
+  #     AC1's literal `[Self; 2]` return type AND makes adding a variant frictionless, which is what
+  #     AC1b calls a FINDING. `strum` refused as disproportionate for a two-variant enum (D47).
+  #   · ALL THREE LAYERS CONVERGED on a false row count in the enum's own guard paragraph — "the
+  #     four D13 rows that produce none" when it is TWO — inherited from an AC1b that contradicts
+  #     itself four lines apart ("the OTHER two rows" vs "the four-row remainder"). The dev copied
+  #     the wrong half instead of raising it as a finding, which the story preamble invites.
+  #   · A re-count the story PRE-NAMED and then skipped: `Expectation::MustAbstain` went from SEVEN
+  #     construction sites to EIGHT, the eighth being this story's own new test.
+  #   · AC1's `Given` ("which `reconcile` matches exhaustively") is refuted by the story's own M4 —
+  #     `reconcile` only CONSTRUCTS a cause; the sole value-level match is `page.rs`'s `cause_label`.
+  #     Traced back to the story-4.6a register bullet, now struck there together with a SECOND false
+  #     clause the first closure had announced but never struck.
+  #   · The cross-vocabulary test covered 2 of 6 pairs while its name states the general claim —
+  #     widened to all six and RE-PROVEN red under M2.
+  # ⚠️ REVIEWER'S OWN DEFECT, recorded: two layers with write access ran against ONE working tree,
+  # and the Edge Case Hunter observed another agent's M3 mid-pass. Nothing was corrupted (tree
+  # verified clean, md5 stable, 267 green) but the next multi-layer review gives each writing layer
+  # its own git worktree.
+  # Test count UNCHANGED at 267 (135 + 90 + 42) — the widened test is still one test, so the number
+  # says nothing about the patches; the re-run red set does. `CLAUDE.md`'s Epic 5 line, stale since
+  # 5.2/5.2b merged, was fixed here rather than deferred.
+  # ⚠️ NEXT: push the patches → green CI → squash merge. `done` is the MERGE's business, and this
+  # workflow's own default of setting `done` at the end of a review is WRONG for this project.
+  5-3-engine-abstention-cause: review
   5-4-decision-and-ruleset-version: backlog
   5-5-l1-join-pure: backlog
   5-6-blocker-and-recall-assertion: backlog

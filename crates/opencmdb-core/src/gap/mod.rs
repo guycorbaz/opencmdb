@@ -22,6 +22,29 @@ pub struct Gap {
 }
 
 /// Why the engine did not conclude. Never a guess, never a merge — reach, not debt (FR16b).
+///
+/// # This is the RECONCILIATION vocabulary; the identity cascade has its own
+///
+/// These three causes answer *why comparing a declared field against observations did not
+/// conclude*. The identity cascade answers a different question — why a VERDICT SET did not
+/// conclude — and since story 5.3 it names its own causes,
+/// [`crate::identity::cascade::IdentityAbstentionCause`]. In the trap corpus this type lives on
+/// the **expectation** side ([`crate::trap::Expectation::MustAbstain`], written by the trap's
+/// author and frozen into the truth format by story 4.2); the cascade's type lives on the
+/// **outcome** side ([`crate::score::Outcome::Abstained`]).
+///
+/// The asymmetry cannot make the release gate asymmetric, and the reason is a mechanism rather
+/// than a promise: [`crate::score::score`]'s 3×3 matches `Outcome::Abstained { .. }` and cannot
+/// reach the payload, and [`crate::score::run_trap`] compares rules only where both sides are
+/// `Some`, which an abstention never is. Nothing compares the two vocabularies, and a test in
+/// `score`'s module says so.
+///
+/// Widening this enum is not free, and the cost falls hardest on a variant [`reconcile`] cannot
+/// produce. The three below are all produced here and all earn their label; adding the cascade's
+/// `Ambiguous` — the case story 5.3 weighed — would add one the corpus format can express, that
+/// `cause_label` must label and that two locales must translate, for something no code path here
+/// ever returns. Measured: adding it yields exactly one `error[E0004]`, in `page.rs`'s
+/// `cause_label`, and breaks nothing else in the workspace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum AbstentionCause {
     /// An observation that is not the perimeter entity (e.g. an undocumented device).
