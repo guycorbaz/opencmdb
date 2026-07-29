@@ -583,6 +583,269 @@ specification. This story's docs may **name** the gap; they must not pre-impleme
       false; honouring it is on the author). Branch `story-5.4-decision-and-ruleset-version`. **The
       story ends at status `review` with the PR open and CI green.** The merge is a separate act.
 
+### Review Findings (AI, 2026-07-29)
+
+_Three parallel layers, each in its own context — Blind Hunter (diff only, no spec, no repo), Edge
+Case Hunter (diff + repo, no spec), Acceptance Auditor (diff + spec + repo). No layer failed._
+
+**What the review did NOT find, stated first because it is the story's own stated failure mode:**
+the SCOPE held. Two layers independently grepped for `fn decide` / `fn combine` / `fn conclude` /
+`-> Decision` and found nothing; `VerdictVectorEntry` is untouched and still uninhabited,
+`ScoredRecord` untouched, `trap.rs:38` byte-unchanged, `fixtures/`, `xtask/`, `opencmdb-bin/` and
+`Cargo.lock` untouched. **All eight gates re-run independently and green** (271 = 135 + 94 + 42,
+both clippy forms, `xtask ci`, `fmt`, `git status fixtures/` empty). Every one of the four mutation
+records re-derives arithmetically against the tree — **no under-reporting of a red set was found**,
+which is the defect class the last three reviews caught.
+
+⚠️ **The residue is almost entirely COUNTS AND CITATIONS in the prose this story wrote** — the same
+class as 5.2b's and 5.3's, one level deeper. Two of them the story predicted about itself and then
+committed anyway.
+
+**Three findings were REFUTED by measurement and dropped**, recorded so they are not re-raised:
+*"five sha256-locked trap files is unevidenced"* (measured: `grep -rlP 'rule\s*=\s*"l2-' fixtures/`
+returns exactly **five** files, of ten — the claim is true) · *"no `#[must_use]` on the two new
+methods"* (the workspace carries one `must_use` in total, in `main.rs`; adding it here would be the
+deviation) · *"M1's record names two of five `E0560` sites"* (Task 7's own instruction is *"quote the
+first error and the site count"*, and it was followed).
+
+#### Decision needed — BOTH RESOLVED 2026-07-29 (Guy)
+
+**Both calls land the same way, and the shared reason is worth stating once: `epics.md` stays
+UNTOUCHED.** AC8 says an edit there is a finding rather than a task, and both of these are questions
+about a story that has not been contexted yet. Writing 5.4b's acceptance criteria from inside 5.4
+would be the same act 5.4 refused when it declined to write `decide()` — arbitrating, in a story
+whose ACs never asked the question, something that was deliberately split out so it would be visible.
+Both therefore become RECORDS, not edits: the measurement and the hand-off go in the Completion Notes
+and in the register, where 5.4b's contexting will meet them.
+
+- [x] [Review][Decision] **RESOLVED — record only.** The `f64` token is measured and recorded; the
+      gate's design (whether it strips `///`/`//!` lines) is 5.4b's to decide at contexting, next to
+      the table it ships with. No code moves, no AC is written in advance.
+      ~~This commit introduces the workspace's FIRST `f64` token, in a doc
+      comment, in exactly the subtree story 5.4b's gate is specified to grep** — Measured:
+      `grep -rn "\bf32\b\|\bf64\b" crates xtask --include=*.rs` returns **one** line on this branch
+      and **zero** on `master`. It is `cascade.rs:42`, quoting D13's own *"REFUSED:
+      `rule -> confidence: f64`"*. AC3 is NOT violated — no type carries a float — but `epics.md`'s
+      new 5.4b AC says *"a gate reds on any `f32` or `f64` under
+      `crates/opencmdb-core/src/identity/`, in the idiom of the existing DDL-collation and
+      retired-vocabulary greps"*, and the DDL/retired-vocabulary greps are line greps. 5.4b's gate
+      would red on day one, on a quotation of the decision that forbids floats. The Completion Notes
+      re-measure four other numbers and not this one. Options: (a) record it in the Completion Notes
+      and as a note on 5.4b, leaving the gate's design to 5.4b's contexting; (b) also amend 5.4b's
+      AC now to say the gate strips `///`/`//!` lines; (c) reword `cascade.rs:42` to avoid the
+      token.~~ **(a) chosen.**
+      *(Raised by the Acceptance Auditor; verified independently.)*
+- [x] [Review][Decision] **RESOLVED — record the hand-off, do not pre-write the AC.** The gap
+      between the owner and the spec is real and is written down in both the Completion Notes and the
+      register, so 5.4b's contexting finds the invariant laid in front of it — which is where the
+      D13 fork is arbitrated with Guy anyway.
+      ~~Story 5.4b is named owner of the conclusion↔`verdict_vector` coherence
+      invariant in THREE places, and the 5.4b acceptance criteria this same commit wrote never
+      mention it** — Owner assigned at `cascade.rs`'s `Decision` doc (*"# What is representable and
+      not refused"*), at `deferred-work.md:1126-1131`, and in `sprint-status.yaml`. `epics.md`'s new
+      `### Story 5.4b` block carries six criteria (total `decide`, the uncovered class,
+      order-independent rule choice, the float gate, the milli-units deferral, totality by
+      exhaustive classes) and **none** covers *"a `Conclusion`'s rule must appear in its own
+      `verdict_vector`"* or *"a `Match` may not carry an empty vector"*. Related, same block: the ACs
+      never state what `decide` RETURNS (a `Conclusion`? a `Decision`? a `Decision` minus its
+      version?) nor who supplies `ruleset_version`. Options: (a) add the `Given/When/Then` to 5.4b
+      now; (b) leave it to 5.4b's contexting and record the hand-off; (c) move the owner
+      elsewhere.~~ **(b) chosen.**
+      *(Raised by the Blind Hunter with no access to `epics.md`'s history.)*
+
+**Both resolutions add a patch each** (a Completion-Notes measurement and a register note); they are
+the last two items of the patch list below.
+
+#### Patch — ALL 22 APPLIED 2026-07-29
+
+_Gate re-run WHOLE after the last edit, not per-patch: `cargo fmt --all --check` clean ·
+`cargo clippy --workspace --locked --all-targets -- -D warnings` clean · **`cargo clippy --workspace
+--locked -- -D warnings` clean** (the CI form) · `cargo test --workspace --locked` → **135 + 94 + 42
+= 271, zero failures** (unchanged: the review added one assertion to an existing test, not a test) ·
+`cargo xtask ci` → five gates green, `ℹ views-hash STALE` exit 0, **not regenerated** ·
+`git status --porcelain fixtures/` **empty** · `cargo doc --workspace --no-deps` → **the same three
+pre-existing warnings** (`ing`, `comparable_fields`, `ScoredRecord`), so none of the review's new
+intra-doc links is broken._
+
+⚠️ **The review's own patches falsified a count the story had measured, and it was re-measured rather
+than carried:** `cascade.rs` is now **690 lines, first `#[cfg(test)]` at `:457` → 456 CODE lines**
+(was 660 / `:445` / 444). Ceiling 2000; `file-size` reports 22 files under, largest 884. Applying
+the fix for "a count in a doc is a claim" while breaking a count would have been the joke this
+project keeps almost telling.
+
+**One patch went beyond a doc edit and is named so it is not mistaken for one:** the vector test's
+message claimed *"the three lists are distinct"* while asserting nothing of the kind, and the fix
+ADDS the pairwise-distinctness assertion rather than deleting the clause — because distinctness is
+exactly what stops that test passing on three identical evidence lists, the vacuous shape Task 6
+banned when it refused `Uuid::nil()` three times. Everything else is prose, docs and register.
+
+- [x] [Review][Patch] **HIGH — "TWO of the four reds are COMPILER-carried … M1 and M2 are not" is
+      false; M1 is compiler-carried, so THREE of four are** [`sprint-status.yaml:610`,
+      `5-4-decision-and-ruleset-version.md:891-894`] — M1 (delete `ruleset_version`) produced **six
+      compile errors and zero executed assertions**: five `E0560` at construction sites — the exact
+      class the same sentence labels compiler-carried for M4 — plus one `E0609`. The record
+      contradicts itself six lines earlier, where M2 is already called *"the only one of the four
+      that reds an assertion rather than a name"*. True statement: *"three of the four reds are
+      compiler-carried (M1 and M4 construction-site errors, M3 a spelling error); only M2 reds an
+      assertion."* **Two layers measured this independently.** This is the over-claim class the story
+      itself inherited as lesson #5 — and it makes the story's *"M1 and M2 are the two that are
+      not"* the second consecutive completion record to overstate its own guards.
+- [x] [Review][Patch] **HIGH — every line citation into `deferred-work.md` written by this commit
+      uses PRE-commit numbering, and this commit shifts them by +21** [`deferred-work.md:1178`,
+      `:1195`; `sprint-status.yaml` (`:1073-1076`, twice); `5-4-…md:254`, `:729`, `:894`, `:906`] —
+      the register's hunks add 4 + 12 + 5 lines above line 1000 (`@@ -1070,13 +1091,108 @@`
+      confirms the offset). Measured on the post-commit tree: `:1025-1044` → **`:1046-1065`** ·
+      `:1067-1072` → **`:1088-1093`** · `:1045-1053` → **`:1066-1074`** · `:1073-1076` →
+      **`:1094-1101`**. As written, `:1025-1044` lands on the 5.3 section preamble and `:1067-1072`
+      on the *"two of 5.3's four tests"* entry. **Three layers converged.** This is inherited lesson
+      #1 — *"a check that its own commit falsifies"* — committed by the commit that quotes it.
+- [x] [Review][Patch] **MEDIUM — "thirteen name a story as owner" is twelve; the thirteenth names an
+      EPIC** [`deferred-work.md:1113`, `:1156`; `sprint-status.yaml:628`; `5-4-…md:315`, `:917`] —
+      counted item by item: twelve `Owner: story N`, one **`Owner: Epic 6`** (the `RuleId` entry),
+      two conditions. The preamble's own next sentence is *"what it does not allow is calling one a
+      name"*. True statement: *"Fifteen items: twelve name a story, one names an epic (Epic 6), two
+      name the CONDITION that would produce an owner."* **Two layers counted independently.**
+- [x] [Review][Patch] **MEDIUM — "plus five tests and five rewritten doc blocks"; four tests and six
+      doc locations shipped** [`sprint-status.yaml:514`] — falsified by the same file at `:592`
+      (*"Four tests pin"*) and by the doc-location count of six. This is the residue of the very
+      *"2/4/5 doc blocks and 4/5 tests"* counting defect the same block records the validation agents
+      as having caught: the correction reached the implementation record and not the summary above
+      it. **Two layers.**
+- [x] [Review][Patch] **MEDIUM — "Folded into the existing entry at `:1025-1044` rather than
+      duplicated" — nothing was folded** [`deferred-work.md:1178`] — the register's four hunks are at
+      243, 310, 339 and 1091; the target entry (post-commit `:1046-1065`) is byte-untouched, and the
+      `Verdict::all()` item is a standalone bullet counted among the fifteen, i.e. duplicated. Fix:
+      append the M3 re-measurement to `:1046-1065` and reword this bullet as a cross-reference, or
+      say the fold was traded for a cross-reference and why. **Two layers.**
+- [x] [Review][Patch] **MEDIUM — the `#[non_exhaustive]` rationale states a consequence that does not
+      hold** [`cascade.rs:60-64`, and AC1's own binding text at `5-4-…md:81-85`] — the comment says
+      it *"would force a `_` arm downstream and destroy the `error[E0004]` that makes a sixth variant
+      break **story 5.4b's table**"*. `#[non_exhaustive]` only forces a wildcard arm in **downstream
+      crates**; 5.4b's table lives in `identity/` — the same crate as `Verdict` — so its match would
+      stay exhaustive and its `E0004` would survive. The true, narrower loss is `E0004` for matches
+      in `opencmdb-bin`. *"Prefer the weaker true sentence"* applies to the second half of that
+      comment, and to AC1's *"`Verdict` is the type where that matters most"*.
+- [x] [Review][Patch] **MEDIUM — the four-name table omits the owner column AC5 binds, and its
+      heading is false of two of its four rows** [`cascade.rs:15-22`] — AC5: *"a table naming all
+      four, one line each, saying whose judgement it is **and which story owns it**"*. Shipped
+      columns: `type | whose judgement | of what | variants`. The story's own Dev Notes table
+      (`5-4-…md:652-657`) HAS the owner column, so the shipped table is a narrowing. Separately, the
+      heading *"Four types say \"verdict\""* is untrue of `Conclusion` and `Outcome`, while
+      `RuleVerdict` and `crate::score::VerdictVectorEntry` — which do carry the word, and are both
+      named elsewhere in this same file — are absent from the table. Fix: add the owner column
+      (`this story` / `this story` / `4.6a` / `4.7a`) and retitle to what the table is.
+- [x] [Review][Patch] **MEDIUM — the `Verdict` ↔ `TrapVerdict` cross-reference is one-way**
+      [`cascade.rs:33-65`] — AC5 requires the `TrapVerdict` doc to point at `Verdict` by full path
+      *"and vice versa"*; Task 5's last bullet says *"Reciprocal in `Verdict`'s own doc"*. The
+      `score.rs` side WAS delivered (`score.rs:203-205`). `grep -n "TrapVerdict"
+      crates/opencmdb-core/src/identity/cascade.rs` returns **one line, `:22`** — the module-doc
+      table. `Verdict`'s own item doc never names it. Fix: one sentence in `Verdict`'s doc pointing
+      at `` [`crate::score::TrapVerdict`] `` by full path.
+- [x] [Review][Patch] **MEDIUM — Task 6 says it closes the test-placement register entry; the entry
+      is byte-untouched and still names an open owner** [`deferred-work.md:1075-1080`] — Task 6:
+      *"This closes `deferred-work.md:1054-1059`."* The entry (now `:1075-1080`) still reads *"Owner:
+      whoever next adds a test to `cascade.rs` — decide the convention once, in one place"*, and
+      AC7's enumeration of register edits does not list it. **The convention WAS written**
+      (`cascade.rs:426-444`) and it does resolve both named cases, so AC6's substance is met — what
+      is missing is the closure, and the AC6/AC7 conflict itself is unrecorded. Fix: append `✅
+      **CLOSED by story 5.4**` pointing at the test-module doc, or state in the Completion Notes why
+      AC7 deliberately excluded it.
+- [x] [Review][Patch] **MEDIUM — "the architecture requires evidence in four places" vs "the five
+      lines that mention the identity link's evidence", both written by this commit**
+      [`deferred-work.md:317` vs `:1115-1118`] — the enumerated citations are five (`:978`, `:1015`,
+      `:1032`, `:1309`, `:3378`), and `sprint-status.yaml` also says five. `four` is the outlier.
+- [x] [Review][Patch] **MEDIUM — *"`:319-327` was re-read after the insertion"* cites the
+      PRE-insertion range** [`sprint-status.yaml:625`, `5-4-…md:912`] — post-commit, 5.3's annotation
+      with its *"the entry BELOW"* / *"the firing-rule/evidence entry above it"* sits at
+      **`:335-343`**; `:319-327` now contains neither phrase. **The ordering claim itself is
+      correct** on the post-commit tree (5.4 annotation → firing-rule entry → 5.3 annotation →
+      `NoMatch` entry, `:311-353`) — only the coordinates are stale, which is the same +21 shift as
+      the HIGH above.
+- [x] [Review][Patch] **MEDIUM — a `verdict_vector` carrying the SAME `RuleId` twice, and an
+      `Abstained { Ambiguous }` with an EMPTY vector, are representable, unenforced and registered
+      nowhere** [`cascade.rs:287-295`] — D13 is *"all rules are evaluated … **each** yields an
+      enumerated verdict"* [architecture.md:960]; a vector with `l1-exact-mac → Supports` and
+      `l1-exact-mac → Opposes` compiles and fabricates D13's *"`Supports` AND `Opposes`"* row from
+      one rule. The register owns the NEIGHBOURING states (`:1126-1131` conclusion-names-an-absent-rule
+      and `Match`-with-empty-vector, owner 5.4b; `:1121-1125` empty evidence, owner 5.5) and is
+      silent on these two. Fix: one register item, owner **5.4b** by the same argument as its
+      sibling — the vector and the conclusion are first built together by `decide`.
+- [x] [Review][Patch] **MEDIUM — `the_verdict_vector_carries_the_whole_triple_in_order`'s doc asserts
+      a property its assertions cannot discriminate** [`cascade.rs:610-613`] — the doc says the
+      triple *"survives the trip in full … order preserved"*. There is no trip: the value is
+      `clone()`d into the literal and compared with itself. **MEASURED** — replacing `RuleVerdict`'s
+      derived `PartialEq` with `fn eq(&self, _: &Self) -> bool { true }` leaves `94 passed; 0
+      failed`. `sprint-status.yaml:612-614` concedes the gap honestly, so this is not an unrecorded
+      over-claim — but the test's OWN doc does not, and the doc is what a reader meets. Fix: the
+      weaker true sentence — *"pins the SHAPE against a field removal or a type change, not a
+      behaviour; nothing transports the triple yet."* (For contrast, the same layer verified the
+      other three tests are genuine: shortening `all()`'s literal with the length preserved reds
+      `the_five_verdicts_of_d13_are_present`, and M2 reds the other two.) **Two layers.**
+- [x] [Review][Patch] **LOW — an assertion message names a property the assertion does not check**
+      [`cascade.rs`, the vector test] — `assert_eq!(decision.verdict_vector[2].evidence, …, "each
+      entry keeps its own evidence, **and the three lists are distinct**")` inspects entry `[2]`
+      only. Drop the second clause or add the comparison it names.
+- [x] [Review][Patch] **LOW — M1's recorded error sites are MUTATED-tree coordinates presented as
+      file locations** [`5-4-…md:871`, `sprint-status.yaml:600`] — the record says `cascade.rs:528`,
+      `:541`, `E0609` at `:653:22`; on the committed tree `:528` is a closing brace and `:653` is
+      `};`. The real construction sites are `:530`, `:543`, `:555`, `:600`, `:637` and the read is
+      `:655`. The numbers are internally consistent (a two-line field+doc deletion), so this is a
+      labelling fix, not a wrong measurement: say *"on the mutated tree"*.
+- [x] [Review][Patch] **LOW — `~~strikethrough~~` now carries two incompatible meanings in the
+      register, and the convention is documented in the wrong file** [`deferred-work.md`, hunks at
+      243/339 vs 1091] — at `:1094` it marks a CLOSED entry; at `:244` and `:339` it strikes only the
+      owner clause **inside entries that declare themselves unstruck two lines later**. A reader of
+      the register alone sees struck text in an entry saying *"Still not struck."* The convention is
+      stated only in `sprint-status.yaml`. Fix: one line in the register's own preamble. *(Minor,
+      same hunks: the strike at `:339` swallows the sentence's terminating period.)*
+- [x] [Review][Patch] **LOW — a stale `NEXT` survives in `sprint-status.yaml`, contradicted by the
+      same file's `last_updated`** [`sprint-status.yaml`, the comment above `5-3-…: done`] — it still
+      reads *"NEXT = `create-story` 5.4 … then its MANDATORY validation pass"*, forty lines above a
+      block recording 5.4 as contexted, validated, implemented and in `review`.
+- [x] [Review][Patch] **LOW — AC7's "one appended line each" landed on the 5.3 ANNOTATION bullets,
+      not on the two `NoMatch` entries** [`deferred-work.md:244-252`, `:335-348`] — AC7 and Task 8
+      name them as two separate acts (append the fork line to each entry; strike the owner string in
+      the annotation). Both landed in the annotations. The required content is present and adjacent
+      and neither entry is struck, so **no over-claim results** — fix by appending the fork line to
+      `:253-260` and `:349-353`, or by recording the deliberate consolidation.
+- [x] [Review][Patch] **LOW — the AC7 closure attributes to AC8 a clause AC8 does not contain**
+      [`deferred-work.md:1094-1101`] — it reads *"Its AC8 requires \"branch → PR → green CI…\" and
+      **says in the same clause** that the merge is a separate act"*. The quoted text is SILENT about
+      the merge; being silent is what resolves the contradiction. Also: the struck entry demanded
+      *"whoever writes 5.4's **AC7**"* and the closure answers with **AC8**, unremarked. Fix: *"Its
+      AC8 stops at the open PR and says nothing about the merge, so the two halves no longer
+      contradict."*
+- [x] [Review][Patch] **LOW — "exactly as the validation agent measured" — the agent measured two
+      `E0599` sites, this story measured three** [`sprint-status.yaml`, the M3 record] — three is
+      CORRECT (the third site is the test this story added), and the error KIND is what the agent
+      established. Fix: *"the same error kind the validation agent measured; three sites rather than
+      two, because this story adds the third reference."*
+
+- [x] [Review][Patch] **From D1 — record the `f64` measurement** [Completion Notes;
+      `deferred-work.md`] — add to the Completion Notes' re-measured counts: *"⚠️ This commit
+      introduces the workspace's FIRST `f64` token — `cascade.rs:42`, a CITATION of D13's own
+      refusal. Measured: `grep -rn "\bf32\b\|\bf64\b" crates xtask --include=*.rs` → **1** on this
+      branch, **0** on `master`. No TYPE carries a float, so AC3 holds; story 5.4b's gate will have
+      to decide whether it strips `///`/`//!` lines, and this line is its committed test case."*
+      Plus a one-line note against 5.4b in the register. **`epics.md` is not edited.**
+- [x] [Review][Patch] **From D2 — record the 5.4b owner/spec hand-off** [Completion Notes;
+      `deferred-work.md`] — state that three documents name 5.4b owner of the
+      conclusion↔`verdict_vector` invariant while `epics.md`'s six 5.4b criteria cover neither it nor
+      what `decide` RETURNS, and that this is handed to 5.4b's contexting deliberately rather than
+      pre-written here. **`epics.md` is not edited.**
+
+#### Deferred
+
+- [x] [Review][Defer] **The four new tests normalise the exact state story 5.4b is chartered to
+      refuse** [`cascade.rs`, `a_decision_names_a_rule_and_an_abstention_does_not` and
+      `the_conclusion_mirrors_the_outcomes_rule_shape`] — six `Decision` literals build
+      `Conclusion::Match { rule }` / `NoMatch { rule }` with `verdict_vector: Vec::new()`, which is
+      precisely the *"merged, with no explanation"* shape `Decision`'s own doc and
+      `deferred-work.md:1126-1131` call the thing D13 exists to prevent. **Nothing is wrong today** —
+      there is no constructor and no enforcement — but every one of those literals must be rewritten
+      the day 5.4b enforces the invariant it is named owner of. Deferred, owner **5.4b**, so it is
+      not discovered as a surprise. *(Raised by the Blind Hunter.)*
+
 ## Dev Notes
 
 ### What was measured, before the story was written
@@ -852,7 +1115,10 @@ No byte moved under `fixtures/` (`git status fixtures/` and `MANIFEST.toml` both
 
 - **267 → 271 tests: 135 bin + 94 core + 42 xtask**, zero failures. Only `core` moved, by the four
   new tests, as predicted.
-- `cascade.rs`: **660 lines total, first `#[cfg(test)]` at `:445` → 444 CODE lines**, ceiling 2000.
+- `cascade.rs`: **690 lines total, first `#[cfg(test)]` at `:457` → 456 CODE lines**, ceiling 2000.
+  *(660 / `:445` / 444 at the end of dev-story; the code review's doc patches added 12 code lines.
+  Re-measured after the last review edit rather than carried — this story's own inherited lesson #3
+  applied to the review that enforces it.)*
   The `file-size` gate reports 22 files under the ceiling, largest 884.
 - `cargo doc --workspace --no-deps` → **3 warnings, the same three that were pre-existing** (`ing`,
   `comparable_fields`, `ScoredRecord`). None of the many new full-path intra-doc links is broken.
@@ -888,12 +1154,31 @@ five gates green, `ℹ views-hash STALE` exit 0 (expected, GitHub issue #50, **n
   `warning: unused import: crate::observation::ObsId` at `:30:5` — under the CI form of clippy that
   warning is a hard error, so the `evidence` field is what keeps that import live in the lib build.
 
-⚠️ **Two of the four reds are carried by the COMPILER, not by an assertion, and the record says so**
-rather than claiming the residue closed. M3's red is a spelling error and M4's a construction-site
-error — both would fire identically on a test body of `assert_eq!(1, 1)`. M1 and M2 are the two that
-are not. `deferred-work.md:1045-1053`'s owner **stays 5.5**; this story does not close it, and
-`the_verdict_vector_carries_the_whole_triple_in_order` has **no possible behavioural mutation** —
-a `pub` field has no code to break.
+⚠️ **THREE of the four reds are carried by the COMPILER, not by an assertion — corrected at code
+review, and the correction makes this record weaker and true.** M1's and M4's reds are
+construction-site errors and M3's is a spelling error; **all three would fire identically on a test
+body of `assert_eq!(1, 1)`. Only M2 reds an assertion.** *(This paragraph said "two … M1 and M2 are
+the two that are not", which contradicted the M2 bullet above — the bullet already called M2 "the
+only one of the four that reds an assertion rather than a name". Two review layers measured M1
+independently: six compile errors, **zero tests executed, zero assertions evaluated**, which is the
+exact class this same sentence assigned to M4. Deleting a field breaks its construction sites
+whatever the test body says; that is what "compiler-carried" means, and M1 is not exempt because the
+field it deletes is the one AC3 cares about.)* The *"two of story 5.3's four new tests are carried by
+the type system"* entry keeps owner **5.5**; this story does not close it, and
+`the_verdict_vector_carries_the_whole_triple_in_order` has **no possible behavioural mutation** — a
+`pub` field has no code to break. **Measured at review**: replacing `RuleVerdict`'s derived
+`PartialEq` with a total `fn eq(&self, _: &Self) -> bool { true }` leaves the crate green, so that
+test pins a SHAPE and no behaviour. Its doc comment now says exactly that.
+
+⚠️ **This commit introduces the workspace's FIRST `f32`/`f64` token.** Measured at review:
+`grep -rn "\bf32\b\|\bf64\b" crates xtask --include=*.rs` → **1** on this branch, **0** on `master`.
+The hit is `identity/cascade.rs:42`, a **quotation** of D13's own refusal (*"REFUSED: `rule ->
+confidence: f64`"*). **No TYPE carries a float, so AC3 holds** — but it sits in exactly the subtree
+story 5.4b's gate is specified to grep, and that gate as written in `epics.md` is a line grep, so it
+would red on day one on a citation of the decision it enforces. **Guy's call, 2026-07-29: record it,
+do not pre-write 5.4b's AC** — whether the gate strips `///`/`//!` lines is a design question for the
+story that writes the gate. Registered; `epics.md` was NOT edited. This is the fifth number
+re-measured on the final tree and the only one the story's own Completion Notes had missed.
 
 **Six doc locations changed, five of them because this story falsified them** — `cascade.rs`'s module
 doc, `identity/mod.rs:8-9`, `score.rs:46-47` (*"Not named `Decision`"* — the name is now taken),
@@ -903,25 +1188,78 @@ doc, `identity/mod.rs:8-9`, `score.rs:46-47` (*"Not named `Decision`"* — the n
 false and gained the reciprocal cross-reference. **Every one was re-read against the final tree after
 the last edit.**
 
-**The register.** `deferred-work.md:1073-1076` (*"Owner: whoever writes 5.4's AC7 — require the PR and
-stop"*) is **CLOSED by append-and-strike**, this story being the owner it names. Three entries are
-annotated `↺` and **none is struck**: the two `NoMatch` bullets, whose owner moves to **5.4b/5.5**
-(the owner string lives in 5.3's ANNOTATION bullets, so it was struck in place there and the update
-appended — nothing was rewritten), and the firing-rule/evidence contract, whose owner moves to
-**5.5**. ⚠️ The new annotation was placed **above** its target, the idiom of its two nearest
-neighbours, and **`:319-327` was re-read afterwards**: 5.3's own *"the entry BELOW"* and *"the
-firing-rule/evidence entry above it"* both still resolve — the section reads 5.4's annotation →
-firing-rule entry → 5.3's annotation → `NoMatch` entry. No amendment was needed.
+⚠️ **The cross-reference was one-way until code review, and the four-name table was a narrowing of
+the one AC5 binds.** `score.rs`'s side shipped (*"⚠️ Not `crate::identity::cascade::Verdict`"*); the
+*"and vice versa"* half did not — `Verdict`'s own item doc never named `TrapVerdict`, only the module
+table did. Both are now delivered. AC5 also binds the table to say *"which story owns it"* and the
+shipped table had four columns without an owner, while the story's own Dev Notes table has five;
+the owner column is now there. The table's heading claimed *"four types SAY verdict"*, which is
+untrue of `Conclusion` and `Outcome` while `RuleVerdict` and `score::VerdictVectorEntry` — both named
+elsewhere in the same file — do carry the word and are not rows; the heading now names what the table
+actually is, and a note says why those two are excluded.
 
-A new `## Deferred from: story-5.4` section is appended at the END (the file is chronological) with
-**fifteen items — thirteen naming a story, two naming the condition that would produce an owner**
-(`whoever writes D20's ADR`, `whoever revisits the crate's re-export policy`). The section's own
-preamble states that split rather than claiming fifteen named owners.
+⚠️ **One doc comment was FALSE and is corrected:** the `#[non_exhaustive]` rationale said the
+attribute *"would destroy the `error[E0004]` that makes a sixth variant break story 5.4b's table"*.
+It would not. `#[non_exhaustive]` is **inert within the defining crate**, and 5.4b's table lives in
+this crate; the real loss is downstream exhaustiveness in `opencmdb-bin`, and that is the whole of
+it. AC1's own binding text carries the same error (*"`Verdict` is the type where that matters
+most — 5.4b's table matches on it"*), so the spec was wrong and the code faithfully copied it. The
+weaker true sentence shipped.
+
+**The test-placement register entry is now actually CLOSED.** Task 6 asserted it (*"This closes
+`deferred-work.md:1054-1059`"*) and the entry was byte-untouched, still reading *"Owner: whoever next
+adds a test to `cascade.rs`"* — an assertion of closure with no closure behind it, which is the
+inverse of the failure that entry's own AC warns about. The convention **was** written
+(`cascade.rs`'s test-module doc) and does resolve both named cases, so AC6's substance was met; what
+was missing was the register act, and AC7's enumeration had not listed it. Closed at review, naming
+the convention and both cases it decides.
+
+**The register.** The **AC7-drafting** entry (*"Owner: whoever writes 5.4's AC7 — require the PR and
+stop"*) is **CLOSED by append-and-strike**, this story being the owner it names. ⚠️ The wording that
+answers it is this story's **AC8**, not its AC7, and the closure now says so rather than substituting
+one for the other silently; that AC8 **says nothing at all about the merge**, and the silence is what
+resolves the contradiction. Three entries are annotated `↺` and **none is struck**: the two `NoMatch`
+bullets, whose owner moves to **5.4b/5.5** (the owner string lives in 5.3's ANNOTATION bullets, so it
+was struck in place there and the update appended — nothing was rewritten), and the
+firing-rule/evidence contract, whose owner moves to **5.5**. ⚠️ The new annotation was placed
+**above** its target, the idiom of its two nearest neighbours, and 5.3's own annotation was re-read
+afterwards: its *"the entry BELOW"* and *"the firing-rule/evidence entry above it"* both still
+resolve — the section reads 5.4's annotation → firing-rule entry → 5.3's annotation → `NoMatch`
+entry. No amendment was needed. **At code review, the fork line AC7 asks for was also appended to the
+two `NoMatch` entries themselves**, which had received the annotation but not the line.
+
+⚠️ **CITATIONS — the defect this story warned itself about and committed anyway.** Every line
+citation into `deferred-work.md` written by this commit used **pre-commit** numbering, while the
+commit's own insertions shifted the file by **+21**. Three review layers converged on it, and it is
+inherited lesson #1 (*"a check that its own commit falsifies is worse than no check"*) committed by
+the commit that quotes it. Fixed by citing entries **by title**, which does not rot. Post-review
+positions, measured after the last edit: AC7-drafting closure **`:1117-1126`** · *"two of 5.3's four
+tests"* **`:1080-1088`** · `IdentityAbstentionCause::all()` residue **`:1054-1079`** ·
+test-placement convention (now CLOSED) **`:1089-1103`** · flat re-export **`:1111-1116`**. The
+pre-commit numbers still standing in the ACs and Tasks above are historical and correct **for the
+tree the story was written against**; they are not updated, because a spec is a record of what was
+specified.
+
+A new `## Deferred from: story-5.4` section is appended at the END (the file is chronological). It
+now carries **eighteen items — fifteen naming a story, ONE naming an epic (`Epic 6`), two naming the
+condition that would produce an owner** (`whoever writes D20's ADR`, `whoever revisits the crate's
+re-export policy`). *(It shipped as "fifteen items, thirteen naming a story"; the code review counted
+them bullet by bullet and found the thirteenth was `Epic 6` — an epic called a story in the very
+sentence forbidding that. The review then added three items: a `verdict_vector` carrying the same
+`RuleId` twice, the first `f64` token, and 5.4b's owner/spec gap. Both new numbers were counted
+mechanically after the last edit.)*
 
 **Two `Owner: Epic 5` entries were deliberately NOT touched**, and saying so turns silence into a
-scope statement: `:285-290` (lattice monotonicity — needs an engine producing verdicts across
-capability subsets, story 5.13) and `:336-344` (`RuleId` whitespace/case normalization in `run_trap`
-— it bites when a PRODUCER emits a `RuleId`, story 5.5).
+scope statement: lattice monotonicity (needs an engine producing verdicts across capability subsets,
+story 5.13) and `RuleId` whitespace/case normalization in `run_trap` (it bites when a PRODUCER emits
+a `RuleId`, story 5.5).
+
+⚠️ **Handed to story 5.4b's contexting, deliberately unanswered here.** Three documents name 5.4b
+owner of the conclusion↔`verdict_vector` coherence invariant (`cascade.rs`'s `Decision` doc, the
+register, `sprint-status.yaml`) while `epics.md`'s six 5.4b criteria cover neither it nor **what
+`decide` returns** nor who supplies `ruleset_version`. **Guy's call, 2026-07-29: record the hand-off,
+do not pre-write the AC** — writing 5.4b's criteria from inside 5.4 would be the same act this story
+refused when it declined to write `decide()`. `epics.md` was NOT edited.
 
 **Scope held.** No `decide()`, no table, no `xtask` gate (5.4b) · no rule, no join, no producer (5.5)
 · no `From<Decision> for Outcome`, `VerdictVectorEntry` untouched and still uninhabited (5.7) · no

@@ -503,16 +503,20 @@ development_status:
   # engine speaks its own abstention vocabulary, and NOTHING produces one yet. `done` is the MERGE's
   # business — the `code-review` workflow's default of setting it at the end of the review was again
   # not applied, as for 5.1/5.2/5.2b.
-  # NEXT = `create-story` 5.4 (`Decision` and `ruleset_version`), then its MANDATORY validation pass
-  # by two fresh-context agents before dev-story.
+  # (This entry carried a "NEXT = `create-story` 5.4" line until story 5.4's code review struck it:
+  # 5.4 has since been contexted, validated, implemented and put in `review`, so a second NEXT forty
+  # lines above the file's own `last_updated` pointed at work already done.)
   5-3-engine-abstention-cause: done
   #
   # 5.4 CONTEXTED 2026-07-29 — the engine's return type, and NO algebra: no `decide`, no rule, no
   # join, no producer. It writes FIVE types in the existing `identity/cascade.rs` — `Verdict` (D13's
   # five, spelled as architecture.md:964 spells them), `RuleVerdict { rule, verdict, evidence }`,
   # `RulesetVersion`, `Conclusion` (Match | NoMatch | Abstained, mirroring `score::Outcome`'s shape)
-  # and `Decision { conclusion, verdict_vector, ruleset_version }` — plus five tests and five
-  # rewritten doc blocks.
+  # and `Decision { conclusion, verdict_vector, ruleset_version }` — plus four tests and SIX touched
+  # doc locations, five of them rewritten because this story falsifies them.
+  # (This line read "five tests and five rewritten doc blocks" until the code review counted them —
+  # the same 4/5-tests and 2/4/5-doc-blocks counting defect the validation pass had already caught
+  # once in this file, corrected in the implementation record below and not in this summary.)
   # SIX measurements taken against master (505379e) BEFORE the story was written, so the dev
   # re-derives nothing and a surprise reads as a FINDING:
   #   · `cargo test --workspace --locked` → 135 bin + 90 core + 42 xtask = 267, zero failures;
@@ -546,8 +550,9 @@ development_status:
   # Guy's arbitration 2026-07-29: it concludes `Abstained { AbsenceOfProof }`. The arbitration
   # belongs to 5.4b (the function that must be total); 5.4 may NAME the gap and must not answer it.
   # Story 5.4 also CLOSES the register entry that named it by name: "Owner: whoever writes 5.4's AC7
-  # — require the PR and stop" (deferred-work.md:1073-1076). Its AC8 ends at the PR; the merge is a
-  # separate act.
+  # — require the PR and stop" (the AC7-drafting entry under `## Deferred from: code review of
+  # story-5.3`). Its AC8 stops at the PR and says nothing about the merge — the SILENCE is what
+  # resolves the contradiction, and the wording that answers the entry is 5.4's AC8, not its AC7.
   # VALIDATED 2026-07-29 by two fresh-context agents (fact-check + gap-hunt). Both verified against
   # the tree, and every finding they raised was checked before being applied. 6 HIGH + 8 MEDIUM from
   # the gap-hunt, 5 HIGH + 8 MEDIUM/LOW from the fact-check; all applied. What they caught:
@@ -594,21 +599,32 @@ development_status:
   # `Decision`. No byte moved under fixtures/ (verified empty, MANIFEST untouched).
   # 267 → 271 tests (135 bin + 94 core + 42 xtask); only core moved, as predicted. Both forms of
   # clippy green INCLUDING the CI form. `cargo doc` → the same THREE pre-existing warnings, so none
-  # of the new full-path links is broken. `cascade.rs` = 444 CODE lines, ceiling 2000.
+  # of the new full-path links is broken. `cascade.rs` = 456 CODE lines after the code review's doc
+  # patches (444 at the end of dev-story), ceiling 2000; re-measured, not carried.
   # FOUR mutations run:
+  # (Line numbers below are MUTATED-tree coordinates — the positions after each mutation's own
+  # deletion, which is what the compiler printed. On the committed tree the M1 construction sites are
+  # :530/:543/:555/:600/:637 and the read is :655. Labelled after the code review found `:528`
+  # presented as a file location when it is a closing brace.)
   #   · M1 (drop `ruleset_version`) → SIX errors: 5× E0560 at construction sites + 1× E0609 at
-  #     :653:22, the assertion that READS it. That is "mandatory by construction", measured;
+  #     :653:22, the read. That is "mandatory by construction", measured;
   #   · M2 (`rule()` returns None for NoMatch) → TWO failing tests, both assertion PANICS, both new.
   #     The only one of the four that reds an assertion rather than a name;
-  #   · M3 (delete `Verdict::Disqualifying`) → `error[E0599]` at THREE sites and NEVER `E0308` —
-  #     exactly as the validation agent measured by compiling the case, and NOT as the story's first
-  #     draft predicted. The prediction was corrected BEFORE dev; the measurement agrees with the
-  #     correction;
+  #   · M3 (delete `Verdict::Disqualifying`) → `error[E0599]` at THREE sites and NEVER `E0308` — the
+  #     same error KIND the validation agent measured by compiling the case, at three sites rather
+  #     than its two, because this story adds the third reference (the test that spells the variant).
+  #     NOT as the story's first draft predicted: that prediction was corrected BEFORE dev, and the
+  #     measurement agrees with the correction;
   #   · M4 (drop `evidence`) → FOUR errors (3× E0560, 1× E0609) PLUS an unpredicted side effect,
   #     recorded rather than smoothed: `warning: unused import: crate::observation::ObsId` at :30:5,
   #     which the CI form of clippy turns into a hard error. The field is what keeps that import live.
-  # ⚠️ TWO of the four reds are COMPILER-carried (M3 a spelling error, M4 a construction-site error);
-  # M1 and M2 are not. The story does NOT claim to close deferred-work.md:1045-1053 — owner stays 5.5.
+  # ⚠️ THREE of the four reds are COMPILER-carried: M1 and M4 are construction-site errors and M3 is
+  # a spelling error — all three would fire identically on a test body of `assert_eq!(1, 1)`. ONLY M2
+  # reds an assertion. (This line said "TWO … M1 and M2 are not" until story 5.4's code review, where
+  # two layers measured M1 producing six compile errors and ZERO executed assertions — the same class
+  # this very line already assigned to M4, and contradicting the M2 bullet six lines above. Correcting
+  # it makes the record weaker and true.) The story does NOT claim to close the "two of 5.3's four
+  # tests are carried by the type system" entry (deferred-work.md:1080-1088) — owner stays 5.5.
   # `the_verdict_vector_carries_the_whole_triple_in_order` has NO possible behavioural mutation: a
   # `pub` field has no code to break, and the record says so.
   # ONE count in the story's own Dev Notes is falsified by its own commit and corrected in the
@@ -618,16 +634,24 @@ development_status:
   # identity/mod.rs, score.rs's "Not named `Decision`", score.rs's VerdictVectorEntry element
   # sentence — its "uninhabited"/"provably empty" claims SURVIVE — and trap.rs's `RuleId` doc, whose
   # "Epic 5 names them" prediction the seven-corpus-rule-names measurement refutes).
-  # REGISTER: deferred-work.md:1073-1076 CLOSED by append-and-strike (this story was its named
-  # owner — its AC8 ends at the PR). THREE entries annotated ↺ and NONE struck: the two `NoMatch`
-  # bullets (owner → 5.4b/5.5, the owner string struck in place inside 5.3's annotation bullets, so
-  # no bullet was rewritten) and the firing-rule/evidence contract (owner → 5.5). The new annotation
-  # sits ABOVE its target, the idiom of its two nearest neighbours, and :319-327 was RE-READ after
-  # insertion: 5.3's own "entry BELOW"/"entry above it" both still resolve, so no amendment was
-  # needed. A new `## Deferred from: story-5.4` section appended at the END opens FIFTEEN items —
-  # THIRTEEN name a story, TWO name the CONDITION that would produce an owner (`whoever writes D20's
-  # ADR`, `whoever revisits the crate's re-export policy`), and the section's preamble states that
-  # split rather than claiming fifteen named owners.
+  # REGISTER: the AC7-drafting entry CLOSED by append-and-strike (this story was its named owner —
+  # its AC8 stops at the PR and says NOTHING about the merge, which is what resolves the
+  # contradiction). THREE entries annotated ↺ and NONE struck: the two `NoMatch` bullets (owner →
+  # 5.4b/5.5) and the firing-rule/evidence contract (owner → 5.5). The new annotation sits ABOVE its
+  # target, the idiom of its two nearest neighbours, and 5.3's own annotation was RE-READ after
+  # insertion: its "entry BELOW"/"entry above it" both still resolve, so no amendment was needed.
+  # A new `## Deferred from: story-5.4` section appended at the END (the file is chronological).
+  # ⚠️ CITATIONS: this entry cited deferred-work.md by LINE, using pre-commit numbers that the same
+  # commit shifted by +21 — found by three review layers and fixed by citing entries by TITLE, which
+  # does not rot. Post-review positions, measured after the last edit: AC7-drafting closure
+  # :1117-1126 · "two of 5.3's four tests" :1080-1088 · `IdentityAbstentionCause::all()` residue
+  # :1054-1079 · test-placement convention (now CLOSED) :1089-1103 · flat re-export :1111-1116.
+  # The section now opens EIGHTEEN items — FIFTEEN name a story, ONE names an EPIC (`Epic 6`), TWO
+  # name the CONDITION that would produce an owner (`whoever writes D20's ADR`, `whoever revisits
+  # the crate's re-export policy`). It read "FIFTEEN items, THIRTEEN name a story" until the code
+  # review counted them: the thirteenth was `Epic 6`, an epic being called a story in the sentence
+  # that forbids exactly that. The review then added three items (a duplicate-`RuleId` vector, the
+  # first `f64` token, and 5.4b's owner/spec gap), which is where eighteen comes from.
   5-4-decision-and-ruleset-version: review
   #
   # 5.4b INSERTED 2026-07-29 with Guy, at 5.4's contexting and before any Epic 5 engine code existed

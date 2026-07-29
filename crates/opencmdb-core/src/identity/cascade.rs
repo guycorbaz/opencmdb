@@ -12,14 +12,20 @@
 //! harness in Epic 4, *"a metric written after the engine is bent to fit the engine"* — and because
 //! story 4.6a recorded the abstention half of the choice as Epic 5's to make.
 //!
-//! # Four types say "verdict", and they are four different judgements
+//! # Four judgements, four types, and none of them is the others
 //!
-//! | type | whose judgement | of what | variants |
-//! |---|---|---|---|
-//! | [`Verdict`] | ONE rule | one candidate pair | 5 |
-//! | [`Conclusion`] | the CASCADE | a whole verdict set | 3 |
-//! | [`crate::score::Outcome`] | the trap harness | what something ANSWERED about a trap | 3 |
-//! | [`crate::score::TrapVerdict`] | the trap RUNNER | whether one trap passed | 3 |
+//! | type | whose judgement | of what | variants | owner |
+//! |---|---|---|---|---|
+//! | [`Verdict`] | ONE rule | one candidate pair | 5 | this file, story 5.4 |
+//! | [`Conclusion`] | the CASCADE | a whole verdict set | 3 | this file, story 5.4 |
+//! | [`crate::score::Outcome`] | the trap harness | what something ANSWERED about a trap | 3 | story 4.6a |
+//! | [`crate::score::TrapVerdict`] | the trap RUNNER | whether one trap passed | 3 | story 4.7a |
+//!
+//! ⚠️ **The table is about JUDGEMENTS, not about names.** Two types that carry the word *verdict*
+//! are deliberately not rows in it, because neither is a judgement: [`RuleVerdict`] is the
+//! `(rule, verdict, evidence)` triple — an ELEMENT that carries a [`Verdict`] — and
+//! [`crate::score::VerdictVectorEntry`] is the harness-side placeholder for that same triple,
+//! uninhabited until story 5.7 unifies the two.
 //!
 //! [`Conclusion`] and [`crate::score::Outcome`] look redundant and are not. `Outcome` is what a
 //! harness writes down about *any* answer, including a hand-authored one in a test; `Conclusion` is
@@ -35,6 +41,10 @@ use crate::trap::RuleId;
 /// D13 writes this enum out by name: `enum Verdict { Decisive, Supports, Neutral, Opposes,
 /// Disqualifying }` [architecture.md:964]. The five variants and their spelling are the
 /// architecture's, not a paraphrase.
+///
+/// ⚠️ **Not [`crate::score::TrapVerdict`]**, which is what the trap RUNNER says about one trap.
+/// This is what ONE RULE says about ONE candidate pair. The two names are four letters apart and
+/// the judgements are not comparable; the module doc above tabulates all four.
 ///
 /// # This type is the vocabulary; combining is story 5.4b's
 ///
@@ -60,9 +70,11 @@ use crate::trap::RuleId;
 /// today, which is the move that ADR exists to gate.
 // Deliberately absent, each with a reason: `Serialize`/`Deserialize` (nothing persists a verdict —
 // story 5.9 if it persists one), `PartialOrd`/`Ord` (see the doc above — D20's ADR owns it),
-// `Display` (story 5.14 renders through the `t!()` seam), and `#[non_exhaustive]` (never:
-// `opencmdb-bin` is another crate, so it would force a `_` arm downstream and destroy the
-// `error[E0004]` that makes a sixth variant break story 5.4b's table).
+// `Display` (story 5.14 renders through the `t!()` seam), and `#[non_exhaustive]` (never: it would
+// force a `_` arm in `opencmdb-bin`, which is a DIFFERENT crate, and destroy the `error[E0004]`
+// that makes a sixth variant break every match there). ⚠️ It would NOT weaken story 5.4b's table:
+// `#[non_exhaustive]` is inert within the defining crate, and 5.4b's table lives in this one. The
+// loss is downstream exhaustiveness, and that is the whole of it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
     /// This rule alone settles the pair — the strongest thing a rule may say.
@@ -607,9 +619,18 @@ mod tests {
         }
     }
 
-    /// The `(rule, verdict, evidence)` triple survives the trip in full — D13's *"the list of
-    /// `(rule, verdict, evidence)` IS the explanation"*. Three entries, three different verdicts,
-    /// three distinct non-empty evidence lists, order preserved.
+    /// `RuleVerdict` really is a TRIPLE and `Decision` really carries a vector of them — three
+    /// entries, three different verdicts, three distinct non-empty evidence lists.
+    ///
+    /// ⚠️ **What this does NOT prove, stated because the assertions look stronger than they are.**
+    /// There is no trip: the vector is `clone()`d into the literal and compared with itself, so
+    /// every assertion below reads a `pub` field with no code between it and the value the test
+    /// wrote. **Measured**: replacing `RuleVerdict`'s derived `PartialEq` with a total
+    /// `fn eq(&self, _: &Self) -> bool { true }` leaves the whole crate green. This test pins the
+    /// SHAPE — it reds when a field is removed or retyped (story 5.4's M4: three `error[E0560]`
+    /// plus one `error[E0609]`) — and it pins no BEHAVIOUR, because a `pub` field has no code to
+    /// break. The behavioural version needs a producer; that is story 5.5's, and the residue is
+    /// registered in `deferred-work.md` under story 5.3's code review.
     #[test]
     fn the_verdict_vector_carries_the_whole_triple_in_order() {
         let vector = vec![
@@ -649,7 +670,16 @@ mod tests {
         assert_eq!(
             decision.verdict_vector[2].evidence,
             vec![obs(4), obs(5)],
-            "each entry keeps its own evidence, and the three lists are distinct"
+            "each entry keeps its own evidence"
+        );
+        // Asserted rather than merely asserted ABOUT: the three evidence lists being distinct is
+        // what stops this test passing on three identical ones, which is the vacuous shape the
+        // story banned outright when it refused `Uuid::nil()` three times.
+        assert!(
+            decision.verdict_vector[0].evidence != decision.verdict_vector[1].evidence
+                && decision.verdict_vector[1].evidence != decision.verdict_vector[2].evidence
+                && decision.verdict_vector[0].evidence != decision.verdict_vector[2].evidence,
+            "the three evidence lists are pairwise distinct, so no entry can stand in for another"
         );
         assert_eq!(
             decision.ruleset_version,
