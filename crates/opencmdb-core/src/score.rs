@@ -729,9 +729,11 @@ mod tests {
         // ACROSS the two vocabularies — `must_abstain()` carries the corpus's
         // `AbstentionCause::NoObservedValue`, this outcome carries the engine's
         // `IdentityAbstentionCause`, and scoring still passes because it reads neither.
-        // The variant must DIFFER from `abstained()`'s: with both on `Ambiguous` the two helpers
-        // become value-identical, this assertion duplicates the one in
-        // `must_abstain_fails_on_any_decision`, and the sub-claim evaporates while staying green.
+        // The variant DIFFERS from `abstained()`'s so the two helpers stay distinguishable at a
+        // glance. It is no longer the load-bearing reason it once was: since 5.3,
+        // `scoring_is_blind_to_the_abstention_cause_whatever_it_is` asserts this same pair inside
+        // its loop, so the sub-claim survives either way. Kept different because two helpers that
+        // are value-identical but differently named are a trap for the next reader.
         let refused_other = Outcome::Refused {
             rule: rule("something-else"),
         };
@@ -779,27 +781,40 @@ mod tests {
     /// The claim of story 5.3, made executable: the two sides of a trap carry DIFFERENT cause types
     /// and nothing compares them.
     ///
-    /// The expectation carries `AbstentionCause::NoObservedValue` — the spelling the three committed
-    /// `must-abstain` trap files write — and the outcome carries the engine's
-    /// `IdentityAbstentionCause::Ambiguous`, which no `AbstentionCause` can even name. It passes,
+    /// The expectation carries a `AbstentionCause` — including `NoObservedValue`, the spelling the
+    /// three committed `must-abstain` trap files write — and the outcome carries an
+    /// `IdentityAbstentionCause`, which no `AbstentionCause` can even name. Every pair passes,
     /// because [`score`] reads neither payload and [`run_trap`] finds no rule on either side.
+    ///
+    /// **All SIX pairs, not one.** The corpus side is enumerated by hand because `AbstentionCause`
+    /// belongs to another module and has no `all()`; that literal is the redundancy — if a variant
+    /// is added there, this list does not follow, which is a gap the reconciliation enum's own
+    /// exhaustive consumers (`page.rs`'s `cause_label`) catch first.
     #[test]
     fn the_two_abstention_vocabularies_are_never_compared() {
-        let corpus_side = Expectation::MustAbstain {
-            cause: AbstentionCause::NoObservedValue,
-        };
-        for cause in IdentityAbstentionCause::all() {
-            let engine_side = Outcome::Abstained { cause };
-            assert_eq!(
-                score(&corpus_side, &engine_side),
-                Score::Pass,
-                "a corpus NoObservedValue expectation answered by the engine's {cause:?} passes"
-            );
-            assert_eq!(
-                run_trap(&corpus_side, &engine_side),
-                TrapVerdict::Pass,
-                "and it is a plain Pass, never a WrongRule — neither side names a rule"
-            );
+        let corpus_causes = [
+            AbstentionCause::OutOfPerimeter,
+            AbstentionCause::NoObservedValue,
+            AbstentionCause::ConflictingObservations,
+        ];
+        for corpus_cause in corpus_causes {
+            let corpus_side = Expectation::MustAbstain {
+                cause: corpus_cause,
+            };
+            for cause in IdentityAbstentionCause::all() {
+                let engine_side = Outcome::Abstained { cause };
+                assert_eq!(
+                    score(&corpus_side, &engine_side),
+                    Score::Pass,
+                    "a corpus {corpus_cause:?} expectation answered by the engine's {cause:?} passes"
+                );
+                assert_eq!(
+                    run_trap(&corpus_side, &engine_side),
+                    TrapVerdict::Pass,
+                    "and ({corpus_cause:?}, {cause:?}) is a plain Pass, never a WrongRule — \
+                     neither side names a rule"
+                );
+            }
         }
     }
 

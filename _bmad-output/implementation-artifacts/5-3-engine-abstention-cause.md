@@ -470,6 +470,104 @@ than absorbed. The procedure is in Dev Notes.
       5.2b. The `code-review` workflow's own default (setting `done` at the end of the review) is
       WRONG here.
 
+### Review Findings (AI, 2026-07-29)
+
+_Three parallel layers — Blind Hunter (diff only), Edge Case Hunter (diff + repo, no spec),
+Acceptance Auditor (diff + spec + repo). **All three converged on the enum doc's row count**, and
+TWO layers independently attacked `all()`'s witness — the Edge Case Hunter by RUNNING it. The
+Acceptance Auditor reproduced SIX of the seven mutations and reports that **not one observed red set
+differed from the record**, including both places where the spec's own predictions were wrong._
+
+⚠️ **Orchestration defect, mine, recorded because it nearly cost a measurement:** two layers with
+write access ran against ONE working tree. The Edge Case Hunter observed `score.rs:189` carrying
+another agent's M3 mid-pass and correctly left it alone. Nothing was corrupted — the tree was
+verified clean and green afterwards (135 + 90 + 42, no stray variant, `cascade.rs` md5 stable) — but
+the next multi-layer review runs each writing layer in its own git worktree.
+
+- [x] [Review][Decision] **RESOLVED 2026-07-29 — Guy's call: keep the mechanism, tell the truth
+      about it, register the residue (owner 5.14).** Two candidate closures were BUILT and MEASURED
+      before deciding: an `ordinal()`/`slot()` witness is green with the variant missing (91 passed
+      — it closes nothing, and it was the reviewer's own first recommendation, withdrawn on
+      measurement), and a single-source `macro_rules!` works but violates AC1's literal `[Self; 2]`
+      return type and makes adding a variant frictionless, which is what AC1b calls a finding.
+      `strum` refused as disproportionate (D47). Shipped: the true weaker doc, plus a comment at
+      the witness naming the wrong repair. Full record in `deferred-work.md`.
+      ~~**`all()`'s witness has a silent lazy-repair path, and it was MEASURED**~~ —
+      adding a third variant and repairing ONLY the `error[E0004]` (adding a bare match arm) leaves
+      `all()` returning 2 of 3 while `cargo test -p opencmdb-core` reports **90 passed**. No
+      `E0308` fires, because repairing the match never forces the literal. So the guard AC1b rests
+      on has a green exit. The doc correction is a patch below either way; the DECISION is whether
+      to also strengthen the guard.
+
+- [x] [Review][Patch] The enum doc says *"the **four** D13 rows that produce none"* and *"the other
+      **four** rows"*, then lists exactly TWO — four rows produce a variant, two produce none
+      [crates/opencmdb-core/src/identity/cascade.rs:15-19]
+- [x] [Review][Patch] *"Two of its three decisions are abstentions"* is contradicted two lines later
+      by *"`NoMatch` … is an **active opposition** … never an abstention"*
+      [crates/opencmdb-core/src/identity/cascade.rs:17-27]
+- [x] [Review][Patch] `all()`'s doc claims a new variant *"breaks this function **twice**"*; M1b and
+      M1c measured the two errors as MUTUALLY EXCLUSIVE, never simultaneous — and the inline comment
+      three lines below states it differently again [crates/opencmdb-core/src/identity/cascade.rs:83-90]
+- [x] [Review][Patch] The variant-set test's doc claims a third variant *"makes `all()` no longer
+      contain these two"* — false; `all()` still contains both
+      [crates/opencmdb-core/src/identity/cascade.rs:106-110]
+- [x] [Review][Patch] `gap/mod.rs`'s closing paragraph drifts from *"`Ambiguous`"* to *"a variant
+      **here**"*, making it false of the three variants `reconcile` does produce
+      [crates/opencmdb-core/src/gap/mod.rs:42-44]
+- [x] [Review][Patch] The cross-vocabulary test pins the corpus side to one variant, so it covers 2
+      of 6 pairs while its name states the general claim [crates/opencmdb-core/src/score.rs:787-798]
+- [x] [Review][Patch] `other_cause`'s justification comment defends a uniqueness this same commit
+      removed — the new cause-blindness loop already asserts that pair
+      [crates/opencmdb-core/src/score.rs:733-740]
+- [x] [Review][Patch] `Expectation::MustAbstain` went from SEVEN Rust construction sites to EIGHT
+      (`score.rs:788` is new) and the "counts re-measured on the FINAL tree" block omits it — the one
+      number the story's own inherited lesson #3 names literally
+      [_bmad-output/implementation-artifacts/5-3-engine-abstention-cause.md, Completion Notes]
+- [x] [Review][Patch] AC1's `Given` says `AbstentionCause` is one *"which `reconcile` matches
+      exhaustively"*; the story's own M4 refutes it — the only value-level match is `page.rs`'s
+      `cause_label`. Record as a correction to the story [story file, AC1]
+- [x] [Review][Patch] The environment note says *"nine untracked entries"* and lists eleven; `git
+      status --porcelain | wc -l` → 11 [story file, Completion Notes]
+- [x] [Review][Patch] M5's record says *"three of the five are the new guards"* without naming which
+      three, where M1–M4 all name theirs [story file, Completion Notes]
+- [x] [Review][Patch] *"named in **seven** files"* is true of source files only — four more Markdown
+      files name the type in the same commit [story file, Completion Notes]
+- [x] [Review][Patch] The mutation line:col citations point at the MUTATED tree, not the committed
+      one; a reader opening `cascade.rs:88` finds the wrong line [story file, Completion Notes]
+- [x] [Review][Patch] The 4.6a closure announces *"One sentence below is now FALSE"* and then leaves
+      that sentence un-struck, which is the failure mode the note itself names
+      [_bmad-output/implementation-artifacts/deferred-work.md:160-184]
+- [x] [Review][Patch] Both `↺ PARTLY closed` annotations sit ABOVE their target bullet and name no
+      target; the file's own idiom writes *"the entry above"*
+      [_bmad-output/implementation-artifacts/deferred-work.md:234-239, :310-315]
+- [x] [Review][Patch] `sprint-status.yaml` claims the new register section opens *"FIVE items, each
+      with a named owner"*; two carry `Owner: nobody` and `Owner: whoever needs the comparison`
+      [_bmad-output/implementation-artifacts/sprint-status.yaml]
+- [x] [Review][Patch] `docs/project-context.md`: the inserted 5.3 clause orphans *"That pin"*, which
+      now reads as pointing at 5.3's tests [docs/project-context.md:68-70]
+- [x] [Review][Patch] `CLAUDE.md` still says *"story 5.1 is `done`"* with 5.2 and 5.2b since merged —
+      inherited drift from those two stories, but docs-current-before-push is a project rule and this
+      push is the occasion [CLAUDE.md:7]
+
+- [x] [Review][Defer] Two of the four new tests are carried by the type system, not by their
+      assertions — their only recorded reds are `E0599`/`E0308` that fire because the test SPELLS the
+      variant [crates/opencmdb-core/src/identity/cascade.rs:113, :129] — deferred, partly addressed
+      by the decision above
+- [x] [Review][Defer] `an_abstention_names_no_rule_whatever_its_cause` lives in `cascade.rs` but
+      asserts a property of `score::Outcome::rule()`, inverting the very convention Task 5 invoked to
+      justify splitting the tests [crates/opencmdb-core/src/identity/cascade.rs:129] — deferred, the
+      spec bound the placement
+- [x] [Review][Defer] A trap file may write `must-abstain = { cause = "OutOfPerimeter" }` and no
+      validation refuses it, though the cascade has no such row
+      [crates/opencmdb-core/src/trap.rs:89] — deferred, pre-existing corpus-format question
+- [x] [Review][Defer] `lib.rs`'s new flat re-export has no consumer — `trap_gate.rs` imports the long
+      path — while the story refuses serde and `Ord` on a no-consumer argument
+      [crates/opencmdb-core/src/lib.rs:40] — deferred, pre-existing crate idiom
+- [x] [Review][Defer] AC7 as drafted requires a squash merge inside a workflow that must end at
+      `review`; every Epic 5 story will hit it [story file, AC7] — deferred, spec-drafting wart
+- [x] [Review][Defer] CI runs no `cargo doc`, so broken intra-doc links are gated by nothing; this
+      diff is clean by luck, not by mechanism [.github/workflows/ci.yml] — deferred, pre-existing
+
 ## Dev Notes
 
 ### What was measured, before the story was written
@@ -739,14 +837,18 @@ story that adds no bin-side guard should look like.
 | `git status --short fixtures/MANIFEST.toml` | **empty** |
 
 `cargo xtask ci` reported `file-size 22 file(s) under 2000 code lines (largest: 884)`. Measured
-directly: `score.rs` 586 code lines (580 before), `identity/cascade.rs` 101, `gap/mod.rs` 148 (128
-before) — the ceiling is not in view.
+directly **after the code review's patches**: `score.rs` 586 code lines (580 before the story),
+`identity/cascade.rs` **121** (101 before the patches — the doc grew), `gap/mod.rs` **151** (128
+before the story) — the ceiling is not in view.
 
 **`cargo doc --workspace --no-deps --locked`** was also run, because clippy does not check
 intra-doc links and this story writes many. It emits **three** warnings, and all three are
 PRE-EXISTING: `score.rs:429`'s `break[ing]` (an unescaped `[`, unrelated), `is_unchanged` linking to
 the private `comparable_fields`, and one in `bin`. **None of the new full-path links warns** — that
-is the measurement behind AC3's "write them as full paths", not an assumption.
+is the measurement behind AC3's "write them as full paths", not an assumption. Re-run after the code
+review's patches: still exactly those three, none in new or edited docs. ⚠️ `grep -c "^warning:"`
+returns **5**, not 3 — two of the lines are rustdoc's own `generated N warnings` summaries. Counting
+those as findings is a trap this note exists to disarm.
 
 ### Completion Notes List
 
@@ -763,15 +865,35 @@ not a post-condition — a count in a doc is a claim):
 - **Three** committed `must-abstain` expectations write `cause = "NoObservedValue"`:
   `example.toml:44`, `hostname-absence.toml:47`, `shared-hardware-vm.toml:46`. Unchanged.
 - **`Outcome::Abstained` now has NINE construction sites, not six** — this story added three
-  (`score.rs:760`, `score.rs:792`, `cascade.rs:132`, all inside the new loops). **All nine are still
+  (two in `score.rs`, one in `cascade.rs`, all inside the new loops). **All nine are still
   in test modules; production code constructs an abstention nowhere.** M5 measured that
   independently: reverting the field type broke only the `lib test` target, never the lib.
-- `IdentityAbstentionCause` is named in **seven** files: `lib.rs`, `identity/mod.rs`,
-  `identity/cascade.rs`, `score.rs`, `gap/mod.rs`, `trap.rs` (doc only) and `trap_gate.rs`.
+- **`Expectation::MustAbstain` went from SEVEN Rust construction sites to EIGHT.** The eighth is
+  this story's own `the_two_abstention_vocabularies_are_never_compared`, in `score.rs`. All eight
+  keep `AbstentionCause`, so Dev Notes' *"all seven keep `AbstentionCause` and none of them
+  changes"* still holds of the seven it counted — but the NUMBER is stale, and it is the one the
+  story's own inherited lesson #3 names literally. **Caught by the code review, not here**, which is
+  the honest record: the same re-count was done for the two numbers above and skipped for this one.
+- `IdentityAbstentionCause` is named in **seven SOURCE files**: `lib.rs`, `identity/mod.rs`,
+  `identity/cascade.rs`, `score.rs`, `gap/mod.rs`, `trap.rs` (doc only) and `trap_gate.rs`. Four
+  Markdown files in this same commit name it too — "seven" is a claim about `crates/`, and saying so
+  is the difference between a count and a true count.
+
+**ONE CORRECTION to the story, and it is inherited rather than introduced.** AC1's `Given` describes
+`AbstentionCause` as one *"which `reconcile` matches exhaustively"*. **It does not.** `reconcile`
+only CONSTRUCTS a cause (three `abstain(...)` calls in `gap/mod.rs`); the sole value-level `match` on
+the enum in the whole workspace is `page.rs`'s `cause_label`, which is exactly what M4 measures — one
+`error[E0004]`, there and nowhere else. So this story contains its own refutation, and the false
+clause traces back to the story-4.6a register bullet, where it is now struck. The AC's *conclusion*
+is unaffected: widening the enum still costs a label and two locale strings.
 
 **The mutations — SEVEN run, not five.** Each was run, its complete observed red set recorded,
 restored, and `git status` checked before the next. Two of the seven are additions the story did not
 ask for, and the reason is given below.
+
+⚠️ **Every `file:line:col` below is a coordinate on the MUTATED tree, not on the committed one** —
+that is what rustc printed, and a red record that "cleans up" its coordinates is no longer the
+observation. A reader opening the committed `cascade.rs` at those lines finds neighbouring code.
 
 - **M1 — delete the `Ambiguous` variant.** Six `error[E0599]` ("no variant … named `Ambiguous`")
   across **four** distinct sites: `cascade.rs:88:26` (the `all()` literal) and `cascade.rs:93:23`
@@ -826,7 +948,11 @@ ask for, and the reason is given below.
   variant `reconcile` can never produce — which is the argument for a separate type, now measured.
 - **M5 — revert `Outcome::Abstained`'s field to `gap::AbstentionCause`.** Five `error[E0308]`, all
   in the `lib test` target: `cascade.rs:132:38`, `score.rs:645:20`, `:740:20`, `:760:50`,
-  `:792:52` — **three of the five are the new guards**. Plus `warning: unused import:
+  `:792:52` — **three of the five are the new guards, and they are**
+  `an_abstention_names_no_rule_whatever_its_cause` (`cascade.rs:132`),
+  `scoring_is_blind_to_the_abstention_cause_whatever_it_is` (`score.rs:760`) and
+  `the_two_abstention_vocabularies_are_never_compared` (`score.rs:792`); the other two are the
+  pre-existing helpers `abstained()` (`:645`) and `other_cause` (`:740`). Plus `warning: unused import:
   crate::identity::cascade::IdentityAbstentionCause` at `score.rs:34:5`. **The lib itself still
   compiles**, which measures the story's premise that production constructs no abstention.
 
@@ -843,7 +969,8 @@ concerns the abstention vocabulary and each needs a producing engine (5.4–5.7)
 statement; silence would not be.
 
 **Environment observation, recorded as a symptom and NOT as a cause.** `git status` at the repo root
-lists nine untracked entries — `.bashrc`, `.bash_profile`, `.profile`, `.zshrc`, `.zprofile`,
+lists **eleven** untracked entries (`git status --porcelain | wc -l` → 11; this note said "nine"
+while listing eleven until the code review counted them) — `.bashrc`, `.bash_profile`, `.profile`, `.zshrc`, `.zprofile`,
 `.gitconfig`, `.gitmodules`, `.idea`, `.mcp.json`, `.ripgreprc`, `.vscode` — which `ls -l` shows are
 **character devices** (`crw-rw-rw- root 1, 3` = `/dev/null`), all dated 2026-07-28 09:30 and owned by
 `nobody:nogroup`. They are agent-sandbox mounts, not repository content; nothing in this story
@@ -924,3 +1051,28 @@ by 5.1 and confirmed by 5.2 and 5.2b. Status is `review`.
   One count in the story's Dev Notes is now stale by this story's own commit and is corrected in
   the Completion Notes: `Outcome::Abstained` has **nine** construction sites, not six. All nine are
   still in test modules. Status → `review`.
+- 2026-07-29 — **Code review held** (`bmad-code-review`, three parallel layers). 1 decision + 18
+  patches applied + 6 defers + 3 dismissed. **No behavioural defect was found in any layer**; what
+  fell was documentation truth, in a story built to guard it. The Acceptance Auditor reproduced SIX
+  of the seven mutations and **not one observed red set differed from the record**.
+  The decision, and the only finding that touched a mechanism: **`all()`'s witness stops the build
+  on a new variant but does not force the variant into the list** — measured by RUNNING the lazy
+  repair (bare match arm → 90 tests green, `all()` returning 2 of 3). Guy's call: keep the
+  mechanism, state its limit truthfully, register the residue with owner 5.14. Two closures were
+  built and measured first and both rejected — an `ordinal()` witness is green with the variant
+  missing (91 passed, so it closes nothing; it was the reviewer's own first recommendation,
+  withdrawn on measurement), and a single-source `macro_rules!` works but violates AC1's literal
+  `[Self; 2]` and makes adding a variant frictionless, which AC1b calls a finding.
+  All three layers converged on a false row count in the enum's guard paragraph (*"the four D13
+  rows that produce none"* — it is two), inherited from an AC1b that contradicts itself four lines
+  apart. Also patched: `all()`'s doc claiming a new variant breaks it *"twice"* when the two errors
+  are alternatives; the variant-set test's doc asserting a guard it does not have; a re-count the
+  story pre-named and skipped (`Expectation::MustAbstain` 7 → 8); AC1's `Given` clause, refuted by
+  the story's own M4 and traced back to the 4.6a register bullet, now struck there with a second
+  false clause beside it; the cross-vocabulary test widened from 2 of 6 pairs to all 6 and
+  **re-proven red**; and eight smaller count/antecedent/placement defects across four documents.
+  Test count UNCHANGED at 267 — the widened test is still one test — so the number says nothing
+  about the patches; what says something is the re-run red set. `CLAUDE.md`'s Epic 5 line, stale
+  since 5.2 and 5.2b merged, was corrected here rather than deferred. Status stays `review`:
+  **`done` is the MERGE's business**, and this workflow's own default of setting `done` at the end
+  of a review is wrong for this project.

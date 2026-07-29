@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-28  # Story 5.3 IMPLEMENTED → review (267 tests; 7 mutations; fixtures/ untouched)
+last_updated: 2026-07-29  # Story 5.3 code review held — 18 patches applied, 1 decision, 6 defers; still `review`
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -457,9 +457,49 @@ development_status:
   # different outcome-side type "would make comparison asymmetric" (there is no comparison). The two
   # `NoMatch` bullets are annotated ↺ PARTLY closed, NOT struck: the vocabulary exists, the mapping
   # has no producer until 5.4/5.5. A new `## Deferred from: story-5.3` section appended at the END
-  # (the file is chronological) opens FIVE items, each with a named owner.
+  # (the file is chronological) opens FIVE items. THREE name a story (5.9, 5.14 twice); the other
+  # two name the condition that would produce an owner rather than a person — `Owner: nobody` for
+  # the `#[non_exhaustive]` refusal, which is a decision recorded so it is not re-litigated, and
+  # `Owner: whoever needs the comparison` for the absent `From` bridge. The register's own idiom
+  # allows both. (This line read "each with a named owner" until the code review counted them.)
   # PUSHED 2026-07-28: PR #48, CI GREEN in 1m00s (run 30389174367). NOT merged — `done` is the
-  # MERGE's business and `code-review` comes first. ⚠️ NEXT: code-review 5.3 → squash merge.
+  # MERGE's business and `code-review` comes first.
+  #
+  # CODE REVIEW HELD 2026-07-29 — three parallel layers, 1 decision + 18 patches + 6 defers + 1
+  # orchestration defect of the reviewer's own. NO behavioural defect in any layer; the code was
+  # sound. What fell is documentation truth, in a story built to guard it. The Acceptance Auditor
+  # reproduced SIX of the seven mutations and NOT ONE observed red set differed from the record —
+  # including both places where the spec's own predictions were wrong.
+  #   · THE DECISION: `all()`'s witness stops the build on a new variant (`error[E0004]`) but does
+  #     NOT force the variant into the list. MEASURED by running the lazy repair — a bare match arm
+  #     leaves `all()` returning 2 of 3 with 90 tests GREEN. Guy's call: keep the mechanism, state
+  #     its limit truthfully, register the residue (owner 5.14). Two closures were BUILT and
+  #     MEASURED before deciding and both rejected: an `ordinal()` witness is GREEN with the variant
+  #     missing (91 passed — it closes nothing, and it was the reviewer's own first recommendation,
+  #     withdrawn on measurement not on argument); a single-source `macro_rules!` works but violates
+  #     AC1's literal `[Self; 2]` return type AND makes adding a variant frictionless, which is what
+  #     AC1b calls a FINDING. `strum` refused as disproportionate for a two-variant enum (D47).
+  #   · ALL THREE LAYERS CONVERGED on a false row count in the enum's own guard paragraph — "the
+  #     four D13 rows that produce none" when it is TWO — inherited from an AC1b that contradicts
+  #     itself four lines apart ("the OTHER two rows" vs "the four-row remainder"). The dev copied
+  #     the wrong half instead of raising it as a finding, which the story preamble invites.
+  #   · A re-count the story PRE-NAMED and then skipped: `Expectation::MustAbstain` went from SEVEN
+  #     construction sites to EIGHT, the eighth being this story's own new test.
+  #   · AC1's `Given` ("which `reconcile` matches exhaustively") is refuted by the story's own M4 —
+  #     `reconcile` only CONSTRUCTS a cause; the sole value-level match is `page.rs`'s `cause_label`.
+  #     Traced back to the story-4.6a register bullet, now struck there together with a SECOND false
+  #     clause the first closure had announced but never struck.
+  #   · The cross-vocabulary test covered 2 of 6 pairs while its name states the general claim —
+  #     widened to all six and RE-PROVEN red under M2.
+  # ⚠️ REVIEWER'S OWN DEFECT, recorded: two layers with write access ran against ONE working tree,
+  # and the Edge Case Hunter observed another agent's M3 mid-pass. Nothing was corrupted (tree
+  # verified clean, md5 stable, 267 green) but the next multi-layer review gives each writing layer
+  # its own git worktree.
+  # Test count UNCHANGED at 267 (135 + 90 + 42) — the widened test is still one test, so the number
+  # says nothing about the patches; the re-run red set does. `CLAUDE.md`'s Epic 5 line, stale since
+  # 5.2/5.2b merged, was fixed here rather than deferred.
+  # ⚠️ NEXT: push the patches → green CI → squash merge. `done` is the MERGE's business, and this
+  # workflow's own default of setting `done` at the end of a review is WRONG for this project.
   5-3-engine-abstention-cause: review
   5-4-decision-and-ruleset-version: backlog
   5-5-l1-join-pure: backlog

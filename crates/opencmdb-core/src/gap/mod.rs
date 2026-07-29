@@ -39,9 +39,12 @@ pub struct Gap {
 /// `Some`, which an abstention never is. Nothing compares the two vocabularies, and a test in
 /// `score`'s module says so.
 ///
-/// Widening this enum is not free: a variant here is one the corpus format can express, that
-/// `cause_label` must label and that two locales must translate — for something [`reconcile`] can
-/// never produce.
+/// Widening this enum is not free, and the cost falls hardest on a variant [`reconcile`] cannot
+/// produce. The three below are all produced here and all earn their label; adding the cascade's
+/// `Ambiguous` — the case story 5.3 weighed — would add one the corpus format can express, that
+/// `cause_label` must label and that two locales must translate, for something no code path here
+/// ever returns. Measured: adding it yields exactly one `error[E0004]`, in `page.rs`'s
+/// `cause_label`, and breaks nothing else in the workspace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum AbstentionCause {
     /// An observation that is not the perimeter entity (e.g. an undocumented device).

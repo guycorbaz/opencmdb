@@ -67,7 +67,7 @@ evasions, and story 5.2b five byte-pin tests over six of the eight streams that 
 unpinned families plus `example-traps.jsonl`, `dhcp-churn`'s existing pin extended) together with
 the trap→`obs_id` binding pin; story **5.3** the four tests of the identity engine's own abstention
 vocabulary (`IdentityAbstentionCause`, two variants, in the new `opencmdb-core/src/identity/`) — a
-TYPE and no engine. That pin closed a hole measured TWICE: exchanging two `observations`
+TYPE and no engine. **5.2b's trap→`obs_id` binding pin** closed a hole measured TWICE: exchanging two `observations`
 vectors in `cloned-mac.toml`, and later in `hostname-collision.toml`, each made the corpus DEMAND a
 false merge while the whole suite stayed green. **All 24 committed traps across all ten trap files
 now have their `observations` vector, `Expectation` and `family` pinned** — the scope grew from

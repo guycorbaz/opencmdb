@@ -12,19 +12,21 @@
 
 /// Why the identity cascade did not conclude — the engine's own abstention vocabulary.
 ///
-/// # Two variants, and the four D13 rows that produce none
+/// # Two variants, and the two D13 rows that produce none
 ///
-/// D13's algebra is a table of six conditions over the verdict set [architecture.md:967-974]. Two
-/// of its three decisions are abstentions and they are the two variants below; the other four rows
-/// are accounted for here so a reader does not find an uncovered row and add a variant for it:
+/// D13's algebra is a table of six conditions over the verdict set [architecture.md:967-974]. Four
+/// of those rows produce an abstention and are covered by the two variants below — three by
+/// [`Self::Ambiguous`], one by [`Self::AbsenceOfProof`]. The remaining **two** are accounted for
+/// here, so a reader does not find an uncovered row and add a variant for it:
 ///
 /// - `any Disqualifying → NoMatch` [architecture.md:969] is an **active opposition**: a rule
 ///   opposes, so the answer names that rule and is a [`crate::score::Outcome::Refused`], never an
 ///   abstention.
 /// - `a Decisive, no Opposes → Match` [architecture.md:970] is a [`crate::score::Outcome::Merged`].
 ///
-/// `NoMatch` is therefore reached by two different rows, and **exactly one of them has no rule to
-/// name** — that row is [`Self::AbsenceOfProof`]. Six rows, two abstention variants.
+/// `NoMatch` is therefore reached by two different rows — the `Disqualifying` one just named, which
+/// is a decision, and the absence-of-proof one below — and **exactly one of them has no rule to
+/// name**: that row is [`Self::AbsenceOfProof`]. Six rows, four of them abstentions, two variants.
 ///
 /// A third variant is a **finding**, not a tidy-up. In particular this enum does not reproduce
 /// `OutOfPerimeter`: the cascade's table has no such row, and D16 names the failure mode of
@@ -81,14 +83,32 @@ pub enum IdentityAbstentionCause {
 impl IdentityAbstentionCause {
     /// Every variant, so a caller can exercise the whole vocabulary without listing it.
     ///
-    /// The array length is part of the signature on purpose. Adding a variant breaks this function
-    /// twice — the match below stops being exhaustive (`error[E0004]`), and widening the literal
-    /// without widening the return type is `error[E0308]` — so the witness cannot drift silently
-    /// away from the enum.
+    /// # What the witness below guarantees, and what it does not
+    ///
+    /// Adding a variant makes the `match` non-exhaustive — **`error[E0004]`, which stops the
+    /// build** and forces a human decision at this exact site. That is the guarantee, and it is the
+    /// one that matters: given that a third variant is a finding rather than a routine addition
+    /// (see this type's own doc), an error that refuses to compile IS the mechanism.
+    ///
+    /// **It does not mechanically force the new variant into the array, and that was measured, not
+    /// assumed.** Repairing only the `error[E0004]` — adding a bare arm — leaves this function
+    /// returning the old list while the whole suite stays green. Widening the literal *without*
+    /// widening the return type is a separate `error[E0308]`; the two errors are alternatives along
+    /// one repair path, never simultaneous. The array length is still pinned at `2` in the
+    /// signature so the second error exists at all.
+    ///
+    /// Whether to close that path with a single-source construction is registered with an owner
+    /// (story 5.14) rather than decided here: the alternatives measured for it either make adding a
+    /// variant *frictionless*, which is the opposite of what this vocabulary wants, or cost a
+    /// dependency in the domain crate.
     pub fn all() -> [Self; 2] {
         let all = [Self::Ambiguous, Self::AbsenceOfProof];
-        // The witness: a new variant makes this match error[E0004]; a variant added to the
-        // literal without widening the return type is error[E0308]. Neither can drift silently.
+        // ⚠️ If you arrived here from an error[E0004] after adding a variant: adding a bare
+        // `Self::NewThing => {}` arm silences this and is the WRONG repair — `all()` would then
+        // return a list missing your variant, and every test that loops over it would skip the
+        // variant in silence (measured: the suite stays green). Add it to the literal above and
+        // widen the return type. Better still: re-read this type's doc first — a third variant is
+        // a finding, not a routine addition.
         for c in all {
             match c {
                 Self::Ambiguous => {}
@@ -105,10 +125,14 @@ mod tests {
     use crate::score::Outcome;
 
     /// The variant SET, not its length: on `[Self; 2]` the length is a tautology the return type
-    /// already guarantees, so asserting it would prove nothing. What can go stale is *which* two,
-    /// and a third variant arriving without a D13 row behind it (the enum's doc says why that is a
-    /// finding) makes `all()` no longer contain these two — the length is pinned by the type, the
-    /// membership by this test.
+    /// already guarantees, so asserting it would prove nothing. What this pins is *which* two —
+    /// renaming a variant, or swapping one for another, reds here.
+    ///
+    /// ⚠️ **What it does NOT catch, stated because the name reads stronger than the body:** a
+    /// third variant added to the enum leaves `Ambiguous` and `AbsenceOfProof` in `all()`, so this
+    /// test stays green. What stops that is [`IdentityAbstentionCause::all`]'s `error[E0004]`, and
+    /// its doc says exactly how far that goes. "Exactly" in this name is carried by the `[Self; 2]`
+    /// return type, not by the two assertions below.
     #[test]
     fn the_vocabulary_is_exactly_ambiguous_and_absence_of_proof() {
         let all = IdentityAbstentionCause::all();
