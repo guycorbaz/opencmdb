@@ -5,8 +5,10 @@
 //! riskiest problem in the product, and D13 fixes its shape — **all rules are evaluated**, each
 //! yields an enumerated verdict, and the verdicts combine by an **algebra, never a sum**.
 //!
-//! **What lives here today is [`cascade`], and inside it only the abstention vocabulary.** There is
-//! no rule, no verdict set and no join yet; story 5.4 writes the algebra that produces one.
+//! **What lives here today is [`cascade`], and inside it the engine's vocabulary and its return
+//! type** — the verdict, the `(rule, verdict, evidence)` triple, the conclusion, the ruleset version
+//! and the abstention cause. There is still no rule, no candidate pair and no join, and **nothing
+//! combines a verdict set into a conclusion**: story 5.4b writes that algebra.
 //!
 //! The architecture's source tree names an `IdentityError` on this module [architecture.md:3366].
 //! It is absent because there is no fallible operation to carry it: choosing a cause enum cannot

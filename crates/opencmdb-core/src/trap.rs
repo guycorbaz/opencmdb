@@ -30,9 +30,12 @@ use crate::observation::ObsId;
 
 /// The identifier of an engine rule, as an expectation names it.
 ///
-/// A `String` for now because no rule exists yet — Epic 5 names them. It closes into an enum
-/// when it does: architecture.md:2652 requires *a decision on every variant*, and an
-/// `Other(String)` cannot satisfy an `expect_rule`.
+/// A `String` for now because no rule exists yet. It closes into an enum when **every rule the
+/// corpus names is designed** — architecture.md:2652 requires *a decision on every variant*, and an
+/// `Other(String)` cannot satisfy an `expect_rule`. That is not Epic 5: the committed corpus writes
+/// **seven** distinct rule names and **five of them are `l2-*`**, which Epic 6 specifies. Closing
+/// the enum sooner would either enumerate rules nobody has designed or make five sha256-locked trap
+/// files unparseable. *(This doc said "Epic 5 names them" until story 5.4 measured the seven.)*
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct RuleId(pub String);
