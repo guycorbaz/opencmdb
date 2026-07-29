@@ -326,6 +326,146 @@ impl Decision {
     }
 }
 
+/// Combine a verdict set into a [`Decision`] — D13's algebra, as a TOTAL pure function.
+///
+/// D13: **all rules are evaluated** (never first-match-wins), each yields an enumerated verdict, and
+/// *"verdicts combine by an **algebra, not a sum**"* [architecture.md:960-961]. This is that algebra.
+/// It reads nothing but its arguments: no clock, no I/O, no SQL — *"the engine is a pure function"*
+/// [architecture.md:3302], and *"the engine never touches the clock"* [architecture.md:3364].
+///
+/// # It is TOTAL, and the table it implements is not
+///
+/// Every `Vec<RuleVerdict>` gets an answer — the empty one, and one naming the same rule twice.
+/// There is no `Result`, no `panic!` and no `unwrap`: there is no error to carry.
+///
+/// D13's table has six rows. Enumerated over the PRESENCE of each verdict it leaves **exactly one
+/// input class unanswered**, and this is the enumeration, so a reader can re-derive the gap rather
+/// than trust it (`Disqualifying` absent throughout — it short-circuits):
+///
+/// | `Decisive` | `Supports` | `Opposes` | D13 row | conclusion |
+/// |---|---|---|---|---|
+/// | ✔ | ✔ | ✔ | `:971` | `Ambiguous` |
+/// | ✔ | ✔ | ✗ | `:970` | `Match` |
+/// | ✔ | ✗ | ✔ | `:971` | `Ambiguous` |
+/// | ✔ | ✗ | ✗ | `:970` | `Match` |
+/// | ✗ | ✔ | ✔ | `:973` | `Ambiguous` |
+/// | ✗ | ✔ | ✗ | `:972` | `Ambiguous` |
+/// | ✗ | ✗ | ✔ | **NONE** | **arbitrated below** |
+/// | ✗ | ✗ | ✗ | `:974` | `NoMatch` (absence of proof) |
+///
+/// **Guy's arbitration, 2026-07-29: `>=1 Opposes` alone concludes
+/// [`IdentityAbstentionCause::AbsenceOfProof`]** — nothing argues FOR the merge, so there is no merge
+/// to refuse, and D13 deliberately reserves the refusal-that-names-a-rule for `Disqualifying`. The
+/// correction to D13 itself is a MILESTONE edit of `architecture.md`, never a story task; it is
+/// registered with a GitHub issue.
+///
+/// # Which rule a decision names
+///
+/// A decision names ONE rule while several may be `Disqualifying` or `Decisive` at once. The one
+/// named is the **lexicographically smallest [`RuleId`] among the verdicts that qualified for that
+/// arm** — the `Disqualifying` ones for a refusal, the `Decisive` ones for a match.
+///
+/// ⚠️ **That is a TIEBREAK WITH NO SEMANTIC CONTENT.** `l1-distinct-mac` is not "more disqualifying"
+/// than `l1-exact-mac`. It is chosen because it is the only order-independent rule available that
+/// invents nothing: no rule priority exists, because **no rule exists**. D13 refuses the alternative
+/// by name — *"which rule fires first? The one written first. **That is not a decision, it is an
+/// accident of file order**"* [architecture.md:936-937]. A designed priority replaces it when rules
+/// have one: story 5.5 for L1, Epic 6 for `l2-*`. Registered.
+///
+/// # What it does not do
+///
+/// It does not refuse a vector naming the same rule twice, and it does not validate
+/// `ruleset_version` — including `RulesetVersion(0)`, which D14's "mandatory" does not forbid since
+/// that is about PRESENCE. Both need a producer to state and to red, and no rule exists.
+///
+/// The conclusion and the vector are built together here, so a conclusion naming a rule absent from
+/// its own vector is unreachable **through this function** — the rule is selected FROM the vector
+/// that is then returned, and `decide(vec![], _)` abstains rather than matching. A `Decision` built
+/// by struct literal elsewhere is still unconstrained (the fields are `pub`); that residue is
+/// registered with story 5.9.
+pub fn decide(verdict_vector: Vec<RuleVerdict>, ruleset_version: RulesetVersion) -> Decision {
+    let has = |w: Verdict| verdict_vector.iter().any(|rv| rv.verdict == w);
+
+    // ⚠️ A `match` on the presence tuple, NOT an `if`/`else if` chain, and that is load-bearing:
+    // it is what makes deleting an arm an `error[E0004]` instead of a silent behaviour change. An
+    // `if`-chain with a trailing `else` was measured to swallow the loss of the arbitration arm
+    // while every one of the sixteen classes kept its answer.
+    let conclusion = match (
+        has(Verdict::Disqualifying),
+        has(Verdict::Decisive),
+        has(Verdict::Supports),
+        has(Verdict::Opposes),
+    ) {
+        // architecture.md:969 — "any Disqualifying → NoMatch, absolute priority, short-circuits
+        // everything". Checked first, so the priority is structural and not an accident of order.
+        (true, _, _, _) => match smallest_rule_with(&verdict_vector, Verdict::Disqualifying) {
+            Some(rule) => Conclusion::NoMatch { rule },
+            // Unreachable: `has(Disqualifying)` IS the presence of a RuleVerdict carrying it, so the
+            // candidate set is non-empty. Written as an arm rather than an `expect()` so that no
+            // path in this function can panic.
+            None => Conclusion::Abstained {
+                cause: IdentityAbstentionCause::AbsenceOfProof,
+            },
+        },
+
+        // architecture.md:970 — "a Decisive, no Opposes → Match".
+        (false, true, _, false) => match smallest_rule_with(&verdict_vector, Verdict::Decisive) {
+            Some(rule) => Conclusion::Match { rule },
+            // Unreachable, for the same reason as above.
+            None => Conclusion::Abstained {
+                cause: IdentityAbstentionCause::AbsenceOfProof,
+            },
+        },
+
+        // architecture.md:971 — "a Decisive, >=1 Opposes → Ambiguous", the cloned-MAC case.
+        (false, true, _, true) => Conclusion::Abstained {
+            cause: IdentityAbstentionCause::Ambiguous,
+        },
+
+        // architecture.md:972 — "no Decisive, >=1 Supports, no Opposes → Ambiguous" (weak evidence).
+        (false, false, true, false) => Conclusion::Abstained {
+            cause: IdentityAbstentionCause::Ambiguous,
+        },
+
+        // architecture.md:973 — "Supports AND Opposes → Ambiguous" (conflict).
+        (false, false, true, true) => Conclusion::Abstained {
+            cause: IdentityAbstentionCause::Ambiguous,
+        },
+
+        // ⚠️ NOT a D13 row — this is the class the table does not cover, and there is no
+        // architecture line to cite. Guy's arbitration, 2026-07-29: `>=1 Opposes` with nothing
+        // arguing for the merge abstains for absence of proof. See this function's doc.
+        (false, false, false, true) => Conclusion::Abstained {
+            cause: IdentityAbstentionCause::AbsenceOfProof,
+        },
+
+        // architecture.md:974 — "only Neutral / nothing → NoMatch (absence of proof)". `Neutral` is
+        // not in the tuple because no row tests it: it is what is left when nothing else spoke.
+        (false, false, false, false) => Conclusion::Abstained {
+            cause: IdentityAbstentionCause::AbsenceOfProof,
+        },
+    };
+
+    Decision {
+        conclusion,
+        verdict_vector,
+        ruleset_version,
+    }
+}
+
+/// The lexicographically smallest [`RuleId`] among the verdicts carrying `wanted`, if any.
+///
+/// The tiebreak of [`decide`], factored out so the two rule-naming arms cannot drift apart. It
+/// returns an `Option` because the type system does not know that the caller has already established
+/// presence; the callers discharge it with an arm rather than with `expect()`, so no path panics.
+fn smallest_rule_with(verdicts: &[RuleVerdict], wanted: Verdict) -> Option<RuleId> {
+    verdicts
+        .iter()
+        .filter(|rv| rv.verdict == wanted)
+        .map(|rv| rv.rule.clone())
+        .min()
+}
+
 /// Why the identity cascade did not conclude — the engine's own abstention vocabulary.
 ///
 /// # Two variants, and the two D13 rows that produce none
@@ -685,6 +825,296 @@ mod tests {
             decision.ruleset_version,
             RulesetVersion(7),
             "the ruleset version is carried alongside, not derived"
+        );
+    }
+
+    // ── story 5.4b: the verdict algebra ──────────────────────────────────────────────────────
+
+    /// D13's table, read directly and restated here as a SECOND, INDEPENDENT ORACLE.
+    ///
+    /// ⚠️ **Deliberate redundancy — do not collapse this into [`decide`] with a DRY pass.** It is the
+    /// same protected shape as `fixtures.rs`'s `expected()`, which restates the corpus bytes rather
+    /// than reading them through the code under test. A test that called `decide` to compute its own
+    /// expectation would prove nothing at all.
+    ///
+    /// It is written from the four PRESENCE booleans, in D13's own row order, and returns the full
+    /// [`Conclusion`] — **rule included**, because the rule is the half of a conclusion an arm can
+    /// silently get wrong.
+    fn expected_conclusion(v: &[RuleVerdict]) -> Conclusion {
+        let has = |w: Verdict| v.iter().any(|rv| rv.verdict == w);
+        // The lexicographically smallest rule among the verdicts carrying `w` — restated, not shared
+        // with the implementation.
+        let smallest = |w: Verdict| {
+            v.iter()
+                .filter(|rv| rv.verdict == w)
+                .map(|rv| rv.rule.clone())
+                .min()
+        };
+
+        if has(Verdict::Disqualifying) {
+            // architecture.md:969 — "any Disqualifying → NoMatch, absolute priority".
+            match smallest(Verdict::Disqualifying) {
+                Some(rule) => Conclusion::NoMatch { rule },
+                None => unreachable!("has(Disqualifying) implies a Disqualifying verdict exists"),
+            }
+        } else if has(Verdict::Decisive) && !has(Verdict::Opposes) {
+            // architecture.md:970 — "a Decisive, no Opposes → Match".
+            match smallest(Verdict::Decisive) {
+                Some(rule) => Conclusion::Match { rule },
+                None => unreachable!("has(Decisive) implies a Decisive verdict exists"),
+            }
+        } else if has(Verdict::Decisive) {
+            // architecture.md:971 — "a Decisive, >=1 Opposes → Ambiguous" (the cloned-MAC case).
+            Conclusion::Abstained {
+                cause: IdentityAbstentionCause::Ambiguous,
+            }
+        } else if has(Verdict::Supports) {
+            // architecture.md:972 (weak evidence) and :973 (Supports AND Opposes, conflict) — with
+            // no Decisive, both land on Ambiguous whatever Opposes does.
+            Conclusion::Abstained {
+                cause: IdentityAbstentionCause::Ambiguous,
+            }
+        } else {
+            // architecture.md:974 — "only Neutral / nothing → NoMatch (absence of proof)", AND the
+            // class D13's table does not cover: >=1 Opposes with nothing arguing for the merge.
+            // Guy's arbitration, 2026-07-29.
+            Conclusion::Abstained {
+                cause: IdentityAbstentionCause::AbsenceOfProof,
+            }
+        }
+    }
+
+    /// A subset of the five verdicts, as one `RuleVerdict` each with a distinct rule.
+    ///
+    /// Rules are named so that lexicographic order does NOT follow `Verdict::all()`'s order —
+    /// otherwise "smallest rule" and "first in the vector" would be indistinguishable here.
+    fn subset(mask: u32) -> Vec<RuleVerdict> {
+        const NAMES: [&str; 5] = ["r-e", "r-c", "r-a", "r-d", "r-b"];
+        Verdict::all()
+            .into_iter()
+            .enumerate()
+            .filter(|(i, _)| mask & (1 << i) != 0)
+            .map(|(i, verdict)| RuleVerdict {
+                rule: rule(NAMES[i]),
+                verdict,
+                evidence: vec![obs(100 + i as u128)],
+            })
+            .collect()
+    }
+
+    /// `decide` is TOTAL over D13's table: all 32 subsets of the five verdicts get an answer, and it
+    /// is the one D13's own text gives — including the empty vector, which is the `mask == 0` case.
+    ///
+    /// This is the "every input class, not a sample" the epic asks for: `2^5` presence combinations,
+    /// each checked against [`expected_conclusion`], an oracle written from the architecture rather
+    /// than from the code under test.
+    ///
+    /// ⚠️ **Every mismatch is collected and reported together, not asserted per iteration.** A bare
+    /// `assert_eq!` inside the loop aborts on the first one, which hides HOW MANY classes a change
+    /// moved — and that count is this test's coverage. Measured: it is the difference between "M1
+    /// reds" and "M1 reds on exactly 2 of 32".
+    ///
+    /// ⚠️ **What it does NOT cover: the tiebreak.** Each subset carries at most one verdict of any
+    /// given kind, so no arm ever has two candidates and `min()` over a singleton is order-free.
+    /// `the_named_rule_does_not_depend_on_arrival_order` is the only coverage that property has.
+    #[test]
+    fn decide_is_total_over_every_one_of_d13s_input_classes() {
+        let mut mismatches = Vec::new();
+
+        for mask in 0..32u32 {
+            let vector = subset(mask);
+            let expected = expected_conclusion(&vector);
+            let decision = decide(vector.clone(), RulesetVersion(3));
+
+            if decision.conclusion != expected {
+                mismatches.push(format!(
+                    "subset {mask:05b} {:?}: expected {expected:?}, got {:?}",
+                    vector.iter().map(|rv| rv.verdict).collect::<Vec<_>>(),
+                    decision.conclusion
+                ));
+            }
+            assert_eq!(
+                decision.verdict_vector, vector,
+                "subset {mask:05b}: the verdict vector is carried through, not rebuilt"
+            );
+            assert_eq!(
+                decision.ruleset_version,
+                RulesetVersion(3),
+                "subset {mask:05b}: the version is passed through verbatim"
+            );
+        }
+
+        assert!(
+            mismatches.is_empty(),
+            "{} of 32 input classes disagree with D13's table:\n  {}",
+            mismatches.len(),
+            mismatches.join("\n  ")
+        );
+    }
+
+    /// The class D13's six rows leave uncovered — `>=1 Opposes`, no `Decisive`, no `Supports`, no
+    /// `Disqualifying` — abstains for absence of proof.
+    ///
+    /// It is inside the 32-subset walk already; it gets its own name because it is the ONE answer no
+    /// architecture line backs. It is Guy's arbitration of 2026-07-29: nothing argues FOR the merge,
+    /// so there is no merge to refuse, and D13 reserves the refusal-that-names-a-rule for
+    /// `Disqualifying`.
+    #[test]
+    fn the_input_class_d13_does_not_cover_abstains_for_absence_of_proof() {
+        let vector = vec![RuleVerdict {
+            rule: rule("l2-different-switch"),
+            verdict: Verdict::Opposes,
+            evidence: vec![obs(1)],
+        }];
+
+        let decision = decide(vector, RulesetVersion(1));
+
+        assert_eq!(
+            decision.conclusion,
+            Conclusion::Abstained {
+                cause: IdentityAbstentionCause::AbsenceOfProof
+            },
+            "an Opposes with nothing arguing for the merge abstains; it does not refuse, because a \
+             refusal names a rule and D13 reserves that to Disqualifying"
+        );
+    }
+
+    /// The rule a decision names does not depend on the order the verdicts arrived in — D13's *"the
+    /// one written first… is not a decision, it is an accident of file order"*.
+    ///
+    /// ⚠️ Three verdicts of the SAME rule-naming kind, and their rule names supplied in an order that
+    /// is NOT their lexicographic order. Both are load-bearing: a mixed vector would conclude
+    /// `Abstained`, which names no rule, so every permutation would agree whatever the tiebreak did —
+    /// the test would pass with "first in the vector" and prove nothing.
+    #[test]
+    fn the_named_rule_does_not_depend_on_arrival_order() {
+        let mk = |name: &str| RuleVerdict {
+            rule: rule(name),
+            verdict: Verdict::Disqualifying,
+            evidence: vec![obs(7)],
+        };
+        // Supplied c, a, b — lexicographic order differs from vector order.
+        let names = ["c", "a", "b"];
+        let permutations = [
+            [0, 1, 2],
+            [0, 2, 1],
+            [1, 0, 2],
+            [1, 2, 0],
+            [2, 0, 1],
+            [2, 1, 0],
+        ];
+
+        for order in permutations {
+            let vector: Vec<RuleVerdict> = order.iter().map(|&i| mk(names[i])).collect();
+            let decision = decide(vector, RulesetVersion(1));
+
+            assert_eq!(
+                decision.conclusion,
+                Conclusion::NoMatch { rule: rule("a") },
+                "arrival order {order:?} must not change the rule named: the smallest RuleId wins, \
+                 not the first one in the vector"
+            );
+        }
+    }
+
+    /// A refusal names the rule that FORBADE the pair — never the smallest rule in the vector.
+    ///
+    /// The failing implementation this pins is a real one: taking `min()` over the WHOLE vector once
+    /// and reusing it in both rule-naming arms is deterministic, order-independent, and leaves the
+    /// named rule inside its own verdict vector — so it satisfies every other test here while
+    /// answering `NoMatch { rule: "a" }`, a refusal naming the rule that argued FOR the merge.
+    #[test]
+    fn a_disqualifying_names_the_disqualifying_rule_not_the_smallest_one() {
+        let vector = vec![
+            RuleVerdict {
+                rule: rule("a"),
+                verdict: Verdict::Decisive,
+                evidence: vec![obs(1)],
+            },
+            RuleVerdict {
+                rule: rule("z"),
+                verdict: Verdict::Disqualifying,
+                evidence: vec![obs(2)],
+            },
+        ];
+
+        let decision = decide(vector, RulesetVersion(1));
+
+        assert_eq!(
+            decision.conclusion,
+            Conclusion::NoMatch { rule: rule("z") },
+            "the refusal names the Disqualifying rule; 'a' argued FOR the pair and must not be the \
+             rule a refusal cites"
+        );
+    }
+
+    /// Everything `decide` returns is coherent: a named rule is in the vector it travels with, and
+    /// an empty input can never come back as a `Match`.
+    ///
+    /// This is the invariant story 5.4 registered as unenforceable at the type level — `Decision`'s
+    /// fields are `pub` — and it holds here **by construction**: `decide` selects the rule FROM the
+    /// vector it then returns. A struct literal built elsewhere is still unconstrained; that residue
+    /// is registered with story 5.9.
+    #[test]
+    fn a_named_rule_is_always_present_in_the_vector_it_travels_with() {
+        for mask in 0..32u32 {
+            let decision = decide(subset(mask), RulesetVersion(1));
+            if let Some(named) = decision.rule() {
+                assert!(
+                    decision.verdict_vector.iter().any(|rv| &rv.rule == named),
+                    "subset {mask:05b}: conclusion names {named:?}, which is absent from its own \
+                     verdict vector — 'merged, with no explanation'"
+                );
+            }
+        }
+
+        let empty = decide(Vec::new(), RulesetVersion(1));
+        assert_eq!(
+            empty.conclusion,
+            Conclusion::Abstained {
+                cause: IdentityAbstentionCause::AbsenceOfProof
+            },
+            "an empty verdict set abstains for absence of proof and can never be a Match: \
+             'merged, with no explanation' is unreachable through decide()"
+        );
+    }
+
+    /// A vector naming the same rule twice does not break totality — `decide` answers, and answers
+    /// the same way every time.
+    ///
+    /// `("a", Decisive)` + `("a", Opposes)` is the register's own example: ONE rule contradicting
+    /// itself, fabricating D13's *"a `Decisive`, >=1 `Opposes`"* conflict row on its own. ⚠️ This
+    /// pins TOTALITY, not refusal. Refusing a duplicated rule needs a PRODUCER that emits one verdict
+    /// per rule, and no rule exists — that half stays open with story 5.5.
+    #[test]
+    fn a_duplicated_rule_id_does_not_break_totality() {
+        let vector = vec![
+            RuleVerdict {
+                rule: rule("a"),
+                verdict: Verdict::Decisive,
+                evidence: vec![obs(1)],
+            },
+            RuleVerdict {
+                rule: rule("a"),
+                verdict: Verdict::Opposes,
+                evidence: vec![obs(2)],
+            },
+        ];
+
+        let first = decide(vector.clone(), RulesetVersion(1));
+        let second = decide(vector, RulesetVersion(1));
+
+        assert_eq!(
+            first.conclusion,
+            Conclusion::Abstained {
+                cause: IdentityAbstentionCause::Ambiguous
+            },
+            "one rule contradicting itself is D13's Decisive-plus-Opposes row; decide answers rather \
+             than refusing, because refusing needs a producer that does not exist"
+        );
+        assert_eq!(
+            first.conclusion, second.conclusion,
+            "the same input answers the same way"
         );
     }
 }

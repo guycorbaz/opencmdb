@@ -703,7 +703,7 @@ development_status:
   # not five; and the story cited `cascade.rs:42` for the f64 token when it is `:52` — a number
   # inherited from the register without re-measuring, which is the story's own inherited lesson #1
   # committed by the story that quotes it. Caught before dev this time.
-  5-4b-verdict-algebra-and-float-gate: ready-for-dev
+  5-4b-verdict-algebra-and-float-gate: in-progress
   5-5-l1-join-pure: backlog
   5-6-blocker-and-recall-assertion: backlog
   5-7-trap-runner-stops-scoring-nothing: backlog

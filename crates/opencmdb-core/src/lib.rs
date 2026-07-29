@@ -38,7 +38,7 @@ pub use clock::Clock;
 pub use connector::{Connector, ConnectorError, ObservationSink, PollSummary, VecSink};
 pub use gap::{AbstentionCause, Gap, Reconciliation, reconcile};
 pub use identity::cascade::{
-    Conclusion, Decision, IdentityAbstentionCause, RuleVerdict, RulesetVersion, Verdict,
+    Conclusion, Decision, IdentityAbstentionCause, RuleVerdict, RulesetVersion, Verdict, decide,
 };
 pub use observation::{
     Capabilities, ConnectorId, Fact, FactKind, HostnameSource, L2DomainId, MacAddr, MacParseError,
