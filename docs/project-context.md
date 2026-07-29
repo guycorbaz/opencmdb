@@ -42,7 +42,7 @@ Docker Hub; the binary runs and scans on Guy's NAS (frontend on macvlan, no Trae
 | **E2** Le contrat de connecteur | ✅ done (5 stories) |
 | **E3** Mon premier écart réel — **v0.1** | ✅ done (10 stories), retrospective held |
 | **E4** Infra fixtures & corpus de pièges — v0.2 | ✅ **done 2026-07-25** (19/19 authored; 4.19 split — see below) |
-| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — 15 stories; **5.1, 5.2 and 5.2b done** (PR #41, #44, #46, all merged 2026-07-28). Epic 5's **three inherited-debt stories are closed**; the engine proper starts at **5.3, `done`** (PR #48, merged 2026-07-29) — it ships the identity engine's own abstention vocabulary and NO engine. Next is 5.4 |
+| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — **16 stories** (5.4b INSERTED 2026-07-29 at 5.4's contexting: the verdict algebra as a TOTAL function, plus the `xtask` gate that refuses a float under `identity/`); **5.1, 5.2 and 5.2b done** (PR #41, #44, #46, all merged 2026-07-28). Epic 5's **three inherited-debt stories are closed**; the engine proper starts at **5.3, `done`** (PR #48, merged 2026-07-29) — it ships the identity engine's own abstention vocabulary and NO engine. **5.4 is `review`** — the engine's return type (`Verdict`, `RuleVerdict`, `RulesetVersion`, `Conclusion`, `Decision`) and still NO algebra. Next is 5.4b |
 | **E6–E23** | backlog |
 
 Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`, not this file.
@@ -60,14 +60,16 @@ across nine families** (randomized-mac, multi-nic, shared-hardware-vm, cloned-ma
 vrrp-virtual-mac, hostname-collision, docker-veth, hostname-absence — each in positive AND
 negative form, each naming the RULE rather than the outcome), the scoring algebra, the metrics
 harness, the trap runner, the reality-debt register, and the wire-format spec. Test counts on
-master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **267** on master today
-(135 + 90 + 42) — story 5.1 added the two
+master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **271** on the story-5.4 branch
+(135 + 94 + 42) — story 5.1 added the two
 corpus-wide walks, story 5.2 the trap-text scan, the `raw` scan and the scanner's six closed
 evasions, and story 5.2b five byte-pin tests over six of the eight streams that had none (the four
 unpinned families plus `example-traps.jsonl`, `dhcp-churn`'s existing pin extended) together with
 the trap→`obs_id` binding pin; story **5.3** the four tests of the identity engine's own abstention
 vocabulary (`IdentityAbstentionCause`, two variants, in the new `opencmdb-core/src/identity/`) — a
-TYPE and no engine. **5.2b's trap→`obs_id` binding pin** closed a hole measured TWICE: exchanging two `observations`
+TYPE and no engine; story **5.4** four more, for the engine's RETURN type — `Verdict` (D13's five),
+`RuleVerdict { rule, verdict, evidence }`, `RulesetVersion`, `Conclusion` and `Decision` — still with
+no algebra, no rule and no producer, the combining function being story 5.4b's. **5.2b's trap→`obs_id` binding pin** closed a hole measured TWICE: exchanging two `observations`
 vectors in `cloned-mac.toml`, and later in `hostname-collision.toml`, each made the corpus DEMAND a
 false merge while the whole suite stayed green. **All 24 committed traps across all ten trap files
 now have their `observations` vector, `Expectation` and `family` pinned** — the scope grew from

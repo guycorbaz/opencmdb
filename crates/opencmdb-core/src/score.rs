@@ -43,8 +43,12 @@ use crate::trap::{Expectation, RuleId, TrapId};
 /// in [`score`], and would hold if `Outcome` carried nothing at all. The payloads are here so that
 /// story 4.7 can add `(outcome, rule)` comparison without changing this type.
 ///
-/// **Not named `Decision`.** The architecture reserves that name for the engine's real return type
-/// and never lists its fields; taking it here would squat a type Epic 5 has to define.
+/// **Not named `Decision`, and since story 5.4 that name is taken.**
+/// [`crate::identity::cascade::Decision`] is the ENGINE's return — a conclusion, its verdict vector
+/// and the ruleset version that produced it. This type is the HARNESS's record of an answer, which
+/// may equally be hand-authored in a test. The two mirror each other's algebra (a decision names a
+/// rule, an abstention names a cause) and differ in envelope, and **nothing converts between them**:
+/// mapping one onto the other is a decision about the release gate, and story 5.7 owns it.
 ///
 /// # The two sides of a trap speak different abstention vocabularies (story 5.3)
 ///
@@ -196,6 +200,10 @@ pub fn score(expected: &Expectation, actual: &Outcome) -> Score {
 
 /// The verdict of RUNNING one trap: [`score`]'s truth table, plus the `(verdict, rule)` assertion.
 ///
+/// ⚠️ **Not [`crate::identity::cascade::Verdict`]**, which is what ONE RULE says about one candidate
+/// pair (D13's five-variant enum). This type is what the RUNNER says about one trap. The four
+/// judgements in play are tabulated in `identity::cascade`'s module doc.
+///
 /// D46b's surviving criterion (D64): *"compare `(verdict, rule)`, never `verdict` alone"*. [`score`]
 /// answers the verdict question and stays rule-blind; this adds the rule question ON TOP, so the two
 /// failure modes stay distinct — a wrong verdict and a right verdict by the wrong rule are not the
@@ -273,9 +281,12 @@ pub enum SourceState {}
 /// Without it the A-vs-B question is undecidable after the fact… **the anti-drift is not
 /// discipline, it is a data requirement.**"*
 ///
-/// The vector's element is `(rule, verdict, evidence)` and none of the three exists: rules arrive
-/// in Epic 5. Rather than invent the type, this placeholder is **uninhabited** — so the field is
-/// provably empty, by the same standard as [`SourceState`], instead of being empty by comment.
+/// The vector's element is `(rule, verdict, evidence)`, and since story 5.4 that triple HAS a type
+/// — [`crate::identity::cascade::RuleVerdict`], on the engine's side. **Nothing produces one**: no
+/// rule speaks, so no verdict vector is ever built. This placeholder therefore stays **uninhabited**
+/// rather than being replaced, so the field is provably empty by the same standard as
+/// [`SourceState`], instead of being empty by comment. **Story 5.7 owns the unification**, when the
+/// trap runner first records a run a real engine produced.
 ///
 /// This is also what PINS story 4.7a's AC6 forward contract: [`run_trap`] asserts `(verdict, rule)`
 /// today, but the requirement that *a firing rule leave its `rule_id` and evidence behind* needs an

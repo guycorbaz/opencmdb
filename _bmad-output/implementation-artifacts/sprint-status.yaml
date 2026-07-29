@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-29  # Story 5.3 DONE — PR #48 merged as 62f9c83; NEXT = create-story 5.4
+last_updated: 2026-07-29  # Story 5.4 IMPLEMENTED -> review; PR open. NEXT = code-review 5.4
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -151,10 +151,10 @@ development_status:
 
   # ── Epic 5: Identité d'interface fiable (v0.3) ───────────────────────────
   # Decomposed 2026-07-26 into 14 stories (epics.md); story 5.2b was INSERTED the same day,
-  # bringing it to 15. Build order is the numbering: the THREE inherited debt stories first
-  # (this epic bumps the corpus), then the engine's vocabulary, the pure join, the blocker,
-  # the corpus wiring, persistence, the invariants, and last the operator-visible abstention
-  # surface.
+  # bringing it to 15, and story 5.4b on 2026-07-29, bringing it to 16. Build order is the
+  # numbering: the THREE inherited debt stories first (this epic bumps the corpus), then the
+  # engine's vocabulary, the verdict algebra, the pure join, the blocker, the corpus wiring,
+  # persistence, the invariants, and last the operator-visible abstention surface.
   # ⚠️ NFR4 CANNOT go green here — D18 gates at the DEVICE level (Epic 6). Of the 24 committed
   # traps, 13 name an l1-* rule, 8 an l2-* rule, 3 a cause. Story 5.8 keeps the 8 unanswerable
   # ones IN the denominator so a green gate can never mean "we did not ask".
@@ -506,7 +506,139 @@ development_status:
   # NEXT = `create-story` 5.4 (`Decision` and `ruleset_version`), then its MANDATORY validation pass
   # by two fresh-context agents before dev-story.
   5-3-engine-abstention-cause: done
-  5-4-decision-and-ruleset-version: backlog
+  #
+  # 5.4 CONTEXTED 2026-07-29 — the engine's return type, and NO algebra: no `decide`, no rule, no
+  # join, no producer. It writes FIVE types in the existing `identity/cascade.rs` — `Verdict` (D13's
+  # five, spelled as architecture.md:964 spells them), `RuleVerdict { rule, verdict, evidence }`,
+  # `RulesetVersion`, `Conclusion` (Match | NoMatch | Abstained, mirroring `score::Outcome`'s shape)
+  # and `Decision { conclusion, verdict_vector, ruleset_version }` — plus five tests and five
+  # rewritten doc blocks.
+  # SIX measurements taken against master (505379e) BEFORE the story was written, so the dev
+  # re-derives nothing and a surprise reads as a FINDING:
+  #   · `cargo test --workspace --locked` → 135 bin + 90 core + 42 xtask = 267, zero failures;
+  #   · ZERO `f32` and ZERO `f64` in the whole Rust workspace — so D13's "if the output is a float,
+  #     B has won in disguise" is true by ACCIDENT today, held by no gate. That measurement is what
+  #     justifies story 5.4b's gate;
+  #   · the committed corpus writes SEVEN distinct rule names and FIVE of them are `l2-*` (Epic 6's).
+  #     That is why `RuleId` does NOT close into an enum here, although `trap.rs:33-35` says Epic 5
+  #     closes it: doing so would enumerate five undesigned rules or unparse five locked trap files.
+  #     That doc sentence is therefore corrected by this story (doc-only; `:38` byte-unchanged);
+  #   · `Conclusion`, `RulesetVersion`, `RuleVerdict` occur ZERO times in crates/ and xtask/;
+  #     `Decision` occurs TWICE, both in PROSE (`score.rs:46`, `fixtures.rs:1662`), never as an item;
+  #     `Verdict` on a word boundary returns two prose lines only. No name is contested, none is
+  #     E0252 against lib.rs's flat re-export block;
+  #   · `ObsId` already derives Ord/Eq/Copy (uuid_newtype!), so `Vec<ObsId>` is PartialEq for free;
+  #   · `cascade.rs` is 162 lines with the first `#[cfg(test)]` at :122 → 121 CODE lines, ceiling
+  #     2000. Ample.
+  # DECISIONS taken at contexting, so they are not re-litigated at review: `Decision` is a STRUCT and
+  # `Conclusion` an ENUM (a version repeated on three variants would rest on three declarations
+  # agreeing, which is exactly what D14 says must not be forgettable); `evidence: Vec<ObsId>` is the
+  # smallest non-invented shape (the architecture mentions evidence on SIXTEEN lines, five of them
+  # about the identity link's evidence, and SHAPES it on none); NO serde, NO `Ord` anywhere (D20: strength returns as an ORDINAL under a four-condition
+  # ADR, so an orderable `Verdict` would let magnitude compile), NO `Default` on `Decision` (that IS
+  # the "mandatory" mechanism), NO `const CURRENT_RULESET_VERSION` (there is no ruleset), NO
+  # `From<Decision> for Outcome` (story 5.7's decision about the gate), NO `Decision::cause()` (no
+  # consumer until 5.14), and `score::VerdictVectorEntry` is NOT replaced — doing so would falsify
+  # four places at once with no producer to justify any of them (owner 5.7).
+  # ⚠️ A FINDING was measured at contexting and is recorded rather than absorbed: enumerating D13's
+  # table over the PRESENCE of each verdict yields SEVEN input classes and its six rows cover SIX.
+  # `>=1 Opposes` with no `Decisive`, no `Supports` and no `Disqualifying` is covered by NO row.
+  # Guy's arbitration 2026-07-29: it concludes `Abstained { AbsenceOfProof }`. The arbitration
+  # belongs to 5.4b (the function that must be total); 5.4 may NAME the gap and must not answer it.
+  # Story 5.4 also CLOSES the register entry that named it by name: "Owner: whoever writes 5.4's AC7
+  # — require the PR and stop" (deferred-work.md:1073-1076). Its AC8 ends at the PR; the merge is a
+  # separate act.
+  # VALIDATED 2026-07-29 by two fresh-context agents (fact-check + gap-hunt). Both verified against
+  # the tree, and every finding they raised was checked before being applied. 6 HIGH + 8 MEDIUM from
+  # the gap-hunt, 5 HIGH + 8 MEDIUM/LOW from the fact-check; all applied. What they caught:
+  #   · a MUTATION THE STORY PREDICTED THAT CANNOT HAPPEN — the gap-hunt COMPILED the case: deleting
+  #     `Verdict::Disqualifying` gives `error[E0599]` twice and NEVER the `E0308` M3 announced, which
+  #     the story's own AC1 already said two pages earlier ("alternatives along one repair path,
+  #     never simultaneous"). Same class as 5.3's self-contradicting AC1b, caught BEFORE dev this time;
+  #   · A GAP NO AC, DOC OR REGISTER ENTRY COVERED: a `Decision` whose `Conclusion` names a rule
+  #     ABSENT from its own `verdict_vector`, or a `Match` with an EMPTY vector, is representable and
+  #     nothing refuses it — precisely what the two quotes the story leans on (D13's "the list IS the
+  #     explanation", D19's "a rule that fires without leaving its rule_id…") exist to prevent. Now an
+  #     AC3 bullet and a register item, owner 5.4b (the first place conclusion and vector are built
+  #     together, hence the first place a test can red);
+  #   · THE COUNTING DEFECT, four times in one file — 2/4/5 doc blocks and 4/5 tests. The story's own
+  #     inherited lesson #3 ("a count in a doc is a claim"), violated by the story that states it.
+  #     Now SIX doc locations, five of them falsified and rewritten, counted once and listed once;
+  #   · AC6's blanket "every claim is pinned by a test" was UNSATISFIABLE: six binding claims are
+  #     carried by an ABSENT derive and are untestable without a compile-fail harness this project
+  #     does not have. Scoped to behaviour/shape, with the six named;
+  #   · a STALE MEASUREMENT RE-INTRODUCED from 5.3's pre-merge notes — `Outcome::Abstained` has NINE
+  #     construction sites, not six, and 5.3's OWN completion record already said so (:452-453 of
+  #     this file). Re-introducing a corrected number is the same defect as inventing one;
+  #   · a D19 "quote" that was `deferred-work.md`'s PARAPHRASE, not architecture.md's sentence; two
+  #     greps whose reported output was a hand-picked subset presented as the whole; ~a dozen line
+  #     cites off by one to four; and `Uuid::new_v4()` — which does NOT compile here (`features =
+  #     ["v7","serde"]`), so Task 6 now names the crate's own `Uuid::from_u128` idiom.
+  # BOTH AGENTS INDEPENDENTLY RE-DERIVED THE D13 TABLE GAP and confirmed it: exactly ONE uncovered
+  # input class, the one the story names. The fact-check also confirmed the type design compiles as
+  # specified (derives, E0252, visibility, orphan rules all checked) and that all six baseline
+  # measurements reproduce exactly.
+  # ⚠️ The agents DISAGREED on one point and the tree settled it: register annotations sit ABOVE
+  # their target at :241/:319 and BELOW it at :490 — both idioms exist. What 5.3's review actually
+  # settled is that an annotation must NAME its target, not which side it sits on. AC7 now says so.
+  # Two documents falsified by 5.4b's insertion were fixed at contexting rather than left for the
+  # dev: `docs/project-context.md` and `CLAUDE.md` both said "15 stories"; `epics.md:22` said 15 too,
+  # while `:1313` already said sixteen — a half-updated document the fact-check caught.
+  #
+  # 5.4 IMPLEMENTED 2026-07-29 → review (branch `story-5.4-decision-and-ruleset-version`).
+  # In the weaker true sentence: `identity/cascade.rs` holds FIVE new types — `Verdict` (D13's five,
+  # spelled as architecture.md:964 spells them), `RuleVerdict { rule, verdict, evidence: Vec<ObsId> }`,
+  # `RulesetVersion(u32)`, `Conclusion { Match | NoMatch | Abstained }` and `Decision { conclusion,
+  # verdict_vector, ruleset_version }` — plus `Verdict::all()` and `Decision::rule()`. Four tests pin
+  # their claims. NOTHING combines a verdict set, no rule produces a `Verdict`, nothing produces a
+  # `Decision`. No byte moved under fixtures/ (verified empty, MANIFEST untouched).
+  # 267 → 271 tests (135 bin + 94 core + 42 xtask); only core moved, as predicted. Both forms of
+  # clippy green INCLUDING the CI form. `cargo doc` → the same THREE pre-existing warnings, so none
+  # of the new full-path links is broken. `cascade.rs` = 444 CODE lines, ceiling 2000.
+  # FOUR mutations run:
+  #   · M1 (drop `ruleset_version`) → SIX errors: 5× E0560 at construction sites + 1× E0609 at
+  #     :653:22, the assertion that READS it. That is "mandatory by construction", measured;
+  #   · M2 (`rule()` returns None for NoMatch) → TWO failing tests, both assertion PANICS, both new.
+  #     The only one of the four that reds an assertion rather than a name;
+  #   · M3 (delete `Verdict::Disqualifying`) → `error[E0599]` at THREE sites and NEVER `E0308` —
+  #     exactly as the validation agent measured by compiling the case, and NOT as the story's first
+  #     draft predicted. The prediction was corrected BEFORE dev; the measurement agrees with the
+  #     correction;
+  #   · M4 (drop `evidence`) → FOUR errors (3× E0560, 1× E0609) PLUS an unpredicted side effect,
+  #     recorded rather than smoothed: `warning: unused import: crate::observation::ObsId` at :30:5,
+  #     which the CI form of clippy turns into a hard error. The field is what keeps that import live.
+  # ⚠️ TWO of the four reds are COMPILER-carried (M3 a spelling error, M4 a construction-site error);
+  # M1 and M2 are not. The story does NOT claim to close deferred-work.md:1045-1053 — owner stays 5.5.
+  # `the_verdict_vector_carries_the_whole_triple_in_order` has NO possible behavioural mutation: a
+  # `pub` field has no code to break, and the record says so.
+  # ONE count in the story's own Dev Notes is falsified by its own commit and corrected in the
+  # Completion Notes rather than left standing: `Decision` occurred TWICE in prose at 505379e and now
+  # occurs 26 times, because the type exists. That is the exact defect 5.3's review caught.
+  # SIX doc locations changed, FIVE because this story falsified them (cascade.rs module doc,
+  # identity/mod.rs, score.rs's "Not named `Decision`", score.rs's VerdictVectorEntry element
+  # sentence — its "uninhabited"/"provably empty" claims SURVIVE — and trap.rs's `RuleId` doc, whose
+  # "Epic 5 names them" prediction the seven-corpus-rule-names measurement refutes).
+  # REGISTER: deferred-work.md:1073-1076 CLOSED by append-and-strike (this story was its named
+  # owner — its AC8 ends at the PR). THREE entries annotated ↺ and NONE struck: the two `NoMatch`
+  # bullets (owner → 5.4b/5.5, the owner string struck in place inside 5.3's annotation bullets, so
+  # no bullet was rewritten) and the firing-rule/evidence contract (owner → 5.5). The new annotation
+  # sits ABOVE its target, the idiom of its two nearest neighbours, and :319-327 was RE-READ after
+  # insertion: 5.3's own "entry BELOW"/"entry above it" both still resolve, so no amendment was
+  # needed. A new `## Deferred from: story-5.4` section appended at the END opens FIFTEEN items —
+  # THIRTEEN name a story, TWO name the CONDITION that would produce an owner (`whoever writes D20's
+  # ADR`, `whoever revisits the crate's re-export policy`), and the section's preamble states that
+  # split rather than claiming fifteen named owners.
+  5-4-decision-and-ruleset-version: review
+  #
+  # 5.4b INSERTED 2026-07-29 with Guy, at 5.4's contexting and before any Epic 5 engine code existed
+  # — the same shape as 5.2b's insertion, and for the same reason: the thing being split out is the
+  # one whose correctness has to be the SUBJECT of a story, not a subsection of one. It owns
+  # `decide` (D13's six rows as a TOTAL pure function, including the uncovered class above), the
+  # order-independent choice of which rule a decision names when several qualify (which pre-empts
+  # 5.11), and the `cargo xtask ci` gate that reds on any `f32`/`f64` under `identity/` — in the
+  # idiom of the existing DDL-collation and retired-vocabulary greps (D56/D65: every gate lives in
+  # Rust, never in YAML). The letter suffix keeps 5.5–5.14 at their numbers (D56b idiom).
+  5-4b-verdict-algebra-and-float-gate: backlog
   5-5-l1-join-pure: backlog
   5-6-blocker-and-recall-assertion: backlog
   5-7-trap-runner-stops-scoring-nothing: backlog

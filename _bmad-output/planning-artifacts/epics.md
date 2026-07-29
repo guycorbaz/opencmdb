@@ -19,9 +19,9 @@ resumePoint: >
   engine) get a design nod at story-creation time.
   EPICS 3 and 4 are COMPLETE (Epic 4 closed 2026-07-25, retrospective held
   2026-07-26; story 4.19 was SPLIT, 4.19b re-scoped to Epic 11 via issue #34).
-  EPIC 5 (Identité d'interface fiable, v0.3) is DECOMPOSED into 15 stories
-  (5.1–5.14 on 2026-07-26 with Guy, plus 5.2b INSERTED the same day — see the
-  Epic 5 preamble) below. Three arbitrations were taken at
+  EPIC 5 (Identité d'interface fiable, v0.3) is DECOMPOSED into 16 stories
+  (5.1–5.14 on 2026-07-26 with Guy, plus 5.2b INSERTED the same day and 5.4b
+  INSERTED 2026-07-29 at story 5.4's contexting — see the Epic 5 preamble) below. Three arbitrations were taken at
   decomposition time and live in the stories that carry them: (a) NFR4 CANNOT go
   green in Epic 5 — D18 gates at the DEVICE level, and of the 24 committed traps
   13 name an `l1-*` rule, 8 an `l2-*` rule and 3 a cause; the Epic List entry was
@@ -1310,11 +1310,11 @@ Build the L1 interface-identity join and drive it against the corpus Epic 4 froz
 
 _Decomposed 2026-07-26 with Guy, immediately after the Epic 4 retrospective. Three arbitrations were taken at decomposition time and are recorded in the stories that carry them: the NFR4 level boundary (see the Epic List entry above and story 5.8), the engine's own abstention cause (5.3), and what persistence Epic 5 does and does not create (5.9)._
 
-_**Three** of the fifteen stories are **inherited debt**, placed at the HEAD on Guy's decision: the corpus byte-fidelity and corpus privacy themes had each accumulated three to four unowned entries in `deferred-work.md`. They come first because **this epic bumps the corpus**, and hardening after the bump means replaying every entry against artefacts that have moved._
+_**Three** of the sixteen stories are **inherited debt**, placed at the HEAD on Guy's decision: the corpus byte-fidelity and corpus privacy themes had each accumulated three to four unowned entries in `deferred-work.md`. They come first because **this epic bumps the corpus**, and hardening after the bump means replaying every entry against artefacts that have moved._
 
 _**Story 5.2b was INSERTED on 2026-07-26**, one day after the decomposition and before any Epic 5 code existed. It was surfaced while preparing story 5.1: four committed trap families (randomized-mac, multi-nic, shared-hardware-vm, cloned-mac) turned out to be named by no test at all, so 5.1's AC1 — which strengthens byte-pins that EXIST — could not reach them. It was neither absorbed into 5.1 nor left in the register, because the corpus is the oracle the L1 join is about to be judged against: hardening it after its first consumer exists means bending the engine to fit whatever the corpus happens to say. The letter suffix is the house idiom for an inserted item (D56b, AC5b/7b/7c), chosen so 5.3–5.14 keep their numbers._
 
-_Build order: the three debt stories (5.1, 5.2, 5.2b) -> the engine's vocabulary (5.3, 5.4) -> the pure join (5.5) -> the blocker (5.6) -> wiring it to the corpus (5.7, 5.8) -> persistence (5.9, 5.10) -> the invariants (5.11, 5.12, 5.13) -> the operator-visible surface (5.14). No story depends on a later one._
+_Build order: the three debt stories (5.1, 5.2, 5.2b) -> the engine's vocabulary (5.3, 5.4) -> the verdict algebra (5.4b) -> the pure join (5.5) -> the blocker (5.6) -> wiring it to the corpus (5.7, 5.8) -> persistence (5.9, 5.10) -> the invariants (5.11, 5.12, 5.13) -> the operator-visible surface (5.14). No story depends on a later one._
 
 ### Story 5.1: The corpus pins the obs_id-to-line binding, and every stream goes through the connector
 
@@ -1434,13 +1434,43 @@ So that the explanation is free (D13) and improving the engine is not a silent d
 
 **Given** D13's refusal of `rule -> confidence: f64` ("if the output is a float, B has won in disguise")
 **When** the type is reviewed
-**Then** no float crosses a decision boundary; any ranking value is an INTEGER in milli-units and may order candidates for display only.
+**Then** no float crosses a decision boundary; any ranking value is an INTEGER in milli-units and may order candidates for display only. _(SPLIT 2026-07-29: the TYPE-level half is story 5.4's — no type it defines carries a float or a magnitude; the **gate** that holds it mechanically is story 5.4b's, below. Measured at the split: zero `f32`/`f64` in the whole Rust workspace, so the rule was true by accident.)_
 
 **Given** D14's "`ruleset_version` is mandatory"
 **When** a decision is produced
 **Then** it carries the version of the ruleset that produced it.
 
-**And** the verdict algebra of D13 (`Decisive` / `Supports` / `Neutral` / `Opposes` / `Disqualifying`) is expressed as an enumeration, and combining verdicts is an algebra, never a sum.
+**And** the verdict algebra of D13 (`Decisive` / `Supports` / `Neutral` / `Opposes` / `Disqualifying`) is expressed as an enumeration, and combining verdicts is an algebra, never a sum. _(SPLIT 2026-07-29 at story 5.4's contexting: the enumeration is story 5.4's; **combining** them is story 5.4b's, below.)_
+
+### Story 5.4b: The verdict algebra is a total function, and no float can reach it
+
+_Inserted 2026-07-29 with Guy, at story 5.4's contexting and before any Epic 5 engine code existed. Two reasons, both measured. **(1)** Enumerating D13's table [architecture.md:967-974] over the PRESENCE of each verdict yields seven input classes and the six rows cover six of them: **`≥1 Opposes` with no `Decisive`, no `Supports` and no `Disqualifying` is covered by no row.** A function that must be total therefore needs an arbitration D13 does not supply, and that arbitration deserves to be the subject of a story rather than a subsection of one. **(2)** D13's *"if the output is a float, B has won in disguise"* is held today by nothing — measured at `505379e`: zero `f32`/`f64` in the whole Rust workspace, so the rule is true by accident. The letter suffix follows the house idiom for an INSERTED item (D56b, AC5b/7b/7c, story 5.2b) so 5.5–5.14 keep their numbers._
+
+As the identity engine,
+I want the verdict algebra as a total pure function, and a gate that refuses a float in the identity subtree,
+So that no input class falls through the table unnoticed and no weight can enter through the back door.
+
+**Acceptance Criteria:**
+
+**Given** story 5.4's `Verdict`, `RuleVerdict`, `Conclusion`, `Decision` and `RulesetVersion`, and D13's six-row table
+**When** the algebra is written
+**Then** `decide` is a **pure function over a verdict set** — no clock, no I/O, no SQL — implementing every row, with each arm citing the architecture line it comes from.
+
+**Given** the input class D13's table does not cover — `≥1 Opposes`, no `Decisive`, no `Supports`, no `Disqualifying`
+**When** it is met
+**Then** the conclusion is **`Abstained { AbsenceOfProof }`** _(Guy's arbitration, 2026-07-29)_: nothing argues FOR the merge, so there is no merge to refuse, and D13 deliberately reserves the refusal-that-names-a-rule for `Disqualifying`. The gap and the arbitration are documented at the function, and recorded as a correction to be carried into D13 at a milestone — never patched into `architecture.md` inside a story.
+
+**Given** that a decision names ONE rule while several rules may be `Disqualifying` or `Decisive` at once
+**When** more than one qualifies
+**Then** the rule named is chosen **deterministically and independently of the order the verdicts arrive in** — a property tested by permuting the input, not asserted in prose. *"The one written first… is not a decision, it is an accident of file order"* [architecture.md:936-937]; this also pre-empts story 5.11.
+
+**Given** D13's *"REFUSED: `rule -> confidence: f64`… if the output is a float, B has won in disguise"* [architecture.md:956-958]
+**When** `cargo xtask ci` runs
+**Then** a gate reds on any `f32` or `f64` under `crates/opencmdb-core/src/identity/`, in the idiom of the existing DDL-collation and retired-vocabulary greps (D56/D65 — every gate lives in Rust, never in YAML), with its own prove-to-red.
+
+**And** no ranking value is invented: D13's milli-units corollary [architecture.md:988-993] binds the day a float would otherwise appear, and no candidate ordering exists in Epic 5 (L1 is a deterministic lookup). The deferral is registered with its owner.
+
+**And** the table's totality is proven by exercising **every** input class, not a sample — and each guard is proven to red before it passes, the mutation recorded (house rule, story 1.3).
 
 ### Story 5.5: The L1 join, as a pure function
 
