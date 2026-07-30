@@ -42,14 +42,17 @@ Docker Hub; the binary runs and scans on Guy's NAS (frontend on macvlan, no Trae
 | **E2** Le contrat de connecteur | ✅ done (5 stories) |
 | **E3** Mon premier écart réel — **v0.1** | ✅ done (10 stories), retrospective held |
 | **E4** Infra fixtures & corpus de pièges — v0.2 | ✅ **done 2026-07-25** (19/19 authored; 4.19 split — see below) |
-| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — **16 stories** (5.4b INSERTED 2026-07-29 at 5.4's contexting: the verdict algebra as a TOTAL function, plus the `xtask` gate that refuses a float under `identity/`); **5.1, 5.2 and 5.2b done** (PR #41, #44, #46, all merged 2026-07-28). Epic 5's **three inherited-debt stories are closed**; the engine proper starts at **5.3, `done`** (PR #48, merged 2026-07-29) — it ships the identity engine's own abstention vocabulary and NO engine. **5.4 is `done`** (PR #52, merged 2026-07-29 as `da87b62`) — the engine's return type (`Verdict`, `RuleVerdict`, `RulesetVersion`, `Conclusion`, `Decision`) and still NO algebra. **5.4b is `ready-for-dev`** — `decide` as a TOTAL function, plus the anti-float gate |
+| **E5** Identité d'interface fiable — v0.3 | 🔵 **in-progress** since 2026-07-27 — **16 stories** (5.4b INSERTED 2026-07-29 at 5.4's contexting: the verdict algebra as a TOTAL function, plus the `xtask` gate that refuses a float under `identity/`); **5.1, 5.2 and 5.2b done** (PR #41, #44, #46, all merged 2026-07-28). Epic 5's **three inherited-debt stories are closed**; the engine proper starts at **5.3, `done`** (PR #48, merged 2026-07-29) — it ships the identity engine's own abstention vocabulary and NO engine. **5.4 is `done`** (PR #52, merged 2026-07-29 as `da87b62`) — the engine's return type (`Verdict`, `RuleVerdict`, `RulesetVersion`, `Conclusion`, `Decision`) and still NO algebra. **5.4b is `review`, CODE-REVIEWED 2026-07-30** (PR #55 open, CI green) — `decide` as a TOTAL pure function over D13's table (the uncovered class abstains; the D13 correction is issue #54, a milestone act) plus the sixth `xtask` gate, `float-free`. Still no rule and no producer. The review's 22 patches are applied and 5 deferrals registered; what it caught was mostly **claims, not behaviour** — a shipped doc quoting 47 offenders where the tree it described gave 45, a register count of eight where ten were annotated, this very file's test count left stale under a checked-off task, and a premise assertion that had gone inert. On the code: `decide` now matches on `Option<RuleId>` so the two unreachable arms are gone, and the gate's matcher is a numeric-literal tokeniser — `1e-3` and `1.` were green, `"192.168.0.1"` and `t.0.1` were red, all measured. Next is 5.5 |
 | **E6–E23** | backlog |
 
 Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`, not this file.
 
-**What exists today:** a three-crate workspace that builds and ships. `cargo xtask ci` runs four real
-gates — dependency frontier (D47), DDL binary collation (D64), retired vocabulary (D65), and the
-fixture corpus lock (both directions: edited AND orphan). `opencmdb-core` holds the domain
+**What exists today:** a three-crate workspace that builds and ships. `cargo xtask ci` runs **six**
+real gates — dependency frontier (D47), DDL binary collation (D64), retired vocabulary (D65), the
+fixture corpus lock (both directions: edited AND orphan), the file-size ceiling (D56b) and
+`float-free` (D13, story 5.4b) — plus the informational `views-hash` staleness check, which reports
+`ℹ STALE` and exits 0 by design. _(This sentence said "four" until 2026-07-30; `file-size` and
+`float-free` had shipped without it being updated.)_ `opencmdb-core` holds the domain
 (`Observation`, `Fact`, `Capabilities`, the closed `ConnectorError` taxonomy, the `Connector` trait
 and its consumer-driven contract test). `opencmdb-bin` holds everything touching the outside world:
 MariaDB pool + migrations, axum/askama/HTMX pages, an ARP/ping connector, the fixture reader and
@@ -60,8 +63,8 @@ across nine families** (randomized-mac, multi-nic, shared-hardware-vm, cloned-ma
 vrrp-virtual-mac, hostname-collision, docker-veth, hostname-absence — each in positive AND
 negative form, each naming the RULE rather than the outcome), the scoring algebra, the metrics
 harness, the trap runner, the reality-debt register, and the wire-format spec. Test counts on
-master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **271** on the story-5.4 branch
-(135 + 94 + 42) — story 5.1 added the two
+master at Epic 4's close: **119 (bin) + 86 (core) + 42 (xtask)**; **281** on the story-5.4b branch
+after its code review (**135 bin + 100 core + 46 xtask**) — story 5.1 added the two
 corpus-wide walks, story 5.2 the trap-text scan, the `raw` scan and the scanner's six closed
 evasions, and story 5.2b five byte-pin tests over six of the eight streams that had none (the four
 unpinned families plus `example-traps.jsonl`, `dhcp-churn`'s existing pin extended) together with
@@ -69,7 +72,11 @@ the trap→`obs_id` binding pin; story **5.3** the four tests of the identity en
 vocabulary (`IdentityAbstentionCause`, two variants, in the new `opencmdb-core/src/identity/`) — a
 TYPE and no engine; story **5.4** four more, for the engine's RETURN type — `Verdict` (D13's five),
 `RuleVerdict { rule, verdict, evidence }`, `RulesetVersion`, `Conclusion` and `Decision` — still with
-no algebra, no rule and no producer, the combining function being story 5.4b's. **5.2b's trap→`obs_id` binding pin** closed a hole measured TWICE: exchanging two `observations`
+no algebra, no rule and no producer; and story **5.4b** the ALGEBRA itself — `decide` as a TOTAL pure
+function over D13's table plus the class it leaves uncovered — with six core tests, plus four `xtask`
+tests for the sixth gate, `float-free`. **Still no rule and no producer**: nothing emits a `Verdict`,
+so nothing calls `decide` outside its own tests (story 5.5 owns the join).
+**5.2b's trap→`obs_id` binding pin** closed a hole measured TWICE: exchanging two `observations`
 vectors in `cloned-mac.toml`, and later in `hostname-collision.toml`, each made the corpus DEMAND a
 false merge while the whole suite stayed green. **All 24 committed traps across all ten trap files
 now have their `observations` vector, `Expectation` and `family` pinned** — the scope grew from
