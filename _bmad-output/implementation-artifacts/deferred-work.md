@@ -1269,6 +1269,12 @@ says *"Not struck"* two lines later, meaning the ENTRY is not struck. Both appea
   `Verdict` are all re-exported at the crate root and nothing imports them from there. Following the
   crate's idiom was chosen over deviating for one module, and the cost is recorded rather than
   hidden. **Owner: whoever revisits the crate's re-export policy** (that entry's own wording).
+  ↺ **GREW to SIX names by story 5.4b, recorded 2026-07-30 by its code review, not by the story.**
+  `decide` joined the same flat block and nothing imports it from the crate root either
+  (`grep -rn "decide(" crates/ xtask/` finds no caller outside `cascade.rs`). 5.4b's File List
+  claimed *"the cost is recorded on the existing re-export entry"* while this bullet still said five
+  and enumerated five — the annotation the story's own binding Dev Note asked for was never written.
+  Owner unchanged.
 
 _The three items below were added by story 5.4's CODE REVIEW (2026-07-29), not by the story. They
 are in this section rather than in a review section of their own because they are properties of what
@@ -1314,6 +1320,19 @@ the story shipped._
   has no `f32`/`f64` token at all and is the likeliest shape a weight takes). The gate's own doc
   carries its limits, including two false-POSITIVE directions: a float in a block comment, and a
   decimal inside a string literal in code. Neither occurs under `identity/` today.
+  ↺ **THREE corrections by the 2026-07-30 code review, appended rather than rewritten above.**
+  (1) The line citation in the sentence above says `cascade.rs:52`; it is **`:53`**, and AC8's own
+  rule — *"cite entries by TITLE, not by line number… a line citation written here will rot the same
+  way"* — is what the sentence broke, one bullet after stating it. The story's Completion Notes say
+  `:53`, so the two records disagreed. (2) **The 47 is wrong: the tree it described gave 45**
+  (44 in `cascade.rs` + 1 in `mod.rs`, re-measured two independent ways) — 47 was true at the WIP
+  commit `1ced9e2` and was never re-measured after the doc pass shortened two prose lines. ⚠️ **And
+  45 did not survive this review either**: replacing the matcher with a tokeniser stopped story
+  references like `5.4b` from counting, so the same command now returns 42. Three values for one
+  sentence inside one story. No figure is quoted in code any more — a test asserts the gap instead,
+  because a count in a comment rots and an assertion does not. (3) The limits list was INCOMPLETE in the direction that matters:
+  `1e-3` and `1.` are both `f64` and were both GREEN. The matcher is now a numeric-literal tokeniser,
+  which also stopped reddening `"192.168.0.1"`, `t.0.1` and `a_f64_never_decides()`.
 - **Three documents name story 5.4b owner of the conclusion↔`verdict_vector` coherence invariant,
   and 5.4b's acceptance criteria do not mention it.** The owner is assigned in
   `identity/cascade.rs`'s `Decision` doc, in the sibling entry of this section, and in

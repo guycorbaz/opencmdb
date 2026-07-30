@@ -909,7 +909,9 @@ const FLOAT_TYPES: [&str; 4] = ["f32", "f64", "f16", "f128"];
 /// `the_stripping_is_what_makes_the_literal_rule_usable` — many offenders on the raw lines, zero on
 /// the code parts — rather than quoted here as a figure, because a number in a comment rots and an
 /// assertion does not. _(An earlier revision of this doc did quote one, and it was stale within the
-/// same story: measured 47 before the doc pass, 45 after it.)_
+/// same story: the doc said 47, the tree it described gave 45, and the tokeniser that replaced the
+/// matcher moved the figure again. Three values for one sentence is the argument for asserting
+/// instead of quoting.)_
 fn line_has_float(line: &str) -> Option<&'static str> {
     let code = strip_line_comment(line);
     for token in FLOAT_TYPES {
@@ -1948,9 +1950,13 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     /// ⚠️ The premise is pinned to the citation's TEXT, not to the substring `f64`. It was pinned to
     /// the substring first, and that guard went inert inside the same story: `cascade.rs` gained
     /// further `f64` tokens in other doc comments, so deleting the citation left the assertion green
-    /// while its message still claimed it would catch that. There are 22 `f32`/`f64` tokens in the
-    /// workspace and three under the guarded subtree; all of them are in `///` blocks and none is in
-    /// code, which is the property the gate holds — not "there is only one".
+    /// while its message still claimed it would catch that — MEASURED by renaming the citation and
+    /// watching the substring form stay green.
+    ///
+    /// The property the gate actually holds is *"no float token in CODE under the guarded subtree"*,
+    /// never *"there is only one `f64` in the workspace"*. **No count is written here on purpose**:
+    /// the workspace figure moved the moment this file gained a `FLOAT_TYPES` constant, and the first
+    /// draft of this very paragraph quoted the pre-tokeniser number.
     #[test]
     fn float_gate_is_green_on_the_real_tree_despite_the_committed_d13_citation() {
         let root = workspace_root();

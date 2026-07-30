@@ -745,7 +745,7 @@ is now stated in the gate's doc rather than left implicit.
       names as the gate's whole purpose. The doc's "Known limits" list is also incomplete: it states
       four limits, all about comments and strings, and neither literal form appears
       [xtask/src/main.rs:357-365, limits list at :319-326]
-- [ ] [Review][Patch] A shipped doc comment asserts **47** offenders; the committed tree gives **45**
+- [ ] [Review][Patch] A shipped doc comment asserts **47** offenders; the tree it describes gives **45**
       — re-measured twice independently (a Python replication of the three matcher fns with stripping
       removed, and a raw grep): 44 in `cascade.rs` + 1 in `mod.rs` = 45, and 0 with stripping active.
       It was 47 at the WIP commit `1ced9e2` and was never re-measured after Task 6's doc pass
@@ -1181,6 +1181,8 @@ persistence, no corpus wiring. No byte moved under `fixtures/`.
 **Counts re-measured on the FINAL tree** (a count in a doc is a claim):
 
 - **271 → 280 tests: 135 bin + 100 core + 45 xtask**, zero failures. `core` +6, `xtask` +3.
+  _(After the 2026-07-30 code review: **281** — 135 bin + 100 core + **46** xtask. The review added
+  one xtask test and one core assertion, and removed one core assertion that could not fail.)_
 - `cascade.rs`: **1154 lines, first `#[cfg(test)]` at `:631` → 630 CODE lines**, ceiling 2000.
 - `xtask/src/main.rs`: **1748 lines, first `#[cfg(test)]` at `:1027` → 1026 CODE lines**; still the
   workspace's largest, and `file-size` reports `largest: 1026`.
@@ -1216,31 +1218,52 @@ than smoothed:**
 - **M3** (`min()` → `next()`, i.e. "first in the vector") → **only** the permutation test reds; the
   32-walk stays green. This confirms validation's finding that the walk gives the tiebreak **zero**
   coverage and that the permutation test is its only guard.
-- **M4** (remove the comment-stripping) → **47 offenders on the real tree, not 1.** The prediction was
-  *"reds on the committed citation"*. The other 46 are **story references in prose** — `5.4b`,
+- **M4** (remove the comment-stripping) → **many offenders on the real tree, not 1.** The prediction
+  was *"reds on the committed citation"*. The others are **story references in prose** — `5.4b`,
   `4.6a`, `4.7a` are literally digit-dot-digit — because the gate also matches **bare float
-  literals**, `let confidence = 0.85;` carrying no `f32`/`f64` token at all. All three xtask gate
-  tests red too, not just the one the story named. **The stripping and the literal rule are
-  load-bearing together**, and the gate's doc now says so with the number.
-- **M5** (a real float in code under `identity/`) → **2** reds naming file and line, the type AND the
-  literal, where the story predicted one.
+  literals**, `let confidence = 0.85;` carrying no `f32`/`f64` token at all. All the xtask gate tests
+  red too, not just the one the story named. **The stripping and the literal rule are load-bearing
+  together.** _(This bullet said **47** and the gate's doc quoted it. Both were wrong on the
+  tree they described, which gave **45** — 44 in `cascade.rs` + 1 in `mod.rs`, re-measured two
+  independent ways by the 2026-07-30 review. That review then replaced the matcher with a tokeniser
+  and the same command returns **42**: three values for one sentence inside one story. 47 was true at the WIP commit `1ced9e2`, before the doc
+  pass shortened two prose lines, and was never re-measured — this story's own inherited lesson #1,
+  committed by the story that quotes it. No figure is written in code any more: a test asserts the
+  gap instead.)_
+- **M5** (a real float in code under `identity/`) → reds, naming file and line. _(This bullet claimed
+  **2** reds, "the type AND the literal". The 2026-07-30 review showed that is arithmetically
+  impossible: `line_has_float` `return`s on the first matching shape and the gate pushes at most one
+  offender per line, so the two labels are mutually exclusive per line. The mutation's text was never
+  recorded, so the count cannot be reproduced and is withdrawn rather than restated.)_
 
 ⚠️ **ONE of the five reds is compiler-carried, four are not.** M2 is `error[E0004]` and would fire on
 a test body of `assert_eq!(1, 1)`. M1 and M3 red through assertions; M4 reds through the gate's three
 xtask tests. **M5 was observed through `cargo xtask ci`'s own output rather than a test run** — that
 is the gate reporting, not a test asserting, and saying so is the honest form.
 
-**TWELVE doc locations corrected**, found by `grep -rn '5\.4b' crates/ xtask/` on the final tree
-rather than from the story's list of five. Nine name 5.4b; **three do not and would have been missed
-by that list**: `IdentityAbstentionCause::AbsenceOfProof`'s doc (it read *"nothing in the verdict set
-argues either way"*, which the arbitrated class — carrying an `Opposes` — falsifies; the gap-hunt
-agent caught this before dev), `IdentityAbstentionCause`'s *"six rows… two variants"* (seven input
-classes now), and the test module's inventory. Three sentences naming 5.4b were left standing because
-they are **still true**, chiefly the `#[non_exhaustive]` note whose *"5.4b's table lives in this
-one"* is exactly right.
+**TEN doc BLOCKS corrected** — eight in `cascade.rs`, one in `identity/mod.rs`, one in
+`xtask/src/main.rs` — found by `grep -rn '5\.4b' crates/ xtask/` on the final tree rather than from
+the story's list of five. Nine name 5.4b; **three do not and would have been missed by that list**:
+`IdentityAbstentionCause::AbsenceOfProof`'s doc (it read *"nothing in the verdict set argues either
+way"*, which the arbitrated class — carrying an `Opposes` — falsifies; the gap-hunt agent caught this
+before dev), `IdentityAbstentionCause`'s *"six rows… two variants"* (seven input classes now), and the
+test module's inventory. **ONE** pre-existing sentence naming 5.4b was left standing because it is
+still true: the `#[non_exhaustive]` note whose *"5.4b's table lives in this one"* is exactly right.
 
-**The register.** Eight entries annotated across four sections — validation corrected the story's
-*"six, all in one section"*. The coherence invariant ✅ **CLOSED by construction**, residue to 5.9;
+_(This paragraph said **TWELVE** locations and **three** sentences left standing. The 2026-07-30
+review found neither reproducible: the stated method yields ten rewritten mentions, twelve is
+reachable only by excluding the `xtask` module doc that Task 6 itself lists, and four of the five
+surviving `5.4b` mentions are sentences this story WROTE rather than left. Counting doc blocks is the
+one method that gives the same answer twice, so that is the number stated now.)_
+
+**The register. TEN entries annotated across four sections** — validation corrected the story's
+*"six, all in one section"* to eight, and the 2026-07-30 code review corrected eight to **ten** by
+counting them: `grep -c 'by story 5.4b, 2026-07-29' deferred-work.md` → 10, at lines 253, 272, 365,
+377, 1186, 1252, 1287, 1308, 1328, 1354. The 4.6a and 4.7a sections carry **two** 5.4b-owned bullets
+each, not one. ⚠️ The enumeration that follows already listed ten (5 named + "the four `NoMatch`
+annotation lines" + the empty-vector entry) while its own preamble said eight — the count and the
+list disagreed inside one paragraph, which is the third time in this story that a number was wrong in
+the sentence that enumerates its own items. The coherence invariant ✅ **CLOSED by construction**, residue to 5.9;
 the D13 table gap ✅ **CLOSED in code**, with the `architecture.md` correction moved to **GitHub issue
 \#54** (a milestone act, never a story task); the duplicate-rule entry ↺ **PARTLY closed** (totality
 yes, refusal → 5.5); the `f64`-token entry ✅ CLOSED; the owner/spec-gap entry ✅ CLOSED; and the four
@@ -1271,10 +1294,17 @@ edited** · `page.rs`, `locales/app.yml`, `fixtures.rs`, `trap_gate.rs`, `score.
 - `crates/opencmdb-core/src/identity/mod.rs` — module doc: the algebra now lives here. **Doc only.**
 - `crates/opencmdb-core/src/lib.rs` — `decide` joins the flat `identity::cascade` re-export, in the
   idiom `gap` already uses for `reconcile` (a function, last in the braces). The cost is recorded on
-  the existing re-export entry rather than in a new one.
+  the existing re-export entry rather than in a new one. _(It was NOT: the 2026-07-30 review found
+  that entry untouched, still saying "grew by **five** names" and enumerating five, while `lib.rs`
+  re-exported a sixth. The annotation the story's own binding Dev Note asked for is now appended to
+  `deferred-work.md:1266`.)_
 - `xtask/src/main.rs` — `IDENTITY_DIR`, `line_has_float`, `has_float_literal`, `gate_float_free`,
   its registration in `run_ci()` as `g5`, three inline tests, and the module doc's gate list (which
   was **already** missing `file-size` before this story — both bullets added).
+  _(After the 2026-07-30 review: `has_float_literal` is replaced by `float_literal_kind`, a
+  numeric-literal tokeniser; `strip_line_comment` and `FLOAT_TYPES` are new; a fourth test asserts
+  the stripping is load-bearing; the section was moved below Gate 3 so the file's banner order
+  follows `run_ci`, and `file-size` gained the banner it never had.)_
 
 **Modified — documents:**
 
@@ -1297,3 +1327,4 @@ correction to `architecture.md` is a milestone act (AC3).
 | 2026-07-29 | Story contexted against `3d63544` (story-5.4 branch, post-code-review), PR #52 still open — the deviation from "merge before contexting" is recorded at the top. Answers the three findings story 5.4's review handed forward: `decide`'s signature, the coherence invariant's owner, and the pre-existing `f64` token in the gate's own subtree. |
 | 2026-07-29 | Validated by two fresh-context agents (fact-check + gap-hunt); **9 HIGH + 12 MEDIUM/LOW applied**. Four findings changed the DESIGN, not the prose, and each was **measured rather than argued**: (1) the arms are now bound to a `match` on the presence tuple — the gap-hunt agent compiled all three permitted shapes and found that with an `if`-chain, deleting the arbitration arm *"compiles and changes 0 of 16 input classes"*, making M2 a silent no-op; (2) the permutation test now requires three verdicts of the SAME rule-naming kind, because an `Abstained` names no rule and the test was vacuous as written, giving AC4 zero coverage; (3) an implementation taking `min()` over the whole vector satisfied every specified test while naming the rule that argued FOR a refusal — a named test and a full-`Conclusion` oracle now close it; (4) the float gate was built and run, and missed `0.85f64` and `let confidence = 0.85;` — the likeliest shapes a weight takes. Bookkeeping: the register set is **eight entries across four sections**, not six in one; **eleven** doc blocks are falsified, not five; and `cascade.rs:42` was the pre-review coordinate for the `f64` citation — it is `:52`, an error inherited from the register without re-measuring, which is the story's own inherited lesson #1. |
 | 2026-07-29 | Implemented: `decide` + `smallest_rule_with`, the `float-free` gate, 6 core tests + 3 xtask tests, 12 doc locations, 5 mutations run, 8 register entries annotated + 9 new items, GitHub issue #54 opened. 271 → 280 tests. Two mutation predictions corrected by measurement (M4 → 47 offenders not 1; M1's count only observable once the 32-walk was made cumulative). One process defect recorded: a mutation restored with `git checkout` against an uncommitted baseline destroyed the implementation once. Status → `review`. |
+| 2026-07-30 | **PR #55 opened, CI green.** Code review held, three parallel layers (Blind Hunter · Edge Case Hunter · Acceptance Auditor): 1 decision resolved by Guy, **22 patches applied**, 5 deferrals registered, **3 layer claims refuted by re-measurement**. 280 → 281 tests (135 + 100 + 46). Seven of the eight HIGH findings were about CLAIMS, not behaviour: 47 offenders → **45** (and **42** once the matcher was replaced, three values for one sentence), eight register entries → **TEN**, twelve doc locations → **ten blocks**, three sentences left standing → **one**, M5's "2 reds" withdrawn as arithmetically impossible, `project-context.md`'s test count stale under a CHECKED task, and a premise guard measured INERT. On the code: `decide` matches on `Option<RuleId>` per AC1 so the two unreachable arms are gone; the gate's matcher is a numeric-literal tokeniser because `1e-3` and `1.` were green while `"192.168.0.1"`, `t.0.1` and `a_f64_never_decides()` were red; the stripper tracks strings; the gate fails closed on an empty guarded directory. Six mutations, **one prediction refuted**: halving the totality walk's bound left all 100 core tests green, so "every input class" was asserted by nothing — an assertion that each `Verdict` appears now reds on it. ⚠️ The `git checkout` process defect this story documented REPEATED itself and destroyed that assertion once. |

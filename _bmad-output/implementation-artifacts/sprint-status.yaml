@@ -50,8 +50,9 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-29  # 5.4 done (PR #52 merged). 5.4b IMPLEMENTED -> review; the algebra and
-                          # the float-free gate. 280 tests. NEXT = code-review 5.4b
+last_updated: 2026-07-30  # 5.4b CODE-REVIEWED (3 layers): 22 patches applied, 5 deferrals, 3 layer
+                          # claims refuted. 281 tests (135+100+46). PR #55 open, CI green.
+                          # NEXT = merge #55, then bookkeeping, then story 5.5.
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -762,6 +763,54 @@ development_status:
   # Counted after the last edit: a first draft of that preamble added to nine only by counting the
   # epic as its own item and forgetting the milestone.
   # `epics.md` VERIFIED and NOT edited, as AC9 requires.
+  #
+  # CODE REVIEW held 2026-07-30, three parallel layers (Blind Hunter · Edge Case Hunter ·
+  # Acceptance Auditor). 1 decision resolved by Guy, 22 patches applied, 5 deferrals registered,
+  # 3 layer claims REFUTED. PR #55 open, CI green. 280 → 281 tests (135 bin + 100 core + 46 xtask).
+  # ⚠️ SEVEN of the eight HIGH findings were about CLAIMS, not behaviour, and the numbers this block
+  # carried were among them. Corrections, each re-measured before being written:
+  #   · "47 offenders when the stripping is removed" → **45 under the matcher that shipped** (44 in
+  #     cascade.rs + 1 in mod.rs, measured two independent ways). 47 was true at the WIP commit
+  #     `1ced9e2` and was never re-measured after the doc pass. ⚠️ And the figure moved AGAIN when the
+  #     review replaced the matcher with a tokeniser: story references like `5.4b` stopped counting,
+  #     so the same command now gives 42. THREE values for one sentence in one story — which is why
+  #     no figure is quoted in code any more and a test asserts the gap instead.
+  #   · "EIGHT register entries annotated" → **TEN** (`grep -c 'by story 5.4b, 2026-07-29'` = 10).
+  #     The sentence that said eight then enumerated ten; the 4.6a/4.7a sections carry two each.
+  #   · "TWELVE doc locations corrected" → not reproducible by any consistent method; counting doc
+  #     BLOCKS gives ten. The figure is replaced by the method and its result, not re-guessed.
+  #   · "three sentences naming 5.4b left standing" → exactly **ONE** pre-existing sentence was; the
+  #     other mentions are sentences the story wrote.
+  #   · "M5 → 2 reds, the type AND the literal" → arithmetically impossible: `line_has_float` returns
+  #     on the first match, so the gate pushes at most one offender per line. The mutation text was
+  #     never recorded, so the count cannot be reproduced and is withdrawn rather than restated.
+  #   · `docs/project-context.md` had Task 9 CHECKED while its test count and one falsified sentence
+  #     were untouched — the checkbox was the claim, and it was wrong.
+  #   · a test doc called the D13 citation "the workspace's only `f64` token" (it is not) and its
+  #     premise guard had gone INERT: deleting the citation left `source.contains("f64")` green,
+  #     measured by renaming it. Now pinned to the citation's TEXT.
+  # WHAT CHANGED IN THE CODE, and why each was more than cosmetic:
+  #   · `decide` matches on `(Option<RuleId>, Option<RuleId>, bool, bool)` as AC1 had prescribed and
+  #     the implementation had not followed. The two `None` arms are GONE rather than justified: they
+  #     had mapped an impossible state onto `Abstained { AbsenceOfProof }` — a legitimate answer for
+  #     two other classes — so a broken invariant would have turned a refusal into an honest-looking
+  #     abstention. Exhaustiveness survives: deleting the arbitration arm is still
+  #     `error[E0004]: non-exhaustive patterns: (None, None, false, true) not covered`.
+  #   · the float gate's matcher is a numeric-literal TOKENISER. Measured on the old form:
+  #     `1e-3` and `1.` were GREEN (both `f64`, and the exponent form is the shape a weight takes),
+  #     while `"192.168.0.1"`, `t.0.1` and `fn a_f64_never_decides()` were RED. Story 5.5 writes the
+  #     first MAC/IP rule under the guarded subtree, so the false positives were not theoretical.
+  #     Guy chose the tokeniser over a `#[cfg(test)]` skip or an escape comment.
+  #   · the comment stripper tracks string literals: `let sep = "//"; let c: f64 = 0.85;` was GREEN.
+  #   · the gate fails closed on a guarded directory holding no `.rs` file, and sorts its offenders.
+  # SIX mutations, and ONE PREDICTION REFUTED BY MEASUREMENT — recorded because it changed the work:
+  # halving the totality walk's derived bound left ALL 100 core tests GREEN, because the oracle agrees
+  # on every class the walk still visits. "Every input class" was asserted by NOTHING. An assertion
+  # that each `Verdict` variant appeared in some walked subset now reds on it, naming `Disqualifying`.
+  # ⚠️ A PROCESS DEFECT REPEATED: that assertion was written, proven, and then DESTROYED by a
+  # `git checkout` restoring to HEAD during the next mutation — the exact defect this story's own
+  # implementation notes record. Re-applied and committed before continuing. The lesson does not
+  # transfer by being written down.
   5-4b-verdict-algebra-and-float-gate: review
   5-5-l1-join-pure: backlog
   5-6-blocker-and-recall-assertion: backlog
