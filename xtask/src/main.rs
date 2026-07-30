@@ -66,6 +66,13 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+// ── Gate 4: file size (D56b) ────────────────────────────────────────────────
+//
+// ⚠️ This section sits ABOVE Gate 0 rather than between Gates 3 and 5, which is where its number
+// says it belongs. That placement predates story 5.4b and is left alone deliberately: `run_ci` runs
+// the gates 0,1,2,3,4,5 and every OTHER section is now in that order, so the one exception is
+// visible instead of being hidden by renumbering.
+
 /// The CODE-line ceiling per source file. Tests do not count (see [`code_line_count`]): the concern
 /// is a module doing too much, not a well-covered one, and the house convention keeps tests inline
 /// beside the code (D56b). A file that grows past this is asking to be split into modules.
@@ -293,137 +300,6 @@ fn crates_present_in_tree(tree: &str) -> HashSet<String> {
         }
     }
     names
-}
-
-// ── Gate 5: no float under identity/ (D13) ──────────────────────────────────
-
-/// The subtree the float gate guards. D13 refuses a float at the DECISION boundary, and this is
-/// where the decision lives.
-const IDENTITY_DIR: &str = "crates/opencmdb-core/src/identity";
-
-/// The float token, or a float literal, in a line of CODE — comments stripped.
-///
-/// D13: *"**REFUSED: `rule -> confidence: f64`.** A float compares, averages, thresholds — and we
-/// are back to invented weights via the back door. **If the output is a float, B has won in
-/// disguise.**"* [architecture.md:956-958].
-///
-/// # What it catches, and what it does not
-///
-/// It strips from the first `//` to end of line, then looks for three shapes:
-/// a word-bounded `f32`/`f64`; an `f32`/`f64` **suffix** on a numeric literal (`0.85f64`, `1f32`),
-/// which has no word boundary before the `f`; and a bare **float literal** (`0.85`), which carries
-/// no `f32`/`f64` token at all while still being an `f64` by inference. The last two were measured
-/// as escapes of a word-boundary-only match, and a bare literal is the likeliest shape a weight
-/// actually takes.
-///
-/// Known limits, stated because a comment asserting a checkable property gets checked:
-/// - a float inside a **block comment** `/* … */` is NOT stripped and reds — a false POSITIVE. None
-///   exists under the guarded subtree today; if one appears, that is the sentence to revisit.
-/// - a `//` inside a **string literal** truncates the line early, so a float after it is missed — a
-///   false negative, and a harmless one: a float inside a string is not a float.
-/// - a decimal inside a **string literal in code** (`"0.1.1"`) reds — a false POSITIVE. None exists
-///   under the guarded subtree today.
-/// - `#[doc = "…"]` is not stripped and would red. None exists under the guarded subtree today.
-///
-/// ⚠️ **The stripping does far more work than "tolerate one citation", and that was MEASURED.**
-/// Removing it makes this gate report **47** offenders on the committed tree, not one: a story
-/// reference in prose — `5.4b`, `4.6a`, `4.7a` — is literally a digit-dot-digit, so the
-/// bare-literal rule that catches `let confidence = 0.85;` also catches every story number this
-/// project writes in a doc comment. The two features are load-bearing together: the literal rule is
-/// what makes the gate catch an untyped weight, and the stripping is what makes the literal rule
-/// usable at all.
-fn line_has_float(line: &str) -> Option<&'static str> {
-    let code = match line.find("//") {
-        Some(i) => &line[..i],
-        None => line,
-    };
-    for token in ["f32", "f64"] {
-        if contains_word(code, token) {
-            return Some("f32/f64 type");
-        }
-        // A suffix binds to the digits before it, so `contains_word` cannot see it.
-        if code.contains(token) {
-            return Some("f32/f64 literal suffix");
-        }
-    }
-    if has_float_literal(code) {
-        return Some("float literal");
-    }
-    None
-}
-
-/// A bare decimal literal: a digit, a dot, a digit. `1.0`, `0.85`. Not `x.0` (tuple field), not
-/// `1..2` (range), not `architecture.md:967-974`.
-fn has_float_literal(code: &str) -> bool {
-    let b = code.as_bytes();
-    for i in 1..b.len().saturating_sub(1) {
-        if b[i] == b'.' && b[i - 1].is_ascii_digit() && b[i + 1].is_ascii_digit() {
-            return true;
-        }
-    }
-    false
-}
-
-/// No float may reach a decision — D13's clause, held mechanically rather than by accident.
-///
-/// Before this gate the rule was true by measurement only: the whole workspace contained zero
-/// `f32`/`f64` in code. A gate is what keeps it true.
-///
-/// It walks [`IDENTITY_DIR`] **recursively**, because the architecture's own source tree names a
-/// future `identity/field_decision/` [architecture.md:3370-3372] and a flat read would go blind the
-/// day it is created.
-///
-/// It **fails CLOSED** if the directory is missing. The DDL gate reports "nothing to check" when its
-/// directory is absent, but that directory does not exist yet; this one does, so its disappearance
-/// is a finding — the fixture gate's reasoning, *"reporting 'nothing to check' on the deletion of the
-/// thing being guarded is a guarantee the gate does not have"*.
-fn gate_float_free(root: &Path) -> Result<(bool, String)> {
-    let dir = root.join(IDENTITY_DIR);
-    if !dir.exists() {
-        return Ok((
-            false,
-            format!(
-                "{IDENTITY_DIR} is missing — the guarded subtree must exist for this gate to mean anything"
-            ),
-        ));
-    }
-
-    let mut offenders = Vec::new();
-    let mut checked = 0usize;
-    for entry in walkdir::WalkDir::new(&dir)
-        .into_iter()
-        .filter_map(Result::ok)
-    {
-        let p = entry.path();
-        if p.extension().and_then(|e| e.to_str()) != Some("rs") {
-            continue;
-        }
-        let content =
-            std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?;
-        checked += 1;
-        for (i, line) in content.lines().enumerate() {
-            if let Some(what) = line_has_float(line) {
-                let shown = p.strip_prefix(root).unwrap_or(p);
-                offenders.push(format!("{}:{}: {what}", shown.display(), i + 1));
-            }
-        }
-    }
-
-    if offenders.is_empty() {
-        Ok((
-            true,
-            format!("no float in code across {checked} file(s) under {IDENTITY_DIR}"),
-        ))
-    } else {
-        Ok((
-            false,
-            format!(
-                "{} float(s) where a decision is made — D13 refuses it:\n      {}",
-                offenders.len(),
-                offenders.join("\n      ")
-            ),
-        ))
-    }
 }
 
 // ── Gate 1: DDL binary collation (D64 condition 1) ──────────────────────────
@@ -983,6 +859,238 @@ fn manifest_findings(
         }
     }
     findings
+}
+
+// ── Gate 5: no float under identity/ (D13) ──────────────────────────────────
+
+/// The subtree the float gate guards. D13 refuses a float at the DECISION boundary, and this is
+/// where the decision lives.
+const IDENTITY_DIR: &str = "crates/opencmdb-core/src/identity";
+
+/// Rust's float type names. `f16`/`f128` are not stable yet; D13's clause is *"no float"*, not "no
+/// `f64`", so the gate names all four rather than the two that exist today.
+const FLOAT_TYPES: [&str; 4] = ["f32", "f64", "f16", "f128"];
+
+/// The float token, or a float literal, in a line of CODE — comments stripped.
+///
+/// D13: *"**REFUSED: `rule -> confidence: f64`.** A float compares, averages, thresholds — and we
+/// are back to invented weights via the back door. **If the output is a float, B has won in
+/// disguise.**"* [architecture.md:956-958].
+///
+/// # What it catches, and what it does not
+///
+/// It strips comments (see [`strip_line_comment`]) and then looks for two shapes:
+/// a **word-bounded** float type name from [`FLOAT_TYPES`] — a type position, `let x: f64`, `as
+/// f64` — and a **float literal**, recognised by [`float_literal_kind`], which is a real
+/// tokeniser rather than a substring search: `0.85`, `1e-3`, `1.`, `0.85f64`, `1f32`.
+///
+/// The word boundary is load-bearing in BOTH directions and each direction was measured: without it
+/// `let x: f64` is caught but so is `fn a_f64_never_decides()` and `f32x4::splat(1)`, and an earlier
+/// revision of this gate reddened on both. There is no substring fallback: a float type inside a
+/// longer identifier is not a float type.
+///
+/// Known limits, stated because a comment asserting a checkable property gets checked:
+/// - a float inside a **block comment** `/* … */` is NOT stripped and reds — a false POSITIVE. None
+///   exists under the guarded subtree today; if one appears, that is the sentence to revisit.
+/// - `#[doc = "…"]` is not stripped and would red on a float in its text. None exists under the
+///   guarded subtree today.
+/// - [`strip_line_comment`] tracks double quotes but not `'"'` char literals and not strings that
+///   span lines, so a line containing an odd number of `"` can mis-classify a following `//`. None
+///   exists under the guarded subtree today.
+/// - a **hex float** (`0x1p3`, not stable Rust) is not recognised, and neither is a float built at
+///   runtime from integers — a gate over source text cannot see the second one at all.
+///
+/// ⚠️ **The stripping does far more work than "tolerate one citation", and that was MEASURED.**
+/// Removing it makes this gate report many offenders on the committed tree rather than one, because
+/// a story reference in prose — `5.4b`, `4.6a`, `4.7a` — is a digit-dot-digit, so the literal rule
+/// that catches `let confidence = 0.85;` also catches story numbers written in doc comments. The two
+/// features are load-bearing together: the literal rule is what makes the gate catch an untyped
+/// weight, and the stripping is what makes the literal rule usable at all. The gap is ASSERTED by
+/// `the_stripping_is_what_makes_the_literal_rule_usable` — many offenders on the raw lines, zero on
+/// the code parts — rather than quoted here as a figure, because a number in a comment rots and an
+/// assertion does not. _(An earlier revision of this doc did quote one, and it was stale within the
+/// same story: measured 47 before the doc pass, 45 after it.)_
+fn line_has_float(line: &str) -> Option<&'static str> {
+    let code = strip_line_comment(line);
+    for token in FLOAT_TYPES {
+        if contains_word(code, token) {
+            return Some("float type");
+        }
+    }
+    float_literal_kind(code)
+}
+
+/// The code part of a line: everything before a `//` that is not inside a string literal.
+///
+/// The naive `line.find("//")` this replaces truncated at a `//` **inside** a string, so
+/// `let sep = "//"; let c: f64 = 0.85;` was reported clean — the missed float was not in the string,
+/// it was the code after it. Measured before the fix.
+fn strip_line_comment(line: &str) -> &str {
+    let b = line.as_bytes();
+    let mut in_string = false;
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'\\' if in_string => {
+                i += 2;
+                continue;
+            }
+            b'"' => in_string = !in_string,
+            b'/' if !in_string && b.get(i + 1) == Some(&b'/') => return &line[..i],
+            _ => {}
+        }
+        i += 1;
+    }
+    line
+}
+
+/// A float literal in a line of code, tokenised rather than pattern-matched.
+///
+/// A numeric literal starts where a digit is preceded by neither an identifier character nor a `.`
+/// — the second exclusion is what keeps a nested tuple field access (`t.0.1`) and a dotted quad
+/// (`"192.168.0.1"`) from reading as floats. The body then takes digits and `_`, at most **one**
+/// dot, and an optional exponent; a second dot means the token is not a numeric literal at all (an
+/// IP address, a version, `1..2`'s range operator). Finally the suffix is read: an empty suffix
+/// makes it a float only if a dot or an exponent was seen, an `f32`/`f64`/`f16`/`f128` suffix makes
+/// it a float regardless (`1f32`), and any other suffix means this was never a Rust numeric literal
+/// (`5.4b` is a story number, `0xFF` is hex) and is not reported.
+///
+/// # Returns
+///
+/// The label to show the developer, or `None`. The label distinguishes a suffixed literal from a
+/// bare one because the fix differs: one is a declared float, the other is an `f64` by inference.
+fn float_literal_kind(code: &str) -> Option<&'static str> {
+    let b = code.as_bytes();
+    let ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
+    let mut i = 0;
+    while i < b.len() {
+        if !b[i].is_ascii_digit() || (i > 0 && (ident(b[i - 1]) || b[i - 1] == b'.')) {
+            i += 1;
+            continue;
+        }
+
+        let mut j = i;
+        let mut dots = 0;
+        let mut exponent = false;
+        while j < b.len() {
+            match b[j] {
+                c if c.is_ascii_digit() => j += 1,
+                b'_' => j += 1,
+                b'.' if dots == 0 && b.get(j + 1) != Some(&b'.') => {
+                    dots += 1;
+                    j += 1;
+                }
+                b'.' => break,
+                b'e' | b'E'
+                    if !exponent
+                        && (matches!(b.get(j + 1), Some(c) if c.is_ascii_digit())
+                            || matches!(
+                                (b.get(j + 1), b.get(j + 2)),
+                                (Some(b'+') | Some(b'-'), Some(c)) if c.is_ascii_digit()
+                            )) =>
+                {
+                    exponent = true;
+                    j += if b[j + 1].is_ascii_digit() { 2 } else { 3 };
+                }
+                _ => break,
+            }
+        }
+        // A second dot means this is not one numeric literal: `192.168.0.1`, `1.2.3`.
+        if b.get(j) == Some(&b'.') && matches!(b.get(j + 1), Some(c) if c.is_ascii_digit()) {
+            i = j + 1;
+            continue;
+        }
+
+        let suffix_start = j;
+        while j < b.len() && ident(b[j]) {
+            j += 1;
+        }
+        let suffix = code[suffix_start..j].trim_start_matches('_');
+        if FLOAT_TYPES.contains(&suffix) {
+            return Some("float literal with an f32/f64 suffix");
+        }
+        if suffix.is_empty() && (dots == 1 || exponent) {
+            return Some("bare float literal");
+        }
+        i = j.max(i + 1);
+    }
+    None
+}
+
+/// No float may reach a decision — D13's clause, held mechanically rather than by accident.
+///
+/// Before this gate the rule was true by measurement only: the whole workspace contained zero
+/// `f32`/`f64` in code. A gate is what keeps it true.
+///
+/// It walks [`IDENTITY_DIR`] **recursively**, because the architecture's own source tree names a
+/// future `identity/field_decision/` [architecture.md:3370-3372] and a flat read would go blind the
+/// day it is created.
+///
+/// It **fails CLOSED** on two conditions, not one: the directory missing, and the directory present
+/// but holding no `.rs` file. The DDL gate reports "nothing to check" when its directory is absent,
+/// but that directory does not exist yet; this one does, so its disappearance is a finding — the
+/// fixture gate's reasoning, *"reporting 'nothing to check' on the deletion of the thing being
+/// guarded is a guarantee the gate does not have"*. The second condition is the likelier accident:
+/// moving `cascade.rs` to a new module leaves `identity/` standing, and a gate that answers
+/// `no float in code across 0 file(s)` to that is reporting a pass over nothing.
+fn gate_float_free(root: &Path) -> Result<(bool, String)> {
+    let dir = root.join(IDENTITY_DIR);
+    if !dir.exists() {
+        return Ok((
+            false,
+            format!(
+                "{IDENTITY_DIR} is missing — the guarded subtree must exist for this gate to mean anything"
+            ),
+        ));
+    }
+
+    let mut offenders = Vec::new();
+    let mut checked = 0usize;
+    for entry in walkdir::WalkDir::new(&dir)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
+        let p = entry.path();
+        if p.extension().and_then(|e| e.to_str()) != Some("rs") {
+            continue;
+        }
+        let content =
+            std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?;
+        checked += 1;
+        for (i, line) in content.lines().enumerate() {
+            if let Some(what) = line_has_float(line) {
+                let shown = p.strip_prefix(root).unwrap_or(p);
+                offenders.push(format!("{}:{}: {what}", shown.display(), i + 1));
+            }
+        }
+    }
+
+    if checked == 0 {
+        return Ok((
+            false,
+            format!(
+                "{IDENTITY_DIR} holds no .rs file — the guarded code has moved and this gate is \
+                 reporting a pass over nothing"
+            ),
+        ));
+    }
+
+    offenders.sort();
+    if offenders.is_empty() {
+        Ok((
+            true,
+            format!("no float in code across {checked} file(s) under {IDENTITY_DIR}"),
+        ))
+    } else {
+        Ok((
+            false,
+            format!(
+                "{} float(s) where a decision is made — D13 refuses it:\n      {}",
+                offenders.len(),
+                offenders.join("\n      ")
+            ),
+        ))
+    }
 }
 
 // ── Check 3: views-hash staleness (informational) ───────────────────────────
@@ -1626,27 +1734,49 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
 
     // ── float-free gate (D13) ────────────────────────────────────────────────────────────────
 
-    /// The line classifier, shape by shape — including the three a word-boundary-only match was
-    /// MEASURED to miss, which is why they are pinned individually rather than by one example.
+    /// The line classifier, shape by shape.
+    ///
+    /// Every case below was MEASURED against the previous revision of this matcher, which searched
+    /// for digit-dot-digit and for the bare substrings `f32`/`f64`. Five of them came back wrong:
+    /// two legal float spellings passed (`1e-3`, `1.`) and three innocent lines reddened (a dotted
+    /// quad, a nested tuple field, an identifier merely containing `f64`). They are pinned
+    /// individually rather than by one example because each has its own reason.
     #[test]
     fn float_line_classifier_catches_types_suffixes_and_bare_literals() {
-        // The obvious one.
-        assert!(line_has_float("    let _x: f64 = 0.0;").is_some());
+        // A float TYPE, word-bounded.
+        assert_eq!(line_has_float("    let _x: f64 = 0.0;"), Some("float type"));
         assert!(line_has_float("fn w(x: f32) -> f32 { x }").is_some());
+        assert!(line_has_float("    let y = n as f64;").is_some());
 
         // A suffix binds to the digits, so there is no word boundary before the `f`.
-        assert!(
-            line_has_float("    let confidence = 0.85f64;").is_some(),
+        assert_eq!(
+            line_has_float("    let confidence = 0.85f64;"),
+            Some("float literal with an f32/f64 suffix"),
             "a suffixed literal escapes a word-boundary match"
         );
         assert!(line_has_float("    let c = 1f32;").is_some());
+        assert!(line_has_float("    let c = 0.5_f64;").is_some());
 
         // A bare literal carries no f32/f64 token at all, and is an f64 by inference. This is the
         // likeliest shape an invented weight actually takes.
-        assert!(
-            line_has_float("    let confidence = 0.85;").is_some(),
+        assert_eq!(
+            line_has_float("    let confidence = 0.85;"),
+            Some("bare float literal"),
             "a bare decimal literal is a float even with no type named"
         );
+        assert!(line_has_float("    let c = 1_000.0;").is_some());
+
+        // The two spellings the digit-dot-digit rule was measured to MISS. Both are `f64`.
+        assert!(
+            line_has_float("    let confidence = 1e-3;").is_some(),
+            "exponent form carries no dot at all and was green before"
+        );
+        assert!(line_has_float("    let c = 2E10;").is_some());
+        assert!(
+            line_has_float("    let confidence = 1.;").is_some(),
+            "a trailing dot is a float and was green before"
+        );
+        assert!(line_has_float("    let c = 2. * x;").is_some());
 
         // Comments are stripped: the architecture may be quoted.
         assert!(
@@ -1657,7 +1787,15 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         assert!(line_has_float("//! the algebra refuses f64 outright").is_none());
         assert!(line_has_float("    let n = 1u32; // not an f64 either").is_none());
 
-        // Things that merely look like floats.
+        // A `//` INSIDE a string is not a comment. Before the stripper tracked quotes, this line
+        // truncated at the literal and the float after it was never seen.
+        assert!(
+            line_has_float("    let sep = \"//\"; let c: f64 = 0.85;").is_some(),
+            "a // inside a string must not hide the code that follows it"
+        );
+        assert!(line_has_float("    let u = \"http://h/x\"; let c = 0.85;").is_some());
+
+        // Things that merely look like floats. The last three reddened before the tokeniser.
         assert!(
             line_has_float("/// [architecture.md:967-974]").is_none(),
             "a line-number range is not a float"
@@ -1667,10 +1805,75 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             "a tuple field access is not a float"
         );
         assert!(
+            line_has_float("    let a = t.0.1;").is_none(),
+            "a NESTED tuple field access is not a float either — it reddened before"
+        );
+        assert!(
             line_has_float("    for i in 1..32 {").is_none(),
             "a range is not a float"
         );
         assert!(line_has_float("    let s: u32 = 42;").is_none());
+        assert!(
+            line_has_float("        assert_eq!(ip, \"192.168.0.1\");").is_none(),
+            "a dotted quad has three dots and is no numeric literal — it reddened before, and \
+             story 5.5 writes IP literals under the guarded subtree"
+        );
+        assert!(
+            line_has_float("        let v = \"0.9.0\";").is_none(),
+            "a three-part version is not a float"
+        );
+        assert!(
+            line_has_float("    fn a_f64_never_decides() {}").is_none(),
+            "an identifier merely CONTAINING f64 is not a float type — it reddened before"
+        );
+        assert!(
+            line_has_float("    let v = f32x4::splat(1);").is_none(),
+            "nor is a wider SIMD type whose name starts with f32"
+        );
+        assert!(
+            line_has_float("        let s = \"story 5.4b\";").is_none(),
+            "a story number has a suffix that is no Rust suffix, so it is not a literal"
+        );
+        assert!(
+            line_has_float("    let x = 0xFF;").is_none(),
+            "a hex integer is not a float"
+        );
+    }
+
+    /// The stripping is not an optimisation, and this is the assertion that says so.
+    ///
+    /// Run the same two checks the gate runs, but on the RAW line instead of the code part, and the
+    /// real tree yields many offenders where the gate yields none — because every story number and
+    /// line-range citation in a doc comment is a digit-dot-digit. The exact figure is deliberately
+    /// NOT written down: a count in a comment rots, and this assertion does not.
+    #[test]
+    fn the_stripping_is_what_makes_the_literal_rule_usable() {
+        let root = workspace_root();
+        let dir = root.join(IDENTITY_DIR);
+        let mut raw_hits = 0usize;
+        for entry in walkdir::WalkDir::new(&dir)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            if entry.path().extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            let content = std::fs::read_to_string(entry.path()).expect("readable");
+            for line in content.lines() {
+                let typed = FLOAT_TYPES.iter().any(|t| contains_word(line, t));
+                if typed || float_literal_kind(line).is_some() {
+                    raw_hits += 1;
+                }
+            }
+        }
+
+        let (green, msg) = gate_float_free(&root).expect("the gate runs");
+        assert!(green, "the gate itself is green on the real tree: {msg}");
+        assert!(
+            raw_hits > 10,
+            "without stripping the same checks must flood — they found only {raw_hits}, so either \
+             the guarded subtree lost its doc comments or the stripping is no longer load-bearing"
+        );
     }
 
     /// The gate itself, against a temp tree — the walk, the recursion, and the missing directory.
@@ -1711,6 +1914,17 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         let (green, msg) = gate_float_free(&root).expect("the gate runs");
         assert!(!green, "a bare float literal must red: {msg}");
 
+        // FAILS CLOSED when the directory still stands but holds no Rust file — the likelier
+        // accident of the two, and the one that used to report `0 file(s)` as a PASS.
+        std::fs::remove_file(guarded.join("cascade.rs")).expect("rm");
+        std::fs::remove_file(guarded.join("score.rs")).expect("rm");
+        let (green, msg) = gate_float_free(&root).expect("the gate runs");
+        assert!(
+            !green,
+            "a guarded subtree with no .rs file must RED, not pass over nothing: {msg}"
+        );
+        assert!(msg.contains("no .rs file"), "{msg}");
+
         // FAILS CLOSED when the guarded subtree is gone — the fixture gate's reasoning, not the
         // DDL gate's: this directory exists today, so its disappearance is a finding.
         std::fs::remove_dir_all(&guarded).expect("rm -r");
@@ -1728,8 +1942,15 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     /// worth pinning rather than a tautology.
     ///
     /// `crates/opencmdb-core/src/identity/cascade.rs` quotes *"REFUSED: `rule -> confidence: f64`"*
-    /// in a `///` block. It is the workspace's only `f64` token, and a naive line grep would red on
-    /// it. This test is what keeps the stripping from being removed as "an optimisation".
+    /// in a `///` block, and a naive line grep would red on it. This test is what keeps the stripping
+    /// from being removed as "an optimisation".
+    ///
+    /// ⚠️ The premise is pinned to the citation's TEXT, not to the substring `f64`. It was pinned to
+    /// the substring first, and that guard went inert inside the same story: `cascade.rs` gained
+    /// further `f64` tokens in other doc comments, so deleting the citation left the assertion green
+    /// while its message still claimed it would catch that. There are 22 `f32`/`f64` tokens in the
+    /// workspace and three under the guarded subtree; all of them are in `///` blocks and none is in
+    /// code, which is the property the gate holds — not "there is only one".
     #[test]
     fn float_gate_is_green_on_the_real_tree_despite_the_committed_d13_citation() {
         let root = workspace_root();
@@ -1740,7 +1961,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         let cascade = root.join(IDENTITY_DIR).join("cascade.rs");
         let source = std::fs::read_to_string(&cascade).expect("cascade.rs is readable");
         assert!(
-            source.contains("f64"),
+            source.contains("confidence: f64"),
             "the citation this gate must tolerate has moved or gone — if it was removed on purpose, \
              this test's premise is what needs revisiting"
         );

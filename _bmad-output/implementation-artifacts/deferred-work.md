@@ -1421,3 +1421,52 @@ and forgetting the milestone entirely. The arithmetic was wrong before it was me
   planning document is a MILESTONE act, never a story task (`epics.md:1461`). **Owner: a milestone
   edit, carried by GitHub issue #54** — which also records that `architecture-views.md` must be
   regenerated in the same pass (issue #50). Not a condition and not a story: an issue.
+
+## Deferred from: code review of story-5.4b (2026-07-30)
+
+Five items, from a three-layer review (Blind Hunter · Edge Case Hunter · Acceptance Auditor). All
+five are **repo-wide or producer-blocked**, which is why they are deferrals and not patches: the
+review's 23 patch items are in the story file. Two of them arrived as HIGH findings against 5.4b and
+were **moved here by re-measurement** — recorded that way on purpose, because a deferral that hides
+why it was downgraded is worse than no deferral.
+
+- **Four `cargo xtask ci` gates swallow every `walkdir` error.** `filter_map(Result::ok)` at
+  `xtask/src/main.rs:105` (`gate_file_size`), `:395` (`gate_float_free`), `:439`
+  (`gate_ddl_collation`) and `:557` (`gate_vocabulary`): an unreadable subdirectory, a metadata
+  failure or a loop drops its files from the walk, the `checked` count shrinks with them, and the
+  gate reports a pass over a tree it did not fully see. ⚠️ **The Edge layer raised this as HIGH
+  against story 5.4b**, on the true observation that the same file refuses this failure mode by name
+  at `corpus_entries` (`:753-806`: *"a walk whose failure mode is 'quietly saw less of the tree' is
+  not a gate"*). Re-measurement moved it: **three of the four sites predate 5.4b**, and AC6 told the
+  story to write the gate "in the idiom of its two neighbours" — which it did exactly. So this is not
+  a defect the story introduced, and fixing only the newest gate would be the least useful version of
+  the fix. **Owner: a condition** — the next story that touches `xtask`'s gate plumbing, or a chore
+  PR; whoever takes it should convert all four together and mirror `corpus_entries`' `with_context`.
+- **The gates do not follow symlinks and do not report them.** No `.follow_links(…)` on any gate's
+  `WalkDir`, so a symlinked subdirectory under a guarded tree is yielded as one entry and never
+  descended; a module compiled in via `#[path = "…"]` or an `include!("…")` is likewise outside the
+  walk, and the extension filter is `.rs`-only. Asymmetric with `corpus_entries`, which refuses to
+  skip a symlink in silence (`CorpusEntry::Symlink`, `:744-747`). Same repo-wide shape as the entry
+  above and best taken in the same pass. **Owner: a condition** — the same pass that fixes the walk
+  errors.
+- **Nothing refuses a blank `RuleId` on the `RuleVerdict` side.** `RuleId(pub String)` derives `Ord`
+  (`trap.rs:39-41`), so `decide`'s tiebreak is byte order and `RuleId("")` sorts before everything:
+  a verdict vector carrying one yields `Conclusion::NoMatch { rule: RuleId("") }`, on which
+  `Decision::rule()` still answers `Some` — so "every decision names a rule" degenerates into naming
+  nothing, while `Trap::validate` already refuses a blank rule on the expectation side
+  (`trap.rs:302`). Not reachable today because nothing produces a `RuleVerdict` outside tests.
+  **Owner: story 5.5**, which is where the first producer appears and therefore the first place a
+  validation can be stated about what a producer emits.
+- **A named rule with EMPTY `evidence` yields a `Match` that explains nothing.** `decide` never
+  inspects `evidence`, so `RuleVerdict { verdict: Decisive, evidence: vec![] }` produces a `Match`
+  defeating D13's *"the list IS the explanation"* one level below the empty-**vector** case story
+  5.4b genuinely closed by construction. The story records the invariant as needing a firing rule to
+  state, and that is right — this entry only pins that the two emptinesses are different and that
+  `Decision`'s doc currently closes them in one sentence (the doc half is a patch item in the story).
+  **Owner: story 5.5.**
+- **The `xtask` module doc's list of gates is not itself gated, and has already drifted once.**
+  Evidence rather than prediction: story 5.4b had to ADD the `file-size` entry to that list, which
+  means the story that shipped `file-size` left it out and CI never noticed. Nothing checks that the
+  list of gates in the module doc matches the gates `run_ci` actually runs, so the sixth gate's entry
+  will rot the same way. **Owner: a condition** — the same `xtask` pass as the walk items; the cheap
+  version is a test asserting the doc names every gate `run_ci` calls.

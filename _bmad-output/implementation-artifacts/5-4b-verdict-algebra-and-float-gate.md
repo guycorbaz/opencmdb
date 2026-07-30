@@ -680,6 +680,266 @@ re-open it.**
       prerequisite at the top). Branch `story-5.4b-verdict-algebra-and-float-gate`. **The story ends
       at status `review` with the PR open and CI green.** The merge is a separate act.
 
+### Review Findings (AI, 2026-07-30)
+
+Three parallel layers on `master...HEAD` (9 files, +1150/−104; ~780 lines of code in `cascade.rs`
+and `xtask/src/main.rs`): **Blind Hunter** (code diff only, no project access), **Edge Case Hunter**
+(diff + repo; it extracted `line_has_float`/`has_float_literal`/`contains_word` into a standalone
+binary and **executed** the cases, so its float-matcher verdicts are measured), **Acceptance
+Auditor** (diff + this story + `project-context.md` + `CLAUDE.md`; it ran `cargo test --workspace`,
+both clippy forms, `cargo xtask ci` and `gh`).
+
+**1 decision-needed (resolved) · 22 actionable patch · 5 defer · 3 dismissed.** The patch section
+carries 25 bullets, three of which are struck as `— absorbed` by the tokeniser item that came out of
+the resolved decision; 25 − 3 = 22 is the number to act on. _(This line first said 23, a figure
+carried over from before the decision was resolved and not recounted — corrected by counting the
+bullets in this file, which is the same defect five of the findings below report.)_
+
+Every count in the findings was re-measured by the orchestrating reviewer before being written here;
+three layer claims were **refuted** in that pass and are recorded at the end rather than dropped
+silently.
+
+#### Decision needed — RESOLVED 2026-07-30 (Guy)
+
+**Resolution: rewrite the matcher as a numeric-literal tokeniser** (option (c), expanded). A
+delimited numeric literal, exactly one dot, not preceded by `.` or an identifier character; plus the
+exponent and trailing-dot forms; plus the `f32`/`f64` suffix recognised **on the literal** rather
+than as a bare substring. This closes three measured false positives *and* two measured false
+negatives in one pass, and it absorbs three of the patch items below (marked `— absorbed`). No
+escape-hatch comment and no `#[cfg(test)]` skip is added: the divergence with `file-size` stays, and
+is now stated in the gate's doc rather than left implicit.
+
+- [x] [Review][Decision] **The gate's false positives have no escape hatch, and story 5.5 is the
+      first story likely to trip them** — Measured by execution: `fn a_f64_never_decides() {}` reds
+      (labelled `"f32/f64 literal suffix"`, a wrong diagnosis), `let a = t.0.1;` reds (nested tuple
+      field access, valid Rust, and the gate's doc at `xtask/src/main.rs:356` explicitly claims
+      `x.0` is excluded), and a dotted-quad in a string literal reds — the last one IS documented as
+      a known false positive on the grounds that "none exists under the guarded subtree today".
+      5.5 writes the first L1 MAC/IP rule and its tests **under `identity/`**, where an IP literal
+      or a test named after the rule is near-certain. There is no `#[allow]`, no `// gate: ok`, no
+      allowlist, and no `#[cfg(test)]` skip — while the sibling `file-size` gate deliberately stops
+      at the first `#[cfg(test)]` (`code_line_count`, `xtask/src/main.rs:80-88`), a divergence stated
+      in neither gate's doc. The remedy is a genuine choice: (a) skip `#[cfg(test)]` like `file-size`,
+      (b) an explicit allowlist/escape comment, (c) narrow the matcher (require a non-digit before
+      the first digit, so `192.168.0.1` and `t.0.1` stop matching), (d) accept the friction and let
+      5.5 work around it. Guy's call — the wrong choice here is the one that gets the gate weakened
+      or deleted in its second week.
+
+#### Patch
+
+- [ ] [Review][Patch] **Rewrite `line_has_float`/`has_float_literal` as a numeric-literal
+      tokeniser** (from the resolved decision above). Required behaviour, all five cases measured on
+      the current tree: `"192.168.0.1"` → green (three dots), `t.0.1` → green (preceded by `.`),
+      `fn a_f64_never_decides()` → green (not a literal), `1e-3` / `2E10` / `1.` → RED, `0.85` /
+      `0.85f64` / `1f32` → RED. Recognise `f32`/`f64` as a word (type position) or as a suffix **on a
+      literal**, and drop the bare `code.contains(token)` fallback that currently makes the
+      word-boundary branch decorative. Add `f16`/`f128` to the token list while the matcher is open.
+      Then rewrite the doc's "Known limits" list to match what the new matcher does — it currently
+      states four limits, all about comments and strings, and its "three shapes" paragraph describes
+      a gate this file does not implement [xtask/src/main.rs:335-370, doc at :312-326]
+- [ ] [Review][Patch] ~~Two legal Rust float spellings are invisible to the gate~~ — **absorbed** by
+      the tokeniser item above. Kept for the record because the measurement is the reason the
+      tokeniser was chosen: `1e-3`, `2E10` and
+      `1.` all measured as `None`; exponent form carries no `.` and trailing-dot has no digit after
+      it, and both are `f64` by inference, i.e. exactly the "weight through the back door" shape AC6
+      names as the gate's whole purpose. The doc's "Known limits" list is also incomplete: it states
+      four limits, all about comments and strings, and neither literal form appears
+      [xtask/src/main.rs:357-365, limits list at :319-326]
+- [ ] [Review][Patch] A shipped doc comment asserts **47** offenders; the committed tree gives **45**
+      — re-measured twice independently (a Python replication of the three matcher fns with stripping
+      removed, and a raw grep): 44 in `cascade.rs` + 1 in `mod.rs` = 45, and 0 with stripping active.
+      It was 47 at the WIP commit `1ced9e2` and was never re-measured after Task 6's doc pass
+      shortened two prose lines — the story's own inherited lesson #1, committed by the story that
+      quotes it. Stale in five places [xtask/src/main.rs:329; deferred-work.md:1311;
+      sprint-status.yaml:730; this file :959 and :1039]
+- [ ] [Review][Patch] `docs/project-context.md` was not brought current, yet Task 9's checkbox says
+      it was — only the Epic 5 table row changed (`1 1` in `--numstat`). Left standing: the
+      **271**-test count and the per-story inventory that never mentions 5.4b's nine tests
+      [docs/project-context.md:62-64], and a sentence this branch falsifies — "no algebra, no rule
+      and no producer, the combining function being story 5.4b's" [docs/project-context.md:72].
+      Correct to 280 (135 + 100 + 45) and rewrite `:72` [this file :672]
+- [ ] [Review][Patch] A shipped test doc claims the citation is "the workspace's only `f64` token"
+      — there are **22** workspace-wide (3 under `identity/`), and this story measured the
+      contradiction itself at :929-931 and left the doc standing. Second half: because this story
+      added `f32`/`f64` at `cascade.rs:290-291`, the test's premise guard
+      `assert!(source.contains("f64"), "the citation this gate must tolerate has moved or gone…")`
+      now stays **green** when the D13 citation is deleted — the guard no longer detects what its
+      message claims. Re-pin it to the citation text, not the substring
+      [xtask/src/main.rs:1731 and :1743-1747]
+- [ ] [Review][Patch] The register carries **TEN** 5.4b annotations, not eight — `grep -c 'by story
+      5.4b, 2026-07-29'` → 10, at lines 253, 272, 365, 377, 1186, 1252, 1287, 1308, 1328, 1354. The
+      same sentence that says "Eight" then enumerates ten (5 named + "the four `NoMatch` annotation
+      lines" + the empty-vector entry). The 4.6a/4.7a sections carry **two** 5.4b-owned bullets each,
+      not one. Stated as eight in three places [this file :982 and :1039; sprint-status.yaml:719]
+- [ ] [Review][Patch] The File List claims the re-export cost "is recorded on the existing
+      re-export entry"; that entry is untouched by this diff and still reads "grew by **five** names
+      with no consumer", enumerating five — while `lib.rs` now re-exports a sixth un-consumed name,
+      `decide`. The story's own binding Dev Note (:791-795) said to add the cost to the existing
+      entry. Either annotate it or weaken the File List to say the cost is NOT recorded
+      [deferred-work.md:1266-1271; this file :1012-1014]
+- [ ] [Review][Patch] The `//`-truncation false negative is real and its stated justification is
+      false — measured: `let url = "http://x"; let confidence = 0.85;`, `let s = "a // b"; let c =
+      0.85;` and `/* see http://x */ let c = 0.85;` all return `None`. The doc calls this "harmless:
+      a float inside a string is not a float", but the missed float is **not** inside the string, it
+      is real code after it. Under this project's rule that a checkable comment gets checked, the
+      false reassurance is the defect: a reader who consults the limits list concludes this case
+      cannot hurt [xtask/src/main.rs:336-339, doc at :322-323]
+- [ ] [Review][Patch] The last row of `decide`'s own doc table names `NoMatch` where `decide`
+      returns `Abstained { AbsenceOfProof }` — the column is headed `conclusion` and the doc
+      explicitly invites re-derivation ("so a reader can re-derive the gap rather than trust it"),
+      so the row reads as the returned variant. It is a faithful quote of D13's row `:974` sitting in
+      a column that means something else, and it contradicts the `NoMatch` variant's own doc 115
+      lines above, which gets it exactly right ("has **no rule to name**, so it cannot be
+      represented by this variant and becomes `Abstained`"). Split the column, or mark the row as
+      D13's letter vs the engine's answer [cascade.rs:363 vs :453-455; correct text at :248-255]
+- [ ] [Review][Patch] AC1's prescribed construct was not used, and it left two dead arms that answer
+      "absence of proof" — AC1 required the presence test and the selection to be **one** act (`if
+      let Some(rule) = …`), so that "no arm ever holds an `Option` it must prove `Some`". The
+      presence test stayed in the tuple and the selection is a second act bridged by a fabricated
+      `None` arm. Consequence: if `has(w)` and `smallest_rule_with` ever diverge, a `Disqualifying`
+      refusal degrades into an honest-looking `Abstained` — the one answer D13/D18 care most about
+      not fabricating — with nothing observable. No test can red on these arms, and the oracle takes
+      the **opposite** decision on the same branch (`unreachable!()`), so implementation and oracle
+      differ on a path neither exercises. The auditor supplied a compatible construct: match on
+      `(smallest_rule_with(…Disqualifying), smallest_rule_with(…Decisive), has(Supports),
+      has(Opposes))`, which is still exhaustiveness-checked, so M2 still yields `error[E0004]` and no
+      arm holds an undischarged `Option` [cascade.rs:410-419 and :421-427; oracle at :892, :898]
+- [ ] [Review][Patch] A sixth `Verdict` variant would silently halve the totality test's coverage —
+      `decide`'s presence tuple stays 4-wide, so **no `error[E0004]` fires in `decide`** on variant
+      addition (only on arm deletion), and the new verdict is treated exactly like `Neutral`.
+      `subset()` is driven by a hard-coded `0..32`, so bit 5 is never set, `NAMES[5]` is never
+      reached and nothing panics or reds; the test keeps the name
+      `decide_is_total_over_every_one_of_d13s_input_classes` while checking 32 of 64 classes. Derive
+      the bound from `Verdict::all().len()` and generate the names
+      [cascade.rs:402-407, :925-937, :958]
+- [ ] [Review][Patch] The gate greens on a guarded directory that exists but holds no `.rs` file —
+      `checked` is computed and printed but never asserted `> 0`, so relocating `cascade.rs` to a new
+      module while leaving `identity/` in place yields `no float in code across 0 file(s)` and a
+      pass. `dir.exists()` is the only liveness check (and is true for a *file* named `identity`).
+      AC6 demanded fail-closed only for the missing directory, so this is a residue rather than a
+      violation — but the gate's doc claims the stronger property [xtask/src/main.rs:412-416,
+      `checked` at :403, fail-closed block at :382-389]
+- [ ] [Review][Patch] "TWELVE doc locations corrected" is not reproducible by any consistent method
+      — the stated method (`grep -rn '5\.4b' crates/ xtask/` on the final tree) yields 10 rewritten
+      mentions, or 9 doc blocks if two adjacent lines merge; counting doc *blocks* consistently gives
+      **10** (8 in `cascade.rs` — which the File List itself states — plus `mod.rs` plus `xtask`);
+      counting sentences gives 13+. Twelve is reachable only by excluding the `xtask` module doc,
+      which Task 6 lists as a doc location and the File List records changing [this file :973, :639,
+      :1010, :1015-1017]
+- [ ] [Review][Patch] "Three sentences naming 5.4b were left standing" — exactly **one** was: the
+      pre-existing `#[non_exhaustive]` note (two lines). The other three of the five surviving
+      mentions are sentences this story **wrote** [this file :978-980; cascade.rs:77-78, :618, :865;
+      xtask/src/main.rs:330]
+- [ ] [Review][Patch] The register cites `cascade.rs:52` for the D13 citation; it is at **:53** (the
+      module-doc rewrite added a line above it) — and AC8 forbade line citations in the register for
+      exactly this reason ("a line citation written here will rot the same way"). The Completion
+      Notes get `:53` right, so the two records now contradict each other
+      [deferred-work.md:1309 vs this file :931]
+- [ ] [Review][Patch] Task 5 required the observed failure quoted for each mutation; only M2 is
+      quoted verbatim, and **M5's count is arithmetically impossible** — `line_has_float` `return`s
+      on the first matching shape and the gate pushes at most one offender per line, so the
+      classifications "type" and "literal" are mutually exclusive per line and a single inserted
+      float line cannot produce "2 reds, the type AND the literal". The mutation text was not
+      recorded, so the number cannot be reproduced. Quote the output or weaken the claim
+      [this file :947-971; xtask/src/main.rs:335-352]
+- [ ] [Review][Patch] `subset()`'s doc justifies its scrambled `NAMES` by a property the test cannot
+      have — it claims the names are ordered so "lexicographic order does NOT follow `Verdict::all()`'s
+      order — otherwise 'smallest rule' and 'first in the vector' would be indistinguishable here",
+      but because `subset` emits at most one `RuleVerdict` per verdict kind, no rule-naming arm ever
+      has two candidates, so `min()` and "first in the vector" are indistinguishable **whatever
+      `NAMES` contains**. The file admits this 30 lines later ("What it does NOT cover: the
+      tiebreak"). Replacing `NAMES` with `["a".."e"]` changes nothing observable
+      [cascade.rs:925-937 vs :400-402]
+- [ ] [Review][Patch] The tiebreak's "no semantic content" claim is false in the direction that
+      matters — `RuleId(pub String)` derives `Ord`, so `min()` is **byte** order. Given this
+      project's `l1-*`/`l2-*` naming, any decision where an L1 and an L2 rule both disqualify always
+      names the L1 one, forever: a stable tier preference, not the absence of one. It is also
+      case-sensitive (`"L1-exact"` beats `"l1-a"`) and **flips tiers the moment rule numbering
+      reaches ten** (`"l10-x"` < `"l2-x"`). The doc's intra-tier example (`l1-distinct-mac` vs
+      `l1-exact-mac`) is the one case where the claim holds. Weaken the sentence
+      [cascade.rs:470-476, doc at :373-375]
+- [ ] [Review][Patch] `Decision`'s doc closes "merged, with no explanation" "by construction"
+      without saying **which** emptiness it closed — `decide` never inspects `evidence`, so a
+      single `RuleVerdict { verdict: Decisive, evidence: vec![] }` still yields a `Match` whose
+      explanation explains nothing. The empty-*vector* case is genuinely closed; the empty-*evidence*
+      case is not, and the story defers it elsewhere. Qualify the sentence
+      [cascade.rs:98-103 and :421-427]
+- [ ] [Review][Patch] ~~The word-boundary branch can never change the verdict, only the label~~ —
+      **absorbed** by the tokeniser item; kept because it is the measurement behind it.
+      `code.contains(token)` is a strict superset of `contains_word(code, token)`, so the real rule
+      is "any substring occurrence in the non-comment part". The doc describes "three shapes" as if
+      the first were load-bearing detection and says the last two "were measured as escapes of a
+      word-boundary-only match" — true of a hypothetical gate, not of this one. Any identifier
+      containing the substring reds and is mislabelled `"f32/f64 literal suffix"`, sending the reader
+      to the wrong fix [xtask/src/main.rs:340-348, doc at :312-317]
+- [ ] [Review][Patch] Offenders are emitted in walkdir traversal order, so the same tree can print
+      RED lines in different orders on two machines — the sibling `file-size` gate sorts before
+      formatting [xtask/src/main.rs:391, :407 vs gate_file_size at :129]
+- [ ] [Review][Patch] The determinism half of `decide`'s permutation test cannot fail — calling a
+      `fn` with no state twice and asserting equal outputs is guaranteed by the language, not by the
+      code under test; no mutation of `decide`'s body can red it. It inflates the apparent coverage
+      of the doc's "answers the same way every time" claim [cascade.rs:587-601 region]
+- [ ] [Review][Patch] ~~`f16`/`f128` are absent from the token list~~ — **absorbed** by the
+      tokeniser item. D13's
+      clause is "no float" and the gate enumerates two of the four float type names. Unreachable on
+      stable today, which is why this is a doc/limits item rather than a hole
+      [xtask/src/main.rs:340]
+- [ ] [Review][Patch] The new gate breaks the file's banner numbering — order is now `Gate 0`,
+      `Gate 5`, `Gate 1`, `Gate 2`, `Gate 3`, the new gate having been inserted above `Gate 1` rather
+      than after the two neighbours AC6 named. Cosmetic, no behaviour affected
+      [xtask/src/main.rs:298 vs :192, :429, :493, :623]
+- [ ] [Review][Patch] PR **#55** (open, `ci` SUCCESS) is recorded nowhere — not in the
+      `sprint-status.yaml` block, not in this story, not in `CLAUDE.md` — while every predecessor is
+      recorded as "PR #41 / #44 / #46 / #48 / #52" [sprint-status.yaml:764]
+
+#### Deferred
+
+- [x] [Review][Defer] Four `cargo xtask ci` gates swallow every `walkdir` error via
+      `filter_map(Result::ok)`, so an unreadable subdirectory silently shrinks the tree they claim to
+      have checked [xtask/src/main.rs:105, :395, :439, :557] — deferred, pre-existing. **The Edge
+      layer rated this HIGH against 5.4b on the grounds that the same file forbids it by name at
+      `corpus_entries` (:753-806, "a walk whose failure mode is 'quietly saw less of the tree' is not
+      a gate"). Re-measurement moved it**: three of the four sites predate this story
+      (`gate_file_size`, `gate_ddl_collation`, `gate_vocabulary`), and AC6 told 5.4b to follow "the
+      idiom of its two neighbours" — which it did, exactly. The weakness is repo-wide and fixing one
+      gate would be the least useful version of the fix.
+- [x] [Review][Defer] The gates do not follow symlinks and do not report them, so a symlinked
+      subdirectory (or a module pulled in by `#[path]`, or an `include!`) is outside every walk
+      [xtask/src/main.rs:393 and the three sibling gates] — deferred, pre-existing and repo-wide.
+      Asymmetric with `corpus_entries`, which refuses to skip a symlink in silence
+      (`CorpusEntry::Symlink`).
+- [x] [Review][Defer] Nothing refuses a blank or whitespace `RuleId` on the `RuleVerdict` side, so
+      `decide` can return `NoMatch { rule: RuleId("") }` on which `Decision::rule()` still answers
+      `Some` — "every decision names a rule" degenerates to naming nothing. `Trap::validate` refuses
+      a blank rule on the expectation side [trap.rs:302] — deferred, owner story 5.5, which is where
+      a `RuleVerdict` first gets produced by something other than a test.
+- [x] [Review][Defer] A named rule with EMPTY `evidence` yields a `Match` that explains nothing,
+      defeating D13's "the list IS the explanation" one level below the empty-vector case this story
+      closed [cascade.rs:421-427] — deferred, owner story 5.5; the invariant needs a firing rule to
+      state, as the story already records.
+- [x] [Review][Defer] The `xtask` module doc's list of gates is not itself gated and will drift again
+      — evidence: this story had to add the `file-size` entry, meaning the previous story shipped a
+      gate absent from that list [xtask/src/main.rs:646-648 region] — deferred, pre-existing.
+
+#### Dismissed, with the reason (three layer claims that did not survive re-measurement)
+
+1. **"The gate test leaks its scratch tree on failure and poisons the next run"** (Blind) —
+   **refuted.** `scratch()` calls `remove_dir_all` on entry *and* namespaces the path with
+   `std::process::id()`, with a doc comment saying exactly why ("a shared constant path races
+   between concurrent runs and leaves a stale corpus behind when an assertion fails")
+   [xtask/src/main.rs:1228-1235].
+2. **"A sixth `Verdict` variant makes `NAMES[i]` panic with an index-out-of-bounds"** (Blind) —
+   **refuted by the Edge layer**, and the real defect is worse than the claimed one: the hard-coded
+   `0..32` means bit 5 is never set, so nothing panics, nothing reds, and the test silently covers
+   half the space. Carried as a patch item above in its corrected form.
+3. **"Every 'Registered' claim is unverifiable" and "what the diff fails to make self-evident"**
+   (Blind) — dismissed as blindness artifacts. The two layers with repo access confirmed the
+   register entries exist, that GitHub issue #54 is open, `RuleId`'s `Ord` derive, `contains_word`,
+   `walkdir`'s presence and `Verdict::all()`'s arity. The one durable observation inside that
+   finding (the module-doc gate list drifting) is carried as a defer above.
+   **Blind also claimed the diff still says "`NoMatch` is therefore reached by two different rows"**
+   — the tree says something different and correct; only the doc *table* row is wrong.
+
 ## Dev Notes
 
 ### Why `decide` returns a `Decision` and not a bare `Conclusion`
