@@ -50,9 +50,10 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-30  # 5.4b CODE-REVIEWED (3 layers): 22 patches applied, 5 deferrals, 3 layer
-                          # claims refuted. 281 tests (135+100+46). PR #55 open, CI green.
-                          # NEXT = merge #55, then bookkeeping, then story 5.5.
+last_updated: 2026-07-30  # 5.4b DONE: PR #55 squash-merged as 4f4e774 after a green CI run.
+                          # Its code review applied 22 patches, registered 5 deferrals and refuted
+                          # 3 of its own layers' claims. 281 tests (135+100+46), six gates green.
+                          # NEXT = story 5.5, the L1 join — the first caller of decide().
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -766,7 +767,7 @@ development_status:
   #
   # CODE REVIEW held 2026-07-30, three parallel layers (Blind Hunter · Edge Case Hunter ·
   # Acceptance Auditor). 1 decision resolved by Guy, 22 patches applied, 5 deferrals registered,
-  # 3 layer claims REFUTED. PR #55 open, CI green. 280 → 281 tests (135 bin + 100 core + 46 xtask).
+  # 3 layer claims REFUTED. PR #55, CI green. 280 → 281 tests (135 bin + 100 core + 46 xtask).
   # ⚠️ SEVEN of the eight HIGH findings were about CLAIMS, not behaviour, and the numbers this block
   # carried were among them. Corrections, each re-measured before being written:
   #   · "47 offenders when the stripping is removed" → **45 under the matcher that shipped** (44 in
@@ -811,7 +812,13 @@ development_status:
   # `git checkout` restoring to HEAD during the next mutation — the exact defect this story's own
   # implementation notes record. Re-applied and committed before continuing. The lesson does not
   # transfer by being written down.
-  5-4b-verdict-algebra-and-float-gate: review
+  #
+  # `done` 2026-07-30: PR #55 squash-merged as 4f4e774 after a green CI run (1m05). As with every
+  # story in this project, `done` is the MERGE's business — which is why this sat at `review` from the
+  # end of dev-story through the whole code review and its 22 patches. ⚠️ The review workflow's own
+  # step 6 would have set `done` as soon as the patches were applied; that default was deliberately
+  # NOT followed, because it would have marked a story done while its PR was still open.
+  5-4b-verdict-algebra-and-float-gate: done
   5-5-l1-join-pure: backlog
   5-6-blocker-and-recall-assertion: backlog
   5-7-trap-runner-stops-scoring-nothing: backlog
