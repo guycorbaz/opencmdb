@@ -1010,11 +1010,17 @@ mod tests {
     #[test]
     fn decide_is_total_over_every_one_of_d13s_input_classes() {
         let mut mismatches = Vec::new();
+        let mut exercised: Vec<Verdict> = Vec::new();
 
         let classes = input_classes();
 
         for mask in 0..classes {
             let vector = subset(mask);
+            for rv in &vector {
+                if !exercised.contains(&rv.verdict) {
+                    exercised.push(rv.verdict);
+                }
+            }
             let expected = expected_conclusion(&vector);
             let decision = decide(vector.clone(), RulesetVersion(3));
 
@@ -1042,6 +1048,19 @@ mod tests {
             mismatches.len(),
             mismatches.join("\n  ")
         );
+
+        // ⚠️ The walk agreeing with the oracle says NOTHING about how much of the space it walked:
+        // halving `classes` was MEASURED to leave all 100 core tests green, because the oracle agrees
+        // on every class the walk still visits. This is what makes "every input class" falsifiable —
+        // a bound too small stops exercising the highest-bit variant, and that reds here.
+        for verdict in Verdict::all() {
+            assert!(
+                exercised.contains(&verdict),
+                "{verdict:?} never appeared in any of the {classes} subsets walked, so this test \
+                 does not cover the space its name claims — check that the bound is derived from \
+                 Verdict::all() and that subset() maps every index"
+            );
+        }
     }
 
     /// The class D13's six rows leave uncovered — `>=1 Opposes`, no `Decisive`, no `Supports`, no
