@@ -1,6 +1,6 @@
 # Story 5.4b: The verdict algebra is a total function, and no float can reach it
 
-Status: review
+Status: done
 
 <!-- Validation is MANDATORY here (Guy's decision, Epic 4 retrospective 2026-07-26): two
      fresh-context agents (fact-check + gap-hunt) BEFORE dev-story. The template banner saying
