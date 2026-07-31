@@ -7,8 +7,10 @@
 //! Subdomains land here by folder, but the folder is not the frontier: visibility is
 //! (`pub(in ...)` → `E0603`, D54). The identity engine, the verdict algebra, the gap
 //! predicate, and `http_status(&DomainError) -> u16` (D53) live under here as the work
-//! of story 1 onward. This is the walking-skeleton placeholder: it compiles, and it
-//! asserts nothing about identity yet.
+//! of story 1 onward. The identity engine now decides at L1: `identity::l1` joins
+//! observations on `(l2_domain, mac)` and answers a candidate pair through
+//! `identity::cascade::decide`. Its L2 half, and the persistence of what it decides,
+//! are still ahead.
 
 #![forbid(unsafe_code)]
 // Documentation is a project rule (CLAUDE.md): every public item — structs, enums, fields,

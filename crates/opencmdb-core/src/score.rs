@@ -282,17 +282,19 @@ pub enum SourceState {}
 /// discipline, it is a data requirement.**"*
 ///
 /// The vector's element is `(rule, verdict, evidence)`, and since story 5.4 that triple HAS a type
-/// — [`crate::identity::cascade::RuleVerdict`], on the engine's side. **Nothing produces one**: no
-/// rule speaks, so no verdict vector is ever built. This placeholder therefore stays **uninhabited**
-/// rather than being replaced, so the field is provably empty by the same standard as
-/// [`SourceState`], instead of being empty by comment. **Story 5.7 owns the unification**, when the
-/// trap runner first records a run a real engine produced.
+/// — [`crate::identity::cascade::RuleVerdict`], on the engine's side. A rule now speaks and a
+/// verdict vector IS built ([`crate::identity::l1`]), but **nothing feeds it to the harness**: no
+/// run here is produced by that engine. This placeholder therefore stays **uninhabited** rather than
+/// being replaced, so the field is provably empty by the same standard as [`SourceState`], instead
+/// of being empty by comment. **Story 5.7 owns the unification**, when the trap runner first records
+/// a run a real engine produced.
 ///
 /// This is also what PINS story 4.7a's AC6 forward contract: [`run_trap`] asserts `(verdict, rule)`
 /// today, but the requirement that *a firing rule leave its `rule_id` and evidence behind* needs an
-/// engine to enforce. Until Epic 5 fills this vector, "the firing rule left its evidence" is a
-/// contract recorded (in `deferred-work.md`), not a mechanism — and the emptiness here is its proof
-/// that nothing yet produces one.
+/// engine to enforce. It now IS a mechanism, on the engine's side:
+/// [`crate::identity::l1::verdict_for_pair`] carries both `ObsId`s on every verdict that argues, and
+/// a test reds if it stops. ⚠️ **That mechanism has not reached HERE**: this vector is still empty
+/// because no run in this module was produced by that engine, which is what story 5.7 changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerdictVectorEntry {}
 

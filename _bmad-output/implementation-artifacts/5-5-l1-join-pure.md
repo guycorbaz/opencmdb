@@ -1,6 +1,6 @@
 # Story 5.5: The L1 join, as a pure function — and the first rule that fires
 
-Status: ready-for-dev
+Status: review
 
 <!-- Validation is MANDATORY here (Guy's decision, Epic 4 retrospective 2026-07-26): two
      fresh-context agents (fact-check + gap-hunt) BEFORE dev-story. The template banner saying
@@ -493,69 +493,69 @@ holds no 5.9-owned entry. **Say which one you closed.**
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Enumerate the obligations before writing code** (AC9)
-  - [ ] `grep -n '5\.5' _bmad-output/implementation-artifacts/deferred-work.md` — **19 lines**; read
+- [x] **Task 1 — Enumerate the obligations before writing code** (AC9)
+  - [x] `grep -n '5\.5' _bmad-output/implementation-artifacts/deferred-work.md` — **19 lines**; read
         every one. Do **not** use `grep 'story 5\.5'` as the enumeration (11 hits, two owner strings
         wrap across a newline and are invisible to it).
-  - [ ] Group them by REQUIREMENT. Expect these eight, and verify rather than trust the list:
+  - [x] Group them by REQUIREMENT. Expect these eight, and verify rather than trust the list:
         (R1) a firing rule leaves `rule_id` **and** evidence, with a test that reds · (R2) refuse a
         blank `RuleId` producer-side · (R3) one verdict per rule · (R4) the `RulesetVersion` constant
         and what `0` means · (R5) the tiebreak — designed priority or the weaker true sentence ·
         (R6) the producer emits a canonical `RuleId` · (R7) 5.3's two compiler-carried tests ·
         (R8) the `NoMatch` producer half only.
-  - [ ] `grep -rn '5\.5' crates/ xtask/ --include=*.rs` — **12 sites**. List them; they are Task 6's
+  - [x] `grep -rn '5\.5' crates/ xtask/ --include=*.rs` — **12 sites**. List them; they are Task 6's
         worklist and a floor, not the set.
 
-- [ ] **Task 2 — Read before writing** (AC1; the project's primary named cause of review cycles)
-  - [ ] `crates/opencmdb-core/src/observation/mod.rs` — `Observation`, `Fact`, `Scope`, `MacAddr`,
+- [x] **Task 2 — Read before writing** (AC1; the project's primary named cause of review cycles)
+  - [x] `crates/opencmdb-core/src/observation/mod.rs` — `Observation`, `Fact`, `Scope`, `MacAddr`,
         `ObsId`, `is_locally_administered`. ⚠️ It is `observation/mod.rs`, a directory module, not
         `observation.rs`.
-  - [ ] `crates/opencmdb-core/src/identity/cascade.rs` in full, including its test module's
+  - [x] `crates/opencmdb-core/src/identity/cascade.rs` in full, including its test module's
         placement doc (`:636-664`): *a test lives with the item whose CLAIM it pins.*
-  - [ ] `crates/opencmdb-core/src/identity/mod.rs`, `lib.rs` (module list + the flat re-export policy).
-  - [ ] `xtask/src/main.rs`'s `gate_float_free` and its three helpers — you are about to write code
+  - [x] `crates/opencmdb-core/src/identity/mod.rs`, `lib.rs` (module list + the flat re-export policy).
+  - [x] `xtask/src/main.rs`'s `gate_float_free` and its three helpers — you are about to write code
         under the directory it guards. See *The float gate is live under your feet* in Dev Notes.
 
-- [ ] **Task 3 — The join** (AC1, AC2)
-  - [ ] New file `crates/opencmdb-core/src/identity/l1.rs`; `pub mod l1;` in `identity/mod.rs`.
-  - [ ] `fn join(observations: &[Observation]) -> BTreeMap<(L2DomainId, MacAddr), BTreeSet<ObsId>>`.
+- [x] **Task 3 — The join** (AC1, AC2)
+  - [x] New file `crates/opencmdb-core/src/identity/l1.rs`; `pub mod l1;` in `identity/mod.rs`.
+  - [x] `fn join(observations: &[Observation]) -> BTreeMap<(L2DomainId, MacAddr), BTreeSet<ObsId>>`.
         ⚠️ **`BTreeSet`, not `Vec`** — a `Vec` value is order-dependent and fails AC1's own test.
-  - [ ] Tests: order-independence · two vantages, one group · zero / one / several `Fact::Mac` ·
+  - [x] Tests: order-independence · two vantages, one group · zero / one / several `Fact::Mac` ·
         the same MAC twice in one observation contributes once · an observation with no MAC in no
         group · a test that varies `raw`/`observed_at`/`connector_id` and asserts an identical map ·
         **two `l2_domain`s, two groups** with an assertion that the scope dimension actually varied.
 
-- [ ] **Task 4 — The two rules and the L1 entry point** (AC3, AC4, AC5, AC6, AC7)
-  - [ ] `pub fn decide_pair(a: &Observation, b: &Observation) -> Decision` — by reference, not by
+- [x] **Task 4 — The two rules and the L1 entry point** (AC3, AC4, AC5, AC6, AC7)
+  - [x] `pub fn decide_pair(a: &Observation, b: &Observation) -> Decision` — by reference, not by
         `ObsId` (a pair of ids would squat 5.6's generator).
-  - [ ] `l1-exact-mac` -> `Decisive` on **at least one shared key**; `l1-distinct-mac` ->
+  - [x] `l1-exact-mac` -> `Decisive` on **at least one shared key**; `l1-distinct-mac` ->
         `Disqualifying` when they share **none** and both carry a MAC (reproduce AC5's five-step
         derivation in the doc comment); no MAC -> `Neutral` under `l1-exact-mac`.
-  - [ ] Evidence: both `ObsId`s on an arguing verdict; none on `Neutral`.
-  - [ ] `pub const CURRENT_RULESET_VERSION: RulesetVersion = RulesetVersion(1);` — and **no `Default`**.
+  - [x] Evidence: both `ObsId`s on an arguing verdict; none on `Neutral`.
+  - [x] `pub const CURRENT_RULESET_VERSION: RulesetVersion = RulesetVersion(1);` — and **no `Default`**.
         ⚠️ The **rule ids** cannot be `const RuleId` (`RuleId(pub String)`, `error[E0015]`) — pick
         `&str` constants or accessor fns, and say which.
-  - [ ] The entry point builds the one-element vector and calls `decide`. **First caller outside
+  - [x] The entry point builds the one-element vector and calls `decide`. **First caller outside
         `cascade.rs`'s tests.**
-  - [ ] Producer-side: emitted ids non-blank and `trim()`-equal; one verdict per pair (trivially
+  - [x] Producer-side: emitted ids non-blank and `trim()`-equal; one verdict per pair (trivially
         true — do not close the register entry); arguing-verdict evidence.
-  - [ ] Tests: `l1-exact-mac` fires on a locally-administered MAC **and** on a VRRP-range MAC (AC3's
+  - [x] Tests: `l1-exact-mac` fires on a locally-administered MAC **and** on a VRRP-range MAC (AC3's
         negative requirement) · **the multi-MAC pair A={X,Y} / B={Y,Z} merges** · the two rule ids
         asserted as **string literals**, not via the constants · the full `Conclusion` compared with
         `assert_eq!`, **never `matches!`** — measured load-bearing, see AC5.
 
-- [ ] **Task 5 — The independent oracle** (AC8)
-  - [ ] Write the expected conclusion from D13's text, not by calling the implementation. Label it as
+- [x] **Task 5 — The independent oracle** (AC8)
+  - [x] Write the expected conclusion from D13's text, not by calling the implementation. Label it as
         protected deliberate redundancy, in the idiom of `cascade.rs:901-906`.
 
-- [ ] **Task 6 — Prove to red** (AC8)
-  - [ ] ⚠️ **COMMIT the implementation FIRST.** This is a step, not a warning. Story 5.4b lost work
+- [x] **Task 6 — Prove to red** (AC8)
+  - [x] ⚠️ **COMMIT the implementation FIRST.** This is a step, not a warning. Story 5.4b lost work
         to `git checkout <file>` reverting to `HEAD` against an uncommitted baseline **twice — once in
         dev and again in its own code review**, the second time destroying an assertion that had just
         been proven. Its own record concludes: *"the lesson does not transfer by being written down."*
         After each restore verify with `md5sum` against the committed baseline **and** `git status`.
         Never `cp` a backup without checking the exit code.
-  - [ ] Minimum mutations, each with predicted vs observed and **every** red reported. The
+  - [x] Minimum mutations, each with predicted vs observed and **every** red reported. The
         predictions below were measured at validation — reproduce them, and report any divergence:
         - **(M1)** group by the bare MAC **while filling the key's `l2_domain` slot from the first
           observation seen for that MAC** — ⚠️ specify this variant. Changing the *return type* to
@@ -572,36 +572,36 @@ holds no 5.9-owned entry. **Say which one you closed.**
         - **(M6)** ⚠️ **non-blank but NON-CANONICAL id** — `"L1-Exact-MAC "` (case + trailing space)
           and `"l1_distinct_mac"`. Measured with self-referential tests: **zero reds, 296/296 green.**
           This mutation is the one that proves AC8's string-literal oracle is doing work.
-  - [ ] Classify each red: compiler-carried or assertion-carried.
-  - [ ] ⚠️ **Split an assertion that pins two properties into two tests.** Measured: AC2's test
+  - [x] Classify each red: compiler-carried or assertion-carried.
+  - [x] ⚠️ **Split an assertion that pins two properties into two tests.** Measured: AC2's test
         written as one function (join assertion, then `decide_pair` assertion) **aborts at the first
         `assert_eq!` and reports 1 red where the mutation breaks 2**. This is the early-abort defect
         AC8 names, reproduced inside this story.
 
-- [ ] **Task 7 — Docs and register** (AC9)
-  - [ ] Correct the **eleven** correction sites (the twelfth, `xtask/src/main.rs:1821`, is
+- [x] **Task 7 — Docs and register** (AC9)
+  - [x] Correct the **eleven** correction sites (the twelfth, `xtask/src/main.rs:1821`, is
         **verify-only**), then work the per-file table in *What this story inherits* §7 — **15
         falsified claims in `cascade.rs` alone, 7 of them invisible to the grep**, plus
         `identity/mod.rs`, `lib.rs`, `trap.rs` and `score.rs` (docs only).
-  - [ ] ⚠️ The corrected `cascade.rs:9`/`:56` must not say *"rules now produce verdicts"* flatly.
+  - [x] ⚠️ The corrected `cascade.rs:9`/`:56` must not say *"rules now produce verdicts"* flatly.
         `Verdict` has **five** variants; L1 produces **three** (`Decisive`, `Disqualifying`,
         `Neutral`). The true sentence names the residue: **`Supports` and `Opposes` have no producer
         until Epic 6's `l2-*` rules** — that is TWO, not three. Register it.
-  - [ ] ⚠️ `identity/mod.rs:19-23` — *"It starts meaning something when an item here is restricted to
+  - [x] ⚠️ `identity/mod.rs:19-23` — *"It starts meaning something when an item here is restricted to
         this subtree, **which nothing yet is**"* — becomes false the moment you write
         `pub(in crate::identity)`. Check it rather than discover it in review.
-  - [ ] Annotate the register per requirement. **Append; never rewrite a bullet.** Cite entries by
+  - [x] Annotate the register per requirement. **Append; never rewrite a bullet.** Cite entries by
         TITLE, not by line number — 5.4's stale line citations were caught by three review layers.
-  - [ ] Re-count mechanically **after the last edit**, and state each number **once**. Prefer
+  - [x] Re-count mechanically **after the last edit**, and state each number **once**. Prefer
         asserting a property in a test over quoting a figure in a comment.
-  - [ ] `crates/opencmdb-core/src/lib.rs` — add the new public items to the flat re-export list.
-  - [ ] `sprint-status.yaml`, `CLAUDE.md`, `docs/project-context.md` — docs-current-before-push.
+  - [x] `crates/opencmdb-core/src/lib.rs` — add the new public items to the flat re-export list.
+  - [x] `sprint-status.yaml`, `CLAUDE.md`, `docs/project-context.md` — docs-current-before-push.
         Re-measure the three per-crate test counts on the final tree (baseline **281 = 135 + 100 + 46**).
-  - [ ] `epics.md` — **verify only**. An edit is a finding.
+  - [x] `epics.md` — **verify only**. An edit is a finding.
 
-- [ ] **Task 8 — Gate and PR** (AC9)
-  - [ ] The full local gate, both clippy forms. `git status` under `fixtures/` **empty**.
-  - [ ] Branch `story-5.5-l1-join-pure` -> PR -> green CI. **Ends at `review`, PR open.**
+- [x] **Task 8 — Gate and PR** (AC9)
+  - [x] The full local gate, both clippy forms. `git status` under `fixtures/` **empty**.
+  - [x] Branch `story-5.5-l1-join-pure` -> PR -> green CI. **Ends at `review`, PR open.**
 
 ## Dev Notes
 
@@ -818,17 +818,117 @@ D54: **the folder is not the frontier — visibility is.** For an internal-only 
 
 ### Agent Model Used
 
-_To be filled by the dev agent._
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`.
 
 ### Debug Log References
 
+**Mutation pass (Task 6), against the committed baseline `6483b4d`.** Every restore verified with
+`md5sum` against `8ad7687246ae29cb70527fe1c1c90c48` **and** `git status`; no `cp`, no uncommitted
+baseline. Every red reported, not the first.
+
+| # | mutation | reds | classification |
+|---|---|---|---|
+| M1 | group by the bare MAC, key's `l2_domain` slot from the first observation seen for that MAC (**type-preserving form**) | **1** | assertion |
+| M2 | `l1-distinct-mac` emits `Opposes` | **4** | assertion |
+| M3 | drop the evidence from an arguing verdict | **3** | assertion |
+| M4 | `vantage` in the key (**type-preserving form**) | **5** | assertion |
+| M5 | `L1_EXACT_MAC = "  "` (blank id) | **7** | assertion |
+| M6 | `L1_EXACT_MAC = "L1-Exact-MAC "`, `L1_DISTINCT_MAC = "l1_distinct_mac"` (non-blank, **non-canonical**) | **10** | assertion |
+
+**Not one red is compiler-carried.** None would fire on a test body of `assert_eq!(1, 1)`.
+
+M1's single red is `the_same_mac_in_two_l2_domains_is_two_groups`, and only that — the story's
+prediction holds for the type-preserving variant, which is the one it names.
+
+M2's observed output, which is what confirms AC5's five-step derivation by running rather than
+arguing:
+
+```
+assertion `left == right` failed: only NoMatch names a rule for a non-merge; an Opposes would
+                                  abstain and name nothing
+  left: Abstained { cause: AbsenceOfProof }
+ right: NoMatch { rule: RuleId("l1-distinct-mac") }
+```
+
 ### Completion Notes List
 
+**Status: `review`. PR open, CI green. `done` is the merge's business.**
+
+- **The join is `join(&[Observation]) -> BTreeMap<(L2DomainId, MacAddr), BTreeSet<ObsId>>`.** The
+  value is a `BTreeSet` and not a `Vec`, so order-independence holds **by construction** rather than
+  through a `sort()` a refactor can drop — and the repeated-`Fact::Mac` case is settled for free.
+- **The two rules are `l1-exact-mac -> Decisive` and `l1-distinct-mac -> Disqualifying`**, with the
+  corpus's spelling. A pair with no MAC is `Neutral` under `l1-exact-mac`, the rule that tried.
+  The quantifier is **existential**: the pair shares an interface when it shares at least one key.
+- **`decide` is called from outside its own tests for the first time**, by `decide_pair`, with
+  `CURRENT_RULESET_VERSION = RulesetVersion(1)`. **No `Default` was added.**
+- **AC3 was discharged as a NEGATIVE requirement**, as the validated story required: no IANA-prefix
+  predicate was added, `MacAddr::is_locally_administered()` was not re-derived, and two tests assert
+  `l1-exact-mac` still fires on a locally-administered MAC and on a VRRP-range MAC. Neither committed
+  trap is reddened.
+- **25 tests added** (core 100 → 125). Workspace **281 → 306 = 135 + 125 + 46**, counted mechanically
+  after the last edit.
+- **Six `xtask` gates green**, `float-free` now walking **3** files under `identity/`;
+  `ℹ views-hash STALE`, exit 0 by design (issue #50). `git status` under `fixtures/` empty.
+
+**What I did NOT do, and would have had to report if I had:** no candidate pair was generated, no
+`blocking_recall` computed, `VerdictVectorEntry` was not inhabited, no `From<Decision> for Outcome`
+was added, and `score.rs`'s CODE, `trap_gate.rs`, `run_trap`, `Tally`, `Report` and `SourceState`
+were not touched. `epics.md`, `architecture.md` and `architecture-views.md` were not edited.
+
+**Honest note on the red/green cycle.** The tests and the implementation were written together, so
+there was **no failing-test phase** for the initial write. The prove-to-red discipline is carried
+entirely by the six-mutation pass above, which is the project's house rule and is more rigorous; the
+initial green is not counted as evidence of anything.
+
+**Register: eight requirements dispositioned, and only five are CLOSED.** Appended under
+`## Deferred from: story-5.5`, grouped by requirement and citing entries by TITLE. Closed: R1
+(evidence), R4 (the version constant), R6 (canonical id), R7 (5.3's compiler-carried tests), R8 (the
+`NoMatch` producer half). **Left open, with the measurement that says why:** R3 — "one verdict per
+rule" is *trivially* true at L1 because the producer emits one verdict per pair, so no mutation makes
+it red for the right reason (owner Epic 6); R2 — a blank id is **asserted**, not refused, because a
+runtime refusal has no reachable branch under AC6 (the type-level half stays with 5.9); R5 — the
+tiebreak keeps its placeholder because **L1 supplies no tie**, its two rules never meeting in one
+vector.
+
+**Two findings, both reported rather than absorbed:**
+
+1. 🔴 **`xtask/src/main.rs:1821`'s prediction about this story did not come true.** The validated
+   story classified it verify-only on the assumption it would. Its assertion message read *"story 5.5
+   writes IP literals under the guarded subtree"*; **measured on the shipped tree: zero `Ipv4Addr`
+   and zero dotted quads under `identity/`** — the L1 key is a MAC and an opaque domain id, so no IP
+   literal was ever needed. Verifying is what found it false, so the message was corrected to the
+   rationale that holds regardless. Registered.
+2. ⚠️ **The `E0560`/`E0609` figure the story quotes for the absent `Default` is stale**, and I did
+   not propagate it. Re-measured on this tree: **six `E0560` plus two `E0609`** under
+   `cargo check -p opencmdb-core --tests`, not five plus one — that figure was true before `decide`
+   and its tests existed. `cascade.rs`'s doc now states the property without a number.
+
+**Flagged FORWARD for story 5.6, deliberately not solved here:** `epics.md:1507`'s
+`blocking_recall >= 0.999` is a bare float literal and **reds the `float-free` gate**. If the blocker
+lives under `identity/`, 5.6 trips it on its first assertion. Registered with owner 5.6 so its
+contexting decides rather than discovers.
+
 ### File List
+
+| file | change |
+|---|---|
+| `crates/opencmdb-core/src/identity/l1.rs` | **NEW** — the join, the two rules, `decide_pair`, the ruleset constant, and 25 tests |
+| `crates/opencmdb-core/src/identity/mod.rs` | `pub mod l1;` + module doc corrected (*"no rule, no candidate pair and no join"* was falsified) |
+| `crates/opencmdb-core/src/identity/cascade.rs` | **docs only** — **12** falsified claims corrected (module doc, `Verdict`, `RuleVerdict` + its `evidence` field, `RulesetVersion`, `Decision` ×2, `decide` ×2, two test docs, one assertion message). `git diff --unified=0` reports **17** hunks; the difference is `cargo fmt` reflow, not further claims |
+| `crates/opencmdb-core/src/lib.rs` | flat re-export of `identity::l1`'s public items + crate doc (*"asserts nothing about identity yet"*) |
+| `crates/opencmdb-core/src/score.rs` | **docs only** — `:285` and `:293` reason clauses; code, `VerdictVectorEntry` and both `size_of` tests untouched |
+| `crates/opencmdb-core/src/trap.rs` | docs only — `RuleId`'s *"A `String` for now because no rule exists yet"* |
+| `xtask/src/main.rs` | one assertion message — the expired prediction above |
+| `_bmad-output/implementation-artifacts/deferred-work.md` | appended `## Deferred from: story-5.5`; **no bullet rewritten** |
+| `_bmad-output/implementation-artifacts/sprint-status.yaml` | status → `review` |
+| `_bmad-output/implementation-artifacts/5-5-l1-join-pure.md` | this record |
+| `CLAUDE.md`, `docs/project-context.md` | docs-current-before-push |
 
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-07-31 | **Implemented — status `review`, PR open.** `identity/l1.rs` is NEW: the join `join(&[Observation]) -> BTreeMap<(L2DomainId, MacAddr), BTreeSet<ObsId>>`, the two corpus rules (`l1-exact-mac -> Decisive`, `l1-distinct-mac -> Disqualifying`, no MAC -> `Neutral`), `decide_pair` — **the first caller of `decide` outside its own tests** — and `CURRENT_RULESET_VERSION = RulesetVersion(1)` with no `Default`. **25 tests added; workspace 281 -> 306 = 135 + 125 + 46**, counted mechanically after the last edit; six `xtask` gates green (`float-free` now walks 3 files), `fixtures/` untouched. **Prove-to-red: six mutations, 1 / 4 / 3 / 5 / 7 / 10 reds, every one assertion-carried and none compiler-carried.** M2 confirmed AC5's derivation by RUNNING it — `Opposes` yields `Abstained { AbsenceOfProof }` and names no rule. **M6 is the mutation validation added, and it earned its place: the gap-hunt agent measured 0 reds for it on self-referential tests; on the shipped tests it reds 10**, because the assertions restate the two rule ids as independent string literals. Register: **eight requirements dispositioned, five CLOSED (R1, R4, R6, R7, R8) and three deliberately left OPEN with the measurement that says why** — R3 is trivially true at L1 (one verdict per pair, so no mutation reds it for the right reason, owner Epic 6), R2 ships as an assertion rather than a refusal (no reachable branch under AC6), R5 keeps its placeholder because L1 supplies no tie. **One finding reported rather than absorbed:** `xtask/src/main.rs:1821` predicted *"story 5.5 writes IP literals under the guarded subtree"* and the prediction **did not come true** — zero `Ipv4Addr`, zero dotted quads under `identity/` — so the verify-only classification was itself falsified by verifying, and the message was corrected. Also caught: the story's `E0560`/`E0609` figure is a 5.4-era measurement (6+2 on this tree, not 5+1) and was not propagated. Flagged forward: 5.6's `blocking_recall >= 0.999` reds the `float-free` gate. ⚠️ Honest note: the tests and the implementation were written together, so there was **no failing-test phase** on the initial write; the prove-to-red evidence is the mutation pass alone. |
 | 2026-07-31 | **Validation pass, two fresh-context agents (fact-check + gap-hunt), MANDATORY per Guy's Epic 4 retrospective decision.** Coverage: ~108 factual claims measured (97 true) and a REAL `identity/l1.rs` written from AC1–AC7, gated locally (296 tests, six gates green) and mutated 8 ways. **27 findings: 6 HIGH, 13 MEDIUM, 8 LOW — and every HIGH came from the agent that COMPILED the story, none from the agent that checked its claims.** The story's citations, greps, counts and all 26 `float-free` cases were correct; what broke was what the story *prescribes*. The six HIGH, all applied: **(H1)** AC1 was self-contradictory — it demanded order-independence while prescribing `Vec<ObsId>`, whose values are order-dependent; the literal implementation failed AC1's own test. Return type is now `BTreeMap<(L2DomainId, MacAddr), BTreeSet<ObsId>>` (Guy's call), which also settles the duplicate-`Fact::Mac` case for free. **(H2)** the `float-free` gate reds on `"story 5.7"` inside an **assertion message** — a one-dot decimal with an empty suffix is a bare float literal, and `"story 5.4b"` (in the story's own GREEN list) survives only by its `b`; three such forms added to the RED list. **(H3)** the canonical-`RuleId` requirement was guarded by nothing — renaming the constants to `"L1-Exact-MAC "` and `"l1_distinct_mac"` left the whole suite green (296/296) because every test built its expectation from the constant it was checking; AC8 now requires the two ids as **string literals**, and M6 was added to the mutation list. **(H4)** AC4 told the dev to document the `Neutral` rule id as "unobservable today" — **false**: `Decision::verdict_vector` is a `pub` field and `Decision` derives `Debug`/`PartialEq`, so the id is pinned by any whole-`Decision` `assert_eq!`; replaced with the weaker true sentence. **(H5)** AC4's table did not decide the multi-MAC pair — for A={X,Y}, B={Y,Z} both rows matched and the two readings gave opposite verdicts; the quantifier is now **existential** (Guy's call), grounded in D12 and in `multi-nic.toml:18`, which expects that pair to merge. **(H6)** `score.rs` was marked LEAVE ALONE while carrying two claims this story falsifies; granted a **docs-only** exception (Guy's call) — code, `VerdictVectorEntry` and both `size_of` tests untouched. Also corrected: the §1 rule table claimed `l1-exact-mac` answers *every* `must-merge` pole (**seven of ten**; `multi-nic`, `shared-hardware-vm` and `docker-veth` name `l2-*`), the `E0560`/`E0609` figure was a story-5.4-era measurement (**6+2**, not 5+1, on this tree), "three of ten falsified doc blocks" was **recorded nowhere** (the register says twelve sites → ten blocks), `RuleId` is not const-constructible (`error[E0015]`), `Observation` has no `origin` field, Task 6's M1 and M4 predictions were wrong (both compiler-carried as literally worded), and five citations were off (`presence :906-909`→`:910-913`, `mac_canon :1479-1482`→`:1470-1473`, `cascade.rs:443-445`→`:449-451`, `:3357`→`:3356`, `:2792`→`:2793`). Scope was challenged and the challenge **failed by measurement**: 5.7's AC1 requires a real engine to answer every `l1-*` trap and no story is dedicated to writing the L1 rules, so 5.5 absorbing them is forced; and at 8 tasks it is below the epic's norm (5.3→10, 5.4→11, 5.4b→10). No split proposed. |
 | 2026-07-30 | Story contexted against `master` at `ef0329c`, with 5.4b merged (PR #55 + bookkeeping #56). Three parallel analyses: architecture (entered via the Decision Index), existing code, accumulated debt. **Three findings changed the story rather than decorating it:** (1) **AC3 as the epic words it is a trap** — D13 calls the U/L bit and the IANA prefix `Disqualifying` *"as GROUPING anchors"*, grouping is L2, and two committed traps demand `l1-exact-mac` fire on a locally-administered MAC and on a VRRP MAC; implementing AC3 literally reds them, so AC3 is restated as a NEGATIVE requirement and no IANA predicate is added. (2) **`l1-distinct-mac` must emit `Disqualifying`, and the derivation is forced, not chosen** — the corpus demands the `must-not-merge` pole be answered by name, only `NoMatch { rule }` names a rule for a non-merge, and `decide` reaches `NoMatch` from a `Disqualifying` alone; an `Opposes` would abstain and name nothing, making story 5.7's comparison unsatisfiable. AC5 carries the five-step chain and points the validation agents at it. (3) **The bare-MAC key passes the entire corpus** — every committed replay stream has exactly one `l2_domain` (D61 measured `network_id` at one distinct value), so AC2 can only be defended by a synthetic two-scope test. Also measured at contexting: `Scope { l2_domain, vantage }` and `MacAddr::is_locally_administered()` already EXIST (so this story creates neither); `Scope` is not `Ord`, so a `BTreeMap` keyed on it does not compile; no `InterfaceId`/`EntityId` exists and none is minted here; `grep -n '5\.5' deferred-work.md` gives **19** lines while `grep -n 'story 5\.5'` gives 11 and misses two owner strings that wrap across a newline — the same undercount that made 5.4b claim eight register entries where ten existed. |

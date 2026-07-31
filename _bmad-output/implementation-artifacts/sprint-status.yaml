@@ -50,9 +50,10 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-31  # 5.5 VALIDATED (2 fresh-context agents): 27 findings applied, 6 HIGH —
-                          # all 6 from the agent that COMPILED it, 0 from the fact-checker.
-                          # Still ready-for-dev. NEXT = dev-story 5.5.
+last_updated: 2026-07-31  # 5.5 IMPLEMENTED -> `review` (PR open). 306 tests, six gates green.
+                          # 6 mutations, all reds assertion-carried; M6 (added by the validation)
+                          # reds 10 where the agent's self-referential version red 0.
+                          # NEXT = code-review 5.5, then merge.
                           # 281 tests (135+100+46), six gates green.
                           # NEXT = `create-story validate` on 5.5 (MANDATORY, two fresh-context
                           # agents), then dev-story.
@@ -897,7 +898,41 @@ development_status:
   # real engine to answer every l1-* trap and NO story is dedicated to writing the L1 rules, so 5.5
   # absorbing them is forced, not creep; and at 8 tasks it is BELOW the epic's norm (5.3=10, 5.4=11,
   # 5.4b=10). No 5.5b proposed. Epic 5 stays at 16 stories.
-  5-5-l1-join-pure: ready-for-dev
+  #
+  # 2026-07-31 — IMPLEMENTED -> `review`. `identity/l1.rs` is NEW: the join, the two corpus rules,
+  # `decide_pair` (**the first caller of `decide` outside its own tests**) and
+  # `CURRENT_RULESET_VERSION = RulesetVersion(1)` with NO `Default`. 25 tests added; workspace
+  # **281 -> 306 = 135 + 125 + 46**, counted mechanically after the last edit. Six gates green,
+  # `float-free` now walks 3 files; `fixtures/` untouched.
+  # Prove-to-red, six mutations, EVERY red assertion-carried and NONE compiler-carried:
+  #   M1 bare-MAC key (type-preserving) = 1 · M2 `Opposes` = 4 · M3 evidence dropped = 3 ·
+  #   M4 `vantage` in the key = 5 · M5 blank id = 7 · M6 non-canonical id = 10.
+  # 🔑 **M6 is the mutation the VALIDATION added, and it earned its place.** The gap-hunt agent had
+  # measured 0 reds for it (whole suite green) on self-referential tests; on the shipped tests it
+  # reds TEN, because the assertions restate the two rule ids as independent string literals. The
+  # validation finding was not theoretical.
+  # AC5's derivation was confirmed by RUNNING its counter-hypothesis, not by arguing it: with
+  # `Opposes`, the conclusion is `Abstained { AbsenceOfProof }` and `Decision::rule()` is `None`.
+  # Register: EIGHT requirements dispositioned, **only FIVE closed** — R1 evidence, R4 the version
+  # constant, R6 canonical id, R7 5.3's compiler-carried tests, R8 the NoMatch producer half.
+  # Three left OPEN with the measurement that says why: R3 "one verdict per rule" is
+  # TRIVIALLY true at L1 (one verdict per pair -> no mutation reds it for the right reason, owner
+  # Epic 6); R2 ships as an ASSERTION not a refusal (a runtime refusal has no reachable branch under
+  # AC6); R5 keeps its placeholder because **L1 supplies no TIE** — its two rules never meet in one
+  # vector. Reporting three as open rather than eight as closed is the point.
+  # 🔴 ONE FINDING, reported not absorbed: `xtask/src/main.rs:1821` predicted *"story 5.5 writes IP
+  # literals under the guarded subtree"*. **Measured: zero `Ipv4Addr` and zero dotted quads under
+  # `identity/`** — the L1 key is a MAC and an opaque domain id. The validation had classified that
+  # site "verify-only" ON THE ASSUMPTION the prediction would come true; verifying is what showed it
+  # false, and the message was corrected. A green-case rationale naming a future story is a claim
+  # with an expiry date.
+  # Also caught and NOT propagated: the story's `E0560`/`E0609` figure is a 5.4-era measurement
+  # (6+2 on this tree under `--tests`, not 5+1); `cascade.rs` now states the property with no number.
+  # ⚠️ HONEST NOTE: tests and implementation were written together, so there was **no failing-test
+  # phase** on the initial write. The prove-to-red evidence is the mutation pass alone, and the
+  # initial green counts as evidence of nothing.
+  # ⚠️ Still flagged FORWARD for 5.6: `blocking_recall >= 0.999` (epics.md:1507) reds `float-free`.
+  5-5-l1-join-pure: review
   5-6-blocker-and-recall-assertion: backlog
   5-7-trap-runner-stops-scoring-nothing: backlog
   5-8-unimplemented-level-counts-as-not-passing: backlog

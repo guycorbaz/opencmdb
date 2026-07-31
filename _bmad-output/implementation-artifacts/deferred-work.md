@@ -1489,3 +1489,125 @@ why it was downgraded is worse than no deferral.
   list of gates in the module doc matches the gates `run_ci` actually runs, so the sixth gate's entry
   will rot the same way. **Owner: a condition** — the same `xtask` pass as the walk items; the cheap
   version is a test asserting the doc names every gate `run_ci` calls.
+
+## Deferred from: story-5.5 (2026-07-31)
+
+_Story 5.5 shipped the L1 join, the two rules the committed corpus names, and the first caller of
+`decide` outside its own tests. The eight requirements the register owed this story are dispositioned
+below **by requirement, not by section** — the same requirement was registered at up to four sites,
+because the register is append-only and chronological. Nothing above is struck: the annotations are
+appended here._
+
+**Enumerated with `grep -n '5\.5' deferred-work.md` — NINETEEN lines.** `grep -n 'story 5\.5'` gives
+eleven and misses two owner strings that wrap across a newline. That is the undercount that made
+story 5.4b claim eight register entries where ten existed, so the wider grep is the enumeration.
+
+### Dispositioned by this story
+
+- ✅ **R1 — a firing rule leaves its `rule_id` AND its evidence, with a test that reds. CLOSED for
+  the L1 producer, by a mechanism.** Registered at four sites: *"The firing-rule contract (AC6) is
+  RECORDED, not built"* (§story-4.7a) and its owner-moving annotation; *"`RuleVerdict::evidence` is
+  `Vec<ObsId>`, the smallest shape that is not invented"* and *"Nothing enforces that a verdict which
+  ARGUES leaves non-empty evidence"* (§story-5.4); *"A named rule with EMPTY `evidence` yields a
+  `Match` that explains nothing"* (§code review of story-5.4b).
+  `identity::l1::verdict_for_pair` carries both sides' `ObsId`s on every verdict that ARGUES and
+  none on a `Neutral` — so the invariant is **not** "evidence is never empty", exactly as the
+  register insisted. `an_arguing_verdict_never_ships_empty_evidence` reds when it stops: **measured,
+  mutation M3, three assertion-carried reds.** ⚠️ **Scope of the closure:** this holds for what the
+  L1 producer emits. `RuleVerdict`'s fields are `pub` with no constructor, so a struct literal built
+  elsewhere is unconstrained — that residue is story 5.9's and is NOT closed here.
+- ✅ **R4 — the `RulesetVersion` constant and what `0` means. CLOSED.** Registered at
+  *"`RulesetVersion(0)` is constructible and means nothing; no value is refused"* and *"There is no
+  `CURRENT_RULESET_VERSION` constant and no `Default` on `Decision`"* (both §story-5.4).
+  `identity::l1::CURRENT_RULESET_VERSION = RulesetVersion(1)` — it lives beside the rules it
+  versions, not in `cascade.rs`, so the value asserting "these rules are there" sits where they are.
+  **No `Default` was added.** No value is refused, and the story states the weaker true thing
+  instead: the emitted version is not the meaningless zero (`the_ruleset_version_is_not_the_
+  meaningless_zero`).
+  ⚠️ **The `error[E0560]`/`error[E0609]` figure in the older entry is a story-5.4-era measurement and
+  is stale.** On this tree, deleting the field gives **six `E0560` plus two `E0609`** under
+  `cargo check -p opencmdb-core --tests`; the entry said five plus one, which was true before
+  `decide` and its tests existed. Recorded rather than edited, per append-only.
+- ✅ **R6 — the producer emits a canonical `RuleId`. CLOSED for the producer half.** Registered at
+  *"`(verdict, rule)` comparison is whitespace/case-sensitive, no normalization"* (§code review of
+  story-4.7a), deferred to this story by name at story 5.4. `L1_EXACT_MAC` and `L1_DISTINCT_MAC` are
+  spelled exactly as `fixtures/scenario/traps/*.toml` spells them, and
+  `the_producers_rule_ids_are_canonical` asserts each equals its own `trim()` and its own
+  `to_lowercase()`.
+  🔑 **The guard that makes this real is that the tests restate the two ids as INDEPENDENT string
+  literals** (`CORPUS_EXACT_MAC`, `CORPUS_DISTINCT_MAC`), labelled as protected deliberate
+  redundancy. This was measured, not assumed: story 5.5's gap-hunt validation agent built the
+  self-referential version — every expectation derived from the constant it checks — and mutating the
+  constants to `"L1-Exact-MAC "` and `"l1_distinct_mac"` left its **entire suite green**. On the
+  shipped tests the same mutation (M6) reds **ten** tests. ⚠️ The `run_trap` comparison half stays
+  with **story 5.7**; `run_trap` is in `score.rs`, whose code this story does not touch.
+- ✅ **R7 — story 5.3's two compiler-carried tests. CLOSED by making an abstention behavioural.**
+  Registered at *"Two of story 5.3's four new tests are carried by the type system, not by their
+  assertions"* (§code review of story-5.3), whose owner clause reads *"the first story with a
+  producer, where an abstention becomes reachable from something other than a literal"*. That is now
+  true: `identity::l1`'s `a_produced_abstention_names_no_rule` reaches
+  `Abstained { AbsenceOfProof }` through `decide_pair` from two real observations, and asserts
+  `Decision::rule() == None`. ⚠️ **It does not retro-fit 5.3's two tests**, which keep their narrower
+  subjects and their honest limits; it adds the behavioural reach the entry asked for.
+- ✅ **R8 — the `NoMatch` PRODUCER half. CLOSED.** Registered at *"The `NoMatch → Refused` vs
+  `Abstained` question is Epic 5's, not scored here"* (§story-4.7a), whose last annotation reads
+  *"Producing one still needs a rule (story 5.5) and mapping one onto `Outcome` still needs story
+  5.7."* `l1-distinct-mac` emits `Disqualifying`, so a key mismatch reaches
+  `Conclusion::NoMatch { rule }` and NAMES its rule. **The derivation was confirmed by running its
+  counter-hypothesis, not by argument** (mutation M2): with `Opposes` instead, the conclusion is
+  `Abstained { AbsenceOfProof }` and `Decision::rule()` is `None` — which names no rule and would
+  make story 5.7's comparison unsatisfiable. ⚠️ **The `Decision → Outcome` mapping half is
+  untouched** and stays with story 5.7.
+
+### Open, with what this story measured about them
+
+- ⚠️ **R3 — "one verdict per rule" is stated but TRIVIALLY true here, so the half with content stays
+  open.** Registered at the duplicate-rule annotation (§code review of story-5.4, *"Owner of that
+  half moves to story 5.5"*) and at *"Refusing a `verdict_vector` that names the same rule twice
+  needs a producer"* (§story-5.4b). The L1 producer's body emits **exactly one** verdict for one
+  pair, so it cannot duplicate a rule — and therefore cannot exercise the refusal either.
+  `the_producer_emits_exactly_one_verdict_for_one_pair` asserts the shape, but no mutation available
+  at L1 makes it red for the right reason. **Owner of the remaining half: Epic 6**, the first
+  producer that emits several verdicts into one vector. Recorded as NOT closed rather than reported
+  closed, because a trivially-true assertion is not a guard.
+- ⚠️ **R2 — a blank `RuleId` is ASSERTED, not refused, and the difference is deliberate.** Registered
+  at *"Nothing refuses a blank `RuleId` on the `RuleVerdict` side"* (§code review of story-5.4b).
+  A runtime refusal has **no reachable branch**: the entry point returns a `Decision` and not a
+  `Result`, and the ids come from constants, so a `panic!` would sit on a dead arm and adding a
+  `Result` would contradict the story's own AC. What ships is the testable form —
+  `every_emitted_rule_id_is_non_blank` asserts the emitted ids are non-empty after `trim()`,
+  mirroring `Trap::validate`'s `rule.0.trim().is_empty()` on the expectation side. **Measured,
+  mutation M5: seven assertion-carried reds.** The TYPE-level refusal, for a `RuleVerdict` built by
+  struct literal anywhere, is not closed and belongs with story 5.9's constructor residue.
+- ⚠️ **R5 — the lexicographic tiebreak keeps its placeholder, because L1 supplies no TIE.**
+  Registered at *"The lexicographic tiebreak is a placeholder, and it has no semantic content"*
+  (§story-5.4b), owner *"story 5.5 for the L1 rules, Epic 6 for the `l2-*` half"*. The L1 producer
+  emits one verdict per pair, so its two rules never appear in one vector and the tiebreak is **never
+  consulted on an L1 decision**. Designing a priority between them would order two things that
+  cannot meet. The placeholder and its three measured costs stand; **the first vector that can hold
+  two verdicts is Epic 6's**, and that is where a designed priority gets an input.
+
+### New, raised by this story
+
+- **`Verdict::Supports` and `Verdict::Opposes` have no producer.** L1 emits three of the five
+  variants — `Decisive`, `Disqualifying`, `Neutral`. **Two, not three**, remain producerless, and
+  `cascade.rs`'s corrected docs now say so by name rather than claiming "rules produce verdicts"
+  flatly. **Owner: Epic 6**, whose `l2-*` rules are where an argument that neither settles nor
+  forbids first appears.
+- **The `identity::l1` producer is reachable from nothing but its own tests.** It is the mirror of
+  the situation `decide` was in before this story: a producer exists, and no caller in the shipped
+  binary reaches it. `score_corpus`'s `answers` parameter is still fed an empty map, so every trap is
+  still "scored by nothing". **Owner: story 5.7**, which crosses that seam — and the crate frontier
+  (D47) is why this story could not.
+- ⚠️ **`xtask/src/main.rs`'s dotted-quad assertion carried a PREDICTION about this story, and the
+  prediction did not come true.** Its message read *"story 5.5 writes IP literals under the guarded
+  subtree"*. **Measured on the shipped tree: zero `Ipv4Addr` and zero dotted quads under
+  `identity/`** — the L1 key is a MAC and an opaque domain id, so no IP literal was needed. The
+  message was corrected to the rationale that is true regardless (a dotted quad has three dots and is
+  not a numeric literal). Recorded because a green-case rationale that names a future story is a
+  claim with an expiry date, and this one expired. **No owner — closed by the correction.**
+- ⚠️ **Flagged FORWARD for story 5.6, unsolved here:** `epics.md:1507` gives the blocker the
+  assertion `blocking_recall >= 0.999`. That is a bare float literal, and **the `float-free` gate
+  reds on it** — confirmed by measurement during this story's validation, not by reading the gate.
+  If the blocker lives under `identity/`, story 5.6 trips the gate on its first assertion. **Owner:
+  story 5.6**, at contexting, so it is a decision and not a surprise.
