@@ -42,9 +42,12 @@ pub use gap::{AbstentionCause, Gap, Reconciliation, reconcile};
 pub use identity::cascade::{
     Conclusion, Decision, IdentityAbstentionCause, RuleVerdict, RulesetVersion, Verdict, decide,
 };
+// `identity::l1::join` is deliberately NOT flat-re-exported: `opencmdb_core::join` is a very
+// generic root-level name for an L1-specific function, and its consumer (the candidate generator)
+// does not exist yet. Reach it through `identity::l1::join`. `verdict_for_pair` is `pub(crate)` —
+// see its doc for why exposing it beside `decide` would falsify a claim in `cascade`.
 pub use identity::l1::{
-    CURRENT_RULESET_VERSION, L1_DISTINCT_MAC, L1_EXACT_MAC, L1Key, decide_pair, join,
-    verdict_for_pair,
+    CURRENT_RULESET_VERSION, L1_DISTINCT_MAC, L1_EXACT_MAC, L1Key, decide_pair,
 };
 pub use observation::{
     Capabilities, ConnectorId, Fact, FactKind, HostnameSource, L2DomainId, MacAddr, MacParseError,

@@ -199,7 +199,8 @@ pub struct RuleVerdict {
     /// to leave evidence behind — *"a rule that fires without leaving its `rule_id` in the database
     /// is a rule we cannot debug in production"* [architecture.md:1309-1310] — and **shapes it
     /// nowhere**. A richer payload (the fact values, the candidate pair, a rendered sentence) is a
-    /// design nothing asks for: the L1 producer fills this with both sides' [`ObsId`]s, and no
+    /// design nothing asks for: the L1 producer fills this, on a verdict that ARGUES, with both
+    /// sides' [`ObsId`]s sorted — a [`Verdict::Neutral`] legitimately carries none — and no
     /// consumer reads more.
     pub evidence: Vec<ObsId>,
 }

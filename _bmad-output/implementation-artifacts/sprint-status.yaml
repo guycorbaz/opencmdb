@@ -50,13 +50,10 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-31  # 5.5 IMPLEMENTED -> `review` (PR open). 306 tests, six gates green.
+last_updated: 2026-07-31  # 5.5 IMPLEMENTED + CODE-REVIEWED -> `review` (PR #57, CI green).
                           # 6 mutations, all reds assertion-carried; M6 (added by the validation)
                           # reds 10 where the agent's self-referential version red 0.
-                          # NEXT = code-review 5.5, then merge.
-                          # 281 tests (135+100+46), six gates green.
-                          # NEXT = `create-story validate` on 5.5 (MANDATORY, two fresh-context
-                          # agents), then dev-story.
+                          # Code-reviewed (3 layers) and patched: 309 tests. NEXT = merge.
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -902,7 +899,7 @@ development_status:
   # 2026-07-31 — IMPLEMENTED -> `review`. `identity/l1.rs` is NEW: the join, the two corpus rules,
   # `decide_pair` (**the first caller of `decide` outside its own tests**) and
   # `CURRENT_RULESET_VERSION = RulesetVersion(1)` with NO `Default`. 25 tests added; workspace
-  # **281 -> 306 = 135 + 125 + 46**, counted mechanically after the last edit. Six gates green,
+  # **281 -> 309 = 135 + 128 + 46** after the code review, counted mechanically. Six gates green,
   # `float-free` now walks 3 files; `fixtures/` untouched.
   # Prove-to-red, six mutations, EVERY red assertion-carried and NONE compiler-carried:
   #   M1 bare-MAC key (type-preserving) = 1 · M2 `Opposes` = 4 · M3 evidence dropped = 3 ·
@@ -913,8 +910,9 @@ development_status:
   # validation finding was not theoretical.
   # AC5's derivation was confirmed by RUNNING its counter-hypothesis, not by arguing it: with
   # `Opposes`, the conclusion is `Abstained { AbsenceOfProof }` and `Decision::rule()` is `None`.
-  # Register: EIGHT requirements dispositioned, **only FIVE closed** — R1 evidence, R4 the version
+  # Register: EIGHT requirements dispositioned, five reported closed — R1 evidence, R4 the version
   # constant, R6 canonical id, R7 5.3's compiler-carried tests, R8 the NoMatch producer half.
+  # ⚠️ R7 was DOWNGRADED to partial by the code review (see below), leaving FOUR closed.
   # Three left OPEN with the measurement that says why: R3 "one verdict per rule" is
   # TRIVIALLY true at L1 (one verdict per pair -> no mutation reds it for the right reason, owner
   # Epic 6); R2 ships as an ASSERTION not a refusal (a runtime refusal has no reachable branch under
@@ -932,6 +930,40 @@ development_status:
   # phase** on the initial write. The prove-to-red evidence is the mutation pass alone, and the
   # initial green counts as evidence of nothing.
   # ⚠️ Still flagged FORWARD for 5.6: `blocking_recall >= 0.999` (epics.md:1507) reds `float-free`.
+  #
+  # 2026-07-31 — CODE REVIEW held, three layers (Blind · Edge · Auditor). ~30 findings, **6 HIGH**
+  # after dedup, all applied. 306 -> **309 tests** (28 in l1.rs). PR #57 CI green.
+  # 🔑 TWO findings arrived INDEPENDENTLY from two layers (the evidence asymmetry, the self-pair) —
+  # that agreement is why they were fixed rather than argued.
+  # The three CODE highs:
+  #   · **`keys_of`'s `_ => None` catch-all.** Measured: adding `Fact::Uplink { peer_mac }` as an
+  #     identity key left the ENTIRE workspace green — a switch merging with everything plugged into
+  #     it. Now exhaustive over `Fact`, in `fixtures.rs`'s idiom ("Exhaustive on purpose — no `_`
+  #     arm"), so the compiler forces the decision on the next address-carrying variant.
+  #   · **Evidence was not symmetric**: decide_pair(a,b) != decide_pair(b,a), same conclusion but
+  #     unequal Decisions, so a downstream dedup would see one logical pair as two. Now sorted.
+  #   · **A GROUP address (broadcast/multicast) is treated as an interface identity.** The I/G bit
+  #     names no interface — `opencmdb-bin`'s privacy scan says exactly that, written in this same
+  #     epic by 5.2 — yet three devices reporting ff:ff:ff:ff:ff:ff merge into ONE group. FALSE
+  #     MERGE, the class NFR4 exists to prevent, and the corpus can NEVER catch it (0 I/G-set MACs
+  #     across 14 streams; the privacy scan now refuses to let one be committed). Refusing them
+  #     would red NO committed trap — measured. **Guy's decision: DOCUMENT + REGISTER, do not
+  #     filter** — consuming a structural reading at L1 is what 5.5's own doc says L1 does not do.
+  #     Current behaviour PINNED by a test so it cannot change in silence. Owner: a decision at
+  #     Epic 6's contexting; a trap would have to be authored, since the corpus cannot express it.
+  # Surface narrowed on Guy's call: `verdict_for_pair` -> `pub(crate)` (exposing it beside `decide`
+  # made cascade.rs's "its two rules never appear in one vector" FALSE), `join` off the flat list.
+  # 🔴 THREE of the six HIGH were about CLAIMS, and all three were MINE — the FOURTH consecutive
+  # story whose completion record over-claimed:
+  #   · cascade.rs's corrected `evidence` doc dropped the qualifier -> false for a `Neutral`;
+  #   · the File List's "17 hunks - 12 claims = cargo fmt reflow" was REFUTED by measurement
+  #     (`rustfmt --check` on master's cascade.rs exits 0 — all 17 hunks are content);
+  #   · the Debug Log tabulated 6 mutation counts and commented only on the ONE that matched,
+  #     leaving FOUR divergences unstated (M2 2->4, M3 2->3, M4 7->5, M5 1->7).
+  # R7 DOWNGRADED from CLOSED to partial: its owner clause was discharged, its TITLE (5.3's two
+  # compiler-carried tests) was not, and AC8's two options were neither taken. The weaker true
+  # sentence is now written — the test CANNOT be made behavioural, because `Outcome::Abstained`
+  # carries no rule field by design. So of the eight requirements: FOUR closed, FOUR open.
   5-5-l1-join-pure: review
   5-6-blocker-and-recall-assertion: backlog
   5-7-trap-runner-stops-scoring-nothing: backlog

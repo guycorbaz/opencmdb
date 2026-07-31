@@ -34,6 +34,26 @@
 //! judgement"* [architecture.md:1171-1173]; D16 refuses abstaining on a virtual MAC because *"this
 //! is not an ambiguity, it is a topology fact"* [architecture.md:1106-1114].
 //!
+//! # ⚠️ A third structural reading exists, is NOT consumed here, and is NOT a decision
+//!
+//! The **I/G bit** — bit 0 of the first octet — marks a GROUP address (multicast or broadcast).
+//! `opencmdb-bin`'s corpus privacy scan already states the reading, in this same epic: *"Set means
+//! the address is a group (multicast or broadcast) address, **which names no interface**"*
+//! (`fixtures.rs`, `is_multicast_mac`).
+//!
+//! **This file does not consume it either**, and unlike the U/L bit and the IANA prefixes that is
+//! **not** backed by a committed trap — no trap exercises a group address, and refusing them here
+//! would red none. So the honest statement is: `ff:ff:ff:ff:ff:ff`, `01:00:5e:…` and the all-zero
+//! address are **currently treated as ordinary interface identities**, and three devices reporting
+//! the broadcast address merge into one group. `a_group_address_merges_today_and_that_is_unresolved`
+//! pins that behaviour so the class cannot change in silence.
+//!
+//! ⚠️ **That is a recorded gap, not a reasoned position.** Its failure mode is a FALSE MERGE, which
+//! is what NFR4 exists to prevent, and the corpus can never catch it — the committed streams carry
+//! no group address, and the privacy scan now refuses to let one be committed. It is registered
+//! with an owner rather than decided by this story, because L1 consuming a structural reading is
+//! exactly what this section says L1 does not do, and reversing that needs a decision, not a patch.
+//!
 //! # No float
 //!
 //! There is nothing to rank: the key matches or it does not. `cargo xtask ci`'s `float-free` gate
@@ -99,14 +119,28 @@ pub const CURRENT_RULESET_VERSION: RulesetVersion = RulesetVersion(1);
 /// group once rather than twice. An observation carrying no MAC has no L1 key and yields an empty
 /// set; that is not an error, it is a source that did not see a MAC.
 fn keys_of(observation: &Observation) -> BTreeSet<L1Key> {
+    use crate::observation::Fact;
+
     observation
         .facts
         .iter()
         .filter_map(|fact| match fact {
-            crate::observation::Fact::Mac { addr, .. } => {
-                Some((observation.scope.l2_domain, *addr))
-            }
-            _ => None,
+            Fact::Mac { addr, .. } => Some((observation.scope.l2_domain, *addr)),
+            // ⚠️ Exhaustive on purpose — NO `_` arm, in the idiom `fixtures.rs`'s
+            // `assert_facts_are_synthetic` established. `Fact` is `#[non_exhaustive]`, but that is
+            // inert inside its own crate, so a new variant CARRYING AN ADDRESS must break this
+            // match and force a decision rather than defaulting to "not an identity key" in
+            // silence. Measured: with a `_` arm, adding `Fact::Uplink { peer_mac }` as a key left
+            // the whole workspace green while a switch merged with everything plugged into it.
+            //
+            // `Uplink` is the one to think hardest about: `peer_mac` is a real address, and it
+            // identifies the NEIGHBOUR, never this device. It is a topology edge, which is L2's.
+            Fact::Uplink { .. } => None,
+            Fact::IpV4 { .. } => None,
+            Fact::Hostname { .. } => None,
+            Fact::DhcpLease { .. } => None,
+            Fact::OuiVendor { .. } => None,
+            Fact::Rtt { .. } => None,
         })
         .collect()
 }
@@ -172,6 +206,14 @@ pub fn join(observations: &[Observation]) -> BTreeMap<L1Key, BTreeSet<ObsId>> {
 /// two different keys are not a weak argument against a merge — they are a definitional refusal. A
 /// reading, not an inference, which is the category D13 uses for its structural facts.
 ///
+/// ⚠️ **The id says `distinct-mac`; the condition is distinct KEY, and the two are not the same.**
+/// Two observations carrying the **identical** MAC in different `l2_domain`s share no key, so this
+/// rule fires and names MAC-distinctness for a case where the MACs are equal. The id is the
+/// corpus's and this file does not own it, so the overload is recorded rather than renamed — and it
+/// is invisible on the committed corpus, where every replay stream carries one `l2_domain` (D61).
+/// Story 5.7 compares this id against the corpus bytes; if a trap ever separates "different MAC"
+/// from "same MAC, different domain", one of the two has to move.
+///
 /// # Why a missing MAC is `Neutral`
 ///
 /// D20 names the bug class this avoids: *"the rule that wrongly `Opposes` should return `Neutral`:
@@ -187,12 +229,20 @@ pub fn join(observations: &[Observation]) -> BTreeMap<L1Key, BTreeSet<ObsId>> {
 ///
 /// # Evidence
 ///
-/// A verdict that ARGUES carries both observations' [`ObsId`]s — D19: *"a rule that fires must leave
+/// A verdict that ARGUES carries both observations' [`ObsId`]s, **sorted**, so the pair is unordered
+/// and `decide_pair(a, b) == decide_pair(b, a)` — D19: *"a rule that fires must leave
 /// its `rule_id` and its evidence behind — a rule that fires without leaving its `rule_id` is
 /// undebuggable in production"*. A `Neutral` legitimately carries none, so the invariant is not
 /// "evidence is never empty". `decide` cannot enforce this: it never reads `evidence`, which is
 /// precisely why the guard belongs on this side.
-pub fn verdict_for_pair(a: &Observation, b: &Observation) -> RuleVerdict {
+/// ⚠️ **`pub(crate)`, not `pub`, and that is load-bearing.** [`crate::identity::cascade`]'s doc
+/// states that L1's two rules *"never appear in one vector"*, which is what lets its undesigned
+/// byte-order tiebreak stay unconsulted at L1. That claim is true of [`decide_pair`] and would be
+/// FALSE of an exposed intermediate: `decide(vec![verdict_for_pair(a,b), verdict_for_pair(c,d)], _)`
+/// is a two-line call that puts both ids in one vector. Exposing the intermediate beside the
+/// combinator, while documenting the combination as undesigned, is the defect this visibility
+/// prevents. [`decide_pair`] is the entry point.
+pub(crate) fn verdict_for_pair(a: &Observation, b: &Observation) -> RuleVerdict {
     let keys_a = keys_of(a);
     let keys_b = keys_of(b);
 
@@ -211,10 +261,18 @@ pub fn verdict_for_pair(a: &Observation, b: &Observation) -> RuleVerdict {
         (L1_DISTINCT_MAC, Verdict::Disqualifying)
     };
 
+    // Sorted, so the evidence of a pair does not depend on which side was the left argument.
+    // Without this, `decide_pair(a, b) != decide_pair(b, a)` — same conclusion, unequal `Decision`s
+    // — and `Decision` derives `PartialEq`, so any downstream dedup or "have we decided this pair
+    // already" check would see one logical pair as two. Measured before it was fixed. Same
+    // reasoning as [`join`]'s `BTreeSet`: the property holds by construction, not by a convention.
+    let mut evidence = vec![a.obs_id, b.obs_id];
+    evidence.sort();
+
     RuleVerdict {
         rule: RuleId(rule.to_string()),
         verdict,
-        evidence: vec![a.obs_id, b.obs_id],
+        evidence,
     }
 }
 
@@ -464,7 +522,15 @@ mod tests {
         assert_eq!(
             keys_of(&here).len(),
             1,
-            "both sides carry the identical MAC; only the domain differs"
+            "one key per side, so the grouping below cannot be explained by a second MAC"
+        );
+        // ⚠️ Without this, editing `there` to carry a different MAC leaves both assertions green
+        // and `groups.len()` still 2 — and the test would prove nothing about scope qualification,
+        // which is the only thing standing between a bare-MAC key and green.
+        assert_eq!(
+            keys_of(&here).iter().map(|(_, m)| *m).collect::<Vec<_>>(),
+            keys_of(&there).iter().map(|(_, m)| *m).collect::<Vec<_>>(),
+            "both sides must carry the IDENTICAL MAC; only the domain may differ"
         );
 
         let groups = join(&[here, there]);
@@ -513,6 +579,11 @@ mod tests {
     #[test]
     fn an_exact_match_fires_on_a_redundancy_protocol_mac() {
         let addr = vrrp_mac();
+        assert_eq!(
+            [addr.0[0], addr.0[1], addr.0[2], addr.0[3], addr.0[4]],
+            [0x00, 0x00, 0x5e, 0x00, 0x01],
+            "the fixture must actually sit in the IANA VRRP range"
+        );
 
         let decision = decide_pair(&simple(1, addr), &simple(2, addr));
 
@@ -521,6 +592,55 @@ mod tests {
             expected_l1_conclusion(CORPUS_EXACT_MAC, Verdict::Decisive),
             "L1 is deterministic on the key, so the exact-MAC rule fires for a virtual MAC \
              exactly as for any other"
+        );
+    }
+
+    /// A group address is treated as an ordinary identity TODAY — pinned so it cannot change in
+    /// silence, and named as unresolved rather than as a position.
+    ///
+    /// ⚠️ **This test asserts the CURRENT behaviour, and that behaviour is a recorded gap.** The
+    /// I/G bit marks a multicast or broadcast address, which `opencmdb-bin`'s privacy scan already
+    /// says *"names no interface"*. Here three devices reporting the broadcast address merge into
+    /// one group. Its failure mode is a FALSE MERGE. If a later story decides to refuse group
+    /// addresses at L1, **this test is the one that must red and be rewritten** — that is its job.
+    #[test]
+    fn a_group_address_merges_today_and_that_is_unresolved() {
+        let broadcast = MacAddr([0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
+        assert_eq!(broadcast.0[0] & 1, 1, "the fixture must set the I/G bit");
+
+        let groups = join(&[
+            simple(1, broadcast),
+            simple(2, broadcast),
+            simple(3, broadcast),
+        ]);
+
+        assert_eq!(
+            groups.len(),
+            1,
+            "three devices reporting the broadcast address are ONE group today — the class is \
+             registered, not decided"
+        );
+        assert_eq!(
+            decide_pair(&simple(1, broadcast), &simple(2, broadcast)).conclusion,
+            expected_l1_conclusion(CORPUS_EXACT_MAC, Verdict::Decisive)
+        );
+    }
+
+    #[test]
+    fn a_peers_mac_is_not_this_devices_identity() {
+        let mut with_uplink = simple(1, mac(0x01));
+        with_uplink.facts.push(Fact::Uplink {
+            peer_mac: mac(0x99),
+            peer_port: "gi0/1".to_string(),
+        });
+
+        let groups = join(&[with_uplink]);
+
+        assert_eq!(
+            groups.keys().collect::<Vec<_>>(),
+            vec![&(l2(10), mac(0x01))],
+            "an Uplink's peer_mac identifies the NEIGHBOUR; treating it as a key would merge a \
+             switch with everything plugged into it"
         );
     }
 
@@ -629,10 +749,36 @@ mod tests {
 
         let decision = decide_pair(&left, &right);
 
+        // ⚠️ The expectation is a LITERAL, not `verdict_for_pair(&left, &right)`. Computing it by
+        // calling the code under test would make this test unable to fail for any change to the
+        // producer — both sides would move together — which is the standard this module's own doc
+        // sets for `expected_l1_conclusion`.
         assert_eq!(
             decision.verdict_vector,
-            vec![verdict_for_pair(&left, &right)],
+            vec![RuleVerdict {
+                rule: RuleId(CORPUS_EXACT_MAC.to_string()),
+                verdict: Verdict::Decisive,
+                evidence: vec![obs_id(1), obs_id(2)],
+            }],
             "the vector decide returns is the one this producer built"
+        );
+    }
+
+    #[test]
+    fn a_pair_decides_the_same_whichever_side_is_the_left_argument() {
+        let a = simple(1, mac(0x01));
+        let b = simple(2, mac(0x01));
+        let c = simple(3, mac(0x02));
+
+        assert_eq!(
+            decide_pair(&a, &b),
+            decide_pair(&b, &a),
+            "a candidate pair is unordered: the whole Decision, evidence included, must agree"
+        );
+        assert_eq!(
+            decide_pair(&a, &c),
+            decide_pair(&c, &a),
+            "and that holds for the refusing rule too, not only the merging one"
         );
     }
 
@@ -674,16 +820,16 @@ mod tests {
             verdict_for_pair(&simple(1, mac(0x01)), &simple(2, mac(0x01))),
             verdict_for_pair(&simple(1, mac(0x01)), &simple(2, mac(0x02))),
         ];
-        let mut checked = 0;
-        for verdict in arguing {
+        for verdict in &arguing {
             assert_ne!(verdict.verdict, Verdict::Neutral, "this fixture must argue");
             assert!(
                 !verdict.evidence.is_empty(),
                 "decide never reads evidence, so this guard belongs on the producer side"
             );
-            checked += 1;
         }
-        assert_eq!(checked, 2, "both arguing verdicts were exercised");
+        // The two fixtures must be the two ARGUING rules, not the same one twice — otherwise this
+        // test could pass while one of the two producing branches ships empty evidence.
+        assert_ne!(arguing[0].rule, arguing[1].rule);
     }
 
     #[test]

@@ -463,7 +463,8 @@ pub enum RecordComparison {
 /// - `source_state` — excluded (AC6): uninhabited until Epic 13, so comparing it is vacuous today
 ///   and would silently start mattering the day it gains a type (this destructure forces that
 ///   decision then).
-/// - `verdict_vector` — no producer until an engine; empty on both sides.
+/// - `verdict_vector` — an engine now produces verdicts (`identity::l1`), but nothing FEEDS this
+///   harness one, so this stays empty on both sides. Story 5.7 crosses that seam.
 fn comparable_fields(record: &ScoredRecord) -> (&Outcome, &Capabilities) {
     let ScoredRecord {
         trap: _,

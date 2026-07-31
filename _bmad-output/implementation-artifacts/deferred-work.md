@@ -1504,6 +1504,11 @@ story 5.4b claim eight register entries where ten existed, so the wider grep is 
 
 ### Dispositioned by this story
 
+⚠️ **FOUR closed, FOUR open.** An earlier version of this section reported five closed; story 5.5's
+code review downgraded R7 to partial, because the entry is titled after two tests it does not touch.
+The correction is made in place below rather than appended, since this section is 5.5's own and
+nothing on `master` is rewritten by it.
+
 - ✅ **R1 — a firing rule leaves its `rule_id` AND its evidence, with a test that reds. CLOSED for
   the L1 producer, by a mechanism.** Registered at four sites: *"The firing-rule contract (AC6) is
   RECORDED, not built"* (§story-4.7a) and its owner-moving annotation; *"`RuleVerdict::evidence` is
@@ -1541,7 +1546,8 @@ story 5.4b claim eight register entries where ten existed, so the wider grep is 
   constants to `"L1-Exact-MAC "` and `"l1_distinct_mac"` left its **entire suite green**. On the
   shipped tests the same mutation (M6) reds **ten** tests. ⚠️ The `run_trap` comparison half stays
   with **story 5.7**; `run_trap` is in `score.rs`, whose code this story does not touch.
-- ✅ **R7 — story 5.3's two compiler-carried tests. CLOSED by making an abstention behavioural.**
+- ⚠️ **R7 — story 5.3's two compiler-carried tests. The OWNER CLAUSE is discharged; the entry's
+  TITLE is not. Reported as partial, after the code review measured the overstatement.**
   Registered at *"Two of story 5.3's four new tests are carried by the type system, not by their
   assertions"* (§code review of story-5.3), whose owner clause reads *"the first story with a
   producer, where an abstention becomes reachable from something other than a literal"*. That is now
@@ -1549,6 +1555,20 @@ story 5.4b claim eight register entries where ten existed, so the wider grep is 
   `Abstained { AbsenceOfProof }` through `decide_pair` from two real observations, and asserts
   `Decision::rule() == None`. ⚠️ **It does not retro-fit 5.3's two tests**, which keep their narrower
   subjects and their honest limits; it adds the behavioural reach the entry asked for.
+  🔴 **And that is why this is NOT closed.** The entry is TITLED after those two tests, and by its
+  own title they are still carried by the compiler. AC8 offered two ways out — *"either make one
+  behavioural now, or write the weaker true sentence explaining why it still cannot be"* — and this
+  story took neither: it added a third, new test instead. **The weaker true sentence, owed and now
+  written:** `an_abstention_names_no_rule_whatever_its_cause` reds under its mutation only because
+  the field TYPE changes (`E0308`), and `Outcome::Abstained` carries no rule field, so **no mutation
+  short of fabricating a `RuleId` field can make its assertion fail** — a producer does not change
+  that, because the test's subject is the VOCABULARY, not a produced value. Making it behavioural
+  needs a type that can carry a rule on an abstention, which the design refuses on purpose. **Owner:
+  nobody — it cannot be made behavioural, and this sentence is the disposition.** The sibling,
+  `the_vocabulary_is_exactly_ambiguous_and_absence_of_proof`, stays compiler-carried by design too:
+  its `E0599` IS the guard.
+  _(This entry was reported ✅ CLOSED until story 5.5's code review measured the gap between the
+  owner clause and the title. Corrected in the same story, not carried forward.)_
 - ✅ **R8 — the `NoMatch` PRODUCER half. CLOSED.** Registered at *"The `NoMatch → Refused` vs
   `Abstained` question is Epic 5's, not scored here"* (§story-4.7a), whose last annotation reads
   *"Producing one still needs a rule (story 5.5) and mapping one onto `Outcome` still needs story
@@ -1611,3 +1631,95 @@ story 5.4b claim eight register entries where ten existed, so the wider grep is 
   reds on it** — confirmed by measurement during this story's validation, not by reading the gate.
   If the blocker lives under `identity/`, story 5.6 trips the gate on its first assertion. **Owner:
   story 5.6**, at contexting, so it is a decision and not a surprise.
+
+## Deferred from: code review of story-5.5 (2026-07-31)
+
+_Three layers (Blind Hunter · Edge Case Hunter · Acceptance Auditor). Six HIGH after deduplication;
+all six were PATCHED in the story rather than deferred, except the one below that needs a decision.
+Two findings arrived independently from two layers — the evidence asymmetry and the self-pair — and
+that agreement is why they were fixed rather than argued. The items here are the residue: what the
+patches did not close, and what the review revealed about claims rather than code._
+
+- 🔴 **L1 treats a GROUP address (multicast or broadcast) as an ordinary interface identity, and
+  that is an unexamined class, not a position.** The I/G bit — bit 0 of the first octet — marks an
+  address that names no interface; `opencmdb-bin`'s corpus privacy scan states exactly that
+  (`fixtures.rs`, `is_multicast_mac`: *"Set means the address is a group (multicast or broadcast)
+  address, **which names no interface**"*), written in this same epic by story 5.2. `identity::l1`
+  does not consume the reading: three observations reporting `ff:ff:ff:ff:ff:ff` join into ONE group
+  and any pair of them concludes `Match`. **The failure mode is a FALSE MERGE**, which is what NFR4
+  exists to prevent.
+  Measured at the review: the committed corpus **cannot** catch it — 14 replay streams, 39 distinct
+  MACs, **zero** with the I/G bit set and zero all-zero — and the privacy scan now refuses to let one
+  be committed. Measured also: refusing group addresses at L1 would red **no** committed trap, because
+  the two traps that forbid a structural L1 refusal (`randomized-mac`, `vrrp-virtual-mac`) involve no
+  I/G-set address. So the two questions are separable.
+  **Guy's decision, 2026-07-31: DOCUMENT and REGISTER, do not filter.** Consuming a structural
+  reading at L1 is precisely what story 5.5's own module doc says L1 does not do, and reversing that
+  is a decision with a story behind it, not a patch inside a review. The current behaviour is pinned
+  by `a_group_address_merges_today_and_that_is_unresolved` so it cannot change in silence, and the
+  module doc names the class as a recorded gap rather than a reasoned position.
+  **Owner: a decision, at Epic 6's contexting** — the first epic with an `l2-*` vocabulary in which a
+  group-address refusal could be a named rule rather than a silent filter. Whoever takes it should
+  note that a trap would have to be authored for it, since the corpus cannot express the case today.
+- ✅ **`keys_of`'s `_ => None` catch-all — CLOSED in the review, and it was measured first.** The
+  match is now exhaustive over `Fact`, in the idiom `fixtures.rs`'s `assert_facts_are_synthetic`
+  established (*"Exhaustive on purpose — no `_` arm … a new variant carrying an address must break
+  THIS test and force a decision"*). `Fact` is `#[non_exhaustive]` but that is inert inside its own
+  crate, so the compiler can force the decision and now does. **Why it mattered: with the catch-all,
+  adding `Fact::Uplink { peer_mac }` as an identity key left the ENTIRE workspace green** — a switch
+  merging with everything plugged into it. Now pinned twice: by the exhaustive match (compile error
+  on a new variant) and by `a_peers_mac_is_not_this_devices_identity` (mutation M8, 1 assertion red).
+- ✅ **Evidence was not symmetric — CLOSED by normalising.** `decide_pair(a, b) != decide_pair(b, a)`:
+  the conclusion agreed, the `verdict_vector` did not, because evidence carried argument order
+  (`[1,2]` vs `[2,1]`) and `Decision` derives `PartialEq`. A candidate pair is unordered, so any
+  downstream dedup or "have we decided this pair already" check would have seen one logical pair as
+  two. Evidence is now sorted, by the same reasoning that made [`join`]'s value a `BTreeSet`: the
+  property holds by construction. Mutation M7 reds `a_pair_decides_the_same_whichever_side_is_the_
+  left_argument`. **Found independently by two review layers.**
+- ⚠️ **`verdict_for_pair(a, a)` — the self-pair is answered but undocumented, and no test covers it.**
+  Measured: `Decisive` with `evidence = [x, x]` (now `[x, x]` still, since sorting two equal ids
+  changes nothing), i.e. the doc's *"both observations' `ObsId`s"* degenerates to one id listed twice.
+  The answer is defensible — an observation is trivially its own interface — but `decide_pair`'s doc
+  tells a future candidate generator that the pair *"arrives as an argument"* without telling it that
+  excluding `i == j` is the generator's responsibility. **Owner: story 5.6**, which writes that
+  generator and is the first place the precondition has a holder. Not patched here because inventing
+  a refusal for a caller that does not exist is the shape this project refuses.
+- ⚠️ **The rule id `l1-distinct-mac` fires on pairs whose MACs are IDENTICAL.** The condition is
+  distinct KEY, not distinct MAC: two observations carrying the same address in different
+  `l2_domain`s share no key, so the rule names MAC-distinctness for a case where the MACs are equal.
+  The id is the corpus's and story 5.5 does not own it, so the overload is documented at
+  `verdict_for_pair` rather than renamed. Invisible on the committed corpus, where every stream
+  carries one `l2_domain` (D61). **Owner: story 5.7**, which compares this id against the corpus
+  bytes and is where the collision would first show; if a trap ever separates the two cases, either
+  the trap or the producer has to move.
+- ⚠️ **The doc claims the two rule ids match `fixtures/*.toml` byte for byte, and nothing in this
+  crate checks it.** The test-side redundancy (`CORPUS_EXACT_MAC`/`CORPUS_DISTINCT_MAC`) catches a
+  rename of ONE constant — verified, mutation M6 reds ten tests — but cannot catch **both** literals
+  being wrong relative to the TOML, which is what the doc asserts. Story 5.5 may not read `fixtures/`
+  (its own AC8), so the check cannot live here. **Owner: story 5.7**, which reads the corpus and is
+  the natural home for the comparison. Recorded because the module doc states the stronger property
+  than the redundancy delivers. *(Verified by hand at the review: the corpus spells 7 × `l1-exact-mac`
+  and 6 × `l1-distinct-mac`, matching the constants.)*
+- ⚠️ **The `&str` rule-id constants make every call site perform the `RuleId` wrap.** `RuleId` is not
+  const-constructible, which the doc explains — but it stops there and does not weigh
+  `fn l1_exact_mac() -> RuleId`, a `LazyLock` static, or a `Cow<'static, str>` payload. As shipped,
+  the public surface hands out a raw `&str` and asks each caller to wrap it correctly, which is a
+  weaker version of the inconsistency the constants exist to prevent; it also allocates once per
+  verdict, on a function a blocker will call O(pairs) times. **Owner: a condition** — whoever first
+  measures the blocker's allocation profile, or the story that closes `RuleId` into an enum (Epic 6),
+  whichever comes first.
+- ⚠️ **`L1Key` is a bare tuple alias, so the "`vantage` is not in the key" warning is unenforceable.**
+  `pub type L1Key = (L2DomainId, MacAddr)` creates no distinct type, carries no invariant, hosts no
+  impl, and freezes arity at every construction and lookup site. A struct would make the doc's
+  warning a type-level fact instead of prose. **Owner: story 5.9**, the first story to persist a key
+  and therefore the first with a reason to give it a name that survives a schema.
+- 🔴 **Three of the review's findings were about CLAIMS, not code — and all three were mine.**
+  Recorded because this is the fourth consecutive story in which the completion record over-claimed,
+  and the pattern is now the most reliable defect in this project's process:
+  (1) `cascade.rs`'s corrected `evidence` doc asserted the L1 producer *"fills this with both sides'
+  `ObsId`s"* **unqualified** — false for a `Neutral`, and the same story's `l1.rs` says so correctly
+  three files away; (2) the File List claimed the gap between 12 corrected claims and 17 diff hunks
+  was `cargo fmt` reflow — **`rustfmt --check` on master's `cascade.rs` exits 0**, so `cargo fmt`
+  contributed nothing and all 17 hunks are content; (3) the Debug Log tabulated six observed mutation
+  counts and commented only on the one that matched its prediction, leaving four divergences unstated.
+  All three are corrected in the story. **No owner — the lesson is the entry.**
