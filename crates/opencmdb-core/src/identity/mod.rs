@@ -26,5 +26,6 @@
 //! this subtree, which nothing yet is: [`cascade::IdentityAbstentionCause`] is plain `pub` because
 //! `score::Outcome`, in another subdomain, names it in a field type.
 
+pub mod blocking;
 pub mod cascade;
 pub mod l1;
