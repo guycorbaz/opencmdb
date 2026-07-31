@@ -50,10 +50,18 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-01  # 5.6 contexted AND validated (2 fresh agents, 16 findings applied) -> `ready-for-dev`. master at `0ebd50f`, 309 tests.
-                          # 6 mutations, all reds assertion-carried; M6 (added by the validation)
-                          # reds 10 where the agent's self-referential version red 0.
-                          # Code-reviewed (3 layers) and patched: 309 tests. NEXT = merge.
+last_updated: 2026-08-01  # 5.6 IMPLEMENTED -> `review`. 309 -> 332 tests (139 bin + 147 core + 46
+                          # xtask). Six green gates, `float-free` over 4 files. All six mutations
+                          # run; M1 = 700‰ exactly, M2 leaves the whole corpus green. Zero
+                          # compiler-carried reds. NEXT = code-review, then merge.
+                          #
+                          # History, most recent first:
+                          #  · 5.6 contexted AND validated (2 fresh agents, 16 findings applied)
+                          #    -> `ready-for-dev`; master at `0ebd50f`, 309 tests.
+                          #  · 5.5 DONE — PR #57 squash-merged as `0ebd50f`, 309 tests on master.
+                          #    6 mutations, all reds assertion-carried; the one the validation added
+                          #    reds 10 where the agent's self-referential version red 0.
+                          #    Code-reviewed (3 layers) and patched before merge.
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -1047,9 +1055,44 @@ development_status:
   # story, so the red/green phase is not short-circuited by unreviewed code.
   # NEXT = `dev-story` 5.6.
   # 2026-08-01 — PR #58 merged as `440b30e`; branched `story-5.6-blocker-and-recall-assertion`
-  # from `master` at that commit, which is what the story's contexting note required. `dev-story`
-  # started.
-  5-6-blocker-and-recall-assertion: in-progress
+  # from `master` at that commit, which is what the story's contexting note required.
+  #
+  # 2026-08-01 — story 5.6 IMPLEMENTED -> `review`. 309 -> 332 tests (139 bin + 147 core + 46
+  # xtask), re-counted mechanically. Six green gates; `float-free` walks 4 files under `identity/`
+  # where it walked 3, and it was NOT weakened, skipped or given an escape hatch — the floor is an
+  # INTEGER, `BLOCKING_RECALL_FLOOR_PER_MILLE: u32 = 999`, on D13's own milli-units corollary and on
+  # the architecture's ratified test name `blocking_recall_above_999`, which already carried no
+  # float. That closes register entry R1.
+  #   · A REAL RED PHASE ran before the implementation: with degenerate bodies, 11 of the 19 core
+  #     tests failed and EVERY red was assertion-carried — zero compile errors. The 8 that passed
+  #     against the stub are NAMED in the story rather than glossed, and each is redded by a
+  #     mutation instead.
+  #   · ALL SIX MUTATIONS run against the committed baseline `eea3ef1`, each restore verified by
+  #     `md5sum` AND `git status`. M1 (blocking on an L1 key) scores **700‰ EXACTLY** as measured at
+  #     contexting — 7 reds. M2 (blocking on `l2_domain`) leaves the WHOLE CORPUS GREEN and reds only
+  #     the synthetic cross-domain test — 1 red, and that is the mutation proving the test is
+  #     load-bearing. M3 reds 2 and correctly does NOT red the `n*(n-1)/2` count test. M4 reds 3 in
+  #     core and leaves the corpus entirely green — corpus-invisible, as H1 measured in validation.
+  #     M5 reds 1, M6 reds 1. ZERO compiler-carried reds.
+  #   · THREE DIVERGENCES from the predictions, stated rather than left implicit (the defect four
+  #     consecutive stories carried): M4's bin count is 139, not the predicted 138 — same verdict,
+  #     one more test, because AC4's split rule added a fourth bin test; M1's bin red set is 3, not
+  #     2, the extra being the containment test that did not exist at contexting; M1's core red set
+  #     is 4 where the story said "several".
+  #   · The corpus counts are ASSERTED, not quoted: 24 traps, 23 naming a pair, 1 residue
+  #     (`example-must-abstain`), 0 naming more than two, 10 required pairs, recall 1000‰.
+  #   · A SIXTH falsified doc site was found by RE-READING, not by grep — `identity/mod.rs`'s D54
+  #     paragraph — and it turned out to be TRUE (`verdict_for_pair` is `pub(crate)`, the crate and
+  #     not the subtree), so it was verified and annotated rather than rewritten.
+  #   · Register: R1 (the float) and R2 (the self-pair, now closed IN THE TYPE — `CandidatePair::new`
+  #     returns `None`) disposed of BY TITLE; three new entries opened (D17's `dormant` exclusion,
+  #     unimplementable because no lifecycle state exists — measured; the quadratic universe; the
+  #     floor's arithmetic past 1000 required pairs); four entries belonging to others read and left
+  #     OPEN, including the `&str` allocation one whose condition is measured NOT met, since
+  #     `candidates` calls no rule.
+  #   · `fixtures/` and the planning artifacts are byte-unchanged; no STOP condition arose.
+  # NEXT = `code-review` 5.6, then merge. ⚠️ `done` is the merge's business, not the review's.
+  5-6-blocker-and-recall-assertion: review
   5-7-trap-runner-stops-scoring-nothing: backlog
   5-8-unimplemented-level-counts-as-not-passing: backlog
   5-9-persist-interface-and-identity-link: backlog

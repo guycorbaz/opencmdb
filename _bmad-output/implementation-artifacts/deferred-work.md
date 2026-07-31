@@ -1723,3 +1723,78 @@ patches did not close, and what the review revealed about claims rather than cod
   contributed nothing and all 17 hunks are content; (3) the Debug Log tabulated six observed mutation
   counts and commented only on the one that matched its prediction, leaving four divergences unstated.
   All three are corrected in the story. **No owner — the lesson is the entry.**
+
+## Deferred from: story-5.6 (2026-08-01)
+
+_The blocker and the recall assertion. Two register entries named this story as owner and both are
+disposed of below; three new ones are opened. Nothing that belongs to another story is closed here._
+
+### Dispositioned by this story
+
+- ✅ **R1 — the float, CLOSED by expressing the floor as an INTEGER in per-mille.** Registered at
+  *"Flagged FORWARD for story 5.6, unsolved here"* (§story-5.5, *New, raised by this story*), which
+  measured that `epics.md`'s `blocking_recall >= 0.999` reds the `float-free` gate. What ships is
+  `BLOCKING_RECALL_FLOOR_PER_MILLE: u32 = 999` and a `blocking_recall_per_mille` that compares
+  integers. **The gate was not weakened, skipped, `#[allow]`ed or narrowed** — it walks **4** `.rs`
+  files under `identity/` now where it walked 3, and `cargo xtask ci` reports six green gates. Two
+  grounds, neither invented here: D13's own milli-units corollary [architecture.md:988-993], and the
+  architecture's ratified test name `blocking_recall_above_999` [:2954], which already carries no
+  float and is used verbatim. ⚠️ The float has not been *avoided*, it has been *typed*: the value
+  D13 writes is unchanged.
+- ✅ **R2 — the self-pair, CLOSED in the TYPE rather than in a comment.** Registered at
+  *"`verdict_for_pair(a, a)` — the self-pair is answered but undocumented, and no test covers it"*
+  (§code review of story-5.5), owner *"story 5.6, which writes that generator and is the first place
+  the precondition has a holder"*. `CandidatePair::new(a, a)` returns `None`, so a pair that comes
+  out of the blocker can never be a self-pair, and `decide_pair`'s doc now names the holder instead
+  of leaving the precondition ownerless. `verdict_for_pair`'s own behaviour on `(a, a)` is
+  **unchanged** — it still answers `Decisive`, which is defensible and is not this story's to
+  revisit. Pinned by `the_self_pair_is_refused`; mutation M3 (admitting the self-pair) reds it and
+  `a_repeated_obs_id_yields_no_pair`, **2 assertion-carried reds**.
+
+### Read, and deliberately NOT closed — they belong to others
+
+- **`L1Key` is a bare tuple alias** — owner **story 5.9**. This story neither renames nor wraps it.
+  `CandidatePair`'s private ordered fields are the same *argument* applied to a different type, and
+  the doc says so, but the entry is about `L1Key` and stays open.
+- **The `&str` rule-id constants allocate** *"on a function a blocker will call O(pairs) times"* —
+  owner **a condition**. The condition has NOT been met: `candidates` calls no rule at all, so
+  nothing yet calls `verdict_for_pair` per pair and no allocation profile has been measured. The
+  entry stays open with its owner unchanged.
+- **The group-address gap** (Epic 6) and **`RuleId` → enum** (Epic 6) — untouched. The blocker reads
+  no `Fact` and consumes no structural reading of a MAC.
+
+### New, raised by this story
+
+- ⚠️ **D17's `dormant` exclusion is NOT implemented, because no lifecycle state exists.**
+  [architecture.md:1205-1206] says *"the blocker excludes `dormant` from automatic candidate
+  generation"*. **Measured: `grep -rn 'dormant\|Dormant' crates/ xtask/ --include=*.rs` returns
+  nothing** — there is no lifecycle state, no `presence` level (D17 refuses one at
+  [:1171-1173]), and no field a blocker could read. Writing the exclusion today would mean inventing
+  the state it filters on, which is writing from belief (D45). **Owner: the lifecycle epic
+  (FR40-42)**, which is the first place `dormant` becomes a value rather than a word. Whoever takes
+  it inherits a live consequence: adding the exclusion makes the universe non-total, so
+  `blocking_recall_above_999` becomes the assertion that says whether the narrowing was safe — which
+  is exactly the order D13 wanted.
+- ⚠️ **The universe is quadratic in the slice the CALLER supplies, and nothing yet bounds that
+  slice.** D13's *"90k pairs is noise on a NAS i5"* [architecture.md:1009] is one poll of 300 hosts.
+  Every caller today hands `candidates` one replay stream, so the figure holds — but the day a caller
+  hands it a retention window instead of a poll, `n` is no longer host count and a narrowing key
+  becomes required. **The recall assertion is what would make that narrowing safe rather than
+  silent**, and that is the whole reason it is written before any caller exists. **Owner: 5.9 or 5.7,
+  whichever first hands the blocker something other than one poll.** Recorded rather than built for:
+  a bound with no measured caller would be a guess at which key to narrow on, and §5 of this story is
+  the measurement of how wrong that guess can be while staying green.
+- ⚠️ **`>= 999` per-mille is zero-tolerance BELOW 1000 required pairs and a real tolerance above
+  it.** At the committed denominator of 10, one miss scores 900 and the floor reds — binary, which is
+  the form NFR4 demands. Past 1000 required pairs the same constant would admit a genuine miss, and
+  NFR4's *"any fraction is theatre"* [prd.md:1182] would bite. The module doc states this rather than
+  letting the per-mille dress imply a tolerance the corpus cannot support. **Owner: the story that
+  first grows the truth set past that size** (Tier 2, Epic 11+). It is not a defect today and must
+  not be "fixed" pre-emptively — a threshold tuned for a denominator that does not exist is the
+  decoration D18 refuses.
+- ⚠️ **Nothing calls the blocker and the engine in sequence, and the blocker has no production
+  caller at all.** `candidates` is reached from its own tests and from `fixtures.rs`'s test module.
+  It is the same shape `decide` was in before story 5.5 and `l1` is in today: the seam is
+  `score_corpus`'s `answers` map, still fed empty. **Owner: story 5.7.** Recorded because the module
+  doc claims the two organs do not consult each other, and the *reason* that claim is currently
+  unfalsifiable-in-production is that neither is in production.

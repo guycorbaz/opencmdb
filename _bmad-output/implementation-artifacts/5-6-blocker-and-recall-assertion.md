@@ -1,6 +1,6 @@
 # Story 5.6: The blocker, and the recall assertion nobody writes
 
-Status: ready-for-dev
+Status: review
 
 <!-- Validation is MANDATORY here (Guy's decision, Epic 4 retrospective 2026-07-26): two
      fresh-context agents (fact-check + gap-hunt) BEFORE dev-story. The template banner saying
@@ -518,77 +518,77 @@ reporting 1 red where the mutation broke 2, because `assert_eq!` aborts on the f
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Enumerate the obligations before writing code** (AC8)
-  - [ ] `grep -n '5\.6' _bmad-output/implementation-artifacts/deferred-work.md` — **4 lines, two
+- [x] **Task 1 — Enumerate the obligations before writing code** (AC8)
+  - [x] `grep -n '5\.6' _bmad-output/implementation-artifacts/deferred-work.md` — **4 lines, two
         entries** (R1 the float, R2 the self-pair). Do **not** use `grep 'story 5\.6'`.
-  - [ ] Read the two entries in full, plus the two that mention the blocker without owning it.
-  - [ ] ⚠️ **Check that R1 and R2 have citable TITLES before AC8 asks you to cite them by title** —
+  - [x] Read the two entries in full, plus the two that mention the blocker without owning it.
+  - [x] ⚠️ **Check that R1 and R2 have citable TITLES before AC8 asks you to cite them by title** —
         this was NOT verified at contexting, and AC8's no-line-numbers rule needs a title to exist.
         If one of them has none, say so and cite the smallest stable anchor instead.
-  - [ ] ⚠️ `grep -rn '5\.6' crates/ xtask/ --include=*.rs` returns **one unrelated hit**
+  - [x] ⚠️ `grep -rn '5\.6' crates/ xtask/ --include=*.rs` returns **one unrelated hit**
         (`arp_ping.rs:272`). The doc worklist is §7's five sites, found by reading.
 
-- [ ] **Task 2 — Read before writing** (the project's primary named cause of review cycles)
-  - [ ] `crates/opencmdb-core/src/identity/l1.rs` in full — the join, `decide_pair`, and the module
+- [x] **Task 2 — Read before writing** (the project's primary named cause of review cycles)
+  - [x] `crates/opencmdb-core/src/identity/l1.rs` in full — the join, `decide_pair`, and the module
         doc you are about to falsify.
-  - [ ] `crates/opencmdb-core/src/identity/cascade.rs:280-300` — the `Decision` doc's *"no blocker"*
+  - [x] `crates/opencmdb-core/src/identity/cascade.rs:280-300` — the `Decision` doc's *"no blocker"*
         claim; and `identity/mod.rs`, `lib.rs`.
-  - [ ] `crates/opencmdb-bin/src/fixtures.rs` — `read_jsonl` (`:647`), `read_traps` (`:665`),
+  - [x] `crates/opencmdb-bin/src/fixtures.rs` — `read_jsonl` (`:647`), `read_traps` (`:665`),
         `walk_trap_files` (`:834`), and the test module's helper idiom (`:921`).
-  - [ ] `crates/opencmdb-core/src/trap.rs:69-150` — `Expectation`, `Trap`.
-  - [ ] `xtask/src/main.rs`'s `gate_float_free`, `line_has_float`, `float_literal_kind`,
+  - [x] `crates/opencmdb-core/src/trap.rs:69-150` — `Expectation`, `Trap`.
+  - [x] `xtask/src/main.rs`'s `gate_float_free`, `line_has_float`, `float_literal_kind`,
         `strip_line_comment` — you are writing under the directory it guards. §1 is the measured
         behaviour; re-run the probe yourself if you doubt a line.
 
-- [ ] **Task 3 — The pair type** (AC2)
-  - [ ] New file `crates/opencmdb-core/src/identity/blocking.rs`; `pub mod blocking;` in
+- [x] **Task 3 — The pair type** (AC2)
+  - [x] New file `crates/opencmdb-core/src/identity/blocking.rs`; `pub mod blocking;` in
         `identity/mod.rs`.
-  - [ ] `CandidatePair` with **private** fields, ordered by the constructor;
+  - [x] `CandidatePair` with **private** fields, ordered by the constructor;
         `new(ObsId, ObsId) -> Option<Self>` returning `None` on the self-pair; accessors; derive
         `Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash`.
-  - [ ] Tests 3 and 4 of AC7 — **4 includes the accessors on their own**.
-  - [ ] Declare the test helpers you need here (`obs_id`, `l2`, `ts`, `mac`, `observation`), copied
+  - [x] Tests 3 and 4 of AC7 — **4 includes the accessors on their own**.
+  - [x] Declare the test helpers you need here (`obs_id`, `l2`, `ts`, `mac`, `observation`), copied
         from `l1.rs`'s spellings. They are private there; this duplication is sanctioned (Dev Notes).
 
-- [ ] **Task 4 — The generator** (AC1)
-  - [ ] `pub fn candidates(observations: &[Observation]) -> BTreeSet<CandidatePair>`.
-  - [ ] It calls neither `join` nor `decide_pair` nor `verdict_for_pair`.
-  - [ ] Tests 1, 2, 5, 6, 7, 8, 9 of AC7 — **write test 7 (two `l2_domain`s) FIRST**; it is the only
+- [x] **Task 4 — The generator** (AC1)
+  - [x] `pub fn candidates(observations: &[Observation]) -> BTreeSet<CandidatePair>`.
+  - [x] It calls neither `join` nor `decide_pair` nor `verdict_for_pair`.
+  - [x] Tests 1, 2, 5, 6, 7, 8, 9 of AC7 — **write test 7 (two `l2_domain`s) FIRST**; it is the only
         thing standing between a domain-blocked universe and green (§5). Test 9's module imports
         `join` deliberately (AC1); test 2 asserts from the **distinct-id** count, not `len()`.
 
-- [ ] **Task 5 — The floor and the recall function** (AC3)
-  - [ ] `BLOCKING_RECALL_FLOOR_PER_MILLE: u32 = 999` and `blocking_recall_per_mille(...) -> Option<u32>`.
-  - [ ] Tests 10 and 11 — **11 with an independent literal**, not the constant.
-  - [ ] ⚠️ No float in any assertion message; no story number without a letter suffix inside a string
+- [x] **Task 5 — The floor and the recall function** (AC3)
+  - [x] `BLOCKING_RECALL_FLOOR_PER_MILLE: u32 = 999` and `blocking_recall_per_mille(...) -> Option<u32>`.
+  - [x] Tests 10 and 11 — **11 with an independent literal**, not the constant.
+  - [x] ⚠️ No float in any assertion message; no story number without a letter suffix inside a string
         literal on a code line (§1, measured).
 
-- [ ] **Task 6 — The corpus assertion** (AC4)
-  - [ ] In `crates/opencmdb-bin/src/fixtures.rs`'s **test module only**: `blocking_recall_above_999`
+- [x] **Task 6 — The corpus assertion** (AC4)
+  - [x] In `crates/opencmdb-bin/src/fixtures.rs`'s **test module only**: `blocking_recall_above_999`
         over the 10 `must-merge` pairs, plus the universe-coverage assertion over all 23 pairs, plus
         the *exactly one trap names fewer than two observations* residue count.
-  - [ ] 🔴 **The per-trap containment assertion and the recall value go in SEPARATE tests** (AC4).
+  - [x] 🔴 **The per-trap containment assertion and the recall value go in SEPARATE tests** (AC4).
         In one test they cannot both be observed, and M1's 700‰ becomes unmeasurable.
-  - [ ] Pairs are formed **per stream** via `Trap::replay` + `read_jsonl`; `proposed` is the **union**
+  - [x] Pairs are formed **per stream** via `Trap::replay` + `read_jsonl`; `proposed` is the **union**
         of those per-stream universes, which is what lets one recall call cover 10 streams (AC4).
         Nothing above `#[cfg(test)]` changes.
-  - [ ] ⚠️ `trap_gate.rs` is not opened.
+  - [x] ⚠️ `trap_gate.rs` is not opened.
 
-- [ ] **Task 7 — Prove to red** (AC7)
-  - [ ] **COMMIT first.** Then M1–M6, every red reported and classified.
-  - [ ] Report divergence from the predictions explicitly — story 5.5's review caught a table that
+- [x] **Task 7 — Prove to red** (AC7)
+  - [x] **COMMIT first.** Then M1–M6, every red reported and classified.
+  - [x] Report divergence from the predictions explicitly — story 5.5's review caught a table that
         tabulated six counts and commented only on the one that matched.
 
-- [ ] **Task 8 — Docs, register, gate, PR** (AC8)
-  - [ ] The five doc sites of §7; then re-read the module docs of every file touched.
-  - [ ] Register: dispose R1 and R2; append the three new entries; close nothing that is not yours.
-  - [ ] `lib.rs` — decide the re-export and **state the reason**: the recommendation is to follow
+- [x] **Task 8 — Docs, register, gate, PR** (AC8)
+  - [x] The five doc sites of §7; then re-read the module docs of every file touched.
+  - [x] Register: dispose R1 and R2; append the three new entries; close nothing that is not yours.
+  - [x] `lib.rs` — decide the re-export and **state the reason**: the recommendation is to follow
         `join`'s precedent (reach it through `identity::blocking::…`, since `candidates` and
         `recall` are very generic root-level names), and to correct `lib.rs:46-47`, whose stated
         reason this story falsifies.
-  - [ ] `sprint-status.yaml`, `CLAUDE.md`, `docs/project-context.md`; `epics.md` verify-only.
-  - [ ] Full local gate, both clippy forms; six gates, `float-free` over **4** files.
-  - [ ] Branch `story-5.6-blocker-and-recall-assertion` (from `master`, **after PR #58 merges**) ->
+  - [x] `sprint-status.yaml`, `CLAUDE.md`, `docs/project-context.md`; `epics.md` verify-only.
+  - [x] Full local gate, both clippy forms; six gates, `float-free` over **4** files.
+  - [x] Branch `story-5.6-blocker-and-recall-assertion` (from `master`, **after PR #58 merges**) ->
         PR -> green CI. **Ends at `review`, PR open.**
 
 ## Dev Notes
@@ -756,15 +756,138 @@ so **verify that sentence rather than trust it**, and correct it if this story a
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context), `claude-opus-5[1m]`, as Amelia (`bmad-dev-story`).
+
 ### Debug Log References
+
+**Baseline, re-measured before writing anything** (`cargo test --workspace --locked`):
+**309 = 135 bin + 128 core + 46 xtask**, matching the contexting figure exactly.
+
+**Red phase, before the implementation existed.** The two functions and the constructor were written
+with degenerate bodies (`candidates` → empty set, `new` → always `Some` in argument order,
+`blocking_recall_per_mille` → always `Some(1000)`) and the suite run: **11 of the 19 core tests
+FAILED, every one of them assertion-carried — zero compile errors.** The 8 that passed under the
+degenerate implementation are named here rather than glossed, because a test that passes against a
+stub is a test whose red comes from somewhere else: `no_observation_yields_no_candidate`,
+`one_observation_yields_no_candidate`, `a_repeated_obs_id_yields_no_pair`,
+`the_universe_is_input_order_independent`,
+`the_generator_reads_neither_raw_nor_observed_at_nor_the_connector`,
+`every_required_pair_proposed_is_full_recall`,
+`a_pair_proposed_but_not_required_does_not_inflate_recall`,
+`the_floor_is_nine_hundred_and_ninety_nine_per_mille`. Each of those is redded by a mutation below
+instead (M3, M4, M5, M6), which is where their guarantee actually comes from.
+
+**Mutation pass (AC7), run against the committed baseline `eea3ef1`.** Every restore was verified
+with `md5sum` against the commit **and** `git status` — `blocking.rs` back to
+`8bbceb7b35d05996b7b9536d8d7529d2`, `fixtures.rs` unchanged at
+`100d2a3323d9e959f577d51143c95c17`, working tree clean — after each of the six.
+
+| # | mutation | predicted | OBSERVED | reds | carried by |
+|---|---|---|---|---|---|
+| M1 | universe narrowed to pairs sharing an L1 key | corpus recall **700‰**; recall + coverage + several core tests red | **700‰ exactly** | **7** — 3 bin, 4 core | assertions |
+| M2 | universe narrowed to same-`l2_domain` pairs | whole corpus GREEN; only the synthetic cross-domain test reds | **corpus 139/139 green** | **1** core | assertion |
+| M3 | the self-pair admitted | tests 3 and 4 red; the `n*(n-1)/2` count test does **NOT** | confirmed on both halves | **2** core | assertions |
+| M4 | pair ordered by argument order | core reds; **corpus entirely green** | corpus green | **3** core | assertions |
+| M5 | `Some(1000)` for an empty `required` | the `None` case reds | confirmed | **1** core | assertion |
+| M6 | floor weakened to `900` | **only** the independent-literal test reds | confirmed | **1** core | assertion |
+
+**Zero compiler-carried reds across all six.**
+
+**Divergences from the predictions, stated because the fourth-consecutive-story defect this project
+records is tabulating counts and commenting only on the ones that matched:**
+
+- **M4's bin figure.** The story predicted `138 passed; 0 failed` on `opencmdb-bin`. Observed
+  **`139 passed; 0 failed`** — the *verdict* (entirely green, the corpus cannot see the mutation) is
+  exactly right; the *count* is one higher because this story ships **4** bin tests where the
+  validation prototype shipped 3. AC4's split rule is what added the fourth.
+- **M1's bin red set is 3, and the story could only name 2.** The third is
+  `the_blocker_proposes_every_required_pair_within_its_own_stream`, which did not exist as a separate
+  test at contexting — it is the test AC4's split rule created. Its message names the first trap that
+  misses (`docker-veth-must-merge`), and because it is a *different* test, `blocking_recall_above_999`
+  still runs and still reports **700**. That is the MEDIUM finding from validation, confirmed by
+  measurement rather than inherited: in one test the 700 would have been unobservable.
+- **M1's core red set is 4**, not the "several" the story estimated:
+  `four_observations_yield_six_pairs`, `the_count_is_quadratic_in_the_number_of_distinct_ids`,
+  `two_l2_domains_are_still_a_candidate_pair`, `an_observation_with_no_mac_is_still_a_candidate`.
+- **M2, M3, M5 and M6 matched their predictions with no divergence at all**, including M3's negative
+  half (the count test stays green because `candidates` only offers index pairs `i < j`, so the
+  `Ordering::Equal` branch is unreachable on distinct input).
+
+**Corpus counts, measured by the shipped assertions rather than quoted from the story:** 24 traps,
+23 naming a pair, 1 naming fewer (`example-must-abstain`), **0 naming more than two**, 10 `must-merge`
+pairs, recall **1000‰**. All five are `assert_eq!`s, not comments.
+
+**Final gate**, all green in one pass: `cargo fmt --all` · `cargo clippy --workspace --locked
+--all-targets -- -D warnings` (clean) · `cargo clippy --workspace --locked -- -D warnings` (the CI
+form, clean) · `cargo test --workspace --locked` · `cargo xtask ci` — **six green gates**, with
+`float-free` reporting **4 file(s)** where it reported 3, `file-size` unmoved at 24 files / largest
+1136, plus `ℹ views-hash STALE` (exit 0 by design, issue #50). `git status --porcelain fixtures/`
+returns nothing, and so does `git status --porcelain _bmad-output/planning-artifacts/`.
 
 ### Completion Notes List
 
+- **AC1 — met.** `candidates(&[Observation]) -> BTreeSet<CandidatePair>` returns every unordered pair
+  of distinct `obs_id`s. It calls neither `join`, `verdict_for_pair` nor `decide_pair`; it reads no
+  `Fact` at all, only `obs_id`. The count is asserted from the **distinct-id** count for n = 0..=6,
+  not from `len()`. The superset property is pinned by
+  `every_pair_inside_a_join_group_is_a_candidate`, whose test module imports `join` on purpose — that
+  import is the test, and it is clean under both clippy forms.
+- **AC2 — met.** Private fields ordered by the constructor; `new(a, a)` is `None`; the accessors are
+  exercised on their own. The doc states that the ordering carries **no** meaning.
+- **AC3 — met.** `BLOCKING_RECALL_FLOOR_PER_MILLE: u32 = 999`, `blocking_recall_per_mille` returns
+  `Option<u32>` and `None` on an empty denominator, truncation pinned at 2-of-3 → 666, and the floor
+  pinned by an **independent literal**. The gate is untouched and now walks 4 files.
+- **AC4 — met.** `blocking_recall_above_999` carries the architecture's ratified name and computes
+  **only** the recall; containment lives in its own test; universe coverage over all 23 pairs is a
+  third, deliberately not called recall; the residue count is a fourth. Pairs are formed per stream,
+  `proposed` is the union, and the per-trap containment assertion is what makes the union honest.
+  Nothing above `fixtures.rs`'s `#[cfg(test)]` changed and no new `pub` item appeared in bin.
+- **AC5 — met, and nothing was absorbed.** No verdict, no `Decision`, no call to
+  `decide`/`decide_pair`/`verdict_for_pair`; `trap_gate.rs`, `score.rs`, `trap.rs` and
+  `observation/` were not opened for editing; no `l2-*` rule, no `InterfaceId`/`EntityId`, no
+  persistence, no `Default`; no structural MAC reading consumed; nothing under `fixtures/` written.
+  **No step required a STOP** — no finding of the kind §*What STOP means* describes arose.
+- **AC6 — met.** The module doc carries both D13 quotations with their citations, the 90k-at-300-hosts
+  figure with D13's own conclusion that the blocker is not a performance device, the three-way
+  distinction from D18's refused pairwise-recall gate including the honest sentence that at this
+  denominator the floor is zero-tolerance, the explicit *"nothing here advances NFR4"*, and what the
+  component does not do. It is not an inventory of the epic.
+- **AC7 — met.** 19 core tests + 4 bin, all six mutations run, every red reported and classified, and
+  three divergences from the predictions stated above rather than left implicit.
+- **AC8 — met.** R1 and R2 disposed of by title; three new entries opened with owners; four entries
+  belonging to others explicitly read and left open. The five falsified doc sites corrected, plus a
+  sixth found by re-reading rather than by grep (below). Counts re-measured mechanically after the
+  last edit. `epics.md` verified unmodified.
+- **A sixth falsified site, found by re-reading and not on the story's list.** `identity/mod.rs`'s
+  D54 paragraph says nothing here is restricted to this subtree. That is still **true**
+  (`verdict_for_pair` is `pub(crate)`, which is the crate and not the subtree, and `blocking` adds no
+  `pub(in ...)` item) — so it was **verified and annotated rather than rewritten**, which is what the
+  story asked for. The related sentence in `lib.rs`'s crate doc *was* stale and was corrected.
+- **What is claimed here and what is not.** The blocker has **no production caller**: it is reached
+  from its own tests and from `fixtures.rs`'s test module only. The purity claim is tested on its
+  falsifiable half only — varying `raw`, `observed_at` and `connector_id` — because the clock/SQL
+  half is unreachable from a `&[Observation]` and no test could red on it; the test says so in a
+  comment. Nothing here advances NFR4.
+
 ### File List
+
+| file | change |
+|---|---|
+| `crates/opencmdb-core/src/identity/blocking.rs` | **NEW** — module doc, `CandidatePair`, `candidates`, `BLOCKING_RECALL_FLOOR_PER_MILLE`, `blocking_recall_per_mille`, 19 tests |
+| `crates/opencmdb-core/src/identity/mod.rs` | `pub mod blocking;` + the module doc's *"no candidate pair generator"* claim + the D54 paragraph annotated |
+| `crates/opencmdb-core/src/identity/l1.rs` | **docs only** — the *"next story's"* ownership clauses at the module doc and at `decide_pair`, plus the self-pair precondition's holder |
+| `crates/opencmdb-core/src/identity/cascade.rs` | **docs only** — `Decision`'s *"there is still no blocker"* claim |
+| `crates/opencmdb-core/src/lib.rs` | the crate doc, the retired re-export reason, and the `blocking` re-export decision |
+| `crates/opencmdb-bin/src/fixtures.rs` | **tests only** — one import line in the test module, `CorpusPairs`, `corpus_pairs`, 4 tests. Nothing above `#[cfg(test)]` |
+| `_bmad-output/implementation-artifacts/deferred-work.md` | appended §*Deferred from: story-5.6* |
+| `_bmad-output/implementation-artifacts/sprint-status.yaml` | `5-6` → `review`, with the measurements |
+| `_bmad-output/implementation-artifacts/5-6-blocker-and-recall-assertion.md` | this record |
+| `CLAUDE.md`, `docs/project-context.md` | docs-current-before-push |
 
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-08-01 | **Implemented (`dev-story`) → status `review`.** Branched `story-5.6-blocker-and-recall-assertion` from `master` at `440b30e`, after PR #58 merged — the condition the contexting note set. **309 → 332 tests (139 bin + 147 core + 46 xtask)**, re-counted mechanically after the last edit. Six green gates, `float-free` over **4** files where it walked 3, `file-size` unmoved. **A genuine red phase preceded the implementation**: with degenerate bodies, 11 of the 19 core tests failed and **every red was assertion-carried, zero compile errors**; the 8 that passed against the stub are named in the Debug Log rather than glossed, and each is redded by a mutation instead. **All six mutations run against the committed baseline `eea3ef1`**, each restore verified by `md5sum` **and** `git status`: M1 **700‰ exactly as measured at contexting** (7 reds), M2 **the whole corpus stays green** and only the synthetic cross-domain test reds (1) — the mutation that proves that test is load-bearing, M3 2 reds with the count test correctly NOT redding, M4 3 core reds and **the corpus entirely green**, M5 1, M6 1. **Zero compiler-carried reds.** Three divergences from the predictions are stated explicitly rather than left implicit: M4's bin count is **139**, not the predicted 138 (same verdict, one more test, because AC4's split rule added a fourth bin test); M1's bin red set is **3**, not 2, the extra one being the containment test that did not exist at contexting; and M1's core red set is **4**, where the story estimated "several". The corpus counts are **asserted, not quoted** — 24 traps, 23 pairs, 1 residue, 0 beyond a pair, 10 required, recall 1000‰. AC8's five doc sites corrected, plus **a sixth found by re-reading and not by grep**: `identity/mod.rs`'s D54 paragraph, which turned out to be **true** (`verdict_for_pair` is `pub(crate)` — the crate, not the subtree) and was therefore verified and annotated rather than rewritten. Register: **R1 (the float) and R2 (the self-pair) disposed of by TITLE**, three new entries opened (D17's unimplementable `dormant` exclusion, the quadratic universe, the floor's own arithmetic past 1000 pairs), and four entries belonging to others read and left open — including the `&str` allocation one, whose condition is **measured NOT met**, since `candidates` calls no rule. `fixtures/` and the planning artifacts are byte-unchanged. No STOP condition arose. |
 | 2026-08-01 | **Validation pass, two fresh-context agents (fact-check + gap-hunt), MANDATORY per Guy's Epic 4 retrospective decision.** Coverage: **128 factual claims measured (120 true, 6 false, 2 unverifiable)** and the story **implemented end to end** in an isolated worktree — it compiled first try, reached **331 tests (309 + 22)**, six green gates with `float-free` over **4** files and `file-size` unmoved, and all six mutations were run. **16 findings applied: 3 HIGH, 3 MEDIUM, 4 LOW, plus 6 citation corrections.** As on story 5.5, **every HIGH came from the agent that COMPILED the story, none from the agent that checked its claims** — the citations, greps, corpus counts, register enumeration, the 309 baseline and all eight rows of the float probe reproduced exactly. **The three HIGH:** **(H1)** **M4's second half is FALSE by measurement** — *"the corpus test reds wherever a trap lists its two ids in an order the stream does not"*: **0 of 23** trap pairs do, and 0 are out of ascending-UUID order either, so `opencmdb-bin` stays **138/138 green** under M4; the prediction is now corpus-invisible by statement, and the measurement is a new row in §3. **(H2)** **AC4 was self-contradictory** — *"per stream, never across streams"* cannot coexist with *"recall over the whole truth set"* except through a **union** of the per-stream universes, which the story never named; the union is only honest because the per-trap containment assertion proves each required pair is in its OWN stream (backstopped by a new measurement: **39** distinct `obs_id`s across the **11** trap-named streams, zero collision). **(H3)** **AC1 forbade calling `join` while AC7 test 9 requires it** — the prohibition binds `candidates`, not the module; the test module imports `join` deliberately, which is the only way a superset property is checkable. **The three MEDIUM:** M3's predicted red set named a test that **cannot** red (`candidates` offers only `i < j`, so the `Equal` branch is unreachable on distinct input); **M1's 700‰ is unobservable unless AC4's two assertions are two tests** — measured, a single test panics on `docker-veth-must-merge` before any recall is computed, so AC7's own split rule is now imposed on AC4; and **`fn obs(n: u128)` is not importable** — `l1.rs` spells its five helpers `obs_id`/`l2`/`ts`/`mac`/`observation`, all private, so the copy is sanctioned explicitly rather than left to collide with DRY. Also corrected: `n*(n-1)/2` now says **n = distinct ids**; *"eleven core tests"* is restated as eleven **requirements**; the accessors got a test; `Uuid::from_u128` and `parse_from_rfc3339` are named as the forms that compile; **test 8's justification was refuted** (all six `hostname-absence` observations carry a MAC — the family encodes an absent *hostname*); the **296/296** figure was 5.5's *validation prototype*, whose shipped tests red **10**; *"one per family"* omitted `example-must-merge`, which has no family; `xtask:1821`'s prediction **was corrected during 5.5**; `score_corpus` has **no production caller** (all 10 sites are below `:385`); NFR4 runs to `prd.md:1207`; D18's quote to `:1253`. Two rows added to §1's float table, both measured: the citations AC6 demands are **green even on a code line**, and **`"story 5.7"` reds too** — the rule is any story number without a letter suffix. Two things left explicitly unmeasured rather than assumed: `"v0.1"` (one dot), and whether R1/R2 carry citable TITLES, now a task. The prototype implementation was **discarded** (Guy's call) — dev-story rewrites from the corrected story. |
 | 2026-08-01 | Story contexted against `master` at `0ebd50f` (5.5 merged; bookkeeping PR #58 still OPEN). **Four findings changed the story rather than decorating it, each measured at contexting.** (1) **The float was resolved by measurement, not by reading the gate**: a probe file under `identity/` run through `cargo xtask ci` reported exactly three offenders — `0.999`, the epic's own assertion text quoted in an assertion message, and `"story 5.6"` in a string on a code line — while `999`, `1000`, `blocking_recall_above_999` and a `///`-quoted `0.999` were green. The floor becomes an INTEGER in per-mille, on D13's own milli-units corollary and on the architecture's ratified test name, which already contains no float. (2) **D18 refuses a pairwise-recall gate by name** (*"a gate that cannot fall is decoration"*), so the story owes the distinction — different subject, different venue, and the honest arithmetic that `>= 999‰` at a 10-pair denominator IS zero tolerance. (3) **The truth set is the committed corpus**: 24 traps, 23 name a pair, 10 `must-merge`, of which **7 share a MAC and 3 do not** — so an exact-MAC blocker scores **700‰** and the recall assertion has a real red. Because core cannot read files (D47), the corpus assertion lives in `fixtures.rs`'s test module and the blocker in `identity/blocking.rs`, the file the architecture already names. (4) **The wrong blocker that passes the whole corpus is the same-`l2_domain` one** — all 23 trap pairs are same-scope, measured — so only a synthetic cross-domain test stands between it and green; it is required to be written first. Also measured: `grep '5\.6'` over the code returns **zero** relevant hits, so the doc worklist is by meaning (five sites, listed); there is no `dormant` anywhere, so D17's blocker clause cannot be implemented and is registered instead; and the baseline is **309 tests = 135 + 128 + 46**. |
