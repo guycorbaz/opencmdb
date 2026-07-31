@@ -50,10 +50,12 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-30  # 5.4b DONE: PR #55 squash-merged as 4f4e774 after a green CI run.
-                          # Its code review applied 22 patches, registered 5 deferrals and refuted
-                          # 3 of its own layers' claims. 281 tests (135+100+46), six gates green.
-                          # NEXT = story 5.5, the L1 join — the first caller of decide().
+last_updated: 2026-07-31  # 5.5 VALIDATED (2 fresh-context agents): 27 findings applied, 6 HIGH —
+                          # all 6 from the agent that COMPILED it, 0 from the fact-checker.
+                          # Still ready-for-dev. NEXT = dev-story 5.5.
+                          # 281 tests (135+100+46), six gates green.
+                          # NEXT = `create-story validate` on 5.5 (MANDATORY, two fresh-context
+                          # agents), then dev-story.
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -819,7 +821,83 @@ development_status:
   # step 6 would have set `done` as soon as the patches were applied; that default was deliberately
   # NOT followed, because it would have marked a story done while its PR was still open.
   5-4b-verdict-algebra-and-float-gate: done
-  5-5-l1-join-pure: backlog
+  #
+  # 5.5 CONTEXTED 2026-07-30 -> ready-for-dev. Three parallel analyses (architecture via the Decision
+  # Index, existing code, accumulated debt). ⚠️ Still owes `create-story validate` — two fresh-context
+  # agents — before dev-story; that is MANDATORY here and is not optional for this story either.
+  # THREE findings changed the story rather than decorating it:
+  #   · **AC3 as the epic words it is a TRAP.** D13 calls the U/L bit and the IANA prefix
+  #     `Disqualifying` *"as GROUPING anchors"* (architecture.md:1002) — and grouping is L2 (:891).
+  #     Two committed traps demand `l1-exact-mac` FIRE on a locally-administered MAC
+  #     (randomized-mac.toml:27) and on a VRRP MAC (vrrp-virtual-mac.toml:71), so implementing AC3
+  #     literally reds them. AC3 is restated as a NEGATIVE requirement and no IANA predicate is added.
+  #     The VRRP refusal the corpus does want is named `l2-virtual-mac-prefix` — an l2-* id, Epic 6's.
+  #   · **`l1-distinct-mac` must emit `Disqualifying`, and that is FORCED, not chosen.** The corpus
+  #     demands the must-not-merge pole be answered BY NAME; only `NoMatch { rule }` names a rule for a
+  #     non-merge; and `decide` reaches `NoMatch` from a `Disqualifying` alone. An `Opposes` would land
+  #     on the arbitrated class, abstain, and name nothing — making story 5.7's rule comparison
+  #     unsatisfiable. AC5 carries the five-step chain and points the validation agents at it.
+  #   · **The bare-MAC key passes the ENTIRE corpus.** Every committed replay stream carries exactly
+  #     one `l2_domain` (D61 measured `client.network_id` at ONE distinct value and `client.vlan`
+  #     missing 48/48), so AC2 can only be defended by a synthetic two-scope test. Write it first.
+  # Measured at contexting, so the story creates neither: `Scope { l2_domain, vantage }` already EXISTS
+  # (observation/mod.rs:211-214) and so does `MacAddr::is_locally_administered()` (:78-80). `Scope` is
+  # NOT `Ord`, so a BTreeMap keyed on it does not compile — the key is `(L2DomainId, MacAddr)`.
+  # No `InterfaceId`/`EntityId` exists anywhere in crates/ and none is minted here (5.9's surface).
+  # ⚠️ Enumeration warning carried into the story: `grep -n '5\.5' deferred-work.md` gives **19** lines
+  # while `grep -n 'story 5\.5'` gives 11 and MISSES two owner strings that wrap across a newline —
+  # the same undercount that made 5.4b claim eight register entries where ten existed. The story
+  # therefore groups the obligations by REQUIREMENT (eight) rather than asserting an entry count.
+  # ⚠️ Flagged FORWARD, not solved: story 5.6's `blocking_recall >= 0.999` (epics.md:1507) is a bare
+  # float literal that WILL red the `float-free` gate if the blocker lives under `identity/`.
+  #
+  # 2026-07-31 — VALIDATION PASS held (two fresh-context agents, MANDATORY per Guy's Epic 4 retro).
+  # Coverage: ~108 factual claims measured (97 true) + a REAL `identity/l1.rs` written from AC1-AC7,
+  # gated locally (296 tests, six gates green) and mutated 8 ways. **27 findings: 6 HIGH, 13 MEDIUM,
+  # 8 LOW — all applied to the story.**
+  # 🔑 THE MEASUREMENT OF THE DAY: **all 6 HIGH came from the agent that COMPILED the story; ZERO from
+  # the agent that checked its claims.** The fact-checker found 0 HIGH over ~108 claims — citations,
+  # greps, counts and all 26 `float-free` cases were right. What broke was not what the story ASSERTS
+  # but what it PRESCRIBES, and only building it surfaced that. A fact-check alone would have passed
+  # this story clean. This is the strongest evidence yet for the two-agent rule, and it argues the
+  # gap-hunt agent should be told to BUILD, not just to read.
+  # The six HIGH:
+  #   · AC1 was SELF-CONTRADICTORY — order-independence demanded while prescribing `Vec<ObsId>`, whose
+  #     values are order-dependent. The literal implementation failed AC1's own test. → Guy chose
+  #     `BTreeMap<(L2DomainId, MacAddr), BTreeSet<ObsId>>`, which also settles the duplicate-Fact::Mac
+  #     case for free (the property holds by TYPE, not by a sort() a refactor can drop).
+  #   · The `float-free` gate REDS on `"story 5.7"` inside an ASSERTION MESSAGE — a one-dot decimal
+  #     with an empty suffix is a bare float (xtask/src/main.rs:1011-1018). `"story 5.4b"` survives
+  #     ONLY by its trailing `b` — and it sat in the story's own GREEN list, inviting exactly the wrong
+  #     generalisation. `//` comments are stripped; an assertion message is a CODE line.
+  #   · The canonical-`RuleId` requirement was guarded by NOTHING: renaming the constants to
+  #     `"L1-Exact-MAC "` and `"l1_distinct_mac"` left the whole suite GREEN (296/296), because every
+  #     test built its expectation from the constant it was checking. Self-referential assertion — the
+  #     same anti-pattern the conclusion oracle exists to prevent, left open on the rule id. Story 5.7
+  #     would have failed on all thirteen `l1-*` expectations. → AC8 now demands the ids as STRING
+  #     LITERALS, and mutation M6 (non-blank but non-canonical) was added.
+  #   · AC4 told the dev to DOCUMENT A FALSEHOOD — that a `Neutral`'s rule id is "unobservable today".
+  #     `Decision::verdict_vector` is a pub field and `Decision` derives Debug/PartialEq, so any
+  #     whole-`Decision` assert_eq! pins it. Replaced with the weaker true sentence.
+  #   · AC4's table did not DECIDE the multi-MAC pair: for A={X,Y}, B={Y,Z} both rows matched and the
+  #     two readings gave OPPOSITE verdicts. → Guy chose EXISTENTIAL (share >=1 key -> l1-exact-mac),
+  #     grounded in D12 (:884) and in multi-nic.toml:18, which expects that very pair to MERGE.
+  #   · `score.rs` was marked LEAVE ALONE while carrying two claims this story falsifies (:285-286
+  #     "Nothing produces one", :293-295 "not a mechanism"). → Guy granted a DOCS-ONLY exception; code,
+  #     `VerdictVectorEntry` and both size_of tests stay untouched.
+  # Also corrected: the §1 rule table claimed `l1-exact-mac` answers EVERY must-merge pole — it is
+  # SEVEN OF TEN (multi-nic, shared-hardware-vm, docker-veth name l2-* rules); the E0560/E0609 figure
+  # was a story-5.4-era measurement restated as current (6+2 on this tree, not 5+1 — the story's own
+  # inherited lesson #2 applied to itself); "three of ten falsified doc blocks did not contain 5.4b"
+  # is RECORDED NOWHERE (the register says twelve sites -> ten BLOCKS, and "three sentences" -> ONE);
+  # `RuleId` is not const-constructible (RuleId(pub String) -> error[E0015]); `Observation` has no
+  # `origin` field; Task 6's M1 and M4 predictions were wrong (both compiler-carried as worded);
+  # 15 falsified doc claims in cascade.rs, 7 invisible to the grep; and 5 citations were off.
+  # Scope was CHALLENGED and the challenge FAILED by measurement: 5.7's AC1 (epics.md:1525) needs a
+  # real engine to answer every l1-* trap and NO story is dedicated to writing the L1 rules, so 5.5
+  # absorbing them is forced, not creep; and at 8 tasks it is BELOW the epic's norm (5.3=10, 5.4=11,
+  # 5.4b=10). No 5.5b proposed. Epic 5 stays at 16 stories.
+  5-5-l1-join-pure: ready-for-dev
   5-6-blocker-and-recall-assertion: backlog
   5-7-trap-runner-stops-scoring-nothing: backlog
   5-8-unimplemented-level-counts-as-not-passing: backlog

@@ -40,6 +40,10 @@ pub use gap::{AbstentionCause, Gap, Reconciliation, reconcile};
 pub use identity::cascade::{
     Conclusion, Decision, IdentityAbstentionCause, RuleVerdict, RulesetVersion, Verdict, decide,
 };
+pub use identity::l1::{
+    CURRENT_RULESET_VERSION, L1_DISTINCT_MAC, L1_EXACT_MAC, L1Key, decide_pair, join,
+    verdict_for_pair,
+};
 pub use observation::{
     Capabilities, ConnectorId, Fact, FactKind, HostnameSource, L2DomainId, MacAddr, MacParseError,
     ObsId, Observation, Scope, Timestamp, VantageId,
