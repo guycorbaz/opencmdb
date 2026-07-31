@@ -1817,8 +1817,8 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         assert!(line_has_float("    let s: u32 = 42;").is_none());
         assert!(
             line_has_float("        assert_eq!(ip, \"192.168.0.1\");").is_none(),
-            "a dotted quad has three dots and is no numeric literal — it reddened before, and \
-             story 5.5 writes IP literals under the guarded subtree"
+            "a dotted quad has three dots and is no numeric literal — it reddened before the \
+             tokeniser replaced the digit-dot-digit search"
         );
         assert!(
             line_has_float("        let v = \"0.9.0\";").is_none(),

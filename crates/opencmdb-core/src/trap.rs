@@ -30,7 +30,8 @@ use crate::observation::ObsId;
 
 /// The identifier of an engine rule, as an expectation names it.
 ///
-/// A `String` for now because no rule exists yet. It closes into an enum when **every rule the
+/// A `String` still, although two rules now exist: `identity::l1` implements `l1-exact-mac` and
+/// `l1-distinct-mac`. It closes into an enum when **every rule the
 /// corpus names is designed** — architecture.md:2652 requires *a decision on every variant*, and an
 /// `Other(String)` cannot satisfy an `expect_rule`. That is not Epic 5: the committed corpus writes
 /// **seven** distinct rule names and **five of them are `l2-*`**, which Epic 6 specifies. Closing

@@ -6,8 +6,12 @@
 //! [`Verdict`], [`RuleVerdict`], [`Conclusion`], [`Decision`], [`RulesetVersion`] and
 //! [`IdentityAbstentionCause`] — **and the algebra itself, [`decide`]**, which combines a verdict set
 //! into a conclusion over D13's six-row table plus the one input class that table leaves uncovered.
-//! **No rule produces a [`Verdict`] yet**, so nothing calls `decide` outside its own tests; story 5.5
-//! writes the join and the first firing rule.
+//!
+//! **Rules now produce verdicts, and `decide` has a caller** — [`crate::identity::l1`], which joins
+//! observations on the scope-qualified key and answers a pair with one [`RuleVerdict`]. ⚠️ Be exact
+//! about how far that goes: L1 emits **three** of the five verdicts — [`Verdict::Decisive`],
+//! [`Verdict::Disqualifying`] and [`Verdict::Neutral`]. **[`Verdict::Supports`] and
+//! [`Verdict::Opposes`] still have no producer**, and gain one with Epic 6's `l2-*` rules.
 //!
 //! The vocabulary is chosen before the engine on purpose — the same order D19 imposed on the metrics
 //! harness in Epic 4, *"a metric written after the engine is bent to fit the engine"* — and because
@@ -52,8 +56,10 @@ use crate::trap::RuleId;
 /// D13's contract is that **all rules are evaluated** and that *"verdicts combine by an **algebra,
 /// not a sum**"* [architecture.md:960-961], because *"REFUSED: `rule -> confidence: f64` … if the
 /// output is a float, B has won in disguise"* [architecture.md:956-958]. The six-row table at
-/// [architecture.md:967-974] is implemented by [`decide`], in this file. **No rule produces a
-/// `Verdict` until story 5.5**, so nothing calls it outside its own tests.
+/// [architecture.md:967-974] is implemented by [`decide`], in this file, and
+/// [`crate::identity::l1`] is what calls it. ⚠️ **Only three of the five variants have a producer**
+/// — `Decisive`, `Disqualifying` and `Neutral`, all from L1; `Supports` and `Opposes` gain one with
+/// Epic 6's `l2-*` rules.
 ///
 /// ⚠️ **The six rows do not cover every input.** Enumerated over the PRESENCE of each variant, the
 /// table leaves exactly one class unanswered: at least one `Opposes`, with no `Decisive`, no
@@ -159,21 +165,25 @@ impl Verdict {
 /// outcome… **the anti-drift is not discipline, it is a data requirement.**"*
 /// [architecture.md:1396-1399].
 ///
-/// # Nothing produces one, and nothing validates one
+/// # One producer, and what it is held to
 ///
-/// There is no rule, so every `RuleVerdict` in the tree today is a test literal. The fields are
-/// `pub` with no constructor — the [`crate::score::ScoredRecord`] precedent — and of the two
-/// validations a producer would want, **one now has a place that reds and one does not**: that a
-/// [`Decision`]'s conclusion names a rule its own vector contains holds by construction for
-/// everything [`decide`] returns, and a test says so; that a verdict which ARGUES leaves non-empty
-/// evidence still needs a firing rule to state, and stays registered with story 5.5.
+/// [`crate::identity::l1::verdict_for_pair`] builds these. The fields remain `pub` with no
+/// constructor — the [`crate::score::ScoredRecord`] precedent — so the two validations a producer
+/// would want are honoured **by that producer**, not by the type:
+///
+/// - a [`Decision`]'s conclusion names a rule its own vector contains — by construction for
+///   everything [`decide`] returns, and a test says so;
+/// - a verdict which ARGUES leaves non-empty evidence — stated and tested on the L1 producer, which
+///   is where it can red at all, since [`decide`] never reads [`Self::evidence`].
+///
+/// ⚠️ Both hold for what the L1 producer emits. **A `RuleVerdict` built by struct literal elsewhere
+/// is still unconstrained**, and that residue stays registered.
 ///
 /// # Its relationship to [`crate::score::VerdictVectorEntry`]
 ///
 /// That type is the HARNESS-side placeholder for this same triple, and it is **uninhabited** so
-/// that `ScoredRecord::verdict_vector` is provably empty until an engine fills it. This story does
-/// not replace it: there is still no producer, and replacing it would falsify four places at once.
-/// **Story 5.7 owns the unification**, when the trap runner first records a real run.
+/// that `ScoredRecord::verdict_vector` is provably empty until the trap runner records a real run.
+/// A producer now exists, but nothing yet feeds the harness — **story 5.7 owns the unification**.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuleVerdict {
     /// The rule that spoke. A [`RuleId`] rather than an enum: five of the seven rule names the
@@ -188,8 +198,10 @@ pub struct RuleVerdict {
     /// This is the SMALLEST evidence that is not invented. The architecture requires a firing rule
     /// to leave evidence behind — *"a rule that fires without leaving its `rule_id` in the database
     /// is a rule we cannot debug in production"* [architecture.md:1309-1310] — and **shapes it
-    /// nowhere**. A richer payload (the fact values, the candidate pair, a rendered sentence) has no
-    /// producer until story 5.5 and would be a design taken without one.
+    /// nowhere**. A richer payload (the fact values, the candidate pair, a rendered sentence) is a
+    /// design nothing asks for: the L1 producer fills this, on a verdict that ARGUES, with both
+    /// sides' [`ObsId`]s sorted — a [`Verdict::Neutral`] legitimately carries none — and no
+    /// consumer reads more.
     pub evidence: Vec<ObsId>,
 }
 
@@ -200,16 +212,19 @@ pub struct RuleVerdict {
 /// *"Any reintroduction increments `ruleset_version`; existing links are not recomputed (they carry
 /// the version they were decided under)."* [architecture.md:1392-1393].
 ///
-/// # No constant, no default, no ordering
+/// # The constant lives with the rules; there is still no default and no ordering
 ///
-/// **There is no `CURRENT_RULESET_VERSION` and no `Default`**, because there is no ruleset: no rule
-/// exists. A constant would be a value asserting that the rules it versions are there. The version
-/// arrives as a parameter when a producer builds a [`Decision`] — story 5.5 is the first story with
-/// rules to version, and it owns the constant.
+/// A ruleset now exists — L1's two rules — so the constant naming its version does too:
+/// [`crate::identity::l1::CURRENT_RULESET_VERSION`]. It lives beside the rules it versions rather
+/// than here, so that a value asserting "these rules are there" sits where they are.
+///
+/// **There is still no `Default`, and that is load-bearing**: the version arrives as a parameter
+/// when a producer builds a [`Decision`], and the absent `Default` is what makes it unforgettable —
+/// removing the field breaks every construction site and every read.
 ///
 /// **No value is refused, including `RulesetVersion(0)`.** D14's "mandatory" is about PRESENCE, not
-/// meaning; validating a number against nothing would be the same invention this story refuses for
-/// evidence. Registered, owner story 5.5.
+/// meaning, and validating a number against nothing would be an invention. What the L1 producer
+/// states instead is the weaker true thing: the version it emits is not that meaningless zero.
 ///
 /// **No `PartialOrd`/`Ord`**: the first consumer that ORDERS two versions is persistence (D20's
 /// "existing links are not recomputed" is a claim about which version a row carries, not a
@@ -272,9 +287,10 @@ pub enum Conclusion {
 /// common field to carry; the two types differ in envelope and agree in algebra, which is exactly
 /// what [`Self::rule`] pins.
 ///
-/// # Nothing produces one
+/// # One producer, and still no consumer
 ///
-/// There is no rule, no blocker and no join, so every `Decision` in the tree is a test literal.
+/// [`crate::identity::l1::decide_pair`] produces these. There is still **no blocker**: the pair it
+/// answers arrives from its caller, and candidate generation is the next story's.
 /// **No `From<Decision> for Outcome` exists in either direction**: mapping the engine's return onto
 /// the harness's record is a decision about the release gate, and it belongs to story 5.7 with a
 /// story behind it — not to a silent conversion. The same refusal, for the same reason, kept the
@@ -306,9 +322,11 @@ pub enum Conclusion {
 /// [`decide`] never reads [`RuleVerdict::evidence`], so a single
 /// `RuleVerdict { verdict: Decisive, evidence: vec![] }` still yields a [`Conclusion::Match`] whose
 /// explanation explains nothing — D13's clause defeated one level below the case closed here. That
-/// invariant needs a rule that FIRES to state, since only a producer can be held to "a firing rule
-/// supplies evidence", and no rule exists: registered with story 5.5. _(This paragraph closed both
-/// emptinesses in one sentence until the 2026-07-30 review.)_
+/// invariant can only be stated by a rule that FIRES, and one now does:
+/// [`crate::identity::l1::verdict_for_pair`] carries both sides' [`ObsId`]s on every verdict that
+/// ARGUES, with a test that reds if it stops. ⚠️ **That closes it for the L1 producer, not for the
+/// type** — a struct literal is still unconstrained. _(This paragraph closed both emptinesses in
+/// one sentence until the 2026-07-30 review.)_
 ///
 /// ⚠️ **A struct literal built anywhere else is still unconstrained**, because the fields are `pub`
 /// and there is no constructor; that residue is registered with story 5.9, the first story that
@@ -394,11 +412,16 @@ impl Decision {
 /// arm** — the `Disqualifying` ones for a refusal, the `Decisive` ones for a match.
 ///
 /// ⚠️ **That is a tiebreak nobody designed**, and it is chosen because it is the only
-/// order-independent rule available that invents nothing: no rule priority exists, because **no rule
-/// exists**. D13 refuses the alternative by name — *"which rule fires first? The one written first.
-/// **That is not a decision, it is an accident of file order**"* [architecture.md:936-937]. A
-/// designed priority replaces it when rules have one: story 5.5 for L1, Epic 6 for `l2-*`.
-/// Registered.
+/// order-independent rule available that invents nothing. D13 refuses the alternative by name —
+/// *"which rule fires first? The one written first. **That is not a decision, it is an accident of
+/// file order**"* [architecture.md:936-937].
+///
+/// ⚠️ **Rules now exist, and L1 still supplies no priority — because it supplies no tie.**
+/// [`crate::identity::l1`] emits **exactly one** verdict per pair, so its two rules never appear in
+/// one vector and the tiebreak is never consulted on an L1 decision. Designing a priority between
+/// them would be ordering two things that cannot meet. The tiebreak keeps its byte-order placeholder
+/// and its three costs below; the first vector that can hold two verdicts is Epic 6's, and that is
+/// where a designed priority gets an input. Registered.
 ///
 /// ⚠️ **It is not free of consequence, though, and calling it "semantically empty" was wrong.**
 /// [`RuleId`] is a `String` with a derived `Ord`, so this is BYTE order, and three consequences
@@ -418,7 +441,10 @@ impl Decision {
 ///
 /// It does not refuse a vector naming the same rule twice, and it does not validate
 /// `ruleset_version` — including `RulesetVersion(0)`, which D14's "mandatory" does not forbid since
-/// that is about PRESENCE. Both need a producer to state and to red, and no rule exists.
+/// that is about PRESENCE. Both are claims about what a PRODUCER emits, so they are stated on the
+/// producer's side. ⚠️ The L1 producer emits one verdict per pair, so "one verdict per rule" holds
+/// there **trivially**: the property with content needs a producer that can emit several, which is
+/// Epic 6's. That half stays open.
 ///
 /// The conclusion and the vector are built together here, so a conclusion naming a rule absent from
 /// its own vector is unreachable **through this function** — the rule is selected FROM the vector
@@ -837,8 +863,10 @@ mod tests {
     /// `fn eq(&self, _: &Self) -> bool { true }` leaves the whole crate green. This test pins the
     /// SHAPE — it reds when a field is removed or retyped (story 5.4's M4: three `error[E0560]`
     /// plus one `error[E0609]`) — and it pins no BEHAVIOUR, because a `pub` field has no code to
-    /// break. The behavioural version needs a producer; that is story 5.5's, and the residue is
-    /// registered in `deferred-work.md` under story 5.3's code review.
+    /// break. The behavioural version needs a producer, and one now exists: `identity::l1`'s tests
+    /// assert the triple on a verdict this crate BUILT rather than on a literal — see
+    /// `an_arguing_verdict_never_ships_empty_evidence`, which reds when the producer stops filling
+    /// evidence. This test keeps its narrower job, and its limits are stated rather than fixed.
     #[test]
     fn the_verdict_vector_carries_the_whole_triple_in_order() {
         let vector = vec![
@@ -1194,8 +1222,9 @@ mod tests {
     ///
     /// `("a", Decisive)` + `("a", Opposes)` is the register's own example: ONE rule contradicting
     /// itself, fabricating D13's *"a `Decisive`, >=1 `Opposes`"* conflict row on its own. ⚠️ This
-    /// pins TOTALITY, not refusal. Refusing a duplicated rule needs a PRODUCER that emits one verdict
-    /// per rule, and no rule exists — that half stays open with story 5.5.
+    /// pins TOTALITY, not refusal. Refusing a duplicated rule needs a PRODUCER that can emit two
+    /// verdicts and does not; `identity::l1` emits exactly ONE per pair, so it cannot duplicate a
+    /// rule and cannot exercise the refusal either. That half stays open, with Epic 6.
     ///
     /// _(This test also called `decide` twice and asserted the two answers matched, under the
     /// heading "answers the same way every time". Removed by the 2026-07-30 review: `decide` is a
@@ -1225,7 +1254,7 @@ mod tests {
                 cause: IdentityAbstentionCause::Ambiguous
             },
             "one rule contradicting itself is D13's Decisive-plus-Opposes row; decide answers rather \
-             than refusing, because refusing needs a producer that does not exist"
+             than refusing, because refusing is a claim about a producer that can emit two verdicts"
         );
     }
 }
