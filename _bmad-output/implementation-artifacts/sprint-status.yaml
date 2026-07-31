@@ -50,7 +50,7 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-31  # 5.5 IMPLEMENTED + CODE-REVIEWED -> `review` (PR #57, CI green).
+last_updated: 2026-07-31  # 5.5 DONE — PR #57 squash-merged as `0ebd50f`. 309 tests on master.
                           # 6 mutations, all reds assertion-carried; M6 (added by the validation)
                           # reds 10 where the agent's self-referential version red 0.
                           # Code-reviewed (3 layers) and patched: 309 tests. NEXT = merge.
@@ -964,7 +964,15 @@ development_status:
   # compiler-carried tests) was not, and AC8's two options were neither taken. The weaker true
   # sentence is now written — the test CANNOT be made behavioural, because `Outcome::Abstained`
   # carries no rule field by design. So of the eight requirements: FOUR closed, FOUR open.
-  5-5-l1-join-pure: review
+  #
+  # 2026-07-31 — MERGED. PR #57 squash-merged as `0ebd50f` after a green CI run. `master`: 309 tests
+  # (135 + 128 + 46), six gates green, `views-hash` STALE by design (issue #50).
+  # NEXT = `create-story` 5.6, the blocker — and its contexting must OPEN on the fact that
+  # `blocking_recall >= 0.999` (epics.md:1507) reds the `float-free` gate if the blocker lives under
+  # `identity/`. That was measured during 5.5's validation, not read. It is a decision 5.6 takes
+  # deliberately (move the assertion out of the guarded subtree, or express the floor without a
+  # float literal), never a surprise it discovers on its first red CI.
+  5-5-l1-join-pure: done
   5-6-blocker-and-recall-assertion: backlog
   5-7-trap-runner-stops-scoring-nothing: backlog
   5-8-unimplemented-level-counts-as-not-passing: backlog
