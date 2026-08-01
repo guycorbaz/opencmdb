@@ -50,11 +50,17 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-01  # 5.6 CODE-REVIEWED (3 layers) and PATCHED; stays at `review` because
-                          # `done` is the MERGE's business here, not the review's — the same call
-                          # 5.1-5.5 all made. 332 -> 333 tests (139 bin + 148 core + 46 xtask).
-                          # 9 patches applied, 2 deferrals registered, 11 findings dismissed.
-                          # Six gates still green, `float-free` over 4 files. NEXT = merge.
+last_updated: 2026-08-01  # 5.6 DONE — PR #59 squash-merged as `020c706` after a green CI run,
+                          # code-reviewed and patched first. Epic 5: 8 of 16 stories done.
+                          # NEXT = `create-story` 5.7 (the trap runner stops scoring nothing),
+                          # then its MANDATORY two-agent validation before `dev-story`.
+                          #
+                          # 5.6 CODE-REVIEWED (3 layers) and PATCHED; it stayed at `review` until
+                          # the merge because `done` is the MERGE's business here, not the
+                          # review's — the same call 5.1-5.5 all made. 332 -> 333 tests
+                          # (139 bin + 148 core + 46 xtask). 9 patches applied, 2 deferrals
+                          # registered, 11 findings dismissed. Six gates green, `float-free`
+                          # over 4 files.
                           #
                           #  · The HIGH: the module doc claimed blocking on the MAC, the hostname
                           #    OR the `l2_domain` would each pass the whole corpus. MEASURED over
@@ -1113,7 +1119,7 @@ development_status:
   #     `candidates` calls no rule.
   #   · `fixtures/` and the planning artifacts are byte-unchanged; no STOP condition arose.
   # NEXT = `code-review` 5.6, then merge. ⚠️ `done` is the merge's business, not the review's.
-  5-6-blocker-and-recall-assertion: review
+  5-6-blocker-and-recall-assertion: done
   5-7-trap-runner-stops-scoring-nothing: backlog
   5-8-unimplemented-level-counts-as-not-passing: backlog
   5-9-persist-interface-and-identity-link: backlog
