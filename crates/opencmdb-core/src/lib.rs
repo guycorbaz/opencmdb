@@ -9,7 +9,8 @@
 //! predicate, and `http_status(&DomainError) -> u16` (D53) live under here as the work
 //! of story 1 onward. The identity engine now decides at L1: `identity::l1` joins
 //! observations on `(l2_domain, mac)` and answers a candidate pair through
-//! `identity::cascade::decide`. Its L2 half, and the persistence of what it decides,
+//! `identity::cascade::decide`, and `identity::blocking` is what defines which pairs
+//! could ever be asked about. Its L2 half, and the persistence of what it decides,
 //! are still ahead.
 
 #![forbid(unsafe_code)]
@@ -43,9 +44,19 @@ pub use identity::cascade::{
     Conclusion, Decision, IdentityAbstentionCause, RuleVerdict, RulesetVersion, Verdict, decide,
 };
 // `identity::l1::join` is deliberately NOT flat-re-exported: `opencmdb_core::join` is a very
-// generic root-level name for an L1-specific function, and its consumer (the candidate generator)
-// does not exist yet. Reach it through `identity::l1::join`. `verdict_for_pair` is `pub(crate)` —
-// see its doc for why exposing it beside `decide` would falsify a claim in `cascade`.
+// generic root-level name for an L1-specific function. ⚠️ The reason recorded here used to be that
+// its consumer, the candidate generator, did not exist yet — the generator now exists and does NOT
+// consume `join`, so that reason is retired rather than left standing. `join`'s INTENDED consumer
+// is still the trap runner (story 5.7), which has not crossed the crate frontier and does not call
+// it today. The generic-name argument is the one
+// that survives, and it is the whole reason. Reach it through `identity::l1::join`.
+// `verdict_for_pair` is `pub(crate)` — see its doc for why exposing it beside `decide` would
+// falsify a claim in `cascade`.
+//
+// `identity::blocking` follows the same precedent, for the same reason and more strongly:
+// `opencmdb_core::candidates` names nothing on its own, and neither does a bare `recall`. Reach
+// them through `identity::blocking::{candidates, blocking_recall_per_mille, CandidatePair,
+// BLOCKING_RECALL_FLOOR_PER_MILLE}`.
 pub use identity::l1::{
     CURRENT_RULESET_VERSION, L1_DISTINCT_MAC, L1_EXACT_MAC, L1Key, decide_pair,
 };

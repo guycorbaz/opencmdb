@@ -1,5 +1,5 @@
 # generated: 2026-07-21
-# last_updated: 2026-07-24
+# last_updated: 2026-08-01
 # project: opencmdb
 # project_key: NOKEY
 # tracking_system: file-system
@@ -50,10 +50,39 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-07-31  # 5.5 DONE — PR #57 squash-merged as `0ebd50f`. 309 tests on master.
-                          # 6 mutations, all reds assertion-carried; M6 (added by the validation)
-                          # reds 10 where the agent's self-referential version red 0.
-                          # Code-reviewed (3 layers) and patched: 309 tests. NEXT = merge.
+last_updated: 2026-08-01  # 5.6 CODE-REVIEWED (3 layers) and PATCHED; stays at `review` because
+                          # `done` is the MERGE's business here, not the review's — the same call
+                          # 5.1-5.5 all made. 332 -> 333 tests (139 bin + 148 core + 46 xtask).
+                          # 9 patches applied, 2 deferrals registered, 11 findings dismissed.
+                          # Six gates still green, `float-free` over 4 files. NEXT = merge.
+                          #
+                          #  · The HIGH: the module doc claimed blocking on the MAC, the hostname
+                          #    OR the `l2_domain` would each pass the whole corpus. MEASURED over
+                          #    the ten `must-merge` pairs: MAC 700‰ (the story's OWN M1 figure),
+                          #    hostname 400‰, `l2_domain` 1000‰. Only the third passes — a doc
+                          #    refuted by a measurement inside the same commit.
+                          #  · The one behavioural gap: nothing fed `candidates` an observation
+                          #    with EMPTY `facts`, so a fact-presence narrowing was measured GREEN
+                          #    across all 332 tests. One new test, proven red against it.
+                          #  · 6 of the 9 patches were SENTENCES, not behaviour — fifth story
+                          #    running whose review found a claim outrunning its measurement.
+                          #  · Three prove-to-red runs on the patches themselves, all
+                          #    assertion-carried, restores md5-verified. MV2 measured `checked`
+                          #    at 1 under a degraded fixture, so the old `assert!(checked > 0)`
+                          #    was green there — the strengthening is load-bearing, not tidying.
+                          #
+                          # 5.6 IMPLEMENTED -> `review`. 309 -> 332 tests (139 bin + 147 core + 46
+                          # xtask). Six green gates, `float-free` over 4 files. All six mutations
+                          # run; M1 = 700‰ exactly, M2 leaves the whole corpus green. Zero
+                          # compiler-carried reds.
+                          #
+                          # History, most recent first:
+                          #  · 5.6 contexted AND validated (2 fresh agents, 16 findings applied)
+                          #    -> `ready-for-dev`; master at `0ebd50f`, 309 tests.
+                          #  · 5.5 DONE — PR #57 squash-merged as `0ebd50f`, 309 tests on master.
+                          #    6 mutations, all reds assertion-carried; the one the validation added
+                          #    reds 10 where the agent's self-referential version red 0.
+                          #    Code-reviewed (3 layers) and patched before merge.
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -973,7 +1002,118 @@ development_status:
   # deliberately (move the assertion out of the guarded subtree, or express the floor without a
   # float literal), never a surprise it discovers on its first red CI.
   5-5-l1-join-pure: done
-  5-6-blocker-and-recall-assertion: backlog
+  #
+  # 2026-08-01 — story 5.6 CONTEXTED -> `ready-for-dev`. Four findings, each MEASURED at contexting
+  # rather than reasoned:
+  #   · THE FLOAT IS SETTLED BY MEASUREMENT. A probe file under `identity/` run through
+  #     `cargo xtask ci` reported exactly three offenders — `0.999`, the epic's own assertion text
+  #     quoted inside an ASSERTION MESSAGE, and `"story 5.6"` in a string on a code line — while
+  #     `999`, `1000`, `fn blocking_recall_above_999()` and a `///`-quoted `0.999` were GREEN.
+  #     The floor becomes an INTEGER IN PER-MILLE (`>= 999`), on D13's own milli-units corollary
+  #     [architecture.md:988-993] and on the architecture's ratified test name
+  #     `blocking_recall_above_999` [:2954], which already carries no float. The gate is NOT
+  #     weakened, skipped or given an escape hatch.
+  #   · D18 REFUSES A PAIRWISE-RECALL GATE BY NAME (*"a gate that cannot fall is decoration"*,
+  #     [:1246-1252]), so the story owes the distinction: different subject (generator input
+  #     coverage, not engine output), different venue (a unit test, not a release gate) — and the
+  #     honest arithmetic that at a 10-pair denominator `>= 999‰` IS zero tolerance, and only
+  #     becomes a real tolerance above 1000 required pairs, where NFR4's "any fraction is theatre"
+  #     would bite.
+  #   · THE TRUTH SET IS THE COMMITTED CORPUS, not synthetic pairs: 24 traps, 23 name a pair, 10
+  #     `must-merge` — of which **7 share a MAC and 3 do not** (the three whose rule is `l2-*`).
+  #     So an exact-MAC blocker scores **700‰** and the assertion has a real red. Because core
+  #     cannot read files (D47), the corpus assertion lives in `fixtures.rs`'s TEST MODULE and the
+  #     blocker in `identity/blocking.rs` — the file the architecture already names [:3368].
+  #   · THE WRONG BLOCKER THAT PASSES THE WHOLE CORPUS is the same-`l2_domain` one: all 23 trap
+  #     pairs are same-scope, measured. Only a SYNTHETIC cross-domain test stands between it and
+  #     green, and the story requires that test to be written FIRST.
+  # Also measured: `grep '5\.6'` over `crates/`+`xtask/` returns ONE unrelated hit, so the doc
+  # worklist is by MEANING (five sites, listed in the story) — the grep idiom story 5.5 used yields
+  # an EMPTY worklist here. There is no `dormant` anywhere in the tree, so D17's *"the blocker
+  # excludes dormant from automatic candidate generation"* [:1205-1206] cannot be implemented and is
+  # registered instead of written from belief (D45). Baseline: 309 tests = 135 bin + 128 core + 46
+  # xtask, re-measured with `cargo test --workspace --locked`.
+  # ⚠️ Branch from `master` only AFTER PR #58 (5.5 bookkeeping) merges — it is still OPEN.
+  #
+  # 2026-08-01 — story 5.6 VALIDATED (two fresh-context agents, MANDATORY per Guy's Epic 4
+  # retrospective decision). 128 factual claims measured (120 true, 6 false, 2 unverifiable) and the
+  # story IMPLEMENTED END TO END in an isolated worktree: it compiled first try, 331 tests
+  # (309 + 22), six green gates with `float-free` over 4 files, `file-size` unmoved, all six
+  # mutations run. 16 findings applied (3 HIGH, 3 MEDIUM, 4 LOW + 6 citation fixes).
+  # 🔑 AGAIN: EVERY HIGH CAME FROM THE AGENT THAT COMPILED THE STORY, none from the one that checked
+  # its claims — the citations, greps, corpus counts, register enumeration, the 309 baseline and all
+  # eight rows of the float probe reproduced EXACTLY. What breaks is what a story PRESCRIBES.
+  #   · (H1) M4's second half is FALSE by measurement: 0 of 23 trap pairs list their two ids in an
+  #     order the stream does not (0 out of ascending-UUID order either), so `opencmdb-bin` stays
+  #     138/138 GREEN under M4. The corpus cannot see that mutation at all. New row in the story's
+  #     corpus table; the prediction now says so, so no dev hunts a red that cannot exist.
+  #   · (H2) AC4 was SELF-CONTRADICTORY — "per stream, never across streams" cannot coexist with
+  #     "recall over the whole truth set" except through a UNION of the per-stream universes, which
+  #     the story never named. The union is honest only because the per-trap containment assertion
+  #     proves each required pair is in its OWN stream; backstopped by a new measurement — 39
+  #     distinct obs_ids across the 11 trap-named streams, ZERO collision.
+  #   · (H3) AC1 forbade calling `join` while AC7's test 9 requires it. The prohibition binds
+  #     `candidates`, NOT the module: the test module imports `join` deliberately, and that import is
+  #     the only way a superset property is checkable.
+  #   · MEDIUM: M3 predicted a red on a test that CANNOT red (`candidates` offers only i<j, so the
+  #     `Equal` branch is unreachable on distinct input); M1's 700‰ is UNOBSERVABLE unless AC4's two
+  #     assertions are two tests (measured: one test panics on `docker-veth-must-merge` before any
+  #     recall is computed) — AC7's own split rule now binds AC4; and `fn obs(n)` is NOT importable
+  #     (`l1.rs` spells its five helpers obs_id/l2/ts/mac/observation, all private), so the copy is
+  #     sanctioned explicitly instead of colliding with the DRY rule.
+  #   · Claims refuted by the fact-check: test 8's justification (all six `hostname-absence`
+  #     observations carry a MAC — the family encodes an absent HOSTNAME); the 296/296 figure was
+  #     story 5.5's VALIDATION PROTOTYPE, whose shipped tests red 10 on the same mutation; "one per
+  #     family" omitted `example-must-merge`, which has no family; `xtask:1821`'s prediction was
+  #     already corrected during 5.5; `score_corpus` has NO production caller (all 10 sites below
+  #     `:385`); NFR4 runs to prd.md:1207 and D18's quote to :1253.
+  #   · Two rows added to the float table, both measured: the citations AC6 demands are GREEN even on
+  #     a code line, and `"story 5.7"` REDS too — the rule is any story number without a letter
+  #     suffix, not just this story's.
+  #   · Left explicitly unmeasured rather than assumed: `"v0.1"` (one dot), and whether R1/R2 carry
+  #     citable TITLES (now a task, since AC8 forbids citing by line number).
+  # The prototype implementation was DISCARDED (Guy's call): dev-story rewrites from the corrected
+  # story, so the red/green phase is not short-circuited by unreviewed code.
+  # NEXT = `dev-story` 5.6.
+  # 2026-08-01 — PR #58 merged as `440b30e`; branched `story-5.6-blocker-and-recall-assertion`
+  # from `master` at that commit, which is what the story's contexting note required.
+  #
+  # 2026-08-01 — story 5.6 IMPLEMENTED -> `review`. 309 -> 332 tests (139 bin + 147 core + 46
+  # xtask), re-counted mechanically. Six green gates; `float-free` walks 4 files under `identity/`
+  # where it walked 3, and it was NOT weakened, skipped or given an escape hatch — the floor is an
+  # INTEGER, `BLOCKING_RECALL_FLOOR_PER_MILLE: u32 = 999`, on D13's own milli-units corollary and on
+  # the architecture's ratified test name `blocking_recall_above_999`, which already carried no
+  # float. That closes register entry R1.
+  #   · A REAL RED PHASE ran before the implementation: with degenerate bodies, 11 of the 19 core
+  #     tests failed and EVERY red was assertion-carried — zero compile errors. The 8 that passed
+  #     against the stub are NAMED in the story rather than glossed, and each is redded by a
+  #     mutation instead.
+  #   · ALL SIX MUTATIONS run against the committed baseline `eea3ef1`, each restore verified by
+  #     `md5sum` AND `git status`. M1 (blocking on an L1 key) scores **700‰ EXACTLY** as measured at
+  #     contexting — 7 reds. M2 (blocking on `l2_domain`) leaves the WHOLE CORPUS GREEN and reds only
+  #     the synthetic cross-domain test — 1 red, and that is the mutation proving the test is
+  #     load-bearing. M3 reds 2 and correctly does NOT red the `n*(n-1)/2` count test. M4 reds 3 in
+  #     core and leaves the corpus entirely green — corpus-invisible, as H1 measured in validation.
+  #     M5 reds 1, M6 reds 1. ZERO compiler-carried reds.
+  #   · THREE DIVERGENCES from the predictions, stated rather than left implicit (the defect four
+  #     consecutive stories carried): M4's bin count is 139, not the predicted 138 — same verdict,
+  #     one more test, because AC4's split rule added a fourth bin test; M1's bin red set is 3, not
+  #     2, the extra being the containment test that did not exist at contexting; M1's core red set
+  #     is 4 where the story said "several".
+  #   · The corpus counts are ASSERTED, not quoted: 24 traps, 23 naming a pair, 1 residue
+  #     (`example-must-abstain`), 0 naming more than two, 10 required pairs, recall 1000‰.
+  #   · A SIXTH falsified doc site was found by RE-READING, not by grep — `identity/mod.rs`'s D54
+  #     paragraph — and it turned out to be TRUE (`verdict_for_pair` is `pub(crate)`, the crate and
+  #     not the subtree), so it was verified and annotated rather than rewritten.
+  #   · Register: R1 (the float) and R2 (the self-pair, now closed IN THE TYPE — `CandidatePair::new`
+  #     returns `None`) disposed of BY TITLE; FOUR new entries opened (D17's `dormant` exclusion,
+  #     unimplementable because no lifecycle state exists — measured; the quadratic universe; the
+  #     floor's arithmetic past 1000 required pairs); four entries belonging to others read and left
+  #     OPEN, including the `&str` allocation one whose condition is measured NOT met, since
+  #     `candidates` calls no rule.
+  #   · `fixtures/` and the planning artifacts are byte-unchanged; no STOP condition arose.
+  # NEXT = `code-review` 5.6, then merge. ⚠️ `done` is the merge's business, not the review's.
+  5-6-blocker-and-recall-assertion: review
   5-7-trap-runner-stops-scoring-nothing: backlog
   5-8-unimplemented-level-counts-as-not-passing: backlog
   5-9-persist-interface-and-identity-link: backlog

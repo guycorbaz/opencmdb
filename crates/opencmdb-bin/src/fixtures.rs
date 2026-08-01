@@ -922,6 +922,9 @@ pub(crate) fn walk_trap_files(visit: &mut dyn FnMut(&Path)) -> usize {
 mod tests {
     use super::*;
     use opencmdb_core::gap::AbstentionCause;
+    use opencmdb_core::identity::blocking::{
+        BLOCKING_RECALL_FLOOR_PER_MILLE, CandidatePair, blocking_recall_per_mille, candidates,
+    };
     use opencmdb_core::observation::{
         ConnectorId, Fact, HostnameSource, L2DomainId, MacAddr, ObsId, Scope, Timestamp, VantageId,
     };
@@ -4469,6 +4472,206 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 ts("2026-01-12T00:15:00Z"),
             ],
             "the four last_seen epochs are the four authored instants"
+        );
+    }
+
+    // ---- The blocker, measured against the committed corpus (story 5.6) ----
+    //
+    // The blocker itself lives in `opencmdb_core::identity::blocking`. These assertions live HERE
+    // and not beside it because D47 forbids the domain crate to touch the filesystem, and the truth
+    // set is the corpus: Epic 4 froze it BEFORE the engine on purpose — *"a metric written after
+    // the engine is bent to fit the engine"* — so a recall floor measured against a truth set the
+    // engine's own author writes today would be the mirror D13 refuses for weights, applied to
+    // blocking.
+    //
+    // Nothing above `#[cfg(test)]` changes, and no new `pub` item appears in this crate.
+
+    /// What the committed traps say about pairs, read once and reused by the assertions below.
+    struct CorpusPairs {
+        /// How many traps the corpus holds, across every trap file.
+        traps: usize,
+        /// The traps that name exactly two observations, as `(trap id, replay, the pair)`.
+        pairs: Vec<(String, String, CandidatePair)>,
+        /// The traps that name fewer than two observations, by id.
+        without_a_pair: Vec<String>,
+        /// The traps that name more than two observations, by id.
+        beyond_a_pair: Vec<String>,
+        /// The `must-merge` pairs — the recall truth set.
+        required: std::collections::BTreeSet<CandidatePair>,
+        /// The candidate universe of each replay stream a trap names, keyed by the stream.
+        universes: std::collections::BTreeMap<String, std::collections::BTreeSet<CandidatePair>>,
+    }
+
+    impl CorpusPairs {
+        /// The union of the per-stream universes.
+        ///
+        /// A cross-stream pair is meaningless — `candidates` never sees two streams at once — but
+        /// `required` draws its pairs from ten different streams, so the only recall call that
+        /// typechecks compares against this union. What makes the union HONEST is
+        /// `the_blocker_proposes_every_required_pair_within_its_own_stream`: it proves each required
+        /// pair sits in its OWN stream's universe, so the union can only add pairs and can never
+        /// explain a miss away.
+        fn union(&self) -> std::collections::BTreeSet<CandidatePair> {
+            self.universes.values().flatten().copied().collect()
+        }
+    }
+
+    /// Walk every committed trap file, and build the pairs and universes it implies.
+    fn corpus_pairs() -> CorpusPairs {
+        let mut found = CorpusPairs {
+            traps: 0,
+            pairs: Vec::new(),
+            without_a_pair: Vec::new(),
+            beyond_a_pair: Vec::new(),
+            required: std::collections::BTreeSet::new(),
+            universes: std::collections::BTreeMap::new(),
+        };
+        walk_trap_files(&mut |path| {
+            let file = read_traps(path)
+                .unwrap_or_else(|e| panic!("corpus trap file {} is invalid: {e}", path.display()));
+            for trap in &file.trap {
+                found.traps += 1;
+                if !found.universes.contains_key(&trap.replay) {
+                    let stream = read_jsonl(&fixture_path(&trap.replay).unwrap())
+                        .unwrap_or_else(|e| panic!("reading {}: {e}", trap.replay));
+                    found
+                        .universes
+                        .insert(trap.replay.clone(), candidates(&stream));
+                }
+                match trap.observations.as_slice() {
+                    [a, b] => {
+                        // `CandidatePair::new` returns `Option`, and a trap naming one id twice
+                        // must fail LOUDLY rather than vanish out of the truth set.
+                        let pair = CandidatePair::new(*a, *b)
+                            .expect("a trap names two distinct observations");
+                        found
+                            .pairs
+                            .push((trap.id.0.clone(), trap.replay.clone(), pair));
+                        if matches!(trap.expect, Expectation::MustMerge { .. }) {
+                            found.required.insert(pair);
+                        }
+                    }
+                    fewer if fewer.len() < 2 => found.without_a_pair.push(trap.id.0.clone()),
+                    _ => found.beyond_a_pair.push(trap.id.0.clone()),
+                }
+            }
+        });
+        found
+    }
+
+    /// The architecture's own ratified test name [architecture.md:2954] — D13's
+    /// `blocking_recall >= 0.999`, expressed in the milli-units D13's corollary demands.
+    ///
+    /// It computes ONLY the recall. The per-trap containment assertion is a separate test on
+    /// purpose: with both in one function, a missing pair panics inside the loop and the recall is
+    /// never computed at all, so the value a narrowed blocker would score could not be observed.
+    #[test]
+    fn blocking_recall_above_999() {
+        let corpus = corpus_pairs();
+
+        assert_eq!(
+            corpus.required.len(),
+            10,
+            "the truth set is the committed `must-merge` traps; a denominator that shrinks in \
+             silence is a gate that quietly stops testing"
+        );
+
+        let recall = blocking_recall_per_mille(&corpus.union(), &corpus.required)
+            .expect("the truth set is not empty, so the recall is defined");
+
+        // ⚠️ The FLOOR first, then the exact value — the order is load-bearing and it was the wrong
+        // way round until this story's code review. `assert_eq!(recall, 1000)` is strictly stronger,
+        // so with it first the floor comparison could never be the assertion that fails: a narrowed
+        // blocker redded on a bare equality and D13's threshold said nothing. Measured then:
+        // changing `>=` to `>` left the whole workspace green. This way the realistic failure —
+        // a blocker that hides a required pair — reds with the floor's own message, and the equality
+        // below still pins that the committed corpus is at full recall rather than merely above it.
+        assert!(
+            recall >= BLOCKING_RECALL_FLOOR_PER_MILLE,
+            "recall is {recall} per-mille, below the floor of {BLOCKING_RECALL_FLOOR_PER_MILLE}"
+        );
+        assert_eq!(
+            recall, 1000,
+            "the blocker proposes every pair the corpus requires"
+        );
+    }
+
+    /// Each required pair is in the universe of ITS OWN stream — what makes the union above honest.
+    ///
+    /// Backstop, measured on the committed bytes rather than guaranteed by code: the `obs_id`s
+    /// across the streams the traps name are all distinct, so no coincidental cross-stream hit
+    /// exists today. That is a property of the corpus and could change; this assertion is the one
+    /// that would still hold if it did.
+    #[test]
+    fn the_blocker_proposes_every_required_pair_within_its_own_stream() {
+        let corpus = corpus_pairs();
+        let mut checked = 0usize;
+        for (id, replay, pair) in &corpus.pairs {
+            if !corpus.required.contains(pair) {
+                continue;
+            }
+            assert!(
+                corpus.universes[replay].contains(pair),
+                "{id}: the blocker never proposes the pair this trap requires, in {replay}"
+            );
+            checked += 1;
+        }
+        assert_eq!(
+            checked, 10,
+            "every `must-merge` trap must have been checked, or this test passes by walking past \
+             the traps it exists to cover"
+        );
+    }
+
+    /// Coverage, NOT recall — and the two are deliberately not given one name.
+    ///
+    /// D13's recall metric is about the merge pairs. This asserts something wider and weaker: every
+    /// trap pair, `must-not-merge` and `must-abstain` included, is in the universe. A pair outside
+    /// the universe can never be answered by anything, so the trap runner could never score it.
+    #[test]
+    fn every_trap_pair_is_in_the_universe() {
+        let corpus = corpus_pairs();
+
+        assert_eq!(
+            corpus.pairs.len(),
+            23,
+            "23 of the committed traps name a pair; a count that drifts in silence is a scan that \
+             has stopped covering the corpus"
+        );
+        for (id, replay, pair) in &corpus.pairs {
+            assert!(
+                corpus.universes[replay].contains(pair),
+                "{id}: the pair it judges is outside the candidate universe of {replay}, so no \
+                 rule could ever be asked about it"
+            );
+        }
+    }
+
+    /// Exactly one committed trap names fewer than two observations, and none names more.
+    ///
+    /// The residue is asserted rather than quoted: the two pair-based tests above skip these traps,
+    /// and a skip that can grow silently is how a gate quietly stops testing.
+    #[test]
+    fn exactly_one_trap_names_fewer_than_two_observations() {
+        let corpus = corpus_pairs();
+
+        assert_eq!(corpus.traps, 24, "the corpus holds 24 traps");
+        assert_eq!(
+            corpus.without_a_pair,
+            vec!["example-must-abstain".to_string()],
+            "one trap judges a single observation, and it is named here so the residue cannot grow \
+             unnoticed"
+        );
+        assert!(
+            corpus.beyond_a_pair.is_empty(),
+            "no trap names more than two observations today; one that did would need a decision \
+             about what pair it requires, not a silent skip: {:?}",
+            corpus.beyond_a_pair
+        );
+        assert_eq!(
+            corpus.traps,
+            corpus.pairs.len() + corpus.without_a_pair.len() + corpus.beyond_a_pair.len(),
+            "every trap lands in exactly one of the three buckets"
         );
     }
 }

@@ -15,8 +15,11 @@
 //!
 //! It does not generate candidate pairs and computes no recall floor — the blocker is an L2 organ
 //! (D13 feeds it to *"the scoring"*, and grouping is L2 by definition [architecture.md:891]), and it
-//! is the next story's. The pair arrives as an argument. It does not map a [`Decision`] onto
-//! [`crate::score::Outcome`]: no conversion exists in either direction, deliberately.
+//! lives in [`crate::identity::blocking`]. The pair still arrives as an argument, and this file does
+//! not call the blocker any more than the blocker calls this one: proposing and judging are
+//! separate, and a blocker that consulted a rule would be that rule's echo. It does not map a
+//! [`Decision`] onto [`crate::score::Outcome`]: no conversion exists in either direction,
+//! deliberately.
 //!
 //! # Structural facts are read, never scored
 //!
@@ -284,7 +287,16 @@ pub(crate) fn verdict_for_pair(a: &Observation, b: &Observation) -> RuleVerdict 
 /// `decide` is total and this function adds no failure of its own.
 ///
 /// The pair travels **by reference**, not by [`ObsId`]: a pair of ids would force [`join`]'s map in
-/// here and make this function a candidate generator, which is the next story's organ.
+/// here and make this function a candidate generator, which is
+/// [`crate::identity::blocking::candidates`]'s organ and not this one's.
+///
+/// ⚠️ **`a != b` is the CALLER's precondition, and it now has a holder.** This function does not
+/// refuse the self-pair `(a, a)`: it answers it like any other pair, which is a merge when the
+/// observation carries a MAC — it trivially shares every key with itself — and
+/// `Abstained { AbsenceOfProof }` when it carries none, since [`verdict_for_pair`] is `Neutral` on a
+/// MAC-less side. Neither answer is a refusal.
+/// [`crate::identity::blocking::CandidatePair::new`] is where the exclusion lives: it returns `None`
+/// for two equal ids, so a pair that comes out of the blocker can never be one.
 pub fn decide_pair(a: &Observation, b: &Observation) -> Decision {
     decide(vec![verdict_for_pair(a, b)], CURRENT_RULESET_VERSION)
 }
