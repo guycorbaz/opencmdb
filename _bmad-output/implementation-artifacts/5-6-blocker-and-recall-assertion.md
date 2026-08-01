@@ -1,6 +1,6 @@
 # Story 5.6: The blocker, and the recall assertion nobody writes
 
-Status: review
+Status: done
 
 <!-- Validation is MANDATORY here (Guy's decision, Epic 4 retrospective 2026-07-26): two
      fresh-context agents (fact-check + gap-hunt) BEFORE dev-story. The template banner saying
