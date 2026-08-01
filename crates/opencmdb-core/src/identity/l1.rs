@@ -92,8 +92,12 @@ pub type L1Key = (L2DomainId, MacAddr);
 ///
 /// The two rule ids live in the committed corpus, **not in the architecture**: `grep -c "l1-"` over
 /// `architecture.md` returns zero, and D13 names no rule at all. They are spelled here exactly as
-/// `fixtures/scenario/traps/*.toml` spells them, because story 5.7 compares this producer's id
-/// against those bytes.
+/// `fixtures/scenario/traps/*.toml` spells them, and **since story 5.7 a test says so** rather than
+/// this sentence asking to be believed: `opencmdb_bin`'s `l1_runner` walks every committed trap
+/// file and asserts that every rule id beginning `l1-` is one of these two, that BOTH occur, and
+/// that every id the corpus writes equals its own `trim()` and `to_lowercase()` — so `run_trap`'s
+/// unnormalized string comparison cannot produce a wrong-rule failure on a correct answer. The test
+/// is in `opencmdb-bin` because D47 forbids this crate to read a file.
 ///
 /// ⚠️ A `&str` rather than a `const RuleId`: [`RuleId`] wraps a `String`, which is not
 /// const-constructible (`error[E0015]`).
@@ -214,8 +218,9 @@ pub fn join(observations: &[Observation]) -> BTreeMap<L1Key, BTreeSet<ObsId>> {
 /// rule fires and names MAC-distinctness for a case where the MACs are equal. The id is the
 /// corpus's and this file does not own it, so the overload is recorded rather than renamed — and it
 /// is invisible on the committed corpus, where every replay stream carries one `l2_domain` (D61).
-/// Story 5.7 compares this id against the corpus bytes; if a trap ever separates "different MAC"
-/// from "same MAC, different domain", one of the two has to move.
+/// Story 5.7's corpus comparison now pins the SPELLING against those bytes — it says nothing about
+/// the overload, and cannot: no committed trap separates "different MAC" from "same MAC, different
+/// domain". The day one does, one of the two has to move.
 ///
 /// # Why a missing MAC is `Neutral`
 ///
@@ -318,8 +323,10 @@ pub fn decide_pair(a: &Observation, b: &Observation) -> Decision {
 /// - [`CORPUS_EXACT_MAC`] and [`CORPUS_DISTINCT_MAC`] spell the two rule ids again, as literals, so
 ///   the assertions do not read the constants they are checking. **This was measured to be
 ///   load-bearing**: with every expectation built from [`L1_EXACT_MAC`], renaming that constant to a
-///   non-canonical spelling leaves the entire suite green while story 5.7's corpus comparison would
-///   fail on every `l1-*` expectation.
+///   non-canonical spelling leaves the entire suite green. Story 5.7 added a THIRD, independent
+///   statement — from the TOML side, in `opencmdb_bin`'s `l1_runner` — which is what catches BOTH
+///   literals being wrong relative to the corpus, something these two cannot. None of the three may
+///   be collapsed into the others.
 #[cfg(test)]
 mod tests {
     use super::*;

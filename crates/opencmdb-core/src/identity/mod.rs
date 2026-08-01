@@ -17,9 +17,12 @@
 //!
 //! **The two organs do not consult each other.** [`blocking::candidates`] calls neither [`l1::join`]
 //! nor [`l1::decide_pair`] — proposing is not judging — and `l1` still answers a pair its caller
-//! supplies rather than generating one. Nothing yet calls the two in sequence, and the blocker has
-//! no production caller at all: its INTENDED consumer is the trap runner (story 5.7), which does
-//! not reach the engine today. L1 emits three of the five
+//! supplies rather than generating one. **Nothing calls the two in sequence, and the blocker still
+//! has no production caller at all.** Story 5.7 gave `l1` its first one, `opencmdb_bin`'s
+//! `l1_runner`, and deliberately did NOT make it the blocker's: a trap NAMES the pair it puts under
+//! judgement, so the runner has nothing to generate, and a runner that generated its own pairs
+//! would ignore the corpus's own statement of what is being judged. The first caller holding a set
+//! of observations and no trap is where the two organs meet. L1 emits three of the five
 //! verdicts; `Supports` and `Opposes` gain a producer with Epic 6's `l2-*` rules.
 //!
 //! The architecture's source tree names an `IdentityError` on this module [architecture.md:3366].

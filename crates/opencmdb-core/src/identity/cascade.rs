@@ -30,13 +30,15 @@
 //! are deliberately not rows in it, because neither is a judgement: [`RuleVerdict`] is the
 //! `(rule, verdict, evidence)` triple — an ELEMENT that carries a [`Verdict`] — and
 //! [`crate::score::VerdictVectorEntry`] is the harness-side placeholder for that same triple,
-//! uninhabited until story 5.7 unifies the two.
+//! still uninhabited. Story 5.7 brought the engine's ANSWER to the harness and not its vector;
+//! [`crate::score::VerdictVectorEntry`]'s own doc carries the measured obstacle and the new owner.
 //!
 //! [`Conclusion`] and [`crate::score::Outcome`] look redundant and are not. `Outcome` is what a
 //! harness writes down about *any* answer, including a hand-authored one in a test; `Conclusion` is
 //! what the engine concluded, and it never travels alone — it travels inside a [`Decision`], with
-//! its verdict vector and its ruleset version. **Nothing converts between them**, and the day they
-//! meet is story 5.7's; see [`Decision`] for why no `From` impl exists.
+//! its verdict vector and its ruleset version. Since story 5.7 they DO meet, in
+//! [`crate::score::outcome_of`] — a named function on the harness's side, never a `From` impl; see
+//! [`Decision`] for why the difference matters.
 
 use crate::observation::ObsId;
 use crate::trap::RuleId;
@@ -183,7 +185,10 @@ impl Verdict {
 ///
 /// That type is the HARNESS-side placeholder for this same triple, and it is **uninhabited** so
 /// that `ScoredRecord::verdict_vector` is provably empty until the trap runner records a real run.
-/// A producer now exists, but nothing yet feeds the harness — **story 5.7 owns the unification**.
+/// The trap runner now runs (story 5.7) and does not record one: its answers land in
+/// [`crate::score::Outcome`], which carries no vector, and a `ScoredRecord` would need a capability
+/// snapshot no trap-run path can reach. The measured obstacle and the new owner are on
+/// [`crate::score::VerdictVectorEntry`]'s own doc.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuleVerdict {
     /// The rule that spoke. A [`RuleId`] rather than an enum: five of the seven rule names the
@@ -287,17 +292,23 @@ pub enum Conclusion {
 /// common field to carry; the two types differ in envelope and agree in algebra, which is exactly
 /// what [`Self::rule`] pins.
 ///
-/// # One producer, and still no consumer
+/// # One producer, and — since story 5.7 — one consumer
 ///
-/// [`crate::identity::l1::decide_pair`] produces these. The pair it answers still arrives from its
-/// caller: a blocker now exists — [`crate::identity::blocking::candidates`] — but **nothing calls
-/// the two in sequence**, and neither organ consults the other. The blocker has no production
-/// caller either; its INTENDED consumer is the trap runner (story 5.7), which does not reach the
-/// engine today.
-/// **No `From<Decision> for Outcome` exists in either direction**: mapping the engine's return onto
-/// the harness's record is a decision about the release gate, and it belongs to story 5.7 with a
-/// story behind it — not to a silent conversion. The same refusal, for the same reason, kept the
-/// two abstention vocabularies unbridged in story 5.3.
+/// [`crate::identity::l1::decide_pair`] produces these, and `opencmdb_bin`'s `l1_runner` consumes
+/// them: it hands the engine the two observations a committed trap names and maps the result
+/// through [`crate::score::outcome_of`] for the release gate.
+///
+/// ⚠️ **The blocker is still not in that sequence.** [`crate::identity::blocking::candidates`] has
+/// no production caller, and the trap runner deliberately did not become one: a trap NAMES its
+/// pair (`Trap::observations`), so the runner has nothing to generate, and a runner that generated
+/// its own pairs would ignore the corpus's own statement of what is under judgement. The first
+/// caller holding a set of observations and no trap is where the two organs meet.
+///
+/// **No `From<Decision> for Outcome` exists in either direction, and story 5.7 kept it that way**:
+/// mapping the engine's return onto the harness's record is a decision about the release gate, so
+/// it is [`crate::score::outcome_of`], a function a call site has to type out — not a silent
+/// `.into()`. The same refusal, for the same reason, keeps the two abstention vocabularies
+/// unbridged (story 5.3).
 ///
 /// # No float, anywhere
 ///

@@ -15,6 +15,7 @@ mod auth;
 mod dburl;
 mod fixture_connector;
 mod fixtures;
+mod l1_runner;
 mod metrics;
 mod page;
 mod repo;

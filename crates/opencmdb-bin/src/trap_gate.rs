@@ -5,19 +5,25 @@
 //! and its answer to the pure scoring algebra in `opencmdb_core::score` (story 4.6a), and reports
 //! `{discovered, scored, failures}`.
 //!
-//! # It scores answers; it never runs a producer
+//! # [`score_corpus`] scores answers; it never runs a producer
 //!
 //! D19's build order is *"the metrics harness BEFORE the engine — a metric written after the engine
-//! is bent to fit the engine"*. The structural guarantee here — the true and narrow one — is that
-//! the harness **never calls a producer**, and that its shape is fixed by 4.6a's algebra: a future
+//! is bent to fit the engine"*. The structural guarantee — the true and narrow one — is that
+//! [`score_corpus`] **never calls a producer**, and that its shape is fixed by 4.6a's algebra: an
 //! engine must conform to the [`Outcome`] type, so the engine fits the metric, not the reverse.
 //!
-//! It scores a map of already-produced [`Outcome`]s, keyed by [`TrapId`]. A
-//! `BTreeMap<TrapId, Outcome>` is DATA — no `poll`, no behaviour, no trait to stub — but do NOT
-//! read that as "the metric can never be influenced by an engine": once Epic 5 fills this map from
-//! engine output, the numbers depend on that output, exactly as D18 intends. What cannot happen is
-//! the harness being SHAPED by the engine, because it consumes a fixed type and runs no producer.
-//! The map is empty today; the vacuous run below is what that emptiness looks like.
+//! ⚠️ **Since story 5.7 a producer EXISTS, and it is deliberately not in this file.**
+//! [`crate::l1_runner`] runs the real L1 engine over a trap corpus and returns the map
+//! [`score_corpus`] takes. It lives in its own module precisely so the sentence above stays a
+//! FILE-level property instead of degrading into a per-function promise on the day it first has
+//! something to promise about. The seam between the two is a `BTreeMap<TrapId, Outcome>`, which is
+//! DATA — no `poll`, no behaviour, no trait to stub — and [`score_corpus`]'s signature and body are
+//! unchanged by that story: no engine parameter, no callback, no closure.
+//!
+//! Do NOT read the guarantee as "the metric can never be influenced by an engine": now that the map
+//! is filled from engine output, the numbers depend on that output, exactly as D18 intends. What
+//! cannot happen is the harness being SHAPED by the engine, because it consumes a fixed type and
+//! runs no producer.
 //!
 //! That is why AC1's "must not take an engine parameter" is honoured while AC6's "drive it over a
 //! corpus whose traps are paired with outcomes" is still possible: an outcome is a result, not a
@@ -27,7 +33,10 @@
 //!
 //! With no answers, every discovered trap is **discovered and not scored** — it produces no record.
 //! `failures = 0` then, and the gate is green, but `scored = 0` and `discovered = 3` together say
-//! plainly that nothing was measured. Without `discovered`, a function with an empty body would
+//! plainly that nothing was measured. That is no longer the committed corpus's state — it scores 13
+//! of 24 since story 5.7 — but it remains what an EMPTY answers map looks like, and the residue of
+//! 11 is why `scored` must keep being read beside `discovered`: story 5.8 is what turns that
+//! residue into a bucket that blocks. Without `discovered`, a function with an empty body would
 //! report `{0, 0}` and pass — the exact vacuity story 4.1 removed from the fixtures gate
 //! (`no fixtures — skipped`). A null engine that ABSTAINED on everything would be RED, not green:
 //! D18's middle column demolishes it. Vacuously green means nothing ran, never "an abstainer ran".
@@ -101,8 +110,13 @@ impl Report {
         self.discovered
     }
 
-    /// How many discovered traps had an answer to score. Zero with a non-zero `discovered` is the
-    /// honest state before any engine exists: found, not measured.
+    /// How many discovered traps had an answer to score.
+    ///
+    /// Zero with a non-zero `discovered` was the honest state before any engine existed: found, not
+    /// measured. Since story 5.7 the committed corpus scores **13 of 24** — the thirteen traps whose
+    /// expected rule is `l1-*`. The gap is not an error: eleven traps are unanswerable at this
+    /// cascade level and stay in `discovered` on purpose, so the exclusion is visible. Story 5.8
+    /// turns them into a bucket that BLOCKS.
     pub fn scored(&self) -> usize {
         self.tally.scored()
     }
@@ -303,7 +317,14 @@ pub fn score_corpus(
 /// both: dot-entries skipped, `README.md` exempt at any depth, symlinks refused, foreign
 /// extensions refused, sorted order. Promoting either into the other would move its callers for no
 /// gain here.
-fn discover_trap_files(root: &Path) -> Result<Vec<PathBuf>, FixtureError> {
+///
+/// **`pub(crate)` since story 5.7**, so [`crate::l1_runner`] walks the corpus through THIS function
+/// instead of writing a third walk. The tree already carries two, and their divergence on three
+/// points is a registered defect from story 5.2's review; a third would be the same mistake a third
+/// time. The alternative — `fixtures::walk_trap_files` — is `#[cfg(test)]` and takes **no root**
+/// (it hardcodes the committed corpus), so it neither exists in a production build nor could be
+/// pointed at a scratch corpus.
+pub(crate) fn discover_trap_files(root: &Path) -> Result<Vec<PathBuf>, FixtureError> {
     let mut found = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
@@ -386,6 +407,7 @@ fn discover_trap_files(root: &Path) -> Result<Vec<PathBuf>, FixtureError> {
 mod tests {
     use super::*;
     use crate::fixtures::fixtures_dir;
+    use crate::l1_runner::{answer_trap, l1_answers};
     use opencmdb_core::identity::cascade::IdentityAbstentionCause;
     use opencmdb_core::score::Column;
     use opencmdb_core::trap::RuleId;
@@ -405,8 +427,15 @@ mod tests {
 
     // ── The committed corpus, no answers: vacuously green, and visibly so (AC1, AC2, AC3, AC5) ──
 
+    /// An EMPTY answers map scores nothing — the vacuity `discovered` exists to make visible.
+    ///
+    /// _(Renamed in story 5.7. It read
+    /// `the_committed_corpus_is_discovered_and_scored_by_nothing`, which stated a claim about the
+    /// CORPUS that story 5.7 falsifies: `l1_runner` now answers thirteen of its traps. What this
+    /// test pins is a property of its own CALL — it supplies no answers — and the name now says
+    /// so.)_
     #[test]
-    fn the_committed_corpus_is_discovered_and_scored_by_nothing() {
+    fn an_empty_answers_map_scores_nothing_over_the_committed_corpus() {
         let report = score_corpus(&committed_traps_root(), &BTreeMap::new())
             .expect("the committed corpus reads");
 
@@ -420,7 +449,8 @@ mod tests {
         assert_eq!(
             report.scored(),
             0,
-            "no answer producer exists, so nothing is scored"
+            "this call supplies no answers, so nothing is scored — a producer now EXISTS \
+             (`crate::l1_runner`) and the test below runs the corpus through it"
         );
         assert_eq!(
             report.failures(),
@@ -455,6 +485,184 @@ mod tests {
         assert_eq!(report.discovered(), 24);
         assert_eq!(report.scored(), 1, "only the answered trap is scored");
         assert_eq!(report.failures(), 0, "and its answer is correct");
+    }
+
+    // ── The corpus scored by the REAL engine (story 5.7) ─────────────────────
+    //
+    // These tests live here and not in `l1_runner.rs` because their subject is the REPORT: what
+    // the harness makes of the answers. WHICH traps the runner answers is the runner's own claim
+    // and is pinned there.
+
+    /// The committed corpus, answered by the real L1 engine.
+    ///
+    /// `scored` has read **0** since story 4.6b, over nine stories — the honest state while no
+    /// producer existed. It reads 13 here, and every one of the thirteen passes: the truth table,
+    /// the rule, and the family completeness.
+    #[test]
+    fn the_committed_corpus_is_scored_by_the_l1_engine() {
+        let answers = l1_answers(&committed_traps_root()).expect("the runner answers the corpus");
+        let report = score_corpus(&committed_traps_root(), &answers).expect("the corpus scores");
+
+        assert_eq!(
+            report.discovered(),
+            24,
+            "the unanswered traps stay in the denominator — the exclusion is visible, never silent"
+        );
+        assert_eq!(
+            report.scored(),
+            13,
+            "the thirteen traps whose expected rule is `l1-*`"
+        );
+        assert_eq!(report.failures(), 0, "no truth-table failure");
+        assert!(
+            report.rule_mismatches().is_empty(),
+            "and none of them reached the right verdict by the wrong rule: {:?}",
+            report.rule_mismatches()
+        );
+        assert!(
+            report.incomplete_families().is_empty(),
+            "the corpus shape is unchanged by this story: {:?}",
+            report.incomplete_families()
+        );
+        assert!(report.passed(), "{report}");
+    }
+
+    /// The rendered line stops saying *"0 scored"*.
+    #[test]
+    fn the_report_line_says_thirteen_scored() {
+        let answers = l1_answers(&committed_traps_root()).unwrap();
+        let rendered = score_corpus(&committed_traps_root(), &answers)
+            .unwrap()
+            .to_string();
+        assert!(rendered.contains("24 trap(s) discovered"), "{rendered}");
+        assert!(rendered.contains("13 scored"), "{rendered}");
+        assert!(rendered.contains("0 truth-table failure(s)"), "{rendered}");
+    }
+
+    /// The per-column split, INCLUDING the column that is empty (AC4).
+    ///
+    /// `scored_in` exists so a reader can tell *"the column held"* from *"the column was empty"*.
+    /// After this story `must-abstain` is measured by **nothing**: all three committed
+    /// `must-abstain` traps are unanswerable at L1 — two name a pair but no rule to route on, the
+    /// third names no pair at all. That zero is not a defect of this story, it is the state story
+    /// 5.8 turns into a blocking bucket and story 5.14 / Epic 6 make non-empty.
+    #[test]
+    fn the_per_column_tally_names_the_empty_column() {
+        let answers = l1_answers(&committed_traps_root()).unwrap();
+        let report = score_corpus(&committed_traps_root(), &answers).unwrap();
+        let tally = report.tally();
+
+        assert_eq!(tally.scored_in(Column::MustMerge), 7);
+        assert_eq!(tally.scored_in(Column::MustNotMerge), 6);
+        assert_eq!(
+            tally.scored_in(Column::MustAbstain),
+            0,
+            "the must-abstain column is measured by NOTHING after this story — the vacuity \
+             `scored_in` was built to make visible, not a column that held"
+        );
+        for column in [Column::MustMerge, Column::MustNotMerge, Column::MustAbstain] {
+            assert_eq!(
+                tally.failures_in(column),
+                0,
+                "no failure in {}",
+                column.as_str()
+            );
+        }
+    }
+
+    /// A right verdict by the WRONG rule fails separately — demonstrated by the REAL engine on the
+    /// COMMITTED corpus (AC5).
+    ///
+    /// This is the measured counter-factual of the level selector, made live. The four traps below
+    /// expect an `l2-*` rule and their `must-not-merge` verdict is one L1 happens to reach: the
+    /// engine refuses the pair, correctly, and names `l1-distinct-mac` where the trap's author
+    /// named a device-level rule. Story 4.7a's separation says that is **not** a truth-table
+    /// failure — the verdict passed — and it must be visible anyway. `failures()` stays 0 while
+    /// `passed()` is false.
+    ///
+    /// The four are reached through `l1_runner::answer_trap`, which is level-blind, rather than
+    /// through the walk: a test that reimplemented the selector to bypass it would be proving
+    /// something about itself.
+    #[test]
+    fn a_right_verdict_by_an_l2_rule_is_a_wrong_rule_failure_not_a_truth_table_one() {
+        let wanted = [
+            ("multi-nic-must-not-merge", "l2-different-switch"),
+            ("shared-hardware-vm-must-not-merge", "l2-different-hostname"),
+            (
+                "vrrp-virtual-mac-must-not-merge-bearers",
+                "l2-different-hostname",
+            ),
+            (
+                "vrrp-virtual-mac-must-not-merge-master",
+                "l2-virtual-mac-prefix",
+            ),
+        ];
+        let mut answers = BTreeMap::new();
+        for trap_file in discover_trap_files(&committed_traps_root()).unwrap() {
+            for trap in read_traps(&trap_file).unwrap().trap {
+                if wanted.iter().any(|(id, _)| *id == trap.id.0) {
+                    let outcome = answer_trap(&trap)
+                        .expect("its stream reads")
+                        .expect("each of the four names a pair");
+                    answers.insert(trap.id.clone(), outcome);
+                }
+            }
+        }
+        assert_eq!(answers.len(), 4, "all four traps were found and answered");
+
+        let report = score_corpus(&committed_traps_root(), &answers).unwrap();
+        assert_eq!(
+            report.failures(),
+            0,
+            "the verdict is RIGHT in all four — the truth table passes them"
+        );
+        assert_eq!(report.rule_mismatches().len(), 4, "{report}");
+        for (id, expected_rule) in wanted {
+            let mismatch = report
+                .rule_mismatches()
+                .iter()
+                .find(|m| m.trap.0 == id)
+                .unwrap_or_else(|| panic!("{id} must be reported as a wrong-rule failure"));
+            assert_eq!(mismatch.expected, RuleId(expected_rule.into()));
+            assert_eq!(
+                mismatch.actual,
+                RuleId("l1-distinct-mac".into()),
+                "the L1 engine names the rule it actually fired"
+            );
+            assert_eq!(mismatch.column, Column::MustNotMerge);
+        }
+        assert!(
+            !report.passed(),
+            "a wrong rule blocks the gate even with zero truth-table failures"
+        );
+    }
+
+    /// Replaying the corpus twice yields an identical `Report` (D36).
+    ///
+    /// The `scored() == 13` assertion on the first run is what stops the equality comparing two
+    /// vacuities — the shape `replaying_the_same_corpus_twice_yields_identical_verdicts`
+    /// established. Both the structural equality and the rendered string are compared: a `Report`
+    /// that compared equal while rendering differently would still be a reproducibility defect.
+    #[test]
+    fn replaying_the_corpus_twice_yields_an_identical_report() {
+        let first = score_corpus(
+            &committed_traps_root(),
+            &l1_answers(&committed_traps_root()).unwrap(),
+        )
+        .unwrap();
+        let second = score_corpus(
+            &committed_traps_root(),
+            &l1_answers(&committed_traps_root()).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            first.scored(),
+            13,
+            "two real runs, not two empty ones — otherwise the equality below is vacuous"
+        );
+        assert_eq!(first, second, "the same corpus, the same engine, twice");
+        assert_eq!(first.to_string(), second.to_string());
     }
 
     // ── The gate can be shown to fail, per D18 column (AC6) ──────────────────
