@@ -56,8 +56,8 @@ fixture corpus lock (both directions: edited AND orphan), the file-size ceiling 
 (`Observation`, `Fact`, `Capabilities`, the closed `ConnectorError` taxonomy, the `Connector` trait
 and its consumer-driven contract test). `opencmdb-bin` holds everything touching the outside world:
 MariaDB pool + migrations, axum/askama/HTMX pages, an ARP/ping connector, the fixture reader and
-`FixtureConnector`. Test counts on the story-5.6 branch: **139 (bin) + 147 (core) + 46 (xtask) =
-332**, measured with `cargo test --workspace --locked`. _(This line read "86 + 46 + 38" until
+`FixtureConnector`. Test counts on the story-5.6 branch, after its code review: **139 (bin) + 148 (core) + 46 (xtask)
+= 333**, measured with `cargo test --workspace --locked`. _(This line read "86 + 46 + 38" until
 2026-08-01 — a snapshot of Epic 3's close, left standing through all of Epic 4 and six Epic-5
 stories, in the file BMad auto-loads first. The paragraph below carries the per-story history; this
 one carries the CURRENT number and nothing else.)_
@@ -86,7 +86,9 @@ they share none, `Neutral` when either side has no MAC), and `decide_pair` — *
 `decide` outside its own tests**. Story **5.6** then added **19 core + 4 bin** tests for the blocker
 — `candidates()`, the `CandidatePair` that refuses the self-pair, and D13's recall floor as an
 integer in per-mille, with the corpus half of the assertion in `fixtures.rs`'s test module because
-D47 forbids core to read files — taking the workspace to **332 (139 bin + 147 core + 46 xtask)**.
+D47 forbids core to read files — taking the workspace to **333 (139 bin + 148 core + 46 xtask)**
+after its code review, whose nine patches added one test (an observation with NO fact at all: a
+`facts.is_empty()` narrowing inside `candidates` was measured GREEN across all 332).
 Nothing feeds the corpus harness (5.7), **the blocker has no production caller** (it is reached from
 its own tests and from `fixtures.rs`'s test module only, the same shape `decide` was in before 5.5),
 and `Verdict::Supports`/`Opposes` still have **no producer** (Epic 6).

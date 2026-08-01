@@ -15,11 +15,18 @@
 //! proposes every unordered pair of distinct observations, and the two exclusions it makes — the
 //! self-pair and a repeated `obs_id` — are one rule, named and tested, not a narrowing.
 //!
-//! ⚠️ **A narrowing key is deliberately absent.** Blocking on the MAC, the hostname or the
-//! `l2_domain` would each pass the whole committed corpus and each build a false split into the
-//! universe: a device's interfaces are not confined to one L2 domain — a router, a firewall or a
+//! ⚠️ **A narrowing key is deliberately absent**, and each candidate key builds a false split into
+//! the universe: a device's interfaces are not confined to one L2 domain — a router, a firewall or a
 //! dual-homed server has NICs in several VLANs — and D12 makes the device the level where the
 //! product keeps its promise [architecture.md:919-928].
+//!
+//! What the committed corpus can and cannot see about that is **measured, not assumed**, over its
+//! ten `must-merge` pairs: a MAC-blocked universe scores **700 per-mille** (the story's own M1), a
+//! hostname-blocked one **400**, and an `l2_domain`-blocked one **1000**. So only the `l2_domain`
+//! narrowing passes the whole corpus, and it is the one the corpus is BLIND to — which is why the
+//! synthetic `two_l2_domains_are_still_a_candidate_pair` exists and why it was written first. The
+//! other two keys the corpus would catch on its own; they are refused here for the same reason
+//! anyway, because being caught by today's corpus is not a property a key keeps.
 //!
 //! # The floor is an INTEGER in per-mille, and that is D13's own corollary
 //!
@@ -46,10 +53,11 @@
 //! - **Different arithmetic, and this is the honest half.** At the committed corpus's denominator
 //!   the floor is **not** a tolerance: with 10 required pairs, one miss gives 900 per-mille and the
 //!   floor reds. `>= 999` per-mille **IS zero-tolerance at this scale**, which is the binary form
-//!   NFR4 demands. It becomes a real tolerance only if the required set ever exceeds 1000 pairs —
-//!   and on that day NFR4's *"any fraction is theatre"* bites and the floor must be revisited rather
-//!   than inherited. The per-mille dress must not be read as a statistical tolerance the corpus
-//!   cannot support.
+//!   NFR4 demands. It becomes a real tolerance the moment the required set REACHES 1000 pairs — at
+//!   exactly 1000, one miss scores 999 and `999 >= 999` passes, so the boundary is `>= 1000` and not
+//!   `> 1000` — and on that day NFR4's *"any fraction is theatre"* bites and the floor must be
+//!   revisited rather than inherited. The per-mille dress must not be read as a statistical
+//!   tolerance the corpus cannot support.
 //!
 //! ⚠️ **Nothing here advances NFR4.** NFR4 is at the DEVICE level; this adds no truth-table column
 //! and gates no release.
@@ -104,10 +112,13 @@ impl CandidatePair {
     ///
     /// # Why the self-pair is refused here
     ///
-    /// [`crate::identity::l1::decide_pair`] answers `(a, a)` with a merge — an observation is
-    /// trivially its own interface — and its doc says the pair *"arrives as an argument"* without
-    /// naming who guarantees `a != b`. This constructor is that holder: the generator is the first
-    /// place in the engine where the precondition has an owner.
+    /// [`crate::identity::l1::decide_pair`] does not refuse `(a, a)` — it answers it like any other
+    /// pair, which is a merge when the observation carries a MAC (an observation trivially shares
+    /// every key with itself) and `Abstained { AbsenceOfProof }` when it carries none, since
+    /// `verdict_for_pair` is `Neutral` on a MAC-less side. Either way nothing there names who
+    /// guarantees `a != b`; its doc says only that the pair *"arrives as an argument"*. This
+    /// constructor is that holder: the generator is the first place in the engine where the
+    /// precondition has an owner.
     ///
     /// `None` rather than a panic or a silent normalisation: refusing the pair is an ordinary
     /// outcome of asking for it, not a caller's bug, and a normalisation would let a self-pair enter
@@ -202,8 +213,17 @@ pub const BLOCKING_RECALL_FLOOR_PER_MILLE: u32 = 999;
 ///
 /// # Returns
 ///
-/// `Some(recall)` in `0..=1000`, or `None` if `required` is empty. Pairs proposed but not required
-/// do not raise the value: only members of `required` are counted.
+/// `Some(recall)` in `0..=1000`, or `None` if `required` is empty — **and `None` has that one
+/// meaning only.** The empty set is the sole reason this returns nothing; the arithmetic below
+/// cannot add a second. Pairs proposed but not required do not raise the value: only members of
+/// `required` are counted.
+///
+/// # Panics
+///
+/// Never in practice, and the bound is stated rather than hoped for: `hits` counts a subset of
+/// `required`, so `hits <= required.len()` and the quotient is at most `PER_MILLE`. The `expect`
+/// below is that invariant written down — if it ever fired it would mean the filter counted a pair
+/// outside the set it iterates, which is not a recall to report as `None` but a broken function.
 pub fn blocking_recall_per_mille(
     proposed: &BTreeSet<CandidatePair>,
     required: &BTreeSet<CandidatePair>,
@@ -215,7 +235,8 @@ pub fn blocking_recall_per_mille(
         .iter()
         .filter(|pair| proposed.contains(pair))
         .count();
-    u32::try_from(hits * PER_MILLE / required.len()).ok()
+    let per_mille = hits * PER_MILLE / required.len();
+    Some(u32::try_from(per_mille).expect("hits <= required.len() bounds the quotient at PER_MILLE"))
 }
 
 /// Tests for the blocker, over SYNTHETIC inputs only.
@@ -495,6 +516,33 @@ mod tests {
         );
     }
 
+    /// An observation carrying NO fact at all is still a candidate — the falsifiable half of the
+    /// module doc's *"reads no [`crate::observation::Fact`] at all"*.
+    ///
+    /// The test above varies the KIND of fact; this one removes them entirely, and the difference is
+    /// load-bearing. Measured at this story's code review: a `facts.is_empty()` narrowing inside
+    /// [`candidates`] left the whole workspace green, because no test fed the generator an empty
+    /// `facts` vector and no committed observation has one (0 of 51). Same mutation class as M2,
+    /// but M2 has `two_l2_domains_are_still_a_candidate_pair` and this one had nothing.
+    #[test]
+    fn an_observation_with_no_facts_at_all_is_still_a_candidate() {
+        let mut factless = simple(2, mac(0x02));
+        factless.facts = Vec::new();
+
+        assert!(
+            factless.facts.is_empty(),
+            "the fixture must actually carry no fact, or the narrowing this test exists to red \
+             stays green"
+        );
+
+        assert_eq!(
+            candidates(&[simple(1, mac(0x01)), factless]),
+            BTreeSet::from([pair(1, 2)]),
+            "the generator reads only `obs_id`; an observation with nothing to say is still a \
+             pair's other half"
+        );
+    }
+
     #[test]
     fn every_pair_inside_a_join_group_is_a_candidate() {
         let observations = [
@@ -523,9 +571,14 @@ mod tests {
                 }
             }
         }
-        assert!(
-            checked > 0,
-            "the fixture must produce at least one grouped pair, or this proves nothing"
+        // The EXACT count, not `> 0`: the fixture's one multi-member group is
+        // `(l2(10), mac(0x01))` = {1, 2, 3}, so three pairs are checked and the two singleton
+        // groups contribute none. `> 0` would still pass if the join degraded to a single 2-member
+        // group — a guard an order of magnitude weaker than the fixture it guards.
+        assert_eq!(
+            checked, 3,
+            "the fixture's grouped pairs are exactly three, or this test no longer proves what it \
+             names"
         );
     }
 

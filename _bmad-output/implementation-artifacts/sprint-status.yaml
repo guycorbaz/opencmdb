@@ -50,10 +50,31 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-01  # 5.6 IMPLEMENTED -> `review`. 309 -> 332 tests (139 bin + 147 core + 46
+last_updated: 2026-08-01  # 5.6 CODE-REVIEWED (3 layers) and PATCHED; stays at `review` because
+                          # `done` is the MERGE's business here, not the review's — the same call
+                          # 5.1-5.5 all made. 332 -> 333 tests (139 bin + 148 core + 46 xtask).
+                          # 9 patches applied, 2 deferrals registered, 11 findings dismissed.
+                          # Six gates still green, `float-free` over 4 files. NEXT = merge.
+                          #
+                          #  · The HIGH: the module doc claimed blocking on the MAC, the hostname
+                          #    OR the `l2_domain` would each pass the whole corpus. MEASURED over
+                          #    the ten `must-merge` pairs: MAC 700‰ (the story's OWN M1 figure),
+                          #    hostname 400‰, `l2_domain` 1000‰. Only the third passes — a doc
+                          #    refuted by a measurement inside the same commit.
+                          #  · The one behavioural gap: nothing fed `candidates` an observation
+                          #    with EMPTY `facts`, so a fact-presence narrowing was measured GREEN
+                          #    across all 332 tests. One new test, proven red against it.
+                          #  · 6 of the 9 patches were SENTENCES, not behaviour — fifth story
+                          #    running whose review found a claim outrunning its measurement.
+                          #  · Three prove-to-red runs on the patches themselves, all
+                          #    assertion-carried, restores md5-verified. MV2 measured `checked`
+                          #    at 1 under a degraded fixture, so the old `assert!(checked > 0)`
+                          #    was green there — the strengthening is load-bearing, not tidying.
+                          #
+                          # 5.6 IMPLEMENTED -> `review`. 309 -> 332 tests (139 bin + 147 core + 46
                           # xtask). Six green gates, `float-free` over 4 files. All six mutations
                           # run; M1 = 700‰ exactly, M2 leaves the whole corpus green. Zero
-                          # compiler-carried reds. NEXT = code-review, then merge.
+                          # compiler-carried reds.
                           #
                           # History, most recent first:
                           #  · 5.6 contexted AND validated (2 fresh agents, 16 findings applied)
@@ -1085,7 +1106,7 @@ development_status:
   #     paragraph — and it turned out to be TRUE (`verdict_for_pair` is `pub(crate)`, the crate and
   #     not the subtree), so it was verified and annotated rather than rewritten.
   #   · Register: R1 (the float) and R2 (the self-pair, now closed IN THE TYPE — `CandidatePair::new`
-  #     returns `None`) disposed of BY TITLE; three new entries opened (D17's `dormant` exclusion,
+  #     returns `None`) disposed of BY TITLE; FOUR new entries opened (D17's `dormant` exclusion,
   #     unimplementable because no lifecycle state exists — measured; the quadratic universe; the
   #     floor's arithmetic past 1000 required pairs); four entries belonging to others read and left
   #     OPEN, including the `&str` allocation one whose condition is measured NOT met, since

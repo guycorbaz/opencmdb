@@ -46,8 +46,9 @@ pub use identity::cascade::{
 // `identity::l1::join` is deliberately NOT flat-re-exported: `opencmdb_core::join` is a very
 // generic root-level name for an L1-specific function. ⚠️ The reason recorded here used to be that
 // its consumer, the candidate generator, did not exist yet — the generator now exists and does NOT
-// consume `join`, so that reason is retired rather than left standing. `join`'s consumer is still
-// the trap runner, which has not crossed the crate frontier. The generic-name argument is the one
+// consume `join`, so that reason is retired rather than left standing. `join`'s INTENDED consumer
+// is still the trap runner (story 5.7), which has not crossed the crate frontier and does not call
+// it today. The generic-name argument is the one
 // that survives, and it is the whole reason. Reach it through `identity::l1::join`.
 // `verdict_for_pair` is `pub(crate)` — see its doc for why exposing it beside `decide` would
 // falsify a claim in `cascade`.

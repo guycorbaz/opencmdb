@@ -4579,13 +4579,20 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         let recall = blocking_recall_per_mille(&corpus.union(), &corpus.required)
             .expect("the truth set is not empty, so the recall is defined");
 
-        assert_eq!(
-            recall, 1000,
-            "the blocker proposes every pair the corpus requires"
-        );
+        // ⚠️ The FLOOR first, then the exact value — the order is load-bearing and it was the wrong
+        // way round until this story's code review. `assert_eq!(recall, 1000)` is strictly stronger,
+        // so with it first the floor comparison could never be the assertion that fails: a narrowed
+        // blocker redded on a bare equality and D13's threshold said nothing. Measured then:
+        // changing `>=` to `>` left the whole workspace green. This way the realistic failure —
+        // a blocker that hides a required pair — reds with the floor's own message, and the equality
+        // below still pins that the committed corpus is at full recall rather than merely above it.
         assert!(
             recall >= BLOCKING_RECALL_FLOOR_PER_MILLE,
             "recall is {recall} per-mille, below the floor of {BLOCKING_RECALL_FLOOR_PER_MILLE}"
+        );
+        assert_eq!(
+            recall, 1000,
+            "the blocker proposes every pair the corpus requires"
         );
     }
 

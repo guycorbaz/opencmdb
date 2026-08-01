@@ -290,10 +290,13 @@ pub(crate) fn verdict_for_pair(a: &Observation, b: &Observation) -> RuleVerdict 
 /// here and make this function a candidate generator, which is
 /// [`crate::identity::blocking::candidates`]'s organ and not this one's.
 ///
-/// ⚠️ **`a != b` is the CALLER's precondition, and it now has a holder.** This function answers the
-/// self-pair `(a, a)` with a merge — an observation is trivially its own interface — so nothing here
-/// refuses it. [`crate::identity::blocking::CandidatePair::new`] is where the exclusion lives: it
-/// returns `None` for two equal ids, so a pair that comes out of the blocker can never be one.
+/// ⚠️ **`a != b` is the CALLER's precondition, and it now has a holder.** This function does not
+/// refuse the self-pair `(a, a)`: it answers it like any other pair, which is a merge when the
+/// observation carries a MAC — it trivially shares every key with itself — and
+/// `Abstained { AbsenceOfProof }` when it carries none, since [`verdict_for_pair`] is `Neutral` on a
+/// MAC-less side. Neither answer is a refusal.
+/// [`crate::identity::blocking::CandidatePair::new`] is where the exclusion lives: it returns `None`
+/// for two equal ids, so a pair that comes out of the blocker can never be one.
 pub fn decide_pair(a: &Observation, b: &Observation) -> Decision {
     decide(vec![verdict_for_pair(a, b)], CURRENT_RULESET_VERSION)
 }

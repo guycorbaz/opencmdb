@@ -1727,7 +1727,10 @@ patches did not close, and what the review revealed about claims rather than cod
 ## Deferred from: story-5.6 (2026-08-01)
 
 _The blocker and the recall assertion. Two register entries named this story as owner and both are
-disposed of below; three new ones are opened. Nothing that belongs to another story is closed here._
+disposed of below; **four** new ones are opened. Nothing that belongs to another story is closed
+here. (This sentence read "three" until this story's code review counted the bullets under
+`### New, raised by this story` — the fourth entry was legitimate and carried an owner; only the
+count was never re-measured after the last edit, which is inherited lesson 2 in this very story.)_
 
 ### Dispositioned by this story
 
@@ -1747,8 +1750,12 @@ disposed of below; three new ones are opened. Nothing that belongs to another st
   the precondition has a holder"*. `CandidatePair::new(a, a)` returns `None`, so a pair that comes
   out of the blocker can never be a self-pair, and `decide_pair`'s doc now names the holder instead
   of leaving the precondition ownerless. `verdict_for_pair`'s own behaviour on `(a, a)` is
-  **unchanged** — it still answers `Decisive`, which is defensible and is not this story's to
-  revisit. Pinned by `the_self_pair_is_refused`; mutation M3 (admitting the self-pair) reds it and
+  **unchanged** — it answers `Decisive` when the observation carries a MAC and `Neutral` when it
+  carries none (so `decide_pair` returns `Abstained { AbsenceOfProof }` there, not a merge), which
+  is defensible and is not this story's to revisit. _(This sentence said "it still answers
+  `Decisive`" full stop until this story's code review read the `Neutral` guard at `l1.rs:252-258`
+  — the unconditional form was false for every MAC-less observation, and the same overclaim had
+  been written into two doc comments.)_ Pinned by `the_self_pair_is_refused`; mutation M3 (admitting the self-pair) reds it and
   `a_repeated_obs_id_yields_no_pair`, **2 assertion-carried reds**.
 
 ### Read, and deliberately NOT closed — they belong to others
@@ -1784,8 +1791,10 @@ disposed of below; three new ones are opened. Nothing that belongs to another st
   whichever first hands the blocker something other than one poll.** Recorded rather than built for:
   a bound with no measured caller would be a guess at which key to narrow on, and §5 of this story is
   the measurement of how wrong that guess can be while staying green.
-- ⚠️ **`>= 999` per-mille is zero-tolerance BELOW 1000 required pairs and a real tolerance above
-  it.** At the committed denominator of 10, one miss scores 900 and the floor reds — binary, which is
+- ⚠️ **`>= 999` per-mille is zero-tolerance BELOW 1000 required pairs and a real tolerance from
+  1000 onwards.** The boundary is `>= 1000`, not `> 1000`: at exactly 1000 required pairs one miss
+  scores 999 and `999 >= 999` passes. _(This entry said "above it" until this story's code review did
+  the arithmetic.)_ At the committed denominator of 10, one miss scores 900 and the floor reds — binary, which is
   the form NFR4 demands. Past 1000 required pairs the same constant would admit a genuine miss, and
   NFR4's *"any fraction is theatre"* [prd.md:1182] would bite. The module doc states this rather than
   letting the per-mille dress imply a tolerance the corpus cannot support. **Owner: the story that
@@ -1798,3 +1807,31 @@ disposed of below; three new ones are opened. Nothing that belongs to another st
   `score_corpus`'s `answers` map, still fed empty. **Owner: story 5.7.** Recorded because the module
   doc claims the two organs do not consult each other, and the *reason* that claim is currently
   unfalsifiable-in-production is that neither is in production.
+
+## Deferred from: code review of story-5.6-blocker-and-recall-assertion (2026-08-01)
+
+_Two latent defects in `fixtures.rs`'s new corpus assertion. Both are green today for a reason the
+corpus supplies rather than the code enforces, so both are recorded rather than fixed: the fix is
+cheap, but neither has a failing case that exists._
+
+- ⚠️ **`assert_eq!(checked, 10)` counts required-pair OCCURRENCES, not `must-merge` traps**
+  [`crates/opencmdb-bin/src/fixtures.rs:4601-4614`]. The loop filters on
+  `corpus.required.contains(pair)` over `corpus.pairs`, which is a `Vec`, while `required` is a
+  `BTreeSet`. A second trap — of ANY expectation, in any stream — naming an id pair already in
+  `required` would increment `checked` to 11 while `required.len()` stayed 10, and the test would red
+  with the message *"every `must-merge` trap must have been checked"*, which is not the cause.
+  **Measured not live:** 24 traps, 23 two-observation traps, **23 distinct pairs** — no collision
+  today. **Owner: the story that commits a trap re-using an existing id pair**, or 5.7 if it touches
+  this walk. Recorded rather than fixed because the correct assertion depends on what a second
+  occurrence would MEAN, and no such trap exists to answer that.
+- ⚠️ **The residue assertion compares an order-dependent `Vec`**
+  [`crates/opencmdb-bin/src/fixtures.rs:4653`]. `corpus.without_a_pair` is pushed in
+  `walk_trap_files` order and asserted equal to `vec!["example-must-abstain".to_string()]`. Green
+  today because there is exactly one element, so no order can be wrong. The day a second
+  one-observation trap is committed, the assertion's outcome depends on directory iteration order
+  rather than on content — the exact failure mode `candidates` and `join` both avoid by returning a
+  `BTreeSet`, and which `corpus.required` and `corpus.universes` already avoid in this same file.
+  **Owner: the story that commits a second trap with fewer than two observations.** A `BTreeSet`
+  removes the dependency in one line; it is not applied now because doing so would change a passing
+  assertion with no failing case behind it, which is the change this project asks to be justified by
+  a red.

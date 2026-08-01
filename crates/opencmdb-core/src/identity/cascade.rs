@@ -291,8 +291,9 @@ pub enum Conclusion {
 ///
 /// [`crate::identity::l1::decide_pair`] produces these. The pair it answers still arrives from its
 /// caller: a blocker now exists — [`crate::identity::blocking::candidates`] — but **nothing calls
-/// the two in sequence**, and neither organ consults the other. The blocker's consumer is the trap
-/// runner, which does not reach the engine.
+/// the two in sequence**, and neither organ consults the other. The blocker has no production
+/// caller either; its INTENDED consumer is the trap runner (story 5.7), which does not reach the
+/// engine today.
 /// **No `From<Decision> for Outcome` exists in either direction**: mapping the engine's return onto
 /// the harness's record is a decision about the release gate, and it belongs to story 5.7 with a
 /// story behind it — not to a silent conversion. The same refusal, for the same reason, kept the
