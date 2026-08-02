@@ -2014,3 +2014,33 @@ measurement that says why, and one correction it owes to the story that comes ne
   future non-canonical id on either side would still be a *"red gate on a correct answer"* — the
   test is what makes that a red rather than a surprise. **Owner: the story that admits a
   non-canonical rule id**, if one ever is.
+
+---
+
+## Deferred from: code review of story-5.7 (2026-08-02)
+
+Three-layer review (Blind Hunter · Edge Case Hunter · Acceptance Auditor) of commit `b555712`.
+20 unique findings: 1 decision, 10 patches, 2 deferred (below), 7 dismissed. Both entries here are
+**measured**, not suspected, and neither is a defect on the committed corpus today.
+
+- ⚠️ **`l1_answers` has no cross-file `TrapId` uniqueness check, so a duplicate id silently
+  overwrites.** `answers.insert(trap.id.clone(), …)` [`crates/opencmdb-bin/src/l1_runner.rs:223`]
+  walks every discovered trap file and blindly inserts; `TrapFile::validate` enforces uniqueness
+  only WITHIN a file. Composed with the harness nothing ships wrong — `score_corpus` raises
+  `FixtureError::DuplicateTrapId` [`trap_gate.rs:259-265`] before scoring anything — so this is not
+  reachable through the release gate. But `l1_answers` is `pub` and its doc calls the result
+  *"exactly the `answers` map `score_corpus` takes"*; a caller that reads `answers.len()` **alone**
+  gets a silently short count with no diagnostic, and the residue arithmetic story 5.8 is about to
+  write is precisely that shape of caller. The committed corpus has no duplicate id (measured: 24
+  distinct ids across ten files), so nothing reds today. **Owner: story 5.8**, as the first consumer
+  of this map that counts rather than scores.
+
+- ⚠️ **`outcome_of`'s abstaining row has no end-to-end path through the runner.** All 13 traps the
+  runner answers carry a MAC on both sides, so `verdict_for_pair`'s `Neutral` branch
+  [`identity/l1.rs:257-263`] is never taken through `l1_answers` or `answer_trap`, and
+  `Conclusion::Abstained -> Outcome::Abstained` is proved only by `score.rs`'s own unit tests and by
+  a test that calls `decide(vec![], _)` directly. **Nothing in the runner's tests would notice if
+  `answer_pair` mishandled a MAC-less observation** — the mapping's third row is exercised beside
+  the runner, never through it. This is the same vacuity `Tally::scored_in(MustAbstain) == 0`
+  reports, seen from the mapping's side rather than the tally's, and the two entries close together.
+  **Owner: story 5.14 / Epic 6**, when an abstention first has a producer the corpus can judge.

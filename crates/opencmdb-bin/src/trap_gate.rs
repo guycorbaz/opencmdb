@@ -496,8 +496,15 @@ mod tests {
     /// The committed corpus, answered by the real L1 engine.
     ///
     /// `scored` has read **0** since story 4.6b, over nine stories — the honest state while no
-    /// producer existed. It reads 13 here, and every one of the thirteen passes: the truth table,
-    /// the rule, and the family completeness.
+    /// producer existed. It reads 13 here, and every one of the thirteen passes **both halves of
+    /// story 4.7a's assertion: the truth table AND the rule**.
+    ///
+    /// ⚠️ The `incomplete_families()` assertion below is NOT a property of those thirteen answers
+    /// and is not claimed as one. [`incomplete_families`] is computed over ALL discovered traps
+    /// (`score_corpus` passes it `all_traps`), so it says the corpus SHAPE is unchanged by this
+    /// story and nothing whatever about the engine. It has to be independent: the runner answers 2
+    /// of `hostname-absence`'s 3 traps and 1 of `vrrp-virtual-mac`'s 3, so a completeness check
+    /// computed over the SCORED traps would be non-empty here.
     #[test]
     fn the_committed_corpus_is_scored_by_the_l1_engine() {
         let answers = l1_answers(&committed_traps_root()).expect("the runner answers the corpus");

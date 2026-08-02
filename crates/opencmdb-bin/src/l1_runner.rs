@@ -41,8 +41,13 @@
 //!   would let a future L1 rule slip out of the denominator in silence. The committed corpus writes
 //!   exactly two `l1-*` ids today, so the two selectors agree on the committed bytes — only the
 //!   prefix keeps agreeing tomorrow, and a scratch-corpus test pins that;
-//! - **the counter-factual is measured, not argued.** Answering all 24 traps makes the gate red: 6
-//!   truth-table failures and 4 wrong-rule failures. `answer_trap` is level-BLIND for exactly that
+//! - **the counter-factual is measured, not argued.** Answering every trap this runner CAN answer —
+//!   23 of the 24, the twenty-fourth naming one observation and getting no answer at all — plus the
+//!   one-line shortcut [`answer_trap`] refuses for that last one, makes the gate red: **6
+//!   truth-table failures and 4 wrong-rule failures**. It decomposes as 4 + 4 over the eight `l2-*`
+//!   traps and 2 more over the two paired `must-abstain` ones. ⚠️ Measured at contexting by a probe
+//!   since deleted, and pinned by **no live test**: the two mutations that reproduce its halves are
+//!   not in the tree. `answer_trap` is level-BLIND for exactly that
 //!   reason — it is what lets a test ask the engine about an `l2-*` trap without reimplementing
 //!   this module.
 //!
@@ -104,14 +109,23 @@ fn expects_an_l1_rule(trap: &Trap) -> bool {
         .is_some_and(|rule| rule.0.starts_with(L1_PREFIX))
 }
 
-/// The two observations a trap puts under judgement, or `None` when it does not name exactly two.
+/// The two DISTINCT observations a trap puts under judgement, or `None` when it names no such pair.
 ///
 /// The identity question L1 answers is about a PAIR. A trap naming one observation, or three, is
 /// not a pair and there is nothing for `decide_pair` to be asked about — see [`answer_trap`] for
 /// why the tempting one-line alternative is refused.
+///
+/// ⚠️ **The self-pair is refused HERE, not merely absent from the corpus.** `[x, x]` is two ids and
+/// one observation: `decide_pair(o, o)` intersects `keys_of(o)` with itself, so `l1-exact-mac` fires
+/// and the trap MERGES — a pass no rule reasoned about, the same *right answer for the wrong reason*
+/// [`answer_trap`] refuses for the pairless case. Story 5.6 closed the self-pair in the TYPE
+/// ([`opencmdb_core::identity::blocking::CandidatePair::new`] is `None` on `(a, a)`); this is that
+/// same refusal on the path that does not go through that type. It is not redundant with
+/// `Trap::validate`'s `DuplicateObservation`: [`answer_trap`] reads its stream with `read_jsonl` and
+/// **never calls `read_traps`**, so nothing validates a [`Trap`] a caller built by hand.
 fn named_pair(trap: &Trap) -> Option<(ObsId, ObsId)> {
     match trap.observations.as_slice() {
-        [a, b] => Some((*a, *b)),
+        [a, b] if a != b => Some((*a, *b)),
         _ => None,
     }
 }
@@ -151,7 +165,8 @@ fn answer_pair(stream: &[Observation], trap: &Trap, a: ObsId, b: ObsId) -> Outco
 /// demonstration possible: a test can ask the engine about a trap whose expected rule is `l2-*`
 /// and observe the answer land in `Report::rule_mismatches`, without duplicating [`l1_answers`].
 ///
-/// `None` — no answer at all — when the trap does not name exactly two observations.
+/// `None` — no answer at all — when the trap does not name exactly two DISTINCT observations
+/// ([`named_pair`]: one id, three ids, or the same id twice).
 ///
 /// # Why a pairless trap gets NO answer, rather than the answer that would pass
 ///
@@ -173,6 +188,17 @@ fn answer_pair(stream: &[Observation], trap: &Trap, a: ObsId, b: ObsId) -> Outco
 /// # Errors
 ///
 /// [`FixtureError`] if the trap's replay stream cannot be resolved or read.
+///
+/// # Panics
+///
+/// If an id the trap names is absent from the stream it names. That is a **broken invariant rather
+/// than an input error** — [`read_traps`] cross-checks every `obs_id` against the replay stream and
+/// refuses the file with `DanglingObservation` — but this function reads the stream with
+/// [`read_jsonl`] and **never calls `read_traps`**, so on THIS path the precondition is the
+/// caller's: pass a [`Trap`] that came from that reader. [`Trap`] is fully public with public
+/// fields, so a hand-built one can reach the panic; [`resolve`]'s message names the trap. The
+/// walk in [`l1_answers`] holds the precondition itself, because it reads every trap through
+/// [`read_traps`].
 pub fn answer_trap(trap: &Trap) -> Result<Option<Outcome>, FixtureError> {
     let Some((a, b)) = named_pair(trap) else {
         return Ok(None);
@@ -240,6 +266,7 @@ mod tests {
     // kept alive solely by a test module is an `unused_imports` error in the lib build CI compiles.
     use opencmdb_core::identity::l1::{L1_DISTINCT_MAC, L1_EXACT_MAC};
     use opencmdb_core::score::{Score, TrapVerdict, run_trap, score};
+    use opencmdb_core::trap::{Expectation, RuleId};
     use std::collections::BTreeSet;
     use std::path::PathBuf;
 
@@ -269,9 +296,14 @@ mod tests {
     /// The thirteen traps whose expected rule is `l1-*` — seven `must-merge`, six `must-not-merge`.
     ///
     /// Written out as literals rather than derived from the corpus by the same predicate the
-    /// runner uses: an expectation computed by calling the code under test proves nothing. This is
-    /// the third independent statement of the corpus's L1 surface, beside `l1.rs`'s two constants
-    /// and its test-side restatement, and a DRY pass may not collapse it into any of them.
+    /// runner uses: an expectation computed by calling the code under test proves nothing. That is
+    /// the whole reason, and it is enough — a DRY pass may not replace this list with a call to
+    /// [`expects_an_l1_rule`].
+    ///
+    /// ⚠️ This is **not** the *"third independent statement"* `l1.rs:326-329` points at. That one is
+    /// [`the_producers_rule_ids_are_the_corpus_spelling`] below, and it restates two RULE ids
+    /// against the TOML. These are thirteen TRAP ids: no DRY pass could collapse them into a rule-id
+    /// constant, so borrowing that argument here would protect nothing.
     fn expected_answered() -> BTreeSet<TrapId> {
         ids(&[
             "cloned-mac-must-merge",
@@ -402,6 +434,92 @@ mod tests {
         );
     }
 
+    // ── The two guards the COMMITTED corpus cannot exercise (code review, 2026-08-02) ──────────
+    //
+    // `named_pair` refuses three things: one id, three ids, and the same id twice. The committed
+    // corpus reaches only the first — every trap names one or two, and `Trap::validate` rejects a
+    // duplicated id outright, so no trap FILE can express the other two. Both were measured
+    // invisible before these tests existed: relaxing the arm to `[a, b, ..]` left all 350 tests
+    // green. Story 5.6's M2 idiom — a guard the production path cannot reach needs a test that
+    // reaches it directly — which is why these go through `answer_trap` and not the walk.
+
+    /// A [`Trap`] over `minimal.jsonl` with the observation list a test chooses.
+    ///
+    /// Built by CLONING a committed trap so the replay path stays the corpus's own rather than a
+    /// literal that could drift, then overriding what the test is about. It is not read through
+    /// [`read_traps`] and could not be: the two lists below are exactly what a trap FILE cannot
+    /// express.
+    fn over_minimal(observations: Vec<ObsId>) -> Trap {
+        let mut trap = committed_traps()[&TrapId("example-must-abstain".into())].clone();
+        assert_eq!(
+            trap.replay, "scenario/replay/minimal.jsonl",
+            "the premise: the ids below are `minimal.jsonl`'s"
+        );
+        trap.id = TrapId("hand-built-over-minimal".into());
+        trap.observations = observations;
+        trap.expect = Expectation::MustMerge {
+            rule: RuleId(L1_EXACT_MAC.into()),
+        };
+        trap
+    }
+
+    fn obs(literal: &str) -> ObsId {
+        ObsId::from_uuid(uuid::Uuid::parse_str(literal).expect("an obs_id literal"))
+    }
+
+    /// Three observations are not a pair, and the third is not silently ignored.
+    ///
+    /// The guard's upper half. `Trap::validate` refuses an EMPTY observation list and a DUPLICATED
+    /// one, but says nothing about a third id [`trap.rs:311-317`], so an `l1-*` trap naming three
+    /// would validate — and under a `[a, b, ..]` arm it would be answered on its first two ids with
+    /// the third dropped in silence. That is the same disappearance from the denominator the module
+    /// doc argues a whitelist selector would cause, reached through a different door.
+    #[test]
+    fn a_trap_that_names_three_observations_gets_no_answer() {
+        let trap = over_minimal(vec![
+            obs("aaaaaaaa-0000-4000-8000-000000000001"),
+            obs("aaaaaaaa-0000-4000-8000-000000000002"),
+            obs("aaaaaaaa-0000-4000-8000-000000000003"),
+        ]);
+        assert_eq!(
+            answer_trap(&trap).expect("its stream reads"),
+            None,
+            "three ids are not a pair — and the runner does not answer on the first two"
+        );
+    }
+
+    /// The same observation twice is not a pair, and the merge it would have manufactured is real.
+    ///
+    /// Story 5.6 closed the self-pair in the TYPE (`CandidatePair::new(a, a)` is `None`). That type
+    /// is not on this path: [`answer_trap`] never calls [`read_traps`], so `Trap::validate`'s
+    /// `DuplicateObservation` does not hold the precondition for a [`Trap`] built by hand. The
+    /// second assertion is what makes the first load-bearing rather than tidy — it measures the pass
+    /// the missing guard WOULD have produced, in the idiom
+    /// `the_pass_the_pairless_shortcut_would_have_manufactured_is_real_and_refused` established.
+    #[test]
+    fn a_trap_that_names_the_same_observation_twice_gets_no_answer() {
+        let trap = over_minimal(vec![
+            obs("aaaaaaaa-0000-4000-8000-000000000001"),
+            obs("aaaaaaaa-0000-4000-8000-000000000001"),
+        ]);
+        assert_eq!(
+            answer_trap(&trap).expect("its stream reads"),
+            None,
+            "two ids, one observation — the engine is not asked whether a thing is itself"
+        );
+
+        let stream = read_jsonl(&fixture_path(&trap.replay).unwrap()).unwrap();
+        let one = resolve(&stream, &trap, obs("aaaaaaaa-0000-4000-8000-000000000001"));
+        assert_eq!(
+            outcome_of(&decide_pair(one, one)),
+            Outcome::Merged {
+                rule: RuleId(L1_EXACT_MAC.into())
+            },
+            "an observation shares every key with itself, so without the guard `l1-exact-mac` \
+             fires and the trap MERGES — a pass no rule reasoned about"
+        );
+    }
+
     // ── The four families `epics.md` calls pure-L1 (AC4) ──────────────────────
 
     /// Both DECISION poles of the four pure-L1 families are answered, and each PASSES its trap —
@@ -457,10 +575,19 @@ mod tests {
     /// no root — it hardcodes the committed corpus — so a test built on it cannot be reddened by a
     /// rename in a scratch copy: it would keep reading the committed bytes and stay green. Through
     /// `discover_trap_files(root)` the mutation is a real mutation.
-    fn assert_rule_ids_are_canonical(root: &Path) {
+    ///
+    /// # Returns
+    ///
+    /// `(rule ids checked, distinct rule ids seen)` — so a CALLER can pin the walk's completeness
+    /// over a corpus it knows. Those two numbers are deliberately **not** asserted here: this helper
+    /// runs over scratch roots too, and a count assertion inside it would red mutation M5c (a
+    /// scratch corpus of `multi-nic.toml` alone) on the count instead of on the both-occur guard,
+    /// masking the guard M5c was measured to prove load-bearing.
+    fn assert_rule_ids_are_canonical(root: &Path) -> (usize, usize) {
         let mut seen_exact = false;
         let mut seen_distinct = false;
         let mut checked = 0usize;
+        let mut distinct: BTreeSet<String> = BTreeSet::new();
 
         for file in discover_trap_files(root).expect("the corpus walks") {
             for trap in read_traps(&file).expect("a trap file reads").trap {
@@ -469,6 +596,7 @@ mod tests {
                 };
                 let id: &str = &rule.0;
                 checked += 1;
+                distinct.insert(id.to_string());
 
                 // Every id the corpus writes — `l2-*` included — must be its own trimmed,
                 // lowercased self. `run_trap` compares raw `RuleId` strings with no
@@ -519,6 +647,8 @@ mod tests {
             "no trap in {} names `{L1_DISTINCT_MAC}`",
             root.display()
         );
+
+        (checked, distinct.len())
     }
 
     /// The producer's two rule ids are the corpus's own spelling, and every id it writes is
@@ -531,7 +661,21 @@ mod tests {
     /// others by a DRY pass.
     #[test]
     fn the_producers_rule_ids_are_the_corpus_spelling() {
-        assert_rule_ids_are_canonical(&committed_traps_root());
+        let (checked, distinct) = assert_rule_ids_are_canonical(&committed_traps_root());
+        // ASSERTED here rather than quoted in prose: without these two, the canonicality assertions
+        // above hold over whatever the walk happens to reach, and a truncated walk or a new eighth
+        // rule id would pass in silence. They live in THIS test and not in the helper — see its
+        // `# Returns`.
+        assert_eq!(
+            checked, 21,
+            "twenty-one of the twenty-four committed traps name a rule; the other three are \
+             `must-abstain` and name a cause"
+        );
+        assert_eq!(
+            distinct, 7,
+            "the corpus writes seven distinct rule ids — the figure `l1.rs`'s doc and this story \
+             both quote, asserted so an eighth reds instead of passing"
+        );
     }
 
     /// A private scratch directory per test — a shared constant path races between concurrent
@@ -601,6 +745,9 @@ expect = { must-not-merge = { rule = "l1-not-yet-implemented" } }
             "and the gate is red, not silently smaller"
         );
 
-        std::fs::remove_file(&path).ok();
+        // The DIRECTORY, not just the file, and the same call every sibling scratch test in
+        // `trap_gate.rs` makes: `remove_file` alone leaked one empty directory per run into
+        // `/tmp` (measured: three of them before this was fixed).
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

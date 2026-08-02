@@ -1524,6 +1524,15 @@ mod tests {
     /// This pins the consequence a reader has to be able to rely on: two decisions that differ ONLY
     /// in those two fields map to the SAME outcome. The day `ScoredRecord` carries them, this test
     /// is what says the loss was at the `Outcome` boundary and not further up.
+    ///
+    /// ⚠️ **It cannot red under any realistic mutation of [`outcome_of`], and that is recorded
+    /// rather than smoothed over** — the same honesty the rule-mirror test above carries about M1.
+    /// [`Outcome`] has no field able to hold either value, so every implementation that does not
+    /// branch on `ruleset_version` satisfies the second assertion; it appears in none of the six
+    /// mutation red sets. The only assertion here that can fail is `assert_ne!`, which guards
+    /// [`Decision`]'s derived `PartialEq`, not the mapping. It is kept as a DOCUMENTATION test: what
+    /// it states is a property of the destination type, and the day that type changes it is what
+    /// says the loss used to be at this boundary.
     #[test]
     fn the_verdict_vector_and_the_ruleset_version_are_dropped() {
         let conclusion = Conclusion::Match {
