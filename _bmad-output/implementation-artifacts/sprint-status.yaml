@@ -50,7 +50,88 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-01  # 5.6 DONE — PR #59 squash-merged as `020c706` after a green CI run,
+last_updated: 2026-08-02  # 5.7 CODE-REVIEWED (three layers) and PATCHED -- commit `6f958dd`. It
+                          # STAYS at `review`: `done` is the MERGE's business in this project's flow
+                          # (5.1 established it, 5.2/5.4b/5.5/5.6 held it). **11 patches applied, 2
+                          # deferrals registered, 7 findings dismissed, 350 -> 352 tests**, six gates
+                          # green, both clippy forms clean, `fixtures/` untouched two ways.
+                          # AC1-AC10 re-verified MET by independent measurement.
+                          # **6 of the 11 patches were SENTENCES -- the SIXTH consecutive story with
+                          # that shape.** The two behavioural ones were both measured INVISIBLE
+                          # before the tests existed:
+                          #  · the SELF-PAIR was re-opened on the `answer_trap` path -- a hand-built
+                          #    `Trap { observations: vec![x, x] }` merges on `l1-exact-mac`, an
+                          #    observation sharing every key with itself. Story 5.6 closed that IN
+                          #    THE TYPE (`CandidatePair::new(a, a)` is `None`), but `answer_trap`
+                          #    never calls `read_traps`, so `Trap::validate`'s
+                          #    `DuplicateObservation` does not hold the precondition there.
+                          #    **Guy's call: close it in `named_pair`**, not in a doc sentence.
+                          #  · no test covered a trap naming THREE observations -- relaxing the arm
+                          #    to `[a, b, ..]` left all 350 tests green. Story 5.6's M2 idiom, on the
+                          #    upper half of the guard AC2 closed for the lower.
+                          # One assertion strengthened: *"all seven ids"* was QUOTED in three
+                          # documents and guarded by `checked > 0` alone; `checked == 21` and
+                          # `distinct == 7` are now asserted -- in the COMMITTED-corpus test and
+                          # deliberately NOT in the root-parameterised helper, where they would red
+                          # M5c on the count and mask the both-occur guard M5c proves load-bearing.
+                          # The five claim corrections: CLAUDE.md still said *"Nothing feeds the
+                          # corpus harness (5.7)"* in the PRESENT tense, falsified 400 words below in
+                          # the same file (project-context.md had corrected the identical sentence in
+                          # `b555712` -- one file was updated and its twin was not); the Debug Log
+                          # recorded `trap_gate.rs` at **311** code lines where it is **405**, BELOW
+                          # the story's own 384 baseline and therefore impossible; the corpus-scoring
+                          # test credited the thirteen answers with *"the family completeness"*,
+                          # which is computed over ALL discovered traps; `expected_answered()`
+                          # claimed a lineage belonging to a RULE-id test 260 lines below; and the
+                          # module doc's *"answering all 24 traps"* describes a state the code
+                          # forbids. Prove-to-red on all three new guards, assertion-carried -- and
+                          # **MR3a is recorded rather than dropped**: truncating the canonicality
+                          # walk to one file reds the OLDER both-occur guard and MASKS the new
+                          # counts, the same masking the story met on M5b/M5c, met again first try.
+                          # Two deferrals with owners: no cross-file `TrapId` uniqueness check in
+                          # `l1_answers` (owner **5.8**), and `outcome_of`'s abstaining row has no
+                          # end-to-end path through the runner (owner **5.14 / Epic 6**).
+                          # **Two sub-agent findings were REFUTED by re-measurement** and dismissed
+                          # with the measurement: the scratch test's `!passed()` is not green for
+                          # family incompleteness (no `family` key -> `incomplete_families` skips
+                          # `None`), and pair order IS pinned.
+                          # NEXT = push -> PR -> green CI -> squash merge.
+                          #
+                          # 5.7 IMPLEMENTED -> `review`. **The trap corpus is a gate that RUNS**:
+                          # 24 discovered, **13 scored** (0 for nine stories), 0 failures, 0
+                          # wrong-rule, passed. **333 -> 350 tests.** Six gates green, `fixtures/`
+                          # untouched. Six mutations, zero compiler-carried reds; M4 run on BOTH
+                          # sides — the `l1_answers` half leaves the WHOLE suite green, which is the
+                          # measurement, not a gap. NEXT = `code-review` 5.7, then PR.
+                          #
+                          # 5.7 CONTEXTED **and VALIDATED** -> was `ready-for-dev`. Master at
+                          # `6cc137b`, 333 tests.
+                          #
+                          # VALIDATION (two fresh-context agents, MANDATORY): the gap-hunt agent
+                          # IMPLEMENTED the story end to end in an isolated worktree — AC1-AC8
+                          # built, M1/M3/M4/M5/M6 run, six gates green, `fixtures/` untouched.
+                          # 🔑 THE PATTERN HELD A THIRD TIME: 3 HIGH from the agent that COMPILED
+                          # the story, 0 from the one that checked its claims. **13 findings
+                          # applied (3 HIGH, 5 MEDIUM, 5 LOW), 1 dismissed after re-measurement.**
+                          # Every number the story predicts reproduced EXACTLY — the 24-row answer
+                          # table row for row, 24 discovered / 13 scored / 0 failures / passed,
+                          # `scored_in` 7/6/0, AC5's 4 mismatches, AC8's residue of 11.
+                          # The three HIGH, all prescriptions that only broke under a compiler:
+                          #   H1 AC7's scratch trap had no COLUMN, and the obvious `must-merge`
+                          #      form lands in `failures()` with `rule_mismatches()` EMPTY —
+                          #      `minimal.jsonl` holds no pair L1 merges, and `run_trap` raises
+                          #      `WrongRule` only on a verdict PASS. Now `must-not-merge`;
+                          #   H2 M5 was a NO-OP: `walk_trap_files` takes no root, so a rename in a
+                          #      scratch copy is invisible to it (measured: 21 ids, all canonical).
+                          #      AC7's byte test moves to `discover_trap_files(root)`;
+                          #   H3 M4 reds NOTHING and AC2's named condition was VACUOUS: 0 of the 13
+                          #      `l1-*` traps are pairless, so the level selector excludes the only
+                          #      pairless trap first. The assertion moves to `answer_trap`.
+                          # Prediction check: the contexting note pointed the gap-hunt at AC2, AC5
+                          # and AC9 — right on AC2 and AC9, WRONG on AC5 (it validated clean), and
+                          # the third HIGH landed on AC7, which the note did not name.
+                          #
+                          # 5.6 DONE — PR #59 squash-merged as `020c706` after a green CI run,
                           # code-reviewed and patched first. Epic 5: 8 of 16 stories done.
                           # NEXT = `create-story` 5.7 (the trap runner stops scoring nothing),
                           # then its MANDATORY two-agent validation before `dev-story`.
@@ -1120,7 +1201,103 @@ development_status:
   #   · `fixtures/` and the planning artifacts are byte-unchanged; no STOP condition arose.
   # NEXT = `code-review` 5.6, then merge. ⚠️ `done` is the merge's business, not the review's.
   5-6-blocker-and-recall-assertion: done
-  5-7-trap-runner-stops-scoring-nothing: backlog
+  # 5.7 CONTEXTED 2026-08-01 — the seam. `score_corpus` has scored ZERO since story 4.6b; this
+  # story fills its `answers` map from the real engine and `scored` becomes 13.
+  # EVERY committed trap was run through `decide_pair` at contexting, by a temporary probe test in
+  # `fixtures.rs` (deleted afterwards, md5 back to 3616d8e4…, `git status` clean), so the dev
+  # re-derives nothing and a surprise reads as a FINDING. What it measured:
+  #   · answering ALL 24 traps makes the gate RED — 6 truth-table failures and 4 wrong-rule
+  #     failures. Answering only the 13 whose expected rule is `l1-*` makes it GREEN: 13 scored,
+  #     0 failures, 0 mismatches, every rule right;
+  #   · 🔴 the residue is ELEVEN, not eight. `epics.md:1545` gives story 5.8 the premise *"the 8
+  #     traps whose expected rule is `l2-*`"*. Measured: 8 `l2-*` + 2 `must-abstain` naming a pair
+  #     + 1 `must-abstain` naming a SINGLE observation. The three abstain traps are invisible to a
+  #     `l2-*` selector because `Expectation::rule()` returns `None` for them. Registered with 5.8
+  #     as owner; `epics.md` is verify-only and NOT edited;
+  #   · 🔴 `epics.md:1527` calls hostname-absence a *"pure-L1 family"* whose traps *"pass in BOTH
+  #     poles"*. It holds THREE traps and the third is a `must-abstain` the L1 engine gets WRONG.
+  #     True of the two DECISION poles, false of "all its traps" — the story writes the narrow
+  #     claim and asserts the third trap is unanswered;
+  #   · 🔴 the single-observation trap `example-must-abstain` WOULD PASS via `decide(vec![], _)` →
+  #     `Abstained { AbsenceOfProof }`. Refused: the pass would come from the engine evaluating
+  #     NOTHING. Measured precisely so the tempting one-liner is a named refusal, not an omission;
+  #   · 11 replay streams are referenced by a trap and NOT ONE carries a `capability` record, so a
+  #     `ScoredRecord` here would need an invented snapshot (D36/D45). That is why the
+  #     `VerdictVectorEntry` unification — which FIVE doc sites pin on story 5.7, only TWO of them
+  #     stating the condition (corrected at validation) — is DECIDED and re-owned rather than done,
+  #     with the obstacle recorded;
+  #   · all seven rule ids the corpus writes are canonical (`trim`/`lowercase` fixed points), which
+  #     is what makes `run_trap`'s unnormalized comparison trustworthy — story 4.7a's registered
+  #     gap, closed by measurement plus a test.
+  # DECISIONS taken at contexting: `outcome_of(&Decision) -> Outcome` as a NAMED free function in
+  # `score.rs` (no `From` impl — the existing refusal is honoured, not overturned); the producer in
+  # a NEW module `l1_runner.rs`, NOT in `trap_gate.rs`, so the harness's *"never calls a producer"*
+  # stays a FILE-level property on the day it first has something to promise; `score_corpus`
+  # unchanged; `read_jsonl` not `FixtureConnector`; the blocker is NOT called (a trap hands the
+  # runner its pair) and story 5.6's entry gets the narrow true sentence rather than a closure.
+  # ⚠️ Compile-level traps recorded for the dev: `discover_trap_files` is PRIVATE (make it
+  # `pub(crate)`, and write no third walk), `walk_trap_files` is `#[cfg(test)]`,
+  # `committed_traps_root()` is inside `mod tests`, `verdict_for_pair` is `pub(crate)` in core.
+  # ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
+  # Baseline: master `6cc137b`, clean tree, 333 tests (139 bin + 148 core + 46 xtask).
+  # 5.7 IMPLEMENTED 2026-08-01 -> `review` (branch `story-5.7-trap-runner-stops-scoring-nothing`).
+  # THE SEAM IS CROSSED: `score_corpus` reports `discovered=24, scored=13, failures=0,
+  # rule_mismatches=[], incomplete_families=[], passed=true` — `scored` had read **0** since story
+  # 4.6b, nine stories. 333 -> 350 tests (151 bin + 153 core + 46 xtask). Six gates green
+  # (`float-free` over 4 files), BOTH clippy forms clean, `git status fixtures/` AND
+  # `git diff HEAD -- fixtures/` both empty, `MANIFEST.toml` md5 `1db9798116a0942eb65f4153ec7b22b6`.
+  # `epics.md`, `architecture.md`, `architecture-views.md` all untouched.
+  #  · `score::outcome_of(&Decision) -> Outcome` — exhaustive, no `_` arm, **no `From` impl**: the
+  #    refusal recorded in `cascade.rs` was KEPT and updated, because a `From` makes the conversion
+  #    free at every call site and that invisibility is what the refusal was about;
+  #  · a NEW module `crates/opencmdb-bin/src/l1_runner.rs` (233 code lines) — NOT in `trap_gate.rs`,
+  #    whose "the harness never calls a producer" is a FILE-level property that would have degraded
+  #    to a per-function promise on the day it first had something to promise about. `score_corpus`'s
+  #    signature and body are UNCHANGED; the seam is the `BTreeMap<TrapId, Outcome>`, which is data;
+  #  · `scored_in` = 7 / 6 / 0. The `must-abstain` column is measured by NOTHING after this story
+  #    and the test says so in its own message — the vacuity `scored_in` was built to expose.
+  # SIX MUTATIONS on a committed baseline (`50470d1`), every red assertion- or panic-carried, ZERO
+  # compiler-carried, and every number the story predicted reproduced:
+  #  · M2 (drop the `l1-` prefix) -> `21 scored, 4 truth-table failure(s), 4 wrong-rule failure(s)`
+  #    with the four expected/actual pairs verbatim;
+  #  · M3 (answer `must-abstain` too) -> `16 scored, 2 truth-table failure(s)` — so
+  #    `example-must-abstain` PASSED: §4's manufactured pass, live;
+  #  · M6 (a selector that answers nothing) -> `24 discovered, 0 scored`, 8 tests red including the
+  #    reproducibility one, which is what its `scored() == 13` precondition exists for.
+  # 🔑 M4 WAS RUN ON BOTH SIDES and the difference is the whole point: dropped from `answer_trap` it
+  # panics (`index out of bounds: the len is 1 but the index is 1`); dropped from `l1_answers` the
+  # ENTIRE SUITE STAYS GREEN, because the level selector removes the corpus's only pairless trap
+  # first. That invisibility is the measurement — validation predicted it, and it is why AC2's
+  # assertion lives on `answer_trap`.
+  # 🔑 M5 NEEDED THREE VARIANTS, not the one specified: a single rename is masked by the "either
+  # constant" assertion firing first, and only a corpus with NO `l1-` id at all reds the both-occur
+  # guard — the guard that would otherwise let BOTH constants be renamed to anything and stay green.
+  # TWO DIVERGENCES from the story's own predictions, recorded rather than absorbed: that, and
+  # M1 NOT reddening `the_mapping_preserves_the_rule_mirror_on_every_row` (a wrong ROW keeps the
+  # rule, so `Outcome::rule()` still agrees — the mirror and the three row tests each close what the
+  # other cannot).
+  # WHAT MOVED, AND DID NOT CLOSE:
+  #  · the `VerdictVectorEntry` unification is **RE-OWNED, not done**, and the obstacle was
+  #    RE-MEASURED on the tree before being written down: 11 replay streams are named by a trap and
+  #    NOT ONE carries a `capability` control record, while the only two streams that do
+  #    (`capability-downgrade`, `partial-then-failed`) are named by no trap — so a `ScoredRecord`
+  #    here would mean inventing a capability snapshot for all 24 traps (D36 in reverse, D45's
+  #    "a gate on a false truth"). Owner: the story that gives a trap run a real snapshot;
+  #  · the BLOCKER still has no production caller, and that was a DECISION: a trap NAMES its pair,
+  #    so the runner has nothing to generate. Story 5.6's entry is answered with the narrow sentence
+  #    and stays open, re-owned to the first caller holding observations and no trap;
+  #  · 🔴 the residue is **ELEVEN, not 8** — `epics.md:1545` gives story 5.8 the wrong premise. Three
+  #    classes: 8 `l2-*`, 2 `must-abstain` naming a pair, 1 `must-abstain` naming ONE observation.
+  #    The three `must-abstain` traps are invisible to an `l2-*` selector because
+  #    `Expectation::MustAbstain` carries a CAUSE and no rule. Registered with 5.8 as OWNER;
+  #    `epics.md` is deliberately NOT edited (an edit there would have been a finding).
+  # ALL 19 doc sites honoured or narrowed, verified by re-grepping the FINAL tree: zero remaining
+  # sites claim story 5.7 owns anything — the promise-re-made defect five reviews have caught.
+  # `the_committed_corpus_is_discovered_and_scored_by_nothing` renamed
+  # `an_empty_answers_map_scores_nothing_over_the_committed_corpus`: its name now states what its
+  # CALL does, not a claim about the corpus this story falsifies.
+  # ⚠️ NEXT: `code-review` -> push -> PR -> green CI -> squash merge. `done` is the MERGE's business.
+  5-7-trap-runner-stops-scoring-nothing: review
   5-8-unimplemented-level-counts-as-not-passing: backlog
   5-9-persist-interface-and-identity-link: backlog
   5-10-purge-test: backlog

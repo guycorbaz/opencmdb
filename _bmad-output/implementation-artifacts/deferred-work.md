@@ -257,6 +257,14 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   an oracle written from D13 itself. ⚠️ **What is still open is the mapping onto `Outcome`** — nothing
   converts a `Decision` into what the trap harness records, and no rule produces a `Verdict`. **Owner
   of the remaining half: story 5.7** (the trap runner consuming a real engine). Not struck.
+  ✅ **CLOSED by story 5.7, 2026-08-01.** `score::outcome_of(&Decision) -> Outcome` exists: an
+  exhaustive match with no `_` arm over `Conclusion`'s three variants
+  (`Match { rule } -> Merged { rule }`, `NoMatch { rule } -> Refused { rule }`,
+  `Abstained { cause } -> Abstained { cause }`, the same `IdentityAbstentionCause` on both sides).
+  Five tests pin it, including `outcome_of(&d).rule() == d.rule()` on every row — the mirror
+  `run_trap` depends on. `verdict_vector` and `ruleset_version` are DROPPED, stated at the function
+  and asserted by a test; that residue is the `VerdictVectorEntry` entry below, not this one.
+  **Struck.**
 - **The cascade's `NoMatch` maps two ways onto `Outcome`, and only half of that is recorded.**
   `architecture.md:967-974` makes `NoMatch` cover BOTH an active opposition (`any Disqualifying`) and
   a mere absence of proof (`only Neutral / nothing`). `Outcome::Refused` requires a rule to name, so
@@ -273,6 +281,13 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   `NoMatch { rule }`; `only Neutral / nothing` AND the class D13's table does not cover →
   `Abstained { AbsenceOfProof }`. **The `Outcome` mapping remains unbuilt — owner story 5.7.** Not
   struck.
+  ✅ **CLOSED by story 5.7, 2026-08-01.** `score::outcome_of` maps BOTH halves and keeps them apart:
+  `NoMatch { rule } -> Refused { rule }` and `Abstained { cause } -> Abstained { cause }`. The
+  feared uniform `NoMatch -> Refused` is unrepresentable — the fork is in the type, and `outcome_of`
+  matches it exhaustively. Measured on the corpus rather than argued: the six committed
+  `must-not-merge` traps L1 answers all reach `Refused` and pass, and the three `must-abstain` traps
+  are not answered at all (`Report::scored_in(MustAbstain) == 0`), so no honest abstention was
+  failed. **Struck.**
 
 ## Deferred from: story-4.6b (2026-07-22)
 
@@ -333,7 +348,9 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   `:1015`, `:1032`, `:1309`, `:3378`). **Nothing produces one**: no rule speaks, so no
   verdict vector is ever built, and *"a test must red if it does not"* still has nothing to red.
   `score::VerdictVectorEntry` therefore stays uninhabited and `ScoredRecord::verdict_vector` stays
-  provably empty — story 5.7 owns that unification. ⚠️ Nor does anything enforce that a verdict which
+  provably empty — story 5.7 owns that unification. _(⚠️ RE-OWNED by story 5.7 itself, 2026-08-01:
+  it did NOT unify the two, and the obstacle is measured. See the `## Deferred from: story-5.7`
+  section for the new owner and the measurement.)_ ⚠️ Nor does anything enforce that a verdict which
   ARGUES leaves non-empty evidence: `RuleVerdict`'s fields are `pub` with no constructor
   (`ScoredRecord`'s precedent). **Owner moves from Epic 5 to story 5.5**, the first story with a
   firing rule.
@@ -366,6 +383,10 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   (`identity::cascade::decide`) and chooses the half by the presence of a `Disqualifying`. **The
   `NoMatch → Refused` vs `Abstained` mapping onto `Outcome` is still nobody's code — owner story
   5.7.** Not struck.
+  ✅ **CLOSED by story 5.7, 2026-08-01** — `score::outcome_of`. Same closure as the two bullets in
+  `## Deferred from: story-4.6a`; recorded here too because this entry states the requirement in the
+  form that would have bitten (*"if Epic 5 maps `NoMatch → Refused` uniformly, every honest
+  `must-abstain` trap fails"*), and it is that form the corpus measurement answers. **Struck.**
 - **The `NoMatch → Refused` vs `Abstained` question is Epic 5's, not scored here.** `run_trap` scores
   answers; it does not decide what an engine that finds no merging rule should return. Whether "no
   rule matched" is a `Refused` (a decision, names an opposing rule) or an `Abstained` (no decision,
@@ -377,6 +398,11 @@ not, and one guarantee changed shape. Stated against the existing bullets withou
   ↺ **CLOSED IN PART by story 5.4b, 2026-07-29:** which one a given input gets is now decided, by
   `decide`, over every one of D13's input classes. **Producing one still needs a rule (story 5.5) and
   mapping one onto `Outcome` still needs story 5.7.** Not struck.
+  ✅ **CLOSED by story 5.7, 2026-08-01.** Both remaining halves are now in place: story 5.5 supplied
+  the rule and story 5.7 the mapping (`score::outcome_of`), and `opencmdb_bin`'s `l1_runner` runs
+  the whole chain over the committed corpus. `run_trap`'s silence on the question was scope, and it
+  stays scope: `score.rs` still does not decide what an engine should return, it now merely records
+  what one did. **Struck.**
 
 ## Deferred from: code review of story-4.7a (2026-07-23)
 
@@ -1221,10 +1247,21 @@ says *"Not struck"* two lines later, meaning the ENTRY is not struck. Both appea
   release gate, not a convenience — the same refusal, for the same reason, that kept the two
   abstention vocabularies unbridged in 5.3. **Owner: story 5.7**, the trap runner consuming a real
   engine.
+  ✅ **CLOSED by story 5.7, 2026-08-01 — and the refusal STANDS.** The mapping exists as
+  `score::outcome_of`, a named free function; **no `From` impl was added in either direction**, for
+  exactly the reason recorded here: a `From` makes the conversion free at every call site (`.into()`),
+  which is the invisibility the refusal was about. A named function has to be typed out, so a reader
+  of a call site sees that a gate decision was taken. `cascade.rs`'s sentence stating the refusal was
+  kept and updated to say the mapping now exists. **Struck.**
 - **No `Decision::cause()` and no `Conclusion::rule()`.** `Outcome` has no `cause()` either, and
   nothing groups abstentions by cause until 5.14. `rule()` exists on `Decision` because a consumer
   holds a decision; an accessor on the inner enum would have no caller. **Owner: story 5.14** for
   `cause()`, **story 5.7** for `Conclusion::rule()` if a consumer ever holds a bare conclusion.
+  ✅ **The `Conclusion::rule()` half is CLOSED by story 5.7, 2026-08-01, by ANSWERING the condition
+  rather than by building it: no consumer holds a bare conclusion.** `outcome_of` takes a
+  `&Decision` and matches `&decision.conclusion` in place; `l1_runner` holds a `Decision` and hands
+  it straight on. Nothing in the tree destructures a `Conclusion` away from its envelope, so the
+  accessor would still have no caller. `Decision::cause()` is untouched and stays with **5.14**.
 - **`score::VerdictVectorEntry` and `identity::cascade::RuleVerdict` are two types for one triple.**
   The first is the harness-side placeholder, deliberately **uninhabited** so
   `ScoredRecord::verdict_vector` is provably empty; the second is the engine-side element, with no
@@ -1232,6 +1269,11 @@ says *"Not struck"* two lines later, meaning the ENTRY is not struck. Both appea
   "uninhabited" doc, `ScoredRecord::verdict_vector`'s "always empty… provably so",
   `comparable_fields`' "empty on both sides", and `:210-215` of this file) with nothing to justify
   it. **Owner: story 5.7**, when the harness first records a run a real engine produced.
+  ⚠️ **RE-OWNED by story 5.7, 2026-08-01, WITHOUT being done — the condition was not met.** The
+  harness now scores a run a real engine produced, but it records the run as `Outcome`s, not as
+  `ScoredRecord`s, and an `Outcome` has no vector to fill. The obstacle is `ScoredRecord`'s
+  `capability_snapshot`. See `## Deferred from: story-5.7` for the measurement and the new owner.
+  **Not struck.**
 - **`Verdict::all()` inherits the measured lazy-repair residue of `IdentityAbstentionCause::all()`.**
   Same idiom, same limit: the witness stops the build on a new variant (`error[E0004]`) but does not
   force it into the list. **This is a CROSS-REFERENCE, not a second entry**: the measurement itself
@@ -1546,6 +1588,15 @@ nothing on `master` is rewritten by it.
   constants to `"L1-Exact-MAC "` and `"l1_distinct_mac"` left its **entire suite green**. On the
   shipped tests the same mutation (M6) reds **ten** tests. ⚠️ The `run_trap` comparison half stays
   with **story 5.7**; `run_trap` is in `score.rs`, whose code this story does not touch.
+  ✅ **The `run_trap` comparison half is CLOSED by story 5.7, 2026-08-01** — not by normalizing the
+  comparison, but by proving normalization unnecessary on the committed bytes.
+  `l1_runner`'s `the_producers_rule_ids_are_the_corpus_spelling` walks every committed trap file
+  through `trap_gate::discover_trap_files(root)` and asserts that **all seven** ids the corpus
+  writes — `l2-*` included — equal their own `trim()` and their own `to_lowercase()`, so an
+  unnormalized `RuleId` comparison cannot produce a false wrong-rule failure there. ⚠️ **What that
+  does NOT close**: `run_trap` still compares raw strings, so a FUTURE non-canonical id on either
+  side would still be a *"red gate on a correct answer"*. The test is what makes that a red rather
+  than a surprise.
 - ⚠️ **R7 — story 5.3's two compiler-carried tests. The OWNER CLAUSE is discharged; the entry's
   TITLE is not. Reported as partial, after the code review measured the overstatement.**
   Registered at *"Two of story 5.3's four new tests are carried by the type system, not by their
@@ -1578,6 +1629,11 @@ nothing on `master` is rewritten by it.
   `Abstained { AbsenceOfProof }` and `Decision::rule()` is `None` — which names no rule and would
   make story 5.7's comparison unsatisfiable. ⚠️ **The `Decision → Outcome` mapping half is
   untouched** and stays with story 5.7.
+  ✅ **The mapping half is CLOSED by story 5.7, 2026-08-01** — `score::outcome_of`. And the
+  counter-hypothesis this entry ran is now measured end to end: the six committed `must-not-merge`
+  traps L1 answers reach `Outcome::Refused { l1-distinct-mac }` and PASS both the truth table and
+  the rule, so `Decision::rule()` being `Some` is what makes the comparison satisfiable in practice
+  and not only in the type.
 
 ### Open, with what this story measured about them
 
@@ -1619,6 +1675,11 @@ nothing on `master` is rewritten by it.
   binary reaches it. `score_corpus`'s `answers` parameter is still fed an empty map, so every trap is
   still "scored by nothing". **Owner: story 5.7**, which crosses that seam — and the crate frontier
   (D47) is why this story could not.
+  ✅ **CLOSED by story 5.7, 2026-08-01.** `opencmdb_bin`'s `l1_runner` calls
+  `identity::l1::decide_pair` on the pair each committed trap names, maps the result through
+  `score::outcome_of`, and fills `score_corpus`'s `answers` map. The committed corpus reports
+  `discovered=24, scored=13, failures=0, rule_mismatches=[], passed=true` — `scored` had read **0**
+  since story 4.6b. **Struck.**
 - ⚠️ **`xtask/src/main.rs`'s dotted-quad assertion carried a PREDICTION about this story, and the
   prediction did not come true.** Its message read *"story 5.5 writes IP literals under the guarded
   subtree"*. **Measured on the shipped tree: zero `Ipv4Addr` and zero dotted quads under
@@ -1692,6 +1753,12 @@ patches did not close, and what the review revealed about claims rather than cod
   carries one `l2_domain` (D61). **Owner: story 5.7**, which compares this id against the corpus
   bytes and is where the collision would first show; if a trap ever separates the two cases, either
   the trap or the producer has to move.
+  ↺ **The COMPARISON exists since story 5.7, 2026-08-01; the OVERLOAD does not. Not struck.** The
+  byte comparison pins the SPELLING and says nothing about the condition, and it cannot: no
+  committed trap separates *"different MAC"* from *"same MAC, different `l2_domain`"* — every
+  committed stream carries one `l2_domain` (D61), so the two are indistinguishable on the corpus.
+  **Owner: the story that commits a cross-domain trap**, which is the first place the collision can
+  show. Recorded so the closure of the comparison is not read as the closure of this.
 - ⚠️ **The doc claims the two rule ids match `fixtures/*.toml` byte for byte, and nothing in this
   crate checks it.** The test-side redundancy (`CORPUS_EXACT_MAC`/`CORPUS_DISTINCT_MAC`) catches a
   rename of ONE constant — verified, mutation M6 reds ten tests — but cannot catch **both** literals
@@ -1700,6 +1767,14 @@ patches did not close, and what the review revealed about claims rather than cod
   the natural home for the comparison. Recorded because the module doc states the stronger property
   than the redundancy delivers. *(Verified by hand at the review: the corpus spells 7 × `l1-exact-mac`
   and 6 × `l1-distinct-mac`, matching the constants.)*
+  ✅ **CLOSED by story 5.7, 2026-08-01.** `l1_runner`'s
+  `the_producers_rule_ids_are_the_corpus_spelling` reads the TOML and compares it against the two
+  constants: every id beginning `l1-` is one of them, **both** occur (so the assertion cannot pass by
+  finding none), and the walk asserts it found at least one rule id at all. It is the THIRD
+  independent statement of the two ids — beside the constants and `l1.rs`'s test-side literals — and
+  it is the one that catches BOTH literals being wrong relative to the corpus, which neither of the
+  other two can. `l1.rs`'s doc was rewritten to say a test holds the claim rather than to assert it.
+  **Struck.**
 - ⚠️ **The `&str` rule-id constants make every call site perform the `RuleId` wrap.** `RuleId` is not
   const-constructible, which the doc explains — but it stops there and does not weigh
   `fn l1_exact_mac() -> RuleId`, a `LazyLock` static, or a `Cow<'static, str>` payload. As shipped,
@@ -1788,7 +1863,12 @@ count was never re-measured after the last edit, which is inherited lesson 2 in 
   hands it a retention window instead of a poll, `n` is no longer host count and a narrowing key
   becomes required. **The recall assertion is what would make that narrowing safe rather than
   silent**, and that is the whole reason it is written before any caller exists. **Owner: 5.9 or 5.7,
-  whichever first hands the blocker something other than one poll.** Recorded rather than built for:
+  whichever first hands the blocker something other than one poll.**
+  ↺ **NOT story 5.7, measured 2026-08-01: it hands the blocker nothing at all.** `l1_runner` never
+  calls `candidates` — a trap NAMES its pair, so there is nothing to generate. The owner clause is
+  therefore unchanged in substance and 5.7 drops out of it: **owner: 5.9 or Epic 6, whichever first
+  hands the blocker a set of observations.** Not struck.
+  Recorded rather than built for:
   a bound with no measured caller would be a guess at which key to narrow on, and §5 of this story is
   the measurement of how wrong that guess can be while staying green.
 - ⚠️ **`>= 999` per-mille is zero-tolerance BELOW 1000 required pairs and a real tolerance from
@@ -1807,6 +1887,14 @@ count was never re-measured after the last edit, which is inherited lesson 2 in 
   `score_corpus`'s `answers` map, still fed empty. **Owner: story 5.7.** Recorded because the module
   doc claims the two organs do not consult each other, and the *reason* that claim is currently
   unfalsifiable-in-production is that neither is in production.
+  ↺ **ANSWERED, NOT CLOSED, by story 5.7, 2026-08-01 — and the narrow sentence is the answer.**
+  `score_corpus`'s `answers` map is no longer fed empty: `l1_runner` fills it with 13 real engine
+  answers. **`l1` is therefore in production and the blocker is still not**, and 5.7 declined to
+  make it so on purpose: a trap hands the runner a PAIR (`Trap::observations`), so the runner has
+  nothing to generate, and a runner that generated its own pairs would ignore the corpus's own
+  statement of what is under judgement. `candidates` is still reached only from its own tests and
+  from `fixtures.rs`'s test module. **Owner re-stated: the first caller that holds a set of
+  observations and no trap — story 5.9 or Epic 6.** Not struck.
 
 ## Deferred from: code review of story-5.6-blocker-and-recall-assertion (2026-08-01)
 
@@ -1824,6 +1912,10 @@ cheap, but neither has a failing case that exists._
   today. **Owner: the story that commits a trap re-using an existing id pair**, or 5.7 if it touches
   this walk. Recorded rather than fixed because the correct assertion depends on what a second
   occurrence would MEAN, and no such trap exists to answer that.
+  ↺ **Story 5.7 did NOT touch that walk, 2026-08-01.** `l1_runner` discovers trap files through
+  `trap_gate::discover_trap_files`, not through `fixtures::walk_trap_files`, and the assertion in
+  question is untouched. The `or 5.7` half of the owner clause lapses; the first half stands. Not
+  struck.
 - ⚠️ **The residue assertion compares an order-dependent `Vec`**
   [`crates/opencmdb-bin/src/fixtures.rs:4653`]. `corpus.without_a_pair` is pushed in
   `walk_trap_files` order and asserted equal to `vec!["example-must-abstain".to_string()]`. Green
@@ -1835,3 +1927,120 @@ cheap, but neither has a failing case that exists._
   removes the dependency in one line; it is not applied now because doing so would change a passing
   assertion with no failing case behind it, which is the change this project asks to be justified by
   a red.
+
+## Deferred from: story-5.7-trap-runner-stops-scoring-nothing (2026-08-01)
+
+_The story that made the committed corpus a gate that RUNS: `score_corpus` scores 13 of 24 traps
+where it scored 0 for nine stories. What follows is what it deliberately did not do, each with the
+measurement that says why, and one correction it owes to the story that comes next._
+
+- 🔴 **`epics.md:1545` gives story 5.8 the premise that 8 committed traps are unanswerable at L1.
+  Measured: there are ELEVEN, in three distinct classes, and only the first is the one that premise
+  names.** The residue is asserted by name — not by count — in
+  `l1_runner`'s `the_eleven_unanswered_traps_are_named_one_by_one`.
+
+  | class | n | why L1 cannot answer it | what happens if it is answered anyway |
+  |---|---|---|---|
+  | expected rule is `l2-*` | 8 | the level is not implemented | 4 `VerdictFail` + 4 `WrongRule` |
+  | `must-abstain`, names a pair | 2 | the expectation names **no rule**, so there is no level to route on | 2 `VerdictFail` |
+  | `must-abstain`, names ONE observation | 1 | there is no pair at all | it would **PASS**, for the wrong reason |
+
+  The three `must-abstain` traps are `hostname-absence-must-abstain`,
+  `shared-hardware-vm-must-abstain` and `example-must-abstain`. They are invisible to an `l2-*`
+  selector because `Expectation::MustAbstain` carries a CAUSE and no rule, so `Expectation::rule()`
+  returns `None` for all three [`crates/opencmdb-core/src/trap.rs`]. The eleven ids in full:
+  `cloned-mac-must-not-merge`, `docker-veth-must-merge`, `example-must-abstain`,
+  `hostname-absence-must-abstain`, `multi-nic-must-merge`, `multi-nic-must-not-merge`,
+  `shared-hardware-vm-must-abstain`, `shared-hardware-vm-must-merge`,
+  `shared-hardware-vm-must-not-merge`, `vrrp-virtual-mac-must-not-merge-bearers`,
+  `vrrp-virtual-mac-must-not-merge-master`.
+  ⚠️ **`epics.md` is NOT edited by this story** — it was verify-only, and an edit there would have
+  been a finding. The correction is registered here instead and flagged FORWARD, the same way story
+  5.5 flagged the float forward to 5.6: *so it is a decision and not a surprise*. **Owner: story
+  5.8**, whose bucket has to hold eleven, not eight.
+
+- ⚠️ **The `VerdictVectorEntry` / `RuleVerdict` unification is RE-OWNED, and the obstacle is
+  measured rather than a matter of appetite.** Five sites named story 5.7 for it; two stated the
+  condition — *"when the trap runner first records **a run** a real engine produced"* — and three
+  named the story with no condition at all. That condition is **not met**, and the reason is that a
+  "run" in `score.rs`'s vocabulary is a `Vec<ScoredRecord>`, and a `ScoredRecord` carries
+  `capability_snapshot: Capabilities` — D36's whole point, *"a verdict without its capability
+  snapshot is UNFALSIFIABLE"*. Measured at contexting on `6cc137b`:
+  - **11 replay streams are referenced by a trap, and not one carries a `capability` control
+    record.** Only `capability-downgrade.jsonl` and `partial-then-failed.jsonl` carry control
+    records at all, and no trap names either;
+  - `read_jsonl`, the reader the runner uses, **discards control records by construction**;
+  - a production `Capabilities` DOES exist (`arp_ping.rs` builds one for its `PollSummary`, and
+    `capability-downgrade.jsonl` carries a committed one) — **but none of them is on the trap-run
+    path**, which is the narrower claim the conclusion actually needs.
+
+  ⇒ producing a `ScoredRecord` here would mean **inventing a capability snapshot for all 24 traps**,
+  which is D36's unfalsifiability in reverse and D45's *"a gate on a false truth"*. **Owner: the
+  story that gives a trap run a real capability snapshot** — the `FixtureConnector` read path, which
+  replays control records, not `read_jsonl`. All five sites were narrowed to the sentence that is
+  true after this story; **none was left saying "story 5.7 owns it"**, which is the promise-re-made
+  defect five consecutive code reviews have caught.
+
+- ⚠️ **The blocker STILL has no production caller, and this story declined to be it.** Story 5.6
+  registered *"nothing calls the blocker and the engine in sequence… Owner: story 5.7"*. The narrow
+  true answer: `l1_runner` calls `identity::l1::decide_pair` and never
+  `identity::blocking::candidates`, because a trap NAMES the pair it puts under judgement
+  (`Trap::observations`) — the runner has nothing to generate, and a runner that generated its own
+  pairs would ignore the corpus's own statement of what is being judged. **Owner: the first caller
+  that holds a set of observations and no trap — story 5.9 or Epic 6.** Annotated on story 5.6's own
+  entry as well; recorded here because "the trap runner will call it" was the expectation, and it
+  turned out to be the wrong shape rather than merely deferred.
+
+- ⚠️ **The `must-abstain` column is now measured by NOTHING, and the gate says so rather than
+  hiding it.** `Tally::scored_in(Column::MustAbstain) == 0` on the committed corpus after this
+  story: all three `must-abstain` traps are in the residue above. That zero is exactly the vacuity
+  `scored_in` was built to make visible — *"the column held"* vs *"the column was empty"* — and it
+  is asserted, with the reason in the assertion's own message. **Owner: story 5.14 and Epic 6**,
+  which are where an abstention first has a producer the corpus can judge.
+
+- ⚠️ **`answer_trap` resolves a trap's `replay` against the BAKED corpus root, never against the
+  root handed to `l1_answers`.** So `l1_answers(scratch)` reads trap FILES from the scratch root and
+  STREAMS from `fixtures/`, and a scratch trap corpus may only reference committed replay streams.
+  This is the same limit `read_traps` carries — recorded at `score_corpus` since story 4.6b — and it
+  is stated on the runner too rather than inherited silently. It is **load-bearing rather than
+  incidental**: it is what lets the two scratch tests vary an expectation while judging real
+  committed observations. **Owner: the story that needs a scratch corpus with its own streams.** Not
+  a defect today.
+
+- ⚠️ **`run_trap` still compares raw `RuleId` strings with no normalization; what closed is the
+  claim about the CORPUS, not the comparison.** `the_producers_rule_ids_are_the_corpus_spelling`
+  asserts that all seven ids the committed corpus writes equal their own `trim()` and
+  `to_lowercase()`, so the unnormalized comparison is trustworthy **on the committed bytes**. A
+  future non-canonical id on either side would still be a *"red gate on a correct answer"* — the
+  test is what makes that a red rather than a surprise. **Owner: the story that admits a
+  non-canonical rule id**, if one ever is.
+
+---
+
+## Deferred from: code review of story-5.7 (2026-08-02)
+
+Three-layer review (Blind Hunter · Edge Case Hunter · Acceptance Auditor) of commit `b555712`.
+20 unique findings: 1 decision, 10 patches, 2 deferred (below), 7 dismissed. Both entries here are
+**measured**, not suspected, and neither is a defect on the committed corpus today.
+
+- ⚠️ **`l1_answers` has no cross-file `TrapId` uniqueness check, so a duplicate id silently
+  overwrites.** `answers.insert(trap.id.clone(), …)` [`crates/opencmdb-bin/src/l1_runner.rs:223`]
+  walks every discovered trap file and blindly inserts; `TrapFile::validate` enforces uniqueness
+  only WITHIN a file. Composed with the harness nothing ships wrong — `score_corpus` raises
+  `FixtureError::DuplicateTrapId` [`trap_gate.rs:259-265`] before scoring anything — so this is not
+  reachable through the release gate. But `l1_answers` is `pub` and its doc calls the result
+  *"exactly the `answers` map `score_corpus` takes"*; a caller that reads `answers.len()` **alone**
+  gets a silently short count with no diagnostic, and the residue arithmetic story 5.8 is about to
+  write is precisely that shape of caller. The committed corpus has no duplicate id (measured: 24
+  distinct ids across ten files), so nothing reds today. **Owner: story 5.8**, as the first consumer
+  of this map that counts rather than scores.
+
+- ⚠️ **`outcome_of`'s abstaining row has no end-to-end path through the runner.** All 13 traps the
+  runner answers carry a MAC on both sides, so `verdict_for_pair`'s `Neutral` branch
+  [`identity/l1.rs:257-263`] is never taken through `l1_answers` or `answer_trap`, and
+  `Conclusion::Abstained -> Outcome::Abstained` is proved only by `score.rs`'s own unit tests and by
+  a test that calls `decide(vec![], _)` directly. **Nothing in the runner's tests would notice if
+  `answer_pair` mishandled a MAC-less observation** — the mapping's third row is exercised beside
+  the runner, never through it. This is the same vacuity `Tally::scored_in(MustAbstain) == 0`
+  reports, seen from the mapping's side rather than the tally's, and the two entries close together.
+  **Owner: story 5.14 / Epic 6**, when an abstention first has a producer the corpus can judge.

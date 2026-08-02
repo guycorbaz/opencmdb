@@ -31,7 +31,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::identity::cascade::IdentityAbstentionCause;
+use crate::identity::cascade::{Conclusion, Decision, IdentityAbstentionCause};
 use crate::observation::Capabilities;
 use crate::trap::{Expectation, RuleId, TrapId};
 
@@ -47,8 +47,9 @@ use crate::trap::{Expectation, RuleId, TrapId};
 /// [`crate::identity::cascade::Decision`] is the ENGINE's return — a conclusion, its verdict vector
 /// and the ruleset version that produced it. This type is the HARNESS's record of an answer, which
 /// may equally be hand-authored in a test. The two mirror each other's algebra (a decision names a
-/// rule, an abstention names a cause) and differ in envelope, and **nothing converts between them**:
-/// mapping one onto the other is a decision about the release gate, and story 5.7 owns it.
+/// rule, an abstention names a cause) and differ in envelope. Since story 5.7 ONE function converts
+/// between them — [`outcome_of`], in this module — and it is a named function rather than a `From`
+/// impl precisely because the conversion is a decision about the release gate.
 ///
 /// # The two sides of a trap speak different abstention vocabularies (story 5.3)
 ///
@@ -257,6 +258,65 @@ pub fn run_trap(expected: &Expectation, actual: &Outcome) -> TrapVerdict {
     }
 }
 
+/// Map the ENGINE's return onto the HARNESS's record of an answer — the seam story 5.7 crosses.
+///
+/// [`crate::identity::cascade::Decision`] is what the identity cascade concluded; [`Outcome`] is
+/// what the release gate writes down about an answer, from any source including a hand-authored
+/// test value. Until this function existed **nothing converted between them**, and the conversion
+/// was withheld on purpose: *"mapping the engine's return onto the harness's record is a decision
+/// about the release gate… not a silent conversion"* [`Decision`'s doc]. This is that decision,
+/// taken and named.
+///
+/// # The three rows
+///
+/// | [`Conclusion`] | [`Outcome`] |
+/// |---|---|
+/// | `Match { rule }` | `Merged { rule }` |
+/// | `NoMatch { rule }` | `Refused { rule }` |
+/// | `Abstained { cause }` | `Abstained { cause }` |
+///
+/// The two algebras mirror each other — a decision names a rule, an abstention names a cause — so
+/// the mapping is total on the ANSWER and needs no fallback. The abstaining row carries the SAME
+/// type on both sides: [`IdentityAbstentionCause`] since story 5.3. It is not a translation between
+/// the two abstention vocabularies, which stay unbridged; [`Expectation::MustAbstain`]'s
+/// [`crate::gap::AbstentionCause`] is never touched here.
+///
+/// # What is DROPPED, and why that is not a bug to fix here
+///
+/// [`Decision::verdict_vector`] and [`Decision::ruleset_version`] have **nowhere to go**: `Outcome`
+/// is a three-variant enum with no envelope. [`ScoredRecord`] is where a run would carry them —
+/// its [`ScoredRecord::verdict_vector`] is exactly D18's *"COMPLETE VERDICT VECTOR"* requirement —
+/// and it is uninhabited ([`VerdictVectorEntry`]) because no run in this crate is produced by an
+/// engine. So the loss is real and it is bounded by what the destination can hold, not chosen
+/// here: the day a trap run records a [`ScoredRecord`], the vector and the version are what that
+/// story must carry, and this function is where a reader finds out they were dropped.
+///
+/// [`Decision::rule`] and [`Outcome::rule`] mirror each other, and this mapping preserves that
+/// mirror: `outcome_of(&d).rule() == d.rule()` on every row. That is what makes [`run_trap`]'s
+/// `(verdict, rule)` assertion mean the same thing about an engine answer as about a hand-authored
+/// one, and a test pins it.
+///
+/// # Why a free function and not `impl From<Decision> for Outcome`
+///
+/// A `From` makes the conversion free at every call site — `.into()` — which is precisely the
+/// invisibility [`Decision`]'s doc refused. A named function has to be typed out, so a reader of a
+/// call site sees that a gate decision was taken. The same refusal, for the same reason, keeps the
+/// two abstention vocabularies unbridged (story 5.3).
+///
+/// It lives HERE and not in `identity/`: this is knowledge about the release gate, and the engine
+/// must not acquire it. `Outcome` already names [`IdentityAbstentionCause`] in a field type, so the
+/// dependency direction is unchanged.
+///
+/// Exhaustive with no `_` arm: a fourth [`Conclusion`] variant must break THIS function with
+/// `error[E0004]` and force a decision about how the gate records it.
+pub fn outcome_of(decision: &Decision) -> Outcome {
+    match &decision.conclusion {
+        Conclusion::Match { rule } => Outcome::Merged { rule: rule.clone() },
+        Conclusion::NoMatch { rule } => Outcome::Refused { rule: rule.clone() },
+        Conclusion::Abstained { cause } => Outcome::Abstained { cause: *cause },
+    }
+}
+
 /// The state of a source when an outcome was reached — **not buildable in Epic 4.**
 ///
 /// D32 specifies it as a struct: `{ liveness: Liveness, capabilities: Capabilities }`. Epic 13
@@ -286,15 +346,31 @@ pub enum SourceState {}
 /// verdict vector IS built ([`crate::identity::l1`]), but **nothing feeds it to the harness**: no
 /// run here is produced by that engine. This placeholder therefore stays **uninhabited** rather than
 /// being replaced, so the field is provably empty by the same standard as [`SourceState`], instead
-/// of being empty by comment. **Story 5.7 owns the unification**, when the trap runner first records
-/// a run a real engine produced.
+/// of being empty by comment.
+///
+/// # Story 5.7 did NOT unify the two, and the obstacle is measured rather than a matter of appetite
+///
+/// An engine answer now reaches the harness — `opencmdb_bin`'s `l1_runner` produces one per trap
+/// and [`outcome_of`] maps it — but an [`Outcome`] is where it lands, and an `Outcome` carries no
+/// vector. Unifying this type means producing a [`ScoredRecord`], and a `ScoredRecord` carries
+/// [`ScoredRecord::capability_snapshot`], which is D36's whole point: *"a verdict without its
+/// capability snapshot is UNFALSIFIABLE"*. Measured on the committed corpus: **eleven replay
+/// streams are named by a trap and not one of them carries a `capability` control record**, and the
+/// reader the trap runner uses discards control records by construction. Producing a record here
+/// would mean **inventing a capability snapshot for all 24 traps** — D36's unfalsifiability in
+/// reverse, and D45's *"a gate on a false truth"*.
+///
+/// **Owner: the story that gives a trap run a real capability snapshot** — the `FixtureConnector`
+/// read path, which replays control records, rather than the observations-only reader. Recorded in
+/// `deferred-work.md` with that condition spelled out.
 ///
 /// This is also what PINS story 4.7a's AC6 forward contract: [`run_trap`] asserts `(verdict, rule)`
 /// today, but the requirement that *a firing rule leave its `rule_id` and evidence behind* needs an
 /// engine to enforce. It now IS a mechanism, on the engine's side:
 /// [`crate::identity::l1::verdict_for_pair`] carries both `ObsId`s on every verdict that argues, and
-/// a test reds if it stops. ⚠️ **That mechanism has not reached HERE**: this vector is still empty
-/// because no run in this module was produced by that engine, which is what story 5.7 changes.
+/// a test reds if it stops. ⚠️ **That mechanism still has not reached HERE**: the evidence is
+/// carried on the [`crate::identity::cascade::Decision`] and dropped by [`outcome_of`], because the
+/// destination has nowhere to put it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerdictVectorEntry {}
 
@@ -345,8 +421,11 @@ pub struct ScoredRecord {
     pub capability_snapshot: Capabilities,
     /// Always `None` until Epic 13, and provably so — [`SourceState`] is uninhabited.
     pub source_state: Option<SourceState>,
-    /// Always empty until an engine produces rules, and provably so —
-    /// [`VerdictVectorEntry`] is uninhabited.
+    /// Always empty, and provably so — [`VerdictVectorEntry`] is uninhabited.
+    ///
+    /// ⚠️ The condition this used to name — *"until an engine produces rules"* — has been MET since
+    /// story 5.5 and the vector is still empty, so it was not the condition. The one that holds is
+    /// on [`VerdictVectorEntry`]'s own doc: a trap run that can reach a real capability snapshot.
     pub verdict_vector: Vec<VerdictVectorEntry>,
 }
 
@@ -463,8 +542,10 @@ pub enum RecordComparison {
 /// - `source_state` — excluded (AC6): uninhabited until Epic 13, so comparing it is vacuous today
 ///   and would silently start mattering the day it gains a type (this destructure forces that
 ///   decision then).
-/// - `verdict_vector` — an engine now produces verdicts (`identity::l1`), but nothing FEEDS this
-///   harness one, so this stays empty on both sides. Story 5.7 crosses that seam.
+/// - `verdict_vector` — an engine now produces verdicts (`identity::l1`) and story 5.7 brought its
+///   ANSWER to the harness, but not its vector: [`outcome_of`] drops it, because [`Outcome`] has
+///   nowhere to put it. So this stays empty on both sides, and the story that gives a trap run a
+///   real capability snapshot is the one that can fill it (see [`VerdictVectorEntry`]).
 fn comparable_fields(record: &ScoredRecord) -> (&Outcome, &Capabilities) {
     let ScoredRecord {
         trap: _,
@@ -1338,6 +1419,136 @@ mod tests {
         assert_eq!(
             traps,
             BTreeSet::from([TrapId("x".into()), TrapId("y".into())])
+        );
+    }
+
+    // ── The engine's return, mapped onto the harness's record (story 5.7) ─────
+    //
+    // These tests live HERE, with `outcome_of`, because the claim they pin is `outcome_of`'s:
+    // `Decision` and `Conclusion` are dependencies they merely read. That is `cascade.rs`'s stated
+    // convention — *a test lives with the item whose CLAIM it pins*.
+
+    use crate::identity::cascade::{RuleVerdict, RulesetVersion, Verdict};
+    use crate::observation::ObsId;
+
+    /// A decision with a NON-EMPTY verdict vector and a non-trivial ruleset version, so the two
+    /// fields the mapping drops are present to be dropped. A vector that was empty on both sides
+    /// would make the loss unobservable.
+    fn decision_with(conclusion: Conclusion) -> Decision {
+        Decision {
+            conclusion,
+            verdict_vector: vec![RuleVerdict {
+                rule: rule("l1-exact-mac"),
+                verdict: Verdict::Decisive,
+                evidence: vec![ObsId::from_uuid(uuid::Uuid::nil())],
+            }],
+            ruleset_version: RulesetVersion(1),
+        }
+    }
+
+    #[test]
+    fn a_match_becomes_a_merge_naming_the_same_rule() {
+        let decision = decision_with(Conclusion::Match {
+            rule: rule("l1-exact-mac"),
+        });
+        assert_eq!(
+            outcome_of(&decision),
+            Outcome::Merged {
+                rule: rule("l1-exact-mac")
+            }
+        );
+    }
+
+    #[test]
+    fn a_no_match_becomes_a_refusal_naming_the_same_rule() {
+        let decision = decision_with(Conclusion::NoMatch {
+            rule: rule("l1-distinct-mac"),
+        });
+        assert_eq!(
+            outcome_of(&decision),
+            Outcome::Refused {
+                rule: rule("l1-distinct-mac")
+            }
+        );
+    }
+
+    /// The abstaining row is the one that carries the SAME type on both sides
+    /// ([`IdentityAbstentionCause`], since story 5.3), so the cause travels unchanged. Both
+    /// variants are checked: a mapping that collapsed them onto one cause would still satisfy a
+    /// single-variant test.
+    #[test]
+    fn an_abstention_keeps_its_cause_variant() {
+        for cause in IdentityAbstentionCause::all() {
+            let decision = decision_with(Conclusion::Abstained { cause });
+            assert_eq!(
+                outcome_of(&decision),
+                Outcome::Abstained { cause },
+                "the engine's cause must survive the mapping unchanged"
+            );
+        }
+    }
+
+    /// The mirror `run_trap` depends on: `outcome_of(&d).rule() == d.rule()` on EVERY row.
+    ///
+    /// `run_trap` compares `(expected.rule(), actual.rule())` and fires `WrongRule` only where both
+    /// are `Some`. If the mapping lost or changed the rule, a trap answered by the engine would
+    /// report a wrong-rule failure that the engine never committed — *"a red gate on a correct
+    /// answer"*, which is the failure mode the register already names for the unnormalized string
+    /// comparison.
+    #[test]
+    fn the_mapping_preserves_the_rule_mirror_on_every_row() {
+        let rows = [
+            Conclusion::Match {
+                rule: rule("l1-exact-mac"),
+            },
+            Conclusion::NoMatch {
+                rule: rule("l1-distinct-mac"),
+            },
+            Conclusion::Abstained {
+                cause: IdentityAbstentionCause::AbsenceOfProof,
+            },
+        ];
+        for conclusion in rows {
+            let decision = decision_with(conclusion);
+            assert_eq!(
+                outcome_of(&decision).rule(),
+                decision.rule(),
+                "Decision::rule and Outcome::rule must agree after the mapping: {decision:?}"
+            );
+        }
+    }
+
+    /// What the mapping DROPS, asserted rather than left to the doc comment.
+    ///
+    /// `Outcome` has nowhere to put a verdict vector or a ruleset version, and the doc says so.
+    /// This pins the consequence a reader has to be able to rely on: two decisions that differ ONLY
+    /// in those two fields map to the SAME outcome. The day `ScoredRecord` carries them, this test
+    /// is what says the loss was at the `Outcome` boundary and not further up.
+    ///
+    /// ⚠️ **It cannot red under any realistic mutation of [`outcome_of`], and that is recorded
+    /// rather than smoothed over** — the same honesty the rule-mirror test above carries about M1.
+    /// [`Outcome`] has no field able to hold either value, so every implementation that does not
+    /// branch on `ruleset_version` satisfies the second assertion; it appears in none of the six
+    /// mutation red sets. The only assertion here that can fail is `assert_ne!`, which guards
+    /// [`Decision`]'s derived `PartialEq`, not the mapping. It is kept as a DOCUMENTATION test: what
+    /// it states is a property of the destination type, and the day that type changes it is what
+    /// says the loss used to be at this boundary.
+    #[test]
+    fn the_verdict_vector_and_the_ruleset_version_are_dropped() {
+        let conclusion = Conclusion::Match {
+            rule: rule("l1-exact-mac"),
+        };
+        let rich = decision_with(conclusion.clone());
+        let bare = Decision {
+            conclusion,
+            verdict_vector: Vec::new(),
+            ruleset_version: RulesetVersion(9999),
+        };
+        assert_ne!(rich, bare, "the two decisions really do differ");
+        assert_eq!(
+            outcome_of(&rich),
+            outcome_of(&bare),
+            "the two dropped fields leave no trace in the outcome"
         );
     }
 }
