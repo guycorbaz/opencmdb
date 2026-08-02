@@ -50,9 +50,14 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-02  # 5.8 CONTEXTED -> `ready-for-dev` (see its entry below). Master at
-                          # `60107fa`, clean tree, 352 tests. NEXT = the MANDATORY two-agent
-                          # validation, then `dev-story` 5.8.
+last_updated: 2026-08-03  # 5.8 CODE-REVIEWED (three layers) and PATCHED -- see its entry below.
+                          # It STAYS at `review`: `done` is the MERGE's business in this project's
+                          # flow. Branch `story-5.8-unanswerable-bucket`; the committed gate is RED
+                          # on purpose (11 unanswerable, `passed() == false`).
+                          # NEXT = push -> PR -> green CI -> squash merge.
+                          #
+                          # (superseded 2026-08-03) 5.8 CONTEXTED -> `ready-for-dev`. Master at
+                          # `60107fa`, clean tree, 352 tests.
                           #
                           # 5.7 **DONE** -- PR #61 squash-merged as `d47631b` after a green CI run
                           # (55s), code-reviewed first. **Epic 5 is now 9/16.** Master carries 352

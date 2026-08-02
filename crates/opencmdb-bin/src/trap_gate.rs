@@ -16,9 +16,14 @@
 //! [`crate::l1_runner`] runs the real L1 engine over a trap corpus and returns the map
 //! [`score_corpus`] takes. It lives in its own module precisely so the sentence above stays a
 //! FILE-level property instead of degrading into a per-function promise on the day it first has
-//! something to promise about. The seam between the two is a `BTreeMap<TrapId, Outcome>`, which is
-//! DATA — no `poll`, no behaviour, no trait to stub — and [`score_corpus`]'s signature and body are
-//! unchanged by that story: no engine parameter, no callback, no closure.
+//! something to promise about. The seam between the two is a `BTreeMap<TrapId, Answer>`, which is
+//! DATA — no `poll`, no behaviour, no trait to stub — and [`score_corpus`] takes no engine
+//! parameter, no callback and no closure.
+//! _(This paragraph said the seam is a `BTreeMap<TrapId, Outcome>` and that `score_corpus`'s
+//! signature and body are "unchanged by that story". True of story 5.7; story 5.8 widened the
+//! map's VALUE to [`Answer`] and with it the signature — the arity, and the guarantee above, are
+//! what stayed. The twin of this sentence in `l1_runner.rs` was corrected in 5.8's own commit and
+//! this copy was missed, which is the defect its AC8 warns about.)_
 //!
 //! Do NOT read the guarantee as "the metric can never be influenced by an engine": now that the map
 //! is filled from engine output, the numbers depend on that output, exactly as D18 intends. What
@@ -29,12 +34,15 @@
 //! corpus whose traps are paired with outcomes" is still possible: an outcome is a result, not a
 //! producer.
 //!
+//! [`Answer`]: opencmdb_core::score::Answer
+//! [`Outcome`]: opencmdb_core::score::Outcome
+//!
 //! # Story 5.8 widened the map's VALUE, and that does not spend 4.6b's AC1 either
 //!
 //! [`score_corpus`] now takes `&BTreeMap<TrapId, Answer>` where it took
 //! `&BTreeMap<TrapId, Outcome>`. Its **arity is unchanged**, and so is the guarantee above: an
 //! [`Answer`] is still DATA — no trait, no callback, no closure, nothing this file can call. 4.6b's
-//! AC1 asks that the harness *"must not require an engine to exist"* [`epics.md:1055`], and it does
+//! AC1 asks that the harness *"must not require an engine to exist"* (`epics.md:1055`), and it does
 //! not: an empty map still scores nothing and still passes.
 //!
 //! What the wider value buys is the one thing absence cannot express — *"a producer ran and could
@@ -202,10 +210,16 @@ impl Report {
 
     /// How many traps were unanswerable IN ONE COLUMN.
     ///
-    /// The counterpart of [`Tally::scored_in`], and the two are meant to be read together: for
-    /// every column, `scored_in(c) + unanswered_in(c)` is how many traps the corpus carries in that
-    /// column, so a trap that vanished from BOTH is the one thing the pair can catch and
-    /// `discovered` alone cannot.
+    /// The counterpart of [`Tally::scored_in`], and the two are meant to be read together:
+    /// **when the answers map accounts for every discovered trap** (`unaccounted() == 0`),
+    /// `scored_in(c) + unanswered_in(c)` is how many traps the corpus carries in that column, so a
+    /// trap that vanished from BOTH is the one thing the pair can catch and `discovered` alone
+    /// cannot.
+    ///
+    /// ⚠️ The qualifier is load-bearing, not hedging: with an EMPTY map over the committed corpus —
+    /// the state 4.6b's AC1 keeps green — all three columns read `0 + 0` against 10 / 11 / 3, and
+    /// the identity is false in every one of them. It holds of a TOTAL map, which is what
+    /// `l1_runner::l1_answers` produces.
     pub fn unanswered_in(&self, column: Column) -> usize {
         self.unanswered
             .iter()
@@ -258,9 +272,10 @@ impl Report {
 
 impl fmt::Display for Report {
     /// All three numbers on one line, so "0 failures" can never be read as "the gate passed" when
-    /// nothing was scored (4.6b AC3). Two count suffixes follow on that SAME first line, in a fixed
-    /// order — `", K wrong-rule failure(s)"` (story 4.7a) then `", J incomplete-famil{y|ies}"` (story
-    /// 4.7b) — each appended only when non-zero, so the line alone can never read as a pass while
+    /// nothing was scored (4.6b AC3). **Three** count suffixes follow on that SAME first line, in a
+    /// fixed order — `", K wrong-rule failure(s)"` (story 4.7a), `", J incomplete-famil{y|ies}"`
+    /// (story 4.7b), then `", N unanswerable trap(s)"` (story 5.8) — each appended only when
+    /// non-zero, so the line alone can never read as a pass while
     /// [`Report::passed`] is false, and the nominal first line stays byte-for-byte unchanged (its
     /// 4.6b-asserted substrings are stable). The order is fixed so the rendered string is
     /// deterministic. Each wrong-rule mismatch then follows on its own line (naming both rules), then
@@ -290,9 +305,11 @@ impl fmt::Display for Report {
             write!(f, ", {n} {noun}")?;
         }
         // Story 5.8's suffix is THIRD and last, so the two above stay byte-identical and every
-        // substring assertion 4.6b/4.7a/4.7b wrote on them keeps passing.
+        // substring assertion 4.6b/4.7a/4.7b wrote on them keeps passing. It carries a NOUN, as
+        // both its siblings do — `", 1 unanswerable"` alone read as an adjective with nothing to
+        // qualify.
         if !self.unanswered.is_empty() {
-            write!(f, ", {} unanswerable", self.unanswered.len())?;
+            write!(f, ", {} unanswerable trap(s)", self.unanswered.len())?;
         }
         for mismatch in &self.rule_mismatches {
             write!(
@@ -334,17 +351,43 @@ impl fmt::Display for Report {
                 unanswered.column.as_str()
             )?;
         }
-        // NFR4's status, tied to the bucket rather than written unconditionally. The day Epic 6
-        // empties the bucket this sentence disappears by CONSTRUCTION — a claim that can go stale
-        // must not depend on someone remembering to delete it, which is the defect six consecutive
-        // reviews of this project have caught.
+        // NFR4's status, tied to the bucket rather than written unconditionally — and VENTILATED
+        // by cause, because one closer does not close all three classes.
+        //
+        // ⚠️ This sentence used to attribute the whole count to *"this cascade level — closed by
+        // Epic 6"*. Story 5.8's own code review measured that false: `NoLevelToRouteOn` and
+        // `NoPairUnderJudgement` do not depend on a level at all (`Expectation::rule()` is `None`
+        // for any `must-abstain`, at every level present and future), so Epic 6 takes the bucket
+        // from 11 to 3 and the old sentence would have gone on naming as its closer the epic that
+        // had just shipped. Each class now names the story that actually closes it, and a class
+        // with no members renders nothing — so the line narrows itself as the work lands instead of
+        // relying on someone remembering to edit it.
         if !self.unanswered.is_empty() {
+            let level = self
+                .unanswered
+                .iter()
+                .filter(|u| matches!(u.cause, UnanswerableCause::LevelNotImplemented { .. }))
+                .count();
+            let no_level = self.unanswered.len() - level;
             write!(
                 f,
                 "\n  NFR4 NOT MET at this epic: D18 places the gate at the DEVICE level, and {} \
-                 trap(s) were never put to an engine at this cascade level — closed by Epic 6.",
+                 trap(s) went unanswered.",
                 self.unanswered.len()
             )?;
+            if level > 0 {
+                write!(
+                    f,
+                    " {level} at a cascade level this engine does not implement (closed by Epic 6)."
+                )?;
+            }
+            if no_level > 0 {
+                write!(
+                    f,
+                    " {no_level} with no level to route on at all (closed by story 5.14 / Epic 6, \
+                     where an abstention first has a producer the corpus can judge)."
+                )?;
+            }
         }
         Ok(())
     }
@@ -707,6 +750,13 @@ mod tests {
 
     /// Every committed trap, by id — so a column total can be read from the CORPUS rather than
     /// hard-coded a second time beside the numbers it is meant to check.
+    ///
+    /// ⚠️ **A deliberate twin of `l1_runner`'s helper of the same name, and it may not be
+    /// collapsed.** Rust gives no way to share a `#[cfg(test)] mod tests` item across files, which
+    /// is the same obstacle `l1_runner`'s own `committed_traps_root()` records ("`trap_gate`'s
+    /// lives inside that file's `mod tests` and is unreachable from here"). The house DRY rule
+    /// permits redundancy a comment labels as deliberate; this is that label. A DRY pass that
+    /// wants one copy must promote it to a shared test-support module, not delete one.
     fn committed_traps() -> BTreeMap<TrapId, Trap> {
         let mut all = BTreeMap::new();
         for file in discover_trap_files(&committed_traps_root()).expect("the corpus walks") {
@@ -816,13 +866,121 @@ mod tests {
             );
         }
 
-        assert_eq!(report.unanswered_in(Column::MustMerge), 3);
-        assert_eq!(report.unanswered_in(Column::MustNotMerge), 5);
-        assert_eq!(report.unanswered_in(Column::MustAbstain), 3);
         assert_eq!(
             report.scored() + report.unanswered().len(),
             report.discovered(),
             "and the same equality over the whole corpus: 13 + 11 == 24"
+        );
+    }
+
+    /// The per-column SPLIT, in its own test.
+    ///
+    /// 🔴 Split out from the arithmetic above by story 5.8's code review, per story 5.6's own
+    /// idiom (*"in one test a missing pair panics before any recall exists"*). One test cannot
+    /// carry both: whichever assertion runs first makes the other unreachable under any mutation
+    /// that reds it, and the story's original ordering merely MOVED the unreachability rather than
+    /// removing it. Two tests, two independent reds.
+    ///
+    /// The totals are what the loop above guards; these are the DISTRIBUTION inside each total —
+    /// the only thing that catches a trap moving from scored to bucketed within one column, which
+    /// leaves every total unchanged.
+    #[test]
+    fn the_per_column_split_of_the_bucket_is_three_five_three() {
+        let report = committed_report();
+        assert_eq!(report.unanswered_in(Column::MustMerge), 3);
+        assert_eq!(report.unanswered_in(Column::MustNotMerge), 5);
+        assert_eq!(report.unanswered_in(Column::MustAbstain), 3);
+    }
+
+    /// `unaccounted()` reports the traps a producer said NOTHING about — and the arithmetic is
+    /// measured on a map where all three terms are non-zero.
+    ///
+    /// 🔴 Added by story 5.8's code review: the only prior call site passed an EMPTY map, so both
+    /// subtractions were `− 0` and replacing the whole body with `self.discovered` left the entire
+    /// suite green. Mutation M8 proved the CALL was load-bearing, not the calculation.
+    #[test]
+    fn unaccounted_counts_what_no_producer_spoke_about() {
+        let dir = scratch_dir("unaccounted-partial");
+        write_scratch_traps(
+            &dir,
+            r#"
+[[trap]]
+id = "spoken-for"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000003"]
+reason = "a trap the producer declined, so it lands in the bucket rather than in the tally."
+expect = { must-not-merge = { rule = "l2-different-switch" } }
+
+[[trap]]
+id = "answered-one"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000003"]
+reason = "a trap the producer answered, so it is scored and leaves the unaccounted count alone."
+expect = { must-not-merge = { rule = "l1-distinct-mac" } }
+
+[[trap]]
+id = "silent-about"
+replay = "scenario/replay/minimal.jsonl"
+observations = ["aaaaaaaa-0000-4000-8000-000000000001", "aaaaaaaa-0000-4000-8000-000000000003"]
+reason = "a trap no producer said anything about at all, which is the state this test measures."
+expect = { must-not-merge = { rule = "l1-distinct-mac" } }
+"#,
+        );
+        let mut answers = BTreeMap::new();
+        answers.insert(
+            TrapId("spoken-for".into()),
+            Answer::Unanswerable {
+                cause: UnanswerableCause::LevelNotImplemented {
+                    expected: RuleId("l2-different-switch".into()),
+                },
+            },
+        );
+        answers.insert(
+            TrapId("answered-one".into()),
+            Answer::Answered(Outcome::Refused {
+                rule: RuleId("l1-distinct-mac".into()),
+            }),
+        );
+
+        let report = score_corpus(&dir, &answers).expect("the scratch corpus reads");
+        // All three terms non-zero, so neither subtraction can be dropped without a red.
+        assert_eq!(report.discovered(), 3);
+        assert_eq!(report.scored(), 1);
+        assert_eq!(report.unanswered().len(), 1);
+        assert_eq!(
+            report.unaccounted(),
+            1,
+            "3 discovered − 1 scored − 1 declined = 1 nobody spoke about: {report}"
+        );
+        assert!(
+            !report.passed(),
+            "and the DECLINED one blocks, while the unaccounted one does not — that asymmetry is \
+             decision 4, and it is what keeps 4.6b's AC1 true"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// AC2's named case: an `Unanswerable` key for a trap that does not exist is refused exactly as
+    /// an `Answered` one is.
+    ///
+    /// 🔴 Added by story 5.8's code review. `used.insert` sits outside the `match` so BOTH arms
+    /// reach the check — but nothing pinned it, and moving that line into the `Answered` arm is the
+    /// natural refactor, since the arms already differ.
+    #[test]
+    fn an_unanswerable_answer_for_an_unknown_trap_is_refused_too() {
+        let mut answers = BTreeMap::new();
+        answers.insert(
+            TrapId("no-such-trap".into()),
+            Answer::Unanswerable {
+                cause: UnanswerableCause::NoPairUnderJudgement,
+            },
+        );
+        let err = score_corpus(&committed_traps_root(), &answers)
+            .expect_err("a declined answer for a trap that does not exist is still a mismatch");
+        assert!(
+            matches!(err, FixtureError::AnswerForUnknownTrap { ref trap, count: 1 } if trap == "no-such-trap"),
+            "a producer that declines a trap the corpus does not carry is a mismatch, not a \
+             silent no-op: {err:?}"
         );
     }
 
@@ -832,7 +990,7 @@ mod tests {
         let rendered = committed_report().to_string();
         assert!(rendered.contains("24 trap(s) discovered"), "{rendered}");
         assert!(rendered.contains("13 scored"), "{rendered}");
-        assert!(rendered.contains("11 unanswerable"), "{rendered}");
+        assert!(rendered.contains(", 11 unanswerable trap(s)"), "{rendered}");
         assert!(
             rendered.contains(
                 "unanswerable: trap `multi-nic-must-merge` (must-merge): its author named rule \
@@ -846,9 +1004,25 @@ mod tests {
             ),
             "{rendered}"
         );
+        // 🔴 The NFR4 verdict is VENTILATED by cause: one closer does not close all three classes.
+        // Story 5.8's code review measured that `NoLevelToRouteOn` and `NoPairUnderJudgement` do
+        // not depend on a level at all, so Epic 6 takes the bucket from 11 to 3 and a sentence
+        // attributing the whole count to "this cascade level — closed by Epic 6" would go on
+        // naming as its closer the epic that had just shipped.
         assert!(
-            rendered.contains("NFR4 NOT MET at this epic") && rendered.contains("Epic 6"),
+            rendered.contains("NFR4 NOT MET at this epic")
+                && rendered.contains("11 trap(s) went unanswered."),
             "{rendered}"
+        );
+        assert!(
+            rendered.contains(
+                "8 at a cascade level this engine does not implement (closed by Epic 6)."
+            ),
+            "the eight `l2-*` traps, and only those, are Epic 6's to close: {rendered}"
+        );
+        assert!(
+            rendered.contains("3 with no level to route on at all (closed by story 5.14 / Epic 6"),
+            "the three `must-abstain` traps survive every cascade level and say so: {rendered}"
         );
     }
 
@@ -859,9 +1033,16 @@ mod tests {
         let rendered = score_corpus(&committed_traps_root(), &BTreeMap::new())
             .unwrap()
             .to_string();
+        // The SUFFIX and the LINE PREFIX, not the bare word: a trap id containing "unanswerable"
+        // would have defeated the looser guard, so it would have passed for a reason unrelated to
+        // the bucket (story 5.8's code review).
         assert!(
-            !rendered.contains("unanswerable"),
-            "no bucket, no suffix and no per-trap line: {rendered}"
+            !rendered.contains("unanswerable trap(s)"),
+            "no bucket, no count suffix: {rendered}"
+        );
+        assert!(
+            !rendered.contains("\n  unanswerable: trap `"),
+            "and no per-trap line: {rendered}"
         );
         assert!(
             !rendered.contains("NFR4"),
@@ -910,13 +1091,22 @@ mod tests {
             .iter()
             .map(|u| (u.trap.0.as_str(), &u.cause))
             .collect();
-        // Scored = discovered minus bucketed. Derived from the two sets rather than restated, so it
-        // cannot disagree with the report it is read from.
-        let scored: BTreeSet<String> = committed_traps()
-            .keys()
-            .map(|id| id.0.clone())
-            .filter(|id| !bucket.contains_key(id.as_str()))
+        // 🔴 Read from the RUNNER's map, not derived as "corpus minus bucket". That derivation
+        // folds the report's THIRD state — `unaccounted`, neither scored nor bucketed — into
+        // "answered", so a trap the producer dropped entirely would satisfy `is the family's L1
+        // pole and is answered`. Measured by story 5.8's code review.
+        let answers = l1_answers(&committed_traps_root()).expect("the runner answers the corpus");
+        let scored: BTreeSet<String> = answers
+            .iter()
+            .filter(|(_, a)| matches!(a, opencmdb_core::score::Answer::Answered(_)))
+            .map(|(id, _)| id.0.clone())
             .collect();
+        assert_eq!(
+            report.unaccounted(),
+            0,
+            "the premise of the derivation below: every discovered trap is either answered or \
+             bucketed, so `scored` cannot silently absorb a dropped one"
+        );
 
         let splits = [
             // The three MIXED families: an `l1-*` pole and an `l2-*` pole each.
@@ -1283,10 +1473,14 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// `passed()` is the D18 gate — `failures == 0` — plus a floor of `discovered > 0`. The floor
-    /// is what an EMPTY corpus fails; a real corpus with no engine yet still PASSES, because AC1
-    /// defines the vacuous-over-a-real-corpus run as green (the `scored` number is what tells a
-    /// human it was vacuous, not `passed()`). A run with a failure does not pass.
+    /// `passed()` is the D18 gate — `failures == 0` — plus D46b's wrong-rule criterion, the
+    /// corpus-completeness criterion, the unanswerable bucket (story 5.8), and a floor of
+    /// `discovered > 0`. The floor is what an EMPTY corpus fails; a real corpus with **no producer
+    /// at all** still PASSES, because 4.6b's AC1 defines the vacuous-over-a-real-corpus run as green
+    /// (the `scored` number is what tells a human it was vacuous, not `passed()`). What does NOT
+    /// pass is a producer that RAN and declined — an absent key and an
+    /// [`opencmdb_core::score::Answer::Unanswerable`] are different states and only the second
+    /// blocks. A run with a failure does not pass.
     #[test]
     fn passed_is_the_failures_gate_with_a_discovered_floor() {
         // Vacuous over the committed corpus: discovered, nothing scored, and GREEN (AC1).

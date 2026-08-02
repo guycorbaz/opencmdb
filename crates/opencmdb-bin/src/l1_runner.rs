@@ -270,6 +270,11 @@ pub fn answer_trap(trap: &Trap) -> Result<Option<Outcome>, FixtureError> {
 /// and shorten a map whose LENGTH is now load-bearing — the residue arithmetic reads it. The
 /// harness raises the same error for the same corpus, but a caller of this function alone would
 /// otherwise get a short count with no diagnostic.
+///
+/// Ids are compared **folded** (`trim().to_lowercase()`), the same normalization
+/// `TrapFile::validate` uses within a file — so `"Shared-Id"` and `"shared-id"` in two files are
+/// one duplicate here as they would be in one file, rather than two traps a report cannot tell
+/// apart.
 pub fn l1_answers(traps_root: &Path) -> Result<BTreeMap<TrapId, Answer>, FixtureError> {
     let mut answers: BTreeMap<TrapId, Answer> = BTreeMap::new();
     // One read per distinct replay stream. `contains_key` + `insert` rather than
@@ -278,12 +283,19 @@ pub fn l1_answers(traps_root: &Path) -> Result<BTreeMap<TrapId, Answer>, Fixture
     let mut streams: BTreeMap<String, Vec<Observation>> = BTreeMap::new();
     // Every trap id seen so far, and the file it came from — the same guard `score_corpus` carries,
     // stated here because this map's LENGTH is read, not only its contents.
-    let mut seen: BTreeMap<TrapId, PathBuf> = BTreeMap::new();
+    //
+    // Keyed on the id FOLDED the way `TrapFile::validate` folds it (`trim().to_lowercase()`), not
+    // on the raw string. Story 5.8's code review measured the asymmetry: `"Shared-Id"` in one file
+    // and `"shared-id"` in another passed the raw guard, inflating `discovered` — the denominator
+    // this story made load-bearing — and rendering two bucket lines a reader cannot tell apart,
+    // which is verbatim the harm `TrapError::DuplicateId` exists to prevent.
+    let mut seen: BTreeMap<String, PathBuf> = BTreeMap::new();
 
     for trap_file in discover_trap_files(traps_root)? {
         let traps = read_traps(&trap_file)?;
         for trap in &traps.trap {
-            if let Some(first) = seen.insert(trap.id.clone(), trap_file.clone()) {
+            let folded = trap.id.0.trim().to_lowercase();
+            if let Some(first) = seen.insert(folded, trap_file.clone()) {
                 return Err(FixtureError::DuplicateTrapId {
                     trap: trap.id.0.clone(),
                     first,
@@ -462,7 +474,16 @@ mod tests {
             expected_answered(),
             "the answered set is the thirteen traps whose expected rule is `l1-*`"
         );
-        assert_eq!(answered_ids(&answers).len(), 13);
+        // A statement about the MAP, not about `expected_answered()`'s length — the set equality
+        // above already pins the membership, so counting the literal would assert nothing.
+        assert_eq!(
+            answers
+                .values()
+                .filter(|a| matches!(a, Answer::Answered(_)))
+                .count(),
+            13,
+            "thirteen of the twenty-four entries are answers"
+        );
     }
 
     /// The residue, by NAME rather than by count. *A residue that can grow in silence is how a gate
@@ -488,8 +509,12 @@ mod tests {
             11,
             "eleven, where epics.md:1545 said eight until story 5.8 corrected it"
         );
+        // Both halves read from the MAP, never from the literal oracle. With
+        // `expected_answered().len()` on the left this was `11 + 13 == 24` — a restatement of the
+        // two assertions above that stayed green under M5b, the very mutation its message claims to
+        // catch.
         assert_eq!(
-            unanswered.len() + expected_answered().len(),
+            unanswered.len() + answered_ids(&answers).len(),
             all.len(),
             "answered and unanswered PARTITION the corpus — neither set may lose a trap silently"
         );
@@ -503,11 +528,17 @@ mod tests {
         let answers = l1_answers(&committed_traps_root()).unwrap();
         let causes = unanswered_causes(&answers);
 
+        // Exhaustive, with NO `_` arm: `UnanswerableCause`'s own doc promises that a fourth variant
+        // must break the build "wherever it is matched", and a wildcard here would have let a new
+        // class compile straight into the "not LevelNotImplemented" bucket while the two counts
+        // below silently excluded it.
         let level_not_implemented: BTreeMap<&TrapId, &RuleId> = causes
             .iter()
             .filter_map(|(id, c)| match c {
                 UnanswerableCause::LevelNotImplemented { expected } => Some((id, expected)),
-                _ => None,
+                UnanswerableCause::NoLevelToRouteOn | UnanswerableCause::NoPairUnderJudgement => {
+                    None
+                }
             })
             .collect();
         let no_level = causes
@@ -991,8 +1022,11 @@ expect = {{ must-not-merge = {{ rule = "l1-distinct-mac" }} }}
                 second,
             } => {
                 assert_eq!(trap, "shared-id");
-                assert_ne!(first, second, "the error names BOTH files");
-                assert!(first.starts_with(&dir) && second.starts_with(&dir), "{err}");
+                // The two PATHS, named and distinct. `assert_ne!(first, second)` alone held by
+                // construction — `seen` can only collide across files, since `TrapFile::validate`
+                // refuses a within-file duplicate before this loop ever sees it.
+                assert_eq!(first, &dir.join("first.toml"), "{err}");
+                assert_eq!(second, &dir.join("second.toml"), "{err}");
             }
             other => panic!("expected DuplicateTrapId, got {other:?}"),
         }
@@ -1005,6 +1039,16 @@ expect = {{ must-not-merge = {{ rule = "l1-distinct-mac" }} }}
                 Err(FixtureError::DuplicateTrapId { .. })
             ),
             "score_corpus has its own guard, which is exactly why it cannot be the one under test"
+        );
+
+        // 🔴 And the ids are compared FOLDED, as `TrapFile::validate` folds them within a file.
+        // Measured by story 5.8's code review against the raw-keyed first version: these two passed
+        // it, `discovered` read 2, and the report rendered two bucket lines a reader cannot tell
+        // apart — the exact harm `TrapError::DuplicateId`'s own doc exists to prevent.
+        std::fs::write(dir.join("first.toml"), body("Shared-Id")).expect("first file rewrites");
+        assert!(
+            matches!(l1_answers(&dir), Err(FixtureError::DuplicateTrapId { .. })),
+            "`Shared-Id` and `shared-id` are one id across files, as they are within one"
         );
 
         std::fs::remove_dir_all(&dir).ok();

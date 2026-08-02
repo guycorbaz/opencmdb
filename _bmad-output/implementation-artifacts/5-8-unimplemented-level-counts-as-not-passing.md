@@ -742,6 +742,132 @@ recorded as unreachable-today rather than assumed so.
   - [x] `git status fixtures/` empty; `MANIFEST.toml` untouched; full local gate; then branch → PR →
         green CI → squash merge. **`done` is the MERGE's business**, not the review's.
 
+### Review Findings (code review, 2026-08-03 — three layers)
+
+Blind Hunter (diff only, no repo access) · Edge Case Hunter (diff + project, ran its probes) ·
+Acceptance Auditor (diff + spec + context docs, re-ran 3 of the 10 mutations in an isolated
+worktree). 24 unique findings after dedup: **2 decisions, 19 patches, 1 deferred, 2 dismissed.**
+Every finding below was **re-measured before being written down**.
+
+🔑 **The seventh consecutive story where most defects are SENTENCES, not behaviour** — and this time
+the story's OWN AC8 (*"update BOTH twins of every duplicated sentence"*) is what four of them
+violate. The implementer wrote that instruction and then broke it four times.
+
+- [ ] [Review][Decision] **The `NFR4 NOT MET … closed by Epic 6` line cannot delete itself, so
+      decision 6's central property is false.** The code comment, `deferred-work.md`, `CLAUDE.md`
+      and `project-context.md` all claim *"the day Epic 6 empties the bucket this sentence
+      disappears by CONSTRUCTION"*. Measured: it cannot. Two of the three causes do not depend on a
+      LEVEL at all — `Expectation::rule()` is `None` for any `must-abstain`, so
+      `NoLevelToRouteOn` survives every cascade level, and `NoPairUnderJudgement` is *"unanswerable
+      at every level, present and future"* by its own doc. After Epic 6 ships every `l2-*` rule the
+      bucket goes 11 → **3**, `passed()` stays **false**, and the report still names as its closer
+      the epic that just shipped. `deferred-work.md` in this same commit assigns those three to
+      **story 5.14 / Epic 6**, not to `l2-*`. **Options: (a) weaken the sentence to what is true
+      (name the count and NFR4, drop the closer); (b) render the closer per CAUSE class; (c) accept
+      it and register the residue-of-3 forward.** [`crates/opencmdb-bin/src/trap_gate.rs:341-348`]
+
+- [ ] [Review][Decision] **A rule id with leading whitespace or a different case is bucketed with a
+      FALSE reason.** `expects_an_l1_rule` matches the raw string, and `Trap::validate` guards the
+      `family` field against surrounding whitespace (`FamilyMalformed`) but NOT the rule id.
+      Observed: `" l1-distinct-mac "` → `LevelNotImplemented`, rendering *"at a cascade level this
+      engine does not implement"* — about a level that **is** implemented — and the trap silently
+      leaves the scored set. The asymmetry is measured: a *trailing* space alone is answered and
+      shows as a wrong-rule failure, so the same authoring slip is visible one way and invisible the
+      other. Partly inherited (5.7 registered *"`run_trap` still compares raw `RuleId` strings with
+      no normalization"*), newly made worse by a path that mis-reports. **Options: (a) trim in
+      `expects_an_l1_rule`; (b) add `RuleMalformed` to `Trap::validate`, mirroring `FamilyMalformed`
+      — touches the domain and the corpus contract; (c) register forward.**
+      [`crates/opencmdb-bin/src/l1_runner.rs:124-128`]
+
+- [ ] [Review][Patch] The second `passed()` doc twin — the one AC3 names explicitly — was never
+      corrected [`crates/opencmdb-bin/src/trap_gate.rs:1286-1289`]
+- [ ] [Review][Patch] `trap_gate.rs`'s module doc still says the seam **is** a `BTreeMap<TrapId,
+      Outcome>` and `score_corpus`'s signature is unchanged — the twin of a sentence this same
+      commit corrected in `l1_runner.rs` [`crates/opencmdb-bin/src/trap_gate.rs:18-21`]
+- [ ] [Review][Patch] Both markdown twins still assert, present-tense, that the committed gate
+      **passes** and that the seam is `BTreeMap<TrapId, Outcome>` [`CLAUDE.md`,
+      `docs/project-context.md`]
+- [ ] [Review][Patch] `Display`'s doc says *"Two count suffixes … in a fixed order"*; the same
+      commit adds a third, and neither sentence mentions the NFR4 line
+      [`crates/opencmdb-bin/src/trap_gate.rs:260-262`, `:277-278`]
+- [ ] [Review][Patch] `a_mixed_family_splits_between_the_engine_and_the_bucket` derives `scored`
+      from the corpus minus the bucket, never from the report — so `unaccounted` traps count as
+      "answered", and the comment *"it cannot disagree with the report it is read from"* is false of
+      a set that is not read from the report [`crates/opencmdb-bin/src/trap_gate.rs:900-910`]
+- [ ] [Review][Patch] `unaccounted()`'s arithmetic is unmeasured: replacing the body with
+      `self.discovered` — deleting BOTH subtractions — leaves the whole suite green. M8 proved the
+      CALL, not the calculation [`crates/opencmdb-bin/src/trap_gate.rs:228-232`]
+- [ ] [Review][Patch] The cross-file `TrapId` guard keys on the RAW id where `TrapFile::validate`
+      folds `trim().to_lowercase()`; `"Shared-Id"` + `"shared-id"` across two files gives 2 entries,
+      no error, and two indistinguishable bucket lines
+      [`crates/opencmdb-bin/src/l1_runner.rs:286-292`]
+- [ ] [Review][Patch] `unanswered_in`'s doc states an identity that is false for every partial map —
+      with an empty map the three columns read `0+0` against 10 / 11 / 3
+      [`crates/opencmdb-bin/src/trap_gate.rs:203-208`]
+- [ ] [Review][Patch] The partition assertion uses the literal `expected_answered().len()` instead
+      of the map's answered half, so it is green under M5b — the very mutation its message claims to
+      catch [`crates/opencmdb-bin/src/l1_runner.rs:489-494`]
+- [ ] [Review][Patch] `_ => None` in the residue test falsifies `UnanswerableCause`'s own
+      *"exhaustive with no `_` arm wherever it is matched"* guarantee — a fourth variant would
+      compile here [`crates/opencmdb-bin/src/l1_runner.rs:505-510`]
+- [ ] [Review][Patch] AC2's named case — an `Answer::Unanswerable` key naming no discovered trap —
+      is pinned by no test. Behaviour verified correct by two independent probes
+      [`crates/opencmdb-bin/src/trap_gate.rs:1443`]
+- [ ] [Review][Patch] The AC5 ordering doc claims the unreachability is solved; it is only
+      relocated. One test doing two jobs — split it, per story 5.6's own idiom
+      [`crates/opencmdb-bin/src/trap_gate.rs:795-800`]
+- [ ] [Review][Patch] `sprint-status.yaml`'s `last_updated` headline still says *"5.8 CONTEXTED →
+      ready-for-dev … 352 tests … NEXT = validation"* while the same commit sets `review` and 364
+      [`_bmad-output/implementation-artifacts/sprint-status.yaml:51`]
+- [ ] [Review][Patch] Three new rustdoc warnings (measured 9 → 12): `[Outcome]` no longer resolves
+      in `trap_gate`'s module doc after the import moved into `mod tests`; `[epics.md:1055]` is not
+      an item; `crate::score` is ambiguous [`trap_gate.rs:13`, `:37`, `score.rs:145`]
+- [ ] [Review][Patch] Four near-vacuous assertions: two `score.rs` tests that construct-then-
+      destructure or `assert_ne!` across derived-`PartialEq` variants, and two `l1_runner`
+      assertions that hold by construction [`score.rs:1278-1310`, `l1_runner.rs:459`, `:986`]
+- [ ] [Review][Patch] Grammar and pluralisation in the new render: *"1 trap(s) **were**"*, and
+      `", 1 unanswerable"` carries no noun where both sibling suffixes pluralise
+      [`crates/opencmdb-bin/src/trap_gate.rs:291-295`, `:341-348`]
+- [ ] [Review][Patch] `an_empty_bucket_renders_neither_the_count_nor_the_nfr4_line` is a substring
+      guard a trap id containing *"unanswerable"* would defeat
+      [`crates/opencmdb-bin/src/trap_gate.rs:861-867`]
+- [ ] [Review][Patch] `deferred-work.md`'s closure cites no commit sha, and the two bullets it
+      closes still read as OPEN with *"Owner: story 5.8"*
+      [`_bmad-output/implementation-artifacts/deferred-work.md:1937`, `:2026`, `:2059`]
+- [ ] [Review][Patch] `committed_traps()` is duplicated verbatim in two test modules with no
+      deliberate-redundancy label, where the house DRY rule requires one
+      [`crates/opencmdb-bin/src/trap_gate.rs:707-715`]
+
+- [x] [Review][Defer] **Totality is relative to a ROOT, and nothing ties the two roots together** —
+      `score_corpus(root_a, &l1_answers(root_b))` leaves every trap in `root_a \ root_b` unaccounted:
+      not scored, not bucketed, not blocking, `passed() == true` over a corpus nothing answered. The
+      register's *"`l1_answers` is TOTAL by construction, so nothing ships wrong today"* holds only
+      because `committed_report()` happens to pass the same root twice — a convention in a test
+      helper, not a property. Deferred: it is the same class as the already-registered
+      *"should a partial map block?"* question and resolving it belongs with that decision, not
+      inside this story [`crates/opencmdb-bin/src/trap_gate.rs`, `l1_runner.rs`]
+
+**Dismissed (2), with the measurement that killed each:**
+- `unaccounted()`'s `saturating_sub` masking an invariant break — the Edge Case Hunter measured the
+  underflow **unreachable in production**: `discovered = seen.len()`, `seen` takes exactly one
+  insert per iterated trap and a second errors out, and each trap contributes at most one of
+  `{tally.record, unanswered.push}`. Defensive only. _(The separate finding that its arithmetic is
+  UNTESTED is a patch above — the two are different claims.)_
+- The Acceptance Auditor's initial `trap_gate.rs` figure of **466** code lines against the record's
+  560, which would have made the Dev Agent Record a fabrication. **Refuted by its own
+  re-measurement**: its grep matched a `///` line QUOTING `#[cfg(test)]`, where the gate's matcher
+  is `line.trim_start().starts_with(..)` [`xtask/src/main.rs:90`]. All three code-line figures in
+  the record are exact.
+
+**Re-derived independently and CONFIRMED** (so silence is not read as absence of checking): 24 traps
+/ 10 files / 24 distinct ids; corpus per column 10 / 11 / 3; causes 8 / 2 / 1 (level-first would
+give 8 / 3 / 0); unanswerable per column 3 / 5 / 3; scored 7 / 6 / 0; the eleven ids; **364 tests**;
+all three code-line figures; `epics.md` touched in **one hunk, +3/−1**, at story 5.8's first
+criterion only; the File List complete against `git diff --stat`; no `From`/`Default`/helper
+converting `Answer` to `Outcome` anywhere in the tree; `used.insert` structurally shared by both
+arms (probed); and mutations M1, M3 and M5 reproduced **exactly**, including the Debug Log's own two
+self-corrections.
+
 ---
 
 ## Dev Notes

@@ -142,7 +142,8 @@ pub enum UnanswerableCause {
 
 /// What a producer says about one trap: it answered, or it declined and named why (story 5.8).
 ///
-/// This is the value of the map [`crate::score`]'s consumer — the release gate's harness — takes.
+/// This is the value of the map the release gate's harness takes — `opencmdb_bin`'s
+/// `trap_gate::score_corpus`, which lives outside this crate because it reads files (D47).
 /// Until story 5.8 that map held a bare [`Outcome`] and **absence was the only way to say "not
 /// answered"**. Absence cannot carry a reason, and a trap that leaves the denominator without one is
 /// how a green gate comes to mean *"we did not ask the question"* — which `epics.md`'s story 5.8
@@ -1275,39 +1276,31 @@ mod tests {
 
     // ── An answer, or a named refusal to ask (story 5.8) ─────────────────────
 
-    /// [`Answer::Answered`] is information-preserving: the widening of the seam changes what a map
-    /// can SAY, never what an answered trap means. If this stops holding, every truth-table
-    /// assertion downstream is measuring a different thing than it did before story 5.8.
+    /// [`UnanswerableCause::LevelNotImplemented`] is compared by the rule it CARRIES, not only by
+    /// its discriminant — so two traps declined for different levels are two different records.
+    ///
+    /// _(This replaced a pair of assertions story 5.8's code review measured as unfailable: one
+    /// destructured a value it had just constructed, the other `assert_ne!`d across variants of a
+    /// derived `PartialEq`, where cross-variant equality is unrepresentable. What survives is the
+    /// one comparison the derive does NOT make trivially true — the payload.)_
     #[test]
-    fn an_answered_trap_carries_its_outcome_unchanged() {
-        for outcome in [merged(), refused(), abstained()] {
-            let Answer::Answered(carried) = Answer::Answered(outcome.clone()) else {
-                panic!("an Answered is an Answered");
-            };
-            assert_eq!(carried, outcome, "the outcome survives the envelope");
-        }
-    }
-
-    /// [`UnanswerableCause::LevelNotImplemented`] carries the rule the trap's AUTHOR named — the
-    /// level the producer routed on — and never one the engine chose. That is what makes the
-    /// exclusion a statement about the CORPUS rather than *"we skipped the ones we fail"*.
-    #[test]
-    fn an_unimplemented_level_names_the_authors_rule_and_the_three_causes_are_distinct() {
-        let level = UnanswerableCause::LevelNotImplemented {
+    fn two_unimplemented_levels_are_two_different_causes() {
+        let uplink = UnanswerableCause::LevelNotImplemented {
             expected: rule("l2-uplink-agrees"),
         };
-        let UnanswerableCause::LevelNotImplemented { expected } = &level else {
-            panic!("the variant carries the author's rule");
+        let hostname = UnanswerableCause::LevelNotImplemented {
+            expected: rule("l2-different-hostname"),
         };
-        assert_eq!(expected, &rule("l2-uplink-agrees"));
-
-        // Three classes, three values. A cause that compared equal across classes would let the
-        // 8/2/1 split collapse without any count changing.
-        assert_ne!(level, UnanswerableCause::NoLevelToRouteOn);
-        assert_ne!(level, UnanswerableCause::NoPairUnderJudgement);
         assert_ne!(
-            UnanswerableCause::NoLevelToRouteOn,
-            UnanswerableCause::NoPairUnderJudgement
+            uplink, hostname,
+            "the rule the trap's AUTHOR named is part of the cause, not decoration — a bucket that \
+             compared only the discriminant could not report WHICH level a trap waits on"
+        );
+        assert_eq!(
+            uplink,
+            UnanswerableCause::LevelNotImplemented {
+                expected: rule("l2-uplink-agrees")
+            }
         );
     }
 
