@@ -4,28 +4,41 @@
 //! traps, validated them — and scored **zero**, because the `answers` map it takes has always been
 //! empty. Story 5.5 built the producer ([`opencmdb_core::identity::l1::decide_pair`]) and story 5.6
 //! the blocker; neither had a production caller. This module is that caller: it walks a trap
-//! corpus, asks the real engine about the pair each trap names, and returns a
-//! `BTreeMap<TrapId, Outcome>` the harness can score.
+//! corpus, asks the real engine about the pair each trap names, and returns the
+//! `BTreeMap<TrapId, Answer>` the harness scores.
+//!
+//! Since **story 5.8** that map is TOTAL over the corpus: a trap the engine cannot be asked about
+//! gets an [`Answer::Unanswerable`] carrying WHY, rather than being left out. See [`l1_answers`].
 //!
 //! # Why it is NOT in `trap_gate.rs`
 //!
 //! `trap_gate`'s module doc states a **structural** guarantee: *"It scores answers; it never runs a
 //! producer"*. That is a FILE-level property today — nothing in that file can reach an engine —
 //! and putting the producer beside `score_corpus` would weaken it to a per-function promise on the
-//! very day it first has something to promise about. The seam between the two stays a
-//! `BTreeMap<TrapId, Outcome>`, which is **data**: no trait, no callback, no engine parameter.
-//! `score_corpus`'s signature and body are unchanged by this story.
+//! very day it first has something to promise about. The seam between the two is a
+//! `BTreeMap<TrapId, Answer>`, which is **data**: no trait, no callback, no engine parameter.
+//! _(Story 5.8 widened that map's VALUE from `Outcome` to `Answer`, and with it `score_corpus`'s
+//! signature — its arity, and the guarantee above, are unchanged. This paragraph said "the seam
+//! STAYS a `BTreeMap<TrapId, Outcome>`… `score_corpus`'s signature and body are unchanged by this
+//! story", which was true of story 5.7 and is false of 5.8.)_
 //!
 //! # The selector is the EXPECTED RULE's LEVEL, never the outcome
 //!
-//! [`l1_answers`] answers a trap when two conditions hold, and both are named predicates so a
-//! mutation can hit either alone:
+//! [`l1_answers`] asks the engine about a trap when two conditions hold, and both are named
+//! predicates so a mutation can hit either alone. **Story 5.8 made the ORDER significant** — it
+//! decides which cause a trap that fails both is filed under — so they are numbered as they are
+//! consulted:
 //!
-//! 1. the trap's expectation names a rule whose id starts with `l1-` ([`expects_an_l1_rule`]);
-//! 2. the trap names exactly two observations ([`named_pair`]).
+//! 1. the trap names exactly two distinct observations ([`named_pair`]);
+//! 2. its expectation names a rule whose id starts with `l1-` ([`expects_an_l1_rule`]).
 //!
-//! The obvious objection to (1) is that it looks like *"answer only the traps we already pass"* —
-//! scoring theatre. Four things answer it:
+//! _(Until story 5.8 this list gave the level first and the pair second. The answered set is the
+//! same either way — a trap failing both is unanswerable regardless — but the CAUSE recorded for
+//! `example-must-abstain` differs, and pair-first is the decision: *cannot be asked* outranks
+//! *cannot be routed*.)_
+//!
+//! The obvious objection to the level condition is that it looks like *"answer only the traps we
+//! already pass"* — scoring theatre. Four things answer it:
 //!
 //! - **it selects by LEVEL, not by outcome.** `Expectation::rule()` is what the trap's AUTHOR said
 //!   answers the case, frozen in Epic 4 **before any engine existed**, precisely so the metric
@@ -33,9 +46,9 @@
 //!   engine"*). The predicate reads the id's prefix and nothing else — not the column, not the
 //!   family, not the reason, and never the answer;
 //! - **the unanswered traps do not leave the denominator.** `Report::discovered()` stays 24 while
-//!   `scored()` is 13, and `Tally::scored_in` splits it per column. Story 5.8 turns the residue
-//!   into a bucket that BLOCKS; the exclusion is visible here and blocking there, silent in
-//!   neither;
+//!   `scored()` is 13, and `Tally::scored_in` splits it per column. Since story 5.8 the residue is
+//!   a bucket that BLOCKS (`Report::unanswered`), so the committed gate does not pass at all while
+//!   eleven traps go unasked; the exclusion is visible here and blocking there, silent in neither;
 //! - **a PREFIX, not a whitelist of the two implemented ids.** A trap expecting an `l1-*` rule this
 //!   engine does not implement is answered anyway, and reds as a wrong-rule failure. A whitelist
 //!   would let a future L1 rule slip out of the denominator in silence. The committed corpus writes
@@ -82,11 +95,11 @@
 #![allow(dead_code)]
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use opencmdb_core::identity::l1::decide_pair;
 use opencmdb_core::observation::{ObsId, Observation};
-use opencmdb_core::score::{Outcome, outcome_of};
+use opencmdb_core::score::{Answer, Outcome, UnanswerableCause, outcome_of};
 use opencmdb_core::trap::{Trap, TrapId};
 
 use crate::fixtures::{FixtureError, fixture_path, read_jsonl, read_traps};
@@ -101,8 +114,13 @@ const L1_PREFIX: &str = "l1-";
 /// Whether this trap's EXPECTATION names a rule at the cascade's first level.
 ///
 /// `None` — an abstaining expectation, which names a cause and no rule — is false: there is no
-/// level to route on. The three committed `must-abstain` traps are excluded here, before the pair
-/// condition is ever consulted.
+/// level to route on.
+///
+/// ⚠️ Since story 5.8 this is consulted **second**, after [`named_pair`], so it sees **two** of the
+/// three committed `must-abstain` traps: `example-must-abstain` names one observation and the pair
+/// condition removes it first. _(This doc said "the three committed `must-abstain` traps are
+/// excluded here, before the pair condition is ever consulted" — true under story 5.7's order and
+/// inverted by 5.8's.)_
 fn expects_an_l1_rule(trap: &Trap) -> bool {
     trap.expect
         .rule()
@@ -207,12 +225,38 @@ pub fn answer_trap(trap: &Trap) -> Result<Option<Outcome>, FixtureError> {
     Ok(Some(answer_pair(&stream, trap, a, b)))
 }
 
-/// Walk the trap corpus rooted at `traps_root` and answer every trap the L1 engine is asked about.
+/// Walk the trap corpus rooted at `traps_root` and say something about **every** trap it holds.
 ///
-/// The result is exactly the `answers` map [`crate::trap_gate::score_corpus`] takes. A trap is in
-/// it when BOTH selector conditions hold — the expectation names an `l1-*` rule, and the trap names
-/// exactly two observations. Every other discovered trap is simply absent, which the harness counts
-/// as *discovered and not scored*.
+/// The result is exactly the `answers` map [`crate::trap_gate::score_corpus`] takes, and since
+/// story 5.8 it is **TOTAL over the corpus**: one entry per discovered trap — 24 over the committed
+/// one, **13 [`Answer::Answered`] and 11 [`Answer::Unanswerable`]**. Totality is the point. While a
+/// declined trap was simply ABSENT from this map, a producer could drop a trap out of the
+/// denominator with no reason attached and the gate stayed green; `epics.md`'s story 5.8 forbids
+/// that — the unanswerable traps *"never silently leave the denominator"*. Absence still MEANS
+/// something ([`crate::trap_gate::Report::unaccounted`], 4.6b's vacuous state) — this function just
+/// never produces it.
+///
+/// # The classification is PAIR-FIRST, and the order decides one trap's cause
+///
+/// `example-must-abstain` is in two classes at once: it names a cause and no rule, AND it names one
+/// observation. Whichever condition is consulted first wins, so the order is a decision, not a
+/// style:
+///
+/// 1. **no pair** → [`UnanswerableCause::NoPairUnderJudgement`] — *cannot be asked*;
+/// 2. a pair, but the expectation names no `l1-*` rule → [`UnanswerableCause::NoLevelToRouteOn`]
+///    when it names no rule at all, else [`UnanswerableCause::LevelNotImplemented`] — *cannot be
+///    routed*;
+/// 3. otherwise the engine is asked.
+///
+/// Pair-first gives **8 / 2 / 1**; level-first would give 8 / 3 / 0. Pair-first is taken because a
+/// trap with no pair is unanswerable at every level, present and future, so filing it under a level
+/// it does not have would be wrong the day Epic 6 implements `l2-*` — and because 8 / 2 / 1 is what
+/// story 5.7 measured and registered.
+///
+/// ⚠️ **The ANSWERED SET is invariant under that order.** A trap failing both conditions is
+/// unanswerable either way, so the reorder moves a CAUSE and never a key: the thirteen keys are the
+/// same ones story 5.7 produced, and a test asserts it. Do not read the reorder as a behaviour
+/// change.
 ///
 /// Discovery goes through [`discover_trap_files`], the harness's own walk, so the two see the same
 /// tree. Streams are read once per distinct `replay` and reused; trap files are read from
@@ -220,33 +264,60 @@ pub fn answer_trap(trap: &Trap) -> Result<Option<Outcome>, FixtureError> {
 ///
 /// # Errors
 ///
-/// [`FixtureError`] if the walk, a trap file or a replay stream cannot be read or validated.
-pub fn l1_answers(traps_root: &Path) -> Result<BTreeMap<TrapId, Outcome>, FixtureError> {
-    let mut answers: BTreeMap<TrapId, Outcome> = BTreeMap::new();
+/// [`FixtureError`] if the walk, a trap file or a replay stream cannot be read or validated, or
+/// [`FixtureError::DuplicateTrapId`] if one `TrapId` appears in two files. `TrapFile::validate`
+/// enforces uniqueness only WITHIN a file, and a duplicate here would silently overwrite an entry
+/// and shorten a map whose LENGTH is now load-bearing — the residue arithmetic reads it. The
+/// harness raises the same error for the same corpus, but a caller of this function alone would
+/// otherwise get a short count with no diagnostic.
+pub fn l1_answers(traps_root: &Path) -> Result<BTreeMap<TrapId, Answer>, FixtureError> {
+    let mut answers: BTreeMap<TrapId, Answer> = BTreeMap::new();
     // One read per distinct replay stream. `contains_key` + `insert` rather than
     // `entry().or_insert_with(..)`: `?` is not allowed in that closure, and this is the shape
     // `read_traps` itself uses for the same reason.
     let mut streams: BTreeMap<String, Vec<Observation>> = BTreeMap::new();
+    // Every trap id seen so far, and the file it came from — the same guard `score_corpus` carries,
+    // stated here because this map's LENGTH is read, not only its contents.
+    let mut seen: BTreeMap<TrapId, PathBuf> = BTreeMap::new();
 
     for trap_file in discover_trap_files(traps_root)? {
         let traps = read_traps(&trap_file)?;
         for trap in &traps.trap {
-            // The LEVEL selector, first and alone.
-            if !expects_an_l1_rule(trap) {
-                continue;
+            if let Some(first) = seen.insert(trap.id.clone(), trap_file.clone()) {
+                return Err(FixtureError::DuplicateTrapId {
+                    trap: trap.id.0.clone(),
+                    first,
+                    second: trap_file.clone(),
+                });
             }
-            // The pair condition, second and alone. On the committed corpus it excludes nothing —
-            // the level selector already removed the only pairless trap — and that invisibility is
-            // exactly why `answer_trap` carries the assertion.
-            let Some((a, b)) = named_pair(trap) else {
-                continue;
+            let answer = match named_pair(trap) {
+                // (1) The pair condition, FIRST and alone — see the doc above.
+                None => Answer::Unanswerable {
+                    cause: UnanswerableCause::NoPairUnderJudgement,
+                },
+                // (2) The LEVEL selector, second and alone. Its false arm re-consults the
+                // expectation to tell "names no rule" from "names a rule at another level": two
+                // predicates cannot yield three causes, and a third predicate would either
+                // duplicate the `l1-` test or leave `expects_an_l1_rule` dead.
+                Some(_) if !expects_an_l1_rule(trap) => Answer::Unanswerable {
+                    cause: match trap.expect.rule() {
+                        None => UnanswerableCause::NoLevelToRouteOn,
+                        Some(expected) => UnanswerableCause::LevelNotImplemented {
+                            expected: expected.clone(),
+                        },
+                    },
+                },
+                // (3) Both conditions hold: ask the real engine.
+                Some((a, b)) => {
+                    if !streams.contains_key(&trap.replay) {
+                        let stream = read_jsonl(&fixture_path(&trap.replay)?)?;
+                        streams.insert(trap.replay.clone(), stream);
+                    }
+                    let stream = &streams[&trap.replay];
+                    Answer::Answered(answer_pair(stream, trap, a, b))
+                }
             };
-            if !streams.contains_key(&trap.replay) {
-                let stream = read_jsonl(&fixture_path(&trap.replay)?)?;
-                streams.insert(trap.replay.clone(), stream);
-            }
-            let stream = &streams[&trap.replay];
-            answers.insert(trap.id.clone(), answer_pair(stream, trap, a, b));
+            answers.insert(trap.id.clone(), answer);
         }
     }
     Ok(answers)
@@ -326,10 +397,12 @@ mod tests {
     /// two `must-abstain` traps naming a pair, and one `must-abstain` trap naming a single
     /// observation.
     ///
-    /// ⚠️ `epics.md:1545` hands story 5.8 the premise that there are **8** — the `l2-*` class alone.
+    /// ⚠️ `epics.md:1545` gave story 5.8 the premise that there are **8** — the `l2-*` class alone.
     /// The three `must-abstain` traps are invisible to an `l2-*` selector because
     /// `Expectation::MustAbstain` carries a CAUSE and no rule, so `Expectation::rule()` returns
-    /// `None` for them. The correction is registered in `deferred-work.md` with story 5.8 as owner.
+    /// `None` for them. **Story 5.8 corrected `epics.md` itself**; the register entry that carried
+    /// the correction forward is closed, and the eleven are now a blocking bucket rather than a
+    /// residue named only here.
     fn expected_unanswered() -> BTreeSet<TrapId> {
         ids(&[
             "cloned-mac-must-not-merge",
@@ -348,16 +421,48 @@ mod tests {
 
     // ── Which traps the runner answers (AC2, AC8) ─────────────────────────────
 
+    /// The traps the map says were ANSWERED — the `Answer::Answered` half, not the whole map.
+    ///
+    /// Since story 5.8 the map is TOTAL, so `answers.keys()` is all 24 ids. Deriving the answered
+    /// set from the keys would make this test — and the residue test below — assert nothing.
+    fn answered_ids(answers: &BTreeMap<TrapId, Answer>) -> BTreeSet<TrapId> {
+        answers
+            .iter()
+            .filter(|(_, a)| matches!(a, Answer::Answered(_)))
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
+    /// The traps the map DECLINED, with the cause each was declined for.
+    fn unanswered_causes(
+        answers: &BTreeMap<TrapId, Answer>,
+    ) -> BTreeMap<TrapId, UnanswerableCause> {
+        answers
+            .iter()
+            .filter_map(|(id, a)| match a {
+                Answer::Unanswerable { cause } => Some((id.clone(), cause.clone())),
+                Answer::Answered(_) => None,
+            })
+            .collect()
+    }
+
+    /// The map is TOTAL over the corpus, and the thirteen ANSWERED ids are unchanged by story 5.8's
+    /// reordering — the pair-first classification moves a cause, never a key.
     #[test]
-    fn the_committed_corpus_yields_thirteen_l1_answers() {
+    fn the_committed_corpus_yields_thirteen_l1_answers_and_an_entry_for_every_trap() {
         let answers = l1_answers(&committed_traps_root()).expect("the committed corpus answers");
-        let answered: BTreeSet<TrapId> = answers.keys().cloned().collect();
         assert_eq!(
-            answered,
+            answers.len(),
+            24,
+            "TOTAL over the corpus: every discovered trap has an entry, so none can leave the \
+             denominator without a reason attached"
+        );
+        assert_eq!(
+            answered_ids(&answers),
             expected_answered(),
             "the answered set is the thirteen traps whose expected rule is `l1-*`"
         );
-        assert_eq!(answers.len(), 13);
+        assert_eq!(answered_ids(&answers).len(), 13);
     }
 
     /// The residue, by NAME rather than by count. *A residue that can grow in silence is how a gate
@@ -369,10 +474,10 @@ mod tests {
         let all: BTreeSet<TrapId> = committed_traps().keys().cloned().collect();
         assert_eq!(all.len(), 24, "the corpus holds twenty-four traps");
 
-        let unanswered: BTreeSet<TrapId> = all
-            .difference(&answers.keys().cloned().collect())
-            .cloned()
-            .collect();
+        // 🔴 Derived by FILTERING the map, never by `all.difference(answers.keys())`. The map is
+        // total since story 5.8, so a key difference is empty and that derivation would assert
+        // nothing while still compiling — the shape this test exists to prevent.
+        let unanswered: BTreeSet<TrapId> = unanswered_causes(&answers).into_keys().collect();
         assert_eq!(
             unanswered,
             expected_unanswered(),
@@ -381,7 +486,85 @@ mod tests {
         assert_eq!(
             unanswered.len(),
             11,
-            "eleven, where epics.md:1545 says eight"
+            "eleven, where epics.md:1545 said eight until story 5.8 corrected it"
+        );
+        assert_eq!(
+            unanswered.len() + expected_answered().len(),
+            all.len(),
+            "answered and unanswered PARTITION the corpus — neither set may lose a trap silently"
+        );
+    }
+
+    /// The three causes, by class: **8 / 2 / 1**. The split story 5.7 measured and registered, and
+    /// the one story 5.8's pair-first ordering decides — level-first would give 8 / 3 / 0 with the
+    /// same eleven ids, so a test on the ids alone cannot see the ordering at all.
+    #[test]
+    fn the_residue_decomposes_into_eight_two_and_one() {
+        let answers = l1_answers(&committed_traps_root()).unwrap();
+        let causes = unanswered_causes(&answers);
+
+        let level_not_implemented: BTreeMap<&TrapId, &RuleId> = causes
+            .iter()
+            .filter_map(|(id, c)| match c {
+                UnanswerableCause::LevelNotImplemented { expected } => Some((id, expected)),
+                _ => None,
+            })
+            .collect();
+        let no_level = causes
+            .values()
+            .filter(|c| **c == UnanswerableCause::NoLevelToRouteOn)
+            .count();
+        let no_pair = causes
+            .values()
+            .filter(|c| **c == UnanswerableCause::NoPairUnderJudgement)
+            .count();
+
+        assert_eq!(
+            level_not_implemented.len(),
+            8,
+            "eight traps name a rule at an unimplemented level"
+        );
+        assert_eq!(
+            no_level, 2,
+            "two `must-abstain` traps name a pair but no rule to route on"
+        );
+        assert_eq!(
+            no_pair, 1,
+            "one trap names no pair at all — and PAIR-FIRST is what files it here rather than \
+             under `NoLevelToRouteOn`, which is where level-first would put it"
+        );
+
+        // Each `LevelNotImplemented` carries the rule its AUTHOR named, never one the engine chose.
+        let by_name: BTreeMap<&str, &str> = level_not_implemented
+            .iter()
+            .map(|(id, rule)| (id.0.as_str(), rule.0.as_str()))
+            .collect();
+        assert_eq!(
+            by_name,
+            BTreeMap::from([
+                ("cloned-mac-must-not-merge", "l2-different-hostname"),
+                ("docker-veth-must-merge", "l2-uplink-agrees"),
+                ("multi-nic-must-merge", "l2-uplink-agrees"),
+                ("multi-nic-must-not-merge", "l2-different-switch"),
+                ("shared-hardware-vm-must-merge", "l2-hostname-agrees"),
+                ("shared-hardware-vm-must-not-merge", "l2-different-hostname"),
+                (
+                    "vrrp-virtual-mac-must-not-merge-bearers",
+                    "l2-different-hostname"
+                ),
+                (
+                    "vrrp-virtual-mac-must-not-merge-master",
+                    "l2-virtual-mac-prefix"
+                ),
+            ]),
+            "the level a trap was declined for is the one its author wrote in the corpus"
+        );
+
+        // And the pairless one is named, so a corpus change that adds a second reds here rather
+        // than shifting a count nobody reads.
+        assert_eq!(
+            causes.get(&TrapId("example-must-abstain".into())),
+            Some(&UnanswerableCause::NoPairUnderJudgement)
         );
     }
 
@@ -542,9 +725,9 @@ mod tests {
         ] {
             for pole in ["must-merge", "must-not-merge"] {
                 let id = TrapId(format!("{family}-{pole}"));
-                let outcome = answers
-                    .get(&id)
-                    .unwrap_or_else(|| panic!("{} is a pure-L1 trap and must be answered", id.0));
+                let Some(Answer::Answered(outcome)) = answers.get(&id) else {
+                    panic!("{} is a pure-L1 trap and must be ANSWERED", id.0);
+                };
                 assert_eq!(
                     run_trap(&traps[&id].expect, outcome),
                     TrapVerdict::Pass,
@@ -553,8 +736,14 @@ mod tests {
                 );
             }
         }
+        // 🔴 `contains_key` no longer says anything: the map is TOTAL since story 5.8, so every
+        // trap has an entry and the old `!contains_key` guard would have been silently false while
+        // still compiling. What must be asserted is the VARIANT.
         assert!(
-            !answers.contains_key(&TrapId("hostname-absence-must-abstain".into())),
+            matches!(
+                answers.get(&TrapId("hostname-absence-must-abstain".into())),
+                Some(Answer::Unanswerable { .. })
+            ),
             "the family's THIRD trap is a must-abstain the L1 engine cannot answer — \
              `both poles` means both DECISION poles, not `all its traps`"
         );
@@ -691,7 +880,7 @@ mod tests {
     ///
     /// A trap expecting an `l1-*` rule this engine does **not** implement is answered anyway, and
     /// its answer lands in `rule_mismatches` — visibly wrong. A whitelist would have dropped it out
-    /// of the denominator in silence, which is exactly what story 5.8 exists to prevent.
+    /// of the denominator in silence — which is exactly what story 5.8's blocking bucket prevents.
     ///
     /// ⚠️ The scratch trap is **`must-not-merge`**, and the column is load-bearing: `run_trap`
     /// raises `WrongRule` only on a verdict PASS, and `minimal.jsonl` contains **no pair the L1
@@ -722,11 +911,19 @@ expect = { must-not-merge = { rule = "l1-not-yet-implemented" } }
         .expect("the scratch trap file writes");
 
         let answers = l1_answers(&dir).expect("the scratch corpus answers");
-        assert_eq!(
-            answers.len(),
-            1,
-            "the prefix selector answers it although the id is not one of the two implemented"
+        // The VARIANT, not the length: the map is total since story 5.8, so `len() == 1` would hold
+        // just as well if the prefix selector had declined this trap — which is precisely the
+        // behaviour this test exists to refuse.
+        assert!(
+            matches!(
+                answers.get(&TrapId("scratch-unimplemented-l1".into())),
+                Some(Answer::Answered(_))
+            ),
+            "the prefix selector ANSWERS an `l1-*` rule this engine does not implement, rather \
+             than bucketing it — a whitelist of the two implemented ids would let a future L1 rule \
+             leave the denominator in silence"
         );
+        assert_eq!(answers.len(), 1);
 
         let report =
             crate::trap_gate::score_corpus(&dir, &answers).expect("the scratch corpus scores");
@@ -749,5 +946,89 @@ expect = { must-not-merge = { rule = "l1-not-yet-implemented" } }
         // `trap_gate.rs` makes: `remove_file` alone leaked one empty directory per run into
         // `/tmp` (measured: three of them before this was fixed).
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // ── The cross-file id guard (story 5.8, inherited from 5.7's review) ──────
+
+    /// 🔴 One `TrapId` in two files is REFUSED by the runner, and the test calls the runner
+    /// **directly**.
+    ///
+    /// `TrapFile::validate` enforces uniqueness only WITHIN a file. Before story 5.8 a duplicate
+    /// here merely overwrote an entry; now the map is total and its LENGTH is read by the residue
+    /// arithmetic, so a duplicate shortens a denominator with no diagnostic at all.
+    ///
+    /// ⚠️ **`score_corpus` refuses this same corpus for its own reasons** — the assertion at the
+    /// end measures that, and it is why this test may not go through the harness: composed with
+    /// `score_corpus` the guard is invisible, and a test written that way stays GREEN with the
+    /// runner's guard deleted. It would be measuring the harness, which already worked.
+    #[test]
+    fn one_trap_id_in_two_files_is_refused_by_the_runner_itself() {
+        let dir = scratch_dir("duplicate-id");
+        let body = |id: &str| {
+            format!(
+                r#"
+[[trap]]
+id = "{id}"
+replay = "scenario/replay/minimal.jsonl"
+observations = [
+  "aaaaaaaa-0000-4000-8000-000000000001",
+  "aaaaaaaa-0000-4000-8000-000000000003",
+]
+reason = "one id declared in two separate files, which no per-file validation can ever catch."
+expect = {{ must-not-merge = {{ rule = "l1-distinct-mac" }} }}
+"#
+            )
+        };
+        std::fs::write(dir.join("first.toml"), body("shared-id")).expect("first file writes");
+        std::fs::write(dir.join("second.toml"), body("shared-id")).expect("second file writes");
+
+        let err =
+            l1_answers(&dir).expect_err("a duplicate id is refused, not silently overwritten");
+        match &err {
+            FixtureError::DuplicateTrapId {
+                trap,
+                first,
+                second,
+            } => {
+                assert_eq!(trap, "shared-id");
+                assert_ne!(first, second, "the error names BOTH files");
+                assert!(first.starts_with(&dir) && second.starts_with(&dir), "{err}");
+            }
+            other => panic!("expected DuplicateTrapId, got {other:?}"),
+        }
+
+        // The harness refuses it too — stated here as the measured reason this test calls
+        // `l1_answers` rather than `score_corpus`.
+        assert!(
+            matches!(
+                crate::trap_gate::score_corpus(&dir, &BTreeMap::new()),
+                Err(FixtureError::DuplicateTrapId { .. })
+            ),
+            "score_corpus has its own guard, which is exactly why it cannot be the one under test"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The committed corpus has no duplicate — so the guard above is recorded as
+    /// unreachable-today by MEASUREMENT rather than assumed to be.
+    #[test]
+    fn the_committed_corpus_has_twenty_four_distinct_ids_across_ten_files() {
+        let files = discover_trap_files(&committed_traps_root()).expect("the corpus walks");
+        assert_eq!(files.len(), 10, "ten committed trap files");
+
+        let mut ids: Vec<TrapId> = Vec::new();
+        for file in &files {
+            for trap in read_traps(file).expect("a committed trap file reads").trap {
+                ids.push(trap.id);
+            }
+        }
+        let distinct: BTreeSet<&TrapId> = ids.iter().collect();
+        assert_eq!(ids.len(), 24, "twenty-four traps");
+        assert_eq!(
+            distinct.len(),
+            ids.len(),
+            "and every id is distinct ACROSS files, not merely within one"
+        );
     }
 }

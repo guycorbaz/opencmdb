@@ -50,7 +50,11 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-02  # 5.7 **DONE** -- PR #61 squash-merged as `d47631b` after a green CI run
+last_updated: 2026-08-02  # 5.8 CONTEXTED -> `ready-for-dev` (see its entry below). Master at
+                          # `60107fa`, clean tree, 352 tests. NEXT = the MANDATORY two-agent
+                          # validation, then `dev-story` 5.8.
+                          #
+                          # 5.7 **DONE** -- PR #61 squash-merged as `d47631b` after a green CI run
                           # (55s), code-reviewed first. **Epic 5 is now 9/16.** Master carries 352
                           # tests (153 bin + 153 core + 46 xtask) and six green gates.
                           # NEXT = `create-story` 5.8 (the bucket for the traps L1 cannot answer),
@@ -1317,7 +1321,93 @@ development_status:
   # CALL does, not a claim about the corpus this story falsifies.
   # ⚠️ NEXT: `code-review` -> push -> PR -> green CI -> squash merge. `done` is the MERGE's business.
   5-7-trap-runner-stops-scoring-nothing: done
-  5-8-unimplemented-level-counts-as-not-passing: backlog
+  # 5.8 CONTEXTED 2026-08-02 against master `60107fa` (clean tree, 352 tests = 153 bin + 153 core +
+  # 46 xtask). **This story turns the committed gate RED on purpose**: 24 discovered, 13 scored,
+  # 0 failures, **11 unanswerable**, `passed() == false` — and it stays false until Epic 6, exactly
+  # as `epics.md:416` says (*"NFR4 stays RED and is closed by Epic 6"*).
+  # What was MEASURED at contexting, so the dev re-derives none of it and a surprise reads as a
+  # finding:
+  #  · the corpus re-read trap by trap from the ten committed `.toml` files — 24 traps, 9 families
+  #    + 3 family-less example traps, and **exactly one trap names other than two observations**
+  #    (`example-must-abstain`, one);
+  #  · the residue is **ELEVEN in three classes (8 / 2 / 1)**, not the 8 `epics.md:1545` still
+  #    gives this story. AC8 makes 5.8 the story that CORRECTS `epics.md` — the one lifting of the
+  #    verify-only rule, because 5.7 registered the correction with 5.8 as owner;
+  #  · the classification ORDER is a real arbitration: `example-must-abstain` is in two classes at
+  #    once, so level-first gives 8/3/0 and pair-first gives 8/2/1. **PAIR-FIRST taken** — 8/2/1 is
+  #    what 5.7 published to the register, and "cannot be asked" outranks "cannot be routed".
+  #    Mutation M4 measures the difference, both halves;
+  #  · the per-column arithmetic, derived and re-checked: corpus 10/11/3, scored 7/6/0,
+  #    unanswerable **3/5/3**, and `scored_in(c) + unanswered_in(c) == corpus_total_in(c)` for all
+  #    three. That equality is the story's STRONGEST guard — the only assertion that fails when a
+  #    trap vanishes from both sets, which `discovered` alone cannot see;
+  #  · **eleven** live `passed()` assertions exist (4 true, 7 false) and **exactly ONE flips**
+  #    (`trap_gate.rs:534`). `trap_gate.rs:830` is the canary: it asserts a GREEN gate over the
+  #    committed corpus with an empty map, i.e. 4.6b's AC1, and it must stay green — the bucket is
+  #    filled by an explicit `Answer::Unanswerable`, NEVER by absence. If a second one flips, the
+  #    4.6b guarantee has been broken silently and that is a finding;
+  #  · the seam widens in VALUE, not arity: `&BTreeMap<TrapId, Answer>`. Measured: 26 call sites,
+  #    13 pass `&BTreeMap::new()` (no edit — the element type is inferred), 13 pass a named
+  #    binding. A second parameter would have touched all 26.
+  # 🔴 The one semantic guard the whole story rests on: **`Unanswerable` is NOT an abstention.**
+  # Map it onto `Outcome::Abstained` and `score`'s bottom-right cell returns `Pass`
+  # [`score.rs:198`] — `example-must-abstain` passes because nothing was asked. That is D18's
+  # cowardice moved from the engine up to the harness. Mutation **M3** exists to prove the refusal
+  # is load-bearing; if M3 reds nothing, AC1 is decoration and the story says so rather than
+  # absorbing it.
+  # Also owned here, inherited from 5.7's code review: `l1_answers` has no cross-file `TrapId`
+  # uniqueness check (AC10) — harmless today (24 distinct ids across 10 files, measured) and not
+  # harmless once the map is TOTAL over the corpus, because a duplicate then shortens the residue
+  # denominator with no diagnostic.
+  #
+  # ✅ VALIDATED 2026-08-02 (two fresh-context agents, MANDATORY). The gap-hunt agent IMPLEMENTED
+  # AC1-AC10 end to end in an isolated worktree: **352 -> 364 tests** (163 bin + 155 core + 46
+  # xtask), six gates green, both clippy forms clean, `fixtures/` untouched. **20 findings applied,
+  # 0 dismissed.** 🔑 THE PATTERN HELD A FOURTH TIME: every finding needing a compiler came from the
+  # agent that compiled.
+  # **Every numeric prediction reproduced EXACTLY** — 24/13/11, causes 8/2/1, per-column 3/5/3,
+  # corpus 10/11/3, `scored_in` 7/6/0, `passed() == false`, the render, 26/13/13 call sites. And
+  # §7's table was verified byte-exact: after the seam change and BEFORE any new test existed,
+  # exactly ONE `passed()` site flipped (`trap_gate.rs:534`), canary `:830` included.
+  # The four HIGH, three of them "aimed wrong" rather than "false":
+  #  · **M5 never reached the guard it was written for** — it panics on the first literal
+  #    (`unanswered_in(MustMerge)`, 0 vs 3) long before the arithmetic loop §3 calls the story's
+  #    strongest guard. **M5b added** (one trap leaves BOTH sets -> `9 != 10`), and AC5 now fixes
+  #    the assertion ORDER so both are reachable;
+  #  · **decision 7's TOTALITY inverts three `l1_runner.rs` assertions, two of them SILENTLY** —
+  #    `len()==13`, the residue derived as a set `difference` against the map's KEYS (now empty),
+  #    and a `!contains_key` guard. §7 scoped only `passed()`, so a dev would have diagnosed them
+  #    as the FINDING condition. Now a second table. **Both agents found this class independently**;
+  #  · **three `l1_runner.rs` doc sites are falsified by §4's OWN pair-first decision**, not by the
+  #    bucket (`:19-21`, `:25-29`, and `:106-110`'s "the three must-abstain traps are excluded
+  #    before the pair condition is ever consulted" — under pair-first only TWO are);
+  #  · the story said "**eight** surviving `passed()` assertions" in AC2 and its Change Log while
+  #    §7 said **eleven** — the SEVENTH consecutive story carrying a number falsified inside its
+  #    own file. Also: AC8 sent the dev to a `score.rs` site that does not exist (`Report` is in
+  #    `trap_gate.rs`; `grep -c Report score.rs` = 0) and named 3 of the 7 measured `5.8` sites.
+  # Measured answers to two open questions: **M3 reds 7 tests** (`scored` 13->24, all three
+  # must-abstain traps PASS, `failures` 0->3) so AC1's refusal is NOT decoration; and
+  # **`unaccounted()` has no production or render consumer** — decision 4 said "rendered when
+  # non-zero" and AC6 contradicted it, resolved as accessor-only with M8 giving it a consumer.
+  # ⚠️ M7 measured: with the runner's guard removed `score_corpus` STILL refuses the corpus, so an
+  # AC10 test written through the harness would be GREEN and the new guard untested — AC10 now
+  # REQUIRES the direct `l1_answers` call.
+  # ⚠️ ISSUE #38 RECURRED A THIRD TIME during validation, in a clean isolated worktree: 1 red in
+  # ~11 runs on `fixtures::tests::a_decision_carrying_an_abstention_cause_is_refused` — a THIRD
+  # distinct test, not reproduced in 10 further runs. The failure keeps MOVING between tests, which
+  # argues against any single test being the defective one. **Cause still OPEN.**
+  # ⚠️ NEXT = `dev-story` 5.8. Three arbitrages remain UNANSWERED by Guy and AC8 depends on the
+  # third: pair-first ordering (taken), absent-entry-does-not-block (taken), and **this story
+  # EDITING `epics.md:1545`** — the one lifting of the verify-only rule. If that is refused, AC8
+  # changes and that part must be re-validated. A reference implementation from the validation sits
+  # unpushed on branch `worktree-agent-a2472234e896d6899` at `8c97a55`.
+  #
+  # (superseded) NEXT was the MANDATORY two-agent validation (fact-check + gap-hunt). The
+  # gap-hunt agent must COMPILE the story: on 5.5, 5.6 AND 5.7 every HIGH came from that agent and
+  # none from the fact-checker, and on 5.7 all three HIGH were NO-OPS (a mutation that reddened
+  # nothing, an assertion placed where it was unreachable, a walk blind to the mutation aimed at
+  # it). Point it at AC2, AC5 and AC9's M3.
+  5-8-unimplemented-level-counts-as-not-passing: in-progress
   5-9-persist-interface-and-identity-link: backlog
   5-10-purge-test: backlog
   5-11-order-independence: backlog

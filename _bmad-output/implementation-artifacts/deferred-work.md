@@ -2044,3 +2044,72 @@ Three-layer review (Blind Hunter · Edge Case Hunter · Acceptance Auditor) of c
   the runner, never through it. This is the same vacuity `Tally::scored_in(MustAbstain) == 0`
   reports, seen from the mapping's side rather than the tally's, and the two entries close together.
   **Owner: story 5.14 / Epic 6**, when an abstention first has a producer the corpus can judge.
+
+---
+
+## Deferred from: story-5.8-unimplemented-level-counts-as-not-passing (2026-08-02)
+
+_The story that made the residue BLOCK: the committed gate now reports `24 discovered, 13 scored,
+11 unanswerable` and **does not pass**, and it will not until Epic 6 implements `l2-*`. What follows
+is what this story CLOSED, what it deliberately did not do, and one question it measured rather than
+decided._
+
+### Closed by this story
+
+- ✅ **CLOSED — the 8→11 correction** (registered by story 5.7 with story 5.8 as owner,
+  `deferred-work.md:1937-1960`). `epics.md:1545` now reads **eleven, in three classes (8 / 2 / 1)**,
+  with a dated parenthetical naming what it replaced and why. The split is **asserted** by
+  `l1_runner`'s `the_residue_decomposes_into_eight_two_and_one` and by `trap_gate`'s
+  `the_committed_corpus_is_red_with_eleven_unanswerable_traps` — the second also pins the COLUMN
+  each trap was declined in, which the first does not. `epics.md` was edited by this story and by no
+  other: it is the one lifting of the verify-only rule, taken because leaving a false premise in the
+  epic file is the defect six consecutive reviews have caught.
+
+- ✅ **CLOSED — `l1_answers` has no cross-file `TrapId` uniqueness check** (registered by 5.7's code
+  review, `deferred-work.md:2026-2036`, owner story 5.8 as *"the first consumer of this map that
+  counts rather than scores"*). It now raises `FixtureError::DuplicateTrapId { trap, first, second }`
+  — the existing variant, no new one. The guard became load-bearing rather than tidy the moment the
+  map went TOTAL: its LENGTH is read by the residue arithmetic, so a duplicate shortens a
+  denominator with no diagnostic. ⚠️ **The test calls `l1_answers` DIRECTLY, and that is the
+  finding, not a detail**: `score_corpus` refuses the same corpus for its own reasons
+  [`trap_gate.rs`], so a test written through the harness stays GREEN with the runner's guard
+  deleted — it would be measuring `score_corpus`, which already worked. The test asserts the
+  harness's behaviour too, as the stated reason for the direct call.
+
+### New, raised by this story
+
+- ⚠️ **Should a non-empty but PARTIAL answers map block? — measured, NOT decided here.** Story 5.8's
+  bucket is filled only by an explicit `Answer::Unanswerable`; a trap simply ABSENT from the map is
+  neither scored nor bucketed, and does not block. That is deliberate and it is what keeps **4.6b's
+  AC1** literally true — *"it reports truth-table failures per D18 column and is GREEN vacuously —
+  it must not require an engine to exist"* [`epics.md:1055`] — pinned by
+  `an_absent_answer_is_not_a_decline_and_does_not_block`, which asserts `passed() == true` and
+  `unaccounted() == 24` over the committed corpus with an empty map.
+
+  The hole this leaves is real and is stated rather than hidden: **a future producer that answers
+  some traps and declares nothing about the rest is green, and silently so.** `l1_answers` cannot be
+  that producer — it is TOTAL by construction, asserted at 24 entries — so nothing ships wrong
+  today. `Report::unaccounted()` exists to make the state readable and is deliberately **not
+  rendered and not blocking**: blocking on it would overturn an epic-level acceptance criterion
+  inside a story that was not given that decision. **Owner: the story that adds a SECOND producer**,
+  or Epic 6, whichever first holds a map that is not total by construction.
+
+- ⚠️ **`Report::unaccounted()` has no production consumer.** It is reached from one test. That is
+  recorded rather than resolved: the accessor is what makes the question above measurable, and
+  deleting it would leave the vacuous state named by nothing. Mutation M8 (returning 0
+  unconditionally) reds that one test, so it is not untested — it is unconsumed.
+
+### Read, and deliberately NOT closed — they belong to others
+
+- **No `l2-*` rule is designed or implemented.** This story makes the absence *countable*, never
+  smaller. **Owner: Epic 6**, which is also what empties the bucket and, by construction, deletes
+  the `NFR4 NOT MET` line from the report — that sentence is rendered only while the bucket is
+  non-empty, so it cannot go stale.
+- **No `ScoredRecord`, no `VerdictVectorEntry`.** Re-owned by story 5.7 to *"the story that gives a
+  trap run a real capability snapshot"*, with the obstacle measured there. Unchanged.
+- **The blocker still has no production caller.** `identity::blocking::candidates` is reached from
+  its own tests and from `fixtures.rs`'s test module only. Unchanged by this story and for the same
+  reason story 5.7 recorded: a trap NAMES the pair it puts under judgement, so a runner has nothing
+  to generate. **Owner: story 5.9 or Epic 6** — the first caller that holds observations and no trap.
+- **The `must-abstain` column is still measured by nothing** (`Tally::scored_in(MustAbstain) == 0`).
+  All three of its traps are in the bucket. **Owner: story 5.14 / Epic 6**, unchanged.
