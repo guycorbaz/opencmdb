@@ -1,6 +1,6 @@
 # Story 5.8: A trap whose level the engine does not implement counts as NOT PASSING
 
-Status: ready-for-dev
+Status: review
 
 <!-- Validation is MANDATORY here (Guy's decision, Epic 4 retrospective 2026-07-26): two
      fresh-context agents (fact-check + gap-hunt) BEFORE dev-story. The template banner saying
@@ -692,54 +692,54 @@ recorded as unreachable-today rather than assumed so.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — the vocabulary (AC1)**
-  - [ ] `UnanswerableCause` and `Answer` in `crates/opencmdb-core/src/score.rs`, beside `Outcome`.
+- [x] **Task 1 — the vocabulary (AC1)**
+  - [x] `UnanswerableCause` and `Answer` in `crates/opencmdb-core/src/score.rs`, beside `Outcome`.
         Every `pub` item/variant/field documented; `Debug, Clone, PartialEq, Eq` to match `Outcome`.
-  - [ ] The doc on `Answer` carries §5's measurement — that mapping an unanswerable trap to
+  - [x] The doc on `Answer` carries §5's measurement — that mapping an unanswerable trap to
         `Outcome::Abstained` makes `example-must-abstain` pass — and refuses the conversion by name.
-  - [ ] Unit tests in `score.rs`: the type is inert (it produces no `Score`), and no conversion
+  - [x] Unit tests in `score.rs`: the type is inert (it produces no `Score`), and no conversion
         exists. **No `From`, no `Default`, no helper.**
-- [ ] **Task 2 — the seam and the bucket (AC2, AC3)**
-  - [ ] `score_corpus`'s parameter becomes `&BTreeMap<TrapId, Answer>`; the `Answered` arm keeps the
+- [x] **Task 2 — the seam and the bucket (AC2, AC3)**
+  - [x] `score_corpus`'s parameter becomes `&BTreeMap<TrapId, Answer>`; the `Answered` arm keeps the
         existing tally + `run_trap` path **byte-identical**; the `Unanswerable` arm pushes an
         `Unanswered` and **calls neither** `Tally::record` nor `run_trap`.
-  - [ ] Both arms `used.insert(trap.id)` — the `AnswerForUnknownTrap` check must see an
+  - [x] Both arms `used.insert(trap.id)` — the `AnswerForUnknownTrap` check must see an
         `Unanswerable` key too.
-  - [ ] `Unanswered` struct + `Report::unanswered()` + `Report::unanswered_in()` +
+  - [x] `Unanswered` struct + `Report::unanswered()` + `Report::unanswered_in()` +
         `Report::unaccounted()` (decision 4: reported, non-blocking).
-  - [ ] `passed()` gains the fourth conjunct; its doc distinguishes "no producer ran" (still green)
+  - [x] `passed()` gains the fourth conjunct; its doc distinguishes "no producer ran" (still green)
         from "a producer declined" (red).
-  - [ ] `trap_gate.rs`'s module doc: why the widening does not spend 4.6b's AC1 (§6).
-  - [ ] Update the **13** map-building call sites with `Answer::Answered(..)`; the **13** that pass
+  - [x] `trap_gate.rs`'s module doc: why the widening does not spend 4.6b's AC1 (§6).
+  - [x] Update the **13** map-building call sites with `Answer::Answered(..)`; the **13** that pass
         `&BTreeMap::new()` need no change.
-- [ ] **Task 3 — the runner becomes total (AC7, AC10)**
-  - [ ] `l1_answers -> BTreeMap<TrapId, Answer>`, pair-first classification (§4), predicates kept
+- [x] **Task 3 — the runner becomes total (AC7, AC10)**
+  - [x] `l1_answers -> BTreeMap<TrapId, Answer>`, pair-first classification (§4), predicates kept
         separate and named.
-  - [ ] The cross-file `TrapId` guard, `DuplicateTrapId`, mirroring `score_corpus`'s `seen` map.
-  - [ ] `answer_trap` **unchanged** (decision 8).
-  - [ ] Tests in `l1_runner.rs` (subject = the runner): totality (24 entries), the thirteen answered
+  - [x] The cross-file `TrapId` guard, `DuplicateTrapId`, mirroring `score_corpus`'s `seen` map.
+  - [x] `answer_trap` **unchanged** (decision 8).
+  - [x] Tests in `l1_runner.rs` (subject = the runner): totality (24 entries), the thirteen answered
         unchanged vs `expected_answered()`, the eleven unanswered vs `expected_unanswered()`, the
         three cause classes 8/2/1, the scratch duplicate-id refusal, the 24-distinct-ids assertion.
-- [ ] **Task 4 — the report tests (AC4, AC5, AC6)**
-  - [ ] Tests in `trap_gate.rs` (subject = the report): the RED committed corpus with the eleven by
+- [x] **Task 4 — the report tests (AC4, AC5, AC6)**
+  - [x] Tests in `trap_gate.rs` (subject = the report): the RED committed corpus with the eleven by
         name and by cause; the per-column arithmetic; the two render tests (bucket non-empty →
         `"11 unanswerable"` + the NFR4 line; bucket empty → neither).
-  - [ ] Flip `the_committed_corpus_is_scored_by_the_l1_engine`'s `passed()` assertion, message
+  - [x] Flip `the_committed_corpus_is_scored_by_the_l1_engine`'s `passed()` assertion, message
         first.
-  - [ ] The mixed/pure family assertions (AC7's family half may live here — put each test with the
+  - [x] The mixed/pure family assertions (AC7's family half may live here — put each test with the
         item whose CLAIM it pins, `cascade.rs`'s stated convention).
-- [ ] **Task 5 — the docs and the register (AC8)**
-  - [ ] `epics.md`: the story-5.8 block, 8 → eleven, three classes, dated parenthetical. **Nothing
+- [x] **Task 5 — the docs and the register (AC8)**
+  - [x] `epics.md`: the story-5.8 block, 8 → eleven, three classes, dated parenthetical. **Nothing
         else in that file.**
-  - [ ] `deferred-work.md`: a new `## Deferred from: story-5.8` section, appended.
-  - [ ] Sweep every site claiming the residue is 8 or that the committed gate passes — at minimum
+  - [x] `deferred-work.md`: a new `## Deferred from: story-5.8` section, appended.
+  - [x] Sweep every site claiming the residue is 8 or that the committed gate passes — at minimum
         `trap_gate.rs`, `l1_runner.rs`, `score.rs`, `docs/project-context.md`, `CLAUDE.md`.
         🔑 **Update BOTH twins.** 5.7's HIGH was `CLAUDE.md` and `project-context.md` carrying the
         same sentence with only one corrected.
-- [ ] **Task 6 — mutations and the gate (AC9)**
-  - [ ] Commit first, then M1–M7, each red set recorded verbatim in the Debug Log, each red labelled
+- [x] **Task 6 — mutations and the gate (AC9)**
+  - [x] Commit first, then M1–M7, each red set recorded verbatim in the Debug Log, each red labelled
         **assertion-carried** or **compiler-carried**.
-  - [ ] `git status fixtures/` empty; `MANIFEST.toml` untouched; full local gate; then branch → PR →
+  - [x] `git status fixtures/` empty; `MANIFEST.toml` untouched; full local gate; then branch → PR →
         green CI → squash merge. **`done` is the MERGE's business**, not the review's.
 
 ---
@@ -849,11 +849,136 @@ recorded as unreachable-today rather than assumed so.
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`.
+
 ### Debug Log References
+
+Baseline committed as `2871ebe` on branch `story-5.8-unanswerable-bucket` before any mutation, per
+AC9 (`git checkout <file>` restores to HEAD, and that has destroyed an implementation mid-run in
+this project before).
+
+#### 🔴 The §7 prediction, verified BEFORE any new test existed
+
+After the seam change and the runner rewrite, with **no story-5.8 test yet written**, the suite
+produced **exactly one** failure:
+
+```
+test trap_gate::tests::the_committed_corpus_is_scored_by_the_l1_engine ... FAILED
+   panicked at crates/opencmdb-bin/src/trap_gate.rs:690
+test result: FAILED. 153 passed; 1 failed
+```
+
+§7 predicted one `passed()` assertion would flip and named it. Ten kept their value, the canary
+`trap_gate.rs:830` (4.6b's AC1) included. **No divergence.**
+
+#### Mutations — every red assertion-carried, ZERO compiler-carried
+
+| # | mutation | red set | carried by |
+|---|---|---|---|
+| M1 | `passed()` drops the `unanswered.is_empty()` conjunct | **2** — `…is_red_with_eleven_unanswerable_traps`, `…is_scored_by_the_l1_engine` | assertion |
+| M2 | `l1_answers` emits only the 13 `Answered` | **9** | assertion |
+| M3 | an `Unanswerable` is recorded in the `Tally` as `Outcome::Abstained` | **6** | assertion |
+| M4 | level-first classification | **3** — all three CAUSE assertions | assertion |
+| M5 | `unanswered_in` returns the failures count | **1**, *on the arithmetic loop* | assertion |
+| M5b | one trap leaves BOTH the scored set and the bucket | **8**, incl. the loop at `9 != 10` | assertion |
+| M5c | a REDISTRIBUTION inside one column (added, see below) | **11**, incl. the literal at `4 != 3` | assertion |
+| M6 | the NFR4 line rendered unconditionally | **1** — `an_empty_bucket_renders_neither…` | assertion |
+| M7 | the runner's cross-file id guard removed | **1** — `one_trap_id_in_two_files_is_refused_by_the_runner_itself` | assertion |
+| M8 | `unaccounted()` returns 0 | **1** — `an_absent_answer_is_not_a_decline_and_does_not_block` | assertion |
+
+**M3, probed directly** — the story's central claim, and it holds exactly:
+
+```
+M3 scored=24 failures=3 must_abstain_scored=3 must_abstain_failures=0 must_merge_failures=3
+```
+
+`scored` 13 → **24**; the `must-abstain` column goes 0 → 3 scored with **0 failures**, i.e. **all
+three `must-abstain` traps PASS, `example-must-abstain` included** — a trap passing because nothing
+was asked. The three new `failures` are all `must-merge` (D18's cowardice cell). **AC1's refusal is
+NOT decoration**, measured rather than argued.
+
+**M4's green half, recorded because it is the measurement**: the answered thirteen, the eleven names
+and the per-column arithmetic all stayed GREEN. Only the three cause assertions red
+(`no_level: left 3, right 2` — i.e. 8 / 3 / 0). The reorder moves a CAUSE and never a key, exactly
+as §4 claims.
+
+#### 🔴 Two corrections to the story's own mutation prescriptions, found by running them
+
+1. **M5 reds on the arithmetic LOOP, not on a literal.** The story says it *"panics on the first
+   literal … and never reaches the arithmetic loop"* and that it *"proves the literals, nothing
+   more"*. That was true of the ordering the validation agent had; **AC5 changed the ordering, and
+   the sentence was not re-derived against it.** Measured here at `trap_gate.rs:807`:
+   `column must-merge … left: 7 right: 10` — the loop. So AC5's reordering did what it was for, and
+   M5's stated boundary is inherited from a tree that no longer exists.
+2. **That left the three literals proven by nothing**, since the loop panics first. **M5c was added
+   for exactly that**: it moves one answered `must-merge` trap into the bucket, so the column TOTAL
+   is unchanged (10) and the loop stays green, while `unanswered_in(MustMerge)` goes 3 → 4 and the
+   literal reds at `trap_gate.rs:819` (`left: 4, right: 3`). M5 and M5c prove different assertions
+   and neither masks the other.
+
+#### Divergences from the story's predicted figures, stated rather than smoothed
+
+- **M3 reds 6 tests where the story predicted 7.** The story's figure came from the validation
+  agent's implementation; this one keeps the bucket filled *and* records in the tally, which
+  isolates the tally effect. The direction and every named consequence reproduced exactly.
+- **364 tests, but distributed 162 bin + 156 core** where §11 predicted 163 + 155. Same total; three
+  vocabulary tests went to `score.rs` rather than two. Not a divergence in coverage.
+- Code lines (measured): `score.rs` 681 → **766** (§11 predicted 751), `trap_gate.rs` 405 → **560**
+  (predicted 552), `l1_runner.rs` 259 → **330** (predicted 323). All three run a little longer than
+  the validation's tree — longer docs — and all are far under the 2000 ceiling; the `file-size`
+  gate's largest file is unchanged at **1136**, which is `xtask/src/main.rs` — not one of these.
+  `score.rs` at 766 is now the workspace's **second** largest by code lines, ahead of `fixtures.rs`
+  (728); worth knowing, nowhere near the ceiling.
+
+#### Gate, run whole on the restored tree
+
+`cargo fmt --all --check` clean · `cargo clippy --workspace --all-targets -- -D warnings` clean ·
+`cargo clippy --workspace -- -D warnings` (**the form CI runs**) clean, exit 0 ·
+`cargo test --workspace --locked` **162 + 156 + 46 = 364**, 0 failed ·
+`cargo xtask ci` **six gates green** (`file-size` largest 1136; `float-free` still 4 files under
+`identity/`) · `git status fixtures/` **empty**, `MANIFEST.toml` untouched.
 
 ### Completion Notes List
 
+- **The committed gate is now RED, and that is the deliverable.** `24 discovered, 13 scored,
+  0 failures, 0 wrong-rule, 0 incomplete families, **11 unanswerable**, `passed() == false`` — and it
+  stays false until Epic 6 implements `l2-*`, which is what `epics.md:416` has always said.
+- **AC1–AC10 all MET.** Every numeric prediction in §1–§8 reproduced exactly: 24 / 13 / 11, causes
+  8 / 2 / 1, per-column unanswerable 3 / 5 / 3, corpus per-column 10 / 11 / 3, `scored_in` 7 / 6 / 0.
+- **The seam widened in VALUE, not arity.** `score_corpus` takes `&BTreeMap<TrapId, Answer>` and
+  still takes no engine, no callback, no closure. 4.6b's AC1 survives literally and is asserted in
+  one line (`an_absent_answer_is_not_a_decline_and_does_not_block`): an empty map over the committed
+  corpus still passes, with `unaccounted() == 24` naming the state.
+- **Three assertions that totality inverts were rewritten, not diagnosed** (§7's second table), and
+  a **fourth was found during implementation and is not in the story**: the scratch prefix-selector
+  test asserted `answers.len() == 1`, which a total map satisfies whether the trap is answered *or*
+  bucketed — the exact behaviour that test exists to refuse. It now asserts the VARIANT.
+- **`epics.md:1545` corrected** (8 → eleven, three classes, dated parenthetical). The one lifting of
+  the verify-only rule, and nothing else in that file was touched.
+- **Both inherited register entries closed**, with the `l1_answers` cross-file id test calling the
+  runner **directly** — M7 confirms `score_corpus` would otherwise have kept it green.
+- **Both twins updated** (`CLAUDE.md` and `docs/project-context.md`) — one updated and the other
+  missed was the HIGH of 5.7's review.
+- **What this story did NOT do**, unchanged and registered: no `l2-*` rule (Epic 6); no
+  `ScoredRecord`/`VerdictVectorEntry`; no production caller for the blocker; no decision on whether
+  a non-empty but PARTIAL map should block — measured and owned forward instead.
+- ⚠️ **Issue #38 did not recur** during this implementation: ~14 full-suite runs across the
+  mutations, no unexplained red. Recorded as an observation, not as evidence about the cause.
+
 ### File List
+
+| file | change |
+|---|---|
+| `crates/opencmdb-core/src/score.rs` | UPDATED — `UnanswerableCause`, `Answer`, 3 tests |
+| `crates/opencmdb-bin/src/trap_gate.rs` | UPDATED — `Unanswered`, the fourth bucket, `unanswered()`/`unanswered_in()`/`unaccounted()`, `passed()`, `Display`, `score_corpus`'s seam, module + `passed()` docs, 6 tests, 13 call sites wrapped |
+| `crates/opencmdb-bin/src/l1_runner.rs` | UPDATED — `l1_answers` total + pair-first + cross-file id guard, module/predicate docs, 3 tests, 4 assertions strengthened |
+| `_bmad-output/planning-artifacts/epics.md` | UPDATED — story 5.8's first criterion, 8 → eleven (AC8; the only edit) |
+| `_bmad-output/implementation-artifacts/deferred-work.md` | UPDATED — appended `## Deferred from: story-5.8` |
+| `_bmad-output/implementation-artifacts/sprint-status.yaml` | UPDATED — status + the story's record |
+| `_bmad-output/implementation-artifacts/5-8-…-not-passing.md` | UPDATED — this file |
+| `CLAUDE.md` · `docs/project-context.md` | UPDATED — both twins |
+
+**Nothing under `fixtures/` changed** — verified with `git status fixtures/` (empty).
 
 ## Change Log
 
@@ -861,3 +986,4 @@ recorded as unreachable-today rather than assumed so.
 |---|---|
 | 2026-08-02 | Story contexted from `epics.md:1537-1557` against `master` `60107fa` (352 tests, clean tree). The corpus was re-measured trap by trap: the premise at `epics.md:1545` is **8** and the measured residue is **11** in three classes, so AC8 makes this story the one that corrects the epic file — the correction 5.7 registered with this story as owner. Per-column arithmetic (10/11/3 = 7/6/0 scored + 3/5/3 unanswerable) was derived and is the story's strongest guard. The **eleven** live `passed()` assertions were enumerated (4 true, 7 false) and exactly **one** flips. |
 | 2026-08-02 | **Validated by two fresh-context agents** (fact-check + gap-hunt), 20 findings applied. The gap-hunt agent IMPLEMENTED the story end to end in an isolated worktree: **352 → 364 tests**, six gates green, both clippy forms clean, `fixtures/` untouched, and **every numeric prediction reproduced exactly** — 24/13/11, causes 8/2/1, per-column 3/5/3, `passed() == false`. §7's table was verified byte-exact and only `trap_gate.rs:534` flipped, as predicted. What the compiler found that reading did not: **M5 never reaches the arithmetic loop** it was written to protect (replaced by M5b), **totality inverts three `l1_runner.rs` assertions silently** (a class §7 did not cover), and **three `l1_runner.rs` doc sites are falsified by §4's own pair-first decision**. Both agents independently found the totality class — the convergence is why it is now a table rather than a sentence. |
+| 2026-08-02 | **IMPLEMENTED → `review`.** AC1–AC10 all MET. **352 → 364 tests** (162 bin + 156 core + 46 xtask), six `xtask ci` gates green, both clippy forms clean, `fixtures/` untouched. 🔴 **The committed gate is now RED on purpose**: `24 discovered, 13 scored, 0 failures, 0 wrong-rule, 11 unanswerable, passed = false`. §7's prediction verified **before any new test existed** — exactly one `passed()` assertion flipped, the one it named. Ten mutations, **every red assertion-carried, ZERO compiler-carried**; M3 probed directly gives `scored=24 must_abstain_scored=3 must_abstain_failures=0`, so all three `must-abstain` traps PASS under it and AC1's refusal is measured, not asserted. **Two of the story's own mutation prescriptions were corrected by running them**: M5 reds on the arithmetic LOOP (not on a literal, as the story inherited from a tree AC5's reordering replaced), which left the three literals proven by nothing — so **M5c was added**, a redistribution inside one column that keeps the loop green and reds the literal at `4 != 3`. A **fourth** silently-inverted assertion was found during implementation and is not in §7's table: the scratch prefix-selector test asserted `answers.len() == 1`, satisfied by a total map whether the trap is answered or bucketed. Divergences stated rather than smoothed: M3 reds 6 where the story predicted 7; the 364 split 162/156 where §11 predicted 163/155; all three files run slightly longer than the validation's tree. |

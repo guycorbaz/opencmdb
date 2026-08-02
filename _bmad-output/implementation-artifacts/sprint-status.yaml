@@ -1407,7 +1407,46 @@ development_status:
   # none from the fact-checker, and on 5.7 all three HIGH were NO-OPS (a mutation that reddened
   # nothing, an assertion placed where it was unreachable, a walk blind to the mutation aimed at
   # it). Point it at AC2, AC5 and AC9's M3.
-  5-8-unimplemented-level-counts-as-not-passing: in-progress
+  #
+  # 5.8 IMPLEMENTED -> `review` (branch `story-5.8-unanswerable-bucket`, baseline `2871ebe`).
+  # 🔴 **The committed gate is RED, on purpose**: `24 discovered, 13 scored, 0 failures,
+  # 0 wrong-rule, 0 incomplete families, **11 unanswerable**, passed = FALSE` — and it stays false
+  # until Epic 6 implements `l2-*`, which is what `epics.md:416` has always said.
+  # **352 -> 364 tests** (162 bin + 156 core + 46 xtask). Six gates green, both clippy forms clean,
+  # `fixtures/` untouched. AC1-AC10 all MET; every numeric prediction of the story reproduced
+  # exactly (24/13/11, causes 8/2/1, per-column 3/5/3, corpus 10/11/3, scored_in 7/6/0).
+  # 🔑 §7's prediction verified **BEFORE any new test existed**: after the seam change alone the
+  # suite gave exactly ONE failure, the `passed()` site it named. Ten kept their value.
+  # TEN mutations, **every red assertion-carried, ZERO compiler-carried**. M3 probed directly:
+  # `scored=24 failures=3 must_abstain_scored=3 must_abstain_failures=0` — all three `must-abstain`
+  # traps PASS under it, `example-must-abstain` included, so AC1's refusal is measured not argued.
+  # 🔴 **Two of the story's OWN mutation prescriptions were corrected by running them** — the
+  # fourth consecutive time a prescription broke only under a compiler:
+  #  · **M5 reds on the arithmetic LOOP**, not on a literal. The story said it "panics on the first
+  #    literal and never reaches the loop" — true of the tree the VALIDATION agent had, and
+  #    falsified by AC5's own reordering, which the sentence was never re-derived against;
+  #  · that left the three literals 3/5/3 proven by NOTHING, so **M5c was added**: a redistribution
+  #    inside one column keeps the per-column total at 10 (loop green) while `unanswered_in`
+  #    goes 3 -> 4 and the literal reds at `4 != 3`. M5 and M5c prove different assertions and
+  #    neither masks the other.
+  # A **FOURTH** silently-inverted assertion was found during implementation and is in no story
+  # table: the scratch prefix-selector test asserted `answers.len() == 1`, which a TOTAL map
+  # satisfies whether the trap is answered or bucketed — the very behaviour that test refuses. It
+  # now asserts the VARIANT.
+  # Divergences stated rather than smoothed: M3 reds 6 where the story predicted 7; 364 splits
+  # 162/156 where §11 predicted 163/155; the three touched files run 10-15 lines longer than the
+  # validation's tree. `score.rs` (766) is now the workspace's second largest file by code lines;
+  # `file-size`'s largest is unchanged at 1136 (`xtask/src/main.rs`), far under the 2000 ceiling.
+  # `epics.md:1545` CORRECTED (8 -> eleven, three classes, dated parenthetical) — the one lifting
+  # of the verify-only rule, nothing else in that file touched. Both inherited register entries
+  # CLOSED; the cross-file id test calls `l1_answers` DIRECTLY, and M7 confirms why: with the
+  # runner's guard removed `score_corpus` still refuses the corpus, so a harness-level test would
+  # have stayed green. Both twins (`CLAUDE.md`, `docs/project-context.md`) updated.
+  # ⚠️ Issue #38 did NOT recur across ~14 full-suite runs here. Recorded as an observation only —
+  # it is not evidence about the cause, which stays OPEN.
+  # ⚠️ NEXT = `code-review` 5.8 (a DIFFERENT LLM than the one that implemented it), then push ->
+  # PR -> green CI -> squash merge. **`done` is the MERGE's business**, not the review's.
+  5-8-unimplemented-level-counts-as-not-passing: review
   5-9-persist-interface-and-identity-link: backlog
   5-10-purge-test: backlog
   5-11-order-independence: backlog
