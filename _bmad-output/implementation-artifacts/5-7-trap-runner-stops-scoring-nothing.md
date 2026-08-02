@@ -585,7 +585,7 @@ docs). 20 unique findings after dedup: 1 decision, 10 patches, 2 deferred, 7 dis
 finding below was re-measured before being written down** — two were refuted by that re-measurement
 and are recorded in the dismissed list with the measurement that killed them.
 
-- [ ] [Review][Decision] **The self-pair is re-opened on the `answer_trap` path** — `named_pair`
+- [x] [Review][Decision] **The self-pair is re-opened on the `answer_trap` path** — `named_pair`
       never compares `a` and `b`, so a hand-built `Trap { observations: vec![x, x] }` gives
       `decide_pair(o, o)`: `keys_of(o)` intersects itself, `shares_a_key` is trivially true, and the
       trap PASSES as `Merged { l1-exact-mac }` — a pass no rule reasoned about, the same *right
@@ -596,19 +596,19 @@ and are recorded in the dismissed list with the measurement that killed them.
       **Choice: guard it in `named_pair` (`a == b` → `None`, with a test), or state the precondition
       in `answer_trap`'s doc and leave the behaviour.** [`crates/opencmdb-bin/src/l1_runner.rs:112`]
 
-- [ ] [Review][Patch] `CLAUDE.md` still asserts *"Nothing feeds the corpus harness (5.7)"* in the
+- [x] [Review][Patch] `CLAUDE.md` still asserts *"Nothing feeds the corpus harness (5.7)"* in the
       present tense, falsified ~400 words later in the same paragraph by *"The seam is crossed and
       the trap corpus is a gate that RUNS"*. `docs/project-context.md` corrected the identical
       sentence in this commit (`-Nothing feeds the corpus harness (5.7)…` → `+**The corpus harness
       is now fed**…`); `CLAUDE.md` was left. Measured: `grep -c` → `CLAUDE.md:1`,
       `project-context.md:0`. Violates docs-current-before-push. [`CLAUDE.md:7`]
-- [ ] [Review][Patch] The Debug Log records a measurement that measurement contradicts:
+- [x] [Review][Patch] The Debug Log records a measurement that measurement contradicts:
       *"`trap_gate.rs` **311**"* code lines. Measured on the shipped tree: first `#[cfg(test)]` at
       `:406`, so **405**. 311 is not merely wrong, it is *below* the story's own `6cc137b` baseline
       of 384, which the commit's +21 non-test lines make impossible. Harmless for the `file-size`
       gate; it is a fabricated number in the record.
       [`_bmad-output/implementation-artifacts/5-7-trap-runner-stops-scoring-nothing.md:773`]
-- [ ] [Review][Patch] `the_committed_corpus_is_scored_by_the_l1_engine`'s doc claims *"every one of
+- [x] [Review][Patch] `the_committed_corpus_is_scored_by_the_l1_engine`'s doc claims *"every one of
       the thirteen passes: the truth table, the rule, and **the family completeness**"*. Measured:
       `incomplete_families` is computed over `all_traps` [`trap_gate.rs:301`, `trap.rs:384-408`], not
       over the scored ones — it is a corpus-shape property, independent of `answers`, and the
@@ -616,7 +616,7 @@ and are recorded in the dismissed list with the measurement that killed them.
       must be: the runner answers 2 of `hostname-absence`'s 3 traps and 1 of `vrrp-virtual-mac`'s 3,
       so a completeness check over *scored* traps would be non-empty. Narrow the sentence.
       [`crates/opencmdb-bin/src/trap_gate.rs:496`]
-- [ ] [Review][Patch] *"all **seven** ids the corpus writes"* is quoted, never asserted.
+- [x] [Review][Patch] *"all **seven** ids the corpus writes"* is quoted, never asserted.
       `assert_rule_ids_are_canonical`'s only cardinality guard is `checked > 0`, so a truncated walk
       or an eighth rule id is caught by nothing in that test — it would pass over a corpus reduced to
       `dhcp-churn.toml` alone. Measured on the committed bytes: **21** rule-naming traps, **7**
@@ -624,7 +624,7 @@ and are recorded in the dismissed list with the measurement that killed them.
       root-parameterised helper: put it in the helper and M5c (a scratch corpus of `multi-nic.toml`
       alone) reds on the count instead of on the both-occur guard, masking the very guard the story
       measured M5c to prove load-bearing. [`crates/opencmdb-bin/src/l1_runner.rs:460-522, 532`]
-- [ ] [Review][Patch] **No test covers a trap naming three or more observations**, and the gap is
+- [x] [Review][Patch] **No test covers a trap naming three or more observations**, and the gap is
       measured invisible: rewriting `named_pair`'s `[a, b]` arm to `[a, b, ..]` — which would answer
       such a trap on its first two ids and ignore the third — leaves all 350 tests green. Every
       committed trap names ≤ 2 and every scratch TOML in the tree names 2, and `Trap::validate`
@@ -633,7 +633,7 @@ and are recorded in the dismissed list with the measurement that killed them.
       module doc argues a whitelist would cause, through a different door. This is the upper half of
       the guard whose lower half AC2 closed. Add the `answer_trap` test.
       [`crates/opencmdb-bin/src/l1_runner.rs:112-117`]
-- [ ] [Review][Patch] `expected_answered()`'s doc claims to be *"the third independent statement of
+- [x] [Review][Patch] `expected_answered()`'s doc claims to be *"the third independent statement of
       the corpus's L1 surface, beside `l1.rs`'s two constants and its test-side restatement"*. It is
       a list of thirteen **trap ids**; those are two **rule-id** spellings — no DRY pass could
       collapse one into the other, so the anti-collapse warning protects nothing. `l1.rs:326-329`
@@ -642,21 +642,21 @@ and are recorded in the dismissed list with the measurement that killed them.
       title. The literal list IS right, for its own simpler reason (already stated in the sentence
       above it: an expectation computed by the predicate under test proves nothing) — keep that and
       drop the borrowed lineage. [`crates/opencmdb-bin/src/l1_runner.rs:269-275`]
-- [ ] [Review][Patch] `answer_trap` is `pub`, documents only `# Errors`, and can **panic**: it calls
+- [x] [Review][Patch] `answer_trap` is `pub`, documents only `# Errors`, and can **panic**: it calls
       `read_jsonl` directly and never `read_traps`, so the `DanglingObservation` cross-check that
       `resolve`'s `# Panics` note leans on does not run on this path. `Trap` is fully public with
       public fields and no `#[non_exhaustive]` [`trap.rs:118-142`], so any caller can build one. The
       `# Panics` note lives on a private helper while the `pub` entry point states no precondition —
       against the house rule *"`# Panics` where relevant"*.
       [`crates/opencmdb-bin/src/l1_runner.rs:176-182`]
-- [ ] [Review][Patch] The scratch test removes the FILE and never the DIRECTORY, and only on the
+- [x] [Review][Patch] The scratch test removes the FILE and never the DIRECTORY, and only on the
       success path, where every sibling scratch test in `trap_gate.rs` uses `remove_dir_all`
       [`:747, :759, :781, :811, :871`]. Measured: three leaked directories in `/tmp`
       (`opencmdb-l1-runner-{104584,112245,150444}-unimplemented-l1-rule`), one per prior run.
       Hygiene, not a flake — but `scratch_dir`'s own doc sells the per-test directory as what keeps
       runs from racing, and cleanup that only runs on green does not support that claim.
       [`crates/opencmdb-bin/src/l1_runner.rs:604`]
-- [ ] [Review][Patch] The module doc's counter-factual — *"Answering **all 24** traps makes the gate
+- [x] [Review][Patch] The module doc's counter-factual — *"Answering **all 24** traps makes the gate
       red: 6 truth-table failures and 4 wrong-rule failures"* — describes a state this code forbids:
       `answer_trap` returns `None` for `example-must-abstain`, so at most 23 are answerable without
       the shortcut the same doc refuses. The **arithmetic is correct** (verified: M2's 4 + 4 over the
@@ -664,7 +664,7 @@ and are recorded in the dismissed list with the measurement that killed them.
       passing = 6 + 4), and it is pinned by no live test — its oracle was a contexting probe since
       deleted. Narrow the wording to the traps the runner can answer plus the refused shortcut.
       [`crates/opencmdb-bin/src/l1_runner.rs:44-45`]
-- [ ] [Review][Patch] `the_verdict_vector_and_the_ruleset_version_are_dropped` cannot red under any
+- [x] [Review][Patch] `the_verdict_vector_and_the_ruleset_version_are_dropped` cannot red under any
       realistic mutation of `outcome_of`: `Outcome` has no field able to carry either dropped value,
       so every implementation that does not branch on `ruleset_version` satisfies it, and it appears
       in none of the six recorded red sets. It is a documentation test and worth keeping — but the
@@ -715,6 +715,24 @@ and are recorded in the dismissed list with the measurement that killed them.
 7. *"nine `Owner: story 5.7` sentences survive in `deferred-work.md`"* — each carries an adjacent
    ✅ CLOSED / ↺ / ⚠️ RE-OWNED annotation, which is precisely what Task 6 prescribed (*"appended,
    never rewriting an existing bullet"*).
+
+#### Prove-to-red on the review's three new guards (commit `6f958dd`, baseline committed first)
+
+Every red assertion-carried; the tree was restored and re-verified green after each.
+
+| mutation | what it changes | observed |
+|---|---|---|
+| **MR1** | `named_pair`'s arm back to `[a, b]` — the self-pair guard dropped | RED, **1** test: `a_trap_that_names_the_same_observation_twice_gets_no_answer`, *"two ids, one observation"* |
+| **MR2** | `[a, b, ..] if a != b` — three observations accepted, third ignored | RED, **1** test: `a_trap_that_names_three_observations_gets_no_answer`; the answer it would have given is `Some(Abstained { AbsenceOfProof })` |
+| **MR3a** | the canonicality walk truncated to **one** file | RED — but on the PRE-EXISTING both-occur guard (*"no trap … names `l1-distinct-mac`"*), which **masks** the new counts. `cloned-mac.toml` sorts first and writes no `l1-distinct-mac`. |
+| **MR3b** | truncated to **two** files — `dhcp-churn.toml` writes both `l1-*` ids, so both-occur stays green | RED on the new assertion alone: `checked` **4**, expected **21** |
+
+⚠️ **MR3a is recorded rather than dropped**: it is the same masking the story met on M5b/M5c, met
+again on the first try, and it is why MR3b had to choose a prefix that keeps the older guard
+satisfied. A mutation that reds the wrong assertion proves nothing about the new one.
+
+**352 tests** (153 bin + 153 core + 46 xtask) — 350 → 352. Six gates green, both clippy forms clean,
+`cargo fmt --all --check` clean, `git status fixtures/` and `git diff HEAD -- fixtures/` both empty.
 
 **Also verified clean, by measurement rather than by reading the claim:** AC1–AC10 all MET; 24 traps
 / 13 `l1-*` / 8 `l2-*` / 3 causes / 23 pairs / 1 single; the residue of 11 literal ids matches the
@@ -1154,5 +1172,6 @@ Added:
 
 | Date | Change |
 |---|---|
+| 2026-08-02 | **CODE-REVIEWED (three layers), 11 patches applied, 2 deferrals registered, 7 findings dismissed — commit `6f958dd`. Status stays `review`: `done` is the MERGE's business in this project's flow.** AC1–AC10 were re-verified MET by independent measurement (24/13/8/3, the residue of 11 literal ids, 7 distinct rule ids, 11 trap-named replay streams with zero `capability` records, `grep "5.7 owns"` empty, File List matching the diff exactly). **6 of the 11 patches were SENTENCES, not behaviour — the sixth consecutive story with that shape.** Two behavioural gaps, both measured invisible before the tests existed: **the SELF-PAIR was re-opened on the `answer_trap` path** — a hand-built `Trap { observations: vec![x, x] }` gave `decide_pair(o, o)`, which intersects `keys_of(o)` with itself, so `l1-exact-mac` fired and the trap MERGED, a pass no rule reasoned about; story 5.6 had closed that in the TYPE (`CandidatePair::new(a, a)` is `None`) but `answer_trap` never calls `read_traps`, so `Trap::validate`'s `DuplicateObservation` does not hold the precondition there. **Guy's call: close it in `named_pair`** (`[a, b] if a != b`), not in a doc sentence. And **no test covered a trap naming THREE observations** — relaxing the arm to `[a, b, ..]` left all 350 tests green, because every committed trap names ≤ 2 and `Trap::validate` rejects an empty or duplicated list but not a third id. Story 5.6's M2 idiom, on the upper half of the guard AC2 closed for the lower. One assertion strengthened: *"all seven ids"* was QUOTED in three documents and guarded by `checked > 0` alone, so the test would have passed over a corpus reduced to one file — `checked == 21` and `distinct == 7` are now asserted, **in the committed-corpus test and deliberately NOT in the root-parameterised helper**, where they would red M5c on the count and mask the both-occur guard M5c was measured to prove load-bearing. The five claim corrections: `CLAUDE.md` still said *"Nothing feeds the corpus harness (5.7)"* in the present tense, falsified 400 words below in the same file while `project-context.md` had corrected the identical sentence in `b555712`; the Debug Log recorded `trap_gate.rs` at **311** code lines where it is **405**, a figure BELOW the story's own 384 baseline and therefore impossible; `the_committed_corpus_is_scored_by_the_l1_engine` credited the thirteen answers with *"the family completeness"*, which `incomplete_families` computes over ALL discovered traps and cannot be; `expected_answered()` claimed to be the *"third independent statement"* `l1.rs` points at, when that is a RULE-id test 260 lines below and this is a list of TRAP ids; and the module doc's *"answering all 24 traps"* describes a state the code forbids (23 are answerable), with its correct 6 + 4 arithmetic now marked as pinned by no live test. `answer_trap` gains the `# Panics` section its `pub` signature owed. **Prove-to-red on all three new guards, each assertion-carried, on a committed baseline** — and **MR3a is recorded rather than dropped**: truncating the canonicality walk to one file reds the OLDER both-occur guard and masks the new counts, the same masking the story met on M5b/M5c, met again on the first try. **350 → 352 tests** (153 + 153 + 46); six gates green, both clippy forms clean, `fixtures/` verified untouched two ways. Two deferrals registered with owners: `l1_answers` has no cross-file `TrapId` uniqueness check (owner **5.8**; `score_corpus` catches it today, a `len()`-only caller would not), and `outcome_of`'s abstaining row has no end-to-end path through the runner (owner **5.14 / Epic 6**). Seven findings dismissed each with the measurement that killed it — **two of them refuted sub-agent claims**: the scratch test's `!passed()` is not green for family incompleteness (that trap declares no `family` key, and `incomplete_families` skips `None`), and pair order IS pinned (`a_pair_decides_the_same_whichever_side_is_the_left_argument`). |
 | 2026-08-01 | **IMPLEMENTED → `review`.** The committed corpus is scored by the real L1 engine: `discovered=24, scored=13, failures=0, rule_mismatches=[], incomplete_families=[], passed=true`, where `scored` had read **0** since story 4.6b. **333 → 350 tests** (151 bin + 153 core + 46 xtask); six gates green including `float-free` over 4 files, both clippy forms clean, `fixtures/` verified untouched two ways and `MANIFEST.toml` md5-verified. AC1–AC10 all met. **Six mutations run on a committed baseline (`50470d1`), every red assertion- or panic-carried, zero compiler-carried** — and each of the story's own numbers reproduced: M2 gives `21 scored, 4 truth-table failure(s), 4 wrong-rule failure(s)` with the four expected/actual pairs verbatim, M3 gives `16 scored, 2 truth-table failure(s)` (so `example-must-abstain` PASSED — §4's manufactured pass, live), M6 gives `24 discovered, 0 scored`. **M4 was run on BOTH sides and the difference is the finding the validation predicted**: dropped from `answer_trap` it panics with `index out of bounds: the len is 1 but the index is 1`; dropped from `l1_answers` the **entire suite stays green**, because the level selector removes the only pairless trap first. **M5 needed THREE variants, not the one specified** — a single rename is masked by the "either constant" assertion, and only a corpus with no `l1-` id at all (M5c) reds the both-occur guard, which is the guard that would otherwise let both constants be renamed to anything. **Two divergences from the story's predictions recorded rather than absorbed**: that, and the fact that M1 does NOT red `the_mapping_preserves_the_rule_mirror_on_every_row` (a wrong ROW keeps the rule, so the mirror and the three row tests each close what the other cannot). §6's obstacle was re-measured on the tree before being written into the register — **11 trap-named replay streams, zero `capability` control records among them**, and the only two streams that carry control records are named by no trap — so the `VerdictVectorEntry` unification is **re-owned, not done**, to the story that gives a trap run a real capability snapshot. The blocker still has **no production caller** and that was a decision, not an omission: a trap NAMES its pair. All **19** doc sites honoured or narrowed, verified by re-grepping the final tree: **zero remaining sites claim story 5.7 owns anything**. `epics.md`, `architecture.md` and `architecture-views.md` untouched. |
 | 2026-08-01 | **Validation pass, two fresh-context agents (fact-check + gap-hunt), MANDATORY per Guy's Epic 4 retrospective decision.** The gap-hunt agent **implemented the story end to end** in an isolated worktree off `6cc137b` — AC1–AC8 built and run, mutations M1/M3/M4/M5/M6 executed, all six gates green, `git status fixtures/` empty. **The pattern held for the third consecutive story: all 3 HIGH findings came from the agent that COMPILED the story, 0 from the agent that checked its claims.** Every number the story predicts was reproduced exactly — the 24-row §1 table row for row, `discovered=24 / scored=13 / failures=0 / mismatches=empty / passed=true`, `scored_in` 7 / 6 / 0, AC5's `failures=0` + `4` mismatches, AC6's identical replay, AC8's residue of 11 — and §5's load-bearing *"same type"* claim (`Outcome::Abstained` and `Conclusion::Abstained` both carry `IdentityAbstentionCause`, which is `Copy`) is TRUE, so AC1 is implementable verbatim. The `Display` render is `24 trap(s) discovered, 13 scored, 0 truth-table failure(s)` — AC3's `"13 scored"` substring holds. **13 findings applied: 3 HIGH, 5 MEDIUM, 5 LOW.** **The three HIGH, each a prescription that only broke under a compiler:** **(H1)** AC7's scratch trap was unspecified as to **column**, and the obvious `must-merge` form lands in `failures()` with `rule_mismatches()` **empty** — because `minimal.jsonl` holds **no pair the L1 engine merges** (MACs `…:53:01`, none, `…:53:02`) and `run_trap` raises `WrongRule` only on a verdict PASS. AC7 now prescribes `must-not-merge` over obs `…0001`/`…0003`, with the corpus fact stated. **(H2)** **M5 was a no-op**: `fixtures::walk_trap_files` takes **no root** (it hardcodes `fixture_path("scenario/traps")`), so a rename in a scratch copy is invisible to it — measured, the walk still reported 21 canonical ids. AC7's byte test is re-prescribed over `discover_trap_files(root)`, which this story promotes to `pub(crate)` anyway. **(H3)** **M4 reds nothing and AC2's named condition was vacuous**: of the 13 traps whose expected rule is `l1-*`, **zero** name other than two observations — the corpus's only pairless trap carries a cause and is excluded by the **level** selector first. The pair guard is unreachable through `l1_answers`; AC2's assertion is now on `answer_trap(&example_must_abstain) == Ok(None)` and M4 is applied there (measured: index-out-of-bounds panic). Story 5.6's M2 idiom, again. **The five MEDIUM:** *"14 sites across 6 files"* is neither figure — the grep spans **5** files, and with the 5 unmatched sites the set AC9 governs is **19**; AC8 asserted *"exactly the literal set measured in §3"* and **§3 contained no such set** (the 11 ids are now written out there); §6's *"four sites … and each states the condition"* is **five** sites of which only **two** state it; the prescribed shared core `(&Observation, &Observation) -> Outcome` is a one-liner that factors nothing — the real duplication is the id→`&Observation` resolution plus the trap-naming panic, so `answer_pair(stream, trap, a, b) -> Outcome` is prescribed instead; and the `obs_id ==` *"`corpus_pairs()` idiom"* **does not exist** (`grep` → **0** hits; `corpus_pairs()` stops at pairs of ids), so that resolution is new code, not a copy. **The five LOW:** the caching idiom `or_insert_with(\|\| read_jsonl(..)?)` does not compile (`?` in a closure — use `contains_key` + `insert`, as `read_traps` does); `answer_trap` resolves `replay` against the **baked** root, so `l1_answers(scratch)` reads traps from the scratch root and streams from `fixtures/` — stated for `read_traps` only, now stated for the runner; *"one read per distinct stream"* is true of the runner's own cache but `read_traps` already reads each stream once per trap file; `the_fixtures_path_is_expressed_once` counts `"/../../fixtures"` and asserts **2**, it does not police the substring `fixtures/` (prescription right, reason overstated); §6's *"there is no production source"* of `Capabilities` is **false** — `arp_ping.rs:183-187` builds one above its `#[cfg(test)]`, and `capability-downgrade.jsonl:3` carries one — narrowed to *"none a trap run can reach"*, which is what §6's conclusion actually needs. Also corrected: *"their traps pass in BOTH poles"* is `epics.md:1529`, not `:1527`; §7's *"nothing in the tree checks it"* is the register's *"nothing in **this crate**"* (the wider sentence happens to be true, but is not what is written down). **One gap-hunt finding was DISMISSED after re-measurement**: `Expectation::rule()` cited as `trap.rs:107-113` — the doc line is 106 and the fn spans 107-112, so the citation resolves; the agent's "106-111" is no more exact. All 14 grep rows, every other line citation, §6's stream/capability counts, §7's seven ids and their canonicality, §8's 333 tests / `#[cfg(test)]` offsets / six gates, and the float-free trap (`assert!(true, "story 5.7 …")` → red; `///`, `//!` → safe) reproduced exactly. The prototype implementation was **discarded** — `dev-story` rewrites from the corrected story. |

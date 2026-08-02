@@ -50,7 +50,54 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-01  # 5.7 IMPLEMENTED -> `review`. **The trap corpus is a gate that RUNS**:
+last_updated: 2026-08-02  # 5.7 CODE-REVIEWED (three layers) and PATCHED -- commit `6f958dd`. It
+                          # STAYS at `review`: `done` is the MERGE's business in this project's flow
+                          # (5.1 established it, 5.2/5.4b/5.5/5.6 held it). **11 patches applied, 2
+                          # deferrals registered, 7 findings dismissed, 350 -> 352 tests**, six gates
+                          # green, both clippy forms clean, `fixtures/` untouched two ways.
+                          # AC1-AC10 re-verified MET by independent measurement.
+                          # **6 of the 11 patches were SENTENCES -- the SIXTH consecutive story with
+                          # that shape.** The two behavioural ones were both measured INVISIBLE
+                          # before the tests existed:
+                          #  · the SELF-PAIR was re-opened on the `answer_trap` path -- a hand-built
+                          #    `Trap { observations: vec![x, x] }` merges on `l1-exact-mac`, an
+                          #    observation sharing every key with itself. Story 5.6 closed that IN
+                          #    THE TYPE (`CandidatePair::new(a, a)` is `None`), but `answer_trap`
+                          #    never calls `read_traps`, so `Trap::validate`'s
+                          #    `DuplicateObservation` does not hold the precondition there.
+                          #    **Guy's call: close it in `named_pair`**, not in a doc sentence.
+                          #  · no test covered a trap naming THREE observations -- relaxing the arm
+                          #    to `[a, b, ..]` left all 350 tests green. Story 5.6's M2 idiom, on the
+                          #    upper half of the guard AC2 closed for the lower.
+                          # One assertion strengthened: *"all seven ids"* was QUOTED in three
+                          # documents and guarded by `checked > 0` alone; `checked == 21` and
+                          # `distinct == 7` are now asserted -- in the COMMITTED-corpus test and
+                          # deliberately NOT in the root-parameterised helper, where they would red
+                          # M5c on the count and mask the both-occur guard M5c proves load-bearing.
+                          # The five claim corrections: CLAUDE.md still said *"Nothing feeds the
+                          # corpus harness (5.7)"* in the PRESENT tense, falsified 400 words below in
+                          # the same file (project-context.md had corrected the identical sentence in
+                          # `b555712` -- one file was updated and its twin was not); the Debug Log
+                          # recorded `trap_gate.rs` at **311** code lines where it is **405**, BELOW
+                          # the story's own 384 baseline and therefore impossible; the corpus-scoring
+                          # test credited the thirteen answers with *"the family completeness"*,
+                          # which is computed over ALL discovered traps; `expected_answered()`
+                          # claimed a lineage belonging to a RULE-id test 260 lines below; and the
+                          # module doc's *"answering all 24 traps"* describes a state the code
+                          # forbids. Prove-to-red on all three new guards, assertion-carried -- and
+                          # **MR3a is recorded rather than dropped**: truncating the canonicality
+                          # walk to one file reds the OLDER both-occur guard and MASKS the new
+                          # counts, the same masking the story met on M5b/M5c, met again first try.
+                          # Two deferrals with owners: no cross-file `TrapId` uniqueness check in
+                          # `l1_answers` (owner **5.8**), and `outcome_of`'s abstaining row has no
+                          # end-to-end path through the runner (owner **5.14 / Epic 6**).
+                          # **Two sub-agent findings were REFUTED by re-measurement** and dismissed
+                          # with the measurement: the scratch test's `!passed()` is not green for
+                          # family incompleteness (no `family` key -> `incomplete_families` skips
+                          # `None`), and pair order IS pinned.
+                          # NEXT = push -> PR -> green CI -> squash merge.
+                          #
+                          # 5.7 IMPLEMENTED -> `review`. **The trap corpus is a gate that RUNS**:
                           # 24 discovered, **13 scored** (0 for nine stories), 0 failures, 0
                           # wrong-rule, passed. **333 -> 350 tests.** Six gates green, `fixtures/`
                           # untouched. Six mutations, zero compiler-carried reds; M4 run on BOTH
