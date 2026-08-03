@@ -668,7 +668,10 @@ half-updated once already.
 - [x] **T8 — the full local gate, then PR**
   - [x] `cargo fmt --all` · clippy **twice** (§8) · `cargo test --workspace --locked` **with the DB
         running** · `cargo xtask ci`.
-  - [x] Push the branch, open the PR, wait for green CI, **squash merge**. Never push to `master`.
+  - [ ] Push the branch, open the PR, wait for green CI, **squash merge**. Never push to `master`.
+        ⏸️ **NOT DONE — deliberately.** The house order is `dev-story` → `code-review` → PR →
+        green CI → squash merge, and `done` is the MERGE's business. Four commits sit on
+        `story-5.9-persist-interface-and-identity-link`, unpushed.
 
 ---
 
