@@ -2213,6 +2213,10 @@ project's reviews have caught repeatedly, so the distinction is kept explicit he
 
 ### New, raised by this story
 
+- ⚠️ **No `state` column on `interface` and no `entity` supertype / `device` table** — three
+  distinct entries, split here because decision 4 names three and an earlier draft merged the
+  first two into one bullet (caught by the code review).
+
 - ⚠️ **No `entity` supertype table and no `device` table.** D21's supertype
   [architecture.md:1450-1454] exists to make the interface/device disjunction structural. With
   `device` absent the disjunction has ONE arm, and a supertype over one subtype enforces nothing —

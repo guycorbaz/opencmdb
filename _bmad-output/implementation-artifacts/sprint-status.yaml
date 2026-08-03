@@ -67,7 +67,15 @@ last_updated: 2026-08-03  # 5.9 contexted (`ready-for-dev`), SPLIT (5.9b INSERTE
                           # (*"a gate that cannot fall is decoration"*). **Do not "fix" it.** The
                           # `NFR4 NOT MET` line renders only while the bucket is non-empty, so it
                           # deletes itself the day Epic 6 empties it.
-                          # NEXT = `code-review` 5.9, then push -> PR -> green CI -> squash merge.
+                          # NEXT = push -> PR -> green CI -> squash merge. 5.9 is CODE-REVIEWED
+                          # (3 layers, 2 against a live DB): 1 decision, 22 patches, 13 deferrals.
+                          # 378 -> 383 tests, 7 -> 12 mutations, every red assertion-carried.
+                          # 🔴 Guy arbitrated the uniqueness key a SECOND time: `valid_to` is
+                          # NOT NULL on CLOSED rows, so the key constrained HISTORY -- two closes
+                          # at one derived instant collided (1062) and the link silently stayed
+                          # current, i.e. story 5.10's replay path. Final:
+                          # UNIQUE (observation_id, current_subject), NULL once superseded.
+                          # 🔑 architecture.md:1468 had ALREADY prescribed the nil sentinel.
                           # 5.9 is IMPLEMENTED: 367 -> 378 tests, six gates green, all seven
                           # mutations run WITH a live mariadb:10.11.11 (port 13306), every red
                           # assertion-carried. 🔴 M3 was a NO-OP on its first run: dropping the
