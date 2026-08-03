@@ -50,11 +50,24 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-03  # 5.8 CODE-REVIEWED (three layers) and PATCHED -- see its entry below.
-                          # It STAYS at `review`: `done` is the MERGE's business in this project's
-                          # flow. Branch `story-5.8-unanswerable-bucket`; the committed gate is RED
-                          # on purpose (11 unanswerable, `passed() == false`).
-                          # NEXT = push -> PR -> green CI -> squash merge.
+last_updated: 2026-08-03  # 5.8 **DONE** -- PR #63 squash-merged as `bbd3b3a` after a green CI run
+                          # (56s), code-reviewed first. **Epic 5 is now 10/16.** Master carries 367
+                          # tests (165 bin + 156 core + 46 xtask) and six green gates.
+                          # 🔴 **THE COMMITTED GATE IS RED ON PURPOSE AND MASTER NOW CARRIES IT**:
+                          # `24 discovered, 13 scored, 0 failures, 0 wrong-rule, 11 unanswerable,
+                          # passed = FALSE`. It stays false until Epic 6 implements `l2-*` -- that
+                          # is `epics.md:416` (*"NFR4 stays RED and is closed by Epic 6"*) and D18
+                          # (*"a gate that cannot fall is decoration"*). **Do not "fix" it.** The
+                          # `NFR4 NOT MET` line renders only while the bucket is non-empty, so it
+                          # deletes itself the day Epic 6 empties it.
+                          # NEXT = `create-story` 5.9 (`persist-interface-and-identity-link`).
+                          # ⚠️ ISSUE #38 stays OPEN: the local suite ran green here (367/367, one
+                          # run) and CI green, which is NOT evidence the cause is gone -- the
+                          # recorded shape is 2 red in ~11 runs, moving between tests.
+                          #
+                          # (superseded 2026-08-03) 5.8 CODE-REVIEWED (three layers) and PATCHED --
+                          # see its entry below. It STAYED at `review` until the merge: `done` is
+                          # the MERGE's business in this project's flow.
                           #
                           # (superseded 2026-08-03) 5.8 CONTEXTED -> `ready-for-dev`. Master at
                           # `60107fa`, clean tree, 352 tests.
@@ -1488,7 +1501,7 @@ development_status:
   # test helper, not a property. Owner: the same story that answers *"should a partial map
   # block?"* -- they are one decision.
   # ⚠️ NEXT = push -> PR -> green CI -> squash merge.
-  5-8-unimplemented-level-counts-as-not-passing: review
+  5-8-unimplemented-level-counts-as-not-passing: done
   5-9-persist-interface-and-identity-link: backlog
   5-10-purge-test: backlog
   5-11-order-independence: backlog
