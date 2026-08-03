@@ -1241,6 +1241,53 @@ mod tests {
             "an abstention places the observation nowhere"
         );
 
+        // ⚠️ rule-XOR-cause can only be reached by going AROUND the adapter, and that is the
+        // point. `insert_identity_link` derives the rule and the cause from one `match`, so it
+        // cannot emit an incoherent pair — which makes the CHECK a second line of defence against
+        // a future writer. Until these two inserts existed nothing measured it: dropping the
+        // constraint left all 378 tests GREEN. `Decision::rule()` returns None exactly for an
+        // abstention; this attacks that property from both sides.
+        let abstained_naming_a_rule = sqlx::query(
+            "INSERT INTO identity_link \
+             (id, observation_id, interface_id, link_subject, outcome, rule_id, abstention_cause, \
+              evidence, ruleset_version, decided_by, valid_from, valid_to) \
+             VALUES (?, ?, NULL, ?, 'abstained', 'l1-exact-mac', 'ambiguous', '[]', 1, 'ENGINE', ?, ?)",
+        )
+        .bind(uuid::Uuid::now_v7().to_string())
+        .bind(obs.to_string())
+        .bind(ABSTAINED_SUBJECT)
+        .bind(datetime_literal(at(1_700_000_000)))
+        .bind(OPEN_END)
+        .execute(&pool)
+        .await
+        .map_err(classify);
+        assert_eq!(
+            abstained_naming_a_rule.err(),
+            Some(RepositoryError::Constraint("check")),
+            "an abstention took no decision, so it names no rule"
+        );
+
+        let deciding_without_a_rule = sqlx::query(
+            "INSERT INTO identity_link \
+             (id, observation_id, interface_id, link_subject, outcome, rule_id, abstention_cause, \
+              evidence, ruleset_version, decided_by, valid_from, valid_to) \
+             VALUES (?, ?, ?, ?, 'match', NULL, NULL, '[]', 1, 'ENGINE', ?, ?)",
+        )
+        .bind(uuid::Uuid::now_v7().to_string())
+        .bind(obs.to_string())
+        .bind(iface.to_string())
+        .bind(iface.to_string())
+        .bind(datetime_literal(at(1_700_000_000)))
+        .bind(OPEN_END)
+        .execute(&pool)
+        .await
+        .map_err(classify);
+        assert_eq!(
+            deciding_without_a_rule.err(),
+            Some(RepositoryError::Constraint("check")),
+            "a decision names the rule that settled it"
+        );
+
         // decided_by is a closed set.
         let bad_actor = insert_identity_link(
             &pool,
