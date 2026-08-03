@@ -96,6 +96,92 @@ impl Outcome {
     }
 }
 
+/// Why a producer could not put a trap to its engine at all (story 5.8).
+///
+/// ⚠️ **This is not an abstention, and the distinction is the whole of story 5.8.** An abstention is
+/// an ANSWER — the engine was asked, evaluated, and declined to decide; it is
+/// [`Outcome::Abstained`] and it PASSES the `must-abstain` column. An unanswerable trap is one the
+/// engine was **never asked about**. See [`Answer`] for the measurement that keeps them apart.
+///
+/// The three variants are the three classes measured over the committed corpus at story 5.8's
+/// contexting — **8 / 2 / 1** of the eleven traps the L1 engine leaves unanswered. They are made
+/// mutually exclusive by the producer consulting the PAIR condition first (story 5.8 §4):
+/// `example-must-abstain` is in two classes at once — it names a cause and no rule AND it names one
+/// observation — and pair-first files it under [`Self::NoPairUnderJudgement`], because *cannot be
+/// asked* outranks *cannot be routed*.
+///
+/// Exhaustive with no `_` arm wherever it is matched: a fourth class must break the build and force
+/// a decision about how the gate counts it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UnanswerableCause {
+    /// The trap's expectation names a rule at a cascade level this engine does not implement — the
+    /// eight `l2-*` traps of the committed corpus.
+    ///
+    /// `expected` is the rule the trap's AUTHOR named, frozen in Epic 4 before any engine existed.
+    /// It is never a rule the engine chose: the producer reads the expectation's level and nothing
+    /// else, which is what keeps the exclusion from being *"we skipped the ones we fail"*.
+    LevelNotImplemented {
+        /// The rule id the trap's author said answers this case.
+        expected: RuleId,
+    },
+    /// The trap's expectation names a CAUSE and no rule, so there is no level to route on — the two
+    /// paired `must-abstain` traps (`hostname-absence-must-abstain`,
+    /// `shared-hardware-vm-must-abstain`).
+    ///
+    /// [`Expectation::rule`] returns `None` for a `must-abstain`, which is why these are invisible
+    /// to an `l2-*` selector and why story 5.7 measured the residue at eleven where `epics.md` had
+    /// said eight.
+    NoLevelToRouteOn,
+    /// The trap does not put a PAIR under judgement, so there is no question to form at any level —
+    /// `example-must-abstain`, which names one observation.
+    ///
+    /// Unanswerable at every level, present and future, which is why pair-first files it here
+    /// rather than under a level it does not have.
+    NoPairUnderJudgement,
+}
+
+/// What a producer says about one trap: it answered, or it declined and named why (story 5.8).
+///
+/// This is the value of the map the release gate's harness takes — `opencmdb_bin`'s
+/// `trap_gate::score_corpus`, which lives outside this crate because it reads files (D47).
+/// Until story 5.8 that map held a bare [`Outcome`] and **absence was the only way to say "not
+/// answered"**. Absence cannot carry a reason, and a trap that leaves the denominator without one is
+/// how a green gate comes to mean *"we did not ask the question"* — which `epics.md`'s story 5.8
+/// forbids: the unanswerable traps *"never silently leave the denominator"*.
+///
+/// A trap that is both answered and declared unanswerable is **unrepresentable** rather than merely
+/// invalid — `trap.rs`'s stated idiom for [`Expectation`], applied here. That is why this is one
+/// enum and not two maps.
+///
+/// # 🔴 [`Self::Unanswerable`] is NOT an abstention
+///
+/// The tempting shortcut is to record a declined trap as `Outcome::Abstained` and let the existing
+/// truth table deal with it. **Measured, and it is not hypothetical:** `example-must-abstain`'s
+/// expectation is `must-abstain`, and `(must-abstain, Abstained)` is [`Score::Pass`] — so the trap
+/// would PASS *because nothing was asked*, and put a 1 in the `must-abstain` column of a gate that
+/// never ran. That is D18's cowardice, moved up one level from the engine to the harness.
+///
+/// So this variant **never becomes an [`Outcome`]**: there is no `From`, no `Default` and no helper
+/// anywhere that converts it, and it never reaches [`Tally::record`]. The same refusal, for the same
+/// reason, keeps [`outcome_of`] a named function rather than a `From` impl.
+///
+/// Story 5.7 refused the identical shortcut one layer down, in the runner
+/// (`opencmdb_bin::l1_runner::answer_trap` gives a pairless trap NO answer rather than the
+/// `decide(vec![], _)` that would have passed). This is that refusal at the report.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Answer {
+    /// The engine was asked and answered. Scored by the truth table exactly as before story 5.8.
+    Answered(
+        /// What the engine concluded, in the harness's vocabulary.
+        Outcome,
+    ),
+    /// The engine was never asked, for this reason. Counted in a blocking bucket; never scored.
+    Unanswerable {
+        /// Why the producer could not put this trap to the engine.
+        cause: UnanswerableCause,
+    },
+}
+
 /// One of D18's three columns — the unit the gate counts in.
 ///
 /// ⚠️ **"Column" is D18's word for the EXPECTATION axis**, and [`score`]'s doc table renders that
@@ -1186,6 +1272,58 @@ mod tests {
         assert_eq!(run_trap(&must_not_merge(), &abstained()), TrapVerdict::Pass);
         // And must-abstain answered correctly: no rule on either side, a plain pass.
         assert_eq!(run_trap(&must_abstain(), &abstained()), TrapVerdict::Pass);
+    }
+
+    // ── An answer, or a named refusal to ask (story 5.8) ─────────────────────
+
+    /// [`UnanswerableCause::LevelNotImplemented`] is compared by the rule it CARRIES, not only by
+    /// its discriminant — so two traps declined for different levels are two different records.
+    ///
+    /// _(This replaced a pair of assertions story 5.8's code review measured as unfailable: one
+    /// destructured a value it had just constructed, the other `assert_ne!`d across variants of a
+    /// derived `PartialEq`, where cross-variant equality is unrepresentable. What survives is the
+    /// one comparison the derive does NOT make trivially true — the payload.)_
+    #[test]
+    fn two_unimplemented_levels_are_two_different_causes() {
+        let uplink = UnanswerableCause::LevelNotImplemented {
+            expected: rule("l2-uplink-agrees"),
+        };
+        let hostname = UnanswerableCause::LevelNotImplemented {
+            expected: rule("l2-different-hostname"),
+        };
+        assert_ne!(
+            uplink, hostname,
+            "the rule the trap's AUTHOR named is part of the cause, not decoration — a bucket that \
+             compared only the discriminant could not report WHICH level a trap waits on"
+        );
+        assert_eq!(
+            uplink,
+            UnanswerableCause::LevelNotImplemented {
+                expected: rule("l2-uplink-agrees")
+            }
+        );
+    }
+
+    /// 🔴 **The pass that collapsing `Unanswerable` into `Outcome::Abstained` would manufacture is
+    /// REAL** — measured here rather than asserted in prose, in story 5.7's idiom.
+    ///
+    /// This is the premise behind [`Answer`]'s refusal to convert. `example-must-abstain`'s
+    /// expectation is `must-abstain`; record its unanswerable state as an abstention and the truth
+    /// table returns [`Score::Pass`] — a trap passing *because nothing was asked*, in the column of
+    /// a gate that never ran. The refusal itself is proven where it can be: nothing in this crate
+    /// converts the two, and story 5.8's mutation M3 measures what happens downstream when
+    /// something does.
+    #[test]
+    fn the_pass_a_declined_trap_would_manufacture_as_an_abstention_is_real() {
+        assert_eq!(
+            score(&must_abstain(), &abstained()),
+            Score::Pass,
+            "this is why `Answer::Unanswerable` must never become an `Outcome::Abstained`: the \
+             must-abstain column would pass on a trap the engine was never asked about"
+        );
+        // And the same shortcut on a decision column would NOT pass — which is why the danger is
+        // specific to `must-abstain` and why only that column can hide it.
+        assert_eq!(score(&must_merge(), &abstained()), Score::Fail);
     }
 
     // ── Comparing two runs (story 4.6c) ──────────────────────────────────────

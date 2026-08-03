@@ -1542,9 +1542,11 @@ So that a green gate can never mean "we did not ask the question".
 
 **Acceptance Criteria:**
 
-**Given** the 8 traps whose expected rule is `l2-*`, which the L1 engine cannot answer
+**Given** the **11** committed traps the L1 engine cannot answer, in **three** classes — **8** whose expected rule is `l2-*` (the level is not implemented), **2** `must-abstain` traps that name a pair but no rule to route on, and **1** that names no pair at all
 **When** the corpus is scored
 **Then** they are counted as NOT PASSING in a fourth named bucket, beside truth-table failures, rule mismatches and incomplete families — they never silently leave the denominator.
+
+_(This criterion said **"the 8 traps whose expected rule is `l2-*`"** until 2026-08-02. Measured by story 5.7 and again at 5.8's contexting: the residue is **eleven**. The three `must-abstain` traps are invisible to an `l2-*` selector because `Expectation::MustAbstain` carries a CAUSE and no rule, so `Expectation::rule()` returns `None` for all three — a bucket built to hold eight would have left three traps outside it, which is the very silence this story exists to close. Story 5.7 registered the correction in `deferred-work.md` with story 5.8 as owner rather than editing this file, because 5.7 was verify-only here; story 5.8 owns it and applies it. The 8 / 2 / 1 split is asserted by `l1_runner`'s `the_residue_decomposes_into_eight_two_and_one`, not merely quoted.)_
 
 **Given** D18's rejection of decoration — *"a loose threshold on a benign defect is a gate that can never fall, and a gate that cannot fall is decoration"*
 **When** the gate reports

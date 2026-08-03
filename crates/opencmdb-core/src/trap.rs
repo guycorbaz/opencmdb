@@ -166,6 +166,18 @@ pub enum TrapError {
     ReasonTooLong { trap: TrapId, chars: usize },
     /// A decision does not name the rule it expects to fire.
     RuleMissing { trap: TrapId },
+    /// A decision names a rule that is not a clean token — it carries surrounding whitespace or a
+    /// control character. The sibling of [`TrapError::FamilyMalformed`], and for the same two
+    /// reasons: a control character injects into the gate's per-trap report lines, and padding
+    /// renders dirty. Since story 5.8 there is a third, sharper reason — a rule id is what the
+    /// runner ROUTES on (`expects_an_l1_rule` reads its level prefix), so a padded id is
+    /// mis-routed into the unanswerable bucket and then explained there with a false sentence.
+    ///
+    /// ⚠️ CASE is deliberately NOT refused here: `"L1-EXACT-MAC"` is a different id from
+    /// `"l1-exact-mac"` to every comparison in the tree (`run_trap` compares raw strings), so
+    /// refusing it would be a new corpus contract rather than a hygiene rule. That question is
+    /// registered, not decided here.
+    RuleMalformed { trap: TrapId },
     /// A trap does not say which replay stream it judges.
     ReplayMissing { trap: TrapId },
     /// A trap judges nothing.
@@ -225,6 +237,13 @@ impl core::fmt::Display for TrapError {
                 f,
                 "trap `{}`: a decision must name the rule it expects to fire — comparing the \
                  verdict alone goes green for the right answer reached by the wrong rule (D19)",
+                trap.0
+            ),
+            TrapError::RuleMalformed { trap } => write!(
+                f,
+                "trap `{}`: the expected rule id carries surrounding whitespace or a control \
+                 character — a rule id is routed on by its level prefix and rendered into the \
+                 gate's report, so it must be a single clean token",
                 trap.0
             ),
             TrapError::ReplayMissing { trap } => {
@@ -299,10 +318,19 @@ impl Trap {
 
         // A decision names the rule that fires (must-merge) or the rule that opposes
         // (must-not-merge). An abstention names a cause instead, and the type already says so.
-        if let Some(rule) = self.expect.rule()
-            && rule.0.trim().is_empty()
-        {
-            return Err(TrapError::RuleMissing { trap: id() });
+        if let Some(rule) = self.expect.rule() {
+            if rule.0.trim().is_empty() {
+                return Err(TrapError::RuleMissing { trap: id() });
+            }
+            // The same rule the `family` field has carried since story 4.7b, applied to the field
+            // that had been the exception. A rule id is ROUTED ON by its level prefix and RENDERED
+            // into the gate's report, so surrounding whitespace makes an engine mis-route a trap
+            // and then explain the mis-routing with a false sentence: story 5.8's code review
+            // measured `" l1-distinct-mac "` bucketed as *"at a cascade level this engine does not
+            // implement"* — about a level that IS implemented.
+            if rule.0.as_str() != rule.0.trim() || rule.0.chars().any(|c| c.is_control()) {
+                return Err(TrapError::RuleMalformed { trap: id() });
+            }
         }
 
         if self.replay.trim().is_empty() {
@@ -497,6 +525,43 @@ mod tests {
             rule: RuleId("l1-distinct-mac".into()),
         };
         assert!(t.validate().is_ok());
+    }
+
+    /// A rule id must be a single clean token — the guard `family` has carried since story 4.7b,
+    /// applied to the field that had been the exception (story 5.8's code review).
+    ///
+    /// The harm is sharper than a dirty render: the runner ROUTES on the id's level prefix, so a
+    /// padded id fails `starts_with("l1-")`, lands in the unanswerable bucket, and is explained
+    /// there as *"at a cascade level this engine does not implement"* — false, about a level that
+    /// is implemented. Refusing the file is what stops that sentence from ever being written.
+    #[test]
+    fn a_rule_id_carrying_whitespace_or_a_control_character_is_refused() {
+        let mut t = trap(GOOD);
+        for dirty in [
+            " l1-distinct-mac",
+            "l1-distinct-mac ",
+            "\tl1-distinct-mac",
+            "l1-distinct\u{7}mac",
+        ] {
+            t.expect = Expectation::MustNotMerge {
+                rule: RuleId(dirty.into()),
+            };
+            assert!(
+                matches!(t.validate(), Err(TrapError::RuleMalformed { .. })),
+                "`{dirty}` must be refused as a dirty rule id"
+            );
+        }
+
+        // ⚠️ CASE is NOT refused: `"L1-EXACT-MAC"` is a DIFFERENT id from `"l1-exact-mac"` to every
+        // comparison in the tree, so refusing it would be a new corpus contract rather than a
+        // hygiene rule. Pinned so the boundary is deliberate rather than an oversight.
+        t.expect = Expectation::MustNotMerge {
+            rule: RuleId("L1-DISTINCT-MAC".into()),
+        };
+        assert!(
+            t.validate().is_ok(),
+            "case is a different id, not a dirty one — registered, not refused here"
+        );
     }
 
     #[test]
