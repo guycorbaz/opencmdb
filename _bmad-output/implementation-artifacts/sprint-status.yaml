@@ -1449,8 +1449,45 @@ development_status:
   # have stayed green. Both twins (`CLAUDE.md`, `docs/project-context.md`) updated.
   # ⚠️ Issue #38 did NOT recur across ~14 full-suite runs here. Recorded as an observation only —
   # it is not evidence about the cause, which stays OPEN.
-  # ⚠️ NEXT = `code-review` 5.8 (a DIFFERENT LLM than the one that implemented it), then push ->
-  # PR -> green CI -> squash merge. **`done` is the MERGE's business**, not the review's.
+  #
+  # 5.8 CODE-REVIEWED (three layers, 2026-08-03) and PATCHED -- commit `e4591e6`. It STAYS at
+  # `review`: `done` is the MERGE's business. **2 decisions applied, 19 patches, 1 deferral, 2
+  # dismissed with the measurement that killed each. 364 -> 367 tests**, six gates green, both
+  # clippy forms clean, `fixtures/` untouched, and **rustdoc back to 9 warnings -- master's own
+  # baseline**, the three regressions closed.
+  # 🔑 SEVENTH consecutive story where most defects are SENTENCES -- and sharper than its
+  # predecessors: **four of them violate the story's OWN AC8** (*"update BOTH twins of every
+  # duplicated sentence"*), including the twin AC3 named explicitly. The implementer wrote the
+  # instruction and broke it four times: `trap_gate.rs`'s `passed()` doc twin, `trap_gate.rs`'s
+  # module doc (twin of a sentence corrected in `l1_runner.rs` IN THE SAME COMMIT), and both
+  # markdown files still asserting the gate PASSES in the present tense.
+  # Guy's two decisions, both option 2:
+  #  · **the NFR4 line is VENTILATED by cause.** Measured: `NoLevelToRouteOn` and
+  #    `NoPairUnderJudgement` do not depend on a level at all (`Expectation::rule()` is `None` for
+  #    any `must-abstain`, at every level present and future), so Epic 6 takes the bucket 11 -> 3
+  #    and the old sentence would have gone on naming as its closer the epic that had just
+  #    shipped. Each class now names the story that closes it; a class with no members renders
+  #    nothing. **The "deletes itself by construction" claim was FALSE and is now narrowed.**
+  #  · **`TrapError::RuleMalformed`**, mirroring `FamilyMalformed`: a padded rule id was mis-routed
+  #    into the bucket and explained there with a false sentence -- `" l1-distinct-mac "` rendered
+  #    as *"at a cascade level this engine does not implement"*, about a level that IS. CASE is
+  #    deliberately NOT refused (a different id, not a dirty one) and that boundary is pinned.
+  # Six review mutations, every red assertion-carried:
+  #  · **R4 reddened NOTHING before its patch** -- the Edge Case Hunter measured `unaccounted()`'s
+  #    whole arithmetic deletable (`self.discovered`) with the entire suite green. M8 had proved
+  #    the CALL, not the calculation. Same shape the story itself recorded for M5.
+  #  · **R6 run on BOTH sides**: the literal-oracle partition assertion stays GREEN under M5b --
+  #    the very mutation its message claims to catch -- and the map-reading one reds at 23 != 24.
+  # Also closed: the cross-file id guard now folds `trim().to_lowercase()` like
+  # `TrapFile::validate` (raw-keyed, `"Shared-Id"` + `"shared-id"` passed, inflating `discovered`);
+  # the mixed-family test derives `scored` from the RUNNER's map, not corpus-minus-bucket, which
+  # had folded `unaccounted` into "answered"; AC2's unknown-key case is pinned; the arithmetic test
+  # is SPLIT in two per story 5.6's idiom.
+  # ONE deferral: **totality is ROOT-relative** -- `score_corpus(root_a, &l1_answers(root_b))`
+  # leaves the difference unaccounted and PASSES. What keeps it closed today is a convention in a
+  # test helper, not a property. Owner: the same story that answers *"should a partial map
+  # block?"* -- they are one decision.
+  # ⚠️ NEXT = push -> PR -> green CI -> squash merge.
   5-8-unimplemented-level-counts-as-not-passing: review
   5-9-persist-interface-and-identity-link: backlog
   5-10-purge-test: backlog

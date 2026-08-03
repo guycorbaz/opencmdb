@@ -361,7 +361,7 @@ are **targets, not predictions** — a divergence is a FINDING, not a variation.
 
 | | before | after |
 |---|---|---|
-| tests | 352 (153 bin + 153 core + 46 xtask) | **364** (163 bin + 155 core + 46 xtask) |
+| tests | 352 (153 bin + 153 core + 46 xtask) | **364** (162 + 156 + 46) at implementation, **367** (165 + 156 + 46) after the code review |
 | `trap_gate.rs` code lines | 405 | **552** |
 | `l1_runner.rs` code lines | 259 | **323** |
 | `score.rs` code lines | 681 | **751** |
@@ -753,7 +753,7 @@ Every finding below was **re-measured before being written down**.
 the story's OWN AC8 (*"update BOTH twins of every duplicated sentence"*) is what four of them
 violate. The implementer wrote that instruction and then broke it four times.
 
-- [ ] [Review][Decision] **The `NFR4 NOT MET … closed by Epic 6` line cannot delete itself, so
+- [x] [Review][Decision] **The `NFR4 NOT MET … closed by Epic 6` line cannot delete itself, so
       decision 6's central property is false.** The code comment, `deferred-work.md`, `CLAUDE.md`
       and `project-context.md` all claim *"the day Epic 6 empties the bucket this sentence
       disappears by CONSTRUCTION"*. Measured: it cannot. Two of the three causes do not depend on a
@@ -766,7 +766,7 @@ violate. The implementer wrote that instruction and then broke it four times.
       (name the count and NFR4, drop the closer); (b) render the closer per CAUSE class; (c) accept
       it and register the residue-of-3 forward.** [`crates/opencmdb-bin/src/trap_gate.rs:341-348`]
 
-- [ ] [Review][Decision] **A rule id with leading whitespace or a different case is bucketed with a
+- [x] [Review][Decision] **A rule id with leading whitespace or a different case is bucketed with a
       FALSE reason.** `expects_an_l1_rule` matches the raw string, and `Trap::validate` guards the
       `family` field against surrounding whitespace (`FamilyMalformed`) but NOT the rule id.
       Observed: `" l1-distinct-mac "` → `LevelNotImplemented`, rendering *"at a cascade level this
@@ -779,62 +779,62 @@ violate. The implementer wrote that instruction and then broke it four times.
       — touches the domain and the corpus contract; (c) register forward.**
       [`crates/opencmdb-bin/src/l1_runner.rs:124-128`]
 
-- [ ] [Review][Patch] The second `passed()` doc twin — the one AC3 names explicitly — was never
+- [x] [Review][Patch] The second `passed()` doc twin — the one AC3 names explicitly — was never
       corrected [`crates/opencmdb-bin/src/trap_gate.rs:1286-1289`]
-- [ ] [Review][Patch] `trap_gate.rs`'s module doc still says the seam **is** a `BTreeMap<TrapId,
+- [x] [Review][Patch] `trap_gate.rs`'s module doc still says the seam **is** a `BTreeMap<TrapId,
       Outcome>` and `score_corpus`'s signature is unchanged — the twin of a sentence this same
       commit corrected in `l1_runner.rs` [`crates/opencmdb-bin/src/trap_gate.rs:18-21`]
-- [ ] [Review][Patch] Both markdown twins still assert, present-tense, that the committed gate
+- [x] [Review][Patch] Both markdown twins still assert, present-tense, that the committed gate
       **passes** and that the seam is `BTreeMap<TrapId, Outcome>` [`CLAUDE.md`,
       `docs/project-context.md`]
-- [ ] [Review][Patch] `Display`'s doc says *"Two count suffixes … in a fixed order"*; the same
+- [x] [Review][Patch] `Display`'s doc says *"Two count suffixes … in a fixed order"*; the same
       commit adds a third, and neither sentence mentions the NFR4 line
       [`crates/opencmdb-bin/src/trap_gate.rs:260-262`, `:277-278`]
-- [ ] [Review][Patch] `a_mixed_family_splits_between_the_engine_and_the_bucket` derives `scored`
+- [x] [Review][Patch] `a_mixed_family_splits_between_the_engine_and_the_bucket` derives `scored`
       from the corpus minus the bucket, never from the report — so `unaccounted` traps count as
       "answered", and the comment *"it cannot disagree with the report it is read from"* is false of
       a set that is not read from the report [`crates/opencmdb-bin/src/trap_gate.rs:900-910`]
-- [ ] [Review][Patch] `unaccounted()`'s arithmetic is unmeasured: replacing the body with
+- [x] [Review][Patch] `unaccounted()`'s arithmetic is unmeasured: replacing the body with
       `self.discovered` — deleting BOTH subtractions — leaves the whole suite green. M8 proved the
       CALL, not the calculation [`crates/opencmdb-bin/src/trap_gate.rs:228-232`]
-- [ ] [Review][Patch] The cross-file `TrapId` guard keys on the RAW id where `TrapFile::validate`
+- [x] [Review][Patch] The cross-file `TrapId` guard keys on the RAW id where `TrapFile::validate`
       folds `trim().to_lowercase()`; `"Shared-Id"` + `"shared-id"` across two files gives 2 entries,
       no error, and two indistinguishable bucket lines
       [`crates/opencmdb-bin/src/l1_runner.rs:286-292`]
-- [ ] [Review][Patch] `unanswered_in`'s doc states an identity that is false for every partial map —
+- [x] [Review][Patch] `unanswered_in`'s doc states an identity that is false for every partial map —
       with an empty map the three columns read `0+0` against 10 / 11 / 3
       [`crates/opencmdb-bin/src/trap_gate.rs:203-208`]
-- [ ] [Review][Patch] The partition assertion uses the literal `expected_answered().len()` instead
+- [x] [Review][Patch] The partition assertion uses the literal `expected_answered().len()` instead
       of the map's answered half, so it is green under M5b — the very mutation its message claims to
       catch [`crates/opencmdb-bin/src/l1_runner.rs:489-494`]
-- [ ] [Review][Patch] `_ => None` in the residue test falsifies `UnanswerableCause`'s own
+- [x] [Review][Patch] `_ => None` in the residue test falsifies `UnanswerableCause`'s own
       *"exhaustive with no `_` arm wherever it is matched"* guarantee — a fourth variant would
       compile here [`crates/opencmdb-bin/src/l1_runner.rs:505-510`]
-- [ ] [Review][Patch] AC2's named case — an `Answer::Unanswerable` key naming no discovered trap —
+- [x] [Review][Patch] AC2's named case — an `Answer::Unanswerable` key naming no discovered trap —
       is pinned by no test. Behaviour verified correct by two independent probes
       [`crates/opencmdb-bin/src/trap_gate.rs:1443`]
-- [ ] [Review][Patch] The AC5 ordering doc claims the unreachability is solved; it is only
+- [x] [Review][Patch] The AC5 ordering doc claims the unreachability is solved; it is only
       relocated. One test doing two jobs — split it, per story 5.6's own idiom
       [`crates/opencmdb-bin/src/trap_gate.rs:795-800`]
-- [ ] [Review][Patch] `sprint-status.yaml`'s `last_updated` headline still says *"5.8 CONTEXTED →
+- [x] [Review][Patch] `sprint-status.yaml`'s `last_updated` headline still says *"5.8 CONTEXTED →
       ready-for-dev … 352 tests … NEXT = validation"* while the same commit sets `review` and 364
       [`_bmad-output/implementation-artifacts/sprint-status.yaml:51`]
-- [ ] [Review][Patch] Three new rustdoc warnings (measured 9 → 12): `[Outcome]` no longer resolves
+- [x] [Review][Patch] Three new rustdoc warnings (measured 9 → 12): `[Outcome]` no longer resolves
       in `trap_gate`'s module doc after the import moved into `mod tests`; `[epics.md:1055]` is not
       an item; `crate::score` is ambiguous [`trap_gate.rs:13`, `:37`, `score.rs:145`]
-- [ ] [Review][Patch] Four near-vacuous assertions: two `score.rs` tests that construct-then-
+- [x] [Review][Patch] Four near-vacuous assertions: two `score.rs` tests that construct-then-
       destructure or `assert_ne!` across derived-`PartialEq` variants, and two `l1_runner`
       assertions that hold by construction [`score.rs:1278-1310`, `l1_runner.rs:459`, `:986`]
-- [ ] [Review][Patch] Grammar and pluralisation in the new render: *"1 trap(s) **were**"*, and
+- [x] [Review][Patch] Grammar and pluralisation in the new render: *"1 trap(s) **were**"*, and
       `", 1 unanswerable"` carries no noun where both sibling suffixes pluralise
       [`crates/opencmdb-bin/src/trap_gate.rs:291-295`, `:341-348`]
-- [ ] [Review][Patch] `an_empty_bucket_renders_neither_the_count_nor_the_nfr4_line` is a substring
+- [x] [Review][Patch] `an_empty_bucket_renders_neither_the_count_nor_the_nfr4_line` is a substring
       guard a trap id containing *"unanswerable"* would defeat
       [`crates/opencmdb-bin/src/trap_gate.rs:861-867`]
-- [ ] [Review][Patch] `deferred-work.md`'s closure cites no commit sha, and the two bullets it
+- [x] [Review][Patch] `deferred-work.md`'s closure cites no commit sha, and the two bullets it
       closes still read as OPEN with *"Owner: story 5.8"*
       [`_bmad-output/implementation-artifacts/deferred-work.md:1937`, `:2026`, `:2059`]
-- [ ] [Review][Patch] `committed_traps()` is duplicated verbatim in two test modules with no
+- [x] [Review][Patch] `committed_traps()` is duplicated verbatim in two test modules with no
       deliberate-redundancy label, where the house DRY rule requires one
       [`crates/opencmdb-bin/src/trap_gate.rs:707-715`]
 
@@ -858,6 +858,24 @@ violate. The implementer wrote that instruction and then broke it four times.
   re-measurement**: its grep matched a `///` line QUOTING `#[cfg(test)]`, where the gate's matcher
   is `line.trim_start().starts_with(..)` [`xtask/src/main.rs:90`]. All three code-line figures in
   the record are exact.
+
+#### Prove-to-red on the review's own new guards (baseline `e4591e6`, committed first)
+
+Every red assertion- or `expect`-carried; **zero compiler-carried**.
+
+| # | mutation | red set |
+|---|---|---|
+| R1 | the NFR4 line stops naming the no-level class | **1** — `the_report_names_the_eleven_and_says_nfr4_is_not_met` |
+| R2 | `RuleMalformed` removed from `Trap::validate` | **1** — `a_rule_id_carrying_whitespace_or_a_control_character_is_refused`, on `" l1-distinct-mac"` |
+| R3 | the cross-file id guard reverts to the RAW key | **1** — the `"Shared-Id"` / `"shared-id"` half of the duplicate test |
+| R4 | `unaccounted()` drops BOTH subtractions (the Edge Case Hunter's exact mutation) | **2** — `unaccounted_counts_what_no_producer_spoke_about`, and the mixed-family test's new `unaccounted() == 0` premise. **Before the patch this reddened NOTHING.** |
+| R5 | `used.insert` moved into the `Answered` arm only | **10** |
+| R6 | the partition assertion reverted to the literal oracle, under M5b | 🔴 **the assertion stays GREEN** — which IS the measurement |
+
+**R6 was run on BOTH sides, and the difference is the finding.** With `expected_answered().len()`
+the arithmetic is `11 + 13 == 24` under M5b — green, while its message claims to catch exactly that
+mutation. With `answered_ids(&answers).len()` it reds at `left: 23, right: 24`. The literal version
+restated its two neighbours; the map version measures the map.
 
 **Re-derived independently and CONFIRMED** (so silence is not read as absence of checking): 24 traps
 / 10 files / 24 distinct ids; corpus per column 10 / 11 / 3; causes 8 / 2 / 1 (level-first would
@@ -1050,7 +1068,8 @@ as §4 claims.
 - **364 tests, but distributed 162 bin + 156 core** where §11 predicted 163 + 155. Same total; three
   vocabulary tests went to `score.rs` rather than two. Not a divergence in coverage.
 - Code lines (measured): `score.rs` 681 → **766** (§11 predicted 751), `trap_gate.rs` 405 → **560**
-  (predicted 552), `l1_runner.rs` 259 → **330** (predicted 323). All three run a little longer than
+  (predicted 552), `l1_runner.rs` 259 → **330** (predicted 323). _(After the code review: 767 / 603 /
+  342, plus `trap.rs` 409 → 437 for `RuleMalformed`.)_ All three run a little longer than
   the validation's tree — longer docs — and all are far under the 2000 ceiling; the `file-size`
   gate's largest file is unchanged at **1136**, which is `xtask/src/main.rs` — not one of these.
   `score.rs` at 766 is now the workspace's **second** largest by code lines, ahead of `fixtures.rs`
@@ -1060,7 +1079,7 @@ as §4 claims.
 
 `cargo fmt --all --check` clean · `cargo clippy --workspace --all-targets -- -D warnings` clean ·
 `cargo clippy --workspace -- -D warnings` (**the form CI runs**) clean, exit 0 ·
-`cargo test --workspace --locked` **162 + 156 + 46 = 364**, 0 failed ·
+`cargo test --workspace --locked` **162 + 156 + 46 = 364** at implementation, **165 + 156 + 46 = 367** after the code review, 0 failed ·
 `cargo xtask ci` **six gates green** (`file-size` largest 1136; `float-free` still 4 files under
 `identity/`) · `git status fixtures/` **empty**, `MANIFEST.toml` untouched.
 
@@ -1112,4 +1131,5 @@ as §4 claims.
 |---|---|
 | 2026-08-02 | Story contexted from `epics.md:1537-1557` against `master` `60107fa` (352 tests, clean tree). The corpus was re-measured trap by trap: the premise at `epics.md:1545` is **8** and the measured residue is **11** in three classes, so AC8 makes this story the one that corrects the epic file — the correction 5.7 registered with this story as owner. Per-column arithmetic (10/11/3 = 7/6/0 scored + 3/5/3 unanswerable) was derived and is the story's strongest guard. The **eleven** live `passed()` assertions were enumerated (4 true, 7 false) and exactly **one** flips. |
 | 2026-08-02 | **Validated by two fresh-context agents** (fact-check + gap-hunt), 20 findings applied. The gap-hunt agent IMPLEMENTED the story end to end in an isolated worktree: **352 → 364 tests**, six gates green, both clippy forms clean, `fixtures/` untouched, and **every numeric prediction reproduced exactly** — 24/13/11, causes 8/2/1, per-column 3/5/3, `passed() == false`. §7's table was verified byte-exact and only `trap_gate.rs:534` flipped, as predicted. What the compiler found that reading did not: **M5 never reaches the arithmetic loop** it was written to protect (replaced by M5b), **totality inverts three `l1_runner.rs` assertions silently** (a class §7 did not cover), and **three `l1_runner.rs` doc sites are falsified by §4's own pair-first decision**. Both agents independently found the totality class — the convergence is why it is now a table rather than a sentence. |
+| 2026-08-03 | **CODE-REVIEWED (three layers) and PATCHED** — commit `e4591e6`. It **stays at `review`**: `done` is the MERGE's business in this project's flow (5.1 established it; 5.2/5.4b/5.5/5.6/5.7 held it). **2 decisions applied, 19 patches, 1 deferred, 2 dismissed with the measurement that killed each. 364 → 367 tests**, six gates green, both clippy forms clean, `fixtures/` untouched, and **rustdoc warnings back to 9 — master's own baseline**, the three regressions closed. 🔑 **Seventh consecutive story where most defects are SENTENCES** — and this one is sharper than its predecessors: **four of them violate the story's OWN AC8** (*"update BOTH twins of every duplicated sentence"*), including the twin AC3 named explicitly. The implementer wrote the instruction and then broke it four times. **Guy's two decisions, both option 2:** the NFR4 line is **ventilated by cause** — the review measured that `NoLevelToRouteOn` and `NoPairUnderJudgement` do not depend on a level at all, so Epic 6 takes the bucket 11 → 3 and the old sentence would have gone on naming as its closer the epic that had just shipped; and **`TrapError::RuleMalformed`** now mirrors `FamilyMalformed`, because a padded rule id was mis-routed into the bucket and then explained there with a false sentence (`" l1-distinct-mac "` → *"at a cascade level this engine does not implement"*, about a level that is). Case is deliberately NOT refused and the boundary is pinned by a test. Six review mutations, every red assertion-carried; **R4 reddened NOTHING before its patch** (the Edge Case Hunter had measured `unaccounted()`'s whole arithmetic deletable with the suite green), and **R6 was run on both sides** — the literal-oracle partition assertion stays green under M5b, the map-reading one reds at `23 != 24`. |
 | 2026-08-02 | **IMPLEMENTED → `review`.** AC1–AC10 all MET. **352 → 364 tests** (162 bin + 156 core + 46 xtask), six `xtask ci` gates green, both clippy forms clean, `fixtures/` untouched. 🔴 **The committed gate is now RED on purpose**: `24 discovered, 13 scored, 0 failures, 0 wrong-rule, 11 unanswerable, passed = false`. §7's prediction verified **before any new test existed** — exactly one `passed()` assertion flipped, the one it named. Ten mutations, **every red assertion-carried, ZERO compiler-carried**; M3 probed directly gives `scored=24 must_abstain_scored=3 must_abstain_failures=0`, so all three `must-abstain` traps PASS under it and AC1's refusal is measured, not asserted. **Two of the story's own mutation prescriptions were corrected by running them**: M5 reds on the arithmetic LOOP (not on a literal, as the story inherited from a tree AC5's reordering replaced), which left the three literals proven by nothing — so **M5c was added**, a redistribution inside one column that keeps the loop green and reds the literal at `4 != 3`. A **fourth** silently-inverted assertion was found during implementation and is not in §7's table: the scratch prefix-selector test asserted `answers.len() == 1`, satisfied by a total map whether the trap is answered or bucketed. Divergences stated rather than smoothed: M3 reds 6 where the story predicted 7; the 364 split 162/156 where §11 predicted 163/155; all three files run slightly longer than the validation's tree. |
