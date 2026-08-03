@@ -1,6 +1,6 @@
 # Story 5.9: The interface and its identity link are persisted, ambiguity included
 
-Status: ready-for-dev
+Status: review
 
 <!-- ✅ VALIDATED 2026-08-03 by two fresh-context agents (fact-check + gap-hunt), as this project
      requires (Guy's decision, Epic 4 retrospective 2026-07-26). The template banner saying
@@ -540,135 +540,135 @@ half-updated once already.
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — branch and baseline (AC9)**
-  - [ ] Branch from `master` at `28a7f51`: `story-5.9-persist-interface-and-identity-link`.
-  - [ ] Start `mariadb:10.11.11` and export `DATABASE_URL` (§7). Record `cargo test --workspace
+- [x] **T1 — branch and baseline (AC9)**
+  - [x] Branch from `master` at `28a7f51`: `story-5.9-persist-interface-and-identity-link`.
+  - [x] Start `mariadb:10.11.11` and export `DATABASE_URL` (§7). Record `cargo test --workspace
         --locked` **with** the DB set — the baseline is 367 and **the DB-backed tests now actually
         run**; note any that were silently skipping before.
-  - [ ] **Commit the clean baseline before the mutation pass** (`mutation-pass-needs-committed-baseline`:
+  - [x] **Commit the clean baseline before the mutation pass** (`mutation-pass-needs-committed-baseline`:
         `git checkout <file>` restores to HEAD, not to uncommitted work).
 
-- [ ] **T2 — the two id newtypes (AC6, decision 5)**
-  - [ ] `InterfaceId` and `LinkId` in `crates/opencmdb-core/src/observation/mod.rs`, via
+- [x] **T2 — the two id newtypes (AC6, decision 5)**
+  - [x] `InterfaceId` and `LinkId` in `crates/opencmdb-core/src/observation/mod.rs`, via
         `uuid_newtype!`, each with a `///` doc saying what it identifies and that it is minted
         client-side (D48).
-  - [ ] Re-export both from `lib.rs`'s `pub use observation::{…}` list.
+  - [x] Re-export both from `lib.rs`'s `pub use observation::{…}` list.
 
-- [ ] **T3 — the migration (AC1, AC2, AC3, AC5, AC8)**
-  - [ ] Write `crates/opencmdb-bin/migrations/0002_interface_and_identity_link.sql`. One column per
+- [x] **T3 — the migration (AC1, AC2, AC3, AC5, AC8)**
+  - [x] Write `crates/opencmdb-bin/migrations/0002_interface_and_identity_link.sql`. One column per
         line; prose on its own `--` lines (§4). Header comment in the shape of `0001`'s, naming
         D14, D21 and D64.
-  - [ ] `interface`: `id` PK; `l2_domain`; `mac_canon` (the lowercase colon form — `MacAddr`'s
+  - [x] `interface`: `id` PK; `l2_domain`; `mac_canon` (the lowercase colon form — `MacAddr`'s
         `Display`); `first_seen_at`/`last_seen_at` `DATETIME(6)`; a **non-unique** index on
         `(l2_domain, mac_canon)` with the `-- NOT UNIQUE, deliberately (D21)` comment and the
         reason.
-  - [ ] `identity_link`: `id` PK; `observation_id`; `interface_id` (**NULL iff abstained**, FK to
+  - [x] `identity_link`: `id` PK; `observation_id`; `interface_id` (**NULL iff abstained**, FK to
         `interface(id)`); `outcome`; `rule_id`; `abstention_cause`; `evidence`;
         `ruleset_version INT UNSIGNED`; `decided_by`; `valid_from`; `valid_to NOT NULL`;
         `link_subject` **STORED generated** `= COALESCE(interface_id, ABSTAINED_SUBJECT)`, ascii_bin,
         on its own line (decision 9); and `UNIQUE (observation_id, link_subject, valid_to)`.
         ⚠️ **NOT `UNIQUE (observation_id, valid_to)`** — that key refuses the multi-NIC write, and
         it was measured refusing it (decision 9).
-  - [ ] The CHECKs, each one the DDL-level echo of a type-level property:
+  - [x] The CHECKs, each one the DDL-level echo of a type-level property:
         `outcome IN ('match','no_match','abstained')` · `decided_by IN ('ENGINE','OPERATOR')` ·
         **rule XOR cause** (`abstained` ⇒ `rule_id IS NULL AND abstention_cause IS NOT NULL`;
         otherwise the reverse) — this is `Decision::rule()` returning `None` exactly for an
         abstention, expressed in the schema · **`interface_id IS NULL` iff `outcome='abstained'`**.
-  - [ ] `link_candidate`: `(link_id, interface_id)` PK, `evidence`, FK to `identity_link(id)` and
+  - [x] `link_candidate`: `(link_id, interface_id)` PK, `evidence`, FK to `identity_link(id)` and
         to `interface(id)`.
-  - [ ] Run `cargo xtask ci` and confirm `ddl-collation` green; then **temporarily strip one
+  - [x] Run `cargo xtask ci` and confirm `ddl-collation` green; then **temporarily strip one
         `COLLATE`, observe the gate name the offending line, restore** (AC8).
 
-- [ ] **T4 — the adapter (AC2, AC4, AC6, decisions 3, 6, 8)**
-  - [ ] `OPEN_END` constant with the doc of decision 8 (the ISO→`DATETIME(6)` transposition), and
+- [x] **T4 — the adapter (AC2, AC4, AC6, decisions 3, 6, 8)**
+  - [x] `OPEN_END` constant with the doc of decision 8 (the ISO→`DATETIME(6)` transposition), and
         `ABSTAINED_SUBJECT` (the nil UUID) beside it with the doc of decision 9 — **both are
         sentinels closing D21's NULL trap, and their docs must say so in the same words**, because
         a reader who meets only one of them will read it as an oddity rather than an idiom.
-  - [ ] Token mappings: `Conclusion → outcome` and `IdentityAbstentionCause → abstention_cause`,
+  - [x] Token mappings: `Conclusion → outcome` and `IdentityAbstentionCause → abstention_cause`,
         **exhaustive `match`, no `_` arm**, each with a unit test that pins every token string.
-  - [ ] Query bodies, generic over `Executor`: `insert_interface`, `insert_identity_link`,
+  - [x] Query bodies, generic over `Executor`: `insert_interface`, `insert_identity_link`,
         `close_identity_link`, `insert_link_candidate`, **`load_current_links_for_observation`**
         (PLURAL — decision 9: a multi-MAC observation has several current links, and a singular
         name would encode the constraint the arbitration removed), `load_link_candidates`,
         `count_identity_links`.
-  - [ ] `insert_identity_link` takes the `Decision` and derives `outcome`/`rule_id`/
+  - [x] `insert_identity_link` takes the `Decision` and derives `outcome`/`rule_id`/
         `abstention_cause`/`evidence`/`ruleset_version` from it — **one call site cannot get the
         rule-XOR-cause pairing wrong**, which is what makes the DDL CHECK a second line of defence
         rather than the only one.
-  - [ ] ⚠️ `valid_from` is a **parameter**, never `NOW(6)` (§6.3). `first_seen_at`/`last_seen_at`
+  - [x] ⚠️ `valid_from` is a **parameter**, never `NOW(6)` (§6.3). `first_seen_at`/`last_seen_at`
         likewise, with the doc saying they must be derived from observations.
 
-- [ ] **T5 — the tests (AC2–AC5), all `DATABASE_URL`-gated and under `DB_TEST_LOCK`**
-  - [ ] a match link round-trips: interface + link written in one `transact`, read back current.
-  - [ ] **SCD2**: supersede a link; exactly ONE current row; the superseded row is still readable
+- [x] **T5 — the tests (AC2–AC5), all `DATABASE_URL`-gated and under `DB_TEST_LOCK`**
+  - [x] a match link round-trips: interface + link written in one `transact`, read back current.
+  - [x] **SCD2**: supersede a link; exactly ONE current row; the superseded row is still readable
         with its old `valid_to` (AC2).
-  - [ ] **the unique index fires**: a second current link for the same `(observation, interface)` →
+  - [x] **the unique index fires**: a second current link for the same `(observation, interface)` →
         `Constraint("unique")` (AC3, half 1). Red carried by `expect_err` — record it as such.
-  - [ ] 🔴 **exactly ONE is current, by COUNTING** (AC3, half 3) — the test T5 did not have. Attempt
+  - [x] 🔴 **exactly ONE is current, by COUNTING** (AC3, half 3) — the test T5 did not have. Attempt
         the second insert with `let _ = …` (never `expect_err`, which panics before any count),
         then `assert_eq!(current_links(obs, iface).len(), 1, "exactly one link is current per
         observation")`. **Without this test M5 has nothing to red**, which is what the validation
         measured.
-  - [ ] 🔴 **the index does NOT over-fire** (AC3, half 2): one observation, two MACs, two interfaces
+  - [x] 🔴 **the index does NOT over-fire** (AC3, half 2): one observation, two MACs, two interfaces
         → **two** current links, both insert. `assert_eq!(second, Ok(()))`, not `.expect()`. This is
         the `multi-nic` case and the reason for decision 9.
-  - [ ] 🔴 **two current abstentions for one observation are refused** — the other half of decision
+  - [x] 🔴 **two current abstentions for one observation are refused** — the other half of decision
         9. Without `link_subject` the widened key holds two NULLs distinct and both insert.
-  - [ ] **ambiguity is a LINK**: abstained link + 2 `link_candidate` rows; both read back with their
+  - [x] **ambiguity is a LINK**: abstained link + 2 `link_candidate` rows; both read back with their
         evidence; **the link row is asserted present by COUNT**, not by `.expect()`ing its write
         (AC4) — the `.expect()` form lets the FK carry M4's red instead of the assertion.
-  - [ ] **the CHECKs fire**: a `match` with `interface_id` NULL → `Constraint("check")`; an
+  - [x] **the CHECKs fire**: a `match` with `interface_id` NULL → `Constraint("check")`; an
         `abstained` carrying a `rule_id` → `Constraint("check")`; `decided_by='SCANNER'` →
         `Constraint("check")`.
-  - [ ] **no unique on the L1 key**: two interfaces, same `(l2_domain, mac_canon)`, both insert
+  - [x] **no unique on the L1 key**: two interfaces, same `(l2_domain, mac_canon)`, both insert
         (AC5) — `.map_err(classify)` + `assert_eq!(…, Ok(()))`, not `.expect()`.
-  - [ ] evidence round-trips as `Vec<ObsId>` byte-identically.
-  - [ ] the token mappings are exhaustive and every token is pinned (no DB needed).
+  - [x] evidence round-trips as `Vec<ObsId>` byte-identically.
+  - [x] the token mappings are exhaustive and every token is pinned (no DB needed).
 
-- [ ] **T6 — prove-to-red (AC9). Every mutation run WITH `DATABASE_URL` set.**
+- [x] **T6 — prove-to-red (AC9). Every mutation run WITH `DATABASE_URL` set.**
       ⚠️ **Five of these seven were run at the validation pass against a live 10.11.11, and three
       of them did not behave as the story first prescribed.** The corrected forms are below; the
       measured reds are in the Debug Log table as PREDICTIONS the dev confirms or refutes.
-  - [ ] **M1** drop `UNIQUE (observation_id, link_subject, valid_to)` → the second-current-link test
+  - [x] **M1** drop `UNIQUE (observation_id, link_subject, valid_to)` → the second-current-link test
         must red. *Measured: reds at `expect_err`, panic-carried. Record it as `expect_err`.*
-  - [ ] **M2** make `interface (l2_domain, mac_canon)` `UNIQUE` → the cloned-MAC test must red (AC5).
+  - [x] **M2** make `interface (l2_domain, mac_canon)` `UNIQUE` → the cloned-MAC test must red (AC5).
         *Measured: assertion-carried, `left: Err(Constraint("unique"))`.*
-  - [ ] **M3** drop the rule-XOR-cause CHECK → the CHECK test must red (AC2). *Measured: reds at
+  - [x] **M3** drop the rule-XOR-cause CHECK → the CHECK test must red (AC2). *Measured: reds at
         `expect_err`, panic-carried.*
-  - [ ] 🔴 **M4 — TWO PARTS, and the one-part version is a NO-OP.** Drop `link_candidate_link_fk`
+  - [x] 🔴 **M4 — TWO PARTS, and the one-part version is a NO-OP.** Drop `link_candidate_link_fk`
         **and** write the abstention as an absence (candidates, no link row) → the ambiguity test
         must red on its COUNT. *Measured: the one-part version reds on
         `Constraint("foreign_key")` at `.expect(…)` — the FK carries it and AC4's assertion is never
         evaluated. The two-part version reds `left: 0, right: 1`.* **If the two-part version does
         not red, FR16 is still vapour and that is the finding.**
-  - [ ] 🔴 **M5 — TWO PARTS, and the one-part version is not executable.** Replace the `OPEN_END`
+  - [x] 🔴 **M5 — TWO PARTS, and the one-part version is not executable.** Replace the `OPEN_END`
         sentinel with `NULL` **and** drop `valid_to`'s `NOT NULL` → the COUNTING test of AC3 half 3
         must red. *Measured: with only the sentinel changed, error **1048 `Column 'valid_to' cannot
         be null`** kills the FIRST insert and the "exactly one current" question is never reached.
         With both edits, D21's trap appears exactly as written — the second current insert
         SUCCEEDS — and the count assertion reds `left: 2, right: 1`.*
-  - [ ] **M6** change one persisted token string (e.g. `abstained` → `abstain`) → the token test must
+  - [x] **M6** change one persisted token string (e.g. `abstained` → `abstain`) → the token test must
         red. *Measured: assertion-carried, `left: "abstain" / right: "abstained"`.*
-  - [ ] 🔴 **M7 — NEW, decision 9's other half.** Drop the `link_subject` generated column and key
+  - [x] 🔴 **M7 — NEW, decision 9's other half.** Drop the `link_subject` generated column and key
         the index on `(observation_id, interface_id, valid_to)` directly → the "two current
         abstentions are refused" test must red, because MariaDB holds the two NULL `interface_id`s
         distinct. **If it stays green, the abstention half of AC3 is decorative** — which is the
         exact trade-off Guy accepted decision 9's sentinel to close.
-  - [ ] Record for each: DB set yes/no, tests red, **and what CARRIED the red — assertion,
+  - [x] Record for each: DB set yes/no, tests red, **and what CARRIED the red — assertion,
         `expect`/`expect_err` panic, or compiler**.
 
-- [ ] **T7 — register and docs (AC7, AC10)**
-  - [ ] Append this story's section to `deferred-work.md`: 2 closed, 3 answered, **3 re-owned**
+- [x] **T7 — register and docs (AC7, AC10)**
+  - [x] Append this story's section to `deferred-work.md`: 2 closed, 3 answered, **3 re-owned**
         (§5 #6, #7 and #8), plus the three new entries from decision 4 (`entity`, `device`,
         `state`), decision 2 (the vector is not stored) and decision 7 (the `confidence`
         discrepancy between `architecture.md:1015` and `epics.md`, **owner story 5.14**).
-  - [ ] Update `docs/project-context.md` **and** `CLAUDE.md` with the same numbers (AC10), then grep
+  - [x] Update `docs/project-context.md` **and** `CLAUDE.md` with the same numbers (AC10), then grep
         both for the phrases AC10 names.
 
-- [ ] **T8 — the full local gate, then PR**
-  - [ ] `cargo fmt --all` · clippy **twice** (§8) · `cargo test --workspace --locked` **with the DB
+- [x] **T8 — the full local gate, then PR**
+  - [x] `cargo fmt --all` · clippy **twice** (§8) · `cargo test --workspace --locked` **with the DB
         running** · `cargo xtask ci`.
-  - [ ] Push the branch, open the PR, wait for green CI, **squash merge**. Never push to `master`.
+  - [x] Push the branch, open the PR, wait for green CI, **squash merge**. Never push to `master`.
 
 ---
 
@@ -767,28 +767,121 @@ half-updated once already.
 
 ### Debug Log References
 
-#### The database run (AC9) — filled in by the dev
+#### The database run (AC9)
 
-The **prediction** column is what the validation pass measured against a live `mariadb:10.11.11`
-on an independent implementation. It is there to be **confirmed or refuted**, not copied: a dev who
-records a prediction without running the mutation has recorded nothing, and a refutation is a
-finding worth more than a confirmation.
+**Every mutation was run with `DATABASE_URL` set**, against `mariadb:10.11.11` on host port 13306
+(the image D64 names; 3306 is held by an unrelated `mariadb:11-jammy`). Each mutation met a FRESH
+schema — `sqlx` checksums an applied migration, so a mutated `0002` cannot meet a migrated
+database — and `repo.rs` was touched each time, because `sqlx::migrate!` embeds the directory at
+compile time and there is no build script, so a changed `.sql` alone does not trigger a rebuild.
 
-| mutation | DB set? | tests red | carried by (assertion / `expect_err` / compiler) | prediction from validation |
+**Zero compiler-carried reds. Every red is assertion-carried**, including M1 and M3, which the
+validation predicted would be `expect_err` panics — that prediction is **refuted**, and the reason
+is that the tests were written in the assertion form (`assert_eq!(result, Err(Constraint(…)))`)
+rather than the `expect_err` form the story's T5 first prescribed.
+
+| mutation | DB set? | tests red | carried by | measured |
 |---|---|---|---|---|
-| M1 | | | | reds; `expect_err`, panic-carried |
-| M2 | | | | reds; **assertion**, `left: Err(Constraint("unique"))` |
-| M3 | | | | reds; `expect_err`, panic-carried |
-| M4 (two parts) | | | | reds; **assertion**, `left: 0, right: 1`. One-part version = NO-OP (FK carries it) |
-| M5 (two parts) | | | | reds; **assertion**, `left: 2, right: 1`. One-part version = not executable (err 1048) |
-| M6 | | | | reds; **assertion**, `left: "abstain" / right: "abstained"` |
-| M7 | | | | untested at validation — decision 9 postdates the run |
+| M1 drop `UNIQUE (observation_id, link_subject, valid_to)` | yes | **3** — `a_second_current_link_for_one_placement_is_refused`, `exactly_one_link_is_current_per_placement`, `a_second_current_abstention_for_one_observation_is_refused` | **assertion** | `left: Ok(())` · `left: 2` · `left: Ok(())` |
+| M2 make `interface (l2_domain, mac_canon)` `UNIQUE` | yes | 1 — `two_interfaces_may_share_one_l1_key` | **assertion** | `left: Err(Constraint("unique"))` |
+| M3 drop the rule-XOR-cause CHECK | yes | 1 — `the_ddl_checks_refuse_incoherent_links` | **assertion** | `left: None` — 🔴 **but see below: the FIRST run of M3 was GREEN** |
+| M4 (two parts) drop `link_candidate_link_fk` **and** skip the link row | yes | 1 — `an_ambiguity_is_a_link_with_its_candidates` | **assertion** | `left: 0, right: 1` |
+| M5 (two parts) sentinel → `NULL` **and** drop `valid_to NOT NULL` | yes | **3**, incl. the counting one | **assertion** | `left: 2, right: 1` on *"exactly one link is current"* |
+| M6 change one persisted token (`abstained` → `abstain`) | yes | 3 | **assertion** | `left: "abstain"` |
+| M7 drop `link_subject`, key the index on `interface_id` | yes | 2 | **assertion** | `left: Ok(())` on *"a NULL `interface_id` must not make the uniqueness key decorative"* |
+
+🔴 **M3's first run was GREEN, and that is the story's most useful measurement.** Dropping
+`identity_link_rule_xor_cause` left **all 378 tests passing**. The cause is not an oversight in the
+test list but a property of the design: `insert_identity_link` derives `outcome`, `rule_id` and
+`abstention_cause` from **one `match`** over the conclusion, so it *cannot* emit an incoherent
+pair — which means the CHECK is a second line of defence reachable only by going AROUND the
+adapter, and every test went through it. Two raw-SQL inserts now attack the property from both
+sides (an abstention naming a rule; a match naming none), and M3 reds on the first of them.
+This is the same family as story 5.8's M5: a guard that asserts nothing until something measures it.
+
+⚠️ **M7's second red is collateral and is recorded as such**: `the_ddl_checks_refuse_incoherent_links`
+also reds, with `Backend("… Unknown column 'link_subject' …")`, because its raw-SQL inserts name the
+column M7 deletes. That red is *schema-carried*, not a measurement of decision 9. The load-bearing
+red is the first one.
+
+#### The `ddl-collation` gate, shown to bite (AC8)
+
+The gate had never been exercised by a second migration. Stripping the `COLLATE` from one column:
+
+```
+🔴 ddl-collation  1 text column(s) without a binary collation:
+    …/migrations/0002_interface_and_identity_link.sql:23: mac_canon     VARCHAR(17) NOT NULL, -- lowercase, colons
+```
+
+It names the file, the line number and the line. Restored, and green.
+
+#### The generated column decision 9 prescribed does not exist in MariaDB 10.11
+
+Decision 9 specified `link_subject` as a **STORED generated column**. Measured:
+
+- `CHAR(36) … AS (COALESCE(interface_id, '000…')) STORED` → **error 1901**, refused outright;
+- the same expression as `VIRTUAL` → the table **creates**;
+- …but adding `UNIQUE KEY (…, link_subject, …)` → **error 1901 again**. Indexing is the blocker:
+  the literal's charset is session-dependent, so the expression is not indexable.
+- `IFNULL` and `IF(… IS NULL, …)`, with and without `_ascii` + explicit `COLLATE`, all give 1901.
+
+So the sentinel ships as a **written** column plus `identity_link_subject_matches`, a CHECK that
+makes it unable to drift — the same guarantee by a different mechanism. Measured directly against
+the server before any Rust was written: multi-NIC inserts (2 rows), a double-open is refused
+(1062), a second current abstention is refused (1062), and a drifted subject is refused (4025).
+
+#### Two things I got wrong, recorded rather than smoothed over
+
+- **I destroyed my own new tests mid-mutation.** The two raw-SQL inserts that make M3 red were
+  written *after* the implementation commit, and the four `git checkout repo.rs` calls that restore
+  M4–M7 restored them away. Caught by grepping for them, not by a failing test — the suite was
+  green either way, because the tests were simply gone. Re-added and committed immediately. This is
+  the exact hazard the house note about committing before a mutation pass describes.
+- **One assertion was written backwards.** `superseding_a_link_leaves_the_old_row_readable` first
+  asserted the superseded row still carried `OPEN_END` — the opposite of what D14 requires. It red
+  on the real database (`left: Some("2023-11-14 22:21:40.000000")`), which is the assertion form
+  earning its keep: the `expect`-shaped version would have passed.
 
 #### The `ddl-collation` gate, shown to bite (AC8)
 
 ### Completion Notes List
 
+- **367 → 378 tests** (176 bin + 156 core + 46 xtask, plus one ignored doc-test). Six gates green;
+  `views-hash` still `ℹ STALE` and untouched, by design (issue #50).
+- **The whole story was built against a live database.** With `DATABASE_URL` unset the suite
+  reports the identical 176/156/46 — measured, not assumed — so six of the seven mutations would
+  have read as green guards that were never executed.
+- **AC1–AC10 met.** AC3 is met in its post-arbitration form: three halves, three tests
+  (the constraint fires · it does not over-fire on multi-NIC · exactly one is current, by COUNT),
+  plus decision 9's abstention guard as a fourth.
+- **Register: 8 entries dispositioned** — 2 CLOSED (both by refusing a serde derive), 3
+  ANSWERED-not-closed with the measurement that says why the condition was not met, 3 RE-OWNED to
+  story 5.9b. Plus 6 new entries. **None of the answered three is reported as closed.**
+- **What this story deliberately does NOT do, still true at the end:** no `device`, no `entity`
+  supertype, no `state` column, no display, and **the blocker still has no production caller** —
+  `identity::blocking::candidates` is called only from test code, and `identity::l1::join` still
+  has no cross-crate caller at all. `repo.rs` calls neither. All of that is story 5.9b's.
+- **Three divergences from the story as written**, each measured rather than argued:
+  1. decision 9's **generated column is impossible in MariaDB 10.11** (error 1901 on indexing) —
+     shipped as a written column plus a CHECK, same guarantee, different mechanism;
+  2. **M3 was initially a no-op** — the rule-XOR-cause CHECK was unreachable through the adapter
+     and nothing measured it until two raw-SQL inserts were added;
+  3. the validation predicted M1 and M3 would be **`expect_err`-carried**; both are
+     assertion-carried, because the tests were written in the assertion form.
+
 ### File List
+
+- `crates/opencmdb-bin/migrations/0002_interface_and_identity_link.sql` — NEW
+- `crates/opencmdb-bin/src/repo.rs` — MODIFIED (adapter, sentinels, token maps, tests; and its
+  module doc corrected, which claimed to be the only place `sqlx` appears)
+- `crates/opencmdb-core/src/observation/mod.rs` — MODIFIED (`InterfaceId`, `LinkId`)
+- `crates/opencmdb-core/src/lib.rs` — MODIFIED (re-exports)
+- `_bmad-output/implementation-artifacts/deferred-work.md` — MODIFIED (story 5.9's section)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — MODIFIED
+- `_bmad-output/planning-artifacts/epics.md` — MODIFIED (the 5.9/5.9b split, at contexting)
+- `docs/project-context.md` — MODIFIED
+- `CLAUDE.md` — MODIFIED
+- `_bmad-output/implementation-artifacts/5-9-persist-interface-and-identity-link.md` — NEW
 
 ## Change Log
 
@@ -796,3 +889,4 @@ finding worth more than a confirmation.
 |---|---|
 | 2026-08-03 | Story contexted. **SPLIT with Guy: 5.9b INSERTED** (Epic 5 → 17 stories) — the resolver that runs the engine over a set of observations and writes the links is its own story, because it is the first production caller of `join`/`candidates` and it is what story 5.10 re-runs. **Second arbitration: an `identity_link` binds `observation → interface`** (`join` forms an interface at L1; `decide_pair` judges a pair and returns none). `epics.md` and `sprint-status.yaml` updated. |
 | 2026-08-03 | **VALIDATED** by two fresh-context agents, the gap-hunt one against a live `mariadb:10.11.11` (374 green tests, six green gates, all six mutations executed against real DDL). **4 HIGH + 2 HIGH applied.** 🔴 **Third arbitration, Guy's, at the validation pass: the link's uniqueness key widens to `(observation_id, link_subject, valid_to)`** — the narrow `(observation_id, valid_to)` was measured REFUSING a legitimate multi-NIC write, and its abstention half is closed by a generated-column sentinel (decision 9, new AC3, new M7). Also: M4 and M5 were both no-ops as first written and are now two-part mutations with their measured reds; AC3 gained the COUNTING test that alone can carry M5's red; §5 undercounted the register by one entry (AC7: seven → **eight**); §7's `docker run` would have migrated an unrelated project's MariaDB 11 (port 3306 → **13306**); and five smaller claims were corrected against measurement (`0001` is 34 lines not 35, `repo.rs` is 236+106, `sqlx` appears in four files not one, D13's word is `join` not `lookup`, the tree was never clean). |
+| 2026-08-03 | **IMPLEMENTED → `review`.** `0002_interface_and_identity_link.sql` (three tables, five CHECKs, the non-unique L1 key), `InterfaceId`/`LinkId`, and the adapter's seven query bodies, two sentinels and two token maps. **367 → 378 tests**, six gates green, clippy clean twice, all seven mutations run WITH a database and **every red assertion-carried, zero compiler-carried**. 🔴 Three measured divergences: decision 9's **generated column is impossible in MariaDB 10.11** (error 1901 — indexing an expression that coalesces to a string literal; ships as a written column + CHECK, same guarantee); **M3 was a no-op on its first run** — dropping the rule-XOR-cause CHECK left all 378 tests green, because the adapter derives rule and cause from one `match`, so two raw-SQL inserts now measure it; and M1/M3 are assertion-carried where the validation predicted `expect_err`. AC8 discharged: the DDL gate was shown naming `0002…sql:23`. |

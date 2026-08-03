@@ -67,8 +67,16 @@ last_updated: 2026-08-03  # 5.9 contexted (`ready-for-dev`), SPLIT (5.9b INSERTE
                           # (*"a gate that cannot fall is decoration"*). **Do not "fix" it.** The
                           # `NFR4 NOT MET` line renders only while the bucket is non-empty, so it
                           # deletes itself the day Epic 6 empties it.
-                          # NEXT = `dev-story` 5.9 -- it is contexted AND validated; the two-agent
-                          # pass is DONE and its findings are applied in the story file.
+                          # NEXT = `code-review` 5.9, then push -> PR -> green CI -> squash merge.
+                          # 5.9 is IMPLEMENTED: 367 -> 378 tests, six gates green, all seven
+                          # mutations run WITH a live mariadb:10.11.11 (port 13306), every red
+                          # assertion-carried. 🔴 M3 was a NO-OP on its first run: dropping the
+                          # rule-XOR-cause CHECK left all 378 tests green, because the adapter
+                          # derives rule and cause from one match and cannot emit an incoherent
+                          # pair -- two raw-SQL inserts now measure it.
+                          # 🔴 Decision 9's generated column is IMPOSSIBLE in MariaDB 10.11
+                          # (error 1901 when indexed); the sentinel ships as a written column
+                          # plus a CHECK. Same guarantee, different mechanism.
                           # ⚠️ ISSUE #38 stays OPEN: the local suite ran green here (367/367, one
                           # run) and CI green, which is NOT evidence the cause is gone -- the
                           # recorded shape is 2 red in ~11 runs, moving between tests.
@@ -1521,7 +1529,7 @@ development_status:
   # Second arbitration taken at the same contexting: an `identity_link` binds
   # `observation -> interface` (`join` is what forms an interface at L1; `decide_pair` judges a
   # pair and returns none). NO `device` table and NO `entity` supertype -- both Epic 6.
-  5-9-persist-interface-and-identity-link: ready-for-dev
+  5-9-persist-interface-and-identity-link: review
   5-9b-engine-resolves-and-writes-links: backlog
   5-10-purge-test: backlog
   5-11-order-independence: backlog

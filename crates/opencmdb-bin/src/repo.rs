@@ -472,6 +472,20 @@ pub struct PersistedLink {
     pub decided_by: String,
 }
 
+/// One `identity_link` row as sqlx decodes it, before it becomes a [`PersistedLink`]:
+/// `(id, interface_id, outcome, rule_id, abstention_cause, evidence, ruleset_version, decided_by)`.
+/// The three `Option`s are the three nullable columns — a non-`Option` binding fails to decode.
+type LinkRow = (
+    String,
+    Option<String>,
+    String,
+    Option<String>,
+    Option<String>,
+    String,
+    u32,
+    String,
+);
+
 /// Load the CURRENT links of one observation — plural, because one observation can sit on several
 /// interfaces at once.
 ///
@@ -489,16 +503,7 @@ pub async fn load_current_links_for_observation<'e, E>(
 where
     E: Executor<'e, Database = MySql>,
 {
-    let rows: Vec<(
-        String,
-        Option<String>,
-        String,
-        Option<String>,
-        Option<String>,
-        String,
-        u32,
-        String,
-    )> = sqlx::query_as(
+    let rows: Vec<LinkRow> = sqlx::query_as(
         "SELECT id, interface_id, outcome, rule_id, abstention_cause, evidence, \
                 ruleset_version, decided_by \
          FROM identity_link WHERE observation_id = ? AND valid_to = ? \

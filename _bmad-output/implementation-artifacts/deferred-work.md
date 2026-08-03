@@ -2155,3 +2155,107 @@ that killed each. The one entry here is **measured, not suspected**.
   making a partial map block, and the second is exactly the epic-level decision this story declined
   to take alone. **Owner: the same story that answers *"should a non-empty but PARTIAL answers map
   block?"*** — they are one decision, and splitting them would produce two half-answers.
+
+## Deferred from: story-5.9-persist-interface-and-identity-link (2026-08-03)
+
+Eight entries named story 5.9 as owner. **Two are CLOSED, three are ANSWERED-not-closed, three are
+RE-OWNED to story 5.9b.** An answered entry says *"the condition was measured and not met"*; a
+closed one says *"the thing was done"* — reporting the first as the second is the over-claim this
+project's reviews have caught repeatedly, so the distinction is kept explicit here.
+
+- ✅ **CLOSED — `IdentityAbstentionCause` derives no `Serialize`/`Deserialize`** *(owner clause:
+  "if it persists a cause at all")*. This story persists a cause, **and closes the entry by
+  REFUSING the derive**. `repo::cause_token` is an exhaustive `match` in the ADAPTER with no `_`
+  arm. Two reasons: a derived variant name is a wire format nobody chose, and renaming a variant
+  would silently rewrite stored bytes — the *"silent data migration, the worst kind"* D14 names
+  about `ruleset_version`; and `IdentityAbstentionCause` is deliberately not `#[non_exhaustive]`
+  precisely so a new variant produces `error[E0004]` downstream. A `#[derive]` bypasses that
+  mechanism; the `match` uses it. Both tokens are pinned by `every_persisted_token_is_pinned`.
+
+- ✅ **CLOSED — none of the five new types derives `Serialize`/`Deserialize`** *(owner clause: "if
+  it persists a decision at all")*. Same refusal, same reason. This story persists a decision's
+  *components* as COLUMNS (`outcome`, `rule_id`, `abstention_cause`, `ruleset_version`), never a
+  `Decision` as a blob. Nothing serialises `Verdict`, `RuleVerdict`, `Conclusion` or `Decision`.
+
+- ↺ **ANSWERED, NOT CLOSED — `RulesetVersion` derives no `PartialOrd`/`Ord`.** The entry predicted
+  that *"the first consumer that ORDERS two versions is persistence"*. **Measured here: it does
+  not.** `insert_identity_link` binds the version and `load_current_links_for_observation` reads it
+  back; nothing compares two. *"The link decided under the current ruleset"* is an EQUALITY, not an
+  order. No `Ord` was added. **The owner clause stands, unmet** — the first story that ORDERS two
+  versions still owns it.
+
+- ↺ **ANSWERED, NOT CLOSED — an incoherent `Decision` is still buildable by struct literal**
+  *(owner clause: "the first story that reconstructs a `Decision` from somewhere other than
+  `decide`")*. The condition is **not met**: this story's read side returns `PersistedLink` — rows —
+  and the `verdict_vector` is deliberately not stored, so a `Decision` **cannot** be rebuilt from a
+  row. No constructor was written. ⚠️ Note the tests DO build `Decision` by struct literal
+  (`a_match`, `an_abstention` in `repo.rs`), which is test code and does not meet the clause, but
+  it is recorded here rather than left for a reviewer to find.
+
+- ↺ **ANSWERED, NOT CLOSED — nothing enforces that a `RuleVerdict` built by struct literal leaves
+  non-empty evidence.** Same reason as above: no `RuleVerdict` is constructed by this story's
+  production code.
+
+- ↺ **RE-OWNED to story 5.9b — `L1Key` is a bare tuple alias** *(owner clause: "the first story to
+  persist a key")*. This story persists the key's two COMPONENTS as columns (`interface.l2_domain`,
+  `interface.mac_canon`) and **never holds an `L1Key` value** — it does not call `join`. 5.9b does.
+
+- ↺ **RE-OWNED to story 5.9b — the blocker STILL has no production caller.** Unchanged in
+  substance: `identity::blocking::candidates` has no production caller after this story either, and
+  `identity::l1::join` still has no cross-crate caller at all. Neither is called from `repo.rs`.
+
+- ↺ **RE-OWNED to story 5.9b — the universe is quadratic in the slice the CALLER supplies, and
+  nothing yet bounds that slice.** Distinct from the entry above: that one is *"has no caller"*,
+  this one is *"the caller's slice is unbounded"*. This story hands the blocker nothing, so the
+  condition is untouched. 5.9b is the first story that hands it a set of observations and therefore
+  the first that can measure `n`. _(This entry was missed by the story's own §5, which counted
+  seven; the validation's fact-check found it.)_
+
+### New, raised by this story
+
+- ⚠️ **No `entity` supertype table and no `device` table.** D21's supertype
+  [architecture.md:1450-1454] exists to make the interface/device disjunction structural. With
+  `device` absent the disjunction has ONE arm, and a supertype over one subtype enforces nothing —
+  it is the speculation the *"create tables only when the story needs them"* rule refuses.
+  **Owner: Epic 6, with `device`.** Deferred, not dropped.
+
+- ⚠️ **No `state` column on `interface`.** D21's extended `entity.state`
+  (`active|dormant|…`, [architecture.md:1477-1479]) and F17's lifecycle are read by nothing before
+  the lifecycle epic. **Owner: the lifecycle epic (FR40-42).**
+
+- ⚠️ **The `verdict_vector` is NOT stored, so a persisted link cannot be turned back into a
+  `Decision`.** D14's list of what a link carries [architecture.md:1015-1016] does not include it,
+  and `epics.md`'s AC2 restates that list without it. D18's *"the harness records the COMPLETE
+  VERDICT VECTOR"* is a requirement on the **trap harness** (`ScoredRecord`, `score.rs`), a
+  different sentence about a different object. Storing it would mean deriving a wire format for
+  four domain types to serve no reader. **Owner: whichever of Epic 6 or story 5.14 first needs the
+  vector** — that is a schema addition with a named consumer, not a refactor.
+
+- 🔴 **`architecture.md` D14 and `epics.md` disagree about a `confidence` column, and the
+  discrepancy is recorded rather than patched.** D14's sentence says a link carries *"the rule
+  applied, the evidence, **the confidence**, when, by whom"* [architecture.md:1015]; `epics.md`'s
+  AC2 for story 5.9 omits `confidence` and lists `ruleset_version` in its place. **The omission is
+  the later and the correct one**, on D13's authority: *"REFUSED: `rule -> confidence: f64` … if
+  the output is a float, B has won in disguise"* [architecture.md:956-958]. Its milli-unit
+  corollary binds *"the day a ranking value appears"*, and L1 is a deterministic join with nothing
+  to rank — so a `confidence` column here would be a value asserting that a ranking exists. No
+  column was created. **Owner: story 5.14**, the first story with a ranking surface, which already
+  owns the milli-unit entry. `architecture.md` was NOT edited (issue #54's precedent: a correction
+  to a decision body is a milestone act, never a story's).
+
+- 🔴 **MariaDB 10.11 cannot INDEX a generated column whose expression coalesces to a string
+  literal, and the story's decision 9 prescribed exactly that.** Measured at implementation:
+  `CHAR(36) … AS (COALESCE(interface_id, '000…')) STORED` is refused outright with **error 1901**;
+  the same expression as `VIRTUAL` creates fine but **error 1901 returns the moment a `UNIQUE KEY`
+  names the column** — the literal's charset is session-dependent, so the expression is not
+  indexable. The sentinel therefore ships as a **written** `link_subject` column plus a CHECK
+  (`identity_link_subject_matches`) that makes it unable to drift, which is the same guarantee by a
+  different mechanism. Recorded because the next reader will meet decision 9's text before the
+  DDL. **No owner: this is closed by the implementation**, and it is here as the measurement.
+
+- ⚠️ **`load_link_valid_to` renders a `DATETIME(6)` with `CAST(… AS CHAR)` in SQL**, because
+  `sqlx` is built here without its `chrono` feature and has no Rust type to decode one into. That
+  is transport, not comparison — D10 forbids SQL to descend into a domain value and an instant's
+  wire encoding is not one — but it IS a second rendering site, and the write path renders in Rust.
+  **Owner: the first story that needs to read an instant back as a value** (rather than to compare
+  it against a sentinel); enabling `sqlx`'s `chrono` feature would collapse the two.
