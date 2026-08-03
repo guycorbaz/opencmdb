@@ -50,9 +50,9 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-03  # 5.9 contexted (`ready-for-dev`), SPLIT (5.9b INSERTED, Epic 5 -> 17
-                          # stories) and VALIDATED by two fresh-context agents -- the gap-hunt one
-                          # against a live mariadb:10.11.11. **Epic 5 is now 10/17.**
+last_updated: 2026-08-03  # 5.9 **DONE** -- PR #65 squash-merged as `57db541` after a green CI run
+                          # (58s), code-reviewed first. **Epic 5 is now 11/17.** Master carries
+                          # **383 tests** (181 bin + 156 core + 46 xtask) and six green gates.
                           # 🔴 Guy arbitrated at the validation: the identity_link uniqueness key is
                           # (observation_id, link_subject, valid_to). The narrow (observation_id,
                           # valid_to) was MEASURED refusing a legitimate multi-NIC write -- `join`
@@ -67,7 +67,12 @@ last_updated: 2026-08-03  # 5.9 contexted (`ready-for-dev`), SPLIT (5.9b INSERTE
                           # (*"a gate that cannot fall is decoration"*). **Do not "fix" it.** The
                           # `NFR4 NOT MET` line renders only while the bucket is non-empty, so it
                           # deletes itself the day Epic 6 empties it.
-                          # NEXT = push -> PR -> green CI -> squash merge. 5.9 is CODE-REVIEWED
+                          # NEXT = `create-story` 5.9b (the resolver that runs the engine over a
+                          # set of observations and writes the links it derives -- first production
+                          # caller of `join` and `candidates`), then its MANDATORY two-agent
+                          # validation. ⚠️ For any DB story the gap-hunt MUST run a real MariaDB:
+                          # the suite is green either way with DATABASE_URL unset.
+                          # 5.9 was CODE-REVIEWED
                           # (3 layers, 2 against a live DB): 1 decision, 22 patches, 13 deferrals.
                           # 378 -> 383 tests, 7 -> 12 mutations, every red assertion-carried.
                           # 🔴 Guy arbitrated the uniqueness key a SECOND time: `valid_to` is
@@ -1537,7 +1542,7 @@ development_status:
   # Second arbitration taken at the same contexting: an `identity_link` binds
   # `observation -> interface` (`join` is what forms an interface at L1; `decide_pair` judges a
   # pair and returns none). NO `device` table and NO `entity` supertype -- both Epic 6.
-  5-9-persist-interface-and-identity-link: review
+  5-9-persist-interface-and-identity-link: done
   5-9b-engine-resolves-and-writes-links: backlog
   5-10-purge-test: backlog
   5-11-order-independence: backlog
