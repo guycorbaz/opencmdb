@@ -1,0 +1,889 @@
+# Story 5.9: The interface and its identity link are persisted, ambiguity included
+
+Status: review
+
+<!-- ✅ VALIDATED 2026-08-03 by two fresh-context agents (fact-check + gap-hunt), as this project
+     requires (Guy's decision, Epic 4 retrospective 2026-07-26). The template banner saying
+     "Validation is optional" does not apply here.
+
+     🔑 THE GAP-HUNT RAN WITH A LIVE DATABASE — `mariadb:10.11.11` on host port 13306, and every
+     one of the six mutations was executed against real DDL. It reached 374 green tests (2
+     newtypes, the full `0002`, 7 query bodies, 9 tests), six green gates, clippy twice clean.
+     That matters because it MEASURED the story's own §7 warning and confirmed it: 174/156/46
+     green **identically** with and without `DATABASE_URL`.
+
+     🔴 SIX HIGH findings — FOUR from the agent that COMPILED the story, TWO from the fact-check.
+     The gap-hunt's four are applied below; the fact-check's two follow them.
+       • **AC3's uniqueness key rejected a LEGITIMATE write.** `join` loops
+         `for key in keys_of(observation)` [`l1.rs:174-178`], so a multi-MAC observation lands on
+         N interfaces — and `l1.rs:186` says so in prose. `multi-nic` is a COMMITTED trap family.
+         Measured: the second link gave `left: Err(Constraint("unique"))`.
+         **Guy's arbitration: the key widens to include the subject** — and was arbitrated a SECOND
+         time at the code review, which measured `valid_to` in the key constraining HISTORY. Final
+         form `(observation_id, current_subject)`; see decision 9.
+       • **M5 was not executable as written** and did not measure D21's NULL trap: `valid_to` is
+         `NOT NULL`, so binding NULL dies on error 1048 at the FIRST insert. Now a two-part
+         mutation, and its red was re-aimed at an assertion that COUNTS.
+       • **No prescribed test could carry that assertion.** T5 asked only for the
+         `Constraint("unique")` shape, which panics at `expect_err` before any count exists. The
+         counting test is now prescribed, with its measured red: `left: 2, right: 1`.
+       • **M4 was a no-op against AC4** — `link_candidate`'s FK makes "candidates but no link row"
+         unwritable, so the measured red was `Constraint("foreign_key")` at `.expect(…)` and
+         AC4's assertion was never evaluated. Now a two-part mutation; measured red `left: 0,
+         right: 1`.
+
+     The fact-check's two HIGH are applied too: §7's `docker run` could not have worked on this
+     machine (port 3306 is held by an unrelated `mariadb:11-jammy`, so the DSN would have reached
+     the WRONG ENGINE VERSION silently), and §5 undercounted the register by one entry. -->
+
+## Story
+
+As the operator,
+I want interfaces and their identity links stored as revisable records carrying their evidence,
+so that *"present the candidate matches with their evidence"* (FR16) is something the product can
+actually do.
+
+**This story creates the schema and the persistence contract. It writes no link the engine derived.**
+The rows it writes are written by its own tests, from `Decision`s that `identity::l1::decide_pair`
+produced. The pass that walks a set of observations, calls the blocker and the join, and writes what
+it derives is **story 5.9b**, inserted at this story's contexting — see §1.
+
+**What this story does NOT do**, so the boundary is explicit and not discovered in review:
+
+- it does **not** create `device` — Epic 6. `epics.md:1576` says so, and a table this epic would not
+  populate is speculation;
+- it does **not** create the `entity` supertype either. D21's disjunction
+  [architecture.md:1450-1454] exists so a link can point at an interface *or* a device; `device` does
+  not exist, so the disjunction has one arm. **Owner: Epic 6, with `device`** (§4, decision 4);
+- it does **not** run the engine over anything. `identity::blocking::candidates` still has **no
+  production caller** after this story, and `identity::l1::join` still has **no cross-crate caller
+  at all** — both are story 5.9b's, and the register entry is re-owned rather than silently carried
+  (§5);
+- it does **not** add a `state` column to `interface`. `dormant`/`active` (D21's extended
+  `entity.state`, F17's lifecycle) is read by nothing in Epic 5. **Owner: the lifecycle epic
+  (FR40-42)**;
+- it does **not** display anything. FR16's rendering, the abstention counter and its grouping by
+  cause are **story 5.14**. This story makes the rows readable; it renders no page;
+- it does **not** touch `identity::l1`, `identity::blocking` or `identity::cascade`. The only
+  `opencmdb-core` change is two id newtypes (§4, decision 5).
+
+**Nothing under `fixtures/` moves.** No artefact bytes, no `MANIFEST.toml`, no re-hash. If any step
+appears to require re-authoring a committed artefact, **STOP** — that is a finding, reported rather
+than absorbed.
+
+**`architecture.md` is NOT edited** (issue #54; a milestone act).
+**`architecture-views.md` is NOT regenerated** (issue #50).
+**`epics.md` IS already edited** — at this story's contexting, to record the 5.9/5.9b split and the
+`observation -> interface` arbitration. _(It does NOT record the uniqueness-key arbitration:
+`grep link_subject epics.md` returns 0. That one lives in `sprint-status.yaml` and decision 9.)_ The dev **does not edit it again**; verify-only from here.
+
+⚠️ **Branch from `master`.** Measured at contexting: `master` is at **`28a7f51`** and
+`cargo test --workspace --locked` reports **367 tests** — **165 bin + 156 core + 46 xtask** (plus
+one ignored doc-test).
+
+⚠️ **The tree is NOT clean, and that is expected.** The contexting left three uncommitted planning
+edits — `epics.md` (the SPLIT note, story 5.9b, `16 → 17`), `sprint-status.yaml` (the split, the
+two keys) and this story file, untracked. **They belong on the story branch**; carry them, do not
+stash them and do not commit them to `master`. _(An earlier draft of this line said the tree was
+clean, three lines under a sentence saying `epics.md` had been edited — caught by the validation.)_
+
+---
+
+## What this story inherits, measured rather than assumed
+
+Everything below was measured at contexting on `28a7f51`, by reading the tree. **The dev re-derives
+none of it; a surprise reads as a FINDING.**
+
+### 1. The story was SPLIT at contexting, and 5.9b was inserted
+
+`epics.md`'s story 5.9 carried two ideas: **(a)** the schema and the persistence contract, and
+**(b)** the path that runs the engine over a set of observations and WRITES the links it derives.
+Guy split them on 2026-08-03, before any persistence code existed. Three reasons, all measurable:
+
+1. **(b) is the heavier half**, and it is the first production caller of *two* organs that have
+   never had one — `identity::blocking::candidates` (no production caller at all) and
+   `identity::l1::join` (no *cross-crate* caller at all; `lib.rs:46-53` says so and gives the
+   reason).
+2. **(b) is what story 5.10 requires.** 5.10's *"the engine re-runs"* [`epics.md`] is a re-run of a
+   pass that does not exist. Leaving (b) unowned would have made 5.10 carry two ideas.
+3. The register has owned that residue as *"story 5.9 or Epic 6, whichever first hands the blocker
+   a set of observations"* since story 5.6, re-stated by 5.7 and again by 5.8
+   [`deferred-work.md`]. **This story is not it; 5.9b is.**
+
+The letter suffix is the house idiom for an INSERTED item (D56b; stories 5.2b and 5.4b), so
+5.10–5.14 keep their numbers. **Epic 5 is now 17 stories.** `epics.md` and `sprint-status.yaml`
+carry it; nothing else needs to.
+
+**No acceptance criterion moved, and two were ADDED.** `epics.md`'s four 5.9 criteria are all schema
+statements and all four are still here: the three tables and not `device` → **AC1**; the SCD2 link
+carrying rule/evidence/when/whom/`ruleset_version` → **AC2**; the ambiguity as a link with its
+candidates → **AC4**; binary collation with the DDL gate green → **AC8**. **AC3** (one current link
+per observation, held by the `OPEN_END` sentinel) and **AC5** (no unique index on the L1 key) come
+from **D21**, not from `epics.md` — they are added here because both are schema decisions this
+migration takes whether or not anyone writes them down, and D21 says what happens when they are
+taken wrongly.
+
+### 2. 🔴 What an `identity_link` LINKS — the arbitration this story rests on
+
+This is the decision a reviewer will challenge first, so it is stated before anything is built.
+
+- `identity::l1::decide_pair(&Observation, &Observation) -> Decision` judges **a PAIR of
+  observations** and returns **no interface**. A row shaped `(obs_a, obs_b, verdict)` is what the
+  engine literally returns — and no `interface` row follows from it without a clustering step.
+- `identity::l1::join(&[Observation]) -> BTreeMap<(L2DomainId, MacAddr), BTreeSet<ObsId>>`
+  [`l1.rs:172`] groups observations by the scope-qualified key. **That map IS the set of interfaces
+  at L1**: one key, one interface, and the `BTreeSet<ObsId>` is the set of observations on it. D13
+  says exactly this — *"L1 = pure A — a deterministic **join** on the scope-qualified key
+  `(l2_domain, mac) -> interface`"* [architecture.md:984-985]. _(D13's word is `join`; an earlier
+  draft quoted it as "lookup", which is this story's word and was inside quotation marks.)_
+- ⚠️ **One observation can sit on SEVERAL interfaces, and the schema must permit it.** `join` is
+  `for observation { for key in keys_of(observation) { … } }` [`l1.rs:174-178`] — an observation is
+  inserted under **every** key it carries, and `l1.rs:186` states it: *"An observation may carry
+  several MACs."* `multi-nic` is a committed trap family. This is why AC3's uniqueness key is
+  `(observation_id, current_subject)` and not `(observation_id, valid_to)` — see decision 9.
+
+**Therefore: an `identity_link` binds one `observation_record` to one `interface`**, carrying the
+rule applied, the evidence, when, by whom and `ruleset_version` (D14). `link_candidate` carries the
+N candidate **interfaces** of an observation the engine abstained on — which is what FR16's
+*"present the candidate matches with their evidence"* asks a page to display. The `interface ->
+device` grouping is a **different relation** and arrives with `device`, in Epic 6.
+
+⚠️ **`decide_pair` is still the source of the rule and the evidence** on a link — the pair verdict
+is what justifies placing an observation on an interface. This story stores that justification; it
+does not compute it (5.9b does).
+
+### 3. The tree this story extends, measured
+
+| what | where | size |
+|---|---|---|
+| the only migration | `crates/opencmdb-bin/migrations/0001_initial.sql` | 34 lines, 2 tables |
+| the MariaDB adapter — the only place SQL against the domain tables is written | `crates/opencmdb-bin/src/repo.rs` | 342 lines (236 code + 106 tests; `#[cfg(test)]` at :237) |
+| the abstract persistence contract, sqlx-free (D47/D49) | `crates/opencmdb-core/src/repo/mod.rs` | 66 lines |
+| the id newtypes and the `uuid_newtype!` macro | `crates/opencmdb-core/src/observation/mod.rs:24-64` | 4 newtypes |
+| the engine's return type | `crates/opencmdb-core/src/identity/cascade.rs` | `Decision`, `Conclusion`, `RuleVerdict`, `RulesetVersion`, `Verdict`, `IdentityAbstentionCause` |
+
+**The existing adapter idiom, which this story follows and does not reinvent** [`repo.rs`]:
+
+- **query bodies are free functions generic over `sqlx::Executor`** (D49), written **once**, called
+  both by the read side (with the pool) and by a unit of work (with the transaction connection —
+  read-your-own-writes). `count_declared_attributes`, `insert_observation`, … are the pattern;
+- **static SQL, bound values** (D48) — `sqlx::query("…").bind(x)`. No `format!`, no
+  `AssertSqlSafe`;
+- **`classify(sqlx::Error) -> RepositoryError`** is the ONE `sqlx::Error → RepositoryError`
+  translation in the crate [`repo.rs:214-235`] — `page.rs::server_error` delegates to it. _(It is
+  **not** the only place a MariaDB error code is named: `dburl.rs:105` names `"1045"` for the
+  connect-error explainer. And `sqlx` appears as code in four files — `repo.rs`, `main.rs`,
+  `page.rs`, `dburl.rs` — so do not repeat the "only place sqlx appears" sentence; it is false.)_
+  It already maps `is_unique_violation` →
+  `Constraint("unique")` and `is_check_violation` → `Constraint("check")` — **which is what makes
+  AC3's and AC5's guards assertable without new plumbing**;
+- **ids are bound as `String`** — `observation.obs_id.to_string()` [`repo.rs:151`], because D48 is
+  `CHAR(36) ascii_bin`, not `BINARY(16)`;
+- **serialized domain values go through `serde_json::to_string`** and are decoded in Rust
+  [`repo.rs:140-141, 205-207`] — **SQL never descends into a value comparison** (D10);
+- **DB tests are gated and serialized**: `let Ok(url) = std::env::var("DATABASE_URL") else { … return }`,
+  then `let _guard = crate::DB_TEST_LOCK.lock().await;` [`main.rs:32-33`], then
+  `sqlx::migrate!("./migrations").run(&pool)`, then a `DELETE FROM …` to isolate the run.
+
+### 4. 🔴 The `ddl-collation` gate, exactly how it matches — and the two ways to trip it by accident
+
+`xtask/src/main.rs:307-367`. It walks `crates/opencmdb-bin/migrations/**/*.sql` **line by line**,
+and it is a **reflex heuristic, not a parser**:
+
+```
+trim the line; skip it if it is empty or starts with "--"
+uppercase it
+is_text  := contains "VARCHAR" | contains "TEXT" | contains " CHAR" | starts_with "CHAR" | contains "CLOB"
+has_bin  := contains "_BIN" | contains "COLLATE BINARY"
+offender := is_text && !has_bin
+```
+
+**Two consequences the dev must hold in mind while writing `0002`:**
+
+1. ⚠️ **The word `TEXT` inside a TRAILING comment on a non-text line reds the gate.** `-- context`,
+   `-- the text of the rule`, `-- CHARacter` all contain a matching substring, and the line is not
+   skipped because the skip only fires when the line *starts* with `--`. **Put explanatory prose on
+   its own `--` line**, which is how `0001_initial.sql` is already written.
+2. ⚠️ The check is **per line**. A column declaration split across two lines with the `COLLATE` on
+   the second one reds. Keep one column per line, as `0001` does.
+
+**The shape that passes — the idiom of `0001_initial.sql` (`attr_value` is its line 13; the id line
+below is modelled on `observation_record.id`, line 26). Do not invent a second one:**
+
+```sql
+  id            CHAR(36)    CHARACTER SET ascii   COLLATE ascii_bin    NOT NULL,
+  attr_value    TEXT        CHARACTER SET utf8mb4 COLLATE utf8mb4_bin,
+```
+
+`ascii_bin` for opaque ids and enumerated tokens; `utf8mb4_bin` for anything that could carry a
+non-ASCII byte. Both contain `_BIN`, so both pass.
+
+### 5. The registered debt this story owns — what it CLOSES, what it ANSWERS, what it RE-OWNS
+
+**Eight** entries in `deferred-work.md` name story 5.9 as owner. _(An earlier draft said seven and
+missed #8 — caught by the validation's fact-check, which is the "promise re-made" defect the
+register itself records five consecutive reviews catching.)_ **Three of them are conditional
+(*"if it persists a cause at all"*, *"the first story that reconstructs a `Decision`"*, *"the first
+story to persist a key"*), and the honest disposition of a conditional entry whose condition is not
+met is to ANSWER it with the measurement — not to close it, and not to carry it silently.** That is
+the disposition story 5.7 used for the blocker and 5.6 used for `L1Key`; six consecutive code
+reviews have caught the alternative.
+
+| # | entry | disposition here |
+|---|---|---|
+| 1 | *"`IdentityAbstentionCause` derives no `Serialize`/`Deserialize` … Owner: story 5.9, **if it persists a cause at all**"* | **CLOSED — and by REFUSING the derive.** This story persists a cause, as an explicit exhaustive `match` in the ADAPTER (§4, decision 3). A derived name is a wire format nobody chose: renaming a variant would silently change the stored bytes. |
+| 2 | *"None of the five new types derives `Serialize`/`Deserialize` … Owner: story 5.9, **if it persists a decision at all**"* | **CLOSED — same refusal, same reason.** This story persists a decision's *components* as COLUMNS, never a `Decision` as a blob. Nothing serialises `Verdict`, `RuleVerdict`, `Conclusion` or `Decision`. |
+| 3 | *"`RulesetVersion` derives no `PartialOrd`/`Ord`. The first consumer that ORDERS two versions is persistence … Owner: story 5.9."* | **ANSWERED, NOT CLOSED — the prediction is refuted by measurement.** Persistence stores the version and reads it back; **nothing compares two.** *"The link decided under the current ruleset"* is an EQUALITY, not an order. No `Ord` is added. |
+| 4 | *"An incoherent `Decision` is still buildable by struct literal … Owner: story 5.9, the first story that reconstructs a `Decision` from somewhere other than `decide` (persistence)."* | **ANSWERED, NOT CLOSED.** This story's read side returns **persisted rows**, not a reconstructed `Decision` — the `verdict_vector` is deliberately not stored (§4, decision 2), so a `Decision` cannot be rebuilt from a row and no constructor is written. The condition is not met. |
+| 5 | *"Nothing enforces that a `RuleVerdict` built by struct literal leaves non-empty evidence … residue is story 5.9's."* | **ANSWERED, NOT CLOSED** — same reason as #4: no `RuleVerdict` is constructed by this story. |
+| 6 | *"`L1Key` is a bare tuple alias … Owner: story 5.9, the first story to persist a key."* | **RE-OWNED to story 5.9b, with the measurement.** This story persists the key's two COMPONENTS as columns (`interface.l2_domain`, `interface.mac_canon`) and **never holds an `L1Key` value** — it does not call `join`. 5.9b does. |
+| 7 | *"The blocker STILL has no production caller … Owner: story 5.9 or Epic 6."* | **RE-OWNED to story 5.9b**, explicitly and for the reason in §1. Unchanged in substance. |
+| 8 | *"The universe is quadratic in the slice the CALLER supplies, and nothing yet bounds that slice … ↺ owner: 5.9 or Epic 6, whichever first hands the blocker a set of observations."* [`deferred-work.md:1861-1871`] | **RE-OWNED to story 5.9b.** A DISTINCT bullet from #7 — #7 is *"has no caller"*, this one is *"the caller's slice is unbounded"*. This story hands the blocker nothing, so the condition is untouched; 5.9b is the first story that hands it a set of observations and therefore the first that can measure `n`. |
+
+⚠️ **Do not report #3, #4, #5 as CLOSED.** An answered entry says *"the condition was measured and
+not met"*; a closed one says *"the thing was done"*. Reporting the first as the second is the
+over-claim this project's reviews have caught in six consecutive stories.
+
+### 6. 🔴 The purge-stability constraint story 5.10 inherits from THIS schema
+
+5.10 asserts that deleting the engine's links (`epics.md:1627` writes it
+`TRUNCATE ... WHERE decided_by = 'ENGINE'`, which is pseudo-SQL — MariaDB's `TRUNCATE` takes no
+`WHERE`, so the real statement is a `DELETE`; the `decided_by` column is what it needs either way)
+followed by a re-run reproduces
+the engine's links **bit for bit** (D14 [architecture.md:1038-1039]). **That property is decided
+here, by the schema, and it is easy to destroy without noticing.** Three constraints follow, and
+they are ACs rather than notes:
+
+1. **`interface` rows are NOT purged and their `id` is stable.** The purge deletes *links*. If an
+   interface's UUID were re-minted on a re-run, every reproduced link would carry a different
+   `interface_id` and 5.10 could never pass. The interface survives; the re-run finds it by its
+   `(l2_domain, mac_canon)` key.
+2. **`interface.first_seen_at` / `last_seen_at` are DERIVED FROM OBSERVATIONS, never from the
+   clock.** They are `min`/`max` of the `observed_at` of the observations on the interface. A
+   `NOW(6)` there is not reproducible, and *"the engine never touches the clock"*
+   [architecture.md:3364]. **This story does not compute them** (5.9b does) — it types them, writes
+   them from its parameters, and its doc says where they must come from.
+3. **`identity_link.valid_from` is a parameter, never `NOW(6)`.** Same reason. `0001`'s
+   `insert_declared_attribute` uses `NOW(6)` [`repo.rs:120`] — **that is a DECLARED row authored by
+   a human and it is not a precedent for an engine-derived one.** Do not copy it here.
+
+### 7. 🔴 A green suite says NOTHING about the database — and this story is nothing but database
+
+`DATABASE_URL` is **unset** on Guy's machine (measured at contexting). Every DB-backed test in
+`repo.rs` and `main.rs` begins with `let Ok(url) = std::env::var("DATABASE_URL") else { … return; }`
+and **passes by returning**. CI provides the service — `.github/workflows/ci.yml` sets
+`DATABASE_URL: mysql://root:opencmdb@127.0.0.1:3306/opencmdb_test` against `mariadb:10.11.11`, the
+exact DSM 7 package (D64) — so the tests do run *there*. But:
+
+> **Six of this story's seven mutations red NOTHING with `DATABASE_URL` unset.** M1, M2, M3, M4, M5
+> and M7 are all schema behaviour; only M6 (a token string) is reachable without a database. A
+> prove-to-red pass run without one would record six green mutations and conclude the guards are
+> decorative when in fact they were never executed.
+>
+> **This was MEASURED at the validation pass, not reasoned**: the suite reports 174/156/46 green
+> **identically** with and without `DATABASE_URL`.
+
+**The dev MUST run a local MariaDB and record it.** The exact image is not negotiable (D64:
+dev = CI = prod):
+
+```sh
+docker run --rm -d --name opencmdb-dev-db -p 13306:3306 \
+  -e MARIADB_ROOT_PASSWORD=opencmdb -e MARIADB_DATABASE=opencmdb_test \
+  mariadb:10.11.11
+docker ps --filter name=opencmdb-dev-db      # ⚠️ CONFIRM IT IS UP BEFORE TRUSTING ANY GREEN RUN
+export DATABASE_URL='mysql://root:opencmdb@127.0.0.1:13306/opencmdb_test'
+cargo test --workspace --locked
+```
+
+🔴 **Host port 13306, NOT 3306 — this is a correction, not a preference.** Measured on Guy's
+machine at validation: `0.0.0.0:3306` is held by **`kesh-mariadb`, an unrelated `mariadb:11-jammy`
+container belonging to another project**. The `docker run` on 3306 fails with *"port is already
+allocated"* — and the dangerous path is not that failure, it is the dev exporting the DSN anyway:
+`127.0.0.1:3306` then reaches a **MariaDB 11** instance, the wrong engine version under D64, and
+`sqlx::migrate!` applies `0001` and `0002` to **someone else's database**. Never touch
+`kesh-mariadb`. If 13306 is also taken, pick another free port and change the DSN with it.
+
+⚠️ `docker/docker-compose.yml` deliberately has **no database service** — it points at an external
+MariaDB. It is not the tool for this; the `docker run` above is.
+
+The Debug Log must state, for each mutation, **whether it was run with a database and which
+assertion carried the red**. "Green" without that qualification is not a measurement.
+
+### 8. Baseline, gates and the traps that cost an hour if they are not read
+
+- **Baseline: 367 tests** (165 bin + 156 core + 46 xtask) at `28a7f51`, clean tree.
+- **The six gates must stay green**: `cargo xtask ci` — dependency frontier (D47), **`ddl-collation`
+  (§4 — this story is the first to add DDL since story 3.2)**, retired vocabulary (D65), the fixture
+  corpus lock, `file-size` (D56b), `float-free` (D13). `views-hash` reports `ℹ STALE` and exits 0 —
+  **by design, do not regenerate**.
+- **The `float-free` gate walks `crates/opencmdb-core/src/identity/` and nothing else**
+  (`IDENTITY_DIR`, `xtask/src/main.rs:868`; it currently reports 4 files). Decision 5 puts the two
+  new newtypes in `observation/mod.rs`, which the gate does **not** walk — measured at validation:
+  the gate stayed green and did not interact. So the rule *"no float, no float literal"* holds here
+  as a house rule, **not** because a gate enforces it. `ruleset_version` is a `u32`; there is no
+  confidence, no score, no ranking in this story.
+- ⚠️ **D47 is a gate.** `opencmdb-core` must not gain a dependency on `sqlx`, `anyhow`, `axum` or
+  `askama`. Every line of SQL in this story lives in `opencmdb-bin`.
+- ⚠️ **Run clippy TWICE** before pushing (`local-gate-must-mirror-ci`): `cargo clippy --workspace
+  --all-targets -- -D warnings` **and** `cargo clippy --workspace --locked -- -D warnings` (the
+  second is what CI runs; an import kept alive only by a test passes the first and fails the second).
+- ⚠️ **Issue #38 — unexplained local test non-determinism** recurred on `master` on 2026-08-02. If a
+  test reds once and then passes 8 times on a clean tree, that is #38 and **not** a finding about
+  this story. Record the observation on the issue; **do not adopt a cause without naming the check
+  that would have failed if the cause were wrong.**
+- ⚠️ `sqlx::migrate!` embeds the migration directory **at compile time**. After adding `0002`, a
+  stale build can run the old set — if a test fails with "table doesn't exist", `touch` the crate or
+  `cargo clean -p opencmdb` before believing it.
+
+---
+
+## Decisions taken at contexting
+
+Nine, all with Guy or measured against the tree. They are decisions, not suggestions — a dev who
+disagrees reports a FINDING rather than choosing differently. **Decision 9 was taken at the
+validation pass, not at contexting**, and it changes AC3.
+
+**1. The story is SPLIT; 5.9b is inserted.** §1. Epic 5 → 17 stories.
+
+**2. The `verdict_vector` is NOT stored.** D14 lists what a link carries [architecture.md:1015-1016],
+and `epics.md`'s AC2 restates it as *"the rule applied, the evidence, when, by whom, and
+`ruleset_version`"* — **the vector is in neither list.** D18's *"the harness records the COMPLETE VERDICT VECTOR"* [architecture.md:1396-1399]
+is a requirement on the **trap harness**, which is `ScoredRecord`, in `score.rs`, and is a different
+sentence about a different object. Storing the vector would mean deriving a wire format for four
+domain types (§5, #2) to serve no reader. **Consequence, stated rather than discovered: a persisted
+link cannot be turned back into a `Decision`**, which is exactly why §5 #4 is answered and not
+closed. If Epic 6 or 5.14 needs the vector, that is a schema addition with a named consumer.
+
+**3. The cause and the conclusion are persisted as ASCII tokens by an explicit exhaustive `match` in
+the ADAPTER — no serde derive.** Two reasons: (a) a derived variant name is a wire format nobody
+chose, and a rename would silently rewrite stored bytes — the *"silent data migration, the worst
+kind"* D14 names about `ruleset_version`; (b) `IdentityAbstentionCause` is deliberately **not**
+`#[non_exhaustive]` [`cascade.rs`], precisely so a new variant produces `error[E0004]` in every
+downstream crate. An exhaustive `match` in `opencmdb-bin` **uses** that mechanism; a `#[derive]`
+would bypass it. **No `_` arm** — the `_` is what turns the compile error into a silent
+mis-classification, which is the defect story 5.8's `TrapError::RuleMalformed` patch fixed.
+
+**4. No `entity` supertype table, no `device`, no `state` column.** D21's supertype
+[architecture.md:1450-1454] exists to make the interface/device disjunction structural; with
+`device` absent the disjunction has one arm, and a supertype over one subtype is the speculation the
+*"create tables only when the story needs them"* rule refuses. `state` (`active|dormant|…`,
+D21:1477-1479) is read by nothing before the lifecycle epic. **Owners: Epic 6 for `entity` and
+`device`; the lifecycle epic (FR40-42) for `state`.** Register all three.
+
+**5. `InterfaceId` and `LinkId` are new id newtypes in `crates/opencmdb-core/src/observation/mod.rs`**,
+declared with the existing `uuid_newtype!` macro beside `ObsId`/`ConnectorId`/`L2DomainId`/
+`VantageId`, and re-exported from `lib.rs`. The macro is a plain `macro_rules!` with no
+`#[macro_export]` and no `pub(crate) use`, so it is **not reachable from `identity/`**; a
+`crates/opencmdb-core/src/identity/ids.rs` would need macro plumbing added to buy a folder move,
+and *"the folder is not the frontier — visibility is"* (D54, quoted by `identity/mod.rs` itself).
+`L2DomainId` (*"the MAC's uniqueness space"*) and `VantageId` (*"WHO saw it"*) are already not
+observations, so the module is where the id newtypes live, and the doc says so. **They are minted
+client-side and no function returns one** (D48; architecture.md:2906).
+
+**6. There is no `decided_at` column — `valid_from` IS the "when".** SCD2 needs `valid_from`; a
+second timestamp that always equals it at this story is the speculation decision 4 refuses.
+`decided_by` DOES exist and is not optional: story 5.10 runs
+`TRUNCATE … WHERE decided_by='ENGINE'` literally.
+
+**7. 🔴 There is NO `confidence` column — and the two source documents disagree about that, which is
+why it is a decision and not an omission.** D14's own sentence says a link carries *"the rule
+applied, the evidence, **the confidence**, when, by whom"* [architecture.md:1015]; `epics.md`'s
+AC2 for this story omits `confidence` and lists `ruleset_version` in its place. **The omission is
+the later and the correct one**, on D13's authority: *"REFUSED: `rule -> confidence: f64` … if the
+output is a float, B has won in disguise"* [architecture.md:956-958], and its corollary
+*"`confidence` is an INTEGER in milli-units (0..1000), never `REAL`/`DOUBLE`"* [architecture.md:991-993]
+**binds the day a ranking value appears** — the register already owns that entry with **story 5.14**
+as owner, *"the first story with a ranking surface"*. L1 is a deterministic lookup with nothing to
+rank, so a `confidence` column here would be a value asserting that a ranking exists. **Record the
+discrepancy in `deferred-work.md` with story 5.14 as owner; do not patch `architecture.md`** (issue
+#54's precedent — a correction to a decision body is a milestone act, never a story's).
+
+**8. `OPEN_END` is a MariaDB `DATETIME(6)` sentinel, not the architecture's ISO-8601 string.** D21
+writes `OPEN_END = '9999-12-31T23:59:59.999Z'` [architecture.md:1467] — an **ISO-8601 TEXT** literal
+from the two-engine era, when dates were TEXT. D64 made MariaDB the only engine and the columns are
+`DATETIME(6)`, so the same instant is written `9999-12-31 23:59:59.999999`. **This is a
+transposition, not a contradiction, and the constant's doc must say so** — otherwise the next
+reader finds a document and a constant that disagree and reports a defect. One constant, in the
+adapter, used by every query; core has no reason to name it.
+
+**9. 🔴 The link's uniqueness key is `(observation_id, current_subject)`, where `current_subject`
+is a WRITTEN column holding the subject while the row is current and `NULL` once it is superseded.**
+Arbitrated by Guy TWICE — at the validation pass, then again at the code review, which falsified
+the first form by measurement.
+
+**First arbitration (validation).** The story originally wrote `UNIQUE (observation_id, valid_to)`,
+*"exactly one current link per observation"*, and that **refuses a legitimate write**: `join` is
+`for observation { for key in keys_of(observation) { … } }` [`l1.rs:174-178`], so a multi-MAC
+observation lands on **N interfaces at once**, `l1.rs:186` says so in prose, and `multi-nic` is a
+committed trap family. Measured: the second link came back `Err(Constraint("unique"))`. Guy widened
+the key to include the subject.
+
+**Second arbitration (code review).** The widened form still contained `valid_to`, which is
+`NOT NULL` on **closed** rows too — so the key constrained **history**, not just what is current.
+Measured: two versions of one placement closed at the same instant collide,
+`ERROR 1062 … Duplicate entry 'obs-if1-2023-06-01 12:00:00.000000'`, the second close is refused
+and **the link silently stays current** while the caller believes it superseded. Every instant here
+is data-derived and never the clock, so a replay reproduces instants — that is story 5.10's
+purge-and-replay and story 5.11's *"no new version for an unchanged decision"*, i.e. the normal
+path. `valid_to` therefore leaves the key, and the column becomes:
+
+```sql
+  current_subject  CHAR(36)  CHARACTER SET ascii  COLLATE ascii_bin,   -- NULL once superseded
+```
+
+with `UNIQUE KEY identity_link_one_current (observation_id, current_subject)` and one CHECK,
+`identity_link_current_subject`, doing both jobs: the subject cannot drift from `interface_id`, and
+it cannot disagree with `valid_to` about whether the row is current.
+
+**Two NULLs, opposite intents, and that is the whole design.** The sentinel keeps an *accidental*
+NULL out of the key — without it two current abstentions for one observation both insert, since
+MariaDB holds NULLs distinct, and the constraint is decorative for exactly the half FR16 exists to
+display. The NULL on a closed row is that same distinctness used *deliberately*, to drop history
+out of the key. D21 warns against the first and this uses the second.
+
+🔑 **The sentinel is D21's own, not a new invention.** `architecture.md:1468` ends the NULL-trap
+paragraph with *"Same reasoning for `NIL_INTERFACE`/`NIL_DEVICE`."* An earlier draft of this
+decision re-derived it over thirty lines instead of citing it — caught by the code review. The nil
+UUID must therefore never be a real interface either: `interface_id_not_nil` refuses it, because an
+interface carrying it would occupy an abstention's slot (measured, `ERROR 1062`).
+
+⚠️ **It is a WRITTEN column, not a generated one.** MariaDB 10.11 refuses to INDEX a generated
+column whose expression coalesces to a string literal — `error 1901`, measured on `STORED` (refused
+outright) and on `VIRTUAL` (creates, then 1901 the moment a `UNIQUE KEY` names it), because the
+literal's charset is session-dependent and the expression is not indexable. `IFNULL` and
+`IF(… IS NULL, …)`, with and without `_ascii` + explicit `COLLATE`, all give 1901. The CHECK is what
+buys back the guarantee a generated column would have given for free.
+
+⚠️ `current_subject` is a text column and the `ddl-collation` gate walks it — `CHARACTER SET ascii
+COLLATE ascii_bin` on its own single line like every other (§4).
+
+---
+
+## Tasks / Subtasks
+
+- [x] **T1 — branch and baseline (AC9)**
+  - [x] Branch from `master` at `28a7f51`: `story-5.9-persist-interface-and-identity-link`.
+  - [x] Start `mariadb:10.11.11` and export `DATABASE_URL` (§7). Record `cargo test --workspace
+        --locked` **with** the DB set — the baseline is 367 and **the DB-backed tests now actually
+        run**; note any that were silently skipping before.
+  - [x] **Commit the clean baseline before the mutation pass** (`mutation-pass-needs-committed-baseline`:
+        `git checkout <file>` restores to HEAD, not to uncommitted work).
+
+- [x] **T2 — the two id newtypes (AC6, decision 5)**
+  - [x] `InterfaceId` and `LinkId` in `crates/opencmdb-core/src/observation/mod.rs`, via
+        `uuid_newtype!`, each with a `///` doc saying what it identifies and that it is minted
+        client-side (D48).
+  - [x] Re-export both from `lib.rs`'s `pub use observation::{…}` list.
+
+- [x] **T3 — the migration (AC1, AC2, AC3, AC5, AC8)**
+  - [x] Write `crates/opencmdb-bin/migrations/0002_interface_and_identity_link.sql`. One column per
+        line; prose on its own `--` lines (§4). Header comment in the shape of `0001`'s, naming
+        D14, D21 and D64.
+  - [x] `interface`: `id` PK; `l2_domain`; `mac_canon` (the lowercase colon form — `MacAddr`'s
+        `Display`); `first_seen_at`/`last_seen_at` `DATETIME(6)`; a **non-unique** index on
+        `(l2_domain, mac_canon)` with the `-- NOT UNIQUE, deliberately (D21)` comment and the
+        reason.
+  - [x] `identity_link`: `id` PK; `observation_id`; `interface_id` (**NULL iff abstained**, FK to
+        `interface(id)`); `outcome`; `rule_id`; `abstention_cause`; `evidence`;
+        `ruleset_version INT UNSIGNED`; `decided_by`; `valid_from`; `valid_to NOT NULL`;
+        `current_subject` **written, nullable**, ascii_bin, on its own line (decision 9); and
+        `UNIQUE (observation_id, current_subject)`. ⚠️ **NOT `(observation_id, valid_to)`** (refuses
+        the multi-NIC write) and **NOT `(observation_id, current_subject, valid_to)`** (constrains
+        history — two closes at one derived instant collide). Both were measured (decision 9).
+  - [x] The CHECKs decision 9 needs: `identity_link_current_subject` (drift AND currency, one
+        constraint), `identity_link_interval`, `interface_id_not_nil`, `interface_seen_window`.
+  - [x] `ON DELETE CASCADE` on `link_candidate_link_fk` — without it story 5.10's purge fails
+        `ERROR 1451` as soon as an engine link carries a candidate.
+  - [x] The CHECKs, each one the DDL-level echo of a type-level property:
+        `outcome IN ('match','no_match','abstained')` · `decided_by IN ('ENGINE','OPERATOR')` ·
+        **rule XOR cause** (`abstained` ⇒ `rule_id IS NULL AND abstention_cause IS NOT NULL`;
+        otherwise the reverse) — this is `Decision::rule()` returning `None` exactly for an
+        abstention, expressed in the schema · **`interface_id IS NULL` iff `outcome='abstained'`**.
+  - [x] `link_candidate`: `(link_id, interface_id)` PK, `evidence`, FK to `identity_link(id)` and
+        to `interface(id)`.
+  - [x] Run `cargo xtask ci` and confirm `ddl-collation` green; then **temporarily strip one
+        `COLLATE`, observe the gate name the offending line, restore** (AC8).
+
+- [x] **T4 — the adapter (AC2, AC4, AC6, decisions 3, 6, 8)**
+  - [x] `OPEN_END` constant with the doc of decision 8 (the ISO→`DATETIME(6)` transposition), and
+        `ABSTAINED_SUBJECT` (the nil UUID) beside it with the doc of decision 9 — **both are
+        sentinels closing D21's NULL trap, and their docs must say so in the same words**, because
+        a reader who meets only one of them will read it as an oddity rather than an idiom.
+  - [x] Token mappings: `Conclusion → outcome` and `IdentityAbstentionCause → abstention_cause`,
+        **exhaustive `match`, no `_` arm**, each with a unit test that pins every token string.
+  - [x] Query bodies, generic over `Executor`: `insert_interface`, `insert_identity_link`,
+        `close_identity_link`, `insert_link_candidate`, **`load_current_links_for_observation`**
+        (PLURAL — decision 9: a multi-MAC observation has several current links, and a singular
+        name would encode the constraint the arbitration removed), `load_link_valid_to` (the AC2
+        supersede read-back), `load_link_candidates`, `count_identity_links` — **eight**, not seven.
+  - [x] `insert_identity_link` takes the `Decision` and derives `outcome`/`rule_id`/
+        `abstention_cause`/`evidence`/`ruleset_version` from it — **one call site cannot get the
+        rule-XOR-cause pairing wrong**, which is what makes the DDL CHECK a second line of defence
+        rather than the only one.
+  - [x] ⚠️ `valid_from` is a **parameter**, never `NOW(6)` (§6.3). `first_seen_at`/`last_seen_at`
+        likewise, with the doc saying they must be derived from observations.
+
+- [x] **T5 — the tests (AC2–AC5), all `DATABASE_URL`-gated and under `DB_TEST_LOCK`**
+  - [x] a match link round-trips: interface + link written in one `transact`, read back current.
+  - [x] **SCD2**: supersede a link; exactly ONE current row; the superseded row is still readable
+        with its old `valid_to` (AC2).
+  - [x] **the unique index fires**: a second current link for the same `(observation, interface)` →
+        `Constraint("unique")` (AC3, half 1). Red carried by `expect_err` — record it as such.
+  - [x] 🔴 **exactly ONE is current, by COUNTING** (AC3, half 3) — the test T5 did not have. Attempt
+        the second insert with `let _ = …` (never `expect_err`, which panics before any count),
+        then `assert_eq!(current_links(obs, iface).len(), 1, "exactly one link is current per
+        observation")`. **Without this test M5 has nothing to red**, which is what the validation
+        measured.
+  - [x] 🔴 **the index does NOT over-fire** (AC3, half 2): one observation, two MACs, two interfaces
+        → **two** current links, both insert. `assert_eq!(second, Ok(()))`, not `.expect()`. This is
+        the `multi-nic` case and the reason for decision 9.
+  - [x] 🔴 **two current abstentions for one observation are refused** — the other half of decision
+        9. Without the `current_subject` sentinel the key holds two NULLs distinct and both insert.
+  - [x] **ambiguity is a LINK**: abstained link + 2 `link_candidate` rows; both read back with their
+        evidence; **the link row is asserted present by COUNT**, not by `.expect()`ing its write
+        (AC4) — the `.expect()` form lets the FK carry M4's red instead of the assertion.
+  - [x] **the CHECKs fire**: a `match` with `interface_id` NULL → `Constraint("check")`; an
+        `abstained` carrying a `rule_id` → `Constraint("check")`; `decided_by='SCANNER'` →
+        `Constraint("check")`.
+  - [x] **no unique on the L1 key**: two interfaces, same `(l2_domain, mac_canon)`, both insert
+        (AC5) — `.map_err(classify)` + `assert_eq!(…, Ok(()))`, not `.expect()`.
+  - [x] evidence round-trips as `Vec<ObsId>` byte-identically.
+  - [x] the token mappings are exhaustive and every token is pinned (no DB needed) — and so is the
+        sentinel derivation, so **two** of the mutations red without a database, not one.
+
+- [x] **T6 — prove-to-red (AC9). Every mutation run WITH `DATABASE_URL` set.**
+      ⚠️ **Five of these seven were run at the validation pass against a live 10.11.11, and three
+      of them did not behave as the story first prescribed.** The corrected forms are below; the
+      measured reds are in the Debug Log table as PREDICTIONS the dev confirms or refutes.
+  - [x] **M1** drop `UNIQUE (observation_id, link_subject, valid_to)` → the second-current-link test
+        must red. *Measured: reds at `expect_err`, panic-carried. Record it as `expect_err`.*
+  - [x] **M2** make `interface (l2_domain, mac_canon)` `UNIQUE` → the cloned-MAC test must red (AC5).
+        *Measured: assertion-carried, `left: Err(Constraint("unique"))`.*
+  - [x] **M3** drop the rule-XOR-cause CHECK → the CHECK test must red (AC2). *Measured: reds at
+        `expect_err`, panic-carried.*
+  - [x] 🔴 **M4 — TWO PARTS, and the one-part version is a NO-OP.** Drop `link_candidate_link_fk`
+        **and** write the abstention as an absence (candidates, no link row) → the ambiguity test
+        must red on its COUNT. *Measured: the one-part version reds on
+        `Constraint("foreign_key")` at `.expect(…)` — the FK carries it and AC4's assertion is never
+        evaluated. The two-part version reds `left: 0, right: 1`.* **If the two-part version does
+        not red, FR16 is still vapour and that is the finding.**
+  - [x] 🔴 **M5 — TWO PARTS, and the one-part version is not executable.** Replace the `OPEN_END`
+        sentinel with `NULL` **and** drop `valid_to`'s `NOT NULL` → the COUNTING test of AC3 half 3
+        must red. *Measured: with only the sentinel changed, error **1048 `Column 'valid_to' cannot
+        be null`** kills the FIRST insert and the "exactly one current" question is never reached.
+        With both edits, D21's trap appears exactly as written — the second current insert
+        SUCCEEDS — and the count assertion reds `left: 2, right: 1`.*
+  - [x] **M6** change one persisted token string (e.g. `abstained` → `abstain`) → the token test must
+        red. *Measured: assertion-carried, `left: "abstain" / right: "abstained"`.*
+  - [x] 🔴 **M7 — decision 9's abstention half.** Key the index on `interface_id` directly instead
+        of on `current_subject` → the "two current abstentions are refused" test must red, because
+        MariaDB holds the two NULL `interface_id`s distinct. ⚠️ **Run it as a FOUR-site mutation**
+        (DDL column, DDL index, the adapter's INSERT column list, the adapter's `ORDER BY`) or the
+        red is schema-carried on eight tests instead of assertion-carried on the one that matters.
+  - [x] 🔴 **M8 — the multi-NIC guard, which M1–M7 do not reach.** Narrow the key back to
+        `(observation_id, valid_to)` → `one_observation_holds_a_current_link_on_each_of_its_interfaces`
+        must red. **This is the guard the whole arbitration exists to install, and until the code
+        review it had no recorded red at all.**
+  - [x] **M9** drop `ON DELETE CASCADE` → the purge test must red (story 5.10's blocker).
+  - [x] **M10** drop `interface_id_not_nil` → the DDL-guard test must red.
+  - [x] **M11** drop `close_identity_link`'s `AND valid_to = ?` → the close test must red.
+  - [x] **M12** drop its `rows_affected() == 0` check → the close test must red.
+  - [x] Record for each: DB set yes/no, tests red, **and what CARRIED the red — assertion,
+        `expect`/`expect_err` panic, or compiler**.
+
+- [x] **T7 — register and docs (AC7, AC10)**
+  - [x] Append this story's section to `deferred-work.md`: 2 closed, 3 answered, **3 re-owned**
+        (§5 #6, #7 and #8), plus the three new entries from decision 4 (`entity`, `device`,
+        `state`), decision 2 (the vector is not stored) and decision 7 (the `confidence`
+        discrepancy between `architecture.md:1015` and `epics.md`, **owner story 5.14**).
+  - [x] Update `docs/project-context.md` **and** `CLAUDE.md` with the same numbers (AC10), then grep
+        both for the phrases AC10 names.
+
+- [x] **T8 — the full local gate, then PR**
+  - [x] `cargo fmt --all` · clippy **twice** (§8) · `cargo test --workspace --locked` **with the DB
+        running** · `cargo xtask ci`.
+  - [ ] Push the branch, open the PR, wait for green CI, **squash merge**. Never push to `master`.
+        ⏸️ **NOT DONE — deliberately.** The house order is `dev-story` → `code-review` → PR →
+        green CI → squash merge, and `done` is the MERGE's business. Four commits sit on
+        `story-5.9-persist-interface-and-identity-link`, unpushed.
+
+---
+
+## Dev Notes
+
+### Existing shapes to follow, not reinvent
+
+- **The whole adapter idiom** is in §3. Read `crates/opencmdb-bin/src/repo.rs` end to end before
+  writing a line — it is 342 lines and it already answers every structural question this story
+  raises.
+- **The DDL idiom** is `0001_initial.sql`, 34 lines. Copy its column layout and its comment
+  placement exactly; §4 explains why the placement is load-bearing.
+- **`MacAddr`'s `Display`** [`observation/mod.rs:83`] is lowercase colon-separated. That IS
+  `mac_canon`; do not write a second canonicalisation. `MacAddr` is `[u8; 6]` deliberately —
+  *"device identity is compared byte-exact"* — and the column is `ascii_bin`, which is the same rule
+  one layer down (D64).
+- **`Decision::rule()`** [`cascade.rs`] returns `None` exactly for an abstention. The rule-XOR-cause
+  CHECK is that property expressed in DDL; write the insert so it derives both from the same
+  `match`, and the CHECK becomes a second line of defence instead of the only one.
+
+### Compile-level facts — each costs an hour if it is discovered under `rustc`
+
+- `uuid_newtype!` is a bare `macro_rules!` in `observation/mod.rs:24` with **no** `#[macro_export]`
+  and **no** `pub(crate) use`. It is not reachable from `identity/`. That is why decision 5 puts the
+  two newtypes in `observation/mod.rs`.
+- `RuleId` is `pub struct RuleId(pub String)` [`trap.rs:42`], `#[serde(transparent)]`. `.0` is the
+  `String`; bind it directly.
+- `ObsId` and friends already derive `Serialize`/`Deserialize`, so `serde_json::to_string(&Vec<ObsId>)`
+  works with no new derive — **that is the whole reason `evidence` needs none of the four types
+  §5 #2 refuses derives for.**
+- `RulesetVersion` is `pub struct RulesetVersion(pub u32)`; bind `.0`. sqlx maps `u32` to
+  `INT UNSIGNED`.
+- `sqlx::query_as` returns tuples; `Option<String>` for a nullable column. `interface_id`,
+  `rule_id` and `abstention_cause` are all nullable — a non-`Option` binding panics at decode.
+- `chrono::DateTime<Utc>` formats for MariaDB as `"%Y-%m-%d %H:%M:%S%.6f"` [`repo.rs:142-145`] —
+  reuse that, do not invent a second format.
+- `MariaUnit::executor()` is `pub(crate)` [`repo.rs:33`]; the query bodies take
+  `E: Executor<'e, Database = MySql>` and both the pool and `unit.executor()` satisfy it.
+- ⚠️ **sqlx 0.9 REJECTS `sqlx::query(&format!(…))` at compile time** — *"dynamic SQL strings should
+  be audited for possible injections"*. Met under `rustc` at the validation pass. It bites on the
+  per-table `DELETE` cleanup T5's tests need: write one static `DELETE` per table, not a loop over
+  table names. (This is D48 enforced by the library rather than by review.)
+- **All the other compile-level facts above were re-verified under a compiler at validation and
+  hold** — `RuleId(pub String).0`, `RulesetVersion(pub u32).0`, sqlx `u32` ↔ `INT UNSIGNED`, the
+  chrono format string, `MariaUnit::executor()`, `Option<String>` decode for nullable columns, and
+  decision 5's claim: injecting `uuid_newtype!` into `identity/l1.rs` gives
+  `error: cannot find macro uuid_newtype in this scope`.
+
+### What a reviewer will challenge, and the answer that is already measured
+
+| challenge | answer |
+|---|---|
+| *"Why is there no `device` / `entity`?"* | Decision 4 + `epics.md:1576`. Owner named: Epic 6. |
+| *"D21 says the supertype is enforced by the engine, not by convention — you dropped it."* | It is **deferred with `device`, not dropped**. A supertype over one subtype enforces nothing. |
+| *"You store no `verdict_vector`, but D18 requires the complete vector."* | D18's sentence is about the **trap harness** (`ScoredRecord`), not the link. D14's list of what a link carries does not include it. Decision 2. |
+| *"`RulesetVersion` still has no `Ord` and you owned that entry."* | §5 #3: the prediction was that persistence orders versions. **Measured: it does not** — it stores and reads one. Answered with the measurement, not closed. |
+| *"`decided_at` is missing."* | Decision 6: `valid_from` is the "when"; a second always-equal timestamp is speculation. |
+| *"D14 says a link carries the CONFIDENCE and you have no such column."* | Decision 7: D13 refuses `rule -> confidence: f64` outright, its milli-unit corollary binds *"the day a ranking value appears"*, and L1 has nothing to rank. `epics.md`'s AC2 already omits it. Registered with story 5.14. |
+| *"The `OPEN_END` constant does not match `architecture.md`."* | Decision 8: ISO-8601 TEXT is the two-engine era; D64 made the column `DATETIME(6)`. Same instant, transposed, and the constant's doc says so. |
+| *"The blocker still has no production caller."* | True, by decision. §1 and §5 #7 — story 5.9b. |
+| *"`UNIQUE (observation_id, current_subject)` is over-engineered — one observation, one link."* | Decision 9, and it is **measured**: `join` inserts an observation under every key it carries [`l1.rs:174-178`], `l1.rs:186` says an observation may carry several MACs, `multi-nic` is a committed trap family, and the narrow key was observed returning `Err(Constraint("unique"))` on a legitimate second link. |
+| *"A written sentinel column is a clever trick."* | It is D21's own: `architecture.md:1468` says *"Same reasoning for `NIL_INTERFACE`/`NIL_DEVICE`"* right after prescribing `OPEN_END`. One idiom, named by the register, used twice. |
+| *"Why is a closed row's `current_subject` NULL, when D21 warns against NULLs in a unique key?"* | Because the two NULLs have opposite intents. D21 warns against an ACCIDENTAL NULL making a constraint decorative — that is what the nil sentinel prevents. A closed row's NULL is that same distinctness used DELIBERATELY, to take history out of the key. Leaving `valid_to` in the key instead was measured colliding on a replay (decision 9). |
+
+### References
+
+- [Source: `_bmad-output/planning-artifacts/epics.md#Story 5.9`] — the four ACs, the SPLIT note and
+  the link-subject arbitration added at this contexting.
+- [Source: `_bmad-output/planning-artifacts/epics.md#Story 5.9b`] — what this story deliberately
+  leaves to the next one.
+- [Source: `_bmad-output/planning-artifacts/architecture.md:1013-1049`] — **D14**, the link as an
+  SCD2 entity, `AMBIGUOUS` as a link, the purge test, `ruleset_version` mandatory.
+- [Source: `_bmad-output/planning-artifacts/architecture.md:1450-1479`] — **D21**: the supertype,
+  the NULL trap and `OPEN_END`, the refusal of a unique index on `interface.mac_canon`, the extended
+  `entity.state`.
+- [Source: `_bmad-output/planning-artifacts/architecture.md:1434-1446`] — read-your-own-writes, the
+  transaction unit, *"an identity decision is NEVER split across two transactions"* (5.9b's, quoted
+  here because AC6's `transact` is what will make it possible).
+- [Source: `_bmad-output/planning-artifacts/architecture.md:2658`] — **D48**, opaque ids
+  `CHAR(36) ascii_bin`.
+- [Source: `_bmad-output/planning-artifacts/architecture.md:4377`] — **D64**, MariaDB only, binary
+  collation on every text column.
+- [Source: `_bmad-output/planning-artifacts/prd.md:896-897`] — **FR16 / FR16b**.
+- [Source: `crates/opencmdb-bin/src/repo.rs`] — the adapter idiom, `classify`, the DB-test shape.
+- [Source: `crates/opencmdb-bin/migrations/0001_initial.sql`] — the DDL idiom.
+- [Source: `xtask/src/main.rs:307-367`] — the `ddl-collation` gate, verbatim.
+- [Source: `crates/opencmdb-core/src/identity/cascade.rs`] — `Decision`, `Conclusion`,
+  `IdentityAbstentionCause`, and the three registered residues §5 dispositions.
+- [Source: `_bmad-output/implementation-artifacts/deferred-work.md`] — the **eight** entries naming
+  story 5.9; #8 is at `:1861-1871`.
+
+---
+
+## Dev Agent Record
+
+### Agent Model Used
+
+### Debug Log References
+
+#### The database run (AC9)
+
+**Every mutation was run with `DATABASE_URL` set**, against `mariadb:10.11.11` on host port 13306
+(the image D64 names; 3306 is held by an unrelated `mariadb:11-jammy`). Each mutation met a FRESH
+schema — `sqlx` checksums an applied migration, so a mutated `0002` cannot meet a migrated
+database — and `repo.rs` was touched each time, because `sqlx::migrate!` embeds the directory at
+compile time and there is no build script, so a changed `.sql` alone does not trigger a rebuild.
+
+**Zero compiler-carried reds. Every red is assertion-carried**, including M1 and M3, which the
+validation predicted would be `expect_err` panics — that prediction is **refuted**, and the reason
+is that the tests were written in the assertion form (`assert_eq!(result, Err(Constraint(…)))`)
+rather than the `expect_err` form the story's T5 first prescribed.
+
+| mutation | DB set? | tests red | carried by | measured |
+|---|---|---|---|---|
+| M1 drop `UNIQUE (observation_id, current_subject)` | yes | **3** | **assertion** | `left: Ok(())` · `left: 2` · `left: Ok(())` |
+| M2 make `interface (l2_domain, mac_canon)` `UNIQUE` | yes | 1 | **assertion** | `left: Err(Constraint("unique"))` |
+| M3 drop the rule-XOR-cause CHECK | yes | 1 | **assertion** | `left: None` — 🔴 **GREEN on its first run; see below** |
+| M4 (two parts) drop `link_candidate_link_fk` **and** skip the link row | yes | 1 | **assertion** | `left: 0, right: 1` |
+| M5 the nil sentinel becomes a `NULL` | yes | **4** | **assertion** | `left: Ok(())` on *"a NULL `interface_id` must not make the uniqueness key decorative"* |
+| M6 change one persisted token | yes | **5** | **assertion** | `left: "abstain"` |
+| M7 (four sites) key the index on `interface_id` instead of `current_subject` | yes | 2 | **assertion** | `left: Ok(())` on the abstention guard |
+| M8 narrow the key to `(observation_id, valid_to)` | yes | 2 | **assertion** | `left: Err(Constraint("unique"))` on the multi-NIC guard |
+| M9 drop `ON DELETE CASCADE` | yes | 1 | **assertion** | story 5.10's purge is blocked |
+| M10 drop `interface_id_not_nil` | yes | 1 | **assertion** | `left: None` |
+| M11 drop `close_identity_link`'s `AND valid_to = ?` | yes | 1 | **assertion** | `left: Err(Constraint("check"))` on *"an already-closed row … cannot be rewritten"* |
+| M12 drop its `rows_affected() == 0` check | yes | 1 | **assertion** | `left: Ok(())` on *"closing a link that does not exist is an error"* |
+
+**Twelve mutations, every one run with a database, every red assertion-carried, zero
+compiler-carried.** M1–M6 were re-run against the FINAL schema after the code review changed the
+uniqueness key — the earlier table recorded them against a schema that no longer exists, which is
+the defect this project keeps catching, so it was re-measured rather than annotated. M5 was
+**redefined** in the process: with `valid_to` out of the key, "the `OPEN_END` sentinel becomes NULL"
+no longer asks a question, and the live sentinel to attack is the nil one.
+
+🔑 **M8 exists because the code review found that the guard the whole arbitration installs had no
+recorded red**: `one_observation_holds_a_current_link_on_each_of_its_interfaces` is reddened by
+none of M1–M7. M7 is recorded as a **four-site** mutation (DDL column, DDL index, the adapter's
+INSERT column list, its `ORDER BY`); run as a one-site edit it reds eight tests, all schema-carried
+on `Unknown column`, and the assertion that matters is never evaluated.
+
+🔴 **M3's first run was GREEN, and that is the story's most useful measurement.** Dropping
+`identity_link_rule_xor_cause` left **all 378 tests passing**. The cause is not an oversight in the
+test list but a property of the design: `insert_identity_link` derives `outcome`, `rule_id` and
+`abstention_cause` from **one `match`** over the conclusion, so it *cannot* emit an incoherent
+pair — which means the CHECK is a second line of defence reachable only by going AROUND the
+adapter, and every test went through it. Two raw-SQL inserts now attack the property from both
+sides (an abstention naming a rule; a match naming none), and M3 reds on the first of them.
+This is the same family as story 5.8's M5: a guard that asserts nothing until something measures it.
+
+
+
+#### The `ddl-collation` gate, shown to bite (AC8)
+
+The gate had never been exercised by a second migration. Stripping the `COLLATE` from one column:
+
+```
+🔴 ddl-collation  1 text column(s) without a binary collation:
+    …/migrations/0002_interface_and_identity_link.sql:23: mac_canon     VARCHAR(17) NOT NULL, -- lowercase, colons
+```
+
+It names the file, the line number and the line. Restored, and green.
+
+#### The generated column decision 9 prescribed does not exist in MariaDB 10.11
+
+Decision 9 specified `link_subject` as a **STORED generated column**. Measured:
+
+- `CHAR(36) … AS (COALESCE(interface_id, '000…')) STORED` → **error 1901**, refused outright;
+- the same expression as `VIRTUAL` → the table **creates**;
+- …but adding `UNIQUE KEY (…, link_subject, …)` → **error 1901 again**. Indexing is the blocker:
+  the literal's charset is session-dependent, so the expression is not indexable.
+- `IFNULL` and `IF(… IS NULL, …)`, with and without `_ascii` + explicit `COLLATE`, all give 1901.
+
+So the sentinel ships as a **written** column plus `identity_link_current_subject`, a CHECK that
+makes it unable to drift — the same guarantee by a different mechanism. Measured directly against
+the server before any Rust was written: multi-NIC inserts (2 rows), a double-open is refused
+(1062), a second current abstention is refused (1062), and a drifted subject is refused (4025).
+
+#### Two things I got wrong, recorded rather than smoothed over
+
+- **I destroyed my own new tests mid-mutation.** The two raw-SQL inserts that make M3 red were
+  written *after* the implementation commit, and the four `git checkout repo.rs` calls that restore
+  M4–M7 restored them away. Caught by grepping for them, not by a failing test — the suite was
+  green either way, because the tests were simply gone. Re-added and committed immediately. This is
+  the exact hazard the house note about committing before a mutation pass describes.
+- **One assertion was written backwards.** `superseding_a_link_leaves_the_old_row_readable` first
+  asserted the superseded row still carried `OPEN_END` — the opposite of what D14 requires. It red
+  on the real database (`left: Some("2023-11-14 22:21:40.000000")`), which is the assertion form
+  earning its keep: the `expect`-shaped version would have passed.
+
+### Completion Notes List
+
+- **367 → 378 tests** (176 bin + 156 core + 46 xtask, plus one ignored doc-test). Six gates green;
+  `views-hash` still `ℹ STALE` and untouched, by design (issue #50).
+- **The whole story was built against a live database.** With `DATABASE_URL` unset the suite
+  reports the identical 176/156/46 — measured, not assumed — so six of the seven mutations would
+  have read as green guards that were never executed.
+- **AC1–AC10 met.** AC3 is met in its post-arbitration form: three halves, three tests
+  (the constraint fires · it does not over-fire on multi-NIC · exactly one is current, by COUNT),
+  plus decision 9's abstention guard as a fourth.
+- **Register: 8 entries dispositioned** — 2 CLOSED (both by refusing a serde derive), 3
+  ANSWERED-not-closed with the measurement that says why the condition was not met, 3 RE-OWNED to
+  story 5.9b. Plus 6 new entries. **None of the answered three is reported as closed.**
+- **What this story deliberately does NOT do, still true at the end:** no `device`, no `entity`
+  supertype, no `state` column, no display, and **the blocker still has no production caller** —
+  `identity::blocking::candidates` is called only from test code, and `identity::l1::join` still
+  has no cross-crate caller at all. `repo.rs` calls neither. All of that is story 5.9b's.
+- **Three divergences from the story as written**, each measured rather than argued:
+  1. decision 9's **generated column is impossible in MariaDB 10.11** (error 1901 on indexing) —
+     shipped as a written column plus a CHECK, same guarantee, different mechanism;
+  2. **M3 was initially a no-op** — the rule-XOR-cause CHECK was unreachable through the adapter
+     and nothing measured it until two raw-SQL inserts were added;
+  3. the validation predicted M1 and M3 would be **`expect_err`-carried**; both are
+     assertion-carried, because the tests were written in the assertion form.
+
+### File List
+
+- `crates/opencmdb-bin/migrations/0002_interface_and_identity_link.sql` — NEW
+- `crates/opencmdb-bin/src/repo.rs` — MODIFIED (adapter, sentinels, token maps, tests; and its
+  module doc corrected, which claimed to be the only place `sqlx` appears)
+- `crates/opencmdb-core/src/observation/mod.rs` — MODIFIED (`InterfaceId`, `LinkId`)
+- `crates/opencmdb-core/src/lib.rs` — MODIFIED (re-exports)
+- `_bmad-output/implementation-artifacts/deferred-work.md` — MODIFIED (story 5.9's section)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — MODIFIED
+- `_bmad-output/planning-artifacts/epics.md` — MODIFIED (the 5.9/5.9b split, at contexting)
+- `docs/project-context.md` — MODIFIED
+- `CLAUDE.md` — MODIFIED
+- `_bmad-output/implementation-artifacts/5-9-persist-interface-and-identity-link.md` — NEW
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-03 | Story contexted. **SPLIT with Guy: 5.9b INSERTED** (Epic 5 → 17 stories) — the resolver that runs the engine over a set of observations and writes the links is its own story, because it is the first production caller of `join`/`candidates` and it is what story 5.10 re-runs. **Second arbitration: an `identity_link` binds `observation → interface`** (`join` forms an interface at L1; `decide_pair` judges a pair and returns none). `epics.md` and `sprint-status.yaml` updated. |
+| 2026-08-03 | **VALIDATED** by two fresh-context agents, the gap-hunt one against a live `mariadb:10.11.11` (374 green tests, six green gates, all six mutations executed against real DDL). **4 HIGH + 2 HIGH applied.** 🔴 **Third arbitration, Guy's, at the validation pass: the link's uniqueness key widens to `(observation_id, link_subject, valid_to)`** — the narrow `(observation_id, valid_to)` was measured REFUSING a legitimate multi-NIC write, and its abstention half is closed by a generated-column sentinel (decision 9, new AC3, new M7). Also: M4 and M5 were both no-ops as first written and are now two-part mutations with their measured reds; AC3 gained the COUNTING test that alone can carry M5's red; §5 undercounted the register by one entry (AC7: seven → **eight**); §7's `docker run` would have migrated an unrelated project's MariaDB 11 (port 3306 → **13306**); and five smaller claims were corrected against measurement (`0001` is 34 lines not 35, `repo.rs` is 236+106, `sqlx` appears in four files not one, D13's word is `join` not `lookup`, the tree was never clean). |
+| 2026-08-03 | **IMPLEMENTED → `review`.** `0002_interface_and_identity_link.sql` (three tables, five CHECKs, the non-unique L1 key), `InterfaceId`/`LinkId`, and the adapter's seven query bodies, two sentinels and two token maps. **367 → 378 tests**, six gates green, clippy clean twice, all seven mutations run WITH a database and **every red assertion-carried, zero compiler-carried**. 🔴 Three measured divergences: decision 9's **generated column is impossible in MariaDB 10.11** (error 1901 — indexing an expression that coalesces to a string literal; ships as a written column + CHECK, same guarantee); **M3 was a no-op on its first run** — dropping the rule-XOR-cause CHECK left all 378 tests green, because the adapter derives rule and cause from one `match`, so two raw-SQL inserts now measure it; and M1/M3 are assertion-carried where the validation predicted `expect_err`. AC8 discharged: the DDL gate was shown naming `0002…sql:23`. |
+
+### Review Findings
+
+Three-layer review (Blind Hunter · Edge Case Hunter · Acceptance Auditor), 2026-08-03, on
+`master...8659cf4`. Two of the three layers ran against their own live `mariadb:10.11.11`; the
+Acceptance Auditor re-executed the whole mutation pass independently. **Every HIGH below is
+measured, and I re-measured the top three myself.**
+
+- [x] [Review][Decision] **The uniqueness key Guy arbitrated is measured breaking two legitimate writes** — `(observation_id, link_subject, valid_to)` contains `valid_to`, which is `NOT NULL` on *closed* rows too, so the key constrains HISTORY. Two versions of one placement closed at the same DERIVED instant collide: measured `ERROR 1062 … Duplicate entry 'obs-if1-2023-06-01 12:00:00.000000'`, the second close is refused and **the link silently stays current**. Story 5.10 replays with data-derived instants and 5.11 asserts no new version for an unchanged decision, so the collision is the normal path, not the exotic one. Second face: an `interface` minted with the nil UUID takes the abstention's slot — measured `ERROR 1062` on a legitimate abstention for the same observation. 🔑 And `architecture.md:1468` already prescribed this sentinel — *"Same reasoning for `NIL_INTERFACE`/`NIL_DEVICE`"* — which decision 9 re-derived at length instead of citing. [`0002…sql:63`]
+- [x] [Review][Patch] The FK blocks the purge story 5.10 is specified to run — measured `ERROR 1451` on `DELETE FROM identity_link WHERE decided_by='ENGINE'` as soon as any engine link carries a candidate, i.e. exactly the ambiguity case the table exists for. Needs `ON DELETE CASCADE` on `link_candidate_link_fk` [`0002…sql:92`]
+- [x] [Review][Patch] `close_identity_link` has no guard: closing an unknown id returns `Ok(())`, re-closing rewrites the historical stamp (2023 → 2020), and closing back AT `OPEN_END` **resurrects a superseded link as current** — measured. Needs `AND valid_to = ?`, a `rows_affected() == 0` → `NotFound`, and a refusal of `closed_at == OPEN_END` [`repo.rs:410`]
+- [x] [Review][Patch] No interval CHECKs — an inverted version (`valid_from > valid_to`) and an inverted seen-window (`first_seen_at > last_seen_at`) are both storable, measured `Ok(())` [`0002…sql`]
+- [x] [Review][Patch] `interface.id` may be the nil UUID, which collides with `ABSTAINED_SUBJECT` — needs `CHECK (id <> '000…')` [`0002…sql:20`]
+- [x] [Review][Patch] **Four more guards that nothing measures** — same family as M3, which I already got caught by once: `identity_link_subject_matches` (no test writes a DRIFTED subject), the `outcome` CHECK, and the three foreign keys can each be dropped with all 378 tests green [`0002…sql`]
+- [x] [Review][Patch] Three persisted tokens are never round-tripped through the database: `DecidedBy::Operator`, `Conclusion::NoMatch` and `IdentityAbstentionCause::AbsenceOfProof`. Misspell `'OPERATOR'` in the DDL and the suite stays green; the first operator-asserted link then fails in production [`repo.rs`, `0002…sql:67`]
+- [x] [Review][Patch] AC10 VIOLATED — both twins say **"11 done"** while the same files say 5.9 is `review` and `sprint-status.yaml` says 10/17. By this project's own rule (*"`done` is the MERGE's business"*) it is 10. A number falsified inside its own file, which is precisely what AC10 exists to catch [`CLAUDE.md:7`, `docs/project-context.md:45`]
+- [x] [Review][Patch] Decision 9, AC3, T3 and M7 still specify a **STORED generated column that does not exist in the code** — only the Debug Log records that it ships as a written column plus a CHECK. A reader meets decision 9 first [`5-9…md:408-435, 453-455, 568, 652`]
+- [x] [Review][Patch] M7's record is not the mutation that was run — executed literally it reds **eight** tests, all schema-carried (`Unknown column 'link_subject'`); the recorded 2-red result needs three further adapter edits. Re-aim it at the index alone, or record it as a four-site mutation [`5-9…md:652`]
+- [x] [Review][Patch] **The guard decision 9 exists to install has no recorded red** — `one_observation_holds_a_current_link_on_each_of_its_interfaces` is reddened by none of M1–M7. The mutation that reds it (narrow the key back to `(observation_id, valid_to)`) was run at validation against a DRAFT schema and never against the shipped one. Add it as M8 [`5-9…md`]
+- [x] [Review][Patch] The validation banner contradicts itself eight lines apart: *"FOUR HIGH, all from the agent that COMPILED the story … the fact-checker produced no HIGH"* then *"The fact-check's two HIGH are applied too"*. Both twins inherited it [`5-9…md:35-36, 56`]
+- [x] [Review][Patch] *"three of the six prescribed mutations were no-ops or not executable"* — the story names **two** (M4, M5); the third item is a missing test, not a mutation. Propagated to both twins [`CLAUDE.md:7`, `docs/project-context.md:45`]
+- [x] [Review][Patch] *"`epics.md` … to record the 5.9/5.9b split **and the link-subject arbitration**"* is false — `grep link_subject epics.md` returns **0**. The key arbitration lives in `sprint-status.yaml` and decision 9 [`5-9…md:97-98`]
+- [x] [Review][Patch] *"the adapter's seven query bodies"* is **eight** — `load_link_valid_to` is missing from T4's list and from the Change Log count [`5-9…md:589-593, 895`]
+- [x] [Review][Patch] `identity_fixture`'s doc says it empties *"the three identity tables plus `observation_record`"*; the body deletes three tables. A false doc is a defect here [`repo.rs:564`]
+- [x] [Review][Patch] Decision 9 and `ABSTAINED_SUBJECT`'s doc should CITE `architecture.md:1468` rather than re-derive the sentinel — it turns the story's longest argument into one line [`5-9…md`, `repo.rs`]
+- [x] [Review][Patch] Duplicate empty `#### The ddl-collation gate, shown to bite (AC8)` heading [`5-9…md:848`]
+- [x] [Review][Patch] `exactly_one_link_is_current_per_placement`'s doc says *"without the sentinel"* without naming WHICH — there are two now, and removing `link_subject` leaves this test green (removing `OPEN_END` reds it, which is what M5 measured) [`repo.rs:1010`]
+- [x] [Review][Patch] Register: decision 4 required three new entries (`entity`, `device`, `state`); `entity` and `device` ship merged into one bullet [`deferred-work.md`]
+- [x] [Review][Patch] `assert_ne!(old.as_deref(), Some(OPEN_END))` is strictly implied by the `assert_eq!` four lines above and cannot fail independently [`repo.rs:731`]
+- [x] [Review][Patch] Hand-written `"2023-11-14 22:13:20.000000"` duplicates `datetime_literal(at(1_700_000_000))` used for the same purpose 35 lines above [`repo.rs:1108`]
+- [x] [Review][Patch] *"the only mutation of the seven that reds without a database"* is one test short — `the_two_sentinels_are_pinned` also reds without one [`repo.rs:1161`]
+- [x] [Review][Defer] No `find_interface_by_key` and no `touch_interface_last_seen`, so nothing can find an existing interface on a re-run [`repo.rs`] — deferred: the story's own scope note puts the resolver in 5.9b, and a lookup with no caller is the speculation decision 4 refuses. **Owner: 5.9b.**
+- [x] [Review][Defer] `sql_mode` is not pinned on connect, so silent truncation of `rule_id`/`mac_canon`/`abstention_cause` depends on the operator's server config [`main.rs:104`] — deferred, pre-existing (the bare `MySqlPool::connect` predates this story). **Owner: the first story that hardens the connection.**
+- [x] [Review][Defer] A length violation is classified `Backend("… 1406 …")` rather than a `Constraint` [`repo.rs:classify`] — deferred, pre-existing.
+- [x] [Review][Defer] An `Ambiguous` abstention with ZERO candidates is storable, so *"the ambiguity is DATA, not a hole"* is a convention rather than an invariant [`0002…sql`] — deferred: nothing writes link+candidates as one unit until 5.9b. **Owner: 5.9b.**
+- [x] [Review][Defer] `link_candidate` rows attach to a MATCH link, and a candidate may name the link's own interface [`0002…sql:84-94`] — deferred, needs the FR16 renderer to say what it means. **Owner: story 5.14.**
+- [x] [Review][Defer] `rule_id = ""` satisfies *"a decision names the rule that settled it"* [`0002…sql:69`] — deferred, low.
+- [x] [Review][Defer] `datetime_literal` truncates below the microsecond silently, and 5.10 compares in-memory to stored [`repo.rs`] — deferred. **Owner: story 5.10**, which is where it would first bite.
+- [x] [Review][Defer] A `Timestamp` past year 9999 gives an unclassified `Backend` error the adapter could reject [`repo.rs`] — deferred, low.
+- [x] [Review][Defer] One corrupt `evidence` blob blinds every current link of the observation, because the collect uses `?` [`repo.rs:load_current_links_for_observation`] — deferred; `CHECK (json_valid(evidence))` is available in MariaDB 10.11. **Owner: the first story that reads links on a page (5.14).**
+- [x] [Review][Defer] `PersistedLink.id`/`.interface_id` and `load_link_candidates`' first element are bare `String` while the write side is fully typed [`repo.rs`] — deferred; the first reader that needs the typed form should drive it. **Owner: story 5.14.**
+- [x] [Review][Defer] `count_identity_links` is `pub` with no caller and no test [`repo.rs:593`] — deferred, consistent with the module's existing `allow(dead_code)` skeleton.
+- [x] [Review][Defer] `mac_canon`'s canonical form is asserted by a comment only; one writer using uppercase creates a second interface row invisibly [`0002…sql:29`] — deferred; a `CHECK (mac_canon = LOWER(mac_canon))` is the candidate fix. **Owner: 5.9b**, the first writer.
+- [x] [Review][Defer] `identity_link.observation_id` carries no foreign key while every other cross-table reference does, and all nine new tests depend on that asymmetry (they write links for observations that were never inserted) [`0002…sql:48`] — deferred: adding it today reds 8 tests. **Owner: 5.9b**, which writes links from observations that exist.
+
+| 2026-08-03 | **CODE-REVIEWED** (three layers; two ran against their own live `mariadb:10.11.11`, and the Acceptance Auditor re-executed the whole mutation pass independently). **1 decision, 22 patches, 13 deferrals, 2 dismissed. 378 → 383 tests**, and the mutation set grows 7 → **12**, every red assertion-carried. 🔴 **Guy arbitrated the uniqueness key a SECOND time**, on a measurement that falsified the first: `valid_to` is `NOT NULL` on CLOSED rows too, so the key constrained HISTORY — two versions of one placement closed at the same DERIVED instant collided (`ERROR 1062`), the second close was refused and **the link silently stayed current**, which is story 5.10's replay path. Final form `(observation_id, current_subject)`, `current_subject` being `NULL` once superseded — NULL-distinctness used deliberately where D21 warns against suffering it accidentally. 🔑 `architecture.md:1468` had **already prescribed** the nil sentinel (*"Same reasoning for `NIL_INTERFACE`/`NIL_DEVICE`"*), which decision 9 re-derived instead of citing. Also fixed: `ON DELETE CASCADE` (story 5.10's purge failed `ERROR 1451` behind a candidate), `close_identity_link`'s three refusals (an unknown id returned `Ok(())`, a re-close rewrote history, closing at the sentinel **resurrected** a superseded link), the nil-interface collision, interval CHECKs, and **four DDL guards plus three persisted tokens that were measured droppable with the whole suite green** — the M3 family, four more times. **M8 is the mutation the arbitration's own guard never had.** Four patches were false numbers in this story's own documents, including *"11 done"* in both twins — a direct violation of AC10. |

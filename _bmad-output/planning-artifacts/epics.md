@@ -19,9 +19,10 @@ resumePoint: >
   engine) get a design nod at story-creation time.
   EPICS 3 and 4 are COMPLETE (Epic 4 closed 2026-07-25, retrospective held
   2026-07-26; story 4.19 was SPLIT, 4.19b re-scoped to Epic 11 via issue #34).
-  EPIC 5 (Identité d'interface fiable, v0.3) is DECOMPOSED into 16 stories
-  (5.1–5.14 on 2026-07-26 with Guy, plus 5.2b INSERTED the same day and 5.4b
-  INSERTED 2026-07-29 at story 5.4's contexting — see the Epic 5 preamble) below. Three arbitrations were taken at
+  EPIC 5 (Identité d'interface fiable, v0.3) is DECOMPOSED into 17 stories
+  (5.1–5.14 on 2026-07-26 with Guy, plus 5.2b INSERTED the same day, 5.4b
+  INSERTED 2026-07-29 at story 5.4's contexting and 5.9b INSERTED 2026-08-03 at
+  story 5.9's contexting — see the Epic 5 preamble) below. Three arbitrations were taken at
   decomposition time and live in the stories that carry them: (a) NFR4 CANNOT go
   green in Epic 5 — D18 gates at the DEVICE level, and of the 24 committed traps
   13 name an `l1-*` rule, 8 an `l2-*` rule and 3 a cause; the Epic List entry was
@@ -1310,11 +1311,11 @@ Build the L1 interface-identity join and drive it against the corpus Epic 4 froz
 
 _Decomposed 2026-07-26 with Guy, immediately after the Epic 4 retrospective. Three arbitrations were taken at decomposition time and are recorded in the stories that carry them: the NFR4 level boundary (see the Epic List entry above and story 5.8), the engine's own abstention cause (5.3), and what persistence Epic 5 does and does not create (5.9)._
 
-_**Three** of the sixteen stories are **inherited debt**, placed at the HEAD on Guy's decision: the corpus byte-fidelity and corpus privacy themes had each accumulated three to four unowned entries in `deferred-work.md`. They come first because **this epic bumps the corpus**, and hardening after the bump means replaying every entry against artefacts that have moved._
+_**Three** of the seventeen stories are **inherited debt**, placed at the HEAD on Guy's decision: the corpus byte-fidelity and corpus privacy themes had each accumulated three to four unowned entries in `deferred-work.md`. They come first because **this epic bumps the corpus**, and hardening after the bump means replaying every entry against artefacts that have moved._
 
 _**Story 5.2b was INSERTED on 2026-07-26**, one day after the decomposition and before any Epic 5 code existed. It was surfaced while preparing story 5.1: four committed trap families (randomized-mac, multi-nic, shared-hardware-vm, cloned-mac) turned out to be named by no test at all, so 5.1's AC1 — which strengthens byte-pins that EXIST — could not reach them. It was neither absorbed into 5.1 nor left in the register, because the corpus is the oracle the L1 join is about to be judged against: hardening it after its first consumer exists means bending the engine to fit whatever the corpus happens to say. The letter suffix is the house idiom for an inserted item (D56b, AC5b/7b/7c), chosen so 5.3–5.14 keep their numbers._
 
-_Build order: the three debt stories (5.1, 5.2, 5.2b) -> the engine's vocabulary (5.3, 5.4) -> the verdict algebra (5.4b) -> the pure join (5.5) -> the blocker (5.6) -> wiring it to the corpus (5.7, 5.8) -> persistence (5.9, 5.10) -> the invariants (5.11, 5.12, 5.13) -> the operator-visible surface (5.14). No story depends on a later one._
+_Build order: the three debt stories (5.1, 5.2, 5.2b) -> the engine's vocabulary (5.3, 5.4) -> the verdict algebra (5.4b) -> the pure join (5.5) -> the blocker (5.6) -> wiring it to the corpus (5.7, 5.8) -> persistence (5.9 the schema, 5.9b the resolver that fills it, 5.10 the purge) -> the invariants (5.11, 5.12, 5.13) -> the operator-visible surface (5.14). No story depends on a later one._
 
 ### Story 5.1: The corpus pins the obs_id-to-line binding, and every stream goes through the connector
 
@@ -1560,6 +1561,10 @@ _(This criterion said **"the 8 traps whose expected rule is `l2-*`"** until 2026
 
 ### Story 5.9: The interface and its identity link are persisted, ambiguity included
 
+_**SPLIT 2026-08-03 with Guy, at this story's contexting and before any persistence code existed.** As written this story carried two ideas: **(a)** the schema and the persistence contract, and **(b)** the path that runs the engine over a set of observations and WRITES the links it derives. (b) is the heavier half, it is the first production caller of `identity::l1::join` and `identity::blocking::candidates` (a residue the register has owned as *"story 5.9 or Epic 6"* since story 5.6), and it is what story 5.10's *"the engine re-runs"* requires. Splitting keeps each story one idea, in the house idiom for an INSERTED item (D56b, stories 5.2b and 5.4b) so 5.10–5.14 keep their numbers: **5.9 is the schema and its adapter, 5.9b is the resolver that fills it.** No acceptance criterion below is weakened — all four are schema statements and all four stay here._
+
+_**Arbitration taken at the same contexting: what an `identity_link` LINKS at this level is `observation -> interface`.** `decide_pair` judges a PAIR of observations and returns no interface; `join` groups observations by `(l2_domain, mac)` and therefore **is** what forms an interface at L1. So the persisted link binds one `observation_record` to one `interface`, carrying the rule, the evidence, when, by whom and `ruleset_version`; `link_candidate` carries the N candidate **interfaces** of an ambiguous observation, which is what FR16's *"present the candidate matches with their evidence"* asks to display. The `interface -> device` grouping is a different relation and belongs to Epic 6 with `device`. **No `entity` supertype table is created either** (D21's disjunction has one arm while `device` does not exist); its owner is Epic 6, with `device`._
+
 As the operator,
 I want interfaces and their identity links stored as revisable records carrying their evidence,
 So that "present the candidate matches with their evidence" (FR16) is something the product can actually do.
@@ -1579,6 +1584,36 @@ So that "present the candidate matches with their evidence" (FR16) is something 
 **Then** it is a LINK with its `link_candidate` rows and their evidence, never an absence — *"the ambiguity is DATA, not a hole; otherwise there is nothing to display and FR16 is vapour."*
 
 **And** every text column carries an explicit binary collation (D64), and the DDL gate stays green.
+
+### Story 5.9b: The engine resolves a set of observations and writes the links it derives
+
+_Inserted 2026-08-03 with Guy, at story 5.9's contexting and before any persistence code existed — see the SPLIT note on story 5.9 above for why. It is the first story that hands `identity::blocking::candidates` and `identity::l1::join` something OTHER than a trap: a trap NAMES its pair, so the trap runner (5.7) had nothing to generate and deliberately called neither. The register has carried that residue as *"story 5.9 or Epic 6, whichever first hands the blocker a set of observations"* since story 5.6; this story is it._
+
+As the operator,
+I want a scan's observations turned into interfaces and identity links by the engine, in one deterministic pass,
+So that what the engine decides is written down rather than recomputed, and story 5.10 has something to purge.
+
+**Acceptance Criteria:**
+
+**Given** a set of observations and the tables story 5.9 created
+**When** the resolver runs
+**Then** each observation carrying a MAC lands on exactly ONE `interface` — the one its `(l2_domain, mac)` key names — and each such placement is written as an `identity_link` with the rule that settled it, its evidence and `ruleset_version`.
+
+**Given** `identity::blocking::candidates`, which until this story had no production caller, and `identity::l1::join`, which had no cross-crate caller at all
+**When** the resolver runs
+**Then** both are called by production code, and D13's order — *candidate generation (blocking) -> verdicts -> three-way decision* — is the order of the pass; the blocker is not bypassed by reading the join's key directly.
+
+**Given** D21's *"identity resolution runs INSIDE the writer actor, against the write connection"*
+**When** two observations of the same MAC arrive in ONE pass
+**Then** the second sees the first's link — read-your-own-writes inside one transaction — and **an identity decision is never split across two transactions**.
+
+**Given** an observation the engine abstains on
+**When** the pass writes
+**Then** it writes a LINK carrying the cause and its `link_candidate` rows, never an absence (D14/FR16) — the same refusal story 5.9's schema makes representable.
+
+**And** the pass reads no clock for anything it stores as an interface's `first_seen_at`/`last_seen_at`: those are derived from the observations, so a re-run reproduces them — which is the precondition story 5.10 tests.
+
+**And** each guard is proven to red before it passes, the mutation recorded (house rule, story 1.3).
 
 ### Story 5.10: The purge test proves the link is a cache of attention, not of truth
 

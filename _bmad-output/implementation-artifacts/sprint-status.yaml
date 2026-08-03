@@ -50,8 +50,15 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-03  # 5.8 **DONE** -- PR #63 squash-merged as `bbd3b3a` after a green CI run
-                          # (56s), code-reviewed first. **Epic 5 is now 10/16.** Master carries 367
+last_updated: 2026-08-03  # 5.9 contexted (`ready-for-dev`), SPLIT (5.9b INSERTED, Epic 5 -> 17
+                          # stories) and VALIDATED by two fresh-context agents -- the gap-hunt one
+                          # against a live mariadb:10.11.11. **Epic 5 is now 10/17.**
+                          # 🔴 Guy arbitrated at the validation: the identity_link uniqueness key is
+                          # (observation_id, link_subject, valid_to). The narrow (observation_id,
+                          # valid_to) was MEASURED refusing a legitimate multi-NIC write -- `join`
+                          # puts one observation on N interfaces (l1.rs:174-178) and `multi-nic` is
+                          # a committed trap family. See story 5.9 decision 9.
+                          # Master carries 367
                           # tests (165 bin + 156 core + 46 xtask) and six green gates.
                           # 🔴 **THE COMMITTED GATE IS RED ON PURPOSE AND MASTER NOW CARRIES IT**:
                           # `24 discovered, 13 scored, 0 failures, 0 wrong-rule, 11 unanswerable,
@@ -60,7 +67,24 @@ last_updated: 2026-08-03  # 5.8 **DONE** -- PR #63 squash-merged as `bbd3b3a` af
                           # (*"a gate that cannot fall is decoration"*). **Do not "fix" it.** The
                           # `NFR4 NOT MET` line renders only while the bucket is non-empty, so it
                           # deletes itself the day Epic 6 empties it.
-                          # NEXT = `create-story` 5.9 (`persist-interface-and-identity-link`).
+                          # NEXT = push -> PR -> green CI -> squash merge. 5.9 is CODE-REVIEWED
+                          # (3 layers, 2 against a live DB): 1 decision, 22 patches, 13 deferrals.
+                          # 378 -> 383 tests, 7 -> 12 mutations, every red assertion-carried.
+                          # 🔴 Guy arbitrated the uniqueness key a SECOND time: `valid_to` is
+                          # NOT NULL on CLOSED rows, so the key constrained HISTORY -- two closes
+                          # at one derived instant collided (1062) and the link silently stayed
+                          # current, i.e. story 5.10's replay path. Final:
+                          # UNIQUE (observation_id, current_subject), NULL once superseded.
+                          # 🔑 architecture.md:1468 had ALREADY prescribed the nil sentinel.
+                          # 5.9 is IMPLEMENTED: 367 -> 378 tests, six gates green, all seven
+                          # mutations run WITH a live mariadb:10.11.11 (port 13306), every red
+                          # assertion-carried. 🔴 M3 was a NO-OP on its first run: dropping the
+                          # rule-XOR-cause CHECK left all 378 tests green, because the adapter
+                          # derives rule and cause from one match and cannot emit an incoherent
+                          # pair -- two raw-SQL inserts now measure it.
+                          # 🔴 Decision 9's generated column is IMPOSSIBLE in MariaDB 10.11
+                          # (error 1901 when indexed); the sentinel ships as a written column
+                          # plus a CHECK. Same guarantee, different mechanism.
                           # ⚠️ ISSUE #38 stays OPEN: the local suite ran green here (367/367, one
                           # run) and CI green, which is NOT evidence the cause is gone -- the
                           # recorded shape is 2 red in ~11 runs, moving between tests.
@@ -1502,7 +1526,19 @@ development_status:
   # block?"* -- they are one decision.
   # ⚠️ NEXT = push -> PR -> green CI -> squash merge.
   5-8-unimplemented-level-counts-as-not-passing: done
-  5-9-persist-interface-and-identity-link: backlog
+  # ── Story 5.9 was SPLIT at its contexting, 2026-08-03, with Guy ──────────
+  # As written in `epics.md` it carried two ideas: (a) the schema + the persistence contract,
+  # and (b) the path that runs the engine over a set of observations and WRITES the links.
+  # (b) is the heavier half, it is the first production caller of `identity::l1::join` and
+  # `identity::blocking::candidates` (a residue the register has owned as "story 5.9 or
+  # Epic 6" since story 5.6), and it is what story 5.10's "the engine re-runs" requires.
+  # 5.9 = the schema and its adapter. 5.9b = the resolver that fills it. Epic 5 -> 17 stories;
+  # the letter suffix keeps 5.10-5.14 on their numbers (house idiom, D56b, 5.2b and 5.4b).
+  # Second arbitration taken at the same contexting: an `identity_link` binds
+  # `observation -> interface` (`join` is what forms an interface at L1; `decide_pair` judges a
+  # pair and returns none). NO `device` table and NO `entity` supertype -- both Epic 6.
+  5-9-persist-interface-and-identity-link: review
+  5-9b-engine-resolves-and-writes-links: backlog
   5-10-purge-test: backlog
   5-11-order-independence: backlog
   5-12-never-overwrite-anti-regression: backlog

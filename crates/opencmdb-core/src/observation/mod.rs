@@ -62,6 +62,28 @@ uuid_newtype!(
     /// WHO saw it — the observing vantage point.
     VantageId
 );
+uuid_newtype!(
+    /// Identifies one interface — the thing the L1 join forms.
+    ///
+    /// At L1 an interface IS a scope-qualified key: [`crate::identity::l1::join`] groups
+    /// observations by `(l2_domain, mac)` and each group is one interface. This newtype names the
+    /// row that group is persisted as, so a link can point at it. It is **minted client-side**
+    /// (D48) — no function here returns one, and it is never derived from an observed value.
+    ///
+    /// It lives beside [`ObsId`] rather than under `identity/` because `uuid_newtype!` is a bare
+    /// `macro_rules!` reachable only from this module — and because "the folder is not the
+    /// frontier, visibility is" (D54). [`L2DomainId`] and [`VantageId`] are not observations
+    /// either.
+    InterfaceId
+);
+uuid_newtype!(
+    /// Identifies one identity link — one placement of an observation on an interface.
+    ///
+    /// A link is an ENTITY, not a foreign key (D14): it is versioned, it carries the rule and the
+    /// evidence that justified it, and superseding it appends a row rather than overwriting one.
+    /// That is why it needs an id of its own. **Minted client-side** (D48).
+    LinkId
+);
 
 /// A 48-bit hardware address held as its exact 6 bytes.
 ///
