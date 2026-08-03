@@ -62,8 +62,8 @@ pub use identity::l1::{
     CURRENT_RULESET_VERSION, L1_DISTINCT_MAC, L1_EXACT_MAC, L1Key, decide_pair,
 };
 pub use observation::{
-    Capabilities, ConnectorId, Fact, FactKind, HostnameSource, L2DomainId, MacAddr, MacParseError,
-    ObsId, Observation, Scope, Timestamp, VantageId,
+    Capabilities, ConnectorId, Fact, FactKind, HostnameSource, InterfaceId, L2DomainId, LinkId,
+    MacAddr, MacParseError, ObsId, Observation, Scope, Timestamp, VantageId,
 };
 pub use repo::{BoxFuture, ReadRepository, RepositoryError, WriteRepository, WriteUnit};
 pub use score::{
