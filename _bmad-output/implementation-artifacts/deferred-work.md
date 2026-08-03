@@ -2259,3 +2259,56 @@ project's reviews have caught repeatedly, so the distinction is kept explicit he
   wire encoding is not one — but it IS a second rendering site, and the write path renders in Rust.
   **Owner: the first story that needs to read an instant back as a value** (rather than to compare
   it against a sentinel); enabling `sqlx`'s `chrono` feature would collapse the two.
+
+## Deferred from: code review of story-5.9 (2026-08-03)
+
+Three-layer review (Blind Hunter · Edge Case Hunter · Acceptance Auditor) of `master...8659cf4`.
+Two layers ran against their own live `mariadb:10.11.11`; the Auditor re-executed the whole
+mutation pass. **Thirteen entries deferred, each measured rather than suspected.**
+
+- ⚠️ **No `find_interface_by_key`, no `touch_interface_last_seen`.** `0002`'s header states the
+  design — *"the re-run finds an interface by its key"* — and no lookup exists. With the L1 key
+  deliberately non-unique, a second scan cannot tell "cloned MAC" from "we forgot to look it up",
+  and `last_seen_at` is write-once. **Owner: story 5.9b**, the resolver; a lookup with no caller is
+  the speculation decision 4 refuses.
+- ⚠️ **`identity_link.observation_id` carries no foreign key** while `interface_id`,
+  `link_candidate.link_id` and `link_candidate.interface_id` all do. Measured: a link whose
+  observation does not exist inserts `Ok(())`. All nine of this story's tests depend on it — they
+  mint an `ObsId` and never insert an observation — so adding the FK today reds 8 tests.
+  **Owner: story 5.9b**, which writes links from observations that exist.
+- ⚠️ **`sql_mode` is not pinned on connect**, so silent truncation of `rule_id` (VARCHAR(64)),
+  `mac_canon` (17) and `abstention_cause` (32) depends on the operator's server configuration.
+  Measured under `sql_mode=''`: an 80-char rule id stores as 64 and a long MAC as 17. A truncated
+  `rule_id` is exactly the silent corruption story 5.10's bit-for-bit replay would report as a
+  mismatch with no cause. Pre-existing (`main.rs` connects bare). **Owner: the first story that
+  hardens the connection.**
+- ⚠️ **A length violation classifies as `Backend("… 1406 …")`**, not a `Constraint`. Pre-existing
+  in `classify`. **Owner: with the entry above.**
+- ⚠️ **An `Ambiguous` abstention with ZERO candidates is storable**, so *"the ambiguity is DATA, not
+  a hole"* is a convention rather than an invariant — FR16 would render an empty candidate list.
+  Nothing writes link+candidates as one unit; this story's tests assemble it by hand inside
+  `transact`. **Owner: story 5.9b.**
+- ⚠️ **`link_candidate` rows attach happily to a MATCH link**, and a candidate may name the link's
+  own interface. Measured `Ok(())`. A renderer that shows a disambiguation UI whenever the list is
+  non-empty would show it on a decisively-matched link. **Owner: story 5.14**, the FR16 surface.
+- ⚠️ **One corrupt `evidence` blob blinds the whole observation.**
+  `load_current_links_for_observation` collects with `?`, so a single undecodable row errors ALL
+  current links. `CHECK (json_valid(evidence))` exists in MariaDB 10.11. **Owner: story 5.14.**
+- ⚠️ **`datetime_literal` truncates below the microsecond in silence** (`…123_456_789 ns` →
+  `.123456`), and story 5.10 compares in-memory values to stored ones. Nothing asserts it.
+  **Owner: story 5.10**, where it would first bite.
+- ⚠️ **`mac_canon`'s canonical form is asserted by a comment only.** One writer using uppercase
+  creates a second `interface` row for the same physical NIC, invisibly, because the index is
+  deliberately non-unique. `CHECK (mac_canon = LOWER(mac_canon))` is the candidate fix.
+  **Owner: story 5.9b**, the first writer.
+- ⚠️ **`rule_id = ''` satisfies the rule-XOR-cause CHECK.** *"A decision names the rule that
+  settled it"* is met by an empty name; the CHECK only tests `IS NOT NULL`. **Owner: story 5.9b.**
+- ⚠️ **A `Timestamp` past year 9999** renders `+11476-08-15 …` and returns an unclassified
+  `Backend("… 1292 …")` for an argument the adapter could reject. **Owner: unassigned, low.**
+- ⚠️ **`PersistedLink.id`/`.interface_id` and `load_link_candidates`' first element are bare
+  `String`** while the write side is fully typed (`LinkId`, `InterfaceId`, `ObsId`). The first
+  reader that needs the typed form should drive it rather than this story guessing.
+  **Owner: story 5.14.**
+- ⚠️ **`count_identity_links` is `pub` with no caller and no test.** Consistent with the module's
+  existing `#![allow(dead_code)]` skeleton, recorded so it is not mistaken for coverage.
+  **Owner: story 5.9b.**

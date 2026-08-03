@@ -229,16 +229,17 @@ where
 /// [`ABSTAINED_SUBJECT`] closes the same trap on the other column of the same key.
 pub const OPEN_END: &str = "9999-12-31 23:59:59.999999";
 
-/// The `link_subject` of a link that names no interface — an abstention.
+/// The `current_subject` of a current link that names no interface — an abstention.
 ///
-/// The nil UUID, standing for "no interface". Same reasoning as [`OPEN_END`], one column over:
-/// `interface_id` is NULL for an abstention, the uniqueness key contains it, and MariaDB holds
-/// NULLs distinct — so two current abstentions for one observation would both insert and the
-/// abstention half of the constraint would be decorative. The DDL's
-/// `identity_link_subject_matches` CHECK is what stops the sentinel drifting from what it stands
-/// for.
+/// This is D21's `NIL_INTERFACE`, which the register names in the same breath as [`OPEN_END`] and
+/// for the same reason: *"Same reasoning for `NIL_INTERFACE`/`NIL_DEVICE`"* [architecture.md:1468].
+/// `interface_id` is NULL for an abstention, the uniqueness key contains the subject, and MariaDB
+/// holds NULLs distinct — so without the sentinel two current abstentions for one observation
+/// would both insert and the constraint would be decorative for exactly the half FR16 exists to
+/// display. `identity_link_current_subject` is what stops it drifting from what it stands for.
 ///
-/// It is **never** an `interface.id`: `interface_id` keeps its foreign key and stays NULL.
+/// It is **never** an `interface.id` — `interface_id` keeps its foreign key and stays NULL — and
+/// `interface_id_not_nil` refuses an interface that would collide with it.
 pub const ABSTAINED_SUBJECT: &str = "00000000-0000-0000-0000-000000000000";
 
 /// The persisted token for a [`Conclusion`], by an exhaustive `match`.
@@ -370,16 +371,17 @@ where
     };
     let evidence_json =
         serde_json::to_string(evidence).map_err(|e| sqlx::Error::Encode(Box::new(e)))?;
+    let valid_to_literal = datetime_literal(valid_to);
     sqlx::query(
         "INSERT INTO identity_link \
-         (id, observation_id, interface_id, link_subject, outcome, rule_id, abstention_cause, \
+         (id, observation_id, interface_id, current_subject, outcome, rule_id, abstention_cause, \
           evidence, ruleset_version, decided_by, valid_from, valid_to) \
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(id.to_string())
     .bind(observation_id.to_string())
     .bind(interface.map(|i| i.to_string()))
-    .bind(link_subject_of(interface))
+    .bind(current_subject_of(interface, &valid_to_literal))
     .bind(outcome_token(&decision.conclusion))
     .bind(rule_id)
     .bind(abstention_cause)
@@ -387,39 +389,68 @@ where
     .bind(decision.ruleset_version.0)
     .bind(decided_by.token())
     .bind(datetime_literal(valid_from))
-    .bind(datetime_literal(valid_to))
+    .bind(&valid_to_literal)
     .execute(executor)
     .await?;
     Ok(())
 }
 
-/// The `link_subject` for a link pointing at `interface` — the interface, or [`ABSTAINED_SUBJECT`]
-/// when there is none. The single derivation site, which is what keeps it from drifting.
-fn link_subject_of(interface: Option<InterfaceId>) -> String {
-    interface.map_or_else(|| ABSTAINED_SUBJECT.to_string(), |i| i.to_string())
+/// The `current_subject` for a link pointing at `interface` and expiring at `valid_to_literal` —
+/// the interface, or [`ABSTAINED_SUBJECT`] when there is none, or `None` once the row is not
+/// current. The single derivation site, which is what keeps it from drifting.
+fn current_subject_of(interface: Option<InterfaceId>, valid_to_literal: &str) -> Option<String> {
+    if valid_to_literal != OPEN_END {
+        return None;
+    }
+    Some(interface.map_or_else(|| ABSTAINED_SUBJECT.to_string(), |i| i.to_string()))
 }
 
-/// Close a current link by stamping its `valid_to` — an SCD2 supersede is this plus an append.
+/// Close a CURRENT link by stamping its `valid_to` and dropping it out of the uniqueness key — an
+/// SCD2 supersede is this plus an append.
 ///
 /// The old row stays readable with its old `valid_to`: *"a bad link is UNLINKED, never erased"*
 /// [architecture.md:1016-1017]. `closed_at` is a parameter, never the clock.
 ///
+/// # Three refusals, each of which was measured happening before it existed
+///
+/// - **only a current row closes.** The `WHERE` names [`OPEN_END`]; without it, re-closing an
+///   already-closed row rewrote its historical stamp and returned `Ok(())`, and closing one back
+///   AT the sentinel resurrected a superseded link as current.
+/// - **closing nothing is an error.** `rows_affected() == 0` is [`RepositoryError::NotFound`];
+///   without it, closing an unknown id returned `Ok(())` and the caller's supersede then failed
+///   on the append with a confusing uniqueness error.
+/// - **`closed_at` may not be [`OPEN_END`].** The sentinel is a reserved value the type cannot
+///   exclude, so the function must: closing at it left the link current while reporting success.
+///
 /// # Errors
 ///
-/// Returns the `sqlx::Error` as it came; callers classify it with [`classify`].
+/// [`RepositoryError::NotFound`] when no current link with that id exists, and
+/// [`RepositoryError::Constraint`] when `closed_at` is the sentinel or would invert the interval.
 pub async fn close_identity_link<'e, E>(
     executor: E,
     id: LinkId,
     closed_at: Timestamp,
-) -> Result<(), sqlx::Error>
+) -> Result<(), RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
 {
-    sqlx::query("UPDATE identity_link SET valid_to = ? WHERE id = ?")
-        .bind(datetime_literal(closed_at))
-        .bind(id.to_string())
-        .execute(executor)
-        .await?;
+    let closed_at_literal = datetime_literal(closed_at);
+    if closed_at_literal == OPEN_END {
+        return Err(RepositoryError::Constraint("check"));
+    }
+    let result = sqlx::query(
+        "UPDATE identity_link SET valid_to = ?, current_subject = NULL \
+         WHERE id = ? AND valid_to = ?",
+    )
+    .bind(&closed_at_literal)
+    .bind(id.to_string())
+    .bind(OPEN_END)
+    .execute(executor)
+    .await
+    .map_err(classify)?;
+    if result.rows_affected() == 0 {
+        return Err(RepositoryError::NotFound);
+    }
     Ok(())
 }
 
@@ -506,11 +537,10 @@ where
     let rows: Vec<LinkRow> = sqlx::query_as(
         "SELECT id, interface_id, outcome, rule_id, abstention_cause, evidence, \
                 ruleset_version, decided_by \
-         FROM identity_link WHERE observation_id = ? AND valid_to = ? \
-         ORDER BY link_subject",
+         FROM identity_link WHERE observation_id = ? AND current_subject IS NOT NULL \
+         ORDER BY current_subject",
     )
     .bind(observation_id.to_string())
-    .bind(OPEN_END)
     .fetch_all(executor)
     .await?;
     rows.into_iter()
@@ -773,7 +803,12 @@ mod tests {
         }
     }
 
-    /// Connect, migrate and empty the three identity tables plus `observation_record`.
+    /// Connect, migrate and empty the three identity tables.
+    ///
+    /// ⚠️ `observation_record` is NOT touched, and does not need to be: `identity_link.observation_id`
+    /// carries no foreign key, so these tests mint an `ObsId` and never insert an observation. That
+    /// asymmetry is registered with story 5.9b as owner — every other cross-table reference here
+    /// IS a foreign key.
     ///
     /// The `DELETE`s are one static statement per table, not a loop over table names: sqlx 0.9
     /// rejects `sqlx::query(&format!(…))` at compile time. Children before parents (FKs).
@@ -898,7 +933,6 @@ mod tests {
         .expect("first link");
         close_identity_link(&pool, first, at(1_700_000_500))
             .await
-            .map_err(classify)
             .expect("close the first");
         write_link(
             &pool,
@@ -1093,7 +1127,7 @@ mod tests {
     }
 
     /// Decision 9's other half — two current ABSTENTIONS for one observation are refused. Without
-    /// the `link_subject` sentinel both `interface_id`s are NULL, MariaDB holds NULLs distinct,
+    /// the `current_subject` nil sentinel both `interface_id`s are NULL, MariaDB holds NULLs distinct,
     /// and the constraint would be decorative for exactly the half FR16 exists to display.
     #[tokio::test]
     async fn a_second_current_abstention_for_one_observation_is_refused() {
@@ -1254,7 +1288,7 @@ mod tests {
         // abstention; this attacks that property from both sides.
         let abstained_naming_a_rule = sqlx::query(
             "INSERT INTO identity_link \
-             (id, observation_id, interface_id, link_subject, outcome, rule_id, abstention_cause, \
+             (id, observation_id, interface_id, current_subject, outcome, rule_id, abstention_cause, \
               evidence, ruleset_version, decided_by, valid_from, valid_to) \
              VALUES (?, ?, NULL, ?, 'abstained', 'l1-exact-mac', 'ambiguous', '[]', 1, 'ENGINE', ?, ?)",
         )
@@ -1274,7 +1308,7 @@ mod tests {
 
         let deciding_without_a_rule = sqlx::query(
             "INSERT INTO identity_link \
-             (id, observation_id, interface_id, link_subject, outcome, rule_id, abstention_cause, \
+             (id, observation_id, interface_id, current_subject, outcome, rule_id, abstention_cause, \
               evidence, ruleset_version, decided_by, valid_from, valid_to) \
              VALUES (?, ?, ?, ?, 'match', NULL, NULL, '[]', 1, 'ENGINE', ?, ?)",
         )
@@ -1309,7 +1343,7 @@ mod tests {
         assert!(bad_actor.is_ok(), "the ENGINE token is accepted");
         let raw_bad_actor = sqlx::query(
             "INSERT INTO identity_link \
-             (id, observation_id, interface_id, link_subject, outcome, rule_id, abstention_cause, \
+             (id, observation_id, interface_id, current_subject, outcome, rule_id, abstention_cause, \
               evidence, ruleset_version, decided_by, valid_from, valid_to) \
              VALUES (?, ?, ?, ?, 'match', 'l1-exact-mac', NULL, '[]', 1, 'SCANNER', ?, ?)",
         )
@@ -1370,8 +1404,427 @@ mod tests {
         );
     }
 
-    /// The persisted tokens are pinned, every one of them. No database needed — this is the only
-    /// mutation of the seven that reds without one.
+    /// Every guard the DDL declares is REACHED by something — the review found four that were not.
+    ///
+    /// Each of these can only be violated by going around the adapter, which is what makes them a
+    /// second line of defence; and each was measured droppable with the whole suite green before
+    /// this test existed. Same family as M3.
+    #[tokio::test]
+    async fn every_ddl_guard_refuses_what_it_names() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = identity_fixture().await else {
+            return;
+        };
+        let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
+        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 20]).await;
+        let other = an_interface(&pool, l2, [0, 1, 2, 3, 4, 21]).await;
+
+        // `identity_link_current_subject` — the sentinel drifted from what it stands for.
+        assert_eq!(
+            raw_link(
+                &pool,
+                obs,
+                Some(iface),
+                Some(&other.to_string()),
+                "match",
+                OPEN_END
+            )
+            .await,
+            Some(RepositoryError::Constraint("check")),
+            "current_subject must not name an interface the link does not place the observation on"
+        );
+
+        // `identity_link_outcome` — a token outside the closed set.
+        assert_eq!(
+            raw_link(
+                &pool,
+                obs,
+                Some(iface),
+                Some(&iface.to_string()),
+                "linked",
+                OPEN_END
+            )
+            .await,
+            Some(RepositoryError::Constraint("check")),
+            "outcome is match | no_match | abstained"
+        );
+
+        // `identity_link_current_subject`, currency half — a closed row still in the key.
+        assert_eq!(
+            raw_link(
+                &pool,
+                obs,
+                Some(iface),
+                Some(&iface.to_string()),
+                "match",
+                "2023-06-01 12:00:00.000000"
+            )
+            .await,
+            Some(RepositoryError::Constraint("check")),
+            "a superseded row leaves the uniqueness key"
+        );
+
+        // `identity_link_interval` — a version that ends before it begins.
+        assert_eq!(
+            raw_link(
+                &pool,
+                obs,
+                Some(iface),
+                None,
+                "match",
+                "2000-01-01 00:00:00.000000"
+            )
+            .await,
+            Some(RepositoryError::Constraint("check")),
+            "a version covers a half-open interval"
+        );
+
+        // `identity_link_interface_fk` — a link naming an interface that does not exist.
+        let ghost = InterfaceId::from_uuid(uuid::Uuid::now_v7());
+        assert_eq!(
+            raw_link(
+                &pool,
+                obs,
+                Some(ghost),
+                Some(&ghost.to_string()),
+                "match",
+                OPEN_END
+            )
+            .await,
+            Some(RepositoryError::Constraint("foreign_key")),
+            "a link points at a real interface"
+        );
+
+        // `interface_id_not_nil` — an interface that would collide with ABSTAINED_SUBJECT.
+        assert_eq!(
+            insert_interface(
+                &pool,
+                InterfaceId::from_uuid(uuid::Uuid::nil()),
+                l2,
+                &MacAddr([0, 1, 2, 3, 4, 22]),
+                at(1_700_000_000),
+                at(1_700_000_100),
+            )
+            .await
+            .map_err(classify)
+            .err(),
+            Some(RepositoryError::Constraint("check")),
+            "the nil UUID is D21's NIL_INTERFACE and must not also be a real interface"
+        );
+
+        // `interface_seen_window` — a window that closes before it opens.
+        assert_eq!(
+            insert_interface(
+                &pool,
+                InterfaceId::from_uuid(uuid::Uuid::now_v7()),
+                l2,
+                &MacAddr([0, 1, 2, 3, 4, 23]),
+                at(1_700_000_100),
+                at(1_700_000_000),
+            )
+            .await
+            .map_err(classify)
+            .err(),
+            Some(RepositoryError::Constraint("check")),
+            "first_seen_at precedes last_seen_at"
+        );
+
+        // `link_candidate_link_fk` / `link_candidate_interface_fk` — candidates of nothing.
+        assert_eq!(
+            insert_link_candidate(
+                &pool,
+                LinkId::from_uuid(uuid::Uuid::now_v7()),
+                iface,
+                &[obs]
+            )
+            .await
+            .map_err(classify)
+            .err(),
+            Some(RepositoryError::Constraint("foreign_key")),
+            "a candidate hangs off a real link"
+        );
+    }
+
+    /// Write one link with raw SQL, going AROUND the adapter's derivations, and return the error.
+    ///
+    /// The adapter cannot produce most of the rows the DDL refuses — that is the point of the
+    /// CHECKs — so reaching them needs this.
+    async fn raw_link(
+        pool: &MySqlPool,
+        obs: ObsId,
+        interface: Option<InterfaceId>,
+        current_subject: Option<&str>,
+        outcome: &str,
+        valid_to: &str,
+    ) -> Option<RepositoryError> {
+        sqlx::query(
+            "INSERT INTO identity_link \
+             (id, observation_id, interface_id, current_subject, outcome, rule_id, \
+              abstention_cause, evidence, ruleset_version, decided_by, valid_from, valid_to) \
+             VALUES (?, ?, ?, ?, ?, 'l1-exact-mac', NULL, '[]', 1, 'ENGINE', ?, ?)",
+        )
+        .bind(uuid::Uuid::now_v7().to_string())
+        .bind(obs.to_string())
+        .bind(interface.map(|i| i.to_string()))
+        .bind(current_subject.map(str::to_string))
+        .bind(outcome)
+        .bind(datetime_literal(at(1_700_000_000)))
+        .bind(valid_to)
+        .execute(pool)
+        .await
+        .map_err(classify)
+        .err()
+    }
+
+    /// The three tokens no other test writes to the database: `OPERATOR`, `no_match` and
+    /// `AbsenceOfProof`. Each is a string literal in two independent places; misspell either side
+    /// and the suite stayed green while the first production write would have failed.
+    #[tokio::test]
+    async fn the_tokens_no_other_test_stores_round_trip() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = identity_fixture().await else {
+            return;
+        };
+        let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
+        let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 30]).await;
+
+        // OPERATOR — a human asserting a link.
+        let obs_op = ObsId::from_uuid(uuid::Uuid::now_v7());
+        insert_identity_link(
+            &pool,
+            LinkId::from_uuid(uuid::Uuid::now_v7()),
+            obs_op,
+            Some(iface),
+            &a_match("l1-exact-mac"),
+            &[obs_op],
+            DecidedBy::Operator,
+            at(1_700_000_000),
+            open_end(),
+        )
+        .await
+        .map_err(classify)
+        .expect("an operator may assert a link");
+
+        // no_match — a rule that FORBADE the pair. It names the interface it excluded, which is
+        // what `identity_link_abstained_has_no_interface` requires of any non-abstention.
+        let obs_no = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let no_match = Decision {
+            conclusion: Conclusion::NoMatch {
+                rule: RuleId("l1-distinct-mac".into()),
+            },
+            verdict_vector: vec![],
+            ruleset_version: CURRENT_RULESET_VERSION,
+        };
+        insert_identity_link(
+            &pool,
+            LinkId::from_uuid(uuid::Uuid::now_v7()),
+            obs_no,
+            Some(iface),
+            &no_match,
+            &[obs_no],
+            DecidedBy::Engine,
+            at(1_700_000_000),
+            open_end(),
+        )
+        .await
+        .map_err(classify)
+        .expect("a refusal names the rule that forbade the pair");
+
+        // AbsenceOfProof — the abstention cause the well-formed path never exercised.
+        let obs_ab = ObsId::from_uuid(uuid::Uuid::now_v7());
+        insert_identity_link(
+            &pool,
+            LinkId::from_uuid(uuid::Uuid::now_v7()),
+            obs_ab,
+            None,
+            &an_abstention(IdentityAbstentionCause::AbsenceOfProof),
+            &[obs_ab],
+            DecidedBy::Engine,
+            at(1_700_000_000),
+            open_end(),
+        )
+        .await
+        .map_err(classify)
+        .expect("absence of proof is an abstention like any other");
+
+        for (obs, decided_by, outcome, rule, cause) in [
+            (obs_op, "OPERATOR", "match", Some("l1-exact-mac"), None),
+            (obs_no, "ENGINE", "no_match", Some("l1-distinct-mac"), None),
+            (
+                obs_ab,
+                "ENGINE",
+                "abstained",
+                None,
+                Some("absence_of_proof"),
+            ),
+        ] {
+            let links = load_current_links_for_observation(&pool, obs)
+                .await
+                .map_err(classify)
+                .expect("read back");
+            assert_eq!(links.len(), 1);
+            assert_eq!(links[0].decided_by, decided_by);
+            assert_eq!(links[0].outcome, outcome);
+            assert_eq!(links[0].rule_id.as_deref(), rule);
+            assert_eq!(links[0].abstention_cause.as_deref(), cause);
+        }
+    }
+
+    /// `close_identity_link`'s three refusals, each of which was measured HAPPENING before the
+    /// guards existed: an unknown id returned `Ok(())`, a re-close rewrote history, and closing at
+    /// the sentinel resurrected a superseded link as current.
+    #[tokio::test]
+    async fn closing_a_link_refuses_what_it_must() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = identity_fixture().await else {
+            return;
+        };
+        let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
+        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 40]).await;
+        let link = LinkId::from_uuid(uuid::Uuid::now_v7());
+        write_link(
+            &pool,
+            link,
+            obs,
+            Some(iface),
+            &a_match("l1-exact-mac"),
+            open_end(),
+        )
+        .await
+        .expect("the link");
+
+        assert_eq!(
+            close_identity_link(
+                &pool,
+                LinkId::from_uuid(uuid::Uuid::now_v7()),
+                at(1_700_000_500)
+            )
+            .await,
+            Err(RepositoryError::NotFound),
+            "closing a link that does not exist is an error, not a silent success"
+        );
+        assert_eq!(
+            close_identity_link(&pool, link, open_end()).await,
+            Err(RepositoryError::Constraint("check")),
+            "closing AT the sentinel would leave the link current while reporting success"
+        );
+
+        close_identity_link(&pool, link, at(1_700_000_500))
+            .await
+            .expect("the real close");
+        assert_eq!(
+            close_identity_link(&pool, link, at(1_600_000_000)).await,
+            Err(RepositoryError::NotFound),
+            "an already-closed row is not current, so its stamp cannot be rewritten"
+        );
+        assert_eq!(
+            load_link_valid_to(&pool, link)
+                .await
+                .map_err(classify)
+                .expect("read"),
+            Some(datetime_literal(at(1_700_000_500))),
+            "and the historical stamp is intact"
+        );
+    }
+
+    /// Two versions of ONE placement closed at the SAME derived instant — the collision the review
+    /// measured under the old key, where the second close was refused and the link silently stayed
+    /// current. Every instant here is data-derived and never the clock, so a replay reproduces
+    /// them: this is story 5.10's purge-and-replay, not an exotic path.
+    #[tokio::test]
+    async fn two_versions_may_be_closed_at_the_same_instant() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = identity_fixture().await else {
+            return;
+        };
+        let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
+        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 50]).await;
+        let closed_at = at(1_700_000_500);
+
+        for _ in 0..2 {
+            let link = LinkId::from_uuid(uuid::Uuid::now_v7());
+            write_link(
+                &pool,
+                link,
+                obs,
+                Some(iface),
+                &a_match("l1-exact-mac"),
+                open_end(),
+            )
+            .await
+            .expect("a version");
+            close_identity_link(&pool, link, closed_at)
+                .await
+                .expect("closing it must not collide with the previous version's stamp");
+        }
+
+        assert_eq!(
+            load_current_links_for_observation(&pool, obs)
+                .await
+                .map_err(classify)
+                .expect("read")
+                .len(),
+            0,
+            "both versions are closed, so nothing is current"
+        );
+    }
+
+    /// Story 5.10's purge deletes engine links wholesale. With `RESTRICT` it failed ERROR 1451 the
+    /// moment any engine link carried a candidate — i.e. the ambiguity case `link_candidate` exists
+    /// for. `ON DELETE CASCADE` is what makes the purge possible; this measures it.
+    #[tokio::test]
+    async fn purging_engine_links_takes_their_candidates_with_them() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = identity_fixture().await else {
+            return;
+        };
+        let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
+        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 60]).await;
+        let link = LinkId::from_uuid(uuid::Uuid::now_v7());
+        write_link(
+            &pool,
+            link,
+            obs,
+            None,
+            &an_abstention(IdentityAbstentionCause::Ambiguous),
+            open_end(),
+        )
+        .await
+        .expect("an abstained link");
+        insert_link_candidate(&pool, link, iface, &[obs])
+            .await
+            .map_err(classify)
+            .expect("its candidate");
+
+        sqlx::query("DELETE FROM identity_link WHERE decided_by = 'ENGINE'")
+            .execute(&pool)
+            .await
+            .map_err(classify)
+            .expect("story 5.10's purge must not be blocked by a candidate");
+
+        assert_eq!(
+            count_identity_links(&pool)
+                .await
+                .map_err(classify)
+                .expect("count"),
+            0
+        );
+        assert_eq!(
+            load_link_candidates(&pool, link)
+                .await
+                .map_err(classify)
+                .expect("candidates")
+                .len(),
+            0,
+            "the candidates went with their link"
+        );
+    }
+
+    /// The persisted tokens are pinned, every one of them. No database needed.
     #[test]
     fn every_persisted_token_is_pinned() {
         assert_eq!(
@@ -1404,7 +1857,7 @@ mod tests {
         assert_eq!(DecidedBy::Operator.token(), "OPERATOR");
     }
 
-    /// The two sentinels are what they claim to be, and `link_subject` is derived from one place.
+    /// The two sentinels are what they claim to be, and `current_subject` is derived from one place.
     #[test]
     fn the_two_sentinels_are_pinned() {
         assert_eq!(OPEN_END, "9999-12-31 23:59:59.999999");
@@ -1415,7 +1868,19 @@ mod tests {
             "OPEN_END is reachable as a Timestamp"
         );
         let iface = InterfaceId::from_uuid(uuid::Uuid::now_v7());
-        assert_eq!(link_subject_of(Some(iface)), iface.to_string());
-        assert_eq!(link_subject_of(None), ABSTAINED_SUBJECT);
+        assert_eq!(
+            current_subject_of(Some(iface), OPEN_END),
+            Some(iface.to_string())
+        );
+        assert_eq!(
+            current_subject_of(None, OPEN_END),
+            Some(ABSTAINED_SUBJECT.to_string())
+        );
+        // Once the row is not current it leaves the uniqueness key entirely.
+        assert_eq!(
+            current_subject_of(Some(iface), "2023-01-01 00:00:00.000000"),
+            None
+        );
+        assert_eq!(current_subject_of(None, "2023-01-01 00:00:00.000000"), None);
     }
 }
