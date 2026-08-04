@@ -1136,10 +1136,16 @@ mod tests {
             return;
         };
 
-        let summary = within(&pool, observations.clone(), BTreeSet::new())
-            .await
-            .expect("the pass must not FAIL on a multi-key abstention");
-
+        // ⚠️ NOT `.expect()`: the pre-arbitration failure is a uniqueness violation that rolls the
+        // whole transaction back, so an `expect` panics before any count can be taken and the red
+        // says nothing about what was written. Story 5.9's M4/M5 lesson, applied here.
+        let outcome = within(&pool, observations.clone(), BTreeSet::new()).await;
+        assert_eq!(
+            outcome.clone().err(),
+            None,
+            "a multi-key abstention must not fail the pass"
+        );
+        let summary = outcome.unwrap_or_default();
         assert_eq!(
             summary.abstentions, 3,
             "one abstention per observation — X abstains ONCE although it sits in two groups"
