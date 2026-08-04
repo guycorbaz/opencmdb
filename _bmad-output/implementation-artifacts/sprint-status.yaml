@@ -54,8 +54,19 @@ last_updated: 2026-08-04  # 5.9b **DONE** -- PR #67 squash-merged as `94314e9` a
                           # run. **Epic 5 is now 12/17.** `master` carries **408 tests**
                           # (203 bin + 159 core + 46 xtask) and six green gates; the branch is
                           # deleted locally and on `origin`.
-                          # NEXT = `create-story` 5.10 (the purge test), then its MANDATORY
-                          # two-agent validation.
+                          # 5.10 is CONTEXTED -> `ready-for-dev`. TWO ARBITRATIONS by Guy:
+                          #  (1) 🔴 "bit for bit" = every decision-bearing column EXCEPT `id`.
+                          #      uuid v7 stamps a wall-clock ms into the primary key, so it is
+                          #      NOT reproducible by construction; D14 says "the same DECISIONS"
+                          #      and an id is not a decision. `interface_id` IS compared, which
+                          #      is what makes the exclusion safe.
+                          #  (2) the decided_by='OPERATOR' rows are written BY THE TEST through
+                          #      the adapter -- nothing writes them before 5.14, but D14's
+                          #      two-natures frontier is real in the schema today.
+                          # Also: the purge is a DELETE, not epics.md's pseudo-SQL
+                          # `TRUNCATE ... WHERE` (registered with Epic 5's retrospective).
+                          # NEXT = the MANDATORY two-agent validation of 5.10, the gap-hunt with
+                          # a real mariadb:10.11.11 on 13306.
                           # 🔴 5.10 INHERITS TWO THINGS FROM THIS REVIEW: uuid v7 stamps a
                           # wall-clock millisecond into every interface.id and identity_link.id,
                           # so its *bit for bit* can only mean MODULO THE IDS -- write that into
@@ -1407,7 +1418,7 @@ development_status:
   # pair and returns none). NO `device` table and NO `entity` supertype -- both Epic 6.
   5-9-persist-interface-and-identity-link: done
   5-9b-engine-resolves-and-writes-links: done
-  5-10-purge-test: backlog
+  5-10-purge-test: in-progress
   5-11-order-independence: backlog
   5-12-never-overwrite-anti-regression: backlog
   5-13-monotone-honesty-trap-family: backlog
