@@ -2452,3 +2452,40 @@ seven consecutive code reviews have caught.
   It is fixed here (every link test now names a real observation), and it is recorded because
   **nothing would have routed a reader to it**: the test never reds. **No owner — closed by the
   implementation**, and here as the measurement.
+
+## Deferred from: code review of story-5.9b (2026-08-04)
+
+Three-layer review (Blind Hunter · Edge Case Hunter · Acceptance Auditor) of `master...18844ea`.
+Two layers ran against their own live `mariadb:10.11.11`; the Auditor re-executed all fourteen
+mutations independently. **Five entries deferred, each measured rather than suspected.**
+
+- ⚠️ **Two concurrent passes can mint two interfaces for one L1 key.** `find_interface_by_l1_key` is
+  a plain `SELECT` under InnoDB's default REPEATABLE READ, and `interface_l1_key` is deliberately
+  NOT unique (D21), so two transactions resolving the same MAC both read "not found" and both
+  insert. Afterwards the `ORDER BY id LIMIT 1` silently picks the lower UUID. The resolver's doc
+  says a second row on one key is *"unreachable through the resolver"* — true per pass, false
+  across passes. Unreachable in practice because D21 puts identity resolution inside a **single**
+  writer actor, but that precondition is stated nowhere in `resolve`'s signature or doc.
+  **Owner: the first story that gives the resolver more than one writer** — the wiring decision 3
+  defers.
+- ⚠️ **`widen_interface_seen_window` ignores `rows_affected()`**, so widening a non-existent
+  interface returns `Ok(())`. This is the silent-success shape story 5.9's code review closed in
+  `close_identity_link`, reappearing in the neighbouring function. Only ever called with an id the
+  same transaction just found or minted. **Owner: the first story that widens a window it did not
+  itself look up.**
+- ⚠️ **An `observed_at` at or past `OPEN_END` fails the whole batch** with
+  `Constraint("check")` from `identity_link_interval`, naming no column. One garbage instant from a
+  connector takes down every link in the pass. `close_identity_link` already guards the sentinel
+  explicitly; the write path does not. **Owner: the first story that ingests instants it did not
+  synthesise.**
+- ⚠️ **Sub-microsecond `observed_at` is truncated** by `datetime_literal`'s `%.6f`, so two distinct
+  instants store as one — measured, `…20.000000001` and `…20.000000999` both become
+  `…20.000000`. `the_stored_instants_are_the_derived_ones` therefore asserts a property that holds
+  only at microsecond granularity. **Already registered by story 5.9 with story 5.10 as owner**;
+  recorded here because this story is the first whose test depends on it.
+- ⚠️ **The eleven register entries this story disposed of still stand unmarked at their original
+  lines** (`:2199`–`:2318`), with their dispositions 120 lines below. This is the house pattern —
+  story 5.9's entries are still greppable too — but §5 of this story counted its own scope BY that
+  grep, so the next story inherits a count that includes eleven closed items. **Owner: whichever
+  story next counts its scope by grepping this file** — the fix is either an annotation in place or
+  a different way of counting.

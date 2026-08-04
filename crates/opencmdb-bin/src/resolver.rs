@@ -28,6 +28,21 @@
 //! must be measured through THIS module rather than through `join` and `decide_pair` directly — a
 //! test that never calls the resolver cannot see the resolver's grouping change.
 //!
+//! ## The singleton, and the abstention
+//!
+//! A group of ONE has no pair to judge, so [`decide_singleton`] answers it: at L1 the interface IS
+//! the key, and an observation carrying that key sits on it by [`join`]'s definition. The self-pair
+//! `(o, o)` is deliberately not used to manufacture a pair — `CandidatePair::new` refuses two equal
+//! ids, and building it here would re-open in a caller what that constructor closes in the type.
+//!
+//! **An observation abstains AT MOST ONCE, whatever the number of keys it carries.** Guy's
+//! arbitration at this story's code review, on a measurement: an abstention row names no key —
+//! `identity_link` holds `observation_id`, a NULL `interface_id` and nothing else — so two
+//! abstention rows for one observation would be identical but for their id. They also collide, both
+//! landing on `ABSTAINED_SUBJECT` in `identity_link_one_current`, which made the whole pass fail
+//! `Constraint("unique")` and roll back. The duplicate was never information; it was one sentence
+//! written twice.
+//!
 //! ## Why the blocker is not decoration
 //!
 //! [`candidates`] is TOTAL today — every unordered pair of distinct ids — so "the universe" and
@@ -37,9 +52,16 @@
 //! plans to make it do [architecture.md:1205]. [`resolve_within`] exists so that the exclusion is
 //! reachable from a test rather than only from a future.
 //!
-//! # The clock is never read
+//! # No instant COLUMN is read from the clock
 //!
-//! Every instant this pass stores is derived from the observations: an interface's window is the
+//! ⚠️ The heading used to read *"the clock is never read"*, and that was false: this file calls
+//! `uuid::Uuid::now_v7()` twice per link, and a v7 UUID embeds a 48-bit wall-clock millisecond —
+//! straight into `interface.id` and `identity_link.id`. That is the house idiom (`ObsId` and
+//! `ConnectorId` are v7 too), so the sentence is what changes, not the code. **The consequence
+//! belongs to story 5.10**: its *"reproduced identically, bit for bit"* can only ever mean *modulo
+//! the ids*, because a replayed link is minted afresh.
+//!
+//! Every instant this pass stores IN A COLUMN is derived from the observations: an interface's window is the
 //! `min`/`max` of its group's `observed_at`, and a link's `valid_from` is its own observation's.
 //! *"The engine never touches the clock"* [architecture.md:3364], and story 5.10 replays this pass
 //! and compares bit for bit. `insert_declared_attribute`'s `NOW(6)` is a DECLARED row authored by a
@@ -66,9 +88,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use opencmdb_core::identity::blocking::{CandidatePair, candidates};
-use opencmdb_core::identity::cascade::{
-    Conclusion, Decision, IdentityAbstentionCause, RulesetVersion, decide,
-};
+use opencmdb_core::identity::cascade::{Conclusion, Decision, IdentityAbstentionCause, decide};
 use opencmdb_core::identity::l1::{CURRENT_RULESET_VERSION, decide_pair, decide_singleton, join};
 use opencmdb_core::observation::{InterfaceId, LinkId, ObsId, Observation, Timestamp};
 use opencmdb_core::repo::RepositoryError;
@@ -84,8 +104,11 @@ use crate::repo::{
 /// measures nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Resolution {
-    /// How many candidate pairs the blocker proposed over this slice — `n(n-1)/2` over DISTINCT
-    /// observation ids, which is what makes the universe's size assertable rather than quotable.
+    /// How many pairs the universe this pass was HANDED contains. [`resolve`] supplies
+    /// `n(n-1)/2` over distinct observation ids, which is what makes the blocker's size assertable
+    /// rather than quotable; [`resolve_within`] reports whatever its caller passed, which is `0` for
+    /// the narrowed-universe test. _(This doc promised the formula unconditionally until the code
+    /// review, which is false through the seam.)_
     pub candidate_pairs: usize,
     /// Interfaces created by this pass, because their L1 key had never been seen.
     pub interfaces_minted: usize,
@@ -101,10 +124,15 @@ pub struct Resolution {
 /// Resolve a slice of observations and write what the engine derives.
 ///
 /// Computes the candidate universe and delegates to [`resolve_within`]. It opens no transaction:
-/// the caller wraps it in `WriteRepository::transact`, which is what makes D21's *"an identity
-/// decision is NEVER split across two transactions"* structural rather than a promise — and what
-/// gives the pass read-your-own-writes, so a second observation of one MAC sees the interface the
-/// first one caused.
+/// **the caller MUST wrap it in `WriteRepository::transact`**, which is what gives the pass
+/// read-your-own-writes, so a second observation of one MAC sees the interface the first one caused.
+///
+/// ⚠️ **That is a precondition, not a structure, and the doc said otherwise until this story's code
+/// review.** The parameter is a `&mut MySqlConnection`, which a pooled connection also satisfies —
+/// measured: called that way, a pass that then failed left **2 interfaces and 2 links committed**
+/// under autocommit. D21's *"an identity decision is NEVER split across two transactions"* holds
+/// when the caller cooperates. Taking a unit-of-work type instead would make it structural; that is
+/// registered rather than done here, because it would move every call site story 5.9 wrote.
 ///
 /// # Errors
 ///
@@ -143,6 +171,9 @@ pub async fn resolve_within(
         candidate_pairs: universe.len(),
         ..Resolution::default()
     };
+    // Observations that got a PLACEMENT. An observation that abstains is deliberately NOT in
+    // here, so it falls through to the tail loop and gets exactly one abstention link — see the
+    // module doc's "one abstention per observation".
     let mut placed: BTreeSet<ObsId> = BTreeSet::new();
 
     for ((l2_domain, mac_canon), group) in &groups {
@@ -178,31 +209,25 @@ pub async fn resolve_within(
 
         for obs_id in group {
             let observation = by_id[obs_id];
-            placed.insert(*obs_id);
-            match placement_decision(observation, group, universe, &by_id) {
-                Some(decision) => {
-                    write_link(&mut *conn, observation, Some(interface), &decision).await?;
-                    summary.links_written += 1;
-                }
-                None => {
-                    // Every pair this observation could have been judged on was excluded from the
-                    // universe, so nothing argued for the placement the key would otherwise give.
-                    write_link(&mut *conn, observation, None, &nothing_was_evaluated()).await?;
-                    summary.links_written += 1;
-                    summary.abstentions += 1;
-                }
+            // No `else` branch: an observation the blocker proposed nothing for is left out of
+            // `placed` and abstains ONCE, in the tail loop, however many keys it carries.
+            if let Some(decision) = placement_decision(observation, group, universe, &by_id) {
+                write_link(&mut *conn, observation, Some(interface), &decision).await?;
+                placed.insert(*obs_id);
+                summary.links_written += 1;
             }
         }
     }
 
-    // An observation carrying no MAC has no L1 key, so it is in no group — and it still gets a
-    // LINK, never an absence (D14/FR16): the ambiguity is DATA, not a hole.
+    // Everything that was not placed abstains, and abstains EXACTLY ONCE — an observation carrying
+    // no MAC at all, and an observation whose pairs the blocker withheld on every key it carries.
+    // The link is written and never omitted: *"the ambiguity is DATA, not a hole"* (D14/FR16).
+    let mut abstained: BTreeSet<ObsId> = BTreeSet::new();
     for observation in observations {
-        if placed.contains(&observation.obs_id) {
+        if placed.contains(&observation.obs_id) || !abstained.insert(observation.obs_id) {
             continue;
         }
-        let decision = abstention_for(observation, observations, universe);
-        write_link(&mut *conn, observation, None, &decision).await?;
+        write_link(&mut *conn, observation, None, &nothing_was_evaluated()).await?;
         summary.links_written += 1;
         summary.abstentions += 1;
     }
@@ -228,43 +253,23 @@ fn placement_decision(
     universe: &BTreeSet<CandidatePair>,
     by_id: &BTreeMap<ObsId, &Observation>,
 ) -> Option<Decision> {
-    let Some(witness) = group.iter().find(|id| **id != observation.obs_id) else {
+    if group.len() == 1 {
         return Some(decide_singleton(observation));
-    };
-    let pair = CandidatePair::new(observation.obs_id, *witness)?;
-    if !universe.contains(&pair) {
-        return None;
     }
-    Some(decide_pair(observation, by_id[witness]))
-}
-
-/// The abstention for an observation that carries no L1 key at all.
-///
-/// Taken from the ENGINE wherever a pair exists: `verdict_for_pair` is `Neutral` whenever either
-/// side carries no MAC, so [`decide_pair`] against any other observation returns
-/// `Abstained { AbsenceOfProof }` with the rule that tried recorded in the vector — an abstention
-/// with an explanation. Only a slice holding this observation alone has no pair to ask about, and
-/// then [`nothing_was_evaluated`] is the honest answer.
-///
-/// ⚠️ The witness is the smallest `ObsId` other than this one, over the whole slice rather than over
-/// a group, for the same determinism reason as [`placement_decision`].
-fn abstention_for(
-    observation: &Observation,
-    observations: &[Observation],
-    universe: &BTreeSet<CandidatePair>,
-) -> Decision {
-    let witness = observations
+    // The SMALLEST other id whose pair the blocker actually proposed — the containment test is
+    // inside the search, not after it. ⚠️ Measured before this was so: with the filter applied to
+    // one candidate witness instead of to all of them, a universe missing the single pair (1,2)
+    // made observations 1 AND 2 abstain although (1,3) and (2,3) were both proposed. The `min` is
+    // taken over the survivors, so removing a pair can change which witness is chosen but never
+    // silences an observation the blocker still speaks about.
+    let witness = group
         .iter()
-        .filter(|o| o.obs_id != observation.obs_id)
-        .filter(|o| {
-            CandidatePair::new(observation.obs_id, o.obs_id)
+        .filter(|id| **id != observation.obs_id)
+        .find(|id| {
+            CandidatePair::new(observation.obs_id, **id)
                 .is_some_and(|pair| universe.contains(&pair))
-        })
-        .min_by_key(|o| o.obs_id);
-    match witness {
-        Some(other) => decide_pair(observation, other),
-        None => nothing_was_evaluated(),
-    }
+        })?;
+    Some(decide_pair(observation, by_id[witness]))
 }
 
 /// `Abstained { AbsenceOfProof }` with an empty verdict vector — the value of an EMPTY verdict set.
@@ -302,6 +307,12 @@ fn seen_window(
 ///
 /// `valid_from` is the observation's own `observed_at` and `valid_to` is `OPEN_END`; the evidence is
 /// the decision's own, so a link names what actually argued for it (D19).
+///
+/// ⚠️ **It keeps the FIRST verdict's evidence only.** Every `Decision` L1 produces carries exactly
+/// one verdict, so nothing is lost today — but that is an L1 accident, not a property, and
+/// `cascade.rs` says Epic 6's cascade ends it. On that day the evidence of verdicts 2..n would
+/// vanish with nothing red. Registered with Epic 6 rather than pre-solved: unioning evidence across
+/// a vector is a decision about what a link MEANS, and no producer exists to decide it against.
 async fn write_link(
     conn: &mut MySqlConnection,
     observation: &Observation,
@@ -346,6 +357,13 @@ async fn write_link(
 ///   D19 wants the id left behind because a rule that fires without one is undebuggable.
 ///   `0003_resolver_guards.sql` carries the same refusal in DDL, as a second line of defence.
 ///
+/// ⚠️ **Nothing fills `candidates_for_link` yet**: the only call site passes `&[]`, and this pass
+/// writes no `link_candidate` row because L1 has no ambiguity to hold candidates for. So the day a
+/// producer of `Ambiguous` arrives, this guard would refuse a LEGITIMATE ambiguity rather than let
+/// it be written with its candidates — the inverse of FR16. **Whoever produces the first
+/// `Ambiguous` owns filling this slice**, and that is Epic 6; the guard is written to take it now
+/// so the signature does not have to change under them.
+///
 /// # Errors
 ///
 /// [`RepositoryError::Constraint`] naming which of the two invariants was violated.
@@ -365,10 +383,6 @@ fn guard_decision(
         _ => Ok(()),
     }
 }
-
-/// The ruleset every link this pass writes is stamped with — the engine's own, never a local
-/// constant. Re-exported for the tests that assert a persisted `ruleset_version`.
-pub(crate) const RESOLVER_RULESET_VERSION: RulesetVersion = CURRENT_RULESET_VERSION;
 
 /// Tests for the resolver.
 ///
@@ -492,6 +506,23 @@ mod tests {
             .transact(move |unit| {
                 let observations = observations.clone();
                 Box::pin(async move { resolve(unit.executor(), &observations).await })
+            })
+            .await
+    }
+
+    /// Run one pass inside one transaction against a caller-supplied universe.
+    async fn within(
+        pool: &MySqlPool,
+        observations: Vec<Observation>,
+        universe: BTreeSet<CandidatePair>,
+    ) -> Result<Resolution, RepositoryError> {
+        MariaRepository::new(pool.clone())
+            .transact(move |unit| {
+                let observations = observations.clone();
+                let universe = universe.clone();
+                Box::pin(
+                    async move { resolve_within(unit.executor(), &observations, &universe).await },
+                )
             })
             .await
     }
@@ -1039,6 +1070,168 @@ mod tests {
                 "the pass must not fall back on the join's key when the blocker said nothing"
             );
         }
+    }
+
+    /// 🔴 The blocker withholding ONE pair must not silence an observation it still speaks about.
+    ///
+    /// Three observations on one MAC, universe missing only `(1,2)`. Observation 1 can still be
+    /// judged against 3, and 2 against 3 — so all three are PLACED. Measured before the fix: 1 and
+    /// 2 both abstained, because `placement_decision` tested containment on a single candidate
+    /// witness instead of searching for one. Found by all three code-review layers.
+    #[tokio::test]
+    async fn withholding_one_pair_does_not_silence_the_others() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let observations = vec![
+            observation(1, l2(1), &[mac(0x01)], 1_700_000_000),
+            observation(2, l2(1), &[mac(0x01)], 1_700_000_100),
+            observation(3, l2(1), &[mac(0x01)], 1_700_000_200),
+        ];
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+        let withheld =
+            CandidatePair::new(observations[0].obs_id, observations[1].obs_id).expect("distinct");
+        let narrowed: BTreeSet<CandidatePair> = candidates(&observations)
+            .into_iter()
+            .filter(|pair| *pair != withheld)
+            .collect();
+
+        let summary = within(&pool, observations.clone(), narrowed)
+            .await
+            .expect("resolve");
+
+        assert_eq!(
+            summary.abstentions, 0,
+            "each observation still has a proposed pair to be judged on"
+        );
+        for observation in &observations {
+            let links = current_links(&pool, observation.obs_id).await;
+            assert_eq!(
+                links[0].outcome, "match",
+                "{} was silenced",
+                observation.obs_id
+            );
+        }
+    }
+
+    /// 🔴 An observation abstaining on SEVERAL keys writes exactly ONE link (Guy's arbitration).
+    ///
+    /// Two MACs, empty universe: both groups withhold, and before the arbitration the pass wrote
+    /// two abstention rows that collided on `ABSTAINED_SUBJECT` — `Err(Constraint("unique"))` and a
+    /// full rollback, **zero links written**. The two rows would have been identical but for their
+    /// id: an abstention row names no key.
+    #[tokio::test]
+    async fn an_observation_abstains_once_however_many_keys_it_carries() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        // X carries both MACs, so it sits in BOTH groups; Y and Z give each group a second member,
+        // which is what makes the blocker's silence reach X twice. ⚠️ One observation alone with
+        // two MACs would NOT do: each group would be a singleton, and a singleton has no pair for
+        // the blocker to withhold — measured, it is placed on both interfaces and abstains nowhere.
+        let observations = vec![
+            observation(1, l2(1), &[mac(0x01), mac(0x02)], 1_700_000_000),
+            observation(2, l2(1), &[mac(0x01)], 1_700_000_100),
+            observation(3, l2(1), &[mac(0x02)], 1_700_000_200),
+        ];
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+
+        let summary = within(&pool, observations.clone(), BTreeSet::new())
+            .await
+            .expect("the pass must not FAIL on a multi-key abstention");
+
+        assert_eq!(
+            summary.abstentions, 3,
+            "one abstention per observation — X abstains ONCE although it sits in two groups"
+        );
+        let x = current_links(&pool, observations[0].obs_id).await;
+        assert_eq!(
+            x.len(),
+            1,
+            "two abstention rows for X would be identical but for their id, and would collide"
+        );
+        assert_eq!(x[0].outcome, "abstained");
+        assert_eq!(x[0].interface_id, None);
+        assert_eq!(
+            count_identity_links(&pool).await.expect("count"),
+            3,
+            "three observations, three links"
+        );
+    }
+
+    /// 🔴 The witness convention, pinned on a group of THREE.
+    ///
+    /// ⚠️ Every other test uses a group of TWO, where "smallest other" and "largest other" name the
+    /// same observation — so the convention was measured by nothing, and swapping the two left all
+    /// 402 tests green. Decision 4 calls this determinism *"what story 5.10 replays"*, so it is
+    /// load-bearing and this test is what holds it.
+    #[tokio::test]
+    async fn the_witness_is_the_smallest_other_id_in_the_group() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let observations = vec![
+            observation(1, l2(1), &[mac(0x01)], 1_700_000_000),
+            observation(2, l2(1), &[mac(0x01)], 1_700_000_100),
+            observation(3, l2(1), &[mac(0x01)], 1_700_000_200),
+        ];
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+        let id = |n: u128| ObsId::from_uuid(uuid::Uuid::from_u128(n));
+
+        pass(&pool, observations).await;
+
+        for (subject, expected) in [
+            (1u128, vec![id(1), id(2)]),
+            (2, vec![id(1), id(2)]),
+            (3, vec![id(1), id(3)]),
+        ] {
+            let links = current_links(&pool, id(subject)).await;
+            assert_eq!(
+                links[0].evidence, expected,
+                "observation {subject} is judged against the SMALLEST other id in its group"
+            );
+        }
+    }
+
+    /// AC3 — a placement of a group of two names the corpus's merge rule, and only that one.
+    ///
+    /// `l1-distinct-mac` is unwritable here by three independent steps, so this asserts the single
+    /// value rather than a set.
+    #[tokio::test]
+    async fn a_group_placement_names_the_exact_mac_rule() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let observations = vec![
+            observation(1, l2(1), &[mac(0x01)], 1_700_000_000),
+            observation(2, l2(1), &[mac(0x01)], 1_700_000_100),
+        ];
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+
+        pass(&pool, observations.clone()).await;
+
+        for observation in &observations {
+            let links = current_links(&pool, observation.obs_id).await;
+            assert_eq!(links[0].rule_id.as_deref(), Some(CORPUS_EXACT_MAC));
+        }
+    }
+
+    /// The same `obs_id` twice in one slice writes ONE link, with or without a MAC.
+    ///
+    /// The grouped path was already deduped by `join`'s `BTreeSet`; the tail loop iterated the raw
+    /// slice and wrote two abstention rows for a repeated MAC-less observation, which collided.
+    #[tokio::test]
+    async fn a_repeated_obs_id_writes_one_link() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let twice = mac_less(1, l2(1), 1_700_000_000);
+        let Some(pool) = fixture(std::slice::from_ref(&twice)).await else {
+            return;
+        };
+
+        let summary = pass(&pool, vec![twice.clone(), twice.clone()]).await;
+
+        assert_eq!(summary.links_written, 1, "one observation, one link");
+        assert_eq!(count_identity_links(&pool).await.expect("count"), 1);
     }
 
     /// Decision 8 — the universe is `n(n-1)/2` over DISTINCT ids, asserted rather than quoted.
