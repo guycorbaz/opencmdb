@@ -2585,3 +2585,29 @@ story does not meet**. One CLOSED, two ANSWERED-AND-RE-OWNED, one left untouched
   as AC6 requires. The validation measured the opposite ordering doing the opposite. Not a defect
   here; recorded as a shape to watch, because two mutations of story 5.9b landed on a summary line
   rather than on the assertion their AC named.
+
+## Deferred from: code review of story-5-10 (2026-08-05)
+
+Three-layer review of `master...a82fa3a`; **all three layers ran their own live
+`mariadb:10.11.11`** and the Auditor re-executed the mutation pass. Three entries deferred.
+
+- ⚠️ **The purge deletes superseded rows the snapshot never compared.** `purge_engine_links` has no
+  `current_subject` filter; `snapshot_links` restricts to current rows. So "bit for bit" covers
+  what is current, while the purge erases history as well — measured: a pass, then
+  `close_identity_link`, gives `rows_in_table = 1, snapshot_len = 0, purge_count = 1`. Inert today
+  because nothing supersedes, and `a_superseded_engine_link_is_not_restored_by_the_replay` now names
+  the asymmetry rather than leaving it silent. **Owner: story 5.11**, the first story that
+  supersedes — it must decide whether the replay owes history anything.
+- ⚠️ **The comparison is blind to `link_candidate` and to `interface`'s own columns.**
+  `snapshot_links` covers `identity_link` only; `interface_ids` compares the `id` column and not
+  `l2_domain`, `mac_canon` or the seen-window. More materially, the purge CASCADES candidates away
+  and nothing asserts the replay puts them back — latent, because L1 has no `Ambiguous` producer and
+  the resolver writes no candidate. **Owner: Epic 6**, the first producer of `Ambiguous`; a
+  `snapshot_candidates` compared alongside would turn the blindness into a red the day it stops
+  being empty.
+- ⚠️ **The purge and the replay run in TWO transactions, and the composed shape runs nowhere.**
+  `purge_engine_links` commits, and only then does the replay open its own transaction. If the
+  replay fails — a unique collision with an operator row is exactly that case, and
+  `an_operator_cannot_take_a_slot_the_engine_holds` measures it — the purge is already committed and
+  the engine's links are gone with nothing to restore them. Both in one unit of work is what a
+  production caller needs. **Owner: the first story that gives the purge a production caller.**

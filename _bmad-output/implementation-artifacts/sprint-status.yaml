@@ -66,7 +66,17 @@ last_updated: 2026-08-04  # 5.9b **DONE** -- PR #67 squash-merged as `94314e9` a
                           # 🔑 An ORDER BY inside a function used on BOTH sides of a comparison is
                           # UNREDDENABLE -> the snapshot's order has a test of its own.
                           # 🔴 The two natures are MUTUALLY EXCLUSIVE on one placement -> owner 5.14.
-                          # NEXT = `code-review` 5.10, then push -> PR -> green CI -> squash merge.
+                          # 5.10 CODE-REVIEWED: 1 decision open, 18 patches, 3 deferrals.
+                          # 411 -> 415 tests, mutations 7 -> 12. Six of seven reproduced exactly.
+                          # 🔴 MY HEADLINE WAS REFUTED by a fixture I had declared impossible:
+                          # `purge_engine_links` has NO current_subject filter, so it deletes
+                          # SUPERSEDED engine rows the snapshot excludes -- the store after a
+                          # purge-and-replay is NOT the store before it. Now a test + M3c.
+                          # 🔴 I diagnosed that an ORDER BY used on BOTH sides of a comparison is
+                          # unreddenable and did NOT generalise it to the PROJECTION: eight of the
+                          # ten compared columns could be blanked with the whole suite green, and
+                          # rule_id was asserted NOWHERE. Fixed with one-sided oracles (M7/M8/M9).
+                          # NEXT = push -> PR -> green CI -> squash merge.
                           # (contexting entry:) TWO ARBITRATIONS by Guy:
                           #  (1) 🔴 "bit for bit" = every decision-bearing column EXCEPT `id`.
                           #      uuid v7 stamps a wall-clock ms into the primary key, so it is
@@ -78,8 +88,7 @@ last_updated: 2026-08-04  # 5.9b **DONE** -- PR #67 squash-merged as `94314e9` a
                           #      two-natures frontier is real in the schema today.
                           # Also: the purge is a DELETE, not epics.md's pseudo-SQL
                           # `TRUNCATE ... WHERE` (registered with Epic 5's retrospective).
-                          # NEXT = the MANDATORY two-agent validation of 5.10, the gap-hunt with
-                          # a real mariadb:10.11.11 on 13306.
+                          # (its validation is done.)
                           # 🔴 5.10 INHERITS TWO THINGS FROM THIS REVIEW: uuid v7 stamps a
                           # wall-clock millisecond into every interface.id and identity_link.id,
                           # so its *bit for bit* can only mean MODULO THE IDS -- write that into
@@ -122,7 +131,7 @@ last_updated: 2026-08-04  # 5.9b **DONE** -- PR #67 squash-merged as `94314e9` a
                           # "a divergence is a FINDING" rule to its own three divergences; a doc
                           # cited a test that had been INVENTED; RESOLVER_RULESET_VERSION was dead
                           # code with a false doc; and this very block contradicted itself.
-                          # NEXT = push -> PR -> green CI -> squash merge.
+                          # (that NEXT is spent: 5.9b was merged as `94314e9`, PR #67.)
                           # ⚠️ For any DB story the gap-hunt MUST run a real MariaDB (13306; 3306 is
                           # held by an unrelated container). And a mutation that changes the ARITY
                           # of a statement's bind parameters HANGS the suite instead of reddening
