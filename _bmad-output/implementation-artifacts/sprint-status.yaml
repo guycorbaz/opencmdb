@@ -54,7 +54,20 @@ last_updated: 2026-08-04  # 5.9b **DONE** -- PR #67 squash-merged as `94314e9` a
                           # run. **Epic 5 is now 12/17.** `master` carries **408 tests**
                           # (203 bin + 159 core + 46 xtask) and six green gates; the branch is
                           # deleted locally and on `origin`.
-                          # 5.10 is CONTEXTED -> `ready-for-dev`. TWO ARBITRATIONS by Guy:
+                          # 5.10 is IMPLEMENTED -> `review` (NOT `done`: that is the MERGE's
+                          # business). Branch `story-5-10-purge-test`, commits NOT PUSHED.
+                          # 408 -> 411 tests, six gates green, corpus still 11 unanswerable.
+                          # D14's own test PASSES: purge the engine's links, re-run, and every
+                          # decision-bearing column comes back identical.
+                          # 🔴 epics.md:1634 asks for something a purge-and-replay can NEVER do,
+                          # and it is now MEASURED: M1 (keyed on the interface being FOUND) reds;
+                          # M1-noop (keyed on an EXISTING LINK) reds NOTHING, because the purge
+                          # restores the state run 1 started from. Registered with Epic 5's retro.
+                          # 🔑 An ORDER BY inside a function used on BOTH sides of a comparison is
+                          # UNREDDENABLE -> the snapshot's order has a test of its own.
+                          # 🔴 The two natures are MUTUALLY EXCLUSIVE on one placement -> owner 5.14.
+                          # NEXT = `code-review` 5.10, then push -> PR -> green CI -> squash merge.
+                          # (contexting entry:) TWO ARBITRATIONS by Guy:
                           #  (1) 🔴 "bit for bit" = every decision-bearing column EXCEPT `id`.
                           #      uuid v7 stamps a wall-clock ms into the primary key, so it is
                           #      NOT reproducible by construction; D14 says "the same DECISIONS"
@@ -1418,7 +1431,7 @@ development_status:
   # pair and returns none). NO `device` table and NO `entity` supertype -- both Epic 6.
   5-9-persist-interface-and-identity-link: done
   5-9b-engine-resolves-and-writes-links: done
-  5-10-purge-test: in-progress
+  5-10-purge-test: review
   5-11-order-independence: backlog
   5-12-never-overwrite-anti-regression: backlog
   5-13-monotone-honesty-trap-family: backlog

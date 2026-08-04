@@ -1,6 +1,6 @@
 # Story 5.10: The purge test proves the link is a cache of attention, not of truth
 
-Status: ready-for-dev
+Status: review
 
 <!-- ✅ VALIDATED 2026-08-04 by two fresh-context agents (fact-check + gap-hunt), as this project
      requires. **The gap-hunt BUILT the story** against a live `mariadb:10.11.11` on port 13311,
@@ -409,75 +409,75 @@ it saying `review` and *"NEXT = dev-story"* at once.
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — branch, live database, committed baseline (AC8)**
-  - [ ] Branch from `master` at `0b3f09c`: `story-5-10-purge-test`.
-  - [ ] Start `mariadb:10.11.11` on **13306**, confirm `docker ps`, record the baseline **with** the
+- [x] **T1 — branch, live database, committed baseline (AC8)**
+  - [x] Branch from `master` at `0b3f09c`: `story-5-10-purge-test`.
+  - [x] Start `mariadb:10.11.11` on **13306**, confirm `docker ps`, record the baseline **with** the
         DB set (408, and the bin suite slower than without — that gap is the only local evidence the
         DB tests ran).
-  - [ ] **Commit the clean baseline before the mutation pass.**
+  - [x] **Commit the clean baseline before the mutation pass.**
 
-- [ ] **T2 — `purge_engine_links` and `snapshot_links` (AC1, AC2)**
-  - [ ] `purge_engine_links(executor) -> Result<u64, sqlx::Error>`, static SQL, with the `DELETE`
+- [x] **T2 — `purge_engine_links` and `snapshot_links` (AC1, AC2)**
+  - [x] `purge_engine_links(executor) -> Result<u64, sqlx::Error>`, static SQL, with the `DELETE`
         vs `TRUNCATE` sentence in its doc.
-  - [ ] `snapshot_links(executor) -> Result<Vec<LinkSnapshot>, sqlx::Error>` — the ten compared
+  - [x] `snapshot_links(executor) -> Result<Vec<LinkSnapshot>, sqlx::Error>` — the ten compared
         columns, **no `id`**, ordered by `(observation_id, current_subject)`. `LinkSnapshot` derives
         `Debug, Clone, PartialEq, Eq`.
-  - [ ] Point `purging_engine_links_takes_their_candidates_with_them` at the new body.
-  - [ ] ⚠️ Watch `file-size`: `repo.rs` is at **773** code lines of a 2000 ceiling.
+  - [x] Point `purging_engine_links_takes_their_candidates_with_them` at the new body.
+  - [x] ⚠️ Watch `file-size`: `repo.rs` is at **773** code lines of a 2000 ceiling.
 
-- [ ] **T3 — the purge-and-replay test (AC3, AC4)**
-  - [ ] A fixture with a multi-MAC observation, a MAC-less one, and a group of three.
-  - [ ] Resolve → snapshot → capture the interface ids → purge → resolve again → snapshot.
-  - [ ] `assert_eq!(after, before)` on the whole `Vec`, and the interface id SET unchanged.
-  - [ ] The test's name says what is excluded, e.g.
+- [x] **T3 — the purge-and-replay test (AC3, AC4)**
+  - [x] A fixture with a multi-MAC observation, a MAC-less one, and a group of three.
+  - [x] Resolve → snapshot → capture the interface ids → purge → resolve again → snapshot.
+  - [x] `assert_eq!(after, before)` on the whole `Vec`, and the interface id SET unchanged.
+  - [x] The test's name says what is excluded, e.g.
         `every_column_but_the_id_survives_a_purge_and_replay`.
 
-- [ ] **T4 — the operator's rows (AC5)**
-  - [ ] Write an `OPERATOR` link through the adapter, **on an observation the pass does not place**
+- [x] **T4 — the operator's rows (AC5)**
+  - [x] Write an `OPERATOR` link through the adapter, **on an observation the pass does not place**
         (AC5). ⚠️ Measured: on one the pass DOES place, the write is `Err(Constraint("unique"))`.
-  - [ ] 🔴 **Its `link_candidate` child needs the `an_abstention` idiom and goes AROUND
+  - [x] 🔴 **Its `link_candidate` child needs the `an_abstention` idiom and goes AROUND
         `guard_decision`.** `identity_link_abstained_has_no_interface` forces a non-abstained row to
         name an interface, so a candidate only makes sense on an ABSTENTION — and
         `resolver::guard_decision` refuses `Abstained { Ambiguous }` with an empty candidate slice,
         which is the shape this needs. Hand-build the `Decision` (the `repo.rs` test module already
         has `an_abstention`), call `insert_identity_link` directly, and point the candidate at an
         interface the engine minted — `link_candidate_interface_fk` is RESTRICT.
-  - [ ] Purge; assert the row is present with its `id` intact, its children too, and that
+  - [x] Purge; assert the row is present with its `id` intact, its children too, and that
         `purge_engine_links` returned exactly the ENGINE count.
 
-- [ ] **T5 — prove-to-red (AC6, AC8). Every mutation WITH the database.**
-  - [ ] 🔴 **M1 — derive a compared column from whether the interface was FOUND rather than minted**
+- [x] **T5 — prove-to-red (AC6, AC8). Every mutation WITH the database.**
+  - [x] 🔴 **M1 — derive a compared column from whether the interface was FOUND rather than minted**
         → AC3's comparison must red, assertion-carried on `assert_eq!(after, before)`. **This is the
         only mutation that reaches AC3**, and it was measured as the sole red.
-  - [ ] 🔴 **M1-noop — the mutation this task first prescribed, kept AS a measurement.** Make the
+  - [x] 🔴 **M1-noop — the mutation this task first prescribed, kept AS a measurement.** Make the
         resolver derive `valid_from` from an existing LINK. It reds
         `the_stored_instants_are_the_derived_ones` (story 5.9b's test) and leaves AC3's comparison
         **GREEN** — measured by the validation, in one run. **Record it as a no-op and say why**,
         because the why is the story's sharpest fact (§8).
-  - [ ] **M2** — purge `interface` rows alongside the links → AC4 must red on the id set, and AC3 on
+  - [x] **M2** — purge `interface` rows alongside the links → AC4 must red on the id set, and AC3 on
         `interface_id`.
-  - [ ] 🔴 **M3** — drop `snapshot_links`' `ORDER BY` → **the ORDERING test of AC2 must red**, never
+  - [x] 🔴 **M3** — drop `snapshot_links`' `ORDER BY` → **the ORDERING test of AC2 must red**, never
         AC3's comparison. ⚠️ **Measured at the validation: against AC3 it is a no-op and the whole
         suite stays green**, structurally — both snapshots go through the same query (§5c). Record
         both halves.
-  - [ ] **M4** — make `purge_engine_links` delete every row regardless of `decided_by` → AC5 must
+  - [x] **M4** — make `purge_engine_links` delete every row regardless of `decided_by` → AC5 must
         red.
-  - [ ] **M5** — re-mint the interface instead of finding it by key (5.9b's M3, re-run here) → AC4
+  - [x] **M5** — re-mint the interface instead of finding it by key (5.9b's M3, re-run here) → AC4
         must red. ⚠️ Measured: it reds **5** tests, **3 of them story 5.9b's**, and in AC3's test the
         carrier is the SUMMARY assertion rather than the id set. Say which of the five are this
         story's coverage and which are inherited.
-  - [ ] **M6** — include `id` in `LinkSnapshot` → AC3 must red, which is the *positive* proof that
+  - [x] **M6** — include `id` in `LinkSnapshot` → AC3 must red, which is the *positive* proof that
         the exclusion of decision 1 is load-bearing and not a convenience.
-  - [ ] 🔴 **Record the carrier PER TEST, never one label for a set.** M2 was measured producing
+  - [x] 🔴 **Record the carrier PER TEST, never one label for a set.** M2 was measured producing
         **1 assertion + 2 `.expect` panics**; a single label there is the exact defect story 5.9b's
         review found in its own Debug Log.
-  - [ ] ⚠️ **A trap the validation hit**: `fetch_optional` on an aggregate (`MAX(...)`) returns
+  - [x] ⚠️ **A trap the validation hit**: `fetch_optional` on an aggregate (`MAX(...)`) returns
         `Some((NULL,))`, not `None`, so decoding it into a non-`Option` column errors the whole pass
         — 23 tests red, all `.expect` panics. If a mutation needs an aggregate, bind it as `Option`.
-  - [ ] Record, **per test**: DB yes/no, which tests red, and what carried each red.
+  - [x] Record, **per test**: DB yes/no, which tests red, and what carried each red.
 
-- [ ] **T6 — register and docs (AC7, AC9)**
-  - [ ] Append this story's section to `deferred-work.md`:
+- [x] **T6 — register and docs (AC7, AC9)**
+  - [x] Append this story's section to `deferred-work.md`:
         · the `uuid` v7 entry **CLOSED**;
         · **BOTH** `datetime_literal` bullets — `:2302` and `:2484` — **ANSWERED AND RE-OWNED**
           (§4). ⚠️ They are not the same debt: the first is about this story's comparison, the
@@ -489,13 +489,13 @@ it saying `review` and *"NEXT = dev-story"* at once.
         · §2's `epics.md` `TRUNCATE` correction, and §5b's finding that **`epics.md:1634`'s
           "state the purge removes" points the wrong way** → **Epic 5's retrospective**;
         · 🔴 **the two natures are mutually exclusive on one placement** (AC5) → **story 5.14**.
-  - [ ] Update `docs/project-context.md` **and** `CLAUDE.md`, then grep both.
-  - [ ] Update `sprint-status.yaml`, **narrative included**.
+  - [x] Update `docs/project-context.md` **and** `CLAUDE.md`, then grep both.
+  - [x] Update `sprint-status.yaml`, **narrative included**.
 
-- [ ] **T7 — the full local gate, then the PR**
-  - [ ] `cargo fmt --all` · clippy **twice** · `cargo test --workspace --locked` **with the DB** ·
+- [x] **T7 — the full local gate, then the PR**
+  - [x] `cargo fmt --all` · clippy **twice** · `cargo test --workspace --locked` **with the DB** ·
         `cargo xtask ci`.
-  - [ ] Re-check the corpus: **11 unanswerable, `passed() == false`**.
+  - [x] Re-check the corpus: **11 unanswerable, `passed() == false`**.
   - [ ] Then `code-review`, then push → PR → green CI → **squash merge**. Never push to `master`;
         `done` is the MERGE's business.
 
@@ -564,9 +564,94 @@ _(to be filled by the dev agent)_
 
 ### Debug Log References
 
+#### The database run
+
+Everything below ran against a live `mariadb:10.11.11` in `opencmdb-dev-db`, host port **13306**
+(3306 is held by `kesh-mariadb`, another project's, untouched). Baseline with the DB set: **408**
+tests, and the bin suite takes **2.6 s** against **0.04 s** without — that gap is the only local
+evidence the DB-backed tests executed at all.
+
+#### 🔑 The central property holds, and the two organs agree
+
+`every_column_but_the_id_survives_a_purge_and_replay`: six links over three interfaces (a group of
+three, a multi-MAC observation, a MAC-less one), snapshot → purge → replay → snapshot, and
+**`assert_eq!(after, before)` passes on all ten compared columns**, `interface_id` included. The
+replay reports `interfaces_found = 3, interfaces_minted = 0`, so the interfaces it points at are the
+same rows — which is what makes excluding the link `id` safe rather than convenient.
+
+#### 🔴 The mutation pair that IS the story's sharpest fact
+
+**M1 and M1-noop are the same mutation up to what they key on, and only one can red.**
+
+| | keys on | reds |
+|---|---|---|
+| **M1** | whether the interface was **FOUND** — state the purge does NOT restore | `every_column_but_the_id_survives_a_purge_and_replay`, **assertion** |
+| **M1-noop** | an **existing LINK** — state the purge removes and the replay recreates | 🔴 **nothing. Zero tests.** |
+
+Both make `valid_from` — a compared column — conditional; both run against the live database. The
+purge restores the store to exactly the state run 1 started from, so a decision keyed on link rows
+produces the **same** value in both runs and the comparison cannot see it.
+
+🔑 **`epics.md:1634` therefore asks for the one thing this test can never do.** What it does prove is
+the useful statement: *the engine's output depends only on the observations and on the interfaces,
+never on its own prior links* — which is D14's *"cache of attention, not of truth"* made
+operational. Recorded rather than smoothed over, because the next reader will otherwise re-derive it.
+
+⚠️ **My FIRST attempt at M1 was itself a no-op**, for a third reason: it shifted the interface's
+seen-window, which is not a compared column. A mutation must touch something the assertion reads.
+
+#### The mutation table — carrier recorded PER TEST
+
+| # | mutation | DB | tests red | carrier, per test |
+|---|---|---|---|---|
+| **M1** | `valid_from` depends on the interface being FOUND | ✅ | 1 — `every_column_but_the_id_survives_a_purge_and_replay` | assertion |
+| **M1-noop** | the same, keyed on an existing LINK | ✅ | **0** | — (structural no-op, §5b) |
+| **M2** | purge `interface` rows alongside the links | ✅ | 2 | 🔴 **MIXED**: **assertion** on `every_column…` (`"interfaces are NOT purged, and their ids are the same rows"`, `left: []` vs three ids) + **`.expect` PANIC** on `the_operators_rows…` (the surviving operator link's FK refuses the delete, ERROR 1451) |
+| **M3** | drop `snapshot_links`' `ORDER BY` | ✅ | 1 — `the_snapshot_is_ordered_by_the_query_not_by_insertion` | assertion. 🔑 **AC3's comparison stayed GREEN**, structurally |
+| **M4** | purge every row regardless of `decided_by` | ✅ | 1 — `the_operators_rows_and_their_candidates_survive_the_purge` | assertion |
+| **M5** | never find, always mint | ✅ | 4 — of which **3 are story 5.9b's** | assertion ×4, incl. `every_column…` |
+| **M6** | put `id` back into `LinkSnapshot` | ✅ | 1 — `every_column_but_the_id_survives_a_purge_and_replay` | assertion |
+
+**M6 is the positive proof**: excluding the id is load-bearing, not a convenience — put it back and
+the comparison reds at once.
+
+⚠️ **M2 could not be written without changing `purge_engine_links`' signature.** A query body generic
+over `sqlx::Executor` consumes it BY VALUE, so a second statement needs `&mut MySqlConnection` — and
+the one call site passing `&pool` then has to change with it. Recorded because the shipped
+one-statement form hides it.
+
+⚠️ **The red of M2 lands on the assertion AC6 names**, and only because the id-set assertion is
+placed BEFORE the replay. Moved after it, a summary assertion pre-empts it — the validation measured
+exactly that on the gap-hunt's version.
+
 ### Completion Notes List
 
+- **AC1–AC9 met.** 408 → **411 tests** (206 bin + 159 core + 46 xtask), six gates green, both clippy
+  forms clean, `fixtures/` untouched, and the trap corpus still **11 unanswerable,
+  `passed() == false`** — re-checked, because a green gate here would be a regression.
+- 🔑 **D14's own test passes**: purge the engine's links, re-run, and every decision-bearing column
+  comes back identical. The story's whole premise is now a measurement rather than an argument.
+- 🔴 **`epics.md:1634` is falsified by measurement and the story says so.** M1-noop reds nothing, by
+  construction. The corrected statement is in §5b and in AC6.
+- 🔴 **The `ORDER BY` has a test of its own**, because a comparison of two snapshots can never carry
+  it — M3 confirms: it reds the ordering test and leaves AC3 green.
+- **`snapshot_links` is restricted to CURRENT links**, which is not a simplification: two superseded
+  versions of one placement carry equal sort keys, so the order over history would be InnoDB's
+  accident. Story 5.11 is the one that will supersede.
+- **The operator's row survives with its own `id`** — an INPUT keeps its identity; only derivations
+  are re-minted. It names an observation the pass does not place, because
+  `identity_link_one_current` makes the two natures mutually exclusive on one placement.
+- ⏸️ **T7's push/PR is deliberately NOT done.** `code-review` first; `done` is the MERGE's business.
+
 ### File List
+
+- `crates/opencmdb-bin/src/repo.rs` — MODIFIED (`purge_engine_links`, `LinkSnapshot`,
+  `snapshot_links`; the cascade test now delegates to the query body)
+- `crates/opencmdb-bin/src/resolver.rs` — MODIFIED (4 tests: the purge-and-replay, the ordering, the
+  operator's rows, plus the `interface_ids` and `purge_fixture` helpers)
+- `_bmad-output/implementation-artifacts/deferred-work.md` — MODIFIED (this story's section)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — MODIFIED
+- `docs/project-context.md`, `CLAUDE.md` — MODIFIED (AC9)
 
 ---
 
