@@ -1,6 +1,6 @@
 # Story 5.9b: The engine resolves a set of observations and writes the links it derives
 
-Status: ready-for-dev
+Status: review
 
 <!-- ⏳ VALIDATION HALF DONE (2026-08-04). Two fresh-context agents are required before `dev-story`
      — Guy's decision at the Epic 4 retrospective (2026-07-26). The template's "Validation is
@@ -742,136 +742,136 @@ write "12 done" while `sprint-status.yaml` says `review`** — `done` is the MER
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — branch, live database, committed baseline (AC10)**
-  - [ ] Branch from `master` at `47bdca2`: `story-5.9b-engine-resolves-and-writes-links`.
-  - [ ] Start `mariadb:10.11.11` on **13306** and export `DATABASE_URL` (§7). Confirm `docker ps`
+- [x] **T1 — branch, live database, committed baseline (AC10)**
+  - [x] Branch from `master` at `47bdca2`: `story-5.9b-engine-resolves-and-writes-links`.
+  - [x] Start `mariadb:10.11.11` on **13306** and export `DATABASE_URL` (§7). Confirm `docker ps`
         before trusting any green run. Record the baseline **with** the DB set, and note which tests
         run now that were silently returning.
-  - [ ] **Commit the clean baseline before the mutation pass** — `git checkout <file>` restores to
+  - [x] **Commit the clean baseline before the mutation pass** — `git checkout <file>` restores to
         HEAD, not to uncommitted work, and that has destroyed new tests mid-pass twice.
 
-- [ ] **T2 — the adapter's new query bodies (AC4, AC5, AC7)**
-  - [ ] `find_interface_by_l1_key(executor, l2_domain, &MacAddr) -> Result<Option<InterfaceId>, sqlx::Error>`
+- [x] **T2 — the adapter's new query bodies (AC4, AC5, AC7)**
+  - [x] `find_interface_by_l1_key(executor, l2_domain, &MacAddr) -> Result<Option<InterfaceId>, sqlx::Error>`
         — static SQL, bound values, `ORDER BY id LIMIT 1` **with a doc saying why an ordered
         first-match is correct**: the L1 index is deliberately non-unique (a cloned MAC is two real
         interfaces), so this returns *an* interface for the key and the cloned-MAC case is Epic 6's.
-  - [ ] `widen_interface_seen_window(executor, id, first_seen, last_seen)` — `LEAST`/`GREATEST`
+  - [x] `widen_interface_seen_window(executor, id, first_seen, last_seen)` — `LEAST`/`GREATEST`
         (decision 7), with the D10 sentence in its doc.
-  - [ ] The link writer (see T3) may live in `resolver.rs`; the raw query bodies stay in `repo.rs`.
+  - [x] The link writer (see T3) may live in `resolver.rs`; the raw query bodies stay in `repo.rs`.
         ⚠️ **Watch `file-size`**: `repo.rs` is at 657 code lines of a 2000 ceiling.
-  - [ ] Give `count_identity_links` a caller and a test, or delete it (register #9).
+  - [x] Give `count_identity_links` a caller and a test, or delete it (register #9).
 
-- [ ] **T3 — the resolver (AC1, AC2, AC3, AC5, AC6)**
-  - [ ] New `crates/opencmdb-bin/src/resolver.rs`; declare `mod resolver;` in `main.rs`.
-  - [ ] 🔴 **`#![allow(dead_code)]` at the top of the file, with the one-line justification
+- [x] **T3 — the resolver (AC1, AC2, AC3, AC5, AC6)**
+  - [x] New `crates/opencmdb-bin/src/resolver.rs`; declare `mod resolver;` in `main.rs`.
+  - [x] 🔴 **`#![allow(dead_code)]` at the top of the file, with the one-line justification
         `repo.rs:11` already carries** — it is the price of decision 3. ⚠️ Measured at the
         validation: without it, `cargo clippy --workspace --locked -- -D warnings` (**the CI form**)
         fails with **8 `error: … is never used`** on the whole deliverable, while `--all-targets`
         passes because the tests keep it alive. That is §8's two-clippy warning landing on this
         story's own central module, and it bites at T9 after everything is written.
-  - [ ] **TWO entry points** (decision 12): `resolve(conn, observations)` computes the universe and
+  - [x] **TWO entry points** (decision 12): `resolve(conn, observations)` computes the universe and
         delegates to `resolve_within(conn, observations, &universe)`. Both return a summary of
         **counts** (interfaces minted, interfaces found, links, abstentions, candidate pairs).
         Neither opens a transaction: the caller wraps it in `repo.transact(…)`, which is what makes
         *"never split across two transactions"* structural rather than a promise. ⚠️ **The seam is
         not decoration** — without it M12 was measured leaving all 397 tests green.
-  - [ ] ⚠️ **Do not prescribe an idempotent pass** (decision 10). Running `resolve` twice over one
+  - [x] ⚠️ **Do not prescribe an idempotent pass** (decision 10). Running `resolve` twice over one
         slice is `Err(Constraint("unique"))` and a full rollback; that is story 5.11's.
-  - [ ] The pass, in D13's order: `candidates` once → `join` → per group, per observation, confirm
+  - [x] The pass, in D13's order: `candidates` once → `join` → per group, per observation, confirm
         the pair is in the universe, `decide_pair`, find-or-mint the interface, widen the window,
         write the link.
-  - [ ] The abstention branch for observations with no L1 key (decision 6), taking its `Decision`
+  - [x] The abstention branch for observations with no L1 key (decision 6), taking its `Decision`
         from `decide_pair(o, w)` **whenever any pair exists** — the engine returns
         `Abstained { AbsenceOfProof }` for free — and only manufacturing one for a slice of a single
         MAC-less observation.
-  - [ ] The two guards, in `resolver.rs` and returning `RepositoryError::Constraint`: `Ambiguous`
+  - [x] The two guards, in `resolver.rs` and returning `RepositoryError::Constraint`: `Ambiguous`
         with no candidates, and an empty `rule_id`. ⚠️ **Not in `insert_identity_link`** — it
         returns `sqlx::Error`, in which `RepositoryError::Constraint` is not constructible (AC5).
-  - [ ] ⚠️ No `Utc::now()`, no `NOW(6)`, no `Clock`. Every instant derived (§6.2).
+  - [x] ⚠️ No `Utc::now()`, no `NOW(6)`, no `Clock`. Every instant derived (§6.2).
 
-- [ ] **T3b — `identity::l1::decide_singleton` (decision 5, AC3)**
-  - [ ] `pub fn decide_singleton(o: &Observation) -> Decision` in
+- [x] **T3b — `identity::l1::decide_singleton` (decision 5, AC3)**
+  - [x] `pub fn decide_singleton(o: &Observation) -> Decision` in
         `crates/opencmdb-core/src/identity/l1.rs`: build the one-element `Decisive` `RuleVerdict`
         on `L1_EXACT_MAC` with `evidence = vec![o.obs_id]`, return
         `decide(vec![…], CURRENT_RULESET_VERSION)`. **Nothing bypasses `decide`.**
-  - [ ] Its doc says what it is for and why it exists **here** rather than in the resolver: verdict
+  - [x] Its doc says what it is for and why it exists **here** rather than in the resolver: verdict
         composition stays inside `l1.rs`, which is the whole reason `verdict_for_pair` is
         `pub(crate)`.
-  - [ ] ⚠️ **This is the ONLY change to the engine in this story.** `join`, `decide_pair` and
+  - [x] ⚠️ **This is the ONLY change to the engine in this story.** `join`, `decide_pair` and
         `verdict_for_pair` are untouched, and a second engine edit is a FINDING.
-  - [ ] Update the residue statement in **all three** places that carry it —
+  - [x] Update the residue statement in **all three** places that carry it —
         `deferred-work.md:2187`, `:2195`, and the doc comment at `cascade.rs:345-347`, which names
         story 5.9 as owner. Two of three is the doc-twin defect.
 
-- [ ] **T4 — `0003_resolver_guards.sql` (AC7)**
-  - [ ] The three guards. One statement per line, prose on its own `--` lines (§8).
-  - [ ] ⚠️ **Do not edit `0002`.** ⚠️ `touch` the crate after adding the file — `sqlx::migrate!`
+- [x] **T4 — `0003_resolver_guards.sql` (AC7)**
+  - [x] The three guards. One statement per line, prose on its own `--` lines (§8).
+  - [x] ⚠️ **Do not edit `0002`.** ⚠️ `touch` the crate after adding the file — `sqlx::migrate!`
         embeds the directory at compile time.
-  - [ ] 🔴 **DROP AND RECREATE `opencmdb_test` before the first `0003` run, and between DDL
+  - [x] 🔴 **DROP AND RECREATE `opencmdb_test` before the first `0003` run, and between DDL
         mutations.** Measured: on a database that already holds a story-5.9-era link whose
         `observation_id` names no observation, the `ALTER TABLE … ADD CONSTRAINT
         identity_link_observation_fk` fails **ERROR 1452**, `sqlx::migrate!` refuses the set, and
         every DB test dies at `.expect("migrate")`. §7 tells you to reuse the container story 5.9
         used; its data is what bites.
-  - [ ] Show the `ddl-collation` gate biting, then restore.
+  - [x] Show the `ddl-collation` gate biting, then restore.
 
-- [ ] **T5 — fix the tests the FK reds (AC7)**
-  - [ ] Run the suite with `0003` applied and **count** the reds. 🔴 The measured number is
+- [x] **T5 — fix the tests the FK reds (AC7)**
+  - [x] Run the suite with `0003` applied and **count** the reds. 🔴 The measured number is
         **14 across two files** — 12 in `repo.rs` (`Constraint("foreign_key")`, panic-carried) plus
         `repo::tests::ingest_observation_round_trip` and **`main::tests::index_renders_the_real_gap`**,
         which fail **ERROR 1451** on a `DELETE FROM observation_record` that does not delete links
         first. The register's "eight" is corrected, not repeated.
-  - [ ] Fix the twelve by inserting the observation the link refers to; fix the two others by
+  - [x] Fix the twelve by inserting the observation the link refers to; fix the two others by
         **ordering the cleanup** (links before observations). **Never by dropping the FK** and never
         by relaxing a test.
-  - [ ] ⚠️ **The two ERROR 1451 ones are ORDER-DEPENDENT** — they pass when run alone. Trust the
+  - [x] ⚠️ **The two ERROR 1451 ones are ORDER-DEPENDENT** — they pass when run alone. Trust the
         full-suite run, not a filtered one.
-  - [ ] 🔴 **Then go to `every_ddl_guard_refuses_what_it_names`, which does NOT red** and now passes
+  - [x] 🔴 **Then go to `every_ddl_guard_refuses_what_it_names`, which does NOT red** and now passes
         for the wrong reason (AC7). Give its interface-FK case a real observation.
 
-- [ ] **T6 — the tests (AC2–AC8), all `DATABASE_URL`-gated and under `DB_TEST_LOCK`**
-  - [ ] two observations, one shared MAC → **1** interface, **2** links, both current (AC2).
-  - [ ] one observation with two MACs → **2** interfaces, **2** current links (AC2). ⚠️ **Synthetic
+- [x] **T6 — the tests (AC2–AC8), all `DATABASE_URL`-gated and under `DB_TEST_LOCK`**
+  - [x] two observations, one shared MAC → **1** interface, **2** links, both current (AC2).
+  - [x] one observation with two MACs → **2** interfaces, **2** current links (AC2). ⚠️ **Synthetic
         by necessity**: no committed observation carries two MACs (§2), so nothing under `fixtures/`
         can stand in for this test.
-  - [ ] a singleton group → one link, `l1-exact-mac`, evidence `[o]` (AC3, decision 5).
-  - [ ] a placement's rule and evidence come from `decide_pair` — assert the evidence equals the
+  - [x] a singleton group → one link, `l1-exact-mac`, evidence `[o]` (AC3, decision 5).
+  - [x] a placement's rule and evidence come from `decide_pair` — assert the evidence equals the
         sorted pair, not a constant (AC3).
-  - [ ] two passes over **DIFFERENT observations on the same key**, first in ONE transaction (AC4,
+  - [x] two passes over **DIFFERENT observations on the same key**, first in ONE transaction (AC4,
         read-your-own-writes), then in TWO → **1** interface either way, found and not minted
         (measured green: `interfaces_found = 1`, `interfaces_minted = 0`). ⚠️ **Not the same
         observations twice** — that is `Err(Constraint("unique"))` and a full rollback (decision 10).
-  - [ ] an older second batch **widens the window at BOTH ends** (AC6, decision 7). ⚠️ Measured:
+  - [x] an older second batch **widens the window at BOTH ends** (AC6, decision 7). ⚠️ Measured:
         under M7 `first_seen_at` lands on the right value anyway and only the `last_seen_at`
         assertion reds — a test asserting one end passes the mutation.
-  - [ ] an observation with no MAC → an abstained link, `AbsenceOfProof`, **0** candidates (AC5).
-  - [ ] the two writer guards, **called directly** (AC5) — not through the resolver, which cannot
+  - [x] an observation with no MAC → an abstained link, `AbsenceOfProof`, **0** candidates (AC5).
+  - [x] the two writer guards, **called directly** (AC5) — not through the resolver, which cannot
         reach them.
-  - [ ] the **three new guards** — the observation FK and the two CHECKs — each by a **raw SQL
+  - [x] the **three new guards** — the observation FK and the two CHECKs — each by a **raw SQL
         insert** going around the adapter (AC7): a link naming an absent `observation_id` (M8), an
         uppercase `mac_canon` (M9), an empty `rule_id` (M10). ⚠️ **The FK is not a CHECK**; do not
         let a "three CHECKs" heading absorb a constraint of another kind.
-  - [ ] the agreement test and the **transitivity** case, synthetic, no DB needed (AC8).
-  - [ ] `candidates(obs).len() == n*(n-1)/2` over distinct ids, asserted (decision 8).
-  - [ ] 🔴 **two scopes, one MAC** — two observations sharing a MAC in **two** `l2_domain`s →
+  - [x] the agreement test and the **transitivity** case, synthetic, no DB needed (AC8).
+  - [x] `candidates(obs).len() == n*(n-1)/2` over distinct ids, asserted (decision 8).
+  - [x] 🔴 **two scopes, one MAC** — two observations sharing a MAC in **two** `l2_domain`s →
         **2** interfaces, **2** links. Synthetic by necessity: every committed stream carries one
         `l2_domain` [`l1.rs:83-88`]. **Added at the validation**, which measured that M1 had no
         target test.
-  - [ ] 🔴 **the stored instants are the derived ones** — read `interface.first_seen_at` /
+  - [x] 🔴 **the stored instants are the derived ones** — read `interface.first_seen_at` /
         `last_seen_at` and `identity_link.valid_from` back and compare against the group's
         `min`/`max` `observed_at` and the observation's own. **Added at the validation**: every
         other prescribed test asserts a COUNT, which a clock-derived instant does not change, so
         M6 had nothing to red. ⚠️ Read them with `CAST(… AS CHAR)` and compare against
         `datetime_literal(expected)` — `sqlx` is built without `chrono` here (decision 7), and that
         is the same transport idiom `load_link_valid_to` already uses [`repo.rs`].
-  - [ ] 🔴 **the reference scale** — build **300** synthetic observations and assert
+  - [x] 🔴 **the reference scale** — build **300** synthetic observations and assert
         `candidates(&obs).len() == 44_850`, recording the pass's wall-clock in the Debug Log
         (decision 8, AC9). **Added at the validation**, which measured that no task produced the
         reference-scale number both decision 8 and AC9 demand.
 
-- [ ] **T7 — prove-to-red (AC10). Every mutation run WITH `DATABASE_URL` set unless marked.**
+- [x] **T7 — prove-to-red (AC10). Every mutation run WITH `DATABASE_URL` set unless marked.**
       Record for each: DB yes/no, tests red, **and what CARRIED the red**.
-  - [ ] **M1** — make `find_interface_by_l1_key` ignore `l2_domain` and match on `mac_canon` alone
+  - [x] **M1** — make `find_interface_by_l1_key` ignore `l2_domain` and match on `mac_canon` alone
         → the **two-scope test** must red on its interface COUNT. ⚠️ **Re-aimed at the validation.**
         As first written it said *"group by the bare MAC"*, which is `join`'s key and therefore an
         edit to `identity/l1.rs` — a file this story forbids itself to touch, and a guard story 5.5
@@ -880,22 +880,22 @@ write "12 done" while `sprint-status.yaml` says `review`** — `done` is the MER
         ⚠️ Measured at the validation in its ORIGINAL form (mutating `keys_of`): **10 tests red, 7 of
         them `opencmdb-core`'s own** — it re-measured stories 5.5 and 5.6's committed guards and
         added no coverage here, with only one assertion-carried red among the three in the resolver.
-  - [ ] **M2** — build the groups as connected components of the `Match` pairs instead of by key →
+  - [x] **M2** — build the groups as connected components of the `Match` pairs instead of by key →
         **the DB-level transitivity test** must red (§3's refutation, MEASURED). ⚠️ **Re-aimed at
         the validation**: against the PURE transitivity test it was measured a **NO-OP** — that test
         calls `join` and `decide_pair` directly and never calls `resolve`, so the whole suite stays
         green except one incidental multi-NIC assertion. §3 is right; the wiring was wrong. Against
         the DB test the red is assertion-carried (`two interfaces, left: 1, right: 2`).
-  - [ ] **M3** — skip `find_interface_by_l1_key` and always mint → the "1 interface after two
+  - [x] **M3** — skip `find_interface_by_l1_key` and always mint → the "1 interface after two
         passes" test must red on its COUNT (AC4).
-  - [ ] **M4** — take the link's rule from a constant instead of from the `Decision` → the
+  - [x] **M4** — take the link's rule from a constant instead of from the `Decision` → the
         rule/evidence test must red. ⚠️ *Predict the shape: a constant `l1-exact-mac` is the RIGHT
         answer for every group of size ≥ 2, so the red must come from the **evidence**, not from the
         rule. If it only reds on the rule, the test is measuring the wrong half.*
-  - [ ] **M5** — write the abstention as an absence (no link row) → the abstention test must red on
+  - [x] **M5** — write the abstention as an absence (no link row) → the abstention test must red on
         its COUNT, never on an `.expect()` of the write (story 5.9's M4 lesson: the `.expect()` form
         lets a foreign key carry the red and the assertion is never evaluated).
-  - [ ] 🔴 **M6 — `NOW(6)`, in TWO variants, and NOT `Utc::now()`.** ⚠️ **Rewritten at the
+  - [x] 🔴 **M6 — `NOW(6)`, in TWO variants, and NOT `Utc::now()`.** ⚠️ **Rewritten at the
         validation, twice over.** `Utc::now()` **does not compile** here (`error[E0599]`; `chrono` is
         `default-features = false` in both crates to keep the `clock` feature off), so M6 as first
         written was **not executable**. And its named target was "the re-run reproducibility test",
@@ -906,34 +906,34 @@ write "12 done" while `sprint-status.yaml` says `review`** — `done` is the MER
           CHECK rather than for the instant. **No test read a link's `valid_from` back, and
           `PersistedLink` does not even carry the column.** The stored-instants test of T6 is what
           gives M6b a target — this is story 5.9's AC3 defect repeating one story later.
-  - [ ] **M7** — `LEAST`/`GREATEST` → plain assignment → the widening test must red (AC6).
-  - [ ] **M8** — drop the observation FK from `0003` → the test that a link cannot name a
+  - [x] **M7** — `LEAST`/`GREATEST` → plain assignment → the widening test must red (AC6).
+  - [x] **M8** — drop the observation FK from `0003` → the test that a link cannot name a
         non-existent observation must red (AC7).
-  - [ ] **M9** — drop `CHECK (mac_canon = LOWER(mac_canon))` → its raw-insert test must red (AC7).
-  - [ ] **M10** — drop `CHECK (rule_id <> '')` → its raw-insert test must red (AC7).
-  - [ ] **M11** — delete the `Ambiguous`-without-candidates guard → its direct test must red (AC5).
-  - [ ] 🔴 **M13** — delete the **empty-`rule_id` guard in the WRITER** (not the DDL CHECK, which is
+  - [x] **M9** — drop `CHECK (mac_canon = LOWER(mac_canon))` → its raw-insert test must red (AC7).
+  - [x] **M10** — drop `CHECK (rule_id <> '')` → its raw-insert test must red (AC7).
+  - [x] **M11** — delete the `Ambiguous`-without-candidates guard → its direct test must red (AC5).
+  - [x] 🔴 **M13** — delete the **empty-`rule_id` guard in the WRITER** (not the DDL CHECK, which is
         M10) → its direct test must red (AC5). **Added at the validation**: decision 6 names two
         writer guards and only one had a mutation. Story 5.9's M3 is the lesson — an adapter guard
         and its DDL echo must each be measured, because dropping one leaves the other carrying the
         test and the story records a red it did not earn.
-  - [ ] 🔴 **M12** — delete the universe check → a test handing `resolve_within` an **EMPTY**
+  - [x] 🔴 **M12** — delete the universe check → a test handing `resolve_within` an **EMPTY**
         universe must red (`"match"` vs `"abstained"`, assertion-carried). ⚠️ **The suspicion was
         confirmed by measurement**: against the real blocker, deleting the check leaves the **entire
         suite green (397/397)**, because `candidates` is TOTAL. The seam of decision 12 is what
         makes this mutation mean anything, and the narrowed-universe test is not optional.
 
-- [ ] **T8 — register and docs (AC9, AC10)**
-  - [ ] Append this story's section to `deferred-work.md`: the **eleven** entries of §5 with their
+- [x] **T8 — register and docs (AC9, AC10)**
+  - [x] Append this story's section to `deferred-work.md`: the **eleven** entries of §5 with their
         verbs and measurements, plus the four new residues of AC9.
-  - [ ] Update `docs/project-context.md` **and** `CLAUDE.md` with the same numbers, then grep both
+  - [x] Update `docs/project-context.md` **and** `CLAUDE.md` with the same numbers, then grep both
         for every phrase they duplicate. **Both twins, in the same commit.**
-  - [ ] Update `sprint-status.yaml`.
+  - [x] Update `sprint-status.yaml`.
 
-- [ ] **T9 — the full local gate, then the PR**
-  - [ ] `cargo fmt --all` · clippy **twice** (§8) · `cargo test --workspace --locked` **with the DB
+- [x] **T9 — the full local gate, then the PR**
+  - [x] `cargo fmt --all` · clippy **twice** (§8) · `cargo test --workspace --locked` **with the DB
         running** · `cargo xtask ci`.
-  - [ ] Re-check the corpus report: **11 unanswerable, `passed() == false`** (AC10).
+  - [x] Re-check the corpus report: **11 unanswerable, `passed() == false`** (AC10).
   - [ ] Then `code-review`, then push → PR → green CI → **squash merge**. Never push to `master`.
         `done` is the MERGE's business here, not the review's.
 
@@ -1048,9 +1048,146 @@ _(to be filled by the dev agent)_
 
 ### Debug Log References
 
+#### The database run (AC10)
+
+Everything below ran against a live **`mariadb:10.11.11`** in `opencmdb-dev-db`, host port **13306**
+(3306 is held by an unrelated `mariadb:11-jammy` from another project, untouched). `docker ps` was
+confirmed before every trusted run, and `SELECT VERSION()` reported `10.11.11-MariaDB-ubu2204`.
+
+🔑 **The baseline is the same with and without a database, and that is the point.** With
+`DATABASE_URL` set, `cargo test --workspace --locked` reports **181 / 156 / 46** — the same counts
+as without it. What changes is that the DB-backed tests EXECUTE instead of `return`ing: the bin
+suite takes **0.36 s** with the database and **0.02 s** without. That timing gap is the only local
+evidence they ran at all.
+
+#### 🔴 A mutation that changed BIND ARITY hung the suite for three hours
+
+Recorded because it cost real time and because the next reader will otherwise repeat it. The first
+form of M6b replaced `valid_from`'s `?` with `NOW(6)` in the SQL **and left the matching
+`.bind(datetime_literal(valid_from))` in place** — twelve binds for eleven placeholders. The suite
+did not fail: it **hung**, at 0 % CPU, for ~2 h 48 min, holding `DB_TEST_LOCK` so nothing else could
+run. A prepared-statement parameter mismatch desynchronises the MySQL protocol and the connection
+waits for a packet that never comes.
+
+Two consequences, both applied: **a mutation must preserve arity** — the corrected M6b drops the
+placeholder AND its bind — and **the mutation driver now runs each `cargo test` under a 420 s
+timeout**, so a hang is recorded as `<the suite HUNG>` instead of eating an afternoon.
+
+#### The foreign key reds in TWO WAVES, and the second is invisible until the first is fixed
+
+The story predicted *"14 tests across two files"*. Measured, the shape is sharper:
+
+1. `0003` applied to a freshly created database → **12 red in `repo.rs`**, every one
+   `Constraint("foreign_key")` panic-carried at `.expect()`. That is the register's "8", corrected.
+2. Those twelve fixed (an `an_observation` helper inserts the row the link names) →
+   **2 more appear**: `repo::tests::ingest_observation_round_trip` and
+   **`main::tests::index_renders_the_real_gap`**, both **ERROR 1451**, from a
+   `DELETE FROM observation_record` that does not delete links first.
+
+🔑 **The second wave cannot be seen before the first is fixed**, because a failing test rolls back
+its transaction and leaves no link behind for the cleanup to trip over. Fixed by ordering the
+cleanup (children before parents) in both files.
+
+#### The mutation table — 14 mutations, every red ASSERTION-carried, zero compiler-carried
+
+| # | mutation | DB | tests red | what carried the red |
+|---|---|---|---|---|
+| M1 | `find_interface_by_l1_key` ignores `l2_domain` | ✅ | 1 — `one_mac_in_two_scopes_is_two_interfaces` | assertion, `left: 1, right: 2` |
+| M2 | groups as connected components of the `Match` pairs | ✅ | 2 — `the_pass_does_not_fuse_a_with_c`, `one_observation_with_two_macs_lands_on_two_interfaces` | assertion, `left: 1, right: 2` |
+| M3 | always mint, never look up | ✅ | 3 | assertion, `left: 0, right: 1` on the found-count |
+| M4 | evidence from a constant instead of the verdict | ✅ | 1 — `a_placements_evidence_is_the_pair_the_engine_judged` | assertion, **on the EVIDENCE** |
+| M5 | the abstention written as an absence | ✅ | 1 | assertion, `left: 0, right: 1` on the COUNT |
+| M6a | interface window ← `NOW(6)` | ✅ | 3 | assertion, `left: "2026-08-04 11:47:56.907039"` |
+| M6b | link `valid_from` ← `NOW(6)` | ✅ | 4 — incl. `the_stored_instants_are_the_derived_ones` | assertion |
+| M7 | `LEAST`/`GREATEST` → plain assignment | ✅ | 1 | assertion, **on `last_seen_at`** |
+| M8 | drop `identity_link_observation_fk` | ✅ recreated | 1 | assertion, `left: None, right: Some(Constraint("foreign_key"))` |
+| M9 | drop `interface_mac_canon_lower` | ✅ recreated | 1 | assertion |
+| M10 | drop `identity_link_rule_id_not_empty` | ✅ recreated | 1 | assertion |
+| M11 | drop the `Ambiguous`-without-candidates guard | ✅ | 1 | assertion, `Ok(())` vs `Err(Constraint("ambiguity_without_candidates"))` |
+| M12 | drop the universe containment check | ✅ | 1 | assertion, `left: 0, right: 2` abstentions |
+| M13 | drop the empty-`rule_id` guard in the WRITER | ✅ | 1 | assertion |
+
+**Three predictions the validation made, all three confirmed by measurement:**
+
+- **M4's red comes from the EVIDENCE, not the rule.** `left: [obs1]` against
+  `right: [obs1, obs2]`. The rule is knowable in advance, so a test checking only the rule would
+  have measured a constant.
+- **M7's red comes from `last_seen_at`, the end AC6 did not originally name.**
+  `left: "2023-11-14 22:13:20"` against `right: "2023-11-14 22:21:40"` — the window was NARROWED to
+  the older batch. A test asserting `first_seen_at` alone passes this mutation.
+- **M12 needs the `resolve_within` seam.** With the universe computed internally the check is
+  unreachable, `candidates` being total; handed an EMPTY universe the test reds `0` abstentions
+  against `2`.
+
+**And M2 turns §3's refutation from a derivation into a measurement.** Grouping by connected
+components fuses A with C although they share no key: `left: 1, right: 2` interfaces. The story
+said this had to be measured rather than quoted, and it is.
+
+#### One collateral red, explained rather than left standing
+
+**M6a also reds `repo::tests::every_ddl_guard_refuses_what_it_names**, with
+`left: None, right: Some(Constraint("check"))`. That is not noise: the test's `interface_seen_window`
+case hands `insert_interface` an INVERTED window (`first = 1_700_000_100`, `last = 1_700_000_000`)
+and expects the CHECK to refuse it. M6a hardcodes `NOW(6), NOW(6)`, so the parameters never reach
+the columns, both ends are equal, and there is nothing left to violate. The mutation is faithful and
+story 5.9's guard is load-bearing — both facts, from one red.
+
 ### Completion Notes List
 
+- **AC1–AC10 met.** 383 → **402 tests** (197 bin + 159 core + 46 xtask), six `xtask ci` gates green,
+  `cargo fmt --check` clean, **both** clippy forms clean, `git status fixtures/` empty, and the
+  committed trap corpus still reports **11 unanswerable with `passed() == false`** — verified after
+  the fact, because a green gate here would have been a regression, not a win.
+- 🔴 **`identity::l1::decide_singleton` is the one change to the engine**, and it closes the hole the
+  validation found under a compiler: a singleton group has no pair, `insert_identity_link` requires a
+  `Decision`, and both alternatives were worse — a struct literal with an empty `verdict_vector` is
+  the *"merged, with no explanation"* shape D13 forbids, and composing the verdict in `opencmdb-bin`
+  is what `verdict_for_pair`'s `pub(crate)` exists to prevent. It builds the one-element `Decisive`
+  vector and returns `decide`'s value.
+- 🔑 **No struct-literal `Decision` was needed ANYWHERE, which is better than the story predicted.**
+  The excluded-pair and lone-MAC-less-observation cases both use
+  `decide(Vec::new(), CURRENT_RULESET_VERSION)` — the algebra's own answer for an empty verdict set,
+  and literally true here: nothing was evaluated because nothing was proposed. So the register entry
+  *"the first story that reconstructs a `Decision` from somewhere other than `decide`"* is ANSWERED
+  with its clause **still unmet**, not closed.
+- **The register: 11 entries disposed — 6 closed, 4 answered-not-closed, 1 measured and left open.**
+  ⚠️ Two of the four are dispositions the story expected to be closures: `L1Key`'s newtype is
+  **refused** with its reason (the key is destructured at its one use site and never travels as a
+  value), and **`count_identity_links` still has no PRODUCTION caller** — it gains two test callers
+  here and nothing more, so reporting it closed would be the over-claim seven reviews have caught.
+  The story's §5 said "CLOSE"; the measurement says otherwise, and the measurement wins.
+- ⚠️ **A task line and its own acceptance criterion disagree, and the disagreement is reported rather
+  than silently reconciled.** T6 says the transitivity case is *"synthetic, no DB needed"*; AC8, as
+  corrected at the validation, requires it **through `resolve` against the database**, because a
+  pure test never calls the resolver and cannot see its grouping change. **Both were written** — the
+  pure one states the quantifier, the DB one carries M2 — and this note exists because `dev-story`
+  may not edit a task line.
+- **Decision 8's number is measured, not quoted**: `candidates(&obs).len() == 44_850` at the
+  reference scale of 300 hosts, asserted in a test. D13's prose says "90k" for the same scale; the
+  figure counts pairs the other way, and the register carries the correction.
+- **`datetime_literal` and `open_end` were promoted out of privacy** (`pub(crate)`), the second out
+  of `repo.rs`'s test module entirely: the resolver writes every current link at the sentinel, and a
+  private helper is what makes a second spelling of an instant the natural reflex.
+- ⏸️ **T9's push/PR is deliberately NOT done.** The house order is `dev-story` → `code-review` → PR
+  → green CI → squash merge, and `done` is the MERGE's business here.
+
 ### File List
+
+- `crates/opencmdb-bin/src/resolver.rs` — NEW (the pass, its two entry points, the guards, 20 tests)
+- `crates/opencmdb-bin/migrations/0003_resolver_guards.sql` — NEW (three guards)
+- `crates/opencmdb-bin/src/repo.rs` — MODIFIED (`find_interface_by_l1_key`,
+  `widen_interface_seen_window`, `open_end` promoted out of the test module, `datetime_literal` made
+  `pub(crate)`, the `an_observation` fixture helper, the ordered cleanup, the three new guard tests,
+  15 link tests pointed at real observations)
+- `crates/opencmdb-bin/src/main.rs` — MODIFIED (`mod resolver;`, the ordered cleanup in
+  `index_renders_the_real_gap`)
+- `crates/opencmdb-core/src/identity/l1.rs` — MODIFIED (`decide_singleton` + 3 tests)
+- `crates/opencmdb-core/src/identity/cascade.rs` — MODIFIED (the struct-literal residue's doc: the
+  clause stands unmet, and why)
+- `_bmad-output/implementation-artifacts/deferred-work.md` — MODIFIED (this story's section)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — MODIFIED
+- `docs/project-context.md`, `CLAUDE.md` — MODIFIED (AC10, including the `absence_of_proof` token
+  both twins spelled as the Rust variant name)
 
 ---
 
@@ -1058,6 +1195,7 @@ _(to be filled by the dev agent)_
 
 | date | note |
 |---|---|
+| 2026-08-04 | **IMPLEMENTED → `review`.** 383 → **402 tests** (197 bin + 159 core + 46 xtask), six gates green, `fmt --check` clean, both clippy forms clean, `fixtures/` untouched, and the trap corpus still **11 unanswerable / `passed() == false`** (re-checked, because a green gate here would have been a regression). All **14 mutations run WITH a live `mariadb:10.11.11`**, and **every red is assertion-carried — zero compiler-carried**. 🔴 Three of the validation's predictions confirmed by measurement: M4 reds on the EVIDENCE and not the rule; M7 reds on `last_seen_at`, the window end AC6 had not named; and M12 is a no-op without the `resolve_within` seam, reddening `0` abstentions against `2` only when handed an empty universe. **M2 turns §3's refutation into a measurement** — connected components fuse A with C, `left: 1, right: 2`. 🔑 **No struct-literal `Decision` was needed anywhere**: `decide(vec![], _)` is the algebra's own answer for an empty verdict set, so the register's *"first story that reconstructs a `Decision` outside `decide`"* clause is ANSWERED and still UNMET rather than closed — as is `count_identity_links`, which gains two test callers and still no production one. 🔴 The foreign key reds in **two waves**: 12 in `repo.rs`, then 2 more (one in `main.rs`) that are **invisible until the first twelve are fixed**, because a failing test rolls back and leaves no link for the cleanup to trip over. ⚠️ And a mutation that changed BIND ARITY **hung the suite for 2 h 48 min at 0 % CPU** holding `DB_TEST_LOCK` — a prepared-statement parameter mismatch desynchronises the protocol; the driver now runs each suite under a timeout. |
 | 2026-08-04 | **GAP-HUNT layer done** — the story BUILT end to end in an isolated worktree against a live `mariadb:10.11.11`, **398 tests** (196 bin + 156 core + 46 xtask), six gates green, `fixtures/` untouched, every mutation executed. **7 HIGH, 5 MEDIUM, 7 LOW, all applied.** 🔴 Two arbitrations by Guy: a singleton's `Decision` comes from a **new `identity::l1::decide_singleton`** rather than from a struct literal or from the resolver composing a verdict — the one change this story makes to the engine, and the honest closure of the residue `cascade.rs:345-347` registers; and **the pass is NOT idempotent** (twice over one slice is `Err(Constraint("unique"))` and a full rollback), which is story 5.11's, so AC4's two tests move to different observations on the same key. 🔑 **Four prescriptions were not executable or measured nothing**: `Utc::now()` does not compile (`chrono` is `default-features = false` in both crates to keep `clock` off, deliberately), so M6 became `NOW(6)` in two variants; **M12 left the entire suite green** and needed the `resolve_within` seam to mean anything; **M2 was a no-op** against a transitivity test that never calls `resolve`; and **M6b had no target at all** — no test read a link's `valid_from` back, story 5.9's AC3 defect one story later. Also: the foreign key reds **14 tests across `repo.rs` AND `main.rs`**, not eight; `every_ddl_guard_refuses_what_it_names` now passes for the wrong reason and **never reds**, so nothing routes the dev to it; the widening test's red comes from `last_seen_at`, the end AC6 did not name; the reference scale is **44 850** pairs, not D13's "90k"; and `resolver.rs` needs `#![allow(dead_code)]` or the **CI** clippy form fails with 8 errors on the story's own deliverable. |
 | 2026-08-04 | **FACT-CHECK layer done** (fresh context, read-only): **78 claims measured, 69 true, 6 false, 6 gaps.** All applied, each re-measured independently first. 🔑 **44 / 44 line citations correct and every count exact** — the defects were entirely in quoted tokens, one corpus claim, and the AC↔task↔mutation seam. The three HIGH: the persisted token is `absence_of_proof` and not the variant name `AbsenceOfProof` (which appears in no committed byte); AC3's rule SET is unmeasurable because `l1-distinct-mac` is unwritable by three independent steps (`Disqualifying` → `NoMatch` → a row decision 9 never writes); and 🔴 **`multi-nic` is not the multi-MAC shape — no committed observation carries more than one MAC** (max 1 across 13 streams), so a sentence three documents use as evidence supports nothing. Also: M1 required editing a file the story forbids itself, M6 and M8 named tests that did not exist, one guard had no mutation (now M13), and two register entries owned by CONDITION are met by decisions 5 and 6 — **nine entries became eleven**. ⏳ The gap-hunt layer is still running. |
 | 2026-08-04 | Story contexted on `master` at `47bdca2` (383 tests, six green gates, clean tree). **Three arbitrations taken with Guy**: (1) `epics.md`'s AC1 *"exactly ONE interface"* is **falsified by `join`** and widens to *one interface per L1 KEY* — `epics.md` deliberately not edited, correction owned by Epic 5's retrospective; (2) the mechanism is **`join` NAMES, the blocker and `decide_pair` JUSTIFY**, with the connected-component alternative refuted by the existential quantifier and required to be MEASURED (M2); (3) the resolver is **not wired into `main.rs`** — production code with named consumers in 5.10 and 5.11, residue registered with 5.14. Six further decisions measured against the tree, of which decision 5 (a singleton is placed by the key, and `decide_pair(o, o)` is REFUSED because it re-opens the self-pair story 5.6 closed in the type) and decision 6 (`Ambiguous` is unreachable at L1, so the only abstention cause this pass writes is `AbsenceOfProof`) are the two a reviewer will challenge first. **Nine registered entries** counted and dispositioned. ⏳ **Validation by two fresh-context agents is still owed, and the gap-hunt MUST run a live `mariadb:10.11.11` on port 13306.** |

@@ -1616,7 +1616,7 @@ development_status:
   # `observation -> interface` (`join` is what forms an interface at L1; `decide_pair` judges a
   # pair and returns none). NO `device` table and NO `entity` supertype -- both Epic 6.
   5-9-persist-interface-and-identity-link: done
-  5-9b-engine-resolves-and-writes-links: in-progress
+  5-9b-engine-resolves-and-writes-links: review
   5-10-purge-test: backlog
   5-11-order-independence: backlog
   5-12-never-overwrite-anti-regression: backlog
