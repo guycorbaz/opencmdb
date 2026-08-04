@@ -50,8 +50,18 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-04  # 5.9b **CODE-REVIEWED -> stays `review`** (`done` is the MERGE's
-                          # business here). Branch `story-5.9b-...`, commits NOT PUSHED.
+last_updated: 2026-08-04  # 5.9b **DONE** -- PR #67 squash-merged as `94314e9` after a green CI
+                          # run. **Epic 5 is now 12/17.** `master` carries **408 tests**
+                          # (203 bin + 159 core + 46 xtask) and six green gates; the branch is
+                          # deleted locally and on `origin`.
+                          # NEXT = `create-story` 5.10 (the purge test), then its MANDATORY
+                          # two-agent validation.
+                          # 🔴 5.10 INHERITS TWO THINGS FROM THIS REVIEW: uuid v7 stamps a
+                          # wall-clock millisecond into every interface.id and identity_link.id,
+                          # so its *bit for bit* can only mean MODULO THE IDS -- write that into
+                          # 5.10 before writing anything against it; and `datetime_literal`
+                          # truncates below the microsecond, which its replay comparison will meet.
+                          # (before the merge:) 5.9b was CODE-REVIEWED and stayed `review`.
                           # **402 -> 408 tests** (203 bin + 159 core + 46 xtask), mutations 14 -> 18,
                           # six gates green, clippy clean twice, fixtures/ untouched, corpus still
                           # 11 unanswerable / passed() == false.
@@ -1396,7 +1406,7 @@ development_status:
   # `observation -> interface` (`join` is what forms an interface at L1; `decide_pair` judges a
   # pair and returns none). NO `device` table and NO `entity` supertype -- both Epic 6.
   5-9-persist-interface-and-identity-link: done
-  5-9b-engine-resolves-and-writes-links: review
+  5-9b-engine-resolves-and-writes-links: done
   5-10-purge-test: backlog
   5-11-order-independence: backlog
   5-12-never-overwrite-anti-regression: backlog
