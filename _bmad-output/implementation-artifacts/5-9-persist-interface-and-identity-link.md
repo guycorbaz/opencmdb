@@ -1,6 +1,6 @@
 # Story 5.9: The interface and its identity link are persisted, ambiguity included
 
-Status: review
+Status: done
 
 <!-- ✅ VALIDATED 2026-08-03 by two fresh-context agents (fact-check + gap-hunt), as this project
      requires (Guy's decision, Epic 4 retrospective 2026-07-26). The template banner saying
