@@ -392,10 +392,15 @@ CONDITION this story never meets (§4)
 **When** `deferred-work.md` gains this story's section
 **Then** the `uuid` v7 entry is **CLOSED** — the consequence is now written into an AC and a test
 name rather than left to be rediscovered.
-**And** **both bullets** of the `datetime_literal` truncation are **ANSWERED AND RE-OWNED**: its
-prediction about this story is falsified by decision 5, and its ownership is unconditional, so it
-gets a NEW owner rather than an answer alone (§4). An entry whose named owner has passed and which
-is only "answered" is a debt nobody holds.
+🔴 **And the `datetime_literal` truncation is SPLIT** (Guy's arbitration at the code review), because
+the entry holds two debts and assigning it whole is what made it circle for three stories:
+**CLOSED here** for the half that is a property of a pure function — the entry's own reproach is
+*"Nothing asserts it"*, and `datetime_literal_truncates_below_the_microsecond` now does, with
+mutations M10 and M11 reddening it; **RE-OWNED to story 5.11** for the half that is a risk, because
+5.11 supersedes and is therefore the first story to hold TWO instants for one placement.
+⚠️ An earlier disposition re-owned it to a CONDITION — *"the first story that compares an instant it
+holds in memory against a stored one"* — which is exactly the form this criterion rejects as *"a
+debt nobody holds"*. Caught by the code review, in this criterion's own words.
 **And** the **`sqlx` `chrono` feature** entry is **left untouched**: its owner is a condition, not
 this story (§4). ⚠️ If the implementation does need a `Timestamp`, the condition IS met — say so and
 close it, rather than forcing the string form to keep this sentence true.

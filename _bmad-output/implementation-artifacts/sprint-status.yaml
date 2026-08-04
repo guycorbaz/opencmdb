@@ -67,7 +67,11 @@ last_updated: 2026-08-04  # 5.9b **DONE** -- PR #67 squash-merged as `94314e9` a
                           # UNREDDENABLE -> the snapshot's order has a test of its own.
                           # 🔴 The two natures are MUTUALLY EXCLUSIVE on one placement -> owner 5.14.
                           # 5.10 CODE-REVIEWED: 1 decision open, 18 patches, 3 deferrals.
-                          # 411 -> 415 tests, mutations 7 -> 12. Six of seven reproduced exactly.
+                          # 411 -> 416 tests, mutations 7 -> 14. Six of seven reproduced exactly.
+                          # 🔑 The datetime_literal debt is SPLIT (Guy): the 'nothing asserts it'
+                          # half is CLOSED here by a two-line test (M10/M11 red it); the 'a
+                          # comparison can be wrong' half is RE-OWNED to 5.11, which supersedes
+                          # and is the first to hold TWO instants for one placement.
                           # 🔴 MY HEADLINE WAS REFUTED by a fixture I had declared impossible:
                           # `purge_engine_links` has NO current_subject filter, so it deletes
                           # SUPERSEDED engine rows the snapshot excludes -- the store after a

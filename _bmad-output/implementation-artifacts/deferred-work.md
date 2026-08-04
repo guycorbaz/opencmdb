@@ -2533,17 +2533,30 @@ story does not meet**. One CLOSED, two ANSWERED-AND-RE-OWNED, one left untouched
   (`every_column_but_the_id_survives_a_purge_and_replay`), and **mutation M6 proves it load-bearing**
   — put the id back and the comparison reds at once.
 
-- ↺ **ANSWERED AND RE-OWNED — `datetime_literal` truncates below the microsecond**, both bullets.
-  🔑 **Its ownership was UNCONDITIONAL** (*"Owner: story 5.10, where it would first bite"*), and an
-  earlier draft of this story mistook the entry's RATIONALE for an owner clause — a mistake worth
-  recording, because an entry whose named owner has passed and which is merely *"answered"* is a debt
-  nobody holds.
-  **The rationale is falsified**: the comparison is snapshot-against-snapshot, both sides rendered by
-  the same `CAST(… AS CHAR)` and truncated identically, so the truncation cannot bite here.
-  ⚠️ **The second bullet is a DIFFERENT debt** and this story does not dispose of it: it is about the
-  WRITE path, and about story 5.9b's `the_stored_instants_are_the_derived_ones` asserting a property
-  that holds only at microsecond granularity. **New owner for both: the first story that compares an
-  instant it holds IN MEMORY against a stored one** — this story never does.
+- ⚗️ **SPLIT — `datetime_literal` truncates below the microsecond.** Guy's arbitration at the code
+  review: the entry contains **two debts**, and assigning it whole is what has made it circle for
+  three stories.
+  - ✅ **CLOSED here — the half that is a property of a pure function.** The entry's own reproach is
+    *"Nothing asserts it"*, and nothing did: changing the format string reddened no test that named
+    the truncation. `repo::tests::datetime_literal_truncates_below_the_microsecond` now pins it —
+    two instants **788 ns apart**, distinct in Rust, rendering identically. **Mutations M10
+    (`%.9f`) and M11 (`%.3f`) both red it, assertion-carried.** No future story was needed for this
+    half, and it cost two lines.
+  - ↺ **RE-OWNED — the half that is a risk.** A caller comparing an instant it HOLDS against one it
+    STORED can be wrong, and nothing does that yet. **Owner: story 5.11**, and the reason is
+    substantive rather than convenient: 5.11 supersedes, so it is the first story that holds **two
+    instants for one placement** and must decide whether they denote the same thing. Story 5.14 only
+    renders them, and a human reading a microsecond-truncated timestamp loses nothing.
+  🔴 **And the second bullet's own evidence is refuted**: it cites
+  `the_stored_instants_are_the_derived_ones` as *"asserting a property that holds only at microsecond
+  granularity"* — but that test **cannot catch the truncation at all**, because it builds its
+  expected value by passing the instant through the truncating function itself. Both sides truncate
+  identically. **It is the same bilateral-oracle shape this story's code review found in
+  `snapshot_links`**, and it is written into the new test's doc so 5.11 does not inherit the belief
+  that the point is covered.
+  ⚠️ **An earlier disposition re-owned this to *"the first story that compares an instant it holds in
+  memory against a stored one"* — a CONDITION, which is precisely the form AC7 rejects as *"a debt
+  nobody holds"*.** Caught by the Acceptance Auditor, in the story's own criterion.
 
 - ⚪ **UNTOUCHED — the `sqlx` `chrono` feature.** Its owner is *"the first story that needs to read an
   instant back as a VALUE (rather than to compare it against a sentinel)"* — a CONDITION, and this
