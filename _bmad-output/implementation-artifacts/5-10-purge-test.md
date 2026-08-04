@@ -661,3 +661,93 @@ exactly that on the gap-hunt's version.
 |---|---|
 | 2026-08-04 | **VALIDATED** by two fresh-context agents; the gap-hunt BUILT the story against a live `mariadb:10.11.11`, reaching **412 tests** with six green gates and `fixtures/` untouched. 🔑 **The central property HOLDS**: the purge-and-replay reproduces all ten compared columns exactly, `interface_id` included. **The findings are all about the measurement apparatus, not the property.** 🔴 **Four HIGH.** (1) **M1 is a NO-OP** — found by reasoning by the fact-check, then confirmed by measurement: the purge restores the state run 1 started from, so a dependency on state the purge REMOVES is invisible by construction. `epics.md:1634` points the wrong way, and §5b now says so with the measurement; the correct mutation depends on state the purge does NOT restore. (2) **The `ORDER BY` is unreddenable by a two-snapshot comparison** — deleting it left the whole suite green, structurally, so AC2 gains a test of its own (§5c). (3) 🔴 **The two natures are MUTUALLY EXCLUSIVE on one placement**: an operator can never confirm an engine placement (`Err(Constraint("unique"))`), and an operator row in the slot makes the **replay roll back entirely**. Guy's arbitration: AC5 names a subject the engine does not place, and *"can an operator override an engine placement?"* is registered with story 5.14. (4) **`current_subject` is NULL on superseded rows**, so decision 4's ordering degenerates the moment story 5.11 supersedes anything — the snapshot is now restricted to CURRENT links. Also: M2 produces a **mixed carrier set** (1 assertion + 2 panics), summary assertions pre-empt the reds their ACs name, AC5's operator candidate must go around `guard_decision`, and the `datetime_literal` debt is **two** entries — one about the comparison, one about the write path — of which §4 disposes of only the first. |
 | 2026-08-04 | Story contexted on `master` at `0b3f09c` (408 tests, six green gates, clean tree). **Two arbitrations by Guy.** (1) 🔴 *"Bit for bit"* means **every decision-bearing column EXCEPT `id`** — `uuid::Uuid::now_v7()` stamps a wall-clock millisecond into the primary key, so it is not reproducible by construction; D14 says *"the same DECISIONS"*, and an id is not a decision. `interface_id` IS compared, which is what makes the exclusion safe and what turns story 5.9b's `find_interface_by_l1_key` from a claim into a measured property. (2) The `decided_by='OPERATOR'` rows AC5 needs are **written by the test through the adapter** — nothing writes them in production before story 5.14, but D14's two-natures frontier is real in the schema today and *"if that frontier is fuzzy in the code, the invariant is dead"*. Three further decisions measured against the tree: the purge is a **`DELETE`**, not `epics.md`'s pseudo-SQL `TRUNCATE … WHERE` (registered with Epic 5's retrospective rather than edited); the snapshot is a query body with **no `id` field at all**, so the exclusion is structural; and the comparison is one `assert_eq!` on a `Vec`, so a divergence prints whole rather than stopping at the first mismatch. ⏳ **Validation by two fresh-context agents is still owed, and the gap-hunt MUST run a live `mariadb:10.11.11` on port 13306.** |
+
+---
+
+### Review Findings
+
+Three-layer review (Blind Hunter · Edge Case Hunter · Acceptance Auditor), 2026-08-05, on
+`master...a82fa3a`. **All three ran against their own live `mariadb:10.11.11`** (ports 13312–13314,
+all stopped, `kesh-mariadb` never touched) and the Auditor re-executed the mutation pass.
+
+🔑 **The central property is real and all three reproduced it**: D14's purge test passes, all ten
+compared columns including `interface_id`, and M6 proves the `id` exclusion load-bearing. **Six of
+the seven claimed mutations reproduce exactly, carrier and count.** What does not survive is the
+story's REASONING headline and the completeness of its guards.
+
+- [ ] [Review][Decision] **Who owns the `datetime_literal` truncation debt?** AC7's own rationale
+  says an entry left to a condition is *"a debt nobody holds"* — and the re-owning this story wrote
+  hands it to *"the first story that compares an instant it holds IN MEMORY against a stored one"*,
+  **which is a condition, not a story**. Worse, `the_stored_instants_are_the_derived_ones` arguably
+  satisfies it already. Options: name **story 5.11** (it supersedes, and will compare instants),
+  name **story 5.14** (it renders them), or say plainly that the debt is unowned and why
+
+- [ ] [Review][Patch] 🔴 **The story's headline is FALSE as stated, and the Auditor built the fixture
+  that refutes it.** *"The purge restores the store to exactly the state run 1 started from"* is a
+  property of THIS FIXTURE, not of the purge: `purge_engine_links` has **no `current_subject`
+  filter**, so it deletes SUPERSEDED engine rows too — and the snapshot excludes them. With one
+  present before run 1, M1-noop reds `assert_eq!(after, before)`, assertion-carried; the same test is
+  green on the clean tree. **Confirmed by the implementer by reading both statements.** `epics.md:1634`
+  does not point the wrong way in general — it points at a case this fixture cannot reach. The claim
+  is in the story, the register, `CLAUDE.md` and `sprint-status.yaml` [`repo.rs:772`, `:863`]
+- [ ] [Review][Patch] **Add the superseded-engine-link purge-and-replay test** — six lines of setup
+  that turn the caveat above into a guard instead of a sentence
+- [ ] [Review][Patch] 🔴 **The story records TWO mutually exclusive results for M1-noop.** §5b, AC6
+  and T5 say it reds `the_stored_instants_are_the_derived_ones`; the Debug Log says *"nothing, zero
+  tests"*, and that half is in four documents. **Both are reachable**, and which one you get depends
+  on where the predicate is evaluated — hoisted to the group loop → 0 reds; per observation → 1 red,
+  assertion-carried. Record the placement WITH the result and prefer the per-observation form
+- [ ] [Review][Patch] 🔴 **Eight of the ten "compared columns" can be blanked with the whole suite
+  green** — the story diagnosed that an `ORDER BY` used on both sides of a comparison is
+  unreddenable and **did not generalise it to the projection**. `rule_id` is asserted nowhere in the
+  workspace. AC2's *"exactly the ten compared columns"* has no oracle. Fix, measured by the review: a
+  ONE-SIDED oracle in both tests, against values each test already knows [`repo.rs:870-882`]
+- [ ] [Review][Patch] **AC5 says "byte-identical on all ten compared columns"; the test asserts two.**
+  The test already snapshots both sides of the purge — capture `before` and compare the whole row
+- [ ] [Review][Patch] **The second sort key and the currency filter are BOTH deletable with the suite
+  green** (M3b, M3c — measured twice, by two layers). The ordering test uses three single-MAC
+  observations, so no two rows ever share an `observation_id` and the tiebreak is never reached; and
+  nothing supersedes, so the `WHERE` never excludes anything. Give the ordering test a multi-MAC
+  observation, and a superseded link to exclude [`repo.rs:863-864`]
+- [ ] [Review][Patch] **`valid_to` is a TAUTOLOGY under the snapshot's own `WHERE`** —
+  `identity_link_current_subject` makes `current_subject IS NOT NULL ⟺ valid_to = OPEN_END`, so it
+  can never carry a divergence. It is presented as one of ten columns that *"CARRY THE DECISION"*
+  [`repo.rs:819`]
+- [ ] [Review][Patch] 🔴 **A doc claim contradicted by a measurement ALREADY IN THE REGISTER**:
+  *"`identity_link_abstained_has_no_interface` means only an ABSTENTION can carry candidates"* —
+  `deferred-work.md:2295` records *"`link_candidate` rows attach happily to a MATCH link. Measured
+  `Ok(())`"*, registered by story 5.9's own review. The conclusion (hand-build the `Decision`) is
+  right; the reason given is refuted, in a file this story appended to [`resolver.rs:1347`]
+- [ ] [Review][Patch] **"An operator can never confirm OR CORRECT a placement the engine holds" is too
+  strong** — measured: an OPERATOR link on a DIFFERENT subject inserts fine; only the SAME
+  `(observation, subject)` is refused. Correcting a placement normally means moving it, which is
+  permitted. The story-5.14 deferral rests on the stronger claim [`resolver.rs:1339-1341`]
+- [ ] [Review][Patch] **The two-natures claim is in five documents and in no test**, though both
+  halves were measured TRUE by two layers. Twelve lines pin it, and it is AC5's premise
+- [ ] [Review][Patch] **AC6 and T5 claim "one assertion plus TWO `.expect` panics" for M2**; measured
+  **1 + 1**, twice. The Debug Log is right and the acceptance criterion is wrong
+- [ ] [Review][Patch] **T5 claims M5 reds 5 tests with a summary carrier**; measured **4**, all
+  assertion-carried, and in AC3's test the carrier is the comparison itself. The Debug Log is right;
+  T5 was never reconciled with it — and this project's own rule is that a divergence is a finding
+- [ ] [Review][Patch] **The test's name says "every column but the id" while TWO columns are
+  excluded** (`id` and `current_subject`), each for its own recorded reason — a sentence outrunning
+  its measurement, in the test whose subject is exactness [`resolver.rs:1265`]
+- [ ] [Review][Patch] **`purge_engine_links`' doc over-promises its return**: measured, `ROW_COUNT()`
+  reports 2 for 2 links plus 2 cascaded candidates — InnoDB does not report cascades. Say *"how many
+  LINKS went"*, assert the return in the cascade test, and assert `link_candidate` is empty after
+- [ ] [Review][Patch] **The purge is global and unscoped**, and a partial replay silently loses links
+  (measured: purge, replay 2 of 6 observations, `Ok`, snapshot 6 → 2, no signal). Its doc lists what
+  it does NOT touch without saying that what it does touch is everything
+- [ ] [Review][Patch] `interface_ids`' doc says *"as a set"*; it returns a sorted `Vec` compared as a
+  sequence. And `interface_ids(&pool).await[0]` is a bare index — `.first().expect(…)` costs nothing
+- [ ] [Review][Patch] **Add the empty-store test** — `purge_engine_links` returns 0, `snapshot_links`
+  returns `[]`; both correct, both uncovered
+- [ ] [Review][Patch] `sprint-status.yaml` carries **two `NEXT =` lines**; `CLAUDE.md` has a doubled
+  period and story 5.9b's trailing sentence now reads as 5.10's (AC9)
+
+- [x] [Review][Defer] The purge deletes superseded rows the snapshot never compared — an asymmetry no
+  document states. Inert until something supersedes; **story 5.11** is what will
+- [x] [Review][Defer] The comparison is blind to `link_candidate` and to `interface`'s own columns
+  (`l2_domain`, `mac_canon`, the seen-window). Latent: the resolver writes no candidate today
+- [x] [Review][Defer] The purge and the replay run in TWO transactions, and the composed shape — both
+  in one unit of work — is what a production caller needs and what nothing runs

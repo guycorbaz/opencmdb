@@ -746,7 +746,17 @@ where
     Ok(count)
 }
 
-/// Delete every link the ENGINE derived, and return how many rows went.
+/// Delete every link the ENGINE derived, and return how many LINKS went.
+///
+/// ⚠️ **The count excludes cascaded `link_candidate` rows** — measured: two links carrying two
+/// candidates report `2`, not `4`, because InnoDB does not report cascaded deletions to the client.
+/// A caller logging *"purged N rows"* would understate.
+///
+/// ⚠️ **It is GLOBAL and unscoped**: every engine link in the database, superseded ones included.
+/// The list below says what it leaves; what it takes is everything else. A replay that covers fewer
+/// observations than the purge removed loses the difference **silently** — measured: purge six,
+/// replay two, `Ok(2)`, and the snapshot goes 6 → 2 with no error. **The caller's precondition is
+/// that the replay covers the same observation set.**
 ///
 /// **It is a `DELETE`, not a `TRUNCATE`.** D14 writes the purge as
 /// `TRUNCATE ... WHERE decided_by='ENGINE'` [architecture.md:1038-1039] and `epics.md:1627` repeats
@@ -815,7 +825,14 @@ pub struct LinkSnapshot {
     pub decided_by: String,
     /// When the version opened, as MariaDB renders it.
     pub valid_from: String,
-    /// When it closes — [`OPEN_END`] while current.
+    /// When it closes.
+    ///
+    /// ⚠️ **Under [`snapshot_links`]' own `WHERE` this field is a CONSTANT.**
+    /// `identity_link_current_subject` makes `current_subject IS NOT NULL ⟺ valid_to = OPEN_END`,
+    /// so every row this snapshot can return carries the sentinel and this column can never carry a
+    /// divergence. It is here for shape rather than for evidence — measured at the code review,
+    /// which also measured that blanking it leaves the whole suite green. `valid_from` is NOT in
+    /// that position: it is genuinely data-derived.
     pub valid_to: String,
 }
 

@@ -1240,7 +1240,7 @@ mod tests {
         assert_eq!(count_identity_links(&pool).await.expect("count"), 1);
     }
 
-    /// The interface ids, as a set — what AC4 compares across the purge.
+    /// Sorted, so the comparison across the purge is a SEQUENCE and a divergence names the row.
     async fn interface_ids(pool: &MySqlPool) -> Vec<String> {
         let rows: Vec<(String,)> = sqlx::query_as("SELECT id FROM interface ORDER BY id")
             .fetch_all(pool)
@@ -1264,7 +1264,9 @@ mod tests {
 
     /// 🔴 AC3/AC4 — D14's own test: purge the engine's links, re-run, and the decisions come back.
     ///
-    /// ⚠️ **`id` is excluded, and that is the whole subtlety.** `identity_link.id` is a v7 UUID and
+    /// ⚠️ **TWO columns are excluded, each for its own recorded reason.** `current_subject` is a
+    /// FUNCTION of `interface_id` on a current row, held there by `identity_link_current_subject`,
+    /// so comparing it would measure nothing new — it is the `ORDER BY` key instead. And `id`: `identity_link.id` is a v7 UUID and
     /// a v7 UUID embeds a wall-clock millisecond, so a replayed link is minted with a different one
     /// — measured 57 ms apart over identical input. D14's *"bit for bit"* means the DECISION, and a
     /// row identifier is not a decision. `LinkSnapshot` has no `id` field at all, so the exclusion
@@ -1273,7 +1275,7 @@ mod tests {
     /// **`interface_id` IS compared**, which is what makes that safe: if the replay re-minted its
     /// interfaces, every reproduced link would point elsewhere and this would red.
     #[tokio::test]
-    async fn every_column_but_the_id_survives_a_purge_and_replay() {
+    async fn every_decision_bearing_column_survives_a_purge_and_replay() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
         let observations = purge_fixture();
         let Some(pool) = fixture(&observations).await else {
@@ -1289,6 +1291,39 @@ mod tests {
             .expect("snapshot before");
         let interfaces_before = interface_ids(&pool).await;
         assert_eq!(before.len(), 6, "six current links to reproduce");
+
+        // 🔴 A ONE-SIDED oracle, and it is not optional. `before` and `after` both go through
+        // `snapshot_links`, so the comparison below cannot see a column the QUERY gets wrong —
+        // measured at the code review: eight of the ten compared columns could be replaced by a
+        // constant with the whole suite green, and `rule_id` was asserted nowhere in the workspace.
+        // These assert against values this test knows independently of the query.
+        let placed = before
+            .iter()
+            .find(|l| l.outcome == "match")
+            .expect("a placement among the six");
+        assert_eq!(placed.rule_id.as_deref(), Some("l1-exact-mac"));
+        assert_eq!(placed.decided_by, "ENGINE");
+        assert_eq!(placed.ruleset_version, 1);
+        assert!(
+            interfaces_before.contains(placed.interface_id.as_ref().expect("a placement")),
+            "a placement names one of the interfaces this pass minted"
+        );
+        assert_eq!(placed.valid_to, crate::repo::OPEN_END);
+        let abstained = before
+            .iter()
+            .find(|l| l.outcome == "abstained")
+            .expect("the MAC-less observation abstains");
+        assert_eq!(abstained.interface_id, None);
+        assert_eq!(abstained.rule_id, None);
+        assert_eq!(
+            abstained.abstention_cause.as_deref(),
+            Some("absence_of_proof")
+        );
+        assert_eq!(
+            abstained.valid_from,
+            crate::repo::datetime_literal(at(1_700_000_400)),
+            "valid_from is the observation's own observed_at"
+        );
 
         let purged = MariaRepository::new(pool.clone())
             .transact(|unit| {
@@ -1332,21 +1367,262 @@ mod tests {
         assert_eq!(second.interfaces_minted, 0);
     }
 
+    /// 🔴 The SECOND sort key: two current links of ONE observation come back by subject.
+    ///
+    /// ⚠️ **Measured absent by two review layers.** `ORDER BY observation_id, current_subject` →
+    /// `ORDER BY observation_id` left the whole suite green, because the tiebreak is only reachable
+    /// when one `observation_id` owns two current rows, and the ordering test used three single-MAC
+    /// observations. This fixture reaches it, and makes the physical order DISAGREE with the sorted
+    /// one:
+    ///
+    /// - `A` carries `mac03` and is resolved FIRST, so its interface is minted first and gets the
+    ///   SMALLER v7 id; `B` carries `mac02` and is minted second, so its id is LARGER;
+    /// - `C` carries both. `join`'s key is `(l2_domain, mac)` and `mac02 < mac03`, so C's links are
+    ///   WRITTEN iface02 (larger id) then iface03 (smaller). Sorted by `current_subject` they must
+    ///   come back the other way round.
+    #[tokio::test]
+    async fn the_tiebreak_orders_one_observations_links_by_their_subject() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let a = observation(1, l2(1), &[mac(0x03)], 1_700_000_000);
+        let b = observation(2, l2(1), &[mac(0x02)], 1_700_000_100);
+        let c = observation(3, l2(1), &[mac(0x02), mac(0x03)], 1_700_000_200);
+        let Some(pool) = fixture(&[a.clone(), b.clone(), c.clone()]).await else {
+            return;
+        };
+
+        pass(&pool, vec![a]).await;
+        pass(&pool, vec![b]).await;
+        pass(&pool, vec![c.clone()]).await;
+
+        let by_mac: Vec<(String, String)> =
+            sqlx::query_as("SELECT mac_canon, id FROM interface ORDER BY mac_canon")
+                .fetch_all(&pool)
+                .await
+                .expect("the two interfaces");
+        assert_eq!(by_mac.len(), 2);
+        let iface02 = by_mac[0].1.clone();
+        let iface03 = by_mac[1].1.clone();
+        assert!(
+            iface03 < iface02,
+            "mac03's interface was minted first, so its v7 id is the smaller one"
+        );
+
+        let subjects: Vec<String> = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot")
+            .into_iter()
+            .filter(|l| l.observation_id == c.obs_id.to_string())
+            .map(|l| l.interface_id.expect("a placement"))
+            .collect();
+
+        assert_eq!(
+            subjects,
+            vec![iface03.clone(), iface02.clone()],
+            "sorted by subject"
+        );
+        assert_ne!(
+            subjects,
+            vec![iface02, iface03],
+            "and NOT in the order the two links were written — which is what gives the second \
+             sort key something to do"
+        );
+    }
+
+    /// 🔴 A SUPERSEDED engine link is state the purge removes and the replay never restores.
+    ///
+    /// ⚠️ **This test exists because the story claimed the opposite.** It said a purge-and-replay is
+    /// blind to a link-keyed dependency *"by construction"*, on the ground that the purge restores
+    /// the state run 1 started from. That is a property of the OTHER fixture, not of the purge:
+    /// `purge_engine_links` has **no `current_subject` filter**, so it deletes superseded engine
+    /// rows too, while `snapshot_links` excludes them. The Acceptance Auditor built the refuting
+    /// fixture and measured a link-keyed mutation reddening the comparison; this is that fixture,
+    /// kept as a guard rather than as a caveat.
+    ///
+    /// Story 5.11 is the one that will start producing superseded links, and it inherits this.
+    #[tokio::test]
+    async fn a_superseded_engine_link_is_not_restored_by_the_replay() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let mut observations = purge_fixture();
+        let extra = observation(9, l2(9), &[mac(0x09)], 1_700_000_900);
+        observations.push(extra.clone());
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+
+        // Place the extra observation, then supersede its link: it leaves the snapshot's domain
+        // (current_subject becomes NULL) but stays in the table, and stays the ENGINE's.
+        pass(&pool, vec![extra.clone()]).await;
+        let its_link = crate::repo::load_current_links_for_observation(&pool, extra.obs_id)
+            .await
+            .map_err(classify)
+            .expect("its link");
+        crate::repo::close_identity_link(
+            &pool,
+            LinkId::from_uuid(uuid::Uuid::parse_str(&its_link[0].id).expect("a link id")),
+            at(1_700_001_000),
+        )
+        .await
+        .expect("supersede it");
+
+        let rows_before = count_identity_links(&pool).await.expect("count");
+        let snapshot_before = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot");
+        assert_eq!(rows_before, 1, "the superseded row is still in the table");
+        assert_eq!(
+            snapshot_before.len(),
+            0,
+            "and the snapshot does not see it — which is exactly why the comparison cannot \
+             notice its loss"
+        );
+
+        let purged = MariaRepository::new(pool.clone())
+            .transact(|unit| {
+                Box::pin(async move {
+                    crate::repo::purge_engine_links(unit.executor())
+                        .await
+                        .map_err(classify)
+                })
+            })
+            .await
+            .expect("purge");
+
+        assert_eq!(purged, 1, "the purge takes the SUPERSEDED engine row too");
+        pass(&pool, observations).await;
+        let superseded_after: i64 = sqlx::query_as::<_, (i64,)>(
+            "SELECT COUNT(*) FROM identity_link WHERE current_subject IS NULL",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("count superseded")
+        .0;
+        assert_eq!(
+            superseded_after, 0,
+            "the replay writes only current links, so the superseded row is NOT restored — the \
+             store after a purge-and-replay is NOT the store before it"
+        );
+    }
+
+    /// 🔴 The two natures are mutually exclusive on ONE placement, and here it is measured.
+    ///
+    /// ⚠️ The claim stood in five documents and in no test until the code review. Both halves:
+    /// an operator cannot take the slot the engine holds, and an operator holding a slot the replay
+    /// needs makes the whole replay fail.
+    #[tokio::test]
+    async fn an_operator_cannot_take_a_slot_the_engine_holds() {
+        use opencmdb_core::identity::cascade::RulesetVersion;
+
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let observations = vec![mac_less(1, l2(1), 1_700_000_000)];
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+        pass(&pool, observations.clone()).await;
+
+        let abstention = Decision {
+            conclusion: Conclusion::Abstained {
+                cause: IdentityAbstentionCause::AbsenceOfProof,
+            },
+            verdict_vector: vec![],
+            ruleset_version: RulesetVersion(1),
+        };
+        let clash = crate::repo::insert_identity_link(
+            &pool,
+            LinkId::from_uuid(uuid::Uuid::from_u128(0x5_0_1_0)),
+            observations[0].obs_id,
+            None,
+            &abstention,
+            &[],
+            DecidedBy::Operator,
+            at(1_700_000_100),
+            open_end(),
+        )
+        .await
+        .map_err(classify);
+        assert_eq!(
+            clash,
+            Err(RepositoryError::Constraint("unique")),
+            "the engine already holds (observation, NIL_INTERFACE); the operator cannot have it too"
+        );
+
+        // And with the slot taken first, the replay fails and rolls back.
+        crate::repo::purge_engine_links(&pool)
+            .await
+            .expect("clear the engine's link");
+        crate::repo::insert_identity_link(
+            &pool,
+            LinkId::from_uuid(uuid::Uuid::from_u128(0x5_0_1_1)),
+            observations[0].obs_id,
+            None,
+            &abstention,
+            &[],
+            DecidedBy::Operator,
+            at(1_700_000_100),
+            open_end(),
+        )
+        .await
+        .map_err(classify)
+        .expect("the slot is free now");
+        assert_eq!(
+            try_pass(&pool, observations).await.err(),
+            Some(RepositoryError::Constraint("unique")),
+            "the replay needs a slot the operator holds, and the whole pass rolls back"
+        );
+        assert_eq!(
+            count_identity_links(&pool).await.expect("count"),
+            1,
+            "only the operator's row is left — the pass wrote nothing"
+        );
+    }
+
+    /// An empty store: the purge removes nothing and says so, and the snapshot is empty.
+    #[tokio::test]
+    async fn an_empty_store_purges_nothing_and_snapshots_nothing() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = fixture(&[]).await else {
+            return;
+        };
+
+        assert_eq!(
+            crate::repo::purge_engine_links(&pool)
+                .await
+                .expect("purge nothing"),
+            0
+        );
+        assert_eq!(
+            crate::repo::snapshot_links(&pool)
+                .await
+                .map_err(classify)
+                .expect("snapshot nothing"),
+            vec![]
+        );
+    }
+
     /// 🔴 AC5 — the operator's rows are INPUTS, and the purge does not touch them.
     ///
     /// ⚠️ **The operator's link names an observation the pass does NOT place, and that is a
     /// constraint, not a convenience.** `identity_link_one_current` is
     /// `(observation_id, current_subject)` and the purge removes only `decided_by='ENGINE'`, so an
-    /// operator can never confirm or correct a placement the engine already holds — the write is
-    /// refused `Err(Constraint("unique"))` — and an operator row sitting in a slot the replay needs
-    /// makes the **whole replay roll back**. Measured at this story's validation. D14's *"two
+    /// operator can never hold **the SAME `(observation, subject)` slot** the engine holds — that
+    /// write is refused `Err(Constraint("unique"))` — and an operator row sitting in a slot the
+    /// replay needs makes the **whole replay roll back**. ⚠️ Placing the observation on a DIFFERENT
+    /// interface is permitted today: an operator link on another subject inserts fine, measured at
+    /// the code review. _(An earlier draft said an operator can never "confirm or correct" a
+    /// placement, and correcting normally means moving it — which the schema allows.)_ Measured at this story's validation. D14's *"two
     /// natures in one table"* is true of the TABLE and false of one `(observation, subject)`;
     /// whether an operator may ever override the engine is registered with story 5.14.
     ///
     /// ⚠️ **The candidate goes AROUND `guard_decision`, deliberately.**
-    /// `identity_link_abstained_has_no_interface` means only an ABSTENTION can carry candidates,
-    /// and `resolver::guard_decision` refuses `Abstained { Ambiguous }` with an empty candidate
-    /// slice — which is the shape this needs. So the `Decision` is hand-built and
+    /// The constraint being worked around is `resolver::guard_decision`, which refuses
+    /// `Abstained { Ambiguous }` with an empty candidate slice — the shape this test needs.
+    /// ⚠️ **NOT the schema**: nothing in the DDL restricts candidates to abstentions, and
+    /// `deferred-work.md` already records the measurement — *"`link_candidate` rows attach happily
+    /// to a MATCH link, measured `Ok(())`"*, from story 5.9's own review. _(An earlier draft of this
+    /// comment blamed `identity_link_abstained_has_no_interface`, which constrains `interface_id`
+    /// against `outcome` INSIDE `identity_link` and says nothing about candidates. A doc comment
+    /// contradicted by a measurement already in the register.)_ So the `Decision` is hand-built and
     /// `insert_identity_link` is called directly, as `repo.rs`'s own `an_abstention` tests do. The
     /// candidate points at an interface the ENGINE minted: `link_candidate_interface_fk` is
     /// RESTRICT.
@@ -1360,7 +1636,11 @@ mod tests {
             return;
         };
         pass(&pool, observations).await;
-        let engine_interface = interface_ids(&pool).await[0].clone();
+        let engine_interface = interface_ids(&pool)
+            .await
+            .first()
+            .expect("the pass minted an interface")
+            .clone();
 
         // A sixth observation the pass never saw, so the operator's link contends for no slot.
         let untouched = mac_less(6, l2(1), 1_700_000_500);
@@ -1403,6 +1683,17 @@ mod tests {
         .map_err(classify)
         .expect("the operator's candidate");
 
+        // AC5 says "byte-identical on ALL TEN compared columns", so the operator's whole row is
+        // captured before the purge. Asserting two fields would have left eight unchecked.
+        let operator_before: Vec<crate::repo::LinkSnapshot> = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot before")
+            .into_iter()
+            .filter(|l| l.decided_by == "OPERATOR")
+            .collect();
+        assert_eq!(operator_before.len(), 1);
+
         let purged = MariaRepository::new(pool.clone())
             .transact(|unit| {
                 Box::pin(async move {
@@ -1424,8 +1715,10 @@ mod tests {
             1,
             "one row survives, and it is the operator's"
         );
-        assert_eq!(survivors[0].decided_by, "OPERATOR");
-        assert_eq!(survivors[0].observation_id, untouched.obs_id.to_string());
+        assert_eq!(
+            survivors, operator_before,
+            "untouched on every compared column, not merely present"
+        );
 
         // Its own id did not move: an operator row is the SAME row, not a reproduced decision.
         let still_there = crate::repo::load_current_links_for_observation(&pool, untouched.obs_id)
