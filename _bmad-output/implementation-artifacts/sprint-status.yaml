@@ -50,196 +50,49 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-03  # 5.9 **DONE** -- PR #65 squash-merged as `57db541` after a green CI run
-                          # (58s), code-reviewed first. **Epic 5 is now 11/17.** Master carries
-                          # **383 tests** (181 bin + 156 core + 46 xtask) and six green gates.
-                          # 🔴 Guy arbitrated at the validation: the identity_link uniqueness key is
-                          # (observation_id, link_subject, valid_to). The narrow (observation_id,
-                          # valid_to) was MEASURED refusing a legitimate multi-NIC write -- `join`
-                          # puts one observation on N interfaces (l1.rs:174-178) and `multi-nic` is
-                          # a committed trap family. See story 5.9 decision 9.
-                          # Master carries 367
-                          # tests (165 bin + 156 core + 46 xtask) and six green gates.
-                          # 🔴 **THE COMMITTED GATE IS RED ON PURPOSE AND MASTER NOW CARRIES IT**:
-                          # `24 discovered, 13 scored, 0 failures, 0 wrong-rule, 11 unanswerable,
-                          # passed = FALSE`. It stays false until Epic 6 implements `l2-*` -- that
-                          # is `epics.md:416` (*"NFR4 stays RED and is closed by Epic 6"*) and D18
-                          # (*"a gate that cannot fall is decoration"*). **Do not "fix" it.** The
-                          # `NFR4 NOT MET` line renders only while the bucket is non-empty, so it
-                          # deletes itself the day Epic 6 empties it.
-                          # NEXT = `create-story` 5.9b (the resolver that runs the engine over a
-                          # set of observations and writes the links it derives -- first production
-                          # caller of `join` and `candidates`), then its MANDATORY two-agent
-                          # validation. ⚠️ For any DB story the gap-hunt MUST run a real MariaDB:
-                          # the suite is green either way with DATABASE_URL unset.
-                          # 5.9 was CODE-REVIEWED
-                          # (3 layers, 2 against a live DB): 1 decision, 22 patches, 13 deferrals.
-                          # 378 -> 383 tests, 7 -> 12 mutations, every red assertion-carried.
-                          # 🔴 Guy arbitrated the uniqueness key a SECOND time: `valid_to` is
-                          # NOT NULL on CLOSED rows, so the key constrained HISTORY -- two closes
-                          # at one derived instant collided (1062) and the link silently stayed
-                          # current, i.e. story 5.10's replay path. Final:
-                          # UNIQUE (observation_id, current_subject), NULL once superseded.
-                          # 🔑 architecture.md:1468 had ALREADY prescribed the nil sentinel.
-                          # 5.9 is IMPLEMENTED: 367 -> 378 tests, six gates green, all seven
-                          # mutations run WITH a live mariadb:10.11.11 (port 13306), every red
-                          # assertion-carried. 🔴 M3 was a NO-OP on its first run: dropping the
-                          # rule-XOR-cause CHECK left all 378 tests green, because the adapter
-                          # derives rule and cause from one match and cannot emit an incoherent
-                          # pair -- two raw-SQL inserts now measure it.
-                          # 🔴 Decision 9's generated column is IMPOSSIBLE in MariaDB 10.11
-                          # (error 1901 when indexed); the sentinel ships as a written column
-                          # plus a CHECK. Same guarantee, different mechanism.
-                          # ⚠️ ISSUE #38 stays OPEN: the local suite ran green here (367/367, one
-                          # run) and CI green, which is NOT evidence the cause is gone -- the
-                          # recorded shape is 2 red in ~11 runs, moving between tests.
-                          #
-                          # (superseded 2026-08-03) 5.8 CODE-REVIEWED (three layers) and PATCHED --
-                          # see its entry below. It STAYED at `review` until the merge: `done` is
-                          # the MERGE's business in this project's flow.
-                          #
-                          # (superseded 2026-08-03) 5.8 CONTEXTED -> `ready-for-dev`. Master at
-                          # `60107fa`, clean tree, 352 tests.
-                          #
-                          # 5.7 **DONE** -- PR #61 squash-merged as `d47631b` after a green CI run
-                          # (55s), code-reviewed first. **Epic 5 is now 9/16.** Master carries 352
-                          # tests (153 bin + 153 core + 46 xtask) and six green gates.
-                          # NEXT = `create-story` 5.8 (the bucket for the traps L1 cannot answer),
-                          # whose premise 5.7 CORRECTED: the residue is **ELEVEN**, not the eight
-                          # `epics.md:1545` gives it -- the three `must-abstain` traps are invisible
-                          # to an `l2-*` selector because `Expectation::MustAbstain` carries a cause
-                          # and no rule. The correction is in `deferred-work.md` with 5.8 as owner;
-                          # `epics.md` was deliberately NOT edited, so 5.8's contexting must read the
-                          # register and not only the epic.
-                          # ⚠️ ISSUE #38 RECURRED on `master` at `d47631b` and was recorded there
-                          # with its measurement: 2 red runs out of ~11, on TWO DIFFERENT tests,
-                          # then 8 consecutive green -- clean tree, all 25 fixture sha256s verified
-                          # green by the `fixtures` gate during the red runs, CI green on the same
-                          # commit. One hypothesis (scratch-path collision between tests) was RAISED
-                          # and REFUTED by measurement: all six `write_traps` tags are distinct and
-                          # `scratch_dir` embeds the pid. **The cause stays OPEN -- do not adopt one
-                          # without naming the check that would have failed if it were wrong.**
-                          #
-                          # 5.7 CODE-REVIEWED (three layers) and PATCHED -- commit `6f958dd`. It
-                          # stayed at `review` until the merge: `done` is the MERGE's business in
-                          # this project's flow (5.1 established it, 5.2/5.4b/5.5/5.6 held it). **11 patches applied, 2
-                          # deferrals registered, 7 findings dismissed, 350 -> 352 tests**, six gates
-                          # green, both clippy forms clean, `fixtures/` untouched two ways.
-                          # AC1-AC10 re-verified MET by independent measurement.
-                          # **6 of the 11 patches were SENTENCES -- the SIXTH consecutive story with
-                          # that shape.** The two behavioural ones were both measured INVISIBLE
-                          # before the tests existed:
-                          #  · the SELF-PAIR was re-opened on the `answer_trap` path -- a hand-built
-                          #    `Trap { observations: vec![x, x] }` merges on `l1-exact-mac`, an
-                          #    observation sharing every key with itself. Story 5.6 closed that IN
-                          #    THE TYPE (`CandidatePair::new(a, a)` is `None`), but `answer_trap`
-                          #    never calls `read_traps`, so `Trap::validate`'s
-                          #    `DuplicateObservation` does not hold the precondition there.
-                          #    **Guy's call: close it in `named_pair`**, not in a doc sentence.
-                          #  · no test covered a trap naming THREE observations -- relaxing the arm
-                          #    to `[a, b, ..]` left all 350 tests green. Story 5.6's M2 idiom, on the
-                          #    upper half of the guard AC2 closed for the lower.
-                          # One assertion strengthened: *"all seven ids"* was QUOTED in three
-                          # documents and guarded by `checked > 0` alone; `checked == 21` and
-                          # `distinct == 7` are now asserted -- in the COMMITTED-corpus test and
-                          # deliberately NOT in the root-parameterised helper, where they would red
-                          # M5c on the count and mask the both-occur guard M5c proves load-bearing.
-                          # The five claim corrections: CLAUDE.md still said *"Nothing feeds the
-                          # corpus harness (5.7)"* in the PRESENT tense, falsified 400 words below in
-                          # the same file (project-context.md had corrected the identical sentence in
-                          # `b555712` -- one file was updated and its twin was not); the Debug Log
-                          # recorded `trap_gate.rs` at **311** code lines where it is **405**, BELOW
-                          # the story's own 384 baseline and therefore impossible; the corpus-scoring
-                          # test credited the thirteen answers with *"the family completeness"*,
-                          # which is computed over ALL discovered traps; `expected_answered()`
-                          # claimed a lineage belonging to a RULE-id test 260 lines below; and the
-                          # module doc's *"answering all 24 traps"* describes a state the code
-                          # forbids. Prove-to-red on all three new guards, assertion-carried -- and
-                          # **MR3a is recorded rather than dropped**: truncating the canonicality
-                          # walk to one file reds the OLDER both-occur guard and MASKS the new
-                          # counts, the same masking the story met on M5b/M5c, met again first try.
-                          # Two deferrals with owners: no cross-file `TrapId` uniqueness check in
-                          # `l1_answers` (owner **5.8**), and `outcome_of`'s abstaining row has no
-                          # end-to-end path through the runner (owner **5.14 / Epic 6**).
-                          # **Two sub-agent findings were REFUTED by re-measurement** and dismissed
-                          # with the measurement: the scratch test's `!passed()` is not green for
-                          # family incompleteness (no `family` key -> `incomplete_families` skips
-                          # `None`), and pair order IS pinned.
+last_updated: 2026-08-04  # 5.9b **CODE-REVIEWED -> stays `review`** (`done` is the MERGE's
+                          # business here). Branch `story-5.9b-...`, commits NOT PUSHED.
+                          # **402 -> 408 tests** (203 bin + 159 core + 46 xtask), mutations 14 -> 18,
+                          # six gates green, clippy clean twice, fixtures/ untouched, corpus still
+                          # 11 unanswerable / passed() == false.
+                          # Three layers; two ran their own live mariadb:10.11.11 and the Auditor
+                          # RE-EXECUTED the whole mutation pass, reproducing 13 of 14 exactly
+                          # including all three named predictions. **2 arbitrations, 23 patches,
+                          # 5 deferrals, 0 dismissed.**
+                          # 🔴 IT REFUTED A HEADLINE OF MINE IN FIVE PLACES, the commit subject of
+                          # 18844ea included: "every red is ASSERTION-carried" is FALSE for M6b
+                          # (1 assertion + 3 .expect() panics), and the story's own T7 bullet said
+                          # so one section above. Cause: the driver read the carrier off the WHOLE
+                          # output, so a MIXED set collapsed to one label. It now reports per test.
+                          # 🔴 FOUR behavioural defects, three found separately by two layers:
+                          #   . placement_decision tested containment on ONE witness while its
+                          #     sibling filtered correctly 12 lines below -- universe missing only
+                          #     (1,2) and observations 1 AND 2 abstained;
+                          #   . a multi-key abstention collided on ABSTAINED_SUBJECT and rolled the
+                          #     WHOLE pass back (0 links written);
+                          #   . abstention_for had NO observable effect -- its body replaced by
+                          #     nothing_was_evaluated() left every test green;
+                          #   . a repeated MAC-less obs_id wrote two colliding links.
+                          # 🔑 GUY'S TWO ARBITRATIONS:
+                          #   (1) an observation abstains AT MOST ONCE whatever the key count. The
+                          #       deciding measurement: an abstention row NAMES NO KEY, so the two
+                          #       rows would be identical but for their id -- the duplicate was
+                          #       never information.
+                          #   (2) the smallest-other-ObsId witness convention is KEPT and now
+                          #       MEASURED on a group of three. Every earlier test used a group of
+                          #       TWO, where "smallest other" and "largest other" name the same
+                          #       observation, so swapping them left all 402 tests green.
+                          # Also: the reference-scale PASS and its wall-clock existed in no test
+                          # (now 44 850 pairs, 300 interfaces, ~73 ms); AC7's "shown to bite" had no
+                          # record (the gate now names 0003...sql:48); §9 did not apply its own
+                          # "a divergence is a FINDING" rule to its own three divergences; a doc
+                          # cited a test that had been INVENTED; RESOLVER_RULESET_VERSION was dead
+                          # code with a false doc; and this very block contradicted itself.
                           # NEXT = push -> PR -> green CI -> squash merge.
-                          #
-                          # 5.7 IMPLEMENTED -> `review`. **The trap corpus is a gate that RUNS**:
-                          # 24 discovered, **13 scored** (0 for nine stories), 0 failures, 0
-                          # wrong-rule, passed. **333 -> 350 tests.** Six gates green, `fixtures/`
-                          # untouched. Six mutations, zero compiler-carried reds; M4 run on BOTH
-                          # sides — the `l1_answers` half leaves the WHOLE suite green, which is the
-                          # measurement, not a gap. NEXT = `code-review` 5.7, then PR.
-                          #
-                          # 5.7 CONTEXTED **and VALIDATED** -> was `ready-for-dev`. Master at
-                          # `6cc137b`, 333 tests.
-                          #
-                          # VALIDATION (two fresh-context agents, MANDATORY): the gap-hunt agent
-                          # IMPLEMENTED the story end to end in an isolated worktree — AC1-AC8
-                          # built, M1/M3/M4/M5/M6 run, six gates green, `fixtures/` untouched.
-                          # 🔑 THE PATTERN HELD A THIRD TIME: 3 HIGH from the agent that COMPILED
-                          # the story, 0 from the one that checked its claims. **13 findings
-                          # applied (3 HIGH, 5 MEDIUM, 5 LOW), 1 dismissed after re-measurement.**
-                          # Every number the story predicts reproduced EXACTLY — the 24-row answer
-                          # table row for row, 24 discovered / 13 scored / 0 failures / passed,
-                          # `scored_in` 7/6/0, AC5's 4 mismatches, AC8's residue of 11.
-                          # The three HIGH, all prescriptions that only broke under a compiler:
-                          #   H1 AC7's scratch trap had no COLUMN, and the obvious `must-merge`
-                          #      form lands in `failures()` with `rule_mismatches()` EMPTY —
-                          #      `minimal.jsonl` holds no pair L1 merges, and `run_trap` raises
-                          #      `WrongRule` only on a verdict PASS. Now `must-not-merge`;
-                          #   H2 M5 was a NO-OP: `walk_trap_files` takes no root, so a rename in a
-                          #      scratch copy is invisible to it (measured: 21 ids, all canonical).
-                          #      AC7's byte test moves to `discover_trap_files(root)`;
-                          #   H3 M4 reds NOTHING and AC2's named condition was VACUOUS: 0 of the 13
-                          #      `l1-*` traps are pairless, so the level selector excludes the only
-                          #      pairless trap first. The assertion moves to `answer_trap`.
-                          # Prediction check: the contexting note pointed the gap-hunt at AC2, AC5
-                          # and AC9 — right on AC2 and AC9, WRONG on AC5 (it validated clean), and
-                          # the third HIGH landed on AC7, which the note did not name.
-                          #
-                          # 5.6 DONE — PR #59 squash-merged as `020c706` after a green CI run,
-                          # code-reviewed and patched first. Epic 5: 8 of 16 stories done.
-                          # NEXT = `create-story` 5.7 (the trap runner stops scoring nothing),
-                          # then its MANDATORY two-agent validation before `dev-story`.
-                          #
-                          # 5.6 CODE-REVIEWED (3 layers) and PATCHED; it stayed at `review` until
-                          # the merge because `done` is the MERGE's business here, not the
-                          # review's — the same call 5.1-5.5 all made. 332 -> 333 tests
-                          # (139 bin + 148 core + 46 xtask). 9 patches applied, 2 deferrals
-                          # registered, 11 findings dismissed. Six gates green, `float-free`
-                          # over 4 files.
-                          #
-                          #  · The HIGH: the module doc claimed blocking on the MAC, the hostname
-                          #    OR the `l2_domain` would each pass the whole corpus. MEASURED over
-                          #    the ten `must-merge` pairs: MAC 700‰ (the story's OWN M1 figure),
-                          #    hostname 400‰, `l2_domain` 1000‰. Only the third passes — a doc
-                          #    refuted by a measurement inside the same commit.
-                          #  · The one behavioural gap: nothing fed `candidates` an observation
-                          #    with EMPTY `facts`, so a fact-presence narrowing was measured GREEN
-                          #    across all 332 tests. One new test, proven red against it.
-                          #  · 6 of the 9 patches were SENTENCES, not behaviour — fifth story
-                          #    running whose review found a claim outrunning its measurement.
-                          #  · Three prove-to-red runs on the patches themselves, all
-                          #    assertion-carried, restores md5-verified. MV2 measured `checked`
-                          #    at 1 under a degraded fixture, so the old `assert!(checked > 0)`
-                          #    was green there — the strengthening is load-bearing, not tidying.
-                          #
-                          # 5.6 IMPLEMENTED -> `review`. 309 -> 332 tests (139 bin + 147 core + 46
-                          # xtask). Six green gates, `float-free` over 4 files. All six mutations
-                          # run; M1 = 700‰ exactly, M2 leaves the whole corpus green. Zero
-                          # compiler-carried reds.
-                          #
-                          # History, most recent first:
-                          #  · 5.6 contexted AND validated (2 fresh agents, 16 findings applied)
-                          #    -> `ready-for-dev`; master at `0ebd50f`, 309 tests.
-                          #  · 5.5 DONE — PR #57 squash-merged as `0ebd50f`, 309 tests on master.
-                          #    6 mutations, all reds assertion-carried; the one the validation added
-                          #    reds 10 where the agent's self-referential version red 0.
-                          #    Code-reviewed (3 layers) and patched before merge.
+                          # ⚠️ For any DB story the gap-hunt MUST run a real MariaDB (13306; 3306 is
+                          # held by an unrelated container). And a mutation that changes the ARITY
+                          # of a statement's bind parameters HANGS the suite instead of reddening
+                          # it -- run every mutation under a timeout.
 project: opencmdb
 project_key: NOKEY
 tracking_system: file-system
@@ -1543,7 +1396,7 @@ development_status:
   # `observation -> interface` (`join` is what forms an interface at L1; `decide_pair` judges a
   # pair and returns none). NO `device` table and NO `entity` supertype -- both Epic 6.
   5-9-persist-interface-and-identity-link: done
-  5-9b-engine-resolves-and-writes-links: backlog
+  5-9b-engine-resolves-and-writes-links: review
   5-10-purge-test: backlog
   5-11-order-independence: backlog
   5-12-never-overwrite-anti-regression: backlog

@@ -242,6 +242,28 @@ pub const OPEN_END: &str = "9999-12-31 23:59:59.999999";
 /// `interface_id_not_nil` refuses an interface that would collide with it.
 pub const ABSTAINED_SUBJECT: &str = "00000000-0000-0000-0000-000000000000";
 
+/// [`OPEN_END`] as a [`Timestamp`], for the callers that pass a link's `valid_to` as a parameter.
+///
+/// The single derivation site, and it is checked against the literal by
+/// `the_sentinel_instant_renders_as_the_sentinel_literal`: two spellings of one instant that drift
+/// apart would make `identity_link_current_subject` refuse every current link the resolver writes,
+/// with a `check` violation naming nothing a reader could act on.
+///
+/// _(This lived in `repo.rs`'s test module until story 5.9b, which needs it in production: the
+/// resolver writes every current link at the sentinel.)_
+///
+/// # Panics
+///
+/// Never in practice — the date is a literal in range, and the `expect` documents that.
+pub(crate) fn open_end() -> Timestamp {
+    use chrono::TimeZone;
+    chrono::Utc
+        .with_ymd_and_hms(9999, 12, 31, 23, 59, 59)
+        .single()
+        .expect("the sentinel instant")
+        + chrono::Duration::microseconds(999_999)
+}
+
 /// The persisted token for a [`Conclusion`], by an exhaustive `match`.
 ///
 /// No `#[derive(Serialize)]`, deliberately: a derived variant name is a wire format nobody chose,
@@ -326,9 +348,103 @@ where
     Ok(())
 }
 
+/// Find the interface an L1 key names, or `None` when the key has never been seen.
+///
+/// This is what makes a re-run reproducible: `0002`'s header states that *"the re-run finds an
+/// interface by its key"*, and if the id were re-minted on every pass, every reproduced link would
+/// carry a different `interface_id` and story 5.10's bit-for-bit purge test could never pass. It is
+/// also what makes read-your-own-writes real rather than a convention — called with a unit of
+/// work's connection, it sees an interface the same transaction just inserted.
+///
+/// # Why an ordered first match is correct here
+///
+/// `interface_l1_key` is deliberately NOT unique (D21): a cloned MAC is two real interfaces sharing
+/// one address, and a UNIQUE there would turn the case the engine must ABSTAIN on into a 500. So
+/// this returns **an** interface for the key, `ORDER BY id` for determinism rather than for meaning
+/// — [`InterfaceId`] is a UUID and its order is a construction device, exactly as
+/// `CandidatePair`'s is. Telling two interfaces on one key apart is the cloned-MAC problem and
+/// belongs to Epic 6; until then a second row on the same key is unreachable through the resolver,
+/// which mints at most one interface per key per pass.
+///
+/// # Errors
+///
+/// Returns the `sqlx::Error` as it came; callers classify it with [`classify`]. A stored id that is
+/// not a UUID decodes as [`sqlx::Error::Decode`] — the id newtypes have no `FromStr`, so the parse
+/// happens here.
+pub async fn find_interface_by_l1_key<'e, E>(
+    executor: E,
+    l2_domain: L2DomainId,
+    mac_canon: &MacAddr,
+) -> Result<Option<InterfaceId>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String,)> = sqlx::query_as(
+        "SELECT id FROM interface WHERE l2_domain = ? AND mac_canon = ? ORDER BY id LIMIT 1",
+    )
+    .bind(l2_domain.to_string())
+    .bind(mac_canon.to_string())
+    .fetch_all(executor)
+    .await?;
+    match rows.into_iter().next() {
+        None => Ok(None),
+        Some((id,)) => {
+            let parsed =
+                uuid::Uuid::parse_str(&id).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            Ok(Some(InterfaceId::from_uuid(parsed)))
+        }
+    }
+}
+
+/// Widen an interface's seen-window to cover two more instants, never narrowing it.
+///
+/// `LEAST`/`GREATEST` rather than a read-modify-write in Rust, for one reason: `sqlx` is built here
+/// without its `chrono` feature, so a `DATETIME(6)` has no Rust type to decode into and the window
+/// could only be read back as the string MariaDB renders — comparing those in Rust would be an
+/// instant comparison wearing a string costume.
+///
+/// **This is not the comparison D10 forbids.** D10 keeps SQL out of *domain value* comparison
+/// because identity is the product; a seen-window is bookkeeping, no value is under judgement, and
+/// MariaDB is the only engine (D64). _(Enabling `sqlx`'s `chrono` feature would let this be written
+/// in Rust and would collapse `load_link_valid_to`'s second rendering site with it; that is
+/// registered, with the first story that needs to read an instant back as a VALUE as its owner.)_
+///
+/// Widening rather than assigning is what makes an out-of-order arrival safe: a batch older than
+/// the stored window must extend `first_seen_at` backwards, and a narrowed `first_seen_at` is
+/// unrecoverable.
+///
+/// # Errors
+///
+/// Returns the `sqlx::Error` as it came; callers classify it with [`classify`].
+pub async fn widen_interface_seen_window<'e, E>(
+    executor: E,
+    id: InterfaceId,
+    first_seen_at: Timestamp,
+    last_seen_at: Timestamp,
+) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    sqlx::query(
+        "UPDATE interface \
+         SET first_seen_at = LEAST(first_seen_at, ?), last_seen_at = GREATEST(last_seen_at, ?) \
+         WHERE id = ?",
+    )
+    .bind(datetime_literal(first_seen_at))
+    .bind(datetime_literal(last_seen_at))
+    .bind(id.to_string())
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
 /// Format an instant the way MariaDB writes one. The single formatting site; do not invent a
 /// second format string.
-fn datetime_literal(at: Timestamp) -> String {
+///
+/// `pub(crate)` rather than private since story 5.9b: `resolver.rs` reads instants back with
+/// `CAST(… AS CHAR)` and compares them against this rendering, and a private function here is what
+/// makes a second format string the natural reflex over there.
+pub(crate) fn datetime_literal(at: Timestamp) -> String {
     at.format("%Y-%m-%d %H:%M:%S%.6f").to_string()
 }
 
@@ -723,6 +839,23 @@ mod tests {
             .run(&pool)
             .await
             .expect("migrate");
+        // ⚠️ Children before parents. `identity_link.observation_id` gained a foreign key in
+        // `0003_resolver_guards.sql`, so deleting observations while a link still points at one
+        // fails ERROR 1451. This is ORDER-DEPENDENT: it only bites once some earlier test has
+        // committed a link, which is why it stayed invisible until story 5.9b fixed the twelve
+        // tests the key reddened outright.
+        sqlx::query("DELETE FROM link_candidate")
+            .execute(&pool)
+            .await
+            .expect("clean candidates");
+        sqlx::query("DELETE FROM identity_link")
+            .execute(&pool)
+            .await
+            .expect("clean links");
+        sqlx::query("DELETE FROM interface")
+            .execute(&pool)
+            .await
+            .expect("clean interfaces");
         sqlx::query("DELETE FROM observation_record")
             .execute(&pool)
             .await
@@ -775,16 +908,6 @@ mod tests {
         chrono::DateTime::from_timestamp(secs, 0).expect("in range")
     }
 
-    /// `OPEN_END` as a `Timestamp`, so a test can pass it where a link's `valid_to` is a parameter.
-    fn open_end() -> Timestamp {
-        use chrono::TimeZone;
-        chrono::Utc
-            .with_ymd_and_hms(9999, 12, 31, 23, 59, 59)
-            .single()
-            .expect("the sentinel instant")
-            + chrono::Duration::microseconds(999_999)
-    }
-
     fn a_match(rule: &str) -> Decision {
         Decision {
             conclusion: Conclusion::Match {
@@ -803,12 +926,13 @@ mod tests {
         }
     }
 
-    /// Connect, migrate and empty the three identity tables.
+    /// Connect, migrate and empty the identity tables **and `observation_record`**.
     ///
-    /// ⚠️ `observation_record` is NOT touched, and does not need to be: `identity_link.observation_id`
-    /// carries no foreign key, so these tests mint an `ObsId` and never insert an observation. That
-    /// asymmetry is registered with story 5.9b as owner — every other cross-table reference here
-    /// IS a foreign key.
+    /// ⚠️ This doc said `observation_record` *"is NOT touched, and does not need to be"* until story
+    /// 5.9b, because `identity_link.observation_id` carried no foreign key and these tests minted an
+    /// `ObsId` without ever inserting an observation. `0003_resolver_guards.sql` adds that key —
+    /// measured reddening **twelve** tests here — so every link now needs a real observation behind
+    /// it, and the cleanup deletes children before parents.
     ///
     /// The `DELETE`s are one static statement per table, not a loop over table names: sqlx 0.9
     /// rejects `sqlx::query(&format!(…))` at compile time. Children before parents (FKs).
@@ -834,7 +958,39 @@ mod tests {
             .execute(&pool)
             .await
             .expect("clean interfaces");
+        sqlx::query("DELETE FROM observation_record")
+            .execute(&pool)
+            .await
+            .expect("clean observations");
         Some(pool)
+    }
+
+    /// Insert a minimal observation and return its id — the row a link's `observation_id` names.
+    ///
+    /// Story 5.9's tests minted an `ObsId` out of thin air, which `0003`'s foreign key now refuses.
+    /// The facts are irrelevant to every test that calls this: what the FK constrains is that the
+    /// row EXISTS, and a link's meaning comes from its rule and its evidence, not from the
+    /// observation's contents.
+    async fn an_observation(pool: &MySqlPool) -> ObsId {
+        use opencmdb_core::observation::{ConnectorId, Observation, Scope, VantageId};
+
+        let id = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let observation = Observation {
+            obs_id: id,
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::nil()),
+            observed_at: at(1_700_000_000),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            },
+            facts: vec![],
+            raw: None,
+        };
+        insert_observation(pool, &observation)
+            .await
+            .map_err(classify)
+            .expect("insert observation");
+        id
     }
 
     async fn an_interface(pool: &MySqlPool, l2: L2DomainId, mac: [u8; 6]) -> InterfaceId {
@@ -861,7 +1017,7 @@ mod tests {
             return;
         };
         let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
-        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs = an_observation(&pool).await;
         let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 5]).await;
         let link = LinkId::from_uuid(uuid::Uuid::now_v7());
         let evidence = vec![obs, ObsId::from_uuid(uuid::Uuid::now_v7())];
@@ -916,7 +1072,7 @@ mod tests {
             return;
         };
         let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
-        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs = an_observation(&pool).await;
         let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 6]).await;
         let first = LinkId::from_uuid(uuid::Uuid::now_v7());
         let second = LinkId::from_uuid(uuid::Uuid::now_v7());
@@ -1009,7 +1165,7 @@ mod tests {
             return;
         };
         let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
-        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs = an_observation(&pool).await;
         let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 7]).await;
 
         write_link(
@@ -1050,7 +1206,7 @@ mod tests {
             return;
         };
         let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
-        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs = an_observation(&pool).await;
         let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 8]).await;
 
         for _ in 0..2 {
@@ -1089,7 +1245,7 @@ mod tests {
             return;
         };
         let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
-        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs = an_observation(&pool).await;
         let nic_a = an_interface(&pool, l2, [0, 1, 2, 3, 4, 9]).await;
         let nic_b = an_interface(&pool, l2, [0, 1, 2, 3, 4, 10]).await;
 
@@ -1135,7 +1291,7 @@ mod tests {
         let Some(pool) = identity_fixture().await else {
             return;
         };
-        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs = an_observation(&pool).await;
         let abstention = an_abstention(IdentityAbstentionCause::Ambiguous);
 
         write_link(
@@ -1175,7 +1331,7 @@ mod tests {
             return;
         };
         let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
-        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs = an_observation(&pool).await;
         let one = an_interface(&pool, l2, [0, 1, 2, 3, 4, 11]).await;
         let two = an_interface(&pool, l2, [0, 1, 2, 3, 4, 12]).await;
         let link = LinkId::from_uuid(uuid::Uuid::now_v7());
@@ -1244,7 +1400,7 @@ mod tests {
         let Some(pool) = identity_fixture().await else {
             return;
         };
-        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs = an_observation(&pool).await;
 
         // A match with no interface — `interface_id IS NULL` iff abstained.
         let no_interface = write_link(
@@ -1416,7 +1572,7 @@ mod tests {
             return;
         };
         let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
-        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs = an_observation(&pool).await;
         let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 20]).await;
         let other = an_interface(&pool, l2, [0, 1, 2, 3, 4, 21]).await;
 
@@ -1546,6 +1702,87 @@ mod tests {
         );
     }
 
+    /// AC7 — the three guards `0003_resolver_guards.sql` installs, each measured by a RAW insert
+    /// that goes around the adapter.
+    ///
+    /// ⚠️ Around the adapter deliberately. Story 5.9's M3 is the lesson: dropping the
+    /// rule-XOR-cause CHECK left all 378 tests green, because `insert_identity_link` derives the
+    /// rule and the cause from one `match` and cannot emit an incoherent pair — the guard is only
+    /// reachable by not using it. The same is true of all three here: `MacAddr`'s `Display` cannot
+    /// produce an uppercase `mac_canon`, and the engine's two rule ids are non-empty constants.
+    ///
+    /// ⚠️ The FOREIGN KEY is not a CHECK. It is grouped with them because all three are the same
+    /// story's guards, not because they are the same kind of constraint.
+    #[tokio::test]
+    async fn the_resolver_guards_refuse_what_they_name() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = identity_fixture().await else {
+            return;
+        };
+        let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
+        let obs = an_observation(&pool).await;
+        let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 30]).await;
+
+        // `identity_link_observation_fk` — a link naming an observation that does not exist.
+        let ghost_observation = ObsId::from_uuid(uuid::Uuid::now_v7());
+        assert_eq!(
+            raw_link(
+                &pool,
+                ghost_observation,
+                Some(iface),
+                Some(&iface.to_string()),
+                "match",
+                OPEN_END
+            )
+            .await,
+            Some(RepositoryError::Constraint("foreign_key")),
+            "a link points at an observation that exists — the evidence must be there to point at"
+        );
+
+        // `interface_mac_canon_lower` — the canonical form is the lowercase colon form.
+        let uppercase = sqlx::query(
+            "INSERT INTO interface (id, l2_domain, mac_canon, first_seen_at, last_seen_at) \
+             VALUES (?, ?, '00:11:22:33:44:AA', ?, ?)",
+        )
+        .bind(uuid::Uuid::now_v7().to_string())
+        .bind(l2.to_string())
+        .bind(datetime_literal(at(1_700_000_000)))
+        .bind(datetime_literal(at(1_700_000_100)))
+        .execute(&pool)
+        .await
+        .map_err(classify)
+        .err();
+        assert_eq!(
+            uppercase,
+            Some(RepositoryError::Constraint("check")),
+            "an uppercase mac_canon would create a second interface for one physical NIC, \
+             invisibly, because the L1 index is deliberately non-unique"
+        );
+
+        // `identity_link_rule_id_not_empty` — '' satisfies rule-XOR-cause, and is not a name.
+        let nameless = sqlx::query(
+            "INSERT INTO identity_link \
+             (id, observation_id, interface_id, current_subject, outcome, rule_id, \
+              abstention_cause, evidence, ruleset_version, decided_by, valid_from, valid_to) \
+             VALUES (?, ?, ?, ?, 'match', '', NULL, '[]', 1, 'ENGINE', ?, ?)",
+        )
+        .bind(uuid::Uuid::now_v7().to_string())
+        .bind(obs.to_string())
+        .bind(iface.to_string())
+        .bind(iface.to_string())
+        .bind(datetime_literal(at(1_700_000_000)))
+        .bind(OPEN_END)
+        .execute(&pool)
+        .await
+        .map_err(classify)
+        .err();
+        assert_eq!(
+            nameless,
+            Some(RepositoryError::Constraint("check")),
+            "a decision names the rule that settled it, and the empty string is not a name"
+        );
+    }
+
     /// Write one link with raw SQL, going AROUND the adapter's derivations, and return the error.
     ///
     /// The adapter cannot produce most of the rows the DDL refuses — that is the point of the
@@ -1590,7 +1827,7 @@ mod tests {
         let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 30]).await;
 
         // OPERATOR — a human asserting a link.
-        let obs_op = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs_op = an_observation(&pool).await;
         insert_identity_link(
             &pool,
             LinkId::from_uuid(uuid::Uuid::now_v7()),
@@ -1608,7 +1845,7 @@ mod tests {
 
         // no_match — a rule that FORBADE the pair. It names the interface it excluded, which is
         // what `identity_link_abstained_has_no_interface` requires of any non-abstention.
-        let obs_no = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs_no = an_observation(&pool).await;
         let no_match = Decision {
             conclusion: Conclusion::NoMatch {
                 rule: RuleId("l1-distinct-mac".into()),
@@ -1632,7 +1869,7 @@ mod tests {
         .expect("a refusal names the rule that forbade the pair");
 
         // AbsenceOfProof — the abstention cause the well-formed path never exercised.
-        let obs_ab = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs_ab = an_observation(&pool).await;
         insert_identity_link(
             &pool,
             LinkId::from_uuid(uuid::Uuid::now_v7()),
@@ -1681,7 +1918,7 @@ mod tests {
             return;
         };
         let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
-        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs = an_observation(&pool).await;
         let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 40]).await;
         let link = LinkId::from_uuid(uuid::Uuid::now_v7());
         write_link(
@@ -1740,7 +1977,7 @@ mod tests {
             return;
         };
         let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
-        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs = an_observation(&pool).await;
         let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 50]).await;
         let closed_at = at(1_700_000_500);
 
@@ -1782,7 +2019,7 @@ mod tests {
             return;
         };
         let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
-        let obs = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let obs = an_observation(&pool).await;
         let iface = an_interface(&pool, l2, [0, 1, 2, 3, 4, 60]).await;
         let link = LinkId::from_uuid(uuid::Uuid::now_v7());
         write_link(

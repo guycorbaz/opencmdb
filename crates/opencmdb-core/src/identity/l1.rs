@@ -306,6 +306,53 @@ pub fn decide_pair(a: &Observation, b: &Observation) -> Decision {
     decide(vec![verdict_for_pair(a, b)], CURRENT_RULESET_VERSION)
 }
 
+/// Decide the placement of an observation that is ALONE on one of its L1 keys.
+///
+/// # Why this exists at all
+///
+/// [`decide_pair`] judges a PAIR, and a group of one has no pair. The placement is still true —
+/// at L1 the interface **is** the key [architecture.md:984-985], so an observation carrying that
+/// key sits on that interface by [`join`]'s definition, and [`L1_EXACT_MAC`] is the rule that names
+/// it. What is missing is not the fact but the [`Decision`] carrying it, which every persistence
+/// caller needs.
+///
+/// # Why it lives here and not in the caller
+///
+/// The first caller (`opencmdb_bin`'s resolver, story 5.9b) could have built the verdict itself and
+/// called [`decide`]. That would make another crate the first producer of an L1 rule verdict — the
+/// exact composition [`verdict_for_pair`]'s `pub(crate)` exists to prevent. Verdict composition
+/// stays in this file; callers get a [`Decision`].
+///
+/// **Nothing bypasses [`decide`].** The alternative a caller would otherwise reach for is a struct
+/// literal, which is the *"merged, with no explanation"* shape [`Decision`]'s own doc warns about
+/// and which D13's *"the list IS the explanation"* exists to forbid. This builds the one-element
+/// `Decisive` vector and hands it to the algebra like every other path.
+///
+/// # The evidence is the observation itself
+///
+/// One `ObsId`, not two: no second observation argued for this placement, and D19 wants the
+/// evidence a rule actually had. A caller that sees a one-element evidence list is reading *"this
+/// key was carried by exactly one observation"*, which is true and useful.
+///
+/// ⚠️ **This is not the self-pair.** `decide_pair(o, o)` would also answer `Match`, since an
+/// observation shares every key with itself — but [`crate::identity::blocking::CandidatePair::new`]
+/// refuses two equal ids on purpose, and manufacturing the pair here would re-open in a caller what
+/// that constructor closed in the type.
+///
+/// ⚠️ An observation carrying **no** MAC has no key and is in no group, so it never reaches this
+/// function; it is an abstention, and [`decide_pair`] against any other observation already returns
+/// exactly that.
+pub fn decide_singleton(observation: &Observation) -> Decision {
+    decide(
+        vec![RuleVerdict {
+            rule: RuleId(L1_EXACT_MAC.to_string()),
+            verdict: Verdict::Decisive,
+            evidence: vec![observation.obs_id],
+        }],
+        CURRENT_RULESET_VERSION,
+    )
+}
+
 /// Tests for the L1 join and its two rules.
 ///
 /// # Synthetic inputs only
@@ -892,6 +939,82 @@ mod tests {
             decision.verdict_vector[0].rule,
             RuleId(CORPUS_EXACT_MAC.to_string()),
             "the id is still recorded in the vector — observable, but not decision-bearing"
+        );
+    }
+
+    #[test]
+    fn a_singleton_is_placed_by_its_key_with_itself_as_evidence() {
+        let alone = simple(1, mac(0x01));
+
+        let decision = decide_singleton(&alone);
+
+        assert_eq!(
+            decision.conclusion,
+            Conclusion::Match {
+                rule: RuleId(CORPUS_EXACT_MAC.to_string())
+            },
+            "an observation alone on its key is still placed on the interface the key names"
+        );
+        assert_eq!(
+            decision.verdict_vector.len(),
+            1,
+            "one verdict — the key that placed it"
+        );
+        assert_eq!(
+            decision.verdict_vector[0].evidence,
+            vec![obs_id(1)],
+            "the evidence is the single observation that carried the key, not a manufactured pair"
+        );
+        assert_eq!(
+            decision.ruleset_version, CURRENT_RULESET_VERSION,
+            "a singleton placement is versioned like every other decision"
+        );
+    }
+
+    /// The verdict vector is what makes a decision explainable (D13: *"the list IS the
+    /// explanation"*), and a struct literal with an empty vector is the shape [`Decision`]'s own
+    /// doc warns about. This asserts the vector is NON-EMPTY rather than merely that the conclusion
+    /// is right — a `Decision { conclusion, verdict_vector: vec![], .. }` satisfies the test above
+    /// and fails this one.
+    #[test]
+    fn a_singleton_decision_carries_its_explanation() {
+        let decision = decide_singleton(&simple(1, mac(0x01)));
+
+        assert!(
+            !decision.verdict_vector.is_empty(),
+            "a placement with no verdict vector is 'merged, with no explanation'"
+        );
+        assert_eq!(
+            decision.verdict_vector[0].verdict,
+            Verdict::Decisive,
+            "the key is decisive; nothing here is a weak signal"
+        );
+    }
+
+    /// [`decide_singleton`] must NOT be [`decide_pair`] applied to `(o, o)`: the self-pair is
+    /// refused by `CandidatePair::new` and the difference is observable in the EVIDENCE — one id
+    /// against the same id twice. Story 5.6 closed the self-pair in the type and story 5.7's review
+    /// found it re-opened in a caller; this test is what stops the third time.
+    #[test]
+    fn a_singleton_is_not_the_self_pair_in_disguise() {
+        let alone = simple(1, mac(0x01));
+
+        let singleton = decide_singleton(&alone);
+        let self_pair = decide_pair(&alone, &alone);
+
+        assert_eq!(
+            singleton.verdict_vector[0].evidence,
+            vec![obs_id(1)],
+            "one observation, named once"
+        );
+        assert_eq!(
+            self_pair.verdict_vector[0].evidence,
+            vec![obs_id(1), obs_id(1)],
+            "the self-pair names it twice — which is how the two are told apart"
+        );
+        assert_ne!(
+            singleton.verdict_vector[0].evidence, self_pair.verdict_vector[0].evidence,
+            "if these ever agree, decide_singleton has become the self-pair"
         );
     }
 }

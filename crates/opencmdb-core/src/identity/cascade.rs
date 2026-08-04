@@ -343,8 +343,17 @@ pub enum Conclusion {
 /// one sentence until the 2026-07-30 review.)_
 ///
 /// ⚠️ **A struct literal built anywhere else is still unconstrained**, because the fields are `pub`
-/// and there is no constructor; that residue is registered with story 5.9, the first story that
-/// reconstructs a `Decision` from somewhere other than `decide`.
+/// and there is no constructor. That residue named story 5.9 as its owner, *"the first story that
+/// reconstructs a `Decision` from somewhere other than `decide`"*.
+///
+/// **Story 5.9 did it in tests only. Story 5.9b was going to be the first to do it in PRODUCTION
+/// code — and refused.** Persisting a placement needs a `Decision`, and an observation alone on its
+/// L1 key has no pair to produce one, so a struct literal with an empty `verdict_vector` was the
+/// obvious route: exactly the *"merged, with no explanation"* shape this doc warns about, one line
+/// away from being written. [`crate::identity::l1::decide_singleton`] exists instead — it builds
+/// the one-element `Decisive` verdict and hands it to [`decide`] like every other path.
+/// **The owner clause therefore stands, unmet**: the residue waits for a caller that genuinely
+/// reconstructs a `Decision`, and no such caller exists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Decision {
     /// What the cascade concluded.

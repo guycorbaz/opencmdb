@@ -19,6 +19,7 @@ mod l1_runner;
 mod metrics;
 mod page;
 mod repo;
+mod resolver;
 mod trap_gate;
 
 // The i18n seam (D39/D66): user-facing strings resolve through `t!()` against `locales/`. EN is
@@ -406,6 +407,23 @@ mod tests {
             .execute(&pool)
             .await
             .expect("clean declared");
+        // ⚠️ Children before parents. `identity_link.observation_id` gained a foreign key in
+        // `0003_resolver_guards.sql`, so deleting observations while a link still points at one
+        // fails ERROR 1451. This is ORDER-DEPENDENT: it only bites once some earlier test has
+        // committed a link, which is why it stayed invisible until story 5.9b fixed the twelve
+        // tests the key reddened outright.
+        sqlx::query("DELETE FROM link_candidate")
+            .execute(&pool)
+            .await
+            .expect("clean candidates");
+        sqlx::query("DELETE FROM identity_link")
+            .execute(&pool)
+            .await
+            .expect("clean links");
+        sqlx::query("DELETE FROM interface")
+            .execute(&pool)
+            .await
+            .expect("clean interfaces");
         sqlx::query("DELETE FROM observation_record")
             .execute(&pool)
             .await

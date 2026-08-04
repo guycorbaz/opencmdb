@@ -2316,3 +2316,206 @@ mutation pass. **Thirteen entries deferred, each measured rather than suspected.
 - ⚠️ **`count_identity_links` is `pub` with no caller and no test.** Consistent with the module's
   existing `#![allow(dead_code)]` skeleton, recorded so it is not mistaken for coverage.
   **Owner: story 5.9b.**
+
+## Deferred from: story-5.9b-engine-resolves-and-writes-links (2026-08-04)
+
+**Eleven entries named this story as owner — nine by NAME and two by CONDITION**, the second pair
+found by the validation's fact-check rather than by a grep. Their disposition below: **six CLOSED,
+four ANSWERED-not-closed, one measured and left OPEN by decision.** An answered entry says *"the
+condition was measured and not met"* — or, twice here, *"the condition was met and the story refused
+it"*; a closed one says *"the thing was done"*. Reporting the first as the second is the over-claim
+seven consecutive code reviews have caught.
+
+- ✅ **CLOSED — the blocker has a production caller.** `crates/opencmdb-bin/src/resolver.rs` calls
+  `identity::blocking::candidates` once over the whole slice, before any verdict is asked for, and
+  `identity::l1::join` for the grouping. Both had waited since story 5.6; `join` had **no
+  cross-crate caller at all**.
+
+- ✅ **CLOSED — `find_interface_by_l1_key` and `widen_interface_seen_window` exist.** `0002`'s header
+  had stated the design — *"the re-run finds an interface by its key"* — with no lookup behind it.
+  The lookup is what makes an interface id stable across runs, which story 5.10's bit-for-bit replay
+  depends on, and what makes read-your-own-writes real rather than a convention:
+  `the_second_observation_sees_the_first_ones_interface_in_one_transaction` measures it.
+
+- ✅ **CLOSED — `identity_link.observation_id` carries its foreign key** (`0003_resolver_guards.sql`).
+  🔑 **The register said it reds 8 tests; measured, it reds TWELVE** in `repo.rs`, all
+  `Constraint("foreign_key")` panic-carried. **And two more then appeared** —
+  `repo::tests::ingest_observation_round_trip` and `main::tests::index_renders_the_real_gap` — which
+  `DELETE FROM observation_record` without deleting links first and fail **ERROR 1451**.
+  🔑 **Those two were INVISIBLE until the twelve were fixed**, because a failing test rolls back and
+  leaves no link behind for the cleanup to trip over. Fourteen tests across two files, in two waves;
+  the second wave is order-dependent and a filtered run hides it.
+
+- ✅ **CLOSED — an `Ambiguous` abstention with no candidates is refused**, by `resolver::guard_decision`,
+  returning `Constraint("ambiguity_without_candidates")`. ⚠️ **Unreachable through the resolver**: L1
+  emits no `Supports` and no `Opposes`, so `decide` cannot conclude `Ambiguous` at all. The guard is
+  therefore tested by calling it DIRECTLY — a test written through the pass would stay green with the
+  guard deleted, which is story 5.8's measured lesson.
+
+- ✅ **CLOSED — `mac_canon` must equal its own `LOWER()`** (`0003`). `MacAddr`'s `Display` cannot emit
+  anything else, so this is a second line of defence; it is measured by a RAW insert going around the
+  adapter, in the idiom story 5.9's M3 forced.
+
+- ✅ **CLOSED — `rule_id = ''` is refused twice**: by `resolver::guard_decision`
+  (`Constraint("rule_id_empty")`) and by `identity_link_rule_id_not_empty` in `0003`. Both are
+  measured, and separately: dropping either leaves the other carrying the test, which is exactly how
+  story 5.9's M3 first came back green.
+
+- ↺ **ANSWERED, NOT CLOSED — `L1Key` is still a bare tuple alias, and the newtype is REFUSED.**
+  *(Owner clause: "the first story to persist a key".)* The condition is now MET — this story holds
+  `L1Key` values and persists both components. The newtype was still not introduced, and the reason
+  is a measurement rather than a preference: the key is destructured at its ONE use site
+  (`for ((l2_domain, mac_canon), group) in &groups`) and never travels as a value —
+  `find_interface_by_l1_key` takes the two components as separate parameters, and the schema stores
+  them as two columns. A newtype would wrap something that is never passed around. **The owner clause
+  is spent; the residue is now a refusal with its reason.**
+
+- ↺ **ANSWERED, NOT CLOSED — an incoherent `Decision` is still buildable by struct literal, and this
+  story is the one that ALMOST met the clause.** *(Owner clause: "the first story that reconstructs a
+  `Decision` from somewhere other than `decide`".)* Persisting a placement needs a `Decision`;
+  an observation alone on its L1 key has no pair to produce one; so a struct literal with an empty
+  `verdict_vector` was one line away — the *"merged, with no explanation"* shape `Decision`'s own doc
+  warns about and D13's *"the list IS the explanation"* forbids. **`identity::l1::decide_singleton`
+  exists instead**: it builds the one-element `Decisive` verdict and returns `decide`'s value, so
+  nothing bypasses the algebra. **The clause therefore stands, unmet.** The same disposition applies
+  to its twin (nothing enforces non-empty evidence on a `RuleVerdict` built by struct literal).
+  🔑 The residue is stated in THREE places — here, its twin above, and the doc comment on
+  `cascade.rs`'s `Decision`, which named story 5.9 as owner. All three were updated together; two of
+  three is the doc-twin defect four of story 5.9's review patches were.
+
+- ↺ **ANSWERED, NOT CLOSED — `count_identity_links` still has no PRODUCTION caller.** 🔑 **The entry's
+  premise was half stale when it was written**: it says *"no caller and no test"*, and it has had a
+  test since story 5.9's own code review (`repo.rs`, the `ON DELETE CASCADE` test). This story gives
+  it two more test callers and still no production one, so it is neither closed nor deleted — a
+  counting query with no reader is exactly what the module's `#![allow(dead_code)]` skeleton is for.
+  **Owner: story 5.14**, the first story with a surface that counts anything for a human.
+
+- ⚠️ **OPEN, with its number — the universe is quadratic and nothing bounds the caller's slice.**
+  This is the first story that could measure `n`, and it does:
+  `the_universe_is_quadratic_and_its_size_is_asserted` asserts `candidates(&obs).len() == n(n-1)/2`
+  over distinct ids at several sizes and **44 850 at the reference scale of 300 hosts**.
+  🔑 **D13's prose says "90k pairs" for the same scale — the figure counts pairs the other way, and
+  the measured number is half of it.** No refusal threshold was installed: a bound with no measured
+  need is the speculation the *"create only what the story needs"* rule refuses. **Owner: the first
+  story that hands the resolver a slice it did not choose** (a real scan, i.e. the wiring decision 3
+  defers).
+
+### New, raised by this story
+
+- ⚠️ **The resolver is NOT wired into `main.rs`'s startup scan.** By decision: the named consumers are
+  stories 5.10 and 5.11, and wiring it would make every deployment write links with no page to
+  display them and no purge to remove them. **Owner: story 5.14**, the FR16 surface.
+
+- ⚠️ **The pass is NOT idempotent over the same observations.** Measured: running `resolve` twice over
+  one slice inside one `transact` is `Err(Constraint("unique"))` and a **full rollback** — 0
+  interfaces, 0 links. `insert_identity_link` appends and `identity_link_one_current` refuses the
+  second current row. Superseding an unchanged decision instead of appending is *"no new version for
+  an unchanged decision"*, which `0002`'s own header already names. **Owner: story 5.11.**
+
+- ⚠️ **A link's evidence names the PAIR that justified it, not the whole group.** `decide_pair`'s
+  evidence is the sorted pair (D19), so a link on a five-observation interface names two ids. That is
+  the engine's own evidence rather than the resolver's construction, which is why it was chosen;
+  a display may want more. **Owner: story 5.14.**
+
+- ⚠️ **`absence_of_proof` is a cause of CONVENIENCE for an observation whose every pair the blocker
+  excluded.** The engine has two causes and neither means *"the blocker declined to propose"*.
+  Nothing can reach that branch today — `candidates` is TOTAL — so choosing a semantics now would be
+  inventing one no caller can produce. **Owner: the first story that NARROWS the blocker**; F17's
+  `dormant` exclusion [architecture.md:1205] is the named candidate.
+
+- ⚠️ **The seen-window is widened with `LEAST`/`GREATEST` in SQL.** Not the comparison D10 forbids —
+  no domain value is under judgement, and MariaDB is the only engine (D64) — but it IS arithmetic in
+  SQL, chosen because `sqlx` is built here without its `chrono` feature and a `DATETIME(6)` has no
+  Rust type to decode into. Enabling that feature would let the widening be computed in Rust and
+  would collapse `load_link_valid_to`'s `CAST(… AS CHAR)` with it. **Owner: the first story that needs
+  to read an instant back as a VALUE** — the entry story 5.9 opened, whose condition this story does
+  **not** meet: it compares rendered strings against `datetime_literal`, which is transport.
+
+- 🔴 **`epics.md`'s AC1 for story 5.9b is FALSIFIED by the code it describes, and `epics.md` was not
+  edited.** It says *"each observation carrying a MAC lands on exactly ONE `interface`"*; `join` loops
+  `for key in keys_of(observation)` [`l1.rs:174-178`] and `keys_of` returns one entry per `Fact::Mac`,
+  so a two-MAC observation lands on TWO. Guy widened the criterion at contexting — *one interface per
+  L1 key* — and `one_observation_with_two_macs_lands_on_two_interfaces` asserts it. Story 5.8's
+  precedent for editing `epics.md` does not apply: 5.7 had handed 5.8 that correction with a named
+  owner, and here the contexting found its own. **Owner: Epic 5's retrospective.**
+
+- 🔴 **`epics.md:1616` is departed from too**: it requires an abstention link to carry *"its
+  `link_candidate` rows"*, and this pass writes **zero** for an `absence_of_proof` — correctly, since
+  nothing was a candidate. The story's guard refuses the incoherent case (`Ambiguous` with none) and
+  permits this one. A second unregistered divergence from the epic, recorded beside the first.
+  **Owner: Epic 5's retrospective.**
+
+- ⚠️ **`every_ddl_guard_refuses_what_it_names` could have stopped measuring its own guard, silently.**
+  After `0003`, MariaDB reports `identity_link_observation_fk` (ERROR 1452) before
+  `identity_link_interface_fk`, and both classify as `Constraint("foreign_key")` — so a case built on
+  an observation that does not exist would be satisfied by the WRONG constraint while staying green.
+  It is fixed here (every link test now names a real observation), and it is recorded because
+  **nothing would have routed a reader to it**: the test never reds. **No owner — closed by the
+  implementation**, and here as the measurement.
+
+## Deferred from: code review of story-5.9b (2026-08-04)
+
+Three-layer review (Blind Hunter · Edge Case Hunter · Acceptance Auditor) of `master...18844ea`.
+Two layers ran against their own live `mariadb:10.11.11`; the Auditor re-executed all fourteen
+mutations independently. **Five entries deferred, each measured rather than suspected.**
+
+- ⚠️ **Two concurrent passes can mint two interfaces for one L1 key.** `find_interface_by_l1_key` is
+  a plain `SELECT` under InnoDB's default REPEATABLE READ, and `interface_l1_key` is deliberately
+  NOT unique (D21), so two transactions resolving the same MAC both read "not found" and both
+  insert. Afterwards the `ORDER BY id LIMIT 1` silently picks the lower UUID. The resolver's doc
+  says a second row on one key is *"unreachable through the resolver"* — true per pass, false
+  across passes. Unreachable in practice because D21 puts identity resolution inside a **single**
+  writer actor, but that precondition is stated nowhere in `resolve`'s signature or doc.
+  **Owner: the first story that gives the resolver more than one writer** — the wiring decision 3
+  defers.
+- ⚠️ **`widen_interface_seen_window` ignores `rows_affected()`**, so widening a non-existent
+  interface returns `Ok(())`. This is the silent-success shape story 5.9's code review closed in
+  `close_identity_link`, reappearing in the neighbouring function. Only ever called with an id the
+  same transaction just found or minted. **Owner: the first story that widens a window it did not
+  itself look up.**
+- ⚠️ **An `observed_at` at or past `OPEN_END` fails the whole batch** with
+  `Constraint("check")` from `identity_link_interval`, naming no column. One garbage instant from a
+  connector takes down every link in the pass. `close_identity_link` already guards the sentinel
+  explicitly; the write path does not. **Owner: the first story that ingests instants it did not
+  synthesise.**
+- ⚠️ **Sub-microsecond `observed_at` is truncated** by `datetime_literal`'s `%.6f`, so two distinct
+  instants store as one — measured, `…20.000000001` and `…20.000000999` both become
+  `…20.000000`. `the_stored_instants_are_the_derived_ones` therefore asserts a property that holds
+  only at microsecond granularity. **Already registered by story 5.9 with story 5.10 as owner**;
+  recorded here because this story is the first whose test depends on it.
+- ⚠️ **The eleven register entries this story disposed of still stand unmarked at their original
+  lines** (`:2199`–`:2318`), with their dispositions 120 lines below. This is the house pattern —
+  story 5.9's entries are still greppable too — but §5 of this story counted its own scope BY that
+  grep, so the next story inherits a count that includes eleven closed items. **Owner: whichever
+  story next counts its scope by grepping this file** — the fix is either an annotation in place or
+  a different way of counting.
+
+### New, raised by the code review and carried forward
+
+- ⚠️ **`write_link` keeps the FIRST verdict's evidence only.** Every `Decision` L1 produces carries
+  exactly one verdict, so nothing is lost today — but that is an L1 accident, not a property, and
+  `cascade.rs` says Epic 6's cascade ends it. On that day the evidence of verdicts 2..n vanishes with
+  nothing red. Not pre-solved: unioning evidence across a vector is a decision about what a link
+  MEANS, and no producer exists to decide it against. **Owner: Epic 6**, with the first multi-verdict
+  `Decision`.
+- ⚠️ **Nothing fills `guard_decision`'s `candidates_for_link`.** The only call site passes `&[]`, and
+  the pass writes no `link_candidate` row, because L1 has no ambiguity to hold candidates for. So the
+  day a producer of `Ambiguous` arrives, the guard would refuse a LEGITIMATE ambiguity rather than
+  let it be written with its candidates — the inverse of FR16. The signature already takes the slice
+  so it need not change under whoever fills it. **Owner: Epic 6**, the first producer of `Ambiguous`.
+- ⚠️ **`resolve` takes a bare `&mut MySqlConnection`, so D21's "never split across two transactions"
+  is a PRECONDITION, not a structure.** Measured: called on a pooled connection under autocommit, a
+  pass that then failed left **2 interfaces and 2 links committed**. Taking a unit-of-work type
+  instead would make it structural, and would move every call site story 5.9 wrote. **Owner: the
+  first story that gives the resolver a second caller** — the wiring decision 3 defers.
+- 🔴 **`uuid::Uuid::now_v7()` reads the clock, and its output is a PRIMARY KEY.** A v7 UUID embeds a
+  48-bit wall-clock millisecond, and this pass mints one per interface and one per link — decoded
+  from two runs over identical input, 57 ms apart. This is the house idiom (`ObsId`, `ConnectorId`
+  are v7 too), so the code is not the problem. **The consequence is story 5.10's**: its *"reproduced
+  identically, bit for bit"* can only ever mean *modulo the ids*, and that has to be written into
+  5.10 before it is written against. **Owner: story 5.10.**
+- ⚠️ **A group whose every member abstains still mints an interface nothing points at**, and
+  interfaces are never purged, so the orphan is permanent. Consistent with decision 2 (`join` NAMES
+  the interface, and it names it whether or not a verdict follows), but unreachable through `resolve`
+  today and unasserted. **Owner: the first story that narrows the blocker** — the same one that owns
+  decision 11's cause-of-convenience.
