@@ -2248,6 +2248,36 @@ mod tests {
         assert_eq!(DecidedBy::Operator.token(), "OPERATOR");
     }
 
+    /// 🔴 `datetime_literal` TRUNCATES below the microsecond, and this is where that is asserted.
+    ///
+    /// The register carried this as *"truncates below the microsecond in silence… **Nothing asserts
+    /// it**"* since story 5.9's code review. Half of that reproach is a property of a pure function
+    /// and needed no future story: it is closed here.
+    ///
+    /// ⚠️ **The other half is not.** Two distinct instants render identically, so a caller that
+    /// compares an instant it HOLDS against one it STORED can be wrong. Nothing here does that yet.
+    /// ⚠️ And `resolver`'s `the_stored_instants_are_the_derived_ones` cannot catch it either: it
+    /// builds its expected value by passing the instant through **this very function**, so both
+    /// sides are truncated identically — the same bilateral-oracle shape story 5.10's code review
+    /// found in `snapshot_links`. **Owner of that half: story 5.11**, the first that holds two
+    /// instants for one placement and must decide whether they are the same.
+    #[test]
+    fn datetime_literal_truncates_below_the_microsecond() {
+        let precise =
+            chrono::DateTime::from_timestamp(1_700_000_000, 123_456_789).expect("in range");
+        let neighbour =
+            chrono::DateTime::from_timestamp(1_700_000_000, 123_456_001).expect("in range");
+
+        assert_eq!(datetime_literal(precise), "2023-11-14 22:13:20.123456");
+        assert_ne!(precise, neighbour, "788 ns apart, and distinct in Rust");
+        assert_eq!(
+            datetime_literal(neighbour),
+            datetime_literal(precise),
+            "and INDISTINGUISHABLE once rendered — that is the truncation, asserted rather than \
+             merely true"
+        );
+    }
+
     /// The two sentinels are what they claim to be, and `current_subject` is derived from one place.
     #[test]
     fn the_two_sentinels_are_pinned() {
