@@ -50,7 +50,80 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-03  # 5.9 **DONE** -- PR #65 squash-merged as `57db541` after a green CI run
+last_updated: 2026-08-04  # 5.9b **CONTEXTED AND VALIDATED -> `ready-for-dev`**.
+                          # Two fresh-context agents ran. **Fact-check: 78 claims, 69 true, 6 false,
+                          # 6 gaps** -- 44/44 line citations correct and every count exact, so the
+                          # defects were all in QUOTED TOKENS, one CORPUS claim and the
+                          # AC<->task<->mutation seam. **Gap-hunt: BUILT the story end to end**
+                          # against a live mariadb:10.11.11, reaching 398 tests, six gates green,
+                          # fixtures/ untouched -- **7 HIGH, 5 MEDIUM, 7 LOW**. All applied.
+                          # 🔴 TWO MORE ARBITRATIONS by Guy, both on measurements:
+                          # (4) a SINGLETON group has no pair, hence no `Decision`, and
+                          #     `insert_identity_link` requires one. It comes from a NEW
+                          #     `identity::l1::decide_singleton` -- the ONE change this story makes
+                          #     to the engine -- rather than from a struct literal (the
+                          #     "merged, with no explanation" shape D13 forbids) or from the
+                          #     resolver composing a verdict outside `l1.rs`. This CLOSES the
+                          #     residue `cascade.rs:345-347` registers against story 5.9.
+                          # (5) the pass is **NOT idempotent**: twice over one slice is
+                          #     `Err(Constraint("unique"))` and a FULL ROLLBACK (0 interfaces,
+                          #     0 links). That is story 5.11's; AC4's tests move to DIFFERENT
+                          #     observations on the same key.
+                          # 🔑 Four prescriptions were not executable or measured nothing:
+                          #   · `Utc::now()` DOES NOT COMPILE (chrono is default-features=false in
+                          #     both crates to keep `clock` off, deliberately) -- M6 became NOW(6);
+                          #   · M12 left the ENTIRE SUITE GREEN (candidates is TOTAL) -> needs the
+                          #     `resolve_within` seam to mean anything;
+                          #   · M2 was a NO-OP against a transitivity test that never calls
+                          #     `resolve`;
+                          #   · M6b had NO target: no test read a link's `valid_from` back --
+                          #     story 5.9's AC3 defect, one story later.
+                          # 🔴 Other measured corrections: the observation FK reds **14 tests
+                          # across repo.rs AND main.rs**, not the register's 8 (2 of them fail
+                          # ERROR 1451 on cleanup ordering, order-dependently);
+                          # `every_ddl_guard_refuses_what_it_names` now passes for the WRONG reason
+                          # and NEVER reds, so nothing routes the dev to it; the persisted token is
+                          # `absence_of_proof`, not the variant name; `l1-distinct-mac` is
+                          # unwritable by a placement, so AC3's rule SET measured nothing;
+                          # **no committed observation carries more than one MAC** and `multi-nic`
+                          # is NOT that shape, so a sentence three documents use as evidence
+                          # supports nothing; the reference scale is 44 850 pairs, not D13's "90k";
+                          # and `resolver.rs` needs `#![allow(dead_code)]` or the CI clippy form
+                          # fails with 8 errors on the deliverable itself.
+                          # Registered entries: nine by name + two by condition = **eleven**.
+                          # NEXT = `dev-story` 5.9b.
+                          # (contexting entry:)
+                          # 5.9b CONTEXTED, on `master` at `47bdca2`
+                          # (383 tests, six green gates, clean tree, no story branch anywhere).
+                          # Story 5.9's bookkeeping PR #66 squash-merged as `47bdca2`.
+                          # 🔴 THREE ARBITRATIONS taken with Guy at this contexting:
+                          # (1) `epics.md`'s AC1 for 5.9b -- *"each observation lands on exactly ONE
+                          #     interface"* -- is FALSIFIED by the code it describes: `join` loops
+                          #     `for key in keys_of(observation)` (l1.rs:174-178), so a multi-MAC
+                          #     observation lands on N. AC1 widens to ONE INTERFACE PER L1 KEY.
+                          #     `epics.md` is NOT edited (verify-only; 5.8's precedent does not
+                          #     apply -- nobody handed this correction over, the contexting found
+                          #     it). Owner of the `epics.md` edit: Epic 5's RETROSPECTIVE.
+                          # (2) The mechanism: `join` NAMES the interface, the blocker and
+                          #     `decide_pair` JUSTIFY the placement, and a test says they agree.
+                          #     The alternative (connected components of the `Match` pairs) is
+                          #     refuted by `verdict_for_pair`'s EXISTENTIAL quantifier -- A~B on k1
+                          #     and B~C on k2 fuse A with C although they share no key -- and
+                          #     mutation M2 must MEASURE that refutation, not quote it.
+                          # (3) The resolver is NOT wired into `main.rs`. It is production code
+                          #     (so the blocker's "no production caller" entry closes) with named
+                          #     consumers in stories 5.10 and 5.11; the shipped binary is unchanged.
+                          # NINE registered entries name 5.9b as owner (counted, not quoted:
+                          # the grep returns 10 lines, one of which is a section preamble).
+                          # ⚠️ NEXT = the MANDATORY two-agent validation (fact-check + gap-hunt)
+                          # BEFORE `dev-story`. The gap-hunt MUST run a real mariadb:10.11.11 on
+                          # host port 13306 -- 3306 is still held by an unrelated container, and
+                          # the suite reports 181/156/46 IDENTICALLY with and without DATABASE_URL.
+                          # Ask it explicitly whether each prescribed mutation actually reds and
+                          # what carries the red: on 5.5/5.6/5.7/5.9 every HIGH came from the agent
+                          # that COMPILED the story, and on 5.7/5.9 the HIGHs were NO-OPS.
+                          # (previous entry:)
+                          # 5.9 **DONE** -- PR #65 squash-merged as `57db541` after a green CI run
                           # (58s), code-reviewed first. **Epic 5 is now 11/17.** Master carries
                           # **383 tests** (181 bin + 156 core + 46 xtask) and six green gates.
                           # 🔴 Guy arbitrated at the validation: the identity_link uniqueness key is
@@ -1543,7 +1616,7 @@ development_status:
   # `observation -> interface` (`join` is what forms an interface at L1; `decide_pair` judges a
   # pair and returns none). NO `device` table and NO `entity` supertype -- both Epic 6.
   5-9-persist-interface-and-identity-link: done
-  5-9b-engine-resolves-and-writes-links: backlog
+  5-9b-engine-resolves-and-writes-links: in-progress
   5-10-purge-test: backlog
   5-11-order-independence: backlog
   5-12-never-overwrite-anti-regression: backlog
