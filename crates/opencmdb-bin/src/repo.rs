@@ -746,6 +746,144 @@ where
     Ok(count)
 }
 
+/// Delete every link the ENGINE derived, and return how many rows went.
+///
+/// **It is a `DELETE`, not a `TRUNCATE`.** D14 writes the purge as
+/// `TRUNCATE ... WHERE decided_by='ENGINE'` [architecture.md:1038-1039] and `epics.md:1627` repeats
+/// it, but **MariaDB's `TRUNCATE` takes no `WHERE` clause** — measured: `TRUNCATE TABLE t WHERE 1=0`
+/// is `ERROR 1064` at the parser. The register carries the correction; this is the statement that
+/// runs.
+///
+/// `link_candidate` rows follow their link by `ON DELETE CASCADE` — story 5.9's review measured
+/// `RESTRICT` failing `ERROR 1451` the moment an engine link carried a candidate, which is exactly
+/// the ambiguity case the table exists for.
+///
+/// ⚠️ **`interface` rows are NOT touched**, and story 5.10 rests on it: the replay finds each
+/// interface by its key rather than minting a new one, so every reproduced link points at the same
+/// row. Purging interfaces here would make the whole invariant unmeasurable.
+///
+/// ⚠️ **`decided_by='OPERATOR'` rows are NOT touched either.** They are INPUTS, not derivations, on
+/// a par with an observation — D14's *"two natures in one table, and if that frontier is fuzzy in
+/// the code, the invariant is dead"*.
+///
+/// # Errors
+///
+/// Returns the `sqlx::Error` as it came; callers classify it with [`classify`].
+pub async fn purge_engine_links<'e, E>(executor: E) -> Result<u64, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let result = sqlx::query("DELETE FROM identity_link WHERE decided_by = 'ENGINE'")
+        .execute(executor)
+        .await?;
+    Ok(result.rows_affected())
+}
+
+/// One current link, reduced to what CARRIES ITS DECISION — and to nothing else.
+///
+/// # There is deliberately no `id` field
+///
+/// `identity_link.id` is a v7 UUID, and a v7 UUID embeds a 48-bit wall-clock millisecond, so a
+/// replayed link is minted with a different one every time — measured at story 5.9b's code review,
+/// two runs over identical input 57 ms apart. D14's *"reproduce the same decisions bit for bit"*
+/// therefore cannot mean the row identifier, and **a row identifier is not a decision**.
+///
+/// The exclusion is STRUCTURAL rather than a habit: there is no field to forget to skip.
+/// `interface_id` IS here, which is what makes the exclusion safe — if the replay re-minted its
+/// interfaces, every reproduced link would point elsewhere and the comparison would red.
+///
+/// `current_subject` is absent for a different reason: it is `interface_id`-or-`NIL_INTERFACE`
+/// while current, held to that by `identity_link_current_subject`, so it is a FUNCTION of a field
+/// already here and comparing it would measure nothing new. It is the `ORDER BY` key instead.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkSnapshot {
+    /// The observation the link places.
+    pub observation_id: String,
+    /// The interface it places it on — `None` for an abstention.
+    pub interface_id: Option<String>,
+    /// The persisted outcome token.
+    pub outcome: String,
+    /// The rule that settled it — `None` for an abstention.
+    pub rule_id: Option<String>,
+    /// Why it abstained — `None` unless it did.
+    pub abstention_cause: Option<String>,
+    /// The observations that justified it.
+    pub evidence: Vec<ObsId>,
+    /// The ruleset that produced it (D14).
+    pub ruleset_version: u32,
+    /// `ENGINE` or `OPERATOR` — the frontier D14 calls load-bearing.
+    pub decided_by: String,
+    /// When the version opened, as MariaDB renders it.
+    pub valid_from: String,
+    /// When it closes — [`OPEN_END`] while current.
+    pub valid_to: String,
+}
+
+/// Every CURRENT link, reduced to its decision and ordered so two snapshots compare as sequences.
+///
+/// # Why only current links
+///
+/// `current_subject` is NULL on a superseded row by design, so two superseded versions of one
+/// placement carry EQUAL sort keys and the order between them is InnoDB's accident — measured at
+/// this story's validation. Restricting to current rows makes `(observation_id, current_subject)` a
+/// TOTAL order, because `identity_link_one_current` makes that pair unique exactly there. Nothing
+/// in the purge-and-replay supersedes anything, so nothing is lost; story 5.11 is the one that will
+/// supersede, and it should not inherit an order that is decorative over history.
+///
+/// # Why the instants come back as strings
+///
+/// `sqlx` is built here without its `chrono` feature, so a `DATETIME(6)` has no Rust type to decode
+/// into — the same reason [`load_link_valid_to`] renders with `CAST(… AS CHAR)`. Two snapshots are
+/// compared against EACH OTHER, never against a domain value, so this is transport and not the
+/// comparison D10 forbids. ⚠️ No `Timestamp` is ever produced, which is why the registered
+/// *"first story that needs to read an instant back as a value"* entry stays unmet.
+///
+/// # Errors
+///
+/// Returns the `sqlx::Error` as it came; callers classify it with [`classify`].
+pub async fn snapshot_links<'e, E>(executor: E) -> Result<Vec<LinkSnapshot>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    type SnapshotRow = (
+        String,
+        Option<String>,
+        String,
+        Option<String>,
+        Option<String>,
+        String,
+        u32,
+        String,
+        String,
+        String,
+    );
+    let rows: Vec<SnapshotRow> = sqlx::query_as(
+        "SELECT observation_id, interface_id, outcome, rule_id, abstention_cause, evidence, \
+                ruleset_version, decided_by, CAST(valid_from AS CHAR), CAST(valid_to AS CHAR) \
+         FROM identity_link WHERE current_subject IS NOT NULL \
+         ORDER BY observation_id, current_subject",
+    )
+    .fetch_all(executor)
+    .await?;
+    rows.into_iter()
+        .map(|r| {
+            Ok(LinkSnapshot {
+                observation_id: r.0,
+                interface_id: r.1,
+                outcome: r.2,
+                rule_id: r.3,
+                abstention_cause: r.4,
+                evidence: serde_json::from_str(&r.5)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+                ruleset_version: r.6,
+                decided_by: r.7,
+                valid_from: r.8,
+                valid_to: r.9,
+            })
+        })
+        .collect()
+}
+
 /// Classify a `sqlx::Error` into the closed `RepositoryError` (D47) — the ONLY translation of
 /// a backend error in this crate.
 pub fn classify(error: sqlx::Error) -> RepositoryError {
@@ -2037,11 +2175,10 @@ mod tests {
             .map_err(classify)
             .expect("its candidate");
 
-        sqlx::query("DELETE FROM identity_link WHERE decided_by = 'ENGINE'")
-            .execute(&pool)
+        purge_engine_links(&pool)
             .await
             .map_err(classify)
-            .expect("story 5.10's purge must not be blocked by a candidate");
+            .expect("purge the engine's links");
 
         assert_eq!(
             count_identity_links(&pool)

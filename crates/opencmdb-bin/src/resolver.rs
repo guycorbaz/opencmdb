@@ -1240,6 +1240,253 @@ mod tests {
         assert_eq!(count_identity_links(&pool).await.expect("count"), 1);
     }
 
+    /// The interface ids, as a set — what AC4 compares across the purge.
+    async fn interface_ids(pool: &MySqlPool) -> Vec<String> {
+        let rows: Vec<(String,)> = sqlx::query_as("SELECT id FROM interface ORDER BY id")
+            .fetch_all(pool)
+            .await
+            .expect("read the interface ids");
+        rows.into_iter().map(|r| r.0).collect()
+    }
+
+    /// A fixture broad enough for the purge to mean something: a group of THREE (so the witness
+    /// convention is exercised), a MULTI-MAC observation (two interfaces at once) and a MAC-LESS
+    /// one (an abstention). Six links over three interfaces.
+    fn purge_fixture() -> Vec<Observation> {
+        vec![
+            observation(1, l2(1), &[mac(0x01)], 1_700_000_000),
+            observation(2, l2(1), &[mac(0x01)], 1_700_000_100),
+            observation(3, l2(1), &[mac(0x01)], 1_700_000_200),
+            observation(4, l2(1), &[mac(0x02), mac(0x03)], 1_700_000_300),
+            mac_less(5, l2(1), 1_700_000_400),
+        ]
+    }
+
+    /// 🔴 AC3/AC4 — D14's own test: purge the engine's links, re-run, and the decisions come back.
+    ///
+    /// ⚠️ **`id` is excluded, and that is the whole subtlety.** `identity_link.id` is a v7 UUID and
+    /// a v7 UUID embeds a wall-clock millisecond, so a replayed link is minted with a different one
+    /// — measured 57 ms apart over identical input. D14's *"bit for bit"* means the DECISION, and a
+    /// row identifier is not a decision. `LinkSnapshot` has no `id` field at all, so the exclusion
+    /// is structural.
+    ///
+    /// **`interface_id` IS compared**, which is what makes that safe: if the replay re-minted its
+    /// interfaces, every reproduced link would point elsewhere and this would red.
+    #[tokio::test]
+    async fn every_column_but_the_id_survives_a_purge_and_replay() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let observations = purge_fixture();
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+
+        let first = pass(&pool, observations.clone()).await;
+        assert_eq!(first.links_written, 6, "3 + 2 + 1 abstention");
+        assert_eq!(first.interfaces_minted, 3);
+        let before = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot before");
+        let interfaces_before = interface_ids(&pool).await;
+        assert_eq!(before.len(), 6, "six current links to reproduce");
+
+        let purged = MariaRepository::new(pool.clone())
+            .transact(|unit| {
+                Box::pin(async move {
+                    crate::repo::purge_engine_links(unit.executor())
+                        .await
+                        .map_err(classify)
+                })
+            })
+            .await
+            .expect("purge");
+        assert_eq!(purged, 6, "every link here is the engine's");
+        assert_eq!(
+            count_identity_links(&pool).await.expect("count"),
+            0,
+            "the purge empties the table"
+        );
+
+        // AC4 first, so its red is not pre-empted by anything the replay asserts.
+        assert_eq!(
+            interface_ids(&pool).await,
+            interfaces_before,
+            "interfaces are NOT purged, and their ids are the same rows"
+        );
+
+        let second = pass(&pool, observations).await;
+        let after = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot after");
+
+        assert_eq!(
+            after, before,
+            "every decision-bearing column is reproduced; only the row ids differ, and they are \
+             not in the snapshot"
+        );
+        assert_eq!(
+            second.interfaces_found, 3,
+            "the replay FINDS its interfaces; minting them would have reddened the line above"
+        );
+        assert_eq!(second.interfaces_minted, 0);
+    }
+
+    /// 🔴 AC5 — the operator's rows are INPUTS, and the purge does not touch them.
+    ///
+    /// ⚠️ **The operator's link names an observation the pass does NOT place, and that is a
+    /// constraint, not a convenience.** `identity_link_one_current` is
+    /// `(observation_id, current_subject)` and the purge removes only `decided_by='ENGINE'`, so an
+    /// operator can never confirm or correct a placement the engine already holds — the write is
+    /// refused `Err(Constraint("unique"))` — and an operator row sitting in a slot the replay needs
+    /// makes the **whole replay roll back**. Measured at this story's validation. D14's *"two
+    /// natures in one table"* is true of the TABLE and false of one `(observation, subject)`;
+    /// whether an operator may ever override the engine is registered with story 5.14.
+    ///
+    /// ⚠️ **The candidate goes AROUND `guard_decision`, deliberately.**
+    /// `identity_link_abstained_has_no_interface` means only an ABSTENTION can carry candidates,
+    /// and `resolver::guard_decision` refuses `Abstained { Ambiguous }` with an empty candidate
+    /// slice — which is the shape this needs. So the `Decision` is hand-built and
+    /// `insert_identity_link` is called directly, as `repo.rs`'s own `an_abstention` tests do. The
+    /// candidate points at an interface the ENGINE minted: `link_candidate_interface_fk` is
+    /// RESTRICT.
+    #[tokio::test]
+    async fn the_operators_rows_and_their_candidates_survive_the_purge() {
+        use opencmdb_core::identity::cascade::RulesetVersion;
+
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let observations = purge_fixture();
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+        pass(&pool, observations).await;
+        let engine_interface = interface_ids(&pool).await[0].clone();
+
+        // A sixth observation the pass never saw, so the operator's link contends for no slot.
+        let untouched = mac_less(6, l2(1), 1_700_000_500);
+        crate::repo::insert_observation(&pool, &untouched)
+            .await
+            .map_err(classify)
+            .expect("insert the operator's observation");
+
+        let operator_link = LinkId::from_uuid(uuid::Uuid::from_u128(0x0_9E_5A));
+        let ambiguous = Decision {
+            conclusion: Conclusion::Abstained {
+                cause: IdentityAbstentionCause::Ambiguous,
+            },
+            verdict_vector: vec![],
+            ruleset_version: RulesetVersion(1),
+        };
+        crate::repo::insert_identity_link(
+            &pool,
+            operator_link,
+            untouched.obs_id,
+            None,
+            &ambiguous,
+            &[untouched.obs_id],
+            DecidedBy::Operator,
+            at(1_700_000_500),
+            open_end(),
+        )
+        .await
+        .map_err(classify)
+        .expect("the operator's link");
+        crate::repo::insert_link_candidate(
+            &pool,
+            operator_link,
+            InterfaceId::from_uuid(
+                uuid::Uuid::parse_str(&engine_interface).expect("a minted interface id"),
+            ),
+            &[untouched.obs_id],
+        )
+        .await
+        .map_err(classify)
+        .expect("the operator's candidate");
+
+        let purged = MariaRepository::new(pool.clone())
+            .transact(|unit| {
+                Box::pin(async move {
+                    crate::repo::purge_engine_links(unit.executor())
+                        .await
+                        .map_err(classify)
+                })
+            })
+            .await
+            .expect("purge");
+
+        assert_eq!(purged, 6, "the engine's six, and not the operator's one");
+        let survivors = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot");
+        assert_eq!(
+            survivors.len(),
+            1,
+            "one row survives, and it is the operator's"
+        );
+        assert_eq!(survivors[0].decided_by, "OPERATOR");
+        assert_eq!(survivors[0].observation_id, untouched.obs_id.to_string());
+
+        // Its own id did not move: an operator row is the SAME row, not a reproduced decision.
+        let still_there = crate::repo::load_current_links_for_observation(&pool, untouched.obs_id)
+            .await
+            .map_err(classify)
+            .expect("read it back");
+        assert_eq!(still_there.len(), 1);
+        assert_eq!(
+            still_there[0].id,
+            operator_link.to_string(),
+            "an INPUT keeps its identity; only derivations are re-minted"
+        );
+
+        let candidates = crate::repo::load_link_candidates(&pool, operator_link)
+            .await
+            .map_err(classify)
+            .expect("its candidates");
+        assert_eq!(
+            candidates.len(),
+            1,
+            "the candidate went with its link, which stayed"
+        );
+        assert_eq!(candidates[0].0, engine_interface);
+    }
+
+    /// 🔴 AC2 — the snapshot's order comes from its query, not from the order rows were written.
+    ///
+    /// ⚠️ **This test exists because the purge-and-replay can NEVER carry the `ORDER BY`**, and that
+    /// is structural: both snapshots go through the same query, so any order stable within a run
+    /// yields two equal sequences whatever the fixture. Measured at the validation — deleting the
+    /// `ORDER BY` left the whole suite green. Here the physical order DISAGREES with the prescribed
+    /// one, so the clause has something to do.
+    #[tokio::test]
+    async fn the_snapshot_is_ordered_by_the_query_not_by_insertion() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let observations = vec![
+            observation(1, l2(1), &[mac(0x01)], 1_700_000_000),
+            observation(2, l2(1), &[mac(0x01)], 1_700_000_100),
+            observation(3, l2(1), &[mac(0x01)], 1_700_000_200),
+        ];
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+
+        // One pass each, in DESCENDING id order, so the rows are physically written 3, 2, 1.
+        for observation in observations.iter().rev() {
+            pass(&pool, vec![observation.clone()]).await;
+        }
+
+        let snapshot = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot");
+        let seen: Vec<String> = snapshot.iter().map(|l| l.observation_id.clone()).collect();
+        let expected: Vec<String> = observations.iter().map(|o| o.obs_id.to_string()).collect();
+        assert_eq!(
+            seen, expected,
+            "ascending observation_id, whatever order the rows went in"
+        );
+    }
+
     /// Decision 8 / AC9 — ONE FULL PASS at the reference scale, with its wall-clock.
     ///
     /// ⚠️ Added at the code review, which measured that no test called `resolve` at scale: the
