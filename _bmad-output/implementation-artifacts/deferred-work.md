@@ -2489,3 +2489,33 @@ mutations independently. **Five entries deferred, each measured rather than susp
   grep, so the next story inherits a count that includes eleven closed items. **Owner: whichever
   story next counts its scope by grepping this file** — the fix is either an annotation in place or
   a different way of counting.
+
+### New, raised by the code review and carried forward
+
+- ⚠️ **`write_link` keeps the FIRST verdict's evidence only.** Every `Decision` L1 produces carries
+  exactly one verdict, so nothing is lost today — but that is an L1 accident, not a property, and
+  `cascade.rs` says Epic 6's cascade ends it. On that day the evidence of verdicts 2..n vanishes with
+  nothing red. Not pre-solved: unioning evidence across a vector is a decision about what a link
+  MEANS, and no producer exists to decide it against. **Owner: Epic 6**, with the first multi-verdict
+  `Decision`.
+- ⚠️ **Nothing fills `guard_decision`'s `candidates_for_link`.** The only call site passes `&[]`, and
+  the pass writes no `link_candidate` row, because L1 has no ambiguity to hold candidates for. So the
+  day a producer of `Ambiguous` arrives, the guard would refuse a LEGITIMATE ambiguity rather than
+  let it be written with its candidates — the inverse of FR16. The signature already takes the slice
+  so it need not change under whoever fills it. **Owner: Epic 6**, the first producer of `Ambiguous`.
+- ⚠️ **`resolve` takes a bare `&mut MySqlConnection`, so D21's "never split across two transactions"
+  is a PRECONDITION, not a structure.** Measured: called on a pooled connection under autocommit, a
+  pass that then failed left **2 interfaces and 2 links committed**. Taking a unit-of-work type
+  instead would make it structural, and would move every call site story 5.9 wrote. **Owner: the
+  first story that gives the resolver a second caller** — the wiring decision 3 defers.
+- 🔴 **`uuid::Uuid::now_v7()` reads the clock, and its output is a PRIMARY KEY.** A v7 UUID embeds a
+  48-bit wall-clock millisecond, and this pass mints one per interface and one per link — decoded
+  from two runs over identical input, 57 ms apart. This is the house idiom (`ObsId`, `ConnectorId`
+  are v7 too), so the code is not the problem. **The consequence is story 5.10's**: its *"reproduced
+  identically, bit for bit"* can only ever mean *modulo the ids*, and that has to be written into
+  5.10 before it is written against. **Owner: story 5.10.**
+- ⚠️ **A group whose every member abstains still mints an interface nothing points at**, and
+  interfaces are never purged, so the orphan is permanent. Consistent with decision 2 (`join` NAMES
+  the interface, and it names it whether or not a verdict follows), but unreachable through `resolve`
+  today and unasserted. **Owner: the first story that narrows the blocker** — the same one that owns
+  decision 11's cause-of-convenience.

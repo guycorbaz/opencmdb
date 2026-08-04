@@ -9,6 +9,24 @@
 -- These are ALTER statements in a new file rather than edits to 0002, deliberately: sqlx checksums
 -- every migration it has applied, so changing one that has already run makes every existing
 -- database refuse to migrate.
+--
+-- 🔴 PRECONDITION, and it bites on a DEVELOPER's database rather than in production.
+-- The foreign key below VALIDATES existing rows. Story 5.9's test suite minted observation ids
+-- freely and never inserted the observations, so any database that ran it holds identity_link rows
+-- whose observation_id matches nothing, and this migration fails ERROR 1452.
+--
+-- 🔴 AND THE FAILURE STICKS. _sqlx_migrations then records version 3 with success = 0, and MySQL
+-- DDL is not transactional, so deleting the offending rows does NOT recover: every subsequent run
+-- fails Dirty(3). Recovery is manual:
+--
+--     DELETE FROM link_candidate; DELETE FROM identity_link;
+--     DELETE FROM _sqlx_migrations WHERE version = 3;
+--     -- then check which of the three ALTERs below already went through, and drop those
+--     -- constraints before re-running.
+--
+-- Measured end to end at this story's code review. Production is unaffected: 0002 is unreleased and
+-- no deployment has ever written a link. The simplest developer fix is to drop and recreate the
+-- test database before the first run that carries this file.
 
 -- A link names an observation that exists.
 --

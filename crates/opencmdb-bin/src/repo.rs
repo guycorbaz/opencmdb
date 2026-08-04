@@ -1702,10 +1702,6 @@ mod tests {
         );
     }
 
-    /// Write one link with raw SQL, going AROUND the adapter's derivations, and return the error.
-    ///
-    /// The adapter cannot produce most of the rows the DDL refuses — that is the point of the
-    /// CHECKs — so reaching them needs this.
     /// AC7 — the three guards `0003_resolver_guards.sql` installs, each measured by a RAW insert
     /// that goes around the adapter.
     ///
@@ -1787,6 +1783,10 @@ mod tests {
         );
     }
 
+    /// Write one link with raw SQL, going AROUND the adapter's derivations, and return the error.
+    ///
+    /// The adapter cannot produce most of the rows the DDL refuses — that is the point of the
+    /// CHECKs — so reaching them needs this.
     async fn raw_link(
         pool: &MySqlPool,
         obs: ObsId,

@@ -390,6 +390,20 @@ repeat:
 8. **Decision 8's own numbers disagreed with D13's quote by 2×** — 44 850 measured, "90k" quoted, in
    the same paragraph.
 
+🔴 **§9's own rule applied to §9 — three divergences, reported here as findings rather than left as
+variations.** The table above is the gap-hunt's worktree, not this implementation:
+
+| §9 target | measured at implementation | at the code review |
+|---|---|---|
+| 398 tests (196 + 156 + 46) | **402** (197 + 159 + 46) | **408** (203 + 159 + 46) |
+| `resolver.rs` **281** code lines | **390** | **431** |
+| `repo.rs` **763** code lines | **773** | **773** |
+
+The `file-size` gate is unaffected (largest still 1136) and the direction is upward in every row —
+the gap-hunt built a narrower version of the same story. The point is not the drift but that §9
+said *"a divergence is a FINDING"* and the implementer did not apply it to §9. Caught by the
+Acceptance Auditor.
+
 ⚠️ **Issue #38 recurred once during that run** (`fixtures::tests::a_decision_carrying_an_abstention_cause_is_refused`,
 one red in ~25 runs, clean tree, all 25 fixture sha256s green, not reproduced). No cause adopted.
 
@@ -1088,7 +1102,22 @@ The story predicted *"14 tests across two files"*. Measured, the shape is sharpe
 its transaction and leaves no link behind for the cleanup to trip over. Fixed by ordering the
 cleanup (children before parents) in both files.
 
-#### The mutation table — 14 mutations, every red ASSERTION-carried, zero compiler-carried
+#### The mutation table — 18 mutations, every red assertion- or panic-carried, ZERO compiler-carried
+
+🔴 **The heading read *"every red ASSERTION-carried"* until this story's code review, and that was
+FALSE.** The Acceptance Auditor re-executed the pass and measured M6b: 4 reds, of which **1 is an
+assertion and 3 are `.expect()` panics** in pre-existing `repo.rs` interval-CHECK tests. Two things
+are worth recording rather than quietly fixing:
+
+- **the story's own T7 bullet already said so**, written at the validation — *"the only three reds
+  were pre-existing `repo.rs` tests, panic-carried"* — and the summary written on top of it
+  contradicted it. A claim falsified by its own document, one section away;
+- **the cause is methodological**: the mutation driver classified the carrier by scanning the WHOLE
+  test output for an assertion failure, so a MIXED set collapsed to a single label. It now reports a
+  carrier **per test**. That is the same family as an oracle that restates the expectation instead of
+  measuring the code.
+
+The wording below is the one stories 5.7 and 5.9 used, and it is the true one.
 
 | # | mutation | DB | tests red | what carried the red |
 |---|---|---|---|---|
@@ -1098,7 +1127,7 @@ cleanup (children before parents) in both files.
 | M4 | evidence from a constant instead of the verdict | ✅ | 1 — `a_placements_evidence_is_the_pair_the_engine_judged` | assertion, **on the EVIDENCE** |
 | M5 | the abstention written as an absence | ✅ | 1 | assertion, `left: 0, right: 1` on the COUNT |
 | M6a | interface window ← `NOW(6)` | ✅ | 3 | assertion, `left: "2026-08-04 11:47:56.907039"` |
-| M6b | link `valid_from` ← `NOW(6)` | ✅ | 4 — incl. `the_stored_instants_are_the_derived_ones` | assertion |
+| M6b | link `valid_from` ← `NOW(6)` | ✅ | 4 | 🔴 **1 assertion** (`the_stored_instants_are_the_derived_ones`) **+ 3 `.expect()` panics** (`closing_a_link_refuses_what_it_must`, `superseding_a_link_leaves_the_old_row_readable`, `two_versions_may_be_closed_at_the_same_instant` — pre-existing interval-CHECK tests) |
 | M7 | `LEAST`/`GREATEST` → plain assignment | ✅ | 1 | assertion, **on `last_seen_at`** |
 | M8 | drop `identity_link_observation_fk` | ✅ recreated | 1 | assertion, `left: None, right: Some(Constraint("foreign_key"))` |
 | M9 | drop `interface_mac_canon_lower` | ✅ recreated | 1 | assertion |
@@ -1106,6 +1135,26 @@ cleanup (children before parents) in both files.
 | M11 | drop the `Ambiguous`-without-candidates guard | ✅ | 1 | assertion, `Ok(())` vs `Err(Constraint("ambiguity_without_candidates"))` |
 | M12 | drop the universe containment check | ✅ | 1 | assertion, `left: 0, right: 2` abstentions |
 | M13 | drop the empty-`rule_id` guard in the WRITER | ✅ | 1 | assertion |
+
+**Four mutations added AT the code review, for guards it measured as unheld:**
+
+| # | mutation | DB | tests red | what carried the red |
+|---|---|---|---|---|
+| M14 | witness: smallest → **largest** other `ObsId` | ✅ | 1 — `the_witness_is_the_smallest_other_id_in_the_group` | assertion |
+| M15 | containment tested on ONE witness instead of searched | ✅ | 1 — `withholding_one_pair_does_not_silence_the_others` | assertion |
+| M16 | drop the tail loop's `abstained` dedup | ✅ | 1 — `a_repeated_obs_id_writes_one_link` | panic (the collision aborts before any count) |
+| M16b | write the abstention INSIDE the group loop, i.e. per key | ✅ | 1 — `an_observation_abstains_once_however_many_keys_it_carries` | assertion |
+
+🔑 **M16 reddened the wrong test, and that is the finding.** It was written for *"one abstention per
+observation"* and reds the DUPLICATE-`obs_id` guard instead, because the property is enforced by the
+tail loop iterating **observations** rather than `(group, observation)` pairs — the `abstained` set
+only guards a repeated entry in the slice. **M16b** is the mutation that actually reaches the
+arbitration's guard. Two mutations, two distinct properties, and neither stands in for the other.
+
+🔑 **M16b's first run was PANIC-carried**, because the pre-arbitration failure is a uniqueness
+violation that rolls the transaction back and `.expect()` fires before any count exists — story
+5.9's M4/M5 lesson, met again. The test now asserts `outcome.err() == None` and the red is
+assertion-carried.
 
 **Three predictions the validation made, all three confirmed by measurement:**
 
@@ -1122,6 +1171,38 @@ cleanup (children before parents) in both files.
 **And M2 turns §3's refutation from a derivation into a measurement.** Grouping by connected
 components fuses A with C although they share no key: `left: 1, right: 2` interfaces. The story
 said this had to be measured rather than quoted, and it is.
+
+#### The reference scale, measured at last (decision 8, AC9)
+
+⚠️ **Added at the code review, which measured that no test called `resolve` at scale** — the
+quadratic assertion exercised `candidates` alone, so decision 8's *"the Debug Log records the
+wall-clock of one pass"* had nothing behind it in three documents.
+
+`one_full_pass_at_the_reference_scale`, 300 synthetic observations on 300 distinct MACs, against the
+live database:
+
+```
+reference scale: n=300, pairs=44850, interfaces=300, links=300, pass=73.493341ms
+```
+
+**44 850 pairs, not D13's prose "90k"** — the figure there counts pairs the other way. The full pass
+(blocking, join, 300 `decide_pair` calls, 600 SQL statements inside one transaction) takes **~73 ms**
+on this machine. **No timing is asserted**: a wall-clock assertion is a flaky test on shared
+hardware. What the test asserts is the pair count, the interface count read back from the database,
+and that the pass completes.
+
+#### The `ddl-collation` gate, shown to bite (AC7)
+
+⚠️ Also added at the code review: AC7's clause was ticked with nothing recorded. `0003` declares no
+column, so a temporary text column was appended to it, without a collation:
+
+```
+🔴 ddl-collation  1 text column(s) without a binary collation:
+    …/migrations/0003_resolver_guards.sql:48: ALTER TABLE interface ADD COLUMN probe VARCHAR(8) …
+```
+
+It names the file and the line. Removed, the gate returns to `✅ every text column carries an
+explicit binary collation`. **Green was never the evidence; this is.**
 
 #### One collateral red, explained rather than left standing
 
@@ -1168,12 +1249,32 @@ story 5.9's guard is load-bearing — both facts, from one red.
 - **`datetime_literal` and `open_end` were promoted out of privacy** (`pub(crate)`), the second out
   of `repo.rs`'s test module entirely: the resolver writes every current link at the sentinel, and a
   private helper is what makes a second spelling of an instant the natural reflex.
+- 🔴 **CODE-REVIEWED (three layers, 2026-08-04), and it cost the story four behavioural defects.**
+  Two layers ran against their own live `mariadb:10.11.11`; the Auditor re-executed all fourteen
+  mutations and **reproduced thirteen exactly, including all three named predictions**. The code was
+  right about the engine and wrong about four edges; the documents were wrong more often than that,
+  which is the seventh consecutive story with that shape. **402 → 408 tests**, mutations **14 → 18**.
+  🔑 **The review refuted a headline of mine that sat in five places**, including the commit subject:
+  *"every red is assertion-carried"* is false for M6b (1 assertion, 3 `.expect()` panics), and my own
+  T7 bullet had said so one section above. The driver collapsed a MIXED carrier set to one label; it
+  now reports per test.
+  🔴 **Guy arbitrated twice.** An observation abstains **at most once**, whatever the number of keys
+  — two abstention rows collided on `ABSTAINED_SUBJECT` and failed the whole pass, and they would
+  have been identical but for their id, because an abstention row names no key. And the
+  smallest-other-`ObsId` witness convention is **kept and now measured** on a group of three: every
+  earlier test used a group of two, where the two formulas name the same observation.
+  🔑 **The worst behavioural defect was internal inconsistency**: `placement_decision` tested
+  containment on ONE candidate witness while its sibling `abstention_for` filtered correctly twelve
+  lines below. Measured — universe missing only `(1,2)`, and observations 1 AND 2 abstained.
+  🔑 **`abstention_for` was deleted**: replacing its body with `nothing_was_evaluated()` left every
+  test green, because a `Neutral` verdict carries empty evidence and the vector is not persisted.
+  Its doc promised *"an abstention with an explanation"* that never reached a column.
 - ⏸️ **T9's push/PR is deliberately NOT done.** The house order is `dev-story` → `code-review` → PR
   → green CI → squash merge, and `done` is the MERGE's business here.
 
 ### File List
 
-- `crates/opencmdb-bin/src/resolver.rs` — NEW (the pass, its two entry points, the guards, 20 tests)
+- `crates/opencmdb-bin/src/resolver.rs` — NEW (the pass, its two entry points, the guards, **21 tests** — 15 at implementation, 6 added at the code review; the File List said 20 and the tree said 15)
 - `crates/opencmdb-bin/migrations/0003_resolver_guards.sql` — NEW (three guards)
 - `crates/opencmdb-bin/src/repo.rs` — MODIFIED (`find_interface_by_l1_key`,
   `widen_interface_seen_window`, `open_end` promoted out of the test module, `datetime_literal` made
@@ -1195,6 +1296,7 @@ story 5.9's guard is load-bearing — both facts, from one red.
 
 | date | note |
 |---|---|
+| 2026-08-04 | **CODE-REVIEWED** (three layers; two against their own live `mariadb:10.11.11`, and the Acceptance Auditor re-executed the whole mutation pass). **2 arbitrations by Guy, 23 patches, 5 deferrals, 0 dismissed. 402 → 408 tests**, mutations **14 → 18**. 🔴 **The review refuted a headline of mine in five places, the commit subject included**: *"every red is ASSERTION-carried"* is false for M6b — 1 assertion, 3 `.expect()` panics — and my own T7 bullet said so one section above. Root cause: the driver read the carrier off the WHOLE output, so a mixed set became one label; it now reports per test. 🔴 **Four behavioural defects, three of them found separately by two layers**: `placement_decision` tested containment on ONE witness while its sibling filtered correctly twelve lines below (universe missing only `(1,2)` → observations 1 AND 2 abstained); a multi-key abstention collided on `ABSTAINED_SUBJECT` and rolled the whole pass back; `abstention_for` had **no observable effect** (its body replaced by `nothing_was_evaluated()` left every test green — a `Neutral` verdict's evidence is empty and the vector is not persisted); and a repeated MAC-less `obs_id` wrote two colliding links. 🔑 **Guy's two arbitrations**: one abstention per observation whatever the key count — the deciding measurement being that an abstention row names no key, so the two rows would be identical but for their id — and the witness convention kept but MEASURED on a group of three, since every earlier test used a group of two where "smallest other" and "largest other" coincide. Also: the reference-scale pass and its wall-clock existed in no test (now **44 850 pairs, 300 interfaces, ~73 ms**), AC7's *"shown to bite"* had no record (the gate now names `0003…sql:48`), §9 did not apply its own *"a divergence is a FINDING"* rule to its own three divergences, `sprint-status.yaml` contradicted itself, a doc cited a test I had invented, and `RESOLVER_RULESET_VERSION` was dead code with a false doc. |
 | 2026-08-04 | **IMPLEMENTED → `review`.** 383 → **402 tests** (197 bin + 159 core + 46 xtask), six gates green, `fmt --check` clean, both clippy forms clean, `fixtures/` untouched, and the trap corpus still **11 unanswerable / `passed() == false`** (re-checked, because a green gate here would have been a regression). All **14 mutations run WITH a live `mariadb:10.11.11`**, and **every red is assertion-carried — zero compiler-carried**. 🔴 Three of the validation's predictions confirmed by measurement: M4 reds on the EVIDENCE and not the rule; M7 reds on `last_seen_at`, the window end AC6 had not named; and M12 is a no-op without the `resolve_within` seam, reddening `0` abstentions against `2` only when handed an empty universe. **M2 turns §3's refutation into a measurement** — connected components fuse A with C, `left: 1, right: 2`. 🔑 **No struct-literal `Decision` was needed anywhere**: `decide(vec![], _)` is the algebra's own answer for an empty verdict set, so the register's *"first story that reconstructs a `Decision` outside `decide`"* clause is ANSWERED and still UNMET rather than closed — as is `count_identity_links`, which gains two test callers and still no production one. 🔴 The foreign key reds in **two waves**: 12 in `repo.rs`, then 2 more (one in `main.rs`) that are **invisible until the first twelve are fixed**, because a failing test rolls back and leaves no link for the cleanup to trip over. ⚠️ And a mutation that changed BIND ARITY **hung the suite for 2 h 48 min at 0 % CPU** holding `DB_TEST_LOCK` — a prepared-statement parameter mismatch desynchronises the protocol; the driver now runs each suite under a timeout. |
 | 2026-08-04 | **GAP-HUNT layer done** — the story BUILT end to end in an isolated worktree against a live `mariadb:10.11.11`, **398 tests** (196 bin + 156 core + 46 xtask), six gates green, `fixtures/` untouched, every mutation executed. **7 HIGH, 5 MEDIUM, 7 LOW, all applied.** 🔴 Two arbitrations by Guy: a singleton's `Decision` comes from a **new `identity::l1::decide_singleton`** rather than from a struct literal or from the resolver composing a verdict — the one change this story makes to the engine, and the honest closure of the residue `cascade.rs:345-347` registers; and **the pass is NOT idempotent** (twice over one slice is `Err(Constraint("unique"))` and a full rollback), which is story 5.11's, so AC4's two tests move to different observations on the same key. 🔑 **Four prescriptions were not executable or measured nothing**: `Utc::now()` does not compile (`chrono` is `default-features = false` in both crates to keep `clock` off, deliberately), so M6 became `NOW(6)` in two variants; **M12 left the entire suite green** and needed the `resolve_within` seam to mean anything; **M2 was a no-op** against a transitivity test that never calls `resolve`; and **M6b had no target at all** — no test read a link's `valid_from` back, story 5.9's AC3 defect one story later. Also: the foreign key reds **14 tests across `repo.rs` AND `main.rs`**, not eight; `every_ddl_guard_refuses_what_it_names` now passes for the wrong reason and **never reds**, so nothing routes the dev to it; the widening test's red comes from `last_seen_at`, the end AC6 did not name; the reference scale is **44 850** pairs, not D13's "90k"; and `resolver.rs` needs `#![allow(dead_code)]` or the **CI** clippy form fails with 8 errors on the story's own deliverable. |
 | 2026-08-04 | **FACT-CHECK layer done** (fresh context, read-only): **78 claims measured, 69 true, 6 false, 6 gaps.** All applied, each re-measured independently first. 🔑 **44 / 44 line citations correct and every count exact** — the defects were entirely in quoted tokens, one corpus claim, and the AC↔task↔mutation seam. The three HIGH: the persisted token is `absence_of_proof` and not the variant name `AbsenceOfProof` (which appears in no committed byte); AC3's rule SET is unmeasurable because `l1-distinct-mac` is unwritable by three independent steps (`Disqualifying` → `NoMatch` → a row decision 9 never writes); and 🔴 **`multi-nic` is not the multi-MAC shape — no committed observation carries more than one MAC** (max 1 across 13 streams), so a sentence three documents use as evidence supports nothing. Also: M1 required editing a file the story forbids itself, M6 and M8 named tests that did not exist, one guard had no mutation (now M13), and two register entries owned by CONDITION are met by decisions 5 and 6 — **nine entries became eleven**. ⏳ The gap-hunt layer is still running. |
@@ -1215,30 +1317,30 @@ The defects are overwhelmingly in the story's ACCOUNT of itself — the seventh 
 that shape — with four exceptions in behaviour, three of which two independent layers found
 separately.
 
-- [ ] [Review][Patch] 🔴 **RESOLVED BY GUY (2026-08-04): at most ONE abstention link per observation, whatever the number of keys.** The deciding measurement is that an abstention row names no key — `identity_link` has `observation_id`, a NULL `interface_id` and nothing else — so the two rows in conflict would be **identical but for their id**: the duplicate is not lost information, it is the same sentence twice. No schema change, the nil sentinel stands, and an observation may still be PLACED on N interfaces while abstaining elsewhere. _(Original finding: a multi-key abstention is unwritable and aborts the entire pass)_ — an observation abstaining on two of its L1 keys writes two links with `interface_id = NULL`, both landing on `ABSTAINED_SUBJECT`, and `identity_link_one_current` refuses the second: measured `Err(Constraint("unique"))` with **0 links left behind**. This is the mirror of the bug story 5.9's second arbitration fixed, in the one column that arbitration left alone. Unreachable through `resolve` today (`candidates` is TOTAL) but reachable through `resolve_within`, which exists precisely so narrowing is exercisable. **Found by all three layers.** Options: a key-scoped abstention sentinel, or one abstention link per observation regardless of key count [`resolver.rs:190`, `repo.rs:517`, `0002…sql:77`]
-- [ ] [Review][Patch] 🔴 **RESOLVED BY GUY (2026-08-04): keep the smallest-other-`ObsId` convention and MEASURE it on a group of three.** A test, not a redesign, and it keeps D19's property that a link carries the evidence the rule actually used. The min→max swap becomes **mutation M14**, which must red. _(Original finding: the witness policy is measured by nothing)_ — mutation MUT-B replaced "smallest other `ObsId`" with "largest" and **all 402 tests stayed green**, although the persisted evidence changes completely on a group of three. Every committed test uses a group of TWO, where the two formulas name the same observation. Decision 4 calls this determinism *"what story 5.10 replays"*, so it is an unmeasured load-bearing claim. Options: keep the convention and measure it on a group of ≥3, or make a placement's evidence the whole group [`resolver.rs:231`]
+- [x] [Review][Patch] 🔴 **RESOLVED BY GUY (2026-08-04): at most ONE abstention link per observation, whatever the number of keys.** The deciding measurement is that an abstention row names no key — `identity_link` has `observation_id`, a NULL `interface_id` and nothing else — so the two rows in conflict would be **identical but for their id**: the duplicate is not lost information, it is the same sentence twice. No schema change, the nil sentinel stands, and an observation may still be PLACED on N interfaces while abstaining elsewhere. _(Original finding: a multi-key abstention is unwritable and aborts the entire pass)_ — an observation abstaining on two of its L1 keys writes two links with `interface_id = NULL`, both landing on `ABSTAINED_SUBJECT`, and `identity_link_one_current` refuses the second: measured `Err(Constraint("unique"))` with **0 links left behind**. This is the mirror of the bug story 5.9's second arbitration fixed, in the one column that arbitration left alone. Unreachable through `resolve` today (`candidates` is TOTAL) but reachable through `resolve_within`, which exists precisely so narrowing is exercisable. **Found by all three layers.** Options: a key-scoped abstention sentinel, or one abstention link per observation regardless of key count [`resolver.rs:190`, `repo.rs:517`, `0002…sql:77`]
+- [x] [Review][Patch] 🔴 **RESOLVED BY GUY (2026-08-04): keep the smallest-other-`ObsId` convention and MEASURE it on a group of three.** A test, not a redesign, and it keeps D19's property that a link carries the evidence the rule actually used. The min→max swap becomes **mutation M14**, which must red. _(Original finding: the witness policy is measured by nothing)_ — mutation MUT-B replaced "smallest other `ObsId`" with "largest" and **all 402 tests stayed green**, although the persisted evidence changes completely on a group of three. Every committed test uses a group of TWO, where the two formulas name the same observation. Decision 4 calls this determinism *"what story 5.10 replays"*, so it is an unmeasured load-bearing claim. Options: keep the convention and measure it on a group of ≥3, or make a placement's evidence the whole group [`resolver.rs:231`]
 
-- [ ] [Review][Patch] `placement_decision` consults ONE witness where it should search for any proposed pair — with the universe missing only `(1,2)`, observations 1 and 2 both abstain although `(1,3)` and `(2,3)` are proposed; **re-measured by the implementer**, `abstentions=2 links=3`. Its sibling `abstention_for` already filters correctly. Three sentences are false as a result, AC1's included [`resolver.rs:231-237`]
-- [ ] [Review][Patch] 🔴 **"every red is ASSERTION-carried" is FALSE for M6b** — re-measured: 4 reds, **1 assertion + 3 `.expect()` panics** in pre-existing `repo.rs` interval-CHECK tests. The headline appears in the Debug Log, the Change Log, both doc twins and the commit subject; the story's own T7 bullet already recorded the truth underneath it. The driver's carrier analysis collapsed a MIXED set to one label — a methodological defect worth its own note [story Debug Log, `CLAUDE.md`, `docs/project-context.md`]
-- [ ] [Review][Patch] `abstention_for` has no observable effect — replacing its body with `nothing_was_evaluated()` leaves all 402 tests green, and the two persisted rows are byte-identical, because a `Neutral` verdict carries EMPTY evidence and the vector is not stored. Its doc claims *"an abstention with an explanation"* [`resolver.rs:251-268`]
-- [ ] [Review][Patch] Decision 8's reference-scale **pass** and its wall-clock exist nowhere — `the_universe_is_quadratic_and_its_size_is_asserted` calls `candidates` only, never `resolve`, and no timing is recorded. Three documents prescribe it [`resolver.rs:1049`, story §498/868/1004]
-- [ ] [Review][Patch] `RESOLVER_RULESET_VERSION` is dead and its doc is false — `grep` over the workspace returns only its own definition line [`resolver.rs:371`]
-- [ ] [Review][Patch] `open_end`'s doc cites `the_sentinel_instant_renders_as_the_sentinel_literal`, **a test that does not exist**; the assertion lives in `the_two_sentinels_are_pinned` [`repo.rs:248`]
-- [ ] [Review][Patch] `sprint-status.yaml` says `review` in its status line and *"NEXT = `dev-story` 5.9b"* with **398 tests** in its narrative — the same self-contradiction four of story 5.9's review patches were, one file over
-- [ ] [Review][Patch] §9's own rule — *"a divergence is a FINDING, not a variation"* — went unapplied on three divergences: **398 → 402** tests, `resolver.rs` **281 → 390** code lines, `repo.rs` **763 → 773**
-- [ ] [Review][Patch] `#! The clock is never read` heads a file that calls `uuid::Uuid::now_v7()` twice per link — a v7 UUID embeds a wall-clock millisecond and goes into the primary key of every interface and link, so story 5.10's *"bit for bit"* can only mean *modulo ids* [`resolver.rs:40, :163, :319`]
-- [ ] [Review][Patch] `resolve`'s *"structural rather than a promise"* is false — it takes `&mut MySqlConnection`, so a pooled connection compiles and runs the pass in autocommit; measured: a failing pass left **2 interfaces and 2 links committed** [`resolver.rs:103-107`]
-- [ ] [Review][Patch] A repeated MAC-less `obs_id` writes two links and fails `Constraint("unique")`, while a repeated MAC-carrying one is deduped by `join` — the tail loop iterates the raw slice [`resolver.rs:200-208`]
-- [ ] [Review][Patch] `Resolution::candidate_pairs`'s doc promises `n(n-1)/2` *"over this slice"*; it is `universe.len()`, whatever the caller passed [`resolver.rs:87-89`]
-- [ ] [Review][Patch] AC7's *"the `ddl-collation` gate is shown to bite"* has no recorded measurement, though T4 is ticked
-- [ ] [Review][Patch] The File List says `resolver.rs` carries **20 tests**; it carries **15** (the arithmetic elsewhere is right: 402 − 383 = 19 = 15 + 1 + 3)
-- [ ] [Review][Patch] AC1's *"the module doc states decision 5's singleton case"* is unmet — the singleton is documented on `placement_decision` and `decide_singleton`, not in the module doc
-- [ ] [Review][Patch] AC3 demands a test asserting `rule_id = 'l1-exact-mac'`; it is asserted on the singleton path only, never for a group of ≥ 2
-- [ ] [Review][Patch] `raw_link` lost its doc comment to the newly inserted test, which now carries a sentence false of itself [`repo.rs`]
-- [ ] [Review][Patch] `0003` names no precondition and no recovery — a database carrying story-5.9-era links fails ERROR 1452, and the failure sticks as `Dirty(3)` even after the offending rows are deleted, because `_sqlx_migrations` records the failure and MySQL DDL is not transactional
-- [ ] [Review][Patch] `write_link` keeps only `verdict_vector.first()`'s evidence while its doc says the evidence is *"the decision's own"* — inert at L1, silent the day Epic 6 emits a second verdict [`resolver.rs:312-316`]
-- [ ] [Review][Patch] `guard_decision(decision, &[])` is hard-coded at the only call site, so the `Ambiguous` branch would abort a legitimate ambiguity rather than write it — the inverse of FR16 — and nothing says who fills that slice [`resolver.rs:311`]
-- [ ] [Review][Patch] A group that abstains wholesale still mints an interface nothing points at, and interfaces are never purged [`resolver.rs:151-177`]
+- [x] [Review][Patch] `placement_decision` consults ONE witness where it should search for any proposed pair — with the universe missing only `(1,2)`, observations 1 and 2 both abstain although `(1,3)` and `(2,3)` are proposed; **re-measured by the implementer**, `abstentions=2 links=3`. Its sibling `abstention_for` already filters correctly. Three sentences are false as a result, AC1's included [`resolver.rs:231-237`]
+- [x] [Review][Patch] 🔴 **"every red is ASSERTION-carried" is FALSE for M6b** — re-measured: 4 reds, **1 assertion + 3 `.expect()` panics** in pre-existing `repo.rs` interval-CHECK tests. The headline appears in the Debug Log, the Change Log, both doc twins and the commit subject; the story's own T7 bullet already recorded the truth underneath it. The driver's carrier analysis collapsed a MIXED set to one label — a methodological defect worth its own note [story Debug Log, `CLAUDE.md`, `docs/project-context.md`]
+- [x] [Review][Patch] `abstention_for` has no observable effect — replacing its body with `nothing_was_evaluated()` leaves all 402 tests green, and the two persisted rows are byte-identical, because a `Neutral` verdict carries EMPTY evidence and the vector is not stored. Its doc claims *"an abstention with an explanation"* [`resolver.rs:251-268`]
+- [x] [Review][Patch] Decision 8's reference-scale **pass** and its wall-clock exist nowhere — `the_universe_is_quadratic_and_its_size_is_asserted` calls `candidates` only, never `resolve`, and no timing is recorded. Three documents prescribe it [`resolver.rs:1049`, story §498/868/1004]
+- [x] [Review][Patch] `RESOLVER_RULESET_VERSION` is dead and its doc is false — `grep` over the workspace returns only its own definition line [`resolver.rs:371`]
+- [x] [Review][Patch] `open_end`'s doc cites `the_sentinel_instant_renders_as_the_sentinel_literal`, **a test that does not exist**; the assertion lives in `the_two_sentinels_are_pinned` [`repo.rs:248`]
+- [x] [Review][Patch] `sprint-status.yaml` says `review` in its status line and *"NEXT = `dev-story` 5.9b"* with **398 tests** in its narrative — the same self-contradiction four of story 5.9's review patches were, one file over
+- [x] [Review][Patch] §9's own rule — *"a divergence is a FINDING, not a variation"* — went unapplied on three divergences: **398 → 402** tests, `resolver.rs` **281 → 390** code lines, `repo.rs` **763 → 773**
+- [x] [Review][Patch] `#! The clock is never read` heads a file that calls `uuid::Uuid::now_v7()` twice per link — a v7 UUID embeds a wall-clock millisecond and goes into the primary key of every interface and link, so story 5.10's *"bit for bit"* can only mean *modulo ids* [`resolver.rs:40, :163, :319`]
+- [x] [Review][Patch] `resolve`'s *"structural rather than a promise"* is false — it takes `&mut MySqlConnection`, so a pooled connection compiles and runs the pass in autocommit; measured: a failing pass left **2 interfaces and 2 links committed** [`resolver.rs:103-107`]
+- [x] [Review][Patch] A repeated MAC-less `obs_id` writes two links and fails `Constraint("unique")`, while a repeated MAC-carrying one is deduped by `join` — the tail loop iterates the raw slice [`resolver.rs:200-208`]
+- [x] [Review][Patch] `Resolution::candidate_pairs`'s doc promises `n(n-1)/2` *"over this slice"*; it is `universe.len()`, whatever the caller passed [`resolver.rs:87-89`]
+- [x] [Review][Patch] AC7's *"the `ddl-collation` gate is shown to bite"* has no recorded measurement, though T4 is ticked
+- [x] [Review][Patch] The File List says `resolver.rs` carries **20 tests**; it carries **15** (the arithmetic elsewhere is right: 402 − 383 = 19 = 15 + 1 + 3)
+- [x] [Review][Patch] AC1's *"the module doc states decision 5's singleton case"* is unmet — the singleton is documented on `placement_decision` and `decide_singleton`, not in the module doc
+- [x] [Review][Patch] AC3 demands a test asserting `rule_id = 'l1-exact-mac'`; it is asserted on the singleton path only, never for a group of ≥ 2
+- [x] [Review][Patch] `raw_link` lost its doc comment to the newly inserted test, which now carries a sentence false of itself [`repo.rs`]
+- [x] [Review][Patch] `0003` names no precondition and no recovery — a database carrying story-5.9-era links fails ERROR 1452, and the failure sticks as `Dirty(3)` even after the offending rows are deleted, because `_sqlx_migrations` records the failure and MySQL DDL is not transactional
+- [x] [Review][Patch] `write_link` keeps only `verdict_vector.first()`'s evidence while its doc says the evidence is *"the decision's own"* — inert at L1, silent the day Epic 6 emits a second verdict [`resolver.rs:312-316`]
+- [x] [Review][Patch] `guard_decision(decision, &[])` is hard-coded at the only call site, so the `Ambiguous` branch would abort a legitimate ambiguity rather than write it — the inverse of FR16 — and nothing says who fills that slice [`resolver.rs:311`]
+- [x] [Review][Patch] A group that abstains wholesale still mints an interface nothing points at, and interfaces are never purged [`resolver.rs:151-177`]
 
 - [x] [Review][Defer] Two concurrent passes can mint two interfaces for one L1 key — plain `SELECT` under REPEATABLE READ against a deliberately non-unique index. D21's single writer actor makes it unreachable today; the precondition is unstated
 - [x] [Review][Defer] `widen_interface_seen_window` ignores `rows_affected()`, so a non-existent id returns `Ok(())` — the silent-success shape story 5.9's review closed in `close_identity_link`

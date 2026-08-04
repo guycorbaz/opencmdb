@@ -1240,6 +1240,57 @@ mod tests {
         assert_eq!(count_identity_links(&pool).await.expect("count"), 1);
     }
 
+    /// Decision 8 / AC9 — ONE FULL PASS at the reference scale, with its wall-clock.
+    ///
+    /// ⚠️ Added at the code review, which measured that no test called `resolve` at scale: the
+    /// quadratic assertion below exercises `candidates` alone, so decision 8's *"the Debug Log
+    /// records the wall-clock of one pass"* had nothing behind it.
+    ///
+    /// 300 hosts is NFR30's reference scale on a Plus-class NAS. **No timing is asserted** — a
+    /// wall-clock assertion is a flaky test on shared hardware; the number is printed and the
+    /// Debug Log carries it. What IS asserted is that the pass completes and writes what it should.
+    #[tokio::test]
+    async fn one_full_pass_at_the_reference_scale() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let observations: Vec<Observation> = (0..300u128)
+            .map(|i| {
+                let mut o = observation(i + 1, l2(1), &[], 1_700_000_000 + i as i64);
+                o.facts = vec![Fact::Mac {
+                    addr: MacAddr([0x00, 0x11, 0x22, (i >> 16) as u8, (i >> 8) as u8, i as u8]),
+                    locally_administered: false,
+                }];
+                o
+            })
+            .collect();
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+
+        let started = std::time::Instant::now();
+        let summary = pass(&pool, observations).await;
+        let elapsed = started.elapsed();
+        eprintln!(
+            "reference scale: n=300, pairs={}, interfaces={}, links={}, pass={:?}",
+            summary.candidate_pairs, summary.interfaces_minted, summary.links_written, elapsed
+        );
+
+        assert_eq!(
+            summary.candidate_pairs, 44_850,
+            "n(n-1)/2 at 300 distinct ids"
+        );
+        assert_eq!(
+            summary.interfaces_minted, 300,
+            "300 distinct MACs, 300 interfaces"
+        );
+        assert_eq!(summary.links_written, 300);
+        assert_eq!(summary.abstentions, 0);
+        assert_eq!(
+            interface_count(&pool).await,
+            300,
+            "read back, not taken from the summary"
+        );
+    }
+
     /// Decision 8 — the universe is `n(n-1)/2` over DISTINCT ids, asserted rather than quoted.
     ///
     /// ⚠️ At the reference scale (300 hosts) that is **44 850**, not the "90k" D13's prose quotes:
