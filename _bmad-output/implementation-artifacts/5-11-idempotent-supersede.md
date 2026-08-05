@@ -1,6 +1,6 @@
 # Story 5.11: A second pass supersedes what changed and writes nothing for what did not
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- ✅ VALIDATED 2026-08-05 by two fresh-context agents (fact-check + gap-hunt), as this project
      requires. **The gap-hunt BUILT the story** against its own live `mariadb:10.11.11` on port

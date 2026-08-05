@@ -1513,7 +1513,7 @@ development_status:
   # `candidates` a BTreeSet, the witness is a `min` over a BTreeSet, the window is a min/max fold,
   # and not one of them reads the slice's order. Epic 5: 17 -> 18 stories. `epics.md` NOT edited;
   # the correction is registered with Epic 5's retrospective.
-  5-11-idempotent-supersede: ready-for-dev
+  5-11-idempotent-supersede: in-progress
   5-11b-order-independence: backlog
   5-12-never-overwrite-anti-regression: backlog
   5-13-monotone-honesty-trap-family: backlog
