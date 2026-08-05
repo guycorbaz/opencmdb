@@ -50,8 +50,17 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-05  # 5.11 IMPLEMENTED **AND CODE-REVIEWED** -> `review` (NOT `done`: that is
-                          # the MERGE's business). `master`-branch at **429 tests**, six gates
+last_updated: 2026-08-05  # 5.11 **DONE** -- PR #71 squash-merged as `ce0a770` after a green CI
+                          # run. **Epic 5 is now 14/18.** `master` carries **429 tests**; the
+                          # branch is deleted locally and on `origin`.
+                          # NEXT = `create-story` 5.11b, which inherits by name from 5.11's
+                          # contexting and review: `resolve_within` reads the slice's ARRIVAL ORDER
+                          # twice (`by_id` is a last-duplicate-wins `.collect()`, and the tail
+                          # abstention loop walks the raw slice), and two passes from an EMPTY store
+                          # mint different `interface.id` values, so `snapshot_links` cannot compare
+                          # `interface_id` literally between two orders -- the shape 5.10 hit on
+                          # `id`.
+                          # (previous:) 5.11 IMPLEMENTED **AND CODE-REVIEWED** -> `review`. `master`-branch at **429 tests**, six gates
                           # green, both clippy forms clean, corpus still 11 unanswerable.
                           # The pass is IDEMPOTENT: read the current ENGINE version of the slot,
                           # then insert / do nothing / close-and-append. `0004` relaxes
@@ -1552,7 +1561,7 @@ development_status:
   # `candidates` a BTreeSet, the witness is a `min` over a BTreeSet, the window is a min/max fold,
   # and not one of them reads the slice's order. Epic 5: 17 -> 18 stories. `epics.md` NOT edited;
   # the correction is registered with Epic 5's retrospective.
-  5-11-idempotent-supersede: review
+  5-11-idempotent-supersede: done
   5-11b-order-independence: backlog
   5-12-never-overwrite-anti-regression: backlog
   5-13-monotone-honesty-trap-family: backlog
