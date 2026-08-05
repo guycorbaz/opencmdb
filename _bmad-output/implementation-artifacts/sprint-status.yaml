@@ -50,13 +50,19 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-04  # 5.9b **DONE** -- PR #67 squash-merged as `94314e9` after a green CI
-                          # run. **Epic 5 is now 12/17.** `master` carries **408 tests**
-                          # (203 bin + 159 core + 46 xtask) and six green gates; the branch is
-                          # deleted locally and on `origin`.
-                          # 5.10 is IMPLEMENTED -> `review` (NOT `done`: that is the MERGE's
-                          # business). Branch `story-5-10-purge-test`, commits NOT PUSHED.
-                          # 408 -> 411 tests, six gates green, corpus still 11 unanswerable.
+last_updated: 2026-08-05  # 5.10 **DONE** -- PR #69 squash-merged 2026-08-05 as `e056b5d` after a
+                          # green CI run. **Epic 5 is now 13/17.** `master` carries **416 tests**
+                          # and six green gates (`views-hash` STALE and exiting 0, as designed);
+                          # the branch is deleted locally and on `origin`.
+                          # NEXT = create-story 5.11, which inherits by name: the open half of the
+                          # datetime_literal debt (a caller comparing an instant it HOLDS against
+                          # one it STORED), and being the first story to hold TWO instants for one
+                          # placement -- so the first that can build the fixture 5.10's could not.
+                          # It also owes idempotence: the pass run twice over one slice is today
+                          # `Err(Constraint("unique"))` and a full rollback.
+                          # (previous:) 5.9b was merged as `94314e9`, PR #67, taking master to 408.
+                          # 408 -> 411 tests at implementation, six gates green, corpus still
+                          # 11 unanswerable.
                           # D14's own test PASSES: purge the engine's links, re-run, and every
                           # decision-bearing column comes back identical.
                           # 🔴 epics.md:1634 asks for something a purge-and-replay can NEVER do,
@@ -80,7 +86,7 @@ last_updated: 2026-08-04  # 5.9b **DONE** -- PR #67 squash-merged as `94314e9` a
                           # unreddenable and did NOT generalise it to the PROJECTION: eight of the
                           # ten compared columns could be blanked with the whole suite green, and
                           # rule_id was asserted NOWHERE. Fixed with one-sided oracles (M7/M8/M9).
-                          # NEXT = push -> PR -> green CI -> squash merge.
+                          # (that NEXT is spent: 5.10 was merged as `e056b5d`, PR #69.)
                           # (contexting entry:) TWO ARBITRATIONS by Guy:
                           #  (1) 🔴 "bit for bit" = every decision-bearing column EXCEPT `id`.
                           #      uuid v7 stamps a wall-clock ms into the primary key, so it is
@@ -1444,7 +1450,7 @@ development_status:
   # pair and returns none). NO `device` table and NO `entity` supertype -- both Epic 6.
   5-9-persist-interface-and-identity-link: done
   5-9b-engine-resolves-and-writes-links: done
-  5-10-purge-test: review
+  5-10-purge-test: done
   5-11-order-independence: backlog
   5-12-never-overwrite-anti-regression: backlog
   5-13-monotone-honesty-trap-family: backlog
