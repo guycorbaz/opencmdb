@@ -1,6 +1,6 @@
 # Story 5.10: The purge test proves the link is a cache of attention, not of truth
 
-Status: review
+Status: done
 
 <!-- ✅ VALIDATED 2026-08-04 by two fresh-context agents (fact-check + gap-hunt), as this project
      requires. **The gap-hunt BUILT the story** against a live `mariadb:10.11.11` on port 13311,
