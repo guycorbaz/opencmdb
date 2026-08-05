@@ -2,25 +2,43 @@
 
 Status: ready-for-dev
 
-<!-- ⏳ NOT YET VALIDATED. This project requires a validation pass by **two fresh-context agents**
-     (fact-check + gap-hunt) before `dev-story` — Guy's decision at the Epic 4 retrospective.
+<!-- ✅ VALIDATED 2026-08-05 by two fresh-context agents (fact-check + gap-hunt).
+     **The gap-hunt BUILT THE WHOLE STORY** against its own live `mariadb:10.11.11` on 13311 —
+     T1 through T6, **429 → 441 tests**, six gates green, both clippy forms clean, `cargo fmt`
+     clean, and **no new dependency** (`Cargo.lock` diff empty). 5 HIGH, 5 MEDIUM, 4 LOW applied.
 
-     🔑 **THE GAP-HUNT MUST COMPILE THIS STORY AGAINST A LIVE DATABASE.** `DATABASE_URL` is unset
-     here, every DB-backed test passes by `return`ing, and the suite reports 429 either way. §8 has
-     the `docker run`; host port **13306**, never 3306 (`kesh-mariadb` belongs to another project).
+     🔴 **THE ANSWER TO THIS STORY'S OWN CENTRAL QUESTION IS BAD, AND THAT IS THE POINT OF HAVING
+     ASKED IT: FOUR of the prescribed mutations were measured leaving the ENTIRE SUITE GREEN.**
+       • **M1 as prescribed is a no-op** — the resolver consuming groups in slice order cannot reach
+         a shape-A test that never calls the resolver. AC1 was reddenable by NO permitted mutation
+         until Guy's arbitration opened `identity/` to a temporary mutation (§3).
+       • **M5 is green**: reproducibility within one process is trivially true for any seed, so the
+         seed's PROVENANCE was guarded by nothing. AC4 now demands a GOLDEN-VALUE test.
+       • **M6 is green, and turns AC1 into a tautology** — `permutations()[0]` IS the identity.
+       • **A degenerate ENUMERATOR leaves AC1–AC3 green** unless every consuming test asserts its
+         own permutation count. The gap-hunt proved it by deleting the four count assertions it had
+         happened to write and re-running.
 
-     🔑 **ASK IT EXPLICITLY:** *"does each prescribed mutation actually red, and WHAT carries the
-     red — an assertion, an `expect` panic, or the compiler?"* Report the carrier PER TEST.
+     🔑 **WHAT THE STORY GOT RIGHT, ALSO MEASURED**: shape C is a no-op today AND is not a duplicate
+     of story 5.11's idempotence test — under M2, 5.11's test stayed green while shape C reddened.
+     Shape B's `interface_id` claim holds over 7 purge-and-replay samples. And the load-bearing
+     sizing decision is exact: **720 permutations of the largest stream in 11.5 ms**.
 
-     🔴 **ASK IT SOMETHING ELSE, SPECIFIC TO THIS STORY:** *"is any test here capable of FAILING?"*
-     A story whose subject is a property that already holds by construction is the ideal breeding
-     ground for a test that passes because it measures nothing. §3 names the shape; every AC below
-     carries a mutation whose job is to make the test red, and **a mutation that leaves the suite
-     green is a HIGH finding, not a reassurance.**
+     ⚠️ Also applied: `partial-then-failed.jsonl` ends in a `Failure` record so the obvious
+     `.expect("poll")` PANICS, two streams carry their own connector/scope, the corpus context
+     helpers are private, `main.rs` needs a `#[cfg(test)] mod` line so "untouched" was
+     unsatisfiable, `resolver.rs:635` says "Nothing here reads `fixtures/`" which T5 falsifies, and
+     the register bullet this story disposes of says "425 tests" where master carries 429.
+
+     🔑 FOR THE NEXT VALIDATION: the gap-hunt found 9 of the 14, the fact-check the pure citation
+     defects — including the one that started this, that AC1's mutation could not reach AC1's test.
+     **Both layers found it independently**, one by reading and one by building.
 
      ⚠️ **Commit before the mutation pass** — the driver's first act is `git checkout -- crates/`.
      ⚠️ **A mutation must preserve the ARITY of a SQL statement's bind parameters** or the MySQL
-     protocol desynchronises and the suite HANGS. Run every mutation under a timeout. -->
+     protocol desynchronises and the suite HANGS. Run every mutation under a timeout.
+     🔑 `DATABASE_URL` is unset here and DB tests pass by `return`ing — `dev-story` must run its own
+     database. §8 has the `docker run`; port **13306**, never 3306. -->
 
 ## Story
 
@@ -39,8 +57,8 @@ handed here explicitly rather than left to be rediscovered (§2).
 
 **What this story does NOT do:**
 
-- it does **not** change the engine. `identity::{l1,blocking,cascade}` are untouched. **A change
-  there is a FINDING**;
+- it does **not** change the engine. `identity::{l1,blocking,cascade}` are untouched **in what
+  ships**. **A change there in the diff is a FINDING** — a temporary mutation during T7 is not (§3);
 - it does **not** wire the resolver into `main.rs` (still story 5.14's), and does **not** implement
   an `l2-*` rule — the trap corpus stays **11 unanswerable, `passed() == false`**. **If it turns
   green, that is a FINDING**;
@@ -82,8 +100,11 @@ A slice carrying one `obs_id` **twice with different content** resolves to which
 last — and that copy's `observed_at` is what `write_link` stores as `valid_from` and what
 `seen_window` folds into the interface window. **A fuzzed order over such a slice changes a STORED
 column.** Worse, `join` walks the whole slice, so the observation is grouped under keys from the
-copy that did NOT win: story 5.11's validation measured a slice `[obs1 with mac01, obs1 MAC-less]`
-placing `obs 1` on `interface(mac01)` while the winning copy carries no MAC at all.
+copy that did NOT win — an observation can be placed on an interface derived from a MAC its winning
+copy does not carry. ⚠️ That consequence follows from the code (`join` at `l1.rs:172` walks the
+slice; `by_id` at `resolver.rs:234` keeps the last copy) and **is not recorded as MEASURED in any
+artifact** — an earlier draft said it was. Under this project's *"a cause needs a named check"* rule
+it is a reading, and T2's permutation sweep is what turns it into a measurement.
 
 🔑 **The corpus cannot produce this shape**, and that is a fact in this story's favour rather than a
 gap: `FixtureConnector::from_records` refuses a repeated `obs_id`
@@ -93,9 +114,10 @@ shape is reachable only by handing `resolve` a hand-built `Vec`.
 **The prescribed answer is a REFUSAL, not a documented precondition.** An `ObsId` identifies an
 immutable observation; two different contents under one id is a caller bug, and the pass should say
 so rather than silently pick one. `resolve_within` returns `Err` on a repeated `obs_id` whose
-content differs. _(A repeated IDENTICAL observation stays legal — story 5.9b's
-`a_repeated_obs_id_writes_one_link` and 5.11's `a_repeated_obs_id_abstains_once_and_the_pass_says_so`
-both pass the same clone twice and must keep passing. **If either reds, the refusal is too broad.**)_
+content differs. _(A repeated IDENTICAL observation stays legal — story 5.9b's `a_repeated_obs_id_writes_one_link`
+passes the same clone **twice** and 5.11's `a_repeated_obs_id_abstains_once_and_the_pass_says_so`
+passes it **three times**; both must keep passing, and both were measured still passing when the
+refusal was built at validation. **If either reds, the refusal is too broad.**)_
 
 **2b. The tail abstention loop iterates the RAW SLICE.** `resolver.rs:329`. The row VALUES are
 invariant; only the INSERT order moves, and `snapshot_links` sorts. So this one is benign — but it
@@ -112,16 +134,25 @@ green on day one, and stays green whether or not it measures anything.
 break the ORDER-INDEPENDENCE specifically — not the pass in general. A mutation that reds a test by
 breaking something else has not shown that test measures order.
 
-The canonical shape, and the one to prescribe:
+🔴 **A MUTATION MAY EDIT `identity/`. The ban in AC7 is on the SHIPPED DIFF, not on the prove-to-red
+pass.** Guy's arbitration at this story's validation, on a measurement: the validation built the
+story and ran the originally-prescribed mutation — *"make the resolver consume `join`'s groups in
+slice order"* — and **all 441 tests passed**. It could not do otherwise. Shape A is pure: its test
+calls `join` and `candidates` directly and never enters `resolve_within`, so no mutation of the
+resolver can reach it. And `join` returns a `BTreeMap`, whose equality is structural, so even a
+varying *consumption* order is unobservable in the assertion.
+
+**The mutations that DO red, measured:**
 
 ```
-replace `join`'s BTreeMap with a HashMap seeded per-instance   → group ITERATION order varies
-replace the witness `min` with `first()` over the slice order  → the witness follows arrival
+`join`'s group becomes order-dependent (e.g. `if position % 2 == 0`)  → AC1 reds INSIDE the loop
+`placement_decision` gains `arrival: &[Observation]`, witness = first  → AC2 and AC3 red
 ```
 
-⚠️ Neither is a compile-level change to the engine — **`identity/` is not to be edited**. Apply both
-by mutating the RESOLVER's use of them where possible, and where it is not, say so and mark the AC
-as measured by the permutation sweep alone.
+⚠️ The second is **not the trivial swap** an earlier draft implied: `placement_decision` receives a
+`BTreeSet<ObsId>` and a `BTreeMap`, **neither of which carries arrival order**, so `group.iter().next()`
+*is* the smallest and swapping it changes nothing. The slice must be threaded down to it. State that
+plumbing before running it.
 
 ### 4. The three measurement shapes, and why all three
 
@@ -150,8 +181,10 @@ interfaces"*, and it is the cheapest of the three.
 
 ### 5. The permutation generator: no new dependency, and mostly no randomness
 
-**`rand` is not in the workspace** (checked: `crates/*/Cargo.toml`), and taking it adds a crate to a
-graph `cargo-deny` audits, for a job that does not need it.
+**`rand` is in no manifest in this workspace** — verified over all four (`Cargo.toml`, `xtask/Cargo.toml`,
+`crates/*/Cargo.toml`), not the narrower glob an earlier draft named. `Cargo.lock` carries it only
+transitively, via `sqlx-postgres` and `surge-ping`. Taking it as a DIRECT dependency adds a crate to
+a graph `deny.toml` audits, for a job that does not need it.
 
 - **For the corpus streams (n ≤ 6): enumerate EXHAUSTIVELY.** No RNG, no seed, no flakiness, and
   strictly stronger than any sample. AC3's *"the seed is recorded so a failure is reproducible"* is
@@ -161,11 +194,26 @@ graph `cargo-deny` audits, for a job that does not need it.
   clock-derived one. A clock-derived seed makes a test that fails once a month and reproduces never
   — the anecdote AC3 exists to forbid. The seed is printed with the permutation on failure.
 
-⚠️ **The generator is itself code that can be wrong.** A shuffle that returns the identity
-permutation makes every test below green and measures nothing — the §3 failure mode, arriving
-through the tool rather than the subject. **It gets its own test**: over a fixed seed sweep the
-generator must produce at least two DISTINCT permutations, and must produce a permutation that is
-not the identity.
+⚠️ **The generator is itself code that can be wrong**, and the validation measured that ONE guard is
+not enough. Three are needed, each closing a hole the others leave:
+
+1. **The shuffle gets its own test** — over the seed sweep it produces at least two DISTINCT
+   permutations, and at least one that is not the identity. Measured: this reds when the shuffle
+   returns its input, and **AC1–AC3 all stay green**, so it closes nothing else.
+2. **The shuffle gets a GOLDEN-VALUE test** — `shuffled(&(0..8).collect::<Vec<_>>(), 7)` equals a
+   literal vector, pinning the seed AND the algorithm. 🔴 **Without it the seed's provenance is
+   measured by nothing**: the validation replaced the fixed sweep with a `SystemTime::now()`-derived
+   one and **all 441 tests passed, three runs in a row**. Reproducibility *within one process* is
+   trivially true for any seed — `shuffled(x, s) == shuffled(x, s)` holds whatever `s` is — so the
+   whole anecdote AC4 exists to forbid ships unmeasured without this.
+3. **Every CONSUMING test asserts how many permutations it consumed.** Measured: with the enumerator
+   replaced by *"return the input"*, AC1–AC3 reddened **only** on count assertions, and deleting
+   those four lines left all three GREEN. A guard on the generator does not protect its callers.
+
+🔴 **And `permutations()` yields lexicographic order, so element 0 IS the identity.** Sampling one
+permutation turns AC1 into `join(o) == join(o)` — proven by combining that sample with a genuinely
+order-dependent `join` and watching the test stay green. Any sampling must skip the identity or
+assert its count.
 
 ### 6. The corpus can satisfy AC1's letter and cannot reach the interesting shapes
 
@@ -177,6 +225,25 @@ shape, the multi-scope shape, or the abstention/placement mix in one slice.
 Synthetic slices are therefore **required, not optional** — the same conclusion story 5.5 reached
 about its own claim, for the same reason. Cover at least: a multi-MAC observation, a MAC-less one
 (abstention), two scopes, and a group of three (so the witness convention is exercised).
+
+🔴 **A consequence worth stating rather than discovering: the corpus AC1 test is reddened by nothing
+in the permitted set.** Measured — under a `join` mutated to *first-key-wins*, the corpus test stays
+GREEN while the synthetic one reds, because first-key-wins is a no-op where every observation
+carries exactly one key. AC6 is satisfiable in letter, and the synthetic slices are what carry the
+measurement.
+
+⚠️ **Two committed streams do not load with the corpus context, and one PANICS on the obvious
+idiom** — all measured at validation, through the exact path §7 prescribes:
+
+| stream | what happens |
+|---|---|
+| `partial-then-failed.jsonl` | ends in `Record::Failure`, so `poll` returns `Err(ConnectorError::Unreachable)` with 4 observations already in the sink. **`.expect("poll")` panics.** By design (`fixture_connector.rs:321`) |
+| `capability-downgrade.jsonl`, `partial-then-failed.jsonl` | carry their OWN `connector_id` and `scope`; loading them with the corpus context is refused `ForeignConnectorId`, then `UncoveredScope` |
+| the other **11** | stream cleanly — 3, 4 or 6 observations, 1–5 groups, every permutation order-stable |
+
+⚠️ `corpus_id()`, `corpus_scope()` and `corpus_caps()` are **private to `fixture_connector`'s own
+test module**. T5 must restate them or make them `pub(crate)`; the choice is the implementer's, but
+it is not free and the story names it here rather than leaving it to be hit.
 
 ### 7. The tree this story extends, measured on `798799d`
 
@@ -230,9 +297,13 @@ only lines before the first `#[cfg(test)]`, and `resolver.rs` is well under it.
 
 **AC1 — the derived interfaces and pairs are identical under EVERY permutation.** (shape A)
 Given a slice of up to six observations, when `join` and `candidates` are called on every one of its
-`n!` permutations, then all results are equal.
-**Mutation:** make the resolver consume `join`'s groups in slice order rather than key order. The
-test must red.
+`n!` permutations, then all results are equal — **and the test asserts HOW MANY permutations it
+consumed** (§5.3), because a degenerate enumerator otherwise leaves it green.
+**Mutation:** make `join`'s grouping order-dependent — a temporary edit to `identity/l1.rs`, which
+AC7 permits for a mutation and forbids in the shipped diff (§3). Measured to red inside the
+permutation loop. 🔴 The originally-prescribed mutation (the resolver consuming groups in slice
+order) was **built and left all 441 tests green**; it cannot reach a test that never calls the
+resolver.
 
 **AC2 — a fuzzed order run into a populated store writes NOTHING.** (shape C)
 Given a store built by an in-order pass, when the permuted slice is resolved into it, then
@@ -247,28 +318,48 @@ Given an in-order pass and its snapshot, when the engine's links are purged and 
 replayed, then `snapshot_links` compares equal — `interface_id` included, which is comparable
 because the replay finds its interfaces rather than minting them.
 
-**AC4 — the fuzzing is reproducible, and the generator is itself measured.**
-Given the permutation source, when it runs, then corpus-scale slices are enumerated EXHAUSTIVELY
-(no RNG) and the reference-scale slice uses a fixed seed sweep whose seed is printed with any
-failure. **And** the generator has its own test: over that sweep it produces at least two distinct
-permutations, and at least one that is not the identity.
-🔴 Without this AC a shuffle that returns its input makes AC1–AC3 green and meaningless.
+**AC4 — the fuzzing is reproducible, and the generator is measured THREE ways.** (§5)
+Given the permutation source, when it runs, then corpus-scale slices are enumerated EXHAUSTIVELY (no
+RNG) and the reference-scale slice uses a fixed seed sweep whose seed is printed with any failure.
+**And** all three guards of §5 exist: the shuffle's own distinctness test, a **golden-value** test
+pinning one `(seed, input) → output` against a literal, and a permutation-count assertion in every
+consuming test.
+🔴 **The golden-value test is not decoration.** Without it, replacing the fixed sweep with a
+clock-derived one leaves **all 441 tests green over three consecutive runs** — measured. The seed's
+provenance is otherwise guarded by nothing, because `shuffled(x, s) == shuffled(x, s)` is true for
+every `s`.
 
-**AC5 — a repeated `obs_id` with DIFFERENT content is refused.** (§2a)
-Given a slice carrying one `obs_id` twice with differing facts or instants, when it is resolved,
-then the pass returns `Err` rather than silently keeping the last copy.
-**And** a repeated IDENTICAL observation stays legal — story 5.9b's and story 5.11's tests for it
-must both still pass. **If either reds, the refusal is too broad.**
+**AC5 — a repeated `obs_id` whose DECISION-BEARING content differs is refused.** (§2a)
+Given a slice carrying one `obs_id` twice with differing facts, instants, scope or vantage, when it
+is resolved, then the pass returns an error that NAMES the condition rather than silently keeping
+the last copy.
+🔑 **`raw` is excluded from that comparison** — Guy's arbitration. `Observation` derives `PartialEq`,
+so `!=` would compile, but `raw` is *"opaque provenance … that NO decision ever reads (D19)"*
+[`observation/mod.rs:255-258`], and refusing on it would red a case where nothing was ever at stake.
+The comparison is therefore explicit, field by field — **and it carries a test that reds when a new
+field is added to `Observation` and forgotten here**, since an explicit comparison is exactly what a
+new field silently escapes.
+🔑 **The error gets its OWN `RepositoryError` variant**, following story 5.11's precedent with
+`InstantRegressed`: `Constraint(_)` means *"a database constraint was violated"* by its own doc, and
+a self-contradictory input from the caller is not that.
+**And** a repeated IDENTICAL observation stays legal — story 5.9b's `a_repeated_obs_id_writes_one_link`
+(same clone **twice**) and story 5.11's `a_repeated_obs_id_abstains_once_and_the_pass_says_so` (same
+clone **three times**) must both still pass. **If either reds, the refusal is too broad.**
+_(Both were measured still passing when the refusal was built at validation.)_
 
 **AC6 — the corpus is used, and its limits are stated.**
 Given at least one committed replay stream, when it is loaded through `FixtureConnector` and
 resolved, then AC1–AC3 hold over it. **And** the story records that the corpus carries no multi-MAC
 observation and no second `l2_domain`, so the synthetic slices of §6 are what cover those.
 
-**AC7 — nothing else moves.**
-`identity::{l1,blocking,cascade}` untouched · `fixtures/` untouched · `main.rs` untouched · trap
+**AC7 — nothing else moves, in the SHIPPED DIFF.**
+`identity::{l1,blocking,cascade}` untouched **in what ships** — a temporary mutation during T7 is
+permitted and is how AC1 is measured at all (§3, Guy's arbitration) · `fixtures/` untouched · trap
 corpus still 11 unanswerable and `passed() == false` · six gates green · both clippy forms clean ·
-no new dependency in any `Cargo.toml`.
+**no new dependency** in any `Cargo.toml` or in `Cargo.lock`.
+⚠️ **`main.rs` gains no BEHAVIOUR — a `#[cfg(test)] mod` declaration excepted.** Measured: T1's new
+module needs one, so *"`main.rs` untouched"* was unsatisfiable as first written. Putting the
+generator inside an existing test module avoids even that; either is acceptable, silence is not.
 
 **AC8 — the doc twins say the same thing.**
 `CLAUDE.md`, `docs/project-context.md`, `sprint-status.yaml` and this file agree on status and
@@ -305,19 +396,30 @@ repeated-`obs_id` tests still pass.
 
 **T7 — prove-to-red.** Commit first. Each mutation under a timeout, carrier recorded PER TEST:
 
-| | mutation | prediction |
-|---|---|---|
-| M1 | consume `join`'s groups in slice order | AC1 reds |
-| M2 | witness = `first()` over slice order instead of smallest-other | AC2 reds — a supersede appears |
-| M3 | the shuffle returns its input unchanged | AC4's generator test reds; ⚠️ **predict whether AC1–AC3 stay green, and say so before running** |
-| M4 | drop the repeated-`obs_id` refusal | AC5 reds |
-| M5 | seed the sweep from the clock | AC4 reds on reproducibility |
-| M6 | sample one permutation instead of enumerating | AC1 reds only if the sample is the identity — ⚠️ **say what this measures before running it** |
+Every row below was **executed at this story's validation**, so the predictions are measurements
+rather than guesses. Reproduce them; a divergence is a finding.
 
-🔴 **A mutation that leaves the suite green is a HIGH finding**, and on this story it is the expected
-failure mode rather than a surprise. Record it as such.
+| | mutation | measured at validation | carrier |
+|---|---|---|---|
+| M1 | `join`'s grouping made order-dependent inside `identity/l1.rs` (permitted for a mutation — AC7) | **AC1 reds inside the permutation loop** | assertion |
+| M1-noop | the resolver consumes `join`'s groups in slice order — *the originally prescribed one* | 🔴 **ENTIRE SUITE GREEN, 441/441.** Shape A never calls the resolver | none |
+| M2 | `placement_decision` gains `arrival: &[Observation]`, witness = first-by-arrival | **AC2 reds** (a link is written), **AC3 reds** (the `evidence` column diverges), + `the_write_amplification_…` | assertion ×3 |
+| M3a | the SHUFFLE returns its input | AC4's distinctness tests red — and **AC1, AC2, AC3 all stay GREEN** | assertion ×2 |
+| M3b | the ENUMERATOR returns its input | AC1×2, AC2, AC3 red — but **every red lands on a count assertion**; delete those four lines and all three go GREEN | assertion |
+| M4 | drop the repeated-`obs_id` refusal | **AC5 reds**, and only AC5 | assertion |
+| M5 | seed the sweep from the clock | 🔴 **ENTIRE SUITE GREEN**, three runs — unless AC4's golden-value test exists | none |
+| M6 | sample one permutation instead of enumerating | 🔴 **suite GREEN**, and `permutations()[0]` IS the identity, so AC1 becomes a tautology. **M6 + M1 together still leave the corpus AC1 test green** | none |
 
-**T8 — docs and register.** The three §2/§5 entries in `deferred-work.md`; then the twins (AC8).
+🔴 **Four of these were measured GREEN, and that is this story's whole subject.** A mutation that
+leaves the suite green is a HIGH finding here, not a reassurance — and the reason each is green is
+recorded above so it cannot be re-discovered as a surprise.
+
+**T8 — docs and register.** The register carries **ONE** bullet for both §2 dependencies
+(`deferred-work.md:2704-2711`, owner 5.11b) and none for §5 — dispose of that bullet and open what
+§5 and §6 raise. ⚠️ That bullet also says *"invisible to all **425** tests"* where `master` carries
+**429**; correct it while you are in the file.
+⚠️ `resolver.rs:635` states *"Nothing here reads `fixtures/`"* as a property — **T5 falsifies it**.
+Update that sentence in the same commit, or put the corpus tests elsewhere. Then the twins (AC8).
 
 ---
 
@@ -384,4 +486,5 @@ _(to be filled)_
 
 | Date | Change |
 |---|---|
+| 2026-08-05 | Validated by two fresh-context agents; **14 findings applied, 5 HIGH**. The gap-hunt BUILT the story (429 → 441 tests, six gates green, no new dependency). 🔴 **Four prescribed mutations were measured leaving the entire suite GREEN** — M1 could not reach a pure test, M5 could not see the seed's provenance, M6 made AC1 a tautology, and a degenerate enumerator slipped past every consumer. Guy's arbitrations: a mutation MAY edit `identity/` (the ban is on the shipped diff), and AC5's comparison EXCLUDES `raw`, which no decision reads. What held: shape C is a no-op and is not a duplicate of 5.11's test, shape B's `interface_id` claim holds, and 720 permutations run in 11.5 ms. |
 | 2026-08-05 | Created by `create-story`. Five decisions at contexting, the load-bearing one being that **the corpus streams carry 3–6 observations, so permutations can be enumerated EXHAUSTIVELY rather than sampled** — no `rand`, no seed, no flakiness, and strictly stronger than the fuzz `epics.md` asks for. The story is designed around one failure mode: a test that cannot fail. |

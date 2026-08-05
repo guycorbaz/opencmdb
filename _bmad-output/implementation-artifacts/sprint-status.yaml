@@ -50,9 +50,42 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-05  # 5.11b CONTEXTED -> `ready-for-dev`. NEXT = `create-story validate`
-                          # with TWO fresh-context agents, and the gap-hunt MUST compile it against
-                          # a live mariadb:10.11.11 on **13306**.
+last_updated: 2026-08-05  # 5.11b CONTEXTED **AND VALIDATED** -> `ready-for-dev`. NEXT = `dev-story`.
+                          # Two fresh-context agents; **14 findings applied, 5 HIGH**. The gap-hunt
+                          # BUILT THE WHOLE STORY against a live mariadb:10.11.11 on 13311:
+                          # **429 -> 441 tests**, six gates green, both clippy forms clean, and
+                          # NO new dependency (Cargo.lock diff empty).
+                          # 🔴 THE ANSWER TO THE STORY'S OWN CENTRAL QUESTION IS BAD, WHICH IS WHY
+                          # IT WAS WORTH ASKING: **FOUR prescribed mutations were measured leaving
+                          # the ENTIRE SUITE GREEN.**
+                          #   . M1 as prescribed is a NO-OP -- the resolver consuming groups in
+                          #     slice order cannot reach a shape-A test that never calls the
+                          #     resolver. AC1 was reddenable by NO permitted mutation.
+                          #   . M5 is GREEN: reproducibility WITHIN one process is trivially true
+                          #     for any seed, so the seed's PROVENANCE was guarded by nothing.
+                          #   . M6 is GREEN and turns AC1 into a tautology: permutations()[0] IS
+                          #     the identity.
+                          #   . A degenerate ENUMERATOR leaves AC1-AC3 green unless every consuming
+                          #     test asserts its own permutation count -- proven by deleting the
+                          #     four count assertions and re-running.
+                          # 🔑 GUY'S TWO ARBITRATIONS:
+                          #   (1) a MUTATION may edit `identity/` -- the ban is on the SHIPPED DIFF,
+                          #       not on the prove-to-red pass. That is what makes AC1 measurable.
+                          #   (2) AC5's comparison EXCLUDES `raw`: D19 says no decision reads it, so
+                          #       refusing on it would red a case where nothing was at stake. The
+                          #       comparison is explicit field-by-field, with a test that reds when
+                          #       a new `Observation` field is forgotten.
+                          # 🔑 WHAT HELD, ALSO MEASURED: shape C is a no-op today AND is not a
+                          # duplicate of 5.11's idempotence test (under M2, 5.11's stayed green
+                          # while shape C reddened); shape B's `interface_id` claim holds over 7
+                          # samples; and the load-bearing sizing decision is exact -- **720
+                          # permutations of the largest stream in 11.5 ms**.
+                          # ⚠️ Also: partial-then-failed.jsonl ends in a Failure record so the
+                          # obvious `.expect("poll")` PANICS; two streams carry their own
+                          # connector/scope; the corpus context helpers are private; `main.rs`
+                          # needs a `#[cfg(test)] mod` line so "untouched" was unsatisfiable; and
+                          # resolver.rs:635 says "Nothing here reads fixtures/", which T5 falsifies.
+                          # (contexting entry:)
                           # 🔑 THE LOAD-BEARING FINDING AT CONTEXTING: the committed replay streams
                           # carry **3 to 6 observations**, so `n!` is at most 720 and permutations
                           # can be ENUMERATED EXHAUSTIVELY rather than sampled. No `rand` (it is in
