@@ -2519,3 +2519,108 @@ mutations independently. **Five entries deferred, each measured rather than susp
   the interface, and it names it whether or not a verdict follows), but unreachable through `resolve`
   today and unasserted. **Owner: the first story that narrows the blocker** — the same one that owns
   decision 11's cause-of-convenience.
+
+## Deferred from: story-5-10-purge-test (2026-08-04)
+
+Three entries named this story as owner — **two by NAME** (the `uuid` v7 consequence, and the
+`datetime_literal` truncation, registered TWICE) and the `sqlx chrono` one **by a CONDITION this
+story does not meet**. One CLOSED, two ANSWERED-AND-RE-OWNED, one left untouched.
+
+- ✅ **CLOSED — `uuid::Uuid::now_v7()` stamps a wall-clock millisecond into every primary key, so
+  *"bit for bit"* can only mean MODULO THE IDS.** It is no longer a note to be rediscovered: it is
+  Guy's arbitration in §1, it is the shape of `LinkSnapshot` (**no `id` field at all**, so the
+  exclusion is structural), it is the name of the test
+  (`every_column_but_the_id_survives_a_purge_and_replay`), and **mutation M6 proves it load-bearing**
+  — put the id back and the comparison reds at once.
+
+- ⚗️ **SPLIT — `datetime_literal` truncates below the microsecond.** Guy's arbitration at the code
+  review: the entry contains **two debts**, and assigning it whole is what has made it circle for
+  three stories.
+  - ✅ **CLOSED here — the half that is a property of a pure function.** The entry's own reproach is
+    *"Nothing asserts it"*, and nothing did: changing the format string reddened no test that named
+    the truncation. `repo::tests::datetime_literal_truncates_below_the_microsecond` now pins it —
+    two instants **788 ns apart**, distinct in Rust, rendering identically. **Mutations M10
+    (`%.9f`) and M11 (`%.3f`) both red it, assertion-carried.** No future story was needed for this
+    half, and it cost two lines.
+  - ↺ **RE-OWNED — the half that is a risk.** A caller comparing an instant it HOLDS against one it
+    STORED can be wrong, and nothing does that yet. **Owner: story 5.11**, and the reason is
+    substantive rather than convenient: 5.11 supersedes, so it is the first story that holds **two
+    instants for one placement** and must decide whether they denote the same thing. Story 5.14 only
+    renders them, and a human reading a microsecond-truncated timestamp loses nothing.
+  🔴 **And the second bullet's own evidence is refuted**: it cites
+  `the_stored_instants_are_the_derived_ones` as *"asserting a property that holds only at microsecond
+  granularity"* — but that test **cannot catch the truncation at all**, because it builds its
+  expected value by passing the instant through the truncating function itself. Both sides truncate
+  identically. **It is the same bilateral-oracle shape this story's code review found in
+  `snapshot_links`**, and it is written into the new test's doc so 5.11 does not inherit the belief
+  that the point is covered.
+  ⚠️ **An earlier disposition re-owned this to *"the first story that compares an instant it holds in
+  memory against a stored one"* — a CONDITION, which is precisely the form AC7 rejects as *"a debt
+  nobody holds"*.** Caught by the Acceptance Auditor, in the story's own criterion.
+
+- ⚪ **UNTOUCHED — the `sqlx` `chrono` feature.** Its owner is *"the first story that needs to read an
+  instant back as a VALUE (rather than to compare it against a sentinel)"* — a CONDITION, and this
+  story is never named. Measured: `snapshot_links` compares two renderings and **never produces a
+  `Timestamp`**, so the condition is not met. Not this story's to close.
+
+### New, raised by this story
+
+- 🔴 **The two natures are MUTUALLY EXCLUSIVE on one placement.** `identity_link_one_current` is
+  `(observation_id, current_subject)` and the purge removes only `decided_by='ENGINE'`, so an
+  operator can **never** confirm or correct a placement the engine already holds — the write is
+  refused `Err(Constraint("unique"))` — and an operator row occupying a slot the replay needs makes
+  the **entire replay roll back**. D14's *"two natures in one table"* is true of the TABLE and false
+  of one `(observation, subject)`. This story measures what it can — an operator row on a subject the
+  engine does not place survives the purge with its own `id` — and registers the model question:
+  **can an operator ever confirm, correct or override an engine placement?** **Owner: story 5.14**,
+  the FR16 surface, which is where a human first touches a link.
+
+- 🔴 **`epics.md:1634` asks for something a purge-and-replay can never measure**, and this is now
+  measured rather than argued: mutations M1 and M1-noop are the same mutation up to what they key on,
+  and only the one keyed on state the purge does NOT restore can red. *"The test reds if any engine
+  decision is made to depend on state the purge removes"* points the wrong way — the purge restores
+  the run-1 start state, so such a dependency is invisible by construction. `epics.md` is NOT edited.
+  **Owner: Epic 5's retrospective**, beside §2's `TRUNCATE ... WHERE` correction and story 5.9b's two.
+
+- ⚠️ **`epics.md:1627` and D14 both write the purge as `TRUNCATE ... WHERE decided_by='ENGINE'`, and
+  MariaDB's `TRUNCATE` takes no `WHERE`** — measured at the parser, `ERROR 1064`. The shipped
+  statement is a `DELETE`, and `purge_engine_links`' doc says so. **Owner: Epic 5's retrospective**
+  for `epics.md`; `architecture.md` is a milestone act (issue #54).
+
+- ⚠️ **A query body generic over `sqlx::Executor` cannot issue two statements.** The executor is
+  consumed by value, so `purge_engine_links` would need `&mut MySqlConnection` — measured while
+  writing mutation M2, which could not be applied without changing the signature AND the one call
+  site that passes `&pool`. The shipped one-statement form hides the constraint. **Owner: the first
+  story that needs a multi-statement query body.**
+
+- ⚠️ **A summary assertion placed before a specific one pre-empts the red an AC names.** In this
+  story the interface-id-set assertion sits BEFORE the replay deliberately, and M2's red lands on it
+  as AC6 requires. The validation measured the opposite ordering doing the opposite. Not a defect
+  here; recorded as a shape to watch, because two mutations of story 5.9b landed on a summary line
+  rather than on the assertion their AC named.
+
+## Deferred from: code review of story-5-10 (2026-08-05)
+
+Three-layer review of `master...a82fa3a`; **all three layers ran their own live
+`mariadb:10.11.11`** and the Auditor re-executed the mutation pass. Three entries deferred.
+
+- ⚠️ **The purge deletes superseded rows the snapshot never compared.** `purge_engine_links` has no
+  `current_subject` filter; `snapshot_links` restricts to current rows. So "bit for bit" covers
+  what is current, while the purge erases history as well — measured: a pass, then
+  `close_identity_link`, gives `rows_in_table = 1, snapshot_len = 0, purge_count = 1`. Inert today
+  because nothing supersedes, and `a_superseded_engine_link_is_not_restored_by_the_replay` now names
+  the asymmetry rather than leaving it silent. **Owner: story 5.11**, the first story that
+  supersedes — it must decide whether the replay owes history anything.
+- ⚠️ **The comparison is blind to `link_candidate` and to `interface`'s own columns.**
+  `snapshot_links` covers `identity_link` only; `interface_ids` compares the `id` column and not
+  `l2_domain`, `mac_canon` or the seen-window. More materially, the purge CASCADES candidates away
+  and nothing asserts the replay puts them back — latent, because L1 has no `Ambiguous` producer and
+  the resolver writes no candidate. **Owner: Epic 6**, the first producer of `Ambiguous`; a
+  `snapshot_candidates` compared alongside would turn the blindness into a red the day it stops
+  being empty.
+- ⚠️ **The purge and the replay run in TWO transactions, and the composed shape runs nowhere.**
+  `purge_engine_links` commits, and only then does the replay open its own transaction. If the
+  replay fails — a unique collision with an operator row is exactly that case, and
+  `an_operator_cannot_take_a_slot_the_engine_holds` measures it — the purge is already committed and
+  the engine's links are gone with nothing to restore them. Both in one unit of work is what a
+  production caller needs. **Owner: the first story that gives the purge a production caller.**
