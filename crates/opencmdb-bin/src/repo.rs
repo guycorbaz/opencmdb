@@ -271,7 +271,7 @@ pub(crate) fn open_end() -> Timestamp {
 /// worst kind"* D14 names about `ruleset_version`. [`Conclusion`] is also deliberately not
 /// `#[non_exhaustive]`, so a new variant produces `error[E0004]` here. **No `_` arm** — the `_` is
 /// what turns that compile error into a silent mis-classification.
-fn outcome_token(conclusion: &Conclusion) -> &'static str {
+pub(crate) fn outcome_token(conclusion: &Conclusion) -> &'static str {
     match conclusion {
         Conclusion::Match { .. } => "match",
         Conclusion::NoMatch { .. } => "no_match",
@@ -282,7 +282,7 @@ fn outcome_token(conclusion: &Conclusion) -> &'static str {
 /// The persisted token for an [`IdentityAbstentionCause`], by an exhaustive `match`.
 ///
 /// Same refusal and same reason as [`outcome_token`].
-fn cause_token(cause: &IdentityAbstentionCause) -> &'static str {
+pub(crate) fn cause_token(cause: &IdentityAbstentionCause) -> &'static str {
     match cause {
         IdentityAbstentionCause::Ambiguous => "ambiguous",
         IdentityAbstentionCause::AbsenceOfProof => "absence_of_proof",
@@ -511,14 +511,28 @@ where
     Ok(())
 }
 
-/// The `current_subject` for a link pointing at `interface` and expiring at `valid_to_literal` —
-/// the interface, or [`ABSTAINED_SUBJECT`] when there is none, or `None` once the row is not
-/// current. The single derivation site, which is what keeps it from drifting.
+/// The subject a CURRENT link occupies — the interface, or [`ABSTAINED_SUBJECT`] when it names none.
+///
+/// The single derivation site, and the one callers outside this module want: it answers *"which
+/// slot in `identity_link_one_current` does this placement hold?"* without making the caller render
+/// an instant it does not have a use for. [`current_subject_of`] delegates here, so the sentinel is
+/// still spelled once.
+///
+/// _(Split out of `current_subject_of` by story 5.11: the resolver needs the subject to LOOK UP the
+/// current version before it writes, and reaching the old signature from there meant passing
+/// `&datetime_literal(open_end())` and unwrapping an `Option` on a branch that cannot be taken —
+/// a panic path bought for nothing.)_
+pub(crate) fn subject_of(interface: Option<InterfaceId>) -> String {
+    interface.map_or_else(|| ABSTAINED_SUBJECT.to_string(), |i| i.to_string())
+}
+
+/// The `current_subject` COLUMN for a link pointing at `interface` and expiring at
+/// `valid_to_literal` — [`subject_of`] while the row is current, `None` once it is not.
 fn current_subject_of(interface: Option<InterfaceId>, valid_to_literal: &str) -> Option<String> {
     if valid_to_literal != OPEN_END {
         return None;
     }
-    Some(interface.map_or_else(|| ABSTAINED_SUBJECT.to_string(), |i| i.to_string()))
+    Some(subject_of(interface))
 }
 
 /// Close a CURRENT link by stamping its `valid_to` and dropping it out of the uniqueness key — an
@@ -676,6 +690,138 @@ where
         .collect()
 }
 
+/// Load the CURRENT link the ENGINE holds on one `(observation_id, subject)` slot, if any.
+///
+/// This is what a compare-then-supersede write path reads before it decides whether to write at all
+/// (story 5.11). It is a SIBLING of [`load_current_links_for_observation`] rather than a widening of
+/// it: that function is plural by design — the L1 join puts one observation on every key it carries
+/// — and two dozen call sites depend on its shape.
+///
+/// # 🔴 `decided_by = 'ENGINE'` is the load-bearing clause
+///
+/// Without it, a compare-then-supersede path finds an OPERATOR's row in the slot and treats it as
+/// its own. **Two things follow, and the second is the one an earlier version of this doc claimed
+/// while measuring the first:**
+///
+/// - when the human's row happens to carry the decision the engine would have written, the pass
+///   **ADOPTS it** — `same_decision` returns `true`, the slot is reported `Unchanged`, and the
+///   engine silently takes credit for a human's assertion. This is what mutation M1 actually
+///   reddens, because the operator rows in both its tests carry `nothing_was_evaluated()`;
+/// - when it carries a DIFFERENT decision, the pass **supersedes it** — a human's assertion closed
+///   and replaced by a derivation. `the_engine_never_adopts_or_supersedes_a_differing_operator_row`
+///   is the test that measures this one, and it exists because nothing did.
+///
+/// With the clause, the operator's row is invisible here, the caller falls through to its insert,
+/// and `identity_link_one_current` refuses it exactly as it did before story 5.11 existed:
+/// `Constraint("unique")` and a rolled-back pass. *"May an operator override the engine?"* stays
+/// story 5.14's question, unanswered rather than answered by accident.
+///
+/// `subject` is [`subject_of`]'s value — an interface id, or [`ABSTAINED_SUBJECT`] for an
+/// abstention. It never carries `valid_to`: `identity_link_current_subject` makes
+/// `current_subject IS NOT NULL` equivalent to *"current"*, so naming the subject IS naming the
+/// current row.
+///
+/// # Errors
+///
+/// Returns the `sqlx::Error` as it came; callers classify it with [`classify`].
+pub async fn load_current_engine_link<'e, E>(
+    executor: E,
+    observation_id: ObsId,
+    subject: &str,
+) -> Result<Option<CurrentEngineLink>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    type Row = (
+        String,
+        Option<String>,
+        String,
+        Option<String>,
+        Option<String>,
+        String,
+        u32,
+        String,
+        String,
+    );
+    // `fetch_optional`, not `fetch_all().next()`: at most one row is not a hope, it is
+    // `identity_link_one_current (observation_id, current_subject)` with a non-NULL bind, and
+    // asking the driver for one row makes the impossibility of a second one structural rather than
+    // a silent discard.
+    let row: Option<Row> = sqlx::query_as(
+        "SELECT id, interface_id, outcome, rule_id, abstention_cause, evidence, \
+                ruleset_version, decided_by, CAST(valid_from AS CHAR) \
+         FROM identity_link \
+         WHERE observation_id = ? AND current_subject = ? AND decided_by = 'ENGINE'",
+    )
+    .bind(observation_id.to_string())
+    .bind(subject)
+    .fetch_optional(executor)
+    .await?;
+    let Some(r) = row else {
+        return Ok(None);
+    };
+    Ok(Some(CurrentEngineLink {
+        link: PersistedLink {
+            id: r.0,
+            interface_id: r.1,
+            outcome: r.2,
+            rule_id: r.3,
+            abstention_cause: r.4,
+            evidence: serde_json::from_str(&r.5).map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+            ruleset_version: r.6,
+            decided_by: r.7,
+        },
+        valid_from: r.8,
+    }))
+}
+
+/// The current ENGINE version of one slot, plus the instant it opened at.
+///
+/// `valid_from` is here and NOT on [`PersistedLink`] because only the supersede path needs it:
+/// before closing a version, the writer must refuse an instant that would run the interval
+/// backwards, and that refusal is the one place in this crate that compares an instant the caller
+/// HOLDS against one the database STORED.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CurrentEngineLink {
+    /// The link as it was read back.
+    pub link: PersistedLink,
+    /// When this version opened, as MariaDB renders it — the same shape [`datetime_literal`]
+    /// produces, which is what makes the comparison a string comparison rather than a parse.
+    pub valid_from: String,
+}
+
+/// Every CURRENT engine slot one observation occupies: `(link id, subject)`, ordered by subject.
+///
+/// The resolver needs this to close what it did NOT visit. `write_link` only ever reads the slot it
+/// is about to fill, so a key that vanished from the input produces no visit and its link would stay
+/// current forever — pointing at an interface no fact in the input supports. Before story 5.11 the
+/// blind append made that case fail loudly on `identity_link_one_current`; the compare routes
+/// around the key, so the detection has to be explicit.
+///
+/// `decided_by = 'ENGINE'`, for [`load_current_engine_link`]'s reason: the engine closes its own
+/// beliefs and never a human's.
+///
+/// # Errors
+///
+/// Returns the `sqlx::Error` as it came; callers classify it with [`classify`].
+pub async fn load_current_engine_slots<'e, E>(
+    executor: E,
+    observation_id: ObsId,
+) -> Result<Vec<(String, String)>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, current_subject FROM identity_link \
+         WHERE observation_id = ? AND current_subject IS NOT NULL AND decided_by = 'ENGINE' \
+         ORDER BY current_subject",
+    )
+    .bind(observation_id.to_string())
+    .fetch_all(executor)
+    .await?;
+    Ok(rows)
+}
+
 /// Load one link by its id, current or superseded, with its `valid_to` as stored.
 ///
 /// This is what proves a superseded link is still readable (D14).
@@ -775,6 +921,20 @@ where
 /// ⚠️ **`decided_by='OPERATOR'` rows are NOT touched either.** They are INPUTS, not derivations, on
 /// a par with an observation — D14's *"two natures in one table, and if that frontier is fuzzy in
 /// the code, the invariant is dead"*.
+///
+/// ⚠️ **It deletes the engine's HISTORY, not only its current beliefs.** There is no
+/// `current_subject` filter here, so superseded engine versions go too — while [`snapshot_links`]
+/// only ever compared current rows. A purge-and-replay therefore leaves the store SMALLER than it
+/// found it, and the snapshots still compare equal:
+/// `a_purge_after_a_supersede_loses_history_and_still_replays` measures both numbers, because the
+/// equal snapshots alone hide the loss.
+///
+/// **That is deliberate** (Guy's arbitration at story 5.11's contexting). A link is *"a cache of
+/// attention, not of truth"* [architecture.md:1036-1039], so what the engine believed yesterday is
+/// not a truth to preserve and the replay owes history nothing.
+/// `architecture.md:1016-1017`'s *"a bad link is UNLINKED, never erased"* governs an OPERATOR's
+/// correction of a live belief, not the engine's own scratch history. Inert until story 5.11,
+/// which is the first that supersedes.
 ///
 /// # Errors
 ///

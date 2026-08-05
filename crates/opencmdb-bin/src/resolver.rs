@@ -67,15 +67,32 @@
 //! and compares bit for bit. `insert_declared_attribute`'s `NOW(6)` is a DECLARED row authored by a
 //! human and is not a precedent.
 //!
-//! # It is not idempotent, and that is story 5.11's
+//! # It IS idempotent, since story 5.11
 //!
-//! Running the pass twice over the SAME observations is `Err(Constraint("unique"))` and a full
-//! rollback: `insert_identity_link` appends, and `identity_link_one_current` refuses a second
-//! current row for one `(observation_id, current_subject)`. Superseding an unchanged decision
-//! instead of appending is *"no new version for an unchanged decision"*, which
-//! `0002_interface_and_identity_link.sql`'s own header already names as story 5.11's. A second pass
-//! over DIFFERENT observations on the same key is the supported shape, and it finds the interface
-//! rather than minting one.
+//! A second pass over the same observations writes nothing at all — not even the same rows again.
+//! [`write_link`] reads the current ENGINE version of the slot it is about to fill and takes one of
+//! three branches: insert into an empty slot, return without writing when the slot already holds
+//! this decision, or close-and-append when it holds a different one. [`Resolution`] reports which,
+//! and `links_written = 0` is what a cycle that learned nothing looks like.
+//!
+//! _(Until story 5.11 the pass appended blindly and a second run was `Err(Constraint("unique"))`
+//! with a full rollback, `identity_link_one_current` refusing the second current row.)_
+//!
+//! **What counts as a CHANGED decision is Guy's arbitration**: the six columns [`same_decision`]
+//! compares, **evidence included**. A singleton and a pair both conclude `Match`/`l1-exact-mac`, so
+//! without evidence in the set a link whose group grew would keep asserting a justification that is
+//! no longer true — and FR16 renders it. The cost is stated rather than discovered: a newcomer that
+//! becomes the group's smallest-other witness supersedes every incumbent, which is O(group size)
+//! writes and is measured at both ends by
+//! `the_write_amplification_is_measured_at_both_ends`.
+//!
+//! ⚠️ **The engine never supersedes an OPERATOR's row.** [`load_current_engine_link`] filters on
+//! `decided_by = 'ENGINE'`, so a human's assertion is invisible to the compare and the pass fails on
+//! its insert exactly as it did before — *"may an operator override the engine?"* stays story 5.14's
+//! question. Without that filter the engine either ADOPTS a human's row as its own — when it
+//! happens to carry the same decision — or SUPERSEDES it when it does not. Both are measured;
+//! [`load_current_engine_link`] says which test measures which, because the doc used to claim the
+//! second while every test in the workspace exercised the first.
 //!
 //! # Not wired into `main.rs`
 //!
@@ -95,8 +112,9 @@ use opencmdb_core::repo::RepositoryError;
 use sqlx::MySqlConnection;
 
 use crate::repo::{
-    DecidedBy, classify, find_interface_by_l1_key, insert_identity_link, insert_interface,
-    open_end, widen_interface_seen_window,
+    DecidedBy, PersistedLink, cause_token, classify, close_identity_link, datetime_literal,
+    find_interface_by_l1_key, insert_identity_link, insert_interface, load_current_engine_link,
+    load_current_engine_slots, open_end, outcome_token, subject_of, widen_interface_seen_window,
 };
 
 /// What one pass did, in counts. Rows, not opinions: every field is something a test can also read
@@ -115,10 +133,52 @@ pub struct Resolution {
     /// Interfaces this pass found by key instead of minting. Story 5.10's replay depends on this
     /// being non-zero on a second pass: a re-minted id would change every reproduced link.
     pub interfaces_found: usize,
-    /// Links written, placements and abstentions together.
+    /// Links written, placements and abstentions together. A NEW version, whether it opened an
+    /// empty slot or replaced a superseded one — so an idempotent pass reports `0` here.
     pub links_written: usize,
     /// How many of those links are abstentions — a link with no interface and a cause.
     pub abstentions: usize,
+    /// Versions CLOSED by this pass because the decision they carried had changed (story 5.11).
+    /// Every one of them has a matching entry in [`Self::links_written`]: a supersede is a close
+    /// plus an append, never one without the other.
+    pub links_superseded: usize,
+    /// Slots this pass found already holding the decision it was about to write, and left alone.
+    /// Readable back out of the database as *"the row still has the id it had before the pass"* —
+    /// which is what distinguishes writing nothing from rewriting the same thing.
+    pub links_unchanged: usize,
+    /// Current engine links CLOSED because the input no longer supports the slot they held — an
+    /// observation that stopped carrying a MAC, or that stopped abstaining.
+    ///
+    /// Unlike [`Self::links_superseded`] these get **no successor**: there is nothing to write,
+    /// which is the whole point. `superseded + vacated` is therefore the number of versions this
+    /// pass closed, and only `superseded` has a matching entry in [`Self::links_written`].
+    pub links_vacated: usize,
+}
+
+impl Resolution {
+    /// Fold one slot's [`WriteOutcome`] into the counts.
+    ///
+    /// `abstentions` stays a SUBSET of `links_written`, which is what its doc promises: an
+    /// abstention the pass left untouched wrote no link, so counting it there would make
+    /// `abstentions > links_written` reachable and the field would stop meaning *"how many of those
+    /// links"*. An idempotent pass over a MAC-less observation therefore reports
+    /// `links_written = 0, abstentions = 0, links_unchanged = 1`.
+    fn record(&mut self, outcome: WriteOutcome, is_abstention: bool) {
+        match outcome {
+            WriteOutcome::Written => self.links_written += 1,
+            WriteOutcome::Superseded => {
+                self.links_written += 1;
+                self.links_superseded += 1;
+            }
+            WriteOutcome::Unchanged => {
+                self.links_unchanged += 1;
+                return;
+            }
+        }
+        if is_abstention {
+            self.abstentions += 1;
+        }
+    }
 }
 
 /// Resolve a slice of observations and write what the engine derives.
@@ -136,8 +196,14 @@ pub struct Resolution {
 ///
 /// # Errors
 ///
-/// Any [`RepositoryError`] the writes produce. `Constraint("unique")` on a second pass over the
-/// same observations is the non-idempotence described in this module's doc, not a defect.
+/// Any [`RepositoryError`] the writes produce. Two are worth naming because they are this
+/// function's own, not the adapter's:
+///
+/// - [`RepositoryError::InstantRegressed`] when an observation is re-supplied with an
+///   `observed_at` EARLIER than the version already stored for that slot;
+/// - [`RepositoryError::Constraint`]`("unique")` when an OPERATOR holds a slot this pass needs.
+///   That is not the old non-idempotence — a second pass over the same observations now writes
+///   nothing at all — it is the frontier described in this module's doc.
 pub async fn resolve(
     conn: &mut MySqlConnection,
     observations: &[Observation],
@@ -175,6 +241,9 @@ pub async fn resolve_within(
     // here, so it falls through to the tail loop and gets exactly one abstention link — see the
     // module doc's "one abstention per observation".
     let mut placed: BTreeSet<ObsId> = BTreeSet::new();
+    // Which SUBJECTS this pass wrote or kept, per observation. What is not in here at the end is a
+    // slot the input no longer supports, and the tail below closes it.
+    let mut visited: BTreeMap<ObsId, BTreeSet<String>> = BTreeMap::new();
 
     for ((l2_domain, mac_canon), group) in &groups {
         let (first_seen_at, last_seen_at) = seen_window(group, &by_id);
@@ -212,9 +281,14 @@ pub async fn resolve_within(
             // No `else` branch: an observation the blocker proposed nothing for is left out of
             // `placed` and abstains ONCE, in the tail loop, however many keys it carries.
             if let Some(decision) = placement_decision(observation, group, universe, &by_id) {
-                write_link(&mut *conn, observation, Some(interface), &decision).await?;
+                let outcome =
+                    write_link(&mut *conn, observation, Some(interface), &decision).await?;
                 placed.insert(*obs_id);
-                summary.links_written += 1;
+                visited
+                    .entry(*obs_id)
+                    .or_default()
+                    .insert(subject_of(Some(interface)));
+                summary.record(outcome, false);
             }
         }
     }
@@ -227,9 +301,43 @@ pub async fn resolve_within(
         if placed.contains(&observation.obs_id) || !abstained.insert(observation.obs_id) {
             continue;
         }
-        write_link(&mut *conn, observation, None, &nothing_was_evaluated()).await?;
-        summary.links_written += 1;
-        summary.abstentions += 1;
+        let outcome = write_link(&mut *conn, observation, None, &nothing_was_evaluated()).await?;
+        visited
+            .entry(observation.obs_id)
+            .or_default()
+            .insert(subject_of(None));
+        summary.record(outcome, true);
+    }
+
+    // 🔴 Close every current ENGINE slot this pass did NOT visit.
+    //
+    // `write_link` only ever reads the slot it is about to FILL, so a key that vanished from the
+    // input produces no iteration and no visit — and its link would stay current forever, pointing
+    // at an interface no fact in the input supports. Measured at this story's code review, on the
+    // `multi-nic` shape: an observation that carried two MACs and now carries one left a second
+    // current link standing, and `snapshot_links` returned two rows where a replay produces one —
+    // a reachable counterexample to story 5.10's purge-and-replay invariant, through pure engine
+    // input.
+    //
+    // ⚠️ **It is this story that made the case silent.** Before the compare, `insert_identity_link`
+    // appended blindly and `identity_link_one_current` refused the second write LOUDLY, with a full
+    // rollback; the compare routes around the key, so the detection has to be explicit. The
+    // uniqueness key was doing this work, and taking its job means taking its duty.
+    //
+    // Only observations this pass actually SAW are considered: an observation absent from the slice
+    // is not evidence that its links are stale, it is evidence of nothing.
+    for observation in observations {
+        let keep = visited.get(&observation.obs_id);
+        for (link_id, subject) in load_current_engine_slots(&mut *conn, observation.obs_id)
+            .await
+            .map_err(classify)?
+        {
+            if keep.is_some_and(|subjects| subjects.contains(&subject)) {
+                continue;
+            }
+            close_identity_link(&mut *conn, link_id_of(&link_id)?, observation.observed_at).await?;
+            summary.links_vacated += 1;
+        }
     }
 
     Ok(summary)
@@ -318,13 +426,68 @@ async fn write_link(
     observation: &Observation,
     interface: Option<InterfaceId>,
     decision: &Decision,
-) -> Result<(), RepositoryError> {
+) -> Result<WriteOutcome, RepositoryError> {
     guard_decision(decision, &[])?;
     let evidence: Vec<ObsId> = decision
         .verdict_vector
         .first()
         .map(|verdict| verdict.evidence.clone())
         .unwrap_or_default();
+
+    let subject = subject_of(interface);
+    let held = load_current_engine_link(&mut *conn, observation.obs_id, &subject)
+        .await
+        .map_err(classify)?;
+
+    if let Some(current) = held {
+        if same_decision(&current.link, interface, decision, &evidence) {
+            return Ok(WriteOutcome::Unchanged);
+        }
+        // 🔴 The instant may not run backwards, and this guard exists ABOVE the DDL on purpose.
+        // Measured at this story's code review: with only `identity_link_interval` to catch it, one
+        // observation whose `observed_at` regressed destroyed the WHOLE cycle — every unrelated
+        // observation in the batch rolled back — under an anonymous `Constraint("check")` naming no
+        // cause; and the same regression was SILENT one branch over, because `same_decision` does
+        // not compare `valid_from`. One condition, two opposite answers. Now it has one.
+        //
+        // ⚠️ This is the FIRST production caller in this codebase to compare an instant it HOLDS
+        // against one the database STORED, which is precisely the `datetime_literal` debt the
+        // register has carried since story 5.9. It compares RENDERINGS — `sqlx` is built without
+        // its `chrono` feature, so a `DATETIME(6)` has no Rust type to decode into — and
+        // `datetime_literal`'s fixed-width `%Y-%m-%d %H:%M:%S%.6f` makes lexicographic order agree
+        // with chronological order. The residue is real and named: the rendering TRUNCATES below
+        // the microsecond, so two instants less than 1 µs apart compare EQUAL here and the guard
+        // does not fire. `repo::tests::datetime_literal_truncates_below_the_microsecond` (story
+        // 5.10) is what pins that truncation.
+        if datetime_literal(observation.observed_at) < current.valid_from {
+            return Err(RepositoryError::InstantRegressed);
+        }
+        // The close instant is the NEW version's `valid_from`, which is this same observation's
+        // `observed_at` — so the chain is exact and half-open, and it is zero-length whenever the
+        // caller supplies a stable instant. `0004_supersede_admits_a_zero_length_version.sql` is
+        // what admits that; under 0002's strict form this line was `ERROR 4025`.
+        close_identity_link(
+            &mut *conn,
+            link_id_of(&current.link.id)?,
+            observation.observed_at,
+        )
+        .await?;
+        insert_identity_link(
+            &mut *conn,
+            LinkId::from_uuid(uuid::Uuid::now_v7()),
+            observation.obs_id,
+            interface,
+            decision,
+            &evidence,
+            DecidedBy::Engine,
+            observation.observed_at,
+            open_end(),
+        )
+        .await
+        .map_err(classify)?;
+        return Ok(WriteOutcome::Superseded);
+    }
+
     insert_identity_link(
         conn,
         LinkId::from_uuid(uuid::Uuid::now_v7()),
@@ -337,7 +500,88 @@ async fn write_link(
         open_end(),
     )
     .await
-    .map_err(classify)
+    .map_err(classify)?;
+    Ok(WriteOutcome::Written)
+}
+
+/// Parse a stored link id back into a [`LinkId`].
+///
+/// The id was minted by this crate as a v7 UUID and stored in a `CHAR(36) ascii_bin` column, so a
+/// parse failure means a row written around the adapter — a DECODE problem, not a rejected write.
+/// It is therefore [`RepositoryError::Backend`] and not a `Constraint(_)`: naming a constraint that
+/// exists in no migration would send a caller looking through the schema for it, and would tell a
+/// retry policy the database refused a write when it did not.
+///
+/// # Errors
+///
+/// [`RepositoryError::Backend`] when the stored id is not a UUID.
+fn link_id_of(stored: &str) -> Result<LinkId, RepositoryError> {
+    uuid::Uuid::parse_str(stored)
+        .map(LinkId::from_uuid)
+        .map_err(|e| RepositoryError::Backend(format!("stored link id is not a uuid: {e}")))
+}
+
+/// What [`write_link`] did to one slot. The three branches of *"no new version for an unchanged
+/// decision"*, named rather than encoded as a pair of booleans a caller could combine wrongly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WriteOutcome {
+    /// The slot was empty and a first version was inserted.
+    Written,
+    /// The slot held a DIFFERENT decision: that version was closed and a new one appended.
+    Superseded,
+    /// The slot already held this exact decision. Nothing was written — not even the same row again.
+    Unchanged,
+}
+
+/// Does the persisted version carry the decision the pass is about to write?
+///
+/// # It is PURE, and that is not a stylistic choice
+///
+/// Five of the six columns below cannot be reddened through the database, and this was measured
+/// rather than suspected. **`interface_id` is structural and stays so forever**: the lookup key
+/// handed to [`load_current_engine_link`] IS `subject_of(interface)`, and
+/// `identity_link_current_subject` makes `current_subject = interface_id` on every current
+/// placement — so a row found by that key necessarily carries that `interface_id`, at any level.
+/// _(An earlier version of this doc blamed L1 for all five, which reads as though Epic 6 would make
+/// them reddenable; for this one it never can.)_ The other four ARE L1's doing: within a `join`
+/// group every member shares the group's key, `decide_pair` and `decide_singleton` both conclude
+/// `Match` with `l1-exact-mac`, the cause is `None` on any placement, and `ruleset_version` is the
+/// constant `CURRENT_RULESET_VERSION`.
+///
+/// **Evidence is the only difference an L1 pass can produce**, so a comparison exercised only
+/// through a pass would measure ONE column while claiming six — story 5.9's M3 family, where the
+/// adapter cannot emit the incoherent value the guard exists to catch.
+///
+/// Being pure, it has its own database-free tests, one per column. That is what makes the other
+/// five reddenable today rather than on the day Epic 6 supplies a second rule.
+///
+/// # What is NOT compared, each for a stated reason
+///
+/// - `observation_id` and `current_subject` are the LOOKUP KEY — a row that did not match them was
+///   never a candidate for this comparison;
+/// - `valid_to` is the sentinel on every current row, held there by `identity_link_current_subject`;
+/// - `decided_by` is `ENGINE` by [`load_current_engine_link`]'s own `WHERE`;
+/// - `valid_from` is the observation's own `observed_at`, and both versions of one placement are
+///   versions of the SAME observation's placement. Comparing it would be a guard that can never
+///   differ — except through a caller that re-supplies an `obs_id` with a different instant, which
+///   nothing enforces and which `0004`'s comment records;
+/// - `id` is a v7 UUID. Story 5.10 settled that a row identifier is not a decision.
+fn same_decision(
+    current: &PersistedLink,
+    interface: Option<InterfaceId>,
+    decision: &Decision,
+    evidence: &[ObsId],
+) -> bool {
+    let (rule_id, abstention_cause) = match &decision.conclusion {
+        Conclusion::Match { rule } | Conclusion::NoMatch { rule } => (Some(rule.0.as_str()), None),
+        Conclusion::Abstained { cause } => (None, Some(cause_token(cause))),
+    };
+    current.interface_id.as_deref() == interface.map(|i| i.to_string()).as_deref()
+        && current.outcome == outcome_token(&decision.conclusion)
+        && current.rule_id.as_deref() == rule_id
+        && current.abstention_cause.as_deref() == abstention_cause
+        && current.evidence == evidence
+        && current.ruleset_version == decision.ruleset_version.0
 }
 
 /// Refuse a decision that cannot be honestly persisted, before any row is written.
@@ -1807,10 +2051,10 @@ mod tests {
         };
 
         let started = std::time::Instant::now();
-        let summary = pass(&pool, observations).await;
+        let summary = pass(&pool, observations.clone()).await;
         let elapsed = started.elapsed();
         eprintln!(
-            "reference scale: n=300, pairs={}, interfaces={}, links={}, pass={:?}",
+            "reference scale, cold: n=300, pairs={}, interfaces={}, links={}, pass={:?}",
             summary.candidate_pairs, summary.interfaces_minted, summary.links_written, elapsed
         );
 
@@ -1828,6 +2072,31 @@ mod tests {
             interface_count(&pool).await,
             300,
             "read back, not taken from the summary"
+        );
+
+        // AC6 — the same pass again, at the same scale. A cycle that learned nothing writes
+        // nothing, and this is where that stops being a two-observation claim.
+        let started = std::time::Instant::now();
+        let idempotent = pass(&pool, observations).await;
+        let elapsed = started.elapsed();
+        eprintln!(
+            "reference scale, idempotent rerun: written={}, superseded={}, unchanged={}, pass={:?}",
+            idempotent.links_written,
+            idempotent.links_superseded,
+            idempotent.links_unchanged,
+            elapsed
+        );
+        assert_eq!(idempotent.links_written, 0);
+        assert_eq!(idempotent.links_superseded, 0);
+        assert_eq!(idempotent.links_unchanged, 300);
+        assert_eq!(
+            idempotent.interfaces_found, 300,
+            "and it finds every interface rather than minting one"
+        );
+        assert_eq!(
+            count_identity_links(&pool).await.expect("count"),
+            300,
+            "read back: the second pass appended nothing"
         );
     }
 
@@ -1856,5 +2125,760 @@ mod tests {
             44_850,
             "300 hosts on the reference NAS — the measured figure, not D13's prose"
         );
+    }
+
+    // ── Story 5.11: idempotence ─────────────────────────────────────────────────────────────────
+
+    /// A persisted link carrying exactly what `decide_singleton(o)` places `o` on `iface` with —
+    /// the baseline every `same_decision` case below perturbs in ONE column.
+    fn persisted_for(observation: &Observation, iface: InterfaceId) -> PersistedLink {
+        PersistedLink {
+            id: uuid::Uuid::now_v7().to_string(),
+            interface_id: Some(iface.to_string()),
+            outcome: "match".to_string(),
+            rule_id: Some(CORPUS_EXACT_MAC.to_string()),
+            abstention_cause: None,
+            evidence: vec![observation.obs_id],
+            ruleset_version: 1,
+            decided_by: "ENGINE".to_string(),
+        }
+    }
+
+    /// AC2b — the baseline is UNCHANGED. Without this the five perturbation tests below could all
+    /// pass on a `same_decision` that always returns `false`.
+    #[test]
+    fn an_identical_version_is_the_same_decision() {
+        let o = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        let iface = InterfaceId::from_uuid(uuid::Uuid::now_v7());
+        let decision = decide_singleton(&o);
+        let evidence = vec![o.obs_id];
+        assert!(same_decision(
+            &persisted_for(&o, iface),
+            Some(iface),
+            &decision,
+            &evidence
+        ));
+    }
+
+    /// 🔴 AC2b — one case per column, WITHOUT a database.
+    ///
+    /// ⚠️ **Five of these six are unreddenable through a pass**, and that was measured at this
+    /// story's validation: dropping every column but `evidence` from `same_decision` left the whole
+    /// suite green. At L1 the interface is a function of the observation's own key, every group
+    /// member shares it, `decide_pair` and `decide_singleton` both conclude `Match`/`l1-exact-mac`,
+    /// the cause is `None` on a placement and `ruleset_version` is a constant — so evidence is the
+    /// only difference a pass can produce. A comparison tested only through a pass measures ONE
+    /// column and claims six. This is the test that makes the other five red.
+    #[test]
+    fn each_decision_bearing_column_alone_makes_it_a_different_decision() {
+        let o = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        let other = observation(2, l2(1), &[mac(0x01)], 1_700_000_100);
+        let iface = InterfaceId::from_uuid(uuid::Uuid::now_v7());
+        let elsewhere = InterfaceId::from_uuid(uuid::Uuid::now_v7());
+        let decision = decide_singleton(&o);
+        let evidence = vec![o.obs_id];
+
+        // 1. interface_id — the placement itself.
+        let mut perturbed = persisted_for(&o, iface);
+        perturbed.interface_id = Some(elsewhere.to_string());
+        assert!(
+            !same_decision(&perturbed, Some(iface), &decision, &evidence),
+            "a link on another interface is another decision"
+        );
+
+        // 2. outcome.
+        let mut perturbed = persisted_for(&o, iface);
+        perturbed.outcome = "no_match".to_string();
+        assert!(!same_decision(
+            &perturbed,
+            Some(iface),
+            &decision,
+            &evidence
+        ));
+
+        // 3. rule_id — the rule that settled it.
+        let mut perturbed = persisted_for(&o, iface);
+        perturbed.rule_id = Some("l1-distinct-mac".to_string());
+        assert!(!same_decision(
+            &perturbed,
+            Some(iface),
+            &decision,
+            &evidence
+        ));
+
+        // 4. abstention_cause. A placement carries none; a stored one is a different decision even
+        //    though `identity_link_rule_xor_cause` would have refused that row.
+        let mut perturbed = persisted_for(&o, iface);
+        perturbed.abstention_cause = Some("absence_of_proof".to_string());
+        assert!(!same_decision(
+            &perturbed,
+            Some(iface),
+            &decision,
+            &evidence
+        ));
+
+        // 5. evidence — the only one a pass can reach on its own (§2, Guy's arbitration).
+        let mut perturbed = persisted_for(&o, iface);
+        perturbed.evidence = vec![o.obs_id, other.obs_id];
+        assert!(!same_decision(
+            &perturbed,
+            Some(iface),
+            &decision,
+            &evidence
+        ));
+
+        // 6. ruleset_version — D14: a ruleset change is a decision change, even at equal outcome.
+        let mut perturbed = persisted_for(&o, iface);
+        perturbed.ruleset_version = 2;
+        assert!(!same_decision(
+            &perturbed,
+            Some(iface),
+            &decision,
+            &evidence
+        ));
+    }
+
+    /// AC2b — an abstention compares on its CAUSE, and an abstention is never a placement.
+    #[test]
+    fn an_abstention_and_a_placement_are_never_the_same_decision() {
+        let o = mac_less(1, l2(1), 1_700_000_000);
+        let iface = InterfaceId::from_uuid(uuid::Uuid::now_v7());
+        let abstention = nothing_was_evaluated();
+
+        let mut stored = persisted_for(&o, iface);
+        stored.interface_id = None;
+        stored.outcome = "abstained".to_string();
+        stored.rule_id = None;
+        stored.abstention_cause = Some("absence_of_proof".to_string());
+        stored.evidence = vec![];
+        assert!(
+            same_decision(&stored, None, &abstention, &[]),
+            "the same abstention, unchanged"
+        );
+
+        let mut other_cause = stored.clone();
+        other_cause.abstention_cause = Some("ambiguous".to_string());
+        assert!(
+            !same_decision(&other_cause, None, &abstention, &[]),
+            "a different cause is a different decision"
+        );
+
+        // 🔴 The CROSS-NATURE comparison the name promises, and which this test did not make until
+        // the code review pointed out that both cases above are abstention-versus-abstention.
+        // Measured absent: without these two, a `same_decision` that could not tell a placement
+        // from an abstention at all would keep this test green.
+        let placement = decide_singleton(&o);
+        assert!(
+            !same_decision(&stored, None, &placement, &[o.obs_id]),
+            "a stored ABSTENTION is never a PLACEMENT decision"
+        );
+        assert!(
+            !same_decision(&persisted_for(&o, iface), Some(iface), &abstention, &[]),
+            "and a stored PLACEMENT is never an abstention"
+        );
+    }
+
+    /// Read every version of one observation's links, current and superseded, oldest row first.
+    async fn versions(
+        pool: &MySqlPool,
+        obs: ObsId,
+    ) -> Vec<(String, String, String, Option<String>)> {
+        let rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
+            "SELECT id, CAST(valid_from AS CHAR), CAST(valid_to AS CHAR), evidence \
+             FROM identity_link WHERE observation_id = ? ORDER BY valid_to, id",
+        )
+        .bind(obs.to_string())
+        .fetch_all(pool)
+        .await
+        .expect("read the versions");
+        rows
+    }
+
+    /// 🔴 AC1 — a second identical pass writes NOTHING, and the `id`s prove it.
+    ///
+    /// This is strictly stronger than story 5.10's purge-and-replay comparison, which deliberately
+    /// excludes `id` because a replayed link is re-minted. Here nothing is re-minted: these are the
+    /// SAME rows. Comparing the ids is what distinguishes *wrote nothing* from *rewrote the same
+    /// thing*, and mutation M3a proves the assertion load-bearing.
+    #[tokio::test]
+    async fn a_second_identical_pass_writes_nothing_at_all() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let observations = purge_fixture();
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+
+        let first = pass(&pool, observations.clone()).await;
+        assert_eq!(first.links_written, 6, "3 + 2 + 1 abstention");
+        assert_eq!(first.links_unchanged, 0);
+        assert_eq!(first.links_superseded, 0);
+        let before = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot before");
+        let ids_before = all_link_ids(&pool).await;
+        assert_eq!(ids_before.len(), 6);
+
+        let second = pass(&pool, observations).await;
+
+        assert_eq!(second.links_written, 0, "a cycle that learned nothing");
+        assert_eq!(second.links_superseded, 0);
+        assert_eq!(second.abstentions, 0, "no abstention LINK was written");
+        assert_eq!(
+            second.links_unchanged, 6,
+            "every slot already held its decision"
+        );
+        assert_eq!(
+            all_link_ids(&pool).await,
+            ids_before,
+            "the same rows, not re-minted ones — this is what `id` equality measures"
+        );
+        assert_eq!(
+            crate::repo::snapshot_links(&pool)
+                .await
+                .map_err(classify)
+                .expect("snapshot after"),
+            before
+        );
+        assert_eq!(
+            count_identity_links(&pool).await.expect("count"),
+            6,
+            "no version was appended"
+        );
+    }
+
+    async fn all_link_ids(pool: &MySqlPool) -> Vec<String> {
+        let rows: Vec<(String,)> = sqlx::query_as("SELECT id FROM identity_link ORDER BY id")
+            .fetch_all(pool)
+            .await
+            .expect("read the link ids");
+        rows.into_iter().map(|r| r.0).collect()
+    }
+
+    /// 🔴 AC3 — a changed witness supersedes, the old version survives, and its interval is
+    /// ZERO-LENGTH.
+    ///
+    /// `o1` is alone on its MAC in run 1, so `decide_singleton` gives it evidence `[o1]`. Run 2 adds
+    /// `o2` on the same MAC, `o1`'s witness becomes `o2`, and `decide_pair` gives evidence
+    /// **`[o1, o2]` — SORTED ascending by `ObsId`** (`l1.rs:277-278`, deliberate, with its own
+    /// committed test). Writing that literal witness-first reds.
+    ///
+    /// The old version closes at the NEW version's `valid_from`, which is the same observation's
+    /// `observed_at` — so `valid_to == valid_from`, which `0002` refused with `ERROR 4025` and
+    /// `0004` admits. Mutation M4 (close at `+1 µs`) and M5 (revert `0004`) both red this.
+    #[tokio::test]
+    async fn a_changed_witness_supersedes_and_the_old_version_survives() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let o1 = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        let o2 = observation(2, l2(1), &[mac(0x01)], 1_700_000_100);
+        let Some(pool) = fixture(&[o1.clone(), o2.clone()]).await else {
+            return;
+        };
+
+        let first = pass(&pool, vec![o1.clone()]).await;
+        assert_eq!(first.links_written, 1);
+        let alone = versions(&pool, o1.obs_id).await;
+        assert_eq!(alone.len(), 1);
+        assert_eq!(
+            alone[0].3.as_deref(),
+            Some(serde_json::to_string(&vec![o1.obs_id]).unwrap().as_str()),
+            "alone on its key, the singleton is its own evidence"
+        );
+
+        let second = pass(&pool, vec![o1.clone(), o2.clone()]).await;
+        assert_eq!(second.links_superseded, 1, "o1's justification changed");
+        assert_eq!(second.links_written, 2, "o1's new version, and o2's first");
+        assert_eq!(second.links_unchanged, 0);
+
+        let after = versions(&pool, o1.obs_id).await;
+        assert_eq!(after.len(), 2, "the old version is UNLINKED, never erased");
+
+        let (old_id, old_from, old_to, old_evidence) = after[0].clone();
+        assert_eq!(
+            old_id, alone[0].0,
+            "the superseded row is the SAME row, restamped"
+        );
+        assert_eq!(
+            old_evidence.as_deref(),
+            Some(serde_json::to_string(&vec![o1.obs_id]).unwrap().as_str()),
+            "history keeps the justification it was written with"
+        );
+        assert_eq!(
+            old_to, old_from,
+            "🔴 zero-length: both versions carry the same observation's observed_at, so the close \
+             instant IS the open instant. 0002 refused this with ERROR 4025."
+        );
+        assert_eq!(old_from, datetime_literal(at(1_700_000_000)));
+
+        let (_, new_from, new_to, new_evidence) = after[1].clone();
+        assert_eq!(new_to, OPEN_END, "the new version is the current one");
+        assert_eq!(new_from, old_from, "same observation, same valid_from");
+        assert_eq!(
+            new_evidence.as_deref(),
+            Some(
+                serde_json::to_string(&vec![o1.obs_id, o2.obs_id])
+                    .unwrap()
+                    .as_str()
+            ),
+            "sorted ascending by ObsId — NEVER witness-first (l1.rs:277-278)"
+        );
+
+        assert_eq!(
+            current_links(&pool, o1.obs_id).await.len(),
+            1,
+            "exactly one current link, which identity_link_one_current also enforces"
+        );
+    }
+
+    /// 🔴 AC4 — the engine never supersedes an OPERATOR's row.
+    ///
+    /// The compare-then-supersede read filters on `decided_by = 'ENGINE'`, so an operator's row is
+    /// invisible to it: the pass falls through to its insert and `identity_link_one_current` refuses
+    /// it, exactly as it did before this story existed. The operator's row comes out untouched —
+    /// same `id`, same `valid_to`, still current.
+    ///
+    /// This PINS today's behaviour rather than changing it. *"May an operator override the engine?"*
+    /// is story 5.14's question, and answering it by accident here is what mutation M1 measures.
+    #[tokio::test]
+    async fn the_engine_never_supersedes_an_operators_link() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let o = mac_less(1, l2(1), 1_700_000_000);
+        let Some(pool) = fixture(std::slice::from_ref(&o)).await else {
+            return;
+        };
+
+        // An operator asserts the abstention slot the pass would want.
+        let operator_link = LinkId::from_uuid(uuid::Uuid::now_v7());
+        MariaRepository::new(pool.clone())
+            .transact(|unit| {
+                Box::pin(async move {
+                    crate::repo::insert_identity_link(
+                        unit.executor(),
+                        operator_link,
+                        ObsId::from_uuid(uuid::Uuid::from_u128(1)),
+                        None,
+                        &nothing_was_evaluated(),
+                        &[],
+                        DecidedBy::Operator,
+                        at(1_700_000_000),
+                        open_end(),
+                    )
+                    .await
+                    .map_err(classify)
+                })
+            })
+            .await
+            .expect("the operator writes");
+
+        let refused = try_pass(&pool, vec![o.clone()]).await;
+        assert!(
+            matches!(refused, Err(RepositoryError::Constraint("unique"))),
+            "the engine does not take a slot a human holds; got {refused:?}"
+        );
+
+        let rows = versions(&pool, o.obs_id).await;
+        assert_eq!(rows.len(), 1, "the pass rolled back entirely");
+        assert_eq!(rows[0].0, operator_link.to_string(), "same id — untouched");
+        assert_eq!(rows[0].2, OPEN_END, "still current, never restamped");
+        let stored: Vec<(String,)> =
+            sqlx::query_as("SELECT decided_by FROM identity_link WHERE id = ?")
+                .bind(operator_link.to_string())
+                .fetch_all(&pool)
+                .await
+                .expect("read decided_by");
+        assert_eq!(stored[0].0, "OPERATOR");
+    }
+
+    /// 🔴 AC5 — a purge-and-replay after a supersede LOSES history, and the snapshots still match.
+    ///
+    /// Guy's arbitration: the purge is an assumed reset. A link is *"a cache of attention, not of
+    /// truth"*, so what the engine believed yesterday is not a truth to preserve — the replay
+    /// rebuilds the CURRENT state and owes history nothing. `purge_engine_links` has no
+    /// `current_subject` filter and takes superseded rows too; `snapshot_links` never compared them.
+    ///
+    /// Both numbers are measured, because the equal snapshots alone would hide the loss — which is
+    /// exactly why story 5.10's comparison could not see this.
+    #[tokio::test]
+    async fn a_purge_after_a_supersede_loses_history_and_still_replays() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let o1 = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        let o2 = observation(2, l2(1), &[mac(0x01)], 1_700_000_100);
+        let Some(pool) = fixture(&[o1.clone(), o2.clone()]).await else {
+            return;
+        };
+
+        pass(&pool, vec![o1.clone()]).await;
+        let grown = pass(&pool, vec![o1.clone(), o2.clone()]).await;
+        assert_eq!(grown.links_superseded, 1);
+
+        let rows_before = count_identity_links(&pool).await.expect("count");
+        assert_eq!(rows_before, 3, "2 current + 1 superseded");
+        let before = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot before");
+        assert_eq!(
+            before.len(),
+            2,
+            "the snapshot only ever saw the current two"
+        );
+
+        let purged = MariaRepository::new(pool.clone())
+            .transact(|unit| {
+                Box::pin(async move {
+                    crate::repo::purge_engine_links(unit.executor())
+                        .await
+                        .map_err(classify)
+                })
+            })
+            .await
+            .expect("purge");
+        assert_eq!(
+            purged, 3,
+            "the purge takes HISTORY as well as the current rows"
+        );
+
+        pass(&pool, vec![o1, o2]).await;
+
+        assert_eq!(
+            crate::repo::snapshot_links(&pool)
+                .await
+                .map_err(classify)
+                .expect("snapshot after"),
+            before,
+            "every decision-bearing column of the CURRENT state comes back"
+        );
+        let rows_after = count_identity_links(&pool).await.expect("count");
+        assert_eq!(
+            rows_after, 2,
+            "and the store is SMALLER than before the purge: the superseded version is gone, \
+             which the equal snapshots above cannot see"
+        );
+        assert!(rows_after < rows_before);
+    }
+
+    /// AC6 — the write amplification, measured at both ends.
+    ///
+    /// The witness is the SMALLEST OTHER `ObsId`, so *"add one observation"* has two answers: a
+    /// newcomer with a LARGER id supersedes nothing, and one with the smallest id supersedes every
+    /// other member of its group. Both are recorded rather than one being passed off as the figure.
+    #[tokio::test]
+    async fn the_write_amplification_is_measured_at_both_ends() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        // A group of six sharing one MAC, minted with ids 2..=7 so id 1 is free below.
+        let group: Vec<Observation> = (2..=7u128)
+            .map(|i| observation(i, l2(1), &[mac(0x01)], 1_700_000_000 + i as i64))
+            .collect();
+        let newcomer_smallest = observation(1, l2(1), &[mac(0x01)], 1_700_000_500);
+        let newcomer_largest = observation(99, l2(1), &[mac(0x01)], 1_700_000_600);
+        let mut all = group.clone();
+        all.push(newcomer_smallest.clone());
+        all.push(newcomer_largest.clone());
+        let Some(pool) = fixture(&all).await else {
+            return;
+        };
+
+        let cold = pass(&pool, group.clone()).await;
+        assert_eq!(cold.links_written, 6);
+        assert_eq!(cold.links_superseded, 0);
+
+        // A LARGER id joins: it is nobody's witness, so nothing is superseded.
+        let mut with_largest = group.clone();
+        with_largest.push(newcomer_largest.clone());
+        let larger = pass(&pool, with_largest.clone()).await;
+        assert_eq!(
+            larger.links_superseded, 0,
+            "a larger id is nobody's smallest-other witness"
+        );
+        assert_eq!(larger.links_written, 1, "only the newcomer's own link");
+        assert_eq!(larger.links_unchanged, 6);
+
+        // The SMALLEST id joins: it becomes every other member's witness.
+        let mut with_smallest = with_largest.clone();
+        with_smallest.push(newcomer_smallest.clone());
+        let smallest = pass(&pool, with_smallest).await;
+        assert_eq!(
+            smallest.links_superseded, 7,
+            "O(group size): every incumbent's evidence changed"
+        );
+        assert_eq!(smallest.links_written, 8, "7 new versions + the newcomer's");
+        assert_eq!(smallest.links_unchanged, 0);
+
+        // 🔴 The counts above are `Resolution` fields, and this module's own doc calls a test that
+        // asserts them ALONE "an oracle restating the pass's own summary". Measured at the code
+        // review: every assertion in this test read a field of the value the code under test
+        // returned, and the post-state was asserted nowhere. These `SELECT` it.
+        let (total,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM identity_link")
+            .fetch_one(&pool)
+            .await
+            .expect("count every version");
+        let (current,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM identity_link WHERE current_subject IS NOT NULL")
+                .fetch_one(&pool)
+                .await
+                .expect("count the current versions");
+        assert_eq!(
+            current, 8,
+            "eight observations on one MAC, one current link each"
+        );
+        assert_eq!(
+            total, 15,
+            "8 current + 7 closed — the supersedes left history behind, read back rather than \
+             taken from the summary"
+        );
+        assert_eq!(
+            total - current,
+            i64::try_from(smallest.links_superseded).expect("a small count"),
+            "and the closed rows are exactly what the summary claimed it superseded"
+        );
+    }
+
+    /// 🔴 AC4 — the operator's row DIFFERS from what the engine would write, and is still untouched.
+    ///
+    /// ⚠️ **This is the case the `decided_by = 'ENGINE'` doc described while no test exercised it.**
+    /// Measured at the code review: in `the_engine_never_supersedes_an_operators_link` and in
+    /// story 5.10's sibling, the operator's row carries `nothing_was_evaluated()` — byte-identical
+    /// to what the engine would write — so with the filter removed `same_decision` returns `true`,
+    /// the pass reports `Unchanged` and returns `Ok`. Those tests measure the engine ADOPTING a
+    /// human's row, which is bad enough; the SUPERSEDE the doc claimed was measured by nothing.
+    ///
+    /// A differing `ruleset_version` is the cheapest way to reach it: it is one of the six compared
+    /// columns and needs no `Ambiguous` producer.
+    #[tokio::test]
+    async fn the_engine_never_adopts_or_supersedes_a_differing_operator_row() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let o = mac_less(1, l2(1), 1_700_000_000);
+        let Some(pool) = fixture(std::slice::from_ref(&o)).await else {
+            return;
+        };
+
+        // Same conclusion, DIFFERENT ruleset — so `same_decision` would say "changed" and the
+        // unfiltered path would close a human's row and append its own.
+        let operators_view = decide(
+            Vec::new(),
+            opencmdb_core::identity::cascade::RulesetVersion(2),
+        );
+        let operator_link = LinkId::from_uuid(uuid::Uuid::now_v7());
+        MariaRepository::new(pool.clone())
+            .transact(|unit| {
+                Box::pin(async move {
+                    crate::repo::insert_identity_link(
+                        unit.executor(),
+                        operator_link,
+                        ObsId::from_uuid(uuid::Uuid::from_u128(1)),
+                        None,
+                        &operators_view,
+                        &[],
+                        DecidedBy::Operator,
+                        at(1_700_000_000),
+                        open_end(),
+                    )
+                    .await
+                    .map_err(classify)
+                })
+            })
+            .await
+            .expect("the operator writes");
+
+        let refused = try_pass(&pool, vec![o.clone()]).await;
+        assert!(
+            matches!(refused, Err(RepositoryError::Constraint("unique"))),
+            "the engine neither adopts nor supersedes it; got {refused:?}"
+        );
+
+        let rows = versions(&pool, o.obs_id).await;
+        assert_eq!(rows.len(), 1, "the pass rolled back whole");
+        assert_eq!(rows[0].0, operator_link.to_string(), "same id — untouched");
+        assert_eq!(rows[0].2, OPEN_END, "still current, never restamped");
+        let stored: Vec<(u32,)> =
+            sqlx::query_as("SELECT ruleset_version FROM identity_link WHERE id = ?")
+                .bind(operator_link.to_string())
+                .fetch_all(&pool)
+                .await
+                .expect("read the ruleset");
+        assert_eq!(
+            stored[0].0, 2,
+            "🔴 the human's own ruleset, not the engine's — this is what a supersede would have lost"
+        );
+    }
+
+    /// 🔴 AC10 — a slot the input no longer supports is CLOSED, not left standing.
+    ///
+    /// The `multi-nic` shape: an observation carrying two MACs, re-supplied carrying one. `join`
+    /// produces no group for the vanished key, so `write_link` never visits that slot — and before
+    /// the code review nothing else did either, leaving a current link pointing at an interface no
+    /// fact in the input supports.
+    ///
+    /// 🔴 **This story is what made the case silent.** The blind append used to fail LOUDLY on
+    /// `identity_link_one_current` with a full rollback; the compare routes around the key, so the
+    /// detection has to be explicit. Measured before the fix: `Ok(links_unchanged: 1)` and **two**
+    /// current links.
+    #[tokio::test]
+    async fn a_slot_the_input_no_longer_supports_is_closed() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let two_macs = observation(1, l2(1), &[mac(0x01), mac(0x02)], 1_700_000_000);
+        let one_mac = observation(1, l2(1), &[mac(0x01)], 1_700_000_100);
+        let Some(pool) = fixture(std::slice::from_ref(&two_macs)).await else {
+            return;
+        };
+
+        let first = pass(&pool, vec![two_macs]).await;
+        assert_eq!(first.links_written, 2, "one link per L1 key");
+        assert_eq!(first.links_vacated, 0);
+        assert_eq!(current_links(&pool, one_mac.obs_id).await.len(), 2);
+
+        let second = pass(&pool, vec![one_mac.clone()]).await;
+
+        assert_eq!(
+            second.links_vacated, 1,
+            "the mac02 slot has no successor and is closed"
+        );
+        assert_eq!(second.links_written, 0, "and nothing new was written");
+        assert_eq!(second.links_unchanged, 1, "mac01's slot is untouched");
+        assert_eq!(
+            current_links(&pool, one_mac.obs_id).await.len(),
+            1,
+            "🔴 ONE current link, read back — two is the orphan this closes"
+        );
+        assert_eq!(
+            count_identity_links(&pool).await.expect("count"),
+            2,
+            "the closed version is UNLINKED, never erased"
+        );
+    }
+
+    /// 🔴 AC10 — and the orphan is what falsified story 5.10's replay invariant.
+    ///
+    /// A link the input does not support cannot be reproduced by a replay, so before the fix
+    /// `snapshot_links` returned **2** rows before the purge and **1** after — a counterexample to
+    /// *"the engine's output depends only on the observations and on the interfaces"* reachable
+    /// through pure engine input, with no operator row and no doctored `obs_id`. Closing the slot is
+    /// what restores it, and this test is the one that would have caught it.
+    ///
+    /// ⚠️ **Both slices carry the SAME `observed_at`, and that is not cosmetic.** Re-supplying one
+    /// `obs_id` with a LATER instant makes the replay irreproducible for a second, independent
+    /// reason: an unchanged slot keeps the `valid_from` it was first written with, while a replay
+    /// from an empty store writes the instant it is handed now. Measured here — the first draft of
+    /// this test moved the instant and reddened on `valid_from`, not on the orphan. That belongs to
+    /// the unenforced caller-discipline entry in the register, not to this test.
+    #[tokio::test]
+    async fn the_replay_invariant_survives_an_observation_that_lost_a_key() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let two_macs = observation(1, l2(1), &[mac(0x01), mac(0x02)], 1_700_000_000);
+        let one_mac = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        let Some(pool) = fixture(std::slice::from_ref(&two_macs)).await else {
+            return;
+        };
+
+        pass(&pool, vec![two_macs]).await;
+        pass(&pool, vec![one_mac.clone()]).await;
+        let before = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot before");
+        assert_eq!(
+            before.len(),
+            1,
+            "only the slot the input supports is current"
+        );
+
+        MariaRepository::new(pool.clone())
+            .transact(|unit| {
+                Box::pin(async move {
+                    crate::repo::purge_engine_links(unit.executor())
+                        .await
+                        .map_err(classify)
+                })
+            })
+            .await
+            .expect("purge");
+        pass(&pool, vec![one_mac]).await;
+
+        assert_eq!(
+            crate::repo::snapshot_links(&pool)
+                .await
+                .map_err(classify)
+                .expect("snapshot after"),
+            before,
+            "the replay reproduces the current state exactly — which it could NOT do while the \
+             vanished key's link was still standing"
+        );
+    }
+
+    /// 🔴 AC11 — an `observed_at` that runs BACKWARDS is refused by name, on both branches.
+    ///
+    /// Measured at the code review, before the guard existed: with only `identity_link_interval` to
+    /// catch it, a regressing instant whose decision ALSO changed inverted the interval and killed
+    /// the **whole cycle** — every unrelated observation in the batch rolled back — under an
+    /// anonymous `Constraint("check")`; and the same regression with an unchanged decision was
+    /// entirely SILENT, because `same_decision` does not compare `valid_from`. One condition, two
+    /// opposite answers.
+    ///
+    /// The guard gives it one answer, above the DDL, with a cause a reader can act on.
+    #[tokio::test]
+    async fn an_instant_that_runs_backwards_is_refused_by_name() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let o1 = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        let o2 = observation(2, l2(1), &[mac(0x01)], 1_700_000_100);
+        let regressed = observation(1, l2(1), &[mac(0x01)], 1_600_000_000);
+        let Some(pool) = fixture(&[o1.clone(), o2.clone()]).await else {
+            return;
+        };
+
+        pass(&pool, vec![o1]).await;
+        let before = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot before");
+
+        // The decision ALSO changes here — o2 joins the group — so this is the branch that used to
+        // reach the DDL and lose the batch.
+        let refused = try_pass(&pool, vec![regressed, o2.clone()]).await;
+        assert!(
+            matches!(refused, Err(RepositoryError::InstantRegressed)),
+            "the cause is NAMED, not an anonymous check failure; got {refused:?}"
+        );
+        assert_eq!(
+            crate::repo::snapshot_links(&pool)
+                .await
+                .map_err(classify)
+                .expect("snapshot after"),
+            before,
+            "and the pass rolled back whole — o2's link was never written either"
+        );
+    }
+
+    /// 🔴 AC2c — story 5.9b's abstention dedup guard, kept and MEASURED.
+    ///
+    /// `resolve_within`'s tail loop refuses to write a second abstention for one `obs_id`, whatever
+    /// the number of keys it carries — Guy's arbitration at story 5.9b's code review, taken after a
+    /// measured `ABSTAINED_SUBJECT` collision rolled a whole pass back.
+    ///
+    /// ⚠️ **This story's write path makes that guard invisible to `a_repeated_obs_id_writes_one_link`**,
+    /// which was measured at validation: deleting `!abstained.insert(…)` left all 424 tests green,
+    /// because the second write now finds the current row and reports it UNCHANGED rather than
+    /// colliding. The guard is kept — an observation still abstains at most once — and this test is
+    /// what says so, by counting the writes the pass reports rather than the rows that survive it.
+    #[tokio::test]
+    async fn a_repeated_obs_id_abstains_once_and_the_pass_says_so() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let o = mac_less(1, l2(1), 1_700_000_000);
+        let Some(pool) = fixture(std::slice::from_ref(&o)).await else {
+            return;
+        };
+
+        let summary = pass(&pool, vec![o.clone(), o.clone(), o.clone()]).await;
+
+        assert_eq!(
+            summary.links_written, 1,
+            "one abstention WRITTEN, not three — the dedup guard, not the compare"
+        );
+        assert_eq!(summary.abstentions, 1);
+        assert_eq!(
+            summary.links_unchanged, 0,
+            "🔴 the load-bearing line: without the dedup the 2nd and 3rd copies would reach the \
+             compare and report `unchanged`, so counting ROWS cannot tell the two apart"
+        );
+        assert_eq!(count_identity_links(&pool).await.expect("count"), 1);
     }
 }
