@@ -50,7 +50,33 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-05  # 5.11 **DONE** -- PR #71 squash-merged as `ce0a770` after a green CI
+last_updated: 2026-08-05  # 5.11b CONTEXTED -> `ready-for-dev`. NEXT = `create-story validate`
+                          # with TWO fresh-context agents, and the gap-hunt MUST compile it against
+                          # a live mariadb:10.11.11 on **13306**.
+                          # 🔑 THE LOAD-BEARING FINDING AT CONTEXTING: the committed replay streams
+                          # carry **3 to 6 observations**, so `n!` is at most 720 and permutations
+                          # can be ENUMERATED EXHAUSTIVELY rather than sampled. No `rand` (it is in
+                          # no Cargo.toml), no seed, no flakiness -- and strictly STRONGER than the
+                          # fuzz epics.md asks for. A seeded sweep is kept only for the 300-strong
+                          # reference slice, from a FIXED seed range, never the clock.
+                          # 🔴 THE STORY IS DESIGNED AROUND ONE FAILURE MODE: a test that cannot
+                          # fail. The property it measures is already true by construction (four
+                          # mechanisms, all BTree-based), so a test measuring nothing looks exactly
+                          # like a success. Every AC names the mutation that must red it, and a
+                          # mutation leaving the suite GREEN is a HIGH finding, not a reassurance.
+                          # 🔑 THREE measurement shapes, not one: (A) pure+exhaustive over `join`
+                          # and `candidates` -- the only one covering the derived interface SET;
+                          # (B) purge-and-replay with a PERMUTED slice, where `interface_id` is
+                          # literally comparable because the replay FINDS its interfaces; (C) the
+                          # permuted slice into a POPULATED store must be a NO-OP -- the strongest,
+                          # and possible only because 5.11 shipped idempotence.
+                          # ⚠️ The generator gets its OWN test: a shuffle returning its input makes
+                          # every other test in the story vacuously green.
+                          # 🔴 ONE production change: `resolve_within` refuses a repeated `obs_id`
+                          # with DIFFERING content (`by_id` is last-duplicate-wins, and the losing
+                          # copy's keys still reach `join`). A repeated IDENTICAL observation stays
+                          # legal -- 5.9b's and 5.11's tests for it must both keep passing.
+                          # (previous:) 5.11 **DONE** -- PR #71 squash-merged as `ce0a770` after a green CI
                           # run. **Epic 5 is now 14/18.** `master` carries **429 tests**; the
                           # branch is deleted locally and on `origin`.
                           # NEXT = `create-story` 5.11b, which inherits by name from 5.11's
@@ -1562,7 +1588,7 @@ development_status:
   # and not one of them reads the slice's order. Epic 5: 17 -> 18 stories. `epics.md` NOT edited;
   # the correction is registered with Epic 5's retrospective.
   5-11-idempotent-supersede: done
-  5-11b-order-independence: backlog
+  5-11b-order-independence: ready-for-dev
   5-12-never-overwrite-anti-regression: backlog
   5-13-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog
