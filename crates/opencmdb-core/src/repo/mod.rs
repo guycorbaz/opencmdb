@@ -31,6 +31,16 @@ pub enum RepositoryError {
     /// A row that was required was not found.
     #[error("not found")]
     NotFound,
+    /// An instant the caller supplied is EARLIER than one already stored for the same subject, so
+    /// honouring it would run a version's interval backwards.
+    ///
+    /// It is its own variant rather than a [`Self::Constraint`] because the database's answer to
+    /// this is an anonymous `CHECK` failure that names no cause a reader could act on — and because
+    /// the same regression is SILENT on the branch where the decision did not change, so the guard
+    /// has to exist above the DDL to give one condition one answer. Story 5.11 measured both
+    /// branches.
+    #[error("the supplied instant precedes the stored one")]
+    InstantRegressed,
     /// Any other backend failure — terminal, non-retryable, opaque by design.
     #[error("backend error: {0}")]
     Backend(String),

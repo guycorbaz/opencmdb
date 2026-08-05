@@ -2530,7 +2530,7 @@ story does not meet**. One CLOSED, two ANSWERED-AND-RE-OWNED, one left untouched
   *"bit for bit"* can only mean MODULO THE IDS.** It is no longer a note to be rediscovered: it is
   Guy's arbitration in §1, it is the shape of `LinkSnapshot` (**no `id` field at all**, so the
   exclusion is structural), it is the name of the test
-  (`every_column_but_the_id_survives_a_purge_and_replay`), and **mutation M6 proves it load-bearing**
+  (`every_decision_bearing_column_survives_a_purge_and_replay`), and **mutation M6 proves it load-bearing**
   — put the id back and the comparison reds at once.
 
 - ⚗️ **SPLIT — `datetime_literal` truncates below the microsecond.** Guy's arbitration at the code
@@ -2624,3 +2624,109 @@ Three-layer review of `master...a82fa3a`; **all three layers ran their own live
   `an_operator_cannot_take_a_slot_the_engine_holds` measures it — the purge is already committed and
   the engine's links are gone with nothing to restore them. Both in one unit of work is what a
   production caller needs. **Owner: the first story that gives the purge a production caller.**
+
+## Deferred from: story-5-11-idempotent-supersede (2026-08-05)
+
+The first story that SUPERSEDES. Three entries were registered at its name and all three are
+disposed of here; four are opened.
+
+### Disposed of
+
+- ✅ **CLOSED — the pass is not idempotent.** Registered by story 5.9b with 5.11 as owner:
+  *"running `resolve` twice over one slice is `Err(Constraint("unique"))` and a full rollback"*.
+  `write_link` now reads the current ENGINE version of the slot before writing and takes one of
+  three branches. `a_second_identical_pass_writes_nothing_at_all` measures it on the `id`s — the
+  same rows, not re-minted ones — and at the reference scale a rerun reports
+  `written 0, superseded 0, unchanged 300`. Mutations M3a and M3b red it.
+
+- ✅ **DISCHARGED — the `datetime_literal` open half. A production caller now exists, and it is this
+  story's own.**
+  ⚠️ **This entry was first written as CLOSED-because-unreachable, and the story's own code review
+  falsified that within the hour.** The disposal said *"no PRODUCTION caller compares an instant it
+  HOLDS against one it STORED, story 5.11 included"*, which was true of the code as it then stood.
+  Then the review's arbitration added the instant-regression guard, and
+  **`resolver.rs`'s `write_link` now does exactly that**:
+  `if datetime_literal(observation.observed_at) < current.valid_from`. The register was right to
+  keep the entry alive for three stories and the closure was premature; recorded that way rather
+  than quietly rewritten.
+  🔑 **The residue is real, named, and pinned by a test that already exists.** The comparison is on
+  RENDERINGS — `sqlx` is built without its `chrono` feature, so a `DATETIME(6)` has no Rust type to
+  decode into — and `datetime_literal`'s fixed-width `%Y-%m-%d %H:%M:%S%.6f` makes lexicographic
+  order agree with chronological order. But the rendering **truncates below the microsecond**, so
+  two instants less than 1 µs apart compare EQUAL and the guard does not fire.
+  `repo::tests::datetime_literal_truncates_below_the_microsecond` (story 5.10's half of the split)
+  is what pins the truncation, and it is now load-bearing for a production guard rather than for
+  nothing.
+  ⚠️ The test sites that compare a read-back `CAST(… AS CHAR)` against `datetime_literal(held)` are
+  deliberately NOT counted here: three successive documents have carried a wrong figure for them.
+  The reproducible form is what a reader needs —
+  `rg -n 'datetime_literal\(' crates/opencmdb-bin/src/` and read the assertions — and
+  `deferred-work.md:2551-2556` already records why those sites cannot catch a truncation change:
+  both sides pass through the truncating function.
+
+- ✅ **CLOSED — the purge deletes superseded rows the snapshot never compared.** Guy's arbitration
+  at contexting: **the replay owes history nothing.** A link is *"a cache of attention, not of
+  truth"*, so the purge is an assumed reset of the engine's beliefs AND of their history, and
+  `architecture.md:1016-1017`'s *"a bad link is UNLINKED, never erased"* governs an operator's
+  correction of a live belief rather than the engine's scratch history. `purge_engine_links`' doc
+  now says so, and `a_purge_after_a_supersede_loses_history_and_still_replays` measures BOTH
+  numbers — 3 rows before, 2 after, snapshots equal — because equal snapshots alone hide the loss.
+  M7 reds it, and reds story 5.10's `a_superseded_engine_link_is_not_restored_by_the_replay` too.
+
+### New, raised by this story
+
+- ⚗️ **A version could be dated by the instant that CAUSED it rather than by the observation's own.**
+  Today every version of one placement opens at the same `valid_from`, so a superseded engine
+  version is zero-length and an engine link's history is ordered by INSERTION rather than by time.
+  Dating a version by the maximum `observed_at` over its new evidence would give real intervals in
+  the ordinary case and degenerate only when the newcomer is older. Not taken here: it changes
+  `valid_from` for every paired link, reds `the_stored_instants_are_the_derived_ones`, and changes
+  the content of story 5.10's snapshots. **It is also what would make the `datetime_literal` risk
+  above real.** **Owner: story 5.14**, the first story that renders a link's history to a human and
+  therefore the first that needs it to read as a chronology.
+
+- 🔴 **The stability of an observation's `observed_at` across passes is a CALLER'S DISCIPLINE and
+  nothing enforces it.** `valid_from` comes from the IN-MEMORY `Observation`; `0003`'s foreign key
+  checks only that `observation_id` EXISTS; and **nothing in the workspace reads
+  `observation_record.observed_at` back as a value** — the only `SELECT` naming that column uses it
+  as an `ORDER BY` (`repo.rs:205`). Hand the pass one `obs_id` with a later instant and a
+  non-zero-length supersede is produced; hand it an earlier one and it is now refused by name
+  (`RepositoryError::InstantRegressed`, installed at this story's code review).
+  🔴 **A second consequence, measured while writing that guard's test:** an unchanged slot keeps the
+  `valid_from` it was FIRST written with, while a purge-and-replay from an empty store writes the
+  instant it is handed now — so re-supplying one `obs_id` with a later instant makes story 5.10's
+  replay comparison red on `valid_from` alone. `the_replay_invariant_survives_an_observation_that_lost_a_key`
+  holds both slices at one instant deliberately, and its doc says why.
+  **Owner: story 5.14** — the wiring story this file names as 5.14 three times elsewhere, so it is
+  named here too rather than described as *"the first story that ingests observations it did not
+  construct"*, which is the condition form this register refuses.
+
+- ⚠️ **`resolve_within` reads the slice's ARRIVAL ORDER twice, and the four order-independent
+  mechanisms do not cover it.** `by_id` is a `.collect()` into a `BTreeMap`, so it is
+  **last-duplicate-wins**: a slice carrying one `obs_id` twice with DIFFERENT content resolves to
+  whichever copy arrives last, and that copy's `observed_at` becomes a STORED column. The tail
+  abstention loop iterates the raw slice, so abstention rows are inserted in arrival order (the row
+  values are invariant; only the mint order moves). `a_repeated_obs_id_abstains_once_and_the_pass_says_so`
+  passes the same clone three times, so last-wins stays invisible to all 425 tests.
+  **Owner: story 5.11b**, whose whole subject this is.
+
+- ⚠️ **Two versions of one placement may OVERLAP, and the schema does not care.** Measured at
+  contexting: closing the old row at `t2 > t1` and opening the new one at `t1` is accepted, so the
+  half-open chain is the WRITER's property and never the DDL's. `identity_link_interval` constrains
+  each row's own interval only. This story chains exactly (`old.valid_to == new.valid_from`), and
+  nothing would red if a later story stopped. **Owner: Epic 6**, which brings the cascade and with
+  it the second producer of decisions — named rather than left as *"the first story that writes a
+  second supersede path"*, which is the condition form this register refuses.
+
+- 🔴 **`0002_interface_and_identity_link.sql:83` now carries a comment that is FALSE of the live
+  schema, and it cannot be edited.** It reads *"A version covers a half-open interval, so it can
+  never be zero-length or inverted"*; `0004` makes the first half false for CLOSED rows. `0002:54`
+  likewise still names *"story 5.11's 'no new version for an unchanged decision'"* in the future
+  tense. **sqlx checksums the migration FILE, comments included**, so correcting it in place would
+  make every existing database refuse to migrate with `VersionMismatch(2)` — measured during this
+  story when exactly that edit was attempted and reverted. `0004`'s own comment points back at
+  `0002`; nothing points forward. Recorded here because the story's own §3 rule is that a false
+  comment in DDL is a defect, and leaving one in an unmodifiable file in SILENCE is worse than
+  leaving it with a note. **Owner: the milestone that consolidates migrations** — the same act that
+  regenerates `architecture-views.md` (issue #50), which is the only point at which rewriting an
+  applied migration is legitimate.

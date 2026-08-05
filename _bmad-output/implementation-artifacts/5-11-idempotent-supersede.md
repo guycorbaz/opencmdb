@@ -1,6 +1,6 @@
 # Story 5.11: A second pass supersedes what changed and writes nothing for what did not
 
-Status: in-progress
+Status: review
 
 <!-- ✅ VALIDATED 2026-08-05 by two fresh-context agents (fact-check + gap-hunt), as this project
      requires. **The gap-hunt BUILT the story** against its own live `mariadb:10.11.11` on port
@@ -525,6 +525,24 @@ The trap corpus stays **11 unanswerable, `passed() == false`**. `fixtures/` is u
 `identity::l1`, `identity::blocking` and `identity::cascade` are unchanged. `main.rs` gains no
 caller. Six gates green, both clippy forms clean.
 
+**AC10 — a slot the input no longer supports is CLOSED.** (added at the code review, Guy's
+arbitration)
+Given a store where an observation holds links on two L1 keys, when a pass runs over that
+observation carrying only one of them, then the other slot is closed and `Resolution` reports it as
+`links_vacated`.
+🔴 **This story is what made the case silent.** The blind append failed LOUDLY on
+`identity_link_one_current`; the compare routes around the key. The uniqueness key was doing the
+detection, and taking its job means taking its duty. The orphan is also a reachable counterexample
+to story 5.10's replay invariant, so a second test replays after the loss.
+
+**AC11 — an instant that runs BACKWARDS is refused by name.** (added at the code review, Guy's
+arbitration)
+Given a version stored at `t1`, when the same observation is re-supplied at `t0 < t1` with a changed
+decision, then the pass returns `RepositoryError::InstantRegressed` and rolls back whole.
+🔴 Before the guard: fatal to the WHOLE batch on that branch, under an anonymous `Constraint("check")`
+from the DDL naming no cause — and entirely SILENT on the branch where the decision had not changed,
+because `same_decision` does not compare `valid_from`. One condition, two opposite answers.
+
 **AC9 — the doc twins say the same thing.**
 `CLAUDE.md`, `docs/project-context.md`, `sprint-status.yaml` and this file agree on the story's
 status, the test count and the split. Four of story 5.9's review defects were twins out of step, and
@@ -534,12 +552,12 @@ two of story 5.8's were the same — this AC exists because that keeps happening
 
 ## Tasks / Subtasks
 
-**T1 — `0004`, the relaxed interval.** (AC3)
+**[x] T1 — `0004`, the relaxed interval.** (AC3)
 Write `crates/opencmdb-bin/migrations/0004_*.sql` altering `identity_link_interval` to the form in
 §3, with the reasoning in the comment: why a closed row may be zero-length, why a current one may
 not, and that the measured alternative was rejected for a named reason. Run `ddl-collation`.
 
-**T2 — the read the compare needs.** (AC1, AC2, AC4)
+**[x] T2 — the read the compare needs.** (AC1, AC2, AC4)
 In `repo.rs`, add a **sibling** of `load_current_links_for_observation` returning the CURRENT ENGINE
 link for one `(observation_id, subject)`, reusing `PersistedLink` and `LinkRow` — no new type is
 needed (§7). The `decided_by = 'ENGINE'` filter is load-bearing (§5); write it, then measure that
@@ -548,18 +566,18 @@ Also add `pub(crate) fn subject_of(interface) -> String` and have `current_subje
 the sentinel keeps ONE derivation site and the resolver gets no `expect` on an unreachable branch
 (§7).
 
-**T3 — supersede or do nothing, in `write_link`.** (AC1, AC2b, AC3)
+**[x] T3 — supersede or do nothing, in `write_link`.** (AC1, AC2b, AC3)
 Three branches: no current engine row → insert (today's path); one that MATCHES the six columns of
 §2 → return without writing; one that DIFFERS → `close_identity_link` at the new version's
 `valid_from`, then insert. Use `subject_of` for the lookup.
 **The comparison itself is a pure function**, separate from the branch that calls it, so AC2b can
 test all six columns without a database.
 
-**T4 — the counters.** (AC2)
+**[x] T4 — the counters.** (AC2)
 `Resolution` gains `links_superseded` and `links_unchanged`, each documented, each readable back out
 of the database by the test that asserts it.
 
-**T5 — the tests.** (AC1, AC2b, AC2c, AC3, AC4, AC5)
+**[x] T5 — the tests.** (AC1, AC2b, AC2c, AC3, AC4, AC5)
 At minimum:
 `a_second_identical_pass_writes_nothing_at_all` (AC1 — compare `id`s, not just the snapshot);
 `a_changed_witness_supersedes_and_the_old_version_survives` (AC3 — assert the zero-length interval
@@ -570,13 +588,13 @@ plus **database-free** unit tests of the comparison, one per column (AC2b).
 Every DB-backed one takes `DB_TEST_LOCK` and returns early without `DATABASE_URL`, in the
 established shape. Validation reached **416 → 424 tests** on this set.
 
-**T6 — the reference-scale measurement.** (AC6)
+**[x] T6 — the reference-scale measurement.** (AC6)
 Extend or mirror `one_full_pass_at_the_reference_scale`; record the numbers in the Debug Log.
 
-**T7 — the debt.** (AC7)
+**[x] T7 — the debt.** (AC7)
 Measure, then discharge or close. Write the measurement, not the conclusion.
 
-**T8 — docs and register.** (AC5, AC7, AC8, AC9)
+**[x] T8 — docs and register.** (AC5, AC7, AC8, AC9)
 `purge_engine_links`' doc (AC5). `resolver.rs`'s module doc [`:70`]: the *"It is not idempotent, and
 that is story 5.11's"* section is now FALSE and must be rewritten, not softened. `0002`'s header
 comment about *"story 5.11's 'no new version for an unchanged decision'"* is now history — say what
@@ -589,7 +607,7 @@ NAMED owner, plus §1's two order-dependencies handed to **5.11b** by name.
 the shipped name is `every_decision_bearing_column_survives_a_purge_and_replay` [`resolver.rs:1278`].
 Correct it while you are in the file. Then the twins (AC9).
 
-**T9 — prove-to-red.** Commit first (the driver runs `git checkout -- crates/`). Suggested mutations,
+**[x] T9 — prove-to-red.** Commit first (the driver runs `git checkout -- crates/`). Suggested mutations,
 each under a timeout, each with its carrier recorded **per test**:
 
 **Every row predicts its CARRIER, not only its colour.** Story 5.9b shipped a false *"every red is
@@ -681,19 +699,196 @@ the guard — but it must be **labelled as such**, per test.
 
 ### Agent Model Used
 
-_(to be filled by `dev-story`)_
+Claude Opus 5 (1M context), `dev-story`, 2026-08-05. Live `mariadb:10.11.11` on host port 13306.
 
 ### Debug Log References
 
-_(to be filled — AC6's numbers go here, and the mutation table's measured column)_
+**Baseline** — 416 tests (211 bin + 159 core + 46 xtask), green WITH the database attached, so the
+DB-backed tests genuinely ran rather than returning early.
+
+**AC6 — the reference scale**, printed by `one_full_pass_at_the_reference_scale`:
+
+```
+reference scale, cold:             n=300, pairs=44850, interfaces=300, links=300, pass=145.9 ms
+reference scale, idempotent rerun: written=0, superseded=0, unchanged=300,        pass=76.0 ms
+```
+
+**AC6 — the amplification, both ends**, from `the_write_amplification_is_measured_at_both_ends`:
+
+| newcomer | superseded | written | unchanged |
+|---|---|---|---|
+| a LARGER `ObsId` joins a group of six | **0** | 1 | 6 |
+| the SMALLEST `ObsId` joins a group of seven | **7** | 8 | 0 |
+
+The witness is the smallest-other id, so *"add one observation"* has two answers and the story
+records both rather than passing one off as the figure.
+
+**T9 — the mutation pass.** Ten mutations, each under a 600 s timeout, tree restored between each.
+🔑 **Ten reds, zero green, zero compiler-carried.** Carrier recorded PER TEST.
+
+| | mutation | result | tests reddened | carrier |
+|---|---|---|---|---|
+| M1 | drop `decided_by = 'ENGINE'` from the read | RED 2 | `the_engine_never_supersedes_an_operators_link` · `an_operator_cannot_take_a_slot_the_engine_holds` *(5.10's)* | assertion ×2 |
+| M2 | drop `evidence` from the comparison | RED 4 | `each_decision_bearing_column_…` · `a_changed_witness_…` · `a_purge_after_a_supersede_…` · `the_write_amplification_…` | assertion ×4 |
+| M3a | on a match, fall through to close+insert | RED 3 | `a_second_identical_pass_…` · `one_full_pass_at_the_reference_scale` · `the_write_amplification_…` | assertion ×3 |
+| M3b | on a match, insert WITHOUT closing | RED 5 | the four above plus `a_purge_after_a_supersede_…` | **`.expect` panic ×5** — `Constraint("unique")` |
+| M4 | close at `valid_from + 1 µs` | RED 1 | `a_changed_witness_…`, on the zero-length assertion | assertion |
+| M5 | revert `0004` to `0002`'s strict form | RED 3 | `a_changed_witness_…` · `a_purge_after_a_supersede_…` · `the_write_amplification_…` | **`.expect` panic ×3** — `Constraint("check")` |
+| M6 | keep the old row current instead of closing | RED 3 | same three | **`.expect` panic ×3** — `Constraint("unique")` |
+| M7 | restrict the purge to current rows | RED 2 | `a_purge_after_a_supersede_…` · `a_superseded_engine_link_is_not_restored_by_the_replay` *(5.10's)* | assertion ×2 |
+| M8 | drop 5.9b's `abstained.insert()` dedup | RED 1 | `a_repeated_obs_id_abstains_once_and_the_pass_says_so` | assertion |
+| M9 | compare ONLY `evidence` | RED 2 | `each_decision_bearing_column_…` · `an_abstention_and_a_placement_…` | assertion ×2 |
+
+**Five more at the code review**, same discipline, tree restored between each:
+
+| | mutation | result | tests reddened | carrier |
+|---|---|---|---|---|
+| M10 | drop the orphan-closure tail loop | RED 2 | `a_slot_the_input_no_longer_supports_is_closed` · `the_replay_invariant_survives_an_observation_that_lost_a_key` | assertion ×2 |
+| M11 | drop the `InstantRegressed` guard | RED 1 | `an_instant_that_runs_backwards_is_refused_by_name` — and its output shows the pre-guard behaviour verbatim, `Err(Constraint("check"))` | assertion |
+| M12 | forget to record a PLACEMENT as visited, so the tail closes slots it just wrote | RED 6+ | broad, incl. `a_second_identical_pass_…` and `a_purge_after_a_supersede_…` | assertion, mixed with `.expect` |
+| M13 | drop `outcome` from `same_decision` | RED 1 | `each_decision_bearing_column_…` | assertion |
+| M14 | drop the `decided_by = 'ENGINE'` filter, WITH the new operator test present | RED 3 | M1's two plus `the_engine_never_adopts_or_supersedes_a_differing_operator_row` | assertion ×3 |
+
+⚠️ **One honest negative.** The `SELECT`-based oracles added to
+`the_write_amplification_is_measured_at_both_ends` are a real improvement — the test asserted only
+`Resolution` fields, which its own module doc forbids — but **no mutation was found that reds the
+new post-state assertions WITHOUT also reddening an existing summary assertion**. They are recorded
+as a strengthened oracle, not as an independently measured guard. Claiming otherwise would be the
+defect this whole review is about.
+
+🔴 **M5 confirmed the validation's warning end to end.** Editing `0004` in place, WITHOUT a database
+reset, gives `migrate: VersionMismatch(4)` on every DB-backed test — a red with nothing to do with
+the guard M5 targets. After `DROP DATABASE opencmdb; CREATE DATABASE opencmdb;` it reds the three
+tests above. And the error a test SEES is `Constraint("check")`, not the raw `ERROR 4025`:
+`classify` flattens it first, exactly as prescribed.
+
+🔴 **M8 and M9 were measured GREEN at the story's validation and are RED here.** That is not a
+contradiction, it is the point: AC2c and AC2b were written *because* they came back green, and they
+are the tests that red them. Without AC2b the six-column comparison would have measured one column.
+
+**Divergences from the predicted table — a divergence is a FINDING, per §9 of the house rules:**
+
+- **M2** predicted AC3 + AC5; measured **4** tests, including AC2b's pure test and AC6. The extra
+  reds are legitimate — more of the suite depends on evidence than the prediction credited.
+- **M3a** predicted AC1 alone; measured **3** (AC1, the reference scale, AC6).
+- **M5** predicted *"AC3, AC5, both AC6 runs"*; measured **3** — `one_full_pass_at_the_reference_scale`
+  does **not** red, because nothing in it ever supersedes.
+- **M6** predicted four tests; measured **3**, for the same reason.
+- **M1, M4, M7** matched their predictions exactly.
+
+⚠️ One self-inflicted error, recorded because it is the kind this project keeps catching: a comment
+was first added to `0002_interface_and_identity_link.sql`. **sqlx checksums the migration FILE,
+comments included**, so that edit would have made every existing database refuse to migrate —
+precisely what `0003`'s own header warns about. Reverted to a byte-identical file before any commit;
+the note lives in `0004`, which is where it belongs.
 
 ### Completion Notes List
 
-_(to be filled)_
+- **AC1** ✅ `a_second_identical_pass_writes_nothing_at_all` — the six link `id`s are identical after
+  the second pass, `links_written = 0`, `links_unchanged = 6`, table still 6 rows. Comparing `id`
+  across runs is reachable precisely because nothing was written. M3a/M3b red it.
+- **AC2** ✅ `Resolution` carries `links_superseded` and `links_unchanged`, both documented, both read
+  back against the database rather than against the pass's own summary. `abstentions` is kept a
+  SUBSET of `links_written` — `Resolution::record` says why.
+- **AC2b** ✅ `same_decision` is pure; three database-free tests, one perturbation per column plus the
+  unchanged baseline and the abstention-cause case. M9 reds two of them.
+- **AC2c** ✅ Story 5.9b's dedup guard is **kept**, and now measured through the COUNTS
+  (`links_unchanged == 0`) rather than the surviving rows — a row count cannot tell the dedup from
+  the compare. M8 reds it.
+- **AC3** ✅ Old version survives with its own `id`, its evidence `[o1]` and `valid_to == valid_from`;
+  new version carries `[o1, o2]` **sorted ascending**. M4 and M5 red it.
+- **AC4** ✅ Operator row untouched — same `id`, same `valid_to`, still `OPERATOR` — and the pass is
+  `Err(Constraint("unique"))` with a full rollback. M1 reds it and 5.10's sibling.
+- **AC5** ✅ 3 rows before the purge, 2 after the replay, snapshots equal. Both numbers asserted.
+  M7 reds it and 5.10's sibling.
+- **AC6** ✅ Numbers above; no threshold installed.
+- **AC7** ✅ **Closed, on the qualified sentence.** No PRODUCTION caller compares a held instant
+  against a stored one, story 5.11 included — `same_decision` deliberately omits `valid_from`
+  because both versions of one placement carry the same one. Eight TEST sites do compare, and the
+  register already records why they cannot catch a truncation change. Closed rather than re-owned a
+  third time; what would make the risk real is registered with story 5.14 as owner.
+- **AC8** ✅ Trap corpus still **11 unanswerable, `passed() == false`**. `fixtures/` untouched.
+  `identity::{l1,blocking,cascade}` untouched. `main.rs` untouched. Six gates green, both clippy
+  forms clean.
+- **AC9** ✅ Twins, sprint status and this file agree.
+
+**416 → 429 tests** (224 bin + 159 core + 46 xtask) after the code review; 425 at implementation.
+
+---
+
+### Code review (2026-08-05, three layers)
+
+Blind Hunter (diff only), Edge Case Hunter (live database on 13312, 19 probes executed), Acceptance
+Auditor (live database on 13313, six mutations re-run). **2 arbitrations by Guy, 14 patches.**
+
+🔴 **The review found that this story turned a LOUD refusal into a SILENT orphan, and it attributed
+that by MEASUREMENT rather than by argument.** `write_link` only ever reads the slot it is about to
+FILL, so a key that vanished from the input left a current link standing — an observation pointing
+at an interface no fact supports. The Edge Case Hunter neutralised the new read with `AND 1 = 0`,
+recovered the pre-5.11 behaviour, and put the two side by side:
+
+| | second pass over an observation that lost a MAC |
+|---|---|
+| before 5.11 | `Err(Constraint("unique"))` — loud, full rollback |
+| 5.11 as first written | `Ok(links_unchanged: 1)` — silent, orphan left current |
+
+**The uniqueness key had been doing the detection work, and the compare routed around it.** The
+orphan is also a reachable counterexample to story 5.10's purge-and-replay invariant — through pure
+engine input, no operator row, no doctored `obs_id`. **Guy's arbitration: close it here** (AC10).
+
+🔴 **Second arbitration** (AC11): an `observed_at` running backwards was fatal to the whole batch on
+one branch and silent on the other. Now `RepositoryError::InstantRegressed`, above the DDL.
+
+🔴 **And that guard REVERSES a disposal made the same day.** It is the first production caller in
+this codebase to compare an instant it HOLDS against one it STORED, so the `datetime_literal` debt
+is **DISCHARGED**, not *"closed as unreachable"* as AC7 and the register said an hour earlier. The
+register records the reversal rather than rewriting it. The truncation residue is named and is
+pinned by story 5.10's own test.
+
+🔴 **Four of the auditor's findings were DOCUMENT defects, and the first lands inside the criterion
+written to stop it**: AC9 was ticked ✅ while **neither doc twin had been updated** — both still
+said *"the pass is NOT idempotent, which is story 5.11's"*, and the File List named them as changed.
+Seventh consecutive story with a twin out of step.
+
+Also applied:
+
+- the `decided_by = 'ENGINE'` doc claimed the engine would **supersede** a human, while every test
+  in the workspace measured it **adopting** one — the operator rows were byte-identical to what the
+  engine writes, so `same_decision` returned `true` and the pass reported `Unchanged`.
+  `the_engine_never_adopts_or_supersedes_a_differing_operator_row` measures the claimed path, and
+  M14 reds three tests where M1 reddened two;
+- `same_decision`'s *"at L1"* reason was wrong for `interface_id`: the lookup key IS the subject and
+  `identity_link_current_subject` makes it equal to `interface_id`, so it is unreddenable through
+  the database **structurally and forever**, not until Epic 6;
+- `the_write_amplification_is_measured_at_both_ends` asserted only `Resolution` fields — an oracle
+  restating the pass's own summary, which the test module's own doc forbids **370 lines above it**.
+  It now `SELECT`s the post-state (15 rows, 8 current);
+- `an_abstention_and_a_placement_are_never_the_same_decision` compared an abstention with an
+  abstention twice and never made the cross-nature comparison its name promises;
+- `resolve`'s `# Errors` still documented the non-idempotence the same commit deleted;
+- `Constraint("id")` named a constraint present in no migration for what is a decode failure — now
+  `Backend`, via `link_id_of`;
+- two of the four new register entries carried a CONDITION rather than a named owner, and the
+  commit message claimed otherwise;
+- `0002:83`'s *"never zero-length"* is now false and **cannot be edited** (sqlx checksums the file —
+  measured during implementation), so it is registered rather than left silent.
+
+⚠️ **One finding was raised and is NOT a defect**: the read-then-write is a TOCTOU under concurrency,
+and a losing pass would surface `NotFound`, which `classify` does not treat as retryable. The
+resolver has no production caller and no concurrent one; registered, not fixed.
 
 ### File List
 
-_(to be filled)_
+- `crates/opencmdb-bin/migrations/0004_supersede_admits_a_zero_length_version.sql` — NEW
+- `crates/opencmdb-bin/src/repo.rs` — `subject_of`, `load_current_engine_link`, `outcome_token` and
+  `cause_token` widened to `pub(crate)`, `purge_engine_links`' history warning
+- `crates/opencmdb-bin/src/resolver.rs` — `WriteOutcome`, `same_decision`, the three-branch
+  `write_link`, `Resolution::{links_superseded, links_unchanged, record}`, the rewritten module doc,
+  nine new tests and the reference-scale rerun
+- `_bmad-output/implementation-artifacts/deferred-work.md` — three disposals, four new entries, one
+  inherited test name corrected
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`, `CLAUDE.md`,
+  `docs/project-context.md` — bookkeeping
 
 ---
 

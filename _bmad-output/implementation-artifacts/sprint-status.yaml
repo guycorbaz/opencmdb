@@ -50,7 +50,46 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-05  # 5.11 CONTEXTED **AND VALIDATED** -> `ready-for-dev`.
+last_updated: 2026-08-05  # 5.11 IMPLEMENTED **AND CODE-REVIEWED** -> `review` (NOT `done`: that is
+                          # the MERGE's business). `master`-branch at **429 tests**, six gates
+                          # green, both clippy forms clean, corpus still 11 unanswerable.
+                          # The pass is IDEMPOTENT: read the current ENGINE version of the slot,
+                          # then insert / do nothing / close-and-append. `0004` relaxes
+                          # identity_link_interval for CLOSED rows only.
+                          # 🔴 THE REVIEW FOUND THAT THIS STORY TURNED A LOUD REFUSAL INTO A SILENT
+                          # ORPHAN. `write_link` only reads the slot it is about to FILL, so a key
+                          # that vanished from the input left a current link standing (the
+                          # `multi-nic` shape) -- and that orphan is a REACHABLE counterexample to
+                          # story 5.10's purge-and-replay invariant, through pure engine input.
+                          # The uniqueness key had been doing the detection; the compare routed
+                          # around it. Attributed by MEASUREMENT: the Edge Case Hunter neutralised
+                          # the new read with `AND 1 = 0` and got the pre-5.11 loud failure back.
+                          # 🔑 GUY'S TWO ARBITRATIONS AT THE REVIEW:
+                          #  (1) `resolve_within` now CLOSES every current engine slot the pass did
+                          #      not visit -> new counter `links_vacated`. M10 reds it.
+                          #  (2) an `observed_at` running BACKWARDS was fatal to the WHOLE batch on
+                          #      one branch and SILENT on the other -> refused by name,
+                          #      `RepositoryError::InstantRegressed`, a guard ABOVE the DDL. M11
+                          #      reds it, and its pre-guard output was `Constraint("check")`.
+                          # 🔴 CONSEQUENCE THAT REVERSES A DISPOSAL MADE THE SAME DAY: that guard is
+                          # the FIRST production caller comparing an instant it HOLDS against one it
+                          # STORED, so the `datetime_literal` debt is **DISCHARGED**, not "closed as
+                          # unreachable" as the register said an hour earlier. The register records
+                          # the reversal rather than rewriting it.
+                          # 🔴 4 HIGH from the auditor were DOCUMENT defects, and the first lands
+                          # INSIDE the AC written to stop it: AC9 was ticked while NEITHER doc twin
+                          # had been updated -- both still said "the pass is NOT idempotent, which
+                          # is story 5.11's". Seventh consecutive story with a twin out of step.
+                          # ⚠️ Also: the `decided_by='ENGINE'` doc claimed the engine would
+                          # SUPERSEDE a human while every test measured it ADOPTING one (the
+                          # operator rows were byte-identical to the engine's) -- a new test
+                          # measures the claimed path; `same_decision`'s "at L1" reason was wrong
+                          # for `interface_id`, which is structural and unreddenable FOREVER; two
+                          # of four new register entries carried a CONDITION, not an owner; and
+                          # `0002`'s "never zero-length" comment is now false and UNEDITABLE (sqlx
+                          # checksums the file), so it is registered rather than left silent.
+                          # NEXT = push -> PR -> green CI -> squash merge.
+                          # (contexting entry:) 5.11 CONTEXTED **AND VALIDATED**.
                           # Two fresh-context agents; **14 findings applied, 5 HIGH**. The gap-hunt
                           # BUILT it against its own live mariadb:10.11.11 on 13311: T1-T4 plus
                           # T5's four tests, **416 -> 424 tests**, six gates green, both clippy
@@ -1513,7 +1552,7 @@ development_status:
   # `candidates` a BTreeSet, the witness is a `min` over a BTreeSet, the window is a min/max fold,
   # and not one of them reads the slice's order. Epic 5: 17 -> 18 stories. `epics.md` NOT edited;
   # the correction is registered with Epic 5's retrospective.
-  5-11-idempotent-supersede: in-progress
+  5-11-idempotent-supersede: review
   5-11b-order-independence: backlog
   5-12-never-overwrite-anti-regression: backlog
   5-13-monotone-honesty-trap-family: backlog
