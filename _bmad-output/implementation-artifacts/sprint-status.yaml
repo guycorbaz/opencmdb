@@ -50,7 +50,39 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-05  # 5.11 CONTEXTED -> `ready-for-dev`. 🔴 **SPLIT at contexting (Guy):
+last_updated: 2026-08-05  # 5.11 CONTEXTED **AND VALIDATED** -> `ready-for-dev`.
+                          # Two fresh-context agents; **14 findings applied, 5 HIGH**. The gap-hunt
+                          # BUILT it against its own live mariadb:10.11.11 on 13311: T1-T4 plus
+                          # T5's four tests, **416 -> 424 tests**, six gates green, both clippy
+                          # forms clean, all 7 prescribed mutations run plus 3 of its own.
+                          # 🔑 THE STORY BUILDS: AC1, AC3, AC4, AC5 all reachable and all HOLD.
+                          # 🔴 TWO mutations came back GREEN, and each became a new criterion:
+                          #   . M8 -- this story SILENTLY RETIRES Guy's own 5.9b arbitration.
+                          #     Deleting `!abstained.insert(..)` leaves all 424 green, because the
+                          #     new write path reports the second write "unchanged". -> AC2c.
+                          #   . M9 -- FIVE of the six comparison columns are unreddenable through
+                          #     the database (at L1 the interface, outcome, rule, cause and ruleset
+                          #     version cannot differ within a group). -> AC2b makes the comparison
+                          #     a PURE FUNCTION with database-free tests.
+                          # 🔴 §3's "EVERY engine supersede is zero-length" was FALSE as a
+                          # universal: `valid_from` comes from the IN-MEMORY observation and nothing
+                          # reads `observation_record.observed_at` back, so the same obs_id handed a
+                          # later instant gives a NON-zero-length supersede. `0004` is still right;
+                          # its justification was too strong and is retracted to the conditional.
+                          # 🔴 The evidence is SORTED ascending (l1.rs:277-278), so the prescribed
+                          # `[o2, o1]` -- in THREE places incl. the headline test -- reds as written.
+                          # 🔴 M5 is not executable as prescribed: sqlx checksums migrations, so
+                          # editing 0004 in place gives VersionMismatch(4) on every DB test. It
+                          # needs a DROP DATABASE first, or the pass records a false result.
+                          # ⚠️ Also: AC7's closure sentence was false (8 TEST sites compare a held
+                          # instant against a stored one; no PRODUCTION caller does), AC6 measures
+                          # 0 or n-1 depending on the newcomer's ObsId and now names both,
+                          # `current_subject_of` is PRIVATE and costs a panic path at the call site,
+                          # §4 overstated a guard 5.10 already ships, and §9's file-size sentence
+                          # was falsified by its own next clause.
+                          # 🔑 11 of the 14 came from the agent that COMPILED it -- the SIXTH
+                          # consecutive story with that split. NEXT = `dev-story` 5.11.
+                          # (contexting entry:) 🔴 **SPLIT at contexting (Guy):
                           # 5.11b INSERTED, Epic 5 -> 18 stories.** 5.11 is the idempotence
                           # (compare -> supersede or do nothing), 5.11b the seeded arrival-order
                           # fuzz. NEXT = `create-story validate` on 5.11 with TWO fresh-context
