@@ -50,16 +50,40 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-05  # 5.10 **DONE** -- PR #69 squash-merged 2026-08-05 as `e056b5d` after a
-                          # green CI run. **Epic 5 is now 13/17.** `master` carries **416 tests**
-                          # and six green gates (`views-hash` STALE and exiting 0, as designed);
-                          # the branch is deleted locally and on `origin`.
-                          # NEXT = create-story 5.11, which inherits by name: the open half of the
-                          # datetime_literal debt (a caller comparing an instant it HOLDS against
-                          # one it STORED), and being the first story to hold TWO instants for one
-                          # placement -- so the first that can build the fixture 5.10's could not.
-                          # It also owes idempotence: the pass run twice over one slice is today
-                          # `Err(Constraint("unique"))` and a full rollback.
+last_updated: 2026-08-05  # 5.11 CONTEXTED -> `ready-for-dev`. 🔴 **SPLIT at contexting (Guy):
+                          # 5.11b INSERTED, Epic 5 -> 18 stories.** 5.11 is the idempotence
+                          # (compare -> supersede or do nothing), 5.11b the seeded arrival-order
+                          # fuzz. NEXT = `create-story validate` on 5.11 with TWO fresh-context
+                          # agents, and the gap-hunt MUST compile it against a live
+                          # mariadb:10.11.11 on **13306** -- this story is nothing but write path.
+                          # 🔑 FOUR arbitrations by Guy, the third with a live measurement in hand:
+                          #  (1) the split above;
+                          #  (2) the EVIDENCE is part of the decision -- a singleton and a pair both
+                          #      produce `l1-exact-mac` and differ only in evidence, so not counting
+                          #      it leaves a link asserting a FALSE justification that FR16 renders;
+                          #  (3) 🔴 EVERY engine supersede is ZERO-LENGTH, measured: both versions
+                          #      of one placement carry the same `valid_from` (the observation's own
+                          #      immutable `observed_at`, pinned by an existing test), so closing
+                          #      the old at the new one's `valid_from` closes it at its own --
+                          #      `ERROR 4025`, `identity_link_interval`. The engine may not read the
+                          #      clock (5.10's replay test HOLDS that), so no later data-derived
+                          #      instant exists. `0004` relaxes the CHECK for CLOSED rows only;
+                          #      measured: it admits the zero-length close, still refuses an
+                          #      INVERTED closed interval and a zero-length CURRENT row.
+                          #      ⚠️ Also measured: the schema does NOT constrain the CHAIN -- two
+                          #      versions may OVERLAP and nothing refuses it.
+                          #  (4) the replay owes HISTORY nothing: the purge stays global, its doc
+                          #      must say it deletes superseded rows, and AC5 measures it.
+                          # 🔑 The compare is filtered to `decided_by='ENGINE'`: unfiltered, the
+                          # engine would SUPERSEDE AN OPERATOR'S row. AC4 pins today's behaviour
+                          # (Constraint("unique") + rollback); the model question stays 5.14's.
+                          # ⚗️ The `datetime_literal` open half may be UNREACHABLE here after all --
+                          # both versions share one `valid_from`, so AC7 is a DISPOSAL: discharge it
+                          # or CLOSE it with the measurement. A third re-own is a FINDING.
+                          # (previous:) 5.10 **DONE** -- PR #69 squash-merged 2026-08-05 as
+                          # `e056b5d`, bookkeeping PR #70 as `63e452d`. **Epic 5 13/18.**
+                          # `master` carries **416 tests** and six green gates (`views-hash` STALE
+                          # and exiting 0, as designed).
                           # (previous:) 5.9b was merged as `94314e9`, PR #67, taking master to 408.
                           # 408 -> 411 tests at implementation, six gates green, corpus still
                           # 11 unanswerable.
@@ -1451,7 +1475,14 @@ development_status:
   5-9-persist-interface-and-identity-link: done
   5-9b-engine-resolves-and-writes-links: done
   5-10-purge-test: done
-  5-11-order-independence: backlog
+  # 🔴 SPLIT at 5.11's contexting, 2026-08-05 (Guy). `epics.md:1636` gives story 5.11 three ACs
+  # that are TWO deliverables: AC2 (idempotence) is new PRODUCTION code, AC1/AC3 (the seeded
+  # arrival-order fuzz) is a MEASUREMENT of what already holds -- `join` returns a BTreeMap,
+  # `candidates` a BTreeSet, the witness is a `min` over a BTreeSet, the window is a min/max fold,
+  # and not one of them reads the slice's order. Epic 5: 17 -> 18 stories. `epics.md` NOT edited;
+  # the correction is registered with Epic 5's retrospective.
+  5-11-idempotent-supersede: ready-for-dev
+  5-11b-order-independence: backlog
   5-12-never-overwrite-anti-regression: backlog
   5-13-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog
