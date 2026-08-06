@@ -50,7 +50,48 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-06  # 5.11b IMPLEMENTED -> `review` (NOT `done`: that is the MERGE's business).
+last_updated: 2026-08-06  # 5.11b IMPLEMENTED **AND CODE-REVIEWED** -> stays `review` (NOT `done`:
+                          # that is the MERGE's business). **429 -> 446 -> 450 tests** after the
+                          # review (245 bin + 159 core + 46 xtask). NEXT = PR, then squash-merge.
+                          # THREE LAYERS, 2026-08-06; the Edge Case Hunter ran its own mutations
+                          # against the live DB and the Auditor re-executed the whole T7 pass.
+                          # 🔑 TWO LAYERS INDEPENDENTLY FOUND THE SAME TWO DEFECTS (the false
+                          # `XorShift64` doc, the corpus test's weak oracle) -- the strongest signal
+                          # this process gives.
+                          # 🔴 THE STORY'S OWN HEADLINE DEFECT RECURRED INSIDE THE STORY:
+                          # `SEED_SWEEP`'s doc asserted the golden-value test guarded its provenance
+                          # and that a clock-derived sweep left the suite green -- BOTH refuted by a
+                          # test EIGHTY LINES BELOW IT IN THE SAME COMMIT. Sixth consecutive story
+                          # with a doc falsified by a measurement in its own commit, and the first
+                          # where the falsifying measurement was the story's own deliverable.
+                          # 🔴 FOUR BEHAVIOURAL DEFECTS, every one found BY MUTATION, not by reading:
+                          #   . "the refusal happens before anything is written" was guarded by
+                          #     NOTHING -- moving the `return Err` to the END left 446/446 GREEN,
+                          #     because every test runs inside `transact`, which rolls back on Err.
+                          #     Now probed on a POOLED connection under autocommit; R1 reds it alone.
+                          #   . NO order test touched the `interface` table's derived instants --
+                          #     making `seen_window` follow arrival order left ALL FIVE order tests
+                          #     green. Shape C now compares the windows; R4 reds it.
+                          #   . the `facts.len()` term in `contradicts` was DROPPABLE with the suite
+                          #     green -- it is the only term catching [x] vs [x,x]. R2 reds it now.
+                          #   . the corpus test's join oracle was `!is_empty()` where its twin pins
+                          #     an exact count. Pinned at 5 interfaces; R3 reds it.
+                          # 🔴 THREE OF MY OWN CLAIMS WERE REFUTED BY RE-MEASUREMENT:
+                          #   . `M3b+` was WRONG IN FIVE DOCUMENTS -- there are SIX count assertions,
+                          #     not five; the sixth is inside `sampled_permutations` and guards
+                          #     shapes B and C a second time. Deleting only the four `consumed` lines
+                          #     leaves the 2 DB consumers RED. The code was better than the claim.
+                          #   . `M1-fkw` was 10 red, not 11 -- I copied the driver's raw line count
+                          #     (which includes `result: FAILED`) for that one row of ten.
+                          #   . the timing figures rested on no check (692 ms here, 561 ms there).
+                          # 🔑 DISMISSED WITH THE CHECK THAT DISMISSED THEM: "DB tests may not run in
+                          # CI" is REFUTED (`ci.yml:24` exports DATABASE_URL against a mariadb
+                          # service); the `rand` transitive claim VERIFIED. The Edge Case Hunter
+                          # refuted EIGHT of its own suspicions by running them.
+                          # 🔴 AC5 is PARTLY MET and was CORRECTED rather than ticked: the "test that
+                          # reds when a new field is added" is a COMPILE error, and a `..` retires it
+                          # with the suite green. Registered.
+                          # (implementation entry:) 5.11b IMPLEMENTED -> `review`.
                           # Built against a live mariadb:10.11.11 on 13306. **429 -> 446 tests**
                           # (241 bin + 159 core + 46 xtask), six gates green, both clippy forms
                           # clean, `Cargo.lock` diff EMPTY. NEXT = `code-review` 5.11b, then PR.

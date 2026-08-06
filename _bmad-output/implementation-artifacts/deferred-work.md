@@ -2808,3 +2808,37 @@ story's own mutation pass and would not have been visible to reading._
   to `fixtures/` is a corpus change, and this story moves nothing under `fixtures/`.
   **Owner: Epic 6**, which implements `l2-*` and is the first epic with a reason to extend the
   corpus.
+
+## Deferred from: code review of story-5-11b (2026-08-06)
+
+- ⚠️ **`contradicts`'s exhaustive destructuring is retired SILENTLY by a `..`.** The guard is real —
+  adding a field to `Observation` yields `error[E0027]` at `resolver.rs`, measured with a `vlan`
+  field — but it is compiler-carried, and **replacing the pattern with `{ .., }` leaves the entire
+  suite green** (measured). The story's AC5 asked for *"a test that reds when a new field is added"*;
+  what shipped is a compile-time guard, and the AC text has been corrected to say so rather than
+  ticked over the gap. A test cannot practically assert that a pattern is exhaustive.
+  **Owner: whoever adds the next field to `Observation`** — a real condition, not a disguised
+  *"someday"*, because that author is the one the compile error stops.
+
+- ⚠️ **The count-assertion census is SIX, and five documents said five.** Four `consumed` counters,
+  one `seeds == 8`, and one inside the helper `sampled_permutations` that guards shapes B and C a
+  second time. Deleting only the four `consumed` lines leaves the two database consumers red at
+  `left: 0, right: 12` — measured on both variants at the code review. Corrected everywhere it
+  appeared. Recorded because the shape recurs: a claim about which guards carry a red is itself a
+  claim needing a check, and this one was repeated across five files before anyone ran it.
+  **No owner — closed**, but see Epic 5's retrospective for the pattern.
+
+- ⚠️ **`XorShift64` has one dead seed and it is a plausible choice.** `new` xors with
+  `0x9E37_79B9_7F4A_7C15`, so that exact seed lands on state zero and every draw is `0`. The
+  degeneration is SILENT — Fisher-Yates with `j = 0` throughout still permutes (a fixed rotation),
+  so both the multiset guard and the reproducibility guard pass on it. Now pinned by
+  `the_dead_seed_is_named_and_outside_the_sweep`, whose load-bearing half asserts that no seed in
+  `SEED_SWEEP` reaches the fixed point. **Owner: the first story that widens `SEED_SWEEP` or changes
+  the fold** — the guard reds for them rather than leaving a fuzz test that quietly stopped fuzzing.
+
+- ⚠️ **`sampled_permutations`' constants are tuned to `n == 6` with no precondition in the type.**
+  `skip(1).step_by(60).take(12)` saturates exactly at 720 (indices 1 … 661) by construction, not by
+  margin; at `n = 5` it yields 2 and the assertion blames the enumerator for a wrong step size; at
+  `n = 7` the twelve samples cover the first 13% of the space, which is not the "deterministic
+  spread" the doc calls it. Documented at the review rather than generalised, because no caller
+  needs another size today. **Owner: the first caller that passes a slice of another length.**

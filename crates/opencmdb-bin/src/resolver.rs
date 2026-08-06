@@ -842,6 +842,18 @@ mod tests {
             .await
     }
 
+    /// The interfaces' DERIVED instants, read back. Added at story 5.11b's code review: no order
+    /// test touched these two columns, and `snapshot_links` carries neither.
+    async fn interface_windows(pool: &MySqlPool) -> Vec<(String, String, String)> {
+        sqlx::query_as(
+            "SELECT id, CAST(first_seen_at AS CHAR), CAST(last_seen_at AS CHAR) \
+             FROM interface ORDER BY id",
+        )
+        .fetch_all(pool)
+        .await
+        .expect("read the interface seen-windows")
+    }
+
     async fn interface_count(pool: &MySqlPool) -> i64 {
         let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM interface")
             .fetch_one(pool)
@@ -3048,6 +3060,12 @@ mod tests {
 
     /// A deterministic spread of permutations, **never the identity**.
     ///
+    /// ⚠️ **The constants below are tuned to `n == 6` and state no precondition in the type.**
+    /// `skip(1).step_by(60).take(12)` saturates exactly at 720 permutations (indices 1, 61, … 661)
+    /// — by construction, not by margin. For a 5-element slice it yields 2 and the assertion fires
+    /// blaming the ENUMERATOR for what is really a step size wrong for the input. Every caller here
+    /// passes a six-observation slice; a future one that does not must re-derive the step.
+    ///
     /// 🔴 The `skip(1)` is load-bearing and not hygiene: `permutations` yields lexicographic order,
     /// so element 0 IS the input. Sampling it would turn both database shapes into a comparison of
     /// a run with itself — green under any order-dependence whatsoever. The two assertions below
@@ -3098,11 +3116,23 @@ mod tests {
         assert_eq!(first.interfaces_minted, 4);
         let ids_before = all_link_ids(&pool).await;
         assert_eq!(ids_before.len(), 7);
+        // 🔴 The interfaces' own derived instants, which NOTHING else here compares. Measured at
+        // the code review: making `seen_window` follow arrival order left all five of this story's
+        // order tests GREEN. Shapes A and B are structurally blind to it — A opens no database, and
+        // B's purge leaves interfaces standing while `widen_interface_seen_window` is monotone, so
+        // a narrowed window writes nothing. `snapshot_links` carries no window column either.
+        let windows_before = interface_windows(&pool).await;
+        assert_eq!(windows_before.len(), 4);
 
         let mut consumed = 0usize;
         for (index, permuted) in sampled_permutations(&observations) {
             let again = pass(&pool, permuted).await;
             assert_eq!(again.links_written, 0, "permutation {index} wrote a link");
+            assert_eq!(
+                interface_windows(&pool).await,
+                windows_before,
+                "permutation {index} moved an interface's derived seen-window"
+            );
             assert_eq!(
                 again.links_superseded, 0,
                 "permutation {index} superseded a version"
@@ -3314,9 +3344,16 @@ mod tests {
 
         let expected_groups = join(&observations);
         let expected_pairs = candidates(&observations);
-        assert!(
-            !expected_groups.is_empty(),
-            "a stream that derives no interface would make the loop below vacuous"
+        // ⚠️ An EXACT count, not `!is_empty()`. Measured at the code review: a `join` collapsing
+        // every observation onto one interface — keyed order-INDEPENDENTLY, so the permutation loop
+        // below cannot see it — reds shape A's twin (`left: 1, right: 4`) and left this test GREEN
+        // while its oracle was only "non-empty". The asymmetry with the exact `expected_pairs`
+        // count two lines down was unexplained and is now closed.
+        assert_eq!(
+            expected_groups.len(),
+            5,
+            "hostname-absence derives five interfaces over its six observations: four singletons \
+             and one pair"
         );
         assert_eq!(expected_pairs.len(), 15, "6 * 5 / 2 unordered pairs");
         // The stated limit, ASSERTED rather than claimed — and computed here from the facts rather
@@ -3429,6 +3466,103 @@ mod tests {
         assert_eq!(count_identity_links(&pool).await.expect("count"), 1);
     }
 
+    /// 🔴 The refusal precedes every write — measured where no transaction can hide it.
+    ///
+    /// ⚠️ **Added at the code review, which measured that the claim was guarded by nothing.** Moving
+    /// the `return Err` to the very END of `resolve_within` — after every interface mint, every
+    /// `write_link` and the vacate loop — left all 446 tests GREEN, because every other test runs
+    /// the pass inside `transact`, which rolls back on `Err`. *"Nothing was written"* therefore held
+    /// wherever the refusal sat, and both the production comment and the sibling test's message
+    /// asserted a placement the suite could not see.
+    ///
+    /// This runs the pass on a POOLED connection under autocommit, where the difference is visible:
+    /// the shipped code writes nothing, and the late-refusal mutant commits one interface and one
+    /// link. It is the same probe story 5.9b used for D21's *"one pass, one transaction"*
+    /// precondition — a caller that does not cooperate gets partial writes, which is exactly what
+    /// makes it discriminating here.
+    #[tokio::test]
+    async fn the_refusal_precedes_every_write_even_without_a_transaction() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let base = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        let mut other = base.clone();
+        other.facts = vec![Fact::Mac {
+            addr: mac(0x02),
+            locally_administered: false,
+        }];
+        let Some(pool) = fixture(std::slice::from_ref(&base)).await else {
+            return;
+        };
+
+        let mut conn = pool.acquire().await.expect("acquire a pooled connection");
+        let refused = resolve(&mut conn, &[base, other]).await;
+        drop(conn);
+
+        assert!(
+            matches!(refused, Err(RepositoryError::ContradictoryObservation)),
+            "got {refused:?}"
+        );
+        assert_eq!(
+            count_identity_links(&pool).await.expect("count"),
+            0,
+            "🔴 no link was committed — and under autocommit there is no rollback to explain it away"
+        );
+        assert_eq!(
+            interface_count(&pool).await,
+            0,
+            "and no interface either: the refusal precedes the mint, not merely the link"
+        );
+    }
+
+    /// The `raw` carve-out does not re-open an arrival-order dependence — MEASURED, not argued.
+    ///
+    /// ⚠️ Added at the code review. `contradicts` deliberately ACCEPTS two copies of one `obs_id`
+    /// differing only in `raw`, so for that shape `by_id` remains last-duplicate-wins and which copy
+    /// the placement loop sees still depends on arrival order. The story applies the opposite
+    /// standard to its own §2b — *"it is benign by an argument, and the permutation sweep is what
+    /// turns the argument into a measurement"* — and then left this one an argument.
+    ///
+    /// It holds because nothing downstream of `by_id` reads `raw`: only `insert_observation` binds
+    /// it, and the resolver never calls that. This test is what says so.
+    #[tokio::test]
+    async fn the_raw_carve_out_is_order_independent_too() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let base = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        let mut with_raw = base.clone();
+        with_raw.raw = Some(r#"{"provenance":"a second poll"}"#.to_string());
+        let Some(pool) = fixture(std::slice::from_ref(&base)).await else {
+            return;
+        };
+
+        pass(&pool, vec![base.clone(), with_raw.clone()]).await;
+        let one_order = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot");
+        assert_eq!(one_order.len(), 1);
+
+        MariaRepository::new(pool.clone())
+            .transact(|unit| {
+                Box::pin(async move {
+                    crate::repo::purge_engine_links(unit.executor())
+                        .await
+                        .map_err(classify)
+                })
+            })
+            .await
+            .expect("purge");
+        pass(&pool, vec![with_raw, base]).await;
+
+        assert_eq!(
+            crate::repo::snapshot_links(&pool)
+                .await
+                .map_err(classify)
+                .expect("snapshot"),
+            one_order,
+            "the copy that wins `by_id` differs between the two orders, and nothing downstream \
+             reads what distinguishes them"
+        );
+    }
+
     /// 🔴 The two exclusions, measured against the one-line comparison they replace.
     ///
     /// Each case asserts BOTH that `contradicts` accepts it and that `a != b` would have refused
@@ -3532,7 +3666,9 @@ mod tests {
         );
         assert_eq!(
             seeds, 8,
-            "the fixed sweep is 0..=7 — a shortened or clock-derived sweep is caught here"
+            "a SHORTENED sweep is caught here. ⚠️ A clock-derived one is NOT — `now()..=now()+7` \
+             also yields eight. `permute::tests::the_seed_sweep_is_the_fixed_range_it_claims_to_be` \
+             is what catches that, and this message said otherwise until the code review"
         );
     }
 
@@ -3567,6 +3703,26 @@ mod tests {
         let mut fewer_facts = base.clone();
         fewer_facts.facts.clear();
         assert!(contradicts(&base, &fewer_facts), "facts, by length");
+
+        // 🔴 The STRICT-SUPERSET case, which is the only thing the `facts.len()` term catches.
+        // Measured at the code review: delete that term and the whole suite stayed green, because
+        // `fewer_facts` above reds through the containment test instead. A shipped guard nothing
+        // reddens is the defect this project keeps finding.
+        let mut doubled = base.clone();
+        doubled.facts = vec![
+            Fact::Mac {
+                addr: mac(0x01),
+                locally_administered: false,
+            },
+            Fact::Mac {
+                addr: mac(0x01),
+                locally_administered: false,
+            },
+        ];
+        assert!(
+            contradicts(&base, &doubled),
+            "facts, by MULTIPLICITY — [x] against [x, x], reachable only through the length term"
+        );
 
         let mut other_facts = base.clone();
         other_facts.facts = vec![Fact::Mac {

@@ -79,11 +79,18 @@ fn next_permutation(order: &mut [usize]) -> bool {
 /// The FIXED seed sweep the reference-scale slice is fuzzed over.
 ///
 /// Fixed, never clock-derived: a clock-derived seed makes a test that fails once a month and
-/// reproduces never — the anecdote the story's AC4 exists to forbid. 🔴 And the provenance of this
-/// constant is guarded by the golden-value test alone: reproducibility WITHIN one process is
-/// trivially true for any seed, since `shuffled(x, s) == shuffled(x, s)` holds whatever `s` is.
-/// Measured — swapping this sweep for a `SystemTime::now()`-derived one left the entire suite green
-/// over three consecutive runs.
+/// reproduces never — the anecdote the story's AC4 exists to forbid.
+///
+/// 🔴 **Its provenance is guarded by [`tests::the_seed_sweep_is_the_fixed_range_it_claims_to_be`]
+/// and by nothing else** — in particular NOT by the golden-value test, which pins `shuffled` at a
+/// hardcoded seed and never reads this constant. Measured: before that guard existed, swapping this
+/// sweep for a `SystemTime::now()`-derived one left the **entire suite green** over three
+/// consecutive runs. Every other consumer stays green under a clock-derived sweep too, because
+/// eight such seeds still shuffle, still reproduce within one process
+/// (`shuffled(x, s) == shuffled(x, s)` holds for every `s`) and still number eight.
+///
+/// _(This doc claimed the golden-value test was the guard until story 5.11b's code review, where
+/// two layers found it refuted by a test eighty lines below it in the same commit.)_
 pub const SEED_SWEEP: std::ops::RangeInclusive<u64> = 0..=7;
 
 /// `items` shuffled by a seeded Fisher-Yates, for slices too large to enumerate.
@@ -102,7 +109,15 @@ pub fn shuffled<T: Clone>(items: &[T], seed: u64) -> Vec<T> {
     out
 }
 
-/// A xorshift64 whose state is never zero — the one input for which the recurrence is a fixed point.
+/// A xorshift64. Zero is the recurrence's one fixed point, and [`Self::new`] moves `seed = 0` off it.
+///
+/// ⚠️ **It does not move EVERY seed off it**, and the doc claimed otherwise until story 5.11b's code
+/// review: `new` xors with a constant, so the seed EQUAL to that constant lands on state zero and
+/// every draw is then `0`. That seed is `0x9E37_79B9_7F4A_7C15` — the golden-ratio constant, which
+/// is exactly the value someone reaching for "a good seed" would reach for.
+/// [`tests::the_dead_seed_is_named_and_outside_the_sweep`] pins the behaviour rather than pretending
+/// it away: the shuffle still permutes (it degenerates to a fixed rotation), so the failure is
+/// SILENT — `the_shuffle_preserves_the_multiset` passes on it.
 struct XorShift64(u64);
 
 impl XorShift64 {
@@ -129,7 +144,9 @@ mod tests {
 
     /// `n!`, as an independent oracle — deliberately NOT computed by the code under test.
     fn factorial(n: usize) -> usize {
-        (1..=n).product::<usize>().max(1)
+        // No `.max(1)`: an empty product is already 1, so the correction was unreachable — and an
+        // oracle carrying a dead branch is harder to trust than one without. Caught at the review.
+        (1..=n).product()
     }
 
     /// The enumerator produces exactly `n!` permutations, all distinct, at every size it is used at.
@@ -253,13 +270,75 @@ mod tests {
         );
     }
 
+    /// ⚠️ The one seed that lands on the recurrence's fixed point, NAMED rather than pretended away.
+    ///
+    /// `XorShift64::new` xors the seed with `0x9E37_79B9_7F4A_7C15`, so that seed gives state zero
+    /// and every draw is `0`. Found at story 5.11b's code review by two layers independently. The
+    /// consequence is a SILENT degeneration, not a panic: Fisher-Yates with `j = 0` throughout still
+    /// permutes — it produces a fixed rotation — so the multiset and reproducibility guards both
+    /// pass on it. This test exists so that the day someone widens the sweep, the failure is a red
+    /// here rather than a fuzz test that quietly stopped fuzzing.
+    #[test]
+    fn the_dead_seed_is_named_and_outside_the_sweep() {
+        const DEAD_SEED: u64 = 0x9E37_79B9_7F4A_7C15;
+        assert!(
+            !SEED_SWEEP.contains(&DEAD_SEED),
+            "the sweep must not contain the seed that kills the generator"
+        );
+
+        // 🔴 The load-bearing half, and the one that survives a change to the seeding constant:
+        // NO seed in the sweep may land on the fixed point. The named constant above pins today's
+        // dead seed; this loop pins the property that actually matters, and reds if the fold in
+        // `new` is changed so that the dead seed moves INTO the sweep.
+        for seed in SEED_SWEEP {
+            let mut state = XorShift64::new(seed);
+            assert_ne!(
+                state.next_u64(),
+                0,
+                "seed {seed} lands on the recurrence's fixed point and shuffles nothing"
+            );
+        }
+
+        let items: Vec<usize> = (0..8).collect();
+        let degenerate = shuffled(&items, DEAD_SEED);
+        assert_ne!(
+            degenerate, items,
+            "it is a rotation, not the identity — which is why the distinctness guard cannot see it"
+        );
+        let mut sorted = degenerate.clone();
+        sorted.sort_unstable();
+        assert_eq!(
+            sorted, items,
+            "and the multiset survives, which is why THAT guard cannot see it either"
+        );
+    }
+
+    /// ⚠️ The enumerator's "duplicate-free" claim is about POSITIONS, not values.
+    ///
+    /// Fed a slice with equal elements it yields `n!` vectors of which only some are distinct —
+    /// measured at the review: `[1, 1, 2]` gives 6 permutations and 3 distinct values. That is
+    /// correct for what this module is for (it permutes ARRIVAL ORDER, and two observations are
+    /// never equal because their `obs_id`s differ), and every caller here passes distinct elements.
+    /// It is pinned so the claim is not read more widely than it holds.
+    #[test]
+    fn duplicate_elements_yield_repeated_permutations() {
+        let all: Vec<Vec<i32>> = permutations(&[1, 1, 2]).collect();
+        assert_eq!(all.len(), 6, "still 3! by position");
+        let distinct: BTreeSet<Vec<i32>> = all.iter().cloned().collect();
+        assert_eq!(distinct.len(), 3, "but only 3 distinct by value");
+    }
+
     /// 🔴 AC4 guard 2 — the GOLDEN VALUE, which pins the seed AND the algorithm.
     ///
-    /// Without this, the seed's provenance is measured by NOTHING: the test above holds for every
-    /// seed, including a clock-derived one, because `shuffled(x, s) == shuffled(x, s)` is trivially
-    /// true. Measured at validation — replacing [`SEED_SWEEP`] with a `SystemTime::now()`-derived
-    /// sweep left all tests green over three consecutive runs, and only a literal expectation reds
-    /// it.
+    /// It pins the ALGORITHM and one `(seed, input)` pair, and it is deliberately independent of
+    /// [`SEED_SWEEP`]: it names seed 7 as a literal and never reads the constant. 🔴 **That
+    /// independence is exactly why it does NOT guard the sweep's provenance** — that job belongs to
+    /// [`the_seed_sweep_is_the_fixed_range_it_claims_to_be`], and the two are complementary rather
+    /// than redundant. _(This doc asserted the opposite until story 5.11b's code review, and pointed
+    /// at "the test above" positionally, which a later insertion had already made wrong.)_
+    ///
+    /// What it DOES catch: any change to the Fisher-Yates walk, to the xorshift, or to the seeding
+    /// constant.
     ///
     /// The literal below is the measured output of THIS algorithm at THIS seed. Change either and
     /// this test reds, which is the entire point.
