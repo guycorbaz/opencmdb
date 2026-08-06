@@ -719,7 +719,7 @@ fn guard_decision(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::permute::permutations;
+    use crate::permute::{SEED_SWEEP, permutations, shuffled};
     use crate::repo::{MariaRepository, OPEN_END, count_identity_links, datetime_literal};
     use opencmdb_core::observation::{
         ConnectorId, Fact, HostnameSource, L2DomainId, MacAddr, Scope, VantageId,
@@ -3459,6 +3459,80 @@ mod tests {
         assert_ne!(
             base, with_raw,
             "🔴 and a bare `a != b` WOULD have refused it"
+        );
+    }
+
+    /// 🔴 AC4 — the REFERENCE-SCALE slice is fuzzed from a FIXED seed sweep, never the clock.
+    ///
+    /// This is where the seeded shuffle earns its place and the only place it has a consumer: the
+    /// shapes above enumerate exhaustively because `n!` is at most 720, and `300!` is not a number
+    /// anything enumerates. The seed is printed with every failure, so a red reproduces from the
+    /// message alone — which is the entire difference between a fuzz test and an anecdote.
+    ///
+    /// Shape C at reference scale: each fuzzed order runs into the already-populated store and must
+    /// write nothing at all.
+    ///
+    /// ⚠️ 300 observations over **100** MACs, so the groups are threes. The existing reference-scale
+    /// test gives every observation its own MAC, which makes every group a singleton — a shape where
+    /// the witness convention is never exercised because there is no other id to choose.
+    #[tokio::test]
+    async fn the_reference_scale_pass_is_order_independent_across_the_seed_sweep() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let observations: Vec<Observation> = (0..300u128)
+            .map(|i| {
+                let mac_index = i % 100;
+                let mut o = observation(i + 1, l2(1), &[], 1_700_000_000 + i as i64);
+                o.facts = vec![Fact::Mac {
+                    addr: MacAddr([
+                        0x00,
+                        0x11,
+                        0x22,
+                        0x00,
+                        (mac_index >> 8) as u8,
+                        mac_index as u8,
+                    ]),
+                    locally_administered: false,
+                }];
+                o
+            })
+            .collect();
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+
+        let first = pass(&pool, observations.clone()).await;
+        assert_eq!(first.interfaces_minted, 100, "100 distinct MACs");
+        assert_eq!(first.links_written, 300);
+
+        let started = std::time::Instant::now();
+        let mut seeds = 0usize;
+        for seed in SEED_SWEEP {
+            let permuted = shuffled(&observations, seed);
+            assert_ne!(
+                permuted, observations,
+                "seed {seed} returned the input — this sweep would then measure nothing"
+            );
+            let again = pass(&pool, permuted).await;
+            assert_eq!(again.links_written, 0, "seed {seed} wrote a link");
+            assert_eq!(
+                again.links_superseded, 0,
+                "seed {seed} superseded a version"
+            );
+            assert_eq!(again.links_vacated, 0, "seed {seed} vacated a slot");
+            assert_eq!(
+                again.interfaces_minted, 0,
+                "seed {seed} minted an interface"
+            );
+            assert_eq!(again.links_unchanged, 300, "seed {seed} lost a slot");
+            seeds += 1;
+        }
+        eprintln!(
+            "reference scale, fuzzed: n=300, macs=100, seeds={seeds}, elapsed={:?}",
+            started.elapsed()
+        );
+        assert_eq!(
+            seeds, 8,
+            "the fixed sweep is 0..=7 — a shortened or clock-derived sweep is caught here"
         );
     }
 
