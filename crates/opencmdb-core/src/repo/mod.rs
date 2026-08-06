@@ -41,6 +41,24 @@ pub enum RepositoryError {
     /// branches.
     #[error("the supplied instant precedes the stored one")]
     InstantRegressed,
+    /// One `ObsId` was supplied TWICE in a single pass carrying different decision-bearing content.
+    ///
+    /// An `ObsId` identifies an immutable observation, so two different contents under one id is a
+    /// self-contradictory input and a caller bug. It is refused rather than resolved: the grouping
+    /// walks the whole slice while the by-id lookup keeps the LAST copy, so silently picking one
+    /// would let an observation be placed on an interface derived from a MAC its winning copy does
+    /// not carry — and which copy wins would depend on arrival order, which is exactly what story
+    /// 5.11b exists to rule out.
+    ///
+    /// It is its own variant rather than a [`Self::Constraint`] for the reason story 5.11
+    /// established with [`Self::InstantRegressed`]: `Constraint` means *"a database constraint was
+    /// violated"* by its own doc, and no database was consulted here — the input contradicts itself
+    /// before any statement runs.
+    ///
+    /// ⚠️ A repeated IDENTICAL observation stays LEGAL. Callers do supply one, and two existing
+    /// tests depend on it.
+    #[error("one observation id was supplied twice with different content")]
+    ContradictoryObservation,
     /// Any other backend failure — terminal, non-retryable, opaque by design.
     #[error("backend error: {0}")]
     Backend(String),

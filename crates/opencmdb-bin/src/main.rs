@@ -18,6 +18,13 @@ mod fixtures;
 mod l1_runner;
 mod metrics;
 mod page;
+/// Deterministic permutation sources for the arrival-order measurements (story 5.11b).
+///
+/// Test-only: it supports no production path, so it is gated rather than shipped. This `mod` line
+/// is the ONE change story 5.11b makes to this file, and it carries no behaviour — the story's AC7
+/// names the exception explicitly, because *"`main.rs` untouched"* was measured unsatisfiable.
+#[cfg(test)]
+mod permute;
 mod repo;
 mod resolver;
 mod trap_gate;

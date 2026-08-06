@@ -1,6 +1,6 @@
 # Story 5.11b: The arrival order of a scan cannot change what the product believes
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- ✅ VALIDATED 2026-08-05 by two fresh-context agents (fact-check + gap-hunt).
      **The gap-hunt BUILT THE WHOLE STORY** against its own live `mariadb:10.11.11` on 13311 —

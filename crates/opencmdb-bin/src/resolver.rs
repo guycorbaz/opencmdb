@@ -231,7 +231,27 @@ pub async fn resolve_within(
     universe: &BTreeSet<CandidatePair>,
 ) -> Result<Resolution, RepositoryError> {
     let groups = join(observations);
-    let by_id: BTreeMap<ObsId, &Observation> = observations.iter().map(|o| (o.obs_id, o)).collect();
+
+    // 🔴 Refuse a self-contradictory slice BEFORE anything is written (story 5.11b).
+    //
+    // This map used to be a plain `.collect()`, which is LAST-DUPLICATE-WINS. That made the pass
+    // read the slice's arrival order twice over: `join` walks the whole slice, so an observation is
+    // grouped under the keys of every copy, while `by_id` hands the placement loop only the last —
+    // so an observation could be placed on an interface derived from a MAC its winning copy does
+    // not carry, and a different arrival order would place it elsewhere. The winning copy's
+    // `observed_at` is also what `write_link` stores as `valid_from` and what `seen_window` folds,
+    // so a permutation could move a STORED column.
+    //
+    // The answer is a refusal rather than a documented precondition: an `ObsId` names one immutable
+    // observation, and two contents under one id is a caller bug the pass should say out loud.
+    let mut by_id: BTreeMap<ObsId, &Observation> = BTreeMap::new();
+    for observation in observations {
+        if let Some(previous) = by_id.insert(observation.obs_id, observation)
+            && contradicts(previous, observation)
+        {
+            return Err(RepositoryError::ContradictoryObservation);
+        }
+    }
 
     let mut summary = Resolution {
         candidate_pairs: universe.len(),
@@ -341,6 +361,51 @@ pub async fn resolve_within(
     }
 
     Ok(summary)
+}
+
+/// Whether two observations supplied under ONE `ObsId` disagree about anything a decision reads.
+///
+/// # Why not `a != b`
+///
+/// `Observation` derives `PartialEq`, so the bare comparison would compile and would be one line.
+/// It would also refuse a slice where nothing was ever at stake: `raw` is *"opaque provenance …
+/// that NO decision ever reads"* (D19) [`observation/mod.rs`], so two copies differing only there
+/// contradict nothing. Guy's arbitration at story 5.11b. The comparison is therefore explicit.
+///
+/// # The destructuring is the guard, and it has no `..`
+///
+/// A new field on `Observation` breaks this function at COMPILE time and forces whoever adds it to
+/// say whether a decision reads it. That is the one thing an explicit comparison otherwise lets a
+/// new field escape in silence, and it is why the pattern below names all six fields.
+///
+/// # `facts` is compared as a SET, not as a sequence
+///
+/// Same reasoning as `raw`, applied one level down: nothing reads the order of `facts` — `keys_of`
+/// collects them into a `BTreeSet` — so two copies differing only in the order their facts were
+/// serialised in contradict nothing either, and refusing them would be the over-broad refusal this
+/// story's AC5 warns against. ⚠️ Stated honestly: the containment test below is blind to
+/// MULTIPLICITY (`[x, x, y]` and `[x, y, y]` compare equal). A repeated fact inside one observation
+/// is pathological and reaches no decision — `keys_of` de-duplicates — and the failure direction is
+/// the safe one: the guard declines to refuse, leaving the pre-5.11b behaviour rather than
+/// inventing a new one.
+fn contradicts(a: &Observation, b: &Observation) -> bool {
+    let Observation {
+        // Equal by construction: this is only ever called on two copies of ONE id.
+        obs_id: _,
+        connector_id,
+        observed_at,
+        scope,
+        facts,
+        // D19 — no decision reads it. See this function's doc.
+        raw: _,
+    } = a;
+
+    *connector_id != b.connector_id
+        || *observed_at != b.observed_at
+        || *scope != b.scope
+        || facts.len() != b.facts.len()
+        || !facts.iter().all(|fact| b.facts.contains(fact))
+        || !b.facts.iter().all(|fact| facts.contains(fact))
 }
 
 /// The `Decision` that justifies placing `observation` on the interface its group names, or `None`
@@ -632,7 +697,12 @@ fn guard_decision(
 ///
 /// # Synthetic inputs, by necessity and not by preference
 ///
-/// Nothing here reads `fixtures/`. Two properties this file rests on cannot be exercised by the
+/// **One test here reads `fixtures/`** — story 5.11b's
+/// `a_committed_stream_derives_the_same_interfaces_in_every_order`, which replays
+/// `hostname-absence.jsonl` through `FixtureConnector` because its AC6 asks for the committed
+/// corpus by name. _(This sentence read "Nothing here reads `fixtures/`" until story 5.11b, which
+/// falsified it in the same commit that corrected it.)_ Everything else is synthetic, and by
+/// necessity: two properties this file rests on cannot be exercised by the
 /// committed corpus at all: every committed replay stream carries exactly ONE `l2_domain`
 /// [`l1.rs:83-88`], so a resolver keyed on the bare MAC would pass the whole corpus; and **no
 /// committed observation carries more than one MAC** — measured over all 13 streams, the maximum is
@@ -649,6 +719,7 @@ fn guard_decision(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::permute::permutations;
     use crate::repo::{MariaRepository, OPEN_END, count_identity_links, datetime_literal};
     use opencmdb_core::observation::{
         ConnectorId, Fact, HostnameSource, L2DomainId, MacAddr, Scope, VantageId,
@@ -2880,5 +2951,554 @@ mod tests {
              compare and report `unchanged`, so counting ROWS cannot tell the two apart"
         );
         assert_eq!(count_identity_links(&pool).await.expect("count"), 1);
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Story 5.11b — the arrival order of a scan cannot change what the product believes (NFR6).
+    //
+    // 🔴 Everything below measures a property that is already true by CONSTRUCTION. Nothing here is
+    // expected to red, which is exactly the condition under which a test that measures nothing
+    // looks like a success. Every one of them therefore asserts HOW MANY permutations it consumed:
+    // measured at validation, a degenerate enumerator reddens ONLY the count assertions, and
+    // deleting those lines leaves the behavioural half green.
+    // ------------------------------------------------------------------------------------------
+
+    /// The synthetic slice the order measurements run over — every shape the corpus CANNOT produce.
+    ///
+    /// - observations 1, 2, 3 share one MAC → a group of THREE, so the witness convention is
+    ///   exercised where *"smallest other"* and *"first by arrival"* actually differ. On a group of
+    ///   two the two formulas coincide and the test would be blind;
+    /// - observation 4 carries **two MACs** → the multi-key shape. §6 measured that this is the
+    ///   only shape under which a first-key-wins `join` is observable at all: where every
+    ///   observation carries exactly one key, that mutation is a no-op and the corpus test stays
+    ///   green under it;
+    /// - observation 5 carries **no MAC** → an abstention sharing a slice with placements;
+    /// - observation 6 carries observation 1's MAC in a **second `l2_domain`** → two scopes, which
+    ///   no committed stream has.
+    ///
+    /// Six observations, so the enumeration is `6! = 720` — measured at ~11.5 ms.
+    fn order_fixture() -> Vec<Observation> {
+        vec![
+            observation(1, l2(1), &[mac(0x01)], 1_700_000_000),
+            observation(2, l2(1), &[mac(0x01)], 1_700_000_100),
+            observation(3, l2(1), &[mac(0x01)], 1_700_000_200),
+            observation(4, l2(1), &[mac(0x02), mac(0x03)], 1_700_000_300),
+            mac_less(5, l2(1), 1_700_000_400),
+            observation(6, l2(2), &[mac(0x01)], 1_700_000_500),
+        ]
+    }
+
+    /// 🔴 AC1 (shape A) — the derived interfaces and pairs are identical under EVERY permutation.
+    ///
+    /// Pure: it calls `join` and `candidates` and never opens a database, which is what lets it be
+    /// exhaustive rather than sampled. It is also the ONLY shape in this story that covers the
+    /// derived interface SET — shapes B and C both start from a store an in-order pass already
+    /// built, so the interfaces exist before they run.
+    ///
+    /// ⚠️ Because it never enters `resolve_within`, no mutation of the RESOLVER can red it — the
+    /// mutation that measures it edits `identity/l1.rs`, which the story's AC7 permits for a
+    /// mutation and forbids in the shipped diff. Measured at validation: the originally prescribed
+    /// resolver-side mutation left all tests green, and could not have done otherwise.
+    #[test]
+    fn the_derived_interfaces_and_pairs_are_identical_under_every_permutation() {
+        let observations = order_fixture();
+        let expected_groups = join(&observations);
+        let expected_pairs = candidates(&observations);
+
+        // Independent oracles: the loop below asserts nothing worth having if the slice derives
+        // nothing. These two counts are known from the fixture, not read back from the code.
+        assert_eq!(
+            expected_groups.len(),
+            4,
+            "mac 01 in l2(1), mac 02, mac 03, and mac 01 again in l2(2)"
+        );
+        assert_eq!(
+            expected_pairs.len(),
+            15,
+            "6 * 5 / 2 unordered pairs of distinct observation ids"
+        );
+
+        let mut consumed = 0usize;
+        for (index, permuted) in permutations(&observations).enumerate() {
+            assert_eq!(
+                join(&permuted),
+                expected_groups,
+                "permutation {index} changed the derived interfaces"
+            );
+            assert_eq!(
+                candidates(&permuted),
+                expected_pairs,
+                "permutation {index} changed the proposed pairs"
+            );
+            consumed += 1;
+        }
+        assert_eq!(
+            consumed, 720,
+            "🔴 6! permutations. A degenerate enumerator is caught HERE and by nothing else, \
+             because the property above is true by construction and stays green under one"
+        );
+    }
+
+    /// How many permutations the two DATABASE shapes each run.
+    ///
+    /// Stated rather than implicit: a permutation sweep multiplies round-trips, so shapes B and C
+    /// sample where shape A enumerates. Twelve passes of a seven-link slice is a few hundred
+    /// statements, which is affordable; 720 would not be.
+    const DB_PERMUTATION_SAMPLE: usize = 12;
+
+    /// A deterministic spread of permutations, **never the identity**.
+    ///
+    /// 🔴 The `skip(1)` is load-bearing and not hygiene: `permutations` yields lexicographic order,
+    /// so element 0 IS the input. Sampling it would turn both database shapes into a comparison of
+    /// a run with itself — green under any order-dependence whatsoever. The two assertions below
+    /// are what stop a future edit from quietly reintroducing it.
+    fn sampled_permutations(observations: &[Observation]) -> Vec<(usize, Vec<Observation>)> {
+        let sample: Vec<(usize, Vec<Observation>)> = permutations(observations)
+            .enumerate()
+            .skip(1)
+            .step_by(60)
+            .take(DB_PERMUTATION_SAMPLE)
+            .collect();
+        assert_eq!(
+            sample.len(),
+            DB_PERMUTATION_SAMPLE,
+            "the sample was truncated — the enumerator yielded fewer permutations than it must"
+        );
+        assert!(
+            sample.iter().all(|(_, p)| p.as_slice() != observations),
+            "the identity is not a fuzzed order"
+        );
+        sample
+    }
+
+    /// 🔴 AC2 (shape C) — a fuzzed order run into a POPULATED store writes nothing at all.
+    ///
+    /// The strongest statement in story 5.11b, and it exists only because story 5.11 shipped
+    /// idempotence. Any order-dependence anywhere in the pass — in the grouping, in the witness, in
+    /// the seen-window, in the tail abstention loop — must surface as a write, a supersede or a
+    /// vacate, because those are the only ways this pass can change anything. It needs no snapshot
+    /// machinery and no column-by-column comparison to say so.
+    ///
+    /// ⚠️ It is NOT a duplicate of story 5.11's idempotence test, which re-runs the SAME order.
+    /// Measured at validation under M2 (a witness that follows arrival): 5.11's test stayed green
+    /// while this one reddened.
+    #[tokio::test]
+    async fn a_fuzzed_order_into_a_populated_store_writes_nothing() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let observations = order_fixture();
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+
+        let first = pass(&pool, observations.clone()).await;
+        assert_eq!(
+            first.links_written, 7,
+            "3 in the group + 2 for the multi-MAC + 1 abstention + 1 singleton"
+        );
+        assert_eq!(first.interfaces_minted, 4);
+        let ids_before = all_link_ids(&pool).await;
+        assert_eq!(ids_before.len(), 7);
+
+        let mut consumed = 0usize;
+        for (index, permuted) in sampled_permutations(&observations) {
+            let again = pass(&pool, permuted).await;
+            assert_eq!(again.links_written, 0, "permutation {index} wrote a link");
+            assert_eq!(
+                again.links_superseded, 0,
+                "permutation {index} superseded a version"
+            );
+            assert_eq!(again.links_vacated, 0, "permutation {index} vacated a slot");
+            assert_eq!(
+                again.links_unchanged, 7,
+                "permutation {index} failed to recognise a slot it had already filled"
+            );
+            assert_eq!(
+                again.interfaces_minted, 0,
+                "permutation {index} minted an interface that already existed"
+            );
+            consumed += 1;
+        }
+        assert_eq!(
+            consumed, DB_PERMUTATION_SAMPLE,
+            "a degenerate enumerator is caught here, not by the no-op assertions above"
+        );
+
+        // Read back rather than trusting the summary: a supersede mints a NEW id, so an unchanged
+        // id set is the database's own account of "nothing was rewritten".
+        assert_eq!(
+            all_link_ids(&pool).await,
+            ids_before,
+            "every link row survived with the id it was first written with"
+        );
+    }
+
+    /// 🔴 AC3 (shape B) — a purge-and-replay in a fuzzed order reproduces every decision-bearing
+    /// column.
+    ///
+    /// Story 5.10's apparatus with a PERMUTED input, and it needs no new adapter code:
+    /// `snapshot_links` is reused unchanged, which is the reason this shape was chosen over a
+    /// hand-rolled comparison.
+    ///
+    /// 🔑 **`interface_id` is literally comparable here**, which shape B alone among the three can
+    /// claim. The purge removes the engine's LINKS and leaves the INTERFACES standing, so the
+    /// replay FINDS its interfaces by key instead of minting new ids — `interfaces_minted == 0`
+    /// below is what says so, and without it the comparison would be measuring a coincidence. This
+    /// is D14's statement exactly: the engine's output depends only on the observations and on the
+    /// interfaces.
+    #[tokio::test]
+    async fn a_purge_and_replay_in_a_fuzzed_order_reproduces_every_column() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let observations = order_fixture();
+        let Some(pool) = fixture(&observations).await else {
+            return;
+        };
+
+        let first = pass(&pool, observations.clone()).await;
+        assert_eq!(first.links_written, 7);
+        assert_eq!(first.interfaces_minted, 4);
+        let before = crate::repo::snapshot_links(&pool)
+            .await
+            .map_err(classify)
+            .expect("snapshot before");
+        let interfaces_before = interface_ids(&pool).await;
+        assert_eq!(before.len(), 7, "seven current links to reproduce");
+        assert_eq!(interfaces_before.len(), 4);
+
+        let mut consumed = 0usize;
+        for (index, permuted) in sampled_permutations(&observations) {
+            MariaRepository::new(pool.clone())
+                .transact(|unit| {
+                    Box::pin(async move {
+                        crate::repo::purge_engine_links(unit.executor())
+                            .await
+                            .map_err(classify)
+                    })
+                })
+                .await
+                .expect("purge");
+
+            let replay = pass(&pool, permuted).await;
+            assert_eq!(
+                replay.interfaces_minted, 0,
+                "permutation {index} re-minted an interface — `interface_id` would then compare \
+                 equal only by accident"
+            );
+            assert_eq!(
+                replay.links_written, 7,
+                "permutation {index} rebuilt a different number of links"
+            );
+            assert_eq!(
+                crate::repo::snapshot_links(&pool)
+                    .await
+                    .map_err(classify)
+                    .expect("snapshot after"),
+                before,
+                "permutation {index} reproduced a different decision"
+            );
+            consumed += 1;
+        }
+        assert_eq!(
+            consumed, DB_PERMUTATION_SAMPLE,
+            "a degenerate enumerator is caught here, not by the comparison above"
+        );
+        assert_eq!(
+            interface_ids(&pool).await,
+            interfaces_before,
+            "no permutation minted an interface across the whole sweep"
+        );
+    }
+
+    /// The committed stream this story measures over.
+    ///
+    /// `hostname-absence.jsonl` carries **six** observations — the largest committed stream — so
+    /// its enumeration is `6! = 720`, the same size shape A runs synthetically. The two streams
+    /// that could NOT be used are named in the test's own doc rather than left to be rediscovered.
+    const CORPUS_STREAM: &str = "scenario/replay/hostname-absence.jsonl";
+
+    /// The corpus's connector identity, **restated** rather than imported.
+    ///
+    /// `fixture_connector`'s equivalents are private to its own test module. Restating them here is
+    /// the deliberate-redundancy idiom this module already uses for `CORPUS_EXACT_MAC`, and it
+    /// buys something: if the committed streams were re-issued under another connector id, the
+    /// load below fails `ForeignConnectorId` and this test reds LOUDLY, where a shared helper would
+    /// have followed the change in silence.
+    fn corpus_connector() -> ConnectorId {
+        ConnectorId::from_uuid(
+            uuid::Uuid::parse_str("33333333-3333-4333-8333-333333333333").expect("a valid uuid"),
+        )
+    }
+
+    /// The single scope every usable committed stream declares. See [`corpus_connector`].
+    fn corpus_scope() -> Scope {
+        Scope {
+            l2_domain: L2DomainId::from_uuid(
+                uuid::Uuid::parse_str("11111111-1111-4111-8111-111111111111")
+                    .expect("a valid uuid"),
+            ),
+            vantage: VantageId::from_uuid(
+                uuid::Uuid::parse_str("22222222-2222-4222-8222-222222222222")
+                    .expect("a valid uuid"),
+            ),
+        }
+    }
+
+    /// A descriptor wide enough to admit any committed stream — deliberately WIDER than what the
+    /// stream emits, because *capable and unseen* must stay legal (D34 §1).
+    fn corpus_capabilities() -> opencmdb_core::observation::Capabilities {
+        use opencmdb_core::observation::{Capabilities, FactKind};
+        Capabilities {
+            as_of: at(1_700_000_000),
+            kinds: BTreeSet::from([
+                FactKind::Mac,
+                FactKind::IpV4,
+                FactKind::Hostname,
+                FactKind::OuiVendor,
+                FactKind::Rtt,
+                FactKind::Uplink,
+                FactKind::DhcpLease,
+            ]),
+        }
+    }
+
+    /// Replay [`CORPUS_STREAM`] through the real connector and collect what it emits.
+    async fn corpus_observations() -> Vec<Observation> {
+        use opencmdb_core::connector::{Connector, VecSink};
+
+        let mut connector = crate::fixture_connector::FixtureConnector::load(
+            corpus_connector(),
+            corpus_capabilities(),
+            vec![corpus_scope()],
+            CORPUS_STREAM,
+        )
+        .expect("the committed stream loads with the corpus context");
+        let mut sink = VecSink::default();
+        connector
+            .poll(
+                at(1_700_000_000),
+                &mut sink,
+                tokio_util::sync::CancellationToken::new(),
+            )
+            .await
+            .expect("this stream ends cleanly — see the doc on the caller");
+        sink.observations
+    }
+
+    /// AC6 — the committed corpus is used, and its limits are stated rather than implied.
+    ///
+    /// # What the corpus can and cannot do here
+    ///
+    /// It satisfies AC1's letter and reaches none of the interesting shapes. Measured and already
+    /// recorded in this module's doc: **no committed observation carries more than one MAC**, and
+    /// every stream carries a single `l2_domain`. So this test is reddened by nothing in the
+    /// story's permitted mutation set — under a `join` mutated to first-key-wins it stays GREEN,
+    /// because first-key-wins is a no-op where every observation has exactly one key. The synthetic
+    /// slice of [`order_fixture`] is what carries that measurement; this one proves the property
+    /// holds on bytes the project committed rather than on bytes a test invented.
+    ///
+    /// # Why THIS stream
+    ///
+    /// Two of the thirteen cannot be used and it is worth naming why, since both look usable:
+    /// `capability-downgrade.jsonl` and `partial-then-failed.jsonl` carry their OWN `connector_id`
+    /// and `scope`, so loading them with the corpus context is refused `ForeignConnectorId` then
+    /// `UncoveredScope`; and `partial-then-failed.jsonl` additionally ends in a `Failure` record,
+    /// so `poll` returns `Err(ConnectorError::Unreachable)` with four observations already in the
+    /// sink and the obvious `.expect("poll")` PANICS. Both are by design.
+    #[tokio::test]
+    async fn a_committed_stream_derives_the_same_interfaces_in_every_order() {
+        let observations = corpus_observations().await;
+        assert_eq!(
+            observations.len(),
+            6,
+            "the largest committed stream, chosen so the enumeration is a full 6!"
+        );
+
+        let expected_groups = join(&observations);
+        let expected_pairs = candidates(&observations);
+        assert!(
+            !expected_groups.is_empty(),
+            "a stream that derives no interface would make the loop below vacuous"
+        );
+        assert_eq!(expected_pairs.len(), 15, "6 * 5 / 2 unordered pairs");
+        // The stated limit, ASSERTED rather than claimed — and computed here from the facts rather
+        // than read out of `keys_of`, which is private to `identity/` and which AC7 forbids this
+        // story to touch. Counting DISTINCT addresses is the right measure: one MAC repeated twice
+        // is still one key, `keys_of` returning a set.
+        for observation in &observations {
+            let macs: BTreeSet<MacAddr> = observation
+                .facts
+                .iter()
+                .filter_map(|fact| match fact {
+                    Fact::Mac { addr, .. } => Some(*addr),
+                    _ => None,
+                })
+                .collect();
+            assert!(
+                macs.len() <= 1,
+                "no committed observation carries more than one MAC — that is exactly why a \
+                 first-key-wins `join` is invisible here and the synthetic slice is required"
+            );
+        }
+
+        let mut consumed = 0usize;
+        for (index, permuted) in permutations(&observations).enumerate() {
+            assert_eq!(
+                join(&permuted),
+                expected_groups,
+                "permutation {index} of the committed stream changed the derived interfaces"
+            );
+            assert_eq!(
+                candidates(&permuted),
+                expected_pairs,
+                "permutation {index} of the committed stream changed the proposed pairs"
+            );
+            consumed += 1;
+        }
+        assert_eq!(consumed, 720, "6! permutations of the committed stream");
+    }
+
+    /// 🔴 AC5 — a repeated `obs_id` whose DECISION-BEARING content differs is refused BY NAME.
+    ///
+    /// The census below is exhaustive on purpose: `contradicts` destructures all six fields of
+    /// `Observation`, and this list is the reader's copy of that destructuring. Four of the five
+    /// variants would previously have been resolved silently in favour of whichever copy arrived
+    /// last — and *which* copy that is depends on arrival order, which is the whole subject.
+    #[tokio::test]
+    async fn a_repeated_obs_id_with_differing_content_is_refused() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let base = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        let Some(pool) = fixture(std::slice::from_ref(&base)).await else {
+            return;
+        };
+
+        let mut other_connector = base.clone();
+        other_connector.connector_id = ConnectorId::from_uuid(uuid::Uuid::from_u128(9));
+        let mut other_instant = base.clone();
+        other_instant.observed_at = at(1_700_000_999);
+        let mut other_domain = base.clone();
+        other_domain.scope.l2_domain = l2(2);
+        let mut other_vantage = base.clone();
+        other_vantage.scope.vantage = VantageId::from_uuid(uuid::Uuid::from_u128(9));
+        let mut other_facts = base.clone();
+        other_facts.facts = vec![Fact::Mac {
+            addr: mac(0x02),
+            locally_administered: false,
+        }];
+
+        for (field, variant) in [
+            ("connector_id", other_connector),
+            ("observed_at", other_instant),
+            ("scope.l2_domain", other_domain),
+            ("scope.vantage", other_vantage),
+            ("facts", other_facts),
+        ] {
+            let refused = try_pass(&pool, vec![base.clone(), variant]).await;
+            assert!(
+                matches!(refused, Err(RepositoryError::ContradictoryObservation)),
+                "a slice contradicting itself on {field} must be refused by NAME, not resolved \
+                 in favour of the last copy; got {refused:?}"
+            );
+            assert_eq!(
+                count_identity_links(&pool).await.expect("count"),
+                0,
+                "{field}: the refusal happens before anything is written"
+            );
+        }
+    }
+
+    /// 🔑 AC5 — `raw` is EXCLUDED from the comparison, through the whole pass.
+    ///
+    /// D19: `raw` is opaque provenance that no decision ever reads, so two copies differing only
+    /// there contradict nothing and refusing them would red a case where nothing was at stake.
+    /// Guy's arbitration.
+    #[tokio::test]
+    async fn a_repeated_obs_id_differing_only_in_raw_is_accepted() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let base = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        let Some(pool) = fixture(std::slice::from_ref(&base)).await else {
+            return;
+        };
+
+        let mut with_raw = base.clone();
+        with_raw.raw = Some(r#"{"provenance":"a second poll"}"#.to_string());
+
+        let summary = pass(&pool, vec![base, with_raw]).await;
+        assert_eq!(
+            summary.links_written, 1,
+            "one observation, one link — `raw` reaches no decision"
+        );
+        assert_eq!(count_identity_links(&pool).await.expect("count"), 1);
+    }
+
+    /// 🔴 The two exclusions, measured against the one-line comparison they replace.
+    ///
+    /// Each case asserts BOTH that `contradicts` accepts it and that `a != b` would have refused
+    /// it. The second half is what makes the explicit field-by-field comparison load-bearing rather
+    /// than decorative: without it, nothing in the suite would notice `contradicts` being replaced
+    /// by a bare `!=`.
+    #[test]
+    fn the_contradiction_test_excludes_what_no_decision_reads() {
+        let base = observation(1, l2(1), &[mac(0x01), mac(0x02)], 1_700_000_000);
+
+        let mut reordered = base.clone();
+        reordered.facts.reverse();
+        assert!(
+            !contradicts(&base, &reordered),
+            "nothing reads the ORDER of `facts` — `keys_of` collects them into a set"
+        );
+        assert_ne!(
+            base, reordered,
+            "🔴 and a bare `a != b` WOULD have refused it"
+        );
+
+        let mut with_raw = base.clone();
+        with_raw.raw = Some("provenance".to_string());
+        assert!(
+            !contradicts(&base, &with_raw),
+            "D19 — no decision reads `raw`"
+        );
+        assert_ne!(
+            base, with_raw,
+            "🔴 and a bare `a != b` WOULD have refused it"
+        );
+    }
+
+    /// The other half: every field a decision DOES read is caught by `contradicts`.
+    ///
+    /// A pure companion to the database test above — it is what stays measurable if the refusal
+    /// ever moves out of `resolve_within`.
+    #[test]
+    fn the_contradiction_test_catches_every_field_a_decision_reads() {
+        let base = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        assert!(
+            !contradicts(&base, &base.clone()),
+            "a clone contradicts nothing"
+        );
+
+        let mut other_connector = base.clone();
+        other_connector.connector_id = ConnectorId::from_uuid(uuid::Uuid::from_u128(9));
+        assert!(contradicts(&base, &other_connector), "connector_id");
+
+        let mut other_instant = base.clone();
+        other_instant.observed_at = at(1_700_000_999);
+        assert!(contradicts(&base, &other_instant), "observed_at");
+
+        let mut other_domain = base.clone();
+        other_domain.scope.l2_domain = l2(2);
+        assert!(contradicts(&base, &other_domain), "scope.l2_domain");
+
+        let mut other_vantage = base.clone();
+        other_vantage.scope.vantage = VantageId::from_uuid(uuid::Uuid::from_u128(9));
+        assert!(contradicts(&base, &other_vantage), "scope.vantage");
+
+        let mut fewer_facts = base.clone();
+        fewer_facts.facts.clear();
+        assert!(contradicts(&base, &fewer_facts), "facts, by length");
+
+        let mut other_facts = base.clone();
+        other_facts.facts = vec![Fact::Mac {
+            addr: mac(0x02),
+            locally_administered: false,
+        }];
+        assert!(contradicts(&base, &other_facts), "facts, by content");
     }
 }
