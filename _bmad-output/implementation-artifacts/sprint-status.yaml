@@ -50,7 +50,43 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-05  # 5.11b CONTEXTED **AND VALIDATED** -> `ready-for-dev`. NEXT = `dev-story`.
+last_updated: 2026-08-06  # 5.11b IMPLEMENTED -> `review` (NOT `done`: that is the MERGE's business).
+                          # Built against a live mariadb:10.11.11 on 13306. **429 -> 446 tests**
+                          # (241 bin + 159 core + 46 xtask), six gates green, both clippy forms
+                          # clean, `Cargo.lock` diff EMPTY. NEXT = `code-review` 5.11b, then PR.
+                          # Three measurement shapes: A pure+exhaustive (720 permutations, twice --
+                          # once synthetic, once over `hostname-absence.jsonl`), B purge-and-replay
+                          # (12 sampled), C the no-op (12 sampled) + a reference-scale seeded sweep
+                          # (300 obs over 100 MACs, 8 seeds, 692 ms).
+                          # 🔴 THE STORY'S OWN CENTRAL QUESTION GOT TWO NEW ANSWERS, BOTH BAD, WHICH
+                          # IS WHY IT WAS WORTH ASKING A SECOND TIME:
+                          #   . M5's prediction is REFUTED. The golden-value test does NOT guard the
+                          #     seed sweep's provenance -- it pins `shuffled` at a HARDCODED seed and
+                          #     never reads SEED_SWEEP. A clock-derived sweep left ALL 445 TESTS
+                          #     GREEN. Closed by a guard that reads the constant's VALUES; M5 now
+                          #     reds exactly one test. Two properties had been conflated:
+                          #     reproducible WITHIN one process is true for every seed; reproducible
+                          #     ACROSS runs is what a fixed seed buys.
+                          #   . M2 exposed that `shuffled` and SEED_SWEEP had NO CONSUMER at all, so
+                          #     AC4's reference-scale half was satisfied by nothing. The new test
+                          #     uses groups of THREE, because the existing reference-scale test gives
+                          #     every observation its own MAC and a singleton never exercises the
+                          #     witness convention.
+                          # 🔑 WHAT HELD, MEASURED: shape C is NOT a duplicate of 5.11's idempotence
+                          # test (under M2, 5.11's stayed green while shape C reddened); M1-noop
+                          # leaves the whole suite green exactly as predicted; and M1-fkw leaves the
+                          # CORPUS AC1 test green while the synthetic one reds -- so AC6 is
+                          # satisfiable in letter and the synthetic slice carries the measurement.
+                          # 🔑 M6 reds HERE (7 tests) where the story measured it green -- that is
+                          # §5.3's count assertions working, and `M3b+COUNTS_DELETED` proves it:
+                          # delete the five count assertions and the four consumers go green again.
+                          # ⚠️ Ten mutation rows, ZERO compiler-carried reds. The one compile failure
+                          # was an artefact of the mutation DRIVER (M5's rename hit a `use` line),
+                          # repaired and re-run -- recorded so it is not read as a measurement.
+                          # 🔑 One production change only: `RepositoryError::ContradictoryObservation`.
+                          # `raw` AND the ORDER of `facts` are excluded from the comparison, each
+                          # with a test asserting the bare `a != b` WOULD have refused it.
+                          # (previous entry:) 5.11b CONTEXTED **AND VALIDATED** -> `ready-for-dev`.
                           # Two fresh-context agents; **14 findings applied, 5 HIGH**. The gap-hunt
                           # BUILT THE WHOLE STORY against a live mariadb:10.11.11 on 13311:
                           # **429 -> 441 tests**, six gates green, both clippy forms clean, and
@@ -1621,7 +1657,7 @@ development_status:
   # and not one of them reads the slice's order. Epic 5: 17 -> 18 stories. `epics.md` NOT edited;
   # the correction is registered with Epic 5's retrospective.
   5-11-idempotent-supersede: done
-  5-11b-order-independence: in-progress
+  5-11b-order-independence: review
   5-12-never-overwrite-anti-regression: backlog
   5-13-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog

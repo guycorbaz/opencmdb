@@ -2701,8 +2701,23 @@ disposed of here; four are opened.
   named here too rather than described as *"the first story that ingests observations it did not
   construct"*, which is the condition form this register refuses.
 
-- ⚠️ **`resolve_within` reads the slice's ARRIVAL ORDER twice, and the four order-independent
-  mechanisms do not cover it.** `by_id` is a `.collect()` into a `BTreeMap`, so it is
+- ✅ **CLOSED by story 5.11b, 2026-08-06 — both halves, by different means.** The
+  last-duplicate-wins half is closed by a REFUSAL rather than by a rule for picking a winner:
+  `resolve_within` returns `RepositoryError::ContradictoryObservation` when one `obs_id` arrives
+  twice carrying different decision-bearing content. `raw` is excluded from that comparison (D19 —
+  no decision reads it) and so is the ORDER of `facts`; both exclusions are measured against the
+  bare `a != b` they replace, so the explicit comparison is load-bearing rather than decorative.
+  Mutation M4 (drop the refusal) reds exactly one test. The tail-abstention half is closed as
+  BENIGN, and now by measurement rather than by argument: 720 permutations of a six-observation
+  slice through `join`/`candidates`, twelve through purge-and-replay, twelve more into a populated
+  store, and eight seeded orders at reference scale — every one a no-op.
+  ⚠️ **One consequence is registered rather than closed**: the pure tests of `contradicts` do NOT
+  protect its WIRING. M4 removes the call and leaves them green; only the database test sees it.
+  _(The count below read "425 tests" when this bullet was written; `master` carried **429** at story
+  5.11's merge and 446 at 5.11b's. The claim it makes is unaffected — last-wins was invisible to all
+  of them.)_
+  ~~⚠️ **`resolve_within` reads the slice's ARRIVAL ORDER twice, and the four order-independent
+  mechanisms do not cover it.**~~ `by_id` is a `.collect()` into a `BTreeMap`, so it is
   **last-duplicate-wins**: a slice carrying one `obs_id` twice with DIFFERENT content resolves to
   whichever copy arrives last, and that copy's `observed_at` becomes a STORED column. The tail
   abstention loop iterates the raw slice, so abstention rows are inserted in arrival order (the row
@@ -2730,3 +2745,66 @@ disposed of here; four are opened.
   leaving it with a note. **Owner: the milestone that consolidates migrations** — the same act that
   regenerates `architecture-views.md` (issue #50), which is the only point at which rewriting an
   applied migration is legitimate.
+
+## Deferred from: story-5-11b-order-independence (2026-08-06)
+
+_Story 5.11b measured a property that is already true by construction, so its residue is almost
+entirely about the MEASUREMENT rather than about the engine. Two entries below were found by the
+story's own mutation pass and would not have been visible to reading._
+
+- 🔴 **The golden-value test does NOT guard the seed sweep's provenance, and the story said it did.**
+  Measured: replacing `SEED_SWEEP` with `now()..=now()+7` left the **entire suite green** — the
+  golden test pins `shuffled` at a hardcoded seed and never reads the constant, while every other
+  consumer stays green because eight clock-derived seeds still shuffle, still reproduce within one
+  process (`shuffled(x, s) == shuffled(x, s)` for every `s`), and still number eight.
+  ✅ **CLOSED in the same story** by `the_seed_sweep_is_the_fixed_range_it_claims_to_be`, which
+  reads the constant's VALUES; M5 then reds exactly one test. Recorded rather than silently fixed
+  because the refuted prediction is the finding: *reproducible within one process* and *reproducible
+  across runs* are different properties, and only the second needs a fixed seed.
+  **No owner — closed.**
+
+- ⚠️ **The pure tests of `contradicts` do not protect its wiring into `resolve_within`.** Mutation
+  M4 deletes the CALL, not the function, and `the_contradiction_test_catches_every_field_a_decision_reads`
+  and `the_contradiction_test_excludes_what_no_decision_reads` both stay green; only the database
+  test `a_repeated_obs_id_with_differing_content_is_refused` reds. That is the correct division of
+  labour and it is not a defect — but it means the refusal's REACHABILITY rests on one test, and a
+  future story that moves the guard would need to move that test with it.
+  **Owner: story 5.14**, the wiring story, which is the first caller to hand the pass observations
+  it did not construct.
+
+- ⚠️ **`contradicts` is blind to fact MULTIPLICITY.** `facts` is compared as a set (a containment
+  test in both directions) rather than as a sequence, deliberately: nothing reads the ORDER of
+  `facts`, since `keys_of` collects them into a `BTreeSet`, so refusing a reordered serialisation
+  would be the over-broad refusal AC5 warns against. The consequence is that `[x, x, y]` and
+  `[x, y, y]` compare equal. A repeated fact inside one observation is pathological and reaches no
+  decision, and the failure direction is the safe one — the guard declines to refuse and leaves the
+  pre-5.11b behaviour rather than inventing a new one. **Owner: whoever gives `Fact` an `Ord`
+  derive**, at which point a `BTreeSet` comparison closes it for free. Not done here: widening a
+  core type for a comparison convenience is outside a story whose one production change is the
+  refusal itself.
+
+- ⚠️ **`permutations` materialises all `n!` vectors before yielding any.** `index_permutations`
+  builds a `Vec<Vec<usize>>` upfront. At the sizes this story uses (`n ≤ 6`, so 720) that is
+  measured at ~20 ms and irrelevant. A caller at `n = 8` would allocate 40 320 vectors before the
+  first iteration, and at `n = 10` it would not finish. The signature is already
+  `impl Iterator`, so making it lazy is a body change with no call-site cost.
+  **Owner: the first story that permutes a slice longer than six** — which is a real condition and
+  not a disguised *"someday"*: the reference-scale path deliberately uses the seeded shuffle
+  instead, precisely because enumeration does not reach it.
+
+- ⚠️ **`shuffled` and `SEED_SWEEP` have exactly ONE consumer.** If
+  `the_reference_scale_pass_is_order_independent_across_the_seed_sweep` were ever deleted, the
+  generator and its four guards would keep passing while measuring nothing about the product — the
+  same shape as a corpus stream nothing reads. Found while measuring M2, which is what exposed that
+  the shuffle had NO consumer at all when the story was first built. **Owner: Epic 5's
+  retrospective**, as an observation about test-support code rather than a defect to fix.
+
+- ⚠️ **The corpus AC1 test is reddened by nothing in the permitted mutation set, and that is
+  structural.** Measured: under a `join` mutated to first-key-wins, the synthetic test reds and
+  `a_committed_stream_derives_the_same_interfaces_in_every_order` stays GREEN, because no committed
+  observation carries more than one MAC and every stream carries one `l2_domain`. AC6 is therefore
+  satisfiable in letter by a corpus that cannot see the mutation, and the synthetic slice is what
+  carries the measurement. Registered rather than fixed: adding a multi-MAC or second-scope stream
+  to `fixtures/` is a corpus change, and this story moves nothing under `fixtures/`.
+  **Owner: Epic 6**, which implements `l2-*` and is the first epic with a reason to extend the
+  corpus.
