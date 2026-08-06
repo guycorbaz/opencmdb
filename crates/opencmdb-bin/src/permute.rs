@@ -232,6 +232,27 @@ mod tests {
         }
     }
 
+    /// 🔴 The SWEEP's own values, pinned — the guard a clock-derived seed actually trips on.
+    ///
+    /// **Measured, and it REFUTES the prediction this story inherited.** The golden-value test
+    /// below was said to be what reds when the sweep is seeded from the clock. It is not: it pins
+    /// `shuffled` at a HARDCODED seed, so it never reads [`SEED_SWEEP`] at all. Replacing the sweep
+    /// with `now()..=now()+7` was measured leaving the ENTIRE suite green — every other consumer
+    /// stays green too, because eight clock-derived seeds still shuffle, still reproduce within one
+    /// process (`shuffled(x, s) == shuffled(x, s)` for every `s`), and still number eight.
+    ///
+    /// Reading the constant's VALUES is the only thing that closes it. The two tests are therefore
+    /// complementary rather than redundant: this one pins the sweep, the next one pins the
+    /// algorithm, and neither substitutes for the other.
+    #[test]
+    fn the_seed_sweep_is_the_fixed_range_it_claims_to_be() {
+        assert_eq!(
+            SEED_SWEEP.collect::<Vec<u64>>(),
+            vec![0, 1, 2, 3, 4, 5, 6, 7],
+            "the sweep must be FIXED — a clock-derived one fails once a month and reproduces never"
+        );
+    }
+
     /// 🔴 AC4 guard 2 — the GOLDEN VALUE, which pins the seed AND the algorithm.
     ///
     /// Without this, the seed's provenance is measured by NOTHING: the test above holds for every
