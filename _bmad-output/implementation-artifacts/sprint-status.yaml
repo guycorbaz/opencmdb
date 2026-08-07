@@ -50,7 +50,143 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-05  # 5.11 **DONE** -- PR #71 squash-merged as `ce0a770` after a green CI
+last_updated: 2026-08-06  # 5.11b IMPLEMENTED **AND CODE-REVIEWED** -> stays `review` (NOT `done`:
+                          # that is the MERGE's business). **429 -> 446 -> 450 tests** after the
+                          # review (245 bin + 159 core + 46 xtask). NEXT = PR, then squash-merge.
+                          # THREE LAYERS, 2026-08-06; the Edge Case Hunter ran its own mutations
+                          # against the live DB and the Auditor re-executed the whole T7 pass.
+                          # 🔑 TWO LAYERS INDEPENDENTLY FOUND THE SAME TWO DEFECTS (the false
+                          # `XorShift64` doc, the corpus test's weak oracle) -- the strongest signal
+                          # this process gives.
+                          # 🔴 THE STORY'S OWN HEADLINE DEFECT RECURRED INSIDE THE STORY:
+                          # `SEED_SWEEP`'s doc asserted the golden-value test guarded its provenance
+                          # and that a clock-derived sweep left the suite green -- BOTH refuted by a
+                          # test EIGHTY LINES BELOW IT IN THE SAME COMMIT. Sixth consecutive story
+                          # with a doc falsified by a measurement in its own commit, and the first
+                          # where the falsifying measurement was the story's own deliverable.
+                          # 🔴 FOUR BEHAVIOURAL DEFECTS, every one found BY MUTATION, not by reading:
+                          #   . "the refusal happens before anything is written" was guarded by
+                          #     NOTHING -- moving the `return Err` to the END left 446/446 GREEN,
+                          #     because every test runs inside `transact`, which rolls back on Err.
+                          #     Now probed on a POOLED connection under autocommit; R1 reds it alone.
+                          #   . NO order test touched the `interface` table's derived instants --
+                          #     making `seen_window` follow arrival order left ALL FIVE order tests
+                          #     green. Shape C now compares the windows; R4 reds it.
+                          #   . the `facts.len()` term in `contradicts` was DROPPABLE with the suite
+                          #     green -- it is the only term catching [x] vs [x,x]. R2 reds it now.
+                          #   . the corpus test's join oracle was `!is_empty()` where its twin pins
+                          #     an exact count. Pinned at 5 interfaces; R3 reds it.
+                          # 🔴 THREE OF MY OWN CLAIMS WERE REFUTED BY RE-MEASUREMENT:
+                          #   . `M3b+` was WRONG IN FIVE DOCUMENTS -- there are SIX count assertions,
+                          #     not five; the sixth is inside `sampled_permutations` and guards
+                          #     shapes B and C a second time. Deleting only the four `consumed` lines
+                          #     leaves the 2 DB consumers RED. The code was better than the claim.
+                          #   . `M1-fkw` was 10 red, not 11 -- I copied the driver's raw line count
+                          #     (which includes `result: FAILED`) for that one row of ten.
+                          #   . the timing figures rested on no check (692 ms here, 561 ms there).
+                          # 🔑 DISMISSED WITH THE CHECK THAT DISMISSED THEM: "DB tests may not run in
+                          # CI" is REFUTED (`ci.yml:24` exports DATABASE_URL against a mariadb
+                          # service); the `rand` transitive claim VERIFIED. The Edge Case Hunter
+                          # refuted EIGHT of its own suspicions by running them.
+                          # 🔴 AC5 is PARTLY MET and was CORRECTED rather than ticked: the "test that
+                          # reds when a new field is added" is a COMPILE error, and a `..` retires it
+                          # with the suite green. Registered.
+                          # (implementation entry:) 5.11b IMPLEMENTED -> `review`.
+                          # Built against a live mariadb:10.11.11 on 13306. **429 -> 446 tests**
+                          # (241 bin + 159 core + 46 xtask), six gates green, both clippy forms
+                          # clean, `Cargo.lock` diff EMPTY. NEXT = `code-review` 5.11b, then PR.
+                          # Three measurement shapes: A pure+exhaustive (720 permutations, twice --
+                          # once synthetic, once over `hostname-absence.jsonl`), B purge-and-replay
+                          # (12 sampled), C the no-op (12 sampled) + a reference-scale seeded sweep
+                          # (300 obs over 100 MACs, 8 seeds, 692 ms).
+                          # 🔴 THE STORY'S OWN CENTRAL QUESTION GOT TWO NEW ANSWERS, BOTH BAD, WHICH
+                          # IS WHY IT WAS WORTH ASKING A SECOND TIME:
+                          #   . M5's prediction is REFUTED. The golden-value test does NOT guard the
+                          #     seed sweep's provenance -- it pins `shuffled` at a HARDCODED seed and
+                          #     never reads SEED_SWEEP. A clock-derived sweep left ALL 445 TESTS
+                          #     GREEN. Closed by a guard that reads the constant's VALUES; M5 now
+                          #     reds exactly one test. Two properties had been conflated:
+                          #     reproducible WITHIN one process is true for every seed; reproducible
+                          #     ACROSS runs is what a fixed seed buys.
+                          #   . M2 exposed that `shuffled` and SEED_SWEEP had NO CONSUMER at all, so
+                          #     AC4's reference-scale half was satisfied by nothing. The new test
+                          #     uses groups of THREE, because the existing reference-scale test gives
+                          #     every observation its own MAC and a singleton never exercises the
+                          #     witness convention.
+                          # 🔑 WHAT HELD, MEASURED: shape C is NOT a duplicate of 5.11's idempotence
+                          # test (under M2, 5.11's stayed green while shape C reddened); M1-noop
+                          # leaves the whole suite green exactly as predicted; and M1-fkw leaves the
+                          # CORPUS AC1 test green while the synthetic one reds -- so AC6 is
+                          # satisfiable in letter and the synthetic slice carries the measurement.
+                          # 🔑 M6 reds HERE (7 tests) where the story measured it green -- that is
+                          # §5.3's count assertions working, and `M3b+COUNTS_DELETED` proves it:
+                          # delete the five count assertions and the four consumers go green again.
+                          # ⚠️ Ten mutation rows, ZERO compiler-carried reds. The one compile failure
+                          # was an artefact of the mutation DRIVER (M5's rename hit a `use` line),
+                          # repaired and re-run -- recorded so it is not read as a measurement.
+                          # 🔑 One production change only: `RepositoryError::ContradictoryObservation`.
+                          # `raw` AND the ORDER of `facts` are excluded from the comparison, each
+                          # with a test asserting the bare `a != b` WOULD have refused it.
+                          # (previous entry:) 5.11b CONTEXTED **AND VALIDATED** -> `ready-for-dev`.
+                          # Two fresh-context agents; **14 findings applied, 5 HIGH**. The gap-hunt
+                          # BUILT THE WHOLE STORY against a live mariadb:10.11.11 on 13311:
+                          # **429 -> 441 tests**, six gates green, both clippy forms clean, and
+                          # NO new dependency (Cargo.lock diff empty).
+                          # 🔴 THE ANSWER TO THE STORY'S OWN CENTRAL QUESTION IS BAD, WHICH IS WHY
+                          # IT WAS WORTH ASKING: **FOUR prescribed mutations were measured leaving
+                          # the ENTIRE SUITE GREEN.**
+                          #   . M1 as prescribed is a NO-OP -- the resolver consuming groups in
+                          #     slice order cannot reach a shape-A test that never calls the
+                          #     resolver. AC1 was reddenable by NO permitted mutation.
+                          #   . M5 is GREEN: reproducibility WITHIN one process is trivially true
+                          #     for any seed, so the seed's PROVENANCE was guarded by nothing.
+                          #   . M6 is GREEN and turns AC1 into a tautology: permutations()[0] IS
+                          #     the identity.
+                          #   . A degenerate ENUMERATOR leaves AC1-AC3 green unless every consuming
+                          #     test asserts its own permutation count -- proven by deleting the
+                          #     four count assertions and re-running.
+                          # 🔑 GUY'S TWO ARBITRATIONS:
+                          #   (1) a MUTATION may edit `identity/` -- the ban is on the SHIPPED DIFF,
+                          #       not on the prove-to-red pass. That is what makes AC1 measurable.
+                          #   (2) AC5's comparison EXCLUDES `raw`: D19 says no decision reads it, so
+                          #       refusing on it would red a case where nothing was at stake. The
+                          #       comparison is explicit field-by-field, with a test that reds when
+                          #       a new `Observation` field is forgotten.
+                          # 🔑 WHAT HELD, ALSO MEASURED: shape C is a no-op today AND is not a
+                          # duplicate of 5.11's idempotence test (under M2, 5.11's stayed green
+                          # while shape C reddened); shape B's `interface_id` claim holds over 7
+                          # samples; and the load-bearing sizing decision is exact -- **720
+                          # permutations of the largest stream in 11.5 ms**.
+                          # ⚠️ Also: partial-then-failed.jsonl ends in a Failure record so the
+                          # obvious `.expect("poll")` PANICS; two streams carry their own
+                          # connector/scope; the corpus context helpers are private; `main.rs`
+                          # needs a `#[cfg(test)] mod` line so "untouched" was unsatisfiable; and
+                          # resolver.rs:635 says "Nothing here reads fixtures/", which T5 falsifies.
+                          # (contexting entry:)
+                          # 🔑 THE LOAD-BEARING FINDING AT CONTEXTING: the committed replay streams
+                          # carry **3 to 6 observations**, so `n!` is at most 720 and permutations
+                          # can be ENUMERATED EXHAUSTIVELY rather than sampled. No `rand` (it is in
+                          # no Cargo.toml), no seed, no flakiness -- and strictly STRONGER than the
+                          # fuzz epics.md asks for. A seeded sweep is kept only for the 300-strong
+                          # reference slice, from a FIXED seed range, never the clock.
+                          # 🔴 THE STORY IS DESIGNED AROUND ONE FAILURE MODE: a test that cannot
+                          # fail. The property it measures is already true by construction (four
+                          # mechanisms, all BTree-based), so a test measuring nothing looks exactly
+                          # like a success. Every AC names the mutation that must red it, and a
+                          # mutation leaving the suite GREEN is a HIGH finding, not a reassurance.
+                          # 🔑 THREE measurement shapes, not one: (A) pure+exhaustive over `join`
+                          # and `candidates` -- the only one covering the derived interface SET;
+                          # (B) purge-and-replay with a PERMUTED slice, where `interface_id` is
+                          # literally comparable because the replay FINDS its interfaces; (C) the
+                          # permuted slice into a POPULATED store must be a NO-OP -- the strongest,
+                          # and possible only because 5.11 shipped idempotence.
+                          # ⚠️ The generator gets its OWN test: a shuffle returning its input makes
+                          # every other test in the story vacuously green.
+                          # 🔴 ONE production change: `resolve_within` refuses a repeated `obs_id`
+                          # with DIFFERING content (`by_id` is last-duplicate-wins, and the losing
+                          # copy's keys still reach `join`). A repeated IDENTICAL observation stays
+                          # legal -- 5.9b's and 5.11's tests for it must both keep passing.
+                          # (previous:) 5.11 **DONE** -- PR #71 squash-merged as `ce0a770` after a green CI
                           # run. **Epic 5 is now 14/18.** `master` carries **429 tests**; the
                           # branch is deleted locally and on `origin`.
                           # NEXT = `create-story` 5.11b, which inherits by name from 5.11's
@@ -1562,7 +1698,7 @@ development_status:
   # and not one of them reads the slice's order. Epic 5: 17 -> 18 stories. `epics.md` NOT edited;
   # the correction is registered with Epic 5's retrospective.
   5-11-idempotent-supersede: done
-  5-11b-order-independence: backlog
+  5-11b-order-independence: review
   5-12-never-overwrite-anti-regression: backlog
   5-13-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog
