@@ -1210,7 +1210,10 @@ fn strip_comments(line: &str, sql: bool, state: &mut CommentState) -> String {
 /// word, collapsing would split it. The review's `e06` planted one at the head of a statement and
 /// the gate went green.
 fn is_invisible(ch: char) -> bool {
-    matches!(ch, '\u{00ad}' | '\u{200b}'..='\u{200f}' | '\u{2060}' | '\u{feff}')
+    matches!(
+        ch,
+        '\u{00ad}' | '\u{200b}'..='\u{200f}' | '\u{2060}' | '\u{feff}'
+    )
 }
 
 /// One file's text, lowercased and whitespace-collapsed, plus the source line of every byte.
@@ -1372,9 +1375,22 @@ fn outside_parens(projection: &str) -> String {
 ///
 /// `DELETE` and `TRUNCATE` are deliberately ABSENT: NFR5 is about AUTHORSHIP and a removal writes
 /// no author — including them was measured reddening the committed tree at two fixture sites.
-/// `RENAME TABLE` and `ALTER … DROP CONSTRAINT` are absent for the opposite reason: they neutralise
-/// the guard rather than write under a false author, and a text matcher is the wrong closure for
-/// that — probes `e14` and `e31` pin both as passing, on purpose.
+/// `RENAME TABLE` and `ALTER … DROP CONSTRAINT` are absent because they touch no ROW at all; they
+/// neutralise the guard, and a text matcher is the wrong closure for that (probes `e14`, `e31`).
+///
+/// ⚠️ **`CREATE OR REPLACE TABLE` is the entry that does NOT follow from that criterion, and saying
+/// so is the point.** By the authorship test it belongs with `e14` and `e31` — it writes no row
+/// under a false author either; it destroys the table and every declared value in it. It reds
+/// anyway, for two reasons that must not be confused:
+///
+/// 1. **The red is incident, not decided.** Mutation M19b removed this entry and `e22` stayed RED,
+///    because the `REPLACE` hiding inside the phrase governs the same reference. The entry earns
+///    its place by NAMING the finding correctly — a message saying `replace` for a statement that
+///    drops the table sends the reader after the wrong thing.
+/// 2. **The red is kept on purpose.** The gesture annihilates the guarded table, and it lives in a
+///    `.sql` migration — the place this story measured to be the most natural home for a bulk
+///    rewrite. Keeping a red that the criterion does not demand is a decision; pretending the
+///    criterion demanded it would be a false sentence, and the review caught this file writing one.
 const WRITE_VERBS: [&str; 7] = [
     "create or replace table",
     "insert into",
@@ -1512,6 +1528,9 @@ fn authorship_findings(content: &str, is_sanctioned_file: bool, sql: bool) -> Ve
 ///   and the guard of the guard is a privilege the database refuses — not a verb added to a list
 ///   here. It is the one place where the gate is green on something that DESTROYS the mechanism
 ///   rather than routing around it, so it is stated first and loudest.
+///   ⚠️ The line is not clean: `CREATE OR REPLACE TABLE` (`e22`) destroys the guard just as
+///   thoroughly and REDS. See [`WRITE_VERBS`] — that red is incident rather than principled, and
+///   the criterion stated here does not by itself separate the three.
 ///
 /// **The closure this gate is not**: a MariaDB `GRANT` that denies the application's own role the
 /// right to write `declared_attribute` outside the sanctioned path — that holds against source
@@ -2563,7 +2582,8 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         std::fs::remove_file(docker.join("evil.sql")).expect("rm");
 
         // The sanctioned data file is matched by PATH, and only at its exact path.
-        let seed = "INSERT INTO declared_attribute (entity_id, actor_id) VALUES ('x','operator');\n";
+        let seed =
+            "INSERT INTO declared_attribute (entity_id, actor_id) VALUES ('x','operator');\n";
         std::fs::write(docker.join("seed-example.sql"), seed).expect("write");
         let (green, msg) = gate_declared_authorship(&root).expect("the gate runs");
         assert!(green, "the seed file is the third sanctioned site: {msg}");
@@ -2920,7 +2940,10 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             .collect();
         pinned.sort();
 
-        assert_eq!(on_disk, pinned, "the corpus and the verdict table have drifted");
+        assert_eq!(
+            on_disk, pinned,
+            "the corpus and the verdict table have drifted"
+        );
         assert_eq!(
             on_disk.len(),
             32,

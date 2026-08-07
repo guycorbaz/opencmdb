@@ -28,6 +28,13 @@ promise stops, and each is stated in the story:
 
 - **`e02`** — the query is assembled at runtime (`format!`). A text matcher cannot follow a table
   name that does not exist until the program runs.
-- **`e14`, `e31`** — `RENAME TABLE` and `ALTER … DROP CONSTRAINT` neutralise the guard rather than
-  write a value under a false author. NFR5 is about AUTHORSHIP, and the closure for guard removal is
-  a privilege the database refuses, not a matcher that reads source text.
+- **`e14`, `e31`** — `RENAME TABLE` and `ALTER … DROP CONSTRAINT` touch no row: they neutralise the
+  guard rather than write a value under a false author. NFR5 is about AUTHORSHIP, and the closure
+  for guard removal is a privilege the database refuses, not a matcher that reads source text.
+
+⚠️ **The line between them and `e22` is not clean, and pretending otherwise would be a false
+sentence.** `CREATE OR REPLACE TABLE` (`e22`) writes no row under a false author either — it
+destroys the table and every declared value in it — yet it REDS. Mutation M19b showed the red is
+incident: it survives removing the verb from the list, because the `REPLACE` inside the phrase
+governs the same reference. It is kept because the gesture annihilates the guarded table from
+inside a `.sql` migration; it is not kept because the criterion demanded it.

@@ -50,7 +50,54 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-07  # 5.12 IMPLEMENTED -> `review` (NOT `done`: that is the MERGE's business).
+last_updated: 2026-08-07  # 5.12 CODE-REVIEWED (three layers) **AND REPAIRED** under Guy's
+                          # arbitration -- **voie A: repair AND narrow the promise**, over (B) a
+                          # database GRANT and (C) dropping the gate. Still `review`: `done` is the
+                          # MERGE's business. **463 -> 467 tests** (248 + 159 + **60** xtask),
+                          # seven gates green. NEXT = PR, CI, squash merge.
+                          # 🔴 THE REVIEW DID NOT FIND DEFECTS IN THE GATE -- it found the gate did
+                          # not hold the property it claimed. Thirty hand-written violations of
+                          # NFR5, **SIXTEEN passed**, three of them executing against a live
+                          # mariadb:10.11.11. Committed as a regression corpus at
+                          # `xtask/probes/authorship/` (+ e31, e32 added during the repair), all
+                          # **32 verdicts pinned in BOTH directions** -- a gate that silently
+                          # WIDENS is a gate whose stated limits have gone stale.
+                          # 🔴 STRUCTURAL: the whole BODY of `gate_declared_authorship` was
+                          # deletable with the xtask suite green (56/56). Every test attacked
+                          # `authorship_findings`; `float-free` had carried the end-to-end test
+                          # since 5.4b and says so in its own doc. ⚠️ It hid behind a mutation
+                          # LABEL -- M5 said "neuter the gate" and hit the MATCHER. Re-measured:
+                          # matcher neutered = 8 reds; gate body replaced by a pass = **0** before
+                          # this pass, 2 now (M20).
+                          # 🔑 THE NARROWING IS HALF THE DELIVERABLE: a TRIPWIRE against the
+                          # good-faith violation, never a barrier against a determined one. Two
+                          # residual classes -- a query assembled at runtime (e02), and guard
+                          # NEUTRALISATION (e14, e31): the gate guards the WRITE, not the guard
+                          # itself, and voie B's GRANT is REGISTERED as the real closure rather
+                          # than implied by this one.
+                          # ⚠️ The criterion does NOT cleanly separate e22: CREATE OR REPLACE TABLE
+                          # destroys the guard just as thoroughly and reds, and M19b proves that
+                          # red INCIDENT (it survives removing the verb -- the REPLACE inside the
+                          # phrase governs). Kept on purpose, not by the criterion. Found by
+                          # READING, by a second session launched on this same story in parallel.
+                          # 🔑 Ten mutations, ten reds, **every one carried by a NAMED assertion**,
+                          # zero compiler- and zero `.expect()`-carried -- classified by reading
+                          # each panic message, because the earlier table's header claimed
+                          # "every red assertion-carried" while its own M6 row said `.expect()` x3
+                          # (5.9b's defect, reproduced).
+                          # 🔴 TWO MUTATIONS CAME BACK GREEN FIRST and both refutations are the
+                          # deliverable: `is_invisible` was carried by nothing (e06 puts its
+                          # zero-width space BEFORE the verb, already a token boundary -> e32 puts
+                          # one INSIDE the words), and the long verb changes no verdict, only the
+                          # finding's NAME. ⚠️ Two more were MIS-DESIGNED, not weak: removing a
+                          # test's own assertion cannot red that test; for an assertion the honest
+                          # mutation breaks the INVARIANT (M21b plants an orphan, M22b makes the
+                          # count lie).
+                          # 🔑 THREE documents described a state the code had passed -- the
+                          # mutation-table header, project-context's "six gates", and
+                          # `xtask/src/main.rs`'s OWN module doc, which enumerated six gates while
+                          # the file implemented seven. **Two of the three in the gate's own file.**
+                          # (implementation entry:) 5.12 IMPLEMENTED -> `review` (NOT `done`: that is the MERGE's business).
                           # **450 -> 463 tests** (248 bin + 159 core + 56 xtask), **SEVEN gates
                           # green**, both clippy forms clean, no new dependency. Built against a
                           # live mariadb on **13307** (5.11b still holds 13306).

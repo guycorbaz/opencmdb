@@ -537,11 +537,119 @@ classified by reading them, one by one.
   does not restore a database, and a planted migration leaves `_sqlx_migrations` referencing a file
   that no longer exists.
 
+### 12. 🔴 The code review, and the repair Guy arbitrated (voie A)
+
+Three review layers ran on 2026-08-07. What they found is not a list of small defects: **the gate
+did not hold the property it claimed.**
+
+**The measurement.** The Edge Case Hunter wrote **thirty** violations of NFR5 against the shipped
+gate, one per mechanism. **Sixteen passed it** — and three of those executed successfully against a
+live `mariadb:10.11.11`. They are now committed, at `xtask/probes/authorship/`, because a repair
+argued about is worth nothing next to a repair measured: whatever this gate becomes, it is measured
+against all thirty-two.
+
+**The second finding, and the structural one.** The whole body of `gate_declared_authorship` — its
+walk, its two roots, its extension filter, its sanctioned-path match, both fail-closed arms — was
+**deletable with the entire xtask suite green (56/56)**. Every test attacked `authorship_findings`
+directly. `float-free` had carried the end-to-end test since story 5.4b, and its doc says in so many
+words that testing only `line_has_float` *"would leave all three untested while the gate read as
+covered"*. This story was written on `float-free`'s precedent and did not copy the part that
+mattered. ⚠️ It hid behind a mutation label: **M5 said *"neuter the gate"* and was applied to the
+matcher** (§T5's table, now annotated).
+
+**Guy's arbitration: option A — repair AND narrow the promise.** Not (B) close it with a database
+`GRANT`, not (C) drop the gate. The narrowing is half the deliverable, not an apology for the other
+half.
+
+#### What was repaired
+
+| mechanism the review defeated | repair | probes |
+|---|---|---|
+| statement-HEAD anchor | `governing_keyword` — the write verb or `select` whose match ENDS latest before the reference governs it; longest wins at equal ends | `e08`, `e09`, `e27`, `e29`, `e30` |
+| block comments unread | `CommentState` + `strip_comments`, carried ACROSS lines; `/*! … */` is MariaDB's **executable** comment, so its markers are dropped and its body KEPT, where an ordinary `/* … */` is dropped whole | `e07`, `e08`, `e09`, `e10`, `e21` |
+| invisible characters | `is_invisible` — deleted, not treated as whitespace: a zero-width space INSIDE a word is one word to the server and two to a collapsing matcher | `e06`, `e32` |
+| `enclosing_fn`'s unbounded `rfind("fn ")` | a candidate must look like a DECLARATION (its name followed by `(` or a generic list) and its braces must still be OPEN at the reference | `e16`, `e17` |
+| verb list | `load data`, `create or replace table` added | `e13`, `e22` |
+| the read half inspected only what came BEFORE the table name | `statement_after` — a provenance column read in a predicate is read | `e18`, `e19`, `e28` |
+
+**Result: 32 probes, 29 red, 3 green by stated decision.**
+
+#### What the promise is now, and what it is not
+
+🔴 **A tripwire against the good-faith violation, not a barrier against a determined one.** The three
+green probes are the shape of the residual hole, and they are two classes, not three:
+
+- **A query assembled at runtime** (`e02`, and the `format!` case the story already pinned — ONE
+  limit with two witnesses). A matcher that reads source text cannot follow a table name that does
+  not exist until the program runs. This is the class, not an oversight.
+- **Neutralising the guard instead of writing under a false author** (`e14` `RENAME TABLE`, `e31`
+  `ALTER … DROP CONSTRAINT` — both touch no row at all). **This gate guards the write, not the guard
+  itself, and the guard of the guard is a privilege the database refuses.** It is the one place the
+  gate is green on something that DESTROYS the mechanism rather than routing around it.
+
+⚠️ **The criterion does not cleanly separate `e22`, and the first draft of this section pretended it
+did.** `CREATE OR REPLACE TABLE` writes no row under a false author either — it destroys the table
+and every declared value in it — and it REDS. Mutation **M19b proves the red is incident**: it
+survives removing the verb from `WRITE_VERBS`, because the `REPLACE` inside the phrase governs the
+same reference. It is kept because the gesture annihilates the guarded table from inside a `.sql`
+migration, the place this story measured as the most natural home for a bulk rewrite — not because
+the authorship test demanded it. **Found by reading, not by the mutation pass**, by the second
+session that had been launched on this same story.
+
+**Voie B is registered as the real closure**, not implied by this one: a MariaDB `GRANT` denying the
+application's own role the right to write `declared_attribute` outside the sanctioned path holds
+against source text this gate never reads, and against a hand-run statement no gate reads at all.
+Read this gate as *"a future story will not add such a write by accident"* — never as *"such a write
+cannot exist"*.
+
+#### The repair's own mutation pass
+
+Ten mutations, **ten reds, every one carried by a NAMED assertion; zero compiler-carried and zero
+`.expect()`-carried** — and the carrier was classified by reading each red test's panic message, one
+by one, because the header of §T5's table had denied its own M6 row by reading the carrier off the
+whole output.
+
+| | mutation | measured |
+|---|---|---|
+| M13b | `is_invisible` never fires | 1 red — `e32` |
+| M14 | `/*!` treated as an ordinary comment (body dropped) | 1 red |
+| M15 | block comments unhandled | 1 red — and it is `a_write_inside_a_block_comment_stays_green` that catches it |
+| M16 | `enclosing_fn` back to the unbounded `rfind` | 1 red, 2 probes |
+| M17 | `governing_keyword` back to the statement-head anchor | 2 red, 2 probes |
+| M18 | the read half stops inspecting the text after the table name | 1 red, 3 probes |
+| M19b | `create or replace table` dropped from the verb list | 1 red |
+| M20 | **the gate BODY replaced by a pass** | **2 red — 0 before this pass. The review's headline defect, now measured.** |
+| M21b | an orphan probe file planted in the corpus | 1 red |
+| M22b | the gate walks only its first root | 2 red — including the file-COUNT assertion |
+
+🔴 **Two of these came back GREEN on their first run, and both refutations are the deliverable.**
+`is_invisible` was carried by nothing: `e06` puts its zero-width space BEFORE the verb, where a token
+boundary already exists — hence `e32`, which puts one inside both the verb and the table name, where
+deleting it is the only thing that finds the statement at all. And `create or replace table` changes
+no VERDICT — the `replace` hiding inside it governs the same reference — only the finding's NAME, so
+the longest-wins rule got a test of its own rather than a verb nobody measured.
+
+⚠️ **And two mutations were mis-designed rather than the guards being weak**: removing a test's own
+assertion cannot red that test. For an assertion, the honest mutation breaks the INVARIANT — plant
+an orphan, make the count lie. That is M21b and M22b.
+
+#### Three documents that described a state the code had already passed
+
+Counted together, because it is the same defect three times and the sixth consecutive story with the
+shape — **two of them in the gate's own file**:
+
+1. §T5's table header: *"every red assertion-carried"*, denied by its own M6 row four lines below
+   (`.expect()` panic ×3). Story 5.9b's defect, reproduced.
+2. `xtask/src/main.rs`'s module doc enumerated **six** gates while the file implemented seven — the
+   gate this story adds was missing from the list the file gives of itself.
+3. `docs/project-context.md` announced six gates.
+
 ### File List
 
 | file | change |
 |---|---|
-| `xtask/src/main.rs` | **the seventh gate** — `gate_declared_authorship`, `authorship_findings`, `normalise_sql_text`, `strip_sql_comment`, `outside_parens`, `is_table_reference`, `statement_before`, `enclosing_fn`, plus 10 tests |
+| `xtask/src/main.rs` | **the seventh gate** — `gate_declared_authorship`, `authorship_findings`, `normalise_sql_text`, `outside_parens`, `is_table_reference`, `statement_before`, `enclosing_fn`, plus 10 tests. **Repaired under voie A**: `CommentState`, `strip_comments` (replacing `strip_sql_comment`), `is_invisible`, `statement_after`, `governing_keyword`, `WRITE_VERBS`, `is_word_at`, and 4 new tests including the gate's own end-to-end test |
+| `xtask/probes/authorship/` | **new** — the code review's 30 evasion probes, `e31` and `e32` added during the repair, and a README stating the three green-by-decision verdicts |
 | `crates/opencmdb-bin/src/repo.rs` | `declared_fixture`, the allowlisted `raw_declared_write_for_ddl_test`, and 3 database tests |
 | `_bmad-output/implementation-artifacts/deferred-work.md` | 8 new entries |
 | `_bmad-output/implementation-artifacts/sprint-status.yaml` | status |
@@ -554,6 +662,7 @@ classified by reading them, one by one.
 
 | Date | Change |
 |---|---|
+| 2026-08-07 | **Code-reviewed (three layers), then REPAIRED under Guy's arbitration — voie A: repair AND narrow the promise.** 🔴 The review measured **16 of 30** hand-written evasions passing the gate, three of them executing against a live MariaDB, and **the whole gate BODY deletable with the xtask suite green** — every test attacked the matcher, and mutation **M5's label said *"neuter the gate"* while the mutation hit `authorship_findings`**, which is where the defect hid. The 30 probes are committed as a regression corpus (`xtask/probes/authorship/`), `e31` and `e32` added during the repair, all 32 verdicts pinned in BOTH directions. The repair: `governing_keyword` replacing the statement-head anchor, block comments across lines with `/*!` kept as executable code, invisible characters deleted, `enclosing_fn` bounded, `statement_after` for the read half, two verbs added. **29 red, 3 green by stated decision** — one runtime-assembly limit with two witnesses, and guard NEUTRALISATION, whose honest closure is the database `GRANT` of voie B, registered rather than implied. Ten mutations, **ten reds, every one carried by a named assertion**; 🔴 **two came back GREEN first** (`is_invisible` carried by nothing until `e32`; the long verb changing the finding's NAME but no verdict) and two were **mis-designed** — removing a test's assertion cannot red that test. **463 → 467 tests** (60 xtask). Three documents described a state the code had passed, two of them in the gate's own file. |
 | 2026-08-07 | Implemented by `dev-story` against a live `mariadb:10.11.11` on 13307. **450 → 463 tests**, **seven gates green**, both clippy forms clean, no new dependency. 🔴 **M1sql was GREEN on first measurement** — the gate read the planted `.sql` migration but `strip_line_comment` handles `//` only, so the `--` header ran into the statement and it no longer began with its verb; closed and pinned. 🔴 **Two false positives**, both *"wrong in both directions"*: `SELECT COUNT(*)` read as a wildcard (the gate's first red, on the committed tree) and a match spanning two string literals. 🔴 **A prediction of the story's refuted**: the gate does NOT inherit `float-free`'s block-comment false positive, because it anchors on a statement's head. **Three sanctioned sites, not two** — `docker/seed-example.sql` is forced by the story's own scope. M4's carrier is the **gate alone** (0 compile errors, all runtime tests green), M3's is an **assertion** as AC2 demanded, and M6 is **entirely silent without `DATABASE_URL`**. |
 | 2026-08-07 | **Validated** by two fresh-context agents; the gap-hunt BUILT the story (453 tests, seven gates green). **3 HIGH from the fact-check, 6 from the gap-hunt**, and 🔑 **two were found independently by BOTH layers**: §1's mechanism 4 is FALSE (a widened SELECT compiles cleanly — sqlx decodes tuples positionally — so AC3's carrier is the GATE ALONE, not the compiler), and AC1 contradicted AC2 (the gate reddens on the raw INSERT that AC2 requires). Resolved by a **two-site allowlist**, not the `cfg(test)` exemption, which was measured to hide a planted test write. Also: the census said *"whole workspace"* and meant *"under `crates/`"* — `docker/seed-example.sql:28` is a second SHIPPED writer; the gate was blind to `.sql` migrations, to backticked and schema-qualified names, and to `INSERT` without `INTO`; AC3 named two provenance columns where the DDL has **three**, and `SELECT *` defeats them all; the READ half had no evasion table and its naive matcher produced FALSE POSITIVES on the clean tree. A **fifth mechanism** was missing and is the strongest — the PK with no upsert means the adapter cannot overwrite at all. ⚠️ The two layers disagreed on a line number and **I measured it myself** (915, the fact-check was right). |
 | 2026-08-07 | Created by `create-story`. Five decisions at contexting. 🔴 **The load-bearing finding: the invariant is already held by FOUR mechanisms and none is a test** — the write path binds SQL literals rather than parameters, a DDL CHECK, the read's column list, and the tuple's arity. So this story is 5.11b's shape, and 5.11b's mutation pass is the evidence that the shape is dangerous. 🔴 **Its harder half: you cannot test the ABSENCE of a code path by running code**, so the guard is a SEVENTH `xtask` gate on `float-free`'s precedent — whose own first matcher was measured wrong in both directions. ⚠️ Also found: `CHECK (actor_id <> 'scanner')` bans **one string literal**, not a property (`'engine'` passes), and `0001_initial.sql`'s comment claiming *"a human; never 'scanner'"* is false AND unmodifiable, sqlx checksumming migration files including comments. |
