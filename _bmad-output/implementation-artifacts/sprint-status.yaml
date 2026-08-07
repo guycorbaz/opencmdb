@@ -53,7 +53,7 @@ generated: 2026-07-21
 last_updated: 2026-08-07  # 5.12 CODE-REVIEWED (three layers) **AND REPAIRED** under Guy's
                           # arbitration -- **voie A: repair AND narrow the promise**, over (B) a
                           # database GRANT and (C) dropping the gate. Still `review`: `done` is the
-                          # MERGE's business. **463 -> 467 tests** (248 + 159 + **60** xtask),
+                          # MERGE's business. **463 -> 469 tests** (248 + 159 + **62** xtask),
                           # seven gates green. NEXT = PR, CI, squash merge.
                           # 🔴 THE REVIEW DID NOT FIND DEFECTS IN THE GATE -- it found the gate did
                           # not hold the property it claimed. Thirty hand-written violations of

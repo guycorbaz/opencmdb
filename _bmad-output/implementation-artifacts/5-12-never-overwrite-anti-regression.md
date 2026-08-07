@@ -793,6 +793,33 @@ SQL — measured, not supposed — and the day the compose gains a database cont
 script, this gate's perimeter must be reopened.** It is in `AUTHORSHIP_ROOTS`' own doc, where the
 next story to touch deployment will meet it.
 
+#### 🔴 A sixth finding, from the VERIFICATION pass — a paragraph outrun by its own repairs
+
+The last, and it came from the parallel session's pre-merge verification rather than from reading
+the diff. It is this project's recurring family — **a sentence refuted by the commit that carries
+it** — and this time it was in the section that PROMISES.
+
+`gate_declared_authorship`'s doc said *"twenty-eight of the thirty-one now red"* and *"the three
+that pass"*. Counted on the table: **4 green, 34 red, 38 total**. All three numbers wrong, and the
+fourth green was `e38`, added two commits earlier in answer to the fifth finding. **The paragraph
+aged at exactly the rate of the repairs it describes.**
+
+🔑 **The diagnosis is worth more than the correction**: the sentence held a DATED fact (*thirty
+violations, sixteen passed* — the review's starting point, which must stay at thirty and sixteen)
+next to a LIVING one (*how many red today*). A dated fact and a living one in one sentence, and it
+is always the living one that rots.
+
+**Fixed by making the living half uncitable rather than by recounting it.** The prose now names the
+CLASSES and says the passing probes are marked `None` in `AUTHORSHIP_PROBES`; the table is the
+count, and the orphan test verifies the table. Nothing left to go stale — otherwise it would be
+recounted at the next probe, and there is always a next probe.
+
+⚠️ **And the same pass found the defect in the doc twins, where it was worse**: `CLAUDE.md` and
+`docs/project-context.md` each carried **four** test counts in ONE paragraph — 468/60, 468/61,
+469/62-with-33-probes and 469/62 — each true when written and stale two commits later, three of them
+contradicting each other. Collapsed to **one live count per document**, stated once, with the reason
+written beside it. `sprint-status.yaml` carried a fifth, 467/60, and is corrected.
+
 #### Three documents that described a state the code had already passed
 
 Counted together, because it is the same defect three times and the sixth consecutive story with the

@@ -1649,11 +1649,20 @@ fn authorship_findings(content: &str, shown: &str, sql: bool) -> Vec<(usize, Str
 /// 🔴 **It catches the good-faith violation, not the determined one, and the difference is
 /// measured rather than assumed.** Story 5.12's code review wrote thirty violations of NFR5 against
 /// the first implementation of this gate and **sixteen passed it** — three of them executing
-/// successfully against MariaDB 10.11.11. Twenty-eight of the thirty-one now red; the corpus lives
-/// in `xtask/probes/authorship/` and every verdict, RED or GREEN, is pinned in `AUTHORSHIP_PROBES`
-/// so that neither a repair nor a regression can happen silently.
+/// successfully against MariaDB 10.11.11. That is the DATED half of this paragraph and it stays at
+/// thirty and sixteen: it is where the gate started.
 ///
-/// The three that pass do so **by decision**, and they are the shape of the residual hole:
+/// The corpus lives in `xtask/probes/authorship/`, and **every verdict, RED or GREEN, is pinned in
+/// [`AUTHORSHIP_PROBES`]** so neither a repair nor a regression happens silently.
+///
+/// ⚠️ **No live count is written here, on purpose.** This paragraph carried three — *"twenty-eight
+/// of the thirty-one now red"*, *"the three that pass"* — and all three were stale within two
+/// commits, overtaken by the repairs the paragraph itself describes. A dated fact and a living one
+/// sat in the same sentence, and it is always the living one that rots. The table is the count, and
+/// the orphan test verifies it; the prose names the CLASSES, which is what is worth reading:
+///
+/// The probes that pass do so **by decision** — they are marked `None` in [`AUTHORSHIP_PROBES`],
+/// which names them — and they are the shape of the residual hole:
 ///
 /// - **A query assembled at runtime** (`e02`). A matcher that reads source text cannot follow a
 ///   table name that does not exist until the program runs. No amount of pattern work closes this;
