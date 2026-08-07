@@ -50,7 +50,17 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-06  # 5.11b IMPLEMENTED **AND CODE-REVIEWED** -> stays `review` (NOT `done`:
+last_updated: 2026-08-07  # 5.11b **DONE** -- PR #73 squash-merged as `f597882` after a green CI run
+                          # (1m10s). **Epic 5 is now 15/18.** `master` carries **450 tests**
+                          # (245 bin + 159 core + 46 xtask); the branch is deleted locally and on
+                          # `origin`. NEXT = `create-story` 5.12.
+                          # ⚠️ CI DID NOT TRIGGER ON THE FIRST PUSH -- no run was created for the
+                          # branch OR the PR, and none anywhere in the repo for ~15h, while the
+                          # workflow was `active` and GitHub reported Actions `operational`. Closing
+                          # and REOPENING the PR re-triggered it and it passed first time. **The
+                          # cause is UNKNOWN and is deliberately not guessed** (this project's rule:
+                          # a cause needs a named check). If it recurs, that is an issue to open.
+                          # (review entry:) 5.11b IMPLEMENTED **AND CODE-REVIEWED** -> was `review` (NOT `done`:
                           # that is the MERGE's business). **429 -> 446 -> 450 tests** after the
                           # review (245 bin + 159 core + 46 xtask). NEXT = PR, then squash-merge.
                           # THREE LAYERS, 2026-08-06; the Edge Case Hunter ran its own mutations
@@ -1698,7 +1708,7 @@ development_status:
   # and not one of them reads the slice's order. Epic 5: 17 -> 18 stories. `epics.md` NOT edited;
   # the correction is registered with Epic 5's retrospective.
   5-11-idempotent-supersede: done
-  5-11b-order-independence: review
+  5-11b-order-independence: done
   5-12-never-overwrite-anti-regression: backlog
   5-13-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog
