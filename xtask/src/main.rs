@@ -1135,12 +1135,18 @@ const PROVENANCE_COLUMNS: [&str; 3] = ["origin_obs_id", "actor_id", "origin"];
 /// `INSERT INTO` and the table name may sit on two different lines, and a per-line matcher was
 /// measured blind to exactly that. Line comments are stripped so the architecture may be quoted;
 /// **block comments are not**, the same known limit `float-free` carries.
-fn normalise_sql_text(content: &str) -> (String, Vec<usize>) {
+fn normalise_sql_text(content: &str, sql_comments: bool) -> (String, Vec<usize>) {
     let mut out = String::with_capacity(content.len());
     let mut lines = Vec::with_capacity(content.len());
     let mut prev_space = true;
     for (idx, raw) in content.lines().enumerate() {
-        for ch in strip_line_comment(raw).chars() {
+        let code = strip_line_comment(raw);
+        let code = if sql_comments {
+            strip_sql_comment(code)
+        } else {
+            code
+        };
+        for ch in code.chars() {
             if ch.is_whitespace() {
                 if !prev_space {
                     out.push(' ');
@@ -1160,6 +1166,28 @@ fn normalise_sql_text(content: &str) -> (String, Vec<usize>) {
         }
     }
     (out, lines)
+}
+
+/// A `.sql` line with its `--` comment removed, respecting single-quoted literals.
+///
+/// 🔴 Without this the gate was measured GREEN on a planted migration
+/// (`UPDATE declared_attribute SET actor_id = 'engine'`) whose only defence was a `--` header line:
+/// the comment ran into the statement under whitespace normalisation, so the fragment no longer
+/// BEGAN with its verb. `strip_line_comment` handles `//` alone, which is right for Rust and blind
+/// for SQL — and a `.sql` migration is the most natural home for a bulk author rewrite.
+fn strip_sql_comment(line: &str) -> &str {
+    let b = line.as_bytes();
+    let mut in_string = false;
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            b'\'' => in_string = !in_string,
+            b'-' if !in_string && b.get(i + 1) == Some(&b'-') => return &line[..i],
+            _ => {}
+        }
+        i += 1;
+    }
+    line
 }
 
 /// Is the `declared_attribute` occurrence at `at` a TABLE reference rather than part of a longer
@@ -1219,8 +1247,8 @@ fn outside_parens(projection: &str) -> String {
 ///
 /// `is_sanctioned_file` short-circuits the write half only: a data file may WRITE with a human
 /// author, and no data file participates in the divergence computation.
-fn authorship_findings(content: &str, is_sanctioned_file: bool) -> Vec<(usize, String)> {
-    let (text, lines) = normalise_sql_text(content);
+fn authorship_findings(content: &str, is_sanctioned_file: bool, sql: bool) -> Vec<(usize, String)> {
+    let (text, lines) = normalise_sql_text(content, sql);
     let mut findings = Vec::new();
     let mut from = 0usize;
 
@@ -1318,7 +1346,9 @@ fn gate_declared_authorship(root: &Path) -> Result<(bool, String)> {
             checked += 1;
             let shown = p.strip_prefix(root).unwrap_or(p);
             let shown = shown.display().to_string().replace('\\', "/");
-            for (line, what) in authorship_findings(&content, shown == SANCTIONED_FILE) {
+            for (line, what) in
+                authorship_findings(&content, shown == SANCTIONED_FILE, ext == Some("sql"))
+            {
                 offenders.push(format!("{shown}:{line}: {what}"));
             }
         }
@@ -2012,7 +2042,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             "INSERT declared_attribute (entity_id) VALUES (?)",
             "REPLACE declared_attribute (entity_id) VALUES (?)",
         ] {
-            let findings = authorship_findings(&in_unsanctioned_fn(sql), false);
+            let findings = authorship_findings(&in_unsanctioned_fn(sql), false, false);
             assert!(!findings.is_empty(), "must RED: {sql}");
         }
     }
@@ -2024,7 +2054,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     fn a_write_split_across_two_lines_still_reds() {
         let src = "fn w() {\n    let q = \"INSERT INTO\n         declared_attribute (a) VALUES (?)\";\n}\n";
         assert!(
-            !authorship_findings(src, false).is_empty(),
+            !authorship_findings(src, false, false).is_empty(),
             "a per-line matcher would miss this, and that is the whole reason for normalising"
         );
     }
@@ -2035,14 +2065,14 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         // The sanctioned adapter.
         let sanctioned = "fn insert_declared_attribute() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
         assert!(
-            authorship_findings(sanctioned, false).is_empty(),
+            authorship_findings(sanctioned, false, false).is_empty(),
             "the adapter is the sanctioned site"
         );
 
         // The sanctioned test helper.
         let helper = "fn raw_declared_write_for_ddl_test() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
         assert!(
-            authorship_findings(helper, false).is_empty(),
+            authorship_findings(helper, false, false).is_empty(),
             "AC2's raw write has a named home"
         );
 
@@ -2050,14 +2080,14 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         let seed =
             "INSERT INTO declared_attribute (entity_id, actor_id) VALUES ('x', 'operator');\n";
         assert!(
-            authorship_findings(seed, true).is_empty(),
+            authorship_findings(seed, true, true).is_empty(),
             "the seed file writes with a human author"
         );
 
         // DELETE is deliberately out of the verb list — it writes no author.
         let del = "fn cleanup() {\n    sqlx::query(\"DELETE FROM declared_attribute\");\n}\n";
         assert!(
-            authorship_findings(del, false).is_empty(),
+            authorship_findings(del, false, false).is_empty(),
             "a DELETE writes no author (§4b)"
         );
 
@@ -2065,21 +2095,21 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         let doc =
             "/// Writes to declared_attribute via INSERT INTO declared_attribute.\nfn f() {}\n";
         assert!(
-            authorship_findings(doc, false).is_empty(),
+            authorship_findings(doc, false, false).is_empty(),
             "line comments are stripped"
         );
 
         // The schema's own definition.
         let ddl = "CREATE TABLE declared_attribute (\n  entity_id CHAR(36) NOT NULL\n);\n";
         assert!(
-            authorship_findings(ddl, false).is_empty(),
+            authorship_findings(ddl, false, true).is_empty(),
             "CREATE TABLE writes no value"
         );
 
         // The function NAME contains the table name.
         let call = "fn caller() {\n    insert_declared_attribute(pool, a, b, c).await?;\n}\n";
         assert!(
-            authorship_findings(call, false).is_empty(),
+            authorship_findings(call, false, false).is_empty(),
             "not a table reference"
         );
     }
@@ -2095,7 +2125,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             // 🔴 And the wildcard, which defeats every column-name rule.
             "SELECT * FROM declared_attribute",
         ] {
-            let findings = authorship_findings(&in_unsanctioned_fn(sql), false);
+            let findings = authorship_findings(&in_unsanctioned_fn(sql), false, false);
             assert!(!findings.is_empty(), "must RED: {sql}");
         }
     }
@@ -2106,7 +2136,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         let ok =
             in_unsanctioned_fn("SELECT entity_id, attr_key, attr_value FROM declared_attribute");
         assert!(
-            authorship_findings(&ok, false).is_empty(),
+            authorship_findings(&ok, false, false).is_empty(),
             "the divergence's own read"
         );
 
@@ -2114,14 +2144,14 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         // an aggregate's star loads no column.
         let agg = in_unsanctioned_fn("SELECT COUNT(*) FROM declared_attribute");
         assert!(
-            authorship_findings(&agg, false).is_empty(),
+            authorship_findings(&agg, false, false).is_empty(),
             "COUNT(*) is not SELECT * — the gate's first false positive, at repo.rs:106"
         );
 
         // 🔴 The false positive the naive backward search produced: a bare DELETE inheriting an
         // `origin` from an unrelated string literal above it.
         let phantom = "fn f() {\n    let a = \"INSERT INTO declared_attribute (origin, actor_id) VALUES (?, ?)\";\n    let b = \"DELETE FROM declared_attribute\";\n}\n";
-        let findings = authorship_findings(phantom, false);
+        let findings = authorship_findings(phantom, false, false);
         assert!(
             findings.iter().all(|(_, w)| !w.contains("a read of")),
             "the `\"` bound is what stops a match spanning two literals; got {findings:?}"
@@ -2136,8 +2166,29 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     fn a_table_name_built_at_runtime_is_invisible_and_that_is_stated() {
         let src = "fn sneaky() {\n    let t = format!(\"declared_{}\", \"attribute\");\n    sqlx::query(&format!(\"INSERT INTO {t} (a) VALUES (?)\"));\n}\n";
         assert!(
-            authorship_findings(src, false).is_empty(),
+            authorship_findings(src, false, false).is_empty(),
             "KNOWN LIMIT: a text gate cannot follow a name built at runtime"
+        );
+    }
+
+    /// 🔴 A planted `.sql` MIGRATION reds — and it did NOT before `strip_sql_comment` existed.
+    ///
+    /// Measured during story 5.12's mutation pass: the gate walked the file (its count rose from 31
+    /// to 32) and found nothing, because the `--` header ran into the statement under whitespace
+    /// normalisation and the fragment no longer BEGAN with `update`. A migration is the most natural
+    /// home for a bulk author rewrite, so this was the gate's largest remaining blind spot.
+    #[test]
+    fn a_bulk_author_rewrite_in_a_sql_migration_reds() {
+        let sql = "-- a bulk author rewrite, the most natural home for one\n                   UPDATE declared_attribute SET actor_id = 'engine' WHERE origin = 'manual';\n";
+        assert!(
+            !authorship_findings(sql, false, true).is_empty(),
+            "a `--` header must not shield the statement behind it"
+        );
+        // And the comment stripping must not swallow a legitimate hyphen inside a literal.
+        let quoted = "INSERT INTO other_table (note) VALUES ('a -- not a comment');\n";
+        assert!(
+            authorship_findings(quoted, false, true).is_empty(),
+            "a `--` inside a single-quoted literal is data, not a comment"
         );
     }
 
@@ -2156,7 +2207,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     fn a_write_inside_a_block_comment_stays_green() {
         let src = "fn f() {\n    /* INSERT INTO declared_attribute (a) VALUES (?) */\n}\n";
         assert!(
-            authorship_findings(src, false).is_empty(),
+            authorship_findings(src, false, false).is_empty(),
             "a commented-out write is not a code path — and unlike float-free, this gate can tell"
         );
     }
@@ -2166,7 +2217,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     fn a_third_site_is_not_sanctioned_by_resembling_the_first() {
         let near = "fn insert_declared_attribute_v2() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
         assert!(
-            !authorship_findings(near, false).is_empty(),
+            !authorship_findings(near, false, false).is_empty(),
             "an allowlist that matched by prefix would be float-free's failure again"
         );
     }
