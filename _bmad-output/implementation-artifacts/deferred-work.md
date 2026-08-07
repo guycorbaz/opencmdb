@@ -2842,3 +2842,67 @@ story's own mutation pass and would not have been visible to reading._
   `n = 7` the twelve samples cover the first 13% of the space, which is not the "deterministic
   spread" the doc calls it. Documented at the review rather than generalised, because no caller
   needs another size today. **Owner: the first caller that passes a slice of another length.**
+
+## Deferred from: story-5-12-never-overwrite-anti-regression (2026-08-07)
+
+- ⚠️ **`CHECK (actor_id <> 'scanner')` bans one padded VALUE, not a property.** Measured:
+  `'engine'` is **accepted**, and `'scanner '` with a trailing space IS refused, because `actor_id`
+  is `CHAR(36)` and MariaDB compares padded. `a_non_human_author_other_than_scanner_is_accepted_and_that_is_the_limit`
+  pins both halves and is labelled as the honest limit rather than as a defect. The property is held
+  by the `declared-authorship` gate, which stops such a write from ever being authored; the CHECK is
+  a tripwire behind it. **Owner: Epic 6**, which brings the `actor` table an allowlist would need —
+  an allowlist in DDL today would be a migration every time an actor is added.
+
+- ⚠️ **`0001_initial.sql:16`'s comment is FALSE and cannot be corrected in place.** It reads
+  `-- a human; never 'scanner'`, which promises authorship and delivers one spelling. sqlx checksums
+  the migration file with SHA-384 over its whole text, comments included, so editing it breaks any
+  database that has **already applied** it. ⚠️ **That is conditional, not absolute** — every test
+  database here is created fresh, so an edited `0001` migrates cleanly locally AND in CI; what breaks
+  is the NAS and any long-lived dev database. The truthful statement now lives in
+  `insert_declared_attribute`'s doc instead. **Owner: the migration-consolidation milestone**
+  (issue #50), the only point at which rewriting an applied migration is legitimate.
+
+- ⚠️ **A table name assembled at runtime is invisible to the gate, and always will be.**
+  `format!("declared_{}", "attribute")` defeats any text matcher.
+  `a_table_name_built_at_runtime_is_invisible_and_that_is_stated` pins it as a KNOWN LIMIT rather
+  than leaving the gate's promise unqualified — D18's rule applied to a gate's own blind spot.
+  **No owner: it is a limit, not a defect.** A gate that claimed otherwise would be the decoration
+  D18 forbids.
+
+- ⚠️ **`DELETE` is deliberately outside the gate's verb list.** NFR5 is about AUTHORSHIP and a
+  `DELETE` writes no author; including it was measured reddening the committed tree at two
+  test-fixture sites (`main.rs:413`, `repo.rs:1110`). **A bulk delete of declared rows is a different
+  invariant — data loss, not authorship — and this gate does not hold it.** Owner: the story that
+  first needs a data-retention guarantee. Named here so the gate's scope is not read more widely
+  than it holds.
+
+- 🔴 **The allowlist has THREE sites where the story prescribed two.** The third is
+  `docker/seed-example.sql`, matched by PATH rather than by function, and it is forced by the story's
+  own requirement to walk `docker/`: the seed file writes a declared row with `'operator'` as its
+  actor, which is legitimate under NFR5 (*"an operator writing a declared value through an explicit
+  action … is not covered by this prohibition"*). ⚠️ **Consequence worth stating**: an edit to that
+  file changing its actor to a non-human one would pass the gate. The DDL CHECK still catches
+  `'scanner'` at runtime, and nothing catches `'engine'`. **Owner: the story that gives the seed file
+  a test**, which today it has none.
+
+- ⚠️ **FR13's `document` gesture will add a second legitimate Rust write path, and the gate will red
+  on it.** NFR5 explicitly permits it (`prd.md:1209-1211`): an operator writing a declared value
+  through an explicit action is a normal declarative write with a human author. Whoever implements
+  `document`/`document-field` must add its writer to `SANCTIONED_FNS` — a one-line edit, but an
+  invisible requirement unless it is written down. **Owner: the triage epic.**
+
+- ⚠️ **NFR5 has THREE assertions and this story covers ONE.** Covered: the third (*"no code path
+  writes a declared field with a non-human author"*, `prd.md:1218-1219`) and FR13's blindness
+  corollary (`:1220-1221`). **NOT covered**: (1) *ingesting an observation that contradicts a
+  declared field leaves that field unchanged and opens a divergence*, and (2) *documenting a field
+  sets the declared value and leaves the observation record bit-for-bit unchanged*. Both need the
+  `document` gesture and the triage inbox, neither of which exists. **Owner: the triage epic.**
+  Registered so that "NFR5 is covered by anti-regression tests" is never read as met in full.
+
+- 🔑 **A mutation-driver lesson, for whoever runs the next prove-to-red pass.** `git checkout` does
+  not restore a DATABASE. A mutation that plants a `.sql` migration is applied by `sqlx::migrate!`
+  and recorded in `_sqlx_migrations`; removing the file afterwards leaves the schema referencing a
+  migration that no longer exists, and **every DB-backed test then fails for a reason unrelated to
+  the mutation** — measured here as 64 spurious reds. The driver must drop and recreate the schema
+  as part of its restore. Same family as the register's existing *"commit before the mutation pass"*
+  entry. **No owner — a note for the method, not a defect in the code.**

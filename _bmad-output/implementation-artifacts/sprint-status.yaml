@@ -50,7 +50,43 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-07  # 5.12 CONTEXTED **AND VALIDATED** -> `ready-for-dev`. NEXT = `dev-story`.
+last_updated: 2026-08-07  # 5.12 IMPLEMENTED -> `review` (NOT `done`: that is the MERGE's business).
+                          # **450 -> 463 tests** (248 bin + 159 core + 56 xtask), **SEVEN gates
+                          # green**, both clippy forms clean, no new dependency. Built against a
+                          # live mariadb on **13307** (5.11b still holds 13306).
+                          # NEXT = `code-review` 5.12, then PR.
+                          # 🔴 M1sql was GREEN ON FIRST MEASUREMENT and the reason was NOT the
+                          # scope: the gate DID read the planted `.sql` migration (31 -> 32 files)
+                          # and found nothing, because `strip_line_comment` handles `//` only, so
+                          # the `--` header ran into the statement under whitespace normalisation
+                          # and the fragment no longer BEGAN with `update`. Closed by
+                          # `strip_sql_comment` and pinned.
+                          # 🔴 TWO FALSE POSITIVES, both the "wrong in both directions" family:
+                          # `SELECT COUNT(*)` read as a wildcard -- the gate's VERY FIRST red, on
+                          # the committed tree at repo.rs:106 -- and a match spanning two string
+                          # literals. Both closed, both pinned.
+                          # 🔴 A PREDICTION OF THE STORY'S, REFUTED: the gate does NOT inherit
+                          # float-free's block-comment false positive. It anchors on a statement's
+                          # HEAD, so a verb inside /* ... */ matches nothing -- and green is the
+                          # right answer, a commented-out write being no code path.
+                          # 🔴 THREE sanctioned sites where the story prescribed two:
+                          # `docker/seed-example.sql` is forced by the story's own scope, and its
+                          # consequence is registered (an edit changing its actor would pass).
+                          # 🔑 AC1 and AC2 no longer contradict: AC2's raw write lives in the
+                          # allowlisted `raw_declared_write_for_ddl_test`, NO cfg(test) exemption.
+                          # 🔑 M4's carrier is the GATE ALONE (0 compile errors, all runtime tests
+                          # green); M3's is an ASSERTION as AC2 demanded, not `.expect_err`; M6 is
+                          # ENTIRELY SILENT without DATABASE_URL.
+                          # 🔑 A FIFTH mechanism, absent from the first draft and the strongest: the
+                          # PK with no ON DUPLICATE KEY UPDATE means the adapter cannot overwrite a
+                          # declared value AT ALL.
+                          # ⚠️ A DRIVER DEFECT cost 64 spurious reds: `git checkout` does not restore
+                          # a DATABASE, and a planted migration leaves `_sqlx_migrations` naming a
+                          # file that no longer exists. Registered as a method note.
+                          # ⚠️ NFR5 has THREE assertions and this story covers ONE (plus FR13's
+                          # corollary). The other two need the `document` gesture -- registered with
+                          # the triage epic, so "NFR5 is covered" is never read as met in full.
+                          # (validation entry:) 5.12 CONTEXTED **AND VALIDATED** -> `ready-for-dev`. NEXT = `dev-story`.
                           # Two fresh-context agents; the gap-hunt BUILT the whole story on a
                           # scratch worktree against its own mariadb on 13312 -- the seventh gate
                           # (~210 code lines), its tests, AC2's raw SQL and all six mutations --
@@ -1784,7 +1820,7 @@ development_status:
   # the correction is registered with Epic 5's retrospective.
   5-11-idempotent-supersede: done
   5-11b-order-independence: done
-  5-12-never-overwrite-anti-regression: in-progress
+  5-12-never-overwrite-anti-regression: review
   5-13-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog
   epic-5-retrospective: optional
