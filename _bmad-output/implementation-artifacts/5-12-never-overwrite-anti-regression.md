@@ -753,7 +753,7 @@ nothing could — and that sentence is the deliverable, not the longer list.**
 
 #### ⚠️ A fifth finding, weaker — and given with its bound rather than without
 
-The parallel session's last, and it presented it **degonflé**: after four accepted findings the pull
+The fifth, and it was presented **deflated**: after four accepted findings the pull
 is to inflate the fifth, and it did the opposite. Re-measured here, bounds included.
 
 The exemption's comment read *"`CREATE TABLE` is the schema's own definition, **never a write of a
@@ -833,6 +833,33 @@ six gates while the file implemented seven — real, found by that session, and 
 deliverable. The twins' *"six gates"* is a different claim, and it is **refuted**. A record that
 fused them would commit, in its own summary, the error this story spent its day correcting: an
 unverified suspicion inheriting a measured one's credit.
+
+#### The parallel session's tally — written as a RULE, because a number written in flight is what this story is about
+
+Seven sends, and the count is stated so it can be checked rather than trusted:
+
+| | what it found | outcome |
+|---|---|---|
+| 1 | the `WRITE_VERBS` criterion did not separate `e22` from `e14`/`e31` | confirmed, M19b showed the red incident |
+| 2 | the offset→line map was per-character, indexed by byte | confirmed, measured at line 0 for line 2 |
+| 3 | the allowlist sanctioned a NAME, not a place | confirmed — **inside the promise** |
+| 4a | the `"` bound truncated the read half | confirmed — **inside the promise** |
+| 4b | `is_invisible` was an enumeration and incomplete | confirmed, ranges widened once |
+| 5 | `CREATE TABLE … AS SELECT` refutes *"never a write of a value"* | confirmed, bounded — sentence fixed, matcher untouched |
+| 5′ | a `.sh`/`Dockerfile`/compose carrying inline SQL would escape the perimeter | **NON-finding** — measured, there are none; kept as a sentence |
+| 6 | the promising paragraph's three live counts were stale | confirmed, from the VERIFICATION pass |
+| 6′ | the twins mix a dated *"six gates"* with a living one | **REFUTED** by measurement — recorded as refuted |
+| 7 | the resume-point memory carried stale counts | confirmed — the seventh occurrence, and the worst placed |
+
+**Seven confirmed findings** (the seventh outside the repository, in the resume point that a next
+session reads BEFORE the code), **one hypothesis measured and refuted**, **one non-finding converted
+into a measurement**. Three of the seven were false sentences in the section that PROMISES.
+
+⚠️ This tally first read *"six"*, and the session that produced the findings is the one that caught
+it — the missing one being the resume point, which the same paragraph had just called *"the only
+place that really mattered for tomorrow morning"*. **A tally written in flight, inside the document
+explaining why not to write counts in flight.** Hence a table that can be recounted instead of a
+number that must be believed.
 
 #### Three documents that described a state the code had already passed
 

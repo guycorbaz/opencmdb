@@ -137,6 +137,15 @@ last_updated: 2026-08-07  # 5.12 CODE-REVIEWED (three layers) **AND REPAIRED** u
                           # supposed, and **reopen the perimeter the day the compose gains a DB
                           # container with an init script** -- the deployment story owns that debt.
                           # **38 probes.**
+                          # 🔑 THE PARALLEL SESSION'S TALLY, AS A RULE NOT A NUMBER: **seven
+                          # sends -- seven CONFIRMED findings** (the 7th outside the repo, in the
+                          # resume-point memory a next session reads BEFORE the code), **one
+                          # hypothesis measured and REFUTED**, one NON-finding converted into a
+                          # measurement. **Three of the seven were false sentences in the section
+                          # that PROMISES.** ⚠️ It first read "six" -- caught by the session that
+                          # produced the findings, the missing one being the resume point that same
+                          # paragraph had just called the only place that mattered for the morning:
+                          # a tally written in flight, inside the document explaining why not to.
                           # 🔑 THREE documents described a state the code had passed -- the
                           # mutation-table header, project-context's "six gates", and
                           # `xtask/src/main.rs`'s OWN module doc, which enumerated six gates while
