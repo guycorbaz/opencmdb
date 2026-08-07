@@ -105,7 +105,7 @@ last_updated: 2026-08-07  # 5.12 CODE-REVIEWED (three layers) **AND REPAIRED** u
                           # through from elsewhere. M24b reds 2 and breaks no legitimate site;
                           # M25 (path compared unnormalised) reds 2 -- the Windows trap, measured.
                           # **THIRTEEN mutations, thirteen reds.** Counts: **463 -> 469**
-                          # (248+159+62), **37 probes**.
+                          # (248+159+62), **38 probes**.
                           # 🔴 A FOURTH finding, a SECOND hole INSIDE the promise: the `"` bound
                           # of `statement_after` truncated the READ half, because in a .rs file a
                           # `"` can be a quote inside the SQL -- every predicate after it lost, and
@@ -120,6 +120,23 @@ last_updated: 2026-08-07  # 5.12 CODE-REVIEWED (three layers) **AND REPAIRED** u
                           # **an enumeration cannot claim the completeness of a property** -- that
                           # sentence is the deliverable, not a longer list. Closure = voie B.
                           # **SIXTEEN mutations, sixteen reds, 37 probes.**
+                          # ⚠️ A FIFTH finding, WEAKER, and given WITH its bound (the session
+                          # deflated it rather than inflating it after four accepted -- itself the
+                          # lesson): the exemption's comment said CREATE TABLE is "never a write of
+                          # a value", FALSE for `CREATE TABLE … AS SELECT`. 🔑 But against a schema
+                          # 0001 has migrated that form FAILS and `IF NOT EXISTS … AS SELECT` is
+                          # INERT, while the form that would really run -- CREATE OR REPLACE TABLE
+                          # … AS SELECT -- ALREADY REDS (measured). A false SENTENCE with narrow
+                          # executable reach, not a sixth hole. **Chosen: fix the sentence, not the
+                          # matcher**; e38 pins the form GREEN by decision.
+                          # 🔑 A NON-FINDING kept as a MEASUREMENT: the `.rs`+`.sql` perimeter would
+                          # miss a .sh/Dockerfile/compose carrying inline SQL -- THERE ARE NONE
+                          # (compose declares no DB container, external MariaDB by decision, no
+                          # init volume). No finding manufactured from the hypothesis; the SENTENCE
+                          # is recorded in AUTHORSHIP_ROOTS' doc: complete TODAY, measured not
+                          # supposed, and **reopen the perimeter the day the compose gains a DB
+                          # container with an init script** -- the deployment story owns that debt.
+                          # **38 probes.**
                           # 🔑 THREE documents described a state the code had passed -- the
                           # mutation-table header, project-context's "six gates", and
                           # `xtask/src/main.rs`'s OWN module doc, which enumerated six gates while

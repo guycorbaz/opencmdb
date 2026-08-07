@@ -1112,6 +1112,15 @@ const DECLARED_TABLE: &str = "declared_attribute";
 /// The subtrees this gate walks. `docker/` is NOT decoration: `seed-example.sql` writes a declared
 /// row and is a file the operator is told to run, so a gate confined to `crates/` would be blind to
 /// the only other writer in the product. Measured at story 5.12's validation.
+///
+/// ⚠️ **The `.rs` + `.sql` extension filter is complete TODAY, and that is a measurement rather than
+/// an assumption.** The same *"a shipped file the operator is told to run"* argument would cover a
+/// `.sh`, a `Dockerfile` or a compose file carrying inline SQL — so they were looked for and there
+/// are none: `docker/` holds only `README.dockerhub.md`, `docker-compose.yml` and
+/// `seed-example.sql`; the compose declares **no database container** (it points at an external
+/// MariaDB, by decision), no `command:` SQL and no init volume — its one volume is a log directory.
+/// 🔑 **The day that compose gains a database container and an init script, this gate's perimeter
+/// must be reopened**, and the story that adds it owns that debt.
 const AUTHORSHIP_ROOTS: [&str; 2] = ["crates", "docker"];
 
 /// The three sanctioned write sites, and nothing else may write a declared field.
@@ -1570,8 +1579,18 @@ fn authorship_findings(content: &str, shown: &str, sql: bool) -> Vec<(usize, Str
         let stmt = statement_before(&text, at).trim_start();
         let line = lines.get(at).copied().unwrap_or(0);
 
-        // `CREATE TABLE` is the schema's own definition, never a write of a value — it governs
-        // nothing, and neither does a bare mention.
+        // `CREATE TABLE` is the schema's own definition and governs nothing, as does a bare
+        // mention.
+        //
+        // ⚠️ *"never a write of a value"* stood here and was FALSE: `CREATE TABLE … AS SELECT`
+        // creates the table AND fills it, and its `select` sits after the table name where
+        // `statement_before` cannot see it. Measured, and measured with its bounds: against a
+        // schema `0001` has already migrated, `CREATE TABLE … AS SELECT` **fails** (the table
+        // exists) and `IF NOT EXISTS … AS SELECT` is **inert** — while the one form of the class
+        // that would really run, `CREATE OR REPLACE TABLE … AS SELECT`, **already reds** (measured
+        // as `9005`). So this is a false SENTENCE with a narrow executable reach, not a hole in the
+        // promise. `e38` pins the grammatical form as passing, on purpose, rather than leaving it
+        // unmeasured.
         let Some(keyword) = governing_keyword(stmt) else {
             continue;
         };
@@ -3081,7 +3100,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     ///
     /// 🔴 Sixteen of the first thirty passed the gate as first shipped. That is what this table
     /// exists to stop from happening again quietly.
-    const AUTHORSHIP_PROBES: [(&str, Option<usize>); 37] = [
+    const AUTHORSHIP_PROBES: [(&str, Option<usize>); 38] = [
         ("e01_raw_string.rs", Some(2)),
         // The one the story already pinned: a query assembled at runtime.
         ("e02_concat_lets.rs", None),
@@ -3133,6 +3152,11 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         ("e36_control_read_no_quote.rs", Some(2)),
         // `e32`'s class with a character the enumeration did not name. See [`is_invisible`].
         ("e37_variation_selector.rs", Some(2)),
+        // GREEN by decision, and the weakest of the four: `CREATE TABLE … AS SELECT` does write
+        // values, but it cannot RUN against a schema `0001` has migrated, and the form of the class
+        // that can — `CREATE OR REPLACE TABLE … AS SELECT` — already reds. Pinned so the fact stays
+        // measured rather than remembered.
+        ("e38_create_table_as_select.sql", None),
     ];
 
     /// The corpus directory must hold exactly the probes the table names — neither more nor fewer.
@@ -3163,7 +3187,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         );
         assert_eq!(
             on_disk.len(),
-            37,
+            38,
             "the corpus is what the review left behind; losing a probe loses a measured mechanism"
         );
     }

@@ -1,6 +1,6 @@
 # The authorship gate's evasion corpus
 
-Thirty-seven hand-written violations of NFR5's never-overwrite invariant, one per mechanism. They are
+Thirty-eight hand-written violations of NFR5's never-overwrite invariant, one per mechanism. They are
 the regression suite of `gate_declared_authorship` (`xtask/src/main.rs`): a repaired gate is
 **measured** against all of them, never argued about.
 
@@ -39,13 +39,17 @@ because it is what proves the quote is the cause: under M26 and M27 the two quot
 while `e36` stays red. A probe that cannot fail proves nothing; a control that never changes is what
 makes its neighbours' change mean something.
 
-## The three that are GREEN on purpose
+## The four that are GREEN on purpose
 
-`e02`, `e14` and `e31` are pinned as PASSING the gate. They are not oversights — they are where the
+`e02`, `e14`, `e31` and `e38` are pinned as PASSING the gate. They are not oversights — they are where the
 promise stops, and each is stated in the story:
 
 - **`e02`** — the query is assembled at runtime (`format!`). A text matcher cannot follow a table
   name that does not exist until the program runs.
+- **`e38`** — `CREATE TABLE … AS SELECT` does write values, and the weakest of the four for it. It
+  cannot RUN against a schema `0001` has already migrated (the table exists), and the form of the
+  class that can — `CREATE OR REPLACE TABLE … AS SELECT` — already reds. A false sentence in the
+  code's own comment with a narrow executable reach, pinned so the fact stays measured.
 - **`e14`, `e31`** — `RENAME TABLE` and `ALTER … DROP CONSTRAINT` touch no row: they neutralise the
   guard rather than write a value under a false author. NFR5 is about AUTHORSHIP, and the closure
   for guard removal is a privilege the database refuses, not a matcher that reads source text.
