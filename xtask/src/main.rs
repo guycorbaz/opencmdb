@@ -1241,7 +1241,15 @@ fn normalise_sql_text(content: &str, sql_comments: bool) -> (String, Vec<usize>)
                 }
             } else {
                 out.push(ch.to_ascii_lowercase());
-                lines.push(idx + 1);
+                // 🔴 One entry per BYTE, not per char. `authorship_findings` indexes this map with
+                // a byte offset into `out`, and `to_ascii_lowercase` leaves non-ASCII intact — so a
+                // single multibyte character in any string literal shifted every later line number
+                // by (bytes − chars). Measured on a 50-emoji literal: the gate reported line **0**
+                // for a write on line 2. Not a detection hole — the finding still reds — but a gate
+                // that sends the reader to the wrong line spends the trust it just earned.
+                for _ in 0..ch.len_utf8() {
+                    lines.push(idx + 1);
+                }
                 prev_space = false;
             }
         }
@@ -2408,6 +2416,41 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         assert_eq!(governing_keyword("reinsert_into_log("), None);
     }
 
+    /// 🔴 The reported LINE survives a multibyte literal — the defect the probe corpus could not
+    /// see, because a pinned boolean says THAT the gate reds and never WHERE.
+    ///
+    /// [`normalise_sql_text`] built its offset→line map one entry per CHARACTER while
+    /// [`authorship_findings`] indexes it with a BYTE offset, and `to_ascii_lowercase` leaves
+    /// non-ASCII intact. Any string literal carrying a multibyte character shifted every later
+    /// finding by (bytes − chars): measured at **line 0 for a write on line 2**. It is not a
+    /// detection hole — the write still reds — which is exactly why nothing caught it.
+    ///
+    /// ⚠️ `e23_multibyte_line` is the corpus's multibyte probe and it reported the RIGHT line even
+    /// while the map was wrong: its drift is a dozen bytes and its line holds enough entries to
+    /// absorb it. Luck, not coverage. The literal below is long enough that it cannot be.
+    #[test]
+    fn the_reported_line_survives_a_multibyte_literal() {
+        let src = format!(
+            "fn a() {{ let s = \"{}\"; }}\nfn w() {{ sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\"); }}\n",
+            "\u{1F680}".repeat(50)
+        );
+        let findings = authorship_findings(&src, false, false);
+        assert_eq!(findings.len(), 1, "one write, one finding: {findings:?}");
+        assert_eq!(
+            findings[0].0, 2,
+            "the finding is on line 2; a per-character line map indexed by byte offset reports 0"
+        );
+
+        // The same drift, one line further down and with a smaller literal — the crueller shape,
+        // because a wrong line that EXISTS reads as correct.
+        let src = format!(
+            "fn a() {{\n    let s = \"{}\";\n}}\nfn w() {{\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}}\n",
+            "é".repeat(40)
+        );
+        let findings = authorship_findings(&src, false, false);
+        assert_eq!(findings[0].0, 5, "{findings:?}");
+    }
+
     /// 🔑 The `format!` hole, PINNED rather than pretended away (D18).
     ///
     /// A text gate cannot see a table name assembled at runtime. Stating it is the difference
@@ -2869,53 +2912,61 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
 
     /// Every probe in `xtask/probes/authorship/`, and the verdict the gate must give it.
     ///
-    /// `true` = the gate must RED. `false` = the probe passes **on purpose**, and is where the
-    /// promise stops — see the corpus README and story 5.12 §12. Both directions are pinned: a
-    /// probe that starts being caught reds this test too, because a gate that silently widens is a
-    /// gate whose STATED limits have gone stale, and the limits are the deliverable here.
+    /// `Some(line)` = the gate must RED **and name that line**. `None` = the probe passes **on
+    /// purpose**, and is where the promise stops — see the corpus README and story 5.12 §12. Both
+    /// directions are pinned: a probe that starts being caught reds this test too, because a gate
+    /// that silently widens is a gate whose STATED limits have gone stale, and the limits are the
+    /// deliverable here.
+    ///
+    /// 🔴 **The verdict was a bare `bool` until the line map was found broken.** A boolean pins
+    /// THAT the gate reds, never WHERE — so `normalise_sql_text` could map byte offsets onto a
+    /// per-character line table (reporting line 0 for a write on line 2, under any multibyte
+    /// literal) with all 60 tests green and `e23`, the multibyte probe itself, passing by luck.
+    /// Twenty-nine booleans are now twenty-nine located verdicts. Found by READING, by a second
+    /// session launched on this same story in parallel.
     ///
     /// 🔴 Sixteen of the first thirty passed the gate as first shipped. That is what this table
     /// exists to stop from happening again quietly.
-    const AUTHORSHIP_PROBES: [(&str, bool); 32] = [
-        ("e01_raw_string.rs", true),
+    const AUTHORSHIP_PROBES: [(&str, Option<usize>); 32] = [
+        ("e01_raw_string.rs", Some(2)),
         // The one the story already pinned: a query assembled at runtime.
-        ("e02_concat_lets.rs", false),
-        ("e03_backslash_cont.rs", true),
-        ("e04_tabs.rs", true),
-        ("e05_nbsp.rs", true),
-        ("e06_zwsp_lead.rs", true),
-        ("e07_block_comment_mid.rs", true),
-        ("e08_block_comment_lead.rs", true),
-        ("e09_version_comment.rs", true),
-        ("e10_version_comment_mid.rs", true),
-        ("e11_insert_select.rs", true),
-        ("e12_on_dup_key.rs", true),
-        ("e13_load_data.rs", true),
+        ("e02_concat_lets.rs", None),
+        ("e03_backslash_cont.rs", Some(3)),
+        ("e04_tabs.rs", Some(2)),
+        ("e05_nbsp.rs", Some(2)),
+        ("e06_zwsp_lead.rs", Some(2)),
+        ("e07_block_comment_mid.rs", Some(2)),
+        ("e08_block_comment_lead.rs", Some(2)),
+        ("e09_version_comment.rs", Some(2)),
+        ("e10_version_comment_mid.rs", Some(2)),
+        ("e11_insert_select.rs", Some(2)),
+        ("e12_on_dup_key.rs", Some(2)),
+        ("e13_load_data.rs", Some(2)),
         // Guard NEUTRALISATION, not authorship — stated, not silently missed.
-        ("e14_rename_table.rs", false),
-        ("e15_uppercase.rs", true),
-        ("e16_nested_fn_name.rs", true),
-        ("e17_fn_in_string.rs", true),
-        ("e18_where_provenance.rs", true),
-        ("e19_order_by_provenance.rs", true),
-        ("e20_sql_migration_insert.sql", true),
-        ("e21_sql_block_comment.sql", true),
-        ("e22_create_or_replace.sql", true),
-        ("e23_multibyte_line.rs", true),
-        ("e24_cfg_test_mod.rs", true),
-        ("e25_semicolon_in_literal.rs", true),
-        ("e26_select_star_where.rs", true),
-        ("e27_subquery_provenance.rs", true),
-        ("e28_prov_after_from_join.rs", true),
-        ("e29_with_cte.rs", true),
-        ("e30_call_procedure.rs", true),
+        ("e14_rename_table.rs", None),
+        ("e15_uppercase.rs", Some(2)),
+        ("e16_nested_fn_name.rs", Some(3)),
+        ("e17_fn_in_string.rs", Some(3)),
+        ("e18_where_provenance.rs", Some(2)),
+        ("e19_order_by_provenance.rs", Some(2)),
+        ("e20_sql_migration_insert.sql", Some(2)),
+        ("e21_sql_block_comment.sql", Some(1)),
+        ("e22_create_or_replace.sql", Some(1)),
+        ("e23_multibyte_line.rs", Some(4)),
+        ("e24_cfg_test_mod.rs", Some(5)),
+        ("e25_semicolon_in_literal.rs", Some(2)),
+        ("e26_select_star_where.rs", Some(2)),
+        ("e27_subquery_provenance.rs", Some(2)),
+        ("e28_prov_after_from_join.rs", Some(2)),
+        ("e29_with_cte.rs", Some(2)),
+        ("e30_call_procedure.rs", Some(2)),
         // Same family as e14, and the one the review's own sweep missed.
-        ("e31_alter_drop_check.sql", false),
+        ("e31_alter_drop_check.sql", None),
         // 🔴 Added during the repair, because mutation M13 came back GREEN: `e06` puts its
         // zero-width space BEFORE the verb, where it is already a token boundary, so it left
         // [`is_invisible`] load-bearing for nothing. Inside a word is where the deletion is the
         // only thing that finds the statement at all.
-        ("e32_zwsp_inside_words.rs", true),
+        ("e32_zwsp_inside_words.rs", Some(2)),
     ];
 
     /// The corpus directory must hold exactly the probes the table names — neither more nor fewer.
@@ -2979,11 +3030,15 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             std::fs::write(&planted, &body).expect("plant");
 
             let (green, msg) = gate_declared_authorship(&root).expect("the gate runs");
-            if must_red {
+            if let Some(line) = must_red {
                 if green {
                     wrong.push(format!("{name}: PASSES the gate and must not"));
-                } else if !msg.contains(&format!("planted.{ext}")) {
-                    wrong.push(format!("{name}: reds without naming the file — {msg}"));
+                } else if !msg.contains(&format!("planted.{ext}:{line}:")) {
+                    wrong.push(format!(
+                        "{name}: reds, but not at the line it must name (`planted.{ext}:{line}:`) — \
+                         a gate that sends the reader to the wrong line spends the trust it just \
+                         earned — {msg}"
+                    ));
                 }
             } else if !green {
                 wrong.push(format!(
