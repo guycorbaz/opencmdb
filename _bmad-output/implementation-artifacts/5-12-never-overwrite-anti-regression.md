@@ -476,7 +476,14 @@ the collision validation predicted.
 `file-size` largest: 1136 → **1421** (validation predicted 1346 for a slightly smaller gate). 579
 lines of headroom under the 2000 ceiling; splitting is not this story's call.
 
-**The mutation table, measured. Every red assertion-carried; zero compiler-carried.**
+**The mutation table, measured. Zero compiler-carried — and the carrier is MIXED, which the
+header of this table denied until the repair pass.**
+
+🔴 It read *"Every red assertion-carried; zero compiler-carried"* while its own **M6** row, four
+lines below, recorded `.expect()` panic ×3. Story 5.9b shipped that exact defect in five documents
+and this story reproduced it: the driver read the carrier off the whole test output, so a MIXED set
+collapsed to one label. The driver now prints each red test's panic MESSAGE and the carrier is
+classified by reading them, one by one.
 
 | | mutation | measured | carrier |
 |---|---|---|---|
@@ -490,14 +497,16 @@ lines of headroom under the 2000 ceiling; splitting is not this story's call.
 | M3 | drop `declared_actor_not_scanner` from the live database | 1 test RED, at `repo.rs:1158` | **assertion** — not `.expect_err`, which AC2 required |
 | M4 | add `origin` to `load_declared_attributes`' SELECT | 🔴 **carrier is the GATE ALONE**: 0 compile errors, all 248 bin + 159 core tests GREEN | assertion (the gate's test) |
 | M5 | neuter the gate — always returns green | 5 tests RED | assertion |
+| | ⚠️ **M5's label is wrong, and the code review's headline defect hid behind it.** The mutation was applied to `authorship_findings` — the MATCHER — never to `gate_declared_authorship`'s body. Re-measured during the repair: neutering the matcher reds **8** tests today; replacing the gate BODY with a pass reddened **0** before this pass, and 2 now (M20). *"Neuter the gate"* named the thing that was not tested after the thing that was. | | |
 | M6 | the sanctioned adapter writes `'scanner'` | gate stays GREEN (the write is inside the sanctioned fn); the **DDL CHECK** catches it — 3 tests RED. ⚠️ **0 RED without `DATABASE_URL`** | `.expect()` panic ×3 |
 | M7allowlist | make the allowlist match by PREFIX | 1 test RED | assertion |
 
 ### Completion Notes List
 
-- **The seventh gate ships and the shape works.** `declared-authorship` walks `.rs` **and** `.sql`
-  under `crates/` **and** `docker/` — 31 files — and reds on any unsanctioned write to
-  `declared_attribute` or any divergence read naming a provenance column.
+- **The seventh gate ships.** `declared-authorship` walks `.rs` **and** `.sql` under `crates/`
+  **and** `docker/` — 31 files — and reds on an unsanctioned write to `declared_attribute` or a
+  divergence read naming a provenance column. ⚠️ *"And the shape works"* stood here until the code
+  review measured **16 of 30** hand-written evasions passing it. See §12.
 - 🔴 **M1sql was GREEN on first measurement, and the reason was not the scope.** The gate DID read
   the planted migration (its count rose 31 → 32) and found nothing: `strip_line_comment` handles
   `//` only, so the `--` header ran into the statement under whitespace normalisation and the
@@ -507,10 +516,14 @@ lines of headroom under the 2000 ceiling; splitting is not this story's call.
 - 🔴 **Two false positives, both the *"wrong in both directions"* family.** `SELECT COUNT(*)` was
   read as a wildcard — **the gate's very first red, on the committed tree at `repo.rs:106`** — and a
   match could span two string literals. Both closed and both pinned by a test.
-- 🔴 **A prediction of the story's, refuted.** It said this gate would inherit `float-free`'s
-  block-comment false positive. **It does not**: this gate anchors on a statement's HEAD, so a verb
-  inside `/* … */` matches no statement head. Green is also the correct answer — a commented-out
-  write is not a code path. The test now asserts the measured truth and says why.
+- 🔴 **A prediction of the story's, refuted — and the refutation was refuted in turn.** The story
+  said this gate would inherit `float-free`'s block-comment false positive; it did not, and the
+  reason recorded was the statement-HEAD anchor, which matched no verb inside `/* … */`. **The code
+  review then defeated that same anchor**: probe `e08` puts a real `INSERT` behind a CLOSED comment
+  (`/* hi */ INSERT INTO declared_attribute …`) and the gate went green on it for exactly the
+  reason it was green on a commented-out one. The anchor is gone (see the repair below); block
+  comments are now stripped outright, which keeps the commented-out case green for a reason that
+  survives its own probe.
 - 🔴 **THREE sanctioned sites, where the story prescribed two.** The third is
   `docker/seed-example.sql`, forced by the story's own requirement to walk `docker/`. Registered with
   its consequence: an edit to that file could change its actor and pass the gate.
