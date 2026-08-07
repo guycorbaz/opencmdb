@@ -820,6 +820,20 @@ recounted at the next probe, and there is always a next probe.
 contradicting each other. Collapsed to **one live count per document**, stated once, with the reason
 written beside it. `sprint-status.yaml` carried a fifth, 467/60, and is corrected.
 
+#### ⚠️ One hypothesis in the same family, MEASURED AND REFUTED — kept separate on purpose
+
+The parallel session pointed at the doc twins as the place where a dated *"six gates"* and a living
+*"seven gates"* might sit in one line, and gave it explicitly as **not measured**. Measured here:
+**there is nothing.** Every *"six gates green"* in `CLAUDE.md` and `docs/project-context.md` is a
+dated code-review record — 5.6, 5.7, 5.8, 5.11b — true at its date, and *"the sixth gate"* names
+`float-free` correctly.
+
+🔑 **It must not be merged with the confirmed one.** `xtask/src/main.rs`'s module doc DID enumerate
+six gates while the file implemented seven — real, found by that session, and already in the
+deliverable. The twins' *"six gates"* is a different claim, and it is **refuted**. A record that
+fused them would commit, in its own summary, the error this story spent its day correcting: an
+unverified suspicion inheriting a measured one's credit.
+
 #### Three documents that described a state the code had already passed
 
 Counted together, because it is the same defect three times and the sixth consecutive story with the
