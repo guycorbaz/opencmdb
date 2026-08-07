@@ -50,7 +50,28 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-07  # 5.12 CODE-REVIEWED (three layers) **AND REPAIRED** under Guy's
+last_updated: 2026-08-07  # 5.12 **DONE** -- PR #75 squash-merged as `378f0f8` after a green CI
+                          # run. **Epic 5 is now 16/18.** Branch deleted locally and on `origin`.
+                          # `master` carries 469 tests (248 bin + 159 core + 62 xtask), **SEVEN**
+                          # gates green, 38 authorship probes.
+                          # NEXT = `create-story` 5.13.
+                          # 🔑 THE STORY'S REAL LESSON, for the Epic 5 retrospective: a SECOND
+                          # session read the deliverable without the context of having written it
+                          # and produced **seven confirmed findings**, plus one hypothesis measured
+                          # and REFUTED and one non-finding converted into a measurement. **NONE
+                          # was reachable by the mutation pass** -- one does not mutate what one
+                          # did not think of -- and **three were false sentences in the section
+                          # that PROMISES**. The corpus could not carry them either: it took a
+                          # LOCATED verdict, a new AXIS, and a CONTROL.
+                          # 🔑 **AND THE CLAUSE WITHOUT WHICH THE LESSON PRODUCES NOTHING: the
+                          # reading produced nothing until it MEASURED.** Each of the seven sends
+                          # arrived with its reproduction, and each was RE-MEASURED here before
+                          # being believed -- including the one that refuted the reader. A reading
+                          # without measurement yields a list of SUSPICIONS: work for the writer,
+                          # nothing for the story. **"Have it read by a fresh context" without "and
+                          # require measurement on BOTH sides" will produce suspicion lists.**
+                          # (The clause is the reader's own, proposed rather than claimed.)
+                          # (review+repair entry:) 5.12 CODE-REVIEWED (three layers) **AND REPAIRED** under Guy's
                           # arbitration -- **voie A: repair AND narrow the promise**, over (B) a
                           # database GRANT and (C) dropping the gate. Still `review`: `done` is the
                           # MERGE's business. **463 -> 469 tests** (248 + 159 + **62** xtask),
@@ -1920,7 +1941,7 @@ development_status:
   # the correction is registered with Epic 5's retrospective.
   5-11-idempotent-supersede: done
   5-11b-order-independence: done
-  5-12-never-overwrite-anti-regression: review
+  5-12-never-overwrite-anti-regression: done
   5-13-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog
   epic-5-retrospective: optional
