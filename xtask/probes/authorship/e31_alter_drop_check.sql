@@ -1,0 +1,1 @@
+ALTER TABLE declared_attribute DROP CONSTRAINT declared_attribute_human_author;
