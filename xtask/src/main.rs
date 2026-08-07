@@ -22,6 +22,11 @@
 //!     `crates/opencmdb-core/src/identity/` — *"if the output is a float, B has won in
 //!     disguise"*. Comments are stripped first, so the architecture may be QUOTED there;
 //!     the committed citation in `cascade.rs` is this gate's negative test case.
+//!   - **authorship** (NFR5 / FR13, story 5.12): no code path writes `declared_attribute`
+//!     outside the sanctioned sites, and no divergence computation reads HOW a declared
+//!     value was obtained. ⚠️ **It is a TRIPWIRE, not a barrier** — see
+//!     [`gate_declared_authorship`] for the two residual holes it cannot close and for the
+//!     database `GRANT` that would close them properly.
 //!   - **views-hash** (informational): whether `architecture-views.md`'s `sourceSha256`
 //!     still matches `architecture.md`. A mismatch means the views file is stale and
 //!     should be regenerated at the next milestone — reported, never a hard failure.
@@ -177,6 +182,10 @@ fn run_ci() -> Result<bool> {
     let (g5, m5) = gate_float_free(&root)?;
     report("float-free", g5, &m5);
     ok &= g5;
+
+    let (g6, m6) = gate_declared_authorship(&root)?;
+    report("authorship", g6, &m6);
+    ok &= g6;
 
     let m3 = check_views_hash(&root)?;
     println!("  ℹ  {:<14} {m3}", "views-hash");
@@ -1095,6 +1104,648 @@ fn gate_float_free(root: &Path) -> Result<(bool, String)> {
     }
 }
 
+// ── Gate 6: declared authorship (NFR5, story 5.12) ───────────────────────────────────────────
+
+/// The table whose authorship NFR5 protects.
+const DECLARED_TABLE: &str = "declared_attribute";
+
+/// The subtrees this gate walks. `docker/` is NOT decoration: `seed-example.sql` writes a declared
+/// row and is a file the operator is told to run, so a gate confined to `crates/` would be blind to
+/// the only other writer in the product. Measured at story 5.12's validation.
+///
+/// ⚠️ **The `.rs` + `.sql` extension filter is complete TODAY, and that is a measurement rather than
+/// an assumption.** The same *"a shipped file the operator is told to run"* argument would cover a
+/// `.sh`, a `Dockerfile` or a compose file carrying inline SQL — so they were looked for and there
+/// are none: `docker/` holds only `README.dockerhub.md`, `docker-compose.yml` and
+/// `seed-example.sql`; the compose declares **no database container** (it points at an external
+/// MariaDB, by decision), no `command:` SQL and no init volume — its one volume is a log directory.
+/// 🔑 **The day that compose gains a database container and an init script, this gate's perimeter
+/// must be reopened**, and the story that adds it owns that debt.
+const AUTHORSHIP_ROOTS: [&str; 2] = ["crates", "docker"];
+
+/// The three sanctioned write sites, and nothing else may write a declared field.
+///
+/// A site is a **PLACE**: a path, plus the enclosing `fn` when the file is Rust (`None` for a data
+/// file, where the whole file is the site).
+///
+/// 🔴 **It was keyed on the function NAME alone, and that sanctioned an ORTHOGRAPHY rather than a
+/// place.** Measured on the committed tree: a new file holding nothing but
+/// ```text
+/// fn insert_declared_attribute(pool: &Pool) {
+///     sqlx::query("INSERT INTO declared_attribute (entity_id, attr_value) VALUES (?, ?)");
+/// }
+/// ```
+/// left the gate GREEN — it read the file (its count rose 31 → 32) and said nothing. No invisible
+/// character, no comment, no trick: **the name was enough**. And this is not an adversary's probe
+/// but the ordinary gesture — someone copies the adapter into another module, or writes a second
+/// one and gives it the name the job already has. That is precisely the case
+/// [`gate_declared_authorship`]'s stated promise claims to hold (*"a future story will not add such
+/// a write by accident"*), so it was a hole INSIDE the narrowed promise, not beside it.
+///
+/// 🔑 The apparatus had already said so itself: the data-file half was keyed by PATH while the Rust
+/// half was keyed by name, and the docs called all three *"sites"* — a word the code checked for
+/// one of them. Found by READING, by a second session launched on this same story in parallel.
+///
+/// ⚠️ The path compared here is the gate's own displayed path, with separators normalised to `/`.
+/// Comparing a raw `Path` would drop the sanction on Windows and red the two real adapters.
+const SANCTIONED_SITES: [(&str, Option<&str>); 3] = [
+    (
+        "crates/opencmdb-bin/src/repo.rs",
+        Some("insert_declared_attribute"),
+    ),
+    (
+        "crates/opencmdb-bin/src/repo.rs",
+        Some("raw_declared_write_for_ddl_test"),
+    ),
+    ("docker/seed-example.sql", None),
+];
+
+/// The provenance columns a divergence computation may never read (FR13, NFR5's second clause).
+///
+/// **THREE, not two.** `origin_obs_id` is *"the adopted observation"* — it is *how the value was
+/// obtained* at least as much as `origin` is, and story 5.12's first draft named only two.
+const PROVENANCE_COLUMNS: [&str; 3] = ["origin_obs_id", "actor_id", "origin"];
+
+/// Where a block comment stands when one line ends and the next begins.
+///
+/// Block comments cross lines, so this cannot be a per-line decision — the review measured
+/// `/* housekeeping */ UPDATE declared_attribute …` passing the gate untouched.
+#[derive(Default)]
+struct CommentState {
+    /// Inside an ordinary `/* … */`, whose body is not code.
+    in_plain: bool,
+    /// Nesting depth inside MariaDB's executable `/*! … */`, whose body IS code.
+    exec_depth: usize,
+    /// Inside a Rust raw string, holding its `#` count — `Some(0)` for `r"…"`.
+    raw_hashes: Option<usize>,
+}
+
+/// Stands in for a `"` that is INSIDE a Rust string literal rather than delimiting one.
+///
+/// 🔴 [`statement_before`] and [`statement_after`] bound a statement at `;` or `"`, and that `"`
+/// bound is load-bearing — without it a finding spans two literals and the gate invents phantoms.
+/// But a `"` can also sit *inside* the SQL, and then the bound truncates the statement instead of
+/// ending it. Measured: `… FROM declared_attribute WHERE note = \"n\" AND actor_id = ?` passed the
+/// gate while the same read WITHOUT the quoted literal reddened — the read half loses every
+/// predicate after the quote, and predicates are where provenance columns live.
+///
+/// This is the ordinary Rust spelling, not a trick: `\"` is how anyone writes a quote inside a
+/// query. So the two forms Rust actually allows — the escape and the raw string — are rewritten to
+/// this sentinel, which is neither a bound nor a token character.
+const QUOTE_IN_LITERAL: char = '\u{1}';
+
+/// One line with its comments removed, carrying [`CommentState`] to the next.
+///
+/// 🔑 The two block forms are handled the OPPOSITE way round, and that is the point:
+/// `/*!50000 INSERT … */` is MariaDB's executable comment — the server runs its body — so the
+/// markers are dropped and the body KEPT, while an ordinary `/* … */` is dropped whole. Reversing
+/// them would either invent a write out of a commented-out one or go blind to a real one; the
+/// review measured the gate doing the second.
+///
+/// `'` is tracked so that a `--` or a `/*` sitting inside a SQL literal stays data.
+fn strip_comments(line: &str, sql: bool, state: &mut CommentState) -> String {
+    let chars: Vec<char> = line.chars().collect();
+    let mut out = String::with_capacity(line.len());
+    let mut in_literal = false;
+    let mut i = 0;
+    while i < chars.len() {
+        // A raw string swallows everything — comments included — until its own terminator.
+        if let Some(hashes) = state.raw_hashes {
+            if chars[i] == '"'
+                && chars[i + 1..]
+                    .iter()
+                    .take(hashes)
+                    .filter(|c| **c == '#')
+                    .count()
+                    == hashes
+            {
+                state.raw_hashes = None;
+                out.push('"');
+                i += 1 + hashes;
+            } else {
+                out.push(if chars[i] == '"' {
+                    QUOTE_IN_LITERAL
+                } else {
+                    chars[i]
+                });
+                i += 1;
+            }
+            continue;
+        }
+        if state.in_plain {
+            if chars[i] == '*' && chars.get(i + 1) == Some(&'/') {
+                state.in_plain = false;
+                i += 2;
+            } else {
+                i += 1;
+            }
+            continue;
+        }
+        match chars[i] {
+            // `\"` is a quote inside a literal, never a delimiter.
+            '\\' if chars.get(i + 1) == Some(&'"') => {
+                out.push(QUOTE_IN_LITERAL);
+                i += 2;
+            }
+            // `r"`, `r#"`, `r##"` … open a raw string, where an unescaped `"` is data.
+            'r' if !in_literal
+                && chars[i + 1..]
+                    .iter()
+                    .position(|c| *c != '#')
+                    .is_some_and(|k| chars.get(i + 1 + k) == Some(&'"'))
+                && !matches!(chars.get(i.wrapping_sub(1)), Some(c) if is_token_char(*c as u8)) =>
+            {
+                let hashes = chars[i + 1..].iter().position(|c| *c != '#').unwrap_or(0);
+                state.raw_hashes = Some(hashes);
+                out.push('"');
+                i += hashes + 2;
+            }
+            '\'' => {
+                in_literal = !in_literal;
+                out.push('\'');
+                i += 1;
+            }
+            '/' if !in_literal && chars.get(i + 1) == Some(&'/') => break,
+            '-' if !in_literal && sql && chars.get(i + 1) == Some(&'-') => break,
+            '/' if !in_literal && chars.get(i + 1) == Some(&'*') => {
+                if chars.get(i + 2) == Some(&'!') {
+                    state.exec_depth += 1;
+                    i += 3;
+                    while chars.get(i).is_some_and(char::is_ascii_digit) {
+                        i += 1;
+                    }
+                } else {
+                    state.in_plain = true;
+                    i += 2;
+                }
+            }
+            '*' if !in_literal && state.exec_depth > 0 && chars.get(i + 1) == Some(&'/') => {
+                state.exec_depth -= 1;
+                i += 2;
+            }
+            c => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// Characters that occupy no width and separate no token — a zero-width space, a joiner, a BOM.
+///
+/// 🔴 They are DELETED rather than treated as whitespace. `INSERT` with a zero-width space inside
+/// it is one word to the server and two to a whitespace-collapsing matcher; deleting restores the
+/// word, collapsing would split it. The review's `e06` planted one at the head of a statement and
+/// the gate went green.
+///
+/// ⚠️ **This is an ENUMERATION, and an enumeration cannot claim the completeness of a property.**
+/// It named five ranges and missed the variation selectors and three invisible operators —
+/// measured, `INS<U+FE0F>ERT` and `INS<U+2063>ERT` both passing. The ranges are widened ONCE, to
+/// the blocks Unicode reserves for zero-width and formatting characters, and deliberately not to
+/// exhaustion: chasing an adversary through the code-point space is a race
+/// [`gate_declared_authorship`]'s stated promise has already declined. What closes that class is a
+/// database privilege, not a longer list here. `e37` pins the widening; nothing pins completeness,
+/// because nothing could.
+fn is_invisible(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{00ad}'
+            | '\u{061c}'
+            | '\u{180e}'
+            | '\u{200b}'..='\u{200f}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206f}'
+            | '\u{fe00}'..='\u{fe0f}'
+            | '\u{feff}'
+    )
+}
+
+/// One file's text, lowercased and whitespace-collapsed, plus the source line of every byte.
+///
+/// Whole-file rather than per-line — the difference from [`line_has_float`], and it is forced:
+/// `INSERT INTO` and the table name may sit on two different lines, and a per-line matcher was
+/// measured blind to exactly that. Comments — line AND block — are stripped, so the architecture
+/// may be quoted; see [`strip_comments`] for the one comment form whose body survives.
+fn normalise_sql_text(content: &str, sql_comments: bool) -> (String, Vec<usize>) {
+    let mut out = String::with_capacity(content.len());
+    let mut lines = Vec::with_capacity(content.len());
+    let mut prev_space = true;
+    let mut state = CommentState::default();
+    for (idx, raw) in content.lines().enumerate() {
+        let code = strip_comments(raw, sql_comments, &mut state);
+        for ch in code.chars() {
+            if is_invisible(ch) {
+                continue;
+            }
+            if ch.is_whitespace() {
+                if !prev_space {
+                    out.push(' ');
+                    lines.push(idx + 1);
+                    prev_space = true;
+                }
+            } else {
+                out.push(ch.to_ascii_lowercase());
+                // 🔴 One entry per BYTE, not per char. `authorship_findings` indexes this map with
+                // a byte offset into `out`, and `to_ascii_lowercase` leaves non-ASCII intact — so a
+                // single multibyte character in any string literal shifted every later line number
+                // by (bytes − chars). Measured on a 50-emoji literal: the gate reported line **0**
+                // for a write on line 2. Not a detection hole — the finding still reds — but a gate
+                // that sends the reader to the wrong line spends the trust it just earned.
+                for _ in 0..ch.len_utf8() {
+                    lines.push(idx + 1);
+                }
+                prev_space = false;
+            }
+        }
+        if !prev_space {
+            out.push(' ');
+            lines.push(idx + 1);
+            prev_space = true;
+        }
+    }
+    (out, lines)
+}
+
+/// Is the `declared_attribute` occurrence at `at` a TABLE reference rather than part of a longer
+/// identifier?
+///
+/// `insert_declared_attribute` contains the table's name preceded by `_`; a backtick or a schema dot
+/// does NOT disqualify it, which is what makes `` `declared_attribute` `` and
+/// `opencmdb.declared_attribute` reachable — both measured green (i.e. invisible) before this.
+fn is_table_reference(text: &str, at: usize) -> bool {
+    let before = text[..at].chars().next_back();
+    let after = text[at + DECLARED_TABLE.len()..].chars().next();
+    let head_ok = !matches!(before, Some(c) if c.is_alphanumeric() || c == '_');
+    let tail_ok = !matches!(after, Some(c) if c.is_alphanumeric() || c == '_');
+    head_ok && tail_ok
+}
+
+/// The statement fragment a table reference belongs to.
+///
+/// Bounded by the nearest preceding `;` **or** `"` — whichever is closer. The `"` bound is what
+/// stops a match spanning two string literals: without it, a bare `DELETE FROM declared_attribute`
+/// was measured inheriting an `origin` from an unrelated INSERT twenty-four lines above, and the
+/// gate reported two phantom findings on the clean tree.
+fn statement_before(text: &str, at: usize) -> &str {
+    let start = text[..at].rfind([';', '"']).map_or(0, |i| i + 1);
+    &text[start..at]
+}
+
+/// The rest of the statement, AFTER the table reference, under the same bounds.
+///
+/// 🔴 The review's largest read-half hole: the first implementation inspected only what stood
+/// BEFORE the table name, so `WHERE actor_id = 'scanner'`, `ORDER BY origin_obs_id` and a join
+/// predicate on `d.origin` all passed. A provenance column read in a predicate is read (FR13).
+fn statement_after(text: &str, at: usize) -> &str {
+    let from = at + DECLARED_TABLE.len();
+    let end = text[from..]
+        .find([';', '"'])
+        .map_or(text.len(), |i| from + i);
+    &text[from..end]
+}
+
+/// The `fn` a byte offset sits inside, if any — the unit [`SANCTIONED_FNS`] allowlists.
+///
+/// 🔴 It was an unbounded `rfind("fn ")`, and the review defeated it twice: a nested
+/// `fn insert_declared_attribute() {}` **whose body had already closed** sanctioned everything
+/// after it, and the same name inside a string literal did the same. So a candidate must look like
+/// a declaration — its name followed by `(` or a generic list — and its braces must still be OPEN
+/// where the reference sits. The innermost such `fn` wins.
+fn enclosing_fn(text: &str, at: usize) -> Option<&str> {
+    let mut found = None;
+    let mut from = 0usize;
+    while let Some(rel) = text[from..at].find("fn ") {
+        let head = from + rel;
+        from = head + 3;
+        if text[..head]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_alphanumeric() || c == '_')
+        {
+            continue;
+        }
+        let rest = &text[head + 3..];
+        let Some(end) = rest.find(|c: char| !(c.is_alphanumeric() || c == '_')) else {
+            continue;
+        };
+        if end == 0 {
+            continue;
+        }
+        let after = rest[end..].trim_start();
+        if !(after.starts_with('(') || after.starts_with('<')) {
+            continue;
+        }
+        let Some(open) = rest.find('{') else { continue };
+        let limit = at - (head + 3);
+        if open >= limit {
+            continue;
+        }
+        let mut depth = 0i32;
+        let mut closed = false;
+        for (i, ch) in rest[open..limit].char_indices() {
+            let _ = i;
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        closed = true;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !closed {
+            found = Some(&rest[..end]);
+        }
+    }
+    found
+}
+
+/// A projection with every parenthesised group removed.
+///
+/// ⚠️ Without it `SELECT COUNT(*) FROM declared_attribute` is read as a wildcard — measured on the
+/// committed tree at `repo.rs:106`, the gate's first red and a FALSE POSITIVE. An aggregate's star
+/// loads no column; `SELECT *` loads all three provenance columns. The distinction is the whole
+/// difference between a gate and a nuisance.
+fn outside_parens(projection: &str) -> String {
+    let mut out = String::with_capacity(projection.len());
+    let mut depth = 0usize;
+    for ch in projection.chars() {
+        match ch {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(ch),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// The verbs that put a value into the guarded table without passing through a human author.
+///
+/// `DELETE` and `TRUNCATE` are deliberately ABSENT: NFR5 is about AUTHORSHIP and a removal writes
+/// no author — including them was measured reddening the committed tree at two fixture sites.
+/// `RENAME TABLE` and `ALTER … DROP CONSTRAINT` are absent because they touch no ROW at all; they
+/// neutralise the guard, and a text matcher is the wrong closure for that (probes `e14`, `e31`).
+///
+/// ⚠️ **`CREATE OR REPLACE TABLE` is the entry that does NOT follow from that criterion, and saying
+/// so is the point.** By the authorship test it belongs with `e14` and `e31` — it writes no row
+/// under a false author either; it destroys the table and every declared value in it. It reds
+/// anyway, for two reasons that must not be confused:
+///
+/// 1. **The red is incident, not decided.** Mutation M19b removed this entry and `e22` stayed RED,
+///    because the `REPLACE` hiding inside the phrase governs the same reference. The entry earns
+///    its place by NAMING the finding correctly — a message saying `replace` for a statement that
+///    drops the table sends the reader after the wrong thing.
+/// 2. **The red is kept on purpose.** The gesture annihilates the guarded table, and it lives in a
+///    `.sql` migration — the place this story measured to be the most natural home for a bulk
+///    rewrite. Keeping a red that the criterion does not demand is a decision; pretending the
+///    criterion demanded it would be a false sentence, and the review caught this file writing one.
+const WRITE_VERBS: [&str; 7] = [
+    "create or replace table",
+    "insert into",
+    "insert",
+    "load data",
+    "replace into",
+    "replace",
+    "update",
+];
+
+/// Does `needle` sit at `at` in `hay` as a whole token?
+fn is_word_at(hay: &str, at: usize, len: usize) -> bool {
+    let b = hay.as_bytes();
+    let before_ok = at == 0 || !is_token_char(b[at - 1]);
+    let after_ok = at + len >= b.len() || !is_token_char(b[at + len]);
+    before_ok && after_ok
+}
+
+/// The keyword that governs a table reference: the write verb or `select` whose match ENDS latest
+/// before it.
+///
+/// 🔑 The first implementation anchored on the statement's HEAD, and the review walked through it
+/// six ways — a CTE (`WITH x AS (SELECT origin FROM …)`), a subquery, and a trigger body whose
+/// `INSERT INTO` sits fifty characters into a `CREATE TRIGGER`. What governs a reference is the
+/// nearest preceding keyword, not the first one in the statement.
+///
+/// At equal end offsets the LONGER keyword wins, so `CREATE OR REPLACE TABLE` is not reported as
+/// the `REPLACE` hiding inside it.
+fn governing_keyword(stmt: &str) -> Option<&'static str> {
+    let mut best: Option<(usize, &'static str)> = None;
+    for kw in WRITE_VERBS.into_iter().chain(["select"]) {
+        let mut from = 0usize;
+        while let Some(rel) = stmt[from..].find(kw) {
+            let at = from + rel;
+            from = at + kw.len();
+            if !is_word_at(stmt, at, kw.len()) {
+                continue;
+            }
+            let end = at + kw.len();
+            let better = match best {
+                None => true,
+                Some((e, k)) => end > e || (end == e && kw.len() > k.len()),
+            };
+            if better {
+                best = Some((end, kw));
+            }
+        }
+    }
+    best.map(|(_, kw)| kw)
+}
+
+/// Every unsanctioned access to `declared_attribute` in one file's text.
+///
+/// `shown` is the file's path as the gate displays it (separators normalised to `/`) — the same
+/// string [`SANCTIONED_SITES`] is keyed on. A whole-file site short-circuits the write half only: a
+/// data file may WRITE with a human author, and no data file participates in the divergence
+/// computation.
+///
+/// 🔑 It took a `bool` until the sanction moved from a name to a place. A boolean the caller had to
+/// compute meant the caller had to know what sanctioning MEANS; passing the path leaves that
+/// knowledge in one spot.
+fn authorship_findings(content: &str, shown: &str, sql: bool) -> Vec<(usize, String)> {
+    let (text, lines) = normalise_sql_text(content, sql);
+    let mut findings = Vec::new();
+    let mut from = 0usize;
+
+    while let Some(rel) = text[from..].find(DECLARED_TABLE) {
+        let at = from + rel;
+        from = at + DECLARED_TABLE.len();
+        if !is_table_reference(&text, at) {
+            continue;
+        }
+        let stmt = statement_before(&text, at).trim_start();
+        let line = lines.get(at).copied().unwrap_or(0);
+
+        // `CREATE TABLE` is the schema's own definition and governs nothing, as does a bare
+        // mention.
+        //
+        // ⚠️ *"never a write of a value"* stood here and was FALSE: `CREATE TABLE … AS SELECT`
+        // creates the table AND fills it, and its `select` sits after the table name where
+        // `statement_before` cannot see it. Measured, and measured with its bounds: against a
+        // schema `0001` has already migrated, `CREATE TABLE … AS SELECT` **fails** (the table
+        // exists) and `IF NOT EXISTS … AS SELECT` is **inert** — while the one form of the class
+        // that would really run, `CREATE OR REPLACE TABLE … AS SELECT`, **already reds** (measured
+        // as `9005`). So this is a false SENTENCE with a narrow executable reach, not a hole in the
+        // promise. `e38` pins the grammatical form as passing, on purpose, rather than leaving it
+        // unmeasured.
+        let Some(keyword) = governing_keyword(stmt) else {
+            continue;
+        };
+
+        // ── the WRITE half ──
+        if keyword != "select" {
+            let enclosing = enclosing_fn(&text, at);
+            let sanctioned = SANCTIONED_SITES.iter().any(|(path, function)| {
+                *path == shown
+                    && match function {
+                        None => true,
+                        Some(name) => enclosing == Some(*name),
+                    }
+            });
+            if !sanctioned {
+                findings.push((
+                    line,
+                    format!(
+                        "`{keyword} {DECLARED_TABLE}` outside the sanctioned write sites — NFR5"
+                    ),
+                ));
+            }
+            continue;
+        }
+
+        // ── the READ half (FR13: a divergence never consults HOW a value was obtained) ──
+        let projection = stmt.rsplit_once("select").map_or(stmt, |(_, p)| p);
+        let projection = projection.split(" from ").next().unwrap_or(projection);
+        let rest = statement_after(&text, at);
+        if outside_parens(projection).contains('*') {
+            findings.push((
+                line,
+                format!("`SELECT *` on {DECLARED_TABLE} loads all three provenance columns — FR13"),
+            ));
+        } else if let Some(col) = PROVENANCE_COLUMNS
+            .into_iter()
+            .find(|c| contains_word(projection, c) || contains_word(rest, c))
+        {
+            findings.push((
+                line,
+                format!("a read of {DECLARED_TABLE} names `{col}` — FR13"),
+            ));
+        }
+    }
+    findings
+}
+
+/// Gate 6 — a TRIPWIRE against a code path that writes a declared field without a human author, or
+/// that reads how one was obtained (NFR5, FR13; story 5.12).
+///
+/// It walks `.rs` **and** `.sql` under [`AUTHORSHIP_ROOTS`]. A `.sql` migration was measured to be
+/// the most natural home for a bulk author rewrite and entirely invisible to a `.rs`-only walk.
+///
+/// # What it promises, and what it does not
+///
+/// 🔴 **It catches the good-faith violation, not the determined one, and the difference is
+/// measured rather than assumed.** Story 5.12's code review wrote thirty violations of NFR5 against
+/// the first implementation of this gate and **sixteen passed it** — three of them executing
+/// successfully against MariaDB 10.11.11. That is the DATED half of this paragraph and it stays at
+/// thirty and sixteen: it is where the gate started.
+///
+/// The corpus lives in `xtask/probes/authorship/`, and **every verdict, RED or GREEN, is pinned in
+/// [`AUTHORSHIP_PROBES`]** so neither a repair nor a regression happens silently.
+///
+/// ⚠️ **No live count is written here, on purpose.** This paragraph carried three — *"twenty-eight
+/// of the thirty-one now red"*, *"the three that pass"* — and all three were stale within two
+/// commits, overtaken by the repairs the paragraph itself describes. A dated fact and a living one
+/// sat in the same sentence, and it is always the living one that rots. The table is the count, and
+/// the orphan test verifies it; the prose names the CLASSES, which is what is worth reading:
+///
+/// The probes that pass do so **by decision** — they are marked `None` in [`AUTHORSHIP_PROBES`],
+/// which names them — and they are the shape of the residual hole:
+///
+/// - **A query assembled at runtime** (`e02`). A matcher that reads source text cannot follow a
+///   table name that does not exist until the program runs. No amount of pattern work closes this;
+///   it is the class, not an oversight.
+/// - **Neutralising the guard instead of writing under a false author** (`e14`, `e31`):
+///   `RENAME TABLE`, `ALTER … DROP CONSTRAINT`. This gate guards the WRITE, not the guard itself,
+///   and the guard of the guard is a privilege the database refuses — not a verb added to a list
+///   here. It is the one place where the gate is green on something that DESTROYS the mechanism
+///   rather than routing around it, so it is stated first and loudest.
+///   ⚠️ The line is not clean: `CREATE OR REPLACE TABLE` (`e22`) destroys the guard just as
+///   thoroughly and REDS. See [`WRITE_VERBS`] — that red is incident rather than principled, and
+///   the criterion stated here does not by itself separate the three.
+///
+/// **The closure this gate is not**: a MariaDB `GRANT` that denies the application's own role the
+/// right to write `declared_attribute` outside the sanctioned path — that holds against source
+/// text this gate never reads, and against a hand-run statement no gate reads at all. It is
+/// registered as the real fix rather than implied by this one. Read this gate as *"a future story
+/// will not add such a write by accident"*, never as *"such a write cannot exist"*.
+///
+/// # Errors
+///
+/// If a guarded root is missing or a file cannot be read — this gate fails CLOSED, like its five
+/// siblings: a pass reported over nothing is worse than a red.
+fn gate_declared_authorship(root: &Path) -> Result<(bool, String)> {
+    let mut offenders = Vec::new();
+    let mut checked = 0usize;
+
+    for sub in AUTHORSHIP_ROOTS {
+        let dir = root.join(sub);
+        if !dir.exists() {
+            return Ok((
+                false,
+                format!(
+                    "{sub}/ is missing — the guarded subtree must exist for this gate to mean anything"
+                ),
+            ));
+        }
+        for entry in walkdir::WalkDir::new(&dir)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            let p = entry.path();
+            let ext = p.extension().and_then(|e| e.to_str());
+            if ext != Some("rs") && ext != Some("sql") {
+                continue;
+            }
+            let content =
+                std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?;
+            checked += 1;
+            let shown = p.strip_prefix(root).unwrap_or(p);
+            let shown = shown.display().to_string().replace('\\', "/");
+            for (line, what) in authorship_findings(&content, &shown, ext == Some("sql")) {
+                offenders.push(format!("{shown}:{line}: {what}"));
+            }
+        }
+    }
+
+    if checked == 0 {
+        return Ok((
+            false,
+            "no .rs or .sql file under the guarded roots — this gate is reporting a pass over nothing"
+                .to_string(),
+        ));
+    }
+
+    offenders.sort();
+    if offenders.is_empty() {
+        Ok((
+            true,
+            format!("declared authorship intact across {checked} file(s)"),
+        ))
+    } else {
+        Ok((
+            false,
+            format!(
+                "{} unsanctioned access(es) to {DECLARED_TABLE}:\n      {}",
+                offenders.len(),
+                offenders.join("\n      ")
+            ),
+        ))
+    }
+}
+
 // ── Check 3: views-hash staleness (informational) ───────────────────────────
 
 fn check_views_hash(root: &Path) -> Result<String> {
@@ -1734,6 +2385,472 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         );
     }
 
+    // ── declared-authorship gate (NFR5 / FR13, story 5.12) ───────────────────────────────────
+
+    /// A path that is no sanctioned site — the default for a probe or a planted violation.
+    const UNSANCTIONED: &str = "crates/opencmdb-bin/src/somewhere_else.rs";
+
+    /// The one file that holds the two Rust sanctioned sites. Naming it in a test is the point:
+    /// under the old name-only key, these tests passed from ANY file.
+    const REPO_RS: &str = "crates/opencmdb-bin/src/repo.rs";
+
+    /// Wrap a fragment in an unsanctioned Rust function, the shape a future violation would take.
+    fn in_unsanctioned_fn(sql: &str) -> String {
+        format!("fn some_new_writer() {{\n    sqlx::query(\"{sql}\").execute(c).await?;\n}}\n")
+    }
+
+    /// 🔴 §4d — the WRITE evasion table. Every row was measured; four were HOLES in the first
+    /// implementation and are closed here.
+    #[test]
+    fn the_write_matcher_survives_every_measured_evasion() {
+        for sql in [
+            "INSERT INTO declared_attribute (entity_id) VALUES (?)",
+            "insert into declared_attribute (entity_id) VALUES (?)",
+            "UPDATE declared_attribute SET actor_id = 'engine'",
+            "REPLACE INTO declared_attribute (entity_id) VALUES (?)",
+            "INSERT INTO  declared_attribute (entity_id) VALUES (?)",
+            // 🔴 The four that were GREEN before this gate walked them properly.
+            "INSERT INTO `declared_attribute` (entity_id) VALUES (?)",
+            "INSERT INTO opencmdb.declared_attribute (entity_id) VALUES (?)",
+            "INSERT declared_attribute (entity_id) VALUES (?)",
+            "REPLACE declared_attribute (entity_id) VALUES (?)",
+        ] {
+            let findings = authorship_findings(&in_unsanctioned_fn(sql), UNSANCTIONED, false);
+            assert!(!findings.is_empty(), "must RED: {sql}");
+        }
+    }
+
+    /// 🔑 The newline-split case — the one structural difference from `float-free`.
+    ///
+    /// A per-line matcher is blind to it, which is why this gate normalises the WHOLE file.
+    #[test]
+    fn a_write_split_across_two_lines_still_reds() {
+        let src = "fn w() {\n    let q = \"INSERT INTO\n         declared_attribute (a) VALUES (?)\";\n}\n";
+        assert!(
+            !authorship_findings(src, UNSANCTIONED, false).is_empty(),
+            "a per-line matcher would miss this, and that is the whole reason for normalising"
+        );
+    }
+
+    /// The `no` rows of §4d: what must stay green.
+    #[test]
+    fn the_write_matcher_leaves_the_legitimate_shapes_alone() {
+        // The sanctioned adapter.
+        let sanctioned = "fn insert_declared_attribute() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
+        assert!(
+            authorship_findings(sanctioned, REPO_RS, false).is_empty(),
+            "the adapter is the sanctioned site"
+        );
+
+        // The sanctioned test helper.
+        let helper = "fn raw_declared_write_for_ddl_test() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
+        assert!(
+            authorship_findings(helper, REPO_RS, false).is_empty(),
+            "AC2's raw write has a named home"
+        );
+
+        // A data file on the allowlist.
+        let seed =
+            "INSERT INTO declared_attribute (entity_id, actor_id) VALUES ('x', 'operator');\n";
+        assert!(
+            authorship_findings(seed, "docker/seed-example.sql", true).is_empty(),
+            "the seed file writes with a human author"
+        );
+
+        // DELETE is deliberately out of the verb list — it writes no author.
+        let del = "fn cleanup() {\n    sqlx::query(\"DELETE FROM declared_attribute\");\n}\n";
+        assert!(
+            authorship_findings(del, UNSANCTIONED, false).is_empty(),
+            "a DELETE writes no author (§4b)"
+        );
+
+        // The name in a doc comment.
+        let doc =
+            "/// Writes to declared_attribute via INSERT INTO declared_attribute.\nfn f() {}\n";
+        assert!(
+            authorship_findings(doc, UNSANCTIONED, false).is_empty(),
+            "line comments are stripped"
+        );
+
+        // The schema's own definition.
+        let ddl = "CREATE TABLE declared_attribute (\n  entity_id CHAR(36) NOT NULL\n);\n";
+        assert!(
+            authorship_findings(ddl, UNSANCTIONED, true).is_empty(),
+            "CREATE TABLE writes no value"
+        );
+
+        // The function NAME contains the table name.
+        let call = "fn caller() {\n    insert_declared_attribute(pool, a, b, c).await?;\n}\n";
+        assert!(
+            authorship_findings(call, UNSANCTIONED, false).is_empty(),
+            "not a table reference"
+        );
+    }
+
+    /// 🔴 §4e — the READ half, including the FALSE POSITIVE the naive matcher produced.
+    #[test]
+    fn the_read_matcher_names_all_three_provenance_columns_and_the_wildcard() {
+        for sql in [
+            "SELECT origin FROM declared_attribute",
+            "SELECT actor_id FROM declared_attribute",
+            // 🔴 The third column, which the story's first draft did not name.
+            "SELECT origin_obs_id FROM declared_attribute",
+            // 🔴 And the wildcard, which defeats every column-name rule.
+            "SELECT * FROM declared_attribute",
+        ] {
+            let findings = authorship_findings(&in_unsanctioned_fn(sql), UNSANCTIONED, false);
+            assert!(!findings.is_empty(), "must RED: {sql}");
+        }
+    }
+
+    /// The `no` rows of §4e.
+    #[test]
+    fn the_read_matcher_leaves_the_sanctioned_read_and_the_aggregate_alone() {
+        let ok =
+            in_unsanctioned_fn("SELECT entity_id, attr_key, attr_value FROM declared_attribute");
+        assert!(
+            authorship_findings(&ok, UNSANCTIONED, false).is_empty(),
+            "the divergence's own read"
+        );
+
+        // 🔴 Measured on the committed tree as this gate's FIRST red, and it was wrong:
+        // an aggregate's star loads no column.
+        let agg = in_unsanctioned_fn("SELECT COUNT(*) FROM declared_attribute");
+        assert!(
+            authorship_findings(&agg, UNSANCTIONED, false).is_empty(),
+            "COUNT(*) is not SELECT * — the gate's first false positive, at repo.rs:106"
+        );
+
+        // 🔴 The false positive the naive backward search produced: a bare DELETE inheriting an
+        // `origin` from an unrelated string literal above it.
+        let phantom = "fn f() {\n    let a = \"INSERT INTO declared_attribute (origin, actor_id) VALUES (?, ?)\";\n    let b = \"DELETE FROM declared_attribute\";\n}\n";
+        let findings = authorship_findings(phantom, UNSANCTIONED, false);
+        assert!(
+            findings.iter().all(|(_, w)| !w.contains("a read of")),
+            "the `\"` bound is what stops a match spanning two literals; got {findings:?}"
+        );
+    }
+
+    /// 🔴 The longest keyword wins at equal end offsets — measured, because M19 came back GREEN.
+    ///
+    /// `CREATE OR REPLACE TABLE` reds either way: the `REPLACE` hiding inside it governs the same
+    /// reference. So the long verb changes no VERDICT, only what the finding is called — and a
+    /// message naming `replace` for a statement that drops the table and every row in it sends the
+    /// reader looking for the wrong thing. Dropping the entry left all 59 tests green, which is
+    /// what this test exists to stop.
+    #[test]
+    fn the_longest_governing_keyword_wins_so_the_finding_is_named_correctly() {
+        assert_eq!(
+            governing_keyword("create or replace table "),
+            Some("create or replace table")
+        );
+        assert_eq!(governing_keyword("insert into "), Some("insert into"));
+        // And the nearest one governs, which is the rule the head-anchor got wrong.
+        assert_eq!(
+            governing_keyword("insert into x select origin from "),
+            Some("select")
+        );
+        // A bare mention governs nothing at all.
+        assert_eq!(governing_keyword("create table "), None);
+        assert_eq!(governing_keyword("rename table "), None);
+        // Substrings of longer identifiers are not keywords.
+        assert_eq!(governing_keyword("reinsert_into_log("), None);
+    }
+
+    /// 🔴 The reported LINE survives a multibyte literal — the defect the probe corpus could not
+    /// see, because a pinned boolean says THAT the gate reds and never WHERE.
+    ///
+    /// [`normalise_sql_text`] built its offset→line map one entry per CHARACTER while
+    /// [`authorship_findings`] indexes it with a BYTE offset, and `to_ascii_lowercase` leaves
+    /// non-ASCII intact. Any string literal carrying a multibyte character shifted every later
+    /// finding by (bytes − chars): measured at **line 0 for a write on line 2**. It is not a
+    /// detection hole — the write still reds — which is exactly why nothing caught it.
+    ///
+    /// ⚠️ `e23_multibyte_line` is the corpus's multibyte probe and it reported the RIGHT line even
+    /// while the map was wrong: its drift is a dozen bytes and its line holds enough entries to
+    /// absorb it. Luck, not coverage. The literal below is long enough that it cannot be.
+    #[test]
+    fn the_reported_line_survives_a_multibyte_literal() {
+        let src = format!(
+            "fn a() {{ let s = \"{}\"; }}\nfn w() {{ sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\"); }}\n",
+            "\u{1F680}".repeat(50)
+        );
+        let findings = authorship_findings(&src, UNSANCTIONED, false);
+        assert_eq!(findings.len(), 1, "one write, one finding: {findings:?}");
+        assert_eq!(
+            findings[0].0, 2,
+            "the finding is on line 2; a per-character line map indexed by byte offset reports 0"
+        );
+
+        // The same drift, one line further down and with a smaller literal — the crueller shape,
+        // because a wrong line that EXISTS reads as correct.
+        let src = format!(
+            "fn a() {{\n    let s = \"{}\";\n}}\nfn w() {{\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}}\n",
+            "é".repeat(40)
+        );
+        let findings = authorship_findings(&src, UNSANCTIONED, false);
+        assert_eq!(findings[0].0, 5, "{findings:?}");
+    }
+
+    /// 🔴 The allowlist is a PLACE, not a spelling — and the two real sites still pass.
+    ///
+    /// Keyed on the function name alone, a new file holding nothing but a `fn` with the adapter's
+    /// name wrote `declared_attribute` with the gate GREEN (probe `e33`). This test pins both
+    /// directions of the fix: the sanctioned name is worth nothing away from its file, and the two
+    /// real adapters — which live in `repo.rs` and would red if the path key were wrong — are
+    /// still sanctioned where they actually are.
+    #[test]
+    fn the_allowlist_sanctions_a_place_and_not_a_name() {
+        let write = "fn insert_declared_attribute() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
+
+        assert!(
+            authorship_findings(write, REPO_RS, false).is_empty(),
+            "the adapter is sanctioned in the file it lives in"
+        );
+        assert!(
+            !authorship_findings(write, UNSANCTIONED, false).is_empty(),
+            "the same name in another file is a new writer — the ordinary accident, not an evasion"
+        );
+
+        // The data-file site is whole-file, and only at its own path.
+        let seed =
+            "INSERT INTO declared_attribute (entity_id, actor_id) VALUES ('x','operator');\n";
+        assert!(authorship_findings(seed, "docker/seed-example.sql", true).is_empty());
+        assert!(!authorship_findings(seed, "docker/seed-other.sql", true).is_empty());
+
+        // And the sanctioned PATHS must be real, or the sanction silently protects nothing.
+        let root = workspace_root();
+        for (path, function) in SANCTIONED_SITES {
+            let full = root.join(path);
+            assert!(full.is_file(), "sanctioned site {path} does not exist");
+            if let Some(name) = function {
+                let body = std::fs::read_to_string(&full).expect("readable");
+                assert!(
+                    body.contains(&format!("fn {name}")),
+                    "{path} no longer declares {name} — the sanction now covers nothing"
+                );
+            }
+        }
+    }
+
+    /// 🔑 The `format!` hole, PINNED rather than pretended away (D18).
+    ///
+    /// A text gate cannot see a table name assembled at runtime. Stating it is the difference
+    /// between a known limit and a false promise — and it is the ONE write-side hole the code
+    /// review's thirty probes could not close, pinned a second time as `e02` in
+    /// [`AUTHORSHIP_PROBES`].
+    #[test]
+    fn a_table_name_built_at_runtime_is_invisible_and_that_is_stated() {
+        let src = "fn sneaky() {\n    let t = format!(\"declared_{}\", \"attribute\");\n    sqlx::query(&format!(\"INSERT INTO {t} (a) VALUES (?)\"));\n}\n";
+        assert!(
+            authorship_findings(src, UNSANCTIONED, false).is_empty(),
+            "KNOWN LIMIT: a text gate cannot follow a name built at runtime"
+        );
+    }
+
+    /// 🔴 A planted `.sql` MIGRATION reds — and it did NOT before [`strip_comments`] read `--`.
+    ///
+    /// Measured during story 5.12's mutation pass: the gate walked the file (its count rose from 31
+    /// to 32) and found nothing, because the `--` header ran into the statement under whitespace
+    /// normalisation and the fragment no longer BEGAN with `update`. A migration is the most natural
+    /// home for a bulk author rewrite, so this was the gate's largest remaining blind spot.
+    #[test]
+    fn a_bulk_author_rewrite_in_a_sql_migration_reds() {
+        let sql = "-- a bulk author rewrite, the most natural home for one\n                   UPDATE declared_attribute SET actor_id = 'engine' WHERE origin = 'manual';\n";
+        assert!(
+            !authorship_findings(sql, UNSANCTIONED, true).is_empty(),
+            "a `--` header must not shield the statement behind it"
+        );
+        // And the comment stripping must not swallow a legitimate hyphen inside a literal.
+        let quoted = "INSERT INTO other_table (note) VALUES ('a -- not a comment');\n";
+        assert!(
+            authorship_findings(quoted, UNSANCTIONED, true).is_empty(),
+            "a `--` inside a single-quoted literal is data, not a comment"
+        );
+    }
+
+    /// 🔑 A commented-out write stays GREEN — the right answer, reached by a different road than
+    /// the one this test first recorded.
+    ///
+    /// Story 5.12 predicted the gate would inherit `float-free`'s block-comment FALSE POSITIVE and
+    /// measured that it did not; the reason recorded then was the statement-head anchor, which
+    /// matched no verb inside `/* … */`. **The code review demolished that anchor** — `e08` planted
+    /// `/* hi */ INSERT INTO declared_attribute …` and the gate went green on a REAL write for the
+    /// same reason it was green on a commented-out one. So the anchor is gone and
+    /// [`strip_comments`] now removes block comments outright, which is what keeps this case green
+    /// today.
+    ///
+    /// Green remains the CORRECT answer — a commented-out write is not a code path, and NFR5 is
+    /// about code paths — but the explanation had to change with the mechanism, and a doc that
+    /// outlives its mechanism is the defect six reviews of this project have caught.
+    #[test]
+    fn a_write_inside_a_block_comment_stays_green() {
+        let src = "fn f() {\n    /* INSERT INTO declared_attribute (a) VALUES (?) */\n}\n";
+        assert!(
+            authorship_findings(src, UNSANCTIONED, false).is_empty(),
+            "a commented-out write is not a code path"
+        );
+
+        // 🔴 And its twin, which the same stripping must NOT swallow: a comment CLOSING before a
+        // real write. Under the old head-anchor these two were indistinguishable.
+        let real = "fn f() {\n    sqlx::query(\"/* hi */ INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
+        assert!(
+            !authorship_findings(real, UNSANCTIONED, false).is_empty(),
+            "a comment before a write hides nothing — probe e08"
+        );
+
+        // A block comment spanning LINES: the state must cross them, or the write below reappears.
+        let spanning = "fn f() {\n    /* INSERT INTO\n       declared_attribute (a) */\n}\n";
+        assert!(
+            authorship_findings(spanning, UNSANCTIONED, false).is_empty(),
+            "the comment state carries from one line to the next"
+        );
+    }
+
+    /// The allowlist must not match by prefix — a third site still reds.
+    #[test]
+    fn a_third_site_is_not_sanctioned_by_resembling_the_first() {
+        let near = "fn insert_declared_attribute_v2() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
+        assert!(
+            !authorship_findings(near, UNSANCTIONED, false).is_empty(),
+            "an allowlist that matched by prefix would be float-free's failure again"
+        );
+    }
+
+    /// The gate is green on the real tree, and it walks both extensions and both roots.
+    ///
+    /// ⚠️ On its own this asserts almost nothing — a gate whose body returned `Ok((true, "0
+    /// file(s)"))` would pass it. What makes it a claim is the file COUNT, pinned below against the
+    /// tree the gate actually walks, and
+    /// [`the_authorship_gate_walks_both_roots_and_fails_closed`], which drives the body.
+    #[test]
+    fn the_authorship_gate_is_green_on_the_real_tree() {
+        let root = workspace_root();
+        let (ok, msg) = gate_declared_authorship(&root).expect("gate runs");
+        assert!(ok, "the committed tree must be clean: {msg}");
+        assert!(
+            msg.contains("file(s)"),
+            "it must say how many it checked: {msg}"
+        );
+
+        // The count is the load-bearing half: it must match what a walk of the two roots finds,
+        // so a gate that silently stops reading a subtree cannot report a pass over nothing.
+        let mut expected = 0usize;
+        for sub in AUTHORSHIP_ROOTS {
+            for entry in walkdir::WalkDir::new(root.join(sub))
+                .into_iter()
+                .filter_map(Result::ok)
+            {
+                let ext = entry.path().extension().and_then(|e| e.to_str());
+                if ext == Some("rs") || ext == Some("sql") {
+                    expected += 1;
+                }
+            }
+        }
+        assert!(expected > 20, "the guarded tree has shrunk unexpectedly");
+        assert!(
+            msg.contains(&format!("{expected} file(s)")),
+            "the gate says it read a different number of files than the tree holds ({expected}): \
+             {msg}"
+        );
+    }
+
+    /// 🔴 The gate BODY, against a temp tree — the two roots, the two extensions, the recursion,
+    /// the sanctioned PATH and both fail-closed arms.
+    ///
+    /// This test exists because the code review measured the entire body of
+    /// [`gate_declared_authorship`] deletable with the whole xtask suite green: every test before
+    /// it attacked [`authorship_findings`] directly, so the walk, the root list, the extension
+    /// filter, the `docker/seed-example.sql` match and both refusals were covered by nothing while
+    /// the gate READ as covered. `float-free` had carried exactly this test since story 5.4b —
+    /// see [`float_gate_walks_recursively_strips_comments_and_fails_closed`] — and this gate,
+    /// written on its precedent, did not copy the part that mattered.
+    #[test]
+    fn the_authorship_gate_walks_both_roots_and_fails_closed() {
+        let root = scratch("authorship-gate");
+        let crates = root.join("crates/opencmdb-bin/src");
+        let docker = root.join("docker");
+        std::fs::create_dir_all(&crates).expect("crates dir");
+        std::fs::create_dir_all(&docker).expect("docker dir");
+
+        // A clean tree first: nested, and holding a file of each extension.
+        std::fs::write(crates.join("repo.rs"), "pub fn f() {}\n").expect("write");
+        std::fs::write(docker.join("compose.sql"), "SELECT 1;\n").expect("write");
+        let (green, msg) = gate_declared_authorship(&root).expect("the gate runs");
+        assert!(green, "a clean tree must pass: {msg}");
+        assert!(msg.contains("2 file(s)"), "both roots are read: {msg}");
+
+        // A violation NESTED under crates/ — proves the walk recurses rather than reading one level.
+        std::fs::write(
+            crates.join("sneak.rs"),
+            "fn w() {\n    sqlx::query(\"UPDATE declared_attribute SET actor_id = 'engine'\");\n}\n",
+        )
+        .expect("write");
+        let (green, msg) = gate_declared_authorship(&root).expect("the gate runs");
+        assert!(!green, "a nested violation must red: {msg}");
+        assert!(
+            msg.contains("crates/opencmdb-bin/src/sneak.rs:2"),
+            "the message names the file AND its line: {msg}"
+        );
+        std::fs::remove_file(crates.join("sneak.rs")).expect("rm");
+
+        // A violation under docker/ — the second root, which a `crates`-only gate would miss and
+        // which the story's own scope forced into the walk.
+        std::fs::write(
+            docker.join("evil.sql"),
+            "UPDATE declared_attribute SET actor_id = 'engine';\n",
+        )
+        .expect("write");
+        let (green, msg) = gate_declared_authorship(&root).expect("the gate runs");
+        assert!(!green, "docker/ is walked too: {msg}");
+        assert!(msg.contains("docker/evil.sql"), "{msg}");
+        std::fs::remove_file(docker.join("evil.sql")).expect("rm");
+
+        // The sanctioned data file is matched by PATH, and only at its exact path.
+        let seed =
+            "INSERT INTO declared_attribute (entity_id, actor_id) VALUES ('x','operator');\n";
+        std::fs::write(docker.join("seed-example.sql"), seed).expect("write");
+        let (green, msg) = gate_declared_authorship(&root).expect("the gate runs");
+        assert!(green, "the seed file is the third sanctioned site: {msg}");
+        std::fs::rename(
+            docker.join("seed-example.sql"),
+            docker.join("seed-example-2.sql"),
+        )
+        .expect("mv");
+        let (green, msg) = gate_declared_authorship(&root).expect("the gate runs");
+        assert!(
+            !green,
+            "the allowlist is one PATH, not a resemblance to it: {msg}"
+        );
+        std::fs::remove_file(docker.join("seed-example-2.sql")).expect("rm");
+
+        // A file of neither extension is ignored — and therefore guards nothing, which is why the
+        // probe corpus lives under `xtask/`, outside the walked roots.
+        std::fs::write(
+            docker.join("notes.md"),
+            "INSERT INTO declared_attribute (a) VALUES (?)\n",
+        )
+        .expect("write");
+        let (green, _) = gate_declared_authorship(&root).expect("the gate runs");
+        assert!(green, "only .rs and .sql are read");
+
+        // FAILS CLOSED on a root holding no readable file — the arm that used to report a pass
+        // over nothing.
+        std::fs::remove_file(crates.join("repo.rs")).expect("rm");
+        std::fs::remove_file(docker.join("compose.sql")).expect("rm");
+        let (green, msg) = gate_declared_authorship(&root).expect("the gate runs");
+        assert!(!green, "a pass over nothing is not a pass: {msg}");
+        assert!(msg.contains("reporting a pass over nothing"), "{msg}");
+
+        // FAILS CLOSED on a MISSING root, and names which one.
+        std::fs::remove_dir_all(&docker).expect("rm -r");
+        let (green, msg) = gate_declared_authorship(&root).expect("the gate runs");
+        assert!(!green, "a missing guarded root must red: {msg}");
+        assert!(msg.contains("docker/ is missing"), "{msg}");
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     // ── float-free gate (D13) ────────────────────────────────────────────────────────────────
 
     /// The line classifier, shape by shape.
@@ -1970,6 +3087,174 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             source.contains("confidence: f64"),
             "the citation this gate must tolerate has moved or gone — if it was removed on purpose, \
              this test's premise is what needs revisiting"
+        );
+    }
+
+    // ── the evasion corpus (story 5.12's code review, repaired under Guy's option A) ──────────
+
+    /// Every probe in `xtask/probes/authorship/`, and the verdict the gate must give it.
+    ///
+    /// `Some(line)` = the gate must RED **and name that line**. `None` = the probe passes **on
+    /// purpose**, and is where the promise stops — see the corpus README and story 5.12 §12. Both
+    /// directions are pinned: a probe that starts being caught reds this test too, because a gate
+    /// that silently widens is a gate whose STATED limits have gone stale, and the limits are the
+    /// deliverable here.
+    ///
+    /// 🔴 **The verdict was a bare `bool` until the line map was found broken.** A boolean pins
+    /// THAT the gate reds, never WHERE — so `normalise_sql_text` could map byte offsets onto a
+    /// per-character line table (reporting line 0 for a write on line 2, under any multibyte
+    /// literal) with all 60 tests green and `e23`, the multibyte probe itself, passing by luck.
+    /// Twenty-nine booleans are now twenty-nine located verdicts. Found by READING, by a second
+    /// session launched on this same story in parallel.
+    ///
+    /// 🔴 Sixteen of the first thirty passed the gate as first shipped. That is what this table
+    /// exists to stop from happening again quietly.
+    const AUTHORSHIP_PROBES: [(&str, Option<usize>); 38] = [
+        ("e01_raw_string.rs", Some(2)),
+        // The one the story already pinned: a query assembled at runtime.
+        ("e02_concat_lets.rs", None),
+        ("e03_backslash_cont.rs", Some(3)),
+        ("e04_tabs.rs", Some(2)),
+        ("e05_nbsp.rs", Some(2)),
+        ("e06_zwsp_lead.rs", Some(2)),
+        ("e07_block_comment_mid.rs", Some(2)),
+        ("e08_block_comment_lead.rs", Some(2)),
+        ("e09_version_comment.rs", Some(2)),
+        ("e10_version_comment_mid.rs", Some(2)),
+        ("e11_insert_select.rs", Some(2)),
+        ("e12_on_dup_key.rs", Some(2)),
+        ("e13_load_data.rs", Some(2)),
+        // Guard NEUTRALISATION, not authorship — stated, not silently missed.
+        ("e14_rename_table.rs", None),
+        ("e15_uppercase.rs", Some(2)),
+        ("e16_nested_fn_name.rs", Some(3)),
+        ("e17_fn_in_string.rs", Some(3)),
+        ("e18_where_provenance.rs", Some(2)),
+        ("e19_order_by_provenance.rs", Some(2)),
+        ("e20_sql_migration_insert.sql", Some(2)),
+        ("e21_sql_block_comment.sql", Some(1)),
+        ("e22_create_or_replace.sql", Some(1)),
+        ("e23_multibyte_line.rs", Some(4)),
+        ("e24_cfg_test_mod.rs", Some(5)),
+        ("e25_semicolon_in_literal.rs", Some(2)),
+        ("e26_select_star_where.rs", Some(2)),
+        ("e27_subquery_provenance.rs", Some(2)),
+        ("e28_prov_after_from_join.rs", Some(2)),
+        ("e29_with_cte.rs", Some(2)),
+        ("e30_call_procedure.rs", Some(2)),
+        // Same family as e14, and the one the review's own sweep missed.
+        ("e31_alter_drop_check.sql", None),
+        // 🔴 Added during the repair, because mutation M13 came back GREEN: `e06` puts its
+        // zero-width space BEFORE the verb, where it is already a token boundary, so it left
+        // [`is_invisible`] load-bearing for nothing. Inside a word is where the deletion is the
+        // only thing that finds the statement at all.
+        ("e32_zwsp_inside_words.rs", Some(2)),
+        // 🔴 The inverse axis, and the corpus had none: every other probe is planted in an
+        // unsanctioned file and asks *does it red*. This one carries the SANCTIONED NAME and asks
+        // whether the name alone lets a write through from somewhere else. It did.
+        ("e33_sanctioned_name_other_file.rs", Some(2)),
+        // 🔴 The read half truncated at a quote INSIDE the query. `e36` is their CONTROL: the same
+        // read without the quoted literal, which reddened all along — it is what proves the quote
+        // is the cause rather than something else about the shape.
+        ("e34_quote_in_raw_string.rs", Some(2)),
+        ("e35_escaped_quote_in_query.rs", Some(2)),
+        ("e36_control_read_no_quote.rs", Some(2)),
+        // `e32`'s class with a character the enumeration did not name. See [`is_invisible`].
+        ("e37_variation_selector.rs", Some(2)),
+        // GREEN by decision, and the weakest of the four: `CREATE TABLE … AS SELECT` does write
+        // values, but it cannot RUN against a schema `0001` has migrated, and the form of the class
+        // that can — `CREATE OR REPLACE TABLE … AS SELECT` — already reds. Pinned so the fact stays
+        // measured rather than remembered.
+        ("e38_create_table_as_select.sql", None),
+    ];
+
+    /// The corpus directory must hold exactly the probes the table names — neither more nor fewer.
+    ///
+    /// The fixtures gate's reasoning (orphan detection in BOTH directions): a probe file added
+    /// without a pinned verdict is measured by nothing, and a table row naming a file that no
+    /// longer exists is a verdict pinned to nothing.
+    #[test]
+    fn the_probe_corpus_and_its_verdict_table_name_the_same_files() {
+        let dir = workspace_root().join("xtask/probes/authorship");
+        let mut on_disk: Vec<String> = std::fs::read_dir(&dir)
+            .expect("the probe corpus is readable")
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".rs") || n.ends_with(".sql"))
+            .collect();
+        on_disk.sort();
+
+        let mut pinned: Vec<String> = AUTHORSHIP_PROBES
+            .iter()
+            .map(|(n, _)| (*n).to_string())
+            .collect();
+        pinned.sort();
+
+        assert_eq!(
+            on_disk, pinned,
+            "the corpus and the verdict table have drifted"
+        );
+        assert_eq!(
+            on_disk.len(),
+            38,
+            "the corpus is what the review left behind; losing a probe loses a measured mechanism"
+        );
+    }
+
+    /// 🔴 Every probe, driven through `gate_declared_authorship` END TO END.
+    ///
+    /// Not through [`authorship_findings`]: the review measured the whole gate BODY — its walk, its
+    /// two roots, its two extensions, its sanctioned-path match and its fail-closed arms —
+    /// deletable with the entire xtask suite green, because every test attacked the helper
+    /// directly. `float-free` carries the same reasoning in
+    /// [`float_gate_walks_recursively_strips_comments_and_fails_closed`], and this gate did not.
+    #[test]
+    fn every_evasion_probe_gets_the_verdict_it_is_pinned_to() {
+        let corpus = workspace_root().join("xtask/probes/authorship");
+        let root = scratch("authorship-probes");
+        let crates = root.join("crates");
+        std::fs::create_dir_all(&crates).expect("crates dir");
+        std::fs::create_dir_all(root.join("docker")).expect("docker dir");
+        // The gate fails closed on a subtree holding no file at all, so the planted probe is never
+        // the only thing under the roots.
+        std::fs::write(crates.join("innocent.rs"), "pub fn f() {}\n").expect("write");
+
+        let mut wrong = Vec::new();
+
+        for (name, must_red) in AUTHORSHIP_PROBES {
+            let ext = if name.ends_with(".sql") { "sql" } else { "rs" };
+            let planted = crates.join(format!("planted.{ext}"));
+            let body = std::fs::read_to_string(corpus.join(name))
+                .unwrap_or_else(|e| panic!("reading probe {name}: {e}"));
+            std::fs::write(&planted, &body).expect("plant");
+
+            let (green, msg) = gate_declared_authorship(&root).expect("the gate runs");
+            if let Some(line) = must_red {
+                if green {
+                    wrong.push(format!("{name}: PASSES the gate and must not"));
+                } else if !msg.contains(&format!("planted.{ext}:{line}:")) {
+                    wrong.push(format!(
+                        "{name}: reds, but not at the line it must name (`planted.{ext}:{line}:`) — \
+                         a gate that sends the reader to the wrong line spends the trust it just \
+                         earned — {msg}"
+                    ));
+                }
+            } else if !green {
+                wrong.push(format!(
+                    "{name}: pinned as a STATED limit and now reds — either the limit moved \
+                     (update the table AND the story) or this is a false positive — {msg}"
+                ));
+            }
+            std::fs::remove_file(&planted).expect("unplant");
+        }
+
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(
+            wrong.is_empty(),
+            "{} of {} probes got the wrong verdict:\n  {}",
+            wrong.len(),
+            AUTHORSHIP_PROBES.len(),
+            wrong.join("\n  ")
         );
     }
 }

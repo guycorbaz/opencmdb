@@ -1091,6 +1091,165 @@ mod tests {
     use super::*;
     use opencmdb_core::repo::WriteRepository;
 
+    /// Connect, migrate and empty `declared_attribute`. `None` when `DATABASE_URL` is unset — and
+    /// then the caller returns, which is why §7 of story 5.12 insists a green suite says nothing.
+    async fn declared_fixture() -> Option<MySqlPool> {
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping declared-authorship test: DATABASE_URL unset");
+            return None;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        sqlx::query("DELETE FROM declared_attribute")
+            .execute(&pool)
+            .await
+            .expect("clean");
+        Some(pool)
+    }
+
+    /// 🔴 The ONE raw write to `declared_attribute` outside the adapter, and the second of the
+    /// authorship gate's sanctioned sites.
+    ///
+    /// It exists because the adapter **cannot** produce the input this story must test: `'operator'`
+    /// is a LITERAL in its SQL, so a test written through `insert_declared_attribute` measures
+    /// nothing about the CHECK — story 5.9's M3, a fourth time in this project.
+    ///
+    /// ⚠️ Its NAME is load-bearing: `xtask`'s `declared-authorship` gate allowlists exactly this
+    /// identifier. Renaming it turns the gate red, which is the intended coupling — the exemption is
+    /// one named site, not a blanket `#[cfg(test)]` hole (measured at story 5.12's validation to
+    /// hide a planted write).
+    async fn raw_declared_write_for_ddl_test(
+        pool: &MySqlPool,
+        entity_id: &str,
+        actor_id: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO declared_attribute \
+             (entity_id, attr_key, attr_value, origin, actor_id, updated_at) \
+             VALUES (?, 'hostname', 'nas', 'manual', ?, NOW(6))",
+        )
+        .bind(entity_id)
+        .bind(actor_id)
+        .execute(pool)
+        .await
+        .map(|_| ())
+    }
+
+    /// 🔴 AC2 — the DDL CHECK bites, measured through RAW SQL because the adapter cannot reach it.
+    ///
+    /// Assertion-carried on purpose: `.expect_err()` would make this a PANIC, and story 5.11b's
+    /// review caught exactly that mislabelling. The carrier is recorded in the story's T5 table.
+    #[tokio::test]
+    async fn a_scanner_authored_declared_write_is_refused_by_the_database() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = declared_fixture().await else {
+            return;
+        };
+
+        let refused = raw_declared_write_for_ddl_test(
+            &pool,
+            "00000000-0000-0000-0000-0000000000f1",
+            "scanner",
+        )
+        .await;
+        assert!(
+            refused.is_err(),
+            "`declared_actor_not_scanner` must refuse it; got {refused:?}"
+        );
+        assert!(
+            matches!(
+                refused.map_err(classify),
+                Err(RepositoryError::Constraint(_))
+            ),
+            "and it must classify as a constraint violation, not an opaque backend error"
+        );
+        assert_eq!(
+            count_declared_attributes(&pool).await.expect("count"),
+            0,
+            "nothing was written"
+        );
+
+        // ⚠️ CHAR(36) pads, so the comparison is on the PADDED value: a trailing space is refused
+        // too. Measured at validation — the CHECK bans one padded VALUE, not one byte string.
+        let padded = raw_declared_write_for_ddl_test(
+            &pool,
+            "00000000-0000-0000-0000-0000000000f2",
+            "scanner ",
+        )
+        .await;
+        assert!(
+            padded.is_err(),
+            "CHAR padding makes 'scanner ' the same value"
+        );
+    }
+
+    /// 🔑 AC2's second half — what the CHECK does NOT hold, pinned as an HONEST LIMIT.
+    ///
+    /// `CHECK (actor_id <> 'scanner')` bans one value, not a property. `'engine'` is a perfectly
+    /// good name for a non-human author and the database accepts it. **This is not a defect and must
+    /// not be "fixed" here**: an allowlist in DDL is a migration every time an actor is added, and
+    /// there is no `actor` table (Epic 6). The real guard is the `declared-authorship` gate, which
+    /// stops the write from ever being authored. This test says out loud what the tripwire is worth.
+    #[tokio::test]
+    async fn a_non_human_author_other_than_scanner_is_accepted_and_that_is_the_limit() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = declared_fixture().await else {
+            return;
+        };
+
+        let accepted = raw_declared_write_for_ddl_test(
+            &pool,
+            "00000000-0000-0000-0000-0000000000f3",
+            "engine",
+        )
+        .await;
+        assert!(
+            accepted.is_ok(),
+            "the CHECK bans ONE value, not a property — got {accepted:?}"
+        );
+        assert_eq!(
+            count_declared_attributes(&pool).await.expect("count"),
+            1,
+            "🔑 the row IS there: the database's guarantee is one spelling, and the gate is what \
+             holds the property"
+        );
+    }
+
+    /// 🔑 Mechanism 5 — the adapter cannot OVERWRITE a declared value at all.
+    ///
+    /// The PK is `(entity_id, attr_key)` and there is no `ON DUPLICATE KEY UPDATE` anywhere in this
+    /// file, so a second write to one field is `ERROR 1062`. For a story called *never overwrite*
+    /// this is the strongest of the five mechanisms, and story 5.12's first draft omitted it.
+    #[tokio::test]
+    async fn the_adapter_cannot_overwrite_an_existing_declared_value() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = declared_fixture().await else {
+            return;
+        };
+        let entity = "00000000-0000-0000-0000-0000000000f4";
+
+        insert_declared_attribute(&pool, entity, "hostname", "nas")
+            .await
+            .expect("the first write is legal");
+        let second = insert_declared_attribute(&pool, entity, "hostname", "stolen").await;
+
+        assert!(
+            second.is_err(),
+            "never overwrite: a second write to one field is refused, not silently applied"
+        );
+        let (value,): (String,) = sqlx::query_as(
+            "SELECT attr_value FROM declared_attribute WHERE entity_id = ? AND attr_key = 'hostname'",
+        )
+        .bind(entity)
+        .fetch_one(&pool)
+        .await
+        .expect("read back");
+        assert_eq!(value, "nas", "and the original value is untouched");
+    }
+
     /// A `transact` round-trip against a real MariaDB: the closure inserts a declared attribute
     /// through the unit and reads its own write back; after commit, the read side sees it.
     /// Gated on `DATABASE_URL` (CI's MariaDB service; a local container in dev).
