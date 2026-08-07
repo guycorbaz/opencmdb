@@ -1,6 +1,6 @@
 # The authorship gate's evasion corpus
 
-Thirty-two hand-written violations of NFR5's never-overwrite invariant, one per mechanism. They are
+Thirty-three hand-written violations of NFR5's never-overwrite invariant, one per mechanism. They are
 the regression suite of `gate_declared_authorship` (`xtask/src/main.rs`): a repaired gate is
 **measured** against all of them, never argued about.
 
@@ -17,10 +17,12 @@ being CAUGHT, since a gate that quietly widens is a gate whose stated limits hav
 ## Provenance
 
 Written by story 5.12's code review against the FIRST implementation of the gate, which **16 of the
-30 passed** — three of them executing successfully against MariaDB 10.11.11. Two were added during
-the repair: `e31`, for a mechanism the review's own sweep had missed, and `e32`, because mutation
-M13 came back GREEN — `e06` puts its zero-width space BEFORE the verb, where a token boundary
-already exists, so it left the guard carried by nothing. The measurement that repair is judged
+30 passed** — three of them executing successfully against MariaDB 10.11.11. Three were added during the repair: `e31`, for a mechanism the review's own sweep had missed;
+`e32`, because mutation M13 came back GREEN — `e06` puts its zero-width space BEFORE the verb, where
+a token boundary already exists, so it left the guard carried by nothing; and **`e33`, which is a
+different AXIS from the other thirty-two**. They are all planted in an unsanctioned file and ask
+*does it red*. `e33` carries the SANCTIONED NAME and asks whether the name alone lets a write
+through from somewhere else — and it did, on the committed tree, with the gate green. The measurement that repair is judged
 by is recorded in the story file.
 
 ## They are not compiled

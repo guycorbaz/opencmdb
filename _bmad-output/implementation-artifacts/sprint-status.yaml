@@ -93,6 +93,19 @@ last_updated: 2026-08-07  # 5.12 CODE-REVIEWED (three layers) **AND REPAIRED** u
                           # test's own assertion cannot red that test; for an assertion the honest
                           # mutation breaks the INVARIANT (M21b plants an orphan, M22b makes the
                           # count lie).
+                          # 🔴 A THIRD defect, the ONLY one INSIDE the narrowed promise:
+                          # `SANCTIONED_FNS` matched the function NAME wherever it lived, so a new
+                          # file holding nothing but `fn insert_declared_attribute` writing the
+                          # table left the gate GREEN (measured; the name was enough). Not an
+                          # adversary's probe but THE ORDINARY GESTURE -- copy the adapter into
+                          # another module. **A hole beside the promise is a stated limit; a hole
+                          # INSIDE it is a false sentence.** Now one `SANCTIONED_SITES` keyed on
+                          # (path, enclosing fn). Probe e33 carries a NEW AXIS: the other 32 ask
+                          # *does it red*, e33 asks whether the sanctioned NAME lets a write
+                          # through from elsewhere. M24b reds 2 and breaks no legitimate site;
+                          # M25 (path compared unnormalised) reds 2 -- the Windows trap, measured.
+                          # **THIRTEEN mutations, thirteen reds.** Counts: **463 -> 469**
+                          # (248+159+62), **33 probes**.
                           # 🔑 THREE documents described a state the code had passed -- the
                           # mutation-table header, project-context's "six gates", and
                           # `xtask/src/main.rs`'s OWN module doc, which enumerated six gates while

@@ -1116,17 +1116,40 @@ const AUTHORSHIP_ROOTS: [&str; 2] = ["crates", "docker"];
 
 /// The three sanctioned write sites, and nothing else may write a declared field.
 ///
-/// Two are Rust functions, matched by their ENCLOSING `fn`; the third is a data file, matched by
-/// path. ⚠️ **The story prescribed TWO sites** — the third is forced by the story's own requirement
-/// to walk `docker/`, where `seed-example.sql` writes legitimately, with `'operator'` as its actor.
-/// A deviation, stated rather than absorbed.
-const SANCTIONED_FNS: [&str; 2] = [
-    "insert_declared_attribute",
-    "raw_declared_write_for_ddl_test",
+/// A site is a **PLACE**: a path, plus the enclosing `fn` when the file is Rust (`None` for a data
+/// file, where the whole file is the site).
+///
+/// 🔴 **It was keyed on the function NAME alone, and that sanctioned an ORTHOGRAPHY rather than a
+/// place.** Measured on the committed tree: a new file holding nothing but
+/// ```text
+/// fn insert_declared_attribute(pool: &Pool) {
+///     sqlx::query("INSERT INTO declared_attribute (entity_id, attr_value) VALUES (?, ?)");
+/// }
+/// ```
+/// left the gate GREEN — it read the file (its count rose 31 → 32) and said nothing. No invisible
+/// character, no comment, no trick: **the name was enough**. And this is not an adversary's probe
+/// but the ordinary gesture — someone copies the adapter into another module, or writes a second
+/// one and gives it the name the job already has. That is precisely the case
+/// [`gate_declared_authorship`]'s stated promise claims to hold (*"a future story will not add such
+/// a write by accident"*), so it was a hole INSIDE the narrowed promise, not beside it.
+///
+/// 🔑 The apparatus had already said so itself: the data-file half was keyed by PATH while the Rust
+/// half was keyed by name, and the docs called all three *"sites"* — a word the code checked for
+/// one of them. Found by READING, by a second session launched on this same story in parallel.
+///
+/// ⚠️ The path compared here is the gate's own displayed path, with separators normalised to `/`.
+/// Comparing a raw `Path` would drop the sanction on Windows and red the two real adapters.
+const SANCTIONED_SITES: [(&str, Option<&str>); 3] = [
+    (
+        "crates/opencmdb-bin/src/repo.rs",
+        Some("insert_declared_attribute"),
+    ),
+    (
+        "crates/opencmdb-bin/src/repo.rs",
+        Some("raw_declared_write_for_ddl_test"),
+    ),
+    ("docker/seed-example.sql", None),
 ];
-
-/// The one data file allowed to write a declared row. See [`SANCTIONED_FNS`].
-const SANCTIONED_FILE: &str = "docker/seed-example.sql";
 
 /// The provenance columns a divergence computation may never read (FR13, NFR5's second clause).
 ///
@@ -1452,9 +1475,15 @@ fn governing_keyword(stmt: &str) -> Option<&'static str> {
 
 /// Every unsanctioned access to `declared_attribute` in one file's text.
 ///
-/// `is_sanctioned_file` short-circuits the write half only: a data file may WRITE with a human
-/// author, and no data file participates in the divergence computation.
-fn authorship_findings(content: &str, is_sanctioned_file: bool, sql: bool) -> Vec<(usize, String)> {
+/// `shown` is the file's path as the gate displays it (separators normalised to `/`) — the same
+/// string [`SANCTIONED_SITES`] is keyed on. A whole-file site short-circuits the write half only: a
+/// data file may WRITE with a human author, and no data file participates in the divergence
+/// computation.
+///
+/// 🔑 It took a `bool` until the sanction moved from a name to a place. A boolean the caller had to
+/// compute meant the caller had to know what sanctioning MEANS; passing the path leaves that
+/// knowledge in one spot.
+fn authorship_findings(content: &str, shown: &str, sql: bool) -> Vec<(usize, String)> {
     let (text, lines) = normalise_sql_text(content, sql);
     let mut findings = Vec::new();
     let mut from = 0usize;
@@ -1476,8 +1505,14 @@ fn authorship_findings(content: &str, is_sanctioned_file: bool, sql: bool) -> Ve
 
         // ── the WRITE half ──
         if keyword != "select" {
-            let sanctioned = is_sanctioned_file
-                || enclosing_fn(&text, at).is_some_and(|f| SANCTIONED_FNS.contains(&f));
+            let enclosing = enclosing_fn(&text, at);
+            let sanctioned = SANCTIONED_SITES.iter().any(|(path, function)| {
+                *path == shown
+                    && match function {
+                        None => true,
+                        Some(name) => enclosing == Some(*name),
+                    }
+            });
             if !sanctioned {
                 findings.push((
                     line,
@@ -1578,9 +1613,7 @@ fn gate_declared_authorship(root: &Path) -> Result<(bool, String)> {
             checked += 1;
             let shown = p.strip_prefix(root).unwrap_or(p);
             let shown = shown.display().to_string().replace('\\', "/");
-            for (line, what) in
-                authorship_findings(&content, shown == SANCTIONED_FILE, ext == Some("sql"))
-            {
+            for (line, what) in authorship_findings(&content, &shown, ext == Some("sql")) {
                 offenders.push(format!("{shown}:{line}: {what}"));
             }
         }
@@ -2253,6 +2286,13 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
 
     // ── declared-authorship gate (NFR5 / FR13, story 5.12) ───────────────────────────────────
 
+    /// A path that is no sanctioned site — the default for a probe or a planted violation.
+    const UNSANCTIONED: &str = "crates/opencmdb-bin/src/somewhere_else.rs";
+
+    /// The one file that holds the two Rust sanctioned sites. Naming it in a test is the point:
+    /// under the old name-only key, these tests passed from ANY file.
+    const REPO_RS: &str = "crates/opencmdb-bin/src/repo.rs";
+
     /// Wrap a fragment in an unsanctioned Rust function, the shape a future violation would take.
     fn in_unsanctioned_fn(sql: &str) -> String {
         format!("fn some_new_writer() {{\n    sqlx::query(\"{sql}\").execute(c).await?;\n}}\n")
@@ -2274,7 +2314,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             "INSERT declared_attribute (entity_id) VALUES (?)",
             "REPLACE declared_attribute (entity_id) VALUES (?)",
         ] {
-            let findings = authorship_findings(&in_unsanctioned_fn(sql), false, false);
+            let findings = authorship_findings(&in_unsanctioned_fn(sql), UNSANCTIONED, false);
             assert!(!findings.is_empty(), "must RED: {sql}");
         }
     }
@@ -2286,7 +2326,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     fn a_write_split_across_two_lines_still_reds() {
         let src = "fn w() {\n    let q = \"INSERT INTO\n         declared_attribute (a) VALUES (?)\";\n}\n";
         assert!(
-            !authorship_findings(src, false, false).is_empty(),
+            !authorship_findings(src, UNSANCTIONED, false).is_empty(),
             "a per-line matcher would miss this, and that is the whole reason for normalising"
         );
     }
@@ -2297,14 +2337,14 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         // The sanctioned adapter.
         let sanctioned = "fn insert_declared_attribute() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
         assert!(
-            authorship_findings(sanctioned, false, false).is_empty(),
+            authorship_findings(sanctioned, REPO_RS, false).is_empty(),
             "the adapter is the sanctioned site"
         );
 
         // The sanctioned test helper.
         let helper = "fn raw_declared_write_for_ddl_test() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
         assert!(
-            authorship_findings(helper, false, false).is_empty(),
+            authorship_findings(helper, REPO_RS, false).is_empty(),
             "AC2's raw write has a named home"
         );
 
@@ -2312,14 +2352,14 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         let seed =
             "INSERT INTO declared_attribute (entity_id, actor_id) VALUES ('x', 'operator');\n";
         assert!(
-            authorship_findings(seed, true, true).is_empty(),
+            authorship_findings(seed, "docker/seed-example.sql", true).is_empty(),
             "the seed file writes with a human author"
         );
 
         // DELETE is deliberately out of the verb list — it writes no author.
         let del = "fn cleanup() {\n    sqlx::query(\"DELETE FROM declared_attribute\");\n}\n";
         assert!(
-            authorship_findings(del, false, false).is_empty(),
+            authorship_findings(del, UNSANCTIONED, false).is_empty(),
             "a DELETE writes no author (§4b)"
         );
 
@@ -2327,21 +2367,21 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         let doc =
             "/// Writes to declared_attribute via INSERT INTO declared_attribute.\nfn f() {}\n";
         assert!(
-            authorship_findings(doc, false, false).is_empty(),
+            authorship_findings(doc, UNSANCTIONED, false).is_empty(),
             "line comments are stripped"
         );
 
         // The schema's own definition.
         let ddl = "CREATE TABLE declared_attribute (\n  entity_id CHAR(36) NOT NULL\n);\n";
         assert!(
-            authorship_findings(ddl, false, true).is_empty(),
+            authorship_findings(ddl, UNSANCTIONED, true).is_empty(),
             "CREATE TABLE writes no value"
         );
 
         // The function NAME contains the table name.
         let call = "fn caller() {\n    insert_declared_attribute(pool, a, b, c).await?;\n}\n";
         assert!(
-            authorship_findings(call, false, false).is_empty(),
+            authorship_findings(call, UNSANCTIONED, false).is_empty(),
             "not a table reference"
         );
     }
@@ -2357,7 +2397,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             // 🔴 And the wildcard, which defeats every column-name rule.
             "SELECT * FROM declared_attribute",
         ] {
-            let findings = authorship_findings(&in_unsanctioned_fn(sql), false, false);
+            let findings = authorship_findings(&in_unsanctioned_fn(sql), UNSANCTIONED, false);
             assert!(!findings.is_empty(), "must RED: {sql}");
         }
     }
@@ -2368,7 +2408,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         let ok =
             in_unsanctioned_fn("SELECT entity_id, attr_key, attr_value FROM declared_attribute");
         assert!(
-            authorship_findings(&ok, false, false).is_empty(),
+            authorship_findings(&ok, UNSANCTIONED, false).is_empty(),
             "the divergence's own read"
         );
 
@@ -2376,14 +2416,14 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         // an aggregate's star loads no column.
         let agg = in_unsanctioned_fn("SELECT COUNT(*) FROM declared_attribute");
         assert!(
-            authorship_findings(&agg, false, false).is_empty(),
+            authorship_findings(&agg, UNSANCTIONED, false).is_empty(),
             "COUNT(*) is not SELECT * — the gate's first false positive, at repo.rs:106"
         );
 
         // 🔴 The false positive the naive backward search produced: a bare DELETE inheriting an
         // `origin` from an unrelated string literal above it.
         let phantom = "fn f() {\n    let a = \"INSERT INTO declared_attribute (origin, actor_id) VALUES (?, ?)\";\n    let b = \"DELETE FROM declared_attribute\";\n}\n";
-        let findings = authorship_findings(phantom, false, false);
+        let findings = authorship_findings(phantom, UNSANCTIONED, false);
         assert!(
             findings.iter().all(|(_, w)| !w.contains("a read of")),
             "the `\"` bound is what stops a match spanning two literals; got {findings:?}"
@@ -2434,7 +2474,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             "fn a() {{ let s = \"{}\"; }}\nfn w() {{ sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\"); }}\n",
             "\u{1F680}".repeat(50)
         );
-        let findings = authorship_findings(&src, false, false);
+        let findings = authorship_findings(&src, UNSANCTIONED, false);
         assert_eq!(findings.len(), 1, "one write, one finding: {findings:?}");
         assert_eq!(
             findings[0].0, 2,
@@ -2447,8 +2487,49 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             "fn a() {{\n    let s = \"{}\";\n}}\nfn w() {{\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}}\n",
             "é".repeat(40)
         );
-        let findings = authorship_findings(&src, false, false);
+        let findings = authorship_findings(&src, UNSANCTIONED, false);
         assert_eq!(findings[0].0, 5, "{findings:?}");
+    }
+
+    /// 🔴 The allowlist is a PLACE, not a spelling — and the two real sites still pass.
+    ///
+    /// Keyed on the function name alone, a new file holding nothing but a `fn` with the adapter's
+    /// name wrote `declared_attribute` with the gate GREEN (probe `e33`). This test pins both
+    /// directions of the fix: the sanctioned name is worth nothing away from its file, and the two
+    /// real adapters — which live in `repo.rs` and would red if the path key were wrong — are
+    /// still sanctioned where they actually are.
+    #[test]
+    fn the_allowlist_sanctions_a_place_and_not_a_name() {
+        let write = "fn insert_declared_attribute() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
+
+        assert!(
+            authorship_findings(write, REPO_RS, false).is_empty(),
+            "the adapter is sanctioned in the file it lives in"
+        );
+        assert!(
+            !authorship_findings(write, UNSANCTIONED, false).is_empty(),
+            "the same name in another file is a new writer — the ordinary accident, not an evasion"
+        );
+
+        // The data-file site is whole-file, and only at its own path.
+        let seed =
+            "INSERT INTO declared_attribute (entity_id, actor_id) VALUES ('x','operator');\n";
+        assert!(authorship_findings(seed, "docker/seed-example.sql", true).is_empty());
+        assert!(!authorship_findings(seed, "docker/seed-other.sql", true).is_empty());
+
+        // And the sanctioned PATHS must be real, or the sanction silently protects nothing.
+        let root = workspace_root();
+        for (path, function) in SANCTIONED_SITES {
+            let full = root.join(path);
+            assert!(full.is_file(), "sanctioned site {path} does not exist");
+            if let Some(name) = function {
+                let body = std::fs::read_to_string(&full).expect("readable");
+                assert!(
+                    body.contains(&format!("fn {name}")),
+                    "{path} no longer declares {name} — the sanction now covers nothing"
+                );
+            }
+        }
     }
 
     /// 🔑 The `format!` hole, PINNED rather than pretended away (D18).
@@ -2461,7 +2542,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     fn a_table_name_built_at_runtime_is_invisible_and_that_is_stated() {
         let src = "fn sneaky() {\n    let t = format!(\"declared_{}\", \"attribute\");\n    sqlx::query(&format!(\"INSERT INTO {t} (a) VALUES (?)\"));\n}\n";
         assert!(
-            authorship_findings(src, false, false).is_empty(),
+            authorship_findings(src, UNSANCTIONED, false).is_empty(),
             "KNOWN LIMIT: a text gate cannot follow a name built at runtime"
         );
     }
@@ -2476,13 +2557,13 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     fn a_bulk_author_rewrite_in_a_sql_migration_reds() {
         let sql = "-- a bulk author rewrite, the most natural home for one\n                   UPDATE declared_attribute SET actor_id = 'engine' WHERE origin = 'manual';\n";
         assert!(
-            !authorship_findings(sql, false, true).is_empty(),
+            !authorship_findings(sql, UNSANCTIONED, true).is_empty(),
             "a `--` header must not shield the statement behind it"
         );
         // And the comment stripping must not swallow a legitimate hyphen inside a literal.
         let quoted = "INSERT INTO other_table (note) VALUES ('a -- not a comment');\n";
         assert!(
-            authorship_findings(quoted, false, true).is_empty(),
+            authorship_findings(quoted, UNSANCTIONED, true).is_empty(),
             "a `--` inside a single-quoted literal is data, not a comment"
         );
     }
@@ -2505,7 +2586,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     fn a_write_inside_a_block_comment_stays_green() {
         let src = "fn f() {\n    /* INSERT INTO declared_attribute (a) VALUES (?) */\n}\n";
         assert!(
-            authorship_findings(src, false, false).is_empty(),
+            authorship_findings(src, UNSANCTIONED, false).is_empty(),
             "a commented-out write is not a code path"
         );
 
@@ -2513,14 +2594,14 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         // real write. Under the old head-anchor these two were indistinguishable.
         let real = "fn f() {\n    sqlx::query(\"/* hi */ INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
         assert!(
-            !authorship_findings(real, false, false).is_empty(),
+            !authorship_findings(real, UNSANCTIONED, false).is_empty(),
             "a comment before a write hides nothing — probe e08"
         );
 
         // A block comment spanning LINES: the state must cross them, or the write below reappears.
         let spanning = "fn f() {\n    /* INSERT INTO\n       declared_attribute (a) */\n}\n";
         assert!(
-            authorship_findings(spanning, false, false).is_empty(),
+            authorship_findings(spanning, UNSANCTIONED, false).is_empty(),
             "the comment state carries from one line to the next"
         );
     }
@@ -2530,7 +2611,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     fn a_third_site_is_not_sanctioned_by_resembling_the_first() {
         let near = "fn insert_declared_attribute_v2() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
         assert!(
-            !authorship_findings(near, false, false).is_empty(),
+            !authorship_findings(near, UNSANCTIONED, false).is_empty(),
             "an allowlist that matched by prefix would be float-free's failure again"
         );
     }
@@ -2927,7 +3008,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     ///
     /// 🔴 Sixteen of the first thirty passed the gate as first shipped. That is what this table
     /// exists to stop from happening again quietly.
-    const AUTHORSHIP_PROBES: [(&str, Option<usize>); 32] = [
+    const AUTHORSHIP_PROBES: [(&str, Option<usize>); 33] = [
         ("e01_raw_string.rs", Some(2)),
         // The one the story already pinned: a query assembled at runtime.
         ("e02_concat_lets.rs", None),
@@ -2967,6 +3048,10 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         // [`is_invisible`] load-bearing for nothing. Inside a word is where the deletion is the
         // only thing that finds the statement at all.
         ("e32_zwsp_inside_words.rs", Some(2)),
+        // 🔴 The inverse axis, and the corpus had none: every other probe is planted in an
+        // unsanctioned file and asks *does it red*. This one carries the SANCTIONED NAME and asks
+        // whether the name alone lets a write through from somewhere else. It did.
+        ("e33_sanctioned_name_other_file.rs", Some(2)),
     ];
 
     /// The corpus directory must hold exactly the probes the table names — neither more nor fewer.
@@ -2997,7 +3082,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         );
         assert_eq!(
             on_disk.len(),
-            32,
+            33,
             "the corpus is what the review left behind; losing a probe loses a measured mechanism"
         );
     }
