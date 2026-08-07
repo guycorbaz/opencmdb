@@ -1,0 +1,489 @@
+# Story 5.12: No code path writes a declared field without a human author
+
+Status: ready-for-dev
+
+<!-- ✅ VALIDATED 2026-08-07 by two fresh-context agents (fact-check + gap-hunt).
+     **The gap-hunt BUILT THE WHOLE STORY** on a scratch worktree against its own
+     `mariadb:10.11.11` on 13312: the seventh gate (~210 code lines), its tests, AC2's raw-SQL tests
+     and all six prescribed mutations — reaching **453 tests, seven gates green**, both clippy forms
+     clean. So the story IS buildable; what follows is what broke on the way.
+
+     🔴 THREE THINGS THE FIRST DRAFT GOT WRONG, EACH MEASURED:
+       • **§1's mechanism 4 was FALSE.** Adding `origin` to the SELECT compiles cleanly and leaves
+         ALL 450 TESTS GREEN — sqlx decodes tuples POSITIONALLY and discards extra columns. The
+         compile error fires only if the TUPLE is widened too. So AC3's carrier is the GATE ALONE,
+         and the first draft predicted a compiler carrier. **Found independently by BOTH layers.**
+       • **AC1 and AC2 contradicted each other.** AC2 needs a raw INSERT in a test; AC1's gate reds
+         on any INSERT outside the adapter — the gate reddened on the story's own test. **Found
+         independently by BOTH layers.** Resolved by a two-site allowlist rather than the
+         `cfg(test)` exemption the gap-hunt tried, which was measured to hide a planted test write.
+       • **The write-path census said "whole workspace" and meant "under `crates/`".**
+         `docker/seed-example.sql:28` is a second, SHIPPED writer.
+
+     🔴 THREE HOLES THE FIRST DRAFT'S SCOPE LEFT, all measured green when they should red: a planted
+     `.sql` MIGRATION (`UPDATE declared_attribute SET actor_id = 'engine'`), backticked and
+     schema-qualified table names, and `INSERT` without `INTO` (MariaDB accepts it). Plus: the DDL
+     has **THREE** provenance columns and AC3 named two — `origin_obs_id` is the adopted observation
+     — and `SELECT *` defeats every column-name rule.
+
+     🔑 THE READ HALF HAD NO EVASION TABLE AT ALL, and the naive matcher produced FALSE POSITIVES on
+     the clean tree — `float-free`'s "wrong in both directions" lesson, reproduced exactly.
+
+     🔑 A FIFTH MECHANISM WAS MISSING, AND IT IS THE STRONGEST: the PK `(entity_id, attr_key)` with
+     no `ON DUPLICATE KEY UPDATE` anywhere means the adapter cannot overwrite a declared value AT
+     ALL (`ERROR 1062`). For a story called *never overwrite*, it belonged first.
+
+     ⚠️ THE TWO LAYERS DISAGREED on `line_has_float`'s line number and **I measured it: 915** (the
+     fact-check was right). A subagent finding is a lead, not a fact.
+
+     ⚠️ Also: AC2's prescribed red was PANIC-carried, M6 is entirely silent without `DATABASE_URL`,
+     `0001`'s unmodifiability is CONDITIONAL (fresh test DBs migrate fine; the NAS is what breaks),
+     the `0002:83` trap belongs to story 5.11 not 5.9, `:1737` is a TEST banner, and §7's port
+     collided with story 5.11b's still-running container.
+     🔑 AC5 is answered in advance: 1136 → **1346** code lines, 654 to spare. Not at risk. -->
+
+## Story
+
+As the operator,
+I want the never-overwrite invariant covered by explicit anti-regression tests,
+So that the product's central promise — *linked, never merged* — cannot erode by accident (NFR5).
+
+**🔴 THIS STORY IS THE SAME SHAPE AS 5.11b, AND 5.11b IS WHY IT MUST BE WRITTEN CAREFULLY.** The
+invariant it covers is **already true by construction** — measured, FIVE separate mechanisms hold
+it and not one of them is a test (one of the five I first listed was itself false; §1). Nothing here is expected to red. Story 5.11b was
+the same, and its mutation pass found **four behavioural defects and refuted three claims of the
+implementer's own**, the sharpest being a guard that could be deleted with the entire suite green.
+§3 is written against that. _(This sentence said "eight claims, five of them the implementer's"
+until validation: the eight was 5.11b's count of suspicions its reviewer **refuted** — the opposite
+sense — and the conflation had already reached two files.)_
+
+**Its central difficulty is different from 5.11b's, and harder.** 5.11b asserted a property *of a
+computation*, which a permutation sweep can measure. This story asserts the **ABSENCE of a code
+path** — *"no code path writes a declared field without a human author"*. **You cannot measure the
+absence of code by running code.** A test suite exercises what exists; it is silent about what
+someone adds tomorrow. That is what §4 is about, and it is the story's real design decision.
+
+**What this story does NOT do:**
+
+- it does **not** add the `entity` table, the triage inbox, or the `document` gesture (FR13's
+  action). Those are Epic 6 and the triage epic. This story guards a promise about a table that
+  already exists, written by one adapter that already exists;
+- it does **not** wire the resolver into `main.rs` (still 5.14's);
+- it does **not** change the identity engine. `identity/` untouched — **a change there is a FINDING**;
+- it does **not** touch `fixtures/`. The trap corpus stays **11 unanswerable, `passed() == false`**.
+  **If it turns green, that is a FINDING.**
+
+---
+
+## What this story inherits, measured rather than assumed
+
+### 1. 🔑 The invariant is ALREADY held, by FIVE mechanisms, none of them a test
+
+Measured at contexting and re-measured at validation, on `master` at `5634a1d`:
+
+| # | mechanism | where | what it holds |
+|---|---|---|---|
+| 1 | the write path binds **SQL literals**, not parameters — `origin` is `'manual'`, `actor_id` is `'operator'` | `repo.rs:123-126` | a caller *cannot* supply a non-human author: there is no parameter to pass one through |
+| 2 | a **DDL CHECK**, `declared_actor_not_scanner` | `0001_initial.sql:20` | the database refuses `actor_id = 'scanner'` |
+| 3 | the read's **column list** omits `origin` and `actor_id` | `repo.rs:187-189` | the divergence computation cannot consult provenance — it never loads it |
+| 4 | ~~the **tuple type**~~ | `repo.rs:183` | 🔴 **FALSE — measured at validation by BOTH layers.** Adding `origin` to the SELECT **compiles cleanly and all 450 tests stay green**: sqlx decodes tuples POSITIONALLY (`sqlx-core/src/from_row.rs`) and silently discards extra columns. The compile error fires only if the TUPLE is widened too. Mechanism 4 protects the destructuring, never the SELECT — **which is exactly why AC3 needs the gate** |
+| 5 | the **primary key** `(entity_id, attr_key)` with **no `ON DUPLICATE KEY UPDATE`** anywhere | `0001:18`, and `grep` gives 0 in `repo.rs` | 🔑 **The strongest of the five, and it was missing from this table.** The sanctioned adapter cannot overwrite an existing declared value AT ALL — a second write is `ERROR 1062`, measured. For a story called *never overwrite*, that belongs first |
+
+**There is exactly one write path to `declared_attribute` UNDER `crates/`** —
+`repo::insert_declared_attribute`. Verified: one `INSERT`, zero `UPDATE`, and two `DELETE`s both
+inside `#[cfg(test)]` (`main.rs:413`, `repo.rs:1110`).
+
+🔴 **But NOT in the whole workspace, and the difference is this story's problem.** Validation found a
+**second writer**: `docker/seed-example.sql:28` inserts a declared row (`:23` and `:48` delete), and
+it is a SHIPPED file the operator is told to run. A gate that walks only `crates/` cannot see the
+only other place a declared field is written. §4 takes this as a requirement, not a footnote.
+
+### 2. 🔴 A weakness in mechanism 2, found at contexting and NOT to be papered over
+
+`CHECK (actor_id <> 'scanner')` bans **one string literal**, not a property. A future writer using
+`actor_id = 'engine'`, `'resolver'`, `'system'` or `''` passes it. The constraint's *name* —
+`declared_actor_not_scanner` — is honest about this; its **doc comment is not**: `0001_initial.sql:16`
+says `-- a human; never 'scanner'`, which reads as a guarantee about authorship and delivers a
+guarantee about one spelling.
+
+**This is this story's decision to take, not to inherit.** Two readings, and the implementer must
+pick ONE and say which:
+
+- **(a) the CHECK is a tripwire, not a gate** — it catches the one name a careless writer would
+  reach for, and the real guard is the `xtask` gate of §4. Keep it, correct its comment, and say so.
+- **(b) the CHECK should name the property** — an allowlist (`actor_id IN (...)`) or a join to a
+  future `actor` table. ⚠️ **An allowlist in DDL is a migration every time an actor is added**, and
+  there is no `actor` table and no `entity` table either (both Epic 6). Choosing this means
+  designing a table this story has no other reason to touch.
+
+**Prescribed: (a)**, with the comment corrected in the ADAPTER's doc rather than in the migration.
+sqlx checksums the migration file with SHA-384 over its whole text, comments included
+(`sqlx-core/src/migrate/migration.rs`), so editing `0001` breaks any database that has **already
+applied** it. ⚠️ **That is conditional, not absolute, and validation corrected this**: every test
+database here is created fresh, so an edited `0001` migrates fine locally AND in CI — what breaks is
+the NAS and any long-lived dev database. The trap is story **5.11**'s record for `0002:83`, not
+5.9's. Register the residue.
+
+⚠️ Validation also measured that `'scanner '` (trailing space) is refused too — `actor_id` is
+`CHAR(36)`, so MariaDB pads and compares padded. The CHECK bans one padded VALUE, not one byte
+string. That widens it very slightly and does not change reading (a).
+
+### 3. 🔴 The failure mode: a test that cannot fail — with 5.11b's evidence, not 5.11b's warning
+
+Story 5.11b ran a mutation pass over a property true by construction. What it measured:
+
+- a guard asserting *"the refusal happens before anything is written"* was **deletable with all 446
+  tests green**, because every test ran inside `transact`, which rolls back on `Err` — the assertion
+  held wherever the guard sat;
+- a doc comment asserted what a test **eighty lines below it in the same commit** refuted;
+- **four of its six** originally prescribed mutations left the suite entirely green on first
+  measurement (the committed record; the eight-row table in its file is the POST-validation set).
+
+**Every AC below therefore names the mutation that must red it.** A mutation leaving the suite green
+is a HIGH finding here, not a reassurance. And per Guy's arbitration at 5.11b: **a mutation MAY edit
+anything, including `identity/` and the migrations — the ban in AC6 is on the SHIPPED DIFF.**
+
+⚠️ **The 5.11b driver lesson**: the mutation runner's red count includes cargo's own
+`result: FAILED` line. **Subtract one**, or report the number the test harness prints.
+
+### 4. 🔑 The design decision: you cannot test the absence of a code path, so the guard is a GATE
+
+AC1 says *"no code path writes a `declared_attribute` with a non-human author, **and the test reds if
+one is introduced**"*. A `#[cfg(test)]` test cannot do the second half: it exercises the paths that
+exist. The path that violates the invariant is the one a future story **adds**.
+
+This project already has the idiom, twice: **D56/D65 put gates in `cargo xtask ci`, in Rust, never in
+YAML** — `float-free` (story 5.4b) reds on a float under `identity/`, `retired-vocabulary` reds on a
+denylisted word. Both are exactly this shape: a property about source text that no runtime test can
+hold.
+
+**Prescribed: a SEVENTH gate, `declared-authorship`.** Validation BUILT it (~210 code lines) and
+took the workspace to 453 tests with seven gates green, so the shape is known to work. What follows
+is what it measured on the way — every row below was executed, not reasoned.
+
+#### 4a. 🔴 The contradiction the first draft shipped, and its resolution
+
+AC1 reds on any `INSERT` outside the sanctioned function. **AC2 requires a raw `INSERT` in a test**,
+to prove the DDL CHECK bites. Validation wrote AC2's test as prescribed and the gate reddened on the
+story's own test — *"1 unsanctioned access … repo.rs:1159"* — taking the gate's own *"green on the
+real tree"* test down with it. **Whichever rule you pick, one of the two ACs fails as first written.**
+
+Validation's resolution was to exempt `#[cfg(test)]`, and it MEASURED the hole that costs: a planted
+violation inside a test module then goes invisible.
+
+🔑 **Prescribed instead: a TWO-SITE ALLOWLIST, by function name, with no `cfg` exemption.** The gate
+sanctions exactly `repo::insert_declared_attribute` and ONE named test helper (e.g.
+`raw_declared_write_for_ddl_test`), and reds everywhere else including inside `#[cfg(test)]`. It is
+narrower than a blanket exemption and it keeps test modules covered. **Measure that a THIRD site
+still reds** — an allowlist that accidentally matches by prefix would be the `float-free` failure
+again.
+
+#### 4b. 🔴 `DELETE` and the exemption are ONE decision, not two
+
+Validation measured: putting `delete from` in the verb list with no exemption **reds the committed
+tree** at `main.rs:413` and `repo.rs:1110`.
+**Prescribed: `DELETE` is OUT of the verb list**, with its reason stated in the gate's doc — NFR5 is
+about AUTHORSHIP, and a `DELETE` writes no author. Register that a bulk delete is a different
+invariant (data loss) that this gate does not hold.
+
+#### 4c. 🔴 The gate must walk `.sql` and `docker/`, not only `.rs` under `crates/`
+
+Two measured holes in the first draft's scope:
+
+- a planted `migrations/0005_scratch.sql` containing `UPDATE declared_attribute SET actor_id =
+  'engine'` left the gate **GREEN**. A migration is the most natural home for a bulk author rewrite;
+- `docker/seed-example.sql` (§1) is outside `crates/` entirely.
+
+**Prescribed:** walk `.rs` **and** `.sql`, under `crates/` **and** `docker/`; exempt `0001`'s
+`CREATE TABLE`. If any scope is left out, say which and why — D18: a gate that cannot fall is
+decoration.
+
+#### 4d. The WRITE evasions — every row below was executed
+
+| evasion | gate | note |
+|---|---|---|
+| `INSERT INTO declared_attribute` in a new file | **RED** | |
+| `insert into declared_attribute` (lowercase) | **RED** | |
+| `UPDATE declared_attribute SET …` | **RED** | |
+| `REPLACE INTO declared_attribute` | **RED** | |
+| `INSERT INTO  declared_attribute` (two spaces) | **RED** | |
+| `INSERT INTO` ⏎ `declared_attribute` (newline) | **RED** | 🔑 forces a **whole-file, whitespace-normalised** matcher, not `float-free`'s per-line one — the one structural difference from the precedent |
+| the name in a doc comment | **green** | as intended |
+| `` `declared_attribute` `` (backticked) | 🔴 **green — HOLE** | must red |
+| `opencmdb.declared_attribute` (schema-qualified) | 🔴 **green — HOLE** | must red |
+| `INSERT declared_attribute` (no `INTO`; MariaDB accepts it) | 🔴 **green — HOLE** | must red |
+| `INSERT /*c*/ INTO declared_attribute` | 🔴 **green — HOLE** | must red |
+| the name built by `format!` | **green** | 🔑 unavoidable for a text gate — **STATE it** (D18) |
+| `/* INSERT INTO declared_attribute */` (block comment) | **RED — false positive** | inherited from `float-free`, which strips LINE comments only. List as a known limit |
+
+#### 4e. 🔴 The READ half needs its own table, and the naive matcher produces FALSE POSITIVES
+
+The first draft gave the read half no evasion table at all. Validation wrote the obvious backward
+`SELECT` search (`before.rfind("select")`) and it ran off the end of its own statement, reporting
+**two phantom findings on the clean tree** — a bare `DELETE FROM declared_attribute` at `repo.rs:1184`
+blamed for an `origin`/`actor_id` appearing in an unrelated INSERT string 24 lines above. Fix
+measured: require no `"` between the `SELECT` and the table, so the match cannot span two literals.
+
+| read evasion | must the gate red? |
+|---|---|
+| `SELECT entity_id, attr_key, attr_value FROM declared_attribute` | **no** — this is the sanctioned read |
+| `SELECT origin FROM declared_attribute` | **yes** |
+| `SELECT actor_id FROM declared_attribute` | **yes** |
+| `SELECT origin_obs_id FROM declared_attribute` | 🔴 **yes** — the DDL has **THREE** provenance columns, and the first draft named two. `origin_obs_id` is *"the adopted observation"* (`0001:15`): it is *how the value was obtained*, arguably more so than `origin` |
+| `SELECT * FROM declared_attribute` | 🔴 **yes** — it loads all three and defeats every column-name rule |
+| a bare `DELETE FROM declared_attribute` with an unrelated `origin` earlier in the file | **no** — the false positive above |
+
+### 5. The second AC's invariant is held by a COLUMN LIST, three layers below where it is stated
+
+*"A divergence computation never consults HOW a declared value was obtained"* (FR13's invariant,
+NFR5's second clause). Today that is true because `load_declared_attributes` selects three columns
+and `build_view` receives `Vec<(String, String, String)>` — **provenance never enters the process**.
+
+🔴 **Weaker than it looks, and the first draft over-claimed it.** Widening the TUPLE is a compile
+error at `build_view` (measured: `error[E0308]`). Widening only the **SELECT** is not — measured by
+both validation layers: the query gains `origin`, **nothing fails to compile and all 450 tests stay
+green**, because sqlx decodes tuples positionally and drops the extra column on the floor. Nor does
+anything stop a future story adding a *second* query. So the gate is not a belt-and-braces here: for
+the SELECT it is **the only guard there is**, and AC3 rests on it alone.
+
+⚠️ Note the asymmetry with §1's mechanism 4: the compile error protects the EXISTING call site, not
+the addition of a new one. Story 5.11b measured the same shape and it is registered there —
+*"the pure tests of `contradicts` do not protect its wiring"*.
+
+### 6. The tree this story extends, measured on `5634a1d`
+
+- **`crates/opencmdb-bin/migrations/0001_initial.sql`** — `declared_attribute` with **three**
+  provenance columns (`origin` [`:14`], `origin_obs_id` [`:15`], `actor_id` [`:16`]), the PK [`:18`]
+  and two CHECKs [`:19`, `:20`]. Checksummed: editing it breaks any database that has ALREADY
+  applied it — which is the NAS, not CI (§2).
+- **`crates/opencmdb-bin/src/repo.rs`** — `insert_declared_attribute` [`:113`], its SQL literals
+  [`:123-126`]; `load_declared_attributes` [`:181`], its column list [`:187-189`], its return type
+  [`:183`]; `count_declared_attributes` (the free fn at [`:101`], the delegating method at [`:88`]).
+- **`crates/opencmdb-bin/src/page.rs`** — `reconcile_view` [`:258`] → `build_view`; the divergence.
+- **`xtask/src/main.rs`** — the gate to copy is `gate_float_free` [`:1038`], its matcher
+  `line_has_float` [`:915`], `strip_line_comment` [`:930`], `float_literal_kind` [`:964`],
+  `fn report` [`:195`], and the scratch-tree idiom `scratch(tag)` [`:1340`].
+  ⚠️ **`:1737` is a section banner INSIDE the test module** (`#[cfg(test)]` begins at `:1137`) — the
+  first draft sent the implementer there. The two validation layers then disagreed about
+  `line_has_float`'s line and **I measured it myself: 915.** A subagent finding is a lead, not a fact.
+  **1975 lines total, 1136 of CODE.** Validation built the gate and measured the cost:
+  **1136 → 1346 code lines**, 654 to spare under the 2000 ceiling. The ceiling is NOT at risk and
+  splitting is not this story's call.
+- **`master` is at 450 tests** (245 bin + 159 core + 46 xtask), six gates green.
+
+### 7. 🔴 A green suite says NOTHING about the database
+
+`DATABASE_URL` is unset locally and every DB-backed test passes by `return`ing. Story 5.12 has a DDL
+CHECK to prove bites (§8's AC2), which is **invisible without a live server** — and story 5.9's
+review measured **four DDL guards droppable with the whole suite green** for exactly this reason.
+
+```
+docker run -d --rm --name opencmdb-5-12 -p 13307:3306 \
+  -e MARIADB_ROOT_PASSWORD=<choose> -e MARIADB_DATABASE=opencmdb mariadb:10.11.11
+export DATABASE_URL='mysql://root:<choose>@127.0.0.1:13307/opencmdb'
+```
+
+⚠️ **Never 3306** (held by an unrelated container). **13307 rather than 13306** — story 5.11b's
+container may still be on 13306; validation hit exactly that collision. Tests take `crate::DB_TEST_LOCK`.
+⚠️ **A CHECK reachable only by going around the adapter needs RAW SQL to measure it** — story 5.9's
+M3 came back green until two raw inserts were written.
+
+### 8. Gates
+
+`cargo xtask ci` (six, becoming **seven**) · `cargo clippy --workspace -- -D warnings` **and**
+`--all-targets` · `#![deny(missing_docs)]` is on for `opencmdb-bin` and `xtask` · `file-size` counts
+only lines before the first `#[cfg(test)]`.
+
+---
+
+## Decisions taken at contexting, and revised at validation
+
+1. **The guard is an `xtask` GATE, not only a test** (§4) — because the invariant is about a code
+   path that does not exist yet, and no runtime test can hold that. D56/D65's idiom, `float-free`'s
+   precedent.
+2. **Its matcher's evasions are measured BEFORE it is declared sound** (§4) — `float-free`'s first
+   matcher was measured wrong in both directions.
+3. **The DDL CHECK is a tripwire, not a gate** (§2, reading (a)) — it bans one padded value; the gate
+   holds the property. Its false comment is registered and corrected in the ADAPTER's doc.
+4. **The divergence blindness is held by the gate ALONE** (§5) — not by the tuple's arity, which was
+   measured NOT to fire on a widened SELECT. This is the correction validation forced.
+5. **A TWO-SITE ALLOWLIST by function name, no `cfg(test)` exemption** (§4a) — because AC1 and AC2
+   contradicted each other as first written, and a blanket exemption was measured to hide a planted
+   write inside a test module.
+6. **`DELETE` is out of the verb list, and the gate walks `.sql` and `docker/` too** (§4b, §4c) —
+   both forced by measurement: DELETE reddened the committed tree, and a planted migration was
+   invisible.
+7. **Every AC names the mutation that must red it** (§3), and a green mutation is a HIGH finding.
+
+---
+
+## Acceptance Criteria
+
+**AC1 — no code path writes a `declared_attribute` with a non-human author, and the GATE reds if one
+is introduced.**
+Given the workspace, when `cargo xtask ci` runs, then `declared-authorship` walks **`.rs` and `.sql`
+under `crates/` AND `docker/`** and reds on any `INSERT`/`UPDATE`/`REPLACE` targeting
+`declared_attribute` outside its **two-site allowlist** (§4a): `repo::insert_declared_attribute` and
+one named test helper. `DELETE` is deliberately OUT of the verb list (§4b).
+**And the gate is shown RED on a planted violation and green on the real tree**, both recorded.
+**Mutations:** every row of §4d, one at a time. The four rows marked 🔴 HOLE must red once fixed; the
+`format!` row must stay green **and be stated as a known limit**.
+
+**AC2 — the DDL CHECK bites, measured through RAW SQL, and its limit is pinned.**
+Given a live MariaDB, when a raw `INSERT` supplies `actor_id = 'scanner'`, then the database refuses
+it (`ERROR 4025` → `RepositoryError::Constraint("check")`, measured). 🔴 The adapter cannot produce
+this, so a test written through `insert_declared_attribute` measures **nothing** — story 5.9's M3, a
+fourth time. **The raw write lives in the allowlisted helper of §4a**, which is what stops it
+reddening AC1's gate.
+⚠️ **The assertion must be `assert!(result.is_err(), …)`, not `.expect_err()`** — validation measured
+the prescribed shape reddening as a PANIC, and this story must not repeat 5.11b's mislabelled carrier.
+**And** a second test records what the CHECK does NOT hold: `actor_id = 'engine'` is **accepted**
+(measured), while `'scanner '` with a trailing space IS refused (CHAR padding). That test pins §2's
+limit and must be labelled as the honest limit, not as a defect.
+**Mutation:** drop `declared_actor_not_scanner` in a scratch migration; the test must red.
+
+**AC3 — the divergence computation never consults how a declared value was obtained.**
+Given `reconcile_view`, when the page renders, then no provenance column reaches `build_view`.
+🔴 **The gate is the ONLY guard here** (§5): widening the SELECT alone compiles cleanly and leaves all
+450 tests green. So the gate must red on a divergence-path read naming **`origin`, `actor_id` OR
+`origin_obs_id`** — three columns, not two — **and on `SELECT *` against `declared_attribute`** (§4e).
+It must NOT red on the sanctioned three-column read, nor on the false positive §4e measured.
+**Mutation M4:** add `origin` to `load_declared_attributes`' SELECT. **The carrier is the gate ALONE**
+— measured: zero compile errors, 450 tests green, only the gate's test reds. State it that way; the
+first draft predicted a compiler carrier and was wrong.
+
+**AC4 — the tests are guards that red on removal, not assertions over current behaviour.**
+Given each new test and the gate, when it is removed or neutered, then something reds, recorded per
+guard **with its carrier**. 🔴 A guard deletable with the suite green is a HIGH finding.
+⚠️ **Two carriers are already known to be awkward and must be reported honestly**: AC2's red is
+DB-dependent (below), and M6's is too.
+
+**AC5 — the gate's cost is stated.** Measured at validation: `xtask/src/main.rs` goes
+**1136 → 1346** code lines against the 2000 ceiling, 654 to spare. Record the number `cargo xtask ci`
+actually prints. The ceiling is not at risk.
+
+**AC6 — nothing else moves, in the SHIPPED DIFF.**
+`identity/` untouched · `fixtures/` untouched · trap corpus still **11 unanswerable**,
+`passed() == false` · `0001_initial.sql` **NOT edited** (§2) · no new dependency in any `Cargo.toml`
+or in `Cargo.lock` (`walkdir` and `anyhow::Context` are already `xtask`'s) · six gates become seven,
+all green · both clippy forms clean · `ci.yml` needs no edit — it is a thin runner with no gate list.
+
+**AC7 — the doc twins say the same thing.**
+`CLAUDE.md`, `docs/project-context.md`, `sprint-status.yaml` and this file agree on status and counts.
+🔴 This failed on seven consecutive stories; 5.11b broke the streak. Check by opening them.
+
+**AC8 — what this story does NOT cover is named.**
+NFR5 has **three** assertions (`prd.md:1208-1221`). This story covers the third (*"no code path
+writes a declared field with a non-human author"*, `:1218-1219`) and FR13's blindness corollary
+(`:1220-1221`). ⚠️ **The first two are NOT covered and the story must say where they go**: (1)
+*ingesting an observation that contradicts a declared field leaves it unchanged and opens a
+divergence* and (2) *documenting leaves the observation record bit-for-bit unchanged* both need the
+`document` gesture, which is the triage epic's. Register both with an owner rather than leaving AC1's
+scope to imply the whole NFR is met.
+
+---
+
+## Tasks / Subtasks
+
+**T1 — the gate's matcher, and BOTH evasion tables first.** (AC1, AC3)
+Write the write matcher (§4d) and the read matcher (§4e) as tests before wiring anything. The read
+matcher's false positive is measured and must be reproduced then fixed. Note the structural
+difference from `float-free`: the newline-split case forces a **whole-file, whitespace-normalised**
+matcher, not a per-line one.
+
+**T2 — wire it as the seventh gate, over the full scope.** (AC1, AC5)
+Copy `gate_float_free` [`:1038`]; report through `fn report` [`:195`]. Walk `.rs` and `.sql` under
+`crates/` and `docker/`. Show it red on a planted violation and green on the real tree; record the
+`file-size` number.
+
+**T3 — the DDL CHECK, through raw SQL, in the allowlisted helper.** (AC2)
+Two tests: `'scanner'` refused (assertion-carried, not `.expect_err`), `'engine'` accepted and
+labelled as the honest limit.
+
+**T4 — the divergence blindness.** (AC3) Three columns and `SELECT *`. The gate is the only guard.
+
+**T5 — prove-to-red.** (AC4) Commit first. Each mutation under a timeout, **carrier PER TEST**, and
+the driver's red count **corrected by one** (it includes cargo's `result: FAILED` line).
+
+| | mutation | measured at validation |
+|---|---|---|
+| M1 | plant an `INSERT INTO declared_attribute` with a scanner author | gate reds; no `mod` line needed — the gate walks the filesystem |
+| M2 | each row of §4d | six red, one green-as-intended, **four HOLES**, one unavoidable, one false positive |
+| M3 | drop `declared_actor_not_scanner` in a scratch migration | AC2 reds — **1 test, and it was PANIC-carried in the prescribed shape** |
+| M4 | add `origin` to `load_declared_attributes`' SELECT | 🔴 **carrier is the GATE ALONE**: 0 compile errors, 450 tests green |
+| M5 | neuter the gate | its own test reds, assertion-carried |
+| M6 | change the sanctioned `'operator'` literal to `'scanner'` | gate stays green (the write is inside the sanctioned fn); **the DDL CHECK catches it at runtime** — 2 tests red, both `.expect()`-carried. ⚠️ **Entirely silent without `DATABASE_URL`**: 246/159/48 all green |
+
+**T6 — docs and register.** Register: §2's weakness and `0001`'s false-but-conditionally-editable
+comment (owner: the migration-consolidation milestone, issue #50); §4d's `format!` hole and the block-comment
+false positive; §4b's DELETE exclusion; and AC8's two uncovered NFR5 assertions (owner: the triage
+epic). Then the twins (AC7).
+
+---
+
+## Dev Notes
+
+### Shapes to follow, not reinvent
+
+- The six existing gates in `xtask/src/main.rs`: each returns `(bool, String)` and is reported
+  through `report(name, ok, message)` at `:178`. The `float-free` gate at `:1737` is the closest
+  precedent — read it before writing the seventh.
+- Gate tests build a scratch tree under a per-module `scratch_dir` embedding `std::process::id()`.
+- Deliberate redundancies a DRY pass may NOT collapse: `fixtures.rs`'s `expected()`, `score.rs`'s two
+  representations pinned by an equality test, the per-module `scratch_dir`.
+
+### Compile-level facts
+
+- `sqlx` is built without `chrono`: a `DATETIME(6)` has no Rust type to decode into; instants come
+  back as strings via `CAST(… AS CHAR)`.
+- `insert_declared_attribute` takes `(executor, entity_id, attr_key, attr_value)` — **there is no
+  actor parameter**, which is mechanism 1 and must survive this story.
+- `sqlx` checksums migration FILES, comments included. `0001_initial.sql` is applied everywhere and
+  **must not be edited** — the same trap `0002:83` carries, registered at story 5.9's review.
+
+### What a reviewer will challenge, and the answer that must already be measured
+
+- *"Can any of these tests fail?"* → §3, and every AC names its mutation. This is the question the
+  story is designed around, and 5.11b is the evidence that it is not rhetorical.
+- *"Why a gate rather than a test?"* → §4. A test exercises what exists; the violation is what a
+  future story adds.
+- *"Is the CHECK enough?"* → No, and §2 says exactly what it is worth. AC2's second test pins it.
+
+### References
+
+- `epics.md:1654-1670` (story 5.12 as written), `prd.md:1208-1215` (NFR5's three assertions),
+  `:884-888` (FR13, and *"the divergence computation never consults how a declared value was
+  obtained"*).
+- `architecture.md` — D3 (field-level provenance), D10 (comparison never descends into SQL), D18 (a
+  gate that cannot fall is decoration), D56/D65 (gates live in `xtask`, in Rust).
+- `deferred-work.md` — story 5.11b's entries, whose shape this story repeats.
+
+---
+
+## Dev Agent Record
+
+### Agent Model Used
+
+_(to be filled by `dev-story`)_
+
+### Debug Log References
+
+_(to be filled — the gate's evasion table as MEASURED, the file-size number after, and the mutation
+table's measured column with the carrier PER TEST)_
+
+### Completion Notes List
+
+_(to be filled)_
+
+### File List
+
+_(to be filled)_
+
+---
+
+## Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-07 | **Validated** by two fresh-context agents; the gap-hunt BUILT the story (453 tests, seven gates green). **3 HIGH from the fact-check, 6 from the gap-hunt**, and 🔑 **two were found independently by BOTH layers**: §1's mechanism 4 is FALSE (a widened SELECT compiles cleanly — sqlx decodes tuples positionally — so AC3's carrier is the GATE ALONE, not the compiler), and AC1 contradicted AC2 (the gate reddens on the raw INSERT that AC2 requires). Resolved by a **two-site allowlist**, not the `cfg(test)` exemption, which was measured to hide a planted test write. Also: the census said *"whole workspace"* and meant *"under `crates/`"* — `docker/seed-example.sql:28` is a second SHIPPED writer; the gate was blind to `.sql` migrations, to backticked and schema-qualified names, and to `INSERT` without `INTO`; AC3 named two provenance columns where the DDL has **three**, and `SELECT *` defeats them all; the READ half had no evasion table and its naive matcher produced FALSE POSITIVES on the clean tree. A **fifth mechanism** was missing and is the strongest — the PK with no upsert means the adapter cannot overwrite at all. ⚠️ The two layers disagreed on a line number and **I measured it myself** (915, the fact-check was right). |
+| 2026-08-07 | Created by `create-story`. Five decisions at contexting. 🔴 **The load-bearing finding: the invariant is already held by FOUR mechanisms and none is a test** — the write path binds SQL literals rather than parameters, a DDL CHECK, the read's column list, and the tuple's arity. So this story is 5.11b's shape, and 5.11b's mutation pass is the evidence that the shape is dangerous. 🔴 **Its harder half: you cannot test the ABSENCE of a code path by running code**, so the guard is a SEVENTH `xtask` gate on `float-free`'s precedent — whose own first matcher was measured wrong in both directions. ⚠️ Also found: `CHECK (actor_id <> 'scanner')` bans **one string literal**, not a property (`'engine'` passes), and `0001_initial.sql`'s comment claiming *"a human; never 'scanner'"* is false AND unmodifiable, sqlx checksumming migration files including comments. |

@@ -50,7 +50,82 @@
 #   'optional' and will not be back-filled.
 
 generated: 2026-07-21
-last_updated: 2026-08-07  # 5.11b **DONE** -- PR #73 squash-merged as `f597882` after a green CI run
+last_updated: 2026-08-07  # 5.12 CONTEXTED **AND VALIDATED** -> `ready-for-dev`. NEXT = `dev-story`.
+                          # Two fresh-context agents; the gap-hunt BUILT the whole story on a
+                          # scratch worktree against its own mariadb on 13312 -- the seventh gate
+                          # (~210 code lines), its tests, AC2's raw SQL and all six mutations --
+                          # reaching **453 tests, SEVEN gates green**, both clippy forms clean.
+                          # 3 HIGH from the fact-check, 6 from the gap-hunt.
+                          # 🔑 TWO WERE FOUND INDEPENDENTLY BY BOTH LAYERS:
+                          #   . §1's mechanism 4 is FALSE. Adding `origin` to the SELECT COMPILES
+                          #     CLEANLY and leaves ALL 450 TESTS GREEN -- sqlx decodes tuples
+                          #     POSITIONALLY and discards extra columns. The compile error fires
+                          #     only if the TUPLE is widened too. So AC3's carrier is the GATE
+                          #     ALONE, where the first draft predicted a compiler carrier.
+                          #   . AC1 CONTRADICTED AC2: AC2 needs a raw INSERT in a test, AC1's gate
+                          #     reds on any INSERT outside the adapter -- the gate reddened on the
+                          #     story's OWN test. Resolved by a TWO-SITE ALLOWLIST by function name,
+                          #     NOT by the cfg(test) exemption the gap-hunt tried, which was
+                          #     measured to hide a planted write inside a test module.
+                          # 🔴 THREE SCOPE HOLES, all measured GREEN when they should red: a planted
+                          # `.sql` MIGRATION, backticked and schema-qualified table names, and
+                          # `INSERT` without `INTO` (MariaDB accepts it). And the census said "whole
+                          # workspace" while meaning "under crates/" -- `docker/seed-example.sql:28`
+                          # is a second, SHIPPED writer the gate could not see.
+                          # 🔴 The DDL has THREE provenance columns and AC3 named two
+                          # (`origin_obs_id` is the adopted observation); `SELECT *` defeats them
+                          # all. The READ half had NO evasion table and its naive matcher produced
+                          # FALSE POSITIVES on the clean tree -- float-free's "wrong in both
+                          # directions" lesson reproduced exactly.
+                          # 🔑 A FIFTH MECHANISM WAS MISSING AND IS THE STRONGEST: the PK
+                          # (entity_id, attr_key) with NO `ON DUPLICATE KEY UPDATE` anywhere means
+                          # the adapter cannot overwrite a declared value AT ALL (ERROR 1062). For a
+                          # story called *never overwrite*, it belonged first.
+                          # ⚠️ The two layers DISAGREED on `line_has_float`'s line and I measured it
+                          # myself: **915** (the fact-check was right). A subagent finding is a lead.
+                          # ⚠️ Also: AC2's prescribed red was PANIC-carried; M6 is entirely silent
+                          # without DATABASE_URL; `0001`'s unmodifiability is CONDITIONAL (fresh test
+                          # DBs migrate fine, the NAS is what breaks); the `0002:83` trap belongs to
+                          # 5.11 not 5.9; `:1737` is a TEST banner; and §7's port collided with
+                          # 5.11b's still-running container (now 13307).
+                          # 🔑 AC5 ANSWERED IN ADVANCE: xtask 1136 -> **1346** code lines, 654 to
+                          # spare under the 2000 ceiling. Not at risk.
+                          # (contexting entry:) 5.12 CONTEXTED -> `ready-for-dev`. NEXT = `create-story validate`
+                          # (MANDATORY here, two fresh-context agents), THEN `dev-story`.
+                          # 🔴 THE LOAD-BEARING FINDING: the never-overwrite invariant is ALREADY
+                          # held, by FOUR mechanisms and not one of them is a test --
+                          #   (1) the write path binds SQL LITERALS, not parameters (`origin` is
+                          #       'manual', `actor_id` is 'operator'), so a caller CANNOT supply a
+                          #       non-human author: there is no parameter to pass one through;
+                          #   (2) a DDL CHECK, `declared_actor_not_scanner`;
+                          #   (3) the read's COLUMN LIST omits `origin` and `actor_id`;
+                          #   (4) the tuple type `Vec<(String, String, String)>` could not carry it.
+                          # So this is 5.11b's shape, and 5.11b's pass (FOUR behavioural defects
+                          # plus THREE claims of the implementer's refuted) is the evidence that the
+                          # shape is dangerous. _(This read "8 claims refuted, 5 of them the
+                          # implementer's" until 5.12's validation: the 8 was 5.11b's count of
+                          # suspicions its reviewer REFUTED -- the opposite sense.)_
+                          # 🔴 ITS HARDER HALF, AND THE REAL DESIGN DECISION: the AC asserts the
+                          # ABSENCE OF A CODE PATH, and **you cannot measure the absence of code by
+                          # running code**. A test exercises what exists; the violation is what a
+                          # future story ADDS. So the guard is a SEVENTH `xtask` gate on D56/D65's
+                          # idiom and `float-free`'s precedent -- whose OWN first matcher was
+                          # measured wrong in BOTH directions (passed `1e-3` and `1.`, reddened
+                          # "192.168.0.1"). The evasion table is prescribed and must be MEASURED
+                          # before the matcher is called sound.
+                          # ⚠️ ALSO FOUND AT CONTEXTING: `CHECK (actor_id <> 'scanner')` bans ONE
+                          # STRING LITERAL, not a property -- 'engine', 'system' and '' all pass.
+                          # Its own name is honest; `0001_initial.sql:16`'s comment ("a human; never
+                          # 'scanner'") is NOT, and sqlx checksums migration files INCLUDING
+                          # comments, so it is UNMODIFIABLE. Prescribed reading: the CHECK is a
+                          # TRIPWIRE, the gate is the guard. AC2 pins the limit with a test that
+                          # asserts 'engine' is ACCEPTED, labelled as the honest limit.
+                          # 🔑 `xtask/src/main.rs` is 1136 CODE lines against the 2000 ceiling and is
+                          # the workspace's largest file -- a seventh gate fits, and AC5 makes the
+                          # cost explicit rather than a later surprise.
+                          # ⚠️ `declared_attribute` DOES exist (since `0001`); the concern that 5.9's
+                          # DDL had not created it was checked and is unfounded.
+                          # (previous entry:) 5.11b **DONE** -- PR #73 squash-merged as `f597882` after a green CI run
                           # (1m10s). **Epic 5 is now 15/18.** `master` carries **450 tests**
                           # (245 bin + 159 core + 46 xtask); the branch is deleted locally and on
                           # `origin`. NEXT = `create-story` 5.12.
@@ -1709,7 +1784,7 @@ development_status:
   # the correction is registered with Epic 5's retrospective.
   5-11-idempotent-supersede: done
   5-11b-order-independence: done
-  5-12-never-overwrite-anti-regression: backlog
+  5-12-never-overwrite-anti-regression: ready-for-dev
   5-13-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog
   epic-5-retrospective: optional
