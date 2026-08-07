@@ -2363,6 +2363,32 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         );
     }
 
+    /// 🔴 The longest keyword wins at equal end offsets — measured, because M19 came back GREEN.
+    ///
+    /// `CREATE OR REPLACE TABLE` reds either way: the `REPLACE` hiding inside it governs the same
+    /// reference. So the long verb changes no VERDICT, only what the finding is called — and a
+    /// message naming `replace` for a statement that drops the table and every row in it sends the
+    /// reader looking for the wrong thing. Dropping the entry left all 59 tests green, which is
+    /// what this test exists to stop.
+    #[test]
+    fn the_longest_governing_keyword_wins_so_the_finding_is_named_correctly() {
+        assert_eq!(
+            governing_keyword("create or replace table "),
+            Some("create or replace table")
+        );
+        assert_eq!(governing_keyword("insert into "), Some("insert into"));
+        // And the nearest one governs, which is the rule the head-anchor got wrong.
+        assert_eq!(
+            governing_keyword("insert into x select origin from "),
+            Some("select")
+        );
+        // A bare mention governs nothing at all.
+        assert_eq!(governing_keyword("create table "), None);
+        assert_eq!(governing_keyword("rename table "), None);
+        // Substrings of longer identifiers are not keywords.
+        assert_eq!(governing_keyword("reinsert_into_log("), None);
+    }
+
     /// 🔑 The `format!` hole, PINNED rather than pretended away (D18).
     ///
     /// A text gate cannot see a table name assembled at runtime. Stating it is the difference
@@ -2830,7 +2856,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     ///
     /// 🔴 Sixteen of the first thirty passed the gate as first shipped. That is what this table
     /// exists to stop from happening again quietly.
-    const AUTHORSHIP_PROBES: [(&str, bool); 31] = [
+    const AUTHORSHIP_PROBES: [(&str, bool); 32] = [
         ("e01_raw_string.rs", true),
         // The one the story already pinned: a query assembled at runtime.
         ("e02_concat_lets.rs", false),
@@ -2865,6 +2891,11 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         ("e30_call_procedure.rs", true),
         // Same family as e14, and the one the review's own sweep missed.
         ("e31_alter_drop_check.sql", false),
+        // 🔴 Added during the repair, because mutation M13 came back GREEN: `e06` puts its
+        // zero-width space BEFORE the verb, where it is already a token boundary, so it left
+        // [`is_invisible`] load-bearing for nothing. Inside a word is where the deletion is the
+        // only thing that finds the statement at all.
+        ("e32_zwsp_inside_words.rs", true),
     ];
 
     /// The corpus directory must hold exactly the probes the table names — neither more nor fewer.
@@ -2892,7 +2923,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         assert_eq!(on_disk, pinned, "the corpus and the verdict table have drifted");
         assert_eq!(
             on_disk.len(),
-            31,
+            32,
             "the corpus is what the review left behind; losing a probe loses a measured mechanism"
         );
     }
