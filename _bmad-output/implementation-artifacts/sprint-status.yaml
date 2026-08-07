@@ -105,7 +105,21 @@ last_updated: 2026-08-07  # 5.12 CODE-REVIEWED (three layers) **AND REPAIRED** u
                           # through from elsewhere. M24b reds 2 and breaks no legitimate site;
                           # M25 (path compared unnormalised) reds 2 -- the Windows trap, measured.
                           # **THIRTEEN mutations, thirteen reds.** Counts: **463 -> 469**
-                          # (248+159+62), **33 probes**.
+                          # (248+159+62), **37 probes**.
+                          # 🔴 A FOURTH finding, a SECOND hole INSIDE the promise: the `"` bound
+                          # of `statement_after` truncated the READ half, because in a .rs file a
+                          # `"` can be a quote inside the SQL -- every predicate after it lost, and
+                          # predicates are where provenance columns live. GREEN on both spellings
+                          # Rust permits (raw string, `\"`), with a CONTROL -- the same read with
+                          # no quoted literal -- RED all along. 🔑 **The control is what makes the
+                          # pair mean anything**: committed as e36, and under M26/M27 the quoted
+                          # forms go green while it stays red. The `"` bound is KEPT; quotes INSIDE
+                          # a literal become a sentinel during normalisation.
+                          # ⚠️ `is_invisible` was an ENUMERATION and missed the variation selectors
+                          # (INS<U+FE0F>ERT passed). Widened ONCE, deliberately NOT to exhaustion:
+                          # **an enumeration cannot claim the completeness of a property** -- that
+                          # sentence is the deliverable, not a longer list. Closure = voie B.
+                          # **SIXTEEN mutations, sixteen reds, 37 probes.**
                           # 🔑 THREE documents described a state the code had passed -- the
                           # mutation-table header, project-context's "six gates", and
                           # `xtask/src/main.rs`'s OWN module doc, which enumerated six gates while

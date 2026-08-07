@@ -1,6 +1,6 @@
 # The authorship gate's evasion corpus
 
-Thirty-three hand-written violations of NFR5's never-overwrite invariant, one per mechanism. They are
+Thirty-seven hand-written violations of NFR5's never-overwrite invariant, one per mechanism. They are
 the regression suite of `gate_declared_authorship` (`xtask/src/main.rs`): a repaired gate is
 **measured** against all of them, never argued about.
 
@@ -30,6 +30,14 @@ by is recorded in the story file.
 `xtask/probes/` is neither `src/`, `tests/`, `examples/` nor `benches/`, so cargo never builds these
 files and `cargo fmt` never rewrites them. That matters: `e04` carries hard tabs, `e05` a no-break
 space and `e06` a zero-width space, and a formatter would silently repair the very thing they probe.
+
+## `e36` is a CONTROL, and that is a distinct job
+
+`e34` and `e35` are the same read carrying a quote inside the query — raw string and escaped
+spelling. `e36` is that read **without** the quote, and it reddened all along. It earns its place
+because it is what proves the quote is the cause: under M26 and M27 the two quoted forms go green
+while `e36` stays red. A probe that cannot fail proves nothing; a control that never changes is what
+makes its neighbours' change mean something.
 
 ## The three that are GREEN on purpose
 

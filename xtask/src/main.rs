@@ -1167,7 +1167,23 @@ struct CommentState {
     in_plain: bool,
     /// Nesting depth inside MariaDB's executable `/*! … */`, whose body IS code.
     exec_depth: usize,
+    /// Inside a Rust raw string, holding its `#` count — `Some(0)` for `r"…"`.
+    raw_hashes: Option<usize>,
 }
+
+/// Stands in for a `"` that is INSIDE a Rust string literal rather than delimiting one.
+///
+/// 🔴 [`statement_before`] and [`statement_after`] bound a statement at `;` or `"`, and that `"`
+/// bound is load-bearing — without it a finding spans two literals and the gate invents phantoms.
+/// But a `"` can also sit *inside* the SQL, and then the bound truncates the statement instead of
+/// ending it. Measured: `… FROM declared_attribute WHERE note = \"n\" AND actor_id = ?` passed the
+/// gate while the same read WITHOUT the quoted literal reddened — the read half loses every
+/// predicate after the quote, and predicates are where provenance columns live.
+///
+/// This is the ordinary Rust spelling, not a trick: `\"` is how anyone writes a quote inside a
+/// query. So the two forms Rust actually allows — the escape and the raw string — are rewritten to
+/// this sentinel, which is neither a bound nor a token character.
+const QUOTE_IN_LITERAL: char = '\u{1}';
 
 /// One line with its comments removed, carrying [`CommentState`] to the next.
 ///
@@ -1184,6 +1200,29 @@ fn strip_comments(line: &str, sql: bool, state: &mut CommentState) -> String {
     let mut in_literal = false;
     let mut i = 0;
     while i < chars.len() {
+        // A raw string swallows everything — comments included — until its own terminator.
+        if let Some(hashes) = state.raw_hashes {
+            if chars[i] == '"'
+                && chars[i + 1..]
+                    .iter()
+                    .take(hashes)
+                    .filter(|c| **c == '#')
+                    .count()
+                    == hashes
+            {
+                state.raw_hashes = None;
+                out.push('"');
+                i += 1 + hashes;
+            } else {
+                out.push(if chars[i] == '"' {
+                    QUOTE_IN_LITERAL
+                } else {
+                    chars[i]
+                });
+                i += 1;
+            }
+            continue;
+        }
         if state.in_plain {
             if chars[i] == '*' && chars.get(i + 1) == Some(&'/') {
                 state.in_plain = false;
@@ -1194,6 +1233,24 @@ fn strip_comments(line: &str, sql: bool, state: &mut CommentState) -> String {
             continue;
         }
         match chars[i] {
+            // `\"` is a quote inside a literal, never a delimiter.
+            '\\' if chars.get(i + 1) == Some(&'"') => {
+                out.push(QUOTE_IN_LITERAL);
+                i += 2;
+            }
+            // `r"`, `r#"`, `r##"` … open a raw string, where an unescaped `"` is data.
+            'r' if !in_literal
+                && chars[i + 1..]
+                    .iter()
+                    .position(|c| *c != '#')
+                    .is_some_and(|k| chars.get(i + 1 + k) == Some(&'"'))
+                && !matches!(chars.get(i.wrapping_sub(1)), Some(c) if is_token_char(*c as u8)) =>
+            {
+                let hashes = chars[i + 1..].iter().position(|c| *c != '#').unwrap_or(0);
+                state.raw_hashes = Some(hashes);
+                out.push('"');
+                i += hashes + 2;
+            }
             '\'' => {
                 in_literal = !in_literal;
                 out.push('\'');
@@ -1232,10 +1289,26 @@ fn strip_comments(line: &str, sql: bool, state: &mut CommentState) -> String {
 /// it is one word to the server and two to a whitespace-collapsing matcher; deleting restores the
 /// word, collapsing would split it. The review's `e06` planted one at the head of a statement and
 /// the gate went green.
+///
+/// ⚠️ **This is an ENUMERATION, and an enumeration cannot claim the completeness of a property.**
+/// It named five ranges and missed the variation selectors and three invisible operators —
+/// measured, `INS<U+FE0F>ERT` and `INS<U+2063>ERT` both passing. The ranges are widened ONCE, to
+/// the blocks Unicode reserves for zero-width and formatting characters, and deliberately not to
+/// exhaustion: chasing an adversary through the code-point space is a race
+/// [`gate_declared_authorship`]'s stated promise has already declined. What closes that class is a
+/// database privilege, not a longer list here. `e37` pins the widening; nothing pins completeness,
+/// because nothing could.
 fn is_invisible(ch: char) -> bool {
     matches!(
         ch,
-        '\u{00ad}' | '\u{200b}'..='\u{200f}' | '\u{2060}' | '\u{feff}'
+        '\u{00ad}'
+            | '\u{061c}'
+            | '\u{180e}'
+            | '\u{200b}'..='\u{200f}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206f}'
+            | '\u{fe00}'..='\u{fe0f}'
+            | '\u{feff}'
     )
 }
 
@@ -3008,7 +3081,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     ///
     /// 🔴 Sixteen of the first thirty passed the gate as first shipped. That is what this table
     /// exists to stop from happening again quietly.
-    const AUTHORSHIP_PROBES: [(&str, Option<usize>); 33] = [
+    const AUTHORSHIP_PROBES: [(&str, Option<usize>); 37] = [
         ("e01_raw_string.rs", Some(2)),
         // The one the story already pinned: a query assembled at runtime.
         ("e02_concat_lets.rs", None),
@@ -3052,6 +3125,14 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         // unsanctioned file and asks *does it red*. This one carries the SANCTIONED NAME and asks
         // whether the name alone lets a write through from somewhere else. It did.
         ("e33_sanctioned_name_other_file.rs", Some(2)),
+        // 🔴 The read half truncated at a quote INSIDE the query. `e36` is their CONTROL: the same
+        // read without the quoted literal, which reddened all along — it is what proves the quote
+        // is the cause rather than something else about the shape.
+        ("e34_quote_in_raw_string.rs", Some(2)),
+        ("e35_escaped_quote_in_query.rs", Some(2)),
+        ("e36_control_read_no_quote.rs", Some(2)),
+        // `e32`'s class with a character the enumeration did not name. See [`is_invisible`].
+        ("e37_variation_selector.rs", Some(2)),
     ];
 
     /// The corpus directory must hold exactly the probes the table names — neither more nor fewer.
@@ -3082,7 +3163,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         );
         assert_eq!(
             on_disk.len(),
-            33,
+            37,
             "the corpus is what the review left behind; losing a probe loses a measured mechanism"
         );
     }
