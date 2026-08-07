@@ -178,6 +178,10 @@ fn run_ci() -> Result<bool> {
     report("float-free", g5, &m5);
     ok &= g5;
 
+    let (g6, m6) = gate_declared_authorship(&root)?;
+    report("authorship", g6, &m6);
+    ok &= g6;
+
     let m3 = check_views_hash(&root)?;
     println!("  ℹ  {:<14} {m3}", "views-hash");
 
@@ -1095,6 +1099,257 @@ fn gate_float_free(root: &Path) -> Result<(bool, String)> {
     }
 }
 
+// ── Gate 6: declared authorship (NFR5, story 5.12) ───────────────────────────────────────────
+
+/// The table whose authorship NFR5 protects.
+const DECLARED_TABLE: &str = "declared_attribute";
+
+/// The subtrees this gate walks. `docker/` is NOT decoration: `seed-example.sql` writes a declared
+/// row and is a file the operator is told to run, so a gate confined to `crates/` would be blind to
+/// the only other writer in the product. Measured at story 5.12's validation.
+const AUTHORSHIP_ROOTS: [&str; 2] = ["crates", "docker"];
+
+/// The three sanctioned write sites, and nothing else may write a declared field.
+///
+/// Two are Rust functions, matched by their ENCLOSING `fn`; the third is a data file, matched by
+/// path. ⚠️ **The story prescribed TWO sites** — the third is forced by the story's own requirement
+/// to walk `docker/`, where `seed-example.sql` writes legitimately, with `'operator'` as its actor.
+/// A deviation, stated rather than absorbed.
+const SANCTIONED_FNS: [&str; 2] = [
+    "insert_declared_attribute",
+    "raw_declared_write_for_ddl_test",
+];
+
+/// The one data file allowed to write a declared row. See [`SANCTIONED_FNS`].
+const SANCTIONED_FILE: &str = "docker/seed-example.sql";
+
+/// The provenance columns a divergence computation may never read (FR13, NFR5's second clause).
+///
+/// **THREE, not two.** `origin_obs_id` is *"the adopted observation"* — it is *how the value was
+/// obtained* at least as much as `origin` is, and story 5.12's first draft named only two.
+const PROVENANCE_COLUMNS: [&str; 3] = ["origin_obs_id", "actor_id", "origin"];
+
+/// One file's text, lowercased and whitespace-collapsed, plus the source line of every byte.
+///
+/// Whole-file rather than per-line — the difference from [`line_has_float`], and it is forced:
+/// `INSERT INTO` and the table name may sit on two different lines, and a per-line matcher was
+/// measured blind to exactly that. Line comments are stripped so the architecture may be quoted;
+/// **block comments are not**, the same known limit `float-free` carries.
+fn normalise_sql_text(content: &str) -> (String, Vec<usize>) {
+    let mut out = String::with_capacity(content.len());
+    let mut lines = Vec::with_capacity(content.len());
+    let mut prev_space = true;
+    for (idx, raw) in content.lines().enumerate() {
+        for ch in strip_line_comment(raw).chars() {
+            if ch.is_whitespace() {
+                if !prev_space {
+                    out.push(' ');
+                    lines.push(idx + 1);
+                    prev_space = true;
+                }
+            } else {
+                out.push(ch.to_ascii_lowercase());
+                lines.push(idx + 1);
+                prev_space = false;
+            }
+        }
+        if !prev_space {
+            out.push(' ');
+            lines.push(idx + 1);
+            prev_space = true;
+        }
+    }
+    (out, lines)
+}
+
+/// Is the `declared_attribute` occurrence at `at` a TABLE reference rather than part of a longer
+/// identifier?
+///
+/// `insert_declared_attribute` contains the table's name preceded by `_`; a backtick or a schema dot
+/// does NOT disqualify it, which is what makes `` `declared_attribute` `` and
+/// `opencmdb.declared_attribute` reachable — both measured green (i.e. invisible) before this.
+fn is_table_reference(text: &str, at: usize) -> bool {
+    let before = text[..at].chars().next_back();
+    let after = text[at + DECLARED_TABLE.len()..].chars().next();
+    let head_ok = !matches!(before, Some(c) if c.is_alphanumeric() || c == '_');
+    let tail_ok = !matches!(after, Some(c) if c.is_alphanumeric() || c == '_');
+    head_ok && tail_ok
+}
+
+/// The statement fragment a table reference belongs to.
+///
+/// Bounded by the nearest preceding `;` **or** `"` — whichever is closer. The `"` bound is what
+/// stops a match spanning two string literals: without it, a bare `DELETE FROM declared_attribute`
+/// was measured inheriting an `origin` from an unrelated INSERT twenty-four lines above, and the
+/// gate reported two phantom findings on the clean tree.
+fn statement_before(text: &str, at: usize) -> &str {
+    let start = text[..at].rfind([';', '"']).map_or(0, |i| i + 1);
+    &text[start..at]
+}
+
+/// The `fn` a byte offset sits inside, if any — the unit [`SANCTIONED_FNS`] allowlists.
+fn enclosing_fn(text: &str, at: usize) -> Option<&str> {
+    let head = text[..at].rfind("fn ")?;
+    let rest = &text[head + 3..];
+    let end = rest.find(|c: char| !(c.is_alphanumeric() || c == '_'))?;
+    Some(&rest[..end])
+}
+
+/// A projection with every parenthesised group removed.
+///
+/// ⚠️ Without it `SELECT COUNT(*) FROM declared_attribute` is read as a wildcard — measured on the
+/// committed tree at `repo.rs:106`, the gate's first red and a FALSE POSITIVE. An aggregate's star
+/// loads no column; `SELECT *` loads all three provenance columns. The distinction is the whole
+/// difference between a gate and a nuisance.
+fn outside_parens(projection: &str) -> String {
+    let mut out = String::with_capacity(projection.len());
+    let mut depth = 0usize;
+    for ch in projection.chars() {
+        match ch {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.push(ch),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Every unsanctioned access to `declared_attribute` in one file's text.
+///
+/// `is_sanctioned_file` short-circuits the write half only: a data file may WRITE with a human
+/// author, and no data file participates in the divergence computation.
+fn authorship_findings(content: &str, is_sanctioned_file: bool) -> Vec<(usize, String)> {
+    let (text, lines) = normalise_sql_text(content);
+    let mut findings = Vec::new();
+    let mut from = 0usize;
+
+    while let Some(rel) = text[from..].find(DECLARED_TABLE) {
+        let at = from + rel;
+        from = at + DECLARED_TABLE.len();
+        if !is_table_reference(&text, at) {
+            continue;
+        }
+        let stmt = statement_before(&text, at).trim_start();
+        let line = lines.get(at).copied().unwrap_or(0);
+
+        // `CREATE TABLE` is the schema's own definition, never a write of a value.
+        if stmt.starts_with("create table") {
+            continue;
+        }
+
+        // ── the WRITE half ──
+        // `DELETE` is deliberately absent: NFR5 is about AUTHORSHIP, and a delete writes no author.
+        // Including it was measured reddening the committed tree at two test-fixture sites.
+        let verb = ["insert into", "insert", "update", "replace into", "replace"]
+            .into_iter()
+            .find(|v| stmt.starts_with(v));
+        if let Some(verb) = verb {
+            let sanctioned = is_sanctioned_file
+                || enclosing_fn(&text, at).is_some_and(|f| SANCTIONED_FNS.contains(&f));
+            if !sanctioned {
+                findings.push((
+                    line,
+                    format!("`{verb} {DECLARED_TABLE}` outside the sanctioned write sites — NFR5"),
+                ));
+            }
+            continue;
+        }
+
+        // ── the READ half (FR13: a divergence never consults HOW a value was obtained) ──
+        if let Some(projection) = stmt.strip_prefix("select") {
+            let projection = projection.split(" from ").next().unwrap_or(projection);
+            if outside_parens(projection).contains('*') {
+                findings.push((
+                    line,
+                    format!(
+                        "`SELECT *` on {DECLARED_TABLE} loads all three provenance columns — FR13"
+                    ),
+                ));
+            } else if let Some(col) = PROVENANCE_COLUMNS
+                .into_iter()
+                .find(|c| contains_word(projection, c))
+            {
+                findings.push((
+                    line,
+                    format!("a read of {DECLARED_TABLE} names `{col}` — FR13"),
+                ));
+            }
+        }
+    }
+    findings
+}
+
+/// Gate 6 — no code path writes a declared field without a human author, and no divergence
+/// computation reads how one was obtained (NFR5, FR13; story 5.12).
+///
+/// It walks `.rs` **and** `.sql` under [`AUTHORSHIP_ROOTS`]. A `.sql` migration was measured to be
+/// the most natural home for a bulk author rewrite and entirely invisible to a `.rs`-only walk.
+///
+/// # Errors
+///
+/// If a guarded root is missing or a file cannot be read — this gate fails CLOSED, like its five
+/// siblings: a pass reported over nothing is worse than a red.
+fn gate_declared_authorship(root: &Path) -> Result<(bool, String)> {
+    let mut offenders = Vec::new();
+    let mut checked = 0usize;
+
+    for sub in AUTHORSHIP_ROOTS {
+        let dir = root.join(sub);
+        if !dir.exists() {
+            return Ok((
+                false,
+                format!(
+                    "{sub}/ is missing — the guarded subtree must exist for this gate to mean anything"
+                ),
+            ));
+        }
+        for entry in walkdir::WalkDir::new(&dir)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            let p = entry.path();
+            let ext = p.extension().and_then(|e| e.to_str());
+            if ext != Some("rs") && ext != Some("sql") {
+                continue;
+            }
+            let content =
+                std::fs::read_to_string(p).with_context(|| format!("reading {}", p.display()))?;
+            checked += 1;
+            let shown = p.strip_prefix(root).unwrap_or(p);
+            let shown = shown.display().to_string().replace('\\', "/");
+            for (line, what) in authorship_findings(&content, shown == SANCTIONED_FILE) {
+                offenders.push(format!("{shown}:{line}: {what}"));
+            }
+        }
+    }
+
+    if checked == 0 {
+        return Ok((
+            false,
+            "no .rs or .sql file under the guarded roots — this gate is reporting a pass over nothing"
+                .to_string(),
+        ));
+    }
+
+    offenders.sort();
+    if offenders.is_empty() {
+        Ok((
+            true,
+            format!("declared authorship intact across {checked} file(s)"),
+        ))
+    } else {
+        Ok((
+            false,
+            format!(
+                "{} unsanctioned access(es) to {DECLARED_TABLE}:\n      {}",
+                offenders.len(),
+                offenders.join("\n      ")
+            ),
+        ))
+    }
+}
+
 // ── Check 3: views-hash staleness (informational) ───────────────────────────
 
 fn check_views_hash(root: &Path) -> Result<String> {
@@ -1731,6 +1986,200 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             code_line_count(&huge) > MAX_CODE_LINES,
             "a {}-line file must exceed the {MAX_CODE_LINES} ceiling",
             MAX_CODE_LINES + 1
+        );
+    }
+
+    // ── declared-authorship gate (NFR5 / FR13, story 5.12) ───────────────────────────────────
+
+    /// Wrap a fragment in an unsanctioned Rust function, the shape a future violation would take.
+    fn in_unsanctioned_fn(sql: &str) -> String {
+        format!("fn some_new_writer() {{\n    sqlx::query(\"{sql}\").execute(c).await?;\n}}\n")
+    }
+
+    /// 🔴 §4d — the WRITE evasion table. Every row was measured; four were HOLES in the first
+    /// implementation and are closed here.
+    #[test]
+    fn the_write_matcher_survives_every_measured_evasion() {
+        for sql in [
+            "INSERT INTO declared_attribute (entity_id) VALUES (?)",
+            "insert into declared_attribute (entity_id) VALUES (?)",
+            "UPDATE declared_attribute SET actor_id = 'engine'",
+            "REPLACE INTO declared_attribute (entity_id) VALUES (?)",
+            "INSERT INTO  declared_attribute (entity_id) VALUES (?)",
+            // 🔴 The four that were GREEN before this gate walked them properly.
+            "INSERT INTO `declared_attribute` (entity_id) VALUES (?)",
+            "INSERT INTO opencmdb.declared_attribute (entity_id) VALUES (?)",
+            "INSERT declared_attribute (entity_id) VALUES (?)",
+            "REPLACE declared_attribute (entity_id) VALUES (?)",
+        ] {
+            let findings = authorship_findings(&in_unsanctioned_fn(sql), false);
+            assert!(!findings.is_empty(), "must RED: {sql}");
+        }
+    }
+
+    /// 🔑 The newline-split case — the one structural difference from `float-free`.
+    ///
+    /// A per-line matcher is blind to it, which is why this gate normalises the WHOLE file.
+    #[test]
+    fn a_write_split_across_two_lines_still_reds() {
+        let src = "fn w() {\n    let q = \"INSERT INTO\n         declared_attribute (a) VALUES (?)\";\n}\n";
+        assert!(
+            !authorship_findings(src, false).is_empty(),
+            "a per-line matcher would miss this, and that is the whole reason for normalising"
+        );
+    }
+
+    /// The `no` rows of §4d: what must stay green.
+    #[test]
+    fn the_write_matcher_leaves_the_legitimate_shapes_alone() {
+        // The sanctioned adapter.
+        let sanctioned = "fn insert_declared_attribute() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
+        assert!(
+            authorship_findings(sanctioned, false).is_empty(),
+            "the adapter is the sanctioned site"
+        );
+
+        // The sanctioned test helper.
+        let helper = "fn raw_declared_write_for_ddl_test() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
+        assert!(
+            authorship_findings(helper, false).is_empty(),
+            "AC2's raw write has a named home"
+        );
+
+        // A data file on the allowlist.
+        let seed =
+            "INSERT INTO declared_attribute (entity_id, actor_id) VALUES ('x', 'operator');\n";
+        assert!(
+            authorship_findings(seed, true).is_empty(),
+            "the seed file writes with a human author"
+        );
+
+        // DELETE is deliberately out of the verb list — it writes no author.
+        let del = "fn cleanup() {\n    sqlx::query(\"DELETE FROM declared_attribute\");\n}\n";
+        assert!(
+            authorship_findings(del, false).is_empty(),
+            "a DELETE writes no author (§4b)"
+        );
+
+        // The name in a doc comment.
+        let doc =
+            "/// Writes to declared_attribute via INSERT INTO declared_attribute.\nfn f() {}\n";
+        assert!(
+            authorship_findings(doc, false).is_empty(),
+            "line comments are stripped"
+        );
+
+        // The schema's own definition.
+        let ddl = "CREATE TABLE declared_attribute (\n  entity_id CHAR(36) NOT NULL\n);\n";
+        assert!(
+            authorship_findings(ddl, false).is_empty(),
+            "CREATE TABLE writes no value"
+        );
+
+        // The function NAME contains the table name.
+        let call = "fn caller() {\n    insert_declared_attribute(pool, a, b, c).await?;\n}\n";
+        assert!(
+            authorship_findings(call, false).is_empty(),
+            "not a table reference"
+        );
+    }
+
+    /// 🔴 §4e — the READ half, including the FALSE POSITIVE the naive matcher produced.
+    #[test]
+    fn the_read_matcher_names_all_three_provenance_columns_and_the_wildcard() {
+        for sql in [
+            "SELECT origin FROM declared_attribute",
+            "SELECT actor_id FROM declared_attribute",
+            // 🔴 The third column, which the story's first draft did not name.
+            "SELECT origin_obs_id FROM declared_attribute",
+            // 🔴 And the wildcard, which defeats every column-name rule.
+            "SELECT * FROM declared_attribute",
+        ] {
+            let findings = authorship_findings(&in_unsanctioned_fn(sql), false);
+            assert!(!findings.is_empty(), "must RED: {sql}");
+        }
+    }
+
+    /// The `no` rows of §4e.
+    #[test]
+    fn the_read_matcher_leaves_the_sanctioned_read_and_the_aggregate_alone() {
+        let ok =
+            in_unsanctioned_fn("SELECT entity_id, attr_key, attr_value FROM declared_attribute");
+        assert!(
+            authorship_findings(&ok, false).is_empty(),
+            "the divergence's own read"
+        );
+
+        // 🔴 Measured on the committed tree as this gate's FIRST red, and it was wrong:
+        // an aggregate's star loads no column.
+        let agg = in_unsanctioned_fn("SELECT COUNT(*) FROM declared_attribute");
+        assert!(
+            authorship_findings(&agg, false).is_empty(),
+            "COUNT(*) is not SELECT * — the gate's first false positive, at repo.rs:106"
+        );
+
+        // 🔴 The false positive the naive backward search produced: a bare DELETE inheriting an
+        // `origin` from an unrelated string literal above it.
+        let phantom = "fn f() {\n    let a = \"INSERT INTO declared_attribute (origin, actor_id) VALUES (?, ?)\";\n    let b = \"DELETE FROM declared_attribute\";\n}\n";
+        let findings = authorship_findings(phantom, false);
+        assert!(
+            findings.iter().all(|(_, w)| !w.contains("a read of")),
+            "the `\"` bound is what stops a match spanning two literals; got {findings:?}"
+        );
+    }
+
+    /// 🔑 The `format!` hole, PINNED rather than pretended away (D18).
+    ///
+    /// A text gate cannot see a table name assembled at runtime. Stating it is the difference
+    /// between a known limit and a false promise.
+    #[test]
+    fn a_table_name_built_at_runtime_is_invisible_and_that_is_stated() {
+        let src = "fn sneaky() {\n    let t = format!(\"declared_{}\", \"attribute\");\n    sqlx::query(&format!(\"INSERT INTO {t} (a) VALUES (?)\"));\n}\n";
+        assert!(
+            authorship_findings(src, false).is_empty(),
+            "KNOWN LIMIT: a text gate cannot follow a name built at runtime"
+        );
+    }
+
+    /// 🔑 A commented-out write stays GREEN — and this is a DIVERGENCE from the story's prediction.
+    ///
+    /// Story 5.12 predicted this gate would inherit `float-free`'s block-comment false positive,
+    /// since `strip_line_comment` strips `//` only. **Measured: it does not.** The reason is
+    /// structural rather than lucky — this gate anchors on the START of a statement
+    /// (`statement_before`), so a verb sitting mid-line inside `/* … */` matches no statement head.
+    /// `float-free` searches anywhere in a line and therefore cannot make that distinction.
+    ///
+    /// Green is also the CORRECT answer: a commented-out write is not a code path, and NFR5 is
+    /// about code paths. A divergence from a prediction is a finding, so it is recorded here rather
+    /// than quietly enjoyed.
+    #[test]
+    fn a_write_inside_a_block_comment_stays_green() {
+        let src = "fn f() {\n    /* INSERT INTO declared_attribute (a) VALUES (?) */\n}\n";
+        assert!(
+            authorship_findings(src, false).is_empty(),
+            "a commented-out write is not a code path — and unlike float-free, this gate can tell"
+        );
+    }
+
+    /// The allowlist must not match by prefix — a third site still reds.
+    #[test]
+    fn a_third_site_is_not_sanctioned_by_resembling_the_first() {
+        let near = "fn insert_declared_attribute_v2() {\n    sqlx::query(\"INSERT INTO declared_attribute (a) VALUES (?)\");\n}\n";
+        assert!(
+            !authorship_findings(near, false).is_empty(),
+            "an allowlist that matched by prefix would be float-free's failure again"
+        );
+    }
+
+    /// The gate is green on the real tree, and it walks both extensions and both roots.
+    #[test]
+    fn the_authorship_gate_is_green_on_the_real_tree() {
+        let root = workspace_root();
+        let (ok, msg) = gate_declared_authorship(&root).expect("gate runs");
+        assert!(ok, "the committed tree must be clean: {msg}");
+        assert!(
+            msg.contains("file(s)"),
+            "it must say how many it checked: {msg}"
         );
     }
 

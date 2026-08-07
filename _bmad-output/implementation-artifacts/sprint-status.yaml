@@ -1784,7 +1784,7 @@ development_status:
   # the correction is registered with Epic 5's retrospective.
   5-11-idempotent-supersede: done
   5-11b-order-independence: done
-  5-12-never-overwrite-anti-regression: ready-for-dev
+  5-12-never-overwrite-anti-regression: in-progress
   5-13-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog
   epic-5-retrospective: optional

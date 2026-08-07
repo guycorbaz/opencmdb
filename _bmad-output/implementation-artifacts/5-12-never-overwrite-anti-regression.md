@@ -1,6 +1,6 @@
 # Story 5.12: No code path writes a declared field without a human author
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- ✅ VALIDATED 2026-08-07 by two fresh-context agents (fact-check + gap-hunt).
      **The gap-hunt BUILT THE WHOLE STORY** on a scratch worktree against its own
