@@ -2047,7 +2047,7 @@ development_status:
   # DOES carry evidence, so at L1 `rule_id` and `outcome` are CONSTANT over placements and
   # `evidence` is the only justification column that could vary; and §6(b) is largely IMPLIED by
   # (a), its one independent clause being `outcome == "abstained"`.
-  5-13-monotone-honesty-measurement: ready-for-dev
+  5-13-monotone-honesty-measurement: in-progress
   5-13b-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog
   epic-5-retrospective: required
