@@ -287,6 +287,16 @@ produced **6 HIGH findings on 4 stories**, two of which would have shipped a tra
 wrong reason. Stories are sliced FINE: prefer many small ones over few big ones, and split a story
 when its halves turn out not to be variants of one idea (4.5 → 4.5a/4.5b).
 
+**And the epic does not close without its RETROSPECTIVE** — Guy's decision, 2026-08-10, taken while
+Epic 5 stood three stories from the end. `sprint-status.yaml` reads `required` for epics 5–23;
+`optional` survives only on epics 1 and 2, whose non-back-filling was decided earlier. **The reason
+is measured: both of this project's most load-bearing working rules came OUT of a retrospective
+rather than out of an abstract decision** — Epic 4's is where `create-story validate` became
+mandatory, and where four documents were found carrying a confident cause that measurement later
+refuted (issue #38, and the *"a cause needs a check"* rule with it). It is the only step that has
+ever changed how the work is done. Items are registered for it BY NAME by the stories that raise
+them; Epic 5 already carries several.
+
 **Commits: one per story, on a BRANCH → PR → green CI → squash merge. Never straight to `master`**
 (adopted mid-Epic 4 at PR #15 and held since: 22 PRs, zero direct pushes, 47/47 green CI runs).
 `enforce_admins` is false, so honouring this is on the author, not on GitHub. Message names what

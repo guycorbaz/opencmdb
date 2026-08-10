@@ -1,5 +1,7 @@
 # generated: 2026-07-21
-# last_updated: 2026-08-01
+# last_updated: 2026-08-10   (this commented twin had read 2026-08-01 while the live
+#                             `last_updated:` field below said 2026-08-07 — two representations of
+#                             one date, one of them stale. Synced 2026-08-10; keep them in step.)
 # project: opencmdb
 # project_key: NOKEY
 # tracking_system: file-system
@@ -24,7 +26,9 @@
 #   - done: Story completed
 #
 # Retrospective Status:
-#   - optional: Can be completed but not required
+#   - required: MUST be held before the epic is closed (Guy, 2026-08-10 — see PROJECT NOTES)
+#   - optional: Can be completed but not required — SURVIVES ONLY on epics 1 and 2, whose
+#     non-back-filling was decided earlier; do not retroactively rewrite a recorded decision
 #   - done: Retrospective has been completed
 #
 # WORKFLOW NOTES:
@@ -46,11 +50,55 @@
 #   DO have a story breakdown in epics.md (Epic 4 at epics.md:830-1178, stories 4.1-4.19).
 #   (An earlier version of this note said the Epic 4 breakdown was outstanding — it is not;
 #   verified 2026-07-22 against epics.md.)
-# - Retrospectives: only Epic 3's was held (the first of the project). Epics 1 and 2 remain
-#   'optional' and will not be back-filled.
+# - Retrospectives: Epic 3's and Epic 4's were held. Epics 1 and 2 remain 'optional' and will not
+#   be back-filled.
+#   🔴 **THE RETROSPECTIVE AT THE END OF AN EPIC IS MANDATORY** — Guy's decision, 2026-08-10, while
+#   Epic 5 stood three stories from closing. Epics 5 through 23 therefore read 'required', not
+#   'optional'. It is not a step to offer and not one to skip when an epic ends quietly: an epic is
+#   NOT CLOSED until its retrospective has run.
+#   **Why, and it is measured rather than asserted: this project's two most load-bearing working
+#   rules were both PRODUCED by a retrospective, not decided in the abstract.** Epic 4's is where
+#   `create-story validate` became mandatory (measured payoff: 6 HIGH findings over 9 stories, two
+#   of which would have shipped a trap passing for the WRONG REASON), and where four documents were
+#   found carrying a confident cause that measurement had refuted — the origin of both issue #38 and
+#   the rule *"a cause needs a check, not a plausible story"*. A retrospective here is not a
+#   ceremony reporting on work already understood; **it is the only step that has ever changed how
+#   the work is done.** Skipping it keeps the lessons inside the epic that produced them.
+#   ⚠️ Epic 5's retrospective already has items REGISTERED BY NAME in the stories that raised them —
+#   among them `epics.md`'s AC1 falsified by the code it describes (5.9b), the `TRUNCATE … WHERE`
+#   correction (5.10), and story 5.12's second-session-reading lesson with its clause (*"a reading
+#   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-07  # 5.12 **DONE** -- PR #75 squash-merged as `378f0f8` after a green CI
+last_updated: 2026-08-10  # 5.13 CONTEXTED and **SPLIT** -- see the `5-13-*` block in
+                          # development_status below for the four findings and Guy's three
+                          # arbitrations. **5.13 = the monotone-honesty MEASUREMENT**
+                          # (`ready-for-dev`); **5.13b INSERTED = the committed trap family**
+                          # (`backlog`). **Epic 5 is now 16/19.**
+                          # Baseline RE-MEASURED on `6078246`, not quoted: **469 tests**
+                          # (248 bin + 159 core + 62 xtask, 1 ignored), **seven gates green**,
+                          # **25 fixtures**, `views-hash` ℹ STALE by design (issue #50).
+                          # 🔑 The story is designed against ONE failure mode, and it is NOT
+                          # 5.11b's: **`faulted ⊆ clean` is satisfied by EQUALITY.** A connector
+                          # that ignores every fault, a mutilation that removes nothing, and a test
+                          # whose faulted run IS the clean run all pass the inclusion. So every AC
+                          # asserts the inclusion **and its strictness**, as two assertions with two
+                          # messages -- (i) failing is a product defect, (ii) failing is a TEST
+                          # defect, and one combined assertion cannot tell them apart.
+                          # 🔑 And the sharpest design point, which the naive reading gets wrong:
+                          # **an abstention is NOT an invented fact.** Under the blinding mutilation
+                          # the faulted run writes a row the clean run does not have -- legal, and
+                          # the honest answer (FR16). So the engine-layer subset is over PLACEMENTS
+                          # `(observation_id, interface_id)`, with `rule_id`/`evidence`/`outcome`
+                          # deliberately excluded: a fault legitimately WEAKENS a justification, and
+                          # a row-level subset would red on a run that did exactly the right thing.
+                          # ⚠️ That same exclusion is what leaves D36's lattice monotonicity
+                          # UNCLAIMED -- re-owned (Epic 6 for the doubt order, 5.13b for the
+                          # capability snapshot), never implied. And **NFR8 has four assertions;
+                          # this story covers ONE.**
+                          # NEXT = `create-story validate` 5.13 -- MANDATORY here, two fresh-context
+                          # agents (fact-check + gap-hunt) -- then `dev-story`.
+                          # (5.12 entry:) 5.12 **DONE** -- PR #75 squash-merged as `378f0f8` after a green CI
                           # run. **Epic 5 is now 16/18.** Branch deleted locally and on `origin`.
                           # `master` carries 469 tests (248 bin + 159 core + 62 xtask), **SEVEN**
                           # gates green, 38 authorship probes.
@@ -1942,80 +1990,138 @@ development_status:
   5-11-idempotent-supersede: done
   5-11b-order-independence: done
   5-12-never-overwrite-anti-regression: done
-  5-13-monotone-honesty-trap-family: backlog
+  # 🔴 5.13 SPLIT at contexting 2026-08-10 with Guy, before any code existed. `epics.md`'s story
+  # 5.13 carried two-to-four ideas and THREE of its clauses are not implementable as written against
+  # the committed corpus format -- four findings, each established by code in the tree:
+  #   (a) `read_traps` refuses a trap naming an observation absent from its stream
+  #       (`DanglingObservation`, fixtures.rs:694) -- and the removal IS the assertion;
+  #   (b) the shape D35(a) needs (observations AFTER the failure record, epics.md:1012) is FORBIDDEN
+  #       in a committed FILE and legal only in memory -- `epics.md` carries the two contradictory
+  #       ACs one line apart, and `deferred-work.md:76` / `fixture_connector.rs:147` record the
+  #       asymmetry, naming D35(a) and saying "if a future story gives in-memory streams a trap-like
+  #       consumer, this needs revisiting". THIS is that story, and it revisits it by NOT doing so;
+  #   (c) a `Trap` judges ONE stream and ONE pair; monotone honesty is a relation between TWO RUNS,
+  #       and `incomplete_families` (trap.rs:412) demands a must-merge AND a must-not-merge pole per
+  #       family -- a subset assertion projects onto neither;
+  #   (d) `deferred-work.md:324` assigns this story a FOURTH deliverable epics.md never mentions
+  #       (lattice monotonicity), which needs capability snapshots 11 of 11 trap-named streams lack.
+  # So: **5.13 is the MEASUREMENT, 5.13b (INSERTED) is the committed FAMILY.** Epic 5: 18 -> 19
+  # stories. The letter suffix is the house idiom for an inserted item (D56b; 5.2b, 5.4b, 5.9b,
+  # 5.11b), so **5.14 keeps its number**. `epics.md` NOT edited; the correction is registered with
+  # **5.13b as owner**.
+  # ⚠️ The KEY was renamed with the file (`5-13-monotone-honesty-trap-family` ->
+  # `5-13-monotone-honesty-measurement`), because the family it was named after is no longer in it.
+  # Guy's two other contexting arbitrations, both recorded in the story's §2: the faulted run is
+  # derived by two named mutilations IN MEMORY from a committed clean stream (no new fixture, no
+  # MANIFEST bump -- the `fixtures` gate must still report **25**); and `device_facts` is read at
+  # BOTH layers -- the facts emitted into the sink, and the identity links `resolve_within` writes.
+  # ✅ VALIDATED 2026-08-10, two fresh-context agents. **The gap-hunt BUILT the story** against its
+  # own live `mariadb:10.11.11` on 13308 and left `master` untouched. 6 HIGH, 5 MEDIUM, 11 LOW
+  # applied; **2 further arbitrations by Guy**. Two findings were reached INDEPENDENTLY by both
+  # layers, one by reading and one by running — the strongest signal of the pass.
+  # 🔴 M2 -- THE ONLY MUTATION NAMED FOR THE INCLUSION HALF, i.e. for the NFR8(a) violation itself
+  # -- CAME BACK GREEN. `poll` invents a fact on every emit -> 0 new reds, because the mutation is
+  # UNCONDITIONAL: it lands on the clean run and the faulted run alike and the invented fact enters
+  # BOTH sides of `f ⊆ c`. **A differential test is blind to any mutation that is a pure function of
+  # the thing being differenced.** The mutation must be FAULT-CONDITIONAL; the measured form reds 2.
+  # 🔴 AC3's inverse direction was a measured NO-OP on both committed streams (`clean = 8 facts,
+  # faulted = 8 facts` on each): the failure is LAST and must be, and a `capability` record FILTERS
+  # NOTHING -- `poll` only reassigns `in_force`. **Guy: it moves to 5.13b**, which commits streams
+  # capable of carrying it.
+  # 🔴 The oracle was the wrong STRUCTURE. `Fact` derives neither `Ord` nor `Hash`, so the prescribed
+  # `BTreeSet<(ObsId, Fact)>` does not compile; the obvious fix is two derives in `opencmdb-core`.
+  # But a SET swallows `[x]` against `[x, x]` -- verbatim the hole story 5.11b measured on
+  # `contradicts`' `facts.len()`. **Guy: a MULTISET, inclusion by removal, `PartialEq` alone.** No
+  # core change, and right on the merits rather than a workaround.
+  # 🔑 WHAT HELD, also measured, and it is most of the story: AC5 is NOT vacuous (2 abstention rows,
+  # `absence_of_proof`); AC4(a) IS reddenable (M8); `interface_id` IS literally comparable
+  # (`minted=0 found=1`); a new `fault_injection.rs` passes **all seven gates**, clippy clean; and
+  # **M1 and M3 behave exactly as predicted**.
+  # ⚠️ `DB_TEST_LOCK` (`main.rs:40`) is MANDATORY on both layer-2 tests -- without it they collide on
+  # `ERROR 1062` INTERMITTENTLY, which is indistinguishable from issue #38. This is the first story
+  # to run the engine over the CORPUS's obs_ids, which two of its own tests share.
+  # ⚠️ Also corrected: `fixtures.rs` is **728** code lines, not 1787 (that is `xtask/src/main.rs`);
+  # `blind_after` needs a fourth argument, an `as_of` (two of four obvious choices refuse to load);
+  # the sweep is 50 positions of which **11 are degenerate**, plus a second degeneracy axis on
+  # `kinds` the count does not guard; `decide_singleton` names the SAME rule as `decide_pair` and
+  # DOES carry evidence, so at L1 `rule_id` and `outcome` are CONSTANT over placements and
+  # `evidence` is the only justification column that could vary; and §6(b) is largely IMPLIED by
+  # (a), its one independent clause being `outcome == "abstained"`.
+  5-13-monotone-honesty-measurement: ready-for-dev
+  5-13b-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog
-  epic-5-retrospective: optional
+  epic-5-retrospective: required
 
   # ── Epic 6: Ne pas compter deux fois la même boîte (v0.4) ────────────────
   epic-6: backlog
-  epic-6-retrospective: optional
+  epic-6-retrospective: required
 
   # ── Epic 7: La boucle se ferme (v0.5) ────────────────────────────────────
   epic-7: backlog
-  epic-7-retrospective: optional
+  epic-7-retrospective: required
 
   # ── Epic 8: Triage fluide (v0.6) ─────────────────────────────────────────
   epic-8: backlog
-  epic-8-retrospective: optional
+  epic-8-retrospective: required
 
   # ── Epic 9: Bootstrap jour-1 (v0.7) ──────────────────────────────────────
   epic-9: backlog
-  epic-9-retrospective: optional
+  epic-9-retrospective: required
 
   # ── Epic 10: Secrets au repos (minimal) (v0.8) ───────────────────────────
   epic-10: backlog
-  epic-10-retrospective: optional
+  epic-10-retrospective: required
 
   # ── Epic 11: Source UniFi complète (v0.9) ────────────────────────────────
   # ⚠️ INHERITS from Epic 4's 2026-07-25 re-scope (issue #34): run the 4.18 wire spec under the
   # REAL parser, and implement 4.19b (mutation generator + ~30 fixtures + expected outcomes).
   epic-11: backlog
-  epic-11-retrospective: optional
+  epic-11-retrospective: required
 
   # ── Epic 12: Scan ARP/ping complet (v0.10) ───────────────────────────────
   epic-12: backlog
-  epic-12-retrospective: optional
+  epic-12-retrospective: required
 
   # ── Epic 13: Ma source devient aveugle (v0.11) ───────────────────────────
   epic-13: backlog
-  epic-13-retrospective: optional
+  epic-13-retrospective: required
 
   # ── Epic 14: IPAM (v0.12) ────────────────────────────────────────────────
   epic-14: backlog
-  epic-14-retrospective: optional
+  epic-14-retrospective: required
 
   # ── Epic 15: Applications & « Hosted here » (v0.13) ──────────────────────
   epic-15: backlog
-  epic-15-retrospective: optional
+  epic-15-retrospective: required
 
   # ── Epic 16: Alertes & notifications (v0.14) ─────────────────────────────
   epic-16: backlog
-  epic-16-retrospective: optional
+  epic-16-retrospective: required
 
   # ── Epic 17: Retour après une absence (v0.15) ────────────────────────────
   epic-17: backlog
-  epic-17-retrospective: optional
+  epic-17-retrospective: required
 
   # ── Epic 18: Bulk steady-state (v0.16) ───────────────────────────────────
   epic-18: backlog
-  epic-18-retrospective: optional
+  epic-18-retrospective: required
 
   # ── Epic 19: Exposer sans risque (v0.17) ─────────────────────────────────
   epic-19: backlog
-  epic-19-retrospective: optional
+  epic-19-retrospective: required
 
   # ── Epic 20: Le réseau visible depuis ailleurs (v0.18) ───────────────────
   epic-20: backlog
-  epic-20-retrospective: optional
+  epic-20-retrospective: required
 
   # ── Epic 21: Maîtriser ses données (v0.19) ───────────────────────────────
   epic-21: backlog
-  epic-21-retrospective: optional
+  epic-21-retrospective: required
 
   # ── Epic 22: First-light soigné & bilingue complet (v0.20) ───────────────
   epic-22: backlog
-  epic-22-retrospective: optional
+  epic-22-retrospective: required
 
   # ── Epic 23: Prêt à installer (v1.0) ─────────────────────────────────────
   epic-23: backlog
-  epic-23-retrospective: optional
+  epic-23-retrospective: required
