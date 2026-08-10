@@ -16,9 +16,16 @@
 //! own criterion."* This module is that caller.
 //!
 //! So **nothing here reads or writes `fixtures/`**: a mutilation takes the records a committed
-//! stream already yielded and returns new ones. The clean run and the faulted run are then *the same
-//! records* differing by one control line, which is what makes *"on the same fixture"* literal
-//! rather than approximate.
+//! stream already yielded and returns new ones.
+//!
+//! ⚠️ **The two mutilations differ in how literally they keep "the same fixture".** [`cut_at`] adds
+//! one control line and changes nothing else, so the clean and faulted runs really are the same
+//! records — that is what tail-keeping buys, and it is why its strictness measures the CONNECTOR
+//! rather than arithmetic. [`blind_after`] adds a control line **and rewrites every following
+//! observation**, because a descriptor denying a kind an observation still carries makes the stream
+//! refuse to load. So under M-B strictness is guaranteed before the connector is invoked, and what
+//! M-B really measures is the INCLUSION half. Stated here because an earlier version of this
+//! paragraph claimed "the same records" for both.
 //!
 //! # 🔴 `⊆` is satisfied by `=`, so the property alone measures NOTHING
 //!
@@ -47,7 +54,7 @@ use std::collections::{BTreeSet, HashSet};
 
 use opencmdb_core::connector::{Connector, ConnectorError, VecSink};
 use opencmdb_core::observation::{
-    Capabilities, ConnectorId, Fact, FactKind, ObsId, Scope, Timestamp,
+    Capabilities, ConnectorId, Fact, FactKind, ObsId, Observation, Scope, Timestamp,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -214,8 +221,14 @@ pub(crate) struct StreamContext {
     pub(crate) id: ConnectorId,
     /// Every distinct scope the stream touches — `from_records` refuses an uncovered one.
     pub(crate) scopes: Vec<Scope>,
-    /// The descriptor in force BEFORE any record: dated at the stream's earliest instant and
+    /// The descriptor in force BEFORE any record: dated at the earliest **observation** instant and
     /// admitting every kind the stream carries, so the clean run loads unchanged.
+    ///
+    /// ⚠️ **Observation instants only — a capability record's `as_of` is read for its `kinds` and
+    /// deliberately not for its date.** `from_records` compares a capability record's `as_of`
+    /// against preceding RECORDS, never against the constructor's descriptor, so this cannot make a
+    /// stream unloadable today. It could if that comparison ever widened, and 5.13b is the story
+    /// that feeds control-carrying streams here.
     pub(crate) initial: Capabilities,
 }
 
@@ -292,51 +305,98 @@ pub(crate) async fn run(records: Vec<Record>, context: &StreamContext) -> RunOut
         .await;
 
     RunOutcome {
-        facts: sink
-            .observations
-            .iter()
-            .flat_map(|observation| {
-                observation
-                    .facts
-                    .iter()
-                    .map(|fact| (observation.obs_id, fact.clone()))
-            })
-            .collect(),
+        claims: sink.observations.iter().flat_map(claims_of).collect(),
         observations: sink.observations.iter().map(|o| o.obs_id).collect(),
         error: outcome.err(),
     }
 }
 
-/// One run's emitted facts, the observations that carried them, and how the poll ended.
+/// Everything one observation ASSERTS — its facts, and what it says about itself.
+///
+/// 🔴 The provenance entry is why this is not simply a list of facts. Story 5.13's code review
+/// measured the hole: an oracle reading only `Fact` values is blind to a blinded source that starts
+/// **back-dating everything it reports**, and `observed_at` is what the engine writes into
+/// `valid_from`, `first_seen_at` and `last_seen_at`. D35(a) forbids adding *an assertion*, not
+/// adding *a `Fact`* — and an observation asserts its own instant, scope and origin as surely as it
+/// asserts a MAC.
+///
+/// `raw` is the one field deliberately left out: D19 says no decision reads it, and including it
+/// would make the oracle sensitive to a field the product is defined to ignore. That exclusion has
+/// its own test.
+fn claims_of(observation: &Observation) -> Vec<Claim> {
+    let mut out: Vec<Claim> = observation
+        .facts
+        .iter()
+        .map(|fact| Claim::Fact(observation.obs_id, fact.clone()))
+        .collect();
+    out.push(Claim::Provenance {
+        obs: observation.obs_id,
+        observed_at: observation.observed_at,
+        scope: observation.scope,
+        connector: observation.connector_id,
+    });
+    out
+}
+
+/// One thing a run asserted. The unit the monotone-honesty comparison counts.
+///
+/// Exhaustive by construction: [`claims_of`] is the only producer, and a field added to
+/// [`Observation`] that carries an assertion must be added HERE or the oracle silently stops
+/// seeing it. That is the failure this enum exists to make visible rather than possible.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Claim {
+    /// A fact the observation carried, attached to the observation that carried it.
+    Fact(ObsId, Fact),
+    /// What the observation asserts about ITSELF: when it was seen, where, and by whom.
+    Provenance {
+        /// The observation making the claim.
+        obs: ObsId,
+        /// The instant it claims to have been seen at — what the engine stores as `valid_from`.
+        observed_at: Timestamp,
+        /// The scope it claims to have been seen in.
+        scope: Scope,
+        /// The connector it claims to come from.
+        connector: ConnectorId,
+    },
+}
+
+/// Everything one run asserted, the observations that carried it, and how the poll ended.
 #[derive(Debug, Clone)]
 pub(crate) struct RunOutcome {
-    /// Every `(obs_id, fact)` the run emitted, in emission order, duplicates preserved.
-    pub(crate) facts: Vec<(ObsId, Fact)>,
+    /// Every [`Claim`] the run emitted, in emission order, **duplicates preserved**.
+    pub(crate) claims: Vec<Claim>,
     /// The observations the run emitted, in order.
     pub(crate) observations: Vec<ObsId>,
     /// The error the poll ended with, or `None` for a clean run.
     pub(crate) error: Option<ConnectorError>,
 }
 
+impl RunOutcome {
+    /// The FACT claims alone — a view, never a second stored field, so the two cannot drift.
+    ///
+    /// Used only where a test needs to say *"the facts are identical and something else is not"*.
+    pub(crate) fn facts_only(&self) -> Vec<Claim> {
+        self.claims
+            .iter()
+            .filter(|c| matches!(c, Claim::Fact(..)))
+            .cloned()
+            .collect()
+    }
+}
+
 /// Multiset inclusion: is every element of `sub` present in `sup`, **counting duplicates**?
 ///
-/// Implemented by successive removal rather than by a set difference, which is the whole point (see
-/// the module doc): `[x, x] ⊆ [x]` is **false** here and would be true of any set-based comparison.
-/// Needs [`PartialEq`] alone, so no trait is added to `opencmdb-core`.
+/// Successive removal, not a set difference, which is the whole point (see the module doc):
+/// `[x, x] ⊆ [x]` is **false** here and would be true of any set-based comparison. Needs
+/// [`PartialEq`] alone, so no trait is added to `opencmdb-core`.
 ///
-/// Quadratic, deliberately. The corpus's largest stream carries 6 observations and the fact counts
-/// are in the tens; an index would buy nothing and would need the very `Ord`/`Hash` this refuses.
+/// ⚠️ **A thin wrapper over [`unaccounted`], deliberately.** The two were written as separate copies
+/// of one removal loop, and story 5.13's code review measured the consequence: every acceptance
+/// criterion calls `unaccounted(..).is_empty()`, so replacing this function's body with `true` red
+/// exactly ONE test while the module doc advertised it as the oracle. One implementation now, so the
+/// two spellings cannot drift and the doc names what the criteria actually run on.
 pub(crate) fn multiset_included<T: PartialEq + Clone>(sub: &[T], sup: &[T]) -> bool {
-    let mut remaining: Vec<T> = sup.to_vec();
-    for item in sub {
-        match remaining.iter().position(|candidate| candidate == item) {
-            Some(at) => {
-                remaining.swap_remove(at);
-            }
-            None => return false,
-        }
-    }
-    true
+    unaccounted(sub, sup).is_empty()
 }
 
 /// The elements of `sub` that `sup` cannot account for — what an inclusion failure should REPORT.
@@ -358,7 +418,11 @@ pub(crate) fn unaccounted<T: PartialEq + Clone>(sub: &[T], sup: &[T]) -> Vec<T> 
     extra
 }
 
-/// The distinct `obs_id`s a set of records names — the denominator AC2 compares against.
+/// The distinct `obs_id`s a set of records names.
+///
+/// Used by AC1's tail-keeping guard to state that a cut removes no observation from the STREAM,
+/// only from what the poll reaches. _(An earlier doc named AC2 as the caller; AC2 compares the
+/// emitted counts on [`RunOutcome`] and never calls this.)_
 pub(crate) fn distinct_observations(records: &[Record]) -> HashSet<ObsId> {
     records
         .iter()
@@ -378,10 +442,10 @@ pub(crate) fn distinct_observations(records: &[Record]) -> HashSet<ObsId> {
 mod tests {
     use super::*;
     use crate::fixtures::{fixture_path, read_records, walk_replay_streams};
-    use opencmdb_core::observation::{HostnameSource, Observation};
 
     const RANDOMIZED: &str = "scenario/replay/randomized-mac.jsonl";
     const PARTIAL: &str = "scenario/replay/partial-then-failed.jsonl";
+    const DOWNGRADE: &str = "scenario/replay/capability-downgrade.jsonl";
 
     fn stream(relative: &str) -> Vec<Record> {
         read_records(&fixture_path(relative).expect("a corpus-relative path"))
@@ -496,8 +560,7 @@ mod tests {
         assert_eq!(earliest_legal_as_of(&records, 2), Some(second));
 
         // The same prefix in descending order: the answer is still the MAX, which is now first.
-        let mut descending = vec![records[1].clone(), records[0].clone()];
-        descending.truncate(2);
+        let descending = vec![records[1].clone(), records[0].clone()];
         assert_eq!(
             earliest_legal_as_of(&descending, 2),
             Some(second),
@@ -627,7 +690,7 @@ mod tests {
         let clean = run(records.clone(), &context).await;
         let raw_carrying = run(with_raw, &context).await;
         assert_eq!(
-            clean.facts, raw_carrying.facts,
+            clean.claims, raw_carrying.claims,
             "the oracle reads facts only: `raw` moves nothing"
         );
     }
@@ -646,17 +709,17 @@ mod tests {
         let clean = run(records.clone(), &context).await;
         let faulted = run(cut_at(&records, 1), &context).await;
 
-        let invented = unaccounted(&faulted.facts, &clean.facts);
+        let invented = unaccounted(&faulted.claims, &clean.claims);
         assert!(
             invented.is_empty(),
-            "AC1(i) INCLUSION: the faulted run INVENTED {} fact(s): {invented:?}",
+            "AC1(i) INCLUSION: the faulted run INVENTED {} claim(s): {invented:?}",
             invented.len()
         );
         assert!(
-            faulted.facts.len() < clean.facts.len(),
+            faulted.claims.len() < clean.claims.len(),
             "AC1(ii) STRICTNESS: the fault did not bite — clean={} faulted={}",
-            clean.facts.len(),
-            faulted.facts.len()
+            clean.claims.len(),
+            faulted.claims.len()
         );
         assert!(
             faulted.error.is_some(),
@@ -685,17 +748,17 @@ mod tests {
         let clean = run(records.clone(), &context).await;
         let faulted = run(blind_after(&records, 1, &kinds, as_of), &context).await;
 
-        let invented = unaccounted(&faulted.facts, &clean.facts);
+        let invented = unaccounted(&faulted.claims, &clean.claims);
         assert!(
             invented.is_empty(),
-            "AC2(i) INCLUSION: the blinded run INVENTED {} fact(s): {invented:?}",
+            "AC2(i) INCLUSION: the blinded run INVENTED {} claim(s): {invented:?}",
             invented.len()
         );
         assert!(
-            faulted.facts.len() < clean.facts.len(),
+            faulted.claims.len() < clean.claims.len(),
             "AC2(ii) STRICTNESS: the blinding did not bite — clean={} faulted={}",
-            clean.facts.len(),
-            faulted.facts.len()
+            clean.claims.len(),
+            faulted.claims.len()
         );
         assert_eq!(
             faulted.observations.len(),
@@ -720,12 +783,12 @@ mod tests {
         let degenerate = run(cut_at(&records, records.len()), &context).await;
 
         assert!(
-            multiset_included(&degenerate.facts, &clean.facts),
+            multiset_included(&degenerate.claims, &clean.claims),
             "the inclusion half is GREEN here — which is exactly why it cannot stand alone"
         );
         assert_eq!(
-            degenerate.facts.len(),
-            clean.facts.len(),
+            degenerate.claims.len(),
+            clean.claims.len(),
             "nothing was removed: k = len is the degenerate position the sweep excludes"
         );
     }
@@ -738,11 +801,195 @@ mod tests {
         let context = context(&records);
         let outcome = run(records.clone(), &context).await;
 
-        assert_eq!(outcome.observations.len(), 4);
+        assert_eq!(
+            outcome.observations.len(),
+            4,
+            "the committed faulted stream emits its four-observation prefix before failing"
+        );
         assert!(matches!(
             outcome.error,
             Some(ConnectorError::Unreachable { .. })
         ));
+    }
+
+    /// 🔴 **Three paths in this module were reachable by NO test** — story 5.13's code review
+    /// measured all three droppable with the suite green: `stream_context`'s capability-widening
+    /// loop, `earliest_legal_as_of`'s `Capability` arm, and `blind_after`'s pass-through arm. One
+    /// cause: **no test handed a control-carrying stream to any of them.** `RANDOMIZED` is
+    /// control-free and `PARTIAL` carries a `Failure`, not a `Capability`.
+    #[test]
+    fn a_control_carrying_stream_reaches_the_paths_the_control_free_ones_cannot() {
+        let records = stream(DOWNGRADE);
+        let record_at = records
+            .iter()
+            .position(|r| matches!(r, Record::Capability(_)))
+            .expect("this stream carries a capability record");
+        let as_of = match &records[record_at] {
+            Record::Capability(c) => c.as_of,
+            _ => unreachable!(),
+        };
+
+        // (a) the widening. ⚠️ The COMMITTED record declares only kinds its observations already
+        // carry, so it cannot show this — measured below, not assumed. The exercising stream is
+        // therefore built here, which is what this module is for.
+        let carried: BTreeSet<FactKind> = records
+            .iter()
+            .filter_map(Record::as_observation)
+            .flat_map(|o| o.facts.iter())
+            .map(|f| f.kind())
+            .collect();
+        let declared: BTreeSet<FactKind> = match &records[record_at] {
+            Record::Capability(c) => c.kinds.clone(),
+            _ => unreachable!(),
+        };
+        assert!(
+            declared.is_subset(&carried),
+            "the committed record declares nothing unseen — if that changes, the synthetic stream \
+             below stops being necessary"
+        );
+        let unseen = FactKind::DhcpLease;
+        assert!(!carried.contains(&unseen));
+        let mut widened = declared.clone();
+        widened.insert(unseen);
+        let synthetic: Vec<Record> = records
+            .iter()
+            .map(|r| match r {
+                Record::Capability(c) => Record::Capability(Capabilities {
+                    as_of: c.as_of,
+                    kinds: widened.clone(),
+                }),
+                other => other.clone(),
+            })
+            .collect();
+        assert!(
+            context(&synthetic).initial.kinds.contains(&unseen),
+            "the initial descriptor admits what a capability record DECLARES even when no \
+             observation carries it — dropping the widening loop reds HERE"
+        );
+
+        // (b) `earliest_legal_as_of` reads a capability record's own instant.
+        let observations_only = records[..=record_at]
+            .iter()
+            .filter_map(Record::as_observation)
+            .map(|o| o.observed_at)
+            .max()
+            .expect("the prefix carries observations");
+        assert!(
+            as_of > observations_only,
+            "the record must postdate its prefix, or reading it changes no answer"
+        );
+        assert_eq!(
+            earliest_legal_as_of(&records, record_at + 1),
+            Some(as_of),
+            "the capability record's instant wins — its arm returning None reds HERE"
+        );
+
+        // (c) `blind_after` passes a non-observation record through rather than dropping it.
+        let kinds = kinds_denying_something_after(&records, record_at + 1)
+            .expect("the tail carries a fact");
+        let mutilated = blind_after(&records, 0, &kinds, as_of);
+        assert_eq!(
+            mutilated
+                .iter()
+                .filter(|r| matches!(r, Record::Capability(_)))
+                .count(),
+            2,
+            "the stream's own capability record survives beside the injected one — a pass-through \
+             arm that drops it reds HERE"
+        );
+    }
+
+    /// `stream_context`'s two remaining claims, measured rather than asserted in prose: the
+    /// descriptor is dated at the EARLIEST observation instant, and a scope seen twice is listed
+    /// once. Both were droppable with the suite green before this test.
+    #[test]
+    fn the_context_is_dated_earliest_and_lists_each_scope_once() {
+        let records = stream(RANDOMIZED);
+        let context = context(&records);
+        let instants: Vec<_> = records
+            .iter()
+            .filter_map(Record::as_observation)
+            .map(|o| o.observed_at)
+            .collect();
+        let earliest = *instants.iter().min().expect("observations");
+        let latest = *instants.iter().max().expect("observations");
+        assert_ne!(
+            earliest, latest,
+            "the stream must span time, or the two coincide"
+        );
+        assert_eq!(
+            context.initial.as_of, earliest,
+            "dated at the EARLIEST — a `latest` implementation reds here"
+        );
+        assert_eq!(records.iter().filter_map(Record::as_observation).count(), 3);
+        assert_eq!(
+            context.scopes.len(),
+            1,
+            "three observations in one scope, listed once — dropping the `contains` guard reds here"
+        );
+    }
+
+    /// 🔴 `denied_kinds_present_after` must be able to say **NO**, and nothing measured that.
+    ///
+    /// Story 5.13's code review replaced its body with `true` and the suite stayed green while
+    /// AC3's doc called it the non-degeneracy guard. A guard that cannot refuse is not a guard.
+    #[test]
+    fn denied_kinds_present_after_can_say_no() {
+        let records = stream(RANDOMIZED);
+        let everything: BTreeSet<FactKind> = records
+            .iter()
+            .filter_map(Record::as_observation)
+            .flat_map(|o| o.facts.iter())
+            .map(|f| f.kind())
+            .collect();
+        assert!(
+            !denied_kinds_present_after(&records, 0, &everything),
+            "a kind set denying NOTHING must be refused — a body returning `true` reds here"
+        );
+        assert!(denied_kinds_present_after(
+            &records,
+            0,
+            &only(FactKind::IpV4)
+        ));
+        assert!(!denied_kinds_present_after(
+            &records,
+            records.len(),
+            &only(FactKind::IpV4)
+        ));
+    }
+
+    /// 🔑 The oracle sees PROVENANCE, not only facts — the hole story 5.13's code review measured.
+    ///
+    /// Two runs whose emitted facts are identical and whose observations differ only in
+    /// `observed_at`. Before the widening this compared equal; `observed_at` is what the engine
+    /// stores as `valid_from` and folds into the interface's seen-window.
+    #[tokio::test]
+    async fn the_oracle_sees_provenance_not_only_facts() {
+        let records = stream(RANDOMIZED);
+        let context = context(&records);
+
+        let mut back_dated = records.clone();
+        if let Record::Observation(o) = &mut back_dated[2] {
+            o.observed_at -= chrono::Duration::hours(1);
+        }
+
+        let clean = run(records, &context).await;
+        let shifted = run(back_dated, &context).await;
+
+        assert_eq!(
+            clean.facts_only().len(),
+            shifted.facts_only().len(),
+            "the FACTS are untouched — a fact-only oracle sees nothing here"
+        );
+        assert!(
+            multiset_included(&clean.facts_only(), &shifted.facts_only()),
+            "and they are the same facts, in both directions"
+        );
+        assert!(
+            !unaccounted(&shifted.claims, &clean.claims).is_empty(),
+            "but the CLAIM set differs — a back-dated observation asserts something the clean run \
+             did not, and that is what D35(a) forbids"
+        );
     }
 
     // ── AC3: the sweep, bounded and non-degenerate ─────────────────────────────
@@ -784,17 +1031,17 @@ mod tests {
             for k in 0..records.len() {
                 // ── M-A, the cut ──
                 let faulted = run(cut_at(records, k), &context).await;
-                let invented = unaccounted(&faulted.facts, &clean.facts);
+                let invented = unaccounted(&faulted.claims, &clean.claims);
                 assert!(
                     invented.is_empty(),
                     "{name} k={k}: cut INCLUSION — invented {invented:?}"
                 );
                 assert!(
-                    faulted.facts.len() < clean.facts.len(),
+                    faulted.claims.len() < clean.claims.len(),
                     "{name} k={k}: cut STRICTNESS — clean={} faulted={} (a bounded k must remove \
                      at least one observation's facts)",
-                    clean.facts.len(),
-                    faulted.facts.len()
+                    clean.claims.len(),
+                    faulted.claims.len()
                 );
                 cut_positions += 1;
 
@@ -808,16 +1055,16 @@ mod tests {
                 let as_of = earliest_legal_as_of(records, k).unwrap_or(context.initial.as_of);
                 let blinded = run(blind_after(records, k, &kinds, as_of), &context).await;
 
-                let invented = unaccounted(&blinded.facts, &clean.facts);
+                let invented = unaccounted(&blinded.claims, &clean.claims);
                 assert!(
                     invented.is_empty(),
                     "{name} k={k}: blind INCLUSION — invented {invented:?}"
                 );
                 assert!(
-                    blinded.facts.len() < clean.facts.len(),
+                    blinded.claims.len() < clean.claims.len(),
                     "{name} k={k}: blind STRICTNESS — clean={} faulted={}",
-                    clean.facts.len(),
-                    blinded.facts.len()
+                    clean.claims.len(),
+                    blinded.claims.len()
                 );
                 assert_eq!(
                     blinded.observations.len(),
@@ -854,7 +1101,7 @@ mod tests {
             for k in 0..=records.len() {
                 total_unbounded += 1;
                 let faulted = run(cut_at(records, k), &context).await;
-                if faulted.facts.len() == clean.facts.len() {
+                if faulted.claims.len() == clean.claims.len() {
                     degenerate += 1;
                     assert_eq!(k, records.len(), "the only degenerate position is k = len");
                 }
@@ -945,17 +1192,33 @@ mod tests {
 
     /// A link's identity FOR THIS COMPARISON: the placement it asserts, and nothing else.
     ///
-    /// 🔴 `rule_id`, `evidence` and `outcome` are deliberately EXCLUDED. A fault legitimately
-    /// WEAKENS a justification — under the cut, observation 1 keeps its placement but is settled as
-    /// a singleton rather than against a partner — and a row-level subset would red on a run that
-    /// did exactly the right thing. What the claim is about is the PLACEMENT, and the placement is
-    /// what is compared, which is what made story 5.10's `id` exclusion safe too.
+    /// 🔴 The comparison excludes **eight** of [`crate::repo::LinkSnapshot`]'s ten fields —
+    /// `rule_id`, `evidence`, `outcome`, `abstention_cause`, `ruleset_version`, `decided_by`,
+    /// `valid_from` and `valid_to`. The exclusion is right, and the reason is D35(a)'s own shape: a
+    /// fault legitimately WEAKENS a justification. Under the cut, observation 1 keeps its placement
+    /// but is settled as a singleton rather than against a partner, so a row-level subset would red
+    /// on a run that did exactly the right thing. What the claim is about is the PLACEMENT, and the
+    /// placement is what is compared — which is what made story 5.10's `id` exclusion safe too.
     ///
-    /// ⚠️ Narrower than it looks, and measured: at L1 today `rule_id` and `outcome` are CONSTANT
-    /// over every row carrying an interface — every member of a `join` group shares the key, so the
-    /// rule is always `l1-exact-mac` and the conclusion always a match. `decide_singleton` names
-    /// that SAME rule and DOES carry evidence (the observation itself). So `evidence` is the only
-    /// one of the three excluded columns that could have varied at all.
+    /// ⚠️ **What this comparison does NOT do, stated because an earlier version of this doc had it
+    /// backwards.** It reassured the reader that `evidence` was *"the only one of the three excluded
+    /// columns that could have varied at all"*, which reads as *"and therefore nothing can hide
+    /// there"*. Story 5.13's code review measured the opposite: an engine persisting an `evidence`
+    /// list naming an observation that was never observed passes **every test in this module**, and
+    /// only four pre-existing `resolver` tests catch it. `evidence` is a JSON column with no foreign
+    /// key, so a fabricated id persists.
+    ///
+    /// 🔑 **What keeps an invented justification out is the ENGINE'S STRUCTURE, not this oracle**: a
+    /// decision's evidence is drawn from the verdict vector, which names only observations in the
+    /// slice the pass was handed. That is a real guarantee and a stronger one than a comparison —
+    /// but it belongs to `identity::l1`, not to this module, and a story that leans on it must SAY
+    /// so and PIN it. [`tests::the_engine_cites_no_evidence_it_was_not_handed`] is that pin: it reds
+    /// the day the structure changes.
+    ///
+    /// ⚠️ Narrower than it looks in the other direction too: at L1 today `rule_id` and `outcome` are
+    /// CONSTANT over every row carrying an interface — every member of a `join` group shares the
+    /// key — and `decide_singleton` names that SAME rule and DOES carry evidence. So of the three
+    /// columns §6 discusses, `evidence` is the only one that could have varied at all.
     fn placement_key(row: &crate::repo::LinkSnapshot) -> (String, Option<String>) {
         (row.observation_id.clone(), row.interface_id.clone())
     }
@@ -1038,6 +1301,62 @@ mod tests {
         );
     }
 
+    /// 🔑 **The structural property AC4's exclusion leans on, pinned so it reds if it changes.**
+    ///
+    /// `placement_key` excludes `evidence`, and story 5.13's code review measured what that costs:
+    /// an engine persisting an `evidence` list naming an observation that was never observed passes
+    /// every other test here. The exclusion is still right — a fault weakens a justification — but
+    /// what keeps a fabricated citation out is not this module's oracle, it is `identity::l1`'s
+    /// shape: a decision's evidence comes from the verdict vector, which names only observations in
+    /// the slice the pass was handed.
+    ///
+    /// That guarantee is worth having and worth NOT taking on trust. This states it as an assertion
+    /// over a real faulted pass: **every `obs_id` any link cites is one the faulted run actually
+    /// emitted.** It does not close the hole by widening the comparison — it names the wall that
+    /// closes it, and it falls down with the wall.
+    #[tokio::test]
+    async fn the_engine_cites_no_evidence_it_was_not_handed() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let records = stream(RANDOMIZED);
+        let context = context(&records);
+
+        let clean = emitted(records.clone(), &context).await;
+        let faulted = emitted(cut_at(&records, 1), &context).await;
+        let seen: HashSet<ObsId> = faulted.iter().map(|o| o.obs_id).collect();
+        assert!(
+            !seen.is_empty(),
+            "the faulted run must emit something, or this is vacuous"
+        );
+
+        let Some(pool) = db_fixture(&clean).await else {
+            return;
+        };
+        engine_pass(&pool, clean).await;
+        crate::repo::purge_engine_links(&pool).await.expect("purge");
+        engine_pass(&pool, faulted).await;
+
+        let rows = crate::repo::snapshot_links(&pool).await.expect("snapshot");
+        assert!(
+            !rows.is_empty(),
+            "the faulted pass must write something, or this is vacuous"
+        );
+        let mut cited = 0usize;
+        for row in &rows {
+            for id in &row.evidence {
+                cited += 1;
+                assert!(
+                    seen.contains(id),
+                    "the faulted pass cited {id} as evidence and the faulted run never emitted it \
+                     — an invented justification is an added assertion (D35(a))"
+                );
+            }
+        }
+        assert!(
+            cited > 0,
+            "no link cited any evidence, so the loop asserted nothing"
+        );
+    }
+
     /// **AC5** — the blinded pass adds rows the clean pass has not, and **every one is an
     /// abstention**.
     ///
@@ -1075,15 +1394,23 @@ mod tests {
         let invented: Vec<_> = pf.difference(&pc).collect();
         assert!(
             invented.is_empty(),
-            "AC4(a) INCLUSION: the blinded pass placed what the clean pass did not: {invented:?}"
+            "AC5(a) INCLUSION: the blinded pass placed what the clean pass did not: {invented:?}"
         );
         assert!(
             pf.len() < pc.len(),
-            "AC4(c) STRICTNESS: clean placed {} faulted placed {}",
+            "AC5(c) STRICTNESS: clean placed {} faulted placed {}",
             pc.len(),
             pf.len()
         );
-        assert_eq!(summary.interfaces_minted, 0);
+        assert_eq!(
+            summary.interfaces_minted, 0,
+            "AC5: a faulted pass carries a SUBSET of the keys, so it can mint nothing"
+        );
+        assert!(
+            summary.interfaces_found > 0,
+            "it FOUND the clean pass's interfaces — the property AC4 asserts, and what makes \
+             interface_id comparable here too"
+        );
 
         // (b): every row the faulted pass has and the clean pass has not is an ABSTENTION.
         let clean_keys: HashSet<_> = clean_rows.iter().map(placement_key).collect();
@@ -1098,24 +1425,12 @@ mod tests {
         for row in &extra {
             assert_eq!(
                 row.outcome, "abstained",
-                "AC4(b): a faulted-only row is a PLACEMENT, not an abstention: {row:?}"
+                "AC5(b): a faulted-only row is a PLACEMENT, not an abstention: {row:?}"
             );
             assert!(
                 row.interface_id.is_none(),
                 "an abstention names no interface"
             );
         }
-    }
-
-    /// A hand-built `HostnameSource` fact, used by no other test here, exists to keep the
-    /// `HostnameSource` import honest if the oracle ever grows a kind-specific branch.
-    #[test]
-    fn a_hostname_fact_compares_by_value() {
-        let a = Fact::Hostname {
-            name: "doc-host".to_string(),
-            source: HostnameSource::Dhcp,
-        };
-        let b = a.clone();
-        assert!(multiset_included(&[a], &[b]));
     }
 }
