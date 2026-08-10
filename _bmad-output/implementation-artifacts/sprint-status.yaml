@@ -96,8 +96,8 @@ last_updated: 2026-08-10  # 5.13 CONTEXTED and **SPLIT** -- see the `5-13-*` blo
                           # UNCLAIMED -- re-owned (Epic 6 for the doubt order, 5.13b for the
                           # capability snapshot), never implied. And **NFR8 has four assertions;
                           # this story covers ONE.**
-                          # NEXT = `create-story validate` 5.13 -- MANDATORY here, two fresh-context
-                          # agents (fact-check + gap-hunt) -- then `dev-story`.
+                          # (superseded: validate, dev-story and code-review have all run. The
+                          # live state is the `5-13-*` block in development_status below.)
                           # (5.12 entry:) 5.12 **DONE** -- PR #75 squash-merged as `378f0f8` after a green CI
                           # run. **Epic 5 is now 16/18.** Branch deleted locally and on `origin`.
                           # `master` carries 469 tests (248 bin + 159 core + 62 xtask), **SEVEN**

@@ -574,18 +574,33 @@ reports `passed() == false`. **No byte under `fixtures/` moved. `opencmdb-core` 
 | **M1** | `poll` continues past `Record::Failure` | strictness reds, inclusion green | ✅ **as predicted** — 9 red, and `ac1` panics on `AC1(ii) STRICTNESS: the fault did not bite — clean=6 faulted=6`, i.e. **after** the inclusion assertion passed | assertion |
 | **M2-naive** | `poll` invents a `Hostname` on **every** emit | GREEN (validation's finding) | 🔴 **REFUTED IN ITS PHRASING, CONFIRMED IN ITS SUBSTANCE** — 3 red, and **not one of them is a story-5.13 test**. All three are byte-equality tests in `fixture_connector`. The differential tests are blind to it, exactly as measured; *"0 new reds"* was the imprecise part | assertion |
 | **M2** | on a `Failure`, synthesise the observation the fault lost | inclusion reds | ✅ 9 red — `AC1(i) INCLUSION: the faulted run INVENTED 3 fact(s)` | assertion |
-| **M2b** | on a `Failure`, **re-emit the first observation UNCHANGED** | — (not prescribed) | ✅ 1 red — `INVENTED 2 fact(s)`, **both of them DUPLICATES and no new fact at all** | assertion |
-| **M2b + set oracle** | the same, with the oracle turned into set semantics | — (the CONTROL) | 🔑 **GREEN.** The set lets the duplication through | — |
+| **M2b** | on a `Failure`, **re-emit the first observation UNCHANGED** | — (not prescribed) | ✅ reds — `INVENTED 2 claim(s)`, **both DUPLICATES, no new fact at all**. ⚠️ **8 red, not the 1 first recorded** — that figure came from a FILTERED run, the same driver defect this story reports and had fixed for M6 only | assertion |
+| **M2b + set oracle** | the same, with the oracle turned into set semantics | — (the CONTROL) | 🔑 **`ac1` goes GREEN** — the set lets the duplication through. ⚠️ The SUITE does not: 8 stay red, one of them the oracle's own duplicate guard. The claim is about `ac1`, and an earlier phrasing invited reading it as the whole suite | — |
 | **M3** | `cut_at` truncates instead of keeping the tail | green except T1's count guard | ✅ **as predicted** — exactly **1** red, `cut_at_keeps_the_tail_…`, `left: 2, right: 4` | assertion |
 | **M4** | `k = len` | strictness reds | ✅ its own test; and `the_excluded_position_…` measures **11 degenerate of 50**, one per stream, all at `k = len` | assertion |
-| **M5** | `blind_after` without the strip | fails to LOAD, `Err`-carried | ✅ its own test — `UndeclaredFactKind`. Carrier is an **`Err`**, not a panic | `expect_err` |
+| **M5** | `blind_after` without the strip | fails to LOAD, `Err`-carried | ⚠️ **the named test does NOT carry it** — it builds the un-stripped stream by hand and never calls `blind_after`. It is a demonstration of *why* the strip is mandatory, not the mutation's carrier | n/a |
 | **M6** | the partition counts abstentions as placements | reds half (a), on M-B only | ✅ **as the validation predicted** — 1 red, `ac5`, `AC4(a) INCLUSION … [(obs2, None), (obs3, None)]`; the cut test stays green | assertion |
 | **M7** | M8 with (a) deleted | (b) reds | ✅ 1 red — `AC4(b): a faulted-only row is a PLACEMENT, not an abstention` | assertion |
 | **M8** | `resolve` mints instead of finding | `interfaces_minted` reds | ✅ 19 red — but **`AC4(a)` fires FIRST**, as the validation warned; `interfaces_minted` is never reached | assertion |
 
-**Eleven mutations, and every red is carried by a NAMED assertion** — classified by reading each
-panic message one at a time. **Zero compiler-carried and zero `.expect()`-carried**; M5's carrier is
-an `expect_err` on a `Result`, which is recorded as such rather than folded into "assertion".
+🔴 **That sentence was written as *"eleven mutations, eleven reds, every one carried by a NAMED
+assertion, zero `.expect()`-carried"* and ALL THREE LAYERS of the code review refuted it.** The
+honest count, re-measured in isolation:
+
+- **the table has eleven ROWS and at most nine reds**: `M2b + set oracle` is **GREEN by design** (it
+  is the control), and `M2-naive` reds three tests **none of which is a story-5.13 test**;
+- **one red under M2 is `.expect()`-carried**, and worse than mislabelled — `ac4` dies at
+  `fault_injection.rs`'s `engine_pass` on `.expect("the pass must resolve"): ContradictoryObservation`
+  and **never reaches its own assertion**. The mutation makes the faulted run re-emit an `obs_id`
+  with different content, so story 5.11b's refusal fires first;
+- **M5's carrier is not `expect_err` either**: the test that documents itself as M5's carrier
+  **never calls `blind_after`** — it builds the un-stripped stream by hand — so deleting the strip
+  cannot red it. The real carriers are `blind_after_adds_one_record_and_strips_only_what_follows`
+  (a named assertion) and `run`'s panic.
+
+**This is the third recurrence of one family** — story 5.9b's *"the driver read the carrier off the
+whole output, so a MIXED set collapsed to one label"*, and the 5.12 repair's header-versus-M6-row.
+It recurred **in the story whose subject is measurements that report what they did not measure**.
 
 #### 🔑 The finding the story did not prescribe: the multiset is load-bearing, and here is the number
 
@@ -644,6 +659,96 @@ AC3's inverse direction moved to 5.13b at validation, on a measurement.
 - `_bmad-output/implementation-artifacts/deferred-work.md` — the re-owning, appended.
 - `CLAUDE.md`, `docs/project-context.md` — the twins (AC8).
 
+---
+
+## 14. 🔴 The code review, and the two arbitrations Guy took (2026-08-10)
+
+Three layers — Blind Hunter (diff only), Edge Case Hunter (diff + a live database), Acceptance
+Auditor (diff + spec). **Four findings were reached INDEPENDENTLY by two or three layers**, one by
+reading and one by running, which is the strongest signal the pass produced.
+
+### 14a. What the review found that the story could not have
+
+🔴 **The oracle saw only `Fact` values.** The Edge Case Hunter wrote a fault-conditional invention
+that touches no fact — **a blinded source that back-dates everything it reports** — and it passed all
+485 tests, with a control proving the same shape IS caught when the invention is a `Fact`. But
+`observed_at` is what the engine stores as `valid_from` and folds into the interface seen-window.
+
+**Guy's arbitration: widen the oracle.** `RunOutcome` now carries `Vec<Claim>` — one `Claim::Fact`
+per fact, plus one `Claim::Provenance` per observation carrying its `observed_at`, `scope` and
+`connector`. **D35(a) forbids adding *an assertion*, not adding *a `Fact`***, and an observation
+asserts its own instant as surely as it asserts a MAC. Measured after the widening: the mutation that
+passed now reds 2 tests on `AC2(i) INCLUSION: the blinded run INVENTED 2 claim(s): [Provenance { … }]`.
+
+🔴 **An invented JUSTIFICATION passed both layers.** An `evidence` list naming an observation never
+observed passes every test in the module; only four **pre-existing** `resolver` tests catch it —
+`evidence` is a JSON column with no foreign key. And `placement_key`'s doc said `evidence` was *"the
+only one of the three excluded columns that could have varied"*, written as reassurance and sitting
+exactly on the hole.
+
+**Guy's arbitration: state the limit and measure it.** The exclusion stays — a fault legitimately
+weakens a justification — but the doc now says what actually holds is **the engine's structure**
+(evidence comes from the verdict vector, which names only observations in the handed slice), and
+`the_engine_cites_no_evidence_it_was_not_handed` pins it. Measured: the fabricated citation reds it
+by name.
+
+### 14b. Four guards that were carried by nothing, each measured droppable first
+
+| guard | measured before | now reds |
+|---|---|---|
+| `denied_kinds_present_after` | body → `true`, **485 green** | M14, 1 test |
+| `stream_context`'s capability-widening loop | deleted, **485 green** | M11, 1 test |
+| `earliest_legal_as_of`'s `Capability` arm | → `None`, **485 green** | M12, 1 test |
+| `blind_after`'s pass-through arm | drops the record, **485 green** | M13, 1 test |
+
+**One cause for the last three: no test ever handed a control-carrying stream to any of them.**
+`RANDOMIZED` is control-free and `PARTIAL` carries a `Failure`, not a `Capability`;
+`capability-downgrade.jsonl` was referenced nowhere in the file. ⚠️ And the committed downgrade
+stream **cannot** exercise the widening — measured, its record declares only kinds its observations
+already carry — so that one needs a synthetic stream, and the test asserts that fact rather than
+assuming it.
+
+Plus `stream_context`'s earliest-instant and scope de-duplication (M15, M16), and
+`multiset_included`, which was a second copy of `unaccounted`'s loop: every AC calls the other one,
+so replacing this body with `true` red exactly ONE test while the module doc advertised it as the
+oracle. It now delegates.
+
+### 14c. ⚠️ The mutation driver ate the repairs, and that is the third recurrence
+
+Mid-repair, four mutations came back green in a row. The mutations were sound: the driver's
+`git checkout -- crates/` **threw away the uncommitted repairs**, so M11 measured the repaired tree
+and M12–M15 measured the original one. The story's own §9 says *"commit before the mutation pass"* —
+violated by the person who wrote it, on the repairs to the review that found the same family twice
+already.
+
+**It was caught only because four greens in a row contradicted a prediction.** Nothing else would
+have shown it. That is the same reason M6 was caught during implementation, and it is the story's
+whole subject arriving a third time.
+
+### 14d. 🔴 A finding of the review that the review itself refuted
+
+The Edge Case Hunter reported **a reproducer for issue #38** — a failing test reddening up to 24
+others, non-deterministically, with four checks behind it.
+
+**The Acceptance Auditor refuted it by isolation**: `ps aux` showed another session running
+`cargo test` against the same schema, and on a private schema the same simulated panic reds
+**exactly 2** tests. The cause was the review harness — all three layers were given one
+`DATABASE_URL`. Recorded here rather than dropped, because the symptom is indistinguishable from #38
+and would have been filed as a reproducer. **An unverified suspicion must not inherit a measurement's
+credit** (story 5.12's lesson), and *three review layers sharing one database silently corrupt each
+other's counts* is a method note worth keeping.
+
+### 14e. What the three layers confirmed
+
+The **"what this story does NOT do" list holds in full** — nothing under `fixtures/` moved,
+`opencmdb-core` is absent from the diff, no dependency, `epics.md` untouched, `main.rs` gained
+exactly one line, trap gate still red. Every count reproduced. `deferred-work.md` is a pure append,
+verified at the `git diff`. AC5 is non-vacuous — the Auditor read the two `absence_of_proof` rows out
+of MariaDB. And the Auditor **refuted its own suspicion** that AC2's inclusion half was carried by
+nothing: a capability-conditional invention reds it by name.
+
+**AC1, AC2, AC3, AC5, AC7, AC9: MET. AC4, AC6, AC8: partly, and repaired here.**
+
 ## Change Log
 
 | date | what |
@@ -651,3 +756,4 @@ AC3's inverse direction moved to 5.13b at validation, on a measurement.
 | 2026-08-10 | Created. **SPLIT at contexting with Guy**: 5.13 the measurement, 5.13b (INSERTED) the committed family. Three arbitrations, four findings against `epics.md`'s text, `epics.md` NOT edited. Baseline on `6078246`: 469 tests, seven gates, 25 fixtures. |
 | 2026-08-10 | **VALIDATED** (fact-check + gap-hunt, the second having BUILT the story against a live MariaDB). 6 HIGH, 5 MEDIUM, 11 LOW applied; **2 further arbitrations by Guy** — AC3's inverse direction moves to 5.13b, and the oracle becomes a multiset on `PartialEq` alone. Three of the story's own mutations were **refuted by measurement** (M2-naive, M6, M7-naive) and are in §5 with their observed results. |
 | 2026-08-10 | **IMPLEMENTED → `review`** (`done` is the MERGE's business). **469 → 485 tests** (264 + 159 + 62), seven gates green, 25 fixtures, trap gate still red, `opencmdb-core` untouched. **Eleven mutations, eleven reds, every one assertion-carried.** One unprescribed finding — a run that invents nothing and merely REPEATS itself violates monotone honesty, and a set-based oracle is measured GREEN on it — and one defect in the mutation driver, caught by disbelieving a 0-red result. |
+| 2026-08-10 | **CODE-REVIEWED (three layers) and REPAIRED.** Two arbitrations by Guy: the oracle widened from facts to CLAIMS (a back-dating source passed all 485 tests), and the `evidence` limit stated and PINNED rather than implied. Four guards measured carried-by-nothing, now reddened one test each. 🔴 The headline *"eleven reds, every one assertion-carried"* was refuted by all three layers — one red is `.expect()`-carried and never reaches its own assertion. **485 → 489 tests**, seven gates green. ⚠️ The mutation driver ate the repairs mid-pass, caught only because four greens contradicted a prediction. |
