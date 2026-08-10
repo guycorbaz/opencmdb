@@ -1,6 +1,6 @@
 # Story 5.13: A faulted run cannot invent a fact — the monotone-honesty measurement
 
-Status: ready-for-dev
+Status: review
 
 <!-- ✅ VALIDATED 2026-08-10 by two fresh-context agents (fact-check + gap-hunt).
      **The gap-hunt BUILT the story** — both mutilations, the AC1/AC2 tests, and the whole layer-2
@@ -465,30 +465,30 @@ covers one; `deferred-work.md:324` is **appended to, never rewritten**.
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — the two mutilations**, in a new `crates/opencmdb-bin/src/fault_injection.rs` (AC1, AC2)
-  - [ ] `cut_at(records, k)` — insert a terminal `Failure`, **keep the tail**
-  - [ ] `blind_after(records, k, kinds, as_of)` — insert a `Capability`, **strip the denied facts**;
+- [x] **T1 — the two mutilations**, in a new `crates/opencmdb-bin/src/fault_injection.rs` (AC1, AC2)
+  - [x] `cut_at(records, k)` — insert a terminal `Failure`, **keep the tail**
+  - [x] `blind_after(records, k, kinds, as_of)` — insert a `Capability`, **strip the denied facts**;
         document §4's three refusals and the `as_of` rule
-  - [ ] a unit test per mutilation asserting its output's record COUNT — the guard M3 needs
-- [ ] **T2 — the multiset oracle** (AC1, AC2)
-  - [ ] inclusion by successive removal over `Vec<(ObsId, Fact)>`, `PartialEq` only
-  - [ ] a test asserting it distinguishes `[x]` from `[x, x]` — the 5.11b hole, closed by
+  - [x] a unit test per mutilation asserting its output's record COUNT — the guard M3 needs
+- [x] **T2 — the multiset oracle** (AC1, AC2)
+  - [x] inclusion by successive removal over `Vec<(ObsId, Fact)>`, `PartialEq` only
+  - [x] a test asserting it distinguishes `[x]` from `[x, x]` — the 5.11b hole, closed by
         construction and pinned by a test rather than by a comment
-  - [ ] `raw` **excluded** (D19: no decision reads it), with a test asserting the bare comparison
+  - [x] `raw` **excluded** (D19: no decision reads it), with a test asserting the bare comparison
         WOULD have differed
-  - [ ] inclusion and strictness as **two** assertions with distinct messages
-- [ ] **T3 — the sweep** (AC3)
-  - [ ] 11 streams × `0 ≤ k < len` × both mutilations; the count **and** the non-degeneracy asserted
-  - [ ] `kinds` chosen so it denies a kind the tail carries — asserted, not assumed
-  - [ ] M4 (`k = len`) gets its own test
-- [ ] **T4 — the engine layer** (AC4, AC5) — **needs a live MariaDB and `DB_TEST_LOCK` (§9)**
-  - [ ] `let _guard = crate::DB_TEST_LOCK.lock().await;` **first line of both tests**
-  - [ ] clean → snapshot → `purge_engine_links` → faulted → snapshot
-  - [ ] the placement partition and §6's (a)/(b)/(c); `interfaces_minted == 0`
-  - [ ] AC5's existence assertion
-- [ ] **T5 — prove-to-red** (AC6): run M1–M8; fill §5 with OBSERVED results; classify each red by
+  - [x] inclusion and strictness as **two** assertions with distinct messages
+- [x] **T3 — the sweep** (AC3)
+  - [x] 11 streams × `0 ≤ k < len` × both mutilations; the count **and** the non-degeneracy asserted
+  - [x] `kinds` chosen so it denies a kind the tail carries — asserted, not assumed
+  - [x] M4 (`k = len`) gets its own test
+- [x] **T4 — the engine layer** (AC4, AC5) — **needs a live MariaDB and `DB_TEST_LOCK` (§9)**
+  - [x] `let _guard = crate::DB_TEST_LOCK.lock().await;` **first line of both tests**
+  - [x] clean → snapshot → `purge_engine_links` → faulted → snapshot
+  - [x] the placement partition and §6's (a)/(b)/(c); `interfaces_minted == 0`
+  - [x] AC5's existence assertion
+- [x] **T5 — prove-to-red** (AC6): run M1–M8; fill §5 with OBSERVED results; classify each red by
       reading its panic message; write up every divergence
-- [ ] **T6 — gates and documents** (AC7, AC8, AC9): the four commands; the twins; append the
+- [x] **T6 — gates and documents** (AC7, AC8, AC9): the four commands; the twins; append the
       re-owning to `deferred-work.md`; register §1 and 3a with **5.13b**; **do not edit `epics.md`**
 
 ---
@@ -542,14 +542,107 @@ draft gave (§10), but because a mutilation is not a reader.
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`.
+
 ### Debug Log References
 
-_State the MariaDB port and image tag used for layer 2, and whether each layer-2 mutation ran with
-the database up._
+**Layer 2 ran against a live database.** `mariadb:10.11.11`, container `opencmdb-5-13`, host port
+**13308** (13306 is 5.11b's, 13307 is 5.12's, and 3306 is held by an unrelated container —
+`kesh-mariadb-dev`, exactly the trap story 5.9's validation caught). `DATABASE_URL` =
+`mysql://root:…@127.0.0.1:13308/opencmdb`.
+
+**Every layer-2 mutation ran with the database UP.** The control was run both ways: without
+`DATABASE_URL` the two engine tests print `skipping layer-2 test: DATABASE_URL unset` and pass by
+returning, and the suite reports the same counts. The timing is the other witness — the `bin` suite
+takes **0.05 s** without a database and **3.8 s** with one.
+
+**Baseline re-measured on `6078246` before any code was written**: 469 (248 + 159 + 62), seven gates
+green, 25 fixtures. **The tree was committed (`a63c44f`) before the mutation pass**, and
+`git status` was verified empty after it.
 
 ### Completion Notes List
 
+**485 tests (264 bin + 159 core + 62 xtask), +16.** Seven gates green, `fixtures` still **25**,
+`file-size` now 28 files (largest unchanged at 1787, `xtask/src/main.rs`). The trap gate is still
+**red** — `the_committed_corpus_is_red_with_eleven_unanswerable_traps` passes, so the corpus still
+reports `passed() == false`. **No byte under `fixtures/` moved. `opencmdb-core` was not touched.**
+
+#### The mutation table, with OBSERVED results (AC6)
+
+| id | mutation | predicted | OBSERVED | carrier |
+|---|---|---|---|---|
+| **M1** | `poll` continues past `Record::Failure` | strictness reds, inclusion green | ✅ **as predicted** — 9 red, and `ac1` panics on `AC1(ii) STRICTNESS: the fault did not bite — clean=6 faulted=6`, i.e. **after** the inclusion assertion passed | assertion |
+| **M2-naive** | `poll` invents a `Hostname` on **every** emit | GREEN (validation's finding) | 🔴 **REFUTED IN ITS PHRASING, CONFIRMED IN ITS SUBSTANCE** — 3 red, and **not one of them is a story-5.13 test**. All three are byte-equality tests in `fixture_connector`. The differential tests are blind to it, exactly as measured; *"0 new reds"* was the imprecise part | assertion |
+| **M2** | on a `Failure`, synthesise the observation the fault lost | inclusion reds | ✅ 9 red — `AC1(i) INCLUSION: the faulted run INVENTED 3 fact(s)` | assertion |
+| **M2b** | on a `Failure`, **re-emit the first observation UNCHANGED** | — (not prescribed) | ✅ 1 red — `INVENTED 2 fact(s)`, **both of them DUPLICATES and no new fact at all** | assertion |
+| **M2b + set oracle** | the same, with the oracle turned into set semantics | — (the CONTROL) | 🔑 **GREEN.** The set lets the duplication through | — |
+| **M3** | `cut_at` truncates instead of keeping the tail | green except T1's count guard | ✅ **as predicted** — exactly **1** red, `cut_at_keeps_the_tail_…`, `left: 2, right: 4` | assertion |
+| **M4** | `k = len` | strictness reds | ✅ its own test; and `the_excluded_position_…` measures **11 degenerate of 50**, one per stream, all at `k = len` | assertion |
+| **M5** | `blind_after` without the strip | fails to LOAD, `Err`-carried | ✅ its own test — `UndeclaredFactKind`. Carrier is an **`Err`**, not a panic | `expect_err` |
+| **M6** | the partition counts abstentions as placements | reds half (a), on M-B only | ✅ **as the validation predicted** — 1 red, `ac5`, `AC4(a) INCLUSION … [(obs2, None), (obs3, None)]`; the cut test stays green | assertion |
+| **M7** | M8 with (a) deleted | (b) reds | ✅ 1 red — `AC4(b): a faulted-only row is a PLACEMENT, not an abstention` | assertion |
+| **M8** | `resolve` mints instead of finding | `interfaces_minted` reds | ✅ 19 red — but **`AC4(a)` fires FIRST**, as the validation warned; `interfaces_minted` is never reached | assertion |
+
+**Eleven mutations, and every red is carried by a NAMED assertion** — classified by reading each
+panic message one at a time. **Zero compiler-carried and zero `.expect()`-carried**; M5's carrier is
+an `expect_err` on a `Result`, which is recorded as such rather than folded into "assertion".
+
+#### 🔑 The finding the story did not prescribe: the multiset is load-bearing, and here is the number
+
+M2 invented a `Hostname`, and the oracle reported **three** facts — the new one **plus two
+duplicates**, because the mutation re-emitted an observation the cut had already emitted. That
+prompted **M2b**, which re-emits the first observation *unchanged*: no new fact anywhere, and the
+oracle still reds with `INVENTED 2 fact(s)`.
+
+**And the control makes the pair mean something**: with the same mutation and the oracle switched to
+set semantics — membership without removal — the test goes **GREEN**.
+
+So the arbitration that made the oracle a multiset is no longer justified by story 5.11b's precedent
+alone. **A run that invents nothing and merely repeats itself is a monotone-honesty violation, and a
+set-based oracle cannot see it.**
+
+#### ⚠️ A defect in the mutation DRIVER, caught by disbelieving its own result
+
+M6 first reported **0 red**. The mutation was sound; the driver was not — `cargo test --workspace A B`
+passes two filters where cargo accepts one, so nothing ran. Re-measured with the full suite, M6 reds
+1 test on the expected assertion.
+
+**It is the story's own subject applied to the story's own tooling**: a measurement that reports
+success because it measured nothing. It is recorded rather than quietly fixed, because the reason it
+was caught is that 0 red contradicted a prediction — had the prediction been *"green"*, the driver
+defect would have been filed as a confirmation.
+
+#### 🔑 A claim of §6, confirmed by a mutation's OUTPUT rather than by reading
+
+M7's failure message prints the row it refused:
+
+```
+LinkSnapshot { observation_id: "eeeeeeee-…0001", interface_id: Some("019feb77-…"),
+               outcome: "match", rule_id: Some("l1-exact-mac"),
+               evidence: [ObsId(eeeeeeee-…0001)], … }
+```
+
+`rule_id` is **`l1-exact-mac`** and `evidence` is **the observation itself** — on a placement the
+faulted pass settled through `decide_singleton`. That is the fact-check's correction to §6, arriving
+a second time from a different direction: `decide_singleton` names the same rule as `decide_pair` and
+does carry evidence, so `evidence` is the only excluded column that could have varied.
+
+#### What is NOT claimed
+
+Lattice monotonicity (D36) is **not** implemented — re-owned in `deferred-work.md` (Epic 6 for the
+doubt order, 5.13b for the capability snapshot). **NFR8 has four assertions and this story covers
+ONE**: bounded blast radius, convergence after recovery and exactly-one-notification are untouched.
+AC3's inverse direction moved to 5.13b at validation, on a measurement.
+
 ### File List
+
+- `crates/opencmdb-bin/src/fault_injection.rs` — NEW. The two mutilations, the multiset oracle, the
+  bounded sweep, and the engine-layer comparison, with their tests.
+- `crates/opencmdb-bin/src/main.rs` — MODIFIED. One line: `mod fault_injection;`.
+- `_bmad-output/implementation-artifacts/5-13-monotone-honesty-measurement.md` — this file.
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — status and the record.
+- `_bmad-output/implementation-artifacts/deferred-work.md` — the re-owning, appended.
+- `CLAUDE.md`, `docs/project-context.md` — the twins (AC8).
 
 ## Change Log
 
@@ -557,3 +650,4 @@ the database up._
 |---|---|
 | 2026-08-10 | Created. **SPLIT at contexting with Guy**: 5.13 the measurement, 5.13b (INSERTED) the committed family. Three arbitrations, four findings against `epics.md`'s text, `epics.md` NOT edited. Baseline on `6078246`: 469 tests, seven gates, 25 fixtures. |
 | 2026-08-10 | **VALIDATED** (fact-check + gap-hunt, the second having BUILT the story against a live MariaDB). 6 HIGH, 5 MEDIUM, 11 LOW applied; **2 further arbitrations by Guy** — AC3's inverse direction moves to 5.13b, and the oracle becomes a multiset on `PartialEq` alone. Three of the story's own mutations were **refuted by measurement** (M2-naive, M6, M7-naive) and are in §5 with their observed results. |
+| 2026-08-10 | **IMPLEMENTED → `review`** (`done` is the MERGE's business). **469 → 485 tests** (264 + 159 + 62), seven gates green, 25 fixtures, trap gate still red, `opencmdb-core` untouched. **Eleven mutations, eleven reds, every one assertion-carried.** One unprescribed finding — a run that invents nothing and merely REPEATS itself violates monotone honesty, and a set-based oracle is measured GREEN on it — and one defect in the mutation driver, caught by disbelieving a 0-red result. |

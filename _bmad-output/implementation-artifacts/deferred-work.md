@@ -2906,3 +2906,38 @@ story's own mutation pass and would not have been visible to reading._
   the mutation** — measured here as 64 spurious reds. The driver must drop and recreate the schema
   as part of its restore. Same family as the register's existing *"commit before the mutation pass"*
   entry. **No owner — a note for the method, not a defect in the code.**
+
+## Deferred from: story-5.13 (2026-08-10)
+
+_Appended, never rewriting the bullets above. Story 5.13 shipped the monotone-honesty MEASUREMENT
+(NFR8(a)/D35(a)); what it deliberately did NOT ship is recorded here with its owner._
+
+- **Lattice monotonicity is STILL not implemented, and story 5.13 is where it was re-owned rather
+  than discharged.** The story-4.6c bullet above names *"Owner: Epic 5, as its 'monotone-honesty
+  invariant trap family'"* — Epic 5 has now shipped that measurement and lattice monotonicity is
+  **not part of it**, by design. 5.13 compares PLACEMENTS `(observation_id, interface_id)` and
+  deliberately excludes `rule_id`, `evidence` and `outcome`, because a fault legitimately WEAKENS a
+  justification and a row-level subset would red on a run that did exactly the right thing. D36's
+  law is a statement about that excluded justification. **Split and re-owned: the doubt ORDER on
+  `Verdict` is Epic 6's** (it needs `Supports`/`Opposes` to have a producer, which no rule provides
+  today), **and the capability-snapshot half is story 5.13b's**, which commits the first trap-named
+  stream carrying a `capability` control record — 11 of 11 trap-named streams carry none, so a
+  `ScoredRecord` today would mean inventing a snapshot for all 24 traps (D36 in reverse).
+- **AC3's inverse direction moved to 5.13b, on a measurement taken by BOTH validation layers.**
+  Deriving a clean run from a committed control-record stream by REMOVING the control record is a
+  **no-op**: measured `clean = 8 facts, faulted = 8 facts` on `partial-then-failed.jsonl` and on
+  `capability-downgrade.jsonl` alike. Two structural causes — the failure record is LAST and must be
+  (`read_records` forbids anything after it), and **a `capability` record filters no fact at all**;
+  `poll` only reassigns `in_force` (`fixture_connector.rs:324`) and nothing downstream strips
+  anything. The strip that makes a blinding bite is the MUTILATION's work, and no committed file has
+  an equivalent. So the two streams are still *"judged by no trap"* as the story-4.6b bullet records,
+  and 5.13b — which commits streams able to carry the assertion — owns it.
+- **NFR8 has FOUR assertions and story 5.13 covers ONE.** (b) bounded blast radius and (c)
+  convergence after recovery need the scheduler; (d) exactly one actionable notification needs the
+  notification surface. *"NFR8 is verified"* must never be read as met. Owners: Epic 13 (Journey 4)
+  for (b) and (c), Epic 16 for (d).
+- **`observation_record` holds the CLEAN facts while the engine layer resolves the FAULTED ones.**
+  Harmless — the resolver reads the slice it is handed and never the table — but it is a database
+  state no real run produces, and it is recorded so a future story reading those rows knows why they
+  disagree with the links beside them.
+

@@ -2047,7 +2047,35 @@ development_status:
   # DOES carry evidence, so at L1 `rule_id` and `outcome` are CONSTANT over placements and
   # `evidence` is the only justification column that could vary; and §6(b) is largely IMPLIED by
   # (a), its one independent clause being `outcome == "abstained"`.
-  5-13-monotone-honesty-measurement: in-progress
+  # 5.13 IMPLEMENTED -> `review` (NOT `done`: that is the MERGE's business). **469 -> 485 tests**
+  # (264 bin + 159 core + 62 xtask), seven gates green, **fixtures still 25**, trap gate still RED,
+  # `opencmdb-core` untouched, no new dependency. Built and mutated against a live
+  # `mariadb:10.11.11` on **13308**. NEXT = `code-review` 5.13, then PR.
+  # **ELEVEN mutations, eleven reds, every one carried by a NAMED assertion** -- classified by
+  # reading each panic message one at a time; zero compiler-carried, zero `.expect()`-carried (M5's
+  # carrier is an `expect_err` on a Result and is recorded as such, not folded in).
+  # 🔑 THE FINDING THE STORY DID NOT PRESCRIBE, and it upgrades Guy's arbitration from a precedent
+  # to a measurement: M2 invented a Hostname and the oracle reported **three** facts -- the new one
+  # plus TWO DUPLICATES, the mutation having re-emitted an observation the cut had already emitted.
+  # That prompted **M2b**, which re-emits the first observation UNCHANGED: no new fact anywhere, and
+  # the oracle still reds with `INVENTED 2 fact(s)`. **And the CONTROL is what makes the pair mean
+  # something** -- same mutation, oracle switched to set semantics: **GREEN**. So *a run that
+  # invents nothing and merely REPEATS itself is a monotone-honesty violation, and a set-based
+  # oracle cannot see it.* The multiset was chosen on story 5.11b's precedent; it is now measured.
+  # ⚠️ A DEFECT IN THE MUTATION DRIVER, caught by disbelieving its own result: M6 first reported
+  # **0 red**, and the mutation was sound -- `cargo test --workspace A B` passes two filters where
+  # cargo accepts one, so nothing ran. Re-measured over the full suite, M6 reds 1 test on the
+  # expected assertion. **It is the story's own subject applied to the story's own tooling**, and it
+  # was caught only because 0 red CONTRADICTED a prediction: had the prediction been "green", the
+  # driver defect would have been filed as a confirmation.
+  # 🔑 A claim of the story confirmed by a mutation's OUTPUT rather than by reading: M7's failure
+  # message prints `rule_id: Some("l1-exact-mac")` and `evidence: [obs1]` on a placement the faulted
+  # pass settled through `decide_singleton` -- the fact-check's correction to the story's §6,
+  # arriving a second time from a different direction.
+  # ⚠️ M2-naive was REFUTED IN ITS PHRASING and CONFIRMED IN ITS SUBSTANCE: it reds **3** tests, not
+  # zero -- but **not one of them is a story-5.13 test**; all three are byte-equality tests in
+  # `fixture_connector`. The differential tests are blind to it exactly as measured.
+  5-13-monotone-honesty-measurement: review
   5-13b-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog
   epic-5-retrospective: required
