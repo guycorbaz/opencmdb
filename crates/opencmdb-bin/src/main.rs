@@ -13,6 +13,7 @@
 mod arp_ping;
 mod auth;
 mod dburl;
+mod fault_injection;
 mod fixture_connector;
 mod fixtures;
 mod l1_runner;
