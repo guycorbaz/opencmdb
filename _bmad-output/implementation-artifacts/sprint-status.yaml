@@ -70,7 +70,24 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-10  # 5.13 CONTEXTED and **SPLIT** -- see the `5-13-*` block in
+last_updated: 2026-08-10  # 5.13 **DONE** -- PR #77 squash-merged as `4f7652d` after a green CI
+                          # run (58 s). **Epic 5 is now 17/19.** Branch deleted locally and on
+                          # `origin`. `master` carries **489 tests** (268 bin + 159 core + 62
+                          # xtask), seven gates green, 25 fixtures, trap gate still RED.
+                          # NEXT = `create-story` 5.13b.
+                          # 🔑 THE STORY'S LESSON FOR THE EPIC 5 RETROSPECTIVE, and it is not the
+                          # one the story set out to teach: **one family of defect struck THREE
+                          # times inside this single story** -- a measurement reporting success
+                          # because it measured nothing. (1) M2, the mutation named for the very
+                          # assertion the story exists to defend, was invisible to a differential
+                          # test. (2) M6 reported 0 red because the driver passed two filters to a
+                          # command accepting one. (3) The driver's `git checkout` ATE the
+                          # uncommitted review repairs, so four mutations measured the wrong tree.
+                          # ⚠️ **All three were caught for the same reason and only that reason: a
+                          # GREEN contradicted a PREDICTION.** Not one was found by reading. A
+                          # mutation pass without written predictions would have filed all three as
+                          # confirmations.
+                          # (superseded entry:) 5.13 CONTEXTED and **SPLIT** -- see the `5-13-*` block in
                           # development_status below for the four findings and Guy's three
                           # arbitrations. **5.13 = the monotone-honesty MEASUREMENT**
                           # (`ready-for-dev`); **5.13b INSERTED = the committed trap family**
@@ -2075,7 +2092,7 @@ development_status:
   # ⚠️ M2-naive was REFUTED IN ITS PHRASING and CONFIRMED IN ITS SUBSTANCE: it reds **3** tests, not
   # zero -- but **not one of them is a story-5.13 test**; all three are byte-equality tests in
   # `fixture_connector`. The differential tests are blind to it exactly as measured.
-  5-13-monotone-honesty-measurement: review
+  5-13-monotone-honesty-measurement: done
   5-13b-monotone-honesty-trap-family: backlog
   5-14-abstention-displayed-by-cause: backlog
   epic-5-retrospective: required
