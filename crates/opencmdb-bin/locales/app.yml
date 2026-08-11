@@ -54,3 +54,26 @@ cause.no_observed_value:
 cause.conflicting_observations:
   en: "Conflicting observations"
   fr: "Observations contradictoires"
+
+page.identity_reach:
+  en: "Identity reach"
+  fr: "Portée de l'identité"
+page.identity_evaluated:
+  en: "evaluated"
+  fr: "évaluées"
+page.identity_not_evaluated:
+  en: "not evaluated"
+  fr: "non évaluées"
+page.identity_because:
+  en: "not evaluated, because:"
+  fr: "non évaluées, parce que :"
+page.identity_floor:
+  en: "How far we can see is bounded by what the network tells us, not by how hard we try."
+  fr: "Ce que nous pouvons voir est borné par ce que le réseau nous dit, pas par nos efforts."
+
+identity_cause.ambiguous:
+  en: "multi-interface — grouping unresolved"
+  fr: "multi-interface — regroupement non résolu"
+identity_cause.absence_of_proof:
+  en: "no live source on this scope"
+  fr: "aucune source vivante sur ce périmètre"

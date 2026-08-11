@@ -172,12 +172,10 @@ fn app(pool: MySqlPool) -> Router {
 fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
     use opencmdb_core::connector::{Connector, VecSink};
     use opencmdb_core::observation::{ConnectorId, L2DomainId, Scope, VantageId};
-    use opencmdb_core::repo::WriteRepository;
     use tokio_util::sync::CancellationToken;
     use uuid::Uuid;
 
     use crate::arp_ping::ArpPingConnector;
-    use crate::repo::{MariaRepository, classify, insert_observation};
 
     std::thread::spawn(move || {
         let runtime = match tokio::runtime::Builder::new_current_thread()
@@ -239,27 +237,71 @@ fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
                     return;
                 }
             };
-            let repo = MariaRepository::new(pool);
-            let mut ingested = 0usize;
-            for observation in sink.observations {
-                let result = repo
-                    .transact(move |unit| {
-                        let observation = observation.clone();
-                        Box::pin(async move {
-                            insert_observation(unit.executor(), &observation)
-                                .await
-                                .map_err(classify)
-                        })
-                    })
-                    .await;
-                match result {
-                    Ok(()) => ingested += 1,
-                    Err(error) => tracing::warn!(?error, "ingesting a scanned observation failed"),
-                }
-            }
-            tracing::info!(ingested, "startup scan complete");
+            ingest_and_resolve(&pool, sink.observations).await;
         });
     });
+}
+
+/// Write the scan's observations, then run the identity pass over that same slice (story 5.14).
+///
+/// **Two transaction units, not one, and the reason is D34 §2** — *"everything emitted before it is
+/// still true"*. An observation is immutable and independently true (FR11), so a resolution failure
+/// must not take the observations down with it. It is also not a choice the current shape offers:
+/// the observations are already written one `transact` EACH (below), so there is no single unit for
+/// the pass to join.
+///
+/// The pass itself is ONE unit, which D21 requires: *"an identity decision is NEVER split across two
+/// transactions"*.
+///
+/// Best-effort like the scan itself, but the refusal is logged at `error!` **by name** —
+/// `InstantRegressed` and `ContradictoryObservation` are the two a real network can produce, and a
+/// silent skip would make the reach counter lie by omission.
+async fn ingest_and_resolve(
+    pool: &MySqlPool,
+    observations: Vec<opencmdb_core::observation::Observation>,
+) -> usize {
+    use opencmdb_core::repo::WriteRepository;
+
+    use crate::repo::{MariaRepository, classify, insert_observation};
+
+    let repo = MariaRepository::new(pool.clone());
+    let mut ingested = 0usize;
+    for observation in observations.iter().cloned() {
+        let result = repo
+            .transact(move |unit| {
+                let observation = observation.clone();
+                Box::pin(async move {
+                    insert_observation(unit.executor(), &observation)
+                        .await
+                        .map_err(classify)
+                })
+            })
+            .await;
+        match result {
+            Ok(()) => ingested += 1,
+            Err(error) => tracing::warn!(?error, "ingesting a scanned observation failed"),
+        }
+    }
+    tracing::info!(ingested, "startup scan complete");
+
+    let slice = observations.clone();
+    match repo
+        .transact(move |unit| {
+            let slice = slice.clone();
+            Box::pin(async move { crate::resolver::resolve(unit.executor(), &slice).await })
+        })
+        .await
+    {
+        Ok(resolution) => tracing::info!(
+            links_written = resolution.links_written,
+            abstentions = resolution.abstentions,
+            interfaces_minted = resolution.interfaces_minted,
+            "identity pass complete"
+        ),
+        // 🔴 `error!` with the refusal NAMED — never a silent skip.
+        Err(error) => tracing::error!(refusal = ?error, "the identity pass refused this slice"),
+    }
+    ingested
 }
 
 /// Readiness: `200 OK` when the database answers a trivial query, `503` when it does not.
@@ -547,6 +589,75 @@ mod tests {
             rust_i18n::t!("cause.out_of_perimeter", locale = "fr"),
             "Hors du périmètre"
         );
+    }
+
+    /// Wipe every table the identity pass touches, children before parents.
+    async fn clean(pool: &MySqlPool) {
+        for statement in [
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+        ] {
+            sqlx::query(sqlx::AssertSqlSafe(statement))
+                .execute(pool)
+                .await
+                .expect("clean");
+        }
+    }
+
+    /// The facts `ArpPingConnector` emits, verbatim: `{IpV4, Rtt}` — its `poll` builds exactly this
+    /// vector (`arp_ping.rs:177`) and its `Capabilities` declares exactly these two `FactKind`s.
+    fn scanned(n: u8) -> opencmdb_core::observation::Observation {
+        use opencmdb_core::observation::{
+            ConnectorId, Fact, L2DomainId, ObsId, Observation, Scope, VantageId,
+        };
+        Observation {
+            obs_id: ObsId::from_uuid(uuid::Uuid::now_v7()),
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::nil()),
+            observed_at: chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap(),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            },
+            facts: vec![
+                Fact::IpV4 {
+                    addr: format!("192.0.2.{n}").parse().unwrap(),
+                },
+                Fact::Rtt { millis: 3 },
+            ],
+            raw: None,
+        }
+    }
+
+    /// 🔴 EXPERIMENT A — what the SHIPPED startup path actually produces.
+    #[tokio::test]
+    async fn the_startup_path_produces_a_reach_counter() {
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        clean(&pool).await;
+
+        let slice: Vec<_> = (10..=14).map(scanned).collect();
+        let ingested = ingest_and_resolve(&pool, slice).await;
+        assert_eq!(ingested, 5);
+
+        let rows = repo::load_current_engine_reach(&pool)
+            .await
+            .expect("read reach");
+        let evaluated = rows.iter().filter(|r| r.interface_id.is_some()).count();
+        let not_evaluated = rows.len() - evaluated;
+        let causes: Vec<_> = rows
+            .iter()
+            .filter_map(|r| r.abstention_cause.clone())
+            .collect();
+        panic!("MEASURED: evaluated={evaluated} not_evaluated={not_evaluated} causes={causes:?}");
     }
 
     #[test]

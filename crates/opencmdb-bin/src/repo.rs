@@ -289,6 +289,56 @@ pub(crate) fn cause_token(cause: &IdentityAbstentionCause) -> &'static str {
     }
 }
 
+/// The inverse of [`cause_token`] — parse a persisted token back into the domain vocabulary.
+///
+/// `None` for a token no variant carries: a cause the domain does not have must not reach a screen.
+pub(crate) fn cause_from_token(token: &str) -> Option<IdentityAbstentionCause> {
+    match token {
+        "ambiguous" => Some(IdentityAbstentionCause::Ambiguous),
+        "absence_of_proof" => Some(IdentityAbstentionCause::AbsenceOfProof),
+        _ => None,
+    }
+}
+
+/// One CURRENT engine link, reduced to what the reach counter reads: the interface it names (or
+/// `None` for an abstention) and the persisted cause token (or `None` when it placed something).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReachRow {
+    /// The interface this link places the observation on — `None` for an abstention.
+    pub interface_id: Option<String>,
+    /// The persisted abstention-cause token — `None` unless it abstained.
+    pub abstention_cause: Option<String>,
+}
+
+/// Every CURRENT link the ENGINE holds, reduced to [`ReachRow`].
+///
+/// ⚠️ `current_subject IS NOT NULL` is the CURRENT filter (story 5.9's second arbitration): a
+/// superseded row carries NULL there, and counting history would make the number grow with every
+/// re-scan.
+///
+/// # Errors
+///
+/// Returns the `sqlx::Error` as it came; callers classify it with [`classify`].
+pub async fn load_current_engine_reach<'e, E>(executor: E) -> Result<Vec<ReachRow>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT interface_id, abstention_cause FROM identity_link \
+         WHERE current_subject IS NOT NULL AND decided_by = 'ENGINE' \
+         ORDER BY current_subject",
+    )
+    .fetch_all(executor)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(interface_id, abstention_cause)| ReachRow {
+            interface_id,
+            abstention_cause,
+        })
+        .collect())
+}
+
 /// Who decided a link. `decided_by` is not optional: story 5.10 deletes the engine's links by it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecidedBy {

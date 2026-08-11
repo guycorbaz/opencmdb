@@ -55,6 +55,22 @@
   {% endfor %}
   </ul>
   {% endif %}
+
+  <h2>{{ s.identity_reach }}</h2>
+  <p class="reach-split">
+    <span class="count">{{ view.reach.evaluated }}</span> <span class="label">{{ s.identity_evaluated }}</span>
+    <span class="sep">·</span>
+    <span class="count">{{ view.reach.not_evaluated }}</span> <span class="label">{{ s.identity_not_evaluated }}</span>
+  </p>
+  {% if !view.reach.by_cause.is_empty() %}
+  <p class="muted">{{ view.reach.not_evaluated }} {{ s.identity_because }}</p>
+  <ul class="identity-causes">
+  {% for c in view.reach.by_cause %}
+    <li><span class="count">{{ c.count }}</span> <span class="cause">{{ c.cause }}</span></li>
+  {% endfor %}
+  </ul>
+  {% endif %}
+  <p class="muted floor">{{ s.identity_floor }}</p>
 {% else %}
   <h1>{{ s.no_declared_title }}</h1>
   <p class="muted">{{ s.no_declared_hint }}</p>

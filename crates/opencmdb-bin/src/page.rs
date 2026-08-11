@@ -16,7 +16,12 @@ use opencmdb_core::{AbstentionCause, reconcile};
 use sqlx::MySqlPool;
 use uuid::Uuid;
 
-use crate::repo::{classify, load_declared_attributes, load_observation_facts};
+use opencmdb_core::identity::cascade::IdentityAbstentionCause;
+
+use crate::repo::{
+    ReachRow, cause_from_token, classify, load_current_engine_reach, load_declared_attributes,
+    load_observation_facts,
+};
 
 /// Committed front-end assets, embedded into the binary (no CDN, self-hosted single binary).
 #[derive(rust_embed::Embed)]
@@ -41,6 +46,21 @@ struct AbstentionRow {
     count: usize,
 }
 
+/// One line of the identity-reach breakdown: a cause, and how many interfaces-worth of engine
+/// links carry it. ONE line per cause — never one row per interface (the UX spec's *"N failures"*).
+struct IdentityCauseRow {
+    cause: String,
+    count: usize,
+}
+
+/// The identity engine's reach: how many current engine links placed something, how many did not,
+/// and the second number broken down by cause.
+struct IdentityReach {
+    evaluated: usize,
+    not_evaluated: usize,
+    by_cause: Vec<IdentityCauseRow>,
+}
+
 /// Everything the card template needs — shaped for rendering, honest about the empty state.
 struct ReconciledView {
     has_entity: bool,
@@ -50,6 +70,7 @@ struct ReconciledView {
     gaps: Vec<GapRow>,
     abstentions: Vec<AbstentionRow>,
     abstention_count: usize,
+    reach: IdentityReach,
 }
 
 /// The user-facing strings, resolved through the i18n `t!()` seam (Story 3.8). The templates read
@@ -69,6 +90,11 @@ struct Strings {
     nothing_unplaced: String,
     no_declared_title: String,
     no_declared_hint: String,
+    identity_reach: String,
+    identity_evaluated: String,
+    identity_not_evaluated: String,
+    identity_because: String,
+    identity_floor: String,
 }
 
 fn strings() -> Strings {
@@ -88,6 +114,11 @@ fn strings() -> Strings {
         nothing_unplaced: t!("page.nothing_unplaced").to_string(),
         no_declared_title: t!("page.no_declared_title").to_string(),
         no_declared_hint: t!("page.no_declared_hint").to_string(),
+        identity_reach: t!("page.identity_reach").to_string(),
+        identity_evaluated: t!("page.identity_evaluated").to_string(),
+        identity_not_evaluated: t!("page.identity_not_evaluated").to_string(),
+        identity_because: t!("page.identity_because").to_string(),
+        identity_floor: t!("page.identity_floor").to_string(),
     }
 }
 
@@ -117,6 +148,62 @@ fn cause_label(cause: AbstentionCause) -> String {
         AbstentionCause::ConflictingObservations => t!("cause.conflicting_observations"),
     }
     .to_string()
+}
+
+/// A human label for an IDENTITY abstention cause — a SECOND vocabulary over a SECOND population.
+///
+/// ⚠️ Deliberately NOT a widening of [`cause_label`]: that one renders `gap::AbstentionCause` over
+/// declared attributes, this one renders `IdentityAbstentionCause` over interfaces. A shared
+/// function taking either enum is the silent bridge `deferred-work.md` forbids.
+fn identity_cause_label(cause: IdentityAbstentionCause) -> String {
+    use rust_i18n::t;
+    match cause {
+        IdentityAbstentionCause::Ambiguous => t!("identity_cause.ambiguous"),
+        IdentityAbstentionCause::AbsenceOfProof => t!("identity_cause.absence_of_proof"),
+    }
+    .to_string()
+}
+
+/// PURE: count the engine's reach out of the current engine links.
+///
+/// A row carrying an `interface_id` is EVALUATED; a row carrying none is NOT evaluated, and its
+/// persisted token is parsed back into [`IdentityAbstentionCause`]. An unknown token is REFUSED —
+/// a cause the domain does not have must not reach a screen.
+///
+/// # Errors
+///
+/// The offending token, when a row carries one no variant parses.
+fn build_reach(rows: &[ReachRow]) -> Result<IdentityReach, String> {
+    let mut evaluated = 0usize;
+    // A `BTreeMap` keyed by the DOMAIN variant: the order is the enum's own, deterministic, and
+    // owed to nothing the database happens to return.
+    let mut counts: std::collections::BTreeMap<usize, (IdentityAbstentionCause, usize)> =
+        std::collections::BTreeMap::new();
+    for row in rows {
+        if row.interface_id.is_some() {
+            evaluated += 1;
+            continue;
+        }
+        let token = row.abstention_cause.as_deref().unwrap_or("");
+        let cause = cause_from_token(token).ok_or_else(|| token.to_string())?;
+        let ordinal = IdentityAbstentionCause::all()
+            .iter()
+            .position(|c| *c == cause)
+            .expect("all() carries every variant");
+        counts.entry(ordinal).or_insert((cause, 0)).1 += 1;
+    }
+    let not_evaluated = counts.values().map(|(_, n)| *n).sum();
+    Ok(IdentityReach {
+        evaluated,
+        not_evaluated,
+        by_cause: counts
+            .into_values()
+            .map(|(cause, count)| IdentityCauseRow {
+                cause: identity_cause_label(cause),
+                count,
+            })
+            .collect(),
+    })
 }
 
 /// Project a fact into a displayable `(label, value)` pair (a superset of the engine's projection —
@@ -161,6 +248,7 @@ fn build_view(
     declared: Vec<(String, String, String)>,
     observations: Vec<Vec<Fact>>,
     preferred_ipv4: Option<String>,
+    reach: IdentityReach,
 ) -> ReconciledView {
     // Group declared attributes by entity, preserving first-seen order.
     let mut entities: Vec<(String, Vec<(String, String)>)> = Vec::new();
@@ -194,6 +282,7 @@ fn build_view(
             gaps: Vec::new(),
             abstentions: Vec::new(),
             abstention_count: 0,
+            reach,
         };
     };
     let ipv4 = ipv4_of(attrs).expect("chosen entity carries an ipv4");
@@ -248,6 +337,7 @@ fn build_view(
         gaps,
         abstentions,
         abstention_count: result.abstention_count(),
+        reach,
     }
 }
 
@@ -258,8 +348,15 @@ fn build_view(
 async fn reconcile_view(pool: &MySqlPool) -> Result<ReconciledView, Response> {
     let declared = load_declared_attributes(pool).await.map_err(server_error)?;
     let observations = load_observation_facts(pool).await.map_err(server_error)?;
+    let rows = load_current_engine_reach(pool).await.map_err(server_error)?;
+    // An unknown persisted cause is REFUSED rather than rendered (§6). It cannot be reached through
+    // the writer — `cause_token` is the only producer — so the only way here is a hand-written row.
+    let reach = build_reach(&rows).map_err(|token| {
+        tracing::error!(token, "a persisted abstention cause no variant parses");
+        (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
+    })?;
     let preferred = std::env::var("OPENCMDB_ENTITY_IPV4").ok();
-    Ok(build_view(declared, observations, preferred))
+    Ok(build_view(declared, observations, preferred, reach))
 }
 
 fn server_error(error: sqlx::Error) -> Response {
@@ -320,6 +417,11 @@ fn content_type(path: &str) -> &'static str {
 mod tests {
     use super::*;
 
+    /// An empty reach, for the tests whose subject is the DECLARED side.
+    fn no_reach() -> IdentityReach {
+        build_reach(&[]).expect("an empty slice parses")
+    }
+
     fn declared_row(entity: &str, key: &str, value: &str) -> (String, String, String) {
         (entity.into(), key.into(), value.into())
     }
@@ -344,7 +446,7 @@ mod tests {
             declared_row("e1", "hostname", "nas"),
         ];
         let observations = vec![vec![ipv4("192.0.2.10"), hostname("intruder")]];
-        let view = build_view(declared, observations, None);
+        let view = build_view(declared, observations, None, no_reach());
 
         assert!(view.has_entity);
         assert_eq!(view.entity_ipv4, "192.0.2.10");
@@ -362,7 +464,7 @@ mod tests {
     fn build_view_counts_out_of_perimeter_as_reach() {
         let declared = vec![declared_row("e1", "ipv4", "192.0.2.10")];
         let observations = vec![vec![ipv4("192.0.2.99")]]; // an undocumented device
-        let view = build_view(declared, observations, None);
+        let view = build_view(declared, observations, None, no_reach());
 
         assert!(view.has_entity);
         assert!(view.gaps.is_empty());
@@ -381,9 +483,125 @@ mod tests {
         );
     }
 
+    fn placed(n: u8) -> ReachRow {
+        ReachRow {
+            interface_id: Some(format!("00000000-0000-0000-0000-0000000000{n:02x}")),
+            abstention_cause: None,
+        }
+    }
+
+    fn abstained(token: &str) -> ReachRow {
+        ReachRow {
+            interface_id: None,
+            abstention_cause: Some(token.into()),
+        }
+    }
+
+    /// AC2/AC3 — a NON-EMPTY population, evaluated beside not-evaluated, one line per cause.
+    #[test]
+    fn reach_counts_evaluated_beside_not_evaluated_and_groups_by_cause() {
+        let rows = vec![
+            placed(1),
+            placed(2),
+            placed(3),
+            abstained("absence_of_proof"),
+            abstained("absence_of_proof"),
+        ];
+        let reach = build_reach(&rows).expect("every token parses");
+        assert_eq!(reach.evaluated, 3);
+        assert_eq!(reach.not_evaluated, 2);
+        // ONE line per cause — never one row per interface.
+        assert_eq!(reach.by_cause.len(), 1, "two abstentions, ONE line");
+        assert_eq!(reach.by_cause[0].count, 2);
+    }
+
+    /// AC3 — an unknown persisted token is REFUSED, not rendered.
+    #[test]
+    fn an_unknown_persisted_cause_is_refused() {
+        let rows = vec![abstained("confidence_too_low")];
+        assert_eq!(
+            build_reach(&rows).err().as_deref(),
+            Some("confidence_too_low"),
+            "a cause the domain does not have must not reach a screen"
+        );
+    }
+
+    /// The round trip: every token `cause_token` writes, `cause_from_token` reads back.
+    #[test]
+    fn every_persisted_cause_token_parses_back() {
+        for cause in IdentityAbstentionCause::all() {
+            assert_eq!(
+                cause_from_token(crate::repo::cause_token(&cause)),
+                Some(cause)
+            );
+        }
+    }
+
+    /// The rendered section, and every ban asserted over the HTML (AC4).
+    fn rendered(rows: &[ReachRow]) -> String {
+        let reach = build_reach(rows).expect("parses");
+        let view = build_view(
+            vec![declared_row("e1", "ipv4", "192.0.2.10")],
+            vec![vec![ipv4("192.0.2.10")]],
+            None,
+            reach,
+        );
+        GapFragment { view, s: strings() }.render().unwrap()
+    }
+
+    /// AC4 — the bans, asserted rather than styled.
+    #[test]
+    fn the_reach_section_carries_no_alarm() {
+        let rows = vec![placed(1), abstained("absence_of_proof"), abstained("absence_of_proof")];
+        let html = rendered(&rows);
+
+        // It renders at all, and it renders the two numbers.
+        assert!(html.contains("Identity reach"), "the section renders");
+        assert!(html.contains("not evaluated"));
+
+        for banned in [
+            "alert", "error", "danger", "warning", "critical", "<progress", "gauge", "badge",
+            "meter", "overdue", "stale", "ago", "days", "since",
+        ] {
+            assert!(
+                !html.contains(banned),
+                "the reach section must carry no {banned:?} — reach, never a reproach"
+            );
+        }
+
+        // ONE line per cause, never one row per interface: two abstentions, one <li>.
+        let lines = html.matches(r#"<li><span class="count">"#).count();
+        assert_eq!(
+            lines, 1,
+            "two abstentions render as ONE line — 'I don't know' is a MOTIF, never N failures"
+        );
+    }
+
+    /// AC5 — the floor renders beside the number, EN and FR.
+    #[test]
+    fn the_floor_is_stated_where_the_number_is() {
+        let html = rendered(&[abstained("absence_of_proof")]);
+        assert!(html.contains("bounded by what the network tells us"));
+        assert!(
+            rust_i18n::t!("page.identity_floor", locale = "fr").contains("borné par ce que le réseau")
+        );
+    }
+
+    /// AC6 — the two vocabularies keep separate labels and separate keys.
+    #[test]
+    fn the_two_abstention_vocabularies_share_no_label_and_no_key() {
+        assert_ne!(
+            cause_label(AbstentionCause::NoObservedValue),
+            identity_cause_label(IdentityAbstentionCause::AbsenceOfProof)
+        );
+        let locales = include_str!("../locales/app.yml");
+        assert!(locales.contains("identity_cause.absence_of_proof"));
+        assert!(locales.contains("cause.no_observed_value"));
+    }
+
     #[test]
     fn build_view_empty_when_no_declared_entity() {
-        let view = build_view(Vec::new(), Vec::new(), None);
+        let view = build_view(Vec::new(), Vec::new(), None, no_reach());
         assert!(!view.has_entity);
         // The empty state renders honestly (default locale `en`).
         let html = GapPage { view, s: strings() }.render().unwrap();
