@@ -2980,3 +2980,34 @@ _Appended, never rewriting the bullets above. Story 5.13 shipped the monotone-ho
   tests that never consult the pin. The byte pins remain worth having (they pin WHICH pair each pole
   judges, and `family`, whose loss silently exempts a family from `incomplete_families`), but the
   justification must be re-derived per family rather than quoted from 5.2b.
+
+## Deferred from: code review of story-5.13b (2026-08-11)
+
+- **🔴 The blinded-source family's MARGINAL coverage over the existing corpus measures ZERO, and its
+  second pole cannot fail on an abstention.** Measured by the review's Edge Case Hunter: mutate the
+  engine to abstain whenever a pair's observations report different fact kinds — the plausible D18
+  cowardice a *"source goes half-blind"* family exists to forbid — and the gate reports
+  `failures: {MustMerge: 2}`, `MustNotMerge: 0`. The two failures are `blinded-source-must-merge`
+  **and the pre-existing `hostname-absence-must-merge`**, whose same-MAC pair already differs in fact
+  kinds, so that class was covered before this story. And the negative pole stays GREEN because
+  `(must-not-merge, Abstained) → Pass` is a deliberate, load-bearing cell in `score.rs`. ⚠️ ***"both
+  of D18's poles"* must therefore not be read as two independent gates.** Registered rather than
+  patched: the family is honest at what it does (it puts a `capability` record inside a trap-named
+  stream, which is its §9 purpose) and inventing a shape purely to raise its coverage would be the
+  bent metric D45 forbids. Owner: Epic 5's retrospective.
+- **🔑 A promise of NON-MODIFICATION protects behaviour and shelters false sentences.** Story 5.13b
+  wrote *"`opencmdb-core` is not touched"* in four documents as a virtue; it is exactly what kept it
+  out of `score.rs:443`, whose comment asserts as a MEASUREMENT the very thing the story's deliverable
+  falsified. Guy narrowed the promise to *"no BEHAVIOUR change"* and the sentence was corrected.
+  **The transferable form: a "does not touch X" clause must be scoped to behaviour, or it becomes a
+  reason not to look at X.** Carry to the retrospective.
+- **⚠️ The mutation-driver family recurred a FOURTH time, and twice inside one story.** (a) M10's red
+  count was taken from a FILTERED run and reported as the full-suite figure — 1 where the truth is
+  37. (b) M7's *"unreachable in a full run"* rested on a `head -8` applied to the driver's own output:
+  the full run WAS executed and its evidence truncated before it was read, after which one test's
+  assertion order was generalised to the whole suite. 🔑 ***A measurement read through a truncation is
+  not a measurement***, and it is the same failure as story 5.13's *"`cargo test --workspace A B`
+  passes two filters"* wearing different clothes. (c) During the review repairs, a
+  `git checkout -- <file>` intended to revert a MUTATION reverted the file and ate a guard written
+  minutes earlier — story 5.13's driver defect reproduced by the person correcting the story that
+  documents it. **Revert the mutation, never the file.** Owner: Epic 5's retrospective.

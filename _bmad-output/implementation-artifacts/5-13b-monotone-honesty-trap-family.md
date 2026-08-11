@@ -53,7 +53,14 @@ data table.
   decoration"*);
 - it does **not** change the identity engine. `identity::{l1,blocking,cascade}` are untouched — a
   change there in the diff is a FINDING;
-- it does **not** touch `opencmdb-core`;
+- it does **not** change BEHAVIOUR in `opencmdb-core`. ⚠️ **The promise was narrowed by Guy at the
+  code review, and the reason is the finding:** it first read *"does not touch `opencmdb-core`"*, and
+  that sentence — repeated in four documents — is exactly what kept this story out of
+  `score.rs:443`, where a comment asserts as a MEASUREMENT the thing this story's deliverable
+  falsifies (*"eleven replay streams are named by a trap and not one of them carries a `capability`
+  control record"* — today twelve, and one does). **A promise of non-modification protects behaviour
+  and shelters false sentences.** The doc is corrected here; no type, no function and no test in
+  `opencmdb-core` changed;
 - it does **not** weaken `no_obs_id_is_shared_across_replay_streams` (`fixtures.rs:1858`). Guy's
   arbitration 4 chose the design that keeps that anchor intact — §5;
 - it does **not** add a dependency, and it does **not** wire the resolver into `main.rs` (5.14's);
@@ -244,7 +251,7 @@ capability record, so the stream still loads):
 | guard form | result |
 |---|---|
 | rekey, then `assert_eq!` on the **whole `Vec<Record>`** | **1 red**, the twin guard, assertion-carried |
-| **keyed lookup** by mapped `obs_id` — literally the draft's letter, no position anywhere | **271 passed; 0 failed** |
+| **keyed lookup** by mapped `obs_id` — literally the draft's letter, no position anywhere | **the twin guard leaves the failure list.** ⚠️ *"271 passed; 0 failed"* was the VALIDATION worktree's figure, taken before the byte pin existed; on the shipped tree the byte pin still reds for its own reason, so the claim is about the GUARD and never about the suite — see the M5 CONTROL row, which says the same thing and which an earlier draft let contradict this one |
 
 **A guard satisfying the draft's letter is blind to the mutation the draft wrote to catch it.** The
 missing property is not injectivity — it is a claim about the SEQUENCE. So:
@@ -648,7 +655,7 @@ runs — so each row below names the command that carried it.
 
 ### Completion Notes List
 
-**489 → 493 tests (272 bin + 159 core + 62 xtask), +4.** Seven gates green, `fixtures` now **28**,
+**489 → 493 tests at implementation, → 494 (273 bin + 159 core + 62 xtask) after the code review.** Seven gates green, `fixtures` now **28**,
 `file-size` 28 files (largest unchanged at 1787). The trap gate is still **RED**: **26 discovered,
 15 scored, 0 failures, 0 wrong-rule, 11 unanswerable, `passed() == false`**. `opencmdb-core` was
 not touched, no dependency was added, `epics.md` was not edited.
@@ -681,14 +688,23 @@ is now measured, not asserted.
 
 #### ⚠️ Two mutations whose carrier was NOT what the row predicted
 
-**M7's completeness assertion is unreachable in a full run.** The story predicted
-`trap_gate.rs:1183` would red. In the whole suite it never gets there: deleting a pole drops the
-trap count, and `discovered == 26` fires first — story 5.13's assertion-order finding, arriving a
-third time. Re-run against a SINGLE test, the completeness carrier is
-`a_mixed_family_splits_between_the_engine_and_the_bucket`, printing
-`IncompleteFamily { family: FamilyId("blinded-source"), has_merge: true, has_not_merge: false }`.
-**The row is kept with both measurements**, because *"M7 reds the completeness check"* is true only
-under isolation and would otherwise be a claim outrunning its measurement.
+🔴 **THIS SECTION WAS ITSELF WRONG, and the code review measured it.** It read: *"M7's
+completeness assertion is unreachable in a full run … `discovered == 26` fires first — story 5.13's
+assertion-order finding, arriving a third time."* **False.** Re-measured unfiltered: **18 red, and
+`trap_gate.rs:1183` is among them**, printing
+`IncompleteFamily { family: FamilyId("blinded-source"), has_merge: true, has_not_merge: false }` —
+exactly what §7 predicted.
+
+The error was a **category mistake**: assertion order governs one test function and does not
+propagate across functions. `discovered == 26` fires first *inside*
+`the_committed_corpus_is_scored_by_the_l1_engine`; `a_mixed_family_splits_between_the_engine_and_the_bucket`
+carries no count assertion before its completeness one, and reds independently.
+
+⚠️ **And what let the mistake stand is the shape worth carrying forward: `head -8` on my own
+measurement output.** The full-suite run was executed; its evidence was truncated before I read it,
+and I then generalised from the one test I had looked at. **A measurement read through a truncation
+is not a measurement**, and the story that reports divergences as findings recorded a divergence
+that never happened — inverting its own AC8.
 
 **M10's carrier is an explicit `panic!`, not an assertion.** Recorded rather than folded in — the
 *"every red is assertion-carried"* headline has now been refuted by review in three separate
@@ -708,15 +724,24 @@ stories, and this table will not restate it.
 | **M5** | swap twin B's obs **3 and 4** (both AFTER the record, so it still loads) | whole-vector guard reds | ✅ | 2 | assertion |
 | **M5 CONTROL** | the same, guard replaced by a **keyed lookup** | the guard goes green | 🔑 **the twin guard leaves the failure list.** ⚠️ The SUITE does not go green — the byte pin still reds, for its own reason. The claim is about the GUARD | 1 | — |
 | **M6** | swap the two traps' `observations` vectors | pin reds AND the gate reds independently | ✅ 4 red, **three of them `trap_gate` tests that never consult the pin** — AC5's true justification, measured | 4 | assertion |
-| **M7** | delete `blinded-source-must-not-merge` | `trap_gate.rs:1183` reds | ⚠️ **NOT in a full run** — the count fires first. Isolated, the carrier is `a_mixed_family_splits_between_the_engine_and_the_bucket` | many / 1 isolated | assertion |
+| **M7** | delete `blinded-source-must-not-merge` | `trap_gate.rs:1183` reds | ✅ **as predicted, in the FULL run** — 18 red, `trap_gate.rs:1183` among them with the `IncompleteFamily` printed. (An earlier entry claimed it was unreachable unfiltered; refuted by the code review and re-measured here) | **18** | assertion |
 | **M8** | rename the expected rule to `l2-uplink-agrees` | routed to the bucket, 11 → 12 | ✅ `26 discovered, **14 scored**, 0 failures, **12 unanswerable**`, the trap explained by its author's rule. The draft's *"likeliest wrong prediction"* flag was unearned and both layers said so | 1+ | assertion |
 | **M9a** | corrupt a `sha256` | EDITED direction reds | ✅ `sha256 mismatch (manifest 000000000000… ≠ file 45139d7d388e…)` | gate | `cargo xtask ci` |
-| **M9b** | omit an artefact from the MANIFEST | ORPHAN direction reds | ✅ measured **on the real tree** before the entries existed: three `present but absent from MANIFEST.toml (orphan)` findings | gate | `cargo xtask ci` |
-| **M10** | give twin B twin A's `obs_id`s | the anchor reds | ✅ names both files and quotes its reason. ⚠️ **`panic!`-carried**, not assertion | 1 | panic |
+| **M9b** | omit **one** artefact from the finished MANIFEST | ORPHAN direction reds | ✅ re-measured as prescribed — one entry removed from the COMPLETED manifest gives exactly one finding: `scenario/traps/blinded-source.toml: present but absent from MANIFEST.toml (orphan)`. (First recorded from the tree's pre-entry state, which is not a mutation of the finished tree — corrected on review) | gate | `cargo xtask ci` |
+| **M10** | give twin B twin A's `obs_id`s | the anchor reds | ✅ names both files and quotes its reason. 🔴 **37 red, NOT 1** — the figure first recorded came from a FILTERED run, the driver defect this story's own Dev Notes warn about two paragraphs above. `read_traps` refuses the trap file (`DanglingObservation`) and takes `l1_answers`, `score_corpus` and every corpus walk down with it. Carriers are **MIXED**, mostly `.expect()` | **37** | mixed |
 
-**Fourteen rows: twelve mutations, two CONTROLS that are GREEN by design.** Carriers were read from
-each panic message one at a time; they are **mixed**, and the table says which is which rather than
-collapsing them to one label.
+🔴 **The headline first written here was *"Fourteen rows: twelve mutations, two CONTROLS that are
+GREEN by design"* and all of it was wrong.** Counted mechanically: **fifteen rows — thirteen
+mutations and two controls**. And *"GREEN by design"* is refuted by the control rows' own text four
+lines above it: **M5 CONTROL says in so many words that the SUITE does not go green** (the byte pin
+still reds, for its own reason), and M2b CONTROL's claim is scoped to one connector test, not to the
+suite. What each control shows is that ONE NAMED TEST goes green — which is the whole claim, and a
+smaller one than "green".
+
+**This is the fourth consecutive story with this family**, in the story whose AC8 says *"that defect
+has recurred in three consecutive stories"*. The corrected form, which can be recounted rather than
+believed: **fifteen rows, thirteen mutations, two controls; each control's green is scoped to the
+test it names; carriers are MIXED and named per row.**
 
 #### What is NOT claimed
 
@@ -748,10 +773,75 @@ not fixed here.
 
 ---
 
+---
+
+## 14. 🔴 The code review, and Guy's two arbitrations (2026-08-11)
+
+Three layers — Blind Hunter (diff only, read from a file so the constraint held), Edge Case Hunter
+(own worktree, mutations), Acceptance Auditor (diff + spec + twins). **Five findings were reached
+INDEPENDENTLY by two or three layers.** No database was started by any of them, and all three
+confirmed none was needed.
+
+### 14a. Guy's arbitrations
+
+| # | question | decision |
+|---|---|---|
+| 7 | `opencmdb-core`'s `score.rs:443` asserts as a MEASUREMENT what this story falsifies; correcting it breaks the *"does not touch `opencmdb-core`"* promise | **Correct it, and NARROW the promise** to *"no BEHAVIOUR change"*. 🔑 The lesson outranks the patch: **the promise CAUSED the defect** — four documents said "untouched", and that is exactly what kept this story from looking at the one sentence that had to move. *A promise of non-modification protects behaviour and shelters false sentences.* |
+| 8 | the twins' tight descriptor is carried by nothing — swapping it for `corpus_caps()` leaves 493 green | **Add the missing guard.** The house rule is *a guard ships with a mutation that reds when THE GUARD is removed*; M2b measured only what the tightness CATCHES. `the_blinded_source_twins_keep_their_tight_descriptor` now reds on the ordinary DRY gesture — measured, 1 red, assertion-carried. |
+
+### 14b. 🔴 Three claims of the implementation record, refuted by re-measurement
+
+- **M10 is 37 red, not 1**, and its carriers are MIXED, not `panic!`. The figure came from a
+  **filtered run** — the driver defect this story's own Dev Notes warn about two paragraphs above.
+  `read_traps` refuses the trap file and takes every corpus walk down with it;
+- **M7's *"unreachable in a full run"* is FALSE.** 18 red, `trap_gate.rs:1183` among them, exactly as
+  §7 predicted. The error was a category mistake — assertion order does not propagate across test
+  functions — and what let it stand was **`head -8` on my own measurement output**. *A measurement
+  read through a truncation is not a measurement*, and a story that reports divergences as findings
+  recorded a divergence that never happened;
+- **the headline was wrong in all three of its numbers**: fifteen rows and thirteen mutations, not
+  fourteen and twelve, and *"GREEN by design"* is refuted by the control rows' own text four lines
+  above it. **Fourth consecutive story with this family**, in the story whose AC8 names it.
+
+### 14c. Two guards that had gone slack, each measured first
+
+- **The tight descriptor** — §14a, arbitration 8;
+- **The trap-text privacy floor.** `macs.len() >= 4` while this story's own trap reasons introduce a
+  **fifth** MAC: the floor would from then on have tolerated the loss of a previously-pinned value
+  and still read as a pass. Raised to 5. 🔑 ***A floor is only a guard while it equals what is
+  there*** — growing the corpus without raising it converts a guard into slack, silently. The count
+  sweep had edited the doc comment two lines above it and left the floor untouched.
+
+### 14d. ⚠️ The sweep missed thirteen more sites, including one §6c had LISTED
+
+`trap_gate.rs:873` — the failure message of `the_per_column_arithmetic_shows_nothing_left_the_denominator`,
+so the one sentence a reader meets when that guard fires stated a false corpus. Plus
+`fixture_connector.rs:351-354` (an accounting the same commit falsified: 11 + 2 no longer reaches
+fifteen), `:1523`, `:1594-1597`, `:1723`; `fixtures.rs:2300` (*"the 14th"* six words after
+`13 → 15` was applied in the same sentence); `l1_runner.rs:48`, `:201`, `:231`, `:440`, `:461`;
+`trap_gate.rs:220`, `:682`, `:1305`. **§6's own warning — that the list is not the authority — was
+right about itself.**
+
+### 14e. What the layers confirmed, so it is not re-derived
+
+The three sha256s recompute from the committed bytes; the twin relation holds field for field; **all
+twenty-one count changes are arithmetically correct**; the prefix/MAC/subnet check is TRUE today and
+was TRUE on `master`; the *"does NOT do"* list holds in full; `deferred-work.md` is a pure append;
+AC1–AC6 and AC10 MET. The Edge Case Hunter **refuted six of its own suspicions by running them** —
+among them that the twin guard is not total in the faulted direction (it is, both ways) and that
+`raw` escapes the comparison (it does not).
+
+### 14f. ⚠️ And one defect the repair pass inflicted on itself
+
+A `git checkout -- <file>` meant to revert a MUTATION reverted the file and **ate the guard written
+minutes earlier** — story 5.13's mutation-driver defect, reproduced by the person repairing the story
+that documents it. **Revert the mutation, never the file.** Recorded rather than quietly redone.
+
 ## Change Log
 
 | date | what |
 |---|---|
 | 2026-08-11 | Created. **Four contexting arbitrations by Guy**, the fourth reversing the literal form of the second on a fact of the code; both recorded. Three inherited clauses refuted by code (§3). |
+| 2026-08-11 | **CODE-REVIEWED (three layers) and REPAIRED.** Two arbitrations by Guy: `score.rs`'s falsified measurement corrected and the `opencmdb-core` promise NARROWED to behaviour (🔑 *the promise caused the defect*), and the twins' tight descriptor given the guard that reds when the guard is removed. 🔴 Three claims of the implementation record refuted by re-measurement — M10 is **37 red, not 1** (a filtered run), M7's *"unreachable in a full run"* is FALSE (a `head -8` on my own output), and the headline was wrong in all three numbers: **fifteen rows, thirteen mutations**, controls scoped to one test each. Fourth consecutive story with that family. ⚠️ The privacy floor had gone slack (a fifth MAC) and is raised to 5; the sweep had missed thirteen sites including one §6c listed. **493 → 494 tests**, seven gates green. |
 | 2026-08-11 | **IMPLEMENTED → `review`** (`done` is the MERGE's business). **489 → 493 tests** (272 + 159 + 62), seven gates green, **28 fixtures**, **26 traps across ten families**, trap gate still RED, `opencmdb-core` untouched. The count sweep came in **ONE wave, not two** — which is what the validation bought, the inventory having been pre-computed. 🔑 One finding the story did not prescribe: the twins' tight descriptor was justified by a sentence and carried by nothing, closed by **M2b** and its **CONTROL** (the same planted fact under `corpus_caps()` is measured GREEN). ⚠️ Two carriers were not what their row predicted — M7's completeness assertion is unreachable in a full run and had to be isolated, and M10 is `panic!`-carried. **Fourteen rows: twelve mutations, two CONTROLS green by design, carriers MIXED and named row by row.** |
 | 2026-08-11 | **VALIDATED** (fact-check + gap-hunt, the second having BUILT the story to 492 tests / 28 fixtures in its own worktree). **6 HIGH per layer, 5 findings reached INDEPENDENTLY by both; 2 further arbitrations by Guy** — AC3's strictness routed to the CUT, and the story kept whole rather than split. 🔴 The headline came from ONE layer: the draft's `obs_id` prefix `bdbdbdbd` is RESERVED and its four UUIDs were byte-identical to committed ones, **invisible to every gate including the story's own M10** — the layer that BUILT the story reached 492 green without seeing it. 🔴 Four of the draft's own claims refuted by measurement: *"total and injective"* is satisfied by a guard measured GREEN on the mutation it exists to catch; AC3's strictness is unreachable for a blinding and the apparatus said so first; AC5's *"green without the pin"* is stale since story 5.7; and §3a's *"transferable"* generalisation has a counterexample in the code it cites — removing a control record can NARROW. §6 rewritten as a METHOD after two inventories of it were wrong. |

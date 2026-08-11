@@ -1311,7 +1311,7 @@ mod tests {
 
     /// The bound is a DECISION, and this is the measurement behind it: `0 ≤ k ≤ len` would add
     /// exactly one degenerate position per stream — 12 of 55 — every one of them at `k = len`, and
-    /// every one of them failing the strictness half. That is mutation M4, eleven times.
+    /// every one of them failing the strictness half. That is mutation M4, twelve times.
     #[tokio::test]
     async fn the_excluded_position_is_exactly_one_per_stream_and_it_is_m4() {
         let streams = control_free_streams();

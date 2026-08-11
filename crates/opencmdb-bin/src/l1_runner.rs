@@ -45,8 +45,8 @@
 //!   could not be bent to the engine (D19: *"a metric written after the engine is bent to fit the
 //!   engine"*). The predicate reads the id's prefix and nothing else — not the column, not the
 //!   family, not the reason, and never the answer;
-//! - **the unanswered traps do not leave the denominator.** `Report::discovered()` stays 24 while
-//!   `scored()` is 13, and `Tally::scored_in` splits it per column. Since story 5.8 the residue is
+//! - **the unanswered traps do not leave the denominator.** `Report::discovered()` stays 26 while
+//!   `scored()` is 15, and `Tally::scored_in` splits it per column. Since story 5.8 the residue is
 //!   a bucket that BLOCKS (`Report::unanswered`), so the committed gate does not pass at all while
 //!   eleven traps go unasked; the exclusion is visible here and blocking there, silent in neither;
 //! - **a PREFIX, not a whitelist of the two implemented ids.** A trap expecting an `l1-*` rule this
@@ -198,7 +198,7 @@ fn answer_pair(stream: &[Observation], trap: &Trap, a: ObsId, b: ObsId) -> Outco
 /// because no rule was asked is the *right answer for the wrong reason* D19 and D46b exist to
 /// catch, and it would put a **1** in the `must-abstain` column of a gate that never asked the
 /// question. So the condition is named, and it is asserted HERE rather than on [`l1_answers`]'
-/// output: of the 13 committed traps whose expected rule is `l1-*`, **zero** name other than two
+/// output: of the 15 committed traps whose expected rule is `l1-*`, **zero** name other than two
 /// observations, so through the walk this guard is unreachable and any assertion on the walk's
 /// output would be vacuous. Story 5.6's idiom: a guard the committed corpus cannot exercise through
 /// the production path needs a test that reaches it directly.
@@ -228,8 +228,8 @@ pub fn answer_trap(trap: &Trap) -> Result<Option<Outcome>, FixtureError> {
 /// Walk the trap corpus rooted at `traps_root` and say something about **every** trap it holds.
 ///
 /// The result is exactly the `answers` map [`crate::trap_gate::score_corpus`] takes, and since
-/// story 5.8 it is **TOTAL over the corpus**: one entry per discovered trap — 24 over the committed
-/// one, **13 [`Answer::Answered`] and 11 [`Answer::Unanswerable`]**. Totality is the point. While a
+/// story 5.8 it is **TOTAL over the corpus**: one entry per discovered trap — 26 over the committed
+/// one, **15 [`Answer::Answered`] and 11 [`Answer::Unanswerable`]**. Totality is the point. While a
 /// declined trap was simply ABSENT from this map, a producer could drop a trap out of the
 /// denominator with no reason attached and the gate stayed green; `epics.md`'s story 5.8 forbids
 /// that — the unanswerable traps *"never silently leave the denominator"*. Absence still MEANS
@@ -254,8 +254,9 @@ pub fn answer_trap(trap: &Trap) -> Result<Option<Outcome>, FixtureError> {
 /// story 5.7 measured and registered.
 ///
 /// ⚠️ **The ANSWERED SET is invariant under that order.** A trap failing both conditions is
-/// unanswerable either way, so the reorder moves a CAUSE and never a key: the fifteen keys are the
-/// same ones story 5.7 produced, and a test asserts it. Do not read the reorder as a behaviour
+/// unanswerable either way, so the reorder moves a CAUSE and never a key. ⚠️ **The keys are no
+/// longer the thirteen story 5.7 produced** — story 5.13b added two, so what survives 5.8's reorder
+/// is the RELATION (a cause moves, a key does not) and not the list. A test asserts the set. Do not read the reorder as a behaviour
 /// change.
 ///
 /// Discovery goes through [`discover_trap_files`], the harness's own walk, so the two see the same
@@ -437,7 +438,7 @@ mod tests {
 
     /// The traps the map says were ANSWERED — the `Answer::Answered` half, not the whole map.
     ///
-    /// Since story 5.8 the map is TOTAL, so `answers.keys()` is all 24 ids. Deriving the answered
+    /// Since story 5.8 the map is TOTAL, so `answers.keys()` is all 26 ids. Deriving the answered
     /// set from the keys would make this test — and the residue test below — assert nothing.
     fn answered_ids(answers: &BTreeMap<TrapId, Answer>) -> BTreeSet<TrapId> {
         answers

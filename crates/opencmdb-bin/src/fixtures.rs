@@ -1950,7 +1950,13 @@ mod tests {
     /// file count can see it — the level below the one story 5.1's review reached. Measured on the
     /// committed corpus at `e846836`: 4 distinct MACs (`00:00:5e:00:01:0a`, `02:00:5e:00:53:10`,
     /// `02:00:5e:00:53:20`, `02:00:5e:00:53:78`) and 3 distinct IPs (`192.0.2.1`, `192.0.2.120`,
-    /// `192.0.2.121`). Those values live in `reason` strings AND in header COMMENTS —
+    /// `192.0.2.121`). ⚠️ **Story 5.13b raised the MAC floor from 4 to 5 and the reason is worth
+    /// keeping**: its `blinded-source.toml` reasons cite `02:00:5e:00:56:01`, a FIFTH MAC — and a
+    /// floor left at 4 would from then on have tolerated the loss of one previously-pinned value
+    /// while still reading as a pass. **A floor is only a guard while it equals what is there**;
+    /// growing the corpus without raising it converts the guard into slack, silently. Its code
+    /// review measured this (the scan reports 5, the floor said 4), and the story's own count sweep
+    /// had edited the doc comment two lines above and left the measurement and the floor untouched. Those values live in `reason` strings AND in header COMMENTS —
     /// `00:00:5e:00:01:0a` is a comment in `vrrp-virtual-mac.toml` and appears nowhere else in that
     /// file — which is the AC working: the scan reads bytes, so a comment counts.
     ///
@@ -1958,9 +1964,10 @@ mod tests {
     /// count over distinct values, so it catches a re-authoring that drops addresses (story 5.2b
     /// touches these very families) and does NOT catch one that drops some while adding others
     /// elsewhere. The distribution is uneven — `dhcp-churn.toml` 1 MAC + 2 IPs, `example.toml`
-    /// 1 MAC, `randomized-mac.toml` 1 MAC, `vrrp-virtual-mac.toml` 1 MAC + 1 IP, the other six
-    /// files nothing — and that sentence is an inventory with no guard behind it, which is exactly
-    /// what the register warns about. Pinning per file is the stronger check and is not taken here;
+    /// 1 MAC, `randomized-mac.toml` 1 MAC, `vrrp-virtual-mac.toml` 1 MAC + 1 IP,
+    /// `blinded-source.toml` 1 MAC, the other six files nothing — and that sentence is an inventory
+    /// with no guard behind it, which is exactly what the register warns about, and which story
+    /// 5.13b's addition demonstrated by falsifying it. Pinning per file is the stronger check and is not taken here;
     /// the floor is the cheap half that stops the scan going silently empty.
     #[test]
     fn the_committed_trap_text_carries_no_real_network_data() {
@@ -1974,9 +1981,9 @@ mod tests {
             ips.extend(seen.ips);
         });
         assert!(
-            macs.len() >= 4 && ips.len() >= 3,
+            macs.len() >= 5 && ips.len() >= 3,
             "the trap-text scan inspected {} distinct MAC(s) and {} distinct IP(s); it was \
-             measured at 4 and 3, so a scan finding fewer has stopped exercising the rule it \
+             measured at 5 and 3, so a scan finding fewer has stopped exercising the rule it \
              claims to enforce rather than proving the corpus clean",
             macs.len(),
             ips.len()
@@ -2290,7 +2297,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     /// `-0000-4000-8000-` middle segment, and sequential numbering from 1 rendered in DECIMAL into
     /// a hexadecimal field (invisible until a stream passes nine observations — the longest today
     /// carries six). All three hold for the 15 streams under `scenario/replay/` and for the wire
-    /// artefact, the 14th, which is this helper's sixth call site. A future stream numbered
+    /// artefact, the 16th, which is this helper's sixth call site. A future stream numbered
     /// otherwise gets its OWN assertion — it is not re-authored to satisfy this helper.
     fn assert_obs_ids(observations: &[Observation], prefix: &str, expected_len: usize) {
         assert_eq!(

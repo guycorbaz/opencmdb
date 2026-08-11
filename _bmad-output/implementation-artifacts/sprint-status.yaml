@@ -70,7 +70,38 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-11  # 5.13b CONTEXTED -> `ready-for-dev`. **Epic 5 stands at 17/19.** See the
+last_updated: 2026-08-11  # 5.13b **CODE-REVIEWED (three layers) and REPAIRED** -> stays `review`
+                          # (`done` is the MERGE's business). **493 -> 494 tests**, seven gates
+                          # green, 28 fixtures. NEXT = PR.
+                          # 🔑 THE LESSON, and it is Guy's arbitration rather than a patch: the
+                          # story promised *"`opencmdb-core` is not touched"* in FOUR documents, and
+                          # that promise is precisely what kept it out of `score.rs:443`, where a
+                          # comment asserts as a MEASUREMENT what this story's own deliverable
+                          # falsifies. **A promise of non-modification protects behaviour and
+                          # shelters false sentences.** Narrowed to *"no BEHAVIOUR change"*, the
+                          # sentence corrected, and the shape carried to the retrospective.
+                          # 🔴 THREE CLAIMS OF THE DEV RECORD WERE REFUTED BY RE-MEASUREMENT: M10 is
+                          # **37 red, not 1** (the figure came from a FILTERED run -- the driver
+                          # defect the story's own Dev Notes warn about two paragraphs above);
+                          # M7's *"unreachable in a full run"* is FALSE (18 red, `trap_gate.rs:1183`
+                          # among them) and what let it stand was a `head -8` on my own measurement
+                          # output -- **a measurement read through a truncation is not a
+                          # measurement**; and the headline *"fourteen rows, twelve mutations, two
+                          # CONTROLS green by design"* is **fifteen rows, thirteen mutations**, with
+                          # each control's green scoped to the ONE test it names. Fourth consecutive
+                          # story with that last family, in the story whose AC8 names it.
+                          # ⚠️ A guard was measured carried by NOTHING and is now closed: swapping
+                          # the twins' tight descriptor for `corpus_caps()` left all 493 green.
+                          # M2b measured what the tightness CATCHES, never what catches its LOSS --
+                          # the house rule runs the other way. `the_blinded_source_twins_keep_their_
+                          # tight_descriptor` reds on the ordinary DRY gesture.
+                          # ⚠️ The trap-text privacy floor had gone SLACK: this story's own trap
+                          # reasons introduce a FIFTH MAC, so a floor left at 4 would have tolerated
+                          # losing a previously-pinned value. Raised to 5. **A floor is only a guard
+                          # while it equals what is there.**
+                          # ⚠️ And the count sweep missed thirteen more sites, including one my own
+                          # §6c had LISTED. All corrected.
+                          # (superseded entry:) 5.13b CONTEXTED -> `ready-for-dev`. **Epic 5 stands at 17/19.** See the
                           # `5-13b-*` block in development_status below for Guy's FOUR arbitrations,
                           # the three inherited clauses refuted by code, and the eight literal counts
                           # the new artefacts move.
@@ -2138,7 +2169,12 @@ development_status:
   #       and `incomplete_families` (trap.rs:412) needs both poles while a `must-abstain` counts for
   #       NEITHER. So `epics.md`'s *"positive AND negative form"* cannot be honoured for the SUBSET
   #       claim. What the family really judges is the **identity decision under a reduced
-  #       capability** -- the traps assert that losing `Rtt` changes no L1 verdict;
+  #       capability**. ⚠️ STATE IT WEAKLY: an earlier phrasing here said *"the traps assert that
+  #       losing `Rtt` changes no L1 verdict"* and the story file refutes that in the SAME commit --
+  #       both traps judge the faulted twin ONLY, nothing judges the same pair on the clean twin, and
+  #       `keys_of` reads `Fact::Mac` alone, so `Rtt` is irrelevant to L1 BY CONSTRUCTION. What they
+  #       really assert is that the two L1 rules fire correctly on a stream carrying a capability
+  #       record. Caught by the code review's Blind Hunter, reading the diff and nothing else;
   #   (c) **`capability-downgrade.jsonl` cannot carry a complete family**, read from its committed
   #       bytes: obs1 and obs4 carry DISTINCT MACs and obs2/obs3 carry NO MAC at all, so no
   #       `must-merge` pole is constructible there. A new stream is FORCED, not preferred.

@@ -217,7 +217,7 @@ impl Report {
     /// cannot.
     ///
     /// ⚠️ The qualifier is load-bearing, not hedging: with an EMPTY map over the committed corpus —
-    /// the state 4.6b's AC1 keeps green — all three columns read `0 + 0` against 10 / 11 / 3, and
+    /// the state 4.6b's AC1 keeps green — all three columns read `0 + 0` against 11 / 12 / 3, and
     /// the identity is false in every one of them. It holds of a TOTAL map, which is what
     /// `l1_runner::l1_answers` produces.
     pub fn unanswered_in(&self, column: Column) -> usize {
@@ -679,7 +679,7 @@ mod tests {
     #[test]
     fn a_trap_with_no_answer_is_discovered_but_not_scored() {
         let mut answers = BTreeMap::new();
-        // A correct answer for one trap, so `scored` is 1 while `discovered` stays 24.
+        // A correct answer for one trap, so `scored` is 1 while `discovered` stays 26.
         answers.insert(
             TrapId("example-must-abstain".into()),
             Answer::Answered(Outcome::Abstained {
@@ -870,7 +870,7 @@ mod tests {
         assert_eq!(
             report.scored() + report.unanswered().len(),
             report.discovered(),
-            "and the same equality over the whole corpus: 13 + 11 == 24"
+            "and the same equality over the whole corpus: 15 + 11 == 26"
         );
     }
 
@@ -1302,7 +1302,7 @@ expect = { must-not-merge = { rule = "l1-distinct-mac" } }
 
     /// Replaying the corpus twice yields an identical `Report` (D36).
     ///
-    /// The `scored() == 13` assertion on the first run is what stops the equality comparing two
+    /// The `scored() == 15` assertion on the first run is what stops the equality comparing two
     /// vacuities — the shape `replaying_the_same_corpus_twice_yields_identical_verdicts`
     /// established. Both the structural equality and the rendered string are compared: a `Report`
     /// that compared equal while rendering differently would still be a reproducibility defect.

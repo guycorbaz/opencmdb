@@ -350,8 +350,14 @@ mod tests {
 
     /// The `connector_id`, scope and capability set of the CORPUS context — the one eleven of the
     /// fifteen committed streams were authored in (`minimal.jsonl` and every trap family since
-    /// 4.9). Story 5.1 widened its reach from one file to eleven; only `partial-then-failed.jsonl`
-    /// and `capability-downgrade.jsonl` carry their own.
+    /// 4.9). Story 5.1 widened its reach from one file to eleven.
+    ///
+    /// ⚠️ **FOUR streams now depart from it, not two.** `partial-then-failed.jsonl` and
+    /// `capability-downgrade.jsonl` carry their own id, scope AND capability set; story 5.13b's two
+    /// blinded-source twins reuse this id and scope but carry their own TIGHT capability set
+    /// (`blinded_source_caps`). So "the corpus context" is three things and a stream may take some
+    /// of them — a distinction this sentence collapsed until 5.13b's review, which found the
+    /// arithmetic (11 + 2) no longer reaching fifteen.
     ///
     /// These ARE a restatement of the files' ids — a second, independent statement of them, in the
     /// same spirit as `fixtures.rs`'s `expected()`. The consequence is worth knowing: regenerate
@@ -1520,7 +1526,7 @@ mod tests {
         capabilities: Capabilities,
     }
 
-    /// The declared context of all 13 committed replay streams — HAND-AUTHORED, never derived.
+    /// The declared context of all 15 committed replay streams — HAND-AUTHORED, never derived.
     ///
     /// This is a second, independent statement of each stream's context, in `expected()`'s idiom.
     /// Deriving it from the observations would make [`FixtureError::ForeignConnectorId`] and
@@ -1598,6 +1604,13 @@ mod tests {
     /// [`FactKind`]s — deliberately wider than what is emitted, which is the whole reason the
     /// descriptor exists. This is not "the walk proves fact-kind coverage corpus-wide".
     ///
+    /// Story 5.13b adds a THIRD non-vacuous case: its two blinded-source twins declare exactly the
+    /// three kinds their clean side emits (`blinded_source_caps`), so a fourth kind on either twin
+    /// reds here. ⚠️ **And that non-vacuity is narrower than it first reads** — its review measured
+    /// that the faulted twin's MID-STREAM narrowing is caught under `corpus_caps()` too, because
+    /// the committed capability record governs the tail whatever the initial descriptor says. What
+    /// the tight descriptor buys is the INITIAL half alone.
+    ///
     /// One more thing it does not check: the table's `as_of` values for the INITIAL descriptor.
     /// `from_records` compares only capability RECORDS against preceding observations, so re-using
     /// `corpus_caps()`'s `2026-01-01T00:00:10Z` across streams dated as late as 2026-01-11 is
@@ -1606,6 +1619,49 @@ mod tests {
     /// Checked in BOTH directions, mirroring the corpus lock's own rule: a walked stream with no
     /// table entry is RED, and a table entry naming no file is RED. A new committed stream must
     /// state its context here, or the suite reds.
+    /// 🔴 **The guard the blinded-source twins' TIGHT descriptor was missing**, added by story
+    /// 5.13b's code review.
+    ///
+    /// `blinded_source_caps()` declares three kinds where `corpus_caps()` declares seven, and the
+    /// story justified that with a mutation (plant a `Hostname` before the capability record: the
+    /// tight descriptor reds, the wide one is measured GREEN) — then wrote *"the descriptor's
+    /// tightness is now measured, not asserted"*. **It was not.** That mutation measures what the
+    /// tightness CATCHES; nothing measured what happens when the tightness is REMOVED, and a review
+    /// layer swapped both entries to `corpus_caps()` and watched all 493 tests stay green.
+    ///
+    /// The house rule runs the other way — *a guard ships with a mutation that reds when THE GUARD
+    /// is removed* — and the gesture that would remove it is entirely ordinary: a DRY pass folding
+    /// these two entries into the `corpus(…)` helper that eleven neighbours already use. This test
+    /// is what makes that pass red instead of silent; measured, it reds exactly one test with this
+    /// message.
+    ///
+    /// It reads the kinds rather than comparing to `corpus_caps()`, so it also reds if someone
+    /// widens `blinded_source_caps()` itself.
+    #[test]
+    fn the_blinded_source_twins_keep_their_tight_descriptor() {
+        let table = committed_stream_contexts();
+        let tight: Vec<&StreamContext> = table
+            .iter()
+            .filter(|c| c.relative_path == BLINDED_CLEAN || c.relative_path == BLINDED_FAULTED)
+            .collect();
+        assert_eq!(
+            tight.len(),
+            2,
+            "both twins must be in the table — if one has gone, the pair is no longer a pair"
+        );
+        for context in tight {
+            assert_eq!(
+                context.capabilities.kinds,
+                BTreeSet::from([FactKind::Mac, FactKind::IpV4, FactKind::Rtt]),
+                "{}: the twins declare EXACTLY the three kinds their clean side emits. Widening \
+                 this — a DRY pass onto the `corpus(…)` helper is the ordinary way it happens — \
+                 retires the whole argument for the pair's initial descriptor without reddening \
+                 anything else",
+                context.relative_path
+            );
+        }
+    }
+
     #[test]
     fn every_committed_replay_stream_is_admissible_to_the_connector() {
         let table = committed_stream_contexts();
@@ -1664,10 +1720,12 @@ mod tests {
                 context.relative_path
             );
         }
-        // Catches a DUPLICATED entry, which neither orphan direction sees: 14 entries over 13
+        // Catches a DUPLICATED entry, which neither orphan direction sees: 16 entries over 15
         // files leaves every file matched and every entry walked. True by construction, and
         // OBSERVED red rather than merely claimed — story 5.1's review-fix pass duplicated the
-        // `dhcp-churn` entry and watched this line report `left: 13, right: 14` (mutation 10).
+        // `dhcp-churn` entry and watched this line report `left: 13, right: 14` (mutation 10; the
+        // figures in that parenthesis are the corpus of the day and are left as the record of what
+        // was actually run, which is why the sentence above them carries the LIVING count instead).
         assert_eq!(
             checked,
             table.len(),
