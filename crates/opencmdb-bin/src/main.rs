@@ -28,6 +28,7 @@ mod page;
 mod permute;
 mod repo;
 mod resolver;
+mod scan_pass;
 mod trap_gate;
 
 // The i18n seam (D39/D66): user-facing strings resolve through `t!()` against `locales/`. EN is
@@ -172,12 +173,10 @@ fn app(pool: MySqlPool) -> Router {
 fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
     use opencmdb_core::connector::{Connector, VecSink};
     use opencmdb_core::observation::{ConnectorId, L2DomainId, Scope, VantageId};
-    use opencmdb_core::repo::WriteRepository;
     use tokio_util::sync::CancellationToken;
     use uuid::Uuid;
 
     use crate::arp_ping::ArpPingConnector;
-    use crate::repo::{MariaRepository, classify, insert_observation};
 
     std::thread::spawn(move || {
         let runtime = match tokio::runtime::Builder::new_current_thread()
@@ -239,25 +238,20 @@ fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
                     return;
                 }
             };
-            let repo = MariaRepository::new(pool);
-            let mut ingested = 0usize;
-            for observation in sink.observations {
-                let result = repo
-                    .transact(move |unit| {
-                        let observation = observation.clone();
-                        Box::pin(async move {
-                            insert_observation(unit.executor(), &observation)
-                                .await
-                                .map_err(classify)
-                        })
-                    })
-                    .await;
-                match result {
-                    Ok(()) => ingested += 1,
-                    Err(error) => tracing::warn!(?error, "ingesting a scanned observation failed"),
-                }
-            }
-            tracing::info!(ingested, "startup scan complete");
+            // 🔴 THE THREE LINES THAT REMAIN UNCARRIED, and story 5.14 says so rather than
+            // implying a guard. Everything below `poll_ingest_resolve` is driven end-to-end by a
+            // test with a `FixtureConnector`; these three — build the connector (above), connect
+            // the pool (above), call the seam (here) — sit inside a `thread::spawn` whose handle is
+            // dropped, and no test can reach them. Deleting THIS call leaves the suite green;
+            // deleting the `resolve` call inside the seam reds one test. That difference is what
+            // the seam bought, and it is measured rather than asserted.
+            let outcome = crate::scan_pass::poll_ingest_resolve(&mut connector, now, &pool).await;
+            tracing::info!(
+                ingested = outcome.ingested,
+                failed = outcome.failed,
+                resolved = outcome.resolution.is_some(),
+                "startup scan complete"
+            );
         });
     });
 }

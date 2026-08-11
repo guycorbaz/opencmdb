@@ -174,7 +174,7 @@ impl Connector for ArpPingConnector {
                     connector_id: self.id,
                     observed_at: now,
                     scope: self.scope,
-                    facts: vec![Fact::IpV4 { addr: ip }, Fact::Rtt { millis }],
+                    facts: emitted_facts(ip, millis),
                     raw: None,
                 });
             }
@@ -183,16 +183,89 @@ impl Connector for ArpPingConnector {
         Ok(PollSummary {
             capabilities: Capabilities {
                 as_of: now,
-                kinds: BTreeSet::from([FactKind::IpV4, FactKind::Rtt]),
+                kinds: declared_kinds(),
             },
             scopes_covered: vec![self.scope],
         })
     }
 }
 
+/// The fact kinds a ping sweep can DECLARE — the descriptor half.
+///
+/// # 🔴 Story 5.14 named this, and the naming is the point
+///
+/// This connector carries TWO independent statements of what it can see: the kinds it declares
+/// (here) and the facts it actually emits ([`emitted_facts`]). They sat forty lines apart as bare
+/// literals with **no cross-check**, and story 5.14's validation measured the consequence: a pin on
+/// one of them stays green when the other changes. Both are named now so both can be asserted, and
+/// the tests state which one carries what.
+///
+/// ⚠️ **`Mac` is absent, and its absence is structural, not an omission.** A ping sweep sees an
+/// address and a round-trip time; reading a MAC means the neighbour table, which is a privilege
+/// question a connector story owns. The consequence is that `identity::l1::join`, which keys on
+/// `(l2_domain, mac)`, can place NOTHING this connector produces — see the tests below.
+pub(crate) fn declared_kinds() -> BTreeSet<FactKind> {
+    BTreeSet::from([FactKind::IpV4, FactKind::Rtt])
+}
+
+/// The facts one answered host yields — the emission half.
+///
+/// 🔴 **This is the half that carries the structural zero**, because `join` reads FACTS and never
+/// the descriptor. A pin on [`declared_kinds`] alone was measured GREEN while a `Fact::Mac` was
+/// added here.
+pub(crate) fn emitted_facts(addr: std::net::Ipv4Addr, millis: u32) -> Vec<Fact> {
+    vec![Fact::IpV4 { addr }, Fact::Rtt { millis }]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **Story 5.14 AC3, first half** — the connector DECLARES no MAC.
+    ///
+    /// Runs everywhere, including CI: it reads a named function and opens no socket.
+    ///
+    /// ⚠️ **And it is NOT the pin that carries the structural zero.** See its sibling below. An
+    /// earlier draft of story 5.14 pinned only this half and prescribed a mutation on the emitted
+    /// facts; both validation layers measured that combination GREEN, because the two literals are
+    /// independent. Whichever of the two you change, change the other's pin's expectation too — or
+    /// find out that you did not.
+    #[test]
+    fn the_ping_sweep_declares_no_mac() {
+        assert!(
+            !declared_kinds().contains(&FactKind::Mac),
+            "a ping sweep declares an address and a round-trip time. The day it declares a MAC,              read `emitted_facts`' pin too: the identity engine keys on what is EMITTED"
+        );
+        assert_eq!(
+            declared_kinds(),
+            BTreeSet::from([FactKind::IpV4, FactKind::Rtt]),
+            "exactly these two, so a third kind is a decision someone took rather than a drift"
+        );
+    }
+
+    /// **Story 5.14 AC3, second half — the pin that carries the structural zero.**
+    ///
+    /// `identity::l1::join` keys on `(l2_domain, mac)` and reads FACTS, not descriptors. So it is
+    /// this vector, not the declaration, that makes every observation the shipped product produces
+    /// fall to the abstention path — `interfaces_minted == 0`, by construction rather than by
+    /// accident (see `scan_pass`'s own pin).
+    ///
+    /// It runs in CI because `emitted_facts` is a named function; every test that reaches a LIVE
+    /// emit is gated on `OPENCMDB_NET_TESTS`, which CI never sets, so a pin written against the
+    /// live path would be skipped — and a mutation against a skipped test comes back green.
+    #[test]
+    fn the_ping_sweep_emits_no_mac() {
+        let facts = emitted_facts("203.0.113.1".parse().expect("a documentation address"), 7);
+        assert!(
+            !facts.iter().any(|f| matches!(f, Fact::Mac { .. })),
+            "the identity engine keys on (l2_domain, mac) and reads FACTS: while this vector              carries no MAC, NOTHING the shipped product scans can ever be placed on an interface.              That is story 5.14's structural zero, and this assertion is what carries it"
+        );
+        assert_eq!(
+            facts.iter().map(Fact::kind).collect::<BTreeSet<_>>(),
+            declared_kinds(),
+            "and the two halves agree today — the cross-check whose ABSENCE let a pin on one of              them stay green while the other changed"
+        );
+    }
     use opencmdb_core::connector::VecSink;
     use opencmdb_core::observation::{L2DomainId, VantageId};
 

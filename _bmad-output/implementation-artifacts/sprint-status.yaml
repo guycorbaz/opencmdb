@@ -2471,7 +2471,7 @@ development_status:
   # DISPLAY clauses**, so this story implements none of them and the wiring it does is asked for
   # nowhere in the epic -- defensible after the split, but said plainly rather than implied.
   # ⚠️ NEXT = `dev-story` 5.14.
-  5-14-wire-the-pass-and-measure-what-it-cannot-say: ready-for-dev
+  5-14-wire-the-pass-and-measure-what-it-cannot-say: in-progress
   # 🔴 5.14b INSERTED at 5.14's validation, 2026-08-11. **The display**, and it inherits a QUESTION
   # rather than a spec: **what does the abstention counter count?** A count over current links
   # measures scan iterations (see 5.14's measurement). Deciding the denominator needs a notion of
