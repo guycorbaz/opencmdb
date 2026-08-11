@@ -172,12 +172,11 @@ fn app(pool: MySqlPool) -> Router {
 fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
     use opencmdb_core::connector::{Connector, VecSink};
     use opencmdb_core::observation::{ConnectorId, L2DomainId, Scope, VantageId};
-    use opencmdb_core::repo::WriteRepository;
     use tokio_util::sync::CancellationToken;
     use uuid::Uuid;
 
     use crate::arp_ping::ArpPingConnector;
-    use crate::repo::{MariaRepository, classify, insert_observation};
+    use crate::repo::MariaRepository;
 
     std::thread::spawn(move || {
         let runtime = match tokio::runtime::Builder::new_current_thread()
@@ -240,26 +239,87 @@ fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
                 }
             };
             let repo = MariaRepository::new(pool);
-            let mut ingested = 0usize;
-            for observation in sink.observations {
-                let result = repo
-                    .transact(move |unit| {
-                        let observation = observation.clone();
-                        Box::pin(async move {
-                            insert_observation(unit.executor(), &observation)
-                                .await
-                                .map_err(classify)
-                        })
-                    })
-                    .await;
-                match result {
-                    Ok(()) => ingested += 1,
-                    Err(error) => tracing::warn!(?error, "ingesting a scanned observation failed"),
-                }
-            }
-            tracing::info!(ingested, "startup scan complete");
+            let outcome = ingest_and_resolve(&repo, sink.observations).await;
+            tracing::info!(
+                ingested = outcome.ingested,
+                failed = outcome.failed,
+                "startup scan complete"
+            );
         });
     });
+}
+
+/// What one scan's ingest-and-resolve did, in counts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct ScanOutcome {
+    /// Observations committed to `observation_record`.
+    pub(crate) ingested: usize,
+    /// Observations whose ingest was refused. Each is its own transaction, so one refusal costs
+    /// only that observation (FR11: an observation is immutable and independently true).
+    pub(crate) failed: usize,
+    /// What the identity pass did, or `None` when the pass itself was refused.
+    pub(crate) resolution: Option<crate::resolver::Resolution>,
+}
+
+/// Ingest a scan's observations and run the identity pass over the ones that landed.
+///
+/// **The seam story 5.14 extracts**, and the reason is stated rather than implied: the body of
+/// `spawn_startup_scan` is a `std::thread::spawn` with no join handle whose first act is
+/// `ArpPingConnector::poll` — an ICMP socket — so no test can reach it. ⚠️ **The last link, the
+/// call site inside `spawn_startup_scan`, is therefore carried by NOTHING**; deleting it leaves
+/// the whole suite green, and story 5.14's M1 records that green rather than hiding it.
+///
+/// # Two transaction units
+///
+/// The ingest is one transaction PER observation and the pass is one transaction of its own. D34
+/// §2 — *"everything emitted before it is still true"* — and FR11 make an observation immutable
+/// and independently true, so a refused pass must not take the sweep's observations down with it.
+async fn ingest_and_resolve(
+    repo: &crate::repo::MariaRepository,
+    observations: Vec<opencmdb_core::observation::Observation>,
+) -> ScanOutcome {
+    use opencmdb_core::repo::WriteRepository;
+
+    use crate::repo::{classify, insert_observation};
+
+    let mut outcome = ScanOutcome::default();
+    let landed = observations.clone();
+    for observation in observations {
+        let result = repo
+            .transact(move |unit| {
+                let observation = observation.clone();
+                Box::pin(async move {
+                    insert_observation(unit.executor(), &observation)
+                        .await
+                        .map_err(classify)
+                })
+            })
+            .await;
+        match result {
+            Ok(()) => outcome.ingested += 1,
+            Err(error) => {
+                outcome.failed += 1;
+                tracing::warn!(?error, "ingesting a scanned observation failed");
+            }
+        }
+    }
+
+    // Unit two: the identity pass, in its OWN transaction. A refusal here rolls back the pass and
+    // nothing else — the observations above are already committed.
+    let result = repo
+        .transact(move |unit| {
+            let landed = landed.clone();
+            Box::pin(async move { crate::resolver::resolve(unit.executor(), &landed).await })
+        })
+        .await;
+    match result {
+        Ok(resolution) => outcome.resolution = Some(resolution),
+        Err(error) => tracing::error!(
+            ?error,
+            "the identity pass was refused — no link was written"
+        ),
+    }
+    outcome
 }
 
 /// Readiness: `200 OK` when the database answers a trivial query, `503` when it does not.
@@ -546,6 +606,194 @@ mod tests {
         assert_eq!(
             rust_i18n::t!("cause.out_of_perimeter", locale = "fr"),
             "Hors du périmètre"
+        );
+    }
+
+    // ── Story 5.14: the wiring and the two structural zeros ────────────────────────────────
+
+    use opencmdb_core::observation::{
+        ConnectorId, Fact, L2DomainId, ObsId, Observation, Scope, VantageId,
+    };
+
+    /// A scan-shaped observation: exactly what `ArpPingConnector` emits — an `IpV4` and an `Rtt`,
+    /// and no MAC.
+    fn scanned(last_octet: u8) -> Observation {
+        Observation {
+            obs_id: ObsId::from_uuid(uuid::Uuid::now_v7()),
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::nil()),
+            observed_at: chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap(),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            },
+            facts: vec![
+                Fact::IpV4 {
+                    addr: std::net::Ipv4Addr::new(192, 0, 2, last_octet),
+                },
+                Fact::Rtt { millis: 1 },
+            ],
+            raw: None,
+        }
+    }
+
+    async fn clean_pool() -> Option<MySqlPool> {
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping story-5.14 DB test: DATABASE_URL unset");
+            return None;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        for statement in [
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+        ] {
+            sqlx::query(statement).execute(&pool).await.expect("clean");
+        }
+        Some(pool)
+    }
+
+    async fn current_engine_links(pool: &MySqlPool) -> i64 {
+        let (count,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM identity_link \
+             WHERE decided_by = 'ENGINE' AND current_subject IS NOT NULL",
+        )
+        .fetch_one(pool)
+        .await
+        .expect("count current engine links");
+        count
+    }
+
+    /// **AC1** — the helper the startup scan calls really runs the pass and writes rows.
+    #[tokio::test]
+    async fn the_startup_helper_ingests_and_resolves() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = clean_pool().await else {
+            return;
+        };
+        let repo = repo::MariaRepository::new(pool.clone());
+        let outcome = ingest_and_resolve(&repo, vec![scanned(10), scanned(11)]).await;
+        assert_eq!(outcome.ingested, 2, "both observations ingest");
+        assert_eq!(outcome.failed, 0);
+        let resolution = outcome.resolution.expect("the pass must run");
+        assert_eq!(resolution.links_written, 2, "the pass writes a link each");
+        assert_eq!(current_engine_links(&pool).await, 2);
+    }
+
+    /// **AC2** — two transaction units: a REFUSED pass leaves the sweep's observations standing.
+    #[tokio::test]
+    async fn a_refused_pass_does_not_take_the_observations_down() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = clean_pool().await else {
+            return;
+        };
+        // One id, two contents: `resolve_within` refuses the slice (`ContradictoryObservation`)
+        // BEFORE it writes anything. The first copy still ingests.
+        let mut twin = scanned(10);
+        let mut contradiction = twin.clone();
+        contradiction.facts = vec![Fact::Rtt { millis: 99 }];
+        twin.raw = None;
+        let repo = repo::MariaRepository::new(pool.clone());
+        let outcome = ingest_and_resolve(&repo, vec![twin, contradiction]).await;
+
+        assert!(
+            outcome.resolution.is_none(),
+            "the pass must have been refused; got {:?}",
+            outcome.resolution
+        );
+        assert_eq!(outcome.ingested, 1, "the first copy is committed");
+        let (observations,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM observation_record")
+            .fetch_one(&pool)
+            .await
+            .expect("count observations");
+        assert_eq!(
+            observations, 1,
+            "a refused pass must not roll the sweep's observations back — \
+             the ingest and the pass are two transaction units (D34 §2, FR11)"
+        );
+    }
+
+    /// **AC3 / pin 1** — the only connector `main.rs` reaches declares no `Mac` kind, so every
+    /// observation it produces falls to the abstention path.
+    #[tokio::test]
+    async fn pin_the_connector_declares_no_mac_kind() {
+        use opencmdb_core::connector::{Connector, VecSink};
+        use opencmdb_core::observation::FactKind;
+        let mut connector = arp_ping::ArpPingConnector::new(
+            ConnectorId::from_uuid(uuid::Uuid::nil()),
+            Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            },
+            vec![],
+        );
+        let mut sink = VecSink::default();
+        let summary = connector
+            .poll(
+                chrono::DateTime::from_timestamp(0, 0).unwrap(),
+                &mut sink,
+                tokio_util::sync::CancellationToken::new(),
+            )
+            .await
+            .expect("poll");
+        assert!(
+            !summary.capabilities.kinds.contains(&FactKind::Mac),
+            "the ARP/ping connector now DECLARES a Mac kind: the identity pass can place what it \
+             scans, and story 5.14's structural zero (§4a) is over — re-open the reach counter"
+        );
+    }
+
+    /// **AC4 / pin 2** — over a MAC-less slice the pass mints NO interface and every observation
+    /// abstains. Asserted on the pass's own `Resolution`; the read is 5.14b's.
+    #[tokio::test]
+    async fn pin_a_mac_less_slice_mints_no_interface() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = clean_pool().await else {
+            return;
+        };
+        let slice = vec![scanned(10), scanned(11), scanned(12)];
+        let repo = repo::MariaRepository::new(pool.clone());
+        let outcome = ingest_and_resolve(&repo, slice.clone()).await;
+        let resolution = outcome.resolution.expect("the pass must run");
+        assert_eq!(
+            resolution.interfaces_minted, 0,
+            "a scanned observation now MINTS an interface — `join`'s key reaches what the \
+             ARP/ping connector emits, and §4a's zero is over"
+        );
+        assert_eq!(
+            resolution.abstentions,
+            slice.len(),
+            "every scanned observation must abstain: {resolution:?}"
+        );
+    }
+
+    /// **AC5 / pin 3** — 🔴 **this pin asserts a DEFECT, not a specification.**
+    #[tokio::test]
+    async fn pin_the_population_accumulates_which_is_the_defect() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = clean_pool().await else {
+            return;
+        };
+        let repo = repo::MariaRepository::new(pool.clone());
+        // Two passes, ONE address, DIFFERENT `obs_id`s — a re-scan of one unchanged host.
+        let first = ingest_and_resolve(&repo, vec![scanned(10)]).await;
+        assert_eq!(first.ingested, 1);
+        let second = ingest_and_resolve(&repo, vec![scanned(10)]).await;
+        assert_eq!(second.ingested, 1);
+
+        assert_eq!(
+            current_engine_links(&pool).await,
+            2,
+            "🔴 THIS IS A DEFECT UNDER MEASUREMENT, NEVER A SPECIFICATION. Two scans of ONE \
+             unchanged host leave TWO current links, because each scan mints fresh `obs_id`s and \
+             the population is OBSERVATIONS, so a count over links measures UPTIME, not reach. \
+             If this assertion falls to 1 the defect is FIXED and this test must be deleted, not \
+             repaired. Choosing the counter's denominator is a GROUPING question and belongs to \
+             story 5.14b / Epic 6."
         );
     }
 
