@@ -70,7 +70,13 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-11  # 5.13b **CODE-REVIEWED (three layers) and REPAIRED** -> stays `review`
+last_updated: 2026-08-11  # 5.13b **DONE** -- PR #79 squash-merged as `6c95115` after a green CI run
+                          # (1 min 4 s). **Epic 5 is now 18/19.** Branch deleted locally and on
+                          # `origin`. `master` carries **494 tests** (273 bin + 159 core + 62 xtask),
+                          # seven gates green, **28 fixtures**, **26 traps across TEN families**,
+                          # trap gate still RED. NEXT = `create-story` 5.14, then Epic 5's
+                          # RETROSPECTIVE, which is REQUIRED and closes the epic.
+                          # (superseded entry:) 5.13b **CODE-REVIEWED (three layers) and REPAIRED** -> stays `review`
                           # (`done` is the MERGE's business). **493 -> 494 tests**, seven gates
                           # green, 28 fixtures. NEXT = PR.
                           # 🔑 THE LESSON, and it is Guy's arbitration rather than a patch: the
@@ -2332,7 +2338,7 @@ development_status:
   # deliberately); D36's precondition is supplied and is NARROWER than it reads, `read_jsonl`
   # dropping control records so the trap path is provably blind to the record just committed; and
   # story 5.2b's *"green without the pin"* is STALE since 5.7 and must be re-derived per family.
-  5-13b-monotone-honesty-trap-family: review
+  5-13b-monotone-honesty-trap-family: done
   5-14-abstention-displayed-by-cause: backlog
   epic-5-retrospective: required
 
