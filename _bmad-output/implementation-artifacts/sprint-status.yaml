@@ -2492,7 +2492,29 @@ development_status:
   # (`purge_engine_links` has no production caller while the pass accumulates ~105 000 rows/year for
   # one host); the denominator (5.14b + Epic 6); and the three uncarried lines (whoever makes the
   # scan joinable -- the periodic scheduler, FR6).
-  # ⚠️ NEXT = `code-review` 5.14, then PR.
+  # ✅ CODE-REVIEWED (three layers) and REPAIRED, 2026-08-11. **502 tests, seven gates green.**
+  # 🔴 ALL THREE LAYERS FOUND THE SAME PRODUCTION DEFECT and one MEASURED it: extracting the seam
+  # removed the ingest loop from `main.rs` and **LEFT THE POLL** -- every startup swept the CIDR
+  # TWICE and threw the first sweep away (4.009 s / 2.0075 s / 1.0025 s as the probe timeout moved,
+  # so it scaled WITH the timeout). A host answering the first sweep and missing the second was
+  # silently lost. `sink` stayed syntactically used, so the compiler said nothing, and deleting the
+  # dead block left all 502 tests green. ⚠️ **The story's own measurement had been taken on
+  # `127.0.0.1/32`** -- the one case where a double sweep of one host is invisible.
+  # 🔴 THE PINS DID NOT HOLD THE PROPERTY THEY CLAIMED: a `Fact::Mac` at the EMIT SITE -- the shape
+  # the upgrade must take, a MAC coming from a neighbour lookup keyed on the address, which
+  # `emitted_facts(ip, millis)` cannot reach -- leaves 502 green while the real binary places a
+  # link. **Guy: narrow the promise (5.12's precedent)** -- a TRIPWIRE, never a barrier.
+  # 🔴 M1b WAS MISRECORDED: **6 red, not 3**. The mutation discarded the pass RESULT instead of
+  # deleting its CALL; 3 was just the number of tests reading `.resolution`. Re-measured live: all
+  # six, every one assertion-carried, four dying on the database count. **A mutation named for one
+  # thing and applied to another measures the other thing** -- the same family as the pins, TWICE in
+  # one story. And *"two divergences"* was FOUR (M5 7->11, M6 7->4, both predictions copied from a
+  # validation worktree as if they were this tree's).
+  # 🔑 REGISTERED, not fixed (Guy): **two concurrent passes mint TWO interfaces for ONE MAC**, both
+  # reporting success -- not reachable today because the MAC-less connector shields it, so **the
+  # connector story that gives it a MAC removes the shield and must carry the race**; and
+  # `current_subject IS NOT NULL` is NOT equivalent to `valid_to = OPEN_END`.
+  # ⚠️ NEXT = PR.
   5-14-wire-the-pass-and-measure-what-it-cannot-say: review
   # 🔴 5.14b INSERTED at 5.14's validation, 2026-08-11. **The display**, and it inherits a QUESTION
   # rather than a spec: **what does the abstention counter count?** A count over current links

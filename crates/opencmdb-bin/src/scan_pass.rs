@@ -13,10 +13,14 @@
 //! nothing" — true, and incomplete: its validation then measured that a seam GENERIC over
 //! [`Connector`] lets a test drive poll → ingest → resolve with the already-committed
 //! `FixtureConnector`, at which point the uncarried region shrinks from *the whole wiring* to
-//! **three lines** — build the connector, connect the pool, call this function.
+//! **`spawn_startup_scan` itself** — the runtime build, the CIDR parse, the two environment knobs,
+//! the pool connect, four early-return branches and the call to this function.
 //!
 //! 🔑 *Recording an unavoidable GREEN is honest; recording it without measuring how much it covers
-//! is not.* The three lines are still carried by nothing, and that is stated rather than implied.
+//! is not.* ⚠️ **And the first attempt at that measurement was wrong**: it said "three lines", which
+//! was a guess dressed as a count — the code review then found a duplicated network sweep living
+//! inside the region the sentence had shrunk to nothing. **A region you have not counted is not a
+//! region you have measured.**
 //!
 //! # 🔴 Two transaction units, and the pass sees only what LANDED
 //!
@@ -279,9 +283,15 @@ mod tests {
     /// **AC1** — the seam really polls, ingests and resolves, driven end to end by a test.
     ///
     /// 🔴 This is what arbitration 8 bought. Deleting the `resolve` call inside
-    /// [`poll_ingest_resolve`] reds THIS test; deleting the call to `poll_ingest_resolve` inside
-    /// `spawn_startup_scan` reds nothing, and the module doc says so. The difference between the two
-    /// is the measured size of what remains uncarried: three lines.
+    /// [`poll_ingest_resolve`] reds **six** tests — all of this module's — every one on a named
+    /// assertion; deleting the call to `poll_ingest_resolve` inside `spawn_startup_scan` reds
+    /// nothing.
+    ///
+    /// ⚠️ The story first recorded **three**, from a mutation that discarded the pass's RESULT
+    /// instead of deleting its CALL. Re-measured against a live database after the code review
+    /// derived the contradiction: four of the six die on the database count, two on `Resolution`'s
+    /// own fields. **A mutation named for one thing and applied to another measures the other
+    /// thing** — the same family this story's own connector pins fell into.
     #[tokio::test]
     async fn the_seam_polls_ingests_and_resolves() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
@@ -378,8 +388,13 @@ mod tests {
     ///
     /// # 🔴 This assertion describes a defect, not a specification
     ///
-    /// Two scans of ONE unplaceable address leave TWO current abstention links, because each scan
-    /// mints fresh `obs_id`s and nothing supersedes an abstention across passes. At a five-minute
+    /// Two scans of ONE address leave TWO current links, because each scan mints fresh `obs_id`s
+    /// and the pass supersedes NO engine link across passes.
+    ///
+    /// ⚠️ **Wider than "abstentions", and the code review measured the difference**: two scans
+    /// carrying the same MAC leave 2 links and 1 INTERFACE. So **giving the connector a MAC does
+    /// not fix this counter** — the accumulation is per-OBSERVATION, not per-abstention, and a
+    /// non-accumulating denominator already exists in the same store for placed rows. At a five-minute
     /// scan interval that one host reads ~105 000 after a year: **a counter built on this measures
     /// uptime, not reach.**
     ///

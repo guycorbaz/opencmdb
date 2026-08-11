@@ -221,6 +221,27 @@ pub(crate) fn emitted_facts(addr: std::net::Ipv4Addr, millis: u32) -> Vec<Fact> 
 mod tests {
     use super::*;
 
+    /// # 🔴 WHAT THESE TWO PINS DO NOT COVER — read this before trusting them
+    ///
+    /// Story 5.14's code review measured it: adding a `Fact::Mac` **at the emit site inside
+    /// `poll`**, rather than inside [`emitted_facts`], leaves **all 502 tests green** — both pins
+    /// and `scan_pass`'s structural-zero pin included — while the real binary then mints an
+    /// interface and places a link where the committed tree abstains.
+    ///
+    /// ⚠️ And that bypass is not an adversary's trick, it is **the shape the upgrade must take**:
+    /// a MAC comes from a neighbour lookup keyed on the address, which `emitted_facts(ip, millis)`
+    /// cannot reach.
+    ///
+    /// **So the narrowed, true promise, on story 5.12's precedent: these pins are a TRIPWIRE
+    /// against a change made through these two functions, never a barrier against a MAC arriving
+    /// by another route.** Read them as *"the named fact set and the named descriptor still agree
+    /// and still exclude the MAC"*, and never as *"nothing the shipped product emits can carry
+    /// one"*. The barrier would need a test over what `poll` really emits, which needs the ICMP
+    /// socket — and every such test is gated on `OPENCMDB_NET_TESTS`, which CI never sets, so a
+    /// mutation against it comes back green because the test was SKIPPED.
+    ///
+    /// The honest closure is a connector story that routes every fact through one construction
+    /// site, or a CI that sets the variable. Registered; not implied by these.
     /// **Story 5.14 AC3, first half** — the connector DECLARES no MAC.
     ///
     /// Runs everywhere, including CI: it reads a named function and opens no socket.

@@ -47,7 +47,10 @@ by `deferred-work.md:2407` and by the fact that without it the display cannot me
   unanswerable;
 - it does **not** change BEHAVIOUR in `opencmdb-core` — scoped to behaviour on purpose, 5.13b having
   measured that a bare *"does not touch X"* becomes a reason not to look at X;
-- it does **not** touch the ARP/ping connector. §4a MEASURES what it emits; giving it a MAC is a
+- ⚠️ it said it does **not** touch the ARP/ping connector — **and it does**, and the correction
+  belongs here where a reader meets the list rather than 270 lines below it. Two anonymous literals
+  inside `poll` became two named functions, **no behaviour change**, because neither could be
+  asserted otherwise. What is untouched is *what the connector emits*; giving it a MAC is a
   connector story with its own privilege question (the neighbour table is not free);
 - it does **not** add a dependency, and it does **not** edit `epics.md` (§7 registers instead).
 
@@ -216,8 +219,15 @@ _Reddened by: M3._
 
 **AC3 — the connector's MAC-lessness is pinned on BOTH literals, and the asymmetry is stated.**
 The declaration and the emission each get a pin; the doc says **which one carries §4a's structural
-zero** (the emission) and **which one runs in CI** (the declaration), and does not claim the second
-is the first.
+zero** (the emission) and does not claim the other is it.
+⚠️ **The asymmetry this AC was written for is GONE and the AC text outlived it**: extracting
+`emitted_facts` made BOTH pins run in CI, so the "one of them only runs gated" clause describes
+nothing. 🔴 **And what replaced it is worse**: the code review measured that a `Fact::Mac` added at
+the emit site inside `poll` — the shape the upgrade must take — leaves both pins AND the
+structural-zero pin green while the real binary places a link. **Guy's arbitration 9: narrow the
+promise on story 5.12's precedent** — these are a TRIPWIRE against a change made through the two
+named functions, never a barrier against a MAC arriving by another route, and the connector's doc
+says so where a reader meets it.
 _Reddened by: M4 and M4b._
 
 **AC4 — the structural zero is pinned on `Resolution`.**
@@ -332,8 +342,8 @@ absence of that check is precisely what let the first draft's pin stay green.
 | id | mutation | predicted | OBSERVED | red | carrier |
 |---|---|---|---|---|---|
 | **M1** | delete the seam call inside `spawn_startup_scan` | **GREEN** | ✅ **0 red** — the three lines are uncarried, exactly as arbitration 6 established and arbitration 8 bounded | 0 | — |
-| **M1b** | delete the `resolve` call inside the seam | RED ×1 | ⚠️ **3 red** — a divergence, in the good direction: three of the seam's tests consume `resolution`, where the validation's build had one. Recorded rather than smoothed | 3 | assertion |
-| **M2** | run the pass in the SAME transaction as the ingest | RED | 🔴 **NOT EXECUTABLE.** There is no single ingest unit to join — the ingest is one `transact` PER OBSERVATION, which this story's own §2 established and its mutation table kept a row for anyway. Story 5.9's M4/M5 family. **M3 carries the boundary instead** | n/a | n/a |
+| **M1b** | delete the `resolve` call inside the seam | RED ×1 | 🔴 **6 red — and the 3 first recorded was WRONG because the mutation was.** It discarded the pass's RESULT instead of deleting its CALL, so the pass still ran; 3 is simply the number of tests that read `.resolution`. Re-measured after the code review derived the contradiction: **all six**, every one on a NAMED assertion, four of them dying on the database count | **6** | assertion ×6 |
+| **M2** | run the pass in the SAME transaction as the ingest | RED | ⚠️ **Not executable as a ONE-LINE change** — there is no single ingest unit to join, the ingest being one `transact` per observation. It IS executable by moving the call inside a `transact` closure, and saying *"not executable"* over-claimed. **The cost is real: `scan_pass`'s "a refused pass must not undo the ingest" comment is carried by nothing**, since §2 measured both refusals unreachable from a scan slice. Registered | n/a | n/a |
 | **M3** | hand the pass the UNFILTERED slice | RED | ✅ **exactly 1**, `a_refused_ingest_is_bounded_to_its_own_row`, on the database-count assertion placed first | 1 | assertion |
 | **M4** | `FactKind::Mac` in the **DECLARATION** | RED | ✅ **2 red** — the declaration pin AND the emission pin's agreement assertion. The cross-check working | 2 | assertion |
 | **M4b** | `Fact::Mac` in the **EMISSION** | RED | ✅ **1 red**, the pin that carries the structural zero. 🔴 **The first draft measured this combination GREEN**; that is the repair, measured | 1 | assertion |
@@ -342,9 +352,22 @@ absence of that check is precisely what let the first draft's pin stay green.
 | **M7** | drop `decided_by = 'ENGINE'` | RED | ✅ **1 red** | 1 | assertion |
 | **M7b** | drop `current_subject IS NOT NULL` | RED | ✅ **1 red** | 1 | assertion |
 
-**Ten rows: nine executable mutations, one NOT EXECUTABLE, one GREEN by construction (M1).**
-Carriers read from each panic message; **all assertion-carried** among the reds. ⚠️ Two divergences
-from prediction, both recorded above: M1b's count, and M2's executability.
+**Ten rows: nine executable mutations, one not executable as a one-line change, one GREEN by
+construction (M1).** Carriers read from each panic message.
+
+🔴 **FOUR divergences from prediction, not two** — the headline first said two and its own table
+refuted it, which is the family this project has now carried in five consecutive stories and which
+§7 warns about three paragraphs above:
+
+| id | predicted | observed |
+|---|---|---|
+| M1b | RED ×1 | **6**, and the first record of **3** was itself wrong (the mutation was mislabelled) |
+| M2 | RED | **not executable as a one-line change** — the honest wording; it IS executable by moving the call inside a `transact` closure, which is a different statement |
+| M5 | RED ×7 | **11** |
+| M6 | RED ×7 | **4** |
+
+⚠️ M5's and M6's predictions were the VALIDATION worktree's figures, copied into this table as if
+they were mine. A number inherited from another tree is not a prediction about this one.
 
 #### What is NOT claimed
 

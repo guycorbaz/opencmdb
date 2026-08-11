@@ -236,13 +236,21 @@ fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
                     return;
                 }
             };
-            // 🔴 THE THREE LINES THAT REMAIN UNCARRIED, and story 5.14 says so rather than
-            // implying a guard. Everything below `poll_ingest_resolve` is driven end-to-end by a
-            // test with a `FixtureConnector`; these three — build the connector (above), connect
-            // the pool (above), call the seam (here) — sit inside a `thread::spawn` whose handle is
-            // dropped, and no test can reach them. Deleting THIS call leaves the suite green;
-            // deleting the `resolve` call inside the seam reds one test. That difference is what
-            // the seam bought, and it is measured rather than asserted.
+            // 🔴 WHAT IS UNCARRIED HERE, stated after the code review corrected it TWICE.
+            //
+            // Everything below `poll_ingest_resolve` is driven end-to-end by a test with a
+            // `FixtureConnector`. Everything in THIS function is not: it is a `thread::spawn` whose
+            // handle is dropped, and no test can reach it. Deleting the call below leaves the whole
+            // suite green; deleting the `resolve` call inside the seam reds **six** tests, every
+            // one on a named assertion.
+            //
+            // ⚠️ An earlier version of this comment said "the three lines that remain uncarried"
+            // and "reds one test", and called itself measured. Both were wrong, and the first was
+            // wrong in the way that mattered: the uncarried region is this whole function — the
+            // runtime build, the CIDR parse, two environment knobs that decide what the scan
+            // MISSES, the pool connect and four early-return branches — and a live defect was
+            // sitting in it (a duplicated sweep, above) while the sentence claimed three lines.
+            // **A region you have not counted is not a region you have measured.**
             let outcome = crate::scan_pass::poll_ingest_resolve(&mut connector, now, &pool).await;
             tracing::info!(
                 ingested = outcome.ingested,
