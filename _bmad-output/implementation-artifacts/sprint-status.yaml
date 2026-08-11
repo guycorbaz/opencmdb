@@ -2428,7 +2428,49 @@ development_status:
   # the omission including **`:2407` — the entry that registers the WIRING**, i.e. the story's own
   # headline act. §1 said "about twenty" while §9 listed twelve: two sections of one document
   # disagreeing, and §9 is the one the tasks bind to. Corrected to twenty-two, counted.
-  # ⚠️ NEXT = `create-story validate` on the REWRITTEN 5.14 (it changed enough to need it again).
+  # ✅ VALIDATED A SECOND TIME 2026-08-11, on the REWRITTEN story. **Two further arbitrations (7, 8).**
+  # 🔴 BOTH LAYERS FOUND THE SAME HEADLINE: **AC3 pinned the DECLARATION while its own mutation muted
+  # the EMISSION.** `arp_ping.rs` carries two independent literals forty lines apart with NO
+  # cross-check -- `facts: vec![Fact::IpV4, Fact::Rtt]` (:177) and `Capabilities { kinds: {IpV4,
+  # Rtt} }` (:183). Adding `Fact::Mac` to the emitted vector left **all 495 tests GREEN, the pin
+  # among them** -- and it is the EMISSION that carries the structural zero, because `join` reads
+  # FACTS, not descriptors. 🔑 This is story 5.12's own recorded family (*"M5 said 'neuter the gate'
+  # and was applied to the MATCHER"*) recurring in the story whose subject is measurements that
+  # measure something other than what they name. Narrowed on 5.12's precedent: pin BOTH literals,
+  # and STATE that the one which runs in CI is not the one that carries the fact -- every test
+  # reaching a live emit is gated on `OPENCMDB_NET_TESTS`, which **CI never sets**.
+  # 🔴 **TWO OF THE STORY'S OWN ACs CONTRADICTED EACH OTHER**: AC4 forbade a new read, AC5 required
+  # one. `Resolution` is per-PASS and reports `links_written: 1` after two passes, never "2 current
+  # links", so the accumulation is visible only through the database. The register disposition built
+  # on *"this story adds no read"* fell with it.
+  # 🔴 **ARBITRATION 7 -- a DB-refused observation cost EVERY OTHER observation its link**, and AC2
+  # could not see it. `identity_link.observation_id` is a foreign key onto `observation_record`, so
+  # one un-ingested row fails the whole pass: measured `resolution=None`, **0 current engine links**,
+  # while AC2 stayed green throughout (it asserted only that the observations survive, and they do).
+  # **Guy: hand the pass only what LANDED, and REPLACE AC2** -- its subject becomes *"the blast
+  # radius of a refused ingest is bounded to its own row"*, because the old subject was unwritable:
+  # the only two refusals are unreachable from a scan slice.
+  # 🔴 **ARBITRATION 8 -- the cheap guard arbitration 6 dismissed EXISTS, in ~40 lines.** A seam
+  # GENERIC over `Connector` lets a test drive poll->ingest->resolve with the already-committed
+  # `FixtureConnector`; deleting the wiring inside it reds exactly ONE test where the story's M1 reds
+  # none. The uncarried region shrinks from the whole wiring to **three lines**. 🔑 The sentence
+  # worth keeping: *recording an unavoidable GREEN is honest; recording it without measuring how much
+  # it covers is not.* Arbitration 6 is KEPT beside it, not overwritten -- it was right that the last
+  # link cannot be carried, and wrong that one extraction was the end of it.
+  # ⚠️ Also caught: **every predicate of the read the story must add is carried by nothing** (drop
+  # `decided_by`, drop `current_subject IS NOT NULL`, drop both -- all three GREEN), the FIFTH
+  # recurrence of that family; the accumulation's honest mutation is a PRODUCTION one (widen the
+  # vacate pass -- 7 red) rather than a fixture edit, and it doubles as the argument for NOT fixing
+  # the denominator here, since over-vacating **erases a host that missed a single scan**; the
+  # story's pin told a future reader to DELETE it on a numeric change, but under the honest mutation
+  # the number falls to 0, which is the OPPOSITE defect; and `:2407` was quoted at half its length --
+  # it reads *"no page to display them **and no purge to remove them**"*, and the PURGE half is the
+  # one the accumulation makes acute (`purge_engine_links` has no production caller), owned by
+  # NEITHER story and now registered.
+  # ⚠️ And a scope statement the story had left implicit: **all four of `epics.md`'s 5.14 clauses are
+  # DISPLAY clauses**, so this story implements none of them and the wiring it does is asked for
+  # nowhere in the epic -- defensible after the split, but said plainly rather than implied.
+  # ⚠️ NEXT = `dev-story` 5.14.
   5-14-wire-the-pass-and-measure-what-it-cannot-say: ready-for-dev
   # 🔴 5.14b INSERTED at 5.14's validation, 2026-08-11. **The display**, and it inherits a QUESTION
   # rather than a spec: **what does the abstention counter count?** A count over current links
