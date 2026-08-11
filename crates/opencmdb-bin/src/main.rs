@@ -171,9 +171,7 @@ fn app(pool: MySqlPool) -> Router {
 /// bound, and a fresh pool avoids sharing connections across runtimes. The periodic scheduler
 /// (FR6) will supersede this.
 fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
-    use opencmdb_core::connector::{Connector, VecSink};
     use opencmdb_core::observation::{ConnectorId, L2DomainId, Scope, VantageId};
-    use tokio_util::sync::CancellationToken;
     use uuid::Uuid;
 
     use crate::arp_ping::ArpPingConnector;
@@ -222,15 +220,15 @@ fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
                 .with_timeout(std::time::Duration::from_millis(timeout_ms));
 
             tracing::info!(%cidr, concurrency, timeout_ms, "startup scan: pinging subnet");
-            let mut sink = VecSink::default();
-            if let Err(error) = connector
-                .poll(now, &mut sink, CancellationToken::new())
-                .await
-            {
-                tracing::warn!(?error, "startup scan failed");
-                return;
-            }
 
+            // 🔴 The poll lives in `scan_pass::poll_ingest_resolve` and NOWHERE ELSE. Story 5.14's
+            // code review found — by three layers independently, and measured by one of them at
+            // 4.009 s / 2.0075 s / 1.0025 s as the probe timeout moved — that extracting the seam
+            // had removed the ingest loop here and LEFT the poll, so every startup swept the CIDR
+            // TWICE and threw the first sweep away. A host answering the first and missing the
+            // second was silently lost. `sink` stayed syntactically used, so the compiler said
+            // nothing, and deleting the dead block left all 502 tests green: **nothing pins this**,
+            // and that is why the "three uncarried lines" figure below was wrong.
             let pool = match MySqlPool::connect(&database_url).await {
                 Ok(pool) => pool,
                 Err(error) => {
