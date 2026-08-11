@@ -2339,7 +2339,197 @@ development_status:
   # dropping control records so the trap path is provably blind to the record just committed; and
   # story 5.2b's *"green without the pin"* is STALE since 5.7 and must be re-derived per family.
   5-13b-monotone-honesty-trap-family: done
-  5-14-abstention-displayed-by-cause: backlog
+  # 🔴 5.14 CONTEXTED 2026-08-11 with Guy — **THREE arbitrations**, and the first CHANGES WHAT THE
+  # STORY IS. Two clauses of `epics.md` are unimplementable, each established by code:
+  #   (a) **the counter would read ZERO in the shipped product.** `main.rs:130-135` spawns the
+  #       startup scan and `:249` writes each observation, but **nothing calls `resolver::resolve`**
+  #       outside `#[cfg(test)]` — verified over the whole tree. A display alone would be
+  #       structurally zero, permanently, and GREEN: decoration in D18's sense. **Guy: 5.14 WIRES
+  #       the pass AND displays.** One story, not split.
+  #   (b) **`epics.md`'s third AC is unreachable TWICE OVER.** Nothing produces `Verdict::Supports`
+  #       or `Opposes` (the only occurrence outside `cascade.rs` is an exhaustive match arm at
+  #       `l1.rs:475`), so L1 cannot conclude `Ambiguous` at all — `resolver.rs:654` says so in as
+  #       many words; and nothing writes a `link_candidate` row in production, the only call site
+  #       being a test. `resolver.rs:669-671` names the owner: *"Whoever produces the first
+  #       `Ambiguous` owns filling this slice, and that is **Epic 6**"*. **Guy: re-owned to Epic 6,
+  #       with the unreachability ASSERTED** — a test that reds the day one appears, so the
+  #       successor is named by a falling test rather than by a sentence.
+  # 🔑 THIRD ARBITRATION: **about twenty `deferred-work.md` entries name 5.14**, most of them BY
+  # CONDITION (*"the first story with a ranking surface"*, *"the first place a consumer can justify
+  # the split"*, *"the FR16 surface"*). **Answer the conditions one by one** — CLOSED where answered,
+  # RE-OWNED where not, each with the measurement. Story 5.7's precedent: `Conclusion::rule()` was
+  # closed by ANSWERING its condition, not by building the accessor. A divergence from the story's
+  # predicted disposition is a FINDING.
+  # ⚠️ READ §4 BEFORE ANY UI: **the abstention panel ALREADY EXISTS.** Story 3.8 shipped "Reach"
+  # (`page.rs:112` `cause_label` + the `t!()` seam, `_gap_card.html:47-48`) — but for
+  # `gap::AbstentionCause` over DECLARED ATTRIBUTES, where this story renders
+  # `IdentityAbstentionCause` over INTERFACES. `deferred-work.md` forbids a `From` bridge between
+  # them *"appearing silently"*, so: a second section, its own label function, its own locale keys.
+  # A shared `cause_label` IS that silent bridge.
+  # 🔑 The parse-back is a DESIGN decision, not plumbing: `cause_token` writes and **nothing parses
+  # it back**. The display should parse into `IdentityAbstentionCause` and REFUSE an unknown token,
+  # so a cause the domain does not have cannot reach a screen — which also gives the enum its first
+  # real consumer and makes several registered entries answerable by measurement.
+  # ⚠️ Today exactly ONE cause is producible (`AbsenceOfProof`), so the grouped list has one line.
+  # Build the grouping anyway (Epic 6 fills it) but **assert what is true** — the line that exists
+  # AND the absence of the other — never that "grouping works".
+  # ⚠️ THIS IS THE LAST STORY OF EPIC 5, and the epic does NOT close until `bmad-retrospective` has
+  # run. Its input is already registered by name: `epics.md`'s AC1 falsified by the code it
+  # describes (5.9b), the `TRUNCATE … WHERE` correction (5.10), 5.12's second-session lesson, and
+  # 5.13b's four — the reserved-prefix hole no gate covers, *"a promise of non-modification shelters
+  # false sentences"*, *"a floor is only a guard while it equals what is there"*, and the
+  # mutation-driver family's FOURTH recurrence. Carry them in; do not rediscover them.
+  # ⚠️ NEXT = `create-story validate` (MANDATORY: two fresh-context agents).
+  # ⚠️ Baseline to RE-MEASURE, not quote: `master` at `6ceb284` — 494 tests, seven gates, 28
+  # fixtures, 26 traps across ten families, trap gate RED.
+  # 🔴 5.14 SPLIT AT VALIDATION, 2026-08-11 (Guy, arbitration 4). **Epic 5: 19 -> 20 stories.**
+  # ⚠️ The KEY was renamed with the file (`5-14-abstention-displayed-by-cause` ->
+  # `5-14-wire-the-pass-and-measure-what-it-cannot-say`), because the surface it was named after is
+  # no longer in it — story 5.13's precedent.
+  # ✅ VALIDATED by two fresh-context agents. **The gap-hunt BUILT the whole story** (read, wiring,
+  # display, bans, AC7 assertion — 503 tests, seven gates green) and then **ran the REAL BINARY
+  # against a REAL MariaDB**. What it found there is why the story is no longer the story it was.
+  # 🔴 **WIRING THE PASS REPLACES ONE STRUCTURAL ZERO WITH ANOTHER.** `arp_ping.rs:177` emits
+  # `vec![Fact::IpV4, Fact::Rtt]` and declares `Capabilities { kinds: {IpV4, Rtt} }` — **no MAC,
+  # EVER** — and it is the only connector `main.rs` reaches; `join` keys on `(L2DomainId, MacAddr)`.
+  # So **every scanned observation abstains**, `interfaces_minted` is 0 by construction, and the
+  # shipped page reads `0 evaluated · 1 not evaluated` against the mock's `187 · 113`. The story's
+  # §3a proved the counter would read zero WITHOUT the wiring; WITH it the *evaluated* half is a
+  # permanent zero for the same structural reason, one line further down.
+  # 🔴 **AND THE COUNTER AGES, which falsifies the promise it exists to keep.** Each scan mints
+  # fresh `obs_id`s, so each scan writes a NEW current abstention link and **nothing supersedes
+  # anything**: five runs of the binary over ONE host gave `current engine links = 1, 2, 3, 4, 5`.
+  # ⚠️ The `current_subject IS NOT NULL` filter does NOT stop it — the draft believed it did. At a
+  # five-minute scan interval that one unplaceable host reads **~105 000 after a year**. So the
+  # story's own AC4 (*"the count renders identically whatever the age of the rows"*) and the UX ban
+  # (*"six months of inaction and it still reads 113, in the same grey"*) are falsified BY THE
+  # WIRING ITS OWN AC1 MANDATES. **The counter measures uptime, not reach.**
+  # 🔑 **Guy: SPLIT. 5.14 wires and MEASURES; 5.14b INSERTED, the display.** The reason for not
+  # fixing the denominator here: an abstained observation HAS no interface — that is what abstention
+  # means — so collapsing sightings of one unplaceable thing means deciding what makes two sightings
+  # the same thing WITHOUT an identity. **That is grouping, and grouping is Epic 6.** Choosing a
+  # denominator under the pressure of a screen to ship would settle in a display story what the next
+  # epic exists to decide.
+  # 🔑 TWO FURTHER ARBITRATIONS: (5) the section is HOISTED out of the declared side's visibility
+  # gate — measured, with four abstentions in the database and no declared row the page renders only
+  # *"No declared record yet"*, so a scan-only deployment (the DEFAULT at first boot) never sees the
+  # counter; the AC forbidding any change to story 3.8's template is amended and the reason written.
+  # 5.14b's. (6) The guard seam **IS the helper, decided and WRITTEN**: deleting the ENTIRE wiring
+  # from `spawn_startup_scan` leaves all 282 tests GREEN, because that function is a
+  # `std::thread::spawn` with no join handle whose body is inseparable from a real ICMP poll. So the
+  # last link is carried by NOTHING, and the story SAYS so with the mutation as evidence rather than
+  # claiming a guard on the startup path.
+  # ⚠️ Also measured and correcting the draft: `InstantRegressed`/`ContradictoryObservation` are
+  # **UNREACHABLE from a scan slice** (fresh `Uuid::now_v7()` per observation, one `observed_at` per
+  # poll, five binary runs, no refusal) — the draft called them *"the two refusals a real network can
+  # produce"*, which is FALSE; and the transaction menu the draft offered **does not exist** — the
+  # ingest is already one `transact` PER OBSERVATION, so two units is the only shape the code offers.
+  # ⚠️ And the fact-check found the draft's §9 listed **12 of the 22** register entries naming 5.14,
+  # the omission including **`:2407` — the entry that registers the WIRING**, i.e. the story's own
+  # headline act. §1 said "about twenty" while §9 listed twelve: two sections of one document
+  # disagreeing, and §9 is the one the tasks bind to. Corrected to twenty-two, counted.
+  # ✅ VALIDATED A SECOND TIME 2026-08-11, on the REWRITTEN story. **Two further arbitrations (7, 8).**
+  # 🔴 BOTH LAYERS FOUND THE SAME HEADLINE: **AC3 pinned the DECLARATION while its own mutation muted
+  # the EMISSION.** `arp_ping.rs` carries two independent literals forty lines apart with NO
+  # cross-check -- `facts: vec![Fact::IpV4, Fact::Rtt]` (:177) and `Capabilities { kinds: {IpV4,
+  # Rtt} }` (:183). Adding `Fact::Mac` to the emitted vector left **all 495 tests GREEN, the pin
+  # among them** -- and it is the EMISSION that carries the structural zero, because `join` reads
+  # FACTS, not descriptors. 🔑 This is story 5.12's own recorded family (*"M5 said 'neuter the gate'
+  # and was applied to the MATCHER"*) recurring in the story whose subject is measurements that
+  # measure something other than what they name. Narrowed on 5.12's precedent: pin BOTH literals,
+  # and STATE that the one which runs in CI is not the one that carries the fact -- every test
+  # reaching a live emit is gated on `OPENCMDB_NET_TESTS`, which **CI never sets**.
+  # 🔴 **TWO OF THE STORY'S OWN ACs CONTRADICTED EACH OTHER**: AC4 forbade a new read, AC5 required
+  # one. `Resolution` is per-PASS and reports `links_written: 1` after two passes, never "2 current
+  # links", so the accumulation is visible only through the database. The register disposition built
+  # on *"this story adds no read"* fell with it.
+  # 🔴 **ARBITRATION 7 -- a DB-refused observation cost EVERY OTHER observation its link**, and AC2
+  # could not see it. `identity_link.observation_id` is a foreign key onto `observation_record`, so
+  # one un-ingested row fails the whole pass: measured `resolution=None`, **0 current engine links**,
+  # while AC2 stayed green throughout (it asserted only that the observations survive, and they do).
+  # **Guy: hand the pass only what LANDED, and REPLACE AC2** -- its subject becomes *"the blast
+  # radius of a refused ingest is bounded to its own row"*, because the old subject was unwritable:
+  # the only two refusals are unreachable from a scan slice.
+  # 🔴 **ARBITRATION 8 -- the cheap guard arbitration 6 dismissed EXISTS, in ~40 lines.** A seam
+  # GENERIC over `Connector` lets a test drive poll->ingest->resolve with the already-committed
+  # `FixtureConnector`; deleting the wiring inside it reds exactly ONE test where the story's M1 reds
+  # none. The uncarried region shrinks from the whole wiring to **three lines**. 🔑 The sentence
+  # worth keeping: *recording an unavoidable GREEN is honest; recording it without measuring how much
+  # it covers is not.* Arbitration 6 is KEPT beside it, not overwritten -- it was right that the last
+  # link cannot be carried, and wrong that one extraction was the end of it.
+  # ⚠️ Also caught: **every predicate of the read the story must add is carried by nothing** (drop
+  # `decided_by`, drop `current_subject IS NOT NULL`, drop both -- all three GREEN), the FIFTH
+  # recurrence of that family; the accumulation's honest mutation is a PRODUCTION one (widen the
+  # vacate pass -- 7 red) rather than a fixture edit, and it doubles as the argument for NOT fixing
+  # the denominator here, since over-vacating **erases a host that missed a single scan**; the
+  # story's pin told a future reader to DELETE it on a numeric change, but under the honest mutation
+  # the number falls to 0, which is the OPPOSITE defect; and `:2407` was quoted at half its length --
+  # it reads *"no page to display them **and no purge to remove them**"*, and the PURGE half is the
+  # one the accumulation makes acute (`purge_engine_links` has no production caller), owned by
+  # NEITHER story and now registered.
+  # ⚠️ And a scope statement the story had left implicit: **all four of `epics.md`'s 5.14 clauses are
+  # DISPLAY clauses**, so this story implements none of them and the wiring it does is asked for
+  # nowhere in the epic -- defensible after the split, but said plainly rather than implied.
+  # ⚠️ NEXT = `dev-story` 5.14.
+  # 5.14 IMPLEMENTED -> `review` (NOT `done`: that is the MERGE's business), 2026-08-11.
+  # **494 -> 502 tests** (281 bin + 159 core + 62 xtask), seven gates green, 28 fixtures, trap gate
+  # still RED. Built and mutated against a live `mariadb:10.11.11` on **13314**.
+  # 🔑 The pass RUNS IN THE SHIPPED BINARY for the first time; the seam is GENERIC over `Connector`
+  # and the story states the MEASURED size of what stays uncarried: **three lines**. M1 (delete the
+  # call to the seam) = 0 red; M1b (delete `resolve` inside it) = 3 red.
+  # 🔴 A DECISION THE STORY DID NOT ANTICIPATE: it said *"does not touch the ARP/ping connector"* and
+  # it touches it. Both literals were anonymous expressions inside `poll`, which opens an ICMP socket
+  # eagerly, and every test reaching a live poll is gated on a variable CI never sets -- so neither
+  # could be asserted. Two NAMED functions, **no behaviour change**, and naming them is what let the
+  # two halves CROSS-CHECK each other: M4 (Mac in the declaration) now reds BOTH pins.
+  # 🔑 THE ARGUMENT FOR DEFERRING THE DENOMINATOR IS NOW A MEASUREMENT: M6, the naive fix, reds four
+  # tests -- three of them PRE-EXISTING `resolver` tests -- because over-vacating **erases a host
+  # that missed a single scan**.
+  # ⚠️ TWO DIVERGENCES FROM PREDICTION, both recorded: M1b reds 3 where 1 was predicted, and **M2 is
+  # NOT EXECUTABLE** (no single ingest unit exists to join -- the story's own section established it
+  # and its mutation table kept a row for it anyway; story 5.9's family).
+  # ⚠️ Registered, not fixed: the PURGE half of `:2407` is owned by NEITHER story
+  # (`purge_engine_links` has no production caller while the pass accumulates ~105 000 rows/year for
+  # one host); the denominator (5.14b + Epic 6); and the three uncarried lines (whoever makes the
+  # scan joinable -- the periodic scheduler, FR6).
+  # ✅ CODE-REVIEWED (three layers) and REPAIRED, 2026-08-11. **502 tests, seven gates green.**
+  # 🔴 ALL THREE LAYERS FOUND THE SAME PRODUCTION DEFECT and one MEASURED it: extracting the seam
+  # removed the ingest loop from `main.rs` and **LEFT THE POLL** -- every startup swept the CIDR
+  # TWICE and threw the first sweep away (4.009 s / 2.0075 s / 1.0025 s as the probe timeout moved,
+  # so it scaled WITH the timeout). A host answering the first sweep and missing the second was
+  # silently lost. `sink` stayed syntactically used, so the compiler said nothing, and deleting the
+  # dead block left all 502 tests green. ⚠️ **The story's own measurement had been taken on
+  # `127.0.0.1/32`** -- the one case where a double sweep of one host is invisible.
+  # 🔴 THE PINS DID NOT HOLD THE PROPERTY THEY CLAIMED: a `Fact::Mac` at the EMIT SITE -- the shape
+  # the upgrade must take, a MAC coming from a neighbour lookup keyed on the address, which
+  # `emitted_facts(ip, millis)` cannot reach -- leaves 502 green while the real binary places a
+  # link. **Guy: narrow the promise (5.12's precedent)** -- a TRIPWIRE, never a barrier.
+  # 🔴 M1b WAS MISRECORDED: **6 red, not 3**. The mutation discarded the pass RESULT instead of
+  # deleting its CALL; 3 was just the number of tests reading `.resolution`. Re-measured live: all
+  # six, every one assertion-carried, four dying on the database count. **A mutation named for one
+  # thing and applied to another measures the other thing** -- the same family as the pins, TWICE in
+  # one story. And *"two divergences"* was FOUR (M5 7->11, M6 7->4, both predictions copied from a
+  # validation worktree as if they were this tree's).
+  # 🔑 REGISTERED, not fixed (Guy): **two concurrent passes mint TWO interfaces for ONE MAC**, both
+  # reporting success -- not reachable today because the MAC-less connector shields it, so **the
+  # connector story that gives it a MAC removes the shield and must carry the race**; and
+  # `current_subject IS NOT NULL` is NOT equivalent to `valid_to = OPEN_END`.
+  # ⚠️ NEXT = PR.
+  5-14-wire-the-pass-and-measure-what-it-cannot-say: review
+  # 🔴 5.14b INSERTED at 5.14's validation, 2026-08-11. **The display**, and it inherits a QUESTION
+  # rather than a spec: **what does the abstention counter count?** A count over current links
+  # measures scan iterations (see 5.14's measurement). Deciding the denominator needs a notion of
+  # "the same unplaceable thing seen twice", which is grouping — so 5.14b arrives WITH Epic 6 or
+  # states its denominator's limit in the surface itself.
+  # It also inherits: `epics.md`'s `Ambiguous`-shows-its-candidates AC, re-owned to Epic 6 with its
+  # unreachability ASSERTED (nothing produces `Supports`/`Opposes`, nothing writes a `link_candidate`
+  # row in production, and `resolver.rs:672` names Epic 6 as the owner); the HOIST out of the
+  # declared side's visibility gate (arbitration 5); the read and the token parse-back — ⚠️ where the
+  # gap-hunt measured that a new variant breaks the LABEL and the WRITER but **never**
+  # `cause_from_token`, whose `_ => None` is structural, so the parse-back cannot carry exhaustiveness
+  # and a variant added with the minimal repair persists a token the reader refuses, losing the WHOLE
+  # PAGE to a 500; the UX bans as HTML assertions; and the remaining register entries.
+  5-14b-abstention-displayed-by-cause: backlog
   epic-5-retrospective: required
 
   # ── Epic 6: Ne pas compter deux fois la même boîte (v0.4) ────────────────

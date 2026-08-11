@@ -3011,3 +3011,88 @@ _Appended, never rewriting the bullets above. Story 5.13 shipped the monotone-ho
   `git checkout -- <file>` intended to revert a MUTATION reverted the file and ate a guard written
   minutes earlier — story 5.13's driver defect reproduced by the person correcting the story that
   documents it. **Revert the mutation, never the file.** Owner: Epic 5's retrospective.
+
+## Deferred from: story-5.14 (2026-08-11)
+
+- ✅ **`:2407` — "the resolver is NOT wired into `main.rs`" — CLOSED, and BOTH halves of its own
+  sentence are named.** It read *"wiring it would make every deployment write links with no page to
+  display them **and no purge to remove them**"*. The first half is now deliberately true for one
+  story: 5.14 wires the pass, 5.14b displays. ⚠️ **The second half is the one that now bites, and it
+  is owned by NEITHER story.** `repo::purge_engine_links` exists since 5.10 and has **no production
+  caller** — every caller is a test — while the pass accumulates one current abstention link per scan
+  per unplaceable host (measured: five runs over one host → five links; ~105 000 a year at a
+  five-minute interval). **Owner: unassigned.** It is registered here rather than folded into 5.14b,
+  because a purge is not a display concern and pretending otherwise would hide it behind a story
+  whose acceptance criteria cannot fail on it.
+- ⚠️ **The abstention counter's DENOMINATOR is undecided, and deciding it is grouping.** A count over
+  current engine links measures scan iterations, not reach. Collapsing sightings of one unplaceable
+  thing means deciding what makes two sightings the same thing WITHOUT an identity — which is Epic
+  6's subject. 🔑 **And the naive fix is measured worse than the defect**: widening `resolve_within`'s
+  vacate pass to close slots of observations it never saw reds four tests, three of them pre-existing
+  `resolver` tests, because it **erases a host that missed a single scan**. **Owner: story 5.14b and
+  Epic 6**, together — the story pins the accumulation with a test whose message says *do not repair
+  this number*.
+- ⚠️ **`ContradictoryObservation` and `InstantRegressed` are UNREACHABLE from a scan slice**, measured
+  across five runs of the real binary: the ARP/ping connector mints a fresh `Uuid::now_v7()` per
+  observation and stamps one `observed_at` per poll. So `:2772`'s concern — that the refusal's
+  reachability rests on one test — is **answered for this caller and survives for the others**: the
+  seam is generic over `Connector`, and a connector that reuses ids can reach both. Owner unchanged.
+- ⚠️ **`count_identity_links` still has no production caller, and now it has a NEIGHBOUR that does
+  what it cannot.** `scan_pass::counted_current_engine_links` filters on `decided_by = 'ENGINE'` and
+  `current_subject IS NOT NULL`; `count_identity_links` is an unfiltered `SELECT COUNT(*)`, so it
+  would agree only by accident and diverge the first time a link is superseded. Recorded so the two
+  are not mistaken for duplicates and so nobody "unifies" them. **Owner: story 5.14b**, the first
+  story with a human-facing count.
+- 🔑 **Three lines of the startup path are carried by NOTHING, and the size is now measured.**
+  `spawn_startup_scan` is a `std::thread::spawn` whose handle is dropped, inseparable from a live
+  ICMP poll, so nothing can assert inside it. The seam took the uncarried region from *the whole
+  poll-ingest-resolve wiring* down to **build the connector, connect the pool, call the seam** —
+  deleting the call to the seam leaves the suite green (M1), deleting the `resolve` call inside it
+  reds three tests (M1b). **Owner: whoever makes the scan joinable or injectable** — the periodic
+  scheduler (FR6) is the natural place, since it must own the scan's lifecycle anyway.
+
+## Deferred from: code review of story-5.14 (2026-08-11)
+
+- **🔴 TWO CONCURRENT PASSES MINT TWO INTERFACES FOR ONE MAC, both reporting success.**
+  `interface_l1_key (l2_domain, mac_canon)` is a plain index, not UNIQUE, and `repo.rs:383` is a
+  `SELECT … LIMIT 1` followed by an INSERT — read-then-insert, not atomic. Measured with
+  `tokio::join!` over two passes on one pool: **interfaces = 2, links = 2, both `Ok`** — no error,
+  no abstention, nothing red; the same input run sequentially gives 1 interface, which is the
+  control. **One physical NIC silently becomes two identities.** Guy's arbitration (2026-08-11):
+  **registered here, not fixed in a wiring story** — a UNIQUE index is DDL whose effect on story
+  5.10's replay and story 5.11's idempotence must be measured first. ⚠️ **It is not reachable through
+  today's connector, and the reason is the shield this story spent itself documenting**: the
+  ARP/ping connector emits no MAC, so nothing scanned reaches the `interface` mint at all. **The
+  connector story that gives it a MAC REMOVES THAT SHIELD and must carry this race with it.**
+  Owner: that story, jointly with whoever adds the UNIQUE index.
+- **⚠️ The two `arp_ping` pins are a TRIPWIRE, not a barrier, and the difference is measured.** A
+  `Fact::Mac` added at the emit site inside `poll` — rather than inside `emitted_facts` — leaves all
+  502 tests green while the real binary mints an interface and places a link. That bypass is the
+  shape the upgrade MUST take: a MAC comes from a neighbour lookup keyed on the address, which
+  `emitted_facts(ip, millis)` cannot reach. Read the pins as *"the named fact set and the named
+  descriptor still agree and still exclude the MAC"*, **never** as *"nothing the shipped product
+  emits can carry one"*. The barrier needs either a test over what `poll` really emits — which needs
+  the ICMP socket, and every such test is gated on `OPENCMDB_NET_TESTS`, **which CI never sets**, so
+  a mutation against it returns green because the test SKIPPED — or a connector that routes every
+  fact through one construction site. **Owner: the connector story**, or whoever decides CI should
+  set that variable.
+- **⚠️ `current_subject IS NOT NULL` is NOT equivalent to `valid_to = OPEN_END`, and `repo.rs:991`
+  states the equivalence as fact.** `identity_link_current_subject` compares
+  `current_subject = interface_id`, which is UNKNOWN — not FALSE — when `current_subject` is NULL,
+  and SQL accepts a CHECK evaluating to UNKNOWN. Measured: a row with `valid_to = OPEN_END` and a
+  NULL `current_subject` is **accepted**, while the same disagreement by value is refused
+  (`ERROR 4025`); `UNIQUE (observation_id, current_subject)` does not bound it either, NULLs being
+  distinct. Story 5.14's read then reports **0** where `valid_to = OPEN_END` reports **2**. ⚠️ Not
+  reachable through the adapter today (`close_identity_link` moves both columns together) — but
+  this story is the first to adopt `current_subject IS NOT NULL` as the DEFINITION of a
+  human-facing population. 🔑 **And there is a coupling nobody had recorded**: tightening the CHECK
+  to what its own comment claims reds **exactly one test in the whole workspace** — this story's
+  `a_superseded_link_is_not_counted`, whose doc calls its row *"superseded"* while its `valid_to` is
+  still `OPEN_END`. The guard is genuine; its stated justification is not, and it now stands in the
+  way of the DDL repair. **Owner: unassigned.**
+- **⚠️ Two entries of story 5.14's §8 were never appended** — `:2700` (`observed_at` stability across
+  passes) and the page-less deployment — while two bullets that are not §8 rows were. Recorded here
+  so the omission is not read as a disposition. `:2700` stands: the accumulation IS its consequence,
+  measured. The page-less deployment lasts **until 5.14b ships, which may be with Epic 6** — the
+  weaker true sentence, where an earlier draft said *"for one story"* and was corrected in the story
+  file but not in the register.

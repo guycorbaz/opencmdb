@@ -28,6 +28,7 @@ mod page;
 mod permute;
 mod repo;
 mod resolver;
+mod scan_pass;
 mod trap_gate;
 
 // The i18n seam (D39/D66): user-facing strings resolve through `t!()` against `locales/`. EN is
@@ -170,14 +171,10 @@ fn app(pool: MySqlPool) -> Router {
 /// bound, and a fresh pool avoids sharing connections across runtimes. The periodic scheduler
 /// (FR6) will supersede this.
 fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
-    use opencmdb_core::connector::{Connector, VecSink};
     use opencmdb_core::observation::{ConnectorId, L2DomainId, Scope, VantageId};
-    use opencmdb_core::repo::WriteRepository;
-    use tokio_util::sync::CancellationToken;
     use uuid::Uuid;
 
     use crate::arp_ping::ArpPingConnector;
-    use crate::repo::{MariaRepository, classify, insert_observation};
 
     std::thread::spawn(move || {
         let runtime = match tokio::runtime::Builder::new_current_thread()
@@ -223,15 +220,15 @@ fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
                 .with_timeout(std::time::Duration::from_millis(timeout_ms));
 
             tracing::info!(%cidr, concurrency, timeout_ms, "startup scan: pinging subnet");
-            let mut sink = VecSink::default();
-            if let Err(error) = connector
-                .poll(now, &mut sink, CancellationToken::new())
-                .await
-            {
-                tracing::warn!(?error, "startup scan failed");
-                return;
-            }
 
+            // 🔴 The poll lives in `scan_pass::poll_ingest_resolve` and NOWHERE ELSE. Story 5.14's
+            // code review found — by three layers independently, and measured by one of them at
+            // 4.009 s / 2.0075 s / 1.0025 s as the probe timeout moved — that extracting the seam
+            // had removed the ingest loop here and LEFT the poll, so every startup swept the CIDR
+            // TWICE and threw the first sweep away. A host answering the first and missing the
+            // second was silently lost. `sink` stayed syntactically used, so the compiler said
+            // nothing, and deleting the dead block left all 502 tests green: **nothing pins this**,
+            // and that is why the "three uncarried lines" figure below was wrong.
             let pool = match MySqlPool::connect(&database_url).await {
                 Ok(pool) => pool,
                 Err(error) => {
@@ -239,25 +236,28 @@ fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
                     return;
                 }
             };
-            let repo = MariaRepository::new(pool);
-            let mut ingested = 0usize;
-            for observation in sink.observations {
-                let result = repo
-                    .transact(move |unit| {
-                        let observation = observation.clone();
-                        Box::pin(async move {
-                            insert_observation(unit.executor(), &observation)
-                                .await
-                                .map_err(classify)
-                        })
-                    })
-                    .await;
-                match result {
-                    Ok(()) => ingested += 1,
-                    Err(error) => tracing::warn!(?error, "ingesting a scanned observation failed"),
-                }
-            }
-            tracing::info!(ingested, "startup scan complete");
+            // 🔴 WHAT IS UNCARRIED HERE, stated after the code review corrected it TWICE.
+            //
+            // Everything below `poll_ingest_resolve` is driven end-to-end by a test with a
+            // `FixtureConnector`. Everything in THIS function is not: it is a `thread::spawn` whose
+            // handle is dropped, and no test can reach it. Deleting the call below leaves the whole
+            // suite green; deleting the `resolve` call inside the seam reds **six** tests, every
+            // one on a named assertion.
+            //
+            // ⚠️ An earlier version of this comment said "the three lines that remain uncarried"
+            // and "reds one test", and called itself measured. Both were wrong, and the first was
+            // wrong in the way that mattered: the uncarried region is this whole function — the
+            // runtime build, the CIDR parse, two environment knobs that decide what the scan
+            // MISSES, the pool connect and four early-return branches — and a live defect was
+            // sitting in it (a duplicated sweep, above) while the sentence claimed three lines.
+            // **A region you have not counted is not a region you have measured.**
+            let outcome = crate::scan_pass::poll_ingest_resolve(&mut connector, now, &pool).await;
+            tracing::info!(
+                ingested = outcome.ingested,
+                failed = outcome.failed,
+                resolved = outcome.resolution.is_some(),
+                "startup scan complete"
+            );
         });
     });
 }
