@@ -166,6 +166,13 @@ pub(crate) async fn poll_ingest_resolve<C: Connector>(
 /// # Errors
 ///
 /// Propagates the database error.
+///
+/// ⚠️ **Consumed only by the tests below TODAY**, and the allow is deliberately on this function
+/// rather than on the module: `scan_pass` carries live production code (`poll_ingest_resolve` is
+/// called from `main`), so a module-level `#![allow(dead_code)]` — the idiom `fixtures.rs`,
+/// `trap_gate.rs` and `fault_injection.rs` use, all of which are dev-only by construction — would
+/// hide a genuinely dead item here. Story 5.14b is its production consumer.
+#[allow(dead_code)]
 pub(crate) async fn counted_current_engine_links(pool: &MySqlPool) -> Result<i64, sqlx::Error> {
     let (count,): (i64,) = sqlx::query_as(sqlx::AssertSqlSafe(
         "SELECT COUNT(*) FROM identity_link \

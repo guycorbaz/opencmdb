@@ -3011,3 +3011,42 @@ _Appended, never rewriting the bullets above. Story 5.13 shipped the monotone-ho
   `git checkout -- <file>` intended to revert a MUTATION reverted the file and ate a guard written
   minutes earlier — story 5.13's driver defect reproduced by the person correcting the story that
   documents it. **Revert the mutation, never the file.** Owner: Epic 5's retrospective.
+
+## Deferred from: story-5.14 (2026-08-11)
+
+- ✅ **`:2407` — "the resolver is NOT wired into `main.rs`" — CLOSED, and BOTH halves of its own
+  sentence are named.** It read *"wiring it would make every deployment write links with no page to
+  display them **and no purge to remove them**"*. The first half is now deliberately true for one
+  story: 5.14 wires the pass, 5.14b displays. ⚠️ **The second half is the one that now bites, and it
+  is owned by NEITHER story.** `repo::purge_engine_links` exists since 5.10 and has **no production
+  caller** — every caller is a test — while the pass accumulates one current abstention link per scan
+  per unplaceable host (measured: five runs over one host → five links; ~105 000 a year at a
+  five-minute interval). **Owner: unassigned.** It is registered here rather than folded into 5.14b,
+  because a purge is not a display concern and pretending otherwise would hide it behind a story
+  whose acceptance criteria cannot fail on it.
+- ⚠️ **The abstention counter's DENOMINATOR is undecided, and deciding it is grouping.** A count over
+  current engine links measures scan iterations, not reach. Collapsing sightings of one unplaceable
+  thing means deciding what makes two sightings the same thing WITHOUT an identity — which is Epic
+  6's subject. 🔑 **And the naive fix is measured worse than the defect**: widening `resolve_within`'s
+  vacate pass to close slots of observations it never saw reds four tests, three of them pre-existing
+  `resolver` tests, because it **erases a host that missed a single scan**. **Owner: story 5.14b and
+  Epic 6**, together — the story pins the accumulation with a test whose message says *do not repair
+  this number*.
+- ⚠️ **`ContradictoryObservation` and `InstantRegressed` are UNREACHABLE from a scan slice**, measured
+  across five runs of the real binary: the ARP/ping connector mints a fresh `Uuid::now_v7()` per
+  observation and stamps one `observed_at` per poll. So `:2772`'s concern — that the refusal's
+  reachability rests on one test — is **answered for this caller and survives for the others**: the
+  seam is generic over `Connector`, and a connector that reuses ids can reach both. Owner unchanged.
+- ⚠️ **`count_identity_links` still has no production caller, and now it has a NEIGHBOUR that does
+  what it cannot.** `scan_pass::counted_current_engine_links` filters on `decided_by = 'ENGINE'` and
+  `current_subject IS NOT NULL`; `count_identity_links` is an unfiltered `SELECT COUNT(*)`, so it
+  would agree only by accident and diverge the first time a link is superseded. Recorded so the two
+  are not mistaken for duplicates and so nobody "unifies" them. **Owner: story 5.14b**, the first
+  story with a human-facing count.
+- 🔑 **Three lines of the startup path are carried by NOTHING, and the size is now measured.**
+  `spawn_startup_scan` is a `std::thread::spawn` whose handle is dropped, inseparable from a live
+  ICMP poll, so nothing can assert inside it. The seam took the uncarried region from *the whole
+  poll-ingest-resolve wiring* down to **build the connector, connect the pool, call the seam** —
+  deleting the call to the seam leaves the suite green (M1), deleting the `resolve` call inside it
+  reds three tests (M1b). **Owner: whoever makes the scan joinable or injectable** — the periodic
+  scheduler (FR6) is the natural place, since it must own the scan's lifecycle anyway.

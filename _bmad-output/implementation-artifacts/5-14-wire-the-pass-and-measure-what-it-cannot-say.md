@@ -1,6 +1,6 @@
 # Story 5.14: Wire the identity pass into the shipped binary — and measure what it cannot say
 
-Status: ready-for-dev
+Status: review
 
 <!-- ✅ VALIDATED TWICE. The first pass (as a DISPLAY story) SPLIT it; the second pass, on the
      rewritten story, produced arbitrations 7 and 8. Both gap-hunts BUILT the story and ran the real
@@ -249,16 +249,16 @@ count, in one place.
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — the generic seam** (AC1): extract, make it generic over `Connector`, drive it with
+- [x] **T1 — the generic seam** (AC1): extract, make it generic over `Connector`, drive it with
       `FixtureConnector`; two transaction units; the pass receives only what landed
-- [ ] **T2 — measure the uncarried region** (AC1): M1 and M1b, and write the SIZE
-- [ ] **T3 — the pins** (AC3, AC4, AC5): both connector literals; `Resolution` on a first pass; the
+- [x] **T2 — measure the uncarried region** (AC1): M1 and M1b, and write the SIZE
+- [x] **T3 — the pins** (AC3, AC4, AC5): both connector literals; `Resolution` on a first pass; the
       accumulation with its doc-comment sentence
-- [ ] **T4 — the read and its guards** (AC6): the operator row and the superseded row
-- [ ] **T5 — prove-to-red** (AC1–AC6): M1–M7b, predictions first, carriers from panic messages, the
+- [x] **T4 — the read and its guards** (AC6): the operator row and the superseded row
+- [x] **T5 — prove-to-red** (AC1–AC6): M1–M7b, predictions first, carriers from panic messages, the
       command that carried each red named
-- [ ] **T6 — the register** (AC9)
-- [ ] **T7 — gates and documents** (AC8, AC10)
+- [x] **T6 — the register** (AC9)
+- [x] **T7 — gates and documents** (AC8, AC10)
 
 ---
 
@@ -295,13 +295,70 @@ is a validation worktree's, WITH the display work, and is not this tree's.
 
 ## Dev Agent Record
 
+
 ### Agent Model Used
+
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`.
 
 ### Debug Log References
 
+**Built and mutated against a live `mariadb:10.11.11`**, container `opencmdb-5-14`, host port
+**13314** (13306–13313 are earlier stories' and the validation worktrees'). ⚠️ **`DATABASE_URL` is
+unset locally and the six new DB tests pass by `return`ing** — the suite reported 502 green either
+way. The witness that they really ran is the timing: the `bin` suite takes 0.06 s without a database
+and **~4 s** with one. **Committed (`b853afd`) before the mutation pass**, and the tree verified
+clean after it.
+
 ### Completion Notes List
 
+**494 → 502 tests (281 bin + 159 core + 62 xtask), +8.** Seven gates green, 28 fixtures, trap gate
+still RED at 26/15/11. `opencmdb-core` behaviour unchanged; nothing under `templates/`.
+
+#### A decision the story did not anticipate, taken and recorded
+
+§4a said this story *"does not touch the ARP/ping connector"*. **It touches it**, and the reason is
+that AC3 was otherwise unimplementable: both literals were anonymous expressions inside `poll`, and
+`poll` opens an ICMP socket eagerly, so neither could be asserted without the network — and every
+existing test that reaches a live poll is gated on `OPENCMDB_NET_TESTS`, which CI never sets.
+
+What shipped is **two named functions, `declared_kinds()` and `emitted_facts()`, and no behaviour
+change**: `poll` now calls them where it used to inline them. The prohibition was about *what the
+connector emits* (giving it a MAC is a connector story with its own privilege question), and that is
+untouched. 🔑 Naming them is also what let the two halves finally CROSS-CHECK each other — the
+absence of that check is precisely what let the first draft's pin stay green.
+
+#### The mutation table, with OBSERVED results
+
+| id | mutation | predicted | OBSERVED | red | carrier |
+|---|---|---|---|---|---|
+| **M1** | delete the seam call inside `spawn_startup_scan` | **GREEN** | ✅ **0 red** — the three lines are uncarried, exactly as arbitration 6 established and arbitration 8 bounded | 0 | — |
+| **M1b** | delete the `resolve` call inside the seam | RED ×1 | ⚠️ **3 red** — a divergence, in the good direction: three of the seam's tests consume `resolution`, where the validation's build had one. Recorded rather than smoothed | 3 | assertion |
+| **M2** | run the pass in the SAME transaction as the ingest | RED | 🔴 **NOT EXECUTABLE.** There is no single ingest unit to join — the ingest is one `transact` PER OBSERVATION, which this story's own §2 established and its mutation table kept a row for anyway. Story 5.9's M4/M5 family. **M3 carries the boundary instead** | n/a | n/a |
+| **M3** | hand the pass the UNFILTERED slice | RED | ✅ **exactly 1**, `a_refused_ingest_is_bounded_to_its_own_row`, on the database-count assertion placed first | 1 | assertion |
+| **M4** | `FactKind::Mac` in the **DECLARATION** | RED | ✅ **2 red** — the declaration pin AND the emission pin's agreement assertion. The cross-check working | 2 | assertion |
+| **M4b** | `Fact::Mac` in the **EMISSION** | RED | ✅ **1 red**, the pin that carries the structural zero. 🔴 **The first draft measured this combination GREEN**; that is the repair, measured | 1 | assertion |
+| **M5** | `join` keys on an `IpV4` fact | RED | ✅ **11 red**, the structural-zero pin among them | 11 | assertion |
+| **M6** | widen the vacate pass to close slots of unseen observations | RED | ✅ **4 red** — the accumulation pin **and three pre-existing `resolver` tests**. 🔑 Those three ARE the story's argument: over-vacating erases a host that missed a single scan, and it is now a measurement rather than prose | 4 | assertion |
+| **M7** | drop `decided_by = 'ENGINE'` | RED | ✅ **1 red** | 1 | assertion |
+| **M7b** | drop `current_subject IS NOT NULL` | RED | ✅ **1 red** | 1 | assertion |
+
+**Ten rows: nine executable mutations, one NOT EXECUTABLE, one GREEN by construction (M1).**
+Carriers read from each panic message; **all assertion-carried** among the reds. ⚠️ Two divergences
+from prediction, both recorded above: M1b's count, and M2's executability.
+
+#### What is NOT claimed
+
+The counter's denominator is not decided (§4b), nothing is displayed, and `epics.md`'s four clauses
+remain 5.14b's. The purge half of `:2407` is owned by neither story and is registered.
+
 ### File List
+
+- `crates/opencmdb-bin/src/scan_pass.rs` — NEW. The seam, the read, and their tests.
+- `crates/opencmdb-bin/src/main.rs` — MODIFIED. `mod scan_pass;` and the three uncarried lines.
+- `crates/opencmdb-bin/src/arp_ping.rs` — MODIFIED. `declared_kinds()`, `emitted_facts()` and the
+  two pins. No behaviour change.
+- `_bmad-output/implementation-artifacts/5-14-*.md`, `sprint-status.yaml`, `deferred-work.md`,
+  `CLAUDE.md`, `docs/project-context.md`.
 
 ---
 

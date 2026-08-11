@@ -2471,7 +2471,29 @@ development_status:
   # DISPLAY clauses**, so this story implements none of them and the wiring it does is asked for
   # nowhere in the epic -- defensible after the split, but said plainly rather than implied.
   # ⚠️ NEXT = `dev-story` 5.14.
-  5-14-wire-the-pass-and-measure-what-it-cannot-say: in-progress
+  # 5.14 IMPLEMENTED -> `review` (NOT `done`: that is the MERGE's business), 2026-08-11.
+  # **494 -> 502 tests** (281 bin + 159 core + 62 xtask), seven gates green, 28 fixtures, trap gate
+  # still RED. Built and mutated against a live `mariadb:10.11.11` on **13314**.
+  # 🔑 The pass RUNS IN THE SHIPPED BINARY for the first time; the seam is GENERIC over `Connector`
+  # and the story states the MEASURED size of what stays uncarried: **three lines**. M1 (delete the
+  # call to the seam) = 0 red; M1b (delete `resolve` inside it) = 3 red.
+  # 🔴 A DECISION THE STORY DID NOT ANTICIPATE: it said *"does not touch the ARP/ping connector"* and
+  # it touches it. Both literals were anonymous expressions inside `poll`, which opens an ICMP socket
+  # eagerly, and every test reaching a live poll is gated on a variable CI never sets -- so neither
+  # could be asserted. Two NAMED functions, **no behaviour change**, and naming them is what let the
+  # two halves CROSS-CHECK each other: M4 (Mac in the declaration) now reds BOTH pins.
+  # 🔑 THE ARGUMENT FOR DEFERRING THE DENOMINATOR IS NOW A MEASUREMENT: M6, the naive fix, reds four
+  # tests -- three of them PRE-EXISTING `resolver` tests -- because over-vacating **erases a host
+  # that missed a single scan**.
+  # ⚠️ TWO DIVERGENCES FROM PREDICTION, both recorded: M1b reds 3 where 1 was predicted, and **M2 is
+  # NOT EXECUTABLE** (no single ingest unit exists to join -- the story's own section established it
+  # and its mutation table kept a row for it anyway; story 5.9's family).
+  # ⚠️ Registered, not fixed: the PURGE half of `:2407` is owned by NEITHER story
+  # (`purge_engine_links` has no production caller while the pass accumulates ~105 000 rows/year for
+  # one host); the denominator (5.14b + Epic 6); and the three uncarried lines (whoever makes the
+  # scan joinable -- the periodic scheduler, FR6).
+  # ⚠️ NEXT = `code-review` 5.14, then PR.
+  5-14-wire-the-pass-and-measure-what-it-cannot-say: review
   # 🔴 5.14b INSERTED at 5.14's validation, 2026-08-11. **The display**, and it inherits a QUESTION
   # rather than a spec: **what does the abstention counter count?** A count over current links
   # measures scan iterations (see 5.14's measurement). Deciding the denominator needs a notion of
