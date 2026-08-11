@@ -81,9 +81,12 @@ story adds was missing from the list the file gives of itself.)_ `opencmdb-core`
 and its consumer-driven contract test). `opencmdb-bin` holds everything touching the outside world:
 MariaDB pool + migrations, axum/askama/HTMX pages, an ARP/ping connector, the fixture reader,
 `FixtureConnector` and — since story 5.7 — `l1_runner`, the release gate's answer producer. Test
-counts on `master` are **489** (268 bin + 159 core + 62 xtask) after **5.13** merged, and the
-`story-5-13b` branch carries **493** (272 + 159 + 62) at `review`, measured with
-`cargo test --workspace`. _(This line read "**450** … after **5.11b** merged" until 2026-08-11 —
+counts on `master` are **502** (281 bin + 159 core + 62 xtask) after **5.14** merged, measured
+with `cargo test --workspace`. _(This line read "**489** … after **5.13**" until 2026-08-11 —
+**two merged stories out of date**, in the file BMad auto-loads first, and the **THIRD** time
+this same paragraph has drifted that far. Its own parenthetical below was written to stop
+exactly this, and did not. ⚠️ For the Epic 5 retrospective: a warning attached to the thing it
+warns about has now failed three times — the fix is a check, not a longer sentence.)_ _(This line read "**450** … after **5.11b** merged" until 2026-08-11 —
 **two merged stories out of date**, in the file BMad auto-loads first, and the SECOND time this
 same paragraph has drifted that far. Its own parenthetical below was written to stop exactly
 this.)_ `master` after 5.12 and 5.13 merged carried **469** then **489**. `master` after 5.11
