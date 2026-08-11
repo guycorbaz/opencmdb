@@ -653,11 +653,139 @@ mod tests {
             .expect("read reach");
         let evaluated = rows.iter().filter(|r| r.interface_id.is_some()).count();
         let not_evaluated = rows.len() - evaluated;
-        let causes: Vec<_> = rows
+        let causes: std::collections::BTreeSet<_> = rows
             .iter()
             .filter_map(|r| r.abstention_cause.clone())
             .collect();
-        panic!("MEASURED: evaluated={evaluated} not_evaluated={not_evaluated} causes={causes:?}");
+
+        // 🔴 MEASURED, and it is the finding: the SHIPPED connector emits `{IpV4, Rtt}` and no MAC,
+        // so `join` produces no L1 key and EVERY scanned observation falls to the tail abstention
+        // loop. Wiring the pass makes the not-evaluated half real and leaves the evaluated half a
+        // structural zero.
+        assert_eq!(evaluated, 0, "the shipped scan places nothing — it carries no MAC");
+        assert_eq!(not_evaluated, 5);
+        assert_eq!(
+            causes,
+            std::collections::BTreeSet::from(["absence_of_proof".to_string()])
+        );
+
+        // The counter GROWS with every scan: a second pass over a fresh slice of the same five
+        // hosts mints five new `obs_id`s and therefore five more CURRENT abstention links.
+        let again: Vec<_> = (10..=14).map(scanned).collect();
+        ingest_and_resolve(&pool, again).await;
+        let after = repo::load_current_engine_reach(&pool)
+            .await
+            .expect("read reach again");
+        assert_eq!(
+            after.len(),
+            10,
+            "5 → 10 for the SAME five hosts: the counter measures uptime, not reach"
+        );
+    }
+
+    /// The CURRENT-only filter (§6's ⚠️), given a guard of its own.
+    #[tokio::test]
+    async fn a_superseded_link_is_not_counted() {
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        clean(&pool).await;
+
+        let one = scanned(20);
+        ingest_and_resolve(&pool, vec![one.clone()]).await;
+        // Supersede it by hand: stamp `valid_to` and drop it out of the current key.
+        sqlx::query(sqlx::AssertSqlSafe(
+            "UPDATE identity_link SET valid_to = '2024-01-01 00:00:00.000000', \
+             current_subject = NULL WHERE decided_by = 'ENGINE'",
+        ))
+        .execute(&pool)
+        .await
+        .expect("supersede");
+
+        let rows = repo::load_current_engine_reach(&pool)
+            .await
+            .expect("read reach");
+        assert!(
+            rows.is_empty(),
+            "a superseded row must not be counted, or the number ages with every re-scan; got {rows:?}"
+        );
+    }
+
+    /// §5 — the TWO-unit boundary: a refused pass leaves the observations standing.
+    #[tokio::test]
+    async fn a_refused_pass_does_not_take_the_observations_down() {
+        use opencmdb_core::observation::Fact;
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        clean(&pool).await;
+
+        // One `obs_id`, two different contents — `ContradictoryObservation`.
+        let a = scanned(40);
+        let mut b = a.clone();
+        b.facts = vec![Fact::Rtt { millis: 99 }];
+        ingest_and_resolve(&pool, vec![a, b]).await;
+
+        let (observations,): (i64,) = sqlx::query_as(sqlx::AssertSqlSafe(
+            "SELECT COUNT(*) FROM observation_record",
+        ))
+        .fetch_one(&pool)
+        .await
+        .expect("count");
+        assert_eq!(
+            observations, 1,
+            "TWO units: the observation the scan emitted survives a refused pass (FR11, D34 §2)"
+        );
+        let rows = repo::load_current_engine_reach(&pool).await.expect("reach");
+        assert!(rows.is_empty(), "and the pass wrote nothing at all");
+    }
+
+    /// AC7 — `Ambiguous` and `link_candidate` are UNREACHABLE. **Epic 6 makes this fall.**
+    #[tokio::test]
+    async fn ambiguous_and_link_candidate_are_unreachable_until_epic_6() {
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        clean(&pool).await;
+        ingest_and_resolve(&pool, (30..=34).map(scanned).collect()).await;
+
+        let rows = repo::load_current_engine_reach(&pool)
+            .await
+            .expect("read reach");
+        assert!(
+            !rows
+                .iter()
+                .any(|r| r.abstention_cause.as_deref() == Some("ambiguous")),
+            "L1 emits no Supports and no Opposes, so it cannot conclude Ambiguous — \
+             EPIC 6 owns the producer, and this assertion is what will fall when it arrives"
+        );
+        let (candidates,): (i64,) =
+            sqlx::query_as(sqlx::AssertSqlSafe("SELECT COUNT(*) FROM link_candidate"))
+                .fetch_one(&pool)
+                .await
+                .expect("count candidates");
+        assert_eq!(
+            candidates, 0,
+            "nothing fills candidates_for_link — EPIC 6 owns filling it"
+        );
     }
 
     #[test]
