@@ -2382,7 +2382,68 @@ development_status:
   # ⚠️ NEXT = `create-story validate` (MANDATORY: two fresh-context agents).
   # ⚠️ Baseline to RE-MEASURE, not quote: `master` at `6ceb284` — 494 tests, seven gates, 28
   # fixtures, 26 traps across ten families, trap gate RED.
-  5-14-abstention-displayed-by-cause: ready-for-dev
+  # 🔴 5.14 SPLIT AT VALIDATION, 2026-08-11 (Guy, arbitration 4). **Epic 5: 19 -> 20 stories.**
+  # ⚠️ The KEY was renamed with the file (`5-14-abstention-displayed-by-cause` ->
+  # `5-14-wire-the-pass-and-measure-what-it-cannot-say`), because the surface it was named after is
+  # no longer in it — story 5.13's precedent.
+  # ✅ VALIDATED by two fresh-context agents. **The gap-hunt BUILT the whole story** (read, wiring,
+  # display, bans, AC7 assertion — 503 tests, seven gates green) and then **ran the REAL BINARY
+  # against a REAL MariaDB**. What it found there is why the story is no longer the story it was.
+  # 🔴 **WIRING THE PASS REPLACES ONE STRUCTURAL ZERO WITH ANOTHER.** `arp_ping.rs:177` emits
+  # `vec![Fact::IpV4, Fact::Rtt]` and declares `Capabilities { kinds: {IpV4, Rtt} }` — **no MAC,
+  # EVER** — and it is the only connector `main.rs` reaches; `join` keys on `(L2DomainId, MacAddr)`.
+  # So **every scanned observation abstains**, `interfaces_minted` is 0 by construction, and the
+  # shipped page reads `0 evaluated · 1 not evaluated` against the mock's `187 · 113`. The story's
+  # §3a proved the counter would read zero WITHOUT the wiring; WITH it the *evaluated* half is a
+  # permanent zero for the same structural reason, one line further down.
+  # 🔴 **AND THE COUNTER AGES, which falsifies the promise it exists to keep.** Each scan mints
+  # fresh `obs_id`s, so each scan writes a NEW current abstention link and **nothing supersedes
+  # anything**: five runs of the binary over ONE host gave `current engine links = 1, 2, 3, 4, 5`.
+  # ⚠️ The `current_subject IS NOT NULL` filter does NOT stop it — the draft believed it did. At a
+  # five-minute scan interval that one unplaceable host reads **~105 000 after a year**. So the
+  # story's own AC4 (*"the count renders identically whatever the age of the rows"*) and the UX ban
+  # (*"six months of inaction and it still reads 113, in the same grey"*) are falsified BY THE
+  # WIRING ITS OWN AC1 MANDATES. **The counter measures uptime, not reach.**
+  # 🔑 **Guy: SPLIT. 5.14 wires and MEASURES; 5.14b INSERTED, the display.** The reason for not
+  # fixing the denominator here: an abstained observation HAS no interface — that is what abstention
+  # means — so collapsing sightings of one unplaceable thing means deciding what makes two sightings
+  # the same thing WITHOUT an identity. **That is grouping, and grouping is Epic 6.** Choosing a
+  # denominator under the pressure of a screen to ship would settle in a display story what the next
+  # epic exists to decide.
+  # 🔑 TWO FURTHER ARBITRATIONS: (5) the section is HOISTED out of the declared side's visibility
+  # gate — measured, with four abstentions in the database and no declared row the page renders only
+  # *"No declared record yet"*, so a scan-only deployment (the DEFAULT at first boot) never sees the
+  # counter; the AC forbidding any change to story 3.8's template is amended and the reason written.
+  # 5.14b's. (6) The guard seam **IS the helper, decided and WRITTEN**: deleting the ENTIRE wiring
+  # from `spawn_startup_scan` leaves all 282 tests GREEN, because that function is a
+  # `std::thread::spawn` with no join handle whose body is inseparable from a real ICMP poll. So the
+  # last link is carried by NOTHING, and the story SAYS so with the mutation as evidence rather than
+  # claiming a guard on the startup path.
+  # ⚠️ Also measured and correcting the draft: `InstantRegressed`/`ContradictoryObservation` are
+  # **UNREACHABLE from a scan slice** (fresh `Uuid::now_v7()` per observation, one `observed_at` per
+  # poll, five binary runs, no refusal) — the draft called them *"the two refusals a real network can
+  # produce"*, which is FALSE; and the transaction menu the draft offered **does not exist** — the
+  # ingest is already one `transact` PER OBSERVATION, so two units is the only shape the code offers.
+  # ⚠️ And the fact-check found the draft's §9 listed **12 of the 22** register entries naming 5.14,
+  # the omission including **`:2407` — the entry that registers the WIRING**, i.e. the story's own
+  # headline act. §1 said "about twenty" while §9 listed twelve: two sections of one document
+  # disagreeing, and §9 is the one the tasks bind to. Corrected to twenty-two, counted.
+  # ⚠️ NEXT = `create-story validate` on the REWRITTEN 5.14 (it changed enough to need it again).
+  5-14-wire-the-pass-and-measure-what-it-cannot-say: ready-for-dev
+  # 🔴 5.14b INSERTED at 5.14's validation, 2026-08-11. **The display**, and it inherits a QUESTION
+  # rather than a spec: **what does the abstention counter count?** A count over current links
+  # measures scan iterations (see 5.14's measurement). Deciding the denominator needs a notion of
+  # "the same unplaceable thing seen twice", which is grouping — so 5.14b arrives WITH Epic 6 or
+  # states its denominator's limit in the surface itself.
+  # It also inherits: `epics.md`'s `Ambiguous`-shows-its-candidates AC, re-owned to Epic 6 with its
+  # unreachability ASSERTED (nothing produces `Supports`/`Opposes`, nothing writes a `link_candidate`
+  # row in production, and `resolver.rs:672` names Epic 6 as the owner); the HOIST out of the
+  # declared side's visibility gate (arbitration 5); the read and the token parse-back — ⚠️ where the
+  # gap-hunt measured that a new variant breaks the LABEL and the WRITER but **never**
+  # `cause_from_token`, whose `_ => None` is structural, so the parse-back cannot carry exhaustiveness
+  # and a variant added with the minimal repair persists a token the reader refuses, losing the WHOLE
+  # PAGE to a 500; the UX bans as HTML assertions; and the remaining register entries.
+  5-14b-abstention-displayed-by-cause: backlog
   epic-5-retrospective: required
 
   # ── Epic 6: Ne pas compter deux fois la même boîte (v0.4) ────────────────
