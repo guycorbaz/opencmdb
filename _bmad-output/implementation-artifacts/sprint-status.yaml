@@ -2339,7 +2339,50 @@ development_status:
   # dropping control records so the trap path is provably blind to the record just committed; and
   # story 5.2b's *"green without the pin"* is STALE since 5.7 and must be re-derived per family.
   5-13b-monotone-honesty-trap-family: done
-  5-14-abstention-displayed-by-cause: backlog
+  # 🔴 5.14 CONTEXTED 2026-08-11 with Guy — **THREE arbitrations**, and the first CHANGES WHAT THE
+  # STORY IS. Two clauses of `epics.md` are unimplementable, each established by code:
+  #   (a) **the counter would read ZERO in the shipped product.** `main.rs:130-135` spawns the
+  #       startup scan and `:249` writes each observation, but **nothing calls `resolver::resolve`**
+  #       outside `#[cfg(test)]` — verified over the whole tree. A display alone would be
+  #       structurally zero, permanently, and GREEN: decoration in D18's sense. **Guy: 5.14 WIRES
+  #       the pass AND displays.** One story, not split.
+  #   (b) **`epics.md`'s third AC is unreachable TWICE OVER.** Nothing produces `Verdict::Supports`
+  #       or `Opposes` (the only occurrence outside `cascade.rs` is an exhaustive match arm at
+  #       `l1.rs:475`), so L1 cannot conclude `Ambiguous` at all — `resolver.rs:654` says so in as
+  #       many words; and nothing writes a `link_candidate` row in production, the only call site
+  #       being a test. `resolver.rs:669-671` names the owner: *"Whoever produces the first
+  #       `Ambiguous` owns filling this slice, and that is **Epic 6**"*. **Guy: re-owned to Epic 6,
+  #       with the unreachability ASSERTED** — a test that reds the day one appears, so the
+  #       successor is named by a falling test rather than by a sentence.
+  # 🔑 THIRD ARBITRATION: **about twenty `deferred-work.md` entries name 5.14**, most of them BY
+  # CONDITION (*"the first story with a ranking surface"*, *"the first place a consumer can justify
+  # the split"*, *"the FR16 surface"*). **Answer the conditions one by one** — CLOSED where answered,
+  # RE-OWNED where not, each with the measurement. Story 5.7's precedent: `Conclusion::rule()` was
+  # closed by ANSWERING its condition, not by building the accessor. A divergence from the story's
+  # predicted disposition is a FINDING.
+  # ⚠️ READ §4 BEFORE ANY UI: **the abstention panel ALREADY EXISTS.** Story 3.8 shipped "Reach"
+  # (`page.rs:112` `cause_label` + the `t!()` seam, `_gap_card.html:47-48`) — but for
+  # `gap::AbstentionCause` over DECLARED ATTRIBUTES, where this story renders
+  # `IdentityAbstentionCause` over INTERFACES. `deferred-work.md` forbids a `From` bridge between
+  # them *"appearing silently"*, so: a second section, its own label function, its own locale keys.
+  # A shared `cause_label` IS that silent bridge.
+  # 🔑 The parse-back is a DESIGN decision, not plumbing: `cause_token` writes and **nothing parses
+  # it back**. The display should parse into `IdentityAbstentionCause` and REFUSE an unknown token,
+  # so a cause the domain does not have cannot reach a screen — which also gives the enum its first
+  # real consumer and makes several registered entries answerable by measurement.
+  # ⚠️ Today exactly ONE cause is producible (`AbsenceOfProof`), so the grouped list has one line.
+  # Build the grouping anyway (Epic 6 fills it) but **assert what is true** — the line that exists
+  # AND the absence of the other — never that "grouping works".
+  # ⚠️ THIS IS THE LAST STORY OF EPIC 5, and the epic does NOT close until `bmad-retrospective` has
+  # run. Its input is already registered by name: `epics.md`'s AC1 falsified by the code it
+  # describes (5.9b), the `TRUNCATE … WHERE` correction (5.10), 5.12's second-session lesson, and
+  # 5.13b's four — the reserved-prefix hole no gate covers, *"a promise of non-modification shelters
+  # false sentences"*, *"a floor is only a guard while it equals what is there"*, and the
+  # mutation-driver family's FOURTH recurrence. Carry them in; do not rediscover them.
+  # ⚠️ NEXT = `create-story validate` (MANDATORY: two fresh-context agents).
+  # ⚠️ Baseline to RE-MEASURE, not quote: `master` at `6ceb284` — 494 tests, seven gates, 28
+  # fixtures, 26 traps across ten families, trap gate RED.
+  5-14-abstention-displayed-by-cause: ready-for-dev
   epic-5-retrospective: required
 
   # ── Epic 6: Ne pas compter deux fois la même boîte (v0.4) ────────────────
