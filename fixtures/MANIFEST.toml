@@ -185,3 +185,30 @@ sha256 = "a5239e155be8d69a0d96a6cb5afc5a4648b25dec7041e9e600d0534192b9024c"
 # CONSUMER PENDING: Epic 11 (issue #34).
 path = "scenario/wire/unifi-clients.expected.jsonl"
 sha256 = "707f4443768733b152977a937edf266ad8a48698d8bb1d9125246806db385d2f"
+
+[[artefact]]
+# Story 5.13b: the CLEAN twin of the blinded-source pair — four observations, no control record,
+# two MACs seen twice each. Judged by NO trap, deliberately: it exists to be the thing the faulted
+# twin is compared against, and being control-free it also joins story 5.13's own AC3 sweep.
+path = "scenario/replay/blinded-source.jsonl"
+sha256 = "45139d7d388e614f22b3128f67816932898ac2fd3b2e69d9d5bb7798e17aeb80"
+
+[[artefact]]
+# Story 5.13b: the FAULTED twin — the stream above with a capability record after its second
+# observation and every following observation stripped of the facts that record denies (the strip
+# is mandatory: containment is positional, so an unstripped tail refuses to load). The first
+# trap-named stream whose committed bytes carry a `capability` record. It is NOT hand-authored
+# independently of its twin — `fault_injection`'s twin guard asserts it IS the clean twin blinded,
+# modulo obs_id, and a redundancy no test pins is a redundancy that drifts.
+path = "scenario/replay/blinded-source-blinded.jsonl"
+sha256 = "0954d0f665a4d0d3b4eb7afb367989e3452fe827e83227225b2385a0462c7dd7"
+
+[[artefact]]
+# Story 5.13b: the blinded-source family — two traps, both poles, both pairs STRADDLING the
+# capability record: must-merge on l1-exact-mac (the same MAC decides across the degradation) and
+# must-not-merge on l1-distinct-mac (a source reporting less must not become a source guessing
+# more). No must-abstain pole — nothing here is ambiguous. Its header states weakly what the pair
+# really asserts, and records that `read_jsonl` drops control records, so the capability record is
+# carried by the bytes and read by no judgement.
+path = "scenario/traps/blinded-source.toml"
+sha256 = "723511a89ddf4a0acdb4428b654cafddf0ac32991b86cfa2332fe3ecf8ea8ec5"

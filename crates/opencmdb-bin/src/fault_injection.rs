@@ -992,6 +992,229 @@ mod tests {
         );
     }
 
+    // ── Story 5.13b: the committed twin pair ───────────────────────────────────
+
+    const BLINDED_CLEAN: &str = "scenario/replay/blinded-source.jsonl";
+    const BLINDED_FAULTED: &str = "scenario/replay/blinded-source-blinded.jsonl";
+
+    /// Where the committed blinding sits, and the instant it carries.
+    ///
+    /// ⚠️ `BLINDED_AS_OF` is a LITERAL and deliberately not `earliest_legal_as_of(clean, 2)`, which
+    /// returns `00:00:05Z` — the earliest LEGAL instant, i.e. a bound, not the value the file
+    /// states. Rebuilding the derivation from the bound would red the twin guard on a difference
+    /// the committed pair does not have.
+    const BLINDED_K: usize = 2;
+    const BLINDED_AS_OF: &str = "2026-04-01T00:00:07Z";
+
+    /// The `obs_id` correspondence between the two committed twins, **as a table**.
+    ///
+    /// The twins cannot share their ids: `no_obs_id_is_shared_across_replay_streams` refuses any
+    /// `obs_id` present in two committed streams, and `blind_after` preserves them. So the guard
+    /// below compares modulo THIS mapping and nothing else — every other field must match.
+    const TWIN_OBS_IDS: [(&str, &str); 4] = [
+        (
+            "dbdbdbdb-0000-4000-8000-000000000001",
+            "bebebebe-0000-4000-8000-000000000001",
+        ),
+        (
+            "dbdbdbdb-0000-4000-8000-000000000002",
+            "bebebebe-0000-4000-8000-000000000002",
+        ),
+        (
+            "dbdbdbdb-0000-4000-8000-000000000003",
+            "bebebebe-0000-4000-8000-000000000003",
+        ),
+        (
+            "dbdbdbdb-0000-4000-8000-000000000004",
+            "bebebebe-0000-4000-8000-000000000004",
+        ),
+    ];
+
+    fn blinded_kinds() -> BTreeSet<FactKind> {
+        BTreeSet::from([FactKind::Mac, FactKind::IpV4])
+    }
+
+    fn twin_instant() -> Timestamp {
+        chrono::DateTime::parse_from_rfc3339(BLINDED_AS_OF)
+            .expect("a literal RFC 3339 instant")
+            .with_timezone(&chrono::Utc)
+    }
+
+    fn obs_id(s: &str) -> ObsId {
+        ObsId::from_uuid(uuid::Uuid::parse_str(s).expect("a literal UUID"))
+    }
+
+    /// 🔴 **The twin guard — the committed blinded twin IS the committed clean twin, blinded.**
+    ///
+    /// Without it the corpus would hold two files trusted to stay twins, and an edit to one would
+    /// silently break a relation that story 5.13 held BY CONSTRUCTION. That is the difference
+    /// between a deliberate redundancy and an accidental one.
+    ///
+    /// # 🔴 Why a whole-`Vec` equality and not a keyed lookup
+    ///
+    /// The first draft of story 5.13b required only that the mapping be *"total and injective —
+    /// never a positional zip"*. **A guard satisfying that letter was MEASURED GREEN** on the very
+    /// mutation it was written to catch: swap the faulted twin's third and fourth observations —
+    /// both sit AFTER the capability record, so the stream still loads — and a per-`obs_id` lookup
+    /// finds every observation exactly where it expects it. Injectivity is not the missing
+    /// property; a claim about the SEQUENCE is. So the mapping is applied as a REWRITE of the
+    /// derivation and the two whole record vectors are compared in one assertion.
+    #[test]
+    fn the_committed_blinded_twin_is_the_clean_twin_blinded() {
+        let clean = stream(BLINDED_CLEAN);
+        let faulted = stream(BLINDED_FAULTED);
+
+        let clean_ids: Vec<ObsId> = clean
+            .iter()
+            .filter_map(Record::as_observation)
+            .map(|o| o.obs_id)
+            .collect();
+        assert_eq!(
+            clean_ids.len(),
+            TWIN_OBS_IDS.len(),
+            "the mapping must cover the clean twin exactly — a table that stops short of the file \
+             would let the observations it omits go uncompared"
+        );
+
+        let mapping: std::collections::BTreeMap<ObsId, ObsId> = TWIN_OBS_IDS
+            .iter()
+            .map(|(from, to)| (obs_id(from), obs_id(to)))
+            .collect();
+        assert_eq!(
+            mapping.len(),
+            TWIN_OBS_IDS.len(),
+            "TOTAL as a function: no clean id appears twice on the left"
+        );
+        let images: BTreeSet<ObsId> = mapping.values().copied().collect();
+        assert_eq!(
+            images.len(),
+            TWIN_OBS_IDS.len(),
+            "INJECTIVE: no two clean ids share an image, or two observations would collapse onto one"
+        );
+        for id in &clean_ids {
+            assert!(
+                mapping.contains_key(id),
+                "TOTAL over the file: {id:?} is in the clean twin and has no image"
+            );
+        }
+
+        let derived = blind_after(&clean, BLINDED_K, &blinded_kinds(), twin_instant());
+        let rekeyed: Vec<Record> = derived
+            .into_iter()
+            .map(|record| match record {
+                Record::Observation(mut observation) => {
+                    observation.obs_id = mapping[&observation.obs_id];
+                    Record::Observation(observation)
+                }
+                other => other,
+            })
+            .collect();
+
+        assert_eq!(
+            rekeyed, faulted,
+            "the committed blinded twin is NOT the committed clean twin blinded — the pair has \
+             drifted, and every claim resting on it is void"
+        );
+    }
+
+    /// **Story 5.13b AC3(i)** — the committed clean twin, blinded in memory, INVENTS nothing and
+    /// loses facts rather than observations.
+    ///
+    /// # 🔴 Why the strictness half is NOT asserted here
+    ///
+    /// Under a blinding, strictness is guaranteed **before the connector is invoked** — the strip
+    /// is what makes the stream loadable at all, so a blinding that removed nothing could not be
+    /// built (this module's own doc says so, and the mutation that targets strictness directly dies
+    /// at the load rather than at an assertion). Asserting it here would be an assertion carried by
+    /// nothing. It is asserted on the CUT instead, by
+    /// [`the_clean_twin_carries_the_strictness_half_through_the_cut`], and the routing is itself
+    /// asserted there rather than left to a reader.
+    ///
+    /// What DOES carry *"the fault bit"* here is `denied_kinds_present_after`, and the fact counts
+    /// below say by how much.
+    #[tokio::test]
+    async fn ac3_the_committed_clean_twin_blinded_invents_nothing() {
+        let records = stream(BLINDED_CLEAN);
+        let context = context(&records);
+        let kinds = blinded_kinds();
+
+        assert!(
+            denied_kinds_present_after(&records, BLINDED_K, &kinds),
+            "the blinding must deny something the tail CARRIES, or it strips nothing and this test \
+             passes on a mutilation that did not happen"
+        );
+
+        let clean = run(records.clone(), &context).await;
+        let faulted = run(
+            blind_after(&records, BLINDED_K, &kinds, twin_instant()),
+            &context,
+        )
+        .await;
+
+        let invented = unaccounted(&faulted.claims, &clean.claims);
+        assert!(
+            invented.is_empty(),
+            "INCLUSION: the blinded run INVENTED {} claim(s): {invented:?}",
+            invented.len()
+        );
+        assert_eq!(
+            faulted.observations.len(),
+            clean.observations.len(),
+            "the loss is measured in FACTS — a half-blind source still answers"
+        );
+        assert_eq!(
+            (clean.facts_only().len(), faulted.facts_only().len()),
+            (12, 10),
+            "the twins' fact counts, pinned: four observations of three facts, of which the two \
+             after the record lose their Rtt"
+        );
+    }
+
+    /// **Story 5.13b AC3(ii)** — the strictness half, on the CUT, plus the ROUTING that puts it
+    /// there.
+    ///
+    /// The routing is asserted rather than described: the clean twin carries no control record, so
+    /// it is discovered by `control_free_streams` and swept by
+    /// [`ac3_the_sweep_holds_at_every_bounded_position_and_none_is_degenerate`] — where `cut_at`
+    /// keeps the tail and strictness is reddenable. Its faulted twin is deliberately NOT in that
+    /// set. Without these two assertions *"the strictness half is routed to the cut"* would be a
+    /// sentence rather than a fact, and the day the clean twin gained a control record it would
+    /// leave the sweep in silence.
+    #[tokio::test]
+    async fn the_clean_twin_carries_the_strictness_half_through_the_cut() {
+        let names: Vec<String> = control_free_streams()
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        assert!(
+            names.iter().any(|n| n == "blinded-source.jsonl"),
+            "the clean twin must be IN the control-free sweep, which is where its strictness half \
+             is measured: {names:?}"
+        );
+        assert!(
+            !names.iter().any(|n| n == "blinded-source-blinded.jsonl"),
+            "and the faulted twin must NOT be — it carries a control record, and a stream that \
+             already carries one is not a clean side"
+        );
+
+        let records = stream(BLINDED_CLEAN);
+        let context = context(&records);
+        let clean = run(records.clone(), &context).await;
+        let cut = run(cut_at(&records, BLINDED_K), &context).await;
+
+        assert!(
+            multiset_included(&cut.claims, &clean.claims),
+            "INCLUSION on the cut: {:?}",
+            unaccounted(&cut.claims, &clean.claims)
+        );
+        assert!(
+            cut.claims.len() < clean.claims.len(),
+            "STRICTNESS: the cut did not bite — clean={} cut={}",
+            clean.claims.len(),
+            cut.claims.len()
+        );
+    }
+
     // ── AC3: the sweep, bounded and non-degenerate ─────────────────────────────
 
     /// **AC3** — every control-free committed stream, every position `0 ≤ k < len`, both
@@ -1013,8 +1236,8 @@ mod tests {
         let streams = control_free_streams();
         assert_eq!(
             streams.len(),
-            11,
-            "the corpus carries 11 control-free replay streams; a new one belongs in this sweep"
+            12,
+            "the corpus carries 12 control-free replay streams; a new one belongs in this sweep"
         );
 
         let mut cut_positions = 0usize;
@@ -1076,18 +1299,18 @@ mod tests {
         }
 
         assert_eq!(
-            cut_positions, 39,
-            "39 bounded positions over 11 streams — the count is the guard against an enumerator \
+            cut_positions, 43,
+            "43 bounded positions over 12 streams — the count is the guard against an enumerator \
              that yields nothing"
         );
         assert_eq!(
-            blind_positions, 39,
+            blind_positions, 43,
             "both mutilations sweep the same positions"
         );
     }
 
     /// The bound is a DECISION, and this is the measurement behind it: `0 ≤ k ≤ len` would add
-    /// exactly one degenerate position per stream — 11 of 50 — every one of them at `k = len`, and
+    /// exactly one degenerate position per stream — 12 of 55 — every one of them at `k = len`, and
     /// every one of them failing the strictness half. That is mutation M4, eleven times.
     #[tokio::test]
     async fn the_excluded_position_is_exactly_one_per_stream_and_it_is_m4() {
@@ -1109,12 +1332,12 @@ mod tests {
         }
 
         assert_eq!(
-            total_unbounded, 50,
-            "0..=len over 11 streams gives 50 positions"
+            total_unbounded, 55,
+            "0..=len over 12 streams gives 55 positions"
         );
         assert_eq!(
-            degenerate, 11,
-            "exactly one per stream — 11 of 50, which is why the sweep is bounded at len"
+            degenerate, 12,
+            "exactly one per stream — 12 of 55, which is why the sweep is bounded at len"
         );
     }
 

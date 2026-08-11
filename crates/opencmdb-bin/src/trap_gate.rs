@@ -162,7 +162,7 @@ impl Report {
     /// How many discovered traps had an answer to score.
     ///
     /// Zero with a non-zero `discovered` was the honest state before any engine existed: found, not
-    /// measured. Since story 5.7 the committed corpus scores **13 of 24** — the thirteen traps whose
+    /// measured. Since story 5.7 the committed corpus scores **15 of 26** — the fifteen traps whose
     /// expected rule is `l1-*`. The gap is not an error: eleven traps are unanswerable at this
     /// cascade level and stay in `discovered` on purpose, so the exclusion is visible. Since story
     /// 5.8 those eleven are also [`Self::unanswered`] — a bucket that BLOCKS — so the gap is no
@@ -635,7 +635,7 @@ mod tests {
     ///
     /// _(Renamed in story 5.7. It read
     /// `the_committed_corpus_is_discovered_and_scored_by_nothing`, which stated a claim about the
-    /// CORPUS that story 5.7 falsifies: `l1_runner` now answers thirteen of its traps. What this
+    /// CORPUS that story 5.7 falsifies: `l1_runner` now answers fifteen of its traps. What this
     /// test pins is a property of its own CALL — it supplies no answers — and the name now says
     /// so.)_
     #[test]
@@ -648,8 +648,9 @@ mod tests {
         // `shared-hardware-vm.toml` (story 4.11) three, `cloned-mac.toml` (story 4.12) two,
         // `dhcp-churn.toml` (story 4.13) two, `vrrp-virtual-mac.toml` (story 4.14) three,
         // `hostname-collision.toml` (story 4.15) two, `docker-veth.toml` (story 4.16) two and
-        // `hostname-absence.toml` (story 4.17) three — twenty-four in the committed corpus.
-        assert_eq!(report.discovered(), 24, "the walk must open the corpus");
+        // `hostname-absence.toml` (story 4.17) three and `blinded-source.toml` (story 5.13b) two —
+        // twenty-six in the committed corpus.
+        assert_eq!(report.discovered(), 26, "the walk must open the corpus");
         assert_eq!(
             report.scored(),
             0,
@@ -668,7 +669,7 @@ mod tests {
     fn the_report_says_plainly_that_nothing_was_scored() {
         let report = score_corpus(&committed_traps_root(), &BTreeMap::new()).unwrap();
         let rendered = report.to_string();
-        assert!(rendered.contains("24 trap(s) discovered"), "{rendered}");
+        assert!(rendered.contains("26 trap(s) discovered"), "{rendered}");
         assert!(rendered.contains("0 scored"), "{rendered}");
         assert!(rendered.contains("0 truth-table failure(s)"), "{rendered}");
     }
@@ -686,7 +687,7 @@ mod tests {
             }),
         );
         let report = score_corpus(&committed_traps_root(), &answers).unwrap();
-        assert_eq!(report.discovered(), 24);
+        assert_eq!(report.discovered(), 26);
         assert_eq!(report.scored(), 1, "only the answered trap is scored");
         assert_eq!(report.failures(), 0, "and its answer is correct");
     }
@@ -700,10 +701,10 @@ mod tests {
     /// The committed corpus, answered by the real L1 engine.
     ///
     /// `scored` has read **0** since story 4.6b, over nine stories — the honest state while no
-    /// producer existed. It reads 13 here, and every one of the thirteen passes **both halves of
+    /// producer existed. It reads 15 here, and every one of the fifteen passes **both halves of
     /// story 4.7a's assertion: the truth table AND the rule**.
     ///
-    /// ⚠️ The `incomplete_families()` assertion below is NOT a property of those thirteen answers
+    /// ⚠️ The `incomplete_families()` assertion below is NOT a property of those fifteen answers
     /// and is not claimed as one. [`incomplete_families`] is computed over ALL discovered traps
     /// (`score_corpus` passes it `all_traps`), so it says the corpus SHAPE is unchanged by this
     /// story and nothing whatever about the engine. It has to be independent: the runner answers 2
@@ -716,13 +717,13 @@ mod tests {
 
         assert_eq!(
             report.discovered(),
-            24,
+            26,
             "the unanswered traps stay in the denominator — the exclusion is visible, never silent"
         );
         assert_eq!(
             report.scored(),
-            13,
-            "the thirteen traps whose expected rule is `l1-*`"
+            15,
+            "the fifteen traps whose expected rule is `l1-*`"
         );
         assert_eq!(report.failures(), 0, "no truth-table failure");
         assert!(
@@ -736,7 +737,7 @@ mod tests {
             report.incomplete_families()
         );
         // 🔴 FLIPPED by story 5.8, and the flip is the deliverable rather than a regression. Until
-        // then this asserted a PASS while eleven of the corpus's twenty-four traps had never been
+        // then this asserted a PASS while eleven of the corpus's twenty-six traps had never been
         // put to any engine — D18's *"a gate that cannot fall is decoration"*. The eleven are now a
         // blocking bucket; `epics.md:416` says NFR4 stays RED and is closed by Epic 6.
         assert!(
@@ -988,8 +989,8 @@ expect = { must-not-merge = { rule = "l1-distinct-mac" } }
     #[test]
     fn the_report_names_the_eleven_and_says_nfr4_is_not_met() {
         let rendered = committed_report().to_string();
-        assert!(rendered.contains("24 trap(s) discovered"), "{rendered}");
-        assert!(rendered.contains("13 scored"), "{rendered}");
+        assert!(rendered.contains("26 trap(s) discovered"), "{rendered}");
+        assert!(rendered.contains("15 scored"), "{rendered}");
         assert!(rendered.contains(", 11 unanswerable trap(s)"), "{rendered}");
         assert!(
             rendered.contains(
@@ -1057,7 +1058,7 @@ expect = { must-not-merge = { rule = "l1-distinct-mac" } }
     #[test]
     fn an_absent_answer_is_not_a_decline_and_does_not_block() {
         let report = score_corpus(&committed_traps_root(), &BTreeMap::new()).unwrap();
-        assert_eq!(report.discovered(), 24);
+        assert_eq!(report.discovered(), 26);
         assert_eq!(report.scored(), 0);
         assert!(
             report.unanswered().is_empty(),
@@ -1065,7 +1066,7 @@ expect = { must-not-merge = { rule = "l1-distinct-mac" } }
         );
         assert_eq!(
             report.unaccounted(),
-            24,
+            26,
             "and the state is REPORTED: neither scored nor declined"
         );
         assert!(
@@ -1190,13 +1191,13 @@ expect = { must-not-merge = { rule = "l1-distinct-mac" } }
 
     /// The rendered line stops saying *"0 scored"*.
     #[test]
-    fn the_report_line_says_thirteen_scored() {
+    fn the_report_line_says_fifteen_scored() {
         let answers = l1_answers(&committed_traps_root()).unwrap();
         let rendered = score_corpus(&committed_traps_root(), &answers)
             .unwrap()
             .to_string();
-        assert!(rendered.contains("24 trap(s) discovered"), "{rendered}");
-        assert!(rendered.contains("13 scored"), "{rendered}");
+        assert!(rendered.contains("26 trap(s) discovered"), "{rendered}");
+        assert!(rendered.contains("15 scored"), "{rendered}");
         assert!(rendered.contains("0 truth-table failure(s)"), "{rendered}");
     }
 
@@ -1214,8 +1215,8 @@ expect = { must-not-merge = { rule = "l1-distinct-mac" } }
         let report = score_corpus(&committed_traps_root(), &answers).unwrap();
         let tally = report.tally();
 
-        assert_eq!(tally.scored_in(Column::MustMerge), 7);
-        assert_eq!(tally.scored_in(Column::MustNotMerge), 6);
+        assert_eq!(tally.scored_in(Column::MustMerge), 8);
+        assert_eq!(tally.scored_in(Column::MustNotMerge), 7);
         assert_eq!(
             tally.scored_in(Column::MustAbstain),
             0,
@@ -1320,7 +1321,7 @@ expect = { must-not-merge = { rule = "l1-distinct-mac" } }
 
         assert_eq!(
             first.scored(),
-            13,
+            15,
             "two real runs, not two empty ones — otherwise the equality below is vacuous"
         );
         assert_eq!(first, second, "the same corpus, the same engine, twice");

@@ -705,7 +705,7 @@ fn guard_decision(
 /// necessity: two properties this file rests on cannot be exercised by the
 /// committed corpus at all: every committed replay stream carries exactly ONE `l2_domain`
 /// [`l1.rs:83-88`], so a resolver keyed on the bare MAC would pass the whole corpus; and **no
-/// committed observation carries more than one MAC** — measured over all 13 streams, the maximum is
+/// committed observation carries more than one MAC** — measured over all 15 streams, the maximum is
 /// one — so the multi-NIC shape that forced story 5.9's uniqueness key to widen appears nowhere in
 /// it. ⚠️ `multi-nic` is NOT that shape: it models a multi-NIC host as two single-MAC observations
 /// and both its poles expect `l2-*` rules, so it sits in the eleven-unanswerable bucket and L1 never
@@ -3327,7 +3327,7 @@ mod tests {
     ///
     /// # Why THIS stream
     ///
-    /// Two of the thirteen cannot be used and it is worth naming why, since both look usable:
+    /// Two of the fifteen cannot be used and it is worth naming why, since both look usable:
     /// `capability-downgrade.jsonl` and `partial-then-failed.jsonl` carry their OWN `connector_id`
     /// and `scope`, so loading them with the corpus context is refused `ForeignConnectorId` then
     /// `UncoveredScope`; and `partial-then-failed.jsonl` additionally ends in a `Failure` record,

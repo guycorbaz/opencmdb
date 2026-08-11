@@ -349,7 +349,7 @@ mod tests {
     const MINIMAL: &str = "scenario/replay/minimal.jsonl";
 
     /// The `connector_id`, scope and capability set of the CORPUS context — the one eleven of the
-    /// thirteen committed streams were authored in (`minimal.jsonl` and every trap family since
+    /// fifteen committed streams were authored in (`minimal.jsonl` and every trap family since
     /// 4.9). Story 5.1 widened its reach from one file to eleven; only `partial-then-failed.jsonl`
     /// and `capability-downgrade.jsonl` carry their own.
     ///
@@ -683,6 +683,30 @@ mod tests {
             ],
         )
         .expect("a Timeout is scriptable");
+    }
+
+    // ── The blinded-source twin pair (story 5.13b) ───────────────────────────
+
+    const BLINDED_CLEAN: &str = "scenario/replay/blinded-source.jsonl";
+    const BLINDED_FAULTED: &str = "scenario/replay/blinded-source-blinded.jsonl";
+
+    /// The initial descriptor for BOTH twins, and it is deliberately TIGHT.
+    ///
+    /// Exactly the three kinds the clean twin emits. `corpus_caps()` would have loaded both streams
+    /// too — it admits all seven kinds — but it would have made
+    /// [`every_committed_replay_stream_is_admissible_to_the_connector`] VACUOUS on the faulted twin,
+    /// which is the one stream in this pair whose whole point is that a capability record NARROWS
+    /// the descriptor mid-stream. Declaring `Rtt` here and dropping it in the committed record is
+    /// what makes the strip observable at the connector, exactly as
+    /// [`downgrade_initial_caps`] does for story 4.5b's stream.
+    ///
+    /// The two twins share it because they carry the same facts up to the strip: a descriptor that
+    /// differed between them would be a second thing to keep in step, and the pair already has one.
+    fn blinded_source_caps() -> Capabilities {
+        Capabilities {
+            as_of: ts("2026-04-01T00:00:00Z"),
+            kinds: BTreeSet::from([FactKind::Mac, FactKind::IpV4, FactKind::Rtt]),
+        }
     }
 
     // ── The capability record (story 4.5b) ───────────────────────────────────
@@ -1536,6 +1560,22 @@ mod tests {
                 id: downgrade_id(),
                 scopes_covered: vec![downgrade_scope()],
                 capabilities: downgrade_initial_caps(),
+            },
+            // Story 5.13b's twin pair. Both in the corpus context — the ids and the scope are the
+            // corpus's, as every family stream since 4.9 — but with a TIGHT descriptor of their
+            // own, so the faulted twin's narrowing is observable here rather than swallowed by
+            // `corpus_caps()`'s seven kinds. See `blinded_source_caps`.
+            StreamContext {
+                relative_path: BLINDED_CLEAN,
+                id: corpus_id(),
+                scopes_covered: vec![corpus_scope()],
+                capabilities: blinded_source_caps(),
+            },
+            StreamContext {
+                relative_path: BLINDED_FAULTED,
+                id: corpus_id(),
+                scopes_covered: vec![corpus_scope()],
+                capabilities: blinded_source_caps(),
             },
         ]
     }

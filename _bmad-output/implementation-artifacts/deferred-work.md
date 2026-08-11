@@ -2941,3 +2941,42 @@ _Appended, never rewriting the bullets above. Story 5.13 shipped the monotone-ho
   state no real run produces, and it is recorded so a future story reading those rows knows why they
   disagree with the links beside them.
 
+
+## Deferred from: story-5.13b (2026-08-11)
+
+- **🔴 The corpus-wide `obs_id` anchor does NOT cover `fixtures/scenario/wire/`, and the
+  compensation for that lives in a README rather than in a check.**
+  `no_obs_id_is_shared_across_replay_streams` (`fixtures.rs:1858`) walks `scenario/replay/` only;
+  `fixtures.rs:1063-1067` records that the wire artefact *"sits outside every corpus walk on
+  purpose"*; and `scenario/wire/README.md:51-52` compensates with a RESERVATION —
+  *"the `bdbdbdbd` obs_id prefix is RESERVED by this directory"*. **This story walked straight into
+  it**: its first draft prescribed `bdbdbdbd` and four UUIDs byte-identical to
+  `unifi-clients.expected.jsonl` lines 1-4, on a measurement correctly scoped to `scenario/replay/`
+  and a conclusion drawn about the whole tree. ⚠️ **No gate would have caught it** — not the anchor,
+  and not this story's own mutation M10, written precisely to prove that anchor live. It was found by
+  READING, by the validation layer that did not build the story; the layer that DID build it reached
+  492 green tests without seeing it. *A green build is not a uniqueness proof when the walk cannot see
+  the file.* The honest closure is a check that reads the reservation, or a walk that covers `wire/`
+  with the exemption stated in code rather than in prose. Owner: not assigned — registered with Epic
+  5's retrospective.
+- **A THIRD committed replay stream is judged by no trap**: `blinded-source.jsonl`, the clean twin.
+  This is not the 4.6b bullet's shape — it is deliberate and structural. The clean twin exists to be
+  the thing the faulted twin is compared against, and being control-free it also joins story 5.13's
+  AC3 sweep, so it is measured by two mechanisms and judged by no trap. Recorded so nobody "fixes" it
+  by authoring a family for it.
+- **D36's capability snapshot: the PRECONDITION is supplied, and it is NARROWER than it reads.**
+  `blinded-source-blinded.jsonl` is the first trap-named stream whose committed BYTES carry a
+  `capability` control record — the count was 11 of 11 without one. ⚠️ But `read_traps` and
+  `l1_runner::answer_trap` both go through `read_jsonl`, which drops control records
+  (`fixtures.rs:647-657`, exhaustive `Failure | Capability => None`), so **the trap path is provably
+  blind to that record**. It is reachable by a future `ScoredRecord` producer and by nothing today.
+  *"D36 is now testable"* must not be read as met: no `ScoredRecord` is produced, the other 24 traps
+  still name streams with no capability record, and the doubt ORDER on `Verdict` needs
+  `Supports`/`Opposes` to have a producer. Owners unchanged — Epic 6 for the doubt order.
+- **Story 5.2b's *"exchanging the two `observations` vectors leaves the whole suite green"* is STALE
+  as a general claim, and this story measured where.** It was true when measured; since story 5.7 the
+  committed corpus is scored by the real engine, so for a family whose swap demands a merge the engine
+  refuses, the trap gate reds on its own — measured here: M6 reds 4 tests, three of them `trap_gate`
+  tests that never consult the pin. The byte pins remain worth having (they pin WHICH pair each pole
+  judges, and `family`, whose loss silently exempts a family from `incomplete_families`), but the
+  justification must be re-derived per family rather than quoted from 5.2b.
