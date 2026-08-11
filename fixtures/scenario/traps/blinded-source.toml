@@ -1,0 +1,60 @@
+# The blinded-source family (story 5.13b) — the identity decision must survive a source that goes
+# half-blind mid-sweep. It judges `scenario/replay/blinded-source-blinded.jsonl`, the first
+# trap-named stream whose committed bytes carry a `capability` control record.
+#
+# THE PAIR OF STREAMS, and why the prose lives here. This family's stream is one half of a committed
+# TWIN PAIR: `blinded-source.jsonl` is the clean twin, and the stream below is that same twin with a
+# capability record inserted after its second observation and every following observation stripped of
+# the facts that record denies. A `.jsonl` can carry no comment — every non-empty line is parsed as a
+# record and must re-serialize to its committed bytes — so the two streams are explained HERE and in
+# `fault_injection.rs`'s twin guard, which is what holds them in step. Without that guard the pair
+# would be two files trusted to stay twins, and a later edit to one would silently break the
+# relation. The redundancy is deliberate (D56: the corpus is a SPEC, and a faulted shape as
+# reviewable bytes is worth more than the same shape assembled inside a test module); the guard is
+# what makes it deliberate rather than accidental.
+#
+# ⚠️ WHAT THESE TWO TRAPS ASSERT, stated weakly on purpose. They judge the BLINDED stream only.
+# Nothing in the corpus judges the same pair on the clean twin, so no trap here makes a before/after
+# comparison, and `keys_of` reads `Fact::Mac` alone — so `Rtt` is irrelevant to L1 BY CONSTRUCTION,
+# not by measurement. What is asserted is that `l1-exact-mac` and `l1-distinct-mac` fire correctly on
+# a stream that carries a capability record. That is smaller than "losing a capability changes no
+# verdict", and it is the true claim. The monotone-honesty relation itself — the faulted run's facts
+# are a SUBSET of the clean run's — is a relation between two RUNS and projects onto none of D18's
+# three columns; it is measured in `fault_injection.rs`, not here (story 5.13b §3b).
+#
+# ⚠️ AND THE CAPABILITY RECORD IS INVISIBLE TO THIS JUDGEMENT. `read_traps` and `l1_runner` both go
+# through `read_jsonl`, which drops control records. The record is carried by the committed BYTES,
+# where a future `ScoredRecord` producer can reach it (D36's capability snapshot, still owned by
+# nobody here); it does not participate in the two decisions below. Do not read "the family judges
+# the stream that carries the capability record" as "the record participates in the judgement".
+#
+# Both pairs STRADDLE the capability record deliberately: each names one observation from before the
+# blinding and one from after, so the decision is taken across the degradation rather than on one
+# side of it. The must-merge and the must-not-merge share their first observation, which is what
+# makes the two poles a genuine pair rather than two unrelated cases — the same MAC decides one and
+# the differing MAC opposes the other, on the same evidence base.
+#
+# No `must-abstain` pole: nothing here is ambiguous. The MACs are present on every observation and
+# they either match or they do not — the blinding removes round-trip times, which no L1 rule reads.
+
+[[trap]]
+id = "blinded-source-must-merge"
+replay = "scenario/replay/blinded-source-blinded.jsonl"
+family = "blinded-source"
+observations = [
+  "bebebebe-0000-4000-8000-000000000001",
+  "bebebebe-0000-4000-8000-000000000003",
+]
+reason = "both carry the identical MAC 02:00:5e:00:56:01, and the source lost its round-trip-time capability between the two sightings: an interface is not identified by how fast it answers, so the merge must survive the loss."
+expect = { must-merge = { rule = "l1-exact-mac" } }
+
+[[trap]]
+id = "blinded-source-must-not-merge"
+replay = "scenario/replay/blinded-source-blinded.jsonl"
+family = "blinded-source"
+observations = [
+  "bebebebe-0000-4000-8000-000000000001",
+  "bebebebe-0000-4000-8000-000000000004",
+]
+reason = "their MACs differ in the final octet — 02:00:5e:00:56:01 against :02 — which opposes the merge rather than merely failing to support it, and a source reporting less must not become a source guessing more."
+expect = { must-not-merge = { rule = "l1-distinct-mac" } }

@@ -45,8 +45,8 @@
 //!   could not be bent to the engine (D19: *"a metric written after the engine is bent to fit the
 //!   engine"*). The predicate reads the id's prefix and nothing else — not the column, not the
 //!   family, not the reason, and never the answer;
-//! - **the unanswered traps do not leave the denominator.** `Report::discovered()` stays 24 while
-//!   `scored()` is 13, and `Tally::scored_in` splits it per column. Since story 5.8 the residue is
+//! - **the unanswered traps do not leave the denominator.** `Report::discovered()` stays 26 while
+//!   `scored()` is 15, and `Tally::scored_in` splits it per column. Since story 5.8 the residue is
 //!   a bucket that BLOCKS (`Report::unanswered`), so the committed gate does not pass at all while
 //!   eleven traps go unasked; the exclusion is visible here and blocking there, silent in neither;
 //! - **a PREFIX, not a whitelist of the two implemented ids.** A trap expecting an `l1-*` rule this
@@ -55,7 +55,7 @@
 //!   exactly two `l1-*` ids today, so the two selectors agree on the committed bytes — only the
 //!   prefix keeps agreeing tomorrow, and a scratch-corpus test pins that;
 //! - **the counter-factual is measured, not argued.** Answering every trap this runner CAN answer —
-//!   23 of the 24, the twenty-fourth naming one observation and getting no answer at all — plus the
+//!   25 of the 26, the twenty-sixth naming one observation and getting no answer at all — plus the
 //!   one-line shortcut [`answer_trap`] refuses for that last one, makes the gate red: **6
 //!   truth-table failures and 4 wrong-rule failures**. It decomposes as 4 + 4 over the eight `l2-*`
 //!   traps and 2 more over the two paired `must-abstain` ones. ⚠️ Measured at contexting by a probe
@@ -198,7 +198,7 @@ fn answer_pair(stream: &[Observation], trap: &Trap, a: ObsId, b: ObsId) -> Outco
 /// because no rule was asked is the *right answer for the wrong reason* D19 and D46b exist to
 /// catch, and it would put a **1** in the `must-abstain` column of a gate that never asked the
 /// question. So the condition is named, and it is asserted HERE rather than on [`l1_answers`]'
-/// output: of the 13 committed traps whose expected rule is `l1-*`, **zero** name other than two
+/// output: of the 15 committed traps whose expected rule is `l1-*`, **zero** name other than two
 /// observations, so through the walk this guard is unreachable and any assertion on the walk's
 /// output would be vacuous. Story 5.6's idiom: a guard the committed corpus cannot exercise through
 /// the production path needs a test that reaches it directly.
@@ -228,8 +228,8 @@ pub fn answer_trap(trap: &Trap) -> Result<Option<Outcome>, FixtureError> {
 /// Walk the trap corpus rooted at `traps_root` and say something about **every** trap it holds.
 ///
 /// The result is exactly the `answers` map [`crate::trap_gate::score_corpus`] takes, and since
-/// story 5.8 it is **TOTAL over the corpus**: one entry per discovered trap — 24 over the committed
-/// one, **13 [`Answer::Answered`] and 11 [`Answer::Unanswerable`]**. Totality is the point. While a
+/// story 5.8 it is **TOTAL over the corpus**: one entry per discovered trap — 26 over the committed
+/// one, **15 [`Answer::Answered`] and 11 [`Answer::Unanswerable`]**. Totality is the point. While a
 /// declined trap was simply ABSENT from this map, a producer could drop a trap out of the
 /// denominator with no reason attached and the gate stayed green; `epics.md`'s story 5.8 forbids
 /// that — the unanswerable traps *"never silently leave the denominator"*. Absence still MEANS
@@ -254,8 +254,9 @@ pub fn answer_trap(trap: &Trap) -> Result<Option<Outcome>, FixtureError> {
 /// story 5.7 measured and registered.
 ///
 /// ⚠️ **The ANSWERED SET is invariant under that order.** A trap failing both conditions is
-/// unanswerable either way, so the reorder moves a CAUSE and never a key: the thirteen keys are the
-/// same ones story 5.7 produced, and a test asserts it. Do not read the reorder as a behaviour
+/// unanswerable either way, so the reorder moves a CAUSE and never a key. ⚠️ **The keys are no
+/// longer the thirteen story 5.7 produced** — story 5.13b added two, so what survives 5.8's reorder
+/// is the RELATION (a cause moves, a key does not) and not the list. A test asserts the set. Do not read the reorder as a behaviour
 /// change.
 ///
 /// Discovery goes through [`discover_trap_files`], the harness's own walk, so the two see the same
@@ -376,7 +377,7 @@ mod tests {
         names.iter().map(|n| TrapId((*n).to_string())).collect()
     }
 
-    /// The thirteen traps whose expected rule is `l1-*` — seven `must-merge`, six `must-not-merge`.
+    /// The fifteen traps whose expected rule is `l1-*` — eight `must-merge`, seven `must-not-merge`.
     ///
     /// Written out as literals rather than derived from the corpus by the same predicate the
     /// runner uses: an expectation computed by calling the code under test proves nothing. That is
@@ -385,10 +386,12 @@ mod tests {
     ///
     /// ⚠️ This is **not** the *"third independent statement"* `l1.rs:326-329` points at. That one is
     /// [`the_producers_rule_ids_are_the_corpus_spelling`] below, and it restates two RULE ids
-    /// against the TOML. These are thirteen TRAP ids: no DRY pass could collapse them into a rule-id
+    /// against the TOML. These are fifteen TRAP ids: no DRY pass could collapse them into a rule-id
     /// constant, so borrowing that argument here would protect nothing.
     fn expected_answered() -> BTreeSet<TrapId> {
         ids(&[
+            "blinded-source-must-merge",
+            "blinded-source-must-not-merge",
             "cloned-mac-must-merge",
             "dhcp-churn-must-merge",
             "dhcp-churn-must-not-merge",
@@ -435,7 +438,7 @@ mod tests {
 
     /// The traps the map says were ANSWERED — the `Answer::Answered` half, not the whole map.
     ///
-    /// Since story 5.8 the map is TOTAL, so `answers.keys()` is all 24 ids. Deriving the answered
+    /// Since story 5.8 the map is TOTAL, so `answers.keys()` is all 26 ids. Deriving the answered
     /// set from the keys would make this test — and the residue test below — assert nothing.
     fn answered_ids(answers: &BTreeMap<TrapId, Answer>) -> BTreeSet<TrapId> {
         answers
@@ -458,21 +461,21 @@ mod tests {
             .collect()
     }
 
-    /// The map is TOTAL over the corpus, and the thirteen ANSWERED ids are unchanged by story 5.8's
+    /// The map is TOTAL over the corpus, and the ANSWERED ids are unchanged by story 5.8's
     /// reordering — the pair-first classification moves a cause, never a key.
     #[test]
-    fn the_committed_corpus_yields_thirteen_l1_answers_and_an_entry_for_every_trap() {
+    fn the_committed_corpus_yields_fifteen_l1_answers_and_an_entry_for_every_trap() {
         let answers = l1_answers(&committed_traps_root()).expect("the committed corpus answers");
         assert_eq!(
             answers.len(),
-            24,
+            26,
             "TOTAL over the corpus: every discovered trap has an entry, so none can leave the \
              denominator without a reason attached"
         );
         assert_eq!(
             answered_ids(&answers),
             expected_answered(),
-            "the answered set is the thirteen traps whose expected rule is `l1-*`"
+            "the answered set is the fifteen traps whose expected rule is `l1-*`"
         );
         // A statement about the MAP, not about `expected_answered()`'s length — the set equality
         // above already pins the membership, so counting the literal would assert nothing.
@@ -481,8 +484,8 @@ mod tests {
                 .values()
                 .filter(|a| matches!(a, Answer::Answered(_)))
                 .count(),
-            13,
-            "thirteen of the twenty-four entries are answers"
+            15,
+            "fifteen of the twenty-six entries are answers"
         );
     }
 
@@ -493,7 +496,7 @@ mod tests {
     fn the_eleven_unanswered_traps_are_named_one_by_one() {
         let answers = l1_answers(&committed_traps_root()).unwrap();
         let all: BTreeSet<TrapId> = committed_traps().keys().cloned().collect();
-        assert_eq!(all.len(), 24, "the corpus holds twenty-four traps");
+        assert_eq!(all.len(), 26, "the corpus holds twenty-six traps");
 
         // 🔴 Derived by FILTERING the map, never by `all.difference(answers.keys())`. The map is
         // total since story 5.8, so a key difference is empty and that derivation would assert
@@ -887,8 +890,8 @@ mod tests {
         // rule id would pass in silence. They live in THIS test and not in the helper — see its
         // `# Returns`.
         assert_eq!(
-            checked, 21,
-            "twenty-one of the twenty-four committed traps name a rule; the other three are \
+            checked, 23,
+            "twenty-three of the twenty-six committed traps name a rule; the other three are \
              `must-abstain` and name a cause"
         );
         assert_eq!(
@@ -1057,9 +1060,9 @@ expect = {{ must-not-merge = {{ rule = "l1-distinct-mac" }} }}
     /// The committed corpus has no duplicate — so the guard above is recorded as
     /// unreachable-today by MEASUREMENT rather than assumed to be.
     #[test]
-    fn the_committed_corpus_has_twenty_four_distinct_ids_across_ten_files() {
+    fn the_committed_corpus_has_twenty_six_distinct_ids_across_eleven_files() {
         let files = discover_trap_files(&committed_traps_root()).expect("the corpus walks");
-        assert_eq!(files.len(), 10, "ten committed trap files");
+        assert_eq!(files.len(), 11, "eleven committed trap files");
 
         let mut ids: Vec<TrapId> = Vec::new();
         for file in &files {
@@ -1068,7 +1071,7 @@ expect = {{ must-not-merge = {{ rule = "l1-distinct-mac" }} }}
             }
         }
         let distinct: BTreeSet<&TrapId> = ids.iter().collect();
-        assert_eq!(ids.len(), 24, "twenty-four traps");
+        assert_eq!(ids.len(), 26, "twenty-six traps");
         assert_eq!(
             distinct.len(),
             ids.len(),

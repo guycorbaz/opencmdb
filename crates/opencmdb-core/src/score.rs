@@ -440,11 +440,23 @@ pub enum SourceState {}
 /// and [`outcome_of`] maps it — but an [`Outcome`] is where it lands, and an `Outcome` carries no
 /// vector. Unifying this type means producing a [`ScoredRecord`], and a `ScoredRecord` carries
 /// [`ScoredRecord::capability_snapshot`], which is D36's whole point: *"a verdict without its
-/// capability snapshot is UNFALSIFIABLE"*. Measured on the committed corpus: **eleven replay
-/// streams are named by a trap and not one of them carries a `capability` control record**, and the
-/// reader the trap runner uses discards control records by construction. Producing a record here
-/// would mean **inventing a capability snapshot for all 24 traps** — D36's unfalsifiability in
-/// reverse, and D45's *"a gate on a false truth"*.
+/// capability snapshot is UNFALSIFIABLE"*.
+///
+/// 🔴 **The measurement this paragraph carried was FALSIFIED by story 5.13b, and the correction
+/// matters more than the number.** It read: *"eleven replay streams are named by a trap and not one
+/// of them carries a `capability` control record"*. Today **twelve** streams are trap-named and
+/// **one of them carries such a record** — `blinded-source-blinded.jsonl`, which story 5.13b
+/// committed for exactly this reason. ⚠️ The story that falsified it declared *"`opencmdb-core` is
+/// not touched"* in four documents and therefore did not come here: **a promise of
+/// non-modification protects behaviour and shelters false sentences.** Its code review caught this,
+/// and Guy's arbitration narrowed the promise to *"no BEHAVIOUR change in `opencmdb-core`"*.
+///
+/// What still holds, and it is the whole of the deferral: **the reader the trap runner uses
+/// discards control records by construction** (`read_jsonl` drops them with an exhaustive match),
+/// so the trap path is provably blind to that record whatever the bytes carry. Producing a
+/// `ScoredRecord` here would still mean **inventing a capability snapshot for the other 25 traps**
+/// — D36's unfalsifiability in reverse, and D45's *"a gate on a false truth"*. The precondition
+/// moved from *impossible* to *supplied for one family*; the deferral did not move at all.
 ///
 /// **Owner: the story that gives a trap run a real capability snapshot** — the `FixtureConnector`
 /// read path, which replays control records, rather than the observations-only reader. Recorded in

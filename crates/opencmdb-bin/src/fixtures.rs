@@ -813,7 +813,7 @@ pub(crate) fn walk_replay_streams(visit: &mut dyn FnMut(&Path)) -> usize {
 ///
 /// It asserts its own non-emptiness, so a caller cannot pass vacuously by walking nothing. That
 /// is the shallow half of the vacuity question story 5.1's review raised; the deep half — a scan
-/// over ten files carrying zero ADDRESSES — counting files cannot reach, and is answered by the
+/// over eleven files carrying zero ADDRESSES — counting files cannot reach, and is answered by the
 /// caller's own coverage assertion.
 ///
 /// Three defects the register recorded against `walk_replay_streams` are closed here rather than
@@ -1022,7 +1022,7 @@ mod tests {
     /// future DRY pass must not collapse the two.** This one starts from `expected()` — an
     /// independently authored Rust literal — so it pins the VALUES as well as the shape, over one
     /// file. The corpus-wide witness starts from the FILE, so it pins the shape only, over all
-    /// thirteen. Deliberate redundancy of exactly the kind the house DRY rule protects.
+    /// fifteen. Deliberate redundancy of exactly the kind the house DRY rule protects.
     #[test]
     fn re_serializing_reproduces_the_committed_bytes() {
         let path = fixture_path(MINIMAL).unwrap();
@@ -1191,7 +1191,7 @@ mod tests {
                 // field a pasted capture could land in unseen.
                 //
                 // **This call site is VACUOUS on today's committed corpus, and saying so is the
-                // point.** Across all 13 replay streams and the wire artefact, exactly ONE
+                // point.** Across all 15 replay streams and the wire artefact, exactly ONE
                 // observation carries a non-null `raw` — `minimal.jsonl` line 3,
                 // `{"provenance":"never read by a decision"}` — and it holds no address. So no
                 // committed `raw` currently exercises this; deleting this line reds nothing in the
@@ -1216,7 +1216,7 @@ mod tests {
     ///
     /// Returned rather than tallied privately because a scan that finds NOTHING is vacuous and
     /// its caller cannot tell. Counting FILES does not catch it — that is the level story 5.1's
-    /// review reached, and the level below it is a scan over ten files carrying zero addresses.
+    /// review reached, and the level below it is a scan over eleven files carrying zero addresses.
     /// `walk_trap_files`'s caller asserts on these values.
     #[derive(Default)]
     struct ScannedText {
@@ -1946,11 +1946,17 @@ mod tests {
     /// register carried that from 4.14's review to here.
     ///
     /// **It asserts its own COVERAGE, not just that it ran.** `walk_trap_files` already refuses to
-    /// pass over zero files, but ten files carrying zero addresses would be just as vacuous and no
+    /// pass over zero files, but eleven files carrying zero addresses would be just as vacuous and no
     /// file count can see it — the level below the one story 5.1's review reached. Measured on the
     /// committed corpus at `e846836`: 4 distinct MACs (`00:00:5e:00:01:0a`, `02:00:5e:00:53:10`,
     /// `02:00:5e:00:53:20`, `02:00:5e:00:53:78`) and 3 distinct IPs (`192.0.2.1`, `192.0.2.120`,
-    /// `192.0.2.121`). Those values live in `reason` strings AND in header COMMENTS —
+    /// `192.0.2.121`). ⚠️ **Story 5.13b raised the MAC floor from 4 to 5 and the reason is worth
+    /// keeping**: its `blinded-source.toml` reasons cite `02:00:5e:00:56:01`, a FIFTH MAC — and a
+    /// floor left at 4 would from then on have tolerated the loss of one previously-pinned value
+    /// while still reading as a pass. **A floor is only a guard while it equals what is there**;
+    /// growing the corpus without raising it converts the guard into slack, silently. Its code
+    /// review measured this (the scan reports 5, the floor said 4), and the story's own count sweep
+    /// had edited the doc comment two lines above and left the measurement and the floor untouched. Those values live in `reason` strings AND in header COMMENTS —
     /// `00:00:5e:00:01:0a` is a comment in `vrrp-virtual-mac.toml` and appears nowhere else in that
     /// file — which is the AC working: the scan reads bytes, so a comment counts.
     ///
@@ -1958,9 +1964,10 @@ mod tests {
     /// count over distinct values, so it catches a re-authoring that drops addresses (story 5.2b
     /// touches these very families) and does NOT catch one that drops some while adding others
     /// elsewhere. The distribution is uneven — `dhcp-churn.toml` 1 MAC + 2 IPs, `example.toml`
-    /// 1 MAC, `randomized-mac.toml` 1 MAC, `vrrp-virtual-mac.toml` 1 MAC + 1 IP, the other six
-    /// files nothing — and that sentence is an inventory with no guard behind it, which is exactly
-    /// what the register warns about. Pinning per file is the stronger check and is not taken here;
+    /// 1 MAC, `randomized-mac.toml` 1 MAC, `vrrp-virtual-mac.toml` 1 MAC + 1 IP,
+    /// `blinded-source.toml` 1 MAC, the other six files nothing — and that sentence is an inventory
+    /// with no guard behind it, which is exactly what the register warns about, and which story
+    /// 5.13b's addition demonstrated by falsifying it. Pinning per file is the stronger check and is not taken here;
     /// the floor is the cheap half that stops the scan going silently empty.
     #[test]
     fn the_committed_trap_text_carries_no_real_network_data() {
@@ -1974,9 +1981,9 @@ mod tests {
             ips.extend(seen.ips);
         });
         assert!(
-            macs.len() >= 4 && ips.len() >= 3,
+            macs.len() >= 5 && ips.len() >= 3,
             "the trap-text scan inspected {} distinct MAC(s) and {} distinct IP(s); it was \
-             measured at 4 and 3, so a scan finding fewer has stopped exercising the rule it \
+             measured at 5 and 3, so a scan finding fewer has stopped exercising the rule it \
              claims to enforce rather than proving the corpus clean",
             macs.len(),
             ips.len()
@@ -2289,8 +2296,8 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     /// What this helper does encode, in one place, are two CORPUS CONVENTIONS: the fixed
     /// `-0000-4000-8000-` middle segment, and sequential numbering from 1 rendered in DECIMAL into
     /// a hexadecimal field (invisible until a stream passes nine observations — the longest today
-    /// carries six). All three hold for the 13 streams under `scenario/replay/` and for the wire
-    /// artefact, the 14th, which is this helper's sixth call site. A future stream numbered
+    /// carries six). All three hold for the 15 streams under `scenario/replay/` and for the wire
+    /// artefact, the 16th, which is this helper's sixth call site. A future stream numbered
     /// otherwise gets its OWN assertion — it is not re-authored to satisfy this helper.
     fn assert_obs_ids(observations: &[Observation], prefix: &str, expected_len: usize) {
         assert_eq!(
@@ -2806,7 +2813,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     /// The free-text scanner's WIRING onto the shared helper, proven directly and in isolation:
     /// one address, one rule, no corpus in the way — so a scanner whose MAC leg drifted from
     /// `assert_synthetic_mac`'s would red HERE, naming the address, rather than somewhere inside a
-    /// walk over ten files.
+    /// walk over eleven files.
     ///
     /// **It is no longer the only thing that would red, and saying so is the honest version.**
     /// This doc claimed, for one story, that *"no COMMITTED text exercises the VRRP allowance
@@ -3550,6 +3557,99 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             ],
             merge("l1-exact-mac"),
             Some("hostname-absence"),
+        );
+    }
+
+    /// Story 5.13b's byte-pin over the blinded-source TWIN PAIR — the family whose stream carries
+    /// a `capability` control record, and whose two poles both STRADDLE it.
+    ///
+    /// # ⚠️ What reds without this pin, and what does NOT
+    ///
+    /// Story 5.2b's argument — *"exchanging the two `observations` vectors leaves the whole suite
+    /// green while making the corpus demand a false merge"* — was measured TWICE and is **stale for
+    /// this family**. Since story 5.7 the committed corpus is scored by the real engine, and here
+    /// the swap would ask `l1-exact-mac` to merge two DISTINCT MACs, which the engine refuses: the
+    /// trap gate reds on its own, before any pin is consulted. So this pin is a **second oracle,
+    /// not the sole carrier**, and saying otherwise would be a claim outrunning its measurement —
+    /// the defect this corpus exists to catch.
+    ///
+    /// It still earns its place: it pins WHICH pair each pole judges (the gate only knows that
+    /// *some* answer disagreed), and it pins `family`, whose loss is measured to exempt the family
+    /// from `incomplete_families` in silence.
+    #[test]
+    fn the_blinded_source_pair_pins_its_twin_relation_and_its_two_poles() {
+        // The stream side: the twins carry the same MACs, and the faulted one carries FEWER facts.
+        // `fault_injection`'s twin guard is what proves the derivation; this states the premise
+        // that guard rests on, in `expected()`'s idiom — read from the bytes, not from the guard.
+        let clean = read_jsonl(&fixture_path("scenario/replay/blinded-source.jsonl").unwrap())
+            .expect("the clean twin must read");
+        let faulted =
+            read_jsonl(&fixture_path("scenario/replay/blinded-source-blinded.jsonl").unwrap())
+                .expect("the faulted twin must read");
+
+        assert_eq!(clean.len(), 4, "the clean twin carries four observations");
+        assert_eq!(
+            faulted.len(),
+            clean.len(),
+            "and so does the faulted one — the blinding removes FACTS, never an observation"
+        );
+        assert_eq!(
+            (
+                clean.iter().map(|o| o.facts.len()).sum::<usize>(),
+                faulted.iter().map(|o| o.facts.len()).sum::<usize>()
+            ),
+            (12, 10),
+            "twelve facts against ten: the two observations after the capability record lose their \
+             Rtt, and nothing else moves"
+        );
+        let mac = |o: &Observation| {
+            o.facts
+                .iter()
+                .find_map(|f| match f {
+                    Fact::Mac { addr, .. } => Some(*addr),
+                    _ => None,
+                })
+                .expect("every observation in this pair carries a MAC")
+        };
+        assert_eq!(
+            mac(&faulted[0]),
+            mac(&faulted[2]),
+            "the must-merge pole's pair shares its MAC ACROSS the capability record — the premise \
+             of the whole family"
+        );
+        assert_ne!(
+            mac(&faulted[0]),
+            mac(&faulted[3]),
+            "and the must-not-merge pole's pair does not, which is what OPPOSES that merge"
+        );
+
+        // The TOML side: which pair each pole judges.
+        let traps = read_traps(&fixture_path("scenario/traps/blinded-source.toml").unwrap())
+            .expect("the blinded-source trap file must read");
+        assert_eq!(
+            traps.trap.len(),
+            2,
+            "the family declares exactly its two poles"
+        );
+        assert_trap_binds(
+            &traps,
+            "blinded-source-must-merge",
+            &[
+                "bebebebe-0000-4000-8000-000000000001",
+                "bebebebe-0000-4000-8000-000000000003",
+            ],
+            merge("l1-exact-mac"),
+            Some("blinded-source"),
+        );
+        assert_trap_binds(
+            &traps,
+            "blinded-source-must-not-merge",
+            &[
+                "bebebebe-0000-4000-8000-000000000001",
+                "bebebebe-0000-4000-8000-000000000004",
+            ],
+            not_merge("l1-distinct-mac"),
+            Some("blinded-source"),
         );
     }
 
@@ -4571,7 +4671,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
 
         assert_eq!(
             corpus.required.len(),
-            10,
+            11,
             "the truth set is the committed `must-merge` traps; a denominator that shrinks in \
              silence is a gate that quietly stops testing"
         );
@@ -4617,7 +4717,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             checked += 1;
         }
         assert_eq!(
-            checked, 10,
+            checked, 11,
             "every `must-merge` trap must have been checked, or this test passes by walking past \
              the traps it exists to cover"
         );
@@ -4634,8 +4734,8 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
 
         assert_eq!(
             corpus.pairs.len(),
-            23,
-            "23 of the committed traps name a pair; a count that drifts in silence is a scan that \
+            25,
+            "25 of the committed traps name a pair; a count that drifts in silence is a scan that \
              has stopped covering the corpus"
         );
         for (id, replay, pair) in &corpus.pairs {
@@ -4655,7 +4755,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     fn exactly_one_trap_names_fewer_than_two_observations() {
         let corpus = corpus_pairs();
 
-        assert_eq!(corpus.traps, 24, "the corpus holds 24 traps");
+        assert_eq!(corpus.traps, 26, "the corpus holds 26 traps");
         assert_eq!(
             corpus.without_a_pair,
             vec!["example-must-abstain".to_string()],
