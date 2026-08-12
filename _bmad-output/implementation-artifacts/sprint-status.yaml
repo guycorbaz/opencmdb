@@ -869,6 +869,12 @@ development_status:
   # ⚠️ NFR4 CANNOT go green here — D18 gates at the DEVICE level (Epic 6). Of the 24 committed
   # traps, 13 name an l1-* rule, 8 an l2-* rule, 3 a cause. Story 5.8 keeps the 8 unanswerable
   # ones IN the denominator so a green gate can never mean "we did not ask".
+  # ⚠️ **STAYS `in-progress` AFTER THE RETROSPECTIVE, and that is Guy's correction of 2026-08-12.**
+  # All 20 stories are `done` and the retrospective is HELD -- but on this project **an epic is not
+  # closed until the retrospective AND the PROJECT REVIEW have both run**. Do not flip this to
+  # `done` on the strength of the story count or of the retrospective alone; the earlier note in
+  # this file that called the retrospective *"what CLOSES the epic"* was too strong and is
+  # superseded here.
   epic-5: in-progress
   # 5.1 DELIVERED (2026-07-27): the `obs_id` ↔ line binding is pinned on `dhcp-churn` and
   # `vrrp-virtual-mac` through one shared `assert_obs_ids` helper (four existing copies folded in,
@@ -2702,10 +2708,9 @@ development_status:
   # only recorded mutation being a GREEN control**, and *"643 lines"* was written in flight inside
   # the bullet about numbers written in flight.
   # ⚠️ NEXT = PR, then **Epic 5's RETROSPECTIVE**, which is REQUIRED and is what CLOSES the epic.
-  # ⚠️ STAYS AT `review`, NOT `done`: on this project `done` is the MERGE's business, and every
-  # story from 5.1 onward has sat here until its PR landed. The generic workflow would have written
-  # `done` after a clean review; the repository's own convention overrides it.
-  5-14b-abstention-displayed-by-cause: review
+  # ✅ 5.14b **DONE** -- PR #84 squash-merged as `015f2a3` after a green CI run (1 min 1 s), branch
+  # deleted on `origin`. **Epic 5 is 20/20.**
+  5-14b-abstention-displayed-by-cause: done
   # ✅ HELD 2026-08-12 -- `epic-5-retro-2026-08-12.md`. Epic 4's six action items: 5 done, 1 not due,
   # ZERO lapsed. **142 consecutive green CI runs** across epics 4-5 (47 + 95). 247 -> 523 tests,
   # 5 -> 7 gates, corpus 25 -> 28 artefacts / 24 -> 26 traps / 9 -> 10 families, 42 PRs merged.
