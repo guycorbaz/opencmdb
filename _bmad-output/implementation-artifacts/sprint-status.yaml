@@ -2750,7 +2750,8 @@ development_status:
   epic-5-retrospective: done
 
   # ── Epic 6: Ne pas compter deux fois la même boîte (v0.4) ────────────────
-  epic-6: backlog
+  # Epic 6 is IN PROGRESS since 2026-08-12 — its first story is contexted.
+  epic-6: in-progress
   # 🔴 EPIC 6 DECOMPOSED 2026-08-12, into NINETEEN stories, after Epic 5's retrospective AND its
   # project review, into NINETEEN stories. **The documenting gesture OPENS the epic** (issue #85, Guy's decision): it is
   # what milestone J3 -- *a real gap detected AND CORRECTED* -- has been missing, and it does not
@@ -2770,8 +2771,64 @@ development_status:
   # carries *"document (all/field)"*. The error was in the QUESTION -- it asked *"opening slice or
   # later?"* meaning later within this epic, while the plan had placed it in the NEXT one. Recorded
   # rather than silently dropped.
-  # the route's refusals settle before any write exists (5.3's precedent); the SWITCH -- not authentication
-  6-1-write-route-writes-nothing: backlog
+  # 6.1 CONTEXTED -> `ready-for-dev`, 2026-08-12. **Epic 6 opens.**
+  # 🔴 CONTEXTING FOUND WHAT THE DECOMPOSITION HAD NOT: **`auth_deny` already refuses the route by
+  # construction** -- it is deny-by-default over every route and `is_public` allowlists only
+  # `/`, `/gap`, `/healthz`, `/assets/*`. So a new POST answers **401 whatever the switch does**, and
+  # the obvious fix -- one line in `is_public` -- **IS the exposure decision**, taken while debugging
+  # with nothing recording it. **AC3 exists so that line cannot be added silently.** The switch
+  # decides whether the route EXISTS; `is_public` decides whether it is REACHABLE; only the second
+  # is an exposure.
+  # ⚠️ Also found: the gesture's canonical name is **`document`** (`document-all`/`document-field`,
+  # `architecture.md:3818`), NOT the epic line's *"promote"* -- and D65's retired list already
+  # carries two spellings of an earlier name for this same act. And 🔴 **story 5.14b's *"never reach
+  # for `--accent`"* guard WILL COLLIDE with story 6.4's amber Document button** -- `--accent` is
+  # reserved for exactly that action in `app.css:12` -- which is a conflict to RESOLVE, not a defect
+  # on either side. Recorded now, because a collision met at implementation time gets settled by
+  # whoever is annoyed.
+  # ✅ ARBITRATION 2 SETTLED (Guy, 2026-08-12): **a SHARED TOKEN** -- `OPENCMDB_WRITE_TOKEN` +
+  # `Authorization: Bearer`, on the twelve-line pattern `auth.rs` already uses for `/metrics`.
+  # 🔴 **AND THE CORRECTION IS THE DELIVERABLE, NOT THE CHOICE**: the question had been asked BADLY
+  # twice, conflating *"is the feature ENABLED"* (the switch) with *"WHO may call it"* (the token).
+  # **They are orthogonal, and the story ships BOTH, each with its own justification** -- letting two
+  # mechanisms share one justification is exactly how a switch ends up being called authentication.
+  # ⚠️ The token authenticates a CALLER, not a person: no users, no sessions, no revocation, everyone
+  # holding it is one principal. **Real, and crude.** Stated at that strength and no higher; Epic 19
+  # is the closure, registered rather than implied. It fails CLOSED on an unset OR empty variable,
+  # which is `scrape_authorized`'s own secure default.
+  # Refused and recorded as defensible: joining the public allowlist (⚠️ its blast radius IS bounded
+  # -- NFR5 keeps the observed side untouchable, so a bogus declared value surfaces as a divergence
+  # -- and that bound is what made the option arguable, NOT what made it chosen); and real sessions
+  # now (Epic 19's scope, seven months out, a whole slice).
+  # 🔴🔴 VALIDATED 2026-08-12 -- **AND THE STORY MUST BE REWRITTEN BEFORE ANY DEV.** `ready-for-dev`
+  # here means only what the vocabulary says, *"a story file exists"*. **§0 of the story file is the
+  # rewrite brief; read it first.** Fact-check: 3 HIGH. Gap-hunt, which BUILT the story: 5 HIGH, and
+  # of FOURTEEN mutations **two came back GREEN with two more green in the shape an implementer
+  # would naturally write**. 🔑 **Both layers found the same central defect independently.**
+  # 🔴 (1) THE CENTRAL MECHANISM DOES NOT WORK IN THE PRESCRIBED SHAPE. `Router::layer` covers only
+  # routes registered BEFORE it -- axum's own doc -- and a CONDITIONAL registration lands after.
+  # Measured end-to-end: a POST with **no `Authorization` at all** answered 200/400, the handler ran,
+  # `auth_deny` never did. **The exposure the story exists to force into the open would happen
+  # silently: AC3 stays green and M5 reds nothing.**
+  # 🔴 (2) THE TOKEN DOES NOT REACH THE BROWSER. `hx-post` sends no `Authorization` (measured: 401),
+  # so story 6.4's button would need the token handed to the page's JS -- and `/` is PUBLIC. That
+  # serves the token to any stranger, the exact principal arbitration 2 excludes. **Arbitration 2
+  # does not cover the gesture it exists for.** PROPOSAL ON THE TABLE, NOT DECIDED: **HTTP Basic** --
+  # the only mechanism where the browser sends the header itself, one code path, no JS, no cookie, no
+  # session store; `curl -u` covers machines; CSRF closed while the credential is not a cookie.
+  # ⚠️ It requires the page to LEAVE `is_public`, and ⚠️ **its load-bearing mechanism is UNMEASURED**
+  # (does an `hx-post` carry the Basic credential?). **MEASURE WITH A REAL BROWSER FIRST** -- two
+  # mechanism assertions were already wrong that day.
+  # 🔴 (3) *"WRITES NOTHING"* WAS CARRIED BY NOTHING: a handler that writes and ROLLS BACK leaves 532
+  # tests and seven gates green -- the `authorship` gate included, since it keys on the SQL's SITE.
+  # 🔑 The gap-hunt BUILT the fix and measured it: a read-only `SubjectLookup` seam via `FromRef`,
+  # ~35 lines, under which **M4b does not compile**. The carrier moves from nothing to the COMPILER.
+  # ⚠️ Also: AC2's refusal reds 0 tests without a database while the Dev Notes push the implementer
+  # away from one; AC1's discriminator collides (404 both ways -- one character in the request body
+  # turns M1 green while the route IS registered); the `vocabulary` gate is inert AND its prescribed
+  # doc wording REDS it; AC5 has no carrier; two `epics.md` divergences unregistered.
+  # ⚠️ NEXT = decide the Basic-auth question (measure first), then REWRITE, then re-validate.
+  6-1-write-route-writes-nothing: ready-for-dev
   # through `insert_declared_attribute` and nowhere else; `SANCTIONED_SITES` gains one named entry
   6-2-route-writes-a-declared-value: backlog
   # assertions 2 and 3, parked since Epic 5 for want of this gesture
