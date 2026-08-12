@@ -1710,3 +1710,365 @@ So that the number measures the product's reach rather than my debt (FR16b).
 **Then** its candidates and their evidence are shown from the persisted `link_candidate` rows (FR16) — the abstention explains itself.
 
 **And** the measured floor is stated where it is displayed: the abstention rate is bounded below by DATA AVAILABILITY, not by engine quality (FR9, NFR30) — hostname is unusable on nearly half of known clients, and no amount of correctness recovers a signal the source never sent.
+
+---
+
+## Epic 6: Ne pas compter deux fois la même boîte
+
+**Goal:** the operator can DOCUMENT what the product found, and the product stops counting one machine twice. **FRs:** FR9 (device level), FR13 (minimal promote), FR37, FR38b. **NFRs:** 4, 5 (assertions 2 and 3), 30.
+
+_**Decomposed 2026-08-12 with Guy, after Epic 5's retrospective and its project review.** Nineteen stories, sliced deliberately finer than Epic 5's fourteen: Epic 5 was planned at fourteen and delivered twenty, and all six insertions were found while contexting a story that carried two ideas. **The order is the reordering of 2026-08-12 (issue #85): the documenting gesture OPENS the epic**, because it is what J3 — *a real gap detected AND CORRECTED* — has been missing, and it does not depend on grouping._
+
+_**Four measured constraints this decomposition respects, so no story rediscovers them:**_
+
+_**(1) The corpus already NAMES the L2 rules, and the names are load-bearing.** The committed traps expect `l2-different-hostname` (3 traps), `l2-uplink-agrees` (2), `l2-hostname-agrees`, `l2-different-switch` and `l2-virtual-mac-prefix`. Epic 4's retrospective warned it: implementing one under a different name reds the trap as `rule_mismatch` and forces a deliberate corpus bump. The rule order below follows the corpus, most-expected first._
+
+_**(2) 🔴 The five rules do NOT turn the release gate green.** They take the unanswerable bucket from **11 to 3**, and the repository already says so. The last three are `must-abstain` traps that name NO rule, so an `l2-` prefix selector cannot route them (story 5.7's finding). **`epics.md` has always said the gate closes with this epic and milestone J4 says the same** — story 6.15 is what makes that true, and it exists because the decomposition checked the arithmetic instead of trusting the sentence._
+
+_**(3) The documenting gesture writes `declared_attribute`, which is what story 5.12's authorship gate guards.** `SANCTIONED_SITES` admits three sites today; a promote adds one. And **two of NFR5's three assertions were registered against the triage epic while waiting for this gesture** — they arrive here, in story 6.3._
+
+_**(4) `Ambiguous` becomes producible in this epic, and `guard_decision` REFUSES an `Ambiguous` carrying no candidates.** `link_candidate` has had no production writer since story 5.9; whoever produces the first `Supports`/`Opposes` owns filling it (story 6.13). ⚠️ **Story 5.14b's tripwire — `the_production_pass_produces_no_ambiguous_abstention` — will RED there, by design**, and its message names `epics.md`'s FR16 clause as the work that has come due. Do not delete it; implement 6.14._
+
+### Story 6.1: The write route exists, and it writes nothing
+
+As the operator,
+I want the product to expose the shape of a documenting action before it can perform one,
+So that the route's refusals are settled while nothing is at stake.
+
+**Acceptance Criteria:**
+
+**Given** a running binary
+**When** the documenting route is called
+**Then** it answers with an enumerated refusal — the request shape, the unknown subject, the absent switch — and **writes no row**.
+
+**Given** a default deployment
+**When** the write switch is unset
+**Then** the route does not exist at all: **a deployment nobody configured is not writable.** ⚠️ **This is a SWITCH, not authentication, and no document may call it authentication.** `auth.rs` is a deny-by-default seam whose public allowlist its own doc calls temporary; real sessions are Epic 19's, seven months out in the Gantt. *(Guy's arbitration, 2026-08-12, over the alternative of joining the temporary allowlist and registering the exposure.)*
+
+**And** it follows story 5.3's precedent — the vocabulary ships before the engine, so the refusals are testable before any write path exists.
+
+### Story 6.2: The route writes a declared value, through the adapter and nowhere else
+
+As the operator,
+I want an observed value to become a declared one,
+So that what the product found becomes what I documented.
+
+**Acceptance Criteria:**
+
+**Given** an observation the engine could not place
+**When** the operator documents it
+**Then** `declared_attribute` rows are written **through `insert_declared_attribute`** and through no other path, and `SANCTIONED_SITES` gains exactly one entry — named, not a blanket exemption.
+
+**Given** story 5.12's authorship gate
+**When** `cargo xtask ci` runs
+**Then** it stays green **because the new site is declared**, and reds if the write is moved outside it. ⚠️ The gate is a TRIPWIRE against a good-faith change, never a barrier — 5.12 measured its residual classes and this story does not widen the promise.
+
+**And** the write carries a HUMAN author: NFR5's grammatical subject is the SCANNER, and an operator writing a declared value through an explicit action is a normal declarative write.
+
+### Story 6.3: NFR5's two remaining assertions are measured, not asserted
+
+As the next developer,
+I want the never-overwrite invariant proven on the gesture that could break it,
+So that the two assertions parked since Epic 5 stop waiting for a precondition that now exists.
+
+**Acceptance Criteria:**
+
+**Given** an observation and a documenting action over it
+**When** the action completes
+**Then** the observation record is **bit-for-bit unchanged** and its link is intact — NFR5's second assertion, which had no subject until this epic.
+
+**Given** a declared field and an ingestion that contradicts it
+**When** the scan runs
+**Then** the declared field is unchanged and a divergence opens — NFR5's first assertion, already covered, **re-asserted here through the new write path** rather than assumed to survive it.
+
+**And** each guard names the code path where the violation could be WRITTEN, not merely a path where it would be visible. ⚠️ **Epic 5's dominant defect class, named at its retrospective: *a guard placed where the defect cannot occur reads as coverage and is none.*** It was found nine times, never by reading.
+
+### Story 6.4: The abstention line carries the gesture
+
+As the operator,
+I want to document an unplaced sighting from where I see it,
+So that the reach section stops being a number and becomes a door.
+
+**Acceptance Criteria:**
+
+**Given** the identity section story 5.14b shipped
+**When** a cause line is an `AbsenceOfProof` abstention
+**Then** it carries the documenting action — **one line, one gesture, never N failures** (FR16b) — and the whole record is documented at once (**FR13(a)**, which the PRD calls *the day-one case*).
+
+**Given** the `Ambiguous` cause
+**When** it is displayed
+**Then** it carries **no** documenting gesture: an ambiguity is a doubt to LIFT, not an entity to CREATE. ⚠️ **The operator's three cases (Guy, 2026-08-12)**: no ambiguity → the software decides; ambiguity → the operator lifts the doubt; unknown → the operator creates the entity. **The gesture belongs to the CAUSE, not to the count.**
+
+**And** the UX bans still hold: the section does not redden, carries no gauge, and does not age. ⚠️ Story 5.14b left them **stated, not met** — the number still grows with scan count — and this story does not claim otherwise.
+
+### Story 6.5: The entity supertype, the device, and the state column — schema only
+
+As the next developer,
+I want the tables a device grouping needs to exist before anything groups,
+So that the schema is a decision of its own rather than a side effect of the first writer.
+
+**Acceptance Criteria:**
+
+**Given** story 5.9's three deferrals — *no `device`, no `entity` supertype, no `state` column* — deferred as one block
+**When** this story ships
+**Then** all three exist, with their binary collations (D64) and their adapter, and **no producer**: nothing writes a device yet.
+
+**Given** the `state` column
+**When** it is defined
+**Then** it admits the lifecycle FR38b needs (`active`, `dormant`) as an enumerated domain in DDL, not a free string.
+
+**And** it follows the 5.9 / 5.9b split exactly: **this story is the schema, story 6.12 is the resolver that fills it.** *(Guy's arbitration 2026-08-12: the supertype comes now, not later.)*
+
+### Story 6.6: L2 candidate generation, and no rule
+
+As the next developer,
+I want the set of interface pairs that could be one device, computed by something that consults no rule,
+So that a blocker cannot become the echo of the rule it feeds.
+
+**Acceptance Criteria:**
+
+**Given** a population of interfaces
+**When** L2 candidates are generated
+**Then** the result is a set of unordered pairs of distinct interfaces, and the generator **calls no `l2-*` rule and no `decide`** — story 5.6's rule, and its reason: *a blocker that consults a rule is that rule's echo.*
+
+**Given** the committed trap corpus
+**When** the L2 recall is measured
+**Then** it is asserted against D13's floor in **milli-units** (`u32`), never a float — the `float-free` gate walks `identity/` and must stay green.
+
+**And** the measurement is a real one: story 5.6 found that blocking on the MAC scores 700‰ and on the hostname 400‰, so **the recall assertion must be able to fail.**
+
+### Story 6.7: `l2-different-hostname` — the first producer of `Opposes`
+
+As the operator,
+I want two interfaces whose hostnames disagree to argue against being one device,
+So that the cascade gains its first opposing voice.
+
+**Acceptance Criteria:**
+
+**Given** a candidate pair whose hostnames are both present and differ
+**When** the rule is evaluated
+**Then** it yields `Verdict::Opposes` — **the first producer of that variant in this codebase** — and the three committed traps expecting `l2-different-hostname` are answered by it.
+
+**Given** a pair where either hostname is absent or empty
+**When** the rule is evaluated
+**Then** it yields `Neutral`, never `Opposes`. ⚠️ **D20 names this as the common bug**: *"the rule that wrongly `Opposes` should return `Neutral` — it does not KNOW, it BELIEVES it knows; nine parasitic abstentions out of ten are that."* The `hostname-absence` family exists to catch it.
+
+**And** the rule id is spelled exactly as the corpus spells it, or the trap reds as `rule_mismatch`.
+
+### Story 6.8: `l2-uplink-agrees` — the first producer of `Supports`
+
+As the operator,
+I want two interfaces on the same switch port to argue for being one device,
+So that the multi-NIC host stops counting twice.
+
+**Acceptance Criteria:**
+
+**Given** a candidate pair sharing an uplink
+**When** the rule is evaluated
+**Then** it yields `Verdict::Supports` — **the first producer of that variant** — and the two traps expecting `l2-uplink-agrees` are answered.
+
+**Given** the pair from `multi-nic`'s `must-merge`
+**When** the cascade decides
+**Then** it merges, and **`decide`'s existing table is what combines the verdicts** — no new algebra, no sum, no float.
+
+**And** the `vrrp-virtual-mac` trap's warning is respected: a shared uplink is *the temptation*, and story 6.11's structural anchor is what refuses it.
+
+### Story 6.9: `l2-hostname-agrees`
+
+As the operator,
+I want two interfaces reporting the same hostname to argue for being one device,
+So that the signal the sources do send is used.
+
+**Acceptance Criteria:**
+
+**Given** a candidate pair whose hostnames are present and equal
+**When** the rule is evaluated
+**Then** it yields `Supports`, and the trap expecting `l2-hostname-agrees` is answered.
+
+**Given** the measured floor (FR9, NFR30)
+**When** the rule's reach is documented
+**Then** it states that **hostname is unusable on nearly half of known clients** — so this rule's silence is data availability, not engine weakness, and the abstention it leaves is honest.
+
+**And** it does not contradict story 6.7: agreeing and differing are two rules, and the `hostname-collision` family exists because agreement is not proof.
+
+### Story 6.10: `l2-different-switch`
+
+As the operator,
+I want two interfaces on different switches to argue against being one device,
+So that geography counts as evidence.
+
+**Acceptance Criteria:**
+
+**Given** a candidate pair whose switches differ
+**When** the rule is evaluated
+**Then** it yields `Opposes`, and the trap expecting `l2-different-switch` is answered.
+
+**Given** a pair where either switch is unknown
+**When** the rule is evaluated
+**Then** `Neutral` — D20 again.
+
+**And** the rule reads only what an observation carries; it descends into no SQL (D10).
+
+### Story 6.11: The virtual-MAC anchor — a structural fact that is NOT a rule
+
+As the operator,
+I want an IANA virtual-router address never to anchor a grouping,
+So that a floating gateway is not folded into whichever master holds it this minute.
+
+**Acceptance Criteria:**
+
+**Given** an interface whose hardware address sits in an IANA redundancy-protocol range
+**When** grouping is attempted
+**Then** the pair is disqualified as a grouping anchor — **and this is a STRUCTURAL FACT READ AT INGESTION, not a rule that scores.** *(Guy's arbitration, 2026-08-12: **there is no rule**.)* D13 says it in those words: the U/L bit and the IANA prefixes are `Disqualifying` *"as GROUPING anchors, known at ingestion"*, and story 5.5 deliberately refused to implement it at L1 for exactly that reason — two committed tests pin the refusal.
+
+**Given** that the corpus nevertheless expects the identifier `l2-virtual-mac-prefix`
+**When** the decision is recorded
+**Then** it **names `l2-virtual-mac-prefix` as what settled it** *(Guy's arbitration (a), 2026-08-12)*, because `Conclusion::NoMatch { rule }` requires a `RuleId` and D19 wants the id left behind — *a rule that fires without one is undebuggable*. ⚠️ **The corpus is NOT bumped.** And the story must say, where a reader meets it, **why a rule identifier names something that is not a rule** — otherwise the next reader takes it for an oversight.
+
+**And** `vrrp-virtual-mac`'s two poles both pass: do not fold the VIP into its master, do not fuse the two bearers, **DO track the one virtual gateway across a failover** (D16's geometry).
+
+### Story 6.12: The resolver writes device groupings
+
+As the operator,
+I want the engine's grouping decisions persisted,
+So that a device is a record rather than a computation repeated at each page load.
+
+**Acceptance Criteria:**
+
+**Given** a population of interfaces and the L2 cascade
+**When** the pass runs
+**Then** it writes `device` rows and their memberships, in D13's order, and **every placement is justified by a rule id and its evidence** — never *"merged, with no explanation"*.
+
+**Given** a second identical pass
+**When** it runs
+**Then** it writes nothing — idempotence, story 5.11's rule, and the same purge-and-replay invariant story 5.10 pinned at L1 must hold at L2.
+
+**And** ⚠️ **two races registered at Epic 5 lose their shield here.** Two concurrent passes mint two interfaces for one MAC (`interface_l1_key` is a plain index and the mint is read-then-insert), and `current_subject IS NOT NULL` is not equivalent to `valid_to = OPEN_END`. Epic 5 recorded that *the connector story that gives it a MAC removes the shield*; **a device grouping that keys on interfaces reaches the same code.** This story carries them or names the story that does.
+
+### Story 6.13: The first `Ambiguous` is persisted with its candidates
+
+As the operator,
+I want an ambiguity stored as data rather than as a hole,
+So that *"I don't know"* can show its work.
+
+**Acceptance Criteria:**
+
+**Given** a verdict set that `decide` resolves to `Abstained { Ambiguous }`
+**When** the link is written
+**Then** `link_candidate` rows are written with it — **its first production writer since the table was created in story 5.9.**
+
+**Given** `resolver::guard_decision`
+**When** an `Ambiguous` carries no candidates
+**Then** it is refused (`Constraint("ambiguity_without_candidates")`), and that refusal is now reachable through the ordinary path rather than only through a hand-built decision. ⚠️ Story 5.9b recorded the inverse danger: *the day a producer of `Ambiguous` arrives, this guard would refuse a LEGITIMATE ambiguity rather than let it be written with its candidates.* **This story is that day.**
+
+**And** ⚠️ **story 5.14b's tripwire `the_production_pass_produces_no_ambiguous_abstention` REDS here, by design.** Its message names `epics.md`'s FR16 clause as the work that has come due. **Implement story 6.14; do not delete the assertion.**
+
+### Story 6.14: The ambiguity explains itself on the page
+
+As the operator,
+I want an unresolved grouping to show its candidates and their evidence,
+So that I can lift the doubt the engine refused to guess at.
+
+**Acceptance Criteria:**
+
+**Given** an abstention whose cause is `Ambiguous`
+**When** it is displayed
+**Then** its candidates and their evidence are shown **from the persisted `link_candidate` rows** (FR16) — the abstention explains itself. _(This is `epics.md`'s story-5.14 clause, re-owned to this epic at 5.14b's contexting with its unreachability ASSERTED; story 6.13 makes it reachable.)_
+
+**Given** the operator's three cases
+**When** the line is rendered
+**Then** it carries the gesture that LIFTS A DOUBT — choose among candidates — and **not** the documenting gesture, which belongs to `AbsenceOfProof`.
+
+**And** the count keeps the honest unit story 5.14b's arbitration 13 fixed, and ⚠️ **Epic 6 is where that unit stops being honest**: once grouping exists, *sighting* is no longer the true word, and the locale keys change with it. Registered at 5.14b as a scheduled consequence, not a correction.
+
+### Story 6.15: The `must-abstain` traps are routed, and the release gate falls green
+
+As the next developer,
+I want every committed trap to be answered,
+So that NFR4's gate measures the engine instead of measuring what the harness can reach.
+
+**Acceptance Criteria:**
+
+**Given** the trap corpus after stories 6.7 to 6.11
+**When** the gate runs
+**Then** the unanswerable bucket is **3, not 0** — the three `must-abstain` traps carry a CAUSE and no rule, so the `l2-` prefix selector cannot route them (story 5.7's measurement). **This story routes them.**
+
+**Given** all 26 traps
+**When** the gate runs
+**Then** **`passed() == true`**: truth-table failures = 0 at the device level, unanswerable = 0. 🔴 **This is the first time the gate has been green since story 4.6b, and it closes NFR4 and milestone J4.**
+
+**And** ⚠️ **an `Unanswerable` must still not be an abstention.** Story 5.8's whole point: map it to `Outcome::Abstained` and `example-must-abstain` passes because nothing was asked — D18's cowardice moved from the engine up to the harness. The routing must not reintroduce it.
+
+### Story 6.16: The seeded generator and the bulk fixture, at reference scale
+
+As the next developer,
+I want a reproducible population of 300 hosts,
+So that the gate's floor is measured at the scale NFR30 names instead of on a handful of traps.
+
+**Acceptance Criteria:**
+
+**Given** a fixed seed
+**When** the generator runs twice
+**Then** it produces the identical population — and the seed's PROVENANCE is guarded by a test that reads the constant's values. ⚠️ **Story 5.11b's finding, verbatim**: *reproducible WITHIN one process is trivially true for every seed; reproducible ACROSS runs is what a fixed seed buys, and only the second was ever at stake.* A clock-derived sweep left the whole suite green.
+
+**Given** the reference scale (300 hosts, 36 subnets)
+**When** the pass runs over it
+**Then** the wall-clock is recorded, and the figure carries the machine it was measured on. ⚠️ Story 5.11b's timings rested on no check and differed between machines.
+
+**And** the corpus lock is bumped deliberately and re-hashed: **the corpus is a locked SPEC** (Epic 4's third eyes-open item).
+
+### Story 6.17: The distributional diff
+
+As the operator,
+I want to see how the population's shape changed between two runs,
+So that a regression that shifts a distribution without failing a trap is still visible.
+
+**Acceptance Criteria:**
+
+**Given** two runs over the same seeded population
+**When** their distributions are compared
+**Then** the diff names what moved — and **the comparison is exact, not a threshold**: NFR4's reasoning applies here too, *any fraction is theatre* at this scale.
+
+**Given** a run identical to its predecessor
+**When** the diff runs
+**Then** it reports no change, and a test plants a single moved observation to prove the diff can fail.
+
+**And** it reads no clock: a diff whose output varies between two identical runs measures the clock.
+
+### Story 6.18: The ephemeral-interface dormant lifecycle
+
+As the operator,
+I want a randomized address that has not been seen for a month to stop counting against reach,
+So that the metric measures the network rather than the churn of privacy features.
+
+**Acceptance Criteria:**
+
+**Given** an interface whose hardware address is **locally administered — a structural fact read at ingestion, never an inference** — and unobserved for the configured window (default 30 days)
+**When** the lifecycle pass runs
+**Then** it moves to `dormant`: excluded from divergence metrics and from automatic candidate generation, **still queryable, retaining first/last-seen and address history indefinitely** (FR38b, FR38).
+
+**Given** a dormant interface whose address is observed again
+**When** the pass runs
+**Then** it returns to active — **the same entity, not a new one.**
+
+**And** the window is a parameter, never the clock read at the point of use: every instant this codebase compares is data-derived (D19), and story 5.11's `InstantRegressed` is the precedent for refusing a clock that runs backwards.
+
+### Story 6.19: Observation history per device
+
+As the operator,
+I want to see when a device was first and last seen, and how its addresses moved,
+So that a change has a date rather than a rumour.
+
+**Acceptance Criteria:**
+
+**Given** a device grouping several interfaces
+**When** its record is read
+**Then** it reports first-seen, last-seen and the IP↔MAC history (FR37), **derived from the observations** and never written by hand.
+
+**Given** the seen-window derivation
+**When** it is computed
+**Then** it is a `min`/`max` over the observations, exactly as story 5.9b derived the interface's window — **the clock is never read**, and story 5.11b found that no order test touched those derived instants until one was written for them.
+
+**And** the history survives a purge-and-replay: it is derived, so D14's *"a cache of attention, not of truth"* applies.
+
+_**FR13(b) is NOT in this epic, and the decomposition briefly put it here by mistake.** A twentieth story — documenting a re-discovery field by field — was written and then removed the same day: **the FR coverage map already assigns it to Epic 7** (`FR13: E6 (minimal promote) / E7 — document (all/field)`), and Epic 7's own description carries *"document (all/field)"* as part of its triage inbox. The error was in the question, not the answer: the decomposition asked *"FR13(b) in the opening slice, or later?"* meaning later **within this epic**, while the plan had already placed it in the **next** one. 🔑 On the merits Epic 7 is also the right home: **field-selective documenting only has meaning once declared content exists and has drifted**, which is the re-discovery Epic 7's inbox triages. This epic ships FR13(a), the day-one case, which is what milestone J3 was missing. (Guy's arbitration, 2026-08-12.)_

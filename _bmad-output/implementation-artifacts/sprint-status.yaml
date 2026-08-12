@@ -46,9 +46,14 @@
 #   (e.g. `1-5-mariadb-service-and-cargo-deny` for "MariaDB service container and cargo-deny in
 #   CI"). The files are the established identifiers; the keys follow them so status detection
 #   resolves.
-# - Epics 5-23 carry no story entries because epics.md defines them at epic level only. Epics 1-4
-#   DO have a story breakdown in epics.md (Epic 4 at epics.md:830-1178, stories 4.1-4.19).
-#   (An earlier version of this note said the Epic 4 breakdown was outstanding — it is not;
+# - ⚠️ THIS NOTE WAS STALE AND IS CORRECTED (2026-08-12). It said *"Epics 5-23 carry no story
+#   entries because epics.md defines them at epic level only"* -- false since 2026-07-26, when Epic 5
+#   was decomposed into 14 stories (delivered as 20), all of which have entries below.
+#   **Epics 1-6 are decomposed in epics.md and carry story entries here. Epics 7-23 are still at
+#   epic level only.** Epic 6 was decomposed 2026-08-12, into TWENTY stories -- sliced deliberately
+#   finer than Epic 5's fourteen, because Epic 5's six insertions were all found while contexting a
+#   story that carried two ideas.
+#   (An earlier version also said the Epic 4 breakdown was outstanding — it is not;
 #   verified 2026-07-22 against epics.md.)
 # - Retrospectives: Epic 3's and Epic 4's were held. Epics 1 and 2 remain 'optional' and will not
 #   be back-filled.
@@ -2746,6 +2751,63 @@ development_status:
 
   # ── Epic 6: Ne pas compter deux fois la même boîte (v0.4) ────────────────
   epic-6: backlog
+  # 🔴 EPIC 6 DECOMPOSED 2026-08-12, into NINETEEN stories, after Epic 5's retrospective AND its
+  # project review, into NINETEEN stories. **The documenting gesture OPENS the epic** (issue #85, Guy's decision): it is
+  # what milestone J3 -- *a real gap detected AND CORRECTED* -- has been missing, and it does not
+  # depend on grouping, which is this epic's own subject.
+  # ⚠️ FOUR MEASURED CONSTRAINTS the decomposition respects, written into `epics.md` so no story
+  # rediscovers them: (1) the corpus already NAMES the five `l2-*` rules and the names are
+  # load-bearing; (2) 🔴 **those five rules take the unanswerable bucket from 11 to 3, NOT to 0** --
+  # the three `must-abstain` traps name no rule, so story **6.15** is what actually turns the gate
+  # green and makes J4 true; (3) the documenting gesture writes `declared_attribute`, which story
+  # 5.12's authorship gate guards, and **two of NFR5's three assertions were parked waiting for it**;
+  # (4) `Ambiguous` becomes producible here, `guard_decision` refuses one with no candidates, and
+  # **story 5.14b's tripwire reds by design** at story 6.13 -- implement 6.14, do not delete it.
+  # ⚠️ SLICED FINER THAN EPIC 5 ON PURPOSE (19 against 14): all six of Epic 5's insertions were found
+  # while contexting a story that carried two ideas.
+  # ⚠️ A TWENTIETH STORY WAS WRITTEN AND REMOVED THE SAME DAY: FR13(b), documenting a re-discovery
+  # field by field. **The FR coverage map already assigns it to Epic 7** and Epic 7's description
+  # carries *"document (all/field)"*. The error was in the QUESTION -- it asked *"opening slice or
+  # later?"* meaning later within this epic, while the plan had placed it in the NEXT one. Recorded
+  # rather than silently dropped.
+  # the route's refusals settle before any write exists (5.3's precedent); the SWITCH -- not authentication
+  6-1-write-route-writes-nothing: backlog
+  # through `insert_declared_attribute` and nowhere else; `SANCTIONED_SITES` gains one named entry
+  6-2-route-writes-a-declared-value: backlog
+  # assertions 2 and 3, parked since Epic 5 for want of this gesture
+  6-3-nfr5-remaining-assertions: backlog
+  # FR13(a), *the day-one case*; the gesture belongs to the CAUSE, not the count
+  6-4-abstention-line-carries-the-gesture: backlog
+  # story 5.9's three deferrals, as ONE schema story, with NO producer
+  6-5-entity-device-and-state-schema: backlog
+  # 5.6's rule: a blocker that consults a rule is that rule's echo; recall in milli-units
+  6-6-l2-candidates-and-no-rule: backlog
+  # the FIRST producer of `Verdict::Opposes` in this codebase; 3 traps
+  6-7-l2-different-hostname: backlog
+  # the FIRST producer of `Verdict::Supports`; 2 traps
+  6-8-l2-uplink-agrees: backlog
+  # and the measured floor: hostname is unusable on nearly half of known clients
+  6-9-l2-hostname-agrees: backlog
+  # geography as evidence; `Neutral` where a switch is unknown (D20)
+  6-10-l2-different-switch: backlog
+  # 🔴 a STRUCTURAL FACT read at ingestion. Guy: *there is no rule* -- and the decision still NAMES `l2-virtual-mac-prefix`, so the corpus is not bumped
+  6-11-virtual-mac-anchor-is-not-a-rule: backlog
+  # 5.9b's precedent; ⚠️ two races registered at Epic 5 lose their shield here
+  6-12-resolver-writes-device-groupings: backlog
+  # `link_candidate`'s first production writer; ⚠️ story 5.14b's tripwire REDS here by design
+  6-13-first-ambiguous-with-its-candidates: backlog
+  # FR16 -- `epics.md`'s story-5.14 clause, re-owned here at 5.14b's contexting
+  6-14-ambiguity-explains-itself: backlog
+  # 🔴 the five rules take the bucket 11 -> 3, NOT 0. This closes NFR4 and milestone J4 -- the gate's first green since story 4.6b
+  6-15-must-abstain-traps-are-routed: backlog
+  # 300 hosts; the seed's PROVENANCE guarded, per 5.11b's finding
+  6-16-seeded-generator-at-reference-scale: backlog
+  # exact, not a threshold -- NFR4's reasoning applies here too
+  6-17-distributional-diff: backlog
+  # FR38b; locally-administered is a STRUCTURAL fact, never an inference
+  6-18-ephemeral-interface-dormant: backlog
+  # FR37, derived by min/max over observations -- the clock is never read
+  6-19-observation-history-per-device: backlog
   epic-6-retrospective: required
 
   # ── Epic 7: La boucle se ferme (v0.5) ────────────────────────────────────
