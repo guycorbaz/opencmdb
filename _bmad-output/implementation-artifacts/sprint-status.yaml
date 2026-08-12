@@ -2632,7 +2632,41 @@ development_status:
   # 🚀 DEV-STORY STARTED 2026-08-12 against a live `mariadb:10.11.11` on port **13316** (13315 is
   # the gap-hunt's, still up). Baseline re-measured, not quoted: **502 tests** green, bin suite
   # **5.48 s** with the database against 0.05 s without -- the witness the DB tests really ran.
-  5-14b-abstention-displayed-by-cause: in-progress
+  # 5.14b IMPLEMENTED -> `review` (NOT `done`: that is the MERGE's business), 2026-08-12.
+  # **502 -> 519 tests** (298 bin + 159 core + 62 xtask), seven gates green, 28 fixtures, trap gate
+  # still RED at 26/15/11, `opencmdb-core` untouched, `epics.md` and the UX spec NOT edited.
+  # Built and mutated against a live `mariadb:10.11.11` on **13316**; the witness the DB tests ran
+  # is the timing (0.05 s without a database, ~4.2 s with one).
+  # 🔴 THE MUTATION PASS'S FINDING, and it is the transferable one: **M6b came back GREEN.** The
+  # anti-sum guard tested that `build_view` and `build_identity_view` do not add each other's
+  # counts -- and NEITHER OF THEM CAN, since neither sees the other's numbers. The only place a sum
+  # can be written is `reconcile_view`, the impure edge that assembles both, and no unit test
+  # reached it. 🔑 ***A guard placed where the defect cannot occur reads as coverage and is none.***
+  # Closed by a database-backed test through the composition, after which M6b reds. ⚠️ **Reading the
+  # guard could not have found this** -- the guard is CORRECT about what it tests. Only running the
+  # mutation did. Carried to the retrospective.
+  # ⚠️ Also caught by the pass, each against my own work: a FALSE SENTENCE in my own assertion
+  # message (it claimed a render assertion would pass here; M8's second red refuted it -- a render
+  # assertion is vacuous only when it checks that SOMETHING appeared or checks the key's own text,
+  # not when it names a distinctive phrase of the translation); **M11a left the total assertion
+  # unmeasured** (it dropped the cause LINE, not the count), so M11a-bis was written to shrink the
+  # total itself; and a false premise of mine -- three out-of-perimeter sightings are **4**
+  # reconciliation abstentions, not 2.
+  # ⚠️ TWELVE ROWS: eleven executable mutations, one GREEN by stated limit (M9c, the id-selector
+  # override the CSS check cannot see -- §8 predicted it). **Zero compiler-carried reds; carriers
+  # MIXED and named row by row** -- M12 is `.expect()`-carried on AC8's premise and never reaches
+  # its own assertion, and M6b reds on a premise too. *"Every red assertion-carried"* is NOT claimed.
+  # 🔑 THE VALIDATION PAID FOR ITSELF, and the figure says so: **FOUR guards this story prescribed
+  # were measured GREEN before any of it shipped** -- the anti-sum over a zero addend, AC5's own
+  # prescribed remedy for a missing locale key, AC8's assertion over a table a rollback left empty,
+  # and the colour check under an id selector.
+  # ⚠️ REGISTERED, not fixed (7 entries, each re-read after writing): the `abstention_cause` column
+  # has no domain in the SCHEMA (the tolerant reader is not that closure); the two UX bans the
+  # counter NAMES rather than merely misses; the temporary unit; the deliberate divergence from the
+  # UX spec's one-panel mock; and `count_identity_links`, ANSWERED -- all three reads stay, and the
+  # word *unfiltered* belongs to it alone.
+  # ⚠️ NEXT = `code-review` (a DIFFERENT model than the one that implemented it), then PR.
+  5-14b-abstention-displayed-by-cause: review
   epic-5-retrospective: required
 
   # ── Epic 6: Ne pas compter deux fois la même boîte (v0.4) ────────────────

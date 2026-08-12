@@ -725,8 +725,15 @@ mod tests {
     ///
     /// 🔴 `assert_ne!` against the key itself, and the reason is measured: a missing `rust-i18n` key
     /// is a SILENT ECHO — `t!` returns the literal `"identity.floor"`, with no compile error and no
-    /// panic. So asserting on the rendered HTML is a TAUTOLOGY: the echoed key IS in the HTML.
-    /// Deleting a key from both locales left 515 tests green under exactly that form.
+    /// panic.
+    ///
+    /// ⚠️ **Be exact about what that makes tautological, because an earlier draft of this comment was
+    /// not.** A render assertion is vacuous when it checks that *something* appeared, or checks for
+    /// the key's own text. It is NOT vacuous when it names a distinctive phrase of the TRANSLATION —
+    /// measured: deleting `identity.floor` from both locales reds this test AND
+    /// `the_surface_states_both_limits_separately`, which asserts on *"floor is set by the data"*.
+    /// The two guards are independent, and saying otherwise credited this one with a reach it does
+    /// not have.
     ///
     /// ⚠️ `set_locale` is NOT used, and must not be: it is process-wide, so a test that calls it
     /// makes the suite order-dependent. Measured during validation at 2-3 varying reds out of 290 —
@@ -752,7 +759,9 @@ mod tests {
                 assert_ne!(
                     resolved, key,
                     "`{key}` is missing from `{locale}`. A missing key is a SILENT ECHO — `t!` \
-                     returns the key itself — so a test reading the rendered HTML would pass here"
+                     returns the key itself, with no compile error and no panic — so any test \
+                     asserting merely that SOMETHING was rendered, or asserting on the key's own \
+                     text, would pass here"
                 );
             }
         }
@@ -840,6 +849,119 @@ mod tests {
         assert!(!html.contains("<progress"), "no gauge");
         assert!(!html.contains("<meter"), "no gauge");
         assert!(html.contains("113"), "the premise: the number IS rendered");
+    }
+
+    /// **AC3, through the COMPOSITION** — the two counts survive one real page build unadded.
+    ///
+    /// # 🔴 Why this test exists, and it was found by a mutation coming back GREEN
+    ///
+    /// `the_two_engines_counts_are_never_added` above builds the two views and composes them
+    /// ITSELF, so it can only ever prove that `build_view` and `build_identity_view` do not add —
+    /// and **neither of them can**, since neither sees the other's numbers. The only place a sum can
+    /// be written is [`reconcile_view`], the impure edge that assembles both, and no unit test
+    /// reaches it. Measured: adding the reconciliation count into the identity one THERE left the
+    /// whole suite green.
+    ///
+    /// 🔑 *A guard placed where the defect cannot occur reads as coverage and is none.* This one
+    /// goes through `reconcile_view`, which needs a database, and plants both populations so the two
+    /// counts and their sum are three distinct numbers.
+    #[tokio::test]
+    async fn one_real_page_build_keeps_the_two_counts_apart() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping page composition test: DATABASE_URL unset");
+            return;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        for statement in [
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+            "DELETE FROM declared_attribute",
+        ] {
+            sqlx::query(statement).execute(&pool).await.expect("clean");
+        }
+
+        // The DECLARED side: one entity, observed out of perimeter -> 2 reconciliation abstentions.
+        crate::repo::insert_declared_attribute(&pool, "e1", "ipv4", "192.0.2.10")
+            .await
+            .expect("declare");
+        // The IDENTITY side: a scan whose sightings the engine cannot place -> 3 abstentions.
+        let mut source = crate::fixture_connector::FixtureConnector::from_observations(
+            opencmdb_core::observation::ConnectorId::from_uuid(uuid::Uuid::from_u128(0x514b)),
+            opencmdb_core::observation::Capabilities {
+                as_of: chrono::DateTime::from_timestamp(1_700_000_000, 0).expect("in range"),
+                kinds: std::collections::BTreeSet::from([
+                    opencmdb_core::observation::FactKind::IpV4,
+                ]),
+            },
+            vec![Scope {
+                l2_domain: L2DomainId::from_uuid(Uuid::from_u128(0x514c)),
+                vantage: VantageId::from_uuid(Uuid::nil()),
+            }],
+            "story 5.14b page composition",
+            (0..3)
+                .map(|i| Observation {
+                    obs_id: ObsId::from_uuid(Uuid::from_u128(0x5150 + i)),
+                    connector_id: ConnectorId::from_uuid(Uuid::from_u128(0x514b)),
+                    observed_at: chrono::DateTime::from_timestamp(1_700_001_000 + i as i64, 0)
+                        .expect("in range"),
+                    scope: Scope {
+                        l2_domain: L2DomainId::from_uuid(Uuid::from_u128(0x514c)),
+                        vantage: VantageId::from_uuid(Uuid::nil()),
+                    },
+                    facts: vec![Fact::IpV4 {
+                        addr: "192.0.2.99".parse().expect("a documentation address"),
+                    }],
+                    raw: None,
+                })
+                .collect(),
+        )
+        .expect("the in-memory stream must load");
+        crate::scan_pass::poll_ingest_resolve(
+            &mut source,
+            chrono::DateTime::from_timestamp(1_700_001_000, 0).expect("in range"),
+            &pool,
+        )
+        .await;
+
+        let (view, identity) = reconcile_view(&pool).await.expect("build the page's state");
+
+        // Three out-of-perimeter sightings are three reconciliation abstentions, plus one
+        // `NoObservedValue` for the declared `ipv4` nothing in-perimeter reported.
+        assert_eq!(
+            view.abstention_count, 4,
+            "the premise: the reconciliation side counts 4"
+        );
+        assert_eq!(
+            identity.not_placed, 3,
+            "the premise: the identity side counts 3 — and 4, 3 and 7 are three DISTINCT numbers, \
+             which is what makes the assertions below able to fail"
+        );
+        assert_ne!(
+            identity.not_placed, 7,
+            "the identity count must not absorb the reconciliation one. This is the direction a \
+             zero-reconciliation fixture cannot see, and it is the one a real page build reaches"
+        );
+        assert_ne!(view.abstention_count, 7, "nor the other way round");
+
+        let html = GapPage {
+            view,
+            identity,
+            s: strings(),
+        }
+        .render()
+        .unwrap();
+        assert!(
+            !html.contains(">7<"),
+            "and no rendered number is their sum: the two populations are declared FIELDS and \
+             SIGHTINGS, so their total denotes nothing"
+        );
     }
 
     /// **AC6** — this section's own CSS rules never reach for `--accent`.

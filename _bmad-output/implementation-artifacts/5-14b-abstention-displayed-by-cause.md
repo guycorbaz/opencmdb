@@ -1,6 +1,6 @@
 # Story 5.14b: The identity engine's abstention is displayed, grouped by cause — and the counter says what it cannot count
 
-Status: ready-for-dev
+Status: review
 
 <!-- ⚠️ NOT YET VALIDATED. `create-story validate` (two fresh-context agents, fact-check + gap-hunt)
      is MANDATORY on this project before `dev-story` (Guy's decision, Epic 4 retrospective
@@ -597,19 +597,19 @@ the one that exists.
 - [x] **T0 — arbitrations 10, 11 and 12** — taken by Guy, 2026-08-12. ⚠️ Arbitration 12 carries a
       *"re-open rather than force"* clause: §10's read-equivalence check runs BEFORE the doc sentence
       is edited, and a divergence re-opens the arbitration instead of being smoothed over.
-- [ ] **T1 — the grouped read** (AC1, AC2): the query, the four carrier rows, `AssertSqlSafe`
-- [ ] **T2 — the view and the hoist** (AC1, AC3, AC4): `build_view` stays pure, counts as an
+- [x] **T1 — the grouped read** (AC1, AC2): the query, the four carrier rows, `AssertSqlSafe`
+- [x] **T2 — the view and the hoist** (AC1, AC3, AC4): `build_view` stays pure, counts as an
       argument, section outside the `has_entity` gate, both sides of the early return
-- [ ] **T3 — the template, the CSS and the locales** (AC1, AC3, AC5, AC6): a distinct key prefix,
+- [x] **T3 — the template, the CSS and the locales** (AC1, AC3, AC5, AC6): a distinct key prefix,
       `en` + `fr`, no `|safe`
-- [ ] **T4 — the limit sentence** (AC5): two facts, not fused
-- [ ] **T5 — the Dignity checks** (AC6): at §8's strengths, with the strengths WRITTEN
-- [ ] **T6 — the unrecognised token** (AC7): plant it, render, count it
-- [ ] **T7 — the `Ambiguous` tripwire** (AC8): on the production path, slice named
-- [ ] **T8 — prove-to-red** (AC1–AC8): M1–M12, predictions FIRST, carriers read from each panic
+- [x] **T4 — the limit sentence** (AC5): two facts, not fused
+- [x] **T5 — the Dignity checks** (AC6): at §8's strengths, with the strengths WRITTEN
+- [x] **T6 — the unrecognised token** (AC7): plant it, render, count it
+- [x] **T7 — the `Ambiguous` tripwire** (AC8): on the production path, slice named
+- [x] **T8 — prove-to-red** (AC1–AC8): M1–M12, predictions FIRST, carriers read from each panic
       message one by one, the command that carried each red named
-- [ ] **T9 — the register** (AC10), then re-read the file
-- [ ] **T10 — gates and documents** (AC9, AC11)
+- [x] **T9 — the register** (AC10), then re-read the file
+- [x] **T10 — gates and documents** (AC9, AC11)
 
 ---
 
@@ -726,11 +726,92 @@ total; check its code half against the 2000 ceiling **before** choosing it, not 
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`.
+
 ### Debug Log References
+
+Built and mutated against a live `mariadb:10.11.11`, container `opencmdb-5-14b`, host port **13316**
+(13315 was still held by the gap-hunt's container). ⚠️ **`DATABASE_URL` is unset locally and the
+DB-backed tests pass by `return`ing** — the suite reports the same counts either way. The witness
+that they really ran is the timing: the `bin` suite takes **0.05 s** without a database and
+**~4.2 s** with one. Committed (`6e1a746`) **before** the mutation pass; the tree was verified clean
+of every mutation afterwards by `grep` for each marker and by reading the diff.
 
 ### Completion Notes List
 
+**502 → 519 tests (298 bin + 159 core + 62 xtask), +17.** Seven gates green, 28 fixtures unchanged,
+trap gate still RED at 26 discovered / 15 scored / 11 unanswerable. `opencmdb-core` untouched.
+`epics.md` and `ux-design-specification.md` not edited.
+
+#### 🔴 The finding of the pass: an anti-sum guard placed where a sum cannot be written
+
+**M6b came back GREEN**, and the reason was not the fixture the validation had warned about.
+`the_two_engines_counts_are_never_added` builds both views and composes them **itself**, so it can
+only prove that `build_view` and `build_identity_view` do not add each other's counts — and **neither
+of them can**, because neither sees the other's numbers. The only place a sum can be written is
+`reconcile_view`, the impure edge that assembles both, and no unit test reached it.
+
+🔑 *A guard placed where the defect cannot occur reads as coverage and is none.* Closed by
+`one_real_page_build_keeps_the_two_counts_apart`, a database-backed test that goes through
+`reconcile_view` with both populations non-zero, after which M6b reds. ⚠️ **Reading the guard could
+not have found this** — the guard is correct about what it tests. Only running the mutation did.
+
+⚠️ **Its first run also caught a false premise of my own**: three out-of-perimeter sightings are
+three reconciliation abstentions plus one `NoObservedValue`, so the count is **4**, not 2. The
+expectation was corrected, not the fixture — 4, 3 and 7 are still three distinct numbers, which is
+what the test needs.
+
+#### ⚠️ A false sentence in my own assertion message, caught by its own mutation
+
+`both_locales_carry_every_identity_key`'s message asserted that *"a test reading the rendered HTML
+would pass here"*. M8 refuted it: deleting `identity.floor` from both locales reds **two** tests, the
+second being `the_surface_states_both_limits_separately`, which reads the rendered HTML. The true
+statement is narrower — a render assertion is vacuous when it checks that *something* appeared or
+checks for the key's own text, **not** when it names a distinctive phrase of the translation. The
+message and the doc comment were corrected; the two guards are independent and neither inherits the
+other's reach.
+
+#### The mutation table, with OBSERVED results and each carrier read from its own panic message
+
+| id | mutation | predicted | OBSERVED | red | carrier |
+|---|---|---|---|---|---|
+| **M1** | collapse the per-cause lines in the view | RED | ✅ **2**, both named assertions (`left: 1`) | 2 | assertion ×2 |
+| **M2** | `GROUP BY outcome` only, dropping the cause | RED | ✅ **1** — the message prints the collapse, 3 groups → 2 | 1 | assertion |
+| **M3** | drop `decided_by = 'ENGINE'` | RED | ✅ **2** — the operator-exclusion test **and the subsumption test**, on its *"agreeing on the full set but not on the filtered one"* clause | 2 | assertion ×2 |
+| **M4** | drop `current_subject IS NOT NULL` | RED | ✅ **2**, same pair | 2 | assertion ×2 |
+| **M6b** | the identity count absorbs the reconciliation one, **in `reconcile_view`** | RED | 🔴 **0 — GREEN.** See above; this is the pass's finding. **1** after the composition test existed | 1 | assertion ⚠️ **on the PREMISE** (`left: 7, right: 3`), not on the `assert_ne!` below it, which never fires |
+| **M7** | put the section back inside `{% if view.has_entity %}` | RED | ✅ **5**, all named assertions | 5 | assertion ×5 |
+| **M8** | delete `identity.floor` from **both** locales | RED ×1 | ✅ **2** — and the second refutes my own message, above. `assert_ne!` prints `left: "identity.floor"`, the echo itself | 2 | assertion ×2 |
+| **M9c** | `#gap-card .abstentions .cause` → `var(--accent)` | 🔴 **GREEN by stated limit** | ✅ **0 red**, exactly as §8 predicts: an id selector beats the rule the check reads | 0 | — |
+| **M10** | a clock reaching the view builder | RED | ✅ **2** — the ageing tripwire **and an ordinary count assertion**, so §8's *"the only thing carrying that ban"* is refuted here too | 2 | assertion ×2 |
+| **M11a** | drop the unrecognised cause LINE | RED | ✅ **1** (`left: 1, right: 2`). ⚠️ **The total did not move** — this mutation touches the line only | 1 | assertion |
+| **M11a-bis** | drop the unrecognised row ENTIRELY — the silent shrink | RED | ✅ **1** (`left: 5, right: 8`), on the total. **Written because M11a left the total assertion unmeasured** | 1 | assertion |
+| **M12** | the production path emits `Ambiguous` | RED | ✅ **21** | 21 | ⚠️ **`.expect()`-carried** on AC8's own test: it dies on *"the pass must have RUN"*, never reaching its `ambiguous` assertion — exactly as validation predicted, and the premise is what makes it red at all |
+
+**Twelve rows: eleven executable mutations and one GREEN by stated limit (M9c).** Zero
+compiler-carried reds. ⚠️ **Carriers are MIXED and named row by row** — M12 is `.expect()`-carried
+and M6b reds on a premise rather than on the assertion written for it. *"Every red assertion-carried"*
+is **not** claimed.
+
+#### What is NOT claimed
+
+The UX bans are **stated, not met** (§5a). The denominator is not decided. Nothing groups sightings.
+`Ambiguous` has no producer and the tripwire is bounded by the slice it names. The CSS check reads
+the text of its own rules and not a resolved colour. `epics.md` is not edited.
+
 ### File List
+
+- `crates/opencmdb-bin/src/repo.rs` — MODIFIED. `EngineReachRow`, `count_engine_reach`, and the four
+  carrier tests (two causes, an operator row, a row out of the current key, an unfamiliar token).
+- `crates/opencmdb-bin/src/page.rs` — MODIFIED. `IdentityView`, `IdentityCauseRow`,
+  `identity_cause_label`, `build_identity_view`, the second read at the impure edge, and ten tests.
+- `crates/opencmdb-bin/src/scan_pass.rs` — MODIFIED. The `Ambiguous` tripwire, the subsumption
+  measurement, and the correction of `counted_current_engine_links`'s false doc sentence.
+- `crates/opencmdb-bin/templates/_gap_card.html` — MODIFIED. The section, outside the `has_entity` gate.
+- `crates/opencmdb-bin/locales/app.yml` — MODIFIED. Eleven keys under `identity.`, `en` + `fr`.
+- `crates/opencmdb-bin/assets/app.css` — MODIFIED. The section's rules.
+- `_bmad-output/implementation-artifacts/5-14b-*.md`, `sprint-status.yaml`, `deferred-work.md`,
+  `CLAUDE.md`, `docs/project-context.md`.
 
 ---
 

@@ -3141,3 +3141,53 @@ carried in by name rather than rediscovered.
   can document one machine?* If the answer is "several", the reorientation to weigh is a short
   slice giving the declared side a write surface and the scan a period — enough to make the tool
   testable on a real network, which is also the best drift detector there is.
+
+## Deferred from: story-5.14b (2026-08-12)
+
+- ⚠️ **The `abstention_cause` column has NO DOMAIN IN THE SCHEMA, and this story deliberately did
+  not give it one.** Arbitration 11 refused a DDL `CHECK (abstention_cause IN (…))` — not merely
+  because it is DDL in a display story, but because it **moves the failure from the DISPLAY to the
+  WRITE**: a variant added by a future story would then be refused at insertion, i.e. the identity
+  pass would start failing rather than the page showing an unfamiliar label. 🔑 *A display story may
+  not be the place a write starts failing.* What ships instead is a TOLERANT READER
+  (`page::identity_cause_label`), which counts and labels an unfamiliar token and never fails.
+  ⚠️ **The cost is stated rather than implied**: the column's domain is held today only by
+  `repo::cause_token` being its sole writer — a property of the CODE, not of the schema. Measured:
+  `UPDATE identity_link SET abstention_cause = 'a_cause_no_variant_names'` succeeds. The schema-side
+  closure is registered here as the real one, on story 5.12's precedent where voie B's `GRANT` was
+  registered rather than implied by the tripwire that shipped. **Owner: unassigned.**
+- ⚠️ **Two UX bans are NAMED by this counter, not merely unmet by it.** `ux…:1280`'s *"No badge, no
+  growing counter"* and `epics.md:1704`'s *"after six months of inaction it reads the same number"*.
+  The number grows while the operator is inactive because the scanner keeps scanning — measured at
+  story 5.14 (five runs over one host → five links). **Arbitration 13 makes the UNIT true
+  (*sightings*, not devices); it does NOT make the bans met.** A figure that rises because the
+  product looked many times is the radar's range rather than the operator's debt, and that is the
+  whole of what the unit buys. **Owner: Epic 6**, which gives the population an identity.
+- ⚠️ **The unit *sighting* / *constat* is TEMPORARY and its locale keys change with Epic 6.**
+  Registered so the rename is met as a scheduled consequence rather than as the correction of a
+  mistake. The note lives in `locales/app.yml` beside the keys themselves. **Owner: Epic 6.**
+- ⚠️ **This story DIVERGES from the UX spec's mock, deliberately, and the spec is NOT edited.**
+  `ux-design-specification.md:919-928` shows ONE panel (`187 evaluated · 113 not evaluated`);
+  arbitration 10 ships TWO framed sections because two populations inside one frame invite the
+  reader to add them, and the invitation is the defect (the counts range over declared FIELDS and
+  over SIGHTINGS; their sum denotes nothing). Registered so the divergence is met as a decision
+  rather than as drift. **Owner: Epic 6**, which revisits this surface.
+- ✅ **`count_identity_links` (`Owner: story 5.14b`) — ANSWERED, and the answer is that all THREE
+  reads stay.** `repo::count_engine_reach` (this story's, filtered + grouped) and
+  `scan_pass::counted_current_engine_links` (filtered, ungrouped) see the same population — now
+  PINNED by `the_grouped_read_subsumes_this_count` rather than reasoned about, on both the full set
+  and the filtered one. `repo::count_identity_links` is the **only unfiltered** one (`SELECT
+  COUNT(*)`, no `WHERE`) and still has no production caller. ⚠️ Do not "unify" them: the word
+  *unfiltered* belongs to the third and must not be spent on the second, which is merely ungrouped.
+- 🔴 **`scan_pass.rs`'s *"Story 5.14b is its production consumer"* was FALSE and is corrected.** It
+  was a prediction about this story shipped as a statement, in the doc of an `#[allow(dead_code)]`
+  function. 5.14b's human-facing count is the grouped read; `counted_current_engine_links` remains
+  the instrument of story 5.14's four pins, which is a real job and is not a production caller.
+- 🔑 **A guard placed where the defect cannot occur reads as coverage and is none** — carried into
+  Epic 5's retrospective. This story's own anti-sum guard (AC3) tested that `build_view` and
+  `build_identity_view` do not add each other's counts, and **neither of them can**: neither sees
+  the other's numbers. The only place a sum can be written is `reconcile_view`, the impure edge that
+  assembles both, and no unit test reached it — measured, the summing mutation left the whole suite
+  GREEN. Closed by a database-backed test through the composition. ⚠️ **It was found only because
+  the mutation was run**; reading the guard could not have found it, since the guard is correct
+  about what it tests.
