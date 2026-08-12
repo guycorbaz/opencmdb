@@ -869,13 +869,18 @@ development_status:
   # ⚠️ NFR4 CANNOT go green here — D18 gates at the DEVICE level (Epic 6). Of the 24 committed
   # traps, 13 name an l1-* rule, 8 an l2-* rule, 3 a cause. Story 5.8 keeps the 8 unanswerable
   # ones IN the denominator so a green gate can never mean "we did not ask".
-  # ⚠️ **STAYS `in-progress` AFTER THE RETROSPECTIVE, and that is Guy's correction of 2026-08-12.**
-  # All 20 stories are `done` and the retrospective is HELD -- but on this project **an epic is not
-  # closed until the retrospective AND the PROJECT REVIEW have both run**. Do not flip this to
-  # `done` on the strength of the story count or of the retrospective alone; the earlier note in
-  # this file that called the retrospective *"what CLOSES the epic"* was too strong and is
-  # superseded here.
-  epic-5: in-progress
+  # ✅ **CLOSED 2026-08-12, after BOTH steps** -- 20/20 stories, retrospective HELD, and the
+  # PROJECT REVIEW conducted on `~/travail/Projets actuels/opencmdb/`. 🔴 **Neither step alone was
+  # sufficient, and the review proved it**: after the retrospective everything looked finished, and
+  # the review then found **milestone J3 unreachable BY CONSTRUCTION** -- it demands a gap *detected
+  # AND CORRECTED*, and the product has no write surface at all, so the correction half had nowhere
+  # to happen. It also found `derniere_activite` wrong under every valid reading, and a registered
+  # risk (R2, *"no version is published"*) **FALSE as written** -- two tags exist and v0.1.1 has
+  # been on Docker Hub since 2026-07-22 -- **deleted on Guy's decision**.
+  # ⚠️ THE RULE, now in `CLAUDE.md`: **an epic closes only after the retrospective THEN the project
+  # review, in that order**, because the review corrects what the retrospective surfaces. Never flip
+  # an epic on the strength of the story count, or of the retrospective alone.
+  epic-5: done
   # 5.1 DELIVERED (2026-07-27): the `obs_id` ↔ line binding is pinned on `dhcp-churn` and
   # `vrrp-virtual-mac` through one shared `assert_obs_ids` helper (four existing copies folded in,
   # six call sites total); all 13 committed streams now load through `FixtureConnector::load` with a
