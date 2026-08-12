@@ -70,7 +70,18 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-11  # 5.14 **DONE** -- PR #81 squash-merged as `48b19b2` after a green CI run
+last_updated: 2026-08-12  # 5.14b CONTEXTED -> `ready-for-dev`. **Epic 5 stands at 19/20**; 5.14b is
+                          # the last story, then the RETROSPECTIVE, which is REQUIRED and which is
+                          # what CLOSES the epic -- not the last story.
+                          # ✅ ITS THREE OPEN ARBITRATIONS WERE TAKEN by Guy the same day (10: two
+                          # sections never summed; 11: the reader never fails; 12: the grouped read
+                          # subsumes 5.14's counter and its false doc sentence is corrected) -- see
+                          # the 5.14b block below, where each carries the alternative REFUSED and
+                          # the reason. Two of them leave something REGISTERED rather than done: the
+                          # schema-side domain of `abstention_cause`, and the deliberate divergence
+                          # from the UX spec's one-panel mock.
+                          # ⚠️ NEXT = `create-story validate` 5.14b, then `dev-story`.
+                          # (superseded entry:) 5.14 **DONE** -- PR #81 squash-merged as `48b19b2` after a green CI run
                           # (1 min 17 s). **Epic 5 is now 19/20.** ⚠️ CI DOES exercise the six new
                           # DB tests: `ci.yml:24` exports `DATABASE_URL` against a `mariadb:10.11.11`
                           # service, so the green means something -- a suspicion the review's blind
@@ -2538,7 +2549,163 @@ development_status:
   # `cause_from_token`, whose `_ => None` is structural, so the parse-back cannot carry exhaustiveness
   # and a variant added with the minimal repair persists a token the reader refuses, losing the WHOLE
   # PAGE to a 500; the UX bans as HTML assertions; and the remaining register entries.
-  5-14b-abstention-displayed-by-cause: backlog
+  # 5.14b CONTEXTED -> `ready-for-dev`, 2026-08-12. **Epic 5 stands at 19/20.**
+  # 🔴 THE TRAP NAMED FIRST, because a dev agent that opens the template would conclude the story is
+  # nearly done: **a section titled "Reach" ALREADY EXISTS on the page** (`_gap_card.html:47-57`) and
+  # it shows a DIFFERENT engine's abstentions -- `gap::AbstentionCause` (three variants, declared
+  # FIELDS of one perimeter entity, recomputed per request by the pure `reconcile`) where this story
+  # adds `identity::cascade::IdentityAbstentionCause` (two variants, OBSERVATIONS across the store,
+  # READ from persisted `identity_link` rows). Same word, different type, different population.
+  # ✅ THE THREE OPEN ARBITRATIONS WERE TAKEN BY GUY, 2026-08-12 -- each recorded in the story WITH
+  # the alternative refused and the reason, because a decision whose alternative is not written down
+  # reads as a preference to the next person:
+  #   · **10 -- TWO SECTIONS, NEVER SUMMED.** The two counts range over different populations
+  #     (declared FIELDS vs OBSERVATIONS) and adding them denotes nothing -- D13's *"an algebra, not
+  #     a sum"* in miniature. REFUSED: one fused frame with two sub-groups, which is closer to the
+  #     spec's mock; **two populations inside one frame invite the reader to add them, and the
+  #     invitation is the defect.** ⚠️ So the story DIVERGES from `ux-design-specification.md`'s
+  #     one-panel mock (lines 919-928) deliberately; the spec is NOT edited and the divergence is
+  #     REGISTERED, so it is met as a decision rather than as drift. Owner of the revisit: Epic 6.
+  #   · **11 -- THE READER NEVER FAILS.** An unrecognised `abstention_cause` token is COUNTED (the
+  #     total must not shrink by omission), labelled through the i18n seam, and the page renders.
+  #     `page.rs` turns any error into a 500 for the WHOLE page, so one unknown token would take
+  #     down the gap display as well. REFUSED: a DDL `CHECK` on the token domain -- and the deciding
+  #     reason is not *"DDL in a display story"* but that it **moves the failure from the DISPLAY to
+  #     the WRITE**: a variant added by a future story would then be refused at insertion, i.e. the
+  #     identity pass starts failing rather than the page showing an unfamiliar label. 🔑 *A display
+  #     story may not be the place a write starts failing.* ⚠️ The cost is stated rather than
+  #     implied: without the CHECK the column's domain is held only by `cause_token` being the sole
+  #     writer -- a property of the CODE, not of the schema -- so the schema-side closure is
+  #     REGISTERED (story 5.12's precedent, where voie B's `GRANT` was registered rather than
+  #     implied by the tripwire that shipped). Owner: unassigned.
+  #   · **12 -- THE GROUPED READ SUBSUMES `counted_current_engine_links`**, whose doc sentence
+  #     *"story 5.14b is its production consumer"* -- a PREDICTION about this story shipped as a
+  #     statement -- is corrected here. The function stays as the instrument of 5.14's four pins and
+  #     keeps its `#[allow(dead_code)]`. REFUSED: keeping it as a SECOND ORACLE on the page (groups
+  #     sum to the unfiltered total) -- two reads on the REQUEST path against a live store disagree
+  #     on any concurrent write, so the oracle would be **flaky by construction** rather than
+  #     load-bearing; the same redundancy stays legitimate inside ONE transaction in a test.
+  #     ⚠️ **The correction is GATED ON A MEASUREMENT**: the two `WHERE` clauses must be verified
+  #     identical and the grouping verified not to drop a row, and a divergence **re-opens the
+  #     arbitration rather than being forced**.
+  # ✅ VALIDATED BY BOTH LAYERS, 2026-08-12; every finding applied. Fact-check: 2 HIGH / 7 MED /
+  # 5 LOW. Gap-hunt, which BUILT the story to **516 tests** against its own `mariadb:10.11.11` on
+  # port 13315 and ran nineteen mutations with controls: 5 HIGH / 7 MED / 4 LOW, plus EIGHT of its
+  # own suspicions refuted by running them.
+  # 🔑 BOTH LAYERS INDEPENDENTLY FOUND `link_columns` -- a function that exists NOWHERE, cited with
+  # a line number. Two agents that never spoke, same finding.
+  # 🔴 FOUR GUARDS THIS STORY PRESCRIBED WERE MEASURED **GREEN**, each with the control that shows
+  # it -- this is what the mandatory validation bought:
+  #   (a) AC3's anti-sum passes on a zero-reconciliation fixture, i.e. the NATURAL fixture for a
+  #       story about the identity section. *An anti-sum guard over a zero addend asserts nothing.*
+  #   (b) a missing locale key is a **SILENT KEY ECHO** (`t!` returns the literal), so the story's
+  #       OWN prescribed remedy -- read the rendered HTML -- is a **tautology**. The remedy was the
+  #       defect. It is now `assert_ne!(resolved, key)`.
+  #   (c) under M12 `guard_decision` refuses the decision and the pass ROLLS BACK, so AC8's
+  #       assertion passes over an EMPTY table: 19 tests red, that one GREEN. Premise assertions
+  #       are now mandatory.
+  #   (d) `#gap-card .abstentions .cause` beats the colour check on specificity.
+  # 🔴 AC5's OLD WORDING DROVE THE IMPLEMENTATION INTO `set_locale`, a PROCESS-GLOBAL: four
+  # consecutive full runs gave **2 or 3 red out of 290, varying**, one casualty being the ageing
+  # guard itself -- *reddened by a locale, with no clock anywhere*. ⚠️ **This is the SHAPE of issue
+  # #38 and NOT its cause**, and the check that settles it was run: `set_locale` is called at
+  # `main.rs:95` ONLY, in production; **no test calls it**, every test uses the per-call `locale =`
+  # override. The mechanism does not exist in the tree, so it cannot explain the past red runs.
+  # Recorded as a warning about what this story WOULD have introduced -- *a cause needs a check,
+  # not a plausible story*. AC5 is SPLIT and `set_locale` is FORBIDDEN in tests.
+  # ⚠️ Also: M11 as written is NOT EXECUTABLE against arbitration 11's own design; the ageing
+  # tripwire is NOT "the only thing carrying that ban" (M10 reds 3, two ordinary count assertions);
+  # the fresh-install empty state was covered by nothing; `AssertSqlSafe` is unnecessary and
+  # conflicts with `repo.rs`'s idiom; `repo.rs`'s code half is **1088** lines, so it IS the right
+  # home; and `no_match` is UNPRODUCIBLE through `resolve`, measured and to be pinned.
+  # ✅ ARBITRATION 13 TAKEN (Guy, 2026-08-12) -- opened by the fact-check layer, which found that
+  # §8 recorded *"does not age"* as true by construction via the view builder's clock-freedom, **a
+  # strictly weaker property wearing the ban's name**, while this same story measures that the
+  # displayed number GROWS; and that the UX spec's FIRST hard ban is literally *"No badge, no
+  # growing counter"*, unaddressed in a story whose deliverable is a growing counter.
+  # **DECISION: ship the number with an HONEST UNIT -- *sightings*, not devices** -- on both sides
+  # of the pair, because each scan mints fresh `obs_id`s and that is what the number is true about.
+  # 🔑 *A number that rises because the product looked many times is the radar's range, not the
+  # operator's debt* -- which is why the unit is the arbitration and not a caption. ⚠️ **The ban
+  # does not become MET; it becomes STATED**, and the unit is TEMPORARY: Epic 6 gives the population
+  # an identity and the locale keys change with it (registered).
+  # 🚀 DEV-STORY STARTED 2026-08-12 against a live `mariadb:10.11.11` on port **13316** (13315 is
+  # the gap-hunt's, still up). Baseline re-measured, not quoted: **502 tests** green, bin suite
+  # **5.48 s** with the database against 0.05 s without -- the witness the DB tests really ran.
+  # 5.14b IMPLEMENTED -> `review` (NOT `done`: that is the MERGE's business), 2026-08-12.
+  # **502 -> 519 tests** (298 bin + 159 core + 62 xtask), seven gates green, 28 fixtures, trap gate
+  # still RED at 26/15/11, `opencmdb-core` untouched, `epics.md` and the UX spec NOT edited.
+  # Built and mutated against a live `mariadb:10.11.11` on **13316**; the witness the DB tests ran
+  # is the timing (0.05 s without a database, ~4.2 s with one).
+  # 🔴 THE MUTATION PASS'S FINDING, and it is the transferable one: **M6b came back GREEN.** The
+  # anti-sum guard tested that `build_view` and `build_identity_view` do not add each other's
+  # counts -- and NEITHER OF THEM CAN, since neither sees the other's numbers. The only place a sum
+  # can be written is `reconcile_view`, the impure edge that assembles both, and no unit test
+  # reached it. 🔑 ***A guard placed where the defect cannot occur reads as coverage and is none.***
+  # Closed by a database-backed test through the composition, after which M6b reds. ⚠️ **Reading the
+  # guard could not have found this** -- the guard is CORRECT about what it tests. Only running the
+  # mutation did. Carried to the retrospective.
+  # ⚠️ Also caught by the pass, each against my own work: a FALSE SENTENCE in my own assertion
+  # message (it claimed a render assertion would pass here; M8's second red refuted it -- a render
+  # assertion is vacuous only when it checks that SOMETHING appeared or checks the key's own text,
+  # not when it names a distinctive phrase of the translation); **M11a left the total assertion
+  # unmeasured** (it dropped the cause LINE, not the count), so M11a-bis was written to shrink the
+  # total itself; and a false premise of mine -- three out-of-perimeter sightings are **4**
+  # reconciliation abstentions, not 2.
+  # ⚠️ TWELVE ROWS: eleven executable mutations, one GREEN by stated limit (M9c, the id-selector
+  # override the CSS check cannot see -- §8 predicted it). **Zero compiler-carried reds; carriers
+  # MIXED and named row by row** -- M12 is `.expect()`-carried on AC8's premise and never reaches
+  # its own assertion, and M6b reds on a premise too. *"Every red assertion-carried"* is NOT claimed.
+  # 🔑 THE VALIDATION PAID FOR ITSELF, and the figure says so: **FOUR guards this story prescribed
+  # were measured GREEN before any of it shipped** -- the anti-sum over a zero addend, AC5's own
+  # prescribed remedy for a missing locale key, AC8's assertion over a table a rollback left empty,
+  # and the colour check under an id selector.
+  # ⚠️ REGISTERED, not fixed (7 entries, each re-read after writing): the `abstention_cause` column
+  # has no domain in the SCHEMA (the tolerant reader is not that closure); the two UX bans the
+  # counter NAMES rather than merely misses; the temporary unit; the deliberate divergence from the
+  # UX spec's one-panel mock; and `count_identity_links`, ANSWERED -- all three reads stay, and the
+  # word *unfiltered* belongs to it alone.
+  # ⚠️ NEXT = `code-review` (a DIFFERENT model than the one that implemented it), then PR.
+  # ✅ CODE-REVIEWED (three layers) and REPAIRED, 2026-08-12. **519 -> 523 tests** (302 bin + 159
+  # core + 62 xtask), `cargo fmt` clean, clippy clean, seven gates green, 28 fixtures, trap gate
+  # still RED at 26/15/11. 2 decisions, 14 patches, 4 deferrals, 0 dismissed. Three findings were
+  # reached by TWO layers independently and one by ALL THREE.
+  # 🔴 THE HEADLINE FALSIFIED ARBITRATION 13 ON THE HALF ALREADY REPORTED AS SETTLED: `placed` and
+  # `not_placed` were in DIFFERENT UNITS, side by side -- `join` writes one row per L1 KEY while an
+  # observation abstains once per OBSERVATION, so a three-MAC sighting beside a MAC-less one showed
+  # `placed = 3 · not placed = 1` for TWO sightings in. **Guy: count SIGHTINGS on both sides**
+  # (`COUNT(DISTINCT observation_id)`). ⚠️ That KILLS arbitration 12's subsumption, so the test that
+  # asserted the two reads AGREE now measures their DIVERGENCE (links 3 / sightings 1).
+  # 🔴 `no_match` was folded into `placed` by a bare `else` -- found by ALL THREE layers. A row that
+  # *"names the interface it EXCLUDED"* was reported as a placement, with *"Every sighting was
+  # placed."* rendered over it.
+  # 🔑 GUY'S TAXONOMY SETTLES IT AND IS NOW THE TYPE'S DOC: **no ambiguity -> the software decides
+  # (`Match` AND `NoMatch`); ambiguity -> the operator LIFTS THE DOUBT; unknown -> the operator
+  # CREATES THE ENTITY.** Its real yield is outside this story: **case three's gesture is the
+  # documenting gesture the product does not have at all**, and case three is the ONLY case
+  # reachable today -- *the abstention section is the entry point of a gesture that does not exist*.
+  # ⚠️ NOT announced in the surface, by decision: descriptive until the gesture is there, because
+  # announcing an absent gesture is a promise.
+  # ⚠️ AND THE APPARATUS DID NOT FIND THAT: nineteen findings and not one asked *"what can the
+  # operator DO with this number?"* -- three layers checked conformance to a specification and the
+  # specification was the author's. A blind spot of the METHOD. Carried to the retrospective.
+  # 🔴 AC10 WAS NOT MET: §11 required NINE register rows and SEVEN landed, and the re-read meant to
+  # catch it counted the seven written against the seven written. 🔑 ***A re-read that reads only
+  # what you wrote cannot find what you did not write.*** ⚠️ Its replacement first reported 7/9 FOR
+  # THE WRONG REASON (needles split by a line break) -- *a check that fails for the wrong reason is
+  # worth nothing* -- normalised and re-run: 9/9.
+  # ⚠️ Four more of the author's guards measured GREEN (the `ORDER BY` doc's *"a test pins it"*
+  # while MariaDB already sorted; the clock guard, whose real carrier is `chrono`'s
+  # `default-features = false`; the `all_placed` branch, rendered by nothing -- AC4's own comment
+  # records that defect found in validation FOR THE SIBLING KEY; and the pure anti-sum guard's two
+  # unfailable `assert_ne!`s), five mutations the ACs cite were missing from the table with **AC6's
+  # only recorded mutation being a GREEN control**, and *"643 lines"* was written in flight inside
+  # the bullet about numbers written in flight.
+  # ⚠️ NEXT = PR, then **Epic 5's RETROSPECTIVE**, which is REQUIRED and is what CLOSES the epic.
+  # ⚠️ STAYS AT `review`, NOT `done`: on this project `done` is the MERGE's business, and every
+  # story from 5.1 onward has sat here until its PR landed. The generic workflow would have written
+  # `done` after a clean review; the repository's own convention overrides it.
+  5-14b-abstention-displayed-by-cause: review
   epic-5-retrospective: required
 
   # ── Epic 6: Ne pas compter deux fois la même boîte (v0.4) ────────────────

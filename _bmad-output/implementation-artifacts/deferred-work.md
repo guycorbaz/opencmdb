@@ -3096,3 +3096,193 @@ _Appended, never rewriting the bullets above. Story 5.13 shipped the monotone-ho
   measured. The page-less deployment lasts **until 5.14b ships, which may be with Epic 6** — the
   weaker true sentence, where an earlier draft said *"for one story"* and was corrected in the story
   file but not in the register.
+
+## Registered for Epic 5's RETROSPECTIVE — raised by Guy, 2026-08-12, not by a story
+
+Guy raised this in conversation while story 5.14b was at `ready-for-dev`, and decided the same day
+that **Epic 5 finishes, then the retrospective runs as the project's REORIENTATION point** rather
+than as a closing formality. It is registered here because it has no story owner: nothing in the
+Epic 5 story set would have carried it in, and this project's rule is that a retrospective item is
+carried in by name rather than rediscovered.
+
+- **🔴 THE QUESTION, in Guy's words: *"le projet dérive et rien n'est actuellement utilisable —
+  est-ce juste ?"*** The measurements below were taken to answer it and are recorded so the
+  retrospective starts from figures rather than from an impression.
+- **Two thirds of the delivered work is invisible to the operator.** 63 stories delivered in 26 days
+  (first commit 2026-07-17, 130 commits at `5046cca`). Epics 1-3 = **21 stories** and they produced
+  *everything that is usable today* — the page, the scan, the gap. Epics 4-5 = **43 stories** and
+  they produced **no operator-visible change at all**. Seven of the last eight stories changed
+  nothing an operator can see; 5.14b would be the first display story since 3.7.
+- **🔴 The DOCUMENTING GESTURE does not exist in the product**, and for a tool whose purpose is to
+  document an IT infrastructure that is the finding, not a detail. The binary exposes **five routes,
+  all read-only** (`/`, `/gap`, `/assets/*`, `/metrics`, `/healthz`) — **no write route**. The only
+  call to `insert_declared_attribute` outside `repo.rs` is `main.rs:442`, **inside the `#[cfg(test)]`
+  opened at `:362`**. To declare anything, an operator writes SQL by hand or copies
+  `docker/seed-example.sql`. ⚠️ Measured, not supposed.
+- **The scan is startup-only** (`main.rs:133`, `:171` — the periodic scheduler, FR6, is deferred),
+  and the page shows **ONE entity**, chosen by `OPENCMDB_ENTITY_IPV4` or the first declared entity
+  carrying an `ipv4`. It is a card, not an inventory.
+- **⚠️ What is NOT drift, and the retrospective must not "fix" it**: writing the trap corpus and the
+  metrics harness BEFORE the engine is D19, deliberate and defensible — *"a metric written after the
+  engine is bent to fit the engine"*. Interface identity is the genuinely hard part of the domain.
+  **The direction is defensible; what has drifted is the RATIO of rigour to reach.**
+- **The apparatus has begun to measure itself.** Six of Epic 5's twenty stories are INSERTIONS
+  discovered during the work, and a large share of review findings are *sentences* — documents
+  contradicting each other — rather than behaviour. 🔑 **And the story documents are outgrowing the
+  work they describe**: story 5.14b's file was **643 lines at contexting**, for a read-only display
+  change. ⚠️ **And this bullet carried that figure as if it were current** while the file had already
+  grown past 800 — a number written in flight, inside the sentence about numbers written in flight,
+  in the commit that appended it. Found by the code review. *The figure is now dated; the point it
+  makes does not need a live number.*
+- **⚠️ Epic 5 will close with an identity engine that places NOTHING in production.** The only
+  connector `main.rs` reaches emits no MAC, and `join` keys on `(l2_domain, mac)` — so on a real
+  network 5.14b's new section will show exactly one line, *"no proof of identity"*, for everything.
+  This is measured (story 5.14) and is pinned by tests on purpose. **What unblocks it is not in Epic
+  5**: a connector that reads the neighbour table (Epic 11 or 12), and Epic 6 for grouping. ⚠️ And
+  that connector story **removes the shield** over the registered two-passes-mint-two-interfaces
+  race — see the code review of story 5.14 above.
+- **A question the retrospective should answer with a number**: *how many epics before an operator
+  can document one machine?* If the answer is "several", the reorientation to weigh is a short
+  slice giving the declared side a write surface and the scan a period — enough to make the tool
+  testable on a real network, which is also the best drift detector there is.
+
+## Deferred from: story-5.14b (2026-08-12)
+
+- ⚠️ **The `abstention_cause` column has NO DOMAIN IN THE SCHEMA, and this story deliberately did
+  not give it one.** Arbitration 11 refused a DDL `CHECK (abstention_cause IN (…))` — not merely
+  because it is DDL in a display story, but because it **moves the failure from the DISPLAY to the
+  WRITE**: a variant added by a future story would then be refused at insertion, i.e. the identity
+  pass would start failing rather than the page showing an unfamiliar label. 🔑 *A display story may
+  not be the place a write starts failing.* What ships instead is a TOLERANT READER
+  (`page::identity_cause_label`), which counts and labels an unfamiliar token and never fails.
+  ⚠️ **The cost is stated rather than implied**: the column's domain is held today only by
+  `repo::cause_token` being its sole writer — a property of the CODE, not of the schema. Measured:
+  `UPDATE identity_link SET abstention_cause = 'a_cause_no_variant_names'` succeeds. The schema-side
+  closure is registered here as the real one, on story 5.12's precedent where voie B's `GRANT` was
+  registered rather than implied by the tripwire that shipped. **Owner: unassigned.**
+- ⚠️ **Two UX bans are NAMED by this counter, not merely unmet by it.** `ux…:1280`'s *"No badge, no
+  growing counter"* and `epics.md:1704`'s *"after six months of inaction it reads the same number"*.
+  The number grows while the operator is inactive because the scanner keeps scanning — measured at
+  story 5.14 (five runs over one host → five links). **Arbitration 13 makes the UNIT true
+  (*sightings*, not devices); it does NOT make the bans met.** A figure that rises because the
+  product looked many times is the radar's range rather than the operator's debt, and that is the
+  whole of what the unit buys. **Owner: Epic 6**, which gives the population an identity.
+- ⚠️ **The unit *sighting* / *constat* is TEMPORARY and its locale keys change with Epic 6.**
+  Registered so the rename is met as a scheduled consequence rather than as the correction of a
+  mistake. The note lives in `locales/app.yml` beside the keys themselves. **Owner: Epic 6.**
+- ⚠️ **This story DIVERGES from the UX spec's mock, deliberately, and the spec is NOT edited.**
+  `ux-design-specification.md:919-928` shows ONE panel (`187 evaluated · 113 not evaluated`);
+  arbitration 10 ships TWO framed sections because two populations inside one frame invite the
+  reader to add them, and the invitation is the defect (the counts range over declared FIELDS and
+  over SIGHTINGS; their sum denotes nothing). Registered so the divergence is met as a decision
+  rather than as drift. **Owner: Epic 6**, which revisits this surface.
+- ✅ **`count_identity_links` (`Owner: story 5.14b`) — ANSWERED, and the answer is that all THREE
+  reads stay.** `repo::count_engine_reach` (this story's, filtered + grouped) and
+  `scan_pass::counted_current_engine_links` (filtered, ungrouped) see the same population — now
+  PINNED by `the_grouped_read_subsumes_this_count` rather than reasoned about, on both the full set
+  and the filtered one. `repo::count_identity_links` is the **only unfiltered** one (`SELECT
+  COUNT(*)`, no `WHERE`) and still has no production caller. ⚠️ Do not "unify" them: the word
+  *unfiltered* belongs to the third and must not be spent on the second, which is merely ungrouped.
+- 🔴 **`scan_pass.rs`'s *"Story 5.14b is its production consumer"* was FALSE and is corrected.** It
+  was a prediction about this story shipped as a statement, in the doc of an `#[allow(dead_code)]`
+  function. 5.14b's human-facing count is the grouped read; `counted_current_engine_links` remains
+  the instrument of story 5.14's four pins, which is a real job and is not a production caller.
+- 🔑 **A guard placed where the defect cannot occur reads as coverage and is none** — carried into
+  Epic 5's retrospective. This story's own anti-sum guard (AC3) tested that `build_view` and
+  `build_identity_view` do not add each other's counts, and **neither of them can**: neither sees
+  the other's numbers. The only place a sum can be written is `reconcile_view`, the impure edge that
+  assembles both, and no unit test reached it — measured, the summing mutation left the whole suite
+  GREEN. Closed by a database-backed test through the composition. ⚠️ **It was found only because
+  the mutation was run**; reading the guard could not have found it, since the guard is correct
+  about what it tests.
+
+## Deferred from: code review of story-5.14b (2026-08-12)
+
+- ⚠️ **Full table scan on `identity_link` for every page load, on a table this story documents as
+  unbounded.** At story 5.14's own one-year figure (105 000 current engine links) `EXPLAIN` on
+  `count_engine_reach`'s query gives `type: ALL, rows: 103761, Using where; Using temporary; Using
+  filesort`, profiled at **24.8–25.4 ms**. No index covers `(decided_by, current_subject)`. Refresh
+  is a button (`hx-get="/gap"`), not a poll, so the cost is per page load rather than continuous —
+  recorded with its bound rather than as an alarm. It belongs with the accumulation it measures.
+  **Owner: Epic 6**, jointly with whoever adds the index.
+- ⚠️ **An empty `abstention_cause` token renders `Unrecognised cause ()`.** `''` satisfies
+  `IS NOT NULL` on a `VARCHAR(32)` with no `CHECK`, so it is storable, and it collapses to the same
+  displayed string as the DDL-forbidden NULL — the two are indistinguishable on the page, and
+  neither gives the operator anything to report. Belongs with this story's registered *"the
+  `abstention_cause` column has no domain in the SCHEMA"* entry and closes with it.
+  **Owner: unassigned.**
+- ⚠️ **`has_any` and `causes` can disagree on a zero-count group.**
+  `build_identity_view(vec![reach("abstained", Some("absence_of_proof"), 0)])` gives
+  `has_any = false` with one cause row: the page prints *"Nothing observed yet"* and silently drops
+  the line it is holding. **Unreachable from `COUNT(*)`**, which never returns a zero group — a
+  totality wart recorded as such rather than patched, so that a future caller feeding this function
+  from something other than the grouped read meets it. **Owner: unassigned.**
+- 🔑 **An `xtask` gate is what would really carry clock-freedom in the view builder; a test cannot.**
+  Story 5.12's precedent, in its own words: *you cannot measure the absence of code by running code
+  — a test exercises what exists, while the violation is what a future story ADDS.* Measured here:
+  a wall clock rendered as an *"as of day N"* note leaves all 519 tests green, because the guard
+  renders twice microseconds apart and sees only a clock finer than that gap. ⚠️ **The real defence
+  today is a dependency configuration, not a test**: `chrono` is `default-features = false`
+  workspace-wide, so `Utc::now` does not exist (`error[E0599]`) and only `std::time::SystemTime`
+  gets through. A gate on `float-free`'s model — reddening on `SystemTime::now` / `Instant::now` /
+  `Utc::now` under the view-building region — is the closure. **Owner: unassigned.**
+
+## Deferred from: story-5.14b, second pass (the four §11 rows that never landed, 2026-08-12)
+
+🔴 **These four were required by story 5.14b's §11 and were NOT written by its first register pass.**
+The AC demanded *"appended and then re-read to check each row landed"*, and a re-read WAS run — it
+counted the seven bullets written and compared them to the seven bullets written. 🔑 ***A re-read
+that reads only what you wrote cannot find what you did not write.*** The check must count against
+the REQUIREMENT (§11 had nine rows), not against its own output. Carried to Epic 5's retrospective,
+because it is the same shape as the mutation-driver family: an instrument that confirms itself.
+
+- ⚠️ **The DENOMINATOR entry's owner is reduced to Epic 6.** `deferred-work.md:3032` still reads
+  `Owner: story 5.14b and Epic 6`, and 5.14b has now shipped — a closed story left standing as
+  co-owner of an open item. **The entry at `:3032` is NOT rewritten** (the register's rule); this
+  bullet supersedes its ownership. 5.14b's half is DONE: it states the limit in the surface, in the
+  operator's language, in both locales. **Owner: Epic 6 alone.**
+- ⚠️ **`:2407`'s PURGE half is untouched by 5.14b, and the story made it MORE acute rather than
+  less.** `repo::purge_engine_links` still has no production caller while the pass accumulates one
+  current link per sighting per scan. This story made the accumulation VISIBLE — a page now displays
+  it — and **a visible defect is not a fixed one**. **Owner: unassigned.**
+- ⚠️ **The `current_subject IS NOT NULL` ≠ `valid_to = OPEN_END` non-equivalence gained a THIRD
+  adopter.** Story 5.14 was the first to make that predicate the definition of a human-facing
+  population; `count_engine_reach` is now the second read to do so, and this one is rendered to the
+  operator. Each adopter raises the cost of repairing the DDL, whose CHECK accepts a row the
+  predicate then misses. Recorded as an increment, not as a new defect. **Owner: unassigned.**
+- ⚠️ **`epics.md`'s `Ambiguous`-shows-its-candidates clause is re-owned to Epic 6 WITH a tripwire.**
+  `scan_pass::the_production_pass_produces_no_ambiguous_abstention` reds the day a producer of
+  `Verdict::Supports`/`Opposes` arrives, and its message names the clause as due. ⚠️ Its red is
+  `.expect()`-carried on its own premise (the pass rolls back under `guard_decision`), so it signals
+  *the pass stopped completing* rather than *an ambiguity was written* — the signal wanted either
+  way, but not the assertion the test reads. **Owner: Epic 6.**
+
+## Deferred from: story-5.14b, the operator's three cases (Guy, 2026-08-12)
+
+🔑 **Guy's taxonomy, and it is the criterion for Epic 6 AND for whatever slice makes the product
+usable.** It came out of the code review's `no_match` finding and settles it:
+
+| case | what the engine wrote | who acts | the gesture |
+|---|---|---|---|
+| **no ambiguity** | `Match`, and also `NoMatch` | the software | none — it decided |
+| **ambiguity** | `Abstained { Ambiguous }` | the operator LIFTS THE DOUBT | choose among the candidates and their evidence (FR16, `link_candidate`) |
+| **unknown** | `Abstained { AbsenceOfProof }` | the operator CREATES THE ENTITY | **declare** — the documenting gesture |
+
+- 🔴 **Case 3's gesture is the one the product does not have at all.** Five routes, all read-only;
+  the only call to `insert_declared_attribute` outside `repo.rs` is inside a `#[cfg(test)]`. And
+  case 3 is **the only case reachable today**: the shipped connector emits no MAC, so every
+  abstention on a real network is `AbsenceOfProof`. **The abstention section is therefore not a
+  counter — it is the entry point of the documenting gesture**, which is why it reads as hollow
+  until that gesture exists. **Owner: the slice that gives the declared side a write surface.**
+- ⚠️ **A cause that opens no gesture must say what would make it disappear**, or it is not a map,
+  it is a complaint. For `AbsenceOfProof` that sentence is *a source that reports hardware
+  addresses* — the connector story, not a human decision. Asking the operator to "resolve" a signal
+  the source never sent would make him carry a lack of the SOURCE, which is the reproach the
+  dignity rule forbids. **Owner: Epic 6**, as a design criterion.
+- 🔴 **NOT announced in the surface, by decision (Guy, 2026-08-12): the section stays DESCRIPTIVE
+  until the gesture exists.** *Announcing an absent gesture is a promise.* The day either gesture
+  ships, the corresponding line gains it — and until then the page says what is, not what will be.
+- ⚠️ **The apparatus did not find this.** Three review layers, nineteen findings, and not one asked
+  *"what can the operator DO with this number?"* — because they checked conformance to a
+  specification, and the specification was mine. **A blind spot of the method, not an accident.**
+  Carried to Epic 5's retrospective.
