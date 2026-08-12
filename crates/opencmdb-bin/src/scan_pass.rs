@@ -171,11 +171,24 @@ pub(crate) async fn poll_ingest_resolve<C: Connector>(
 ///
 /// Propagates the database error.
 ///
-/// ⚠️ **Consumed only by the tests below TODAY**, and the allow is deliberately on this function
-/// rather than on the module: `scan_pass` carries live production code (`poll_ingest_resolve` is
-/// called from `main`), so a module-level `#![allow(dead_code)]` — the idiom `fixtures.rs`,
-/// `trap_gate.rs` and `fault_injection.rs` use, all of which are dev-only by construction — would
-/// hide a genuinely dead item here. Story 5.14b is its production consumer.
+/// ⚠️ **Consumed only by the tests below**, and the allow is deliberately on this function rather
+/// than on the module: `scan_pass` carries live production code (`poll_ingest_resolve` is called
+/// from `main`), so a module-level `#![allow(dead_code)]` — the idiom `fixtures.rs`, `trap_gate.rs`
+/// and `fault_injection.rs` use, all of which are dev-only by construction — would hide a genuinely
+/// dead item here.
+///
+/// 🔴 **This doc used to say *"Story 5.14b is its production consumer"*, and that was a PREDICTION
+/// about a story shipped as a statement. It is false.** 5.14b's human-facing count is
+/// [`crate::repo::count_engine_reach`], which carries the same two `WHERE` clauses and groups them;
+/// the total is the sum of its groups, so calling both would issue two queries for one number.
+/// What this function is, and stays, is **the instrument of the four pins below** — the two
+/// structural zeros and the two `WHERE` carriers. That is a real job, and it is not a production
+/// caller.
+///
+/// **The equivalence is a TEST, not a sentence**: `the_grouped_read_subsumes_this_count` asserts the
+/// sum of the groups equals this count over a store carrying every shape — placed, abstained,
+/// operator-owned and out-of-key. A doc claiming subsumption without that test would be exactly the
+/// kind of unmeasured sentence this project has spent six stories removing.
 #[allow(dead_code)]
 pub(crate) async fn counted_current_engine_links(pool: &MySqlPool) -> Result<i64, sqlx::Error> {
     let (count,): (i64,) = sqlx::query_as(sqlx::AssertSqlSafe(
@@ -453,6 +466,149 @@ mod tests {
             0,
             "and an OPERATOR row is not the engine's reach — without this clause the counter would \
              report a human's decision as the engine's"
+        );
+    }
+
+    /// **Story 5.14b, arbitration 12** — the grouped read really does subsume this count.
+    ///
+    /// 🔑 The arbitration that corrected [`counted_current_engine_links`]'s doc was taken **gated on
+    /// this measurement**: *if the two reads' populations diverge, the arbitration re-opens rather
+    /// than being forced.* Validation checked the two `WHERE` clauses by reading them (byte
+    /// identical) and reasoned that MariaDB's `GROUP BY` puts NULLs in their own group rather than
+    /// discarding them. **Reading is not running**, so this executes both against a store carrying
+    /// every shape the population can take.
+    #[tokio::test]
+    async fn the_grouped_read_subsumes_this_count() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = empty_pool().await else {
+            return;
+        };
+        // Placed rows (NULL cause — the group that a NULL-dropping GROUP BY would lose), abstained
+        // rows (non-NULL cause), and then two rows that BOTH reads must exclude.
+        let mut source = connector(vec![
+            with_mac(30, 1_700_000_900, 0x30),
+            with_mac(31, 1_700_000_901, 0x30),
+            mac_less(32, 1_700_000_902),
+        ]);
+        poll_ingest_resolve(&mut source, at(1_700_000_900), &pool).await;
+
+        let ungrouped = counted_current_engine_links(&pool).await.expect("count");
+        let grouped: i64 = crate::repo::count_engine_reach(&pool)
+            .await
+            .expect("reach")
+            .iter()
+            .map(|row| row.count)
+            .sum();
+
+        assert!(
+            ungrouped > 0,
+            "the premise: the store holds current engine links, else both reads agree on zero and \
+             this test measures nothing"
+        );
+        assert_eq!(
+            grouped, ungrouped,
+            "the sum of the groups must equal the ungrouped total. If this ever fails, the two \
+             reads do NOT see the same population and story 5.14b's arbitration 12 — which \
+             corrected this function's doc on the strength of the equivalence — is re-opened"
+        );
+
+        // And the exclusions agree too: both must ignore an operator row and a row out of the key.
+        sqlx::query("UPDATE identity_link SET decided_by = 'OPERATOR' LIMIT 1")
+            .execute(&pool)
+            .await
+            .expect("re-attribute one link");
+        sqlx::query(
+            "UPDATE identity_link SET current_subject = NULL WHERE decided_by = 'ENGINE' LIMIT 1",
+        )
+        .execute(&pool)
+        .await
+        .expect("drop one link out of the key");
+
+        let ungrouped_after = counted_current_engine_links(&pool).await.expect("count");
+        let grouped_after: i64 = crate::repo::count_engine_reach(&pool)
+            .await
+            .expect("reach")
+            .iter()
+            .map(|row| row.count)
+            .sum();
+        assert_eq!(
+            ungrouped_after,
+            ungrouped - 2,
+            "the premise: the two rows really did leave the population"
+        );
+        assert_eq!(
+            grouped_after, ungrouped_after,
+            "and the two reads still agree once rows are excluded — agreeing on the full set but \
+             not on the filtered one is the divergence this test is really hunting"
+        );
+    }
+
+    /// **Story 5.14b, AC8** — the production pass produces NO `Ambiguous` abstention, and the day
+    /// it does, this reds and names `epics.md`'s unimplemented clause.
+    ///
+    /// # 🔴 The premise assertions are mandatory, and the measurement is why
+    ///
+    /// Validation measured that the obvious form of this test — *"no row carries `ambiguous`"* — is
+    /// **GREEN under the very mutation it exists to catch**. Make the production path emit an
+    /// `Ambiguous` conclusion and `resolver::guard_decision` refuses it
+    /// (`Constraint("ambiguity_without_candidates")`), the pass rolls back, and the assertion then
+    /// passes over an EMPTY TABLE: nineteen other tests red, this one green.
+    ///
+    /// So it asserts FIRST that the pass ran and wrote something. ⚠️ And then the red arrives on
+    /// that premise — an `.expect()` — rather than on the `ambiguous` assertion below it. That is
+    /// stated rather than hidden: what this test proves is *the pass completed and produced no
+    /// ambiguity*, and under the mutation it proves *the pass no longer completes*. Both are the
+    /// signal wanted; neither is "the cause assertion fired".
+    ///
+    /// # What bounds it
+    ///
+    /// The slice below: two observations sharing one MAC, plus one carrying no MAC. That is what the
+    /// shipped connector's shape can reach, plus the one case that mints an interface. **It is not a
+    /// claim about every possible input** — `Verdict::Supports` and `Verdict::Opposes` have no
+    /// producer at all today (`cascade.rs`), which is the structural reason no `Ambiguous` can
+    /// arise, and Epic 6 owns giving them one.
+    #[tokio::test]
+    async fn the_production_pass_produces_no_ambiguous_abstention() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = empty_pool().await else {
+            return;
+        };
+        let slice = vec![
+            with_mac(20, 1_700_000_800, 0x20),
+            with_mac(21, 1_700_000_801, 0x20), // the SAME MAC — the pairing path
+            mac_less(22, 1_700_000_802),       // and the abstaining path
+        ];
+        let mut source = connector(slice);
+
+        let outcome = poll_ingest_resolve(&mut source, at(1_700_000_800), &pool).await;
+
+        // THE PREMISE, first and non-negotiable: without it the assertion below passes over an
+        // empty table and measures nothing.
+        let resolution = outcome
+            .resolution
+            .expect("the pass must have RUN — a None here means it was refused, and the log names why");
+        assert!(
+            resolution.links_written > 0,
+            "the pass must have WRITTEN something: an assertion that no row carries `ambiguous` is \
+             vacuously true over an empty table, and that is exactly what a rollback leaves"
+        );
+
+        let reach = crate::repo::count_engine_reach(&pool)
+            .await
+            .expect("read the reach");
+        assert!(
+            !reach.is_empty(),
+            "the premise again, read back from the store rather than from the pass's own report"
+        );
+        assert!(
+            !reach
+                .iter()
+                .any(|row| row.cause.as_deref() == Some("ambiguous")),
+            "the production pass produced an `Ambiguous` abstention. That is not a bug — it means \
+             a producer of `Verdict::Supports`/`Opposes` has arrived, and with it `epics.md`'s \
+             story-5.14 clause that an ambiguity must SHOW ITS CANDIDATES from `link_candidate` \
+             (FR16). That clause is unimplemented and owned by Epic 6. Implement it rather than \
+             deleting this assertion. Rows: {reach:?}"
         );
     }
 

@@ -892,6 +892,83 @@ where
     Ok(count)
 }
 
+/// One row of the engine's CURRENT reach, exactly as the database groups it.
+///
+/// The tokens are left as the strings they are persisted as. Mapping them to a human label is the
+/// page's business ([`crate::page`]), and mapping them back to a Rust enum is deliberately NOT done:
+/// see [`count_engine_reach`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EngineReachRow {
+    /// The persisted `outcome` token — `match`, `no_match` or `abstained` (`identity_link_outcome`).
+    pub outcome: String,
+    /// The persisted `abstention_cause` token. `None` on a non-abstained row, and the DDL guarantees
+    /// the correspondence: `identity_link_rule_xor_cause` makes the cause non-NULL exactly when
+    /// `outcome = 'abstained'`.
+    pub cause: Option<String>,
+    /// How many current engine links carry that `(outcome, cause)` pair.
+    pub count: i64,
+}
+
+/// The engine's current reach, grouped by outcome and abstention cause.
+///
+/// This is what story 5.14b displays: how many sightings the identity engine placed, how many it
+/// could not, and — for those — why, one line per cause.
+///
+/// # Both `WHERE` clauses are load-bearing, and each is carried by a row a test creates
+///
+/// `decided_by = 'ENGINE'` keeps a human's decision out of a number presented as the engine's reach;
+/// `current_subject IS NOT NULL` keeps superseded history out of a number presented as current.
+/// Story 5.14 measured that dropping either — or both — left its whole suite green, because no test
+/// created the row that would have been wrongly counted. The tests below plant an OPERATOR row and a
+/// row whose `current_subject` has been nulled, and assert this function excludes each.
+///
+/// ⚠️ **A nulled `current_subject` is not the same thing as `valid_to <> OPEN_END`.**
+/// `identity_link_current_subject` accepts a row with `valid_to = OPEN_END` and a NULL
+/// `current_subject`, because the CHECK's disjunct evaluates to UNKNOWN rather than FALSE and SQL
+/// accepts that. Story 5.14's code review registered it; this function is the SECOND to adopt
+/// `current_subject IS NOT NULL` as the definition of a human-facing population, which raises the
+/// cost of repairing the DDL. It is adopted knowingly, not inherited.
+///
+/// # Why the tokens come back as strings
+///
+/// Mapping them back to [`Conclusion`] and [`IdentityAbstentionCause`] here would make this function
+/// fallible on a value the database happily holds — `abstention_cause` is a plain `VARCHAR(32)` with
+/// no `CHECK`, so an unrecognised token can exist. The page must render anyway (story 5.14b's
+/// arbitration 11), so the decision of what to do with an unfamiliar token belongs at the display,
+/// where it can be counted and labelled, and not here, where the only options are a wrong enum and
+/// an error that would take the whole page down.
+///
+/// # Ordering
+///
+/// `ORDER BY` is part of the contract: the page renders these rows in order, and a test pins it.
+/// Without it MariaDB is free to return the groups in any order and the rendered page would differ
+/// between runs for no reason a reader could see.
+///
+/// # Errors
+///
+/// Returns the `sqlx::Error` as it came; callers classify it with [`classify`].
+pub async fn count_engine_reach<'e, E>(executor: E) -> Result<Vec<EngineReachRow>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String, Option<String>, i64)> = sqlx::query_as(
+        "SELECT outcome, abstention_cause, COUNT(*) FROM identity_link \
+         WHERE decided_by = 'ENGINE' AND current_subject IS NOT NULL \
+         GROUP BY outcome, abstention_cause \
+         ORDER BY outcome, abstention_cause",
+    )
+    .fetch_all(executor)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(outcome, cause, count)| EngineReachRow {
+            outcome,
+            cause,
+            count,
+        })
+        .collect())
+}
+
 /// Delete every link the ENGINE derived, and return how many LINKS went.
 ///
 /// ⚠️ **The count excludes cascaded `link_candidate` rows** — measured: two links carrying two
@@ -2622,5 +2699,184 @@ mod tests {
             None
         );
         assert_eq!(current_subject_of(None, "2023-01-01 00:00:00.000000"), None);
+    }
+
+    // ── The engine's reach, grouped (story 5.14b) ──────
+    //
+    // ⚠️ Every predicate of `count_engine_reach`'s WHERE is carried by a row planted below. Story
+    // 5.14 measured that dropping either clause left its whole suite GREEN, because no test created
+    // the row that would have been wrongly counted — the fifth recurrence of that family in this
+    // project. These tests exist so that measurement cannot repeat.
+
+    /// Plant one current ENGINE link, abstained, with the cause given.
+    async fn an_abstained_link(pool: &MySqlPool, cause: IdentityAbstentionCause) {
+        let obs = an_observation(pool).await;
+        insert_identity_link(
+            pool,
+            LinkId::from_uuid(uuid::Uuid::now_v7()),
+            obs,
+            None,
+            &an_abstention(cause),
+            &[obs],
+            DecidedBy::Engine,
+            at(1_700_000_000),
+            open_end(),
+        )
+        .await
+        .map_err(classify)
+        .expect("insert abstained link");
+    }
+
+    /// Plant one current ENGINE link that PLACED its observation on an interface.
+    async fn a_placed_link(pool: &MySqlPool, mac: [u8; 6]) {
+        let obs = an_observation(pool).await;
+        let iface = an_interface(pool, L2DomainId::from_uuid(uuid::Uuid::nil()), mac).await;
+        insert_identity_link(
+            pool,
+            LinkId::from_uuid(uuid::Uuid::now_v7()),
+            obs,
+            Some(iface),
+            &a_match("l1-exact-mac"),
+            &[obs],
+            DecidedBy::Engine,
+            at(1_700_000_000),
+            open_end(),
+        )
+        .await
+        .map_err(classify)
+        .expect("insert placed link");
+    }
+
+    /// **AC1** — the read groups by outcome AND by cause, and the fixture carries TWO causes.
+    ///
+    /// A single-cause fixture cannot distinguish grouping by cause from grouping by outcome: both
+    /// yield one row. The second cause is what makes this an assertion about the grouping.
+    #[tokio::test]
+    async fn the_reach_is_grouped_by_outcome_and_by_cause() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = identity_fixture().await else {
+            return;
+        };
+        an_abstained_link(&pool, IdentityAbstentionCause::AbsenceOfProof).await;
+        an_abstained_link(&pool, IdentityAbstentionCause::AbsenceOfProof).await;
+        an_abstained_link(&pool, IdentityAbstentionCause::Ambiguous).await;
+        a_placed_link(&pool, [0x02, 0, 0x5e, 0, 0x57, 0x01]).await;
+
+        let rows = count_engine_reach(&pool).await.expect("read the reach");
+
+        assert_eq!(
+            rows,
+            vec![
+                EngineReachRow {
+                    outcome: "abstained".into(),
+                    cause: Some("absence_of_proof".into()),
+                    count: 2,
+                },
+                EngineReachRow {
+                    outcome: "abstained".into(),
+                    cause: Some("ambiguous".into()),
+                    count: 1,
+                },
+                EngineReachRow {
+                    outcome: "match".into(),
+                    cause: None,
+                    count: 1,
+                },
+            ],
+            "three groups, in a pinned ORDER: two causes under `abstained` and the placed row apart. \
+             Collapsing the cause grouping gives two rows; collapsing both gives one"
+        );
+    }
+
+    /// **AC2** — `decided_by = 'ENGINE'` is carried by an OPERATOR row that would otherwise count.
+    #[tokio::test]
+    async fn the_reach_excludes_an_operator_link() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = identity_fixture().await else {
+            return;
+        };
+        an_abstained_link(&pool, IdentityAbstentionCause::AbsenceOfProof).await;
+        let before: i64 = count_engine_reach(&pool)
+            .await
+            .expect("read")
+            .iter()
+            .map(|r| r.count)
+            .sum();
+
+        sqlx::query("UPDATE identity_link SET decided_by = 'OPERATOR'")
+            .execute(&pool)
+            .await
+            .expect("re-attribute the link to an operator");
+
+        assert_eq!(before, 1, "the premise: the engine held one current link");
+        assert!(
+            count_engine_reach(&pool).await.expect("read").is_empty(),
+            "an OPERATOR row is a human's decision, not the engine's reach — without this clause \
+             the page would report one as the other"
+        );
+    }
+
+    /// **AC2** — `current_subject IS NOT NULL` is carried by a row dropped out of the current key.
+    ///
+    /// ⚠️ The row's `valid_to` is left at `OPEN_END`, and that is NOT an oversight: the DDL accepts
+    /// the combination (the CHECK's disjunct evaluates to UNKNOWN, which SQL admits), and story
+    /// 5.14's code review registered the non-equivalence. **Do not call this row "superseded"** — it
+    /// is a row whose `current_subject` is NULL, which is what the predicate actually tests.
+    #[tokio::test]
+    async fn the_reach_excludes_a_link_that_left_the_current_key() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = identity_fixture().await else {
+            return;
+        };
+        an_abstained_link(&pool, IdentityAbstentionCause::AbsenceOfProof).await;
+        let before: i64 = count_engine_reach(&pool)
+            .await
+            .expect("read")
+            .iter()
+            .map(|r| r.count)
+            .sum();
+
+        sqlx::query("UPDATE identity_link SET current_subject = NULL")
+            .execute(&pool)
+            .await
+            .expect("drop the link out of the current key");
+
+        assert_eq!(before, 1, "the premise: one current link");
+        assert!(
+            count_engine_reach(&pool).await.expect("read").is_empty(),
+            "a link that left the current key is history, not reach — without this clause the \
+             number would grow with every re-scan even where the engine settled"
+        );
+    }
+
+    /// **AC7** — the store can hold a token no enum variant names, and the read carries it through.
+    ///
+    /// 🔴 This is the premise of the whole tolerant-reader design (`page::identity_cause_label`):
+    /// `abstention_cause` is a plain `VARCHAR(32)` with **no `CHECK`**, so the value below inserts
+    /// cleanly. Measured, not assumed.
+    #[tokio::test]
+    async fn the_reach_carries_a_token_no_variant_names() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = identity_fixture().await else {
+            return;
+        };
+        an_abstained_link(&pool, IdentityAbstentionCause::AbsenceOfProof).await;
+        sqlx::query("UPDATE identity_link SET abstention_cause = 'a_cause_no_variant_names'")
+            .execute(&pool)
+            .await
+            .expect("the column is a plain VARCHAR(32) with no CHECK — this must succeed");
+
+        let rows = count_engine_reach(&pool).await.expect("read");
+
+        assert_eq!(
+            rows,
+            vec![EngineReachRow {
+                outcome: "abstained".into(),
+                cause: Some("a_cause_no_variant_names".into()),
+                count: 1,
+            }],
+            "the read hands the unfamiliar token to the page rather than failing on it — failing \
+             here would take the WHOLE page down for one row"
+        );
     }
 }

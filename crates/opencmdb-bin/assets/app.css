@@ -133,6 +133,18 @@ h2 { font-size: 14px; font-weight: 600; color: var(--muted); margin: 24px 0 8px;
 .abstentions li { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
 .abstentions .cause { color: var(--muted); }
 
+/* ── Identity reach (story 5.14b) — the radar's range, not a debt ─────
+   ⚠️ Every colour here is --muted / --text / --border and NEVER --accent (the amber reserved for
+   the document action). A test reads these rules. Read it for exactly what it is: a check on the
+   TEXT OF THESE RULES, not on the resolved colour — a more specific selector elsewhere overrides
+   them and the test stays green. The palette carries no red at all (see :root), and that is what
+   carries "does not redden"; this block carries only its own honesty. */
+.identity { margin-top: 28px; padding-top: 8px; border-top: 1px solid var(--border); }
+.identity .pair { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.identity .sep { color: var(--muted); }
+.identity .note { font-size: 12px; margin: 6px 0 0; }
+.identity .abstentions .cause { color: var(--muted); }
+
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }

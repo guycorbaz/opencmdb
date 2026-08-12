@@ -45,6 +45,54 @@ page.no_declared_hint:
   en: "Add a declared entity (with an ipv4 attribute) and let a scan observe it — the gap appears here."
   fr: "Ajoutez une entité déclarée (avec un attribut ipv4) et laissez un scan l'observer — l'écart apparaît ici."
 
+# ── Identity reach (story 5.14b) ─────────────────────────────────────────────
+# ⚠️ A DISTINCT PREFIX, deliberately. `cause.*` below belongs to the RECONCILIATION engine
+# (`gap::AbstentionCause`); these belong to the IDENTITY cascade
+# (`identity::cascade::IdentityAbstentionCause`). Two vocabularies in one namespace would let a
+# future rename silently mislabel a count.
+#
+# ⚠️ THE UNIT — "sighting" / "constat" — IS TEMPORARY. It is honest today because each scan mints
+# fresh `obs_id`s and the pass supersedes nothing across passes, so one machine seen ten times is
+# ten rows. Epic 6 gives the population an identity, and on that day these strings change. That is
+# a SCHEDULED consequence, not a correction of a mistake.
+identity.title:
+  en: "Identity"
+  fr: "Identité"
+identity.placed:
+  en: "Sightings placed"
+  fr: "Constats rattachés"
+identity.not_placed:
+  en: "not placed"
+  fr: "non rattachés"
+identity.because:
+  en: "Not placed, because:"
+  fr: "Non rattachés, parce que :"
+identity.all_placed:
+  en: "Every sighting was placed."
+  fr: "Chaque constat a été rattaché."
+identity.nothing_seen:
+  en: "Nothing observed yet — run a scan and this fills in."
+  fr: "Rien d'observé pour l'instant — lancez un scan et ceci se remplira."
+# The two facts below are DELIBERATELY two strings and must not be fused. The first is a property of
+# THIS BUILD that Epic 6 removes; the second is a permanent property of the problem. A reader who
+# meets them fused carries the temporary one as permanent.
+identity.unit:
+  en: "This counts sightings, not devices: one machine seen ten times counts ten. Grouping them is still to come."
+  fr: "Ceci compte des constats, pas des appareils : une machine vue dix fois compte dix. Leur regroupement reste à venir."
+identity.floor:
+  en: "The floor is set by the data, not by the engine: no amount of correctness recovers a signal the source never sent."
+  fr: "Le plancher est fixé par les données, pas par le moteur : aucune justesse ne récupère un signal que la source n'a jamais émis."
+identity.cause.absence_of_proof:
+  en: "No proof of identity"
+  fr: "Aucune preuve d'identité"
+identity.cause.ambiguous:
+  en: "Several possible identities"
+  fr: "Plusieurs identités possibles"
+# Reached when the store holds a token no enum variant names — see `page::identity_cause_label`.
+identity.cause.unrecognised:
+  en: "Unrecognised cause (%{token})"
+  fr: "Cause non reconnue (%{token})"
+
 cause.out_of_perimeter:
   en: "Out of perimeter"
   fr: "Hors du périmètre"

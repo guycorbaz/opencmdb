@@ -3096,3 +3096,48 @@ _Appended, never rewriting the bullets above. Story 5.13 shipped the monotone-ho
   measured. The page-less deployment lasts **until 5.14b ships, which may be with Epic 6** — the
   weaker true sentence, where an earlier draft said *"for one story"* and was corrected in the story
   file but not in the register.
+
+## Registered for Epic 5's RETROSPECTIVE — raised by Guy, 2026-08-12, not by a story
+
+Guy raised this in conversation while story 5.14b was at `ready-for-dev`, and decided the same day
+that **Epic 5 finishes, then the retrospective runs as the project's REORIENTATION point** rather
+than as a closing formality. It is registered here because it has no story owner: nothing in the
+Epic 5 story set would have carried it in, and this project's rule is that a retrospective item is
+carried in by name rather than rediscovered.
+
+- **🔴 THE QUESTION, in Guy's words: *"le projet dérive et rien n'est actuellement utilisable —
+  est-ce juste ?"*** The measurements below were taken to answer it and are recorded so the
+  retrospective starts from figures rather than from an impression.
+- **Two thirds of the delivered work is invisible to the operator.** 63 stories delivered in 26 days
+  (first commit 2026-07-17, 130 commits at `5046cca`). Epics 1-3 = **21 stories** and they produced
+  *everything that is usable today* — the page, the scan, the gap. Epics 4-5 = **43 stories** and
+  they produced **no operator-visible change at all**. Seven of the last eight stories changed
+  nothing an operator can see; 5.14b would be the first display story since 3.7.
+- **🔴 The DOCUMENTING GESTURE does not exist in the product**, and for a tool whose purpose is to
+  document an IT infrastructure that is the finding, not a detail. The binary exposes **five routes,
+  all read-only** (`/`, `/gap`, `/assets/*`, `/metrics`, `/healthz`) — **no write route**. The only
+  call to `insert_declared_attribute` outside `repo.rs` is `main.rs:442`, **inside the `#[cfg(test)]`
+  opened at `:362`**. To declare anything, an operator writes SQL by hand or copies
+  `docker/seed-example.sql`. ⚠️ Measured, not supposed.
+- **The scan is startup-only** (`main.rs:133`, `:171` — the periodic scheduler, FR6, is deferred),
+  and the page shows **ONE entity**, chosen by `OPENCMDB_ENTITY_IPV4` or the first declared entity
+  carrying an `ipv4`. It is a card, not an inventory.
+- **⚠️ What is NOT drift, and the retrospective must not "fix" it**: writing the trap corpus and the
+  metrics harness BEFORE the engine is D19, deliberate and defensible — *"a metric written after the
+  engine is bent to fit the engine"*. Interface identity is the genuinely hard part of the domain.
+  **The direction is defensible; what has drifted is the RATIO of rigour to reach.**
+- **The apparatus has begun to measure itself.** Six of Epic 5's twenty stories are INSERTIONS
+  discovered during the work, and a large share of review findings are *sentences* — documents
+  contradicting each other — rather than behaviour. 🔑 **And the story documents are outgrowing the
+  work they describe**: story 5.14b's file is **643 lines for a read-only display change**.
+- **⚠️ Epic 5 will close with an identity engine that places NOTHING in production.** The only
+  connector `main.rs` reaches emits no MAC, and `join` keys on `(l2_domain, mac)` — so on a real
+  network 5.14b's new section will show exactly one line, *"no proof of identity"*, for everything.
+  This is measured (story 5.14) and is pinned by tests on purpose. **What unblocks it is not in Epic
+  5**: a connector that reads the neighbour table (Epic 11 or 12), and Epic 6 for grouping. ⚠️ And
+  that connector story **removes the shield** over the registered two-passes-mint-two-interfaces
+  race — see the code review of story 5.14 above.
+- **A question the retrospective should answer with a number**: *how many epics before an operator
+  can document one machine?* If the answer is "several", the reorientation to weigh is a short
+  slice giving the declared side a write surface and the scan a period — enough to make the tool
+  testable on a real network, which is also the best drift detector there is.
