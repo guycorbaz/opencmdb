@@ -2706,7 +2706,33 @@ development_status:
   # story from 5.1 onward has sat here until its PR landed. The generic workflow would have written
   # `done` after a clean review; the repository's own convention overrides it.
   5-14b-abstention-displayed-by-cause: review
-  epic-5-retrospective: required
+  # ✅ HELD 2026-08-12 -- `epic-5-retro-2026-08-12.md`. Epic 4's six action items: 5 done, 1 not due,
+  # ZERO lapsed. **142 consecutive green CI runs** across epics 4-5 (47 + 95). 247 -> 523 tests,
+  # 5 -> 7 gates, corpus 25 -> 28 artefacts / 24 -> 26 traps / 9 -> 10 families, 42 PRs merged.
+  # 🔴 THE EPIC'S DOMINANT DEFECT CLASS, counted in at least NINE of the twenty stories and NAMED at
+  # its end: ***a guard placed where the defect cannot occur reads as coverage and is none.*** Never
+  # found by reading — only by running the mutation, because such a guard is CORRECT about what it
+  # tests.
+  # 🔴 GUY'S DRIFT QUESTION, ANSWERED WITH NUMBERS: epics 1-3 = 21 stories and everything usable;
+  # epics 4-5 = **43 stories and nothing operator-visible**. The documenting gesture does not exist
+  # (five routes, all read-only). ⚠️ What is NOT drift: writing the corpus before the engine is D19
+  # and defensible. **What drifted is the RATIO of rigour to reach.**
+  # 🔴 SIGNIFICANT DISCOVERY: **the missing gesture is already in the plan, positioned LAST.** Epic
+  # 6 closes with *"a one-click promote of an observed value into a declared record"* (FR13), and
+  # the PRD calls FR13(a) **"the day-one case"**. It is Guy's case three, it is the ONLY case
+  # reachable today -- and ⚠️ **it does not depend on grouping**, which is Epic 6's subject.
+  # ✅ **ACTION ITEM 1 DECIDED (Guy, 2026-08-12): option (a) -- THE PROMOTE GESTURE MOVES TO THE
+  # FRONT OF EPIC 6.** `epics.md:419-421` edited (a retrospective may; a story may not) and recorded
+  # in **GitHub issue #85**, not silently. Refused, both defensible: (b) a short slice before Epic 6
+  # -- new scope where a reordering suffices; (c) leave the plan -- keeps the product unusable for
+  # a whole epic.
+  # ⚠️ EPIC 6'S FIRST OBLIGATION: it has **no story breakdown**, exactly as Epic 5 had none at this
+  # point. The breakdown puts FR13 first and must decide whether FR13(b) -- field-selective
+  # documenting, which the PRD calls **the dominant long-run case** -- joins that first slice.
+  # ⚠️ Also registered: the review apparatus asks conformance to a specification the author wrote,
+  # so it never asks *"what can the operator DO with this?"* -- a blind spot of the METHOD; and the
+  # mutation driver misled FOUR times in one epic and should be fixed once in `xtask`.
+  epic-5-retrospective: done
 
   # ── Epic 6: Ne pas compter deux fois la même boîte (v0.4) ────────────────
   epic-6: backlog
