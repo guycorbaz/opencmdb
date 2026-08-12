@@ -181,14 +181,19 @@ pub(crate) async fn poll_ingest_resolve<C: Connector>(
 /// about a story shipped as a statement. It is false.** 5.14b's human-facing count is
 /// [`crate::repo::count_engine_reach`], which carries the same two `WHERE` clauses and groups them;
 /// the total is the sum of its groups, so calling both would issue two queries for one number.
-/// What this function is, and stays, is **the instrument of the four pins below** — the two
-/// structural zeros and the two `WHERE` carriers. That is a real job, and it is not a production
-/// caller.
+/// What this function is, and stays, is **the instrument of the tests below**. ⚠️ **Not "four pins"**
+/// — an earlier version of this sentence said four, and a mutation returning `Ok(-1)` measured
+/// **SIX** consumers; it also named `a_mac_less_slice_mints_no_interface_and_abstains_throughout`,
+/// which does NOT call this function (it asserts on the pass's own report, never on the store). A
+/// count written into the paragraph that replaces a false claim, and itself false in both
+/// directions. The role is stated here without a number, which is what nothing can drift from.
 ///
-/// **The equivalence is a TEST, not a sentence**: `the_grouped_read_subsumes_this_count` asserts the
-/// sum of the groups equals this count over a store carrying every shape — placed, abstained,
-/// operator-owned and out-of-key. A doc claiming subsumption without that test would be exactly the
-/// kind of unmeasured sentence this project has spent six stories removing.
+/// 🔴 **It no longer agrees with [`crate::repo::count_engine_reach`], and that is by design.** This
+/// counts ROWS; the grouped read counts SIGHTINGS (`COUNT(DISTINCT observation_id)`), because
+/// counting rows put the two halves of the displayed pair in different units — `join` writes one
+/// row per L1 key while an observation abstains at most once. The test that once asserted their
+/// agreement now measures their DIVERGENCE on a multi-key sighting, which is the more useful thing
+/// to pin: `the_two_reads_diverge_on_a_multi_key_sighting`.
 #[allow(dead_code)]
 pub(crate) async fn counted_current_engine_links(pool: &MySqlPool) -> Result<i64, sqlx::Error> {
     let (count,): (i64,) = sqlx::query_as(sqlx::AssertSqlSafe(
@@ -469,7 +474,57 @@ mod tests {
         );
     }
 
-    /// **Story 5.14b, arbitration 12** — the grouped read really does subsume this count.
+    /// **Story 5.14b** — the two reads DIVERGE on a multi-key sighting, and that is by design.
+    ///
+    /// # 🔴 What this test used to assert, and why it changed
+    ///
+    /// It asserted that the grouped read SUBSUMES this count — arbitration 12's gating measurement,
+    /// and it held while `count_engine_reach` used `COUNT(*)`. The code review then found that
+    /// counting rows puts the two halves of the displayed pair in different units: `join` writes one
+    /// `match` row PER L1 KEY, while story 5.9b's arbitration writes one `abstained` row PER
+    /// OBSERVATION. Guy chose to count SIGHTINGS on both sides, so the grouped read became
+    /// `COUNT(DISTINCT observation_id)` — and the subsumption died with it.
+    ///
+    /// 🔑 **The honest replacement is to measure the difference rather than delete the test.** The
+    /// two reads answer different questions: this one *how many links does the engine hold*, the
+    /// grouped one *how many sightings did it settle*. A multi-MAC observation is exactly where they
+    /// must part, and asserting that they still agreed would pin the defect the review removed.
+    #[tokio::test]
+    async fn the_two_reads_diverge_on_a_multi_key_sighting() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = empty_pool().await else {
+            return;
+        };
+        // ONE sighting carrying THREE MACs -> three links, one sighting.
+        let mut three_macs = mac_less(40, 1_700_001_100);
+        for last in [0x41u8, 0x42, 0x43] {
+            three_macs.facts.push(Fact::Mac {
+                addr: MacAddr([0x02, 0x00, 0x5e, 0x00, 0x57, last]),
+                locally_administered: true,
+            });
+        }
+        let mut source = connector(vec![three_macs]);
+        poll_ingest_resolve(&mut source, at(1_700_001_100), &pool).await;
+
+        let links = counted_current_engine_links(&pool).await.expect("count");
+        let sightings: i64 = crate::repo::count_engine_reach(&pool)
+            .await
+            .expect("reach")
+            .iter()
+            .map(|row| row.count)
+            .sum();
+
+        assert_eq!(
+            links, 3,
+            "the premise: `join` keys on (l2_domain, mac), so one observation with three MACs              lands on three interfaces and leaves three links"
+        );
+        assert_eq!(
+            sightings, 1,
+            "and the grouped read counts SIGHTINGS: one observation is one sighting however many              keys it carries. If this ever equals 3 again, the page has gone back to showing two              different units side by side — `placed` in links and `not placed` in observations"
+        );
+    }
+
+    /// **Story 5.14b** — the two reads AGREE while every sighting carries at most one key.
     ///
     /// 🔑 The arbitration that corrected [`counted_current_engine_links`]'s doc was taken **gated on
     /// this measurement**: *if the two reads' populations diverge, the arbitration re-opens rather
@@ -584,9 +639,9 @@ mod tests {
 
         // THE PREMISE, first and non-negotiable: without it the assertion below passes over an
         // empty table and measures nothing.
-        let resolution = outcome
-            .resolution
-            .expect("the pass must have RUN — a None here means it was refused, and the log names why");
+        let resolution = outcome.resolution.expect(
+            "the pass must have RUN — a None here means it was refused, and the log names why",
+        );
         assert!(
             resolution.links_written > 0,
             "the pass must have WRITTEN something: an assertion that no row carries `ambiguous` is \

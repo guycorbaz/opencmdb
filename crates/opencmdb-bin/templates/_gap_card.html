@@ -81,6 +81,14 @@
     {% endfor %}
     </ul>
     {% endif %}
+    {%- if !identity.settled.is_empty() %}
+    <p class="muted">{{ s.identity_settled }}</p>
+    <ul class="abstentions">
+    {% for r in identity.settled %}
+      <li><span class="cause">{{ r.cause }}</span> <span class="count">{{ r.count }}</span></li>
+    {% endfor %}
+    </ul>
+    {%- endif %}
     <p class="muted note">{{ s.identity_unit }}</p>
     <p class="muted note">{{ s.identity_floor }}</p>
   {% else %}

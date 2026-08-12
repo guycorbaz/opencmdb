@@ -905,7 +905,14 @@ pub struct EngineReachRow {
     /// the correspondence: `identity_link_rule_xor_cause` makes the cause non-NULL exactly when
     /// `outcome = 'abstained'`.
     pub cause: Option<String>,
-    /// How many current engine links carry that `(outcome, cause)` pair.
+    /// How many DISTINCT SIGHTINGS carry that `(outcome, cause)` pair.
+    ///
+    /// 🔴 **Sightings, not rows, and the difference is the whole point.** `join` loops
+    /// `for key in keys_of(observation)`, so one observation carrying three MACs produces THREE
+    /// `match` rows; story 5.9b's arbitration makes an observation abstain **at most once whatever
+    /// the key count**, so it produces ONE `abstained` row. Counting rows would put the two halves
+    /// of the displayed pair in different units — measured: one three-MAC observation beside one
+    /// MAC-less one gave `placed = 3 · not placed = 1` for **two sightings in**.
     pub count: i64,
 }
 
@@ -938,11 +945,22 @@ pub struct EngineReachRow {
 /// where it can be counted and labelled, and not here, where the only options are a wrong enum and
 /// an error that would take the whole page down.
 ///
+/// # 🔴 It does NOT agree with [`crate::scan_pass::counted_current_engine_links`], by design
+///
+/// That one counts ROWS; this one counts SIGHTINGS. They coincide only while every observation
+/// carries at most one L1 key, which is true of the shipped connector today and false the moment a
+/// multi-NIC host is seen. ⚠️ **An earlier version of this doc claimed the grouped read SUBSUMED the
+/// ungrouped count, and that claim died with the switch to `COUNT(DISTINCT …)`.** The test that
+/// carried it now measures the DIFFERENCE instead of the agreement, which is the more useful thing
+/// for it to measure: `the_two_reads_diverge_on_a_multi_key_sighting`.
+///
 /// # Ordering
 ///
-/// `ORDER BY` is part of the contract: the page renders these rows in order, and a test pins it.
-/// Without it MariaDB is free to return the groups in any order and the rendered page would differ
-/// between runs for no reason a reader could see.
+/// The `Vec` is sorted **in Rust**, not by the database. ⚠️ **An `ORDER BY` here was carried by
+/// nothing**: MariaDB 10.11 already returns these groups sorted as a side effect of its `GROUP BY`,
+/// so deleting the clause left the whole suite green — the vec-equality test was restating an
+/// incidental engine behaviour rather than measuring a contract. Sorting here makes that same test a
+/// real carrier, because nothing else produces the order.
 ///
 /// # Errors
 ///
@@ -952,21 +970,22 @@ where
     E: Executor<'e, Database = MySql>,
 {
     let rows: Vec<(String, Option<String>, i64)> = sqlx::query_as(
-        "SELECT outcome, abstention_cause, COUNT(*) FROM identity_link \
+        "SELECT outcome, abstention_cause, COUNT(DISTINCT observation_id) FROM identity_link \
          WHERE decided_by = 'ENGINE' AND current_subject IS NOT NULL \
-         GROUP BY outcome, abstention_cause \
-         ORDER BY outcome, abstention_cause",
+         GROUP BY outcome, abstention_cause",
     )
     .fetch_all(executor)
     .await?;
-    Ok(rows
+    let mut reach: Vec<EngineReachRow> = rows
         .into_iter()
         .map(|(outcome, cause, count)| EngineReachRow {
             outcome,
             cause,
             count,
         })
-        .collect())
+        .collect();
+    reach.sort_by(|a, b| (&a.outcome, &a.cause).cmp(&(&b.outcome, &b.cause)));
+    Ok(reach)
 }
 
 /// Delete every link the ENGINE derived, and return how many LINKS went.

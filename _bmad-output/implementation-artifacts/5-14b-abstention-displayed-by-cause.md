@@ -613,6 +613,40 @@ the one that exists.
 
 ---
 
+### Review Findings (code review, 2026-08-12 — three layers)
+
+🔑 **Three findings were reached by TWO layers independently and one by all THREE** — noted per item,
+because independent convergence is evidence a single reviewer cannot produce.
+
+**Decisions needed**
+
+- [x] **[Review][Decision] `placed` and `not_placed` are in DIFFERENT UNITS, side by side in one frame** — `join` loops `for key in keys_of(observation)`, so a multi-MAC observation yields N links: **`placed` counts PLACEMENTS**. Story 5.9b's arbitration makes an observation abstain **at most once whatever the key count**: **`not_placed` counts OBSERVATIONS**. Measured live — one three-MAC observation plus one MAC-less gives `placed=3 · not placed=1` for **two sightings in**. 🔴 This falsifies arbitration 13 on the placed half, and the `·` pair is exactly the shape arbitration 10 forbids between the two engines — applied between the sections and not inside this one. Shielded today by the MAC-less connector; live the day the connector story gives it a MAC. Options: **(a)** `COUNT(DISTINCT observation_id)` on the non-abstained groups so both halves range over sightings; **(b)** rename the placed half to *placements* and state the asymmetry. [`page.rs:164-166`, `repo.rs:955`] _(edge)_
+- [x] **[Review][Decision] `no_match` is classified as PLACED, and the page then says "Every sighting was placed."** — 🔑 **found by ALL THREE layers.** `build_identity_view`'s bare `else` folds every non-`abstained` outcome into `placed`, but `repo.rs:2397` says such a row *"names the interface it EXCLUDED"*. Probe: `build_identity_view(no_match, 5)` → `placed=5`, and the reassuring sentence renders over it. Dropping `no_match` rows entirely leaves **519 green** — unmeasured in both directions. Unreachable through `resolve` today, live with Epic 6. ⚠️ **§4 asked for a test pinning that unproducibility and none was written.** 🔑 The whole tolerant-reader design reasons carefully about an unknown *cause* token; the sibling case one level up — an *outcome* meaning the opposite of placed — is an unremarked `else`. Options: **(a)** match `"match"` explicitly and route `no_match` to not-placed with its own line, mirroring the cause token; **(b)** keep the mapping, document it with the AC3 divergence named, plus §4's pin. [`page.rs:164-166`] _(blind+edge+auditor)_
+
+**Patches**
+
+- [x] **[Review][Patch] `cargo fmt --all --check` is RED — CI fails before any test runs** — four hunks, all in code this branch adds; `master` is clean. [`page.rs:566`, `:616`, `:845`, `scan_pass.rs:584`] _(blind+auditor)_
+- [x] **[Review][Patch] `count_engine_reach`'s doc claims a test pins its `ORDER BY`; none does** — deleting the clause leaves **519 green**, because MariaDB 10.11 already returns those groups sorted; the vec-equality restates an incidental engine behaviour. `ORDER BY NULL` returns a wholly different order, measured. Fix: sort in Rust after the fetch, which makes the existing test a real carrier. [`repo.rs:943`, `:958`] _(blind+edge)_
+- [x] **[Review][Patch] The clock guard cannot see a clock coarser than a render interval** — a wall clock rendered as *"as of day N"* leaves **519 green**; the two renders are microseconds apart. ⚠️ **And the real carrier is not this test**: `chrono` is `default-features = false` workspace-wide, so `Utc::now` does not exist (`error[E0599]`) — only `std::time::SystemTime` gets through. Narrow the message to what two back-to-back renders prove and credit the dependency configuration where the property is claimed. [`page.rs:832`, `:807-812`] _(blind+edge)_
+- [x] **[Review][Patch] The `all_placed` branch is rendered by no test** — replacing its body with nonsense leaves **519 green**; nothing builds `has_any && causes.is_empty()`. ⚠️ **AC4's own comment records this exact defect found in validation for the sibling key `nothing_seen`** — one half fixed, the other missed. Inverting the condition reds 3, so only the empty side is uncovered. [`_gap_card.html:75`] _(edge+auditor)_
+- [x] **[Review][Patch] AC10 is NOT MET: four of §11's NINE register rows never landed** — the denominator (whose `:3032` entry still reads `Owner: story 5.14b and Epic 6`, naming a shipped story as co-owner), `:2407`'s purge half, the `current_subject`/`OPEN_END` increment, and the `Ambiguous` re-own. 🔴 **And the check I ran counted 7 and compared to 7** — it verified my own output against itself, never against §11's requirement. *A re-read that reads only what you wrote cannot find what you did not write.* [`deferred-work.md:3097-3193`] _(auditor)_
+- [x] **[Review][Patch] The mutation table silently drops five mutations the ACs cite as their evidence** — M5, M6, M8b, M9 and M11b appear nowhere, while AC2/AC3/AC4/AC6/AC7 name them. The auditor ran three: M5 → 1 red, M6 → 1 red, M9 → 1 red. The guards are real; **the record is the defect**. ⚠️ **As shipped, AC6's only recorded mutation is M9c, which is GREEN by design — the CSS guard ships with no recorded red at all**, against the house prove-to-red rule. [story §12] _(auditor)_
+- [x] **[Review][Patch] The pure anti-sum guard is reddened by nothing and its doc presents it as a guard** — under both M6 and M6b, `the_two_engines_counts_are_never_added` stayed green. The story found this and wrote the DB-backed replacement, then kept the pure test with a doc framing it as an anti-sum guard without saying its `assert_ne!`s cannot fail. ⚠️ Its headline is refuted by this same file 100 lines below. [`page.rs:581`, `:592-603`] _(blind+auditor)_
+- [x] **[Review][Patch] Both `assert_ne!` anti-sum lines are dominated by the premise above them, in BOTH directions** — M6b dies at `page.rs:941`, M6 at `:937`, always on the exact-count `assert_eq!`. The record states this for M6b only, because M6 was never run. The honest form: *the premises are the guard and the `assert_ne!`s are documentation.* [`page.rs:937-947`] _(auditor)_
+- [x] **[Review][Patch] `counted_current_engine_links`'s replacement doc says "four pins"; there are SIX consumers** — measured by mutation. And one of the two *"structural zeros"* it names does **not** call it (`a_mac_less_slice_mints_no_interface_and_abstains_throughout` asserts on the pass's report, never on the store). ⚠️ In the paragraph whose subject is a previously-false claim. [`scan_pass.rs:184-186`] _(blind)_
+- [x] **[Review][Patch] A number written in flight, in the bullet that records the lesson about numbers written in flight** — `deferred-work.md:3132` says the story file is *"643 lines"*; it is **826** (745 at this branch's own first commit). True at contexting, stale in the file that records it. [`deferred-work.md:3132`] _(auditor)_
+- [x] **[Review][Patch] The CSS guard is blind to a multi-line `.identity` rule, and that limit is not among the stated ones** — the filter keeps only lines whose trimmed start is `.identity`, so a `color:` on its own line is never inspected. Not an adversary's shape: any formatter or an ordinary hand edit produces it, squarely inside the block the guard claims to check. [`page.rs:977-995`, `app.css:136-141`] _(blind)_
+- [x] **[Review][Patch] `the_identity_section_carries_no_gauge_and_no_percentage` checks the whole page, not the section** — strictly stronger, so no hole, but the name and doc mis-describe the perimeter and it will one day red for a reason its name does not predict. [`page.rs:837`, `:845-847`] _(blind)_
+- [x] **[Review][Patch] "One line per cause" is the CALLER's property, not the function's** — two rows with the same `(outcome, cause)` produce two identical lines. FR16b's guarantee comes from the SQL `GROUP BY`; the pure function the doc credits neither enforces nor documents the precondition. [`page.rs:213-240`] _(edge)_
+- [x] **[Review][Patch] AC5's two limit sentences are conditional on `has_any` and nothing says so** — a store with nothing observed shows the section but neither limit. Defensible (no counter, no limit to state) but unstated. [`_gap_card.html:84-85`] _(auditor)_
+
+**Deferred**
+
+- [x] **[Review][Defer] Full table scan on a table this story documents as unbounded** [`repo.rs:955`] — at the story's own one-year figure (105 000 current engine links) `EXPLAIN` gives `type: ALL, rows: 103761, Using temporary; Using filesort`, profiled at **24.8–25.4 ms** per page load. No index covers `(decided_by, current_subject)`. Refresh is a button, not a poll, so the cost is per load. Recorded with its bound rather than as an alarm; it belongs with the accumulation, which Epic 6 owns. _(edge)_
+- [x] **[Review][Defer] An empty cause token renders `Unrecognised cause ()`** [`page.rs:213`] — `''` satisfies `IS NOT NULL` on a `VARCHAR(32)` with no CHECK, so it is storable; it collapses to the same string as the DDL-forbidden NULL, so the two are indistinguishable and neither tells the operator anything to report. Belongs with the registered *"the column has no domain in the SCHEMA"* entry. _(edge)_
+- [x] **[Review][Defer] `has_any` and `causes` can disagree on a zero-count group** [`page.rs:236-240`] — a zero-count abstained row gives `has_any=false` with one cause row, and the page prints *"Nothing observed yet"* while silently dropping the line it holds. Unreachable from `COUNT(*)`, which never returns a zero group — a totality wart, recorded as such rather than patched. _(edge)_
+- [x] **[Review][Defer] An `xtask` gate would carry clock-freedom where a test cannot** [`page.rs:832`] — story 5.12's precedent: *you cannot measure the absence of code by running code*. A gate on `float-free`'s model, reddening on `SystemTime::now` / `Instant::now` / `Utc::now` under the view-building region, is the real closure; the narrowed test message is not. _(edge)_
+
 ## 12. Prove-to-red
 
 **Predict first, then measure, and record the divergence as a finding.** ⚠️ Story 5.14 recorded
@@ -739,7 +773,7 @@ of every mutation afterwards by `grep` for each marker and by reading the diff.
 
 ### Completion Notes List
 
-**502 → 519 tests (298 bin + 159 core + 62 xtask), +17.** Seven gates green, 28 fixtures unchanged,
+**502 → 523 tests (302 bin + 159 core + 62 xtask), +21** — 519 at implementation, 523 after the code review. Seven gates green, 28 fixtures unchanged,
 trap gate still RED at 26 discovered / 15 scored / 11 unanswerable. `opencmdb-core` untouched.
 `epics.md` and `ux-design-specification.md` not edited.
 
@@ -788,7 +822,27 @@ other's reach.
 | **M11a-bis** | drop the unrecognised row ENTIRELY — the silent shrink | RED | ✅ **1** (`left: 5, right: 8`), on the total. **Written because M11a left the total assertion unmeasured** | 1 | assertion |
 | **M12** | the production path emits `Ambiguous` | RED | ✅ **21** | 21 | ⚠️ **`.expect()`-carried** on AC8's own test: it dies on *"the pass must have RUN"*, never reaching its `ambiguous` assertion — exactly as validation predicted, and the premise is what makes it red at all |
 
-**Twelve rows: eleven executable mutations and one GREEN by stated limit (M9c).** Zero
+🔴 **FIVE MUTATIONS THE ACs CITE AS THEIR EVIDENCE WERE MISSING FROM THIS TABLE**, and the headline
+did not say any had been dropped — found by the code review, which ran three of them. AC2 names M5,
+AC3 names M6, AC4 names M8b, AC6 names M9, AC7 names M11b, and none appeared. ⚠️ **The consequence
+was worse than the omission**: as shipped, **AC6's only recorded mutation was M9c, which is GREEN by
+stated limit** — the CSS guard was recorded with no red at all, against the house prove-to-red rule.
+The rows, measured:
+
+| id | mutation | OBSERVED | red | carrier |
+|---|---|---|---|---|
+| **M5** | route abstained rows into `placed` | 1 | 1 | assertion |
+| **M6** | the reconciliation count absorbs the identity one, in `reconcile_view` | 1 | 1 | assertion ⚠️ **on the premise** (`left: 7, right: 4`), like M6b |
+| **M8b** | delete `identity.nothing_seen` from both locales | 1 | 1 | assertion |
+| **M9** | `.identity .abstentions .cause` → `var(--accent)` | 1 | 1 | assertion — **this is AC6's red**, and it was missing |
+| **M11b** | make the token reader PANIC on an unknown token | 3 | 3 | **`panic!`-carried** (the mutation's own), so it proves the path is reached and NOT that the assertions work |
+
+⚠️ **And both `assert_ne!` anti-sum lines are dominated by the premise above them, in BOTH
+directions** — M6b dies at the exact-count `assert_eq!`, and so does M6. The honest form: *the
+premises are the guard; the `assert_ne!`s are documentation.* The record stated this for M6b alone,
+because M6 had never been run.
+
+**Seventeen rows: sixteen executable mutations and one GREEN by stated limit (M9c).** Zero
 compiler-carried reds. ⚠️ **Carriers are MIXED and named row by row** — M12 is `.expect()`-carried
 and M6b reds on a premise rather than on the assertion written for it. *"Every red assertion-carried"*
 is **not** claimed.
@@ -798,6 +852,68 @@ is **not** claimed.
 The UX bans are **stated, not met** (§5a). The denominator is not decided. Nothing groups sightings.
 `Ambiguous` has no producer and the tripwire is bounded by the slice it names. The CSS check reads
 the text of its own rules and not a resolved colour. `epics.md` is not edited.
+
+#### The code review, and what it repaired (2026-08-12)
+
+**Three layers, nineteen findings: 2 decisions, 14 patches, 4 deferrals, 0 dismissed.**
+**519 → 523 tests** (302 bin + 159 core + 62 xtask). 🔑 **Three findings were reached by two layers
+independently and one by all three** — convergence a single reviewer cannot produce.
+
+🔴 **THE HEADLINE, and it falsified arbitration 13 on the half I had reported as settled:
+`placed` and `not_placed` were in DIFFERENT UNITS, side by side, separated by a `·`.** `join` loops
+`for key in keys_of(observation)`, so a three-MAC observation yields three `match` rows, while story
+5.9b's arbitration writes one `abstained` row per observation. Measured: one three-MAC observation
+beside one MAC-less one displayed `placed = 3 · not placed = 1` for **two sightings in**. ⚠️ And
+putting two populations in one frame is precisely what arbitration 10 forbids between the two
+engines — I applied it between the sections and not inside one. **Guy chose voie 1**: both halves
+count sightings (`COUNT(DISTINCT observation_id)`).
+
+🔴 **A consequence I had to surface before writing it: voie 1 KILLS arbitration 12's subsumption.**
+`counted_current_engine_links` counts rows; the grouped read now counts sightings, so the two part
+company on any multi-key host. The test that asserted their agreement now measures their DIVERGENCE
+(`the_two_reads_diverge_on_a_multi_key_sighting`, links 3 / sightings 1) — the more useful thing for
+it to pin, since asserting agreement would have pinned the defect the review removed.
+
+🔴 **`no_match` was folded into `placed` by a bare `else` — found by ALL THREE layers.** A row that
+*"names the interface it EXCLUDED"* was reported as a placement, with *"Every sighting was placed."*
+rendered over it. **Guy's taxonomy settles it and is now the type's doc**: no ambiguity → the
+software decides (`Match` **and** `NoMatch`); ambiguity → the operator lifts the doubt; unknown →
+the operator creates the entity. `NoMatch` is case one, so it is neither placed nor listed among
+what awaits the operator: it gets its own settled line. The bare `else` is gone; every outcome has
+an explicit arm and an unknown token is carried, exactly as an unknown CAUSE token already was.
+
+🔑 **The taxonomy's real yield is outside this story**: case three's gesture — *the operator creates
+the entity* — is the documenting gesture the product does not have at all, and case three is the
+only case reachable today. **The abstention section is the entry point of a gesture that does not
+exist**, which is why it reads as hollow. ⚠️ **Not announced in the surface, by decision** — the
+section stays descriptive until the gesture is there, because announcing an absent gesture is a
+promise. Registered as the criterion for Epic 6 and for the usability slice.
+
+⚠️ **And the apparatus did not find that.** Nineteen findings and not one asked *"what can the
+operator DO with this number?"*, because three layers checked conformance to a specification and the
+specification was mine. A blind spot of the method, carried to the retrospective.
+
+**Four guards of mine were measured GREEN by the review**, each with its control: the `ORDER BY`
+doc claimed *"a test pins it"* while MariaDB's `GROUP BY` already sorted (now sorted in Rust, so the
+existing test is a real carrier); the clock guard cannot see any clock coarser than the gap between
+two renders — **and the real carrier is `chrono`'s `default-features = false`, not my test**; the
+`all_placed` branch was rendered by nothing (⚠️ AC4's own comment records that defect found in
+validation **for the sibling key**, one half fixed and the other missed); and the pure anti-sum
+guard's two `assert_ne!`s cannot fail, in both directions.
+
+🔴 **AC10 was NOT MET: §11 required NINE register rows and SEVEN landed.** The re-read I ran counted
+the seven I had written and compared them to the seven I had written. 🔑 ***A re-read that reads only
+what you wrote cannot find what you did not write*** — the check must count against the REQUIREMENT.
+The four missing rows are appended, and the second check tests each of the nine by keyword. ⚠️ **Its
+first run reported 7/9 for the wrong reason** — two needles were split by a line break — and a check
+that fails for the wrong reason is worth nothing, so it was normalised and re-run: 9/9.
+
+⚠️ Also repaired: five mutations the ACs cite as their evidence were missing from the table, and
+**AC6's only recorded mutation had been M9c, which is GREEN by stated limit** — the CSS guard shipped
+with no recorded red; the CSS guard itself was blind to a multi-line rule (widened, and the widened
+form measured to red on exactly that shape); *"four pins"* where a mutation measures **six**
+consumers, in the paragraph that replaces a false claim; and *"643 lines"* written in flight inside
+the bullet about numbers written in flight.
 
 ### File List
 

@@ -2666,6 +2666,45 @@ development_status:
   # UX spec's one-panel mock; and `count_identity_links`, ANSWERED -- all three reads stay, and the
   # word *unfiltered* belongs to it alone.
   # ⚠️ NEXT = `code-review` (a DIFFERENT model than the one that implemented it), then PR.
+  # ✅ CODE-REVIEWED (three layers) and REPAIRED, 2026-08-12. **519 -> 523 tests** (302 bin + 159
+  # core + 62 xtask), `cargo fmt` clean, clippy clean, seven gates green, 28 fixtures, trap gate
+  # still RED at 26/15/11. 2 decisions, 14 patches, 4 deferrals, 0 dismissed. Three findings were
+  # reached by TWO layers independently and one by ALL THREE.
+  # 🔴 THE HEADLINE FALSIFIED ARBITRATION 13 ON THE HALF ALREADY REPORTED AS SETTLED: `placed` and
+  # `not_placed` were in DIFFERENT UNITS, side by side -- `join` writes one row per L1 KEY while an
+  # observation abstains once per OBSERVATION, so a three-MAC sighting beside a MAC-less one showed
+  # `placed = 3 · not placed = 1` for TWO sightings in. **Guy: count SIGHTINGS on both sides**
+  # (`COUNT(DISTINCT observation_id)`). ⚠️ That KILLS arbitration 12's subsumption, so the test that
+  # asserted the two reads AGREE now measures their DIVERGENCE (links 3 / sightings 1).
+  # 🔴 `no_match` was folded into `placed` by a bare `else` -- found by ALL THREE layers. A row that
+  # *"names the interface it EXCLUDED"* was reported as a placement, with *"Every sighting was
+  # placed."* rendered over it.
+  # 🔑 GUY'S TAXONOMY SETTLES IT AND IS NOW THE TYPE'S DOC: **no ambiguity -> the software decides
+  # (`Match` AND `NoMatch`); ambiguity -> the operator LIFTS THE DOUBT; unknown -> the operator
+  # CREATES THE ENTITY.** Its real yield is outside this story: **case three's gesture is the
+  # documenting gesture the product does not have at all**, and case three is the ONLY case
+  # reachable today -- *the abstention section is the entry point of a gesture that does not exist*.
+  # ⚠️ NOT announced in the surface, by decision: descriptive until the gesture is there, because
+  # announcing an absent gesture is a promise.
+  # ⚠️ AND THE APPARATUS DID NOT FIND THAT: nineteen findings and not one asked *"what can the
+  # operator DO with this number?"* -- three layers checked conformance to a specification and the
+  # specification was the author's. A blind spot of the METHOD. Carried to the retrospective.
+  # 🔴 AC10 WAS NOT MET: §11 required NINE register rows and SEVEN landed, and the re-read meant to
+  # catch it counted the seven written against the seven written. 🔑 ***A re-read that reads only
+  # what you wrote cannot find what you did not write.*** ⚠️ Its replacement first reported 7/9 FOR
+  # THE WRONG REASON (needles split by a line break) -- *a check that fails for the wrong reason is
+  # worth nothing* -- normalised and re-run: 9/9.
+  # ⚠️ Four more of the author's guards measured GREEN (the `ORDER BY` doc's *"a test pins it"*
+  # while MariaDB already sorted; the clock guard, whose real carrier is `chrono`'s
+  # `default-features = false`; the `all_placed` branch, rendered by nothing -- AC4's own comment
+  # records that defect found in validation FOR THE SIBLING KEY; and the pure anti-sum guard's two
+  # unfailable `assert_ne!`s), five mutations the ACs cite were missing from the table with **AC6's
+  # only recorded mutation being a GREEN control**, and *"643 lines"* was written in flight inside
+  # the bullet about numbers written in flight.
+  # ⚠️ NEXT = PR, then **Epic 5's RETROSPECTIVE**, which is REQUIRED and is what CLOSES the epic.
+  # ⚠️ STAYS AT `review`, NOT `done`: on this project `done` is the MERGE's business, and every
+  # story from 5.1 onward has sat here until its PR landed. The generic workflow would have written
+  # `done` after a clean review; the repository's own convention overrides it.
   5-14b-abstention-displayed-by-cause: review
   epic-5-retrospective: required
 

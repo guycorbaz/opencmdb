@@ -82,6 +82,17 @@ identity.unit:
 identity.floor:
   en: "The floor is set by the data, not by the engine: no amount of correctness recovers a signal the source never sent."
   fr: "Le plancher est fixé par les données, pas par le moteur : aucune justesse ne récupère un signal que la source n'a jamais émis."
+# Outcomes the engine SETTLED without placing — Guy's case one, "the software decides". Rendered on
+# their own line, outside the placed/not-placed pair, because nothing about them awaits the operator.
+identity.settled:
+  en: "Settled without placing:"
+  fr: "Tranchés sans rattachement :"
+identity.outcome.no_match:
+  en: "A rule forbade the placement"
+  fr: "Une règle a interdit le rattachement"
+identity.outcome.unrecognised:
+  en: "Unrecognised outcome (%{token})"
+  fr: "Issue non reconnue (%{token})"
 identity.cause.absence_of_proof:
   en: "No proof of identity"
   fr: "Aucune preuve d'identité"

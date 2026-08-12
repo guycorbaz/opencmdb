@@ -66,13 +66,49 @@ struct IdentityCauseRow {
 /// ⚠️ **The unit is TEMPORARY.** Epic 6 gives the population an identity, at which point *sighting*
 /// stops being the honest word and the locale keys change with it. That rename is a scheduled
 /// consequence, not a correction of a mistake.
+///
+/// # 🔴 Three cases, and they are the OPERATOR's three, not the engine's
+///
+/// Guy's taxonomy (2026-08-12), which is what decides where each outcome goes:
+///
+/// | case | what the engine wrote | who acts | the gesture |
+/// |---|---|---|---|
+/// | **no ambiguity** | `Match`, and also `NoMatch` | the software | none — it decided |
+/// | **ambiguity** | `Abstained { Ambiguous }` | the operator lifts the doubt | choose among the candidates and their evidence (FR16) |
+/// | **unknown** | `Abstained { AbsenceOfProof }` | the operator creates the entity | **declare** — the documenting gesture |
+///
+/// 🔑 **`NoMatch` is case ONE**, which is why it is neither placed nor listed among what awaits the
+/// operator: *a rule FORBADE the pair* is a decision, not an absence. An earlier draft folded it
+/// into `placed` through a bare `else`, so a refused placement was reported as a placement and the
+/// page rendered *"every sighting was placed"* over it — found independently by all three review
+/// layers.
+///
+/// ⚠️ **Neither gesture EXISTS in the product yet**, and this view deliberately announces neither:
+/// the ambiguity gesture needs candidates nothing produces (Epic 6), and the documenting gesture
+/// needs a write surface the product does not have. **Announcing an absent gesture is a promise;
+/// this section stays descriptive until the gesture is there** (Guy, 2026-08-12). The taxonomy is
+/// registered as the criterion for both.
 struct IdentityView {
-    /// Sightings the engine placed on an interface.
+    /// Sightings the engine placed on an interface — case one, `Match`.
     placed: i64,
-    /// Sightings it could not place.
+    /// Sightings it could not place — case two and case three together.
     not_placed: i64,
     /// Why, one line per cause — never one line per failure (FR16b).
+    ///
+    /// ⚠️ **The one-line-per-cause property belongs to the CALLER**, not to this type: it holds
+    /// because `count_engine_reach` groups by cause in SQL. Feed this view two rows carrying the
+    /// same cause and it renders two identical lines. Stated rather than enforced, because the only
+    /// producer is the grouped read.
     causes: Vec<IdentityCauseRow>,
+    /// Outcomes the engine SETTLED without placing — `NoMatch`, and any token no variant names.
+    ///
+    /// Rendered only when non-empty, and today it always is empty: `resolve` cannot produce a
+    /// `NoMatch` (`placement_decision` only judges pairs inside one `join` group, which share their
+    /// key by construction), and `repo::cause_token`'s exhaustive `match` is what writes the rest.
+    /// It is counted and labelled rather than folded anywhere, on `identity_cause_label`'s
+    /// precedent: the tolerant reader for the CAUSE token had a silent twin on the OUTCOME token,
+    /// and this is that twin, made explicit.
+    settled: Vec<IdentityCauseRow>,
     /// Has the engine seen anything at all? Distinguishes *"nothing yet"* from *"nothing unplaced"*.
     has_any: bool,
 }
@@ -113,6 +149,7 @@ struct Strings {
     identity_unit: String,
     identity_nothing_seen: String,
     identity_all_placed: String,
+    identity_settled: String,
 }
 
 fn strings() -> Strings {
@@ -140,6 +177,7 @@ fn strings() -> Strings {
         identity_unit: t!("identity.unit").to_string(),
         identity_nothing_seen: t!("identity.nothing_seen").to_string(),
         identity_all_placed: t!("identity.all_placed").to_string(),
+        identity_settled: t!("identity.settled").to_string(),
     }
 }
 
@@ -220,25 +258,50 @@ fn identity_cause_label(token: &str) -> String {
 /// type, and the empty token then falls to the unrecognised label. That is totality, **not a guard** —
 /// no test can red it, and it is not claimed as covering anything.
 fn build_identity_view(rows: Vec<EngineReachRow>) -> IdentityView {
+    use rust_i18n::t;
+
     let mut placed = 0i64;
     let mut not_placed = 0i64;
     let mut causes: Vec<IdentityCauseRow> = Vec::new();
+    let mut settled: Vec<IdentityCauseRow> = Vec::new();
+    let mut settled_count = 0i64;
     for row in rows {
-        if row.outcome == "abstained" {
-            not_placed += row.count;
-            causes.push(IdentityCauseRow {
-                cause: identity_cause_label(row.cause.as_deref().unwrap_or_default()),
-                count: row.count,
-            });
-        } else {
-            placed += row.count;
+        // 🔴 An explicit arm per outcome, and NO bare `else`. The `else` an earlier draft used sent
+        // `no_match` — *a rule FORBADE this pair* — into `placed`, i.e. reported a refusal as a
+        // success. `identity_link_outcome` admits exactly these three tokens; anything else can only
+        // arrive from a store written by something other than `repo::outcome_token`, and it is
+        // carried rather than folded, exactly as an unknown CAUSE token is.
+        match row.outcome.as_str() {
+            "match" => placed += row.count,
+            "abstained" => {
+                not_placed += row.count;
+                causes.push(IdentityCauseRow {
+                    cause: identity_cause_label(row.cause.as_deref().unwrap_or_default()),
+                    count: row.count,
+                });
+            }
+            "no_match" => {
+                settled_count += row.count;
+                settled.push(IdentityCauseRow {
+                    cause: t!("identity.outcome.no_match").to_string(),
+                    count: row.count,
+                });
+            }
+            other => {
+                settled_count += row.count;
+                settled.push(IdentityCauseRow {
+                    cause: t!("identity.outcome.unrecognised", token = other).to_string(),
+                    count: row.count,
+                });
+            }
         }
     }
     IdentityView {
         placed,
         not_placed,
         causes,
-        has_any: placed + not_placed > 0,
+        settled,
+        has_any: placed + not_placed + settled_count > 0,
     }
 }
 
@@ -566,7 +629,10 @@ mod tests {
         ]);
 
         assert_eq!(view.placed, 3, "the `match` rows are the placed sightings");
-        assert_eq!(view.not_placed, 9, "and both abstained groups are not-placed");
+        assert_eq!(
+            view.not_placed, 9,
+            "and both abstained groups are not-placed"
+        );
         assert_eq!(
             view.causes.len(),
             2,
@@ -580,10 +646,16 @@ mod tests {
 
     /// **AC3** — the two engines' counts are never added, and the fixture makes that measurable.
     ///
-    /// 🔴 The three numbers are DISTINCT ON PURPOSE: reconciliation 2, identity 9, sum 11. Measured
-    /// during this story's validation, a fixture whose reconciliation count is zero — the natural
-    /// one for a story about the identity section — leaves the summing mutation GREEN in one
-    /// direction. **An anti-sum guard over a zero addend asserts nothing.**
+    /// 🔴 **Read this for what it is: the two `assert_ne!`s below CANNOT FAIL.** Measured at the
+    /// code review, under the summing mutation in BOTH directions this test stayed green — because
+    /// it composes the two views itself, and neither builder can add a number it never sees. What
+    /// it really carries is that both frames render side by side and that no rendered number is
+    /// their sum. **The anti-sum property is carried by
+    /// [`one_real_page_build_keeps_the_two_counts_apart`]**, which goes through `reconcile_view`,
+    /// the impure edge where a sum can actually be written.
+    ///
+    /// The three numbers are still distinct on purpose (reconciliation 2, identity 9, sum 11), so
+    /// the render assertion below is not vacuous even though the `assert_ne!`s are.
     #[test]
     fn the_two_engines_counts_are_never_added() {
         let declared = vec![declared_row("e1", "ipv4", "192.0.2.10")];
@@ -616,7 +688,10 @@ mod tests {
         }
         .render()
         .unwrap();
-        assert!(html.contains("Out of perimeter"), "the reconciliation frame");
+        assert!(
+            html.contains("Out of perimeter"),
+            "the reconciliation frame"
+        );
         assert!(html.contains("No proof of identity"), "the identity frame");
         assert!(
             !html.contains(">11<"),
@@ -741,12 +816,14 @@ mod tests {
     #[test]
     fn both_locales_carry_every_identity_key() {
         use rust_i18n::t;
-        const KEYS: [&str; 10] = [
+        const KEYS: [&str; 12] = [
+            "identity.settled",
+            "identity.outcome.no_match",
+            "identity.all_placed",
             "identity.title",
             "identity.placed",
             "identity.not_placed",
             "identity.because",
-            "identity.all_placed",
             "identity.nothing_seen",
             "identity.unit",
             "identity.floor",
@@ -767,6 +844,16 @@ mod tests {
         }
         // The interpolated one, checked on its substitution rather than on its presence.
         for locale in ["en", "fr"] {
+            let outcome = t!(
+                "identity.outcome.unrecognised",
+                locale = locale,
+                token = "zz"
+            );
+            assert_ne!(outcome, "identity.outcome.unrecognised");
+            assert!(
+                outcome.contains("zz"),
+                "the OUTCOME token must be substituted in `{locale}` too: {outcome}"
+            );
             let resolved = t!("identity.cause.unrecognised", locale = locale, token = "zz");
             assert_ne!(resolved, "identity.cause.unrecognised");
             assert!(
@@ -782,6 +869,14 @@ mod tests {
     /// They must not be fused: the unit is a property of THIS BUILD that Epic 6 removes; the floor
     /// is a permanent property of the problem. Fused, a reader carries the temporary one as
     /// permanent.
+    ///
+    /// ⚠️ **Both sentences are CONDITIONAL on `has_any`, and that is a deliberate scope this AC did
+    /// not state.** A store the engine has never touched shows the section and neither limit —
+    /// defensible, because a limit qualifies a number and there is no number to qualify, but it
+    /// means AC5 is met *for a store that has something to show* and not unconditionally. The
+    /// assertion below therefore builds a non-empty view, and the empty case is covered by
+    /// [`the_identity_section_says_so_when_nothing_has_been_observed`], which asserts the other
+    /// branch instead.
     #[test]
     fn the_surface_states_both_limits_separately() {
         let html = GapPage {
@@ -829,14 +924,15 @@ mod tests {
         assert_eq!(
             render_once(),
             render_once(),
-            "the same store must render byte for byte the same, twice — nothing here may read a \
-             clock, an elapsed time or an age"
+            "the same store must render byte for byte the same, twice, microseconds apart. \
+             ⚠️ That is ALL this proves: a clock coarser than the gap between the two renders — a \
+             date, a time of day, an age in days — passes it, measured"
         );
     }
 
     /// **AC6** — no gauge, no percentage, no badge markup in the identity section.
     #[test]
-    fn the_identity_section_carries_no_gauge_and_no_percentage() {
+    fn the_page_carries_no_gauge_and_no_percentage() {
         let html = GapPage {
             view: build_view(Vec::new(), Vec::new(), None),
             identity: build_identity_view(vec![reach("abstained", Some("absence_of_proof"), 113)]),
@@ -845,10 +941,103 @@ mod tests {
         .render()
         .unwrap();
 
-        assert!(!html.contains('%'), "no percentage: a rate presented as the state of the operator's work is a grade");
+        // ⚠️ `html` is the WHOLE page, not the identity section. Strictly stronger, so no hole —
+        // but say so, or this reds one day for a reason its name does not predict.
+        assert!(
+            !html.contains('%'),
+            "no percentage anywhere on the page: a rate presented as the state of the operator's \
+             work is a grade"
+        );
         assert!(!html.contains("<progress"), "no gauge");
         assert!(!html.contains("<meter"), "no gauge");
         assert!(html.contains("113"), "the premise: the number IS rendered");
+    }
+
+    /// **Guy's taxonomy** — `no_match` is case ONE and belongs on neither side of the pair.
+    ///
+    /// 🔴 Found by all three review layers: a bare `else` folded every non-`abstained` outcome into
+    /// `placed`, so *a rule FORBADE this pair* was reported as a placement, and with no other row
+    /// present the page rendered *"Every sighting was placed."* over it.
+    #[test]
+    fn a_forbidden_placement_is_neither_placed_nor_awaiting_the_operator() {
+        let view = build_identity_view(vec![
+            reach("match", None, 2),
+            reach("no_match", None, 5),
+            reach("abstained", Some("absence_of_proof"), 3),
+        ]);
+
+        assert_eq!(
+            view.placed, 2,
+            "a refused placement is NOT a placement — folding it here reported a refusal as a \
+             success, which is the opposite of what the row means"
+        );
+        assert_eq!(
+            view.not_placed, 3,
+            "nor does it await the operator: `no_match` is the SOFTWARE deciding, so there is \
+             neither a doubt to lift nor an entity to create"
+        );
+        assert_eq!(
+            view.causes.len(),
+            1,
+            "one cause line, for the abstention only"
+        );
+        assert_eq!(
+            view.settled.len(),
+            1,
+            "and `no_match` gets its own settled line"
+        );
+        assert_eq!(view.settled[0].count, 5);
+        assert_eq!(view.settled[0].cause, "A rule forbade the placement");
+    }
+
+    /// **AC7's twin, on the OUTCOME token** — an unrecognised outcome is counted and labelled.
+    ///
+    /// The tolerant reader for the CAUSE token had a silent twin on the OUTCOME token: dropping
+    /// `no_match` rows entirely left the whole suite green, unmeasured in both directions.
+    #[test]
+    fn an_unrecognised_outcome_is_counted_and_labelled_rather_than_folded() {
+        let view = build_identity_view(vec![reach("wat", None, 4)]);
+
+        assert_eq!(
+            view.placed, 0,
+            "an outcome nothing names is not a placement"
+        );
+        assert_eq!(view.not_placed, 0, "and it is not an abstention either");
+        assert_eq!(view.settled.len(), 1);
+        assert!(
+            view.settled[0].cause.contains("wat"),
+            "it carries its raw token so the operator can report it: {}",
+            view.settled[0].cause
+        );
+        assert!(
+            view.has_any,
+            "and the section must NOT claim nothing was observed while holding a row"
+        );
+    }
+
+    /// **AC4's third branch** — *"every sighting was placed"*, which nothing rendered.
+    ///
+    /// Measured at the code review: replacing this branch's body with nonsense left all 519 tests
+    /// green. ⚠️ AC4's own comment records this exact defect found in validation for the SIBLING key
+    /// `nothing_seen`; one half was fixed and the other missed.
+    #[test]
+    fn the_section_says_so_when_every_sighting_was_placed() {
+        let html = GapPage {
+            view: build_view(Vec::new(), Vec::new(), None),
+            identity: build_identity_view(vec![reach("match", None, 5)]),
+            s: strings(),
+        }
+        .render()
+        .unwrap();
+
+        assert!(
+            html.contains("Every sighting was placed"),
+            "the third of the section's three mutually exclusive states must render"
+        );
+        assert!(
+            !html.contains("Not placed, because"),
+            "and it must not also claim there is something to explain"
+        );
     }
 
     /// **AC3, through the COMPOSITION** — the two counts survive one real page build unadded.
@@ -973,11 +1162,25 @@ mod tests {
     /// (`--attention: #f0f4fa`, "severity by luminosity + weight, never hue").
     #[test]
     fn the_identity_sections_own_rules_never_reach_for_the_accent() {
+        // ⚠️ Scan from each `.identity` selector to its closing brace, NOT only the selector lines.
+        // Measured at the code review: filtering on lines that START with `.identity` misses a
+        // multi-line rule entirely — `\n.identity .note {\n  color: var(--accent);\n}` left this
+        // test green. That is not an adversary's shape; any formatter or hand edit produces it.
         let css = include_str!("../assets/app.css");
-        let block: Vec<&str> = css
-            .lines()
-            .filter(|line| line.trim_start().starts_with(".identity"))
-            .collect();
+        let mut block: Vec<&str> = Vec::new();
+        let mut inside = false;
+        for line in css.lines() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with(".identity") {
+                inside = true;
+            }
+            if inside {
+                block.push(line);
+                if line.contains('}') {
+                    inside = false;
+                }
+            }
+        }
 
         assert!(
             block.len() >= 4,

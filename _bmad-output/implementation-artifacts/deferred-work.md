@@ -3129,7 +3129,11 @@ carried in by name rather than rediscovered.
 - **The apparatus has begun to measure itself.** Six of Epic 5's twenty stories are INSERTIONS
   discovered during the work, and a large share of review findings are *sentences* — documents
   contradicting each other — rather than behaviour. 🔑 **And the story documents are outgrowing the
-  work they describe**: story 5.14b's file is **643 lines for a read-only display change**.
+  work they describe**: story 5.14b's file was **643 lines at contexting**, for a read-only display
+  change. ⚠️ **And this bullet carried that figure as if it were current** while the file had already
+  grown past 800 — a number written in flight, inside the sentence about numbers written in flight,
+  in the commit that appended it. Found by the code review. *The figure is now dated; the point it
+  makes does not need a live number.*
 - **⚠️ Epic 5 will close with an identity engine that places NOTHING in production.** The only
   connector `main.rs` reaches emits no MAC, and `join` keys on `(l2_domain, mac)` — so on a real
   network 5.14b's new section will show exactly one line, *"no proof of identity"*, for everything.
@@ -3191,3 +3195,94 @@ carried in by name rather than rediscovered.
   GREEN. Closed by a database-backed test through the composition. ⚠️ **It was found only because
   the mutation was run**; reading the guard could not have found it, since the guard is correct
   about what it tests.
+
+## Deferred from: code review of story-5.14b (2026-08-12)
+
+- ⚠️ **Full table scan on `identity_link` for every page load, on a table this story documents as
+  unbounded.** At story 5.14's own one-year figure (105 000 current engine links) `EXPLAIN` on
+  `count_engine_reach`'s query gives `type: ALL, rows: 103761, Using where; Using temporary; Using
+  filesort`, profiled at **24.8–25.4 ms**. No index covers `(decided_by, current_subject)`. Refresh
+  is a button (`hx-get="/gap"`), not a poll, so the cost is per page load rather than continuous —
+  recorded with its bound rather than as an alarm. It belongs with the accumulation it measures.
+  **Owner: Epic 6**, jointly with whoever adds the index.
+- ⚠️ **An empty `abstention_cause` token renders `Unrecognised cause ()`.** `''` satisfies
+  `IS NOT NULL` on a `VARCHAR(32)` with no `CHECK`, so it is storable, and it collapses to the same
+  displayed string as the DDL-forbidden NULL — the two are indistinguishable on the page, and
+  neither gives the operator anything to report. Belongs with this story's registered *"the
+  `abstention_cause` column has no domain in the SCHEMA"* entry and closes with it.
+  **Owner: unassigned.**
+- ⚠️ **`has_any` and `causes` can disagree on a zero-count group.**
+  `build_identity_view(vec![reach("abstained", Some("absence_of_proof"), 0)])` gives
+  `has_any = false` with one cause row: the page prints *"Nothing observed yet"* and silently drops
+  the line it is holding. **Unreachable from `COUNT(*)`**, which never returns a zero group — a
+  totality wart recorded as such rather than patched, so that a future caller feeding this function
+  from something other than the grouped read meets it. **Owner: unassigned.**
+- 🔑 **An `xtask` gate is what would really carry clock-freedom in the view builder; a test cannot.**
+  Story 5.12's precedent, in its own words: *you cannot measure the absence of code by running code
+  — a test exercises what exists, while the violation is what a future story ADDS.* Measured here:
+  a wall clock rendered as an *"as of day N"* note leaves all 519 tests green, because the guard
+  renders twice microseconds apart and sees only a clock finer than that gap. ⚠️ **The real defence
+  today is a dependency configuration, not a test**: `chrono` is `default-features = false`
+  workspace-wide, so `Utc::now` does not exist (`error[E0599]`) and only `std::time::SystemTime`
+  gets through. A gate on `float-free`'s model — reddening on `SystemTime::now` / `Instant::now` /
+  `Utc::now` under the view-building region — is the closure. **Owner: unassigned.**
+
+## Deferred from: story-5.14b, second pass (the four §11 rows that never landed, 2026-08-12)
+
+🔴 **These four were required by story 5.14b's §11 and were NOT written by its first register pass.**
+The AC demanded *"appended and then re-read to check each row landed"*, and a re-read WAS run — it
+counted the seven bullets written and compared them to the seven bullets written. 🔑 ***A re-read
+that reads only what you wrote cannot find what you did not write.*** The check must count against
+the REQUIREMENT (§11 had nine rows), not against its own output. Carried to Epic 5's retrospective,
+because it is the same shape as the mutation-driver family: an instrument that confirms itself.
+
+- ⚠️ **The DENOMINATOR entry's owner is reduced to Epic 6.** `deferred-work.md:3032` still reads
+  `Owner: story 5.14b and Epic 6`, and 5.14b has now shipped — a closed story left standing as
+  co-owner of an open item. **The entry at `:3032` is NOT rewritten** (the register's rule); this
+  bullet supersedes its ownership. 5.14b's half is DONE: it states the limit in the surface, in the
+  operator's language, in both locales. **Owner: Epic 6 alone.**
+- ⚠️ **`:2407`'s PURGE half is untouched by 5.14b, and the story made it MORE acute rather than
+  less.** `repo::purge_engine_links` still has no production caller while the pass accumulates one
+  current link per sighting per scan. This story made the accumulation VISIBLE — a page now displays
+  it — and **a visible defect is not a fixed one**. **Owner: unassigned.**
+- ⚠️ **The `current_subject IS NOT NULL` ≠ `valid_to = OPEN_END` non-equivalence gained a THIRD
+  adopter.** Story 5.14 was the first to make that predicate the definition of a human-facing
+  population; `count_engine_reach` is now the second read to do so, and this one is rendered to the
+  operator. Each adopter raises the cost of repairing the DDL, whose CHECK accepts a row the
+  predicate then misses. Recorded as an increment, not as a new defect. **Owner: unassigned.**
+- ⚠️ **`epics.md`'s `Ambiguous`-shows-its-candidates clause is re-owned to Epic 6 WITH a tripwire.**
+  `scan_pass::the_production_pass_produces_no_ambiguous_abstention` reds the day a producer of
+  `Verdict::Supports`/`Opposes` arrives, and its message names the clause as due. ⚠️ Its red is
+  `.expect()`-carried on its own premise (the pass rolls back under `guard_decision`), so it signals
+  *the pass stopped completing* rather than *an ambiguity was written* — the signal wanted either
+  way, but not the assertion the test reads. **Owner: Epic 6.**
+
+## Deferred from: story-5.14b, the operator's three cases (Guy, 2026-08-12)
+
+🔑 **Guy's taxonomy, and it is the criterion for Epic 6 AND for whatever slice makes the product
+usable.** It came out of the code review's `no_match` finding and settles it:
+
+| case | what the engine wrote | who acts | the gesture |
+|---|---|---|---|
+| **no ambiguity** | `Match`, and also `NoMatch` | the software | none — it decided |
+| **ambiguity** | `Abstained { Ambiguous }` | the operator LIFTS THE DOUBT | choose among the candidates and their evidence (FR16, `link_candidate`) |
+| **unknown** | `Abstained { AbsenceOfProof }` | the operator CREATES THE ENTITY | **declare** — the documenting gesture |
+
+- 🔴 **Case 3's gesture is the one the product does not have at all.** Five routes, all read-only;
+  the only call to `insert_declared_attribute` outside `repo.rs` is inside a `#[cfg(test)]`. And
+  case 3 is **the only case reachable today**: the shipped connector emits no MAC, so every
+  abstention on a real network is `AbsenceOfProof`. **The abstention section is therefore not a
+  counter — it is the entry point of the documenting gesture**, which is why it reads as hollow
+  until that gesture exists. **Owner: the slice that gives the declared side a write surface.**
+- ⚠️ **A cause that opens no gesture must say what would make it disappear**, or it is not a map,
+  it is a complaint. For `AbsenceOfProof` that sentence is *a source that reports hardware
+  addresses* — the connector story, not a human decision. Asking the operator to "resolve" a signal
+  the source never sent would make him carry a lack of the SOURCE, which is the reproach the
+  dignity rule forbids. **Owner: Epic 6**, as a design criterion.
+- 🔴 **NOT announced in the surface, by decision (Guy, 2026-08-12): the section stays DESCRIPTIVE
+  until the gesture exists.** *Announcing an absent gesture is a promise.* The day either gesture
+  ships, the corresponding line gains it — and until then the page says what is, not what will be.
+- ⚠️ **The apparatus did not find this.** Three review layers, nineteen findings, and not one asked
+  *"what can the operator DO with this number?"* — because they checked conformance to a
+  specification, and the specification was mine. **A blind spot of the method, not an accident.**
+  Carried to Epic 5's retrospective.
