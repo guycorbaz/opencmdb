@@ -5,15 +5,18 @@ Status: ready-for-dev
 <!-- ⚠️ CONTEXTED 2026-08-14, the same day story 6.1 merged (PR #89 → `664693b`, docs flipped by
      PR #90 → `3f7069a`). The tree this story extends is master at `3f7069a`: 566 tests
      (344 bin + 160 core + 62 xtask), seven gates green, trap gate RED at 26/15/11 by design.
-     ✅ VALIDATED 2026-08-14, THREE sources: two fact-check layers + a gap-hunt layer that BUILT
-     the whole prescribed design against the live mariadb:10.11.11 (29 prototype tests) — 1 HIGH
-     arbitration taken by Guy, 4 mutation-row defects the build measured, ~10 text corrections,
-     ALL APPLIED, plus the two-browser CSRF bench (§4). 🔴 Guy's arbitration (option A): the
-     authorship gate gains a NAMED READ-SANCTION, FR13-framed — see §6.5. The gap-hunt confirmed
-     by construction: M4 does not compile (no side door — no `FromRef`, no downcast), the index
-     gives ERROR 1062, the end-to-end J3 answers 201, `page.rs` byte-identical. It REFUTED four
-     of the story's own mutations (M8/M11/M12 not executable as reds, M2's message wrong) — each
-     corrected below with its measurement. -->
+     ✅ VALIDATED 2026-08-14, FOUR passes: two fact-check layers + TWO gap-hunt layers that each
+     BUILT the whole prescribed design against the live mariadb:10.11.11 — 1 HIGH arbitration
+     taken by Guy, and ~15 text/mutation corrections, ALL APPLIED, plus the two-browser CSRF
+     bench (§4). 🔴 Guy's arbitration (option A): the authorship gate gains a NAMED READ-SANCTION,
+     FR13-framed — see §6.5. Confirmed by construction (both gap-hunts, independently): M4 does
+     not compile (no side door — no `FromRef`, no downcast; the transaction shape
+     `pool.begin()` → repo free fns over `&mut *tx` → commit runs green), the index gives ERROR
+     1062, the end-to-end J3 answers 201, `page.rs` byte-identical. Refuted/corrected with their
+     measurement: M8 GREEN by the index, M11's oracle is abstention-not-gap, M12 needs a source
+     scan, M2's gate message, plus a fourth broken 6.1 test, the M10 checksum-panic driver step,
+     the multi-value reconcile abstentions, the scheme-blind Origin compare, the PK (not the
+     index) blocking Epic 7, and the J3 view path (build_view's `preferred`, never the env var). -->
 
 ## Story
 
@@ -179,7 +182,14 @@ attr_key)` — two rows under one key cannot both insert. **First occurrence win
 test pins it** — `project` preserves fact order, the adapter loop inserts the first and SKIPS
 the rest of that key (never `Err`: a multi-homed device is normal, not a refusal). The count in
 `Documented.fields` is the number of rows WRITTEN, not of facts seen; the skipped-duplicate
-case carries its own test.
+case carries its own test. ⚠️ **No committed fixture carries two facts of one kind** (validation:
+the `multi-nic` family is N single-MAC observations), so the test's seed is SYNTHETIC — name it
+so. 🔴 **And the pin must assert what the reconcile then does with it** (second gap-hunt, M-c,
+measured): a `{ipv4 a, ipv4 b, hostname}` observation documents 201 / 2 rows, then `reconcile`
+over the entity returns NO gap but TWO abstentions — `ConflictingObservations` (the engine reads
+two same-key facts in one observation as a conflict and drops the field) and `NoObservedValue`
+on the freshly-declared `ipv4`. This is not a defect to "fix" — assert the two abstentions in the
+multi-value test so a later story does not turn them into a false gap.
 
 ---
 
@@ -253,6 +263,10 @@ The check reads two headers (`Origin`, `Host`) and decides:
   limit in the doc rather than normalising ports speculatively;
 - ⚠️ **Two `Origin` headers** → REFUSE outright (6.1's `Authorization` precedent: `HeaderMap`
   first-value semantics let right-then-wrong through, so more than one is refused, tested);
+- ⚠️ **The comparison is authority-only, SCHEME-BLIND** (second gap-hunt L-a, measured):
+  `Origin: https://nas:8080` passes against `Host: nas:8080`, so a same-authority page on the
+  wrong scheme is not distinguished. A stated limit (this LAN product terminates TLS at the
+  proxy and serves one scheme), registered, not silently fixed;
 - **the 403 carries a pinned body and NEVER `WWW-Authenticate`** — it is not an auth failure,
   and arbitration 6's discipline (no advertising the scheme where it is not the answer)
   extends here;
@@ -317,8 +331,11 @@ CREATE UNIQUE INDEX declared_one_adoption_per_field
   `SANCTIONED_SITES` still gains only the one production entry; the epic's "exactly one" holds,
   measured). Its doc says the name is load-bearing; keep the name;
 - ⚠️ Epic 7's `document-field` re-documents a DRIFTED field from a NEWER observation — a
-  DIFFERENT `origin_obs_id`, no collision. The index does not pre-block Epic 7; say so in the
-  migration comment so nobody widens it "for later".
+  DIFFERENT `origin_obs_id`, so THIS index does not collide. 🔴 But the **PRIMARY KEY
+  `(entity_id, attr_key)` DOES** (second gap-hunt L-c, measured: re-documenting one entity's
+  same field reds `1062 … PRIMARY`) — so "the index does not pre-block Epic 7" must NOT read as
+  "Epic 7 will just work". The migration comment names the PK as what Epic 7 must negotiate (an
+  `ON DUPLICATE KEY UPDATE` or a supersede), not this index.
 
 ⚠️ The DDL gates apply: binary collation grep (D64) is satisfied by an INDEX (no new column);
 run `cargo xtask ci` after writing the migration, not only at the end.
@@ -385,6 +402,17 @@ One DB-backed test is this story's reason to exist, and it goes through the FULL
    assertion is `gaps.is_empty()` **AND** `abstention_count == 0` on the documented entity — M11
    reds THIS, not a gap count. *(The divergence computation never consults the provenance columns
    — xtask's `PROVENANCE_COLUMNS` gate holds that half; do not re-test the gate, test the VIEW.)*
+
+🔴 **The path INTO the view is prescribed, not left to the dev** (second gap-hunt L-d): step 4
+selects the entity through **`build_view`'s `preferred` parameter** (or a cleaned table), NEVER
+through `reconcile_view`'s `OPENCMDB_ENTITY_IPV4` env read — 6.1's no-env-mutation norm holds
+(that env var is exactly the kind of hidden coupling the norm exists to kill, and
+`index_renders_the_real_gap` already `remove_var`s it). ⚠️ **Corollary the dev must know**:
+`build_view` selects the entity BY its declared `ipv4` (`page.rs:361-372`), so the J3 seed must
+carry an ipv4 — a **hostname-only** subject documents 201 but mints an entity the view can never
+select (a 201 invisible on the page). That is not this story's bug to fix (the entity model is
+6.5's), but the J3 test must seed an ipv4 subject or it measures nothing, and the invisible-entity
+case is registered for 6.5.
 
 ⚠️ This test is `DATABASE_URL`-gated like every DB test (it self-skips locally without the
 container) — **a green local suite says nothing; run it against the live MariaDB** (13316's
@@ -552,7 +580,7 @@ no count in `sprint-status.yaml`'s comments).
 | **M8** | commit between the facts read and the write loop | 🔴 **GREEN by structural argument, measured** (gap-hunt: 27/27 green incl. a `tokio::join!` race, three runs — the unique index converts every interleaving into the same 409, and the loser fails on its FIRST insert, persisting no partial row). Honest carrier = the index (M10) + a stated atomicity limit. **Do NOT invent a fake concurrency test to force a red** (5.9's M4/M5 class) |
 | **M9** | drop the CSRF check | RED — the cross-site 403 test (end-to-end, credential attached) |
 | **M9b** | compare Origin case-sensitively / accept `Origin: null` / miss the two-Origin refusal | RED — the pure-fn table's rows |
-| **M10** | drop the unique index from the migration | RED — AC4's raw-SQL second adoption inserts cleanly where a refusal is asserted |
+| **M10** | drop the unique index from the migration | RED — AC4's raw-SQL second adoption inserts cleanly where a refusal is asserted. ⚠️ **The driver MUST drop+recreate the test database before this run** (second gap-hunt M-a, measured): on an already-migrated DB, editing `0005` reds every DB test with `VersionMismatch(5)` (sqlx checksum), a red carried by the WRONG thing (5.9b's family) — reset, then the honest carrier is the missing-index insert |
 | **M11** | make the documented write use a WRONG attr key (`"ip"` for `"ipv4"`) | RED — **AC6's keys-equality test** (the primary carrier); ⚠️ **NOT the J3 step-4 gap oracle** — a wrong key yields an ABSTENTION, not a `Gap`, so J3 step 4 stays green unless it also pins `abstention_count == 0` (validation H2, measured green). J3 step 4 is a CO-carrier only with the abstention assertion in place |
 | **M12** | plant a local `"ipv4"`/`"hostname"`/`"mac"` key table in `document.rs` | RED — AC6's SOURCE-SCAN tripwire. ⚠️ **A FAITHFUL copy of `project` does NOT red the keys-equality test** (validation H4, measured 28/28 green — a faithful copy equals the real fn; only a DRIFTED copy reds, and that is M11). The no-copy property needs the textual scan, not a behavioural test |
 | **M13** | remove the read-sanction entry (§6.5) | RED — the sanctioned test verifier's provenance SELECT now reds `cargo xtask ci` (naming `repo.rs` + the column) |
