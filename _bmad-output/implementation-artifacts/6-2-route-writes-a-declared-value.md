@@ -279,20 +279,43 @@ vendored htmx 2.0.4, two origins, server-side oracle:**
 
 | engine | same-origin `hx-post` | cross-site `<form>` POST |
 |---|---|---|
-| **Chrome / Blink 151** | `Origin` = page's own origin (Sec-Fetch-Site same-origin) | `Origin` = the ATTACKER's origin ≠ `Host` = target |
-| **Firefox / Gecko 153** | (6.1's bench already measured Gecko same-origin) | ⚠️ NOT measured — Firefox headless makes zero requests in the validation environment (four launch strategies, incl. xvfb); the cell is RE-REGISTERED, not claimed |
+| **Chrome / Blink 151.0.7922.137** | `Origin` = page's own origin `http://127.0.0.1:18080`; carries `Authorization` (on the 401 retry — Blink primes XHR auth on challenge, not preemptively) | `Origin` = ATTACKER `http://127.0.0.1:18081` ≠ `Host` `127.0.0.1:18080`; carries cached `Authorization: Basic …` PREEMPTIVELY (200, one request) |
+| **Firefox / Gecko 153.0.1** | `Origin` = page's own origin `http://127.0.0.1:18080`; carries `Authorization: Basic …` PREEMPTIVELY (200, one request) | `Origin` = ATTACKER `http://127.0.0.1:18081` ≠ `Host` `127.0.0.1:18080`; carries cached `Authorization: Basic …` PREEMPTIVELY (200, one request) |
 
-🔑 **The decision-critical result, on Blink**: htmx 2.0.4's XHR SENDS `Origin` on a same-origin
-POST, so the happy path passes through *present → compare → match* (not through *absent → pass*,
-which is for `curl` only), and the cross-site POST carries the ATTACKER's `Origin`, so the check
-REFUSES it. **§5's mechanism is NOT re-arbitrated** — the risk this bench existed to catch (a
-browser omitting `Origin` on same-origin XHR) is answered NO for Blink. The Gecko-cross-site cell
-is a small residual (the HTML standard makes `Origin` mandatory on cross-origin requests,
-engine-independent; Blink confirms both directions) — re-registered in `deferred-work.md`, owner
-Epic 19's session closure, NOT a reason to hold dev. `deferred-work.md` row (a) is marked
-DISCHARGED-for-Chromium. ⚠️ The cross-site CACHED-Basic-credential attachment (the threat is
-REAL) was 6.1's F3 recording and remains a recorded threat-model fact, not freshly re-measured
-here (headless Basic-priming across a session is what Firefox's failure blocked).
+**🔧 The Gecko cell was measured after all** (2026-08-14, second bench pass): Firefox headless made
+zero requests because the **snap** `firefox` wrapper refuses a second instance while the operator's
+own Firefox is running (`--no-remote`/`MOZ_NO_REMOTE`/`--new-instance` all ignored by the wrapper —
+stderr: *"Firefox is already running… use a different profile"*). Invoking the raw binary
+`/snap/firefox/current/usr/lib/firefox/firefox` directly bypasses the single-instance lock and
+Firefox runs headless normally. **Three runs per engine, all identical**; server-side oracle in
+`scratchpad/bench-6.2/{A,B}-{CHR,FFX}_r{1,2,3}.log` (A = protected origin, B = attacker).
+
+🔑 **The decision-critical result, on BOTH engines**: htmx 2.0.4's XHR SENDS `Origin` on a
+same-origin POST (value = the page's own origin), so the happy path passes through
+*present → compare → match* (not through *absent → pass*, which is for `curl` only); and the
+cross-site `<form>` POST carries the ATTACKER's `Origin`, so the check REFUSES it. **§5's mechanism
+is NOT re-arbitrated** — the risk this bench existed to catch (a browser omitting `Origin` on
+same-origin XHR) is answered **NO for BOTH Blink and Gecko**. `deferred-work.md` row (a) is
+DISCHARGED for **both engines**, not only Chromium.
+
+🔴 **The cross-site CACHED-Basic-credential attachment (the threat §5 exists to stop) was FRESHLY
+MEASURED on both engines, not merely inherited from 6.1's F3**: with the credential primed for
+origin A (a real 401→credential exchange), the auto-submitted cross-origin `<form>` POST to A
+carried `Authorization: Basic …` **preemptively** — Chrome and Firefox alike, all three runs — so
+ambient authority is confirmed live, and the ONLY thing standing between the attacker page and a
+write is the `Origin` check. 🔑 **A third probe (P3) was added**: a cross-origin `fetch` POST
+(form-encoded, default credentials mode) from B to A. Both engines SEND the request (it reaches
+the server and would be `Origin`-refused), and it carries **NO** credential (401, no retry) — so
+the `fetch`/XHR path is not itself a credential-bearing vector, but the `<form>` path is, which is
+exactly why §5 must not depend on `Sec-Fetch-*` or on the request being an XHR.
+
+⚠️ **One nuance §5 must not lean on**: here A and B differ only by PORT (`:18080` vs `:18081`), so
+`Sec-Fetch-Site` reads **`same-site`** on the cross-origin POST, NOT `cross-site` — a header-based
+CSRF filter keyed on `Sec-Fetch-Site: cross-site` would have MISSED this attacker. §5's literal
+`Origin`-authority-vs-`Host` comparison refuses it correctly (`127.0.0.1:18081` ≠ `127.0.0.1:18080`)
+because it compares authorities, not site. Ports here are explicit and non-default, so the
+default-port-elision edge (§5's `http://nas` vs `nas:80`) was not exercised — that limit stands as
+written.
 
 ---
 
@@ -516,10 +539,10 @@ still RED 26/15/11, fmt and clippy clean, no new crate, templates and `page.rs` 
 **AC8 — the register, each row WITH ITS OWNER, re-read against THIS list**: **(1)** the
 `epics.md:1768` wording divergence (*"through `insert_declared_attribute`"* → the adapter
 sibling) — owner: **Epic 6's retrospective**; **(2)** row (j) CSRF — **CLOSED by this story**,
-with residuals re-registered (pre-Origin browsers; `Host`-forwarding proxy requirement;
-Gecko-cross-site bench cell) — owner: **Epic 19**; **(3)** row (a) Chromium bench —
-**DISCHARGED-for-Chromium at this story's validation**, results in §5; the Gecko-cross-site cell
-re-registered; **(4)** the canonical-UUID question — **CLOSED by §2's sentence**, marked so;
+with residuals re-registered (pre-Origin browsers; `Host`-forwarding proxy requirement) — owner:
+**Epic 19**; **(3)** row (a) two-browser bench — **FULLY DISCHARGED at this story's validation on
+BOTH Blink AND Gecko** (three runs each, all three probes), results in §5; no Gecko cell remains
+open; **(4)** the canonical-UUID question — **CLOSED by §2's sentence**, marked so;
 **(5)** `actor_id='operator'` as a literal (no real actors) — owner: **Epic 19**; **(6)** the
 `SubjectLookup`→`DocumentPort` rename retires 6.1's "never write" sentence — recorded as done
 WITH the rename; **(7)** 🔴 the authorship gate's READ-sanction (§6.5) is a TRIPWIRE against a
@@ -626,9 +649,13 @@ with the merge ABOVE the layer. The known-subject branch answers 501 today and D
 
 ### Validation obligations — ✅ ALL DISCHARGED 2026-08-14 (results folded into the sections above)
 
-1. **The two-browser bench** — ✅ DONE, §5's result table. Blink measured both probes cleanly
-   (the risk it existed to catch is answered NO — no re-arbitration); Gecko-cross-site not
-   measurable in the environment, re-registered. §5's mechanism STANDS.
+1. **The two-browser bench** — ✅ DONE, §5's result table. **BOTH** Blink AND Gecko measured
+   cleanly on all three probes (same-origin `hx-post`, cross-site `<form>` POST, cross-site
+   `fetch`), three runs each, identical; the risk the bench existed to catch (a browser omitting
+   `Origin` on same-origin XHR) is answered **NO for both engines**, so §5 is NOT re-arbitrated.
+   The Gecko cell — first reported unmeasurable — was captured on a second pass by invoking the
+   raw snap Firefox binary (the wrapper's single-instance lock, held by the operator's own
+   Firefox, was the blocker, not headless itself). §5's mechanism STANDS.
 2. **§1's schema reading** — ✅ VERIFIED by both fact-check layers against `0001_initial.sql`
    and the gate; the epic-AC contradiction is SOUND.
 3. **§3 multi-value against the corpus** — ✅ MEASURED by both layers: NO committed fixture

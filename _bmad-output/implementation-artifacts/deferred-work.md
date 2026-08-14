@@ -3292,16 +3292,16 @@ usable.** It came out of the code review's `no_match` finding and settles it:
 Ten rows, each with its owner (AC7 — re-read against the AC's list, not against this output;
 story 5.14b's AC10 failed exactly there).
 
-- **(a) The Chromium half of the Basic browser measurement.** ✅ **DISCHARGED-for-Chromium at
-  story 6.2's validation, 2026-08-14**: the two-origin CSRF bench measured Chrome/Blink 151 on
-  both probes (same-origin `hx-post` carries `Origin` = page origin; cross-site `<form>` POST
-  carries `Origin` = attacker ≠ `Host`), confirming the §5 mechanism on Blink. ⚠️ **RESIDUAL,
-  re-registered: the Gecko-CROSS-SITE cell** — Firefox headless made zero requests in the
-  validation environment (four launch strategies incl. xvfb); Gecko same-origin was 6.1's
-  bench, and the cross-site behaviour is engine-independent by the HTML standard (Origin is
-  mandatory on cross-origin requests), so this is a small re-measurement owed on a machine with a
-  working Firefox, not a blocker. **Owner of the residual: Epic 19's session closure** (or any
-  session with a working Gecko bench).
+- **(a) The two-browser Basic browser measurement.** ✅ **FULLY DISCHARGED 2026-08-14, on BOTH
+  engines** (Chrome/Blink 151 AND Firefox/Gecko 153, three runs each, all three probes): the
+  two-origin CSRF bench measured that htmx 2.0.4's same-origin `hx-post` carries `Origin` = page
+  origin, and a cross-site `<form>` POST carries `Origin` = attacker ≠ `Host` AND the cached
+  `Authorization: Basic …` PREEMPTIVELY — the ambient-authority threat freshly measured, refused
+  by §5's Origin check. The Gecko cell — first reported unmeasurable — was captured by invoking
+  the raw snap Firefox binary (`/snap/firefox/current/usr/lib/firefox/firefox`), the wrapper's
+  single-instance lock having been the blocker, not headless itself. **No residual remains on
+  this row.** _(This row read "DISCHARGED-for-Chromium … Gecko residual owed" until the second
+  bench pass closed it the same day.)_
 - **(b) Credential expiry / the browser's native dialog mid-swap.** The vendored htmx 2.0.4's
   default `responseHandling` does not swap a 4xx into `#gap-card` (read during validation), so
   the residual concern is only the native dialog. **Owner: story 6.4.**
@@ -3337,8 +3337,9 @@ story 5.14b's AC10 failed exactly there).
   **RESIDUALS re-registered, each stated at its strength**: pre-2020 browsers that omit `Origin`
   on a cross-site POST are not protected (LAN single-operator product); the check needs the
   reverse proxy to FORWARD `Host` (`proxy_set_header Host $host;` — nginx's default rewrites it
-  and would 403 every POST); `Host`-absent HTTP/2 direct clients are refused; and the
-  Gecko-cross-site bench cell (row (a)) is owed. **Owner of the residuals: Epic 19** (real
+  and would 403 every POST); `Host`-absent HTTP/2 direct clients are refused. _(The
+  Gecko-cross-site bench cell was owed until the second bench pass measured it — row (a) is now
+  fully discharged.)_ **Owner of the residuals: Epic 19** (real
   sessions + a session token supersede the Origin heuristic entirely).
 
 ## Deferred from: code review of 6-1-write-route-writes-nothing (2026-08-14)
