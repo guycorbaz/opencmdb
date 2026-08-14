@@ -75,8 +75,10 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-14  # 6.1 -> `in-progress` (dev-story, after the 2026-08-14 rewrite on HTTP
-                          # Basic and its two-layer validation, 21 findings all applied).
+last_updated: 2026-08-14  # 6.1 -> `review` (dev-story complete the same day: 523 -> 564 tests,
+                          # fifteen runtime mutations all red + M4's compile refusal, seven gates
+                          # green, built and mutated against a live mariadb:10.11.11 on 13316.
+                          # `done` is the MERGE's business).
                           # (The note below was written at 5.14b's contexting and is DATED.)
                           # 5.14b CONTEXTED -> `ready-for-dev`. **Epic 5 stands at 19/20**; 5.14b is
                           # the last story, then the RETROSPECTIVE, which is REQUIRED and which is
@@ -2831,7 +2833,7 @@ development_status:
   # turns M1 green while the route IS registered); the `vocabulary` gate is inert AND its prescribed
   # doc wording REDS it; AC5 has no carrier; two `epics.md` divergences unregistered.
   # ⚠️ NEXT = decide the Basic-auth question (measure first), then REWRITE, then re-validate.
-  6-1-write-route-writes-nothing: in-progress
+  6-1-write-route-writes-nothing: review
   # through `insert_declared_attribute` and nowhere else; `SANCTIONED_SITES` gains one named entry
   6-2-route-writes-a-declared-value: backlog
   # assertions 2 and 3, parked since Epic 5 for want of this gesture

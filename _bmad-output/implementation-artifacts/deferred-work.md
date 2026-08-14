@@ -3286,3 +3286,42 @@ usable.** It came out of the code review's `no_match` finding and settles it:
   *"what can the operator DO with this number?"* — because they checked conformance to a
   specification, and the specification was mine. **A blind spot of the method, not an accident.**
   Carried to Epic 5's retrospective.
+
+## Deferred from: story-6.1, the write route and the Basic decision (2026-08-14)
+
+Ten rows, each with its owner (AC7 — re-read against the AC's list, not against this output;
+story 5.14b's AC10 failed exactly there).
+
+- **(a) The Chromium half of the Basic browser measurement.** The §4 bench (an `hx-post` carries
+  the cached Basic credential) ran on Firefox 153 only — Gecko's answer, not the web's.
+  **Owner: story 6.2's validation bench.**
+- **(b) Credential expiry / the browser's native dialog mid-swap.** The vendored htmx 2.0.4's
+  default `responseHandling` does not swap a 4xx into `#gap-card` (read during validation), so
+  the residual concern is only the native dialog. **Owner: story 6.4.**
+- **(c) `scrape_authorized` refuses a lowercase `bearer` scheme** (RFC 7235 §2.1 wants
+  case-insensitive) — a recorded defect, deliberately NOT fixed by story 6.1, whose new Basic arm
+  is case-insensitive and does not copy it. **Owner: Epic 19.**
+- **(d) The Basic comparison is not constant-time** (`==` on `String`) — a stated limit
+  (single-operator LAN product, TLS at the proxy), not silently "fixed" with a new dependency.
+  **Owner: Epic 19.**
+- **(e) The `--accent` colour conflict** (story 6.1 §9): story 5.14b's guard asserts the identity
+  section never reaches `--accent`, and story 6.4's Document button in that section will be
+  legitimately amber; a top-level class evades the guard entirely (measured). 6.4 must re-examine
+  the guard — narrow it to the counter and cause lines — not merely satisfy it; and Epic 6b's
+  story 6b.1 re-tokenises `app.css` first, so whoever lands second re-checks the guard exists.
+  **Owner: story 6.4, conditional on 6b.1's ordering.**
+- **(f) The release-notes obligation: the UI stops being publicly readable** (arbitration 2′'s
+  price — `/` and `/gap` left `is_public`). The first release CONTAINING story 6.1 names it in
+  its release notes; the obligation follows the release, not the story number. **Owner: the first
+  release containing this story — today Epic 6b's story 6b.12.**
+- **(g) `document-field`** — FR13(b), documenting a re-discovery field by field. **Owner: Epic 7**
+  (the FR coverage map already assigns it there; recorded at Epic 6's decomposition).
+- **(h) Basic's closure — real sessions** (users, revocation, a login form; one shared credential
+  authenticates a caller, not a person). **Owner: Epic 19.**
+- **(i) The D37 filename drift**: the vendored file is `htmx.min.js` unversioned where
+  `architecture.md:3406` names a versioned filename. **Owner: Epic 6b story 6b.1.**
+- **(j) 🔴 CSRF protection for the write route.** Basic does NOT close CSRF: once the browser
+  holds the credential it attaches it by AMBIENT AUTHORITY, to a cross-site form POST included —
+  the §4 bench probed only same-origin initiators and must not be quoted wider. Harmless in
+  story 6.1 (the route has no effect to forge); it stops being harmless the day the route
+  writes. **Owner: story 6.2**, the story where the route first has an effect to forge.
