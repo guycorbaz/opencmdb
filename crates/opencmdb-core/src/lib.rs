@@ -22,6 +22,7 @@
 
 pub mod clock;
 pub mod connector;
+pub mod document;
 pub mod gap;
 pub mod identity;
 pub mod observation;

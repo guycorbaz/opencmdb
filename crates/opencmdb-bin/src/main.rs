@@ -13,6 +13,7 @@
 mod arp_ping;
 mod auth;
 mod dburl;
+mod document;
 mod fault_injection;
 mod fixture_connector;
 mod fixtures;
@@ -52,6 +53,178 @@ use axum::routing::get;
 use opencmdb_core::Clock;
 use opencmdb_core::observation::Timestamp;
 use sqlx::MySqlPool;
+
+/// The shared HTTP Basic credential (story 6.1, arbitration 2′): ONE pair, read from
+/// `OPENCMDB_BASIC_USER` / `OPENCMDB_BASIC_PASSWORD` at boot.
+///
+/// It authenticates a CALLER, not a person — no users, no sessions, no revocation short of
+/// changing the variable; everyone holding it is the same principal. Real, and crude: Basic
+/// sends the pair base64-encoded on EVERY request, so its confidentiality is TLS's business,
+/// which this product does not terminate (a reverse proxy does — `architecture.md:168`). And it
+/// does NOT close CSRF: the browser attaches the credential by ambient authority, to a
+/// cross-site form POST included — story 6.2 owns CSRF protection, the story where the route
+/// first has an effect to forge. Epic 19 (real sessions) is the closure.
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct BasicCredentials {
+    /// The user half. ASCII, and colon-free (RFC 7617 §2: the user-id must not contain a
+    /// colon) — both refused by [`AppConfig::from_env`] at boot, never silently at request time.
+    pub(crate) user: String,
+    /// The password half. ASCII (refused at boot otherwise); it MAY contain a colon — the
+    /// decoder splits on the FIRST colon only (RFC 7617 §2).
+    pub(crate) password: String,
+}
+
+// Hand-written so a debug-printed config can never leak the password into a log line.
+impl std::fmt::Debug for BasicCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BasicCredentials")
+            .field("user", &self.user)
+            .field("password", &"<redacted>")
+            .finish()
+    }
+}
+
+/// The HTTP surface's configuration — a PARAMETER of [`app`], never an env read inside it
+/// (story 6.1, arbitration 5). Tests construct it directly and mutate no env var; only
+/// [`run`] calls [`AppConfig::from_env`].
+///
+/// Two mechanisms, two questions, never conflated (story 6.1 §3 / AC5):
+/// - `document_enabled` answers *is the feature configured?* — without it the write route is
+///   not in the `Router`. It says NOTHING about who calls: it is defence in depth and an
+///   off-by-default posture, and it is NOT authentication.
+/// - `basic` answers *who may call — and who may read?* — HTTP Basic, enforced in
+///   `auth_deny`'s default arm over every non-public path. This is the security mechanism.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AppConfig {
+    /// `OPENCMDB_DOCUMENT_ENABLED`: whether `POST /document-all` is registered at all.
+    /// *Configured vs. unconfigured* — nothing about callers.
+    pub(crate) document_enabled: bool,
+    /// The Basic pair, or `None` when unconfigured — in which case every non-public path
+    /// refuses (401) WITHOUT the challenge header (arbitration 6): a challenge nothing can
+    /// satisfy is an infinite browser dialog on every unupgraded deployment.
+    pub(crate) basic: Option<BasicCredentials>,
+}
+
+/// Why [`AppConfig::from_env`] refuses a configuration — at boot, with the variable named,
+/// never at request time silently (story 6.1 §3). The superseded draft measured the trap this
+/// exists for: a credential containing a non-ASCII byte refuses everyone, permanently, with no
+/// diagnostic — which matters for a French operator setting `sécret`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AppConfigError {
+    /// The switch carries a value the product does not recognise (accepted: unset, empty,
+    /// `0`/`false`, `1`/`true` — case-insensitive). Refused by name rather than silently
+    /// disabled, so a typo is a boot error and not a mysteriously missing route.
+    UnrecognisedSwitch {
+        /// The value found in `OPENCMDB_DOCUMENT_ENABLED`.
+        value: String,
+    },
+    /// Exactly one half of the Basic pair is set (empty counts as unset, on
+    /// `scrape_authorized`'s unset-OR-empty precedent). A half-configured pair is a
+    /// misconfiguration, not a choice.
+    HalfConfiguredPair {
+        /// The variable that is missing or empty.
+        missing: &'static str,
+    },
+    /// A credential half carries a byte outside ASCII. Basic inherits the trap through the
+    /// base64 of `user:password` — RFC 7617 records that the original scheme *failed to
+    /// specify* the charset, so a non-ASCII pair authenticates nobody, silently.
+    NonAsciiCredential {
+        /// The variable carrying the non-ASCII byte.
+        var: &'static str,
+    },
+    /// The user half contains a colon, which RFC 7617 §2 forbids: the decoder splits the pair
+    /// on the FIRST colon, so such a user could never match and the deployment would refuse
+    /// everyone with no diagnostic.
+    ColonInUser,
+}
+
+impl std::fmt::Display for AppConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnrecognisedSwitch { value } => write!(
+                f,
+                "OPENCMDB_DOCUMENT_ENABLED={value:?} is not recognised — use 1/true or 0/false"
+            ),
+            Self::HalfConfiguredPair { missing } => write!(
+                f,
+                "the Basic pair is half-configured: {missing} is unset or empty — set both \
+                 OPENCMDB_BASIC_USER and OPENCMDB_BASIC_PASSWORD, or neither"
+            ),
+            Self::NonAsciiCredential { var } => write!(
+                f,
+                "{var} contains a non-ASCII byte — Basic authentication has no reliable \
+                 charset (RFC 7617), so such a credential would authenticate nobody"
+            ),
+            Self::ColonInUser => write!(
+                f,
+                "OPENCMDB_BASIC_USER contains a colon, which RFC 7617 forbids in the user-id — \
+                 such a user could never authenticate"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for AppConfigError {}
+
+impl AppConfig {
+    /// Parse and VALIDATE the configuration from an environment lookup. Pure — the lookup is a
+    /// parameter (on `dburl::from_env`'s precedent), so tests drive it without mutating any env
+    /// var. ⚠️ The production call-site is [`run`], which no test drives: the uncovered region
+    /// is one call and one `?` (stated on story 5.14's precedent — recording an unavoidable
+    /// green is honest only with its extent named).
+    ///
+    /// # Errors
+    ///
+    /// Every refusal is a boot error with the variable named — see [`AppConfigError`].
+    pub(crate) fn from_env(
+        lookup: impl Fn(&str) -> Option<String>,
+    ) -> Result<Self, AppConfigError> {
+        let document_enabled = match lookup("OPENCMDB_DOCUMENT_ENABLED") {
+            None => false,
+            Some(value) => match value.trim().to_ascii_lowercase().as_str() {
+                "" | "0" | "false" => false,
+                "1" | "true" => true,
+                _ => return Err(AppConfigError::UnrecognisedSwitch { value }),
+            },
+        };
+        // Empty counts as unset — `scrape_authorized`'s precedent (unset OR empty, both closed).
+        let user = lookup("OPENCMDB_BASIC_USER").filter(|value| !value.is_empty());
+        let password = lookup("OPENCMDB_BASIC_PASSWORD").filter(|value| !value.is_empty());
+        let basic = match (user, password) {
+            (None, None) => None,
+            (Some(_), None) => {
+                return Err(AppConfigError::HalfConfiguredPair {
+                    missing: "OPENCMDB_BASIC_PASSWORD",
+                });
+            }
+            (None, Some(_)) => {
+                return Err(AppConfigError::HalfConfiguredPair {
+                    missing: "OPENCMDB_BASIC_USER",
+                });
+            }
+            (Some(user), Some(password)) => {
+                if !user.is_ascii() {
+                    return Err(AppConfigError::NonAsciiCredential {
+                        var: "OPENCMDB_BASIC_USER",
+                    });
+                }
+                if !password.is_ascii() {
+                    return Err(AppConfigError::NonAsciiCredential {
+                        var: "OPENCMDB_BASIC_PASSWORD",
+                    });
+                }
+                if user.contains(':') {
+                    return Err(AppConfigError::ColonInUser);
+                }
+                Some(BasicCredentials { user, password })
+            }
+        };
+        Ok(Self {
+            document_enabled,
+            basic,
+        })
+    }
+}
 
 /// The real clock. It reads the wall clock through `std::time` (a composition-root privilege)
 /// and converts with `chrono::DateTime::from_timestamp` — NOT chrono's `clock` feature, which
@@ -99,6 +272,10 @@ async fn run() -> anyhow::Result<()> {
     let clock = SystemClock;
     tracing::info!(started_at = %clock.now(), "opencmdb starting");
     let bind = load_bind_address().context("loading configuration")?;
+    // The write-route switch and the Basic pair, validated at boot (story 6.1, arbitration 5).
+    // A bad value refuses to start WITH the variable named, never at request time silently.
+    let config = AppConfig::from_env(|key| std::env::var(key).ok())
+        .context("loading the auth configuration")?;
     // Discrete DATABASE_* variables are the documented path; DATABASE_URL is the deprecated
     // fallback that keeps CI and existing deployments working (issue #6).
     let (database_url, source) = dburl::from_env(|key| std::env::var(key).ok())
@@ -139,25 +316,42 @@ async fn run() -> anyhow::Result<()> {
         .await
         .with_context(|| format!("binding {bind}"))?;
     tracing::info!(%bind, "opencmdb listening");
-    axum::serve(listener, app(pool))
+    axum::serve(listener, app(pool, config))
         .await
         .context("serving the HTTP app")?;
     Ok(())
 }
 
 /// The HTTP surface, factored out of `main` so it is testable without binding a socket. The
-/// database pool is carried in axum state.
-fn app(pool: MySqlPool) -> Router {
-    Router::new()
+/// database pool is carried in axum state on the main router; the document sub-router carries
+/// its own pool-free state (story 6.1 §7), so its handler cannot reach the database BY TYPE.
+///
+/// 🔴 **Every route is registered BEFORE `.layer(auth_deny)` — the conditional included**
+/// (story 6.1 §2, measured on axum 0.8.9: a route added after `.layer()` bypasses the
+/// middleware entirely — axum's own doc says so — and a POST with no credential reached its
+/// handler). The switch decides what the `Router` CARRIES; it must never decide on which side
+/// of the layer a route lands.
+fn app(pool: MySqlPool, config: AppConfig) -> Router {
+    let mut router = Router::new()
         .route("/", get(page::index))
         .route("/gap", get(page::gap_fragment))
         .route("/assets/{*path}", get(page::asset))
         .route("/metrics", get(metrics::handler))
         .route("/healthz", get(healthz))
-        // Deny-by-default seam over every route (Story 3.8): the public UI is allowlisted,
-        // `/metrics` sits behind the scrape token, everything else is refused.
-        .layer(axum::middleware::from_fn(auth::auth_deny))
-        .with_state(pool)
+        .with_state(pool);
+    if config.document_enabled {
+        // The switch governs EXISTENCE only (arbitration 4): merged above the layer, the route
+        // is auth-gated exactly like every other non-public path. Whether it is REACHABLE
+        // without a credential is `is_public`'s decision, and this story shrinks that list.
+        router = router.merge(document::router());
+    }
+    // Deny-by-default seam over every route AND the fallback (Story 3.8, story 6.1): the
+    // public allowlist is `/healthz` + `/assets/*`, `/metrics` sits behind the scrape token,
+    // everything else answers to the Basic pair.
+    router.layer(axum::middleware::from_fn_with_state(
+        config,
+        auth::auth_deny,
+    ))
 }
 
 /// Run a one-shot scan off the request path: build the ARP/ping connector for `cidr`, poll it, and
@@ -364,7 +558,520 @@ mod tests {
     use super::*;
     use axum::body::Body;
     use axum::http::Request;
+    use base64::Engine as _;
     use tower::ServiceExt; // for `oneshot`
+
+    /// A pool that never connects — these tests drive routes that issue no query, or assert
+    /// statuses a failed connection cannot fake (401 is the layer's, produced before any pool
+    /// use).
+    fn lazy_pool() -> MySqlPool {
+        MySqlPool::connect_lazy("mysql://root:x@127.0.0.1:3306/none").expect("lazy pool")
+    }
+
+    /// The test pair. Tests construct [`AppConfig`] directly (arbitration 5) — no env mutation.
+    fn pair() -> BasicCredentials {
+        BasicCredentials {
+            user: "op".to_string(),
+            password: "s3cret".to_string(),
+        }
+    }
+
+    fn config(document_enabled: bool, basic: Option<BasicCredentials>) -> AppConfig {
+        AppConfig {
+            document_enabled,
+            basic,
+        }
+    }
+
+    /// `Authorization: Basic base64(user:password)`.
+    fn basic_header(user: &str, password: &str) -> String {
+        format!(
+            "Basic {}",
+            base64::engine::general_purpose::STANDARD.encode(format!("{user}:{password}"))
+        )
+    }
+
+    const CHALLENGE: &str = "Basic realm=\"opencmdb\"";
+
+    fn www_authenticate(response: &axum::response::Response) -> Option<String> {
+        response
+            .headers()
+            .get(axum::http::header::WWW_AUTHENTICATE)
+            .map(|value| value.to_str().expect("an ASCII header").to_string())
+    }
+
+    async fn body_text(response: axum::response::Response) -> String {
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("a readable body");
+        String::from_utf8(bytes.to_vec()).expect("a UTF-8 body")
+    }
+
+    /// An authenticated `POST /document-all` carrying `body` as a urlencoded form.
+    fn document_post(authorization: Option<&str>, body: &str) -> Request<Body> {
+        let mut builder = Request::builder()
+            .method("POST")
+            .uri("/document-all")
+            .header(
+                axum::http::header::CONTENT_TYPE,
+                "application/x-www-form-urlencoded",
+            );
+        if let Some(value) = authorization {
+            builder = builder.header(axum::http::header::AUTHORIZATION, value);
+        }
+        builder.body(Body::from(body.to_string())).unwrap()
+    }
+
+    // ── AC1: the route exists only when the switch is set ──────────────────────────────────
+
+    /// Switch unset, valid credential: the layer passes and the FALLBACK answers — 404 with an
+    /// EMPTY body, measured distinguishable from every response the registered route can
+    /// produce (all non-empty). ⚠️ The discriminator is the AUTHENTICATED pair: the
+    /// unauthenticated status is 401 in both shapes and proves nothing (M1's carrier).
+    #[tokio::test]
+    async fn without_the_switch_an_authenticated_post_reaches_the_empty_fallback() {
+        let app = app(lazy_pool(), config(false, Some(pair())));
+        let response = app
+            .oneshot(document_post(
+                Some(&basic_header("op", "s3cret")),
+                "subject=x",
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            body_text(response).await,
+            "",
+            "the fallback's body is empty — the registered route never answers an empty body"
+        );
+    }
+
+    /// Switch set, same credential, same request: the ROUTE answers — one of AC2's refusals,
+    /// non-empty body (here 422: `x` is not an observation id).
+    #[tokio::test]
+    async fn with_the_switch_the_same_authenticated_post_reaches_the_route() {
+        let app = app(lazy_pool(), config(true, Some(pair())));
+        let response = app
+            .oneshot(document_post(
+                Some(&basic_header("op", "s3cret")),
+                "subject=x",
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let body = body_text(response).await;
+        assert!(!body.is_empty(), "a registered-route response is non-empty");
+        assert!(body.contains("subject"), "the 422 names the field: {body}");
+    }
+
+    /// The production wiring is `AlwaysUnknown` (AC2): through the whole app, a well-formed
+    /// unknown subject answers the domain's pinned 404 body — non-empty, so it also
+    /// discriminates against the fallback.
+    #[tokio::test]
+    async fn the_production_route_answers_the_pinned_unknown_subject_body() {
+        let app = app(lazy_pool(), config(true, Some(pair())));
+        let subject = uuid::Uuid::now_v7();
+        let response = app
+            .oneshot(document_post(
+                Some(&basic_header("op", "s3cret")),
+                &format!("subject={subject}"),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            body_text(response).await,
+            "unknown subject: the id names no observation"
+        );
+    }
+
+    // ── AC3: Basic stands where the allowlist stood ────────────────────────────────────────
+
+    /// A formerly-public page without a credential: 401 with the exact challenge (M11 reds the
+    /// header assertion).
+    #[tokio::test]
+    async fn formerly_public_pages_challenge_without_a_credential() {
+        for path in ["/", "/gap"] {
+            let app = app(lazy_pool(), config(false, Some(pair())));
+            let response = app
+                .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{path}");
+            assert_eq!(
+                www_authenticate(&response).as_deref(),
+                Some(CHALLENGE),
+                "{path} must carry the challenge"
+            );
+        }
+    }
+
+    /// A valid credential REACHES a formerly-public page: anything but 401, and never the
+    /// challenge. ⚠️ With a lazy pool and no database the page handlers answer 500 through
+    /// `server_error`; asserting 200 needs a database and belongs to the one CI-gated test.
+    #[tokio::test]
+    async fn a_valid_credential_reaches_a_formerly_public_page() {
+        let app = app(lazy_pool(), config(false, Some(pair())));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/gap")
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "s3cret"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_ne!(response.status(), StatusCode::UNAUTHORIZED, "reached");
+        assert_eq!(www_authenticate(&response), None, "never the challenge");
+    }
+
+    /// The half-right pairs are refused with the challenge (M10's end-to-end carrier — the
+    /// both-halves-wrong shape would leave a user-only comparison green).
+    #[tokio::test]
+    async fn half_right_pairs_are_refused_with_the_challenge() {
+        for header in [basic_header("op", "wrong"), basic_header("who", "s3cret")] {
+            let app = app(lazy_pool(), config(false, Some(pair())));
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/gap")
+                        .header(axum::http::header::AUTHORIZATION, header.clone())
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{header}");
+            assert_eq!(www_authenticate(&response).as_deref(), Some(CHALLENGE));
+        }
+    }
+
+    /// Decode robustness end-to-end: garbage base64 and a colon-free pair answer 401 (with the
+    /// challenge — the pair IS configured); the mixed-case scheme and the colon-carrying
+    /// password are ACCEPTED (M12; split on the first colon).
+    #[tokio::test]
+    async fn decode_robustness_end_to_end() {
+        let refused = ["Basic not/base64!!".to_string(), {
+            format!(
+                "Basic {}",
+                base64::engine::general_purpose::STANDARD.encode("no-colon")
+            )
+        }];
+        for header in refused {
+            let app = app(lazy_pool(), config(false, Some(pair())));
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/gap")
+                        .header(axum::http::header::AUTHORIZATION, header.clone())
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{header}");
+            assert_eq!(www_authenticate(&response).as_deref(), Some(CHALLENGE));
+        }
+
+        // Mixed-case scheme, correct pair: accepted (RFC 7235 §2.1 — M12 reds this).
+        let mixed_case_app = app(lazy_pool(), config(false, Some(pair())));
+        let mixed = format!(
+            "bAsIc {}",
+            base64::engine::general_purpose::STANDARD.encode("op:s3cret")
+        );
+        let response = mixed_case_app
+            .oneshot(
+                Request::builder()
+                    .uri("/gap")
+                    .header(axum::http::header::AUTHORIZATION, mixed)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_ne!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "mixed-case scheme accepted"
+        );
+
+        // A password containing a colon authenticates (split on the FIRST colon, RFC 7617 §2).
+        let colon_pair = BasicCredentials {
+            user: "op".to_string(),
+            password: "a:b".to_string(),
+        };
+        let colon_app = app(lazy_pool(), config(false, Some(colon_pair)));
+        let response = colon_app
+            .oneshot(
+                Request::builder()
+                    .uri("/gap")
+                    .header(axum::http::header::AUTHORIZATION, basic_header("op", "a:b"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_ne!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "colon password accepted"
+        );
+    }
+
+    /// Two `Authorization` headers are refused outright — even right-then-wrong, the measured
+    /// trap of `HeaderMap::get`'s first-value semantics.
+    #[tokio::test]
+    async fn two_authorization_headers_are_refused_end_to_end() {
+        let app = app(lazy_pool(), config(false, Some(pair())));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/gap")
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "s3cret"),
+                    )
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "wrong"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    /// Pair UNSET: 401 WITHOUT the challenge header (arbitration 6 — no infinite dialog on
+    /// unupgraded deployments). The assertion is on the header's ABSENCE (M7 reds the status).
+    #[tokio::test]
+    async fn an_unset_pair_refuses_without_the_challenge() {
+        for path in ["/", "/gap", "/anything"] {
+            let app = app(lazy_pool(), config(false, None));
+            let response = app
+                .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{path}");
+            assert_eq!(
+                www_authenticate(&response),
+                None,
+                "{path}: a challenge nothing can satisfy must not be emitted"
+            );
+        }
+    }
+
+    /// ⚠️ M9's ONLY carrier (story 6.1 §2): with the switch SET and the pair SET, the write
+    /// route without a credential answers 401 with the challenge — i.e. the conditional route
+    /// sits ABOVE the layer. With the switch unset the mutation is invisible (both shapes 401),
+    /// and the page-path challenge tests never touch the conditional registration.
+    #[tokio::test]
+    async fn the_write_route_challenges_without_a_credential() {
+        let app = app(lazy_pool(), config(true, Some(pair())));
+        let response = app.oneshot(document_post(None, "subject=x")).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(www_authenticate(&response).as_deref(), Some(CHALLENGE));
+    }
+
+    /// `/metrics` does not accept Basic (M5b) and its 401 never advertises it (arbitration 6 /
+    /// F14) — one caller class, one mechanism. Race-safe: whatever `OPENCMDB_METRICS_TOKEN`
+    /// holds, a Basic header is never `Bearer <token>`.
+    #[tokio::test]
+    async fn metrics_does_not_accept_basic_and_never_advertises_it() {
+        let app = app(lazy_pool(), config(false, Some(pair())));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/metrics")
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "s3cret"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            www_authenticate(&response),
+            None,
+            "the metrics 401 must not advertise a scheme its branch does not accept"
+        );
+    }
+
+    /// The still-public surface is reachable with no credential even when a pair is configured:
+    /// assets answer 200; `/healthz` is REACHED (503 here — the lazy pool has no database, and
+    /// 503 is the handler's own answer, not the layer's 401).
+    #[tokio::test]
+    async fn the_public_surface_stays_reachable_without_a_credential() {
+        let assets_app = app(lazy_pool(), config(false, Some(pair())));
+        let response = assets_app
+            .oneshot(
+                Request::builder()
+                    .uri("/assets/app.css")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let healthz_app = app(lazy_pool(), config(false, Some(pair())));
+        let response = healthz_app
+            .oneshot(
+                Request::builder()
+                    .uri("/healthz")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::SERVICE_UNAVAILABLE,
+            "healthz is reached — its own DB-less answer, never the layer's 401"
+        );
+    }
+
+    // ── AppConfig::from_env (arbitration 5; M7b, M8) ───────────────────────────────────────
+
+    /// The lookup over a literal table — no env mutation anywhere in these tests.
+    fn lookup_of<'a>(
+        table: &'a [(&'static str, &'static str)],
+    ) -> impl Fn(&str) -> Option<String> + 'a {
+        move |key| {
+            table
+                .iter()
+                .find(|(name, _)| *name == key)
+                .map(|(_, value)| value.to_string())
+        }
+    }
+
+    #[test]
+    fn an_empty_environment_is_a_valid_minimal_config() {
+        let config = AppConfig::from_env(lookup_of(&[])).expect("valid");
+        assert!(!config.document_enabled);
+        assert_eq!(config.basic, None);
+    }
+
+    #[test]
+    fn the_switch_accepts_its_documented_values_and_refuses_the_rest() {
+        for on in ["1", "true", "TRUE", " 1 "] {
+            let config =
+                AppConfig::from_env(lookup_of(&[("OPENCMDB_DOCUMENT_ENABLED", on)])).expect(on);
+            assert!(config.document_enabled, "{on:?} enables");
+        }
+        for off in ["0", "false", ""] {
+            let config =
+                AppConfig::from_env(lookup_of(&[("OPENCMDB_DOCUMENT_ENABLED", off)])).expect(off);
+            assert!(!config.document_enabled, "{off:?} disables");
+        }
+        let refused = AppConfig::from_env(lookup_of(&[("OPENCMDB_DOCUMENT_ENABLED", "yes")]));
+        assert_eq!(
+            refused,
+            Err(AppConfigError::UnrecognisedSwitch {
+                value: "yes".to_string()
+            }),
+            "a typo is a boot error, not a mysteriously missing route"
+        );
+    }
+
+    #[test]
+    fn a_full_pair_is_accepted() {
+        let config = AppConfig::from_env(lookup_of(&[
+            ("OPENCMDB_BASIC_USER", "op"),
+            ("OPENCMDB_BASIC_PASSWORD", "s3cret"),
+        ]))
+        .expect("valid");
+        assert_eq!(
+            config.basic,
+            Some(BasicCredentials {
+                user: "op".to_string(),
+                password: "s3cret".to_string()
+            })
+        );
+    }
+
+    /// Empty halves count as unset (M7b: an empty pair must yield `basic: None`, never a
+    /// credential of two empty strings that `base64(":")` would satisfy).
+    #[test]
+    fn an_empty_pair_is_unset_not_a_credential() {
+        let config = AppConfig::from_env(lookup_of(&[
+            ("OPENCMDB_BASIC_USER", ""),
+            ("OPENCMDB_BASIC_PASSWORD", ""),
+        ]))
+        .expect("valid");
+        assert_eq!(config.basic, None);
+    }
+
+    #[test]
+    fn a_half_configured_pair_is_a_boot_error_in_both_directions() {
+        let missing_password = AppConfig::from_env(lookup_of(&[("OPENCMDB_BASIC_USER", "op")]));
+        assert_eq!(
+            missing_password,
+            Err(AppConfigError::HalfConfiguredPair {
+                missing: "OPENCMDB_BASIC_PASSWORD"
+            })
+        );
+        let missing_user = AppConfig::from_env(lookup_of(&[("OPENCMDB_BASIC_PASSWORD", "s3cret")]));
+        assert_eq!(
+            missing_user,
+            Err(AppConfigError::HalfConfiguredPair {
+                missing: "OPENCMDB_BASIC_USER"
+            })
+        );
+    }
+
+    /// M8: a non-ASCII credential is refused at boot with the variable named — the measured
+    /// trap (`sécret`) would otherwise refuse everyone, permanently, with no diagnostic.
+    #[test]
+    fn a_non_ascii_credential_is_refused_at_boot() {
+        let bad_password = AppConfig::from_env(lookup_of(&[
+            ("OPENCMDB_BASIC_USER", "op"),
+            ("OPENCMDB_BASIC_PASSWORD", "sécret"),
+        ]));
+        assert_eq!(
+            bad_password,
+            Err(AppConfigError::NonAsciiCredential {
+                var: "OPENCMDB_BASIC_PASSWORD"
+            })
+        );
+        let bad_user = AppConfig::from_env(lookup_of(&[
+            ("OPENCMDB_BASIC_USER", "opérateur"),
+            ("OPENCMDB_BASIC_PASSWORD", "s3cret"),
+        ]));
+        assert_eq!(
+            bad_user,
+            Err(AppConfigError::NonAsciiCredential {
+                var: "OPENCMDB_BASIC_USER"
+            })
+        );
+    }
+
+    /// A colon in the USER half can never authenticate (the decoder splits on the first
+    /// colon), so it is refused at boot rather than silently refusing everyone forever.
+    #[test]
+    fn a_colon_in_the_user_half_is_refused_at_boot() {
+        let refused = AppConfig::from_env(lookup_of(&[
+            ("OPENCMDB_BASIC_USER", "op:eration"),
+            ("OPENCMDB_BASIC_PASSWORD", "s3cret"),
+        ]));
+        assert_eq!(refused, Err(AppConfigError::ColonInUser));
+    }
+
+    /// The `Debug` impl never prints the password — a debug-printed config must not leak it.
+    #[test]
+    fn debug_output_redacts_the_password() {
+        let printed = format!("{:?}", pair());
+        assert!(printed.contains("op"));
+        assert!(!printed.contains("s3cret"), "redacted: {printed}");
+    }
 
     /// Readiness against a real MariaDB. Gated on `DATABASE_URL`: runs in CI (the MariaDB
     /// service, Story 1.5) and locally against a `mariadb:10.11.11` container; no-ops otherwise.
@@ -380,7 +1087,7 @@ mod tests {
             .run(&pool)
             .await
             .expect("run migrations");
-        let response = app(pool)
+        let response = app(pool, config(false, None))
             .oneshot(
                 Request::builder()
                     .uri("/healthz")
@@ -469,8 +1176,22 @@ mod tests {
             .await
             .expect("ingest observation");
 
-        let response = app(pool)
-            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+        // `/` left the public allowlist under story 6.1 (arbitration 2′): this test now
+        // authenticates through the same `AppConfig` seam production uses — constructed
+        // directly, no env mutation, so no interaction with `DB_TEST_LOCK`'s env-free rule.
+        // ⚠️ This is the ONE pre-6.1 test the visibility change breaks, and it breaks only
+        // where `DATABASE_URL` exists (CI) — a green local suite says nothing here.
+        let response = app(pool, config(false, Some(pair())))
+            .oneshot(
+                Request::builder()
+                    .uri("/")
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "s3cret"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -499,7 +1220,8 @@ mod tests {
                     builder.header(axum::http::header::AUTHORIZATION, format!("Bearer {token}"));
             }
             let request = builder.body(Body::empty()).unwrap();
-            app(pool.clone()).oneshot(request)
+            // No Basic pair here: this test is about the Bearer branch and deny-by-default.
+            app(pool.clone(), config(false, None)).oneshot(request)
         };
 
         // No scrape token configured → `/metrics` is closed; an un-allowlisted path is denied.
