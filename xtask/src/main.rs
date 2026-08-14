@@ -1148,7 +1148,7 @@ const AUTHORSHIP_ROOTS: [&str; 2] = ["crates", "docker"];
 ///
 /// ⚠️ The path compared here is the gate's own displayed path, with separators normalised to `/`.
 /// Comparing a raw `Path` would drop the sanction on Windows and red the two real adapters.
-const SANCTIONED_SITES: [(&str, Option<&str>); 3] = [
+const SANCTIONED_SITES: [(&str, Option<&str>); 4] = [
     (
         "crates/opencmdb-bin/src/repo.rs",
         Some("insert_declared_attribute"),
@@ -1158,7 +1158,30 @@ const SANCTIONED_SITES: [(&str, Option<&str>); 3] = [
         Some("raw_declared_write_for_ddl_test"),
     ),
     ("docker/seed-example.sql", None),
+    // Story 6.2: the documenting gesture's write — the ONLY place an `'adopted'` row is written.
+    (
+        "crates/opencmdb-bin/src/repo.rs",
+        Some("adopt_declared_attribute"),
+    ),
 ];
+
+/// The sites that MAY read a provenance column of `declared_attribute` (story 6.2, Guy's
+/// arbitration 2026-08-14). Mirrors [`SANCTIONED_SITES`] for the READ half.
+///
+/// 🔴 **FR13's invariant is that the DIVERGENCE COMPUTATION never consults how a declared value
+/// was obtained — NOT that no code may ever read provenance.** Story 5.12's gate over-approximated
+/// to *"no `.rs` under `crates/` may read a provenance column"*, which cost nothing until story
+/// 6.2 shipped the first legitimate reader: a test that verifies the adopted rows carry
+/// `origin='adopted'` / `origin_obs_id=subject`. Production reads NO provenance (the
+/// already-documented refusal rides the unique index, not a `SELECT`), so this admits exactly
+/// ONE site — the test verifier.
+///
+/// ⚠️ TRIPWIRE, not a barrier (story 5.12's precedent): it protects against a future story
+/// reading provenance into a divergence path BY ACCIDENT, never against a determined one.
+const SANCTIONED_READS: [(&str, Option<&str>); 1] = [(
+    "crates/opencmdb-bin/src/repo.rs",
+    Some("read_declared_provenance_for_test"),
+)];
 
 /// The provenance columns a divergence computation may never read (FR13, NFR5's second clause).
 ///
@@ -1617,6 +1640,19 @@ fn authorship_findings(content: &str, shown: &str, sql: bool) -> Vec<(usize, Str
         }
 
         // ── the READ half (FR13: a divergence never consults HOW a value was obtained) ──
+        // A named site may read provenance (story 6.2, §6.5) — the divergence-computation ban is
+        // the invariant, not a blanket "no code reads provenance". Mirrors the write half's check.
+        let enclosing = enclosing_fn(&text, at);
+        let read_sanctioned = SANCTIONED_READS.iter().any(|(path, function)| {
+            *path == shown
+                && match function {
+                    None => true,
+                    Some(name) => enclosing == Some(*name),
+                }
+        });
+        if read_sanctioned {
+            continue;
+        }
         let projection = stmt.rsplit_once("select").map_or(stmt, |(_, p)| p);
         let projection = projection.split(" from ").next().unwrap_or(projection);
         let rest = statement_after(&text, at);

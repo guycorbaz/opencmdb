@@ -29,6 +29,17 @@ pub enum DocumentRefusal {
     /// *"Nothing can be documented"* is true under both.
     #[error("unknown subject: nothing can be documented")]
     UnknownSubject,
+    /// The subject was already documented — a later attempt to adopt the same observation's
+    /// same field would count one box twice, which is exactly the gesture's name refusing
+    /// (story 6.2). Detected by the `declared_one_adoption_per_field` unique index, not a
+    /// pre-read (§4/§6.5), so the refusal is race-safe.
+    #[error("already documented: this observation's fields are already declared")]
+    AlreadyDocumented,
+    /// The subject carries nothing this product documents — its facts project to no declared
+    /// field (e.g. an Rtt-only or Uplink-only observation). A success answer here would name
+    /// zero fields, which is the lie this variant exists to prevent (story 6.2).
+    #[error("nothing to document: the observation carries no declarable field")]
+    NothingToDocument,
 }
 
 #[cfg(test)]
@@ -43,6 +54,20 @@ mod tests {
         assert_eq!(
             DocumentRefusal::UnknownSubject.to_string(),
             "unknown subject: nothing can be documented"
+        );
+    }
+
+    /// Story 6.2's two new refusals carry distinct, pinned bodies — the adapter maps them to
+    /// 409 and 422-domain, and a test end-to-end pins the same bytes.
+    #[test]
+    fn the_new_refusals_carry_distinct_pinned_bodies() {
+        assert_eq!(
+            DocumentRefusal::AlreadyDocumented.to_string(),
+            "already documented: this observation's fields are already declared"
+        );
+        assert_eq!(
+            DocumentRefusal::NothingToDocument.to_string(),
+            "nothing to document: the observation carries no declarable field"
         );
     }
 }

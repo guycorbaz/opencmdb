@@ -2853,7 +2853,7 @@ development_status:
   # ⚠️ NEXT = decide the Basic-auth question (measure first), then REWRITE, then re-validate.
   6-1-write-route-writes-nothing: done
   # through `insert_declared_attribute` and nowhere else; `SANCTIONED_SITES` gains one named entry
-  6-2-route-writes-a-declared-value: ready-for-dev
+  6-2-route-writes-a-declared-value: in-progress
   # assertions 2 and 3, parked since Epic 5 for want of this gesture
   6-3-nfr5-remaining-assertions: backlog
   # FR13(a), *the day-one case*; the gesture belongs to the CAUSE, not the count

@@ -77,7 +77,15 @@ impl Reconciliation {
 /// Project an observation's facts into comparable `(field, value)` pairs — the vocabulary bridge
 /// between observed [`Fact`]s and declared attribute keys. Kinds not reconciled as declared
 /// fields in the walking skeleton (Rtt, DhcpLease, Uplink, OuiVendor) are ignored here.
-fn project(observation: &Observation) -> Vec<(String, String)> {
+///
+/// **Two consumers, one source of truth** (story 6.2): the reconcile ([`reconcile`]) compares
+/// observed against declared through these pairs, and the documenting gesture WRITES the
+/// declared record through the SAME pairs. If the two drifted — a field documented under a key
+/// the reconcile does not compare — the gap the operator just closed would stay open on the
+/// page. It is `pub` for exactly that sharing; this is a VISIBILITY change with no behaviour
+/// change. Fact order is preserved, so a caller that must pick one value per key can take the
+/// first occurrence deterministically.
+pub fn project(observation: &Observation) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for fact in &observation.facts {
         match fact {
