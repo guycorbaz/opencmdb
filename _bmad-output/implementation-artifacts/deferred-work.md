@@ -3292,9 +3292,16 @@ usable.** It came out of the code review's `no_match` finding and settles it:
 Ten rows, each with its owner (AC7 — re-read against the AC's list, not against this output;
 story 5.14b's AC10 failed exactly there).
 
-- **(a) The Chromium half of the Basic browser measurement.** The §4 bench (an `hx-post` carries
-  the cached Basic credential) ran on Firefox 153 only — Gecko's answer, not the web's.
-  **Owner: story 6.2's validation bench.**
+- **(a) The two-browser Basic browser measurement.** ✅ **FULLY DISCHARGED 2026-08-14, on BOTH
+  engines** (Chrome/Blink 151 AND Firefox/Gecko 153, three runs each, all three probes): the
+  two-origin CSRF bench measured that htmx 2.0.4's same-origin `hx-post` carries `Origin` = page
+  origin, and a cross-site `<form>` POST carries `Origin` = attacker ≠ `Host` AND the cached
+  `Authorization: Basic …` PREEMPTIVELY — the ambient-authority threat freshly measured, refused
+  by §5's Origin check. The Gecko cell — first reported unmeasurable — was captured by invoking
+  the raw snap Firefox binary (`/snap/firefox/current/usr/lib/firefox/firefox`), the wrapper's
+  single-instance lock having been the blocker, not headless itself. **No residual remains on
+  this row.** _(This row read "DISCHARGED-for-Chromium … Gecko residual owed" until the second
+  bench pass closed it the same day.)_
 - **(b) Credential expiry / the browser's native dialog mid-swap.** The vendored htmx 2.0.4's
   default `responseHandling` does not swap a 4xx into `#gap-card` (read during validation), so
   the residual concern is only the native dialog. **Owner: story 6.4.**
@@ -3323,11 +3330,17 @@ story 5.14b's AC10 failed exactly there).
   authenticates a caller, not a person). **Owner: Epic 19.**
 - **(i) The D37 filename drift**: the vendored file is `htmx.min.js` unversioned where
   `architecture.md:3406` names a versioned filename. **Owner: Epic 6b story 6b.1.**
-- **(j) 🔴 CSRF protection for the write route.** Basic does NOT close CSRF: once the browser
-  holds the credential it attaches it by AMBIENT AUTHORITY, to a cross-site form POST included —
-  the §4 bench probed only same-origin initiators and must not be quoted wider. Harmless in
-  story 6.1 (the route has no effect to forge); it stops being harmless the day the route
-  writes. **Owner: story 6.2**, the story where the route first has an effect to forge.
+- **(j) 🔴 CSRF protection for the write route.** ✅ **CLOSED by story 6.2's Origin check**
+  (contexted + validated 2026-08-14, §5): a browser holding the cached Basic credential and a
+  cross-site page cannot forge a documenting write — the POST carries the attacker's `Origin`
+  (measured, Blink), which the check refuses 403 before any refusal path consults the form. ⚠️
+  **RESIDUALS re-registered, each stated at its strength**: pre-2020 browsers that omit `Origin`
+  on a cross-site POST are not protected (LAN single-operator product); the check needs the
+  reverse proxy to FORWARD `Host` (`proxy_set_header Host $host;` — nginx's default rewrites it
+  and would 403 every POST); `Host`-absent HTTP/2 direct clients are refused. _(The
+  Gecko-cross-site bench cell was owed until the second bench pass measured it — row (a) is now
+  fully discharged.)_ **Owner of the residuals: Epic 19** (real
+  sessions + a session token supersede the Origin heuristic entirely).
 
 ## Deferred from: code review of 6-1-write-route-writes-nothing (2026-08-14)
 
@@ -3342,3 +3355,73 @@ story 5.14b's AC10 failed exactly there).
   lookup should also require the canonical hyphenated form and/or v7 is the write story's
   question — a braced or urn: spelling of a REAL id parses to the same id today, which is
   harmless until something round-trips the text. Owner: story 6.2.
+
+## Deferred from: validation of 6-2-route-writes-a-declared-value (2026-08-14)
+
+- **The canonical-UUID form question (story 6.1's review registered it here).** ✅ **CLOSED by
+  story 6.2 §2**: the subject id is bound as `subject.as_uuid().to_string()` — canonical
+  hyphenated lowercase — before any SQL sees it, so a braced/urn:/hyphenless spelling of a real
+  id is harmless BY CONSTRUCTION (measured: a braced spelling answers 201). No further work.
+- **🔴 The authorship gate now carries a READ-sanction (story 6.2 §6.5, Guy's arbitration
+  2026-08-14).** 5.12's gate guarded the WRITE of provenance; 6.2 is the first story with a
+  legitimate provenance READER (a test verifier), so the gate gains a `SANCTIONED_READS`
+  allowlist, FR13-framed (*the divergence computation* may never read provenance — not *all*
+  code). It is a TRIPWIRE against a future read into a divergence path, never a barrier — the
+  same narrowed promise 5.12 stated for the write half. **Owner: Epic 6's retrospective** (it is
+  a deliberate widening of 5.12's apparatus and should be reviewed as one).
+- **`actor_id = 'operator'` is a LITERAL — no real actors yet.** The documenting write records a
+  human author, but the Basic pair authenticates a caller, not a person (6.1 §3), so every
+  documented row carries `'operator'`. Real per-user actors need sessions. **Owner: Epic 19.**
+## Deferred from: story-6.2, the write path (2026-08-14)
+
+Re-read against the story's AC8 list.
+
+- **(1) The `epics.md:1768` wording divergence** — *"through `insert_declared_attribute`"* reads
+  as *"through the repo adapter"*; the write goes through the sibling `adopt_declared_attribute`.
+  **Owner: Epic 6's retrospective** (`epics.md` untouched, verify-only rule).
+- **(2) CSRF residuals** (row (j) is CLOSED by the Origin check): pre-2020 browsers that omit
+  `Origin` on a cross-site POST; the reverse proxy must FORWARD `Host` (`proxy_set_header Host
+  $host;`); `Host`-absent HTTP/2 direct clients are refused; the compare is scheme-blind; the
+  Gecko-cross-site bench cell. **Owner: Epic 19** (sessions + a token supersede the heuristic).
+- **(3) `actor_id = 'operator'` is a LITERAL** — no real per-user actors; the Basic pair
+  authenticates a caller, not a person. **Owner: Epic 19.**
+- **(4) 🔴 The authorship gate's READ-sanction (§6.5)** is a TRIPWIRE against a future story
+  reading provenance into a divergence path, never a barrier — the narrowed promise, a deliberate
+  widening of 5.12's apparatus. **Owner: Epic 6's retrospective** (review it as one).
+- **(5) The invisible entity** — `build_view` selects an entity by its declared `ipv4`, so a
+  hostname-only subject documents 201 but mints an entity the view can never select. Not this
+  story's bug (the entity model is 6.5's). **Owner: story 6.5.**
+- **(6) Epic 7's `document-field` must negotiate the PRIMARY KEY**, not this index: re-documenting
+  one entity's same field reds `1062 … PRIMARY` (measured). **Owner: Epic 7.**
+
+## Deferred from: code review of 6-2-route-writes-a-declared-value (2026-08-14)
+
+- **HTTP/2-direct and scheme-blind CSRF limits.** `same_origin` refuses a `Host`-absent request
+  (HTTP/2 `:authority`) and is scheme-blind; both are stated limits — the product deploys behind a
+  reverse proxy that forwards `Host` (`architecture.md:168`). **Owner: Epic 19** (sessions + a
+  token supersede the Origin heuristic).
+- **`is_adoption_conflict` couples to the DB error message text.** Measured robust on MariaDB
+  10.11.11 (the index name is interpolated data, not localized prose), but a SQLSTATE `23000` +
+  name check would be strictly more robust. **Owner: whoever next touches the adapter's error
+  classification.**
+- **The first-occurrence-wins dedup is hand-rolled in `document.rs`** where `gap::project`'s doc
+  promises the first-occurrence convention. Extract a shared helper when the second caller lands
+  (story 6.4's button / Epic 7's `document-field`). **Owner: story 6.4 or Epic 7.**
+- **`observed_at` nano-precision truncates at INSERT** (`%.6f`, pre-existing) — harmless for 6.2
+  (`observed_at` is not a declared field), and `load_observation_by_id` is faithful to what is
+  stored. **Owner: the story that first needs sub-microsecond instants (none foreseen).**
+
+## Deferred from: code review of 6-2 — the multi-value decision (Guy, 2026-08-14)
+
+- **A same-key multi-value observation (e.g. two `Fact::IpV4`) documents "success" (201, N
+  fields) while its gap stays OPEN.** Measured: `document-all` writes the FIRST value per key
+  (forced by the PK), answers 201, but `reconcile` reads the two observed values as conflicting,
+  drops the field, and the just-documented `ipv4` returns as a `NoObservedValue` abstention — the
+  operator is told they closed a gap that stays open. §3 documents the abstention. 🔴 **NOT
+  reachable today**: no shipped connector or fixture emits two facts of one kind in one
+  observation (the `multi-nic` family is N single-MAC observations). **Guy's decision: DEFER** —
+  keep first-wins, do not add a model decision here; the one-value-per-`attr_key` model is story
+  6.5's and multi-value facts are a connector story's concern. **Owner: the story that first makes
+  a same-key multi-value observation reachable** (a connector emitting multi-value facts, or the
+  entity model of 6.5). The fix then is either to refuse a self-conflicting projection or to model
+  multiple values — a decision that story owns, not 6.2.

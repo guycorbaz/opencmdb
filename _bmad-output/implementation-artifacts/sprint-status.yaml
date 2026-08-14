@@ -75,12 +75,34 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-14  # 6.1 -> `done`: PR #89 squash-merged as `664693b` after a green CI
-                          # run -- dev-story, three-layer code review (17 findings, 15 applied,
-                          # Guy's decision (b) on the 404 body) and the merge, all the same day.
-                          # The live test count lives in the STORY FILE, its AC8 -- this comment
-                          # carried the figure until the review's F2 removed it. Next: 6.2
-                          # (create-story, then the MANDATORY two-layer validation, then dev).
+last_updated: 2026-08-14  # 6.2 -> `review`: dev-story complete (the live test count lives in the
+                          # STORY FILE, its AC9 -- this comment must not carry it, F2's rule).
+                          # The route now WRITES an adopted declared value, J3's corrected half
+                          # measured end-to-end. Mutation pass: 13 reds + M4 compile + M7/M8
+                          # green-by-structure; three findings (M6's missing empty-projection test
+                          # ADDED, M9b's dead null check removed, M7 recorded). `done` is the
+                          # MERGE's business. (Earlier: VALIDATED -> stays `ready-for-dev` (now MEANT: contexted AND
+                          # its mandatory validation done -- three sources, incl. a gap-hunt that
+                          # BUILT the design against a live MariaDB, + the two-browser CSRF bench).
+                          # 1 HIGH arbitration taken by Guy (option A: the authorship gate gains a
+                          # named READ-sanction, FR13-framed -- 5.12's write-guard did not cover a
+                          # legitimate provenance READER); 4 mutation-row defects the build
+                          # measured (M8 GREEN by the index, M11's oracle is abstention not gap,
+                          # M12 needs a source scan not a behavioural test, M2's gate message);
+                          # ~10 text corrections; ALL APPLIED. CSRF (row j) CLOSED by the Origin
+                          # check, Chromium bench (row a) discharged, Gecko-cross-site residual
+                          # re-registered. 🔴 The contexting found the epic AC's letter
+                          # WRONG about the fn: "through `insert_declared_attribute`" would add
+                          # ZERO sanctioned sites while the same AC says "gains exactly one" --
+                          # the schema resolves it (a documented value is an ADOPTED one,
+                          # `origin='adopted'` + `origin_obs_id`, 0001's own vocabulary), so the
+                          # write is a NEW sibling `adopt_declared_attribute`; divergence
+                          # registered, epics.md not edited. The story also OWNS: CSRF (6.1's
+                          # row (j), Origin check), the Chromium bench (row (a), at validation),
+                          # the canonical-UUID closure, the anti-double-count unique index
+                          # (0005), and gap::project going pub so documented == compared.
+                          # (Earlier the same day: 6.1 -> done, PR #89 `664693b`, review's 17
+                          # findings applied, docs flipped by PR #90.)
                           # (The note below was written at 5.14b's contexting and is DATED.)
                           # 5.14b CONTEXTED -> `ready-for-dev`. **Epic 5 stands at 19/20**; 5.14b is
                           # the last story, then the RETROSPECTIVE, which is REQUIRED and which is
@@ -2837,7 +2859,7 @@ development_status:
   # ⚠️ NEXT = decide the Basic-auth question (measure first), then REWRITE, then re-validate.
   6-1-write-route-writes-nothing: done
   # through `insert_declared_attribute` and nowhere else; `SANCTIONED_SITES` gains one named entry
-  6-2-route-writes-a-declared-value: backlog
+  6-2-route-writes-a-declared-value: review
   # assertions 2 and 3, parked since Epic 5 for want of this gesture
   6-3-nfr5-remaining-assertions: backlog
   # FR13(a), *the day-one case*; the gesture belongs to the CAUSE, not the count

@@ -361,12 +361,13 @@ fn app(pool: MySqlPool, config: AppConfig) -> Router {
         .route("/assets/{*path}", get(page::asset))
         .route("/metrics", get(metrics::handler))
         .route("/healthz", get(healthz))
-        .with_state(pool);
+        .with_state(pool.clone());
     if config.document_enabled {
         // The switch governs EXISTENCE only (arbitration 4): merged above the layer, the route
-        // is auth-gated exactly like every other non-public path. Whether it is REACHABLE
-        // without a credential is `is_public`'s decision, and this story shrinks that list.
-        router = router.merge(document::router());
+        // is auth-gated exactly like every other non-public path. The pool lives INSIDE the
+        // store-backed port, not on the sub-router's state, so the handler still cannot extract
+        // it (story 6.1's M4 carrier survives, story 6.2).
+        router = router.merge(document::router(pool));
     }
     // Deny-by-default seam over every route AND the fallback (Story 3.8, story 6.1): the
     // public allowlist is `/healthz` + `/assets/*`, `/metrics` sits behind the scrape token,
@@ -689,14 +690,25 @@ mod tests {
         assert!(body.contains("subject"), "the 422 names the field: {body}");
     }
 
-    /// The production wiring is `AlwaysUnknown` (AC2): through the whole app, a well-formed
-    /// unknown subject answers the domain's pinned 404 body — non-empty, so it also
-    /// discriminates against the fallback.
+    /// The store-backed production route (story 6.2): through the whole app, a well-formed
+    /// unknown subject answers the domain's pinned 404 body — non-empty, so it discriminates
+    /// against the fallback. 🔴 **DB-gated**: under 6.2 the unknown-subject answer is a real
+    /// store read, so a lazy pool would answer 500, not 404 (validation §8(d)). A green LOCAL
+    /// suite says nothing here — the CI run is the oracle.
     #[tokio::test]
     async fn the_production_route_answers_the_pinned_unknown_subject_body() {
-        let app = app(lazy_pool(), config(true, Some(pair())));
-        let subject = uuid::Uuid::now_v7();
-        let response = app
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping document-route DB test: DATABASE_URL unset");
+            return;
+        };
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        let subject = uuid::Uuid::now_v7(); // never inserted → unknown
+        let response = app(pool, config(true, Some(pair())))
             .oneshot(document_post(
                 Some(&basic_header("op", "s3cret")),
                 &format!("subject={subject}"),
@@ -1258,6 +1270,198 @@ mod tests {
         assert!(html.contains("192.0.2.10"), "renders the entity");
         assert!(html.contains("nas"), "renders the declared hostname");
         assert!(html.contains("intruder"), "renders the observed hostname");
+    }
+
+    /// 🔴 Story 6.2, AC5 — J3's CORRECTED half, measured end-to-end for the first time: an
+    /// observation the product found → documented → the gap it would have shown is CLOSED.
+    /// Through the whole stack against a live MariaDB; the assertion is `gaps.is_empty()` AND
+    /// `abstention_count == 0` (validation H2: a wrong key yields an abstention, not a gap, so
+    /// both halves are load-bearing). Provenance is verified through the ONE sanctioned reader
+    /// (`repo::read_declared_provenance_for_test`, §6.5).
+    #[tokio::test]
+    async fn document_all_closes_the_gap_end_to_end() {
+        use opencmdb_core::observation::{
+            ConnectorId, Fact, HostnameSource, L2DomainId, ObsId, Observation, Scope, VantageId,
+        };
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping J3 DB test: DATABASE_URL unset");
+            return;
+        };
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        // Children before parents (the FK from identity_link.observation_id, 0003). Static SQL.
+        for statement in [
+            "DELETE FROM declared_attribute",
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+        ] {
+            sqlx::query(statement).execute(&pool).await.expect("clean");
+        }
+
+        // The day-one case (FR13(a)): a sighting with ipv4 + hostname, NO declared record.
+        let subject = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let observation = Observation {
+            obs_id: subject,
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::nil()),
+            observed_at: chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap(),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            },
+            facts: vec![
+                Fact::IpV4 {
+                    addr: "192.0.2.10".parse().unwrap(),
+                },
+                Fact::Hostname {
+                    name: "nas".into(),
+                    source: HostnameSource::Dns,
+                },
+            ],
+            raw: None,
+        };
+        repo::insert_observation(&pool, &observation)
+            .await
+            .expect("ingest");
+
+        // Document it — a braced spelling of the real id (the canonical-form closure, §2).
+        let response = app(pool.clone(), config(true, Some(pair())))
+            .oneshot(document_post(
+                Some(&basic_header("op", "s3cret")),
+                &format!("subject={{{}}}", subject.as_uuid()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let created = body_text(response).await;
+        // Parse the minted entity id out of the 201 body ("… as entity <uuid>").
+        let entity_id = created
+            .rsplit(' ')
+            .next()
+            .expect("entity id in body")
+            .to_string();
+
+        // Provenance: two adopted rows, origin_obs_id = the subject, human author.
+        let provenance = repo::read_declared_provenance_for_test(&pool, &entity_id)
+            .await
+            .expect("read provenance");
+        assert_eq!(provenance.len(), 2, "one adopted row per projected field");
+        for (key, origin, origin_obs_id, actor_id) in &provenance {
+            assert_eq!(origin, "adopted", "{key} is adopted");
+            assert_eq!(
+                origin_obs_id.as_deref(),
+                Some(subject.as_uuid().to_string().as_str()),
+                "{key} points at the subject"
+            );
+            assert_eq!(actor_id, "operator", "{key} carries a human author");
+        }
+
+        // 🔴 AC6's DIRECT oracle (code review): the documented KEYS equal `gap::project`'s keys
+        // through the REAL fn — not a copy. First-occurrence-wins dedup, then compare as sorted
+        // sets. A drifted key (M11) or a bin-local copy reds this directly, not only transitively.
+        let mut expected_keys: Vec<String> = Vec::new();
+        for (key, _) in opencmdb_core::gap::project(&observation) {
+            if !expected_keys.contains(&key) {
+                expected_keys.push(key);
+            }
+        }
+        expected_keys.sort();
+        let documented_keys: Vec<String> = provenance.iter().map(|(k, ..)| k.clone()).collect();
+        assert_eq!(
+            documented_keys, expected_keys,
+            "the documented keys ARE gap::project's keys, through the real fn"
+        );
+
+        // The gap is CLOSED: reconcile the documented entity, no gap AND no abstention.
+        let declared: Vec<(String, String)> = repo::load_declared_attributes(&pool)
+            .await
+            .expect("load declared")
+            .into_iter()
+            .filter(|(e, _, _)| *e == entity_id)
+            .map(|(_, k, v)| (k, v))
+            .collect();
+        let reconciliation =
+            opencmdb_core::gap::reconcile(("ipv4", "192.0.2.10"), &declared, &[observation]);
+        assert!(
+            reconciliation.gaps.is_empty(),
+            "the documented fields carry no divergence: {:?}",
+            reconciliation.gaps
+        );
+        assert_eq!(
+            reconciliation.abstention_count(),
+            0,
+            "no abstention on the documented entity: {:?}",
+            reconciliation.abstentions
+        );
+    }
+
+    /// 🔴 Story 6.2, AC2 (M6) — a subject whose facts project to NOTHING (an Rtt-only sighting)
+    /// answers 422 `NothingToDocument` through the STORE-BACKED port, and writes no row. This is
+    /// the store-level carrier the handler-arm test cannot be (it injects the refusal directly);
+    /// without it, removing the port's empty-projection guard is invisible (validation: a guard
+    /// placed where the defect cannot occur reads as coverage and is none).
+    #[tokio::test]
+    async fn an_empty_projection_subject_answers_nothing_to_document_and_writes_nothing() {
+        use opencmdb_core::observation::{
+            ConnectorId, Fact, L2DomainId, ObsId, Observation, Scope, VantageId,
+        };
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping empty-projection DB test: DATABASE_URL unset");
+            return;
+        };
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        for statement in [
+            "DELETE FROM declared_attribute",
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+        ] {
+            sqlx::query(statement).execute(&pool).await.expect("clean");
+        }
+        let subject = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let observation = Observation {
+            obs_id: subject,
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::nil()),
+            observed_at: chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap(),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            },
+            facts: vec![Fact::Rtt { millis: 3 }], // ignored by `gap::project` → empty projection
+            raw: None,
+        };
+        repo::insert_observation(&pool, &observation)
+            .await
+            .expect("ingest");
+
+        let response = app(pool.clone(), config(true, Some(pair())))
+            .oneshot(document_post(
+                Some(&basic_header("op", "s3cret")),
+                &format!("subject={}", subject.as_uuid()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(
+            body_text(response).await,
+            "nothing to document: the observation carries no declarable field"
+        );
+        assert_eq!(
+            repo::count_declared_attributes(&pool).await.expect("count"),
+            0,
+            "nothing was written"
+        );
     }
 
     /// The auth-deny seam, exercised without a database (a lazy pool never connects because these

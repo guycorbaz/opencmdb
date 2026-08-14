@@ -132,6 +132,131 @@ where
     Ok(())
 }
 
+/// Adopt one observed value into the declared record — the documenting gesture's write (story
+/// 6.2, FR13(a)). Static SQL; the four data parameters are BOUND (D48), and `origin`/`actor_id`
+/// are SQL LITERALS: `'adopted'` (a documented value is an adopted one — `0001_initial.sql`'s
+/// own vocabulary, whose `declared_adopted_has_obs` CHECK requires the `origin_obs_id` this fn
+/// always supplies) and `'operator'` (there is no actor parameter to pass a non-human author
+/// through — NFR5's third assertion holds by this signature, story 5.12's structural constraint).
+///
+/// ⚠️ This is `SANCTIONED_SITES`' fourth entry (`xtask`): the ONLY place an `'adopted'` row is
+/// written. Moving this INSERT elsewhere reds the authorship gate — the intended coupling.
+///
+/// # Errors
+///
+/// A `sqlx::Error` — the caller (`StoreDocument`) inspects a unique violation naming
+/// `declared_one_adoption_per_field` to answer `AlreadyDocumented`, and classifies the rest.
+pub async fn adopt_declared_attribute<'e, E>(
+    executor: E,
+    entity_id: &str,
+    attr_key: &str,
+    attr_value: &str,
+    origin_obs_id: &str,
+) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    sqlx::query(
+        "INSERT INTO declared_attribute \
+         (entity_id, attr_key, attr_value, origin, origin_obs_id, actor_id, updated_at) \
+         VALUES (?, ?, ?, 'adopted', ?, 'operator', NOW(6))",
+    )
+    .bind(entity_id)
+    .bind(attr_key)
+    .bind(attr_value)
+    .bind(origin_obs_id)
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
+/// Read the provenance of an entity's declared rows, for tests that VERIFY the documenting
+/// write authored an `'adopted'` row (story 6.2, §6.5). Returns `(attr_key, origin,
+/// origin_obs_id, actor_id)` per row, ordered by key.
+///
+/// 🔴 This is the ONE sanctioned READER of provenance columns (`SANCTIONED_READS` in `xtask`,
+/// keyed on this fn's name) — FR13 bans the DIVERGENCE COMPUTATION from consulting how a value
+/// was obtained, not a test that checks the write did its job. Production reads no provenance:
+/// the already-documented refusal rides the unique index, not a `SELECT`. Renaming this fn
+/// turns the authorship gate red, which is the intended coupling.
+#[cfg(test)]
+pub(crate) async fn read_declared_provenance_for_test(
+    pool: &MySqlPool,
+    entity_id: &str,
+) -> Result<Vec<(String, String, Option<String>, String)>, sqlx::Error> {
+    let rows = sqlx::query_as(
+        "SELECT attr_key, origin, origin_obs_id, actor_id FROM declared_attribute \
+         WHERE entity_id = ? ORDER BY attr_key",
+    )
+    .bind(entity_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+/// Load one observation by its id, reconstructed whole so it composes with
+/// [`opencmdb_core::gap::project`] (story 6.2). `None` when the id names no row — the
+/// documenting gesture's `UnknownSubject`. Static SQL; the facts JSON is deserialized in Rust
+/// (D10 — SQL never compares a value).
+///
+/// # Errors
+///
+/// A `sqlx::Error` on a backend failure or a facts payload that is not valid JSON.
+pub async fn load_observation_by_id<'e, E>(
+    executor: E,
+    obs_id: &str,
+) -> Result<Option<opencmdb_core::observation::Observation>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    use opencmdb_core::observation::{
+        ConnectorId, Fact, L2DomainId, ObsId, Observation, Scope, VantageId,
+    };
+    use uuid::Uuid;
+
+    // `observed_at` is read as TEXT and parsed: sqlx here has no `chrono` feature (its Cargo
+    // features are mysql/migrate/macros only), and `insert_observation` writes the instant as a
+    // formatted string too — so the column round-trips through text, never a native decode.
+    // The row columns: (id, connector_id, observed_at, l2_domain, vantage, facts, raw).
+    type ObservationRow = (
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+    );
+    let row: Option<ObservationRow> = sqlx::query_as(
+        "SELECT id, connector_id, DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%s.%fZ'), \
+             l2_domain, vantage, facts, raw \
+             FROM observation_record WHERE id = ?",
+    )
+    .bind(obs_id)
+    .fetch_optional(executor)
+    .await?;
+    let Some((id, connector_id, observed_at, l2_domain, vantage, facts, raw)) = row else {
+        return Ok(None);
+    };
+    let parse = |s: &str| Uuid::parse_str(s).map_err(|e| sqlx::Error::Decode(Box::new(e)));
+    let observed_at = chrono::DateTime::parse_from_rfc3339(&observed_at)
+        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+        .with_timezone(&chrono::Utc);
+    let facts: Vec<Fact> =
+        serde_json::from_str(&facts).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+    Ok(Some(Observation {
+        obs_id: ObsId::from_uuid(parse(&id)?),
+        connector_id: ConnectorId::from_uuid(parse(&connector_id)?),
+        observed_at,
+        scope: Scope {
+            l2_domain: L2DomainId::from_uuid(parse(&l2_domain)?),
+            vantage: VantageId::from_uuid(parse(&vantage)?),
+        },
+        facts,
+        raw,
+    }))
+}
+
 /// Insert one observation (immutable, linked-never-merged, FR11). `facts` serialize to JSON —
 /// the engine deserializes and compares in Rust; SQL never compares (D10). All values are bound
 /// as Strings (D48); `observed_at` as a MariaDB datetime literal.
@@ -1217,17 +1342,31 @@ mod tests {
     /// identifier. Renaming it turns the gate red, which is the intended coupling — the exemption is
     /// one named site, not a blanket `#[cfg(test)]` hole (measured at story 5.12's validation to
     /// hide a planted write).
+    ///
+    /// 🔴 WIDENED at story 6.2 (same name, same site — the gate keys on `(path, fn)`, so
+    /// parameters are invisible to it): it now carries `attr_key`, `origin` and `origin_obs_id`
+    /// so the adoption-collision probe (AC4) can plant an `'adopted'` row through the ONE
+    /// sanctioned raw writer, which is the only legal home for a raw declared INSERT.
+    #[allow(clippy::too_many_arguments)]
     async fn raw_declared_write_for_ddl_test(
         pool: &MySqlPool,
         entity_id: &str,
+        attr_key: &str,
+        attr_value: &str,
+        origin: &str,
+        origin_obs_id: Option<&str>,
         actor_id: &str,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             "INSERT INTO declared_attribute \
-             (entity_id, attr_key, attr_value, origin, actor_id, updated_at) \
-             VALUES (?, 'hostname', 'nas', 'manual', ?, NOW(6))",
+             (entity_id, attr_key, attr_value, origin, origin_obs_id, actor_id, updated_at) \
+             VALUES (?, ?, ?, ?, ?, ?, NOW(6))",
         )
         .bind(entity_id)
+        .bind(attr_key)
+        .bind(attr_value)
+        .bind(origin)
+        .bind(origin_obs_id)
         .bind(actor_id)
         .execute(pool)
         .await
@@ -1248,6 +1387,10 @@ mod tests {
         let refused = raw_declared_write_for_ddl_test(
             &pool,
             "00000000-0000-0000-0000-0000000000f1",
+            "hostname",
+            "nas",
+            "manual",
+            None,
             "scanner",
         )
         .await;
@@ -1273,6 +1416,10 @@ mod tests {
         let padded = raw_declared_write_for_ddl_test(
             &pool,
             "00000000-0000-0000-0000-0000000000f2",
+            "hostname",
+            "nas",
+            "manual",
+            None,
             "scanner ",
         )
         .await;
@@ -1299,6 +1446,10 @@ mod tests {
         let accepted = raw_declared_write_for_ddl_test(
             &pool,
             "00000000-0000-0000-0000-0000000000f3",
+            "hostname",
+            "nas",
+            "manual",
+            None,
             "engine",
         )
         .await;
@@ -1311,6 +1462,87 @@ mod tests {
             1,
             "🔑 the row IS there: the database's guarantee is one spelling, and the gate is what \
              holds the property"
+        );
+    }
+
+    /// 🔴 Story 6.2, AC4 (M10) — the anti-double-count index BITES: one observation's field may
+    /// be adopted only ONCE. Measured through RAW SQL (the adapter's `document_all` cannot
+    /// construct a second adoption — it mints a fresh entity each call), via the sanctioned raw
+    /// writer. The loser's error names `declared_one_adoption_per_field`, which is what the port
+    /// keys the friendly 409 on.
+    #[tokio::test]
+    async fn a_second_adoption_of_one_observations_field_is_refused_by_the_index() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = declared_fixture().await else {
+            return;
+        };
+        let obs = "00000000-0000-0000-0000-0000000000a1";
+
+        let first = raw_declared_write_for_ddl_test(
+            &pool,
+            "00000000-0000-0000-0000-0000000000e1",
+            "ipv4",
+            "192.0.2.10",
+            "adopted",
+            Some(obs),
+            "operator",
+        )
+        .await;
+        assert!(first.is_ok(), "the first adoption is accepted: {first:?}");
+
+        // A SECOND adoption of the SAME (observation, field) — a different entity, same obs/key.
+        let second = raw_declared_write_for_ddl_test(
+            &pool,
+            "00000000-0000-0000-0000-0000000000e2",
+            "ipv4",
+            "198.51.100.7",
+            "adopted",
+            Some(obs),
+            "operator",
+        )
+        .await;
+        assert!(second.is_err(), "the index must refuse the second adoption");
+        let message = match &second {
+            Err(error) => error
+                .as_database_error()
+                .map(|db| db.message().to_string())
+                .unwrap_or_default(),
+            Ok(()) => String::new(),
+        };
+        assert!(
+            message.contains("declared_one_adoption_per_field"),
+            "the refusal names the index the port keys the 409 on: {message}"
+        );
+        assert_eq!(
+            count_declared_attributes(&pool).await.expect("count"),
+            1,
+            "the second adoption wrote nothing"
+        );
+    }
+
+    /// 🔑 Two 'manual' rows for one field coexist — the index uses NULL-distinctness (D21), so
+    /// only adopted rows (with a non-NULL origin_obs_id) collide. Guards against the index
+    /// accidentally constraining the manual write path.
+    #[tokio::test]
+    async fn two_manual_rows_for_one_field_coexist_under_the_index() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = declared_fixture().await else {
+            return;
+        };
+        for entity in [
+            "00000000-0000-0000-0000-0000000000b1",
+            "00000000-0000-0000-0000-0000000000b2",
+        ] {
+            let written = raw_declared_write_for_ddl_test(
+                &pool, entity, "hostname", "nas", "manual", None, "operator",
+            )
+            .await;
+            assert!(written.is_ok(), "manual rows never collide: {written:?}");
+        }
+        assert_eq!(
+            count_declared_attributes(&pool).await.expect("count"),
+            2,
+            "both manual rows are there"
         );
     }
 
