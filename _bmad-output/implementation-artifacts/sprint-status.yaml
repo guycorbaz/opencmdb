@@ -75,9 +75,17 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-14  # 6.2 CONTEXTED -> `ready-for-dev` (meaning only "a story file
-                          # exists" -- the MANDATORY two-layer validation has NOT run yet and
-                          # comes before any dev). 🔴 The contexting found the epic AC's letter
+last_updated: 2026-08-14  # 6.2 VALIDATED -> stays `ready-for-dev` (now MEANT: contexted AND
+                          # its mandatory validation done -- three sources, incl. a gap-hunt that
+                          # BUILT the design against a live MariaDB, + the two-browser CSRF bench).
+                          # 1 HIGH arbitration taken by Guy (option A: the authorship gate gains a
+                          # named READ-sanction, FR13-framed -- 5.12's write-guard did not cover a
+                          # legitimate provenance READER); 4 mutation-row defects the build
+                          # measured (M8 GREEN by the index, M11's oracle is abstention not gap,
+                          # M12 needs a source scan not a behavioural test, M2's gate message);
+                          # ~10 text corrections; ALL APPLIED. CSRF (row j) CLOSED by the Origin
+                          # check, Chromium bench (row a) discharged, Gecko-cross-site residual
+                          # re-registered. 🔴 The contexting found the epic AC's letter
                           # WRONG about the fn: "through `insert_declared_attribute`" would add
                           # ZERO sanctioned sites while the same AC says "gains exactly one" --
                           # the schema resolves it (a documented value is an ADOPTED one,

@@ -3292,9 +3292,16 @@ usable.** It came out of the code review's `no_match` finding and settles it:
 Ten rows, each with its owner (AC7 — re-read against the AC's list, not against this output;
 story 5.14b's AC10 failed exactly there).
 
-- **(a) The Chromium half of the Basic browser measurement.** The §4 bench (an `hx-post` carries
-  the cached Basic credential) ran on Firefox 153 only — Gecko's answer, not the web's.
-  **Owner: story 6.2's validation bench.**
+- **(a) The Chromium half of the Basic browser measurement.** ✅ **DISCHARGED-for-Chromium at
+  story 6.2's validation, 2026-08-14**: the two-origin CSRF bench measured Chrome/Blink 151 on
+  both probes (same-origin `hx-post` carries `Origin` = page origin; cross-site `<form>` POST
+  carries `Origin` = attacker ≠ `Host`), confirming the §5 mechanism on Blink. ⚠️ **RESIDUAL,
+  re-registered: the Gecko-CROSS-SITE cell** — Firefox headless made zero requests in the
+  validation environment (four launch strategies incl. xvfb); Gecko same-origin was 6.1's
+  bench, and the cross-site behaviour is engine-independent by the HTML standard (Origin is
+  mandatory on cross-origin requests), so this is a small re-measurement owed on a machine with a
+  working Firefox, not a blocker. **Owner of the residual: Epic 19's session closure** (or any
+  session with a working Gecko bench).
 - **(b) Credential expiry / the browser's native dialog mid-swap.** The vendored htmx 2.0.4's
   default `responseHandling` does not swap a 4xx into `#gap-card` (read during validation), so
   the residual concern is only the native dialog. **Owner: story 6.4.**
@@ -3323,11 +3330,16 @@ story 5.14b's AC10 failed exactly there).
   authenticates a caller, not a person). **Owner: Epic 19.**
 - **(i) The D37 filename drift**: the vendored file is `htmx.min.js` unversioned where
   `architecture.md:3406` names a versioned filename. **Owner: Epic 6b story 6b.1.**
-- **(j) 🔴 CSRF protection for the write route.** Basic does NOT close CSRF: once the browser
-  holds the credential it attaches it by AMBIENT AUTHORITY, to a cross-site form POST included —
-  the §4 bench probed only same-origin initiators and must not be quoted wider. Harmless in
-  story 6.1 (the route has no effect to forge); it stops being harmless the day the route
-  writes. **Owner: story 6.2**, the story where the route first has an effect to forge.
+- **(j) 🔴 CSRF protection for the write route.** ✅ **CLOSED by story 6.2's Origin check**
+  (contexted + validated 2026-08-14, §5): a browser holding the cached Basic credential and a
+  cross-site page cannot forge a documenting write — the POST carries the attacker's `Origin`
+  (measured, Blink), which the check refuses 403 before any refusal path consults the form. ⚠️
+  **RESIDUALS re-registered, each stated at its strength**: pre-2020 browsers that omit `Origin`
+  on a cross-site POST are not protected (LAN single-operator product); the check needs the
+  reverse proxy to FORWARD `Host` (`proxy_set_header Host $host;` — nginx's default rewrites it
+  and would 403 every POST); `Host`-absent HTTP/2 direct clients are refused; and the
+  Gecko-cross-site bench cell (row (a)) is owed. **Owner of the residuals: Epic 19** (real
+  sessions + a session token supersede the Origin heuristic entirely).
 
 ## Deferred from: code review of 6-1-write-route-writes-nothing (2026-08-14)
 
@@ -3342,3 +3354,20 @@ story 5.14b's AC10 failed exactly there).
   lookup should also require the canonical hyphenated form and/or v7 is the write story's
   question — a braced or urn: spelling of a REAL id parses to the same id today, which is
   harmless until something round-trips the text. Owner: story 6.2.
+
+## Deferred from: validation of 6-2-route-writes-a-declared-value (2026-08-14)
+
+- **The canonical-UUID form question (story 6.1's review registered it here).** ✅ **CLOSED by
+  story 6.2 §2**: the subject id is bound as `subject.as_uuid().to_string()` — canonical
+  hyphenated lowercase — before any SQL sees it, so a braced/urn:/hyphenless spelling of a real
+  id is harmless BY CONSTRUCTION (measured: a braced spelling answers 201). No further work.
+- **🔴 The authorship gate now carries a READ-sanction (story 6.2 §6.5, Guy's arbitration
+  2026-08-14).** 5.12's gate guarded the WRITE of provenance; 6.2 is the first story with a
+  legitimate provenance READER (a test verifier), so the gate gains a `SANCTIONED_READS`
+  allowlist, FR13-framed (*the divergence computation* may never read provenance — not *all*
+  code). It is a TRIPWIRE against a future read into a divergence path, never a barrier — the
+  same narrowed promise 5.12 stated for the write half. **Owner: Epic 6's retrospective** (it is
+  a deliberate widening of 5.12's apparatus and should be reviewed as one).
+- **`actor_id = 'operator'` is a LITERAL — no real actors yet.** The documenting write records a
+  human author, but the Basic pair authenticates a caller, not a person (6.1 §3), so every
+  documented row carries `'operator'`. Real per-user actors need sessions. **Owner: Epic 19.**
