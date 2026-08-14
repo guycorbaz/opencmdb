@@ -3393,3 +3393,35 @@ Re-read against the story's AC8 list.
   story's bug (the entity model is 6.5's). **Owner: story 6.5.**
 - **(6) Epic 7's `document-field` must negotiate the PRIMARY KEY**, not this index: re-documenting
   one entity's same field reds `1062 … PRIMARY` (measured). **Owner: Epic 7.**
+
+## Deferred from: code review of 6-2-route-writes-a-declared-value (2026-08-14)
+
+- **HTTP/2-direct and scheme-blind CSRF limits.** `same_origin` refuses a `Host`-absent request
+  (HTTP/2 `:authority`) and is scheme-blind; both are stated limits — the product deploys behind a
+  reverse proxy that forwards `Host` (`architecture.md:168`). **Owner: Epic 19** (sessions + a
+  token supersede the Origin heuristic).
+- **`is_adoption_conflict` couples to the DB error message text.** Measured robust on MariaDB
+  10.11.11 (the index name is interpolated data, not localized prose), but a SQLSTATE `23000` +
+  name check would be strictly more robust. **Owner: whoever next touches the adapter's error
+  classification.**
+- **The first-occurrence-wins dedup is hand-rolled in `document.rs`** where `gap::project`'s doc
+  promises the first-occurrence convention. Extract a shared helper when the second caller lands
+  (story 6.4's button / Epic 7's `document-field`). **Owner: story 6.4 or Epic 7.**
+- **`observed_at` nano-precision truncates at INSERT** (`%.6f`, pre-existing) — harmless for 6.2
+  (`observed_at` is not a declared field), and `load_observation_by_id` is faithful to what is
+  stored. **Owner: the story that first needs sub-microsecond instants (none foreseen).**
+
+## Deferred from: code review of 6-2 — the multi-value decision (Guy, 2026-08-14)
+
+- **A same-key multi-value observation (e.g. two `Fact::IpV4`) documents "success" (201, N
+  fields) while its gap stays OPEN.** Measured: `document-all` writes the FIRST value per key
+  (forced by the PK), answers 201, but `reconcile` reads the two observed values as conflicting,
+  drops the field, and the just-documented `ipv4` returns as a `NoObservedValue` abstention — the
+  operator is told they closed a gap that stays open. §3 documents the abstention. 🔴 **NOT
+  reachable today**: no shipped connector or fixture emits two facts of one kind in one
+  observation (the `multi-nic` family is N single-MAC observations). **Guy's decision: DEFER** —
+  keep first-wins, do not add a model decision here; the one-value-per-`attr_key` model is story
+  6.5's and multi-value facts are a connector story's concern. **Owner: the story that first makes
+  a same-key multi-value observation reachable** (a connector emitting multi-value facts, or the
+  entity model of 6.5). The fix then is either to refuse a self-conflicting projection or to model
+  multiple values — a decision that story owns, not 6.2.

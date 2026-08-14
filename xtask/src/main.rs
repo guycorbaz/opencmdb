@@ -1680,6 +1680,12 @@ fn authorship_findings(content: &str, shown: &str, sql: bool) -> Vec<(usize, Str
 /// It walks `.rs` **and** `.sql` under [`AUTHORSHIP_ROOTS`]. A `.sql` migration was measured to be
 /// the most natural home for a bulk author rewrite and entirely invisible to a `.rs`-only walk.
 ///
+/// TWO halves, each with its own named allowlist (story 6.2 added the read half's):
+/// - the **WRITE half** flags any INSERT/UPDATE of `declared_attribute` outside [`SANCTIONED_SITES`];
+/// - the **READ half** flags any `SELECT` naming a [`PROVENANCE_COLUMNS`] entry outside
+///   [`SANCTIONED_READS`] — FR13 bans the *divergence computation* from consulting HOW a value was
+///   obtained, not a test that verifies the documenting write authored an `'adopted'` row.
+///
 /// # What it promises, and what it does not
 ///
 /// 🔴 **It catches the good-faith violation, not the determined one, and the difference is

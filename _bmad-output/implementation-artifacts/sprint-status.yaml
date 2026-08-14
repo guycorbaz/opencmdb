@@ -75,9 +75,10 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-14  # 6.2 -> `review`: dev-story complete (566 -> 580 tests, the route
-                          # now WRITES an adopted declared value, J3's corrected half measured
-                          # end-to-end). Mutation pass: 13 reds + M4 compile + M7/M8
+last_updated: 2026-08-14  # 6.2 -> `review`: dev-story complete (the live test count lives in the
+                          # STORY FILE, its AC9 -- this comment must not carry it, F2's rule).
+                          # The route now WRITES an adopted declared value, J3's corrected half
+                          # measured end-to-end. Mutation pass: 13 reds + M4 compile + M7/M8
                           # green-by-structure; three findings (M6's missing empty-projection test
                           # ADDED, M9b's dead null check removed, M7 recorded). `done` is the
                           # MERGE's business. (Earlier: VALIDATED -> stays `ready-for-dev` (now MEANT: contexted AND

@@ -1361,6 +1361,22 @@ mod tests {
             assert_eq!(actor_id, "operator", "{key} carries a human author");
         }
 
+        // 🔴 AC6's DIRECT oracle (code review): the documented KEYS equal `gap::project`'s keys
+        // through the REAL fn — not a copy. First-occurrence-wins dedup, then compare as sorted
+        // sets. A drifted key (M11) or a bin-local copy reds this directly, not only transitively.
+        let mut expected_keys: Vec<String> = Vec::new();
+        for (key, _) in opencmdb_core::gap::project(&observation) {
+            if !expected_keys.contains(&key) {
+                expected_keys.push(key);
+            }
+        }
+        expected_keys.sort();
+        let documented_keys: Vec<String> = provenance.iter().map(|(k, ..)| k.clone()).collect();
+        assert_eq!(
+            documented_keys, expected_keys,
+            "the documented keys ARE gap::project's keys, through the real fn"
+        );
+
         // The gap is CLOSED: reconcile the documented entity, no gap AND no abstention.
         let declared: Vec<(String, String)> = repo::load_declared_attributes(&pool)
             .await

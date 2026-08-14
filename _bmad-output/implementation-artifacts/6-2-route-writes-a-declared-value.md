@@ -586,6 +586,24 @@ no count in `sprint-status.yaml`'s comments).
       mutation pass** (Dev Notes); fix the FOURTH broken 6.1 test (§8(d)) and verify IN CI
 - [x] **T10 — the register and the documents** (AC8, AC9)
 
+### Review Findings (code review 2026-08-14, three layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor)
+
+🔑 **The core design was MEASURED sound**: the Auditor re-executed M1/M2/M4/M6/M7/M10/M11/M13 — every one matched the record; the Edge Case Hunter REFUTED, by measurement against the live DB, the concurrency (201/409, exactly one entity's rows), the partial-rollback (no orphan), `is_adoption_conflict` (fires on 10.11), the read-sanction (load-bearing), the 500 no-leak, and the whole CSRF taxonomy. All 9 ACs MET except AC9. 13 findings after dedup: 6 patch, 1 decision, 4 defer, 1 dismissed.
+
+- [x] [Review][Defer] (Guy, 2026-08-14) **A same-key multi-value observation is documented "success" (201) but its gap does NOT close** — measured: two `Fact::IpV4` → 201 "2 fields", but `reconcile` reads the two values as CONFLICTING, drops the field, and the just-documented `ipv4` returns as a `NoObservedValue` abstention (the gap the operator was told they closed stays open). Contradicts the write's own "a multi-homed device is normal, not a refusal". ⚠️ **NOT reachable today** (no shipped connector/fixture emits two IpV4 in one observation); §3 documents the abstention. Options: (a) refuse a self-conflicting same-key projection (honest — don't claim success on a value the reconcile will abstain on); (b) defer to the entity-model / connector story with the §3 documentation (the one-value-per-attr_key model is 6.5's). [crates/opencmdb-bin/src/document.rs:181-191]
+- [x] [Review][Patch] 🔴 AC9 violated: the live count "566 → 580" was re-committed into `sprint-status.yaml`'s comment (the exact F2 defect 6.1's review removed) AND repeated in both twins (6.1's twins cited the file WITHOUT the number). Remove the number from all three; cite the story file only. [sprint-status.yaml, CLAUDE.md, docs/project-context.md]
+- [x] [Review][Patch] `an_absent_origin_passes_the_csrf_check` passes for the WRONG reason: `answer()`→`form_post()` always sets `Origin: http://nas:8080`, so it sends a MATCHING origin, never an absent one. The e2e absent-Origin path is uncovered. Send a request with NO Origin header. [crates/opencmdb-bin/src/document.rs, the CSRF tests]
+- [x] [Review][Patch] The 201-body oracle `assert!(body.contains('2'))` is weak — any '2' in the entity UUID satisfies it (green only because the fixture id has no '2'). Assert the exact `"2 field(s)"` substring. [crates/opencmdb-bin/src/document.rs:452]
+- [x] [Review][Patch] AC6's prescribed direct oracle is absent: no test asserts documented keys == `gap::project(&obs)` through the REAL fn (the property is carried transitively by the source-scan + J3 abstention). Add the keys-equality test the AC and §3's DRY note name. [crates/opencmdb-bin/src/document.rs or repo.rs test module]
+- [x] [Review][Patch] §6.5's "the module-doc enumeration must be updated" is unmet: the authorship gate's module doc (`xtask/src/main.rs`) was not expanded for the read-sanction. It stayed TRUE (no drift), but add the read-half to the enumeration as §6.5 required. [xtask/src/main.rs]
+- [x] [Review][Patch] `same_origin` refuses >1 `Origin` header but reads `Host` with `.get()` (first value), applying none of that reasoning to the other half of the compare. Guard `Host` multiplicity symmetrically. [crates/opencmdb-bin/src/document.rs:354-370]
+- [x] [Review][Defer] HTTP/2 direct (`:authority`, no `Host`) → 403 on every POST — a stated limit, registered to Epic 19; the product deploys behind a reverse proxy (`architecture.md:168`). Pre-existing design, not this change's defect.
+- [x] [Review][Defer] `same_origin` scheme-blind — a stated limit, registered. [document.rs]
+- [x] [Review][Defer] `is_adoption_conflict` couples to the DB error message text — REFUTED as a live defect (works on 10.11, index name is data not localized prose); a SQLSTATE+name check would be more robust. [document.rs]
+- [x] [Review][Defer] DRY: the first-wins dedup loop is hand-rolled where `gap::project`'s doc promises the convention; a second caller (6.4/Epic 7) re-derives it. Extract a helper when the second caller lands. [document.rs:181-191]
+- [x] [Review][Defer] `observed_at` round-trip: the `Z`/UTC assumption holds only for a tz-naive `DATETIME` (measured exact for micro-and-coarser instants); a nano instant truncates at INSERT (pre-existing `%.6f`, write-side, harmless — `observed_at` is not a declared field). [repo.rs::load_observation_by_id]
+- **Dismissed** (1): `SANCTIONED_READS`' `None`-means-whole-file semantics is a latent blanket-exempt — but it is the SAME deliberate pattern as `SANCTIONED_SITES` (`docker/seed-example.sql` uses `None`), the current entry is `Some(...)`-scoped, and it is not a defect in the shipped state.
+
 ---
 
 ## 9. Prove-to-red
@@ -790,3 +808,15 @@ claimed* — the gate reds are the gate's own output, honestly.
   tests, seven gates green. Mutation pass: 13 reds + M4 compile + M7/M8 green-by-structure; three
   findings (M6's missing test added, M9b's dead null check removed, M7 recorded). Status →
   `review`.
+- 2026-08-14 — three-layer code review: 13 findings after dedup (6 patch, 1 decision→deferred by
+  Guy, 4 defer, 1 dismissed). 🔑 The core design was MEASURED sound — every re-executed mutation
+  matched the record, and the Edge Case Hunter refuted the concurrency/rollback/CSRF/read-sanction
+  concerns by measurement. Patches applied: AC9's leaked count removed from `sprint-status.yaml` +
+  both twins (F2 recurrence); the absent-Origin test rewritten to actually send no Origin (it
+  passed for the wrong reason); the 201 body oracle tightened to `"2 field(s)"`; AC6's direct
+  keys==`gap::project` oracle added to the J3 test (proven red under a wrong key); §6.5's gate
+  module-doc enumeration expanded for the read half; `Host` multiplicity guarded symmetrically
+  with `Origin`. The two new guards proven red-when-broken. Deferred (Guy): a same-key multi-value
+  observation documents "success" while its gap stays open — NOT reachable today, owned by the
+  model/connector story. Live count unchanged (580; tests modified, not added). Stays `review` —
+  `done` is the MERGE's business.
