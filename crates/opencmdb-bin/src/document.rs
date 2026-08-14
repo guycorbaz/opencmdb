@@ -240,8 +240,8 @@ async fn document_all(
 ///
 /// - **`Origin` absent → PASS** — a machine caller (`curl -u`) sends none; the threat is a
 ///   BROWSER, which sends `Origin` on every cross-site POST (measured, Blink);
-/// - **`Origin: null` → REFUSE** — sandboxed iframes / some redirect chains; no legitimate
-///   same-origin caller sends it;
+/// - **`Origin: null` → REFUSE** — sandboxed iframes / some redirect chains; refused because it
+///   carries no `://` authority to match (no dedicated branch — measured redundant);
 /// - **`Origin` present → compare its authority against `Host`**, ASCII case-insensitively;
 ///   match → pass, mismatch → refuse. ⚠️ Stated limits: this needs the reverse proxy to FORWARD
 ///   `Host` (`proxy_set_header Host $host;` — nginx's default rewrite would refuse every POST);
@@ -260,10 +260,10 @@ fn same_origin(headers: &HeaderMap) -> bool {
     let Ok(origin) = origin.to_str() else {
         return false;
     };
-    if origin.eq_ignore_ascii_case("null") {
-        return false;
-    }
-    // Strip the scheme; compare host[:port] against Host.
+    // Strip the scheme; compare host[:port] against Host. `Origin: null` (opaque origins —
+    // sandboxed iframes, some redirect chains) carries no `://`, so it falls into the refusal
+    // below without a dedicated branch (a dedicated `== "null"` check was measured redundant at
+    // the mutation pass — it is refused by the missing scheme regardless).
     let origin_authority = origin.split_once("://").map(|(_, rest)| rest);
     let Some(origin_authority) = origin_authority else {
         return false;

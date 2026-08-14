@@ -1384,6 +1384,70 @@ mod tests {
         );
     }
 
+    /// 🔴 Story 6.2, AC2 (M6) — a subject whose facts project to NOTHING (an Rtt-only sighting)
+    /// answers 422 `NothingToDocument` through the STORE-BACKED port, and writes no row. This is
+    /// the store-level carrier the handler-arm test cannot be (it injects the refusal directly);
+    /// without it, removing the port's empty-projection guard is invisible (validation: a guard
+    /// placed where the defect cannot occur reads as coverage and is none).
+    #[tokio::test]
+    async fn an_empty_projection_subject_answers_nothing_to_document_and_writes_nothing() {
+        use opencmdb_core::observation::{
+            ConnectorId, Fact, L2DomainId, ObsId, Observation, Scope, VantageId,
+        };
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping empty-projection DB test: DATABASE_URL unset");
+            return;
+        };
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        for statement in [
+            "DELETE FROM declared_attribute",
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+        ] {
+            sqlx::query(statement).execute(&pool).await.expect("clean");
+        }
+        let subject = ObsId::from_uuid(uuid::Uuid::now_v7());
+        let observation = Observation {
+            obs_id: subject,
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::nil()),
+            observed_at: chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap(),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            },
+            facts: vec![Fact::Rtt { millis: 3 }], // ignored by `gap::project` → empty projection
+            raw: None,
+        };
+        repo::insert_observation(&pool, &observation)
+            .await
+            .expect("ingest");
+
+        let response = app(pool.clone(), config(true, Some(pair())))
+            .oneshot(document_post(
+                Some(&basic_header("op", "s3cret")),
+                &format!("subject={}", subject.as_uuid()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(
+            body_text(response).await,
+            "nothing to document: the observation carries no declarable field"
+        );
+        assert_eq!(
+            repo::count_declared_attributes(&pool).await.expect("count"),
+            0,
+            "nothing was written"
+        );
+    }
+
     /// The auth-deny seam, exercised without a database (a lazy pool never connects because these
     /// routes issue no query). Deny-by-default holds; `/metrics` sits behind the scrape token; the
     /// public allowlist stays reachable.

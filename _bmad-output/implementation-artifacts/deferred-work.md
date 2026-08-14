@@ -3371,3 +3371,24 @@ story 5.14b's AC10 failed exactly there).
 - **`actor_id = 'operator'` is a LITERAL — no real actors yet.** The documenting write records a
   human author, but the Basic pair authenticates a caller, not a person (6.1 §3), so every
   documented row carries `'operator'`. Real per-user actors need sessions. **Owner: Epic 19.**
+## Deferred from: story-6.2, the write path (2026-08-14)
+
+Re-read against the story's AC8 list.
+
+- **(1) The `epics.md:1768` wording divergence** — *"through `insert_declared_attribute`"* reads
+  as *"through the repo adapter"*; the write goes through the sibling `adopt_declared_attribute`.
+  **Owner: Epic 6's retrospective** (`epics.md` untouched, verify-only rule).
+- **(2) CSRF residuals** (row (j) is CLOSED by the Origin check): pre-2020 browsers that omit
+  `Origin` on a cross-site POST; the reverse proxy must FORWARD `Host` (`proxy_set_header Host
+  $host;`); `Host`-absent HTTP/2 direct clients are refused; the compare is scheme-blind; the
+  Gecko-cross-site bench cell. **Owner: Epic 19** (sessions + a token supersede the heuristic).
+- **(3) `actor_id = 'operator'` is a LITERAL** — no real per-user actors; the Basic pair
+  authenticates a caller, not a person. **Owner: Epic 19.**
+- **(4) 🔴 The authorship gate's READ-sanction (§6.5)** is a TRIPWIRE against a future story
+  reading provenance into a divergence path, never a barrier — the narrowed promise, a deliberate
+  widening of 5.12's apparatus. **Owner: Epic 6's retrospective** (review it as one).
+- **(5) The invisible entity** — `build_view` selects an entity by its declared `ipv4`, so a
+  hostname-only subject documents 201 but mints an entity the view can never select. Not this
+  story's bug (the entity model is 6.5's). **Owner: story 6.5.**
+- **(6) Epic 7's `document-field` must negotiate the PRIMARY KEY**, not this index: re-documenting
+  one entity's same field reds `1062 … PRIMARY` (measured). **Owner: Epic 7.**

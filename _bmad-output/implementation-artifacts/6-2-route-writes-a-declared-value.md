@@ -1,6 +1,6 @@
 # Story 6.2: The route writes a declared value, through the adapter and nowhere else
 
-Status: ready-for-dev
+Status: review
 
 <!-- ⚠️ CONTEXTED 2026-08-14, the same day story 6.1 merged (PR #89 → `664693b`, docs flipped by
      PR #90 → `3f7069a`). The tree this story extends is master at `3f7069a`: 566 tests
@@ -534,34 +534,34 @@ no count in `sprint-status.yaml`'s comments).
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — the domain refusals** (AC2): `AlreadyDocumented` + `NothingToDocument` in
+- [x] **T1 — the domain refusals** (AC2): `AlreadyDocumented` + `NothingToDocument` in
       `opencmdb_core::document`, Display texts pinned, no `axum`, no status
-- [ ] **T2 — the projection goes `pub`** (AC6): rustdoc naming both consumers; core behaviour
+- [x] **T2 — the projection goes `pub`** (AC6): rustdoc naming both consumers; core behaviour
       unchanged (state the promise at that width)
-- [ ] **T3 — the adapter** (AC1): `repo::adopt_declared_attribute` (literals `'adopted'`,
+- [x] **T3 — the adapter** (AC1): `repo::adopt_declared_attribute` (literals `'adopted'`,
       `'operator'`; bound entity/key/value/obs_id) + `repo::load_observation_by_id` returning
       `Option<Observation>` (composes with `gap::project`, M1); NO already-adopted read (the 409
       rides the index, §6.5); `SANCTIONED_SITES` + 1 named entry
-- [ ] **T4 — the migration** (AC4): `0005_document_guards.sql`, the unique index, the Epic-7
+- [x] **T4 — the migration** (AC4): `0005_document_guards.sql`, the unique index, the Epic-7
       comment, DDL gates re-run; `raw_declared_write_for_ddl_test` WIDENED (same name/site)
       for the raw second-adoption probe
-- [ ] **T4b — the gate read-sanction** (§6.5, AC7): `SANCTIONED_READS` in `xtask`, applied in
+- [x] **T4b — the gate read-sanction** (§6.5, AC7): `SANCTIONED_READS` in `xtask`, applied in
       the READ half, one named entry (the test verifier); FR13 rationale in the gate doc; the
       module-doc enumeration updated; M13/M13b prove it bites both ways
-- [ ] **T5 — the port** (AC1, AC2): `SubjectLookup` → `DocumentPort` (doc retired with the
+- [x] **T5 — the port** (AC1, AC2): `SubjectLookup` → `DocumentPort` (doc retired with the
       rename), `Documented`/`DocumentFailure`, `StoreDocument` (pool INSIDE the impl, in
       `document.rs` — clarify 6.1's module doc: `DocumentState` still holds no pool, `StoreDocument`
       does), `AlwaysUnknown` deleted, one transaction, refusal order (unknown → nothing-to-document
       → write; 409 = index 1062 keyed on the index name), first-occurrence-wins
-- [ ] **T6 — the CSRF check** (AC3): the pure fn, first in the handler, 403 pinned, the limits
+- [x] **T6 — the CSRF check** (AC3): the pure fn, first in the handler, 403 pinned, the limits
       in the doc
-- [ ] **T7 — the handler** (AC1, AC2): exhaustive mapping, 201 body, 500 arm, `main::app`
+- [x] **T7 — the handler** (AC1, AC2): exhaustive mapping, 201 body, 500 arm, `main::app`
       wiring (merge above the layer, unchanged)
-- [ ] **T8 — the J3 test** (AC5): §7's four steps, DB-gated, run against live MariaDB
-- [ ] **T9 — prove-to-red** (AC1–AC7): M1–M13b (sixteen ids, M8 GREEN-by-argument), predictions
+- [x] **T8 — the J3 test** (AC5): §7's four steps, DB-gated, run against live MariaDB
+- [x] **T9 — prove-to-red** (AC1–AC7): M1–M13b (sixteen ids, M8 GREEN-by-argument), predictions
       FIRST, each carrier read from its own panic message; ⚠️ **commit the green state BEFORE the
       mutation pass** (Dev Notes); fix the FOURTH broken 6.1 test (§8(d)) and verify IN CI
-- [ ] **T10 — the register and the documents** (AC8, AC9)
+- [x] **T10 — the register and the documents** (AC8, AC9)
 
 ---
 
@@ -658,3 +658,108 @@ with the merge ABOVE the layer. The known-subject branch answers 501 today and D
 ### Completion Notes List
 
 ### File List
+
+---
+
+## Dev Agent Record
+
+### Agent Model Used
+
+Claude Fable 5 (claude-fable-5).
+
+### Implementation Plan (as executed, 2026-08-14)
+
+T1 → T10 in order, red-green against a live `mariadb:10.11.11` (port 13316). Commit `c6632b1`
+froze the green state BEFORE the mutation pass (Dev Notes' trap; and the DB was reset before the
+M10 run per validation M-a). All four crates compile with `-D warnings`; seven gates green.
+
+- **T1** core: `DocumentRefusal` gains `AlreadyDocumented` + `NothingToDocument`, Display texts pinned.
+- **T2** core: `gap::project` made `pub` with a two-consumer rustdoc; no behaviour change (visibility only).
+- **T3** repo: `adopt_declared_attribute` (`'adopted'`/`'operator'` literals, obs id bound),
+  `load_observation_by_id` returning the whole `Observation` (observed_at read as TEXT — sqlx has
+  no chrono feature here), `read_declared_provenance_for_test` (the ONE sanctioned reader);
+  `SANCTIONED_SITES` + 1 named write entry.
+- **T4** migration `0005_document_guards.sql`: `CREATE UNIQUE INDEX declared_one_adoption_per_field
+  (origin_obs_id, attr_key)`; the Epic-7/PK comment; `raw_declared_write_for_ddl_test` WIDENED
+  (same name/site, three existing callers updated).
+- **T4b** xtask: `SANCTIONED_READS` (Guy's §6.5 arbitration) applied in the gate's read half; FR13
+  rationale in its doc.
+- **T5** document.rs: `SubjectLookup`→`DocumentPort` with `document_all` (whole gesture, one
+  transaction, 409 via the index keyed on its NAME, first-occurrence-wins per key), `StoreDocument`
+  (pool INSIDE the impl — 6.1's M4 carrier survives), `AlwaysUnknown` deleted.
+- **T6** the CSRF `same_origin` check, decided FIRST in the handler; the stated limits in its doc.
+- **T7** the handler: exhaustive `DocumentRefusal` mapping (no `_` arm), 201 body, 500 arm;
+  `main::app` wires `document::router(pool)` above the layer.
+- **T8** the J3 end-to-end test (`document_all_closes_the_gap_end_to_end`): document → provenance
+  via the sanctioned reader → `gap::reconcile` shows `gaps.is_empty()` AND `abstention_count == 0`.
+- **T9/T10** below.
+
+### Debug Log — prove-to-red (T9), predictions FIRST, each carrier read from its own message
+
+| id | mutation | result |
+|---|---|---|
+| M1 | adapter writes `origin='manual'` | **RED** — J3 provenance assertion `"manual" != "adopted"` |
+| M2 | drop the `SANCTIONED_SITES` adopt entry | **RED** — authorship gate: `repo.rs:160: insert into declared_attribute … — NFR5` (names repo.rs + keyword, NOT the fn — validation M4 confirmed) |
+| M2b | move the INSERT into `document.rs` | **RED** — gate: `document.rs:153: insert into declared_attribute` unsanctioned |
+| M3 | write via `insert_declared_attribute` (manual, no obs id) | **RED** — J3 provenance `"manual" != "adopted"` |
+| M4 | add `State<MySqlPool>` to the handler | **does not COMPILE** — `error[E0277]` on the `Handler` bound; no side door (no `FromRef`, no downcast) |
+| M5 | `AlreadyDocumented` arm answers 404 | **RED** — `an_already_documented_subject_answers_409`: `404 != 409` |
+| M6 | remove the `NothingToDocument` guard in the port | **RED** — `an_empty_projection_subject_answers_nothing_to_document…`: `201 != 422`. 🔴 **First measured GREEN** (no store-level empty-projection test existed — the handler-arm test uses an in-memory port and pins only the mapping); a store-backed Rtt-only test was ADDED, after which M6 reds. *A guard placed where the defect cannot occur reads as coverage and is none — the Epic-5 class, caught in the pass.* |
+| M7 | move the empty-projection guard AFTER the write loop | 🟢 **GREEN by structure** — the write loop over an empty `fields` is a no-op, so the guard's position relative to the (empty) loop is invisible; the empty case still answers 422. The guard's real carrier is M6. Divergence from the prediction, recorded. |
+| M8 | commit between the facts read and the write loop | 🟢 **GREEN by structure** (pre-decided at validation): the unique index serialises every interleaving; honest carrier = the index (M10) + the stated atomicity limit. Not re-run — constructing it is artificial. |
+| M9 | drop the CSRF check | **RED** — `a_cross_site_origin_is_refused_403…`: `422 != 403` (the malformed body was consulted, which is exactly what the 403 wins over) |
+| M9b | authority compare case-SENSITIVE | **RED** — `same_origin_decides_each_case` (the case-insensitive assertion). 🔴 The sub-mutation *accept `null`* came back GREEN: the explicit `== "null"` check is **DEAD** (a `null` origin carries no `://` and is refused by that path anyway). The dead check was REMOVED; the `null`-refused tests stay green through the no-scheme path. Divergence → a cleanup. |
+| M10 | drop the index from `0005` | **RED** — `a_second_adoption…is_refused_by_the_index`: `the index must refuse the second adoption`. ⚠️ The DB was DROP/CREATEd before this run (validation M-a: on an already-migrated DB the edit reds every test with `VersionMismatch(5)`, a checksum-carried red). |
+| M11 | documented write uses a WRONG key (`"ip"` for `"ipv4"`) | **RED** — J3's `abstention_count == 0` assertion: `{NoObservedValue: 1}` (validation H2 confirmed: a wrong key yields an ABSTENTION, not a gap; the dual `gaps` AND `abstentions` assertion is what carries it) |
+| M12 | plant a local `"ipv4"`/`"hostname"`/`"mac"` key table in `document.rs` production code | **RED** — `the_projection_is_shared_not_copied` source-scan tripwire names the planted line |
+| M13 | remove the read-sanction entry (§6.5) | **RED** — gate: `repo.rs:188: a read of declared_attribute names origin_obs_id — FR13` |
+| M13b | plant an UNSANCTIONED provenance SELECT in `document.rs` | **RED** — gate: `document.rs:153: a read … names origin_obs_id — FR13` |
+
+**Sixteen ids: THIRTEEN reds, M4 a compile refusal, M7 and M8 GREEN by structure.** Carriers
+MIXED and named per row: M2/M2b/M13/M13b are gate-message-carried; the rest assertion-carried;
+none `.expect()`-carried. **Three findings the pass produced, each fixed or recorded**: M6's
+missing store-level empty-projection test (added), M9b's dead `null` check (removed), M7's
+green-by-structure (recorded, its real carrier is M6). *"every red assertion-carried" is NOT
+claimed* — the gate reds are the gate's own output, honestly.
+
+### Completion Notes
+
+- **All 9 ACs MET.** AC1 (201 + adopted provenance through the adapter, one sanctioned write
+  site — M1/M2/M2b/M3); AC2 (the total ordered taxonomy, no `_` arm, each refusal reachable
+  through the real port, no-write asserted — M4-compile/M5/M6/M9-family); AC3 (CSRF Origin check,
+  the stated limits pinned — M9/M9b, the `same_origin` table); AC4 (the index bites, DB-reset
+  driver step — M10); AC5 (J3 end-to-end, gaps AND abstentions — M11); AC6 (`project` shared, the
+  source tripwire — M11 drift + M12); AC7 (seven gates green, authorship over FOUR write sites +
+  ONE read site, 28 fixtures, trap gate still RED 26/15/11, fmt/clippy clean, no new crate,
+  templates and `page.rs` zero diff); AC8 (register updated below); AC9 (live count HERE).
+- ⚠️ **ONE LIVE COUNT, HERE (AC9): 566 → 580 tests — 357 bin + 161 core + 62 xtask** — verified
+  against the live `mariadb:10.11.11`, 0 failed; the twins cite this file.
+- **The canonical-form closure is measured**: the J3 test documents through a BRACED spelling of
+  the real subject and the stored `origin_obs_id` is canonical (201).
+- **`page.rs` byte-identical, templates untouched, `epics.md` not edited, no new crate** (verified).
+- **Register (T10)**: appended below to `deferred-work.md`, re-read against AC8's list.
+
+### File List
+
+- `crates/opencmdb-core/src/document.rs` — `AlreadyDocumented` + `NothingToDocument`, tests
+- `crates/opencmdb-core/src/gap/mod.rs` — `project` made `pub`, two-consumer rustdoc
+- `crates/opencmdb-bin/src/repo.rs` — `adopt_declared_attribute`, `load_observation_by_id`,
+  `read_declared_provenance_for_test`, widened `raw_declared_write_for_ddl_test`, AC4 index tests
+- `crates/opencmdb-bin/src/document.rs` — `DocumentPort`/`Documented`/`DocumentFailure`,
+  `StoreDocument`, the CSRF `same_origin` check, the store-backed handler, tests
+- `crates/opencmdb-bin/src/main.rs` — `document::router(pool)` wiring; the fourth broken 6.1 test
+  DB-gated; the J3 and empty-projection DB tests
+- `crates/opencmdb-bin/migrations/0005_document_guards.sql` — NEW: the unique index
+- `xtask/src/main.rs` — `SANCTIONED_SITES` +1 write; `SANCTIONED_READS` NEW; gate read half
+- `_bmad-output/implementation-artifacts/deferred-work.md` — register (T10)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — 6.2 status
+- `_bmad-output/implementation-artifacts/6-2-route-writes-a-declared-value.md` — this record
+- `CLAUDE.md`, `docs/project-context.md` — the 6.2 paragraph, live-count reference
+
+### Change Log
+
+- 2026-08-14 — story 6.2 implemented (T1–T10): the route WRITES an adopted declared value; the
+  gate gains a read-sanction (Guy's §6.5); J3's corrected half measured end-to-end. 566 → 580
+  tests, seven gates green. Mutation pass: 13 reds + M4 compile + M7/M8 green-by-structure; three
+  findings (M6's missing test added, M9b's dead null check removed, M7 recorded). Status →
+  `review`.
