@@ -422,6 +422,12 @@ The L1 interface-identity join — the deterministic `(l2_domain, mac) -> interf
 
 _**REORDERED at Epic 5's retrospective, 2026-08-12, by Guy's decision (option a).** This epic used to CLOSE with the promote gesture. Three measurements moved it to the front. **(1)** Two thirds of all delivered work is invisible to the operator: epics 1-3 are 21 stories and everything usable today, epics 4-5 are **43 stories and nothing operator-visible**. **(2)** The documenting gesture does not exist in the product at all — five routes, all read-only, and the only call to `insert_declared_attribute` outside `repo.rs` is inside a `#[cfg(test)]`; to declare anything an operator writes SQL by hand. **(3)** ⚠️ **And it does not depend on grouping**, which is this epic's subject: promoting *"this sighting at 192.0.2.99 — declare it as a device"* needs an observation and a write surface, nothing more. FR13(a) is what the PRD itself calls **"the day-one case"**, and it is case three of the operator's three cases (no ambiguity → the software decides; ambiguity → the operator lifts the doubt; **unknown → the operator creates the entity**), arrived at independently during story 5.14b's code review. Case three is **the only case reachable today**, because the shipped ARP/ping connector emits no MAC and every abstention on a real network is therefore `AbsenceOfProof`. Recorded in `epic-5-retro-2026-08-12.md` and in a GitHub issue, not silently — the house rule since story 4.19's split._
 
+### Epic 6b: L'interface de la maquette (v0.2) — INSERTED 2026-08-13
+🔴 **Inserted between stories 6.3 and 6.4** by the correct-course of 2026-08-13 (`sprint-change-proposal-2026-08-13.md`), on Guy's instruction and after the reference mock became the interface reference. The product gains **the mock's ten screens**, and **every screen states truthfully whether what it shows comes from the product or from an example dataset**. Two are fed (triage; the dashboard's reach section, plus the source and diagnostic facts the product really holds); the rest carry example data and say so. **Release v0.2.0 closes this epic** — and Epic 6 continues under it with stories 6.5–6.19.
+**FRs covered:** **none new** — it re-renders the surfaces of FR10, FR11, FR16, FR16b and builds the site where **FR13(a) lands in story 6.4**. **NFRs:** 25, 26.
+
+_**Why it is `6b` and not `7`:** renumbering seventeen epics to make room for one produces churn and nothing else. The house convention for an insertion is a letter suffix — stories 5.4b, 5.9b, 5.11b, 5.13b and 5.14b were all inserted that way._
+
 ### Epic 7: La boucle se ferme (v0.5)
 The rich triage inbox on a correct synchronous commit: review unreconciled discoveries; document (all/field); accept-gap (gap stays open, mandatory note, wakes on observed change); exclude; snooze; create; attach. This is the MVP "you could stop here" line — the product now reconciles, not just observes.
 **FRs covered:** FR12, FR13, FR14, FR15, FR18 (min). UX-DR13,14,15,16,22,23,42,43.
@@ -1719,6 +1725,8 @@ So that the number measures the product's reach rather than my debt (FR16b).
 
 _**Decomposed 2026-08-12 with Guy, after Epic 5's retrospective and its project review.** Nineteen stories, sliced deliberately finer than Epic 5's fourteen: Epic 5 was planned at fourteen and delivered twenty, and all six insertions were found while contexting a story that carried two ideas. **The order is the reordering of 2026-08-12 (issue #85): the documenting gesture OPENS the epic**, because it is what J3 — *a real gap detected AND CORRECTED* — has been missing, and it does not depend on grouping._
 
+_**🔴 SPLIT IN SEQUENCE 2026-08-13 by correct-course (`sprint-change-proposal-2026-08-13.md`), and split in SEQUENCE ONLY — no story below is modified, added or removed.** The order is now: **6.1 · 6.2 · 6.3 → EPIC 6b (the interface) → 6.4 → release v0.2.0 → 6.5 … 6.19.** Stories 6.1–6.3 are backend-only and touch no screen; **story 6.4 is a screen story** — the abstention line that carries the gesture — and building it before the new interface means building it twice, once in today's card and once in the triage screen. ⚠️ **The release therefore sits INSIDE this epic rather than at its end**: holding v0.2.0 for the fifteen L2 stories would buy exactly one example screen turning real, while the product stays invisible for a third epic. Epic 6 continues under the release._
+
 _**Four measured constraints this decomposition respects, so no story rediscovers them:**_
 
 _**(1) The corpus already NAMES the L2 rules, and the names are load-bearing.** The committed traps expect `l2-different-hostname` (3 traps), `l2-uplink-agrees` (2), `l2-hostname-agrees`, `l2-different-switch` and `l2-virtual-mac-prefix`. Epic 4's retrospective warned it: implementing one under a different name reds the trap as `rule_mismatch` and forces a deliberate corpus bump. The rule order below follows the corpus, most-expected first._
@@ -2072,3 +2080,253 @@ So that a change has a date rather than a rumour.
 **And** the history survives a purge-and-replay: it is derived, so D14's *"a cache of attention, not of truth"* applies.
 
 _**FR13(b) is NOT in this epic, and the decomposition briefly put it here by mistake.** A twentieth story — documenting a re-discovery field by field — was written and then removed the same day: **the FR coverage map already assigns it to Epic 7** (`FR13: E6 (minimal promote) / E7 — document (all/field)`), and Epic 7's own description carries *"document (all/field)"* as part of its triage inbox. The error was in the question, not the answer: the decomposition asked *"FR13(b) in the opening slice, or later?"* meaning later **within this epic**, while the plan had already placed it in the **next** one. 🔑 On the merits Epic 7 is also the right home: **field-selective documenting only has meaning once declared content exists and has drifted**, which is the re-discovery Epic 7's inbox triages. This epic ships FR13(a), the day-one case, which is what milestone J3 was missing. (Guy's arbitration, 2026-08-12.)_
+
+---
+
+## Epic 6b: L'interface de la maquette
+
+**Goal:** the product looks like the reference mock, and **every screen states truthfully whether what it shows comes from the product or from an example dataset.** **FRs:** none new (it re-renders FR10, FR11, FR16, FR16b and builds the site where FR13(a) lands in story 6.4). **NFRs:** 25 (WCAG 2.1 AA on the key views), 26 (EN + FR).
+
+_**Created 2026-08-13 by correct-course** (`sprint-change-proposal-2026-08-13.md`), inserted between stories 6.3 and 6.4. **The sequence is: 6.1 · 6.2 · 6.3 → EPIC 6b → 6.4 → release v0.2.0 → 6.5 … 6.19.** Stories 6.1–6.3 are backend-only and touch no screen; **story 6.4 is a screen story** — building it before this epic means building it twice, once in today's card and once in the triage screen. Twelve stories._
+
+_**Guy's four decisions of 2026-08-13, which are this epic's premises and not open questions:** **(1)** all ten screens ship; those whose code is not implemented show an example dataset with a text saying so. **(2)** the same rule applies INSIDE an implemented screen — the four gestures Epic 7 owns are visible and labelled. **(3)** the mock's palette and typography are adopted. **(4)** dark mode is deferred and the UX spec is corrected rather than left contradicted._
+
+_**Six measured constraints this decomposition respects, so no story rediscovers them:**_
+
+_**(1) 🔴 The example data must NEVER be written to the database.** `docker/seed-example.sql` is already a SHIPPED writer of `declared_attribute`, which story 5.12's authorship gate had to name as a third sanctioned site. If the demo screens seed rows, **an example row becomes indistinguishable from a real one at the storage layer** — the gate gains a site, and the product's central promise is broken by the very thing that was supposed to be visibly fake. The example dataset lives in code, in the handler/template layer, and **no demo screen opens a connection**._
+
+_**(2) 🔴 The release changes the product's colour.** `gap.html` hardcodes `data-theme="dark"` and `assets/app.css` carries BOTH token sets (`#0f1420` dark, `#f6f7f9` light) with no switcher; the mock is light-only. Whoever runs `v0.1.1` today sees a dark product and will see a light one. **Named in the release notes, never discovered.** The dark set stays in the sheet, unreferenced, so its return is a story rather than an excavation._
+
+_**(3) The accent reservation survives the palette swap.** `app.css` already carries `--accent: #d99a4e` with the doctrine in its comment — *"amber — reserved for the document action, never decorative"*. The mock makes its blue the GENERAL primary: nav selection, every primary button, occupied IPAM cells. **Blue is structure, amber is the gesture** — the one place this epic deliberately diverges from the reference, registered in the UX spec on 2026-08-13._
+
+_**(4) The mock's runtime is not this product's.** 496 KB of React over hard-coded arrays. **Liftable: the tokens and the ~100 French strings. Not liftable: the runtime.** The target is Askama partials + HTMX, server-rendered, one URL per screen — a decision the UX spec takes on its own grounds, which the mock does not reopen._
+
+_**(5) The Tailwind v4 trap, multiplied by ten.** A class **built in Rust** is invisible to the static scanner: the CSS regenerates identically, `git diff --exit-code` is green, and **a status pill ships with no colour** — a silent product bug on a product whose core is a visual distinction. Two templates become a dozen; the surface grows with them._
+
+_**(6) The spec assigns NO keyboard letters, by decision.** They are written when all six gestures exist, at once, against the corpus — *"a letter chosen in isolation is a letter whose neighbourhood nobody tested"*. **The mock's `⏎` and `⌫` must not be read as a specification**: `⌫` maps to *Exclure*, which is Epic 7's._
+
+_**Definition of Done, epic-wide:** the a11y keyboard+focus gate (per-epic DoD by the plan's own rule, not a story), axe-core green on the ten routes, and `cargo xtask ci` green — seven gates._
+
+### Story 6b.1: The design system — tokens, typography, and the accent that stays reserved
+
+As the operator,
+I want the product to look like the reference mock,
+So that what I was shown is what I run.
+
+**Acceptance Criteria:**
+
+**Given** the mock's token sheet
+**When** the Tailwind theme is rebuilt
+**Then** it carries the mock's palette (the light base, the neutral and accent ramps) and **Barlow / Barlow Condensed embedded with `rust-embed`** — their licence recorded — with **no external font request**: the single-binary, no-CDN posture is unchanged.
+
+**Given** the documenting gesture
+**When** any surface uses colour
+**Then** **`--accent-document` (amber) is used by that gesture and by nothing else**, and the mock's blue carries structure. ⚠️ **This is the one deliberate divergence from the reference** (constraint 3): the mock makes blue the general primary, and *one colour that means "this is the gesture"* is not the same doctrine as *one colour that means "this is the product"*.
+
+**Given** dark mode
+**When** the new interface ships
+**Then** the light set is what renders, `data-theme="dark"` leaves the template, and **the dark token set stays in the sheet, unreferenced**. 🔴 Constraint 2: this is a visible change for every existing deployment.
+
+**And** every class **built in Rust** is asserted present in the generated CSS (constraint 5) — a green diff is not evidence that a pill has a colour.
+
+### Story 6b.2: The shell — header, navigation, and ten routes
+
+As the operator,
+I want each screen to have its own address,
+So that I can link to one, bookmark it, and come back to it.
+
+**Acceptance Criteria:**
+
+**Given** the mock's frame
+**When** any screen renders
+**Then** it carries the header (brand, tagline, perimeter, last observation) and the navigation over the **ten** entries, with the current one marked (`aria-current`).
+
+**Given** a deep link to any of the ten
+**When** it is opened cold
+**Then** **that screen renders directly, server-side** — no client-side router, no screen selected by JavaScript. HTMX swaps fragments **within** a screen, never between screens. *(The mock switches client-side; that is its runtime, not its design — constraint 4.)*
+
+**And** ⚠️ the navigation shows all ten from the first day, per Guy's decision. **The honesty of that is story 6b.3's business and this story must not "solve" it by hiding entries.**
+
+### Story 6b.3: The example-data marker, and the gate that keeps it honest
+
+As the operator,
+I want to know at a glance whether what I am reading comes from my network,
+So that a demonstration is never mistaken for my inventory.
+
+**Acceptance Criteria:**
+
+**Given** a surface whose content comes from the example dataset
+**When** it renders
+**Then** it carries **one marker and one sentence** — one partial, one key pair, one visual treatment — never a per-screen improvisation.
+
+**Given** that the dashboard is **mixed by nature** (the real reach section beside example stat cards)
+**When** the marker is placed
+**Then** it attaches to **the smallest unit that carries example content** — screen, section, or control. A screen-level-only marker would either lie about the real half or hide the example half.
+
+**Given** any demo surface
+**When** it renders
+**Then** **no database connection is opened and no row is written** (constraint 1), and a test says so.
+
+**And** the partition is asserted **over the route table, not inside each template**: every demo surface carries the marker, every fed surface does not, and **a route added without a declared nature must fail rather than default**. ⚠️ **Epic 5's dominant defect class, named at its retrospective: *a guard placed where the defect cannot occur reads as coverage and is none.*** A test that checks the marker inside the templates that already have it proves nothing about the eleventh screen.
+
+### Story 6b.4: The triage screen, on the real gap
+
+As the operator,
+I want the gap the product really computes shown the way the mock shows it,
+So that the one screen that is fed is also the one that looks best.
+
+**Acceptance Criteria:**
+
+**Given** the gap the product computes today
+**When** `/triage` renders
+**Then** it is the mock's two panes — the queue, and the two photos side by side — each side carrying **its provenance and its freshness** (the spec: neither side is "the truth").
+
+**Given** the gestures
+**When** the action bar renders
+**Then** **only the gestures that exist are live**, and the others are shown and labelled per 6b.3. ⚠️ **And that includes « Merger » until story 6.4 lands** — field-level documenting is **FR13(b), Epic 7's**; what 6.4 ships is **FR13(a)** on the abstention line. *A developer meeting a dead primary button on the product's signature screen will want to fix it: this paragraph is why it is not a bug.*
+
+**And** sorting by age is available **and off by default** — the ban is not that age is hidden, it is that age is never brandished: *sorting by age is the operator's action, never a pushed label*.
+
+### Story 6b.5: The dashboard — the real reach section beside labelled example sections
+
+As the operator,
+I want the daily screen to carry what the product really knows,
+So that the honest part is not diluted by the demonstration around it.
+
+**Acceptance Criteria:**
+
+**Given** the reach section story 5.14b shipped
+**When** the dashboard renders
+**Then** it appears **unchanged in substance**: the same persisted counts, the same honest unit (**sightings**, arbitration 13), and **the two populations are never summed** (arbitration 10).
+
+**Given** the stat cards, the sparklines and *"what grew since your last visit"*
+**When** they render
+**Then** they are example surfaces and carry the marker — **the product has no notion of a last visit**, and the history a sparkline draws does not exist yet.
+
+**And** ⚠️ the sparkline itself is **MVP by the arbitration of 2026-08-13** (the UX spec holds; `epics.md` E17's *"rich stat-card/sparkline/trend analytics"* clause is too broad and **must be narrowed by a retrospective or a correct-course, never by a story**). Here it renders over example data; its fed version waits for the history that feeds it.
+
+### Story 6b.6: Inventory and device record (example)
+
+As the operator,
+I want the two screens that will hold my devices to exist,
+So that the grouping work has somewhere to land.
+
+**Acceptance Criteria:**
+
+**Given** the example dataset
+**When** the inventory and the device record render
+**Then** they carry the mock's shape — filters by type, one object per row with its declared state and its last observation; and on the record: field by field, *Hosted here*, the composite identity, the observation history.
+
+**Given** the state vocabulary the mock introduces (*Concordant · Écart · Conflit · Ambigu · Non déclaré*)
+**When** it is written
+**Then** **every word is checked against the canonical glossary**, and any word the glossary does not carry is **registered rather than introduced**. ⚠️ *Vocabulary is architecture here: if a state is named after an operation we forbid, someone eventually implements the operation.*
+
+**And** these two screens are what Epic 6's stories 6.5–6.19 turn real — **the frame is bought here, the content is not.**
+
+### Story 6b.7: Applications and IPAM (example)
+
+As the operator,
+I want the application inventory and the subnet occupancy to exist as screens,
+So that Epics 14 and 15 have a frame rather than a blank page.
+
+**Acceptance Criteria:**
+
+**Given** the IPAM screen
+**When** the occupancy grid renders
+**Then** it is **CSS Grid with an `aria-label` per cell**, and its cells come from **explicit example data, never from a computed pattern**. ⚠️ The mock fills them with `(i * 37) % 256 < used`: **a fake that varies is a fake no test can pin and no screenshot can compare.**
+
+**Given** the applications screen
+**When** it renders
+**Then** owner and criticality are shown as **declared and unobservable** — *nothing will ever observe them*, which is the mock's own sentence and the reason the screen exists.
+
+**And** both carry the marker of 6b.3.
+
+### Story 6b.8: Sources and alerts
+
+As the operator,
+I want the source screen to tell me what my sources cannot see,
+So that reduced reach reads as a capability to unlock rather than a fault to repair.
+
+**Acceptance Criteria:**
+
+**Given** the shipped ARP/ping connector
+**When** the source screen renders
+**Then** *"what this source cannot see"* is **REAL, not example**: story 5.14 measured that it emits `IpV4` and `Rtt` and **no MAC, ever** — the product genuinely knows the boundary of its own sight, and that section is the most honest thing on the screen.
+
+**Given** the two axes (liveness × capability)
+**When** a source is shown
+**Then** the spec's rule holds: **blind is an incident and gets a colour; reduced is a property and gets a sentence** — never two amber pills meaning opposite things.
+
+**And** the alert list is an example surface (Epic 16), marked as such.
+
+### Story 6b.9: Self-diagnostic and commissioning
+
+As the operator,
+I want the tool's self-report to contain facts,
+So that a screen about the product's state is not the least reliable screen in it.
+
+**Acceptance Criteria:**
+
+**Given** the facts the product really holds (version, database engine and version, migrations applied, last scan and its duration, the reach counts)
+**When** the diagnostic renders
+**Then** each of those rows is **measured at runtime**, not written into a template.
+
+**Given** the rows the product cannot support
+**When** they render
+**Then** they carry the marker. 🔴 **The mock's security group asserts properties this product does not have** — *"all HTTP surfaces authenticated"* is FALSE (`auth.rs` is a deny-by-default seam with a public allowlist its own doc calls temporary, and story 6.1's brief measured a POST to an unknown route answering **400** without the middleware ever running), and the credential rows describe Epics 10 and 19. **A diagnostic screen that states a security property the product lacks is worse than no screen: it is a false claim about security, made by the product about itself.**
+
+**And** the commissioning screen and its baselining are an example surface (Epic 9), marked as such.
+
+### Story 6b.10: The copy — FR and EN, every string a key
+
+As the operator,
+I want the interface in my language,
+So that the product is usable in both without one being a second-class rendering of the other.
+
+**Acceptance Criteria:**
+
+**Given** every string the ten screens introduce
+**When** it ships
+**Then** it exists as an i18n key **with both translations** — FR and EN, neither derived from the other. *(Guy's arbitration, 2026-08-13; the reference mock is a FRENCH RENDERING of a bilingual GUI, not a French-first decision.)*
+
+**Given** the new keys
+**When** `cargo xtask ci` runs
+**Then** the forbidden-word lint and the glossary uniqueness test cover them, and the glossary's FR column is **authoritative over the mock's wording** wherever the two differ.
+
+**And** ⚠️ this is the epic's largest single block of text — **32 keys today against roughly a hundred in the mock** — and **a string added later in one language only is exactly the defect this story exists to prevent.**
+
+### Story 6b.11: The keyboard layer and the focus contract
+
+As the operator,
+I want to run the queue from the keyboard,
+So that triage is as fast as clearing a mailbox.
+
+**Acceptance Criteria:**
+
+**Given** the triage queue
+**When** the operator navigates
+**Then** the arrows and `j`/`k` move the selection, `⏎` performs **the gesture that exists on the focused row**, and the handler **ignores `INPUT` and `TEXTAREA` targets**.
+
+**Given** the gestures that do not exist yet
+**When** bindings are written
+**Then** **no letters are assigned** (constraint 6) — not even the mock's `⌫`, which maps to *Exclure*, Epic 7's.
+
+**And** **focus is never lost across an HTMX swap** — accessibility requirement #1 — and axe-core runs on the ten routes as the epic's DoD gate.
+
+### Story 6b.12: The release v0.2.0, and the documents that describe it
+
+As the operator,
+I want to install this,
+So that the work that has been invisible for two epics becomes a thing I can run.
+
+**Acceptance Criteria:**
+
+**Given** the epic's eleven preceding stories
+**When** the release is cut
+**Then** `v0.2.0` is tagged and published to Docker Hub as `v0.1.1` was, from a green CI run.
+
+**Given** the release notes
+**When** they are written
+**Then** they name **what this release does NOT do**: the eight example screens, the gestures Epic 7 owns, and 🔴 **the change from a dark interface to a light one** (constraint 2). *Announcing an absent gesture is a promise; letting a colour change be discovered is a surprise. Neither is acceptable and the notes are where both are settled.*
+
+**And** the docs-current-before-push rule is discharged in the same push: the **User Manual** and **Administrator Manual** (whose screenshots show a product that no longer looks like that), `README.md`, the `gh-pages` landing site, `docker/README.dockerhub.md`, `docs/project-context.md` and `CLAUDE.md`. ⚠️ **A release whose manual describes the previous interface is not ready**, and this is the first release where that risk is real: `v0.1.1` shipped one page.

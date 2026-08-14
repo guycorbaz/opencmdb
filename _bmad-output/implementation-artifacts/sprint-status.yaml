@@ -2867,6 +2867,35 @@ development_status:
   6-19-observation-history-per-device: backlog
   epic-6-retrospective: required
 
+  # ── Epic 6b: L'interface de la maquette (v0.2) — INSERTED 2026-08-13 ──────
+  # 🔴 INSERTED BY CORRECT-COURSE 2026-08-13 (`sprint-change-proposal-2026-08-13.md`), on Guy's
+  # instruction, after the reference mock became the interface reference. TWELVE stories.
+  # ⚠️ IT SPLITS EPIC 6 IN SEQUENCE, NOT IN CONTENT — no story of Epic 6 is modified, added or
+  # removed. THE ORDER IS: 6.1 · 6.2 · 6.3 → EPIC 6b → 6.4 → release v0.2.0 → 6.5 … 6.19.
+  # Stories 6.1-6.3 are backend-only; **story 6.4 is a SCREEN story**, and building it before this
+  # epic means building it twice — once in today's card, once in the triage screen.
+  # ⚠️ THE RELEASE SITS INSIDE EPIC 6, NOT AT ITS END: holding v0.2.0 for the fifteen L2-grouping
+  # stories would buy one example screen turning real. Epic 6 continues UNDER the release.
+  # 🔴 SIX MEASURED CONSTRAINTS in `epics.md` so no story rediscovers them — among them: the example
+  # data is NEVER written to the database (`docker/seed-example.sql` is already a shipped writer and
+  # story 5.12 had to sanction it; a seeded demo row is indistinguishable from a real one at the
+  # storage layer), and the release CHANGES THE PRODUCT'S COLOUR (`gap.html` hardcodes
+  # `data-theme="dark"`, the mock is light-only) — named in the release notes, never discovered.
+  epic-6b: backlog
+  6b-1-design-system-tokens-and-accent: backlog
+  6b-2-shell-navigation-and-ten-routes: backlog
+  6b-3-example-data-marker-and-its-gate: backlog
+  6b-4-triage-screen-on-the-real-gap: backlog
+  6b-5-dashboard-real-reach-beside-examples: backlog
+  6b-6-inventory-and-device-record: backlog
+  6b-7-applications-and-ipam: backlog
+  6b-8-sources-and-alerts: backlog
+  6b-9-self-diagnostic-and-commissioning: backlog
+  6b-10-copy-fr-and-en: backlog
+  6b-11-keyboard-layer-and-focus-contract: backlog
+  6b-12-release-0-2-0-and-its-documents: backlog
+  epic-6b-retrospective: required
+
   # ── Epic 7: La boucle se ferme (v0.5) ────────────────────────────────────
   epic-7: backlog
   epic-7-retrospective: required
