@@ -75,7 +75,11 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-14  # 6.2 -> `review`: dev-story complete (the live test count lives in the
+last_updated: 2026-08-14  # 6.2 -> `done`: PR #91 squash-merged as `ead7738` after a green CI run
+                          # -- dev-story, three-layer code review (13 findings, 6 patched, 1
+                          # deferred by Guy, core measured sound) and the merge. Next: 6.3 (NFR5's
+                          # two parked assertions). (Earlier note: 6.2 -> `review`; the live count
+                          # lives in the
                           # STORY FILE, its AC9 -- this comment must not carry it, F2's rule).
                           # The route now WRITES an adopted declared value, J3's corrected half
                           # measured end-to-end. Mutation pass: 13 reds + M4 compile + M7/M8
@@ -2859,7 +2863,7 @@ development_status:
   # ⚠️ NEXT = decide the Basic-auth question (measure first), then REWRITE, then re-validate.
   6-1-write-route-writes-nothing: done
   # through `insert_declared_attribute` and nowhere else; `SANCTIONED_SITES` gains one named entry
-  6-2-route-writes-a-declared-value: review
+  6-2-route-writes-a-declared-value: done
   # assertions 2 and 3, parked since Epic 5 for want of this gesture
   6-3-nfr5-remaining-assertions: backlog
   # FR13(a), *the day-one case*; the gesture belongs to the CAUSE, not the count

@@ -1,6 +1,6 @@
 # Story 6.2: The route writes a declared value, through the adapter and nowhere else
 
-Status: review
+Status: done
 
 <!-- ⚠️ CONTEXTED 2026-08-14, the same day story 6.1 merged (PR #89 → `664693b`, docs flipped by
      PR #90 → `3f7069a`). The tree this story extends is master at `3f7069a`: 566 tests
