@@ -20,9 +20,14 @@ use thiserror::Error;
 /// apart (story 6.1 §6).
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum DocumentRefusal {
-    /// The subject id names no observation this store has recorded, so there is nothing whose
-    /// record could be documented.
-    #[error("unknown subject: the id names no observation")]
+    /// The subject cannot be documented: the id names no observation this lookup recognises.
+    ///
+    /// The `Display` sentence is written to be true in BOTH eras (story 6.1's code review,
+    /// Guy's decision): under 6.1's `AlwaysUnknown` wiring EVERY subject is refused — including
+    /// an id that names a genuinely recorded observation — so a sentence claiming *"the id
+    /// names no observation"* would be false until story 6.2's store-backed lookup lands.
+    /// *"Nothing can be documented"* is true under both.
+    #[error("unknown subject: nothing can be documented")]
     UnknownSubject,
 }
 
@@ -37,7 +42,7 @@ mod tests {
     fn unknown_subject_display_is_the_pinned_discriminator() {
         assert_eq!(
             DocumentRefusal::UnknownSubject.to_string(),
-            "unknown subject: the id names no observation"
+            "unknown subject: nothing can be documented"
         );
     }
 }

@@ -75,8 +75,10 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-14  # 6.1 -> `review` (dev-story complete the same day: 523 -> 564 tests,
-                          # fifteen runtime mutations all red + M4's compile refusal, seven gates
+last_updated: 2026-08-14  # 6.1 -> `review` (dev-story and its three-layer code review complete
+                          # the same day; the live test count lives in the STORY FILE, its AC8 --
+                          # this comment carried the figure until the review's F2 removed it.
+                          # Fifteen runtime mutations all red + M4's compile refusal, seven gates
                           # green, built and mutated against a live mariadb:10.11.11 on 13316.
                           # `done` is the MERGE's business).
                           # (The note below was written at 5.14b's contexting and is DATED.)

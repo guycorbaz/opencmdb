@@ -411,6 +411,43 @@ final test count; every other document cites it by reference.
 - [x] **T7 — the register** (AC7), re-read against AC7's list
 - [x] **T8 — gates and documents** (AC6, AC8)
 
+### Review Findings (code review 2026-08-14, three layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor — 17 findings after one merge, 8 edge-suspicions refuted by measurement, all 8 ACs re-verified MET by independent measurement)
+
+- [x] [Review][Decision] **The production 404 body is FALSE for recorded observations** — under `AlwaysUnknown`, an id that names a REAL recorded observation is answered "unknown subject: the id names no observation"; the module doc calls this "truthfully answers *unknown*" while the 501 branch's own justification is "answering success for a write that did not happen would be a lie" — the 404 branch commits the symmetric lie. Options: (a) keep the pinned domain sentence (it becomes true under 6.2's store-backed lookup) and state the transient falsehood in `AlwaysUnknown`'s doc as a recorded cost of shipping the shape first; (b) change the pinned body to a sentence true in both eras (e.g. "unknown subject: nothing can be documented yet"), re-pinned by 6.2.
+- [x] [Review][Patch] File List counts are wrong by one twice: `auth.rs` "13 tests" is 12, `main.rs` "21 new tests" is 20 (recounted; 12+20+8+1 = 41 = 523→564) [story file, File List]
+- [x] [Review][Patch] "The four pinned tests" is followed by FIVE items — the story's own §10 says "four" and lists five, and the Debug Log copied the error [story file, Debug Log; spec §10 origin recorded, not edited]
+- [x] [Review][Patch] `from_env` accepts a CONTROL character in a credential (`"s3cret\n"` — the env-file/echo accident): passes `is_ascii()`, cannot be typed in a Basic dialog, so the deployment refuses everyone silently — the exact trap class the boot refusal claims to close [crates/opencmdb-bin/src/main.rs, from_env]
+- [x] [Review][Patch] False universal sentence in an assertion message and comment: "the registered route never answers an empty body" — measured FALSE for the route's own 405 (empty body); true only for the POST pair the test compares (blind+auditor, both independent) [crates/opencmdb-bin/src/main.rs, AC1 test]
+- [x] [Review][Patch] `deny()`'s doc records only the browser-dialog rationale — a 401 without `WWW-Authenticate` violates a MUST (RFC 9110 §15.5.2); the trade must be named at its strength [crates/opencmdb-bin/src/auth.rs]
+- [x] [Review][Patch] The `&&` short-circuit is a username-confirmation timing oracle (user-mismatch skips the password compare entirely) — register row (d) under-describes what Epic 19 must close [crates/opencmdb-bin/src/auth.rs + deferred-work.md row (d)]
+- [x] [Review][Patch] Twins' headline "sixteen mutation ids in all; zero compiler-carried" invites the misreading M4 refutes — scope the zero to the fifteen runtime reds, as the Debug Log does [CLAUDE.md + docs/project-context.md]
+- [x] [Review][Patch] `the_switch_accepts_its_documented_values_and_refuses_the_rest` measures "the rest" on ONE specimen ("yes") — widen the refused set [crates/opencmdb-bin/src/main.rs]
+- [x] [Review][Patch] The epic-order line ("… → 6.4 → v0.2.0 …") and register row (f) ("Epic 6b's 6b.12") cannot be read together without sprint-status — one clause reconciles them [CLAUDE.md + docs/project-context.md]
+- [x] [Review][Patch] The subject parser accepts the NIL UUID — a load-bearing sentinel (D21: `ABSTAINED_SUBJECT`, `NIL_INTERFACE`) that story 6.2's store-backed lookup would let reach the store; also accepts every non-canonical spelling (braces, urn:, hyphenless, uppercase) while the doc says "UUIDv7 text" [crates/opencmdb-bin/src/document.rs; canonical-form question registered with 6.2]
+- [x] [Review][Patch] `is_public` matches the RAW path by prefix — `/assets/../…` shapes are public-classified; containment measured (rust-embed serves only the bundle, matchit does not collapse `..`) but the doc must state what the containment RESTS ON [crates/opencmdb-bin/src/auth.rs]
+- [x] [Review][Patch] `/metrics/` (trailing slash) falls out of the exact-match scrape branch into the Basic arm and gets the Basic challenge — behavior to state in the doc, not change [crates/opencmdb-bin/src/auth.rs]
+- [x] [Review][Patch] EVERY `Form` rejection collapses to the 422 "malformed" body, the body-size class included — deliberate, but the doc must say so [crates/opencmdb-bin/src/document.rs]
+- [x] [Review][Patch] `sprint-status.yaml`'s `last_updated` comment carries "523 -> 564" — a count in a second document, AC8's letter; reword to cite the story file [sprint-status.yaml:78] (auditor F2)
+- [x] **Decision resolved (Guy, 2026-08-14): option (b)** — the domain sentence is now
+  **"unknown subject: nothing can be documented"**, true under `AlwaysUnknown` AND under 6.2's
+  store-backed lookup; re-pinned in all three places in the same commit (core `Display` test,
+  `document.rs`'s independent constant, the through-app pin). Story 6.2 may refine it.
+- [x] **All 14 patches applied and re-measured**: 566 tests green (the review added two guard
+  pins — control-character at boot, nil-UUID at the route — each proven red-when-removed before
+  acceptance), seven gates green, fmt and clippy clean. The canonical-UUID-form question and the
+  widened row (d) are in `deferred-work.md`.
+- [x] 🔴 **An incident during the apply pass, recorded for the retrospective**: proving the two
+  new guards red-when-removed, the driver reverted each mutation with `git checkout -- <file>` —
+  which restores the COMMITTED state, and the review patches were NOT yet committed, so
+  `main.rs` and `document.rs` silently lost every review patch while `auth.rs` and core kept
+  theirs. Caught one step later because the FULL suite was re-run against the live database
+  before concluding (3 red: the handler emitted the new sentence, the reverted pins expected
+  the old — a mixed state no reading would have suspected), and the patches were re-applied
+  from their anchored scripts. *"Revert the MUTATION, never the FILE" has a precondition the
+  rule does not state: a file-level revert is only equivalent when the baseline is COMMITTED —
+  commit-before-mutating applies to review patches too.*
+- [x] [Review][Defer] `lazy_pool()` hardcodes `127.0.0.1:3306` and assertions depend on nothing answering there correctly — deferred, pre-existing idiom (predates this story), measured safe locally (wrong credentials against the unrelated container) and in CI (green run on PR #89)
+
 ---
 
 ## 9. 🔴 A conflict this story leaves for story 6.4, recorded now
@@ -546,9 +583,12 @@ mutation pass (Dev Notes' own trap: revert the MUTATION, never the file).
 | M12 | scheme matched case-sensitively | **2 red** | assertions (pure `bAsIc` test + end-to-end) |
 
 **Fifteen runtime mutations, fifteen red results; plus M4's refusal to compile — sixteen
-mutation ids. Zero compiler-carried reds, zero `.expect()`-carried reds.** The four pinned
+mutation ids. Zero compiler-carried reds, zero `.expect()`-carried reds.** The FIVE pinned
 tests without mutation rows exist: GET→405, garbage base64→401, no colon→401, colon-in-password
-→ACCEPTED, two `Authorization` headers→401 (each pure AND end-to-end where applicable).
+→ACCEPTED, two `Authorization` headers→401 (each pure AND end-to-end where applicable). _(This
+sentence said "four" until the code review counted the list under it — and the count defect is
+inherited from the spec's own §10, which says "four" and lists five; recorded here rather than
+edited there.)_
 
 **Divergences from prediction, recorded as findings (both):**
 
@@ -579,9 +619,10 @@ tests without mutation rows exist: GET→405, garbage base64→401, no colon→4
   `cargo fmt --all --check` clean, clippy `-D warnings` clean), AC7 (rows (a)–(j) appended,
   re-read against the AC's list: 10/10), AC8 (this file carries the live count; both twins now
   cite it by reference).
-- ⚠️ **ONE LIVE COUNT, HERE (AC8): 523 → 564 tests — 342 bin + 160 core + 62 xtask** — verified
-  twice: locally (DB tests self-skipping) and against the live `mariadb:10.11.11`, same counts,
-  0 failed. CI's run on the PR is the remaining oracle for §8's one CI-gated test.
+- ⚠️ **ONE LIVE COUNT, HERE (AC8): 523 → 566 tests — 344 bin + 160 core + 62 xtask** — the
+  564 of dev's close plus the review's two guard pins (control character, nil UUID); verified
+  locally AND against the live `mariadb:10.11.11`, 0 failed both ways, and CI green on PR #89
+  at dev's close (the review's push re-runs it).
 - **Additions beyond the story's letter, each with its reason** (for the reviewer to judge):
   **(1)** `from_env` also refuses a COLON IN THE USER half — same trap class as non-ASCII (a
   pair that can never authenticate, silently), same boot-refusal remedy, RFC 7617 §2 names it;
@@ -611,12 +652,14 @@ tests without mutation rows exist: GET→405, garbage base64→401, no colon→4
 - `crates/opencmdb-core/src/document.rs` — NEW: `DocumentRefusal`, its pinned `Display`, test
 - `crates/opencmdb-core/src/lib.rs` — `pub mod document;`
 - `crates/opencmdb-bin/src/document.rs` — NEW: sub-router, `DocumentState` (no pool),
-  `SubjectLookup` + `AlwaysUnknown`, the refusals, 8 tests
+  `SubjectLookup` + `AlwaysUnknown`, the refusals, 9 tests (8 + the review's nil-UUID pin)
 - `crates/opencmdb-bin/src/auth.rs` — Basic in the default arm, conditional challenge,
-  `is_public` shrunk, decode robustness, narrowed docs, 13 tests
+  `is_public` shrunk, decode robustness, narrowed docs, 12 tests _(this line said "13" until
+  the code review recounted it — the review's finding #1)_
 - `crates/opencmdb-bin/src/main.rs` — `AppConfig`/`BasicCredentials`/`AppConfigError` +
   `from_env` (pure), the boot `?` in `run()`, `app(pool, config)` with the merge above the
-  layer, 3 existing tests updated + 21 new tests
+  layer, 3 existing tests updated + 21 new tests (20 at dev's close — the review recounted the
+  claimed "21" to 20, then its control-character guard added one back)
 - `crates/opencmdb-bin/Cargo.toml` — `base64 = "0.22.1"` promoted (transitive → direct, pinned
   to the lockfile's version; NO new crate)
 - `Cargo.lock` — the one dependency-edge line that promotion adds
@@ -635,3 +678,8 @@ NOT touched, as the story requires: `crates/opencmdb-bin/templates/` (no diff),
 - 2026-08-14 — story 6.1 implemented (T1–T8), 523 → 564 tests, seven gates green, fifteen
   runtime mutations all red + M4's compile refusal, register rows (a)–(j) appended, doc twins
   corrected (5.14b status, live-count reference), status → `review`.
+- 2026-08-14 — three-layer code review: 17 findings after one merge (1 decision, 14 patch,
+  1 defer, 1 dismissed), 8 edge-suspicions refuted by measurement, all 8 ACs re-verified MET
+  independently. Guy's decision (b): the 404 body becomes "unknown subject: nothing can be
+  documented". All patches applied; 564 → 566 tests (two new guard pins, each proven
+  red-when-removed); stays at `review` — `done` is the MERGE's business.

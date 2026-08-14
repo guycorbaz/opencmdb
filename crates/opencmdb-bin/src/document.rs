@@ -40,9 +40,13 @@ pub(crate) const DOCUMENT_ALL_PATH: &str = "/document-all";
 /// A JSON route here would force story 6.4 to vendor an extension or redo this shape.
 #[derive(Debug, Deserialize)]
 pub(crate) struct DocumentAllRequest {
-    /// The subject: an observation id (UUIDv7 text). FR13(a) documents a SIGHTING's whole
-    /// record, and the observation is what the reach section's cause line will name. Kept as
-    /// text and parsed deliberately, so the 422 body is this module's, not serde's.
+    /// The subject: an observation id in UUID text (minted v7 by D48; the route validates the
+    /// UUID shape and refuses the NIL sentinel, not the version — `uuid::Uuid::parse_str`
+    /// accepts braced, urn: and hyphenless spellings too, and whether 6.2's lookup should
+    /// narrow that to the canonical form is registered with 6.2). FR13(a) documents a
+    /// SIGHTING's whole record, and the observation is what the reach section's cause line
+    /// will name. Kept as text and parsed deliberately, so the 422 body is this module's,
+    /// not serde's.
     pub(crate) subject: String,
 }
 
@@ -99,6 +103,13 @@ async fn document_all(
     let Ok(subject) = request.subject.parse::<uuid::Uuid>() else {
         return malformed();
     };
+    // The nil UUID is refused as a SHAPE error: it is a load-bearing sentinel in this store
+    // (D21 — `ABSTAINED_SUBJECT`, `NIL_INTERFACE`) and D48 mints observation ids as v7, so nil
+    // can never name an observation. Closing the door here keeps the sentinel space
+    // unreachable before story 6.2's store-backed lookup exists to forget it (code review).
+    if subject.is_nil() {
+        return malformed();
+    }
     match state.lookup.check(ObsId::from_uuid(subject)).await {
         // Exhaustive, no `_` arm (story 5.3's precedent): a new refusal variant must produce
         // `error[E0004]` here, never fall into a silent catch-all.
@@ -120,8 +131,11 @@ async fn document_all(
     }
 }
 
-/// The request-shape refusal: 422, naming the field (story 6.1 §6). One body for both shapes
-/// (extractor rejection, non-UUID text) — the field is the same and so is the fix.
+/// The request-shape refusal: 422, naming the field (story 6.1 §6). One body for EVERY shape
+/// refusal — extractor rejection of any class (the body-size limit included), non-UUID text,
+/// and the nil sentinel — deliberate: naming the field is the only actionable hint a
+/// shape-only route can give, and a 413 distinction is the write story's business if it ever
+/// matters (code review).
 fn malformed() -> Response {
     (
         StatusCode::UNPROCESSABLE_ENTITY,
@@ -140,7 +154,7 @@ mod tests {
 
     /// The body the unknown-subject 404 must carry, spelled out here INDEPENDENTLY of the
     /// domain's `Display` (deliberate redundancy): if either side drifts, this reds.
-    const UNKNOWN_SUBJECT_BODY: &str = "unknown subject: the id names no observation";
+    const UNKNOWN_SUBJECT_BODY: &str = "unknown subject: nothing can be documented";
 
     fn form_post(body: &str) -> Request<Body> {
         Request::builder()
@@ -172,6 +186,20 @@ mod tests {
     async fn a_subject_that_is_not_a_uuid_answers_422() {
         let response = router()
             .oneshot(form_post("subject=not-a-uuid"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let body = body_text(response).await;
+        assert!(body.contains("subject"), "the body names the field: {body}");
+    }
+
+    /// The NIL UUID is refused as malformed (code review): it is D21's load-bearing sentinel
+    /// and D48 mints v7, so it can never name an observation — and story 6.2's store-backed
+    /// lookup must never see it.
+    #[tokio::test]
+    async fn the_nil_uuid_is_refused_as_malformed() {
+        let response = router()
+            .oneshot(form_post(&format!("subject={}", uuid::Uuid::nil())))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);

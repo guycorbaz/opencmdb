@@ -132,6 +132,14 @@ pub(crate) enum AppConfigError {
         /// The variable carrying the non-ASCII byte.
         var: &'static str,
     },
+    /// A credential half carries an ASCII CONTROL character — the trailing newline of an
+    /// env-file `echo`, a tab, a carriage return. It passes `is_ascii()`, no browser Basic
+    /// dialog can type it, so such a credential authenticates nobody, silently — the same trap
+    /// class as [`Self::NonAsciiCredential`], found by this story's code review.
+    ControlCharacterInCredential {
+        /// The variable carrying the control character.
+        var: &'static str,
+    },
     /// The user half contains a colon, which RFC 7617 §2 forbids: the decoder splits the pair
     /// on the FIRST colon, so such a user could never match and the deployment would refuse
     /// everyone with no diagnostic.
@@ -154,6 +162,11 @@ impl std::fmt::Display for AppConfigError {
                 f,
                 "{var} contains a non-ASCII byte — Basic authentication has no reliable \
                  charset (RFC 7617), so such a credential would authenticate nobody"
+            ),
+            Self::ControlCharacterInCredential { var } => write!(
+                f,
+                "{var} contains a control character (a trailing newline from an env file?) — \
+                 no browser dialog can type it, so such a credential would authenticate nobody"
             ),
             Self::ColonInUser => write!(
                 f,
@@ -210,6 +223,16 @@ impl AppConfig {
                 }
                 if !password.is_ascii() {
                     return Err(AppConfigError::NonAsciiCredential {
+                        var: "OPENCMDB_BASIC_PASSWORD",
+                    });
+                }
+                if user.chars().any(|c| c.is_ascii_control()) {
+                    return Err(AppConfigError::ControlCharacterInCredential {
+                        var: "OPENCMDB_BASIC_USER",
+                    });
+                }
+                if password.chars().any(|c| c.is_ascii_control()) {
+                    return Err(AppConfigError::ControlCharacterInCredential {
                         var: "OPENCMDB_BASIC_PASSWORD",
                     });
                 }
@@ -625,9 +648,11 @@ mod tests {
     // ── AC1: the route exists only when the switch is set ──────────────────────────────────
 
     /// Switch unset, valid credential: the layer passes and the FALLBACK answers — 404 with an
-    /// EMPTY body, measured distinguishable from every response the registered route can
-    /// produce (all non-empty). ⚠️ The discriminator is the AUTHENTICATED pair: the
-    /// unauthenticated status is 401 in both shapes and proves nothing (M1's carrier).
+    /// EMPTY body, distinguishable from every response the route gives THIS POST (422, the
+    /// pinned 404, 501 — all non-empty). ⚠️ Scoped to the POST pair on purpose: the route's own
+    /// 405 to a GET is empty-bodied, so the universal sentence would be false (code review).
+    /// The discriminator is the AUTHENTICATED pair: the unauthenticated status is 401 in both
+    /// shapes and proves nothing (M1's carrier).
     #[tokio::test]
     async fn without_the_switch_an_authenticated_post_reaches_the_empty_fallback() {
         let app = app(lazy_pool(), config(false, Some(pair())));
@@ -642,7 +667,7 @@ mod tests {
         assert_eq!(
             body_text(response).await,
             "",
-            "the fallback's body is empty — the registered route never answers an empty body"
+            "the fallback's body is empty — the route answers this POST non-empty in every branch"
         );
     }
 
@@ -681,7 +706,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
         assert_eq!(
             body_text(response).await,
-            "unknown subject: the id names no observation"
+            "unknown subject: nothing can be documented"
         );
     }
 
@@ -972,14 +997,18 @@ mod tests {
                 AppConfig::from_env(lookup_of(&[("OPENCMDB_DOCUMENT_ENABLED", off)])).expect(off);
             assert!(!config.document_enabled, "{off:?} disables");
         }
-        let refused = AppConfig::from_env(lookup_of(&[("OPENCMDB_DOCUMENT_ENABLED", "yes")]));
-        assert_eq!(
-            refused,
-            Err(AppConfigError::UnrecognisedSwitch {
-                value: "yes".to_string()
-            }),
-            "a typo is a boot error, not a mysteriously missing route"
-        );
+        // "The rest" measured on several specimens, not one (code review): the near-misses a
+        // hand reaching for a boolean actually types.
+        for wrong in ["yes", "on", "enabled", "2", "vrai"] {
+            let refused = AppConfig::from_env(lookup_of(&[("OPENCMDB_DOCUMENT_ENABLED", wrong)]));
+            assert_eq!(
+                refused,
+                Err(AppConfigError::UnrecognisedSwitch {
+                    value: wrong.to_string()
+                }),
+                "{wrong:?}: a typo is a boot error, not a mysteriously missing route"
+            );
+        }
     }
 
     #[test]
@@ -1049,6 +1078,33 @@ mod tests {
         assert_eq!(
             bad_user,
             Err(AppConfigError::NonAsciiCredential {
+                var: "OPENCMDB_BASIC_USER"
+            })
+        );
+    }
+
+    /// A control character in either half is refused at boot (code review): `"s3cret\n"` — the
+    /// classic env-file `echo` accident — passes `is_ascii()`, and no browser dialog can type
+    /// it, so it would refuse everyone permanently with no diagnostic.
+    #[test]
+    fn a_control_character_in_a_credential_is_refused_at_boot() {
+        let newline_password = AppConfig::from_env(lookup_of(&[
+            ("OPENCMDB_BASIC_USER", "op"),
+            ("OPENCMDB_BASIC_PASSWORD", "s3cret\n"),
+        ]));
+        assert_eq!(
+            newline_password,
+            Err(AppConfigError::ControlCharacterInCredential {
+                var: "OPENCMDB_BASIC_PASSWORD"
+            })
+        );
+        let tab_user = AppConfig::from_env(lookup_of(&[
+            ("OPENCMDB_BASIC_USER", "op\t"),
+            ("OPENCMDB_BASIC_PASSWORD", "s3cret"),
+        ]));
+        assert_eq!(
+            tab_user,
+            Err(AppConfigError::ControlCharacterInCredential {
                 var: "OPENCMDB_BASIC_USER"
             })
         );

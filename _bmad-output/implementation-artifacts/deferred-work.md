@@ -3301,9 +3301,12 @@ story 5.14b's AC10 failed exactly there).
 - **(c) `scrape_authorized` refuses a lowercase `bearer` scheme** (RFC 7235 §2.1 wants
   case-insensitive) — a recorded defect, deliberately NOT fixed by story 6.1, whose new Basic arm
   is case-insensitive and does not copy it. **Owner: Epic 19.**
-- **(d) The Basic comparison is not constant-time** (`==` on `String`) — a stated limit
-  (single-operator LAN product, TLS at the proxy), not silently "fixed" with a new dependency.
-  **Owner: Epic 19.**
+- **(d) The Basic comparison is not constant-time** (`==` on `String`) — **and the `&&`
+  short-circuit is a username-confirmation oracle**: a user mismatch skips the password compare
+  entirely, so timing distinguishes *right user, wrong password* from *wrong user* (the code
+  review widened this row — the first wording under-described what must be closed). A stated
+  limit (single-operator LAN product, TLS at the proxy), not silently "fixed" with a new
+  dependency. **Owner: Epic 19, both halves of the leak.**
 - **(e) The `--accent` colour conflict** (story 6.1 §9): story 5.14b's guard asserts the identity
   section never reaches `--accent`, and story 6.4's Document button in that section will be
   legitimately amber; a top-level class evades the guard entirely (measured). 6.4 must re-examine
@@ -3325,3 +3328,17 @@ story 5.14b's AC10 failed exactly there).
   the §4 bench probed only same-origin initiators and must not be quoted wider. Harmless in
   story 6.1 (the route has no effect to forge); it stops being harmless the day the route
   writes. **Owner: story 6.2**, the story where the route first has an effect to forge.
+
+## Deferred from: code review of 6-1-write-route-writes-nothing (2026-08-14)
+
+- **`lazy_pool()` couples test outcomes to whatever answers `127.0.0.1:3306`.** The idiom predates
+  story 6.1 (the auth test used it first); the new tests reuse it and assert 503/`!= 401` on the
+  premise that `root:x@127.0.0.1:3306/none` never authenticates. Measured safe today — locally the
+  unrelated container refuses the credentials, in CI the service does (green run, PR #89) — but the
+  premise is environmental, not structural. The clean shape is a port known dead (bind-then-close)
+  or a config-injected address. Owner: the next story that touches the test helpers.
+- **The subject parser accepts every RFC-4122 textual spelling and any UUID version.** The NIL
+  sentinel is now refused at the route (this review's patch, D21/D48); whether the store-backed
+  lookup should also require the canonical hyphenated form and/or v7 is the write story's
+  question — a braced or urn: spelling of a REAL id parses to the same id today, which is
+  harmless until something round-trips the text. Owner: story 6.2.

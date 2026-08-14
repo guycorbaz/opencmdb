@@ -38,6 +38,9 @@ pub async fn auth_deny(State(config): State<AppConfig>, request: Request, next: 
     if is_public(path) {
         return next.run(request).await;
     }
+    // Exact match on purpose: `/metrics/` (trailing slash) is NOT this branch — it falls to
+    // the default arm like any unknown path and is answered with the Basic challenge, so a
+    // scraper must use the canonical path (measured at review).
     if path == "/metrics" {
         if scrape_authorized(&request) {
             return next.run(request).await;
@@ -59,12 +62,24 @@ pub async fn auth_deny(State(config): State<AppConfig>, request: Request, next: 
 /// (a probe cannot authenticate) and the assets (CSS/JS/the vendored htmx — style, not data).
 /// `/` and `/gap` left this list under arbitration 2′; adding a path back here IS the exposure
 /// decision, and AC3's pinned shape exists so it cannot be taken by accident.
+///
+/// ⚠️ The match is on the RAW request path, by prefix: `/assets/../gap` is public-classified.
+/// Containment was MEASURED at review, and rests on two facts — the only handler under the
+/// prefix serves rust-embed's bundle (which cannot escape it), and the router does not
+/// collapse `..` — so no gated content is reachable through the prefix today. The day a
+/// normalizing hop or a second `/assets/`-prefixed route lands, this classification and the
+/// router disagree: re-measure then.
 fn is_public(path: &str) -> bool {
     path == "/healthz" || path.starts_with("/assets/")
 }
 
 /// A 401 WITHOUT the Basic challenge — the pair-unconfigured refusal (arbitration 6) and the
 /// `/metrics` refusal (which must never advertise Basic).
+///
+/// ⚠️ RFC 9110 §15.5.2 says a 401 MUST carry `WWW-Authenticate`; this response violates that
+/// MUST deliberately, and the trade is recorded at that strength — not as a UX preference
+/// (code review): a challenge nothing can satisfy is an infinite browser dialog on every
+/// unupgraded deployment, and a scheme `/metrics` does not accept must not be advertised.
 fn deny() -> Response {
     (StatusCode::UNAUTHORIZED, "authentication required").into_response()
 }
@@ -93,8 +108,11 @@ fn challenge() -> Response {
 /// - the pair splits on the **FIRST colon only** (RFC 7617 §2: the user-id must not contain
 ///   one — enforced at boot — the password may);
 /// - the comparison covers the WHOLE decoded pair, both halves. ⚠️ `==` on `String` is not
-///   constant-time — a stated limit (single-operator LAN product, TLS at the proxy), registered
-///   with Epic 19, not silently "fixed" with a new dependency.
+///   constant-time, and the `&&` SHORT-CIRCUITS: a user mismatch skips the password compare
+///   entirely, so timing distinguishes *right user, wrong password* from *wrong user* — a
+///   username-confirmation oracle, not just a byte-position leak. Both halves of the leak are
+///   a stated limit (single-operator LAN product, TLS at the proxy), registered with Epic 19,
+///   not silently "fixed" with a new dependency.
 fn basic_authorized(request: &Request, pair: &BasicCredentials) -> bool {
     let mut values = request.headers().get_all(header::AUTHORIZATION).into_iter();
     let Some(value) = values.next() else {
