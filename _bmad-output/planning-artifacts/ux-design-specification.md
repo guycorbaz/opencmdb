@@ -1,8 +1,54 @@
 ---
 stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 lastStep: 14
-lastEdited: '2026-07-17'
+lastEdited: '2026-08-13'
 editHistory:
+  - date: '2026-08-13'
+    source: 'the reference mock (`~/travail/Projets actuels/opencmdb/documents/opencmdb - maquette.html`, 2026-08-13), read against this spec; three divergences arbitrated by Guy the same day, plus TWO found afterwards and registered unarbitrated.'
+    changes: |
+      🔑 THE MOCK IS THE VISUAL AND INTERACTION REFERENCE (Guy, 2026-08-13: "la maquette est la
+        référence car je n'ai rien vu d'autre pour l'instant"). Ten screens, French, hardcoded
+        fixtures, a React bundle. New subsection at the end of "UX Pattern Analysis & Inspiration":
+        what it is, what is liftable (design tokens, the French copy), what is not (its runtime — the
+        target is Askama + HTMX, server-rendered). THE DIVISION OF AUTHORITY, so neither document is
+        read for what it does not carry: the mock settles WHAT IT SHOWS - layout, hierarchy, density,
+        copy, the shape of a gesture. This spec keeps the INVARIANTS - the bans, the glossary, the two
+        source axes, abstention-as-a-map, the a11y contract - because they are the rules a screen can
+        break without looking broken. Where the two disagree the divergence is WRITTEN AT THE SITE and
+        arbitrated, never absorbed: three were found on the first read, and one of the three was a
+        false sentence of OURS, not of the mock's.
+      DIVERGENCE 1 - SPARKLINE (settled, Guy): the spec holds, `epics.md` E17 is too broad. E17 defers
+        "rich stat-card/sparkline/trend analytics" to Growth, which reads as deferring the THIN
+        sparkline this spec prescribes and whose `<polyline>` its implementation notes already specify.
+        What Growth defers is the rich analytic - multi-series, drill-down, a chart that invites
+        reading - never the one-line trend that stops a large number from being a snapshot.
+        ⚠️ CONSEQUENCE, FLAGGED NOT ABSORBED: `epics.md` E17 carries a sentence that must be narrowed.
+        A retrospective or a correct-course may do it; a story may not.
+      DIVERGENCE 2 - LANGUAGE (settled, Guy): THE GUI IS MULTILINGUAL. FR and EN are the two MVP
+        locales, both first-class; further locales are a later decision and nothing here may assume
+        there will only ever be two. New subsection after the glossary. The mock's French is a
+        RENDERING of a bilingual GUI, not a French-first decision, and must not be read as one.
+        🔴 AND IT FALSIFIES THE GLOSSARY'S OWN COLUMN HEADERS: "EN (docs, API, code) | FR (UI)" says
+        that EN is not a UI language. Under a bilingual GUI it is one. Corrected in place.
+      DIVERGENCE 3 - THE REACH COUNTER (corrected, Guy: record the debt, write no exception):
+        🔴 MY OWN FLAG WAS WRONG AGAINST THE BAN AS WRITTEN, and that is recorded rather than quietly
+        dropped. The ban's test is "no numeric badge on any nav item or icon"; the mock has none, and
+        its "Pending · N fields, across M devices · Oldest: 10 July" line is LITERALLY what this spec
+        prescribes as the replacement. The mock is conformant. What survives is narrower and real, and
+        it is a sentence of OURS that measurement falsified: "six months of inaction and it still
+        reads 113" (Radar section). Story 5.14 measured the shipped binary: each scan writes a new
+        abstention row, so the number grows with how often the product LOOKED. Kept as a TARGET with
+        the debt named, never rewritten into an exception - an exception written here is a door the
+        next section walks through.
+      ⚠️ TWO MORE, FOUND ON A SECOND READ AND LEFT UNARBITRATED - of the mock's TOKENS, not its screens,
+        which is why the first read missed them. (a) THE ACCENT: this spec locks ONE accent reserved
+        solely for the documenting gesture, with a CI gate to match; the mock uses a blue-slate accent
+        as the GENERAL primary - nav selection, every primary button, occupied IPAM cells. Two
+        doctrines, not two palettes: "this colour means the GESTURE" against "this colour means the
+        PRODUCT", and swapping the palette while keeping the second silently retires a specified gate.
+        (b) DARK MODE: first-class from MVP here, ABSENT from the mock - no `prefers-color-scheme`, no
+        `[data-theme]`, one light base. Registered in the Reference Mock subsection so that neither is
+        settled by whoever meets it first.
   - date: '2026-07-17'
     source: 'architecture D57-scope (party mode: Winston, Murat, Amelia, John — decided by Guy), item F58; plus the withdrawal of the `X` extension, decided by Guy.'
     changes: |
@@ -176,6 +222,7 @@ editHistory:
       STILL OPEN (flagged in the glossary, not settled): `ignore` / « ignorer » - the tone disdains;
         `exclude` / « exclure » (out of scope) would be more honest.
 inputDocuments:
+  - '~/travail/Projets actuels/opencmdb/documents/opencmdb - maquette.html'
   - _bmad-output/planning-artifacts/prd.md
   - _bmad-output/planning-artifacts/product-brief-opencmdb.md
   - _bmad-output/planning-artifacts/product-brief-opencmdb-distillate.md
@@ -469,6 +516,16 @@ out-of-date reality. Relief, not reprimand.
 - **Calm object card (1Password) + stat panel (Grafana):** big title, gray subtitle, type-icon,
   breathing room; where a metric is shown, a large number + thin sparkline + tiny label — the
   number carries, not the colour.
+  **⚠️ The sparkline's scope, settled 2026-08-13 (Guy) — this spec holds, `epics.md` E17 is too broad.**
+  E17 defers *"rich stat-card/sparkline/trend analytics"* to Growth, which reads as deferring the **thin**
+  sparkline prescribed here and the server-rendered `<polyline>` the implementation notes already specify.
+  **What Growth defers is the RICH analytic** — multi-series, drill-down, a chart that invites reading —
+  **never the one line that stops a large number from being a snapshot.** A number without its trend is a
+  photograph of a network described everywhere else in this document as two photographs compared; the
+  reference mock renders three of them and is conformant.
+  **🔴 Consequence, flagged rather than absorbed: `epics.md` E17 carries a sentence that must be narrowed.**
+  A retrospective or a correct-course may do it; **a story may not** — that rule is the project's, and it is
+  what keeps a plan from being edited by whoever trips over it.
 - **Muted occupancy grid (UniFi heatmap, tamed):** a dense per-subnet IP grid, one cell = one
   address, GitHub-contributions style — used = filled slate/indigo tile, free = ghost outline,
   reserved = soft hatch; fill rate readable in 3 s, no legend, no green/red.
@@ -485,6 +542,58 @@ out-of-date reality. Relief, not reprimand.
 - **Loud palette** (Grafana) — no rainbow, no automotive gauges, no accusatory red; encode severity
   by **luminosity and typographic weight**, never by hue.
 - **Manual-form heaviness** (NetBox / phpIPAM / iTop) — confirm-don't-transcribe; discovery types.
+
+### The Reference Mock (2026-08-13)
+
+**`~/travail/Projets actuels/opencmdb/documents/opencmdb - maquette.html` is the visual and interaction
+reference for the interface work.** *(Guy, 2026-08-13 — "la maquette est la référence car je n'ai rien vu
+d'autre pour l'instant".)* Everything above this line is inspiration analysed at second hand; the mock is
+the first artefact that shows the product itself, on one screen, in a state a reader can point at.
+
+**What it technically is, so nobody plans against the wrong thing:** a 496 KB single-file bundle — a React
+runtime plus an inlined design system (Barlow, tokens) — whose real content is 85 KB of template, 17 KB of
+which are CSS tokens, and 25 KB of logic **carrying its own data in hard-coded arrays** (`GAPS`, `DEVICES`,
+`APPS`, `SUBNETS`). **Nothing in it is fed by a database, and its runtime is not this product's.**
+
+**Ten screens:** Triage (queue + side-by-side record, keyboard ↑↓/⏎/⌫, undo toast, grouped-by-motif view),
+Dashboard ("since your last visit", stat cards, Reach), Inventory, Device record (field by field, "Hosted
+here", composite identity, observation history), Applications, IPAM (/24 grid, next free address, conflict),
+Sources (the two axes), Alerts, Self-diagnostic, Commissioning (adopt the baseline).
+
+**What is liftable as it stands:** the design tokens and the French copy — the mock is the largest body of
+UI wording this project has, against ~115 lines in `locales/app.yml`. **What is not:** its runtime. The
+target is Askama partials + HTMX, server-rendered, zero JS framework — a decision this document takes on its
+own grounds (see *Design System Choice*), and the mock's React does not reopen it. **A mock is a
+destination, never an implementation.**
+
+**The division of authority, so neither document is read for what it does not carry:**
+
+| The mock settles | This spec keeps |
+|---|---|
+| What is on the screen: layout, hierarchy, density, copy, the shape of a gesture | The invariants: the backlog bans, the glossary, the two source axes, abstention-as-a-map, the a11y and focus contract |
+
+*The reason for the split is not seniority, it is failure mode:* **a mock cannot show an invariant being
+broken** — a screen that reddens with age, a term that names a forbidden operation, an amber second button
+all look perfectly fine in a static frame. **Where the two disagree, the divergence is written at the site
+and arbitrated. It is never absorbed in silence** — three were found on the first read and settled on
+2026-08-13 (the sparkline's scope, above; the interface language, in *Terminology*; the reach counter, in
+*the Radar*), and 🔴 **one of the three turned out to be a false sentence of OURS rather than a defect of
+the mock's.**
+
+**⚠️ Two further divergences were found on a second read — of the mock's TOKENS rather than its screens —
+and they are REGISTERED HERE UNARBITRATED.** They are written down at the moment of discovery so that
+neither is settled by whoever meets it first:
+
+1. **The accent.** This spec locks **one** accent, `--accent-document: #d99a4e`, **reserved solely for the
+   documenting gesture**, and specifies a CI gate asserting *one active `.btn-document` per view*. The mock
+   has a **blue-slate accent (`#5980a6`) used as the general primary**: the selected nav item, every primary
+   button, the ghost buttons, the occupied IPAM cells. **These are not two palettes, they are two
+   doctrines** — *one colour that means "this is the gesture"* against *one colour that means "this is the
+   product"* — and a palette swap that keeps the second silently retires a specified gate.
+2. **Dark mode.** This spec calls it **first-class from MVP** (`[data-theme]`, one token source, snapshots
+   per theme). **The mock has none**: no `prefers-color-scheme`, no `[data-theme]`, a single light base
+   (`#f2f2f3`). Whether dark mode is gained by the mock or dropped from the MVP is a **decision**, and
+   silence would make it an omission.
 
 ### Design Inspiration Strategy
 
@@ -575,6 +684,16 @@ runtime opencmdb avoids, and their default aesthetics fight the calm signature.
 - **Dark mode is first-class from MVP** (`[data-theme]`, one token source drives both). Dark
   pitfalls handled: amber desaturated (~S 55% / L 58%) so it doesn't vibrate on `#0f1420`; text is
   `slate-100`, never `#fff` (avoids halo), ~13:1 contrast.
+  **🔴 DEFERRED 2026-08-13 (Guy), and corrected here rather than left standing.** The reference mock is
+  **light-only** — no `prefers-color-scheme`, no `[data-theme]`, one base — so the interface epic ships
+  light and this bullet states an intention, not the MVP. **The measurement that makes the deferral a real
+  decision rather than a shrug: what ships TODAY is dark.** `gap.html` hardcodes `data-theme="dark"` and
+  `assets/app.css` already carries **both** token sets (`#0f1420` / `#f6f7f9`) with nothing to switch them.
+  So this is not the postponement of an unbuilt feature — **it is the only rendering the product has,
+  changing colour**, and the release notes carry it (Epic 6b, story 6b.12). The dark tokens stay in the
+  sheet, unreferenced: *its return is a story, not an excavation.* **The reason for deferring is that
+  nothing to copy exists** — a dark palette invented beside a light reference is a palette redone the day
+  someone sees it.
 - **Iconography:** a lightweight open SVG set (Lucide/Heroicons), inlined, monochrome, tinted via
   `currentColor`.
 - **Composable partials** keep the design cheap to retouch (design-for-change).
@@ -942,6 +1061,24 @@ inside the lit area.** *Same code, different product: an inventory with holes, o
   It does not redden. It does not grow bold. It does not age visibly. **Six months of inaction and it still
   reads 113, in the same grey, with the same dignity.** *The six-month test applies to abstention before it
   applies to the backlog.*
+  **🔴 That sentence was FALSIFIED by the implementation on 2026-08-11, and it is kept here as a TARGET
+  rather than deleted as an error** *(Guy's arbitration, 2026-08-13: record the debt, write no exception)*.
+  Story 5.14 wired the identity pass into the shipped binary and measured what the number actually does:
+  **every scan mints fresh observation ids, so every scan writes a new abstention row and nothing supersedes
+  anything.** Five runs over ONE host left five rows — of the order of 105 000 after a year at a five-minute
+  interval. **Six months of inaction do not hold it at 113; six months of scanning multiply it. The number
+  measures uptime, not reach.**
+  **What shipped is the honest UNIT, not the invariance:** story 5.14b renders **sightings**, never devices
+  — *a figure that rises because the product looked many times is the radar's RANGE, not the operator's
+  debt* — and **both things are true at once: the unit is honest and this ban is still unmet.** The two must
+  not be confused, because a true unit reads like a fix and stops nothing from growing.
+  **The invariance needs a DENOMINATOR, and a denominator needs grouping** (Epic 6): collapsing ten
+  sightings of one unplaceable thing means deciding what makes two sightings the same thing **without an
+  identity** — which is grouping, and grouping is why the story was split rather than given a denominator on
+  the spot. ⚠️ **And the word goes with it:** once grouping exists, *sighting* stops being the true unit and
+  these copy keys change. A scheduled consequence, registered at 5.14b — not a correction to make early.
+  **No exception is written for this section**, and that is deliberate: *an exception written here is a door
+  the next section walks through.*
 - **The floor is set by the DATA, not by the engine** (PRD FR9): **hostname — one of grouping's three signals
   — is unusable on nearly half of known clients.** No amount of engine quality recovers a signal the source never
   sent. **An abstention target that ignores this measures the network, not the product.**
@@ -1199,7 +1336,7 @@ implements the operation.** These pairs are binding and mirror the PRD's Canonic
 needs **one meaning, not one root** — `document`/« Merger » is one term with one translation, exactly as
 the rule requires._
 
-| Concept | EN (docs, API, code) | FR (UI) | Meaning |
+| Concept | EN (docs, API, code — **and a UI locale**) | FR (UI) | Meaning |
 |---|---|---|---|
 | Auto-discovered state | **observed** | **observé** | Factual, source-tagged, timestamped, **non-editable, never modified** |
 | Operator-documented state | **declared** | **déclaré** | Chosen intent — *"the state the operator has **documented**"* |
@@ -1242,6 +1379,35 @@ came to name two opposite gestures (one that closes the gap, one that keeps it o
 firing. **A term with two meanings passes the uniqueness test.** The gate must be extended with a
 **denylist of retired words** (`accept-as-declared`, `merge`/`fusionner` in EN, `revert`), because the
 positive rule cannot catch this class on its own.
+
+### Interface Language — FR and EN at MVP, both first-class
+
+**The GUI is multilingual.** *(Guy's arbitration, 2026-08-13, taken on reading the reference mock.)* **FR
+and EN are the two MVP locales and neither is a translation of the other's product** — they are two
+renderings of one glossary. **Further locales are a later decision**, and nothing in this specification may
+assume there will only ever be two: the table above is a SHAPE a third column extends, not a bilingual
+assumption baked into the design.
+
+- **🔴 The column headers above were falsified by this arbitration and are corrected in place.** They read
+  *"EN (docs, API, code) | FR (UI)"* — which says, in the document that fixes the vocabulary, **that English
+  is not an interface language.** It is one. The glossary rule is unchanged and now carries its true scope:
+  **one concept, one meaning, one translation PER LOCALE.**
+- **No string is born in one language only.** A screen specified with French copy alone is **half
+  specified**: the second half is not clerical work postponed, it is the moment a term meets the glossary
+  and sometimes fails it. Every string lands as an i18n key with both translations (`rust-i18n`,
+  `locales/app.yml`, EN as the code-side fallback).
+- **The reference mock is a FRENCH RENDERING of a bilingual GUI, not a French-first decision**, and must
+  not be read as one. Its ~100 French strings are the largest body of UI wording this project has; they are
+  a gift to the FR column, not a scoping choice.
+- **⚠️ Epic 22 (*"first-light soigné & bilingue complet"*) does not license shipping a single-language
+  screen before it.** What that epic owns is COMPLETENESS and the in-UI selector; the keys are written with
+  the screen that needs them, or the sweep it inherits is the whole product's copy at once.
+- **A layout consequence, stated with its direction because the direction is what makes it useful:** French
+  runs longer than English for the same sentence, so a layout measured in French holds in English while
+  **the reverse does not follow.** The mock is therefore the safe side to measure — and *safe* is not
+  *verified*: visual snapshots run per THEME today, and a bilingual GUI makes locale a second axis. Whether
+  that axis is snapshotted (doubling the baselines) or left to review is an implementation arbitration, and
+  it is named here so that it is taken rather than defaulted.
 
 ### Microcopy Rules
 
