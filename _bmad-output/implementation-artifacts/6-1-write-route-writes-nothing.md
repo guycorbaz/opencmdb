@@ -1,6 +1,6 @@
 # Story 6.1: The write route exists, and it writes nothing
 
-Status: ready-for-dev
+Status: review
 
 <!-- ✍️ REWRITTEN 2026-08-14 on the rewrite brief the validation of 2026-08-12 produced, after Guy
      decided HTTP Basic on 2026-08-14 — a decision taken ON a measurement: the browser bench of
@@ -402,14 +402,51 @@ final test count; every other document cites it by reference.
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — the domain refusal** (AC2): the enumerated variant in `opencmdb-core`, no `axum`, no status
-- [ ] **T2 — `AppConfig`** (arbitration 5, AC1, M8): the pure `from_env`, the boot `?` in `run()` (uncarried call STATED), `app(pool, config)`
-- [ ] **T3 — Basic in `auth_deny`** (AC3): `basic_authorized` via `from_fn_with_state`, the conditional challenge (arbitration 6), `is_public` shrunk, `/metrics` untouched, the decode-robustness list (§3)
-- [ ] **T4 — the sub-router** (AC1, AC2, AC4): `document.rs`, `DocumentState` (no pool), `SubjectLookup` + `AlwaysUnknown` pinned, the merge above the layer (§2)
-- [ ] **T5 — the broken test** (§8): `index_renders_the_real_gap` updated via `AppConfig` — and verified IN CI, not locally
-- [ ] **T6 — prove-to-red** (AC1–AC4): M1–M12, predictions FIRST, each carrier read from its own panic message one by one; M4's compiler diagnostic recorded verbatim
-- [ ] **T7 — the register** (AC7), re-read against AC7's list
-- [ ] **T8 — gates and documents** (AC6, AC8)
+- [x] **T1 — the domain refusal** (AC2): the enumerated variant in `opencmdb-core`, no `axum`, no status
+- [x] **T2 — `AppConfig`** (arbitration 5, AC1, M8): the pure `from_env`, the boot `?` in `run()` (uncarried call STATED), `app(pool, config)`
+- [x] **T3 — Basic in `auth_deny`** (AC3): `basic_authorized` via `from_fn_with_state`, the conditional challenge (arbitration 6), `is_public` shrunk, `/metrics` untouched, the decode-robustness list (§3)
+- [x] **T4 — the sub-router** (AC1, AC2, AC4): `document.rs`, `DocumentState` (no pool), `SubjectLookup` + `AlwaysUnknown` pinned, the merge above the layer (§2)
+- [x] **T5 — the broken test** (§8): `index_renders_the_real_gap` updated via `AppConfig` — and verified IN CI, not locally
+- [x] **T6 — prove-to-red** (AC1–AC4): M1–M12, predictions FIRST, each carrier read from its own panic message one by one; M4's compiler diagnostic recorded verbatim
+- [x] **T7 — the register** (AC7), re-read against AC7's list
+- [x] **T8 — gates and documents** (AC6, AC8)
+
+### Review Findings (code review 2026-08-14, three layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor — 17 findings after one merge, 8 edge-suspicions refuted by measurement, all 8 ACs re-verified MET by independent measurement)
+
+- [x] [Review][Decision] **The production 404 body is FALSE for recorded observations** — under `AlwaysUnknown`, an id that names a REAL recorded observation is answered "unknown subject: the id names no observation"; the module doc calls this "truthfully answers *unknown*" while the 501 branch's own justification is "answering success for a write that did not happen would be a lie" — the 404 branch commits the symmetric lie. Options: (a) keep the pinned domain sentence (it becomes true under 6.2's store-backed lookup) and state the transient falsehood in `AlwaysUnknown`'s doc as a recorded cost of shipping the shape first; (b) change the pinned body to a sentence true in both eras (e.g. "unknown subject: nothing can be documented yet"), re-pinned by 6.2.
+- [x] [Review][Patch] File List counts are wrong by one twice: `auth.rs` "13 tests" is 12, `main.rs` "21 new tests" is 20 (recounted; 12+20+8+1 = 41 = 523→564) [story file, File List]
+- [x] [Review][Patch] "The four pinned tests" is followed by FIVE items — the story's own §10 says "four" and lists five, and the Debug Log copied the error [story file, Debug Log; spec §10 origin recorded, not edited]
+- [x] [Review][Patch] `from_env` accepts a CONTROL character in a credential (`"s3cret\n"` — the env-file/echo accident): passes `is_ascii()`, cannot be typed in a Basic dialog, so the deployment refuses everyone silently — the exact trap class the boot refusal claims to close [crates/opencmdb-bin/src/main.rs, from_env]
+- [x] [Review][Patch] False universal sentence in an assertion message and comment: "the registered route never answers an empty body" — measured FALSE for the route's own 405 (empty body); true only for the POST pair the test compares (blind+auditor, both independent) [crates/opencmdb-bin/src/main.rs, AC1 test]
+- [x] [Review][Patch] `deny()`'s doc records only the browser-dialog rationale — a 401 without `WWW-Authenticate` violates a MUST (RFC 9110 §15.5.2); the trade must be named at its strength [crates/opencmdb-bin/src/auth.rs]
+- [x] [Review][Patch] The `&&` short-circuit is a username-confirmation timing oracle (user-mismatch skips the password compare entirely) — register row (d) under-describes what Epic 19 must close [crates/opencmdb-bin/src/auth.rs + deferred-work.md row (d)]
+- [x] [Review][Patch] Twins' headline "sixteen mutation ids in all; zero compiler-carried" invites the misreading M4 refutes — scope the zero to the fifteen runtime reds, as the Debug Log does [CLAUDE.md + docs/project-context.md]
+- [x] [Review][Patch] `the_switch_accepts_its_documented_values_and_refuses_the_rest` measures "the rest" on ONE specimen ("yes") — widen the refused set [crates/opencmdb-bin/src/main.rs]
+- [x] [Review][Patch] The epic-order line ("… → 6.4 → v0.2.0 …") and register row (f) ("Epic 6b's 6b.12") cannot be read together without sprint-status — one clause reconciles them [CLAUDE.md + docs/project-context.md]
+- [x] [Review][Patch] The subject parser accepts the NIL UUID — a load-bearing sentinel (D21: `ABSTAINED_SUBJECT`, `NIL_INTERFACE`) that story 6.2's store-backed lookup would let reach the store; also accepts every non-canonical spelling (braces, urn:, hyphenless, uppercase) while the doc says "UUIDv7 text" [crates/opencmdb-bin/src/document.rs; canonical-form question registered with 6.2]
+- [x] [Review][Patch] `is_public` matches the RAW path by prefix — `/assets/../…` shapes are public-classified; containment measured (rust-embed serves only the bundle, matchit does not collapse `..`) but the doc must state what the containment RESTS ON [crates/opencmdb-bin/src/auth.rs]
+- [x] [Review][Patch] `/metrics/` (trailing slash) falls out of the exact-match scrape branch into the Basic arm and gets the Basic challenge — behavior to state in the doc, not change [crates/opencmdb-bin/src/auth.rs]
+- [x] [Review][Patch] EVERY `Form` rejection collapses to the 422 "malformed" body, the body-size class included — deliberate, but the doc must say so [crates/opencmdb-bin/src/document.rs]
+- [x] [Review][Patch] `sprint-status.yaml`'s `last_updated` comment carries "523 -> 564" — a count in a second document, AC8's letter; reword to cite the story file [sprint-status.yaml:78] (auditor F2)
+- [x] **Decision resolved (Guy, 2026-08-14): option (b)** — the domain sentence is now
+  **"unknown subject: nothing can be documented"**, true under `AlwaysUnknown` AND under 6.2's
+  store-backed lookup; re-pinned in all three places in the same commit (core `Display` test,
+  `document.rs`'s independent constant, the through-app pin). Story 6.2 may refine it.
+- [x] **All 14 patches applied and re-measured**: 566 tests green (the review added two guard
+  pins — control-character at boot, nil-UUID at the route — each proven red-when-removed before
+  acceptance), seven gates green, fmt and clippy clean. The canonical-UUID-form question and the
+  widened row (d) are in `deferred-work.md`.
+- [x] 🔴 **An incident during the apply pass, recorded for the retrospective**: proving the two
+  new guards red-when-removed, the driver reverted each mutation with `git checkout -- <file>` —
+  which restores the COMMITTED state, and the review patches were NOT yet committed, so
+  `main.rs` and `document.rs` silently lost every review patch while `auth.rs` and core kept
+  theirs. Caught one step later because the FULL suite was re-run against the live database
+  before concluding (3 red: the handler emitted the new sentence, the reverted pins expected
+  the old — a mixed state no reading would have suspected), and the patches were re-applied
+  from their anchored scripts. *"Revert the MUTATION, never the FILE" has a precondition the
+  rule does not state: a file-level revert is only equivalent when the baseline is COMMITTED —
+  commit-before-mutating applies to review patches too.*
+- [x] [Review][Defer] `lazy_pool()` hardcodes `127.0.0.1:3306` and assertions depend on nothing answering there correctly — deferred, pre-existing idiom (predates this story), measured safe locally (wrong credentials against the unrelated container) and in CI (green run on PR #89)
 
 ---
 
@@ -487,3 +524,162 @@ fixtures, trap gate RED at 26/15/11, `cargo fmt --all --check` clean.
 - [Source: `crates/opencmdb-bin/src/auth.rs`] — the deny seam (`is_public` 36-38, `scrape_authorized` 46-58), the doc sentence quoted in arbitration 2′ (lines 6-7)
 - [Source: `crates/opencmdb-bin/src/main.rs:150-161`] — `app(pool)`, the router, the layer; the fallback-401 pin at `main.rs:510-515`
 - [Source: `architecture.md:3818`] — the `document` vocabulary table; [`architecture.md:168`] — TLS at the reverse proxy
+
+---
+
+## Dev Agent Record
+
+### Implementation Plan (as executed, 2026-08-14)
+
+T1 → T8 in the story's order, red-green-refactor per task, the whole pass built and mutated
+against a live `mariadb:10.11.11` (host port **13316** — 3306 is held by an unrelated container,
+story 5.9's measured trap, untouched). Commit `ad96ea6` froze the green state BEFORE the
+mutation pass (Dev Notes' own trap: revert the MUTATION, never the file).
+
+- **T1**: `crates/opencmdb-core/src/document.rs` — `DocumentRefusal::UnknownSubject` on
+  `RepositoryError`'s idiom (thiserror, no `axum`, no status); its `Display` text IS the HTTP
+  discriminator and is pinned in core AND end-to-end (deliberate redundancy).
+- **T2**: `AppConfig` / `BasicCredentials` / `AppConfigError` in `main.rs`; `from_env(lookup)`
+  pure on `dburl::from_env`'s precedent — the lookup is a parameter, so NOT ONE new test
+  mutates an env var. Boot refusals BY NAME: non-ASCII half (M8), half-configured pair,
+  unrecognised switch value, **and a colon in the user half** (see Completion Notes §additions).
+  The `run()` call-site (`let config = AppConfig::from_env(…)?`) is stated UNCARRIED: one call,
+  one `?`, no test drives `run()`.
+- **T3**: `auth_deny` takes `State<AppConfig>` via `from_fn_with_state`; the default arm is
+  Basic; `/metrics` branch byte-compatible (Bearer only, never the Basic challenge — arb. 6);
+  pair unset → 401 WITHOUT `WWW-Authenticate`; `is_public` = exactly `/healthz` + `/assets/`.
+  Full decode-robustness list of §3, each case tested pure (in `auth.rs`) AND end-to-end
+  (in `main.rs`) — deliberate redundancy, and M10/M12's carriers sit next to the code.
+- **T4**: `crates/opencmdb-bin/src/document.rs` — sub-router `Router<DocumentState>`,
+  `DocumentState { lookup: Arc<dyn SubjectLookup> }` and NO pool field; `AlwaysUnknown`
+  production wiring pinned by its own test; known branch reached through the in-memory
+  `KnowsOne` impl; merge ABOVE `.layer()` in `app(pool, config)` (§2's rule, doc'd on `app`).
+  A known subject answers **501** with "documenting is not implemented yet: nothing was
+  written" — answering success for a write that did not happen would be a lie.
+- **T5**: `index_renders_the_real_gap` authenticates via `AppConfig` + `Authorization` header —
+  no env mutation. Verified against the live MariaDB (the local self-skip proves nothing, §8).
+- **T6/T7/T8**: below; register rows (a)–(j) appended to `deferred-work.md` and re-read against
+  AC7's list (10/10, letters (a)–(j) each present with its owner).
+
+### Debug Log — prove-to-red (T6), predictions first, each red read from its own panic message
+
+| id | applied | result | carrier (read, not inferred) |
+|---|---|---|---|
+| M1 | route registered unconditionally | **1 red** | assertion `left: 422, right: 404` — `without_the_switch_an_authenticated_post_reaches_the_empty_fallback` (the predicted AC1 discriminator, exactly) |
+| M2 | malformed form waved through as nil subject | **3 red** | assertions `404 vs 422` (two `document.rs` tests + the through-app AC1 second block) |
+| M3 | KNOWN subject answered `UnknownSubject` | **1 red** | named assertion `404 vs 501` — `a_known_subject_is_not_answered_unknown` |
+| M3b | unknown subject accepted (Err arm answers as known) | **3 red** | assertions `501 vs 404` incl. the pinned-body equality, twice |
+| M4 | `State<MySqlPool>` param added to the handler (the good-faith shape) | **does not COMPILE** | **`error[E0277]`** at `document.rs:86 post(document_all)`: ``the trait bound `fn(State<DocumentState>, State<Pool<MySql>>, …) -> … {document_all}: Handler<…, DocumentState>` is not satisfied`` — the rewrite's re-prediction (E0277, not the superseded draft's E0599) CONFIRMED by measurement |
+| M5 | `/` added back to `is_public` | **3 red** | assertions each naming `/`: the pinned-list test + both end-to-end challenge tests |
+| M5b | `/metrics` accepts Basic | **1 red** | assertion `200 vs 401` — `metrics_does_not_accept_basic_and_never_advertises_it` |
+| M6 | route renamed to the non-canonical verb | **3 red** | assertions: AC4's path pin (`"/promote-all" vs "/document-all"`) + the two through-app tests that spell the literal independently — the deliberate redundancy carrying |
+| M7 | pair-unset arm accepts | **2 red** | assertions, incl. story 3.8's original `deny by default` pin (`404 vs 401`) |
+| M7b | empty halves kept as a credential (filters dropped) | **1 red** | assertion `Some(BasicCredentials{user:"",…}) vs None` — the panic message itself shows the Debug redaction working |
+| M8 | non-ASCII pair passes `from_env` | **1 red** | assertion `Ok(…) vs Err(NonAsciiCredential{…})` |
+| M9 | layer applied BEFORE the conditional merge | **1 red — the sole predicted carrier, confirmed** | assertion `422 vs 401` — `the_write_route_challenges_without_a_credential`: the handler RAN with no credential, §2's silent exposure made visible |
+| M10 | user-half-only comparison | **2 red** | assertions — ⚠️ divergence, see below |
+| M10-sym *(added)* | password-half-only comparison | **2 red** | assertions — the mirror test's own carrier |
+| M11 | challenge header dropped from the configured-pair 401 | **4 red** | assertions on the header VALUE (`None vs Some("Basic realm=\"opencmdb\"")`) — proven live as prescribed |
+| M12 | scheme matched case-sensitively | **2 red** | assertions (pure `bAsIc` test + end-to-end) |
+
+**Fifteen runtime mutations, fifteen red results; plus M4's refusal to compile — sixteen
+mutation ids. Zero compiler-carried reds, zero `.expect()`-carried reds.** The FIVE pinned
+tests without mutation rows exist: GET→405, garbage base64→401, no colon→401, colon-in-password
+→ACCEPTED, two `Authorization` headers→401 (each pure AND end-to-end where applicable). _(This
+sentence said "four" until the code review counted the list under it — and the count defect is
+inherited from the spec's own §10, which says "four" and lists five; recorded here rather than
+edited there.)_
+
+**Divergences from prediction, recorded as findings (both):**
+
+1. 🔴 **M10's predicted carrier was HALF wrong**: §10 says M10 "reds the two half-right tests".
+   Measured: a user-half-only comparison still REFUSES a wrong user, so
+   `a_wrong_user_with_the_right_password_is_refused` stays GREEN under M10 — only the
+   right-user/wrong-password tests red (2, pure + e2e). The mirror test is load-bearing for the
+   SYMMETRIC mutation, so **M10-sym was run** (password-half-only): 2 red, the mirror pair.
+   Each half of the comparison is carried by its own mutation; neither test is vacuous.
+2. 🔴 **The M9 driver's first run reported the UNMUTATED tree**: the replacement anchor had been
+   invalidated by rustfmt, the script's `assert` threw, and the test run that followed printed
+   342 green — which would have read as "M9 green" to anyone reading the tail alone. Caught by
+   the driver's own assert (its traceback preceded the green) and re-run after re-reading the
+   real text. The retrospective's *"the mutation driver lies"* class, live in this story;
+   the guard that caught it was making the driver PRINT `MUTATED` on success and asserting the
+   anchor — both kept for every subsequent mutation.
+
+### Completion Notes
+
+- **All 8 ACs are MET** — AC1 (M1 + the empty-fallback/non-empty-route discriminator, asserted
+  on the AUTHENTICATED pair), AC2 (every refusal reachable; the discriminating known/unknown
+  pair via `KnowsOne`; M4's diagnostic recorded verbatim above; production wiring `AlwaysUnknown`
+  pinned directly AND through the app), AC3 (challenge/no-challenge in both directions, pinned
+  `is_public` shape, `/metrics` untouched incl. F14's header-absence, M9's named carrier), AC4
+  (path pin + source scan, banned token assembled from parts), AC5 (two docs, two mechanisms —
+  `AppConfig`'s rustdoc and `auth.rs`'s module doc each state their own question and neither
+  claims the other's), AC6 (seven gates green, 28 fixtures, trap gate still RED 26/15/11,
+  `cargo fmt --all --check` clean, clippy `-D warnings` clean), AC7 (rows (a)–(j) appended,
+  re-read against the AC's list: 10/10), AC8 (this file carries the live count; both twins now
+  cite it by reference).
+- ⚠️ **ONE LIVE COUNT, HERE (AC8): 523 → 566 tests — 344 bin + 160 core + 62 xtask** — the
+  564 of dev's close plus the review's two guard pins (control character, nil UUID); verified
+  locally AND against the live `mariadb:10.11.11`, 0 failed both ways, and CI green on PR #89
+  at dev's close (the review's push re-runs it).
+- **Additions beyond the story's letter, each with its reason** (for the reviewer to judge):
+  **(1)** `from_env` also refuses a COLON IN THE USER half — same trap class as non-ASCII (a
+  pair that can never authenticate, silently), same boot-refusal remedy, RFC 7617 §2 names it;
+  carried by its own test, no mutation row (pinned-test class). **(2)** `BasicCredentials`'s
+  `Debug` is hand-written to redact the password — a debug-printed config must not leak it;
+  pinned by `debug_output_redacts_the_password`, and M7b's panic message displays it working.
+  **(3)** M10-sym (above) — run because the divergence analysis showed the mirror test carried
+  by nothing prescribed. **(4)** The known-subject answer is **501** with a truthful body —
+  the story prescribed no status for that branch; 200 would claim a write that did not happen.
+- **The doc-twin drift was corrected in this same commit** (docs-current-before-push): both
+  twins still said **"5.14b is `review`"** while PR #84 had merged 2026-08-12 as `015f2a3` —
+  two days stale, in both files, while `sprint-status.yaml` was right; and both twins claimed
+  "ONE LIVE COUNT … LIVES HERE" — two documents each claiming to be the one place. Both now
+  cite this file (AC8). `project-context.md`'s epic table also read "E5 in-progress, 19 done"
+  and "E6–E23 backlog"; corrected to E5 done 2026-08-12 and E6 in-progress.
+- **What is NOT covered, stated**: `run()`'s config call (one call, one `?`) — no test drives
+  `run()`; §8 layer (3) — a handler opening its OWN connection from env writing another table
+  is a TRIPWIRE gap by design (5.12's precedent), the doc says which; the CSRF exposure is
+  REGISTERED (row j, owner 6.2), not closed; Chromium's half of the browser bench is owed
+  (row a, owner 6.2's validation bench).
+- **Environment note**: the story-dedicated MariaDB container `opencmdb-story61-mariadb`
+  (port 13316) is left running for the code review's own passes; remove with
+  `docker rm -f opencmdb-story61-mariadb` when the story merges.
+
+### File List
+
+- `crates/opencmdb-core/src/document.rs` — NEW: `DocumentRefusal`, its pinned `Display`, test
+- `crates/opencmdb-core/src/lib.rs` — `pub mod document;`
+- `crates/opencmdb-bin/src/document.rs` — NEW: sub-router, `DocumentState` (no pool),
+  `SubjectLookup` + `AlwaysUnknown`, the refusals, 9 tests (8 + the review's nil-UUID pin)
+- `crates/opencmdb-bin/src/auth.rs` — Basic in the default arm, conditional challenge,
+  `is_public` shrunk, decode robustness, narrowed docs, 12 tests _(this line said "13" until
+  the code review recounted it — the review's finding #1)_
+- `crates/opencmdb-bin/src/main.rs` — `AppConfig`/`BasicCredentials`/`AppConfigError` +
+  `from_env` (pure), the boot `?` in `run()`, `app(pool, config)` with the merge above the
+  layer, 3 existing tests updated + 21 new tests (20 at dev's close — the review recounted the
+  claimed "21" to 20, then its control-character guard added one back)
+- `crates/opencmdb-bin/Cargo.toml` — `base64 = "0.22.1"` promoted (transitive → direct, pinned
+  to the lockfile's version; NO new crate)
+- `Cargo.lock` — the one dependency-edge line that promotion adds
+- `_bmad-output/implementation-artifacts/deferred-work.md` — register rows (a)–(j)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — 6.1 status transitions
+- `_bmad-output/implementation-artifacts/6-1-write-route-writes-nothing.md` — this record
+- `CLAUDE.md`, `docs/project-context.md` — the Epic 6 / 6.1 paragraph, the 5.14b status
+  correction, the live-count reference (AC8)
+
+NOT touched, as the story requires: `crates/opencmdb-bin/templates/` (no diff),
+`crates/opencmdb-bin/src/page.rs` (byte-for-byte), `SANCTIONED_SITES`, `epics.md`,
+`metrics.rs`, the migrations.
+
+### Change Log
+
+- 2026-08-14 — story 6.1 implemented (T1–T8), 523 → 564 tests, seven gates green, fifteen
+  runtime mutations all red + M4's compile refusal, register rows (a)–(j) appended, doc twins
+  corrected (5.14b status, live-count reference), status → `review`.
+- 2026-08-14 — three-layer code review: 17 findings after one merge (1 decision, 14 patch,
+  1 defer, 1 dismissed), 8 edge-suspicions refuted by measurement, all 8 ACs re-verified MET
+  independently. Guy's decision (b): the 404 body becomes "unknown subject: nothing can be
+  documented". All patches applied; 564 → 566 tests (two new guard pins, each proven
+  red-when-removed); stays at `review` — `done` is the MERGE's business.
