@@ -1220,7 +1220,7 @@ struct CommentState {
 
 /// Stands in for a `"` that is INSIDE a Rust string literal rather than delimiting one.
 ///
-/// 🔴 [`statement_before`] and [`statement_after`] bound a statement at `;` or `"`, and that `"`
+/// 🔴 [`statement_before`] and [`statement_after_of`] bound a statement at `;` or `"`, and that `"`
 /// bound is load-bearing — without it a finding spans two literals and the gate invents phantoms.
 /// But a `"` can also sit *inside* the SQL, and then the bound truncates the statement instead of
 /// ending it. Measured: `… FROM declared_attribute WHERE note = \"n\" AND actor_id = ?` passed the
@@ -1448,7 +1448,7 @@ pub(crate) fn statement_after_of<'t>(text: &'t str, at: usize, table: &str) -> &
     &text[from..end]
 }
 
-/// The `fn` a byte offset sits inside, if any — the unit [`SANCTIONED_FNS`] allowlists.
+/// The `fn` a byte offset sits inside, if any — the unit [`SANCTIONED_SITES`] pairs with a path.
 ///
 /// 🔴 It was an unbounded `rfind("fn ")`, and the review defeated it twice: a nested
 /// `fn insert_declared_attribute() {}` **whose body had already closed** sanctioned everything

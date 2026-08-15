@@ -2876,7 +2876,7 @@ development_status:
   # This comment read "assertions 2 and 3" until 2026-08-15 — WRONG, and it inherited the error
   # from `epics.md:1724`: assertion 3 is the one story 5.12 covered (`deferred-work.md:2896`).
   # `epics.md` is NOT edited; the divergence is registered with Epic 6's retrospective.
-  6-3-nfr5-remaining-assertions: in-progress
+  6-3-nfr5-remaining-assertions: review
   # FR13(a), *the day-one case*; the gesture belongs to the CAUSE, not the count
   6-4-abstention-line-carries-the-gesture: backlog
   # story 5.9's three deferrals, as ONE schema story, with NO producer

@@ -1,6 +1,6 @@
 # Story 6.3: NFR5's two remaining assertions are measured, not asserted
 
-Status: ready-for-dev
+Status: review
 
 <!-- ⚠️ CONTEXTED 2026-08-15, the day after story 6.2 merged (PR #91 → `ead7738`, docs flipped by
      PR #92 → `72dfe1f`). The tree this story extends is master at `72dfe1f`.
@@ -599,12 +599,12 @@ was a 🔴 review patch on 6.2).
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — the observation snapshot helper** (AC1): `#[cfg(test)]` in `repo.rs`, all seven
+- [x] **T1 — the observation snapshot helper** (AC1): `#[cfg(test)]` in `repo.rs`, all seven
       columns, `CAST(observed_at AS CHAR)`, `Option<String>` for `raw`, `ORDER BY id`
-- [ ] **T2 — AC1's behavioural guards** (AC1): document-success and both refusal paths; the
+- [x] **T2 — AC1's behavioural guards** (AC1): document-success and both refusal paths; the
       observation compare and the `load_current_links_for_observation` compare (ids included);
       a **non-NULL `raw`** in the fixture
-- [ ] **T3 — AC2's ingest guards** (AC2): `FixtureConnector` → `poll_ingest_resolve`; the
+- [x] **T3 — AC2's ingest guards** (AC2): `FixtureConnector` → `poll_ingest_resolve`; the
       declared seven-column compare (through the **widened** sanctioned reader, resolution (3));
       the two-sighting boundary `(0, 2)` with its cause breakdown; the three-sighting `(0, 2)`;
       and the single-sighting divergence — **which deletes the documented observation first**
@@ -612,24 +612,24 @@ was a 🔴 review patch on 6.2).
       spare abstention being `mac`. ⚠️ Do NOT copy 6.2's J3 oracle (`abstention_count == 0`):
       it reds here for the wrong reason. The store-backed reconcile assertions live in
       `page.rs`'s trailing test module (AC5)
-- [ ] **T4 — the eighth gate** (AC3, AC4): `gate_observed_immutable` in `xtask`, reusing
+- [x] **T4 — the eighth gate** (AC3, AC4): `gate_observed_immutable` in `xtask`, reusing
       `AUTHORSHIP_ROOTS` and 5.12's normalisation helpers; **empty allowlist**; wired into
       `cargo xtask ci`; the module doc enumerating **eight**; the rustdoc stating the tripwire
       promise and the DELETE/`identity_link` exclusions with their measurements
-- [ ] **T4b — the gate's end-to-end test and its located probes** (AC3): the end-to-end path
+- [x] **T4b — the gate's end-to-end test and its located probes** (AC3): the end-to-end path
       from day one (5.12's deletable-body finding), probes with `(file, Option<line>)` verdicts,
       including the **load-bearing** GREEN negatives of §3 (a `SELECT … FROM observation_record`,
       an `UPDATE identity_link … WHERE observation_id IN (SELECT …)`, a commented-out write) —
       not only the two vacuity markers validation measured unfailable
-- [ ] **T4c — the `xtask` module split** (AC6, §3b): move the new gate to
+- [x] **T4c — the `xtask` module split** (AC6, §3b): move the new gate to
       `xtask/src/observed_immutable.rs`, raise the shared normalisation helpers to `pub(crate)`,
       parameterise the **two** table-bound ones (`is_table_reference`, `statement_after`), and
       re-measure `file-size` with the prescribed rustdoc present (Guy's arbitration, §3b)
-- [ ] **T5 — prove-to-red** (AC1–AC4): **nine ids** — M1, M1b, M2, M3, M4′, M5, M6, M7, M8 —
+- [x] **T5 — prove-to-red** (AC1–AC4): **nine ids** — M1, M1b, M2, M3, M4′, M5, M6, M7, M8 —
       predictions FIRST, each carrier read from its own panic or gate message; M1/M5 dual-carrier,
       M6 a green control, M1b green on one carrier and red on the other; ⚠️ **commit the green
       state BEFORE the pass** (Dev Notes)
-- [ ] **T6 — the register and the documents** (AC7, AC8), including row (4)'s artifact
+- [x] **T6 — the register and the documents** (AC7, AC8), including row (4)'s artifact
       correction (`6-1-…md:3`'s stale `Status: review`); row (1)'s `sprint-status.yaml` comment
       was already corrected at contexting
 
@@ -803,12 +803,106 @@ private seam, the `file-size` ceiling). None of these were findable by reading t
 
 ### Agent Model Used
 
-### Implementation Plan (as executed)
+Claude Opus 5 (1M context) — `claude-opus-5[1m]`.
+
+### Implementation Plan (as executed, 2026-08-15)
+
+T1 → T6 in order, against a live `mariadb:10.11.11` on port **13318** (`opencmdb-story63`,
+`mysql://root:story63@127.0.0.1:13318/opencmdb_test`). ⚠️ The 6.1/6.2 container on 13316 was
+GONE at contexting; do not inherit a container on faith. Commit `3ded1db` froze the green state
+**before** the mutation pass, so every `git checkout -- <file>` in T5 reverted a mutation and not
+a day's work.
+
+- **T1** `repo.rs`: `ObservationRowSnapshot` + `snapshot_observation_records` (seven columns,
+  `CAST(observed_at AS CHAR)`, `Option<String>` for `raw`); and
+  `read_declared_provenance_for_test` **widened** from four columns to seven, returning
+  `DeclaredRowSnapshot` — resolution (3), same name, same file. Its one caller (6.2's J3 test)
+  updated. ✅ Measured immediately: `authorship` stays GREEN, which is the premise resolution (3)
+  rests on.
+- **T2** three store-backed guards in `main.rs`: the successful gesture, the 409 refusal and the
+  422-domain refusal, each comparing the observation (seven columns) and the link (`id`
+  included). Both populations asserted NON-EMPTY first.
+- **T3** four guards: the declared side byte-identical across a real ingestion through
+  `poll_ingest_resolve` + `FixtureConnector`; the two-sighting boundary; the three-sighting
+  boundary; and the divergence after Guy's arbitrated DELETE.
+- **T4/T4c** `xtask/src/observed_immutable.rs` — the eighth gate in its own module (Guy's
+  arbitration), `is_table_reference_of` and `statement_after_of` parameterised by table, the other
+  five helpers raised to `pub(crate)` unchanged. Module doc updated to enumerate eight; `report()`
+  padding widened `{:<14}` → `{:<18}`.
+- **T4b** 18 located probes under `xtask/probes/observed/` + README, driven END TO END, plus the
+  real-tree and fail-closed tests.
+- **T5** the mutation pass below. **T6** register and documents.
 
 ### Debug Log — prove-to-red (T5), predictions FIRST, each carrier read from its own message
 
+| id | mutation | result | carrier, read from its own message |
+|---|---|---|---|
+| **M1** | `UPDATE observation_record` inside the documenting transaction | **RED ×2** | assertion `documenting moved a byte of the observed record` (`raw` "…blob, é" → "documented") **and** the gate, `1 overwriting access(es)`. **Dual-carrier, both messages read** |
+| **M1b** | the same write in a **new, UNCALLED** `repo.rs` fn | **product suite GREEN (363 + 161, 0 failed); xtask RED; gate RED** | assertion `the_observed_gate_is_green_on_the_real_tree` + the gate message. 🔴 **The validation's "the whole workspace suite stays green" is FALSE on this tree** — it was measured on a prototype gate that had no real-tree test. The PRODUCT suite stays green; the gate's own test reds. The claim is narrowed accordingly |
+| **M2** | gate body replaced by `Ok((true, …))` | **RED ×2** | assertions `11 of 18 probes got the wrong verdict` and `a missing root must not green`. 🔑 Story 5.12's structural finding — *the whole gate body deletable with the xtask suite green* — **does not recur**: the end-to-end carrier shipped with the gate rather than with its review |
+| **M3** | close the subject's link inside the documenting transaction | **RED ×2** | assertion `documenting disturbed the identity link`, **on the row COUNT** (`right: []`) exactly as reading predicted, plus a precondition in the refusal test |
+| **M4′** | refusal-path write **on its own connection** | **RED** | assertion `a nothing-to-document refusal moved a byte of the observed record` (`raw` → "attempted") |
+| **M4-naive** | 🔑 **CONTROL** — the SAME write on the handler's transaction | **product suite GREEN; gate RED** | none behaviourally. **The pair is the finding**: the refusal returns without committing, the transaction rolls back, and *the transaction — not the guard's placement — is what makes the write invisible*. 5.11b's finding, reproduced deliberately |
+| **M5** | `UPDATE declared_attribute` inside `resolver::resolve_within` | **RED ×3 + gate** | assertion `the scanner altered a declared field — NFR5's first assertion is broken`, plus `authorship`, `1 unsanctioned access(es) to declared_attribute`. **Dual-carrier** |
+| **M6** | narrow the snapshot to exclude `raw` (with M1 applied) | 🔴 **RED, where GREEN was predicted** | my own precondition guard `a NULL raw would put a column in the comparison that carries nothing` fires **before** the comparison. **Not executable as a control** — story 5.13's assertion-order family, a fourth occurrence. It does prove that guard load-bearing |
+| **M6-bis** | 🔑 **CONTROL, redesigned** — exclude `raw` from the EQUALITY only | **GREEN, as intended** | measures what M6 meant to: `raw` is the column carrying M1's detection. Narrow the comparison and the mutation goes invisible |
+| **M7** | `gap::project` emits `"ip"` for `"ipv4"` | **RED ×4** | assertion on `gaps.len()` — the gap **vanishes** (`left: 0`). The corrected prediction holds; the first draft had imported 6.2's M11 with its polarity reversed |
+| **M8** | one probe's pinned line shifted by one | **RED ×1** | assertion naming the location: `reds, but not at the line it must name (planted.rs:3:)` while the gate says `planted.rs:2:` |
+
+**Eleven ids run — nine mutations and two CONTROLS.** ⚠️ **The headline is NOT "nine reds".**
+M4-naive and M6-bis are GREEN **by design** and each is the point of its pair; M1b is GREEN on
+the product suite and RED on the gate, which is what it exists to show; and **M6 diverged from
+its prediction** and was replaced rather than quietly re-labelled.
+
+**Carriers are MIXED and named per row.** M1 and M5 are dual-carrier (assertion + gate message);
+M2, M3, M4′, M6, M7, M8 and M1b's xtask half are assertion-carried; the gate halves are
+gate-message-carried. **Zero compiler-carried and zero `.expect()`-carried.**
+*"Every red assertion-carried" is NOT claimed* — three reds here are a gate's own output.
+
+🔴 **Three findings the pass produced, each recorded rather than smoothed over**: M6's
+non-executability (and M6-bis, which measures what it meant to); M1b's suite-green claim narrowed
+from *workspace* to *product*; and the M4′/M4-naive pair, which turns *"a rolled-back write and an
+absent write are indistinguishable"* from a sentence into a measurement.
+
 ### Completion Notes
+
+- **All 8 ACs MET.** AC1 ← M1, M3, M4′ (+ M6-bis as the `raw` control); AC2 ← M5, M7; AC3 ← M1b,
+  M2, M8; AC4 ← the gate's rustdoc and the register; AC5–AC8 ← the tree checks below.
+- ⚠️ **ONE LIVE COUNT, HERE (AC8): 580 → 590 tests — 363 bin + 161 core + 66 xtask** — verified
+  against the live `mariadb:10.11.11`, 0 failed. The twins cite this file and carry no number.
+- **Eight gates green** + `views-hash ℹ STALE exit 0`. `file-size`: 32 files, largest **1849**
+  (against 1829 before) — Guy's module-split arbitration kept the prescribed rustdoc AND the
+  ceiling, where growing `main.rs` would have reached ≈ 2018.
+- **`observed-immutable` runs with an EMPTY allowlist across 36 files**, `docker/` included.
+- Verified unchanged: **no migration**; `page.rs` and `crates/opencmdb-bin/templates/` at zero
+  diff; `Cargo.lock` untouched; no new crate; `epics.md` not edited; 28 fixtures; trap gate still
+  RED at 26/15/11 by design.
+- 🔑 **What the story could NOT close, stated plainly**: the divergence half of NFR5's first
+  assertion is unreachable through the documenting gesture (the test performs its own DELETE) and
+  **cannot fire at all on the shipped connector**. Registered, owner named. *"NFR5 is covered by
+  anti-regression tests" is now true — at the width the register states, and no wider.*
 
 ### File List
 
+- `crates/opencmdb-bin/src/repo.rs` — `ObservationRowSnapshot` + `snapshot_observation_records`;
+  `DeclaredRowSnapshot`; `read_declared_provenance_for_test` widened to seven columns
+- `crates/opencmdb-bin/src/main.rs` — seven new store-backed guards and their fixtures; the 6.2
+  J3 caller updated for the widened reader
+- `xtask/src/observed_immutable.rs` — **NEW**: the eighth gate and its rustdoc
+- `xtask/src/main.rs` — `mod observed_immutable`; the gate wired into `run_ci`; module doc
+  enumerating eight; `is_table_reference_of` / `statement_after_of` parameterised; five helpers
+  raised to `pub(crate)`; `report()` padding; `OBSERVED_PROBES` and four tests
+- `xtask/probes/observed/` — **NEW**: 18 probes + `README.md`
+- `_bmad-output/implementation-artifacts/6-3-nfr5-remaining-assertions.md` — this file
+- `_bmad-output/implementation-artifacts/deferred-work.md` — the register rows
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — status
+- `_bmad-output/implementation-artifacts/6-1-write-route-writes-nothing.md` — register row (4)'s
+  stale `Status: review` corrected
+- `CLAUDE.md`, `docs/project-context.md` — the twins, citing this file and carrying no count
+
 ### Change Log
+
+- **2026-08-15 — contexted**, then VALIDATED by two fresh-context layers the same day; two
+  arbitrations raised and taken by Guy. Status → `ready-for-dev`.
+- **2026-08-15 — developed.** T1–T6, eleven mutation ids, 580 → 590 tests, eight gates green.
+  Status → `review`.
