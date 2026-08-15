@@ -27,13 +27,24 @@
 //!     value was obtained. ⚠️ **It is a TRIPWIRE, not a barrier** — see
 //!     [`gate_declared_authorship`] for the two residual holes it cannot close and for the
 //!     database `GRANT` that would close them properly.
+//!   - **observed-immutable** (NFR5 / FR11, story 6.3): no code path OVERWRITES an
+//!     `observation_record` — a governing `UPDATE`, a `REPLACE`, or an `INSERT … ON
+//!     DUPLICATE KEY UPDATE`. Its allowlist is **EMPTY**, which the committed tree
+//!     supports. ⚠️ A TRIPWIRE, not a barrier, and `DELETE` is deliberately outside its
+//!     verb list — see [`observed_immutable`] for both, with their measurements.
 //!   - **views-hash** (informational): whether `architecture-views.md`'s `sourceSha256`
 //!     still matches `architecture.md`. A mismatch means the views file is stale and
 //!     should be regenerated at the next milestone — reported, never a hard failure.
+//!
+//! ⚠️ **Eight gates plus views-hash.** This list is the file's account of itself, and story
+//! 5.12's code review caught it enumerating SIX while the file implemented seven. Adding a
+//! gate below without adding it here is the same defect again.
 
 // Documentation is a project rule (CLAUDE.md): every public item carries a doc comment.
 // `warn` for now, graduating to `-D missing_docs` once the tree is clean.
 #![deny(missing_docs)]
+
+mod observed_immutable;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -187,8 +198,12 @@ fn run_ci() -> Result<bool> {
     report("authorship", g6, &m6);
     ok &= g6;
 
+    let (g7, m7) = observed_immutable::gate_observed_immutable(&root)?;
+    report("observed-immutable", g7, &m7);
+    ok &= g7;
+
     let m3 = check_views_hash(&root)?;
-    println!("  ℹ  {:<14} {m3}", "views-hash");
+    println!("  ℹ  {:<18} {m3}", "views-hash");
 
     println!(
         "\n{}",
@@ -202,7 +217,7 @@ fn run_ci() -> Result<bool> {
 }
 
 fn report(name: &str, ok: bool, msg: &str) {
-    println!("  {} {name:<14} {msg}", if ok { "✅" } else { "🔴" });
+    println!("  {} {name:<18} {msg}", if ok { "✅" } else { "🔴" });
 }
 
 // ── Gate 0: dependency frontier (D47) ───────────────────────────────────────
@@ -1330,7 +1345,7 @@ fn strip_comments(line: &str, sql: bool, state: &mut CommentState) -> String {
 /// [`gate_declared_authorship`]'s stated promise has already declined. What closes that class is a
 /// database privilege, not a longer list here. `e37` pins the widening; nothing pins completeness,
 /// because nothing could.
-fn is_invisible(ch: char) -> bool {
+pub(crate) fn is_invisible(ch: char) -> bool {
     matches!(
         ch,
         '\u{00ad}'
@@ -1350,7 +1365,7 @@ fn is_invisible(ch: char) -> bool {
 /// `INSERT INTO` and the table name may sit on two different lines, and a per-line matcher was
 /// measured blind to exactly that. Comments — line AND block — are stripped, so the architecture
 /// may be quoted; see [`strip_comments`] for the one comment form whose body survives.
-fn normalise_sql_text(content: &str, sql_comments: bool) -> (String, Vec<usize>) {
+pub(crate) fn normalise_sql_text(content: &str, sql_comments: bool) -> (String, Vec<usize>) {
     let mut out = String::with_capacity(content.len());
     let mut lines = Vec::with_capacity(content.len());
     let mut prev_space = true;
@@ -1396,9 +1411,12 @@ fn normalise_sql_text(content: &str, sql_comments: bool) -> (String, Vec<usize>)
 /// `insert_declared_attribute` contains the table's name preceded by `_`; a backtick or a schema dot
 /// does NOT disqualify it, which is what makes `` `declared_attribute` `` and
 /// `opencmdb.declared_attribute` reachable — both measured green (i.e. invisible) before this.
-fn is_table_reference(text: &str, at: usize) -> bool {
+/// 🔑 **Parameterised by TABLE at story 6.3.** It hard-coded `DECLARED_TABLE.len()`, which — with
+/// [`statement_after_of`] — was the whole cost of serving a second table, measured at that story's
+/// validation. Everything else in this apparatus was already table-agnostic.
+pub(crate) fn is_table_reference_of(text: &str, at: usize, table: &str) -> bool {
     let before = text[..at].chars().next_back();
-    let after = text[at + DECLARED_TABLE.len()..].chars().next();
+    let after = text[at + table.len()..].chars().next();
     let head_ok = !matches!(before, Some(c) if c.is_alphanumeric() || c == '_');
     let tail_ok = !matches!(after, Some(c) if c.is_alphanumeric() || c == '_');
     head_ok && tail_ok
@@ -1410,7 +1428,7 @@ fn is_table_reference(text: &str, at: usize) -> bool {
 /// stops a match spanning two string literals: without it, a bare `DELETE FROM declared_attribute`
 /// was measured inheriting an `origin` from an unrelated INSERT twenty-four lines above, and the
 /// gate reported two phantom findings on the clean tree.
-fn statement_before(text: &str, at: usize) -> &str {
+pub(crate) fn statement_before(text: &str, at: usize) -> &str {
     let start = text[..at].rfind([';', '"']).map_or(0, |i| i + 1);
     &text[start..at]
 }
@@ -1420,8 +1438,10 @@ fn statement_before(text: &str, at: usize) -> &str {
 /// 🔴 The review's largest read-half hole: the first implementation inspected only what stood
 /// BEFORE the table name, so `WHERE actor_id = 'scanner'`, `ORDER BY origin_obs_id` and a join
 /// predicate on `d.origin` all passed. A provenance column read in a predicate is read (FR13).
-fn statement_after(text: &str, at: usize) -> &str {
-    let from = at + DECLARED_TABLE.len();
+///
+/// 🔑 **Parameterised by TABLE at story 6.3** — see [`is_table_reference_of`].
+pub(crate) fn statement_after_of<'t>(text: &'t str, at: usize, table: &str) -> &'t str {
+    let from = at + table.len();
     let end = text[from..]
         .find([';', '"'])
         .map_or(text.len(), |i| from + i);
@@ -1538,7 +1558,7 @@ const WRITE_VERBS: [&str; 7] = [
 ];
 
 /// Does `needle` sit at `at` in `hay` as a whole token?
-fn is_word_at(hay: &str, at: usize, len: usize) -> bool {
+pub(crate) fn is_word_at(hay: &str, at: usize, len: usize) -> bool {
     let b = hay.as_bytes();
     let before_ok = at == 0 || !is_token_char(b[at - 1]);
     let after_ok = at + len >= b.len() || !is_token_char(b[at + len]);
@@ -1555,7 +1575,7 @@ fn is_word_at(hay: &str, at: usize, len: usize) -> bool {
 ///
 /// At equal end offsets the LONGER keyword wins, so `CREATE OR REPLACE TABLE` is not reported as
 /// the `REPLACE` hiding inside it.
-fn governing_keyword(stmt: &str) -> Option<&'static str> {
+pub(crate) fn governing_keyword(stmt: &str) -> Option<&'static str> {
     let mut best: Option<(usize, &'static str)> = None;
     for kw in WRITE_VERBS.into_iter().chain(["select"]) {
         let mut from = 0usize;
@@ -1596,7 +1616,7 @@ fn authorship_findings(content: &str, shown: &str, sql: bool) -> Vec<(usize, Str
     while let Some(rel) = text[from..].find(DECLARED_TABLE) {
         let at = from + rel;
         from = at + DECLARED_TABLE.len();
-        if !is_table_reference(&text, at) {
+        if !is_table_reference_of(&text, at, DECLARED_TABLE) {
             continue;
         }
         let stmt = statement_before(&text, at).trim_start();
@@ -1655,7 +1675,7 @@ fn authorship_findings(content: &str, shown: &str, sql: bool) -> Vec<(usize, Str
         }
         let projection = stmt.rsplit_once("select").map_or(stmt, |(_, p)| p);
         let projection = projection.split(" from ").next().unwrap_or(projection);
-        let rest = statement_after(&text, at);
+        let rest = statement_after_of(&text, at, DECLARED_TABLE);
         if outside_parens(projection).contains('*') {
             findings.push((
                 line,
@@ -3298,5 +3318,160 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             AUTHORSHIP_PROBES.len(),
             wrong.join("\n  ")
         );
+    }
+
+    /// The `observed-immutable` corpus and its LOCATED verdicts — story 6.3.
+    ///
+    /// `Some(line)` means the gate must RED **and name that line**; `None` means it must stay
+    /// GREEN, by a decision recorded in `xtask/probes/observed/README.md`.
+    ///
+    /// 🔑 The verdicts are LOCATED rather than boolean, on story 5.12's hard-won precedent: that
+    /// gate shipped an offset→line map counting characters where the caller indexed bytes, and
+    /// **no boolean probe could see it** — the write still reddened, only at the wrong line.
+    /// *A pinned boolean proves THAT a gate fires and never WHERE.*
+    ///
+    /// ⚠️ `o06` names the line of the TABLE, not of the verb, because the two sit on different
+    /// lines and the finding is anchored on the reference. That is the honest anchor — the reader
+    /// is sent to the table — and pinning it stops a later refactor from moving it silently.
+    const OBSERVED_PROBES: [(&str, Option<usize>); 18] = [
+        ("o01_plain_update.rs", Some(2)),
+        ("o02_plain_update.sql", Some(2)),
+        ("o03_line_comment_marker.rs", Some(5)),
+        ("o04_block_comment.sql", Some(3)),
+        ("o05_invisible.rs", Some(4)),
+        ("o06_split_lines.sql", Some(2)),
+        ("o07_on_duplicate_key.rs", Some(3)),
+        ("o08_replace_into.sql", Some(1)),
+        ("o09_backtick_qualified.sql", Some(1)),
+        ("o10_exec_comment.sql", Some(1)),
+        ("o11_join_update.sql", Some(2)),
+        // GREEN by decision — each one a stated limit or a legitimate shape.
+        ("o20_select_from.rs", None),
+        ("o21_identity_link_subquery.sql", None),
+        ("o22_commented_out.sql", None),
+        ("o23_delete.sql", None),
+        ("o24_insert_plain.sql", None),
+        ("o25_runtime_name.rs", None),
+        ("o26_update_identity_link_bare.sql", None),
+    ];
+
+    /// The corpus on disk and the verdict table name the same files, in both directions.
+    #[test]
+    fn the_observed_probe_corpus_and_its_verdict_table_name_the_same_files() {
+        let dir = workspace_root().join("xtask/probes/observed");
+        let mut on_disk: Vec<String> = std::fs::read_dir(&dir)
+            .expect("the probe corpus is readable")
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".rs") || n.ends_with(".sql"))
+            .collect();
+        on_disk.sort();
+
+        let mut pinned: Vec<String> = OBSERVED_PROBES
+            .iter()
+            .map(|(n, _)| (*n).to_string())
+            .collect();
+        pinned.sort();
+
+        assert_eq!(
+            on_disk, pinned,
+            "the corpus and the verdict table have drifted"
+        );
+    }
+
+    /// 🔴 Every probe, driven through `gate_observed_immutable` **END TO END**.
+    ///
+    /// Not through [`observed_immutable::observed_immutable_findings`]. Story 5.12 measured the
+    /// whole BODY of its own gate — the walk, the two roots, the two extensions, the fail-closed
+    /// arms — deletable with the entire xtask suite green, because every test attacked the helper
+    /// directly. This gate has its end-to-end carrier from its first commit rather than from its
+    /// code review.
+    #[test]
+    fn every_observed_probe_gets_the_verdict_it_is_pinned_to() {
+        let corpus = workspace_root().join("xtask/probes/observed");
+        let root = scratch("observed-probes");
+        let crates = root.join("crates");
+        std::fs::create_dir_all(&crates).expect("crates dir");
+        std::fs::create_dir_all(root.join("docker")).expect("docker dir");
+        // The gate fails closed on a walk that reads nothing, so the planted probe is never the
+        // only file under the roots.
+        std::fs::write(crates.join("innocent.rs"), "pub fn f() {}\n").expect("write");
+
+        let mut wrong = Vec::new();
+
+        for (name, must_red) in OBSERVED_PROBES {
+            let ext = if name.ends_with(".sql") { "sql" } else { "rs" };
+            let planted = crates.join(format!("planted.{ext}"));
+            let body = std::fs::read_to_string(corpus.join(name))
+                .unwrap_or_else(|e| panic!("reading probe {name}: {e}"));
+            std::fs::write(&planted, &body).expect("plant");
+
+            let (green, msg) =
+                observed_immutable::gate_observed_immutable(&root).expect("the gate runs");
+            if let Some(line) = must_red {
+                if green {
+                    wrong.push(format!("{name}: PASSES the gate and must not"));
+                } else if !msg.contains(&format!("planted.{ext}:{line}:")) {
+                    wrong.push(format!(
+                        "{name}: reds, but not at the line it must name (`planted.{ext}:{line}:`) \
+                         — a gate that sends the reader to the wrong line spends the trust it \
+                         just earned — {msg}"
+                    ));
+                }
+            } else if !green {
+                wrong.push(format!(
+                    "{name}: pinned as a STATED limit and now reds — either the limit moved \
+                     (update the table AND the story) or this is a false positive — {msg}"
+                ));
+            }
+            std::fs::remove_file(&planted).expect("unplant");
+        }
+
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(
+            wrong.is_empty(),
+            "{} of {} probes got the wrong verdict:\n  {}",
+            wrong.len(),
+            OBSERVED_PROBES.len(),
+            wrong.join("\n  ")
+        );
+    }
+
+    /// The gate is GREEN on the real committed tree, with an **EMPTY allowlist** — the claim
+    /// story 6.3 rests on, asserted here rather than believed. It also pins that the walk really
+    /// reads files: a gate greening over an empty walk is the decoration D18 forbids.
+    #[test]
+    fn the_observed_gate_is_green_on_the_real_tree() {
+        let root = workspace_root();
+        let (green, msg) =
+            observed_immutable::gate_observed_immutable(&root).expect("the gate runs");
+        assert!(green, "the committed tree overwrites an observation: {msg}");
+        let walked: usize = msg
+            .split_whitespace()
+            .find_map(|w| w.parse().ok())
+            .expect("the message states how many files it read");
+        assert!(
+            walked >= 30,
+            "the gate read only {walked} file(s) — it is vouching for a tree it did not walk"
+        );
+    }
+
+    /// The gate FAILS CLOSED: a root that does not exist, and a walk that reads nothing, are both
+    /// RED. Without this, deleting a root would turn the gate into a silent pass.
+    #[test]
+    fn the_observed_gate_fails_closed_on_a_tree_it_cannot_read() {
+        let root = scratch("observed-fail-closed");
+        std::fs::create_dir_all(&root).expect("root");
+        let (green, msg) =
+            observed_immutable::gate_observed_immutable(&root).expect("the gate runs");
+        assert!(!green, "a missing root must not green: {msg}");
+
+        // Both roots present but holding no .rs/.sql at all.
+        std::fs::create_dir_all(root.join("crates")).expect("crates");
+        std::fs::create_dir_all(root.join("docker")).expect("docker");
+        let (green, msg) =
+            observed_immutable::gate_observed_immutable(&root).expect("the gate runs");
+        assert!(!green, "an empty walk must not green: {msg}");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

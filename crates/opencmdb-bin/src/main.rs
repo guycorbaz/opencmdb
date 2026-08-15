@@ -1351,14 +1351,19 @@ mod tests {
             .await
             .expect("read provenance");
         assert_eq!(provenance.len(), 2, "one adopted row per projected field");
-        for (key, origin, origin_obs_id, actor_id) in &provenance {
-            assert_eq!(origin, "adopted", "{key} is adopted");
+        for row in &provenance {
+            let key = &row.attr_key;
+            assert_eq!(row.origin, "adopted", "{key} is adopted");
             assert_eq!(
-                origin_obs_id.as_deref(),
+                row.origin_obs_id.as_deref(),
                 Some(subject.as_uuid().to_string().as_str()),
                 "{key} points at the subject"
             );
-            assert_eq!(actor_id, "operator", "{key} carries a human author");
+            assert_eq!(row.actor_id, "operator", "{key} carries a human author");
+            assert_eq!(
+                row.entity_id, entity_id,
+                "{key} belongs to the minted entity"
+            );
         }
 
         // 🔴 AC6's DIRECT oracle (code review): the documented KEYS equal `gap::project`'s keys
@@ -1371,7 +1376,8 @@ mod tests {
             }
         }
         expected_keys.sort();
-        let documented_keys: Vec<String> = provenance.iter().map(|(k, ..)| k.clone()).collect();
+        let documented_keys: Vec<String> =
+            provenance.iter().map(|row| row.attr_key.clone()).collect();
         assert_eq!(
             documented_keys, expected_keys,
             "the documented keys ARE gap::project's keys, through the real fn"
@@ -1398,6 +1404,577 @@ mod tests {
             "no abstention on the documented entity: {:?}",
             reconciliation.abstentions
         );
+    }
+
+    // ─── Story 6.3 — NFR5's SECOND assertion ────────────────────────────────────────────
+    //
+    // *"Documenting a field sets the declared value AND leaves the observation record
+    // bit-for-bit unchanged, with the link intact"* (`prd.md:1214-1217`).
+    //
+    // 🔴 On the committed tree this property holds BY CONSTRUCTION: there is no
+    // `UPDATE observation_record` anywhere in `crates/`, and the documenting transaction issues
+    // one SELECT on `observation_record` plus N INSERTs on `declared_attribute`. So these tests
+    // CANNOT FAIL as the tree stands — which is Epic 5's dominant defect class, and exactly why
+    // the story pairs them with a SOURCE gate (`observed-immutable`). Their job is to red on the
+    // day a future story adds the write; the gate's job is to red on the day it is merely
+    // AUTHORED. Neither subsumes the other, and mutation M1b measures that.
+
+    use opencmdb_core::observation::{
+        ConnectorId, Fact, L2DomainId, ObsId, Observation, Scope, VantageId,
+    };
+
+    /// Connect, migrate, and empty every table this story touches — children before parents,
+    /// because `identity_link.observation_id` is a foreign key (`0003_resolver_guards.sql:43-45`).
+    ///
+    /// `None` when `DATABASE_URL` is unset, and then the caller returns: ⚠️ a green local suite
+    /// says NOTHING about this story, whose entire deliverable is database-backed.
+    async fn nfr5_pool() -> Option<MySqlPool> {
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping story 6.3 DB test: DATABASE_URL unset");
+            return None;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        for statement in [
+            "DELETE FROM declared_attribute",
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+        ] {
+            sqlx::query(statement).execute(&pool).await.expect("clean");
+        }
+        Some(pool)
+    }
+
+    /// The story's subject: a sighting carrying every declarable kind — `ipv4`, `hostname` AND
+    /// `mac` — plus a **non-NULL `raw`** and a microsecond-precision instant.
+    ///
+    /// ⚠️ Both of those last two are load-bearing rather than decoration. `raw` is nullable, and
+    /// a fixture leaving it `NULL` would put a column in the comparison that carries nothing —
+    /// mutation M6 is the control that measures it. The `mac` is what gives the observation an
+    /// L1 key, so `resolve` places it on a real interface and *"the link is intact"* has a link
+    /// to be intact about.
+    fn nfr5_observation(ip: &str, hostname: &str, mac: [u8; 6]) -> Observation {
+        use opencmdb_core::observation::{HostnameSource, MacAddr};
+        Observation {
+            obs_id: ObsId::from_uuid(uuid::Uuid::now_v7()),
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::nil()),
+            observed_at: chrono::DateTime::from_timestamp_micros(1_700_000_000_123_456)
+                .expect("in range"),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            },
+            facts: vec![
+                Fact::IpV4 {
+                    addr: ip.parse().expect("an ipv4"),
+                },
+                Fact::Hostname {
+                    name: hostname.into(),
+                    source: HostnameSource::Dns,
+                },
+                Fact::Mac {
+                    addr: MacAddr(mac),
+                    locally_administered: false,
+                },
+            ],
+            raw: Some("{\"opaque\":\"provenance blob, é\"}".into()),
+        }
+    }
+
+    /// Seed one observation and run the identity pass over it, so that a real `identity_link`
+    /// exists before the gesture under test.
+    async fn seed_and_resolve(pool: &MySqlPool, observation: &Observation) {
+        repo::insert_observation(pool, observation)
+            .await
+            .expect("ingest");
+        let mut conn = pool.acquire().await.expect("acquire");
+        crate::resolver::resolve(&mut conn, std::slice::from_ref(observation))
+            .await
+            .expect("resolve");
+    }
+
+    /// Story 6.3, AC1 — a SUCCESSFUL documenting gesture leaves the observed side untouched.
+    ///
+    /// The observation row is compared on **all seven columns** (through
+    /// `repo::snapshot_observation_records`, which reads them as the server renders them rather
+    /// than round-tripping through Rust types), and the link is compared through
+    /// `load_current_links_for_observation`, whose `PersistedLink` **carries the row `id`** —
+    /// which is what tells *"the same link"* from *"an equal link written afresh"*.
+    ///
+    /// ⚠️ Both populations are asserted NON-EMPTY first. Comparing two empty vectors is the
+    /// vacuous-guard shape this story exists to avoid; mutation M1 would stay green under it.
+    #[tokio::test]
+    async fn documenting_leaves_the_observation_and_its_link_untouched() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = nfr5_pool().await else {
+            return;
+        };
+        let observation = nfr5_observation("192.0.2.10", "nas", [0x02, 0, 0, 0, 0, 0x10]);
+        let subject = observation.obs_id;
+        seed_and_resolve(&pool, &observation).await;
+
+        let observations_before = repo::snapshot_observation_records(&pool)
+            .await
+            .expect("snapshot observations");
+        let links_before = repo::load_current_links_for_observation(&pool, subject)
+            .await
+            .expect("load links");
+        assert_eq!(
+            observations_before.len(),
+            1,
+            "the comparison needs a row to compare"
+        );
+        assert!(
+            observations_before[0].raw.is_some(),
+            "a NULL raw would put a column in the comparison that carries nothing"
+        );
+        assert!(
+            !links_before.is_empty(),
+            "the pass must have placed the sighting, or 'the link is intact' asserts nothing"
+        );
+
+        let response = app(pool.clone(), config(true, Some(pair())))
+            .oneshot(document_post(
+                Some(&basic_header("op", "s3cret")),
+                &format!("subject={}", subject.as_uuid()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::CREATED,
+            "the gesture happened"
+        );
+
+        let observations_after = repo::snapshot_observation_records(&pool)
+            .await
+            .expect("snapshot observations");
+        let links_after = repo::load_current_links_for_observation(&pool, subject)
+            .await
+            .expect("load links");
+        assert_eq!(
+            observations_before, observations_after,
+            "documenting moved a byte of the observed record"
+        );
+        assert_eq!(
+            links_before, links_after,
+            "documenting disturbed the identity link"
+        );
+    }
+
+    /// Story 6.3, AC1 — the same two comparisons across a **REFUSED** gesture.
+    ///
+    /// 🔴 The refusal paths are where a *"mark it attempted"* write would land, and they are the
+    /// half a naive after-only check cannot see. ⚠️ And they are harder to guard than they look:
+    /// a write placed on the handler's own transaction is ROLLED BACK when the refusal returns
+    /// without committing, so it is invisible here by construction — measured at this story's
+    /// validation, and the reason mutation M4′ writes on its OWN connection instead.
+    #[tokio::test]
+    async fn a_refused_documenting_gesture_leaves_the_observation_and_its_link_untouched() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = nfr5_pool().await else {
+            return;
+        };
+        let observation = nfr5_observation("192.0.2.20", "printer", [0x02, 0, 0, 0, 0, 0x20]);
+        let subject = observation.obs_id;
+        seed_and_resolve(&pool, &observation).await;
+
+        // Document it once, so the SECOND attempt is the 409 the unique index raises.
+        let first = app(pool.clone(), config(true, Some(pair())))
+            .oneshot(document_post(
+                Some(&basic_header("op", "s3cret")),
+                &format!("subject={}", subject.as_uuid()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(first.status(), StatusCode::CREATED);
+
+        let observations_before = repo::snapshot_observation_records(&pool)
+            .await
+            .expect("snapshot observations");
+        let links_before = repo::load_current_links_for_observation(&pool, subject)
+            .await
+            .expect("load links");
+        assert!(!observations_before.is_empty() && !links_before.is_empty());
+
+        let refused = app(pool.clone(), config(true, Some(pair())))
+            .oneshot(document_post(
+                Some(&basic_header("op", "s3cret")),
+                &format!("subject={}", subject.as_uuid()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(
+            refused.status(),
+            StatusCode::CONFLICT,
+            "the second adoption is refused, which is the point of the fixture"
+        );
+
+        assert_eq!(
+            observations_before,
+            repo::snapshot_observation_records(&pool)
+                .await
+                .expect("snapshot observations"),
+            "a refused gesture moved a byte of the observed record"
+        );
+        assert_eq!(
+            links_before,
+            repo::load_current_links_for_observation(&pool, subject)
+                .await
+                .expect("load links"),
+            "a refused gesture disturbed the identity link"
+        );
+    }
+
+    /// Story 6.3, AC1 — the second refusal shape: a subject that projects to NOTHING answers
+    /// 422-domain, and leaves the observed side untouched too. Distinct from the 409 above
+    /// because it refuses BEFORE the write loop rather than inside it.
+    #[tokio::test]
+    async fn a_nothing_to_document_refusal_leaves_the_observation_untouched() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = nfr5_pool().await else {
+            return;
+        };
+        // Rtt-only: no declarable field, and no L1 key either, so the pass abstains.
+        let observation = Observation {
+            obs_id: ObsId::from_uuid(uuid::Uuid::now_v7()),
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::nil()),
+            observed_at: chrono::DateTime::from_timestamp_micros(1_700_000_500_000_001)
+                .expect("in range"),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            },
+            facts: vec![Fact::Rtt { millis: 12 }],
+            raw: Some("{\"opaque\":\"rtt only\"}".into()),
+        };
+        let subject = observation.obs_id;
+        seed_and_resolve(&pool, &observation).await;
+
+        let before = repo::snapshot_observation_records(&pool)
+            .await
+            .expect("snapshot observations");
+        assert_eq!(before.len(), 1, "the comparison needs a row to compare");
+
+        let refused = app(pool.clone(), config(true, Some(pair())))
+            .oneshot(document_post(
+                Some(&basic_header("op", "s3cret")),
+                &format!("subject={}", subject.as_uuid()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(refused.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+        assert_eq!(
+            before,
+            repo::snapshot_observation_records(&pool)
+                .await
+                .expect("snapshot observations"),
+            "a nothing-to-document refusal moved a byte of the observed record"
+        );
+    }
+
+    // ─── Story 6.3 — NFR5's FIRST assertion, re-asserted through the NEW write path ──────
+    //
+    // *"Ingesting an observation that contradicts a declared field leaves that field unchanged
+    // and opens a divergence"* (`prd.md:1212-1213`).
+    //
+    // 🔴 The two halves are NOT equally reachable, and this story measures the boundary rather
+    // than hiding it. *Unchanged* holds unconditionally and is the invariant NFR5 is actually
+    // about. *A divergence opens* does NOT hold while the documented sighting is still in the
+    // store: `reconcile` treats two disagreeing in-perimeter sightings as a CONFLICT, drops the
+    // field, and abstains twice — FR16 working, *never picked, never merged*. Producing a gap
+    // therefore requires removing the documented sighting, which is Guy's arbitration of
+    // 2026-08-15 and which the third test below performs explicitly.
+
+    /// Ingest one batch through the REAL pass — `poll_ingest_resolve`, driven by the committed
+    /// `FixtureConnector` — rather than through `repo::insert_observation`.
+    ///
+    /// ⚠️ This is what makes the test a re-assertion *"through the new write path"*: the shipped
+    /// ARP/ping connector emits only `IpV4` + `Rtt` and can never produce a contradicting
+    /// `hostname`, so a fixture connector is the only way to drive a real ingestion of one.
+    async fn ingest_through_the_pass(pool: &MySqlPool, observations: Vec<Observation>) {
+        use opencmdb_core::observation::{Capabilities, FactKind};
+        use std::collections::BTreeSet;
+        let capabilities = Capabilities {
+            as_of: chrono::DateTime::from_timestamp(1_700_000_000, 0).expect("in range"),
+            kinds: BTreeSet::from([FactKind::IpV4, FactKind::Hostname, FactKind::Mac]),
+        };
+        let mut connector = crate::fixture_connector::FixtureConnector::from_observations(
+            ConnectorId::from_uuid(uuid::Uuid::nil()),
+            capabilities,
+            vec![Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            }],
+            "story 6.3 contradicting ingestion",
+            observations,
+        )
+        .expect("the in-memory stream must load");
+        let outcome = crate::scan_pass::poll_ingest_resolve(
+            &mut connector,
+            chrono::DateTime::from_timestamp(1_700_000_900, 0).expect("in range"),
+            pool,
+        )
+        .await;
+        assert!(
+            outcome.ingested > 0,
+            "the pass must actually have ingested, or the test measures nothing"
+        );
+    }
+
+    /// Document one sighting through the route and return `(subject, entity_id, observation)`.
+    async fn document_one(pool: &MySqlPool, observation: Observation) -> (ObsId, String) {
+        let subject = observation.obs_id;
+        seed_and_resolve(pool, &observation).await;
+        let response = app(pool.clone(), config(true, Some(pair())))
+            .oneshot(document_post(
+                Some(&basic_header("op", "s3cret")),
+                &format!("subject={}", subject.as_uuid()),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let entity_id = body_text(response)
+            .await
+            .rsplit(' ')
+            .next()
+            .expect("entity id in body")
+            .to_string();
+        (subject, entity_id)
+    }
+
+    /// Story 6.3, AC2 — an ingestion that CONTRADICTS a declared field changes **nothing** on the
+    /// declared side, on all seven columns including `updated_at`.
+    ///
+    /// 🔑 `updated_at` is the column that matters most here: a silent re-write which happened to
+    /// preserve the value would still move it, and that is the drift this assertion exists to
+    /// catch. The comparison goes through the ONE sanctioned provenance reader, widened to seven
+    /// columns at this story (`repo::read_declared_provenance_for_test`).
+    #[tokio::test]
+    async fn a_contradicting_ingestion_leaves_the_declared_side_byte_identical() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = nfr5_pool().await else {
+            return;
+        };
+        let documented = nfr5_observation("192.0.2.30", "nas", [0x02, 0, 0, 0, 0, 0x30]);
+        let (_subject, entity_id) = document_one(&pool, documented).await;
+
+        let declared_before = repo::read_declared_provenance_for_test(&pool, &entity_id)
+            .await
+            .expect("read declared");
+        assert_eq!(
+            declared_before.len(),
+            3,
+            "ipv4 + hostname + mac were documented, or the comparison is thinner than it looks"
+        );
+
+        // The contradiction: same address, a DIFFERENT hostname, through the real pass.
+        let contradicting = nfr5_observation("192.0.2.30", "intruder", [0x02, 0, 0, 0, 0, 0x30]);
+        ingest_through_the_pass(&pool, vec![contradicting]).await;
+
+        assert_eq!(
+            declared_before,
+            repo::read_declared_provenance_for_test(&pool, &entity_id)
+                .await
+                .expect("read declared"),
+            "the scanner altered a declared field — NFR5's first assertion is broken"
+        );
+    }
+
+    /// Story 6.3, AC2 — the boundary, pinned with BOTH numbers: while the documented sighting is
+    /// still in the store, a contradicting ingestion opens **no gap** and abstains **twice**.
+    ///
+    /// ⚠️ Do NOT relax this to `gaps.is_empty()`: the pair `(0, 2)` and its cause breakdown are
+    /// what distinguish *"the product correctly refused to pick"* from *"the product saw
+    /// nothing"*. A third disagreeing sighting is asserted too, because the conflict is counted
+    /// once per FIELD and not once per sighting — counter-intuitive, and pinned for that reason.
+    #[tokio::test]
+    async fn two_disagreeing_sightings_abstain_rather_than_open_a_divergence() {
+        use opencmdb_core::gap::AbstentionCause;
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = nfr5_pool().await else {
+            return;
+        };
+        let documented = nfr5_observation("192.0.2.40", "nas", [0x02, 0, 0, 0, 0, 0x40]);
+        let documented_copy = documented.clone();
+        let (_subject, entity_id) = document_one(&pool, documented).await;
+
+        let contradicting = nfr5_observation("192.0.2.40", "intruder", [0x02, 0, 0, 0, 0, 0x40]);
+        let contradicting_copy = contradicting.clone();
+        ingest_through_the_pass(&pool, vec![contradicting]).await;
+
+        let declared = declared_pairs(&pool, &entity_id).await;
+        let two = opencmdb_core::gap::reconcile(
+            ("ipv4", "192.0.2.40"),
+            &declared,
+            &[documented_copy.clone(), contradicting_copy.clone()],
+        );
+        assert!(
+            two.gaps.is_empty(),
+            "two disagreeing sightings must not pick one: {:?}",
+            two.gaps
+        );
+        assert_eq!(
+            two.abstention_count(),
+            2,
+            "the conflict and the now-unobserved field: {:?}",
+            two.abstentions
+        );
+        assert_eq!(
+            two.abstentions
+                .get(&AbstentionCause::ConflictingObservations),
+            Some(&1),
+            "one conflicting field: {:?}",
+            two.abstentions
+        );
+        assert_eq!(
+            two.abstentions.get(&AbstentionCause::NoObservedValue),
+            Some(&1),
+            "and the declared hostname then has no observed value: {:?}",
+            two.abstentions
+        );
+
+        // A THIRD disagreeing sighting does not add an abstention: the conflict is per FIELD.
+        let third = nfr5_observation("192.0.2.40", "impostor", [0x02, 0, 0, 0, 0, 0x40]);
+        let three = opencmdb_core::gap::reconcile(
+            ("ipv4", "192.0.2.40"),
+            &declared,
+            &[documented_copy, contradicting_copy, third],
+        );
+        assert!(three.gaps.is_empty());
+        assert_eq!(
+            three.abstention_count(),
+            2,
+            "the conflict is counted once per FIELD, not once per sighting: {:?}",
+            three.abstentions
+        );
+    }
+
+    /// Story 6.3, AC2 — and the divergence DOES open once the documented sighting is gone.
+    ///
+    /// 🔴 **The DELETE is this test's own gesture and no production code path performs it**
+    /// (Guy's arbitration, 2026-08-15). It models *the old sighting aged out*: while the sighting
+    /// that supplied the declared value is still in the store, every contradicting ingestion
+    /// conflicts with it, so a gap is unreachable through the documenting gesture. The
+    /// alternatives were refused with their reasons in the story file — seeding the declared row
+    /// manually would lose *"through the new write path"*, and dropping this half would stop
+    /// measuring drift detection, which D22 makes the property that keeps NFR5 alive.
+    ///
+    /// 🔴 **The abstention count depends on WHAT THE NEW SIGHTING CARRIES, not on the shape —
+    /// measured here, against a prediction that said otherwise.** The story file predicted
+    /// `(1, 1)` for this shape; that figure was taken with a contradicting sighting carrying **no
+    /// MAC**, and it does not survive a realistic re-scan. Both cases are pinned below:
+    ///
+    /// - the same NIC seen again under a new hostname (same MAC) → **`(1, 0)`**: `mac` is still
+    ///   observed, so nothing abstains;
+    /// - a contradicting sighting that carries no MAC → **`(1, 1)`**, the spare abstention being
+    ///   the declared `mac` with no observed value.
+    ///
+    /// ⚠️ So story 6.2's oracle (`abstention_count == 0`) is CORRECT for the first and WRONG for
+    /// the second. *A figure quoted without the fixture that produced it is not a measurement*,
+    /// and pinning only one of these two would have hidden that.
+    #[tokio::test]
+    async fn the_divergence_opens_once_the_documented_sighting_is_gone() {
+        use opencmdb_core::gap::AbstentionCause;
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = nfr5_pool().await else {
+            return;
+        };
+        let documented = nfr5_observation("192.0.2.50", "nas", [0x02, 0, 0, 0, 0, 0x50]);
+        let (subject, entity_id) = document_one(&pool, documented).await;
+
+        let contradicting = nfr5_observation("192.0.2.50", "intruder", [0x02, 0, 0, 0, 0, 0x50]);
+        let contradicting_copy = contradicting.clone();
+        ingest_through_the_pass(&pool, vec![contradicting]).await;
+
+        let declared_before = repo::read_declared_provenance_for_test(&pool, &entity_id)
+            .await
+            .expect("read declared");
+
+        // Remove the documented sighting — children before parents (the FK from identity_link).
+        let subject_text = subject.as_uuid().to_string();
+        for statement in [
+            "DELETE FROM link_candidate WHERE link_id IN \
+             (SELECT id FROM identity_link WHERE observation_id = ?)",
+            "DELETE FROM identity_link WHERE observation_id = ?",
+            "DELETE FROM observation_record WHERE id = ?",
+        ] {
+            sqlx::query(statement)
+                .bind(&subject_text)
+                .execute(&pool)
+                .await
+                .expect("age the old sighting out");
+        }
+
+        // The declared side survives the removal untouched — `origin_obs_id` carries no FK.
+        assert_eq!(
+            declared_before,
+            repo::read_declared_provenance_for_test(&pool, &entity_id)
+                .await
+                .expect("read declared"),
+            "removing the source sighting must not touch the declared record"
+        );
+
+        let declared = declared_pairs(&pool, &entity_id).await;
+        let one =
+            opencmdb_core::gap::reconcile(("ipv4", "192.0.2.50"), &declared, &[contradicting_copy]);
+        assert_eq!(one.gaps.len(), 1, "the divergence opens: {:?}", one.gaps);
+        assert_eq!(one.gaps[0].field, "hostname");
+        assert_eq!(one.gaps[0].declared, "nas");
+        assert_eq!(one.gaps[0].observed, "intruder");
+        assert_eq!(
+            one.abstention_count(),
+            0,
+            "the re-scan still sees the same MAC, so nothing abstains: {:?}",
+            one.abstentions
+        );
+
+        // The CONTRAST, and it is why the figure above needs its fixture stated: strip the MAC
+        // from the contradicting sighting and the declared `mac` loses its observed value, so the
+        // same shape measures (1, 1). Neither number is a property of the shape alone.
+        let mut mac_less = nfr5_observation("192.0.2.50", "intruder", [0x02, 0, 0, 0, 0, 0x50]);
+        mac_less
+            .facts
+            .retain(|fact| !matches!(fact, Fact::Mac { .. }));
+        let without_mac =
+            opencmdb_core::gap::reconcile(("ipv4", "192.0.2.50"), &declared, &[mac_less]);
+        assert_eq!(
+            without_mac.gaps.len(),
+            1,
+            "the divergence still opens: {:?}",
+            without_mac.gaps
+        );
+        assert_eq!(
+            without_mac.abstention_count(),
+            1,
+            "and now the declared mac has no observed value: {:?}",
+            without_mac.abstentions
+        );
+        assert_eq!(
+            without_mac
+                .abstentions
+                .get(&AbstentionCause::NoObservedValue),
+            Some(&1),
+            "named, not merely counted: {:?}",
+            without_mac.abstentions
+        );
+    }
+
+    /// The declared `(key, value)` pairs of one entity, as the reconcile consumes them.
+    async fn declared_pairs(pool: &MySqlPool, entity_id: &str) -> Vec<(String, String)> {
+        repo::load_declared_attributes(pool)
+            .await
+            .expect("load declared")
+            .into_iter()
+            .filter(|(e, _, _)| e == entity_id)
+            .map(|(_, k, v)| (k, v))
+            .collect()
     }
 
     /// 🔴 Story 6.2, AC2 (M6) — a subject whose facts project to NOTHING (an Rtt-only sighting)

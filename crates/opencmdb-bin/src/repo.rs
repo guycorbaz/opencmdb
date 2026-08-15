@@ -170,28 +170,168 @@ where
     Ok(())
 }
 
-/// Read the provenance of an entity's declared rows, for tests that VERIFY the documenting
-/// write authored an `'adopted'` row (story 6.2, §6.5). Returns `(attr_key, origin,
-/// origin_obs_id, actor_id)` per row, ordered by key.
+/// One declared row, EVERY column, as MariaDB renders it.
+///
+/// Story 6.3 compares the declared side across an ingestion and needs *"unchanged"* to mean every
+/// column — `updated_at` above all, since a silent re-write that preserved the value would still
+/// move it, and that is the drift NFR5's first assertion exists to catch.
+///
+/// ⚠️ `CHAR(36)` columns come back with trailing spaces stripped by MariaDB, so a padding-only
+/// difference is invisible here. It bounds the phrase *"byte-identical"* and is stated rather
+/// than implied; nothing this story writes can produce such a difference.
+#[cfg(test)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DeclaredRowSnapshot {
+    /// The entity the row belongs to.
+    pub(crate) entity_id: String,
+    /// The field name.
+    pub(crate) attr_key: String,
+    /// The declared value — nullable in the DDL.
+    pub(crate) attr_value: Option<String>,
+    /// `manual` | `adopted` | `imported`.
+    pub(crate) origin: String,
+    /// The adopted observation, `NULL` on a manual row.
+    pub(crate) origin_obs_id: Option<String>,
+    /// A human; never `'scanner'` (the DDL CHECK).
+    pub(crate) actor_id: String,
+    /// When the row was last written, as MariaDB renders it.
+    pub(crate) updated_at: String,
+}
+
+/// Read an entity's declared rows in full, for the tests that VERIFY the documenting write
+/// authored an `'adopted'` row (story 6.2, §6.5) and that the ingestion changed NOTHING
+/// (story 6.3, AC2). Ordered by key, so two reads compare as sequences.
 ///
 /// 🔴 This is the ONE sanctioned READER of provenance columns (`SANCTIONED_READS` in `xtask`,
 /// keyed on this fn's name) — FR13 bans the DIVERGENCE COMPUTATION from consulting how a value
 /// was obtained, not a test that checks the write did its job. Production reads no provenance:
 /// the already-documented refusal rides the unique index, not a `SELECT`. Renaming this fn
 /// turns the authorship gate red, which is the intended coupling.
+///
+/// 🔑 **WIDENED at story 6.3 from four columns to seven — same name, same file, deliberately.**
+/// The gate keys on `(path, fn)`, so the projection is invisible to it, and this is story 6.2's
+/// own precedent ([`raw_declared_write_for_ddl_test`] was widened exactly this way). The
+/// alternative — a second `SANCTIONED_READS` entry — was refused on a MEASUREMENT taken at this
+/// story's validation: `the_allowlist_sanctions_a_place_and_not_a_name` walks `SANCTIONED_SITES`
+/// **only**, so a stale read entry is caught by nothing. Widening adds no entry to guard.
 #[cfg(test)]
 pub(crate) async fn read_declared_provenance_for_test(
     pool: &MySqlPool,
     entity_id: &str,
-) -> Result<Vec<(String, String, Option<String>, String)>, sqlx::Error> {
-    let rows = sqlx::query_as(
-        "SELECT attr_key, origin, origin_obs_id, actor_id FROM declared_attribute \
-         WHERE entity_id = ? ORDER BY attr_key",
+) -> Result<Vec<DeclaredRowSnapshot>, sqlx::Error> {
+    // (entity_id, attr_key, attr_value, origin, origin_obs_id, actor_id, updated_at)
+    type DeclaredRow = (
+        String,
+        String,
+        Option<String>,
+        String,
+        Option<String>,
+        String,
+        String,
+    );
+    let rows: Vec<DeclaredRow> = sqlx::query_as(
+        "SELECT entity_id, attr_key, attr_value, origin, origin_obs_id, actor_id, \
+                    CAST(updated_at AS CHAR) FROM declared_attribute \
+             WHERE entity_id = ? ORDER BY attr_key",
     )
     .bind(entity_id)
     .fetch_all(pool)
     .await?;
-    Ok(rows)
+    Ok(rows
+        .into_iter()
+        .map(
+            |(entity_id, attr_key, attr_value, origin, origin_obs_id, actor_id, updated_at)| {
+                DeclaredRowSnapshot {
+                    entity_id,
+                    attr_key,
+                    attr_value,
+                    origin,
+                    origin_obs_id,
+                    actor_id,
+                    updated_at,
+                }
+            },
+        )
+        .collect())
+}
+
+/// One observation row, EVERY column, as MariaDB renders it — the instrument NFR5's second
+/// assertion needs (*"the observation record is bit-for-bit unchanged"*, `prd.md:1214-1217`).
+///
+/// # Why not [`load_observation_by_id`]
+///
+/// That reader round-trips through Rust types: `observed_at` is re-parsed from RFC 3339 and
+/// `facts` through `serde_json`. A byte that changed and re-serialised identically would be
+/// invisible to it. This one reads the columns as the server renders them and compares nothing
+/// but text.
+///
+/// # Why every column, including `id`
+///
+/// Story 5.10's [`LinkSnapshot`] deliberately drops the row id, because a replayed link is minted
+/// with a new v7 UUID. **That reasoning does not transfer here**: nothing is replayed, the row
+/// must be the SAME row, and `id` is precisely what a mis-targeted write would change. An
+/// exclusion justified elsewhere is not justified here.
+#[cfg(test)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ObservationRowSnapshot {
+    /// The observation id.
+    pub(crate) id: String,
+    /// The connector that emitted it.
+    pub(crate) connector_id: String,
+    /// When the SOURCE dated it, as MariaDB renders it.
+    pub(crate) observed_at: String,
+    /// D19's scope: the L2 domain.
+    pub(crate) l2_domain: String,
+    /// D19's scope: the vantage point.
+    pub(crate) vantage: String,
+    /// The serialized `Vec<Fact>`, verbatim.
+    pub(crate) facts: String,
+    /// The opaque provenance blob — nullable, and a test that leaves it `NULL` measures nothing
+    /// about this column.
+    pub(crate) raw: Option<String>,
+}
+
+/// Every observation row, every column, ordered so two snapshots compare as sequences.
+///
+/// # Errors
+///
+/// Returns the `sqlx::Error` as it came.
+#[cfg(test)]
+pub(crate) async fn snapshot_observation_records(
+    pool: &MySqlPool,
+) -> Result<Vec<ObservationRowSnapshot>, sqlx::Error> {
+    // (id, connector_id, observed_at, l2_domain, vantage, facts, raw)
+    type ObservationSnapshotRow = (
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+    );
+    let rows: Vec<ObservationSnapshotRow> = sqlx::query_as(
+        "SELECT id, connector_id, CAST(observed_at AS CHAR), l2_domain, vantage, facts, raw \
+             FROM observation_record ORDER BY id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(id, connector_id, observed_at, l2_domain, vantage, facts, raw)| {
+                ObservationRowSnapshot {
+                    id,
+                    connector_id,
+                    observed_at,
+                    l2_domain,
+                    vantage,
+                    facts,
+                    raw,
+                }
+            },
+        )
+        .collect())
 }
 
 /// Load one observation by its id, reconstructed whole so it composes with

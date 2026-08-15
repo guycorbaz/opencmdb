@@ -75,7 +75,15 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-14  # 6.2 -> `done`: PR #91 squash-merged as `ead7738` after a green CI run
+last_updated: 2026-08-15  # 6.3 -> `ready-for-dev`: contexted, and its own numbering comment
+                          # corrected (it said "assertions 2 and 3"; the parked pair is 1 and 2).
+                          # ✅ VALIDATED same day, TWO fresh-context layers, BOTH of which BUILT a
+                          # prototype of the prescribed eighth gate rather than reasoning about
+                          # one. Corrections all applied; 2 arbitrations raised and TAKEN by Guy
+                          # (AC2's divergence half is unsatisfiable as epics.md words it; the
+                          # gate breaks the file-size ceiling). epics.md NOT edited; the live
+                          # count lives in the story file. Nothing is blocked -- next: dev-story.
+                          # (Earlier: 2026-08-14) 6.2 -> `done`: PR #91 squash-merged as `ead7738` after a green CI run
                           # -- dev-story, three-layer code review (13 findings, 6 patched, 1
                           # deferred by Guy, core measured sound) and the merge. Next: 6.3 (NFR5's
                           # two parked assertions). (Earlier note: 6.2 -> `review`; the live count
@@ -2864,8 +2872,11 @@ development_status:
   6-1-write-route-writes-nothing: done
   # through `insert_declared_attribute` and nowhere else; `SANCTIONED_SITES` gains one named entry
   6-2-route-writes-a-declared-value: done
-  # assertions 2 and 3, parked since Epic 5 for want of this gesture
-  6-3-nfr5-remaining-assertions: backlog
+  # 🔴 NFR5's assertions (1) and (2), parked since story 5.12 for want of this gesture.
+  # This comment read "assertions 2 and 3" until 2026-08-15 — WRONG, and it inherited the error
+  # from `epics.md:1724`: assertion 3 is the one story 5.12 covered (`deferred-work.md:2896`).
+  # `epics.md` is NOT edited; the divergence is registered with Epic 6's retrospective.
+  6-3-nfr5-remaining-assertions: in-progress
   # FR13(a), *the day-one case*; the gesture belongs to the CAUSE, not the count
   6-4-abstention-line-carries-the-gesture: backlog
   # story 5.9's three deferrals, as ONE schema story, with NO producer
