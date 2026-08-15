@@ -1429,8 +1429,56 @@ pub(crate) fn is_table_reference_of(text: &str, at: usize, table: &str) -> bool 
 /// was measured inheriting an `origin` from an unrelated INSERT twenty-four lines above, and the
 /// gate reported two phantom findings on the clean tree.
 pub(crate) fn statement_before(text: &str, at: usize) -> &str {
-    let start = text[..at].rfind([';', '"']).map_or(0, |i| i + 1);
-    &text[start..at]
+    &text[statement_start(text, at)..at]
+}
+
+/// The last statement bound strictly before `at`, **skipping a `;` that sits inside a
+/// single-quoted SQL string**.
+///
+/// 🔴 Added at story 6.3's code review, on a measurement WITH its control. The bound was the first
+/// `;` whatever its context, so
+/// `INSERT INTO observation_record … VALUES (1, 'a;payload') ON DUPLICATE KEY UPDATE …` captured
+/// nothing after the reference and the overwrite went **undetected** — while the same line without
+/// the semicolon reddened. ⚠️ **The hole was measured to be INHERITED by
+/// [`gate_declared_authorship`]'s read half** (`… WHERE raw = 'a;b' AND actor_id = 'x'` → no
+/// finding; control → one), which is why the fix lives in the SHARED helper rather than in one
+/// gate. `raw` is an opaque blob by design and `ON DUPLICATE KEY UPDATE` is the ordinary
+/// idempotent-ingest gesture, so this was the good-faith path, not an adversary's.
+///
+/// `"` still bounds unconditionally: it ends a Rust string literal, and that bound is what stops a
+/// finding spanning two literals (story 5.12). Byte scanning is safe — `;`, `'` and `"` are ASCII,
+/// and a UTF-8 continuation byte can never equal them.
+fn statement_start(text: &str, at: usize) -> usize {
+    let bytes = text.as_bytes();
+    let mut in_quote = false;
+    let mut last = 0usize;
+    for (i, b) in bytes.iter().enumerate().take(at) {
+        match b {
+            b'\'' => in_quote = !in_quote,
+            b';' if !in_quote => last = i + 1,
+            b'"' => {
+                last = i + 1;
+                in_quote = false;
+            }
+            _ => {}
+        }
+    }
+    last
+}
+
+/// The first statement bound at or after `from`, under [`statement_start`]'s rule.
+fn statement_end(text: &str, from: usize) -> usize {
+    let bytes = text.as_bytes();
+    let mut in_quote = false;
+    for (i, b) in bytes.iter().enumerate().skip(from) {
+        match b {
+            b'\'' => in_quote = !in_quote,
+            b';' if !in_quote => return i,
+            b'"' => return i,
+            _ => {}
+        }
+    }
+    text.len()
 }
 
 /// The rest of the statement, AFTER the table reference, under the same bounds.
@@ -1442,10 +1490,7 @@ pub(crate) fn statement_before(text: &str, at: usize) -> &str {
 /// 🔑 **Parameterised by TABLE at story 6.3** — see [`is_table_reference_of`].
 pub(crate) fn statement_after_of<'t>(text: &'t str, at: usize, table: &str) -> &'t str {
     let from = at + table.len();
-    let end = text[from..]
-        .find([';', '"'])
-        .map_or(text.len(), |i| from + i);
-    &text[from..end]
+    &text[from..statement_end(text, from)]
 }
 
 /// The `fn` a byte offset sits inside, if any — the unit [`SANCTIONED_SITES`] pairs with a path.
@@ -3171,7 +3216,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     ///
     /// 🔴 Sixteen of the first thirty passed the gate as first shipped. That is what this table
     /// exists to stop from happening again quietly.
-    const AUTHORSHIP_PROBES: [(&str, Option<usize>); 38] = [
+    const AUTHORSHIP_PROBES: [(&str, Option<usize>); 39] = [
         ("e01_raw_string.rs", Some(2)),
         // The one the story already pinned: a query assembled at runtime.
         ("e02_concat_lets.rs", None),
@@ -3228,6 +3273,10 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         // that can — `CREATE OR REPLACE TABLE … AS SELECT` — already reds. Pinned so the fact stays
         // measured rather than remembered.
         ("e38_create_table_as_select.sql", None),
+        // 🔴 Story 6.3's code review: a provenance read hidden behind a `;` inside a quoted
+        // literal. Measured GREEN before the shared statement-bound fix, with its control red —
+        // a hole in THIS gate, found while reviewing another one.
+        ("e39_semicolon_in_literal.sql", Some(4)),
     ];
 
     /// The corpus directory must hold exactly the probes the table names — neither more nor fewer.
@@ -3258,7 +3307,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         );
         assert_eq!(
             on_disk.len(),
-            38,
+            39,
             "the corpus is what the review left behind; losing a probe loses a measured mechanism"
         );
     }
@@ -3333,7 +3382,7 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     /// ⚠️ `o06` names the line of the TABLE, not of the verb, because the two sit on different
     /// lines and the finding is anchored on the reference. That is the honest anchor — the reader
     /// is sent to the table — and pinning it stops a later refactor from moving it silently.
-    const OBSERVED_PROBES: [(&str, Option<usize>); 18] = [
+    const OBSERVED_PROBES: [(&str, Option<usize>); 20] = [
         ("o01_plain_update.rs", Some(2)),
         ("o02_plain_update.sql", Some(2)),
         ("o03_line_comment_marker.rs", Some(5)),
@@ -3345,6 +3394,10 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         ("o09_backtick_qualified.sql", Some(1)),
         ("o10_exec_comment.sql", Some(1)),
         ("o11_join_update.sql", Some(2)),
+        // Story 6.3's code review: the shared statement-bound fix, and a KNOWN false positive
+        // pinned to its actual behaviour so nobody "fixes" it with an allowlist entry.
+        ("o27_semicolon_in_literal.sql", Some(3)),
+        ("o28_join_filter_only.sql", Some(6)),
         // GREEN by decision — each one a stated limit or a legitimate shape.
         ("o20_select_from.rs", None),
         ("o21_identity_link_subquery.sql", None),

@@ -1659,7 +1659,20 @@ mod tests {
         let before = repo::snapshot_observation_records(&pool)
             .await
             .expect("snapshot observations");
+        let links_before = repo::load_current_links_for_observation(&pool, subject)
+            .await
+            .expect("load links");
         assert_eq!(before.len(), 1, "the comparison needs a row to compare");
+        // ⚠️ AC1 promises BOTH comparisons across BOTH refusals, and this one was missing until
+        // story 6.3's code review. The reviewing layer excused it as probably vacuous — an
+        // Rtt-only sighting having no link — and that excuse is REFUTED by measurement: the pass
+        // abstains and writes a CURRENT abstention link (`absence_of_proof`), so the comparison
+        // has a row to compare and its absence was a real gap.
+        assert_eq!(
+            links_before.len(),
+            1,
+            "an Rtt-only sighting still carries a current abstention link, or this compares nothing"
+        );
 
         let refused = app(pool.clone(), config(true, Some(pair())))
             .oneshot(document_post(
@@ -1676,6 +1689,13 @@ mod tests {
                 .await
                 .expect("snapshot observations"),
             "a nothing-to-document refusal moved a byte of the observed record"
+        );
+        assert_eq!(
+            links_before,
+            repo::load_current_links_for_observation(&pool, subject)
+                .await
+                .expect("load links"),
+            "a nothing-to-document refusal disturbed the identity link"
         );
     }
 

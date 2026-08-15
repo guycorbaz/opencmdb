@@ -633,6 +633,27 @@ was a 🔴 review patch on 6.2).
       correction (`6-1-…md:3`'s stale `Status: review`); row (1)'s `sprint-status.yaml` comment
       was already corrected at contexting
 
+### Review Findings (code review 2026-08-15, three layers on **Claude Sonnet 5** — a different model from the one that implemented the story, at Guy's instruction)
+
+🔑 **The layer split paid for itself and the sources say where**: the Blind Hunter (diff only) caught the false claims; the Edge Case Hunter (live DB, told to BREAK the gate) caught the two detection holes; the Acceptance Auditor caught the two documents that contradict the tree. **Two findings were reached by two layers independently** (the store-bypassing divergence tests). **Two agent claims were REFUTED by measurement and dismissed with it.**
+
+- [x] [Review][Patch] 🔴 **A `;` inside a single-quoted SQL literal truncates the statement and hides `ON DUPLICATE KEY UPDATE`** — measured WITH its control: `INSERT INTO observation_record … VALUES (1, 'a;payload') ON DUPLICATE KEY UPDATE …` → **0 findings**; the same line without the semicolon → 1 finding. ⚠️ **And the hole is INHERITED by story 5.12's `authorship` gate**, measured on its READ half: `… WHERE raw = 'a;b' AND actor_id = 'x'` → 0 findings, control → 1. `raw` is documented as an opaque blob and `ON DUPLICATE KEY UPDATE` is called *"the ordinary gesture"* in the gate's own doc, so this is the good-faith path, not an adversary's. Fix the SHARED helpers; both gates gain. [xtask/src/main.rs `statement_before`/`statement_after_of`]
+- [x] [Review][Patch] 🔴 **The module rustdoc claims what this commit's own Debug Log refutes**: *"leaves the whole workspace suite green"* — the story's M1b row records the correction (**the PRODUCT suite**; the gate's own xtask test reds) and the shipped doc was never updated. The *"a doc comment must be TRUE"* rule, broken in the file that argues for measured claims. [xtask/src/observed_immutable.rs, module doc]
+- [x] [Review][Patch] 🔴 **`docs/project-context.md` still enumerates SEVEN gates by name**, thirty lines above the paragraph this commit added saying eight — story 5.12's caught defect (*"six gates while the file implemented seven"*) reproduced inside the story whose AC6 exists to prevent it. [docs/project-context.md, "What exists today"]
+- [x] [Review][Patch] 🔴 **AC7 enumerates fourteen register rows and THIRTEEN landed** — the *NFR5 residual width* row (`'engine'` passes the DDL CHECK, a runtime-assembled name is invisible, `docker/seed-example.sql` is a whole-file site with no test) is in the story file and **not** in `deferred-work.md`. Exactly the failure AC7 opens by quoting: *a re-read that reads only what you wrote cannot find what you did not write.* [deferred-work.md]
+- [x] [Review][Patch] 🔴 **The divergence tests bypass the production path, and `page.rs` at zero diff CONTRADICTS T3 and AC5** — found by TWO layers independently. `two_disagreeing_sightings_…` and `the_divergence_opens_…` hand `gap::reconcile` in-memory clones taken BEFORE ingestion, with a hand-supplied perimeter tuple, so they prove that pure function's contract (which `opencmdb-core`'s own tests already cover) and **not** the path that decides which observations feed a reconcile. ⚠️ AC5's own prose named this risk — *"a re-derivation of `build_view`'s perimeter selection in `main.rs`, a second oracle free to drift"* — and the implementation did it anyway. Add the store-backed test through `page::reconcile_view`, which is what T3 prescribed. [crates/opencmdb-bin/src/page.rs]
+- [x] [Review][Patch] **AC1's link comparison is missing from the 422-domain refusal** — the AC promises *"the same two comparisons"* across both refusals; the `NothingToDocument` test compares only the observation. ⚠️ The reviewing agent excused it as probably vacuous; **that excuse is REFUTED by measurement** — an Rtt-only observation carries a current abstention link (`1 link, current_subject NOT NULL, absence_of_proof`), so the comparison is not vacuous and its absence is a real gap. [crates/opencmdb-bin/src/main.rs]
+- [x] [Review][Patch] **View-mediated writes bypass the gate entirely** — measured: `CREATE VIEW obs_v AS SELECT … FROM observation_record;` then `UPDATE obs_v SET raw = …` → gate GREEN. The `UPDATE` never names the guarded table. A text matcher cannot close this; it must be NAMED as a residual class beside the runtime-assembled name and guard neutralisation. [xtask/src/observed_immutable.rs, residuals]
+- [x] [Review][Patch] **A false positive on ordinary prose** — measured: a string literal reading *"refusing to update observation_record automatically"* reds the gate. Structural to a text matcher, and the existing tests were navigated around it without naming it. State it, so a contributor hitting a spurious red rephrases instead of adding the first allowlist entry. [xtask/src/observed_immutable.rs, residuals]
+- [x] [Review][Patch] **A false positive on a filter-only JOIN** — measured: `UPDATE identity_link il JOIN observation_record o ON … SET il.valid_to = NOW(6) WHERE o.raw IS NOT NULL` → 1 finding, though the SET touches only `identity_link`. ⚠️ **The corpus's only "engine supersede" negative uses the SUBQUERY form**, so an ordinary rewrite to a join would red a non-violation. Add the JOIN-form probe pinned to its ACTUAL behaviour and name the limit. [xtask/probes/observed/, module doc]
+- [x] [Review][Patch] **"36 files" is asserted by the doc and pinned by nothing** — the only guard is `walked >= 30`, so the figure goes stale silently as the tree grows. The *"a number quoted without measurement is not a measurement"* class. Soften the doc; keep the floor. [xtask/src/observed_immutable.rs]
+- [x] [Review][Patch] **`RENAME TABLE` shadow-swap and `ALTER TABLE … DROP COLUMN` are silent** — measured green. Symmetric with the `DELETE`/data-loss exclusion already decided, but unnamed. State them as non-goals rather than leaving them unmeasured. [xtask/src/observed_immutable.rs, residuals]
+- [x] [Review][Patch] **`observed_immutable.rs` carries no trailing `#[cfg(test)] mod tests`**, against D56b's house convention; its four tests live in `main.rs`'s module to reuse `scratch()`/`workspace_root()`. Defensible, undiscussed — state the reason in the module doc. [xtask/src/observed_immutable.rs]
+
+- [x] [Review][Defer] **Whether a gate should cover TABLE-level replacement at all** (`RENAME TABLE` swap, `CREATE OR REPLACE`) rather than row-level overwrites only — a scope question both gates share, and it belongs with the pair, not with this story. — deferred, pre-existing. [xtask/]
+
+- **Dismissed (2), each with the measurement that dismissed it**: *`LOAD DATA … REPLACE INTO` slips through* — **REFUTED**, `governing_keyword` picks the later-ending `replace into`, measured green→red correctly, and the edge layer independently refuted it too; *`ON DUPLICATE` matched as a bare substring inside a string literal* — subsumed by the first patch above, which makes quoted spans opaque.
+
 ---
 
 ## 7. Prove-to-red
@@ -868,15 +889,19 @@ absent write are indistinguishable"* from a sentence into a measurement.
 
 - **All 8 ACs MET.** AC1 ← M1, M3, M4′ (+ M6-bis as the `raw` control); AC2 ← M5, M7; AC3 ← M1b,
   M2, M8; AC4 ← the gate's rustdoc and the register; AC5–AC8 ← the tree checks below.
-- ⚠️ **ONE LIVE COUNT, HERE (AC8): 580 → 590 tests — 363 bin + 161 core + 66 xtask** — verified
+- ⚠️ **ONE LIVE COUNT, HERE (AC8): 580 → 591 tests — 364 bin + 161 core + 66 xtask** (after the code review; 590 before it) — verified
   against the live `mariadb:10.11.11`, 0 failed. The twins cite this file and carry no number.
 - **Eight gates green** + `views-hash ℹ STALE exit 0`. `file-size`: 32 files, largest **1849**
   (against 1829 before) — Guy's module-split arbitration kept the prescribed rustdoc AND the
   ceiling, where growing `main.rs` would have reached ≈ 2018.
 - **`observed-immutable` runs with an EMPTY allowlist across 36 files**, `docker/` included.
-- Verified unchanged: **no migration**; `page.rs` and `crates/opencmdb-bin/templates/` at zero
-  diff; `Cargo.lock` untouched; no new crate; `epics.md` not edited; 28 fixtures; trap gate still
-  RED at 26/15/11 by design.
+- Verified unchanged: **no migration**; `crates/opencmdb-bin/templates/` at zero diff;
+  `Cargo.lock` untouched; no new crate; `epics.md` not edited; 28 fixtures; trap gate still RED at
+  26/15/11 by design.
+  ⚠️ **`page.rs` is NO LONGER at zero diff, and that is the code review's doing**: it gains the
+  store-backed divergence-boundary test AC5 explicitly called *"EXPECTED, not a fence breach"* and
+  task T3 had prescribed from the start. The first implementation put that assertion in `main.rs`
+  against hand-fed observations; two review layers found it independently.
 - 🔑 **What the story could NOT close, stated plainly**: the divergence half of NFR5's first
   assertion is unreachable through the documenting gesture (the test performs its own DELETE) and
   **cannot fire at all on the shipped connector**. Registered, owner named. *"NFR5 is covered by
@@ -893,6 +918,11 @@ absent write are indistinguishable"* from a sentence into a measurement.
   enumerating eight; `is_table_reference_of` / `statement_after_of` parameterised; five helpers
   raised to `pub(crate)`; `report()` padding; `OBSERVED_PROBES` and four tests
 - `xtask/probes/observed/` — **NEW**: 18 probes + `README.md`
+- `crates/opencmdb-bin/src/page.rs` — the store-backed divergence-boundary test, through
+  `reconcile_view` (the code review's patch; T3's original prescription)
+- `xtask/probes/observed/o27_semicolon_in_literal.sql`, `o28_join_filter_only.sql` — **NEW**, and
+  `xtask/probes/authorship/e39_semicolon_in_literal.sql` — **NEW**: the shared statement-bound fix
+  pinned on BOTH corpora, plus the known false positive pinned to its actual behaviour
 - `_bmad-output/implementation-artifacts/6-3-nfr5-remaining-assertions.md` — this file
 - `_bmad-output/implementation-artifacts/deferred-work.md` — the register rows
 - `_bmad-output/implementation-artifacts/sprint-status.yaml` — status
@@ -906,3 +936,11 @@ absent write are indistinguishable"* from a sentence into a measurement.
   arbitrations raised and taken by Guy. Status → `ready-for-dev`.
 - **2026-08-15 — developed.** T1–T6, eleven mutation ids, 580 → 590 tests, eight gates green.
   Status → `review`.
+- **2026-08-15 — CODE-REVIEWED (three layers, on Claude Sonnet 5 at Guy's instruction — a
+  different model from the implementer) and REPAIRED.** 12 patches applied, 1 deferred, 2
+  dismissed with the measurement that dismissed them. 🔴 The heaviest patch is not in this story's
+  own code: a `;` inside a quoted SQL literal truncated the statement bound and hid an
+  `ON DUPLICATE KEY UPDATE` — **and story 5.12's `authorship` gate was measured to inherit the
+  same hole on its read half**, so the fix went into the SHARED helper and both corpora gained a
+  probe. Three of this story's own sentences were false (the module rustdoc, the twin's gate
+  count, one register row that never landed). 590 → 591 tests. Status stays `review`.

@@ -3536,3 +3536,27 @@ Re-read against the story's AC8 list.
   6's retrospective** for the register line, for the two residual links, and for whether CI should
   run `cargo doc` with warnings denied — measured cost: it would have caught three of these four
   at the commit that introduced them.
+
+## Deferred from: code review of story 6.3 (2026-08-15)
+
+- ⚠️ **Should a gate cover TABLE-level replacement at all, or only row-level overwrites?** The code
+  review measured `RENAME TABLE observation_record TO old, shadow TO observation_record` and
+  `ALTER TABLE observation_record DROP COLUMN raw` both GREEN. The shadow-swap is a well-known
+  zero-downtime technique that replaces a table's entire contents — *an overwrite in spirit, with
+  no row-level verb firing*. It is symmetric with the `DELETE`/data-loss exclusion both gates
+  already took deliberately, so it is a SCOPE question rather than a defect, and it belongs to the
+  pair of gates rather than to this story. **Owner: Epic 6's retrospective**, alongside the two
+  other gate-scope questions this story registered.
+
+- ⚠️ **NFR5's residual width after story 6.3 — the row AC7 enumerated and the first pass never
+  wrote** (caught by the code review; *a re-read that reads only what you wrote cannot find what
+  you did not write*). Both gates are TRIPWIRES, and story 5.12's stated classes still stand:
+  **`'engine'` passes the DDL CHECK** (`CHECK (actor_id <> 'scanner')` bans one value, not a
+  property — measured at 5.12); **a table name assembled at runtime is invisible** to either text
+  matcher; and **`docker/seed-example.sql` is a whole-file sanctioned site with no test**, so an
+  edit changing its actor to a non-human one would pass. Story 6.3 adds three more measured
+  residuals of its own: a write **through a VIEW**, a **`RENAME TABLE` shadow-swap**, and two
+  **false positives** (ordinary prose, a filter-only JOIN) that a contributor must resolve by
+  rephrasing rather than by adding the first allowlist entry. **Owner: Epic 19** for the privilege
+  half (the `GRANT` that closes guard neutralisation for both gates); **the seed-file story** for
+  the last of 5.12's three.

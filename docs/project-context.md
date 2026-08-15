@@ -74,10 +74,11 @@ monotonicity is re-owned rather than discharged. **5.12 is `done`** — PR #75 s
 
 Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`, not this file.
 
-**What exists today:** a three-crate workspace that builds and ships. `cargo xtask ci` runs **seven**
+**What exists today:** a three-crate workspace that builds and ships. `cargo xtask ci` runs **eight**
 real gates — dependency frontier (D47), DDL binary collation (D64), retired vocabulary (D65), the
 fixture corpus lock (both directions: edited AND orphan), the file-size ceiling (D56b),
-`float-free` (D13, story 5.4b) and `declared-authorship` (NFR5/FR13, story 5.12) — plus the
+`float-free` (D13, story 5.4b), `declared-authorship` (NFR5/FR13, story 5.12) and
+`observed-immutable` (NFR5/FR11, story 6.3) — plus the
 informational `views-hash` staleness check, which reports `ℹ STALE` and exits 0 by design.
 ⚠️ **`declared-authorship` is a TRIPWIRE, not a barrier**, and the difference is measured: story
 5.12's code review wrote thirty violations of NFR5 against its first implementation and **sixteen

@@ -14,8 +14,12 @@
 //! 5.12's sentence, and this gate is its second application.
 //!
 //! Neither carrier subsumes the other, and that is MEASURED rather than argued: a write planted in
-//! a new **uncalled** function leaves the whole workspace suite green and reds this gate alone
-//! (story 6.3's mutation M1b).
+//! a new **uncalled** function leaves the **product** suite green (`opencmdb-bin` + `opencmdb-core`)
+//! and reds this gate (story 6.3's mutation M1b).
+//! ⚠️ It does NOT leave the whole WORKSPACE suite green — [`crate::tests`]'s
+//! `the_observed_gate_is_green_on_the_real_tree` reds too, because that test IS this gate run
+//! against the real tree. The wider sentence stood here until story 6.3's own code review; it was
+//! refuted by that story's own Debug Log, in the same commit.
 //!
 //! # What it reds on
 //!
@@ -35,7 +39,7 @@
 //!
 //! # The allowlist is EMPTY, and that is the point
 //!
-//! Measured on the committed tree: zero occurrences across 36 files, `docker/` included. Where the
+//! Measured on the committed tree: **zero occurrences**, `docker/` included. Where the
 //! authorship gate needed four sanctioned sites, this one needs none — and **an empty allowlist is
 //! the one form of allowlist nobody can quietly widen.** If a future story finds itself adding the
 //! first entry here, that is the moment to ask whether the invariant still holds, not a formality.
@@ -55,6 +59,16 @@
 //!   how a window grows. A gate over a table the product rightly mutates would need an allowlist as
 //!   long as its callers, which is a gate that means nothing. *"The link is intact"* is therefore
 //!   carried by a behavioural comparison only, and the story says so.
+//! - **A write through a VIEW.** Measured at story 6.3's code review: `CREATE VIEW obs_v AS SELECT
+//!   … FROM observation_record;` then `UPDATE obs_v SET raw = …` → **GREEN**. The `UPDATE` never
+//!   names the guarded table, and MariaDB updates a simple view through to its base table. **No
+//!   text matcher can close this** — it needs the schema, not the source — so it is named as a
+//!   residual class rather than chased.
+//! - **`RENAME TABLE` and `ALTER TABLE … DROP COLUMN`.** Measured GREEN. A shadow-table swap
+//!   (`RENAME TABLE observation_record TO old, shadow TO observation_record`) replaces a table's
+//!   whole contents without any row-level verb firing — *an overwrite in spirit*. Whether a gate
+//!   should reach table-level replacement at all is a SCOPE question both gates share, and it is
+//!   registered rather than answered here.
 //! - **`declared_attribute`.** That is [`crate::gate_declared_authorship`]'s table. ⚠️ And D15's
 //!   sibling rule — *"`declared_attribute.entity_id` is NEVER updated. Ever. No UPDATE"*, which
 //!   `architecture.md:1064-1069` calls *"the most dangerous line of SQL in this project"* — is held
@@ -68,6 +82,28 @@
 //! name assembled at runtime (`format!("observation_{}", …)`) is invisible to any text matcher, and
 //! guard neutralisation — editing this file — is closed by a database privilege rather than by a
 //! gate. That `GRANT` is registered as the real closure for both gates.
+//!
+//! # Its FALSE POSITIVES, named so nobody closes them with an allowlist
+//!
+//! A tripwire that reds on legitimate code gets deleted, so its false positives matter as much as
+//! its holes. Both of these were measured at story 6.3's code review:
+//!
+//! - **Ordinary prose.** A string literal reading *"refusing to update observation_record
+//!   automatically"* REDS. Comments are stripped; string content is not, and a text matcher cannot
+//!   tell prose from SQL. **If you hit this, rephrase the message** — do not add the first entry to
+//!   an allowlist whose emptiness is the property above.
+//! - **A filter-only JOIN.** `UPDATE identity_link il JOIN observation_record o ON … SET
+//!   il.valid_to = NOW(6) WHERE o.raw IS NOT NULL` REDS, though the `SET` touches `identity_link`
+//!   alone. The verdict follows the nearest governing verb and never the `SET` clause. ⚠️ The
+//!   corpus's *"engine supersede"* negative uses the SUBQUERY form, so an ordinary rewrite to a
+//!   join would red a non-violation; `o28_join_filter_only.sql` pins this to its ACTUAL behaviour
+//!   rather than to the one we would prefer.
+//!
+//! # Where its tests live
+//!
+//! In `main.rs`'s trailing test module rather than in a `#[cfg(test)] mod tests` here, against
+//! D56b's house convention — deliberately, to reuse `scratch()` and `workspace_root()`, which live
+//! there. Stated because an undiscussed deviation from a house rule reads as an oversight.
 
 use std::path::Path;
 
