@@ -1,0 +1,20 @@
+{#- The navigation, as the reference mock has it: ten entries in three groups.
+
+     ⚠️ The mock writes `href="#"` on all ten, because its navigation is JavaScript. Transcribing
+     it faithfully would produce the very defect this story forbids — an entry displayed and not
+     offered — so every entry carries its own route instead. A test asserts it (M5b). -#}
+<nav class="nav" aria-label="{{ s.nav_label }}">
+  {%- for group in groups %}
+  <div class="nav-group">{{ group.heading }}</div>
+    {%- for entry in group.entries %}
+  <a class="nav-entry" href="{{ entry.href }}"
+     {%- if entry.current %} aria-current="page"{% endif %}>{{ entry.label }}</a>
+    {%- endfor %}
+  {%- endfor %}
+  {#- The perimeter, as the mock shows it, pinned to the bottom of the sticky sidebar.
+      🔑 It comes from `AppConfig`, never from the database: the shell renders on ten screens,
+      eight of which are demonstrations, and epic constraint 1 forbids those to open a
+      connection. The mock's second footer line — "Dernière observation il y a 4 min" — is a
+      `MAX(observed_at)` and is deferred to story 6b.5 for exactly that reason. -#}
+  <div class="nav-footer">{{ s.nav_perimeter }} {{ perimeter }}</div>
+</nav>

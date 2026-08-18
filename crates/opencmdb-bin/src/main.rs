@@ -30,6 +30,7 @@ mod permute;
 mod repo;
 mod resolver;
 mod scan_pass;
+mod screens;
 mod trap_gate;
 
 // The i18n seam (D39/D66): user-facing strings resolve through `t!()` against `locales/`. EN is
@@ -103,6 +104,55 @@ pub(crate) struct AppConfig {
     /// refuses (401) WITHOUT the challenge header (arbitration 6): a challenge nothing can
     /// satisfy is an infinite browser dialog on every unupgraded deployment.
     pub(crate) basic: Option<BasicCredentials>,
+    /// `OPENCMDB_SCAN_CIDR`: the subnet the startup scan sweeps, and — since story 6b.2 — the
+    /// **perimeter the shell displays** in its navigation footer, as the reference mock does.
+    ///
+    /// `None` when unset: the product then scans nothing and the footer says so rather than
+    /// showing an empty value. ⚠️ It enters here as a PARAMETER rather than being read at the
+    /// point of use (story 6.1's rule — not one test in this crate mutates an env var), and it
+    /// is **not validated here**: an invalid CIDR is refused by the scan with a named error, and
+    /// displaying what the operator configured is more honest than displaying nothing.
+    pub(crate) scan_cidr: Option<String>,
+}
+
+/// Whether a configured value carries at least one character an operator could SEE.
+///
+/// 🔴 `trim().is_empty()` is not enough, and the code review measured it rather than argued it:
+/// `"\u{200B}".trim().is_empty()` is **`false`** in Rust, so a zero-width space survived the
+/// emptiness filter. The navigation footer then rendered *"Perimeter "* followed by nothing
+/// visible — indistinguishable from a blank value — instead of the honest *"not configured"*
+/// the surface promises. The defect the filter exists to prevent, reached through a channel it
+/// did not consider.
+///
+/// ⚠️ **Its limit, stated rather than implied**: [`is_invisible`] is an ENUMERATION of Unicode's
+/// default-ignorable ranges, and *an enumeration cannot claim the completeness of a property*
+/// (story 5.12, where the same class was widened once and deliberately not to exhaustion). This
+/// is a tripwire against the character a copy-paste carries in, never a barrier against one
+/// someone chose.
+fn carries_a_visible_glyph(value: &str) -> bool {
+    value
+        .chars()
+        .any(|glyph| !glyph.is_whitespace() && !glyph.is_control() && !is_invisible(glyph))
+}
+
+/// Unicode code points that occupy no visible space, beyond whitespace and control characters.
+///
+/// The ranges are the default-ignorable ones a text editor or a web form will silently carry:
+/// the zero-width family, the bidirectional controls, the word joiners, the variation selectors
+/// and the byte-order mark. See [`carries_a_visible_glyph`] for why this is a tripwire.
+fn is_invisible(glyph: char) -> bool {
+    matches!(
+        glyph,
+        '\u{00AD}'
+            | '\u{180E}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206F}'
+            | '\u{FE00}'..='\u{FE0F}'
+            | '\u{FEFF}'
+            | '\u{E0000}'..='\u{E007F}'
+    )
 }
 
 /// Why [`AppConfig::from_env`] refuses a configuration — at boot, with the variable named,
@@ -201,6 +251,9 @@ impl AppConfig {
             },
         };
         // Empty counts as unset — `scrape_authorized`'s precedent (unset OR empty, both closed).
+        // Empty counts as unset here too: an operator who blanks the variable to disable the
+        // scan must not then see an empty perimeter rendered as if it were a value.
+        let scan_cidr = lookup("OPENCMDB_SCAN_CIDR").filter(|value| carries_a_visible_glyph(value));
         let user = lookup("OPENCMDB_BASIC_USER").filter(|value| !value.is_empty());
         let password = lookup("OPENCMDB_BASIC_PASSWORD").filter(|value| !value.is_empty());
         let basic = match (user, password) {
@@ -245,6 +298,7 @@ impl AppConfig {
         Ok(Self {
             document_enabled,
             basic,
+            scan_cidr,
         })
     }
 }
@@ -331,7 +385,7 @@ async fn run() -> anyhow::Result<()> {
     // Optional one-shot startup scan: the real ARP/ping connector (Story 3.5) pings a declared
     // subnet and ingests observations, so the page shows genuinely observed state. Unset → the
     // page renders the declared side only. The periodic scheduler (FR6) is a later story.
-    if let Ok(cidr) = std::env::var("OPENCMDB_SCAN_CIDR") {
+    if let Some(cidr) = config.scan_cidr.clone() {
         spawn_startup_scan(database_url.clone(), clock.now(), cidr);
     }
 
@@ -356,12 +410,20 @@ async fn run() -> anyhow::Result<()> {
 /// of the layer a route lands.
 fn app(pool: MySqlPool, config: AppConfig) -> Router {
     let mut router = Router::new()
-        .route("/", get(page::index))
+        .route("/", get(redirect_to_triage))
         .route("/gap", get(page::gap_fragment))
         .route("/assets/{*path}", get(page::asset))
         .route("/metrics", get(metrics::handler))
         .route("/healthz", get(healthz))
-        .with_state(pool.clone());
+        .with_state(pool.clone())
+        // 🔴 The nine demonstration screens are merged AFTER `.with_state`, so their router's
+        // state is `()` and not the pool. That is what makes epic constraint 1 enforceable:
+        // give one of those handlers `State<MySqlPool>` and it fails to COMPILE. Merged before,
+        // or built on the main router, the same handler compiles and the guard is a sentence.
+        .merge(screens::router(config.scan_cidr.clone()))
+        // `/triage` carries the pool AND the perimeter, so the perimeter is a parameter rather
+        // than a second reading of the environment (story 6b.2's M12, shipped and now closed).
+        .merge(page::triage_router(pool.clone(), config.scan_cidr.clone()));
     if config.document_enabled {
         // The switch governs EXISTENCE only (arbitration 4): merged above the layer, the route
         // is auth-gated exactly like every other non-public path. The pool lives INSIDE the
@@ -478,6 +540,24 @@ fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
             );
         });
     });
+}
+
+/// `/` sends the operator to the triage screen.
+///
+/// # Why a redirect rather than making `/` the screen
+///
+/// Guy's arbitration (2026-08-18): separating the redirect from the screen keeps **one address
+/// per screen**, so `aria-current` has one case rather than two, and every bookmark that ever
+/// pointed at `/` still resolves — the README, both manuals, the landing site and the Docker Hub
+/// page all point here (their prose is story 6b.12's sweep).
+///
+/// The target is `/triage` rather than `/dashboard` on a measurement rather than a taste:
+/// `epics.md` makes the triage screen the one fed by the REAL gap, while the dashboard is mixed
+/// by construction — a real reach section beside example cards. The person who installs the
+/// product arrives here, and that is exactly whom the example-data marker defends.
+/// ⚠️ Registered for re-examination by story 6b.5; it costs one line, because the target is one.
+async fn redirect_to_triage() -> axum::response::Redirect {
+    axum::response::Redirect::to("/triage")
 }
 
 /// Readiness: `200 OK` when the database answers a trivial query, `503` when it does not.
@@ -604,6 +684,9 @@ mod tests {
         AppConfig {
             document_enabled,
             basic,
+            // Story 6b.2: the shell's perimeter. `None` here so every pre-existing test keeps
+            // exercising the shape it was written for; the perimeter has its own tests.
+            scan_cidr: None,
         }
     }
 
@@ -741,6 +824,60 @@ mod tests {
                 "{path} must carry the challenge"
             );
         }
+    }
+
+    /// 🔴 **Every screen of the shell answers 401 without a credential — named, one by one.**
+    ///
+    /// # Why this exists, and what it replaces
+    ///
+    /// Story 6b.2 added ten addresses and no test named ONE of them. The code was correct —
+    /// `is_public` is a property (`/healthz` or `/assets/*`), so the ten are refused by
+    /// construction — but nothing held it there, and the code review measured both ways it
+    /// could fall:
+    ///
+    /// - widen `is_public` with `/devices` and the whole suite stayed GREEN (the story's own
+    ///   M7, predicted before implementation and never executed);
+    /// - merge the two sub-routers BELOW `auth_deny` and `GET /dashboard` answered **200 OK**
+    ///   with no credential at all — the suite reddened only through two GENERIC probes
+    ///   (`/anything`, `/admin`) inherited from story 6.1, which name nothing of this story.
+    ///
+    /// 🔑 It iterates [`screens::Screen::ALL`] rather than a copied list, so a screen added
+    /// tomorrow is covered the day it exists — an enumeration would go stale exactly when the
+    /// eleventh screen lands.
+    ///
+    /// ⚠️ A lazy pool is enough BECAUSE the refusal happens in the layer, above every handler:
+    /// no request here ever reaches the database. A 200 would mean the layer was bypassed.
+    #[tokio::test]
+    async fn every_screen_is_refused_without_a_credential() {
+        let mut checked = 0_usize;
+        for path in screens::Screen::ALL
+            .iter()
+            .map(|screen| screen.href())
+            .chain(["/"])
+        {
+            let app = app(lazy_pool(), config(false, Some(pair())));
+            let response = app
+                .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::UNAUTHORIZED,
+                "{path} must answer 401 without a credential — a 200 here means the route sits \
+                 below `auth_deny`, or that `is_public` has been widened to admit it"
+            );
+            assert_eq!(
+                www_authenticate(&response).as_deref(),
+                Some(CHALLENGE),
+                "{path} must carry the challenge"
+            );
+            checked += 1;
+        }
+        assert_eq!(
+            checked, 11,
+            "the premise: ten screens plus `/` ({checked} probed) — a loop that went empty \
+             would assert nothing"
+        );
     }
 
     /// A valid credential REACHES a formerly-public page: anything but 401, and never the
@@ -1051,6 +1188,36 @@ mod tests {
         assert_eq!(config.basic, None);
     }
 
+    /// A perimeter with nothing VISIBLE in it counts as unset, invisible characters included.
+    ///
+    /// 🔴 Written after the code review measured the hole: `"\u{200B}".trim().is_empty()` is
+    /// `false`, so a zero-width space passed the emptiness filter and the navigation footer
+    /// rendered a label followed by nothing — the very *"blank rather than named"* outcome AC1
+    /// exists to forbid, reached through a channel neither the story nor its validation saw.
+    ///
+    /// 🔑 The two halves are asserted together on purpose: a filter that rejects everything
+    /// would satisfy the first half alone, and a real CIDR must still survive.
+    #[test]
+    fn a_perimeter_with_no_visible_glyph_counts_as_unset() {
+        for blank in ["", " ", "\t", "\u{200B}", " \u{FEFF}\u{2060} ", "\u{00AD}"] {
+            let config = AppConfig::from_env(lookup_of(&[("OPENCMDB_SCAN_CIDR", blank)]))
+                .expect("a blank perimeter is not a boot error, only an unset one");
+            assert_eq!(
+                config.scan_cidr, None,
+                "{blank:?} carries no visible glyph, so the footer must say `not configured` \
+                 rather than render a label with nothing after it"
+            );
+        }
+        let configured = AppConfig::from_env(lookup_of(&[("OPENCMDB_SCAN_CIDR", "192.0.2.0/24")]))
+            .expect("valid");
+        assert_eq!(
+            configured.scan_cidr.as_deref(),
+            Some("192.0.2.0/24"),
+            "and a real perimeter still reaches the surface — a filter that rejects everything \
+             would pass the half above and destroy the feature"
+        );
+    }
+
     #[test]
     fn a_half_configured_pair_is_a_boot_error_in_both_directions() {
         let missing_password = AppConfig::from_env(lookup_of(&[("OPENCMDB_BASIC_USER", "op")]));
@@ -1249,10 +1416,41 @@ mod tests {
         // directly, no env mutation, so no interaction with `DB_TEST_LOCK`'s env-free rule.
         // ⚠️ This is the ONE pre-6.1 test the visibility change breaks, and it breaks only
         // where `DATABASE_URL` exists (CI) — a green local suite says nothing here.
-        let response = app(pool, config(false, Some(pair())))
+        // 🔴 Story 6b.2 made `/` a redirect, so this test now covers BOTH halves — and it is the
+        // SECOND time it is the sole casualty of a decision about `/`, which the comment above
+        // recorded for the first. The redirect first:
+        let redirect = app(pool.clone(), config(false, Some(pair())))
             .oneshot(
                 Request::builder()
                     .uri("/")
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "s3cret"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            redirect.status(),
+            StatusCode::SEE_OTHER,
+            "`/` sends the operator to the triage screen rather than being one"
+        );
+        assert_eq!(
+            redirect
+                .headers()
+                .get(axum::http::header::LOCATION)
+                .and_then(|value| value.to_str().ok()),
+            Some("/triage"),
+            "and the target is the FED screen, not the mixed dashboard"
+        );
+
+        // Then the screen it points at, which must still show the real gap.
+        let response = app(pool, config(false, Some(pair())))
+            .oneshot(
+                Request::builder()
+                    .uri("/triage")
                     .header(
                         axum::http::header::AUTHORIZATION,
                         basic_header("op", "s3cret"),

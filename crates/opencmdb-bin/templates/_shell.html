@@ -1,0 +1,30 @@
+{#- The frame every screen renders inside: the mock's header, its grouped navigation, and a
+     main column the screen fills.
+
+     The header is the mock's three static slots. It carries NO perimeter and NO last
+     observation — those are the nav footer's and story 6b.5's respectively — and the version
+     comes from the crate rather than from a literal, so a release day cannot make it lie. -#}
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>opencmdb {{ title_separator }} {{ title }}</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/vendor/htmx-2.0.4.min.js" defer></script>
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">opencmdb</span>
+    <span class="tagline">{{ s.tagline }}</span>
+    <span class="version mono">v{{ version }}</span>
+  </header>
+  <div class="shell">
+    {% include "_nav.html" %}
+    <main class="screen">
+      {{ body|safe }}
+    </main>
+  </div>
+</body>
+</html>

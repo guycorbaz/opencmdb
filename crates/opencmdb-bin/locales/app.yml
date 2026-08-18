@@ -113,3 +113,54 @@ cause.no_observed_value:
 cause.conflicting_observations:
   en: "Conflicting observations"
   fr: "Observations contradictoires"
+
+# ── The shell: navigation and header (story 6b.2) ──────────────────────────
+# The French labels are the reference mock's, character for character.
+nav.label:
+  en: "Screens"
+  fr: "Écrans"
+nav.perimeter:
+  en: "Perimeter"
+  fr: "Périmètre"
+nav.perimeter_unset:
+  en: "not configured"
+  fr: "non configuré"
+nav.group.loop:
+  en: "Loop"
+  fr: "Boucle"
+nav.group.inventory:
+  en: "Inventory"
+  fr: "Inventaire"
+nav.group.machine:
+  en: "Machine"
+  fr: "Machine"
+nav.triage:
+  en: "Triage"
+  fr: "Triage"
+nav.dashboard:
+  en: "Dashboard"
+  fr: "Tableau de bord"
+nav.devices:
+  en: "Devices"
+  fr: "Appareils"
+nav.device:
+  en: "Device record"
+  fr: "Fiche appareil"
+nav.apps:
+  en: "Applications"
+  fr: "Applications"
+nav.ipam:
+  en: "IPAM"
+  fr: "IPAM"
+nav.sources:
+  en: "Sources"
+  fr: "Sources"
+nav.alerts:
+  en: "Alerts"
+  fr: "Alertes"
+nav.diagnostic:
+  en: "Self-diagnostic"
+  fr: "Auto-diagnostic"
+nav.onboarding:
+  en: "Commissioning"
+  fr: "Mise en service"

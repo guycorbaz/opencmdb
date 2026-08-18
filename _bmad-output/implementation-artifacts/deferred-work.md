@@ -3657,3 +3657,206 @@ headless browser and a live `mariadb:10.11.11`._
   the story carried the prescription, and it was not run.** A prescribed check that nobody executes
   is worth exactly as much as no check. **Owner: Epic 6b's retrospective** — the question is not the
   two rows but why a story that names this defect class twice still commits it.
+
+## Deferred from: story 6b.2's contexting (2026-08-18)
+
+_Guy's governing arbitration was **the mock prevails**, taken on 2026-08-18 before any code. Each row
+below is a consequence of that sentence, recorded rather than absorbed — a story may not edit
+`epics.md` or the UX spec._
+
+- 🔴 **UX-DR33's Topology entry is RETIRED by the mock.** `epics.md:278` records a six-entry
+  left-nav — *"Inbox · Dashboard · Devices · IPAM · Applications · **Topology**"* — while the mock
+  carries **ten entries in three groups** and **"Topologie" appears ZERO times in its 496 KB** (all
+  four spellings checked). The epic's own AC for story 6b.2 says ten, so the mock wins; what must not
+  be silent is the retirement. 🔑 Read it precisely: UX-DR33's own sentence already calls interactive
+  graphical topology **Growth**, so what is lost is a nav entry to a screen no epic in this plan
+  builds — neither a feature nor an oversight. **Owner: Epic 6b's retrospective.**
+
+- 🔴 **`epics.md`'s header for story 6b.2 asks for four things and three ship.** The AC reads
+  *"the header (brand, tagline, perimeter, last observation)"*; the mock's header is brand, tagline
+  and a version string, and Guy took the mock. 🔑 **The arbitration did not resolve the collision
+  between that AC and the epic's own constraint 1 — it DISSOLVED it**: with no *last observation*
+  there is no `MAX(observed_at)`, so the shell reads nothing and *"no demo screen opens a
+  connection"* holds structurally rather than by discipline. ⚠️ The two facts are **unplaced, not
+  lost**: the perimeter is a commissioning fact (**owner: story 6b.9**) and the last observation a
+  dashboard one (**owner: story 6b.5**). **Owner of the `epics.md` divergence: Epic 6b's
+  retrospective.**
+
+- ⚠️ **`/device` addresses no device, and the story's own AC promises bookmarkability.** The mock
+  carries *Fiche appareil* as a nav peer of *Appareils* — a click-through artefact that shows the
+  screen without a device existing. Guy: do as the mock does for now. The honest shape is
+  `/devices/{id}`, which needs an id, which needs 6b.3's example dataset or Epic 6's real devices.
+  **Owner: story 6b.6** (*Inventory and device record*), where the screen gains content and the
+  choice becomes concrete.
+
+- ⚠️ **The `/` redirect target is to be re-examined when the dashboard stops being mixed.** `/`
+  redirects to `/triage` because `epics.md` makes 6b.4's triage the screen fed by the REAL gap while
+  6b.5's dashboard is mixed by construction (the real reach section beside example stat cards and
+  sparklines) — and the person who installs the product arrives at `/`, which is exactly whom the
+  change proposal's marker defends. Guy's preference is the dashboard on the ordinary
+  admin-tool convention, and it becomes the right answer once the dashboard is mostly fed.
+  🔑 The re-examination is cheap **because the redirect is separate from the screen**: its target is
+  one line. **Owner: story 6b.5.**
+
+- ⚠️ **The bookmark sweep.** `/` stops being the reconciliation card. `README.md`, both LaTeX manuals,
+  the `gh-pages` landing site and `docker/README.dockerhub.md` all point at it. A 303 keeps every
+  link working, so nothing breaks — but the documents describe a one-page product and will be wrong
+  in substance. **Owner: story 6b.12** (the release story, which already owns the docs sweep).
+
+- 🔑 **The Tailwind chain row is RE-OWNED again, and its criterion is sharpened.** Story 6b.1
+  registered it to 6b.2 on *"the first screen story that writes a utility class"*. 6b.2 is that
+  story and writes none: Guy chose hand-authored again, the shell being of the order of ten rules.
+  **The criterion becomes *"the first story that needs a utility the hand-authored sheet cannot
+  express"*** — plausibly 6b.4 or 6b.6. All four measured spellings stay attached to the original
+  row above; the sharpest for whoever lands it is that **preflight ALONE changes ten computed styles
+  and collapses the first-boot `<h1>`**. ⚠️ *A criterion that names a story rather than a condition
+  will be wrong the moment the story arrives and the condition has not.*
+
+- 🔴 **The nav footer's LAST OBSERVATION, and the correction of a false premise.** Story 6b.2 first
+  told Guy that the perimeter and the last observation were **not in the reference**, and arbitration
+  2 was taken on that basis. **Both are in the mock**, in the sticky footer of the `<nav>` — part of
+  the shell, therefore on all ten screens: *"Périmètre 192.168.10.0/24 · Dernière observation il y a
+  4 min"*. The story's §1 called its extraction *"verbatim"* and omitted that block; the code
+  review's fact-check layer found it. 🔑 **Re-arbitrated on the corrected measurement (Guy,
+  2026-08-18): the perimeter ships** (it comes from configuration, so it costs no database read and
+  `OPENCMDB_SCAN_CIDR` moves into `AppConfig` per story 6.1's parameter rule), **and the last
+  observation waits** — it is a `MAX(observed_at)`, the only one of the two that touches epic
+  constraint 1. **Owner: story 6b.5**, whose dashboard already carries the reach section, the same
+  family of fact. ⚠️ *The arbitration stands; the reason this story first gave for it was false, and
+  a decision explained by a false premise is one nobody can re-derive.*
+
+- ⚠️ **The six-entry nav is prescribed in THREE places, not one.** The row above about UX-DR33 cites
+  `epics.md:278`; the UX spec says the same thing twice more, at **`:836-838`** and **`:1308`**.
+  A retrospective acting on one citation would correct one document of three. **Owner: Epic 6b's
+  retrospective**, together with the Topology row.
+
+- ⚠️ **The header gains a slot `epics.md` never asked for.** Its AC names four things (brand,
+  tagline, perimeter, last observation); what ships is brand + tagline in the header, the perimeter
+  in the nav footer, the last observation deferred — **plus a version string**, which is the mock's
+  and which no AC requests. Harmless and useful, but it is a divergence and it is recorded rather
+  than assumed. **Owner: Epic 6b's retrospective.**
+
+- ⚠️ **Two UX-spec prescriptions this epic's mock does not satisfy, found while validating 6b.2 and
+  belonging to no story yet**: `ux-design-specification.md:841` requires the left nav to *"collapse
+  to a bottom bar / drawer on mobile"*, and the mock has **zero `@media` rules**; and its nav entries
+  are ~30px tall (`padding: 7px 10px; font-size: 14px`) against **NFR24's ≥44px touch targets**.
+  Neither is 6b.2's to fix — it builds the desktop shell the mock defines — but both are real and
+  neither was registered. **Owner: story 6b.11** (the keyboard and focus contract, the epic's
+  accessibility story) for the touch targets, **Epic 6b's retrospective** for the responsive
+  prescription the reference silently drops.
+
+- 🔴 **Nobody owns axe-core on the ten routes, and the epic's own DoD requires it.** `epics.md:2113`
+  sets Epic 6b's Definition of Done as *"the a11y keyboard+focus gate … **axe-core green on the ten
+  routes**, and `cargo xtask ci` green"*. The ten routes come into existence in story 6b.2 and **no
+  story in the twelve-story breakdown owns running axe-core over them** — 6b.2's T6 is *"look at all
+  ten screens in a browser"*, which is not a checker. 🔑 It matters more than a missing chore:
+  story 6b.2's AC3 guard was measured to miss two withholding gestures — `display:none` written in
+  the STYLESHEET and `pointer-events:none` — and **closing those needs computed styles, which is
+  exactly what axe-core/Playwright provides**. The a11y obligation and the honesty guard's blind spot
+  are the same gap. **Owner: story 6b.11** (the keyboard layer and focus contract) or the epic's DoD
+  as a whole — **to be decided at the retrospective if 6b.11 does not take it.**
+
+- ⚠️ **The mock is desktop-only, and the UX spec mandates three breakpoints.** Measured: the mock has
+  **zero `@media` rules** and **zero skip links**, and is a fixed `grid-template-columns: 208px
+  minmax(0,1fr)`. The UX spec (`:1530-1545`, `:1568`) mandates mobile-first with breakpoints at
+  ≤360 / 768 / 1280, a mobile bottom nav with a permanent search magnifier, and skip links; `:841`
+  requires the left nav to collapse to a bottom bar or drawer. 🔴 **"The mock prevails" is unbounded
+  as Guy stated it, and applied to responsive it means shipping a desktop-only shell** — a fourth
+  collision of the same family as the nav, the header and `device`, which story 6b.2's contexting did
+  not raise. ✅ **ARBITRATED by Guy on 2026-08-18: not now, we will see later.** The shell ships
+  desktop-only, as the mock has it — so this is **deferred by decision**, not pending an owner. It is
+  scoped when someone opens the product on a telephone, or when story 6b.12 has to describe the
+  release's limits. ⚠️ **NFR24's ≥44px touch targets are NOT covered by this deferral** — a touch
+  target is not a breakpoint, and that obligation stays with story 6b.11.
+
+## Discharged by story 6b.2 (2026-08-18)
+
+- ✅ **The four documents describing a Tailwind chain that does not exist** (row `:3608`, owner
+  story 6b.2) — **DISCHARGED**. `.gitignore:40`, `xtask/Cargo.toml:2-3`, `CLAUDE.md`'s stack line and
+  `docs/project-context.md:279` now say that `app.css` is hand-authored and that the chain is
+  deferred, pointing here for the four spellings. ⚠️ `xtask/Cargo.toml` also announced a
+  `cargo xtask recapture` that does not exist; that sentence is corrected in the same pass and
+  verified against `main.rs`, which dispatches `ci` alone.
+
+- ✅ **`assets/` as a public unauthenticated namespace** (row `:3616`, owner story 6b.2) — **DECIDED
+  rather than inherited, and the decision is: it stays as it is.** The row asked the question
+  because D55's prescribed tree would put the Tailwind build INPUT inside the embed folder, where it
+  would ship and be publicly readable. **The chain is deferred again, so no build input exists to
+  ship** — and everything `assets/` currently holds is meant to be fetched by an unauthenticated
+  browser: the stylesheet, the fonts, htmx, `app.js`. 🔑 The decision is therefore *the namespace is
+  correct for what it holds today*, and the obligation moves WITH the chain: **whoever lands
+  `tailwind.css` must place it outside `assets/` or state that shipping it is accepted.** Re-owned to
+  the Tailwind row rather than left as a standing question.
+
+- ✅ **The radius branch** (row `:3641`, owner story 6b.2) — **TAKEN, and it is the mock's.** The row
+  demanded a choice: the mock's 2/4/7px scale, or the UX spec's `3px` everywhere with the three
+  tokens deleted. Story 6b.2 is the first story to build a screen from the scale, and its navigation
+  entries use **`var(--radius-sm)`** — so the mock's scale now has a consumer and the tokens are no
+  longer dead weight. ⚠️ The UX spec's *"Radius `3px` everywhere"* (`:839`) is therefore **diverged
+  from by decision**, consistent with Guy's *"the mock prevails"*, and the four pre-existing
+  `border-radius: 3px` literals in `app.css` are left alone rather than churned — they belong to the
+  card and the buttons, which no story has revisited. **Owner of the spec sentence: Epic 6b's
+  retrospective.**
+
+## Deferred from: code review of story 6b.2 (2026-08-18)
+
+Three layers on a different model, each in its own git worktree so their mutations could not
+collide. Nine findings; Guy scoped the repair to the three HIGH, and these are the rest.
+
+- ⚠️ **`_version`'s exclusion in `every_key_carries_both_locales` is a branch that cannot be
+  reached, and its comment states a false cause** (`screens.rs`, the `|| key == "_version"`
+  clause). The scanner recognises a key only through `strip_suffix(':')`, and `_version: 2` ends
+  in `2` — so `key` is never `"_version"` at the flush. **Measured both ways**: the clause deleted,
+  the test stays green; and `grep -cE "^[A-Za-z_][A-Za-z0-9_.]*:\s*$"` counts **47**, which is
+  where the 47 really comes from. No behavioural defect — a plausible cause written where the true
+  one is elsewhere, which is the house's own definition of a defect. **Owner: Epic 6b's
+  retrospective**, or whichever story next touches that guard.
+
+- ⚠️ **AC6's text says *"13 new keys"* and the story added 16** (`nav.label`, `nav.perimeter`,
+  `nav.perimeter_unset`, three groups, ten screens; 32 → 48 entries). The Dev Agent Record 400
+  lines below gives the right figure, so the record is correct and the criterion is not — a
+  document falsified inside its own file, the class this project has caught in six consecutive
+  stories. **Owner: Epic 6b's retrospective** (a story may not edit an AC).
+
+- ⚠️ **`Screen::ALL` is a literal array and the compiler does not check it for exhaustiveness.**
+  `href`, `label_key` and `group` are `match`es and DO red on a new variant (measured: three
+  `E0004`), but a variant wired into all three and left out of `ALL` disappears silently from both
+  the navigation and the routing. **Not confirmed**: it was not measured whether `dead_code` under
+  `-D warnings` catches it. **Owner: story 6b.6**, the next story to add a screen.
+
+- ⚠️ **`.wrap` in `app.css` has no consumer** since `gap.html` was deleted — its only user was that
+  file's `<main class="wrap">`. Orphan rule, no impact, and **no guard detects dead CSS at all**.
+  **Owner: story 6b.12**, with the release sweep.
+
+- 🔴 **Eleven of the eighteen prescribed mutations were never re-executed** (M4, M5b, M6, M8–M11,
+  M13–M15). M12 was reported as an isolated incident; the review measured that it is not — it is a
+  whole section of the table left unplayed, and **M7 is the second one that was hiding a real hole**
+  (closed today). ⚠️ The transferable half is that *"the logic looks like it holds"* is what was
+  substituted for execution, twice, in a story whose own table said M7 could not be believed until
+  the guard was widened. **Owner: Epic 6b's retrospective** — this is a method finding, not a code
+  one.
+
+- ⚠️ **`AppConfig` filters emptiness without trimming what it stores**, so a perimeter padded with
+  ordinary spaces reaches the footer with them. Measured as **pre-existing rather than a 6b.2
+  regression**: `OPENCMDB_BASIC_USER`/`PASSWORD` carry the same shape and predate this story. The
+  invisible-glyph half is CLOSED by this review (`carries_a_visible_glyph`); the trimming half is
+  not. **Owner: Epic 19**, with the other credential-handling rows.
+
+- ⚠️ **Nine of the ten screens render an empty `<main>` with nothing saying so.** Nothing promises
+  an absent gesture — the auditor checked the templates for that specifically and found none — but
+  between this merge and story 6b.3 the product reads as nine broken screens rather than nine
+  deliberate placeholders. ⚠️ **The sharpest case is `/device`**: the entry is called *"Fiche
+  appareil"*, it addresses no particular device, and the source says so where the operator cannot
+  see it. **Already owned by story 6b.3** (the example-data marker) and **6b.6** (`/devices/{id}`);
+  recorded here so the delay between the two is a known cost rather than a discovery.
+
+- ✅ **Two limits the story had DECLARED were re-measured and hold**: a `display: none` on one
+  `.nav-entry` escapes every textual guard (AC3's stated blind spot), and a second reader of the
+  perimeter split across two lines escapes `the_perimeter_has_a_single_reader`. Both stay stated
+  limits, not findings — recorded because a declared limit that nobody re-measures becomes a claim.
+
+- ✅ **Three suspicions were REFUTED by measurement and are recorded with their refutation**: the
+  perimeter is not an HTML-injection vector (askama escapes it, `<script>` neutralised); a renamed
+  or deleted template fails the **build**, not merely the tests (`{% include %}` resolves at macro
+  expansion); and dropping the `continue` on `Screen::Triage` makes axum panic at router
+  construction (*"Overlapping method route"*, 12 tests red) rather than double-registering silently.

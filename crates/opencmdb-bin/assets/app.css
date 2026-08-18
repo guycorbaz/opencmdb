@@ -295,3 +295,62 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ── The shell (story 6b.2) — the mock's frame ──────────────────────────────
+   Desktop-only by Guy's arbitration of 2026-08-18: the mock has no `@media` rule and no skip
+   link, and the responsive prescriptions of the UX spec are deferred by decision, registered.
+   ⚠️ Nothing here reaches for --accent-document: story 6b.1 reserves the amber for the
+   documenting gesture and pins its use at zero until story 6.4. The current entry and the focus
+   ring use the mock's structural blue and its neutrals, which is what the mock does too. */
+.topbar .version { margin-left: auto; font-size: 11px; color: var(--muted); }
+
+.shell {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  align-items: start;
+}
+
+.nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 20px 12px;
+  border-right: 1px solid var(--border);
+  min-height: calc(100vh - 49px);
+}
+.nav-group {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 18px 10px 8px;
+}
+.nav-group:first-child { padding-top: 0; }
+
+.nav-entry {
+  display: block;
+  padding: 7px 10px;
+  text-decoration: none;
+  font-size: 14px;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+}
+.nav-entry:hover { background: var(--color-neutral-200); }
+.nav-entry[aria-current="page"] {
+  background: var(--color-neutral-200);
+  color: var(--color-accent);
+  font-weight: 500;
+}
+.nav-entry:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+
+.nav-footer {
+  margin-top: auto;
+  padding: 16px 10px 0;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.screen { padding: 24px; max-width: 980px; }
