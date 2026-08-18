@@ -1,6 +1,6 @@
 # Story 6b.1: The design system — tokens, typography, and the accent that stays reserved
 
-Status: review
+Status: done
 
 Epic: 6b — *L'interface de la maquette* (inserted 2026-08-13 by correct-course,
 `sprint-change-proposal-2026-08-13.md`). **First story of the epic**, so `epic-6b` moves to
