@@ -324,155 +324,145 @@ it is a FEATURE: the guard was built to notice exactly this.
 Substring matching means `--accent-document`.contains(`--accent`) stays `true`, so the rename does
 **not** silently green it; but T4 touches it and AC4 must not pretend otherwise.
 
-## 7. 🔴 THE QUESTION FOR GUY, and the validation made it a different question
+## 7. ✅ ARBITRATED BY GUY, 2026-08-18 — option (1): the tokens now, the chain later
 
-The draft asked whether to split the story in two: **A**, the CSS chain, and **B**, the design
-system. The gap-hunt layer, by BUILDING the chain, turned that into a prior question:
+The draft asked whether to split the story A/B. The gap-hunt layer, by BUILDING the chain, turned
+that into a prior question — **what does the Tailwind chain buy this product today?** — and the
+measurements answered it:
 
-> **What does the Tailwind chain buy this product today?**
+- the intersection between the classes the UI uses and the utilities Tailwind generates is
+  **empty** (§6): all 20 generated ones are false positives from Rust identifiers;
+- the `@source` trap D55 was written around **no longer exists** on v4.3.3 (§1b);
+- auto-detection makes the shipped stylesheet **a function of the repository's Markdown** unless
+  `source(none)` is written;
+- `@theme` **strips every token no utility references**, so the mock's ramps need `@theme static`;
+- preflight **breaks the first-boot screen** unless two narrower imports are used (§6b).
 
-Measured, not supposed: the intersection between the classes the UI uses and the utilities Tailwind
-generates is **empty** (§6); the `@source` trap the decision was written around **no longer exists**
-in v4.3.3 (§1b); auto-detection makes the shipped stylesheet **a function of the repository's
-Markdown** unless `source(none)` is written (HIGH-2 below); `@theme` **strips every token no utility
-references**, so the mock's ramps and `--accent-document` need `@theme static` to survive at all;
-and preflight **breaks the first-boot screen** unless two narrower imports are used (§6b).
+**Guy's decision: option (1).** The sheet stays **hand-authored**, on the mock's tokens; the chain
+waits for the first story that writes a utility. 🔑 *The mock's look does not depend on Tailwind —
+its tokens are CSS custom properties, which is what `app.css` already is.* The chain's value is
+real and arrives with the first screen written in utilities; landing it today would ship three
+undocumented spellings, one gate over an empty set, and a stylesheet coupled to the docs tree, to
+generate nothing the page uses.
 
-**Three options, each with its measured cost:**
+**Refused, and why, so the decision can be re-read later:** option (2) (everything as written) —
+all of the above for no present yield; option (3) (chain + rewrite both templates in utilities) —
+it is the only option where the chain earns its keep immediately, and it contradicts this story's
+own *"ships no screen"* while doing 6b.2/6b.4's work early. **D55 is NOT questioned**: `xtask css`
+never `build.rs` holds whenever the chain lands. What the measurement questions is the DATE.
 
-| | What is done | Cost measured |
-|---|---|---|
-| **(1)** | **Tokens now, chain later** — hand-author the sheet on the mock's tokens, keep the `.mono`/`.card`/… families, defer `cargo xtask css` to the first screen story (6b.2) that writes a utility | AC1/AC5/AC6 leave this story; five documents keep describing an absent chain one story longer; **zero risk to the shipped page** |
-| **(2)** | **The whole thing as written** — chain + tokens, with `source(none)`, `@theme static` and no preflight | three spellings D55 does not contain; a gate over an empty set; `app.css` regenerated from a `tailwind.css` that is hand-authored CSS in an `@import` |
-| **(3)** | **Chain + rewrite the two templates in utilities** | the chain earns its keep; **contradicts this story's own *"ships no screen"*** and does 6b.2/6b.4's work early |
+### 7b. What leaves this story, and where it goes
 
-**My reading, stated as a recommendation and not as a decision: (1).** The chain's value is real
-but it arrives with the first screen written in utilities, and today it would ship three
-undocumented spellings, one empty gate and a stylesheet coupled to the docs tree — to generate
-nothing the page uses. **The mock's look does not depend on Tailwind**; the tokens are CSS custom
-properties, which is what `app.css` already is.
+**AC1, AC5 and AC6 are withdrawn** — they are the chain's criteria. They go to **story 6b.2**, the
+first screen story, which is where a utility class first gets written. Registered in
+`deferred-work.md` **with the five measurements above attached**, because the next reader must not
+re-derive them:
 
-⚠️ **This is Guy's call, and the A/B split question survives inside option (2).** D55 is not being
-questioned — `xtask css` never `build.rs` holds whenever the chain lands. What the measurement
-questions is the DATE, not the decision.
+| Carried forward | Why it matters to 6b.2 |
+|---|---|
+| `@import "tailwindcss" source(none)` | without it there is no `@source` gate to write, and CI reds on docs commits |
+| `@theme static` | plain `@theme` strips the tokens |
+| `tailwindcss/theme` + `tailwindcss/utilities`, **never** the full import | preflight breaks the first-boot screen |
+| the htmx entries can never be generated | a `≥ 1` gate over them reds for ever |
+| D55's trap narrative is stale on v4.3.3 | the decision holds, its example does not |
+
+⚠️ **The five documents of §1 keep describing an absent chain one story longer.** That is this
+option's stated cost, accepted rather than hidden — and it is now a register row rather than a
+surprise.
 
 ## Acceptance Criteria
 
-Derived from `epics.md:2110-2130`, each one made measurable. **AC numbering is this story's own.**
-The epic's four bullets map to **AC2 · AC4 · AC3 · AC5** — tokens+fonts, the reserved accent, the
-light/dark swap, the Rust-built classes. ⚠️ **AC1, AC6, AC7, AC7b and AC8 are this story's OWN
-additions and derive from no epic bullet** — AC1 because §1 measured the chain absent, AC6/AC7
-because a generated sheet replacing a hand-authored one is a regression risk the epic never
-considered, AC7b from register row (i). *(The first draft mapped the four bullets to
-AC2/AC4/AC6/AC7, which is wrong for half of them.)*
+Derived from `epics.md:2110-2130`, each made measurable, **and scoped by Guy's arbitration of §7**.
+The epic's four bullets map to **AC2 · AC4 · AC3 · (AC5, withdrawn)**. AC7, AC7b and AC8 are this
+story's own additions.
 
-**AC1 — the chain exists and is nobody's dependency.**
-`cargo xtask css` regenerates `crates/opencmdb-bin/assets/app.css` from `assets/tailwind.css` using
-the **pinned standalone Tailwind binary** (v4.3.3, released 2026-07-16 — `tailwindcss-linux-x64`,
-and `-musl` for the distroless/static-musl image of story 3.9). **No `build.rs` is added** (D55), the
-binary is not committed (`.gitignore:44-47` already ignores it), and `cargo build` on a machine
-without it still succeeds. A test or gate asserts `xtask` is in nobody's dependency graph — D56's
-existing rule, which must not regress when `xtask` gains a subcommand.
+🔴 **AC1, AC5 and AC6 are WITHDRAWN to story 6b.2** (§7b) — they are the Tailwind chain's criteria
+and the chain does not land here. **They are not deleted: they are re-owned, with their
+measurements.**
+
+**AC1′ — no chain is built, and the documents say so.**
+`cargo xtask css` is **not** added, no Tailwind binary is pinned, `assets/tailwind.css` is not
+created. `app.css` stays **hand-authored** — and its header, which today says *"No Tailwind build
+step for the walking skeleton"*, is rewritten to say what is true after this story: hand-authored on
+the mock's tokens, with the chain owed by 6b.2. ⚠️ The four other documents of §1 are **registered,
+not edited** (a story does not touch the planning artifacts).
 
 **AC2 — the palette and the typefaces are the mock's.**
-🔴 **Under option (2) this requires `@theme static`.** Measured: plain `@theme` **strips every
-variable no utility references** — ten declared tokens, `--color-bg`, `--dark-bg` and
-`--color-accent-document` among them, all absent from the output, which kept only the four font
-defaults. With `@theme static` they survive. Neither the story's draft nor D55 names that spelling.
-The sheet carries the mock's light base and the three ramps of §2, and
-**Barlow / Barlow Condensed are embedded** (five `.woff2` under `assets/fonts/`, from `jpt/barlow`,
-with `OFL.txt` beside them) and referenced by `@font-face` with **no external request** — asserted
-by a test that greps the generated CSS and every template for `http`, `//fonts.`, and `@import url(`.
+`app.css` carries the mock's light base and the three ramps of §2, and **Barlow / Barlow Condensed
+are embedded** — five `.woff2` under `assets/fonts/`, from `jpt/barlow`, with `OFL.txt` beside them
+— referenced by `@font-face` with **no external request**, asserted by a test that greps the sheet
+and every template for `http`, `//fonts.` and `@import url(`.
+⚠️ **Run every font measurement after `touch src/page.rs`**: `cargo build` does not see a new file
+under `assets/` and ships a fontless binary in silence (§3, measured).
 
 **AC3 — light renders, dark stays unreferenced.**
 `data-theme="dark"` is gone from `gap.html`; the dark token set is still present in the sheet and
 **referenced by nothing** — asserted in both directions, because *"still present"* and *"unused"*
-are two claims and one of them is the one that rots.
-🔴 **The draft predicted the WRONG half.** Measured by writing both assertions and mutating: M7
-(delete the dark block) **reds** — the *"still present"* half is carried, and its red is
-`.expect()`-carried, which must not be recorded as assertion-carried (this project's recurring
-mis-classification, four prior occurrences). **M7b — a live rule reading a token defined only in the
-dark block — is GREEN**, and it is a direct violation of *"referenced by nothing"*. M6 checks the
-TEMPLATE; **nothing checks the SHEET.** The second direction must be written to red on M7b before
-this AC may be ticked.
-⚠️ Under plain `@theme` this AC is a **logical contradiction** (present ⟺ referenced). See AC2.
+are two claims and one of them rots.
+🔴 **The second direction is the one carried by nothing, measured**: M7 (delete the block) reds, but
+**M7b — a live rule reading a token defined only in the dark block — is GREEN**. M6 checks the
+TEMPLATE; nothing checks the SHEET. **This AC may not be ticked until an assertion reds on M7b.**
+⚠️ M7's red is `.expect()`-carried and must not be recorded as assertion-carried.
 
 **AC4 — the accent means the gesture and nothing else.**
-`--accent-document` (`#d99a4e`) is used by the documenting gesture only. The two current `--accent`
-consumers that are structure (refresh border, focus outline — `app.css:70,76`) use the blue.
-🔴 A test asserts `--accent-document` appears **exactly** where the gesture is and nowhere else;
-today the gesture's own surface does not exist yet (story 6.4), so the honest assertion is
-**zero non-gesture uses**, and it must be written so that it still means something when 6.4 adds
-the first legitimate one.
+`--accent-document` (`#d99a4e` dark / `#b5793a` light) is used by the documenting gesture only. **All
+six sites of §4's table move**: both definitions renamed, and the four structural `var(--accent)`
+uses (`.card:focus`, `.refresh` colour, border and hover) take the blue.
+A test asserts **zero non-gesture uses** — written so it still means something when story 6.4 adds
+the first legitimate one. ⚠️ `page.rs:1163` reads the literal `--accent`; substring matching keeps it
+honest through the rename, but T4 touches it and this AC must say so.
 
-**AC5 — the classes built in Rust survive the build.** ⚠️ **Applies only under option (2)/(3), and
-its second half is UNSATISFIABLE as written.**
-The gate regenerates into a temp file, compares against the committed `app.css`, and asserts every
-Rust-built class is present in the OUTPUT. 🔴 *"It reds when an `@source` path is wrong"* is
-**refuted**: on v4.3.3 the correct path, the wrong path and no `@source` at all produce the same
-bytes (§1b). It can only hold under `@import "tailwindcss" source(none)`.
-⚠️ And today the guarded set is **empty** (§6): no template class is a utility. The htmx entries of
-D55's example can never be generated and must not sit in a `≥ 1` gate.
-
-**AC6 — the committed CSS and the generated CSS are the same bytes.**
-`cargo xtask ci` reds if `app.css` is stale. This is what makes AC1's *"committed, not built"* safe.
-🔴 **Requires `source(none)`, or every docs-only commit reds CI.** Measured: with auto-detection on,
-appending one sentence containing `grid-cols-3` and `p-4` to a **planning document** adds two rules
-to the shipped stylesheet — and `.top-3` in today's output traces to `competitive-analysis.md`. **The
-product's CSS becomes a function of its prose.** Immunised by `source(none)` and by nothing else.
-
-**AC7 — the page still renders and still says the same things.**
-The existing gap page's behaviour is unchanged: same routes, same strings, same i18n keys, the
-identity-reach pair of story 5.14b intact. **No template gains or loses a sentence.**
-🔴 **Under option (2)/(3) this means: DO NOT IMPORT PREFLIGHT.** Measured in a browser — preflight
-alone changes **ten** computed styles, nine paragraphs losing their margins and the first-boot
-`<h1>` collapsing from 28 px/700 to 14 px/400. With `@import "tailwindcss/theme"` +
-`"tailwindcss/utilities"` the diff is **empty**. The oracle for this AC is a computed-style diff,
-not a page that "looks fine".
+**AC7 — the page still says the same things, and its look changes ON PURPOSE.**
+Routes, strings, i18n keys and story 5.14b's identity-reach pair are unchanged; **no template gains
+or loses a sentence**. 🔑 The oracle is **behavioural, not visual** — the colours, the typefaces and
+the theme change by design, so a computed-style diff is the WRONG oracle here (it is the right one
+for 6b.2, where preflight arrives; recorded there).
+⚠️ `page.rs:1163`'s `block.len() >= 4` premise over `.identity` must still hold — under option (1)
+it does, the component rules staying where they are. **Check it rather than assume it.**
 
 **AC7b — the D37 filename drift is closed, because the register names THIS story as its owner.**
 `deferred-work.md` row **(i)**: the vendored asset is `htmx.min.js`, unversioned, where
 `architecture.md:3406` prescribes `htmx-<ver>.min.js` — *"COMMITTED, version in the filename. Never a
 CDN. (D37)"* — under `assets/vendor/`. **Owner: Epic 6b story 6b.1**, i.e. here. 🔑 This story is
-already rewriting what `assets/` contains and what the template links; doing it now costs one rename
-and one `<script src>`, and deferring it means touching the same two lines twice. ⚠️ It was absent
-from this story's first draft — **the second consecutive story to miss a `deferred-work.md` row that
-names it by number**, which is a finding about the reading, not about the row.
+already changing what `assets/` holds and what the template links; doing it now costs one rename and
+one `<script src>`. ⚠️ It was absent from the first draft — **the second consecutive story to miss a
+`deferred-work.md` row that names it by number**, a finding about the reading, not the row.
 
 **AC8 — the live test count lives HERE**, in this file, and is not copied into `CLAUDE.md`,
 `docs/project-context.md` or `sprint-status.yaml` (story 6.1's AC8 rule, F2).
 
----
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — the chain** (AC1, AC6)
-  - [ ] Pin Tailwind v4.3.3 standalone; document the download + checksum step in the xtask itself,
-        so a missing binary produces a NAMED refusal rather than a stack trace
-  - [ ] `xtask/src/css.rs` — `cargo xtask css` (its own module: `main.rs` is at **1894** code lines
-        against the 2000 ceiling — **106 lines of margin**, measured 2026-08-18 with the gate's own
-        rule, not copied from story 6.3, whose `1829` predates its own review repairs)
-  - [ ] `assets/tailwind.css` — `@import "tailwindcss"`, `@source "../templates/**/*.html"`,
-        `@source "../src/**/*.rs"`, `@source inline(...)`. **`../`, not `./`** (D55)
-  - [ ] Wire the staleness check into `cargo xtask ci`
-- [ ] **T2 — tokens** (AC2, AC3)
-  - [ ] Port §2's tokens into the theme; keep the dark set unreferenced
-  - [ ] Remove `data-theme="dark"` from `gap.html`
-  - [ ] Rewrite `app.css`'s header — it currently describes a hand-authored file
-- [ ] **T3 — typefaces** (AC2)
-  - [ ] Fetch the five `.woff2` + `OFL.txt` from `jpt/barlow`; place under `assets/fonts/`
-  - [ ] `@font-face` for the five faces; `--font-body` / `--font-heading` per the mock
-  - [ ] Assert no external font request from any template or the sheet
-- [ ] **T4 — the accent** (AC4)
-  - [ ] `--accent` → `--accent-document`; move the two structural uses to the blue
-  - [ ] Re-own story 6.1's register row (a) in `deferred-work.md`
-- [ ] **T5 — the guard** (AC5)
-  - [ ] Derive the Rust-built class list from the tree; fail on what it cannot classify
-- [ ] **T6 — regression** (AC7)
-  - [ ] Existing page tests green, unchanged; visual sanity via `/run` against a live DB
-- [ ] **T7 — prove-to-red** (below), predictions written BEFORE execution
+**Scoped to §7's option (1).** No Tailwind binary, no `tailwind.css`, no new xtask subcommand.
 
----
+- [ ] **T1 — tokens** (AC2, AC3, AC1′)
+  - [ ] Port §2's tokens into `app.css`; keep the dark set present and unreferenced
+  - [ ] Remove `data-theme="dark"` from `gap.html`
+  - [ ] Rewrite `app.css`'s header — it describes a walking-skeleton state this story ends
+- [ ] **T2 — typefaces** (AC2)
+  - [ ] Fetch the five `.woff2` + `OFL.txt` from `jpt/barlow` (`fonts/woff2/`); place under
+        `assets/fonts/`. ⚠️ `touch src/page.rs` before any build, or the embed is stale and silent
+  - [ ] `@font-face` for the five faces; `--font-body` / `--font-heading` per the mock
+  - [ ] Assert no external font request from the sheet or any template
+- [ ] **T3 — the accent** (AC4)
+  - [ ] Rename **both** definitions (`:12`, `:22`) to `--accent-document`
+  - [ ] Move the **four** structural uses (`:62`, `:77`, `:78`, `:83`) to the mock's blue
+  - [ ] Check `page.rs:1163` still holds
+- [ ] **T4 — D37** (AC7b)
+  - [ ] `htmx.min.js` → versioned filename under `assets/vendor/`; update `gap.html`'s `<script>`
+  - [ ] Mark register row (i) discharged
+- [ ] **T5 — the guards** (AC3, AC4, AC2)
+  - [ ] The AC3 second-direction assertion, **written to red on M7b** before it is believed
+- [ ] **T6 — regression** (AC7)
+  - [ ] Full suite against a live MariaDB; strings, routes and i18n keys unchanged
+  - [ ] Look at the page (`/run`) — the colour and typeface change is the point, and nobody has
+        seen it yet
+- [ ] **T7 — the register** (§7b)
+  - [ ] AC1/AC5/AC6 re-owned to 6b.2 **with the five measurements attached**
+  - [ ] The four other §1 documents, `epics.md:2108`'s stale *"seven gates"*, D55's stale trap
+        narrative, and the `assets/` public-namespace question
+- [ ] **T8 — prove-to-red**, predictions written BEFORE execution
 
 ## Prove-to-red — the mutations this story owes
 
@@ -480,30 +470,26 @@ House rule: predictions first, each red read from **its own panic message**, car
 and a mutation named for one thing must be applied to that thing (Epic 5's *"the mutation driver
 lies"* class, four recurrences).
 
+**Scoped to option (1).** The chain's mutations — M1/M1′, M2, M3, M10, M12 and the draft's M11
+(preflight) — **move to 6b.2 with their measurements**.
+
 | # | Mutation | Prediction |
 |---|---|---|
-| ~~M1~~ | `@source "./templates/**/*.html"` (the `./` trap) | 🔴 **NOT EXECUTABLE on v4.3.3 — refuted by measurement.** Correct path, wrong path and no `@source` all produce **one hash**. Executable only under `source(none)`, where it becomes M1′ |
-| M1′ | the same, with `@import "tailwindcss" source(none)` | the planted class disappears (measured 1 → 0); AC5's gate reds, the build stays green |
-| M2 | Delete one `@source inline(...)` entry | the gate reds naming the missing class — **only for theme-backed colours**; the htmx entries yield 0/3 in every configuration |
-| M3 | Edit `app.css` by hand without regenerating | AC6's staleness check reds |
-| M4 | Add `@import url(https://fonts.googleapis.com/...)` to the sheet | AC2's no-external-request test reds |
+| M4 | Add `@import url(https://fonts.googleapis.com/…)` to the sheet | AC2's no-external-request test reds |
 | M5 | Use `--accent-document` on a non-gesture element | AC4 reds |
-| M6 | Put `data-theme="dark"` back on `gap.html` | AC3 reds |
-| M7 | Delete the dark token block entirely | 🔴 **prediction refuted — it REDS**, and the draft called it the half carried by nothing. ⚠️ `.expect()`-carried: it dies on the premise and never reaches its own assertion |
-| M7b | A live rule reads a token defined **only** in the dark block | 🔴 **GREEN — measured.** The real hole: M6 checks the template, nothing checks the sheet. *A guard placed where the defect cannot occur* — the class this story quotes |
-| M10 | Append a sentence containing `grid-cols-3` to any planning `.md` | AC6 reds **without `source(none)`** — the product's CSS is a function of its prose |
-| M11 | Import full `tailwindcss` (preflight on) | AC7's computed-style diff reds on ten elements, the first-boot `<h1>` among them |
-| M12 | Plain `@theme` instead of `@theme static` | AC2/AC3/AC4 red — the tokens are stripped from the output |
-| M8 | Remove one `.woff2` from `assets/fonts/` | AC2 reds; if it does not, the fonts are referenced by a name nothing checks. ⚠️ **Run it after `touch src/page.rs`** — a stale embed makes this mutation lie in both directions |
-| M9 (control) | Add a Rust-built class **and** its `@source inline` entry | green by design |
+| M5b | Move only the border and the outline, leaving `.refresh`'s colour and hover amber | AC4 reds — **the draft's own wrong instruction, turned into a mutation** |
+| M6 | Put `data-theme="dark"` back on `gap.html` | AC3's template half reds |
+| M7 | Delete the dark token block | AC3's *"still present"* half reds. ⚠️ **`.expect()`-carried** — measured; do not record it as assertion-carried |
+| M7b | A live rule reads a token defined **only** in the dark block | 🔴 **measured GREEN in the prototype.** The guard AC3 owes must red here, or *"referenced by nothing"* is carried by nothing |
+| M8 | Remove one `.woff2` from `assets/fonts/` | AC2 reds. ⚠️ Run after `touch src/page.rs`, or the stale embed makes it lie in both directions |
+| M9 | Rename `.identity` in the sheet | `page.rs:1163` reds **on its premise** — the guard doing what its message promises |
+| M10′ (control) | Change a hex value in the light palette | green — the look is meant to change; no test pins a colour |
 
-⚠️ **The draft named M1 and M7 as the two that matter, and the validation refuted both** — M1 is
-not executable and M7 reds. **The two that matter are M7b and M10**, neither of which the draft
-contained: both were found by BUILDING, and both are the *guard-where-the-defect-cannot-occur* class
-this story quotes at itself. *A mutation table written from a plan predicts the mutations the plan
-already understands.*
-
----
+⚠️ **The draft named M1 and M7 as the two that matter, and the validation refuted both** — M1 is not
+executable on v4.3.3 and M7 reds. **The two that matter here are M7b and M5b**, neither of which the
+draft contained: M7b was found by BUILDING, M5b by the fact-check reading the file the draft had
+described from memory. *A mutation table written from a plan predicts the mutations the plan already
+understands.*
 
 ## Dev Notes
 

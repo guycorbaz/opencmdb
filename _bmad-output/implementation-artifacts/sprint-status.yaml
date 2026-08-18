@@ -75,7 +75,23 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-18  # 6b.1 CONTEXTED -> `ready-for-dev`, and **EPIC 6b OPENS**. 🔴 The
+last_updated: 2026-08-18  # 6b.1 ✅ VALIDATED (two fresh-context layers) and ARBITRATED by Guy --
+                          # **option (1): the mock's tokens now, the Tailwind chain LATER**, with
+                          # AC1/AC5/AC6 re-owned to story 6b.2 and the five measurements that
+                          # produced the decision attached to them in `deferred-work.md`.
+                          # 🔴 The gap-hunt layer BUILT the chain (v4.3.3, headless browser, live
+                          # MariaDB) and refuted FOUR of the story's own predictions plus one of
+                          # D55's: the `@source` trap no longer exists (correct path, wrong path
+                          # and NO @source give one sha256); auto-detection makes app.css a
+                          # function of the repo's PROSE; `@theme` strips the tokens; M7 reds where
+                          # the draft called it uncarried while the unwritten M7b is GREEN; and
+                          # preflight ALONE breaks the first-boot screen. 🔑 The decisive
+                          # measurement: the intersection between the 27 classes the templates use
+                          # and the 20 utilities Tailwind generates is EMPTY -- so AC5 was a gate
+                          # over an empty set, this story's own quoted defect class applied to
+                          # itself. The fact-check layer refuted 10 of 62 claims, 5 HIGH.
+                          # NEXT = `dev-story` 6b.1, scoped to option (1).
+                          # (Earlier the same day) 6b.1 CONTEXTED -> `ready-for-dev`, and **EPIC 6b OPENS**. 🔴 The
                           # contexting measured that the story's first AC presupposes a toolchain
                           # this repository does NOT have: `cargo xtask css` does not exist (xtask
                           # has ONE subcommand, `ci`), there is no `assets/tailwind.css`, no
