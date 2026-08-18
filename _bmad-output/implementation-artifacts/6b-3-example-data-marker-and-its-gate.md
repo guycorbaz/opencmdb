@@ -49,8 +49,13 @@ Two documents disagree, and the disagreement decides whether this story is small
 
 - **`epics.md`** titles it *"The example-data marker, and the gate that keeps it honest"* and puts
   the example CONTENT in stories **6b.5–6b.9** (dashboard, inventory and device record, applications
-  and IPAM, sources and alerts, self-diagnostic and commissioning — `epics.md:2190-2278`, each
-  titled *"(example)"*). On this reading 6b.3 ships a MECHANISM and no content.
+  and IPAM, sources and alerts, self-diagnostic and commissioning — `epics.md:2190-2278`). On this
+  reading 6b.3 ships a MECHANISM and no content.
+  ⚠️ **This bullet first read *"each titled `(example)`"* and the fact-check REFUTED it: two of the
+  five do** — 6b.6 and 6b.7. 6b.5 reads *"beside labelled example sections"*, and 6b.8 and 6b.9 name
+  no example in their titles at all. The substance holds — those stories carry the example content —
+  but the sentence generalised five cases from two, **and it was a premise of the arbitration below**.
+  Corrected here so nobody cites it as measured.
 - **The code says the opposite.** `screens.rs:170`, written by story 6b.2 and merged in `d8cc438`:
   *"Story 6b.3 owns the example dataset and the marker that says so."*
 
@@ -135,9 +140,30 @@ screen* the AC names.
 🔴 **The register assigned that finding to story 6b.6** (`deferred-work.md`, code review of 6b.2,
 *"Owner: story 6b.6, the next story to add a screen"*). **AC4 makes it this story's**, because a
 partition asserted over a table that can silently lose a row is a guard placed where the defect
-cannot occur. ⚠️ **Not confirmed and worth one measurement before designing around it**: nobody has
-checked whether `dead_code` under `-D warnings` catches an unlisted variant. Measure it first — if
-it does, the hole is narrower than it reads.
+cannot occur.
+
+✅ **T0 IS ANSWERED — the validation MEASURED it rather than reasoning about it, and the answer comes
+with three qualifications that matter more than the answer itself.** A `Screen` variant wired into
+`href`, `label_key`, `group` and `nature()` but omitted from `ALL` produces `error: variant 'Probe'
+is never constructed` under `cargo clippy --workspace --locked -- -D warnings` — CI's exact
+invocation (`.github/workflows/ci.yml:59`). The hole IS narrower than it read.
+
+⚠️ **(i) It holds by a property of the GATE, not of the language.** The obvious bypass was tried — a
+`#[test]` constructing `Screen::Probe`, the gesture anyone writing a test for a new screen makes
+first — and it **fails to disable the guard**, because `cargo clippy --workspace` *without*
+`--all-targets` never compiles `#[cfg(test)]` code. ⚠️ But a future line of PRODUCTION code
+constructing a `Screen` literal outside `ALL` would make the variant *constructed* and **silence the
+guard for that variant**.
+
+⚠️ **(ii) `dead_code` is caught by `cargo clippy`, NOT by `cargo xtask ci`** — different commands,
+and the eight gates do not include clippy. **A developer running only `cargo xtask ci` locally never
+sees this red.** Only CI, or a manual clippy, does.
+
+🔴 **(iii) AC4's closure is therefore PARTIAL and must be recorded as such.** The carrier is an
+EXTERNAL dependency on a lint, and **nothing in the suite pins it**: no test fails if clippy stops
+covering this one day. Do not write *"AC4 met"* without that sentence beside it. Whether to pin it —
+and a pin would have to be a gate, since you cannot measure the absence of code by running code
+(story 5.12) — is a decision to put to Guy rather than take.
 
 ### §0d. ⚠️ AC3 IS ALREADY DISCHARGED, and satisfying it with a runtime test would WEAKEN it
 
@@ -188,7 +214,8 @@ the story, from a recount, not from this paragraph**.
 - **`crates/opencmdb-bin/src/screens.rs`** — `Screen` (10 variants), `NavGroup` (3), `Screen::ALL`,
   `href()`, `label_key()`, `group()`, `title_key()`, `router(perimeter)` returning `Router<()>`, and
   `empty_screen()` which renders the frame around `String::new()`. **This is where `nature()`
-  belongs.** Its trailing test module holds ten guards; `the_perimeter_has_a_single_reader` and
+  belongs.** Its trailing test module holds **eleven** guards (the first draft said ten — counted, not
+  estimated, after the fact-check); `the_perimeter_has_a_single_reader` and
   `every_key_carries_both_locales` are source-scanning properties whose idiom the new partition test
   should follow.
 - **`crates/opencmdb-bin/src/page.rs`** — `Shell`, `render_shell(shell, body)`, `ShellPage`,
@@ -229,15 +256,19 @@ the story, from a recount, not from this paragraph**.
 
 **Written for §0a's third reading.** Rescope on Guy's answer before starting.
 
-- [ ] **T0 — the two measurements that precede design** (§0c): does `dead_code` under `-D warnings`
-      catch a `Screen` variant absent from `ALL`? And does a `nature()` `match` red on a new variant?
-      Both answers change T2's shape
+- [x] **T0 — the two measurements that precede design** (§0c): ✅ **both answered by the validation,
+      before any production code** — `dead_code` DOES catch an unlisted variant under
+      `clippy -D warnings`, and a `nature()` match reds on a new variant. ⚠️ Read §0c's three
+      qualifications: the closure is partial, it lives outside `cargo xtask ci`, and nothing pins it
 - [ ] **T1 — the nature, in the type** (AC4): `Nature` — **`Fed` / `Example` / `Empty`** (§0a) — on
       `screens::Screen` through a `match`, so the compiler refuses a screen with no declared nature.
       ⚠️ `Empty` carries a doc comment saying it is TEMPORARY and must be gone when 6b.9 closes
 - [ ] **T2 — the partition over the ROUTE TABLE** (AC4), not inside the templates: every demo surface
-      carries the marker, every fed surface does not, driven through the real router. ⚠️ Close
-      `Screen::ALL`'s blind half first or the test can silently lose a row
+      carries the marker, every fed surface does not, driven through the real router and asserted on
+      the **HTTP body**, never on the template source. ⚠️ **It is `DATABASE_URL`-gated and therefore
+      INVISIBLE locally** — `/triage` is the only `Fed` screen and needs a real pool (measured ~5.9 s
+      with a database against 0.06 s without). Say so where the test lives, or a local green reads as
+      coverage it is not
 - [ ] **T3 — one partial, one key pair, one treatment** (AC1): `_example_marker.html`, `fr` + `en`,
       no `--accent-document`
 - [ ] **T3b — the example DATASET and the witness screen** (§0a, §0a-bis): the dataset, and
@@ -267,11 +298,41 @@ number below is chosen so that every one of them WILL be played.
 |---|---|---|
 | M1 | Add a `Screen` variant, wire `href`/`label_key`/`group`, omit `nature()` | **fails to COMPILE** — read the real error and record it, do not cite `E0004` from this file |
 | M2 | Add a `Screen` variant, wire everything, omit it from `Screen::ALL` | ⚠️ **prediction unknown on purpose** — §0c/T0 measures it. If GREEN, that is the story's finding and AC4 is not met until it is closed |
-| M3 | Flip one demo screen's nature to *fed* | the partition test reds — the marker vanishes where it is owed |
+| M3 | Flip one demo screen's nature to *fed* | the partition test reds. ⚠️ **Predicted PANIC-carried, not assertion-carried** — the validation measured it dying on `unreachable!("Fed screens are not merged onto this router")` before reaching its own assertion. Record the carrier per row; never claim *"every red assertion-carried"* |
 | M4 | Flip `/triage`'s nature to *example* | the partition test reds in the OTHER direction — a fed surface must never carry the marker |
-| M7 | Flip an `Empty` screen's nature to `Example` | the partition test reds — ⚠️ **this is the arbitration's own guard**: with the marker on an empty `<main>`, the product asserts that a blank screen is a demonstration, which is the false sentence §0a exists to prevent |
+| M7 | Flip an `Empty` screen's nature to `Example` | 🔴 **MY PREDICTION WAS WRONG AND THE VALIDATION MEASURED WHY — read this before writing the guard.** It predicted *"the product asserts a blank screen is a demonstration"*. In a design that dispatches CONTENT from `nature()`, an `Empty` screen promoted to `Example` receives the real dataset **with its marker**, so the lying-marker scenario is **structurally impossible** and cannot be what reds. M7 still reds — but only through a bookkeeping assertion (*exactly one witness screen*), and that assertion was measured to be its **SOLE carrier**: delete it and the test goes GREEN with a second screen declared `Example`, because *"this screen is declared Example and carries the marker"* is a true sentence. ⚠️ **A future tidy-up would remove that assertion as redundant without knowing it carries everything** — give it a comment saying so |
 | M5 | Delete the marker partial's `fr` half, keep `en` | AC1 red via `every_key_carries_both_locales` — the NFR26 direction 6b.2 measured green before its guard existed |
-| M6 | Give the marker `--accent-document` | 6b.1's reservation guard reds — ⚠️ **verify this before believing it**: the guard may scan only `app.css` and the templates it knew about |
+| M6 | Give the marker `--accent-document` | 6b.1's reservation guard reds. ✅ **MEASURED, and my suspicion was REFUTED**: the guard scans `std::fs::read_dir("templates/")` at run time, not a frozen list, so it reds on the colour planted in a template that did not exist when it was written. *The guard survives the ordinary gesture; I doubted it and was wrong.* |
+
+## Validation record — two fresh-context layers, 2026-08-19
+
+**Mandatory here** (Guy, Epic 4 retrospective): every story is validated by two fresh-context agents
+before `dev-story`. Both ran on a different model, each in its own git worktree.
+
+**Layer 1, fact-check — 30 assertions verified one by one, 28 confirmed, 2 REFUTED, both mine.**
+The two most load-bearing claims were reproduced BY COMPILATION rather than read: the triple `E0004`
+on an unwired variant, and the `E0308` on `State<MySqlPool>` in the pool-free sub-router. Refuted:
+*"each titled `(example)`"* (two of five — corrected in §0a, **and it was a premise of the
+arbitration**), and *"ten guards"* in `screens.rs` (eleven).
+
+**Layer 2, gap-hunt — it BUILT the whole mechanism** against a live `mariadb:10.11.11`: `Nature`,
+the marker partial, the example dataset, `/devices` filled, and the route-table partition asserted
+on the real HTTP body. It compiles, 611 → 612 tests, clippy and the eight gates green, `file-size`
+unmoved at 1894.
+
+🔴 **Its central finding is that MY OWN mutation M7 does not guard what I said it guards**, and only
+building could reach it: content dispatched from `nature()` makes the lying-marker scenario
+structurally impossible, so M7's real carrier is a bookkeeping assertion that a future tidy-up would
+delete as redundant. ✅ **Two of my suspicions were REFUTED by measurement** — the
+`--accent-document` guard survives a brand-new template (it reads the directory, not a list), and
+AC3's compile carrier holds exactly as claimed, so T5's *"cite, add no test"* is the right
+prescription. ⚠️ **And T2 is `DATABASE_URL`-gated and invisible locally**, which the story had said
+for AC3 and not for T2 itself.
+
+🔑 **What this pass changed, and it is the reason the step is not optional**: T0 is answered before a
+line of production code, one arbitration premise was corrected, one mutation prediction was replaced
+by a measurement, and two doubts of mine were closed as unfounded. **Three of the four open questions
+I flagged at contexting were settled by someone other than me** — which is what the rule exists for.
 
 ## References
 

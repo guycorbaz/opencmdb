@@ -75,7 +75,33 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.3 ✅ ARBITRATED by Guy on finding (a), before any code: the story
+last_updated: 2026-08-19  # 6b.3 ✅ VALIDATED, two fresh-context layers, and it paid for itself.
+                          # Layer 1 (fact-check): 30 assertions verified, 28 confirmed, 2 REFUTED --
+                          # both mine, and the graver one was a PREMISE OF THE ARBITRATION ("each of
+                          # 6b.5-6b.9 titled `(example)`" -- TWO of five). The two load-bearing
+                          # claims were reproduced BY COMPILATION: triple E0004, and E0308 on
+                          # `State<MySqlPool>` in the pool-free sub-router.
+                          # Layer 2 (gap-hunt) BUILT the whole mechanism against a live
+                          # mariadb:10.11.11 -- Nature, the marker, the dataset, /devices filled, the
+                          # route-table partition on the real HTTP body. Compiles, 611 -> 612, gates
+                          # and clippy green, file-size unmoved.
+                          # ✅ T0 ANSWERED BEFORE ANY PRODUCTION CODE: `dead_code` DOES catch a
+                          # `Screen` absent from `ALL` under `clippy -D warnings`, and the obvious
+                          # bypass (a #[test] constructing it) FAILS because clippy without
+                          # --all-targets never compiles cfg(test). ⚠️ But it holds by a property of
+                          # the GATE, not of the language; it lives OUTSIDE `cargo xtask ci`, so a
+                          # dev running only the gates never sees the red; and NOTHING PINS IT.
+                          # AC4's closure is PARTIAL -- say so, never "AC4 met" alone.
+                          # 🔴 THE CENTRAL FINDING: MY OWN mutation M7 does not guard what I said it
+                          # guards. Content dispatched from `nature()` makes the lying-marker case
+                          # STRUCTURALLY IMPOSSIBLE, so M7's sole carrier is a bookkeeping assertion
+                          # a future tidy-up would delete as redundant. Only BUILDING could reach it.
+                          # ✅ Two of my suspicions REFUTED: the `--accent-document` guard survives a
+                          # brand-new template (it reads the directory), and AC3's compile carrier
+                          # holds -- so T5 "cite, add no test" is right. ⚠️ T2 is DATABASE_URL-gated
+                          # and invisible locally (~5.9s with a DB vs 0.06s without).
+                          # NEXT = `dev-story` 6b.3.
+                          # (Earlier the same day) 6b.3 ✅ ARBITRATED by Guy on finding (a), before any code: the story
                           # ships the example DATASET, the marker, the gate, AND ONE WITNESS SCREEN
                           # filled from it -- not the mechanism alone, and not all nine screens.
                           # 🔑 THEREFORE THREE NATURES, not two: `Fed` / `Example` / `Empty`. With
