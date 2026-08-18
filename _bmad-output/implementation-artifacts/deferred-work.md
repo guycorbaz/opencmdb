@@ -3797,3 +3797,66 @@ below is a consequence of that sentence, recorded rather than absorbed — a sto
   `border-radius: 3px` literals in `app.css` are left alone rather than churned — they belong to the
   card and the buttons, which no story has revisited. **Owner of the spec sentence: Epic 6b's
   retrospective.**
+
+## Deferred from: code review of story 6b.2 (2026-08-18)
+
+Three layers on a different model, each in its own git worktree so their mutations could not
+collide. Nine findings; Guy scoped the repair to the three HIGH, and these are the rest.
+
+- ⚠️ **`_version`'s exclusion in `every_key_carries_both_locales` is a branch that cannot be
+  reached, and its comment states a false cause** (`screens.rs`, the `|| key == "_version"`
+  clause). The scanner recognises a key only through `strip_suffix(':')`, and `_version: 2` ends
+  in `2` — so `key` is never `"_version"` at the flush. **Measured both ways**: the clause deleted,
+  the test stays green; and `grep -cE "^[A-Za-z_][A-Za-z0-9_.]*:\s*$"` counts **47**, which is
+  where the 47 really comes from. No behavioural defect — a plausible cause written where the true
+  one is elsewhere, which is the house's own definition of a defect. **Owner: Epic 6b's
+  retrospective**, or whichever story next touches that guard.
+
+- ⚠️ **AC6's text says *"13 new keys"* and the story added 16** (`nav.label`, `nav.perimeter`,
+  `nav.perimeter_unset`, three groups, ten screens; 32 → 48 entries). The Dev Agent Record 400
+  lines below gives the right figure, so the record is correct and the criterion is not — a
+  document falsified inside its own file, the class this project has caught in six consecutive
+  stories. **Owner: Epic 6b's retrospective** (a story may not edit an AC).
+
+- ⚠️ **`Screen::ALL` is a literal array and the compiler does not check it for exhaustiveness.**
+  `href`, `label_key` and `group` are `match`es and DO red on a new variant (measured: three
+  `E0004`), but a variant wired into all three and left out of `ALL` disappears silently from both
+  the navigation and the routing. **Not confirmed**: it was not measured whether `dead_code` under
+  `-D warnings` catches it. **Owner: story 6b.6**, the next story to add a screen.
+
+- ⚠️ **`.wrap` in `app.css` has no consumer** since `gap.html` was deleted — its only user was that
+  file's `<main class="wrap">`. Orphan rule, no impact, and **no guard detects dead CSS at all**.
+  **Owner: story 6b.12**, with the release sweep.
+
+- 🔴 **Eleven of the eighteen prescribed mutations were never re-executed** (M4, M5b, M6, M8–M11,
+  M13–M15). M12 was reported as an isolated incident; the review measured that it is not — it is a
+  whole section of the table left unplayed, and **M7 is the second one that was hiding a real hole**
+  (closed today). ⚠️ The transferable half is that *"the logic looks like it holds"* is what was
+  substituted for execution, twice, in a story whose own table said M7 could not be believed until
+  the guard was widened. **Owner: Epic 6b's retrospective** — this is a method finding, not a code
+  one.
+
+- ⚠️ **`AppConfig` filters emptiness without trimming what it stores**, so a perimeter padded with
+  ordinary spaces reaches the footer with them. Measured as **pre-existing rather than a 6b.2
+  regression**: `OPENCMDB_BASIC_USER`/`PASSWORD` carry the same shape and predate this story. The
+  invisible-glyph half is CLOSED by this review (`carries_a_visible_glyph`); the trimming half is
+  not. **Owner: Epic 19**, with the other credential-handling rows.
+
+- ⚠️ **Nine of the ten screens render an empty `<main>` with nothing saying so.** Nothing promises
+  an absent gesture — the auditor checked the templates for that specifically and found none — but
+  between this merge and story 6b.3 the product reads as nine broken screens rather than nine
+  deliberate placeholders. ⚠️ **The sharpest case is `/device`**: the entry is called *"Fiche
+  appareil"*, it addresses no particular device, and the source says so where the operator cannot
+  see it. **Already owned by story 6b.3** (the example-data marker) and **6b.6** (`/devices/{id}`);
+  recorded here so the delay between the two is a known cost rather than a discovery.
+
+- ✅ **Two limits the story had DECLARED were re-measured and hold**: a `display: none` on one
+  `.nav-entry` escapes every textual guard (AC3's stated blind spot), and a second reader of the
+  perimeter split across two lines escapes `the_perimeter_has_a_single_reader`. Both stay stated
+  limits, not findings — recorded because a declared limit that nobody re-measures becomes a claim.
+
+- ✅ **Three suspicions were REFUTED by measurement and are recorded with their refutation**: the
+  perimeter is not an HTML-injection vector (askama escapes it, `<script>` neutralised); a renamed
+  or deleted template fails the **build**, not merely the tests (`{% include %}` resolves at macro
+  expansion); and dropping the `continue` on `Screen::Triage` makes axum panic at router
+  construction (*"Overlapping method route"*, 12 tests red) rather than double-registering silently.

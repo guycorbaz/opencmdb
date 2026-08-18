@@ -617,8 +617,9 @@ port 13322).
 
 ### AC9 — THE LIVE COUNT (this file is its only home)
 
-**598 → 609 tests: 382 bin + 161 core + 66 xtask** _(608 at the implementation's close; the
-609th is `the_perimeter_has_a_single_reader`, added when M12 was finally executed)_. Eight gates green, `fmt` and
+**598 → 611 tests: 384 bin + 161 core + 66 xtask** _(608 at the implementation's close; the
+609th is `the_perimeter_has_a_single_reader`, added when M12 was finally executed; the 610th and
+611th are the code review's H1 and H3 guards)_. Eight gates green, `fmt` and
 `clippy --all-targets -- -D warnings` clean — **verified in that order**, which is story 6b.1's
 review finding applied. `app.css` 297 → 356 lines. `opencmdb-core` untouched, no migration.
 
@@ -712,6 +713,7 @@ without it** until the mutation was run — *a finding read is not a finding app
 | 2026-08-18 | Arbitrated by Guy: the mock prevails (nav, header, `device`), `/` → `/triage`, no Tailwind, no responsive. |
 | 2026-08-18 | Validated by two fresh-context layers: 8 of 37 claims refuted, then 7 HIGH + 5 MEDIUM from the layer that built the shell. Both of the story's named carriers were false; one premise of an arbitration was mine and wrong. |
 | 2026-08-18 | Implemented. 598 → 608 tests, eight gates green. Six mutations, six reds — one of them green first, which is why the locale guard exists. |
+| 2026-08-18 | ✅ **CODE-REVIEWED (three layers, on a different model, each in its own git worktree)** — nine findings, Guy scoped the repair to the three HIGH; the rest are registered. 🔴 **H1: no test named ONE of the ten routes.** Two layers reached it separately — `/devices` added to `is_public` left 609 green (the story's own M7, predicted and never executed), and with the sub-routers merged below `auth_deny` a bare `GET /dashboard` answered **200 OK**, the suite reddening only through two GENERIC probes inherited from 6.1. Closed by `every_screen_is_refused_without_a_credential`, iterating `Screen::ALL` rather than a copied list; measured red under BOTH mutations. 🔴 **H2: a guard whose own comment claimed a perimeter it did not walk** — `the_shell_shows_no_last_observation` said *"over the WHOLE shell"* and read `_nav.html` alone; the mock's deferred text planted in `_shell.html`'s header left 382 green. Widened to the frame, plus an include-scan so the guard reds if the frame gains a partial it does not cover. 🔴 **H3: `"\u{200B}".trim().is_empty()` is `false`** — a zero-width space survived `AppConfig`'s filter and rendered a label with nothing after it, the exact outcome AC1 forbids. Closed by `carries_a_visible_glyph`, whose enumeration limit is STATED (story 5.12's rule). ⚠️ A defect was introduced and caught during the repair itself: an insertion landed between an existing `#[test]` and its fn, silently disabling `a_half_configured_pair_…` — found by a duplicated-attribute warning and an anomalous `2 passed`, not by reading. **609 → 611 tests.** |
 | 2026-08-18 | 🔴 **M12 executed after the fact, and it refuted the record: the story SHIPPED its own mutation.** `page::triage` read `std::env::var("OPENCMDB_SCAN_CIDR")` — M12 exactly — while T4b was ticked `[x]`, and all 608 tests were green. Fixed: `TriageState` carries the perimeter, `/triage` moves to its own sub-router (merged above the auth layer — mutated and measured: below it, two DB-free auth pins red). New guard `the_perimeter_has_a_single_reader`, proven red on the shipped tree, naming `page.rs:565`. 608 → 609 tests. |
 
 ### Debug Log References

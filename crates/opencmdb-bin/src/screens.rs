@@ -468,26 +468,67 @@ mod tests {
         // be QUOTED in a comment without tripping a gate, and the same trap story 6b.1 met when
         // its radius comment contained the very text its scanner counted. This template's own
         // comment names the deferred fact in order to explain it.
-        let source = include_str!("../templates/_nav.html");
-        let code: String = source
-            .split("{#")
-            .enumerate()
-            .map(|(i, part)| {
-                if i == 0 {
-                    part.to_string()
-                } else {
-                    part.split_once("#}")
-                        .map(|(_, rest)| rest)
-                        .unwrap_or("")
-                        .to_string()
-                }
-            })
-            .collect();
-        assert!(
-            !code.to_lowercase().contains("observ"),
-            "the last observation is a MAX(observed_at) — a database read on ten screens, eight \
-             of them demonstrations. Deferred to story 6b.5 (registered), and the ABSENCE is \
-             asserted because it is a decision, not an omission"
-        );
+        // 🔴 BOTH files of the frame, not just the navigation. This guard's own comment used to
+        // claim it was *"written over the WHOLE shell rather than over the `<header>` element"*
+        // — story 5.14b's lesson quoted by name — while it read `_nav.html` alone. Measured by
+        // the code review: the mock's own text planted in `_shell.html`'s `<header>` left the
+        // whole suite green. The guard was correct about what it tested, and its comment was
+        // false; a guard that claims a perimeter it does not walk is worse than a narrow one.
+        //
+        // ⚠️ `_gap_card.html` is deliberately NOT here: it SHOWS observed values, which is its
+        // whole job. What is banned is the last-observation INSTANT (a `MAX(observed_at)`), and
+        // it is banned from the frame, which renders on all ten screens.
+        let frame = [
+            ("_shell.html", include_str!("../templates/_shell.html")),
+            ("_nav.html", include_str!("../templates/_nav.html")),
+        ];
+        let strip = |source: &str| -> String {
+            source
+                .split("{#")
+                .enumerate()
+                .map(|(i, part)| {
+                    if i == 0 {
+                        part.to_string()
+                    } else {
+                        part.split_once("#}")
+                            .map(|(_, rest)| rest)
+                            .unwrap_or("")
+                            .to_string()
+                    }
+                })
+                .collect()
+        };
+        for (name, source) in frame {
+            // 🔑 Comments stripped first — the same idiom `float-free` uses so the architecture
+            // may be QUOTED in a comment without tripping a gate, and the same trap story 6b.1
+            // met when its radius comment contained the very text its scanner counted. Both of
+            // these templates name the deferred fact in a comment, in order to explain it.
+            let code = strip(source);
+            assert!(
+                !code.to_lowercase().contains("observ"),
+                "{name}: the last observation is a MAX(observed_at) — a database read on ten \
+                 screens, eight of them demonstrations. Deferred to story 6b.5 (registered), and \
+                 the ABSENCE is asserted because it is a decision, not an omission"
+            );
+        }
+        // 🔑 And the frame WIDENS ITSELF: any partial the shell pulls in must be scanned above,
+        // or this reds. Without it the guard goes stale the day someone splits the header out —
+        // an enumeration that cannot notice what it stopped covering.
+        for (name, source) in frame {
+            for (index, _) in strip(source).match_indices("{% include") {
+                let rest = &strip(source)[index..];
+                let quoted = rest
+                    .split_once('"')
+                    .and_then(|(_, after)| {
+                        after.split_once('"').map(|(inner, _)| inner.to_string())
+                    })
+                    .unwrap_or_else(|| panic!("{name}: an include with no quoted path"));
+                assert!(
+                    frame.iter().any(|(scanned, _)| *scanned == quoted),
+                    "{name} includes {quoted:?}, which this guard does not scan — add it to \
+                     `frame`, or the ban stops covering the frame it names"
+                );
+            }
+        }
     }
 }

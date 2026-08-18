@@ -115,6 +115,46 @@ pub(crate) struct AppConfig {
     pub(crate) scan_cidr: Option<String>,
 }
 
+/// Whether a configured value carries at least one character an operator could SEE.
+///
+/// 🔴 `trim().is_empty()` is not enough, and the code review measured it rather than argued it:
+/// `"\u{200B}".trim().is_empty()` is **`false`** in Rust, so a zero-width space survived the
+/// emptiness filter. The navigation footer then rendered *"Perimeter "* followed by nothing
+/// visible — indistinguishable from a blank value — instead of the honest *"not configured"*
+/// the surface promises. The defect the filter exists to prevent, reached through a channel it
+/// did not consider.
+///
+/// ⚠️ **Its limit, stated rather than implied**: [`is_invisible`] is an ENUMERATION of Unicode's
+/// default-ignorable ranges, and *an enumeration cannot claim the completeness of a property*
+/// (story 5.12, where the same class was widened once and deliberately not to exhaustion). This
+/// is a tripwire against the character a copy-paste carries in, never a barrier against one
+/// someone chose.
+fn carries_a_visible_glyph(value: &str) -> bool {
+    value
+        .chars()
+        .any(|glyph| !glyph.is_whitespace() && !glyph.is_control() && !is_invisible(glyph))
+}
+
+/// Unicode code points that occupy no visible space, beyond whitespace and control characters.
+///
+/// The ranges are the default-ignorable ones a text editor or a web form will silently carry:
+/// the zero-width family, the bidirectional controls, the word joiners, the variation selectors
+/// and the byte-order mark. See [`carries_a_visible_glyph`] for why this is a tripwire.
+fn is_invisible(glyph: char) -> bool {
+    matches!(
+        glyph,
+        '\u{00AD}'
+            | '\u{180E}'
+            | '\u{200B}'..='\u{200F}'
+            | '\u{202A}'..='\u{202E}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206F}'
+            | '\u{FE00}'..='\u{FE0F}'
+            | '\u{FEFF}'
+            | '\u{E0000}'..='\u{E007F}'
+    )
+}
+
 /// Why [`AppConfig::from_env`] refuses a configuration — at boot, with the variable named,
 /// never at request time silently (story 6.1 §3). The superseded draft measured the trap this
 /// exists for: a credential containing a non-ASCII byte refuses everyone, permanently, with no
@@ -213,7 +253,7 @@ impl AppConfig {
         // Empty counts as unset — `scrape_authorized`'s precedent (unset OR empty, both closed).
         // Empty counts as unset here too: an operator who blanks the variable to disable the
         // scan must not then see an empty perimeter rendered as if it were a value.
-        let scan_cidr = lookup("OPENCMDB_SCAN_CIDR").filter(|value| !value.trim().is_empty());
+        let scan_cidr = lookup("OPENCMDB_SCAN_CIDR").filter(|value| carries_a_visible_glyph(value));
         let user = lookup("OPENCMDB_BASIC_USER").filter(|value| !value.is_empty());
         let password = lookup("OPENCMDB_BASIC_PASSWORD").filter(|value| !value.is_empty());
         let basic = match (user, password) {
@@ -786,6 +826,60 @@ mod tests {
         }
     }
 
+    /// 🔴 **Every screen of the shell answers 401 without a credential — named, one by one.**
+    ///
+    /// # Why this exists, and what it replaces
+    ///
+    /// Story 6b.2 added ten addresses and no test named ONE of them. The code was correct —
+    /// `is_public` is a property (`/healthz` or `/assets/*`), so the ten are refused by
+    /// construction — but nothing held it there, and the code review measured both ways it
+    /// could fall:
+    ///
+    /// - widen `is_public` with `/devices` and the whole suite stayed GREEN (the story's own
+    ///   M7, predicted before implementation and never executed);
+    /// - merge the two sub-routers BELOW `auth_deny` and `GET /dashboard` answered **200 OK**
+    ///   with no credential at all — the suite reddened only through two GENERIC probes
+    ///   (`/anything`, `/admin`) inherited from story 6.1, which name nothing of this story.
+    ///
+    /// 🔑 It iterates [`screens::Screen::ALL`] rather than a copied list, so a screen added
+    /// tomorrow is covered the day it exists — an enumeration would go stale exactly when the
+    /// eleventh screen lands.
+    ///
+    /// ⚠️ A lazy pool is enough BECAUSE the refusal happens in the layer, above every handler:
+    /// no request here ever reaches the database. A 200 would mean the layer was bypassed.
+    #[tokio::test]
+    async fn every_screen_is_refused_without_a_credential() {
+        let mut checked = 0_usize;
+        for path in screens::Screen::ALL
+            .iter()
+            .map(|screen| screen.href())
+            .chain(["/"])
+        {
+            let app = app(lazy_pool(), config(false, Some(pair())));
+            let response = app
+                .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::UNAUTHORIZED,
+                "{path} must answer 401 without a credential — a 200 here means the route sits \
+                 below `auth_deny`, or that `is_public` has been widened to admit it"
+            );
+            assert_eq!(
+                www_authenticate(&response).as_deref(),
+                Some(CHALLENGE),
+                "{path} must carry the challenge"
+            );
+            checked += 1;
+        }
+        assert_eq!(
+            checked, 11,
+            "the premise: ten screens plus `/` ({checked} probed) — a loop that went empty \
+             would assert nothing"
+        );
+    }
+
     /// A valid credential REACHES a formerly-public page: anything but 401, and never the
     /// challenge. ⚠️ With a lazy pool and no database the page handlers answer 500 through
     /// `server_error`; asserting 200 needs a database and belongs to the one CI-gated test.
@@ -1092,6 +1186,36 @@ mod tests {
         ]))
         .expect("valid");
         assert_eq!(config.basic, None);
+    }
+
+    /// A perimeter with nothing VISIBLE in it counts as unset, invisible characters included.
+    ///
+    /// 🔴 Written after the code review measured the hole: `"\u{200B}".trim().is_empty()` is
+    /// `false`, so a zero-width space passed the emptiness filter and the navigation footer
+    /// rendered a label followed by nothing — the very *"blank rather than named"* outcome AC1
+    /// exists to forbid, reached through a channel neither the story nor its validation saw.
+    ///
+    /// 🔑 The two halves are asserted together on purpose: a filter that rejects everything
+    /// would satisfy the first half alone, and a real CIDR must still survive.
+    #[test]
+    fn a_perimeter_with_no_visible_glyph_counts_as_unset() {
+        for blank in ["", " ", "\t", "\u{200B}", " \u{FEFF}\u{2060} ", "\u{00AD}"] {
+            let config = AppConfig::from_env(lookup_of(&[("OPENCMDB_SCAN_CIDR", blank)]))
+                .expect("a blank perimeter is not a boot error, only an unset one");
+            assert_eq!(
+                config.scan_cidr, None,
+                "{blank:?} carries no visible glyph, so the footer must say `not configured` \
+                 rather than render a label with nothing after it"
+            );
+        }
+        let configured = AppConfig::from_env(lookup_of(&[("OPENCMDB_SCAN_CIDR", "192.0.2.0/24")]))
+            .expect("valid");
+        assert_eq!(
+            configured.scan_cidr.as_deref(),
+            Some("192.0.2.0/24"),
+            "and a real perimeter still reaches the surface — a filter that rejects everything \
+             would pass the half above and destroy the feature"
+        );
     }
 
     #[test]
