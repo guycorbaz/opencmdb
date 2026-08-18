@@ -75,7 +75,36 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.2 -> `done`: PR #97 squash-merged as `d8cc438` after a green CI run,
+last_updated: 2026-08-19  # 6b.3 CONTEXTED -> `ready-for-dev`. 🔴 SIX findings, and FOUR need Guy
+                          # BEFORE any code. (a) SCOPE CONTRADICTION: `epics.md` puts the example
+                          # CONTENT in 6b.5-6b.9 and titles 6b.3 "the marker and its gate", while
+                          # `screens.rs:170` -- merged in `d8cc438` -- says 6b.3 "owns the example
+                          # dataset AND the marker". On the first reading this story marks nine
+                          # EMPTY screens, and a marker over an empty screen says "this emptiness is
+                          # an example", which is false. A third reading (mechanism + ONE specimen,
+                          # and a THIRD nature `empty`) is what the task list assumes.
+                          # (b) 🔴 THE MARKER IS SPECIFIED BY NO DOCUMENT THIS PROJECT HAS, measured:
+                          # the mock (390 lines) carries NO marker -- the only `demo` hits are base64
+                          # font payloads -- and the UX spec is SILENT. "The mock prevails" gives
+                          # nothing here; this story INVENTS an operator-visible surface, a first for
+                          # Epic 6b, and needs an arbitration on form and words.
+                          # (c) AC4's carrier is HALF-BLIND and the register gave the blind half to
+                          # the WRONG story: a `nature()` match IS compiler-checked, but `Screen::ALL`
+                          # is a literal array that is NOT, so a fully-wired variant absent from `ALL`
+                          # vanishes from nav, routing AND any test iterating it -- *the eleventh
+                          # screen* AC4 names. Register says owner 6b.6; AC4 makes it 6b.3's.
+                          # (d) AC3 IS ALREADY DISCHARGED by 6b.2's `Router<()>` (E0308); a runtime
+                          # test would be strictly WEAKER and is the very class AC4 quotes -- cite,
+                          # do not add. (e) AC2's mixed specimen DOES NOT EXIST (the dashboard is
+                          # empty until 6b.5), so AC2 is STATED not met unless (a) supplies one.
+                          # (f) ⚠️ "eight of which are demonstrations" is FALSE in THREE files
+                          # (`page.rs:53`, `screens.rs:510`, `_nav.html:16`) against "nine" in four --
+                          # shipped in `d8cc438` and missed by ALL THREE review layers.
+                          # 🔑 The mutation table is deliberately SIX rows, not eighteen: 6b.2
+                          # prescribed 18 and played 7, and BOTH holes that reached production (M12,
+                          # M7) were rows written at contexting and never played.
+                          # NEXT = `create-story validate` 6b.3 (MANDATORY), then Guy's four rulings.
+                          # (Earlier the same day) 6b.2 -> `done`: PR #97 squash-merged as `d8cc438` after a green CI run,
                           # code-reviewed first (three layers on a DIFFERENT model, each in its own
                           # git worktree). The product has TEN ADDRESSES: shell, grouped nav, `/`
                           # a 303 to `/triage`, `gap.html` deleted. **591 -> 611 tests.**
@@ -3091,7 +3120,7 @@ development_status:
   epic-6b: in-progress
   6b-1-design-system-tokens-and-accent: done
   6b-2-shell-navigation-and-ten-routes: done
-  6b-3-example-data-marker-and-its-gate: backlog
+  6b-3-example-data-marker-and-its-gate: ready-for-dev
   6b-4-triage-screen-on-the-real-gap: backlog
   6b-5-dashboard-real-reach-beside-examples: backlog
   6b-6-inventory-and-device-record: backlog
