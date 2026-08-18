@@ -3711,3 +3711,36 @@ below is a consequence of that sentence, recorded rather than absorbed — a sto
   row above; the sharpest for whoever lands it is that **preflight ALONE changes ten computed styles
   and collapses the first-boot `<h1>`**. ⚠️ *A criterion that names a story rather than a condition
   will be wrong the moment the story arrives and the condition has not.*
+
+- 🔴 **The nav footer's LAST OBSERVATION, and the correction of a false premise.** Story 6b.2 first
+  told Guy that the perimeter and the last observation were **not in the reference**, and arbitration
+  2 was taken on that basis. **Both are in the mock**, in the sticky footer of the `<nav>` — part of
+  the shell, therefore on all ten screens: *"Périmètre 192.168.10.0/24 · Dernière observation il y a
+  4 min"*. The story's §1 called its extraction *"verbatim"* and omitted that block; the code
+  review's fact-check layer found it. 🔑 **Re-arbitrated on the corrected measurement (Guy,
+  2026-08-18): the perimeter ships** (it comes from configuration, so it costs no database read and
+  `OPENCMDB_SCAN_CIDR` moves into `AppConfig` per story 6.1's parameter rule), **and the last
+  observation waits** — it is a `MAX(observed_at)`, the only one of the two that touches epic
+  constraint 1. **Owner: story 6b.5**, whose dashboard already carries the reach section, the same
+  family of fact. ⚠️ *The arbitration stands; the reason this story first gave for it was false, and
+  a decision explained by a false premise is one nobody can re-derive.*
+
+- ⚠️ **The six-entry nav is prescribed in THREE places, not one.** The row above about UX-DR33 cites
+  `epics.md:278`; the UX spec says the same thing twice more, at **`:836-838`** and **`:1308`**.
+  A retrospective acting on one citation would correct one document of three. **Owner: Epic 6b's
+  retrospective**, together with the Topology row.
+
+- ⚠️ **The header gains a slot `epics.md` never asked for.** Its AC names four things (brand,
+  tagline, perimeter, last observation); what ships is brand + tagline in the header, the perimeter
+  in the nav footer, the last observation deferred — **plus a version string**, which is the mock's
+  and which no AC requests. Harmless and useful, but it is a divergence and it is recorded rather
+  than assumed. **Owner: Epic 6b's retrospective.**
+
+- ⚠️ **Two UX-spec prescriptions this epic's mock does not satisfy, found while validating 6b.2 and
+  belonging to no story yet**: `ux-design-specification.md:841` requires the left nav to *"collapse
+  to a bottom bar / drawer on mobile"*, and the mock has **zero `@media` rules**; and its nav entries
+  are ~30px tall (`padding: 7px 10px; font-size: 14px`) against **NFR24's ≥44px touch targets**.
+  Neither is 6b.2's to fix — it builds the desktop shell the mock defines — but both are real and
+  neither was registered. **Owner: story 6b.11** (the keyboard and focus contract, the epic's
+  accessibility story) for the touch targets, **Epic 6b's retrospective** for the responsive
+  prescription the reference silently drops.
