@@ -75,7 +75,27 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-18  # 6b.1 -> `review`: IMPLEMENTED. The product is LIGHT and in Barlow --
+last_updated: 2026-08-18  # 6b.1 CODE-REVIEWED (three layers, Sonnet 5 -- a different model from
+                          # the implementer) and REPAIRED: 14 findings, ALL applied. 🔴 The
+                          # headline is not a product defect: FIVE of the story's SEVEN guards
+                          # read as coverage and were none, each defeated by an ORDINARY
+                          # gesture -- an OS dark-mode media query above the real `:root`,
+                          # spaces inside `var( … )`, a CSS fallback value, an inline `style=`
+                          # attribute in a template the guard never read, and a
+                          # protocol-relative `url(//host/…)` that four fixed probes missed.
+                          # All five rebuilt as PROPERTIES rather than enumerations; M13-M19
+                          # red, five of them replaying a mutation that was GREEN before its
+                          # patch. 🔴 And the record itself was wrong four ways: the baseline
+                          # was 591 not 597 (the delta is +7, not +1), `cargo fmt --check` was
+                          # NOT clean on the committed tree (CI would have reddened -- clippy
+                          # was fixed by hand AFTER fmt and only clippy re-run), app.css's size
+                          # was wrong in both units, and TWO divergences the story called
+                          # "registered" were in no register. The last one is now three rows,
+                          # the third recording that the story's own §Traps PRESCRIBED the
+                          # check that would have caught it.
+                          # NEXT = `gh pr create` -- and note that a pushed branch triggers NO
+                          # CI (ci.yml fires on push:[master] and pull_request only).
+                          # (Earlier the same day) 6b.1 -> `review`: IMPLEMENTED. The product is LIGHT and in Barlow --
                           # the first change to what the operator sees since story 5.14b, and the
                           # first time the mock's system is in the binary. `app.css` 150 -> 281
                           # lines, five faces + OFL.txt embedded (measured served: 200 font/woff2),

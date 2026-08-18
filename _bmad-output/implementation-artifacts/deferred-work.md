@@ -3630,3 +3630,30 @@ headless browser and a live `mariadb:10.11.11`._
   a 6.2 review patch marked applied but absent from the tree). **Owner: Epic 6b's retrospective** —
   the question is not the row but why a register searched by hand keeps missing the rows that name
   the searcher.
+
+- ⚠️ **The RADIUS divergence — the mock's 2/4/7px scale against the UX spec's `3px` everywhere.**
+  Story 6b.1's §2 said this was *"registered"* and it was not: **the claim was in the story and the
+  row was nowhere**, found by the code review's Acceptance Auditor. Recorded now, with the
+  measurement that sizes it: `app.css` makes **zero** `var(--radius-*)` reads and all four
+  `border-radius` rules carry the literal `3px` (`ux-design-specification.md:839`), so the rendered
+  product is spec-compliant and the three tokens are dead weight — exactly like the shadows. Guy's
+  decision of 2026-08-13 adopts the mock's palette and TYPOGRAPHY; radius is neither, so nothing was
+  arbitrated. **Owner: story 6b.2** (the first story to build a screen from the scale) — either it
+  uses the mock's steps and the spec sentence is corrected by a correct-course, or it keeps `3px` and
+  the three tokens are deleted rather than carried for ever.
+
+- ⚠️ **The OFL attribution in `README.md`.** Story 6b.1 embeds five Barlow faces under SIL OFL 1.1
+  and ships `OFL.txt` beside them (served, measured 200). Its §3 said the README attribution was
+  *"6b.12's business, registered"* — **the same false-registration pattern as the radius row above,
+  in the same story**. Recorded now. The licence obligation itself is DISCHARGED (the notice travels
+  with the fonts); what remains is the courtesy attribution in the project's own documents.
+  **Owner: story 6b.12** (the release story, which already owns the docs sweep).
+
+- 🔑 **A finding about the story's own SELF-CHECK, not about either row above.** Both "registered"
+  claims were written in the story and neither reached the register, in a story whose §Traps
+  explicitly told dev to *"confirm the divergences reach `deferred-work.md` with owners"* — and whose
+  validation obligations cite story 5.14b's identical failure (*"§11 required NINE register rows and
+  SEVEN landed"*, closed by a check that *"read only what you wrote"*). **The check was prescribed,
+  the story carried the prescription, and it was not run.** A prescribed check that nobody executes
+  is worth exactly as much as no check. **Owner: Epic 6b's retrospective** — the question is not the
+  two rows but why a story that names this defect class twice still commits it.

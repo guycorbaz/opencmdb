@@ -109,13 +109,29 @@
   --space-6: 20.4px;
   --space-8: 27.2px;
 
+  /* ⚠️ The mock's three-step radius scale, carried and READ BY NOTHING — measured: zero
+     `var(--radius-*)` uses, while all four `border-radius` rules are the literal `3px` the UX
+     spec requires ("Radius `3px` everywhere", ux-design-specification.md:839). So the product
+     stays spec-compliant and these three are dead weight, like the shadows. Guy's decision of
+     2026-08-13 adopts the mock's palette and TYPOGRAPHY; radius is neither, so the divergence
+     is left open rather than resolved here. Registered in `deferred-work.md`. */
   --radius-sm: 2px;
   --radius-md: 4px;
   --radius-lg: 7px;
 
-  /* ⚠️ Elevation tokens are carried from the mock and USED BY NOTHING: the UX spec bans
-     shadows outright ("elevation via hairline borders, no shadows"). Kept so the system is
-     whole, unused so the specified rule holds. Registered as a divergence. */
+  /* ⚠️ THIRTY-NINE of the 56 tokens above are defined and read by NOTHING today — measured,
+     not estimated: the sheet makes 42 `var()` reads over 17 distinct tokens. That is the
+     design SYSTEM being carried whole while only one screen exists to spend it; stories 6b.2
+     onward are what give the ramps consumers. Two of those thirty-nine are a different case
+     and must not be read as pending:
+       - the three --shadow-* tokens are carried and will stay unused — the UX spec bans
+         shadows outright ("elevation via hairline borders, no shadows"), so using them would
+         contradict a specified rule. Registered as a divergence;
+       - --color-accent-2 and its ramp have no assigned role yet; the mock uses it for
+         secondary emphasis this page has none of.
+     🔑 The first draft of this comment claimed the shadows were the only unused tokens. They
+     are three of thirty-nine, and the review's diff-only layer asked the question that
+     produced this count. */
   --shadow-sm: 0 1px 2px color-mix(in srgb, #2b2b2d 14%, transparent);
   --shadow-md: 0 3px 10px color-mix(in srgb, #2b2b2d 16%, transparent);
   --shadow-lg: 0 12px 32px color-mix(in srgb, #2b2b2d 22%, transparent);

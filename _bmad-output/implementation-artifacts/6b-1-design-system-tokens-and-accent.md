@@ -596,7 +596,15 @@ and 3307 are held by unrelated projects and were not touched.
 
 ### AC8 — THE LIVE COUNT (this file is its only home)
 
-**597 → 598 tests: 371 bin + 161 core + 66 xtask.** Eight gates green (`views-hash` ℹ STALE by
+**591 → 598 tests: 371 bin + 161 core + 66 xtask** — a delta of **+7**, which is the number of
+`#[test]` functions this story adds to `page.rs` (18 → 25, counted).
+
+🔴 **This record first said "597 → 598", and the review refuted it.** 591 is `master` at `b58088d`
+(364 bin + 161 core + 66 xtask), rebuilt in a worktree to check. The 597 was an INTERMEDIATE state —
+my own guards already written and one still missing — read as if it were the baseline, which turned
+a +7 into a +1. *A baseline measured after you started working is not a baseline*, and this is the
+project's *"a validation worktree's count, not this tree's"* class (stories 5.14, 5.13b) in a fresh
+disguise. Eight gates green (`views-hash` ℹ STALE by
 design), `cargo fmt --all --check` clean, `cargo clippy --workspace --all-targets -- -D warnings`
 clean. 28 fixtures, trap gate still RED at 26/15/11, `opencmdb-core` untouched.
 
@@ -619,7 +627,7 @@ Red first, per task. The order was T2/T4 (assets on disk) before T1 (the sheet),
 4. **T1/T3** — `app.css` rewritten: the mock's tokens in an unconditional `:root`, the product's
    semantic aliases mapped onto them, the dark set kept in `:root[data-theme="dark"]`,
    `--accent` → `--accent-document` (both definitions), the four structural consumers moved to the
-   mock's blue, `body`/`h1`/`h2`/`.mono` onto the mock's faces. 150 → 281 lines.
+   mock's blue, `body`/`h1`/`h2`/`.mono` onto the mock's faces. **150 → 297 lines, 5 564 → 11958 bytes** — measured at the END, after the review's patches. The record first said 281 lines / 10 649 B; both were wrong and both were refuted by the audit.
 5. **T5–T8** — the two guards the validation demanded, the mutation pass, the register.
 
 ### Debug Log — prove-to-red, predictions FIRST, each carrier read from its own message
@@ -638,10 +646,24 @@ Red first, per task. The order was T2/T4 (assets on disk) before T1 (the sheet),
 | ~~M10′~~ | change a hex in the light palette | green (*"the look is meant to change"*) | 🔴 **RED — control MIS-DESIGNED**: `--color-surface` is one of the six values AC2 pins, so the "control" mutated a pinned value |
 | M10′-bis (control) | change `--color-neutral-300`, a hex **no test pins** | green | ✅ green | — |
 
-**Eleven ids: nine executable mutations (nine reds), one control green by design, and two rows
-struck out as mis-designed.** Carriers are MIXED and named per row — one `panic!`-carried (M8), the
-rest assertion-carried, **zero compiler-carried**. *"Every red assertion-carried"* is **not**
-claimed.
+🔴 **The first version of this sentence did not add up — 9 + 1 + 2 = 12 against a stated 11 — and
+the review caught it.** Re-tallied against the rows themselves:
+
+| | count |
+|---|---|
+| correctly-designed mutations that RED | **8** — M4, M5, M5b, M6, M7, M7b, M8, M9-bis |
+| the control, green by design | **1** — M10′-bis |
+| struck out as mis-designed | **2** — M9 (green, mutated a preserved prefix) and M10′ (**red, but for the wrong reason**: it mutated a value AC2 pins) |
+| **total rows** | **11** |
+
+Plus **two rows added by the code review**: **M13** (`.refresh:hover` → the OTHER accent ramp) and
+**M14** (a `}` inside a comment in the `:root` block), both RED — **13 rows, 10 correctly-designed
+reds.**
+
+Carriers are MIXED and named per row — one `panic!`-carried (M8), the rest assertion-carried,
+**zero compiler-carried**. *"Every red assertion-carried"* is **not** claimed. ⚠️ Note that M10′ is
+counted as struck-out rather than as a red: *a mutation that reds for a reason its row does not name
+has measured something, but not the thing it claims.*
 
 🔑 **Two findings the pass itself produced, and both are about the pass rather than the code:**
 
@@ -667,29 +689,123 @@ claimed.
   asserted that a `@font-face` was DECLARED, never that a face was embedded — M8 would have stayed
   green over a product serving 404 for every glyph. Five `Assets::get` reads plus a length floor now
   carry it (a truncated placeholder passes a presence check).
+- **What the page actually LOOKS like, which the first record did not say.** T6 asks to look at the
+  page and the record logged only HTTP statuses — *a status code is not a look*. Observed on the
+  rendered page (and independently confirmed with a screenshot by the review's Acceptance Auditor):
+  the light base renders, **Barlow and Barlow Condensed are visibly in use** (the heading is
+  condensed, the body is not), and **the Refresh button is BLUE, not amber** — which is AC4's whole
+  point made visible rather than asserted. Nothing is broken: the copy, the two columns, the gap
+  list and the two reach sections are in place. The look is *different by design*; it is not damaged.
 - **Measured through the running binary** (release, live DB, HTTP Basic configured):
-  `/assets/app.css` 200 (10 649 B, was 5 564), `/assets/fonts/Barlow-Regular.woff2` 200 `font/woff2`,
+  `/assets/app.css` 200 (11958 B, was 5 564), `/assets/fonts/Barlow-Regular.woff2` 200 `font/woff2`,
   `/assets/fonts/OFL.txt` 200, `/assets/vendor/htmx-2.0.4.min.js` 200, **`/assets/htmx.min.js` 404**
   — so D37 is closed in both directions — and `/` 401 without credentials, story 6.1's posture
   intact. The served page carries `<html lang="en">` with no theme attribute.
 - **Binary: 9 778 272 B.** ⚠️ I did **not** measure the before/after delta on this tree; the story's
   `+292.9 KiB` is the validation prototype's figure and is cited as such rather than re-asserted as
   mine.
-- ⚠️ **`cargo fmt --all --check` first reported clean because of a shell mistake of mine** (`head`
-  succeeding made the `&& echo` fire regardless of the exit code). It was NOT clean; formatted and
-  re-verified on the exit code. And clippy reddened once — `manual_pattern_char_comparison` in the
-  new token scanner — fixed to `split([')', ',', ' '])`.
+- 🔴 **`cargo fmt --all --check` was NOT clean on the commit this record first called clean, and the
+  review is what found it.** Two mistakes, one after the other, in the same three commands:
+  first a shell error (`head` succeeding made an `&& echo` fire regardless of the exit code) which
+  produced a false *"clean"*; then, having formatted and re-verified properly, I hand-edited that
+  very block for clippy (`manual_pattern_char_comparison` → `split([')', ',', ' '])`) and re-ran
+  **clippy and the tests but not fmt**. The committed tree failed `cargo fmt --all --check` at
+  `page.rs:1488` and **CI would have reddened**. Fixed, and verified on the exit code alone.
+  🔑 *The note claiming this lesson was itself written on the unformatted tree* — the defect and its
+  own post-mortem shipped in one commit, which is this project's most familiar shape.
 - **The chain is absent by decision** (§7, option (1)): no Tailwind binary, no `tailwind.css`, no new
   `xtask` subcommand. `app.css`'s header now says so and points at the register entry, so the next
   reader meets the four spellings D55 lacks before writing any of them.
 - ⚠️ **The elevation tokens are carried and used by nothing** — the UX spec bans shadows. Stated in
   the sheet where a future reader will meet it.
 
+### Review Findings — code review 2026-08-18, three layers on **Claude Sonnet 5** (a different model from the implementer, per Guy's standing instruction)
+
+**14 findings, all applied. 4 HIGH from the layer that BROKE the guards, 4 HIGH from the layer that
+audited the record, 2 MEDIUM from the diff-only layer.** Every guard this story shipped was reached
+by at least one layer.
+
+🔑 **The headline is not a defect in the product — it is that FIVE of this story's seven guards read
+as coverage and were none.** Each was defeated by an *ordinary developer gesture*, never a
+contortion: an OS dark-mode media query, spaces inside `var( … )`, a CSS fallback value, an inline
+`style=` attribute, a protocol-relative URL. The story's own §6 quotes the project's dominant defect
+class at the epic it came from; the review found it five times in the story that quotes it.
+
+**Blind Hunter (diff only, no project access) — 2 MEDIUM, both applied**
+
+- 🔴 **AC4 verified absence and never destination.** Migrating `.refresh:hover` to
+  `--color-accent-2` — the OTHER ramp, unconditionally defined — left every check green while the
+  button rendered in the wrong hue. The four structural sites are now asserted positively; **M13**
+  reds.
+- ⚠️ **The premise floors were an order of magnitude too low** (`>= 8` over 56 tokens, `>= 20` over
+  42 reads), so they caught only a TOTAL scan failure. Raised to the measured counts; **M14** (a `}`
+  inside a comment in the `:root` block) now reds where it passed.
+- Its two QUESTIONS were both measured: Barlow-Medium **does** have a consumer
+  (`.rows.declared dd { font-weight: 500 }`), and `--color-accent-2` does **not** — which produced
+  the count below.
+- 🔴 **A comment of mine was true of one third of its subject**: it said the shadow tokens were the
+  only ones carried unused. Measured: **39 of the 56 tokens are read by nothing** (42 `var()` reads
+  over 17 distinct tokens). The comment now states the three cases and carries the count.
+
+**Edge Case Hunter (built, ran, mutated, screenshotted; 8 suspicions run, 2 refuted) — 4 HIGH, all applied**
+
+- 🔴 **A `@media (prefers-color-scheme: dark) { :root { … } }` placed ABOVE the real block** made
+  `unconditional_tokens`' first-match search return the CONDITIONAL block, after which a live rule
+  could read a value that exists only under that condition — **green**. The scanner now walks brace
+  DEPTH: a `:root` at depth 0 applies always, one at depth 1 does not. **M15** reds.
+- 🔴 **`var( --accent-document )`** (spaces) and **`var(--accent-document, #b5793a)`** (fallback) both
+  applied the amber to structure while AC4 stayed **green**. The scan is normalised. **M16**, **M17** red.
+- 🔴 **AC4 never read the templates**, so `style="color: var(--accent-document)"` in `gap.html` was
+  invisible — while AC2's sibling test two functions away already scanned both templates. *The
+  discipline existed and was not applied.* **M18** reds.
+- 🔴 **AC2's no-external-request check was four fixed probes**, and `url(//evil-cdn.example.net/track.gif)`
+  — a real cross-origin request — sailed through, because `//fonts.` assumed the only
+  protocol-relative risk was a font CDN. Replaced by a PROPERTY: every URL the sheet and the
+  templates reference must start with `/assets/`, plus no `@import` at all. **M19** reds.
+- ⚠️ LOW: `auth.rs`'s public-prefix pin still named `/assets/htmx.min.js`, a path this story deleted.
+  Harmless (it tests the prefix, not the filesystem) but a false example; corrected, and the fonts
+  added to the pin.
+
+**Acceptance Auditor (re-measured every AC and every figure) — 4 HIGH, all applied**
+
+- 🔴 **"597 → 598 tests" was false.** The baseline is **591**; 597 was an intermediate state with my
+  guards already written. The delta is **+7**, the number of tests added.
+- 🔴 **`cargo fmt --all --check` was NOT clean on the committed tree** (`page.rs:1488`) — **CI would
+  have reddened.** See the Completion Notes: I formatted, then hand-edited that block for clippy, then
+  re-ran clippy and the tests but not fmt.
+- 🔴 **`app.css`'s size was wrong in both units** — 281 lines / 10 649 B claimed; **297 lines / 11958 B**
+  measured now, after the review's patches. The "before" figures were right; only the "after" was
+  wrong, in three places.
+- 🔴 **Two divergences the story called *"registered"* were in no register** — the radius scale and the
+  OFL/README attribution. Both are now rows in `deferred-work.md` **with owners**, and a third row
+  records the finding about the SELF-CHECK: the story's own §Traps prescribed confirming that its
+  divergences reached the register, and cites story 5.14b's identical failure. **The check was
+  prescribed and not run.**
+- ⚠️ MEDIUM: the mutation summary did not add up (9 + 1 + 2 = 12 against 11). Re-tallied above.
+- ⚠️ MEDIUM: T6 logged HTTP statuses and called it *looking at the page*. What the page looks like is
+  now described.
+- ✅ It re-verified every AC by measurement and confirmed the binary at **9 778 272 B**, the
+  AC1/AC5/AC6 withdrawal genuinely and completely registered, `epics.md` untouched, and the count
+  absent from both twins and the sprint file. On its own question — *what can the operator now do?* —
+  nothing new, and the story says so.
+
+**Review mutations: M13–M19, seven ids, seven reds**, each read from its own panic message; five of
+them replay a mutation that was GREEN before its patch. ⚠️ **The five green-first results are the
+review's real output**: they were unreachable by reading, since every one of those guards is correct
+about what it tests.
+
+🔴 **And two mistakes of mine during the repair itself, both recorded rather than smoothed:** an
+unquoted heredoc let the shell execute the backticks in a passage I was writing, mangling it (caught
+by re-reading the file, repaired); and replacing a block between two anchors silently deleted the test
+that sat between them (caught by the count dropping 371 → 370, restored). *The second is the same
+lesson as this story's earlier Tasks-section incident, in the same story — a range between two
+anchors says nothing about what is in the middle.*
+
 ### File List
 
 | File | Change |
 |---|---|
-| `crates/opencmdb-bin/assets/app.css` | rewritten on the mock's tokens; 150 → 281 lines |
+| `crates/opencmdb-bin/assets/app.css` | rewritten on the mock's tokens; 150 → 297 lines |
 | `crates/opencmdb-bin/assets/fonts/Barlow-Regular.woff2` | **new** (58 964 B) |
 | `crates/opencmdb-bin/assets/fonts/Barlow-Medium.woff2` | **new** (59 180 B) |
 | `crates/opencmdb-bin/assets/fonts/Barlow-Bold.woff2` | **new** (60 492 B) |
@@ -698,7 +814,8 @@ claimed.
 | `crates/opencmdb-bin/assets/fonts/OFL.txt` | **new** (4 377 B, SIL OFL 1.1) |
 | `crates/opencmdb-bin/assets/vendor/htmx-2.0.4.min.js` | **renamed** from `assets/htmx.min.js` (D37) |
 | `crates/opencmdb-bin/templates/gap.html` | `data-theme` removed; versioned htmx path |
-| `crates/opencmdb-bin/src/page.rs` | seven new guards + two helpers in the test module |
+| `crates/opencmdb-bin/src/page.rs` | seven new guards + four helpers in the test module (the scanners rebuilt at the review) |
+| `crates/opencmdb-bin/src/auth.rs` | the public-prefix pin: stale htmx path corrected, fonts added |
 | `_bmad-output/implementation-artifacts/deferred-work.md` | row (i) discharged; the chain registered with its measurements |
 | `_bmad-output/implementation-artifacts/sprint-status.yaml` | status transitions |
 | `_bmad-output/implementation-artifacts/6b-1-design-system-tokens-and-accent.md` | this record |
@@ -712,7 +829,8 @@ claimed.
 | 2026-08-18 | Story contexted. §1 measured the absent Tailwind chain; §3 measured that the mock carries no font bytes. |
 | 2026-08-18 | Validated by two fresh-context layers — fact-check (10 of 62 claims refuted, 5 HIGH) and gap-hunt (built the chain; four of the story's predictions refuted, plus one of D55's). |
 | 2026-08-18 | Rescoped on Guy's arbitration: option (1), the tokens now and the chain later. AC1/AC5/AC6 re-owned to 6b.2 with their measurements. |
-| 2026-08-18 | Implemented. 597 → 598 tests, eight gates green. Eleven mutation ids: nine reds, one control, two rows struck out as mis-designed. Two guards of my own were measured hollow and repaired before shipping. |
+| 2026-08-18 | Code-reviewed (three layers, Sonnet 5) and repaired: 14 findings, all applied. FIVE of the story's seven guards were measured hollow and rebuilt as properties; M13–M19 red. |
+| 2026-08-18 | Implemented. 591 → 598 tests, eight gates green. Eleven mutation ids: eight correctly-designed reds, one control, two struck out. Two guards of my own were measured hollow and repaired before shipping. |
 
 | Date | Change |
 |---|---|
