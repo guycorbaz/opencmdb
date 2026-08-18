@@ -75,7 +75,12 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-18  # 6b.1 CODE-REVIEWED (three layers, Sonnet 5 -- a different model from
+last_updated: 2026-08-18  # 6b.1 -> `done`: PR #95 squash-merged as `0b42bd0` after a green CI
+                          # run (1m07). **The product is LIGHT and set in Barlow** -- the first
+                          # operator-visible change since 5.14b. Next: 6b.2 (the shell: header,
+                          # navigation, ten routes), which INHERITS the Tailwind chain with the
+                          # four spellings D55 lacks -- read `deferred-work.md` first.
+                          # (Earlier the same day) 6b.1 CODE-REVIEWED (three layers, Sonnet 5 -- a different model from
                           # the implementer) and REPAIRED: 14 findings, ALL applied. 🔴 The
                           # headline is not a product defect: FIVE of the story's SEVEN guards
                           # read as coverage and were none, each defeated by an ORDINARY
@@ -3008,7 +3013,7 @@ development_status:
   # storage layer), and the release CHANGES THE PRODUCT'S COLOUR (`gap.html` hardcodes
   # `data-theme="dark"`, the mock is light-only) — named in the release notes, never discovered.
   epic-6b: in-progress
-  6b-1-design-system-tokens-and-accent: review
+  6b-1-design-system-tokens-and-accent: done
   6b-2-shell-navigation-and-ten-routes: backlog
   6b-3-example-data-marker-and-its-gate: backlog
   6b-4-triage-screen-on-the-real-gap: backlog
