@@ -222,6 +222,24 @@ struct Strings {
     tagline: String,
     /// The navigation's accessible name (story 6b.2).
     nav_label: String,
+    /// The example-data marker's badge (story 6b.3).
+    example_badge: String,
+    /// The example-data marker's sentence (story 6b.3).
+    example_sentence: String,
+    /// The witness screen's inventory heading (story 6b.3).
+    devices_title: String,
+    /// Column: the device's name (story 6b.3).
+    devices_name: String,
+    /// Column: the address (story 6b.3).
+    devices_ipv4: String,
+    /// Column: the hardware address (story 6b.3).
+    devices_mac: String,
+    /// Column: what the device is for (story 6b.3).
+    devices_role: String,
+    /// The witness screen's second heading — sightings the engine did not place (story 6b.3).
+    unplaced_title: String,
+    /// Column: why a sighting was not placed (story 6b.3).
+    unplaced_reason: String,
     /// The perimeter label in the navigation footer, as the mock shows it (story 6b.2).
     nav_perimeter: String,
     entity: String,
@@ -253,6 +271,15 @@ fn strings() -> Strings {
     Strings {
         tagline: t!("page.tagline").to_string(),
         nav_label: t!("nav.label").to_string(),
+        example_badge: t!("example.badge").to_string(),
+        example_sentence: t!("example.sentence").to_string(),
+        devices_title: t!("devices.title").to_string(),
+        devices_name: t!("devices.name").to_string(),
+        devices_ipv4: t!("devices.ipv4").to_string(),
+        devices_mac: t!("devices.mac").to_string(),
+        devices_role: t!("devices.role").to_string(),
+        unplaced_title: t!("unplaced.title").to_string(),
+        unplaced_reason: t!("unplaced.reason").to_string(),
         nav_perimeter: t!("nav.perimeter").to_string(),
         entity: t!("page.entity").to_string(),
         refresh: t!("page.refresh").to_string(),
@@ -546,6 +573,33 @@ fn server_error(error: sqlx::Error) -> Response {
     let repo_error = classify(error);
     tracing::error!(?repo_error, "loading the page's state failed");
     (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
+}
+
+/// The witness screen's body — the example inventory, in two sections (story 6b.3).
+#[derive(Template)]
+#[template(path = "_devices_example.html")]
+struct DevicesExample {
+    devices: Vec<crate::example_data::ExampleDevice>,
+    sightings: Vec<crate::example_data::ExampleSighting>,
+    s: Strings,
+}
+
+/// Render the example inventory that the witness screen shows.
+///
+/// # Panics
+///
+/// Never in practice: the template is compiled into the binary by askama and its inputs are
+/// constants, so a failure here would mean the template no longer matches its struct — which is a
+/// compile error, not a run-time one. The `expect` states that rather than hiding it behind a
+/// fallback string nobody would ever see.
+pub(crate) fn devices_example_body() -> String {
+    DevicesExample {
+        devices: crate::example_data::devices(),
+        sightings: crate::example_data::unplaced_sightings(),
+        s: strings(),
+    }
+    .render()
+    .expect("the example inventory template and its struct are compiled together")
 }
 
 /// What `/triage` needs: the store it reads, and the perimeter it displays.

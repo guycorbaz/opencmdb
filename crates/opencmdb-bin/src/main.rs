@@ -14,6 +14,7 @@ mod arp_ping;
 mod auth;
 mod dburl;
 mod document;
+mod example_data;
 mod fault_injection;
 mod fixture_connector;
 mod fixtures;
@@ -824,6 +825,98 @@ mod tests {
                 "{path} must carry the challenge"
             );
         }
+    }
+
+    /// 🔴 **AC4 — the partition, asserted over the ROUTE TABLE and on the real HTTP body.**
+    ///
+    /// # Why it is shaped like this
+    ///
+    /// The criterion says it in so many words: *"a test that checks the marker inside the templates
+    /// that already have it proves nothing about the eleventh screen."* So this iterates
+    /// [`screens::Screen::ALL`], drives the REAL `app()` — auth layer included — and reads the
+    /// bytes the browser would receive. It never opens a template.
+    ///
+    /// ⚠️ **The `Fed` half is `DATABASE_URL`-gated, and that is not laziness.** With a lazy pool
+    /// and no database, `/triage` answers 500 and its body carries no marker — so *"a fed screen
+    /// carries no marker"* would pass **because nothing rendered at all**. That is the guard placed
+    /// where the defect cannot occur, which this epic has now shipped five times. Asserting it
+    /// means asserting it against a page that really rendered.
+    ///
+    /// 🔑 **The count assertion at the end is load-bearing and must not be tidied away.** Story
+    /// 6b.3's validation measured it: with content dispatched from `nature()`, promoting a second
+    /// screen to `Example` gives it real example content AND the marker, so the per-screen loop
+    /// stays GREEN — *"this screen is declared Example and carries the marker"* is a true sentence.
+    /// **Delete the count and mutation M7 goes green.** It is the only thing standing between the
+    /// product and a second witness screen nobody decided on.
+    #[tokio::test]
+    async fn the_marker_partition_follows_every_screens_declared_nature() {
+        let marker = "example-marker-badge";
+        let mut example_screens = 0_usize;
+        let mut probed = 0_usize;
+
+        for screen in screens::Screen::ALL {
+            let nature = screen.nature();
+            if nature == screens::Nature::Example {
+                example_screens += 1;
+            }
+            if nature == screens::Nature::Fed && std::env::var("DATABASE_URL").is_err() {
+                // Said, not skipped in silence — see this test's doc.
+                continue;
+            }
+            let response = app(lazy_pool(), config(false, Some(pair())))
+                .oneshot(
+                    Request::builder()
+                        .uri(screen.href())
+                        .header(
+                            axum::http::header::AUTHORIZATION,
+                            basic_header("op", "s3cret"),
+                        )
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "{} must render before its marker can mean anything",
+                screen.href()
+            );
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("a rendered body");
+            let body = String::from_utf8(body.to_vec()).expect("the page is UTF-8");
+            let carries = body.contains(marker);
+            match nature {
+                screens::Nature::Example => assert!(
+                    carries,
+                    "{} shows the example dataset and must say so",
+                    screen.href()
+                ),
+                screens::Nature::Fed | screens::Nature::Empty => assert!(
+                    !carries,
+                    "{} carries the marker and must not: a fed screen would be calling the \
+                     operator's own network a demonstration, and an empty one would be calling \
+                     a blank page one",
+                    screen.href()
+                ),
+            }
+            probed += 1;
+        }
+
+        assert!(
+            probed >= 9,
+            "the premise: at least the nine pool-free screens were probed ({probed}) — a loop \
+             that went empty would assert nothing"
+        );
+        assert_eq!(
+            example_screens, 1,
+            "exactly ONE witness screen carries the example dataset (Guy's arbitration, \
+             2026-08-19). ⚠️ THIS ASSERTION IS NOT REDUNDANT WITH THE LOOP ABOVE: content is \
+             dispatched from `nature()`, so a second `Example` screen renders example content AND \
+             its marker, and every per-screen check stays true. Delete this line and nothing \
+             notices that the product grew a witness screen nobody decided on"
+        );
     }
 
     /// 🔴 **Every screen of the shell answers 401 without a credential — named, one by one.**

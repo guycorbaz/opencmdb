@@ -1,0 +1,15 @@
+{#- The example-data marker: ONE partial, ONE key pair, ONE treatment (story 6b.3, AC1).
+
+     🔑 It is included by the smallest unit that carries example content — a SECTION, not only a
+     screen (AC2) — which is why it is a partial rather than a slot in `_shell.html`. The dashboard
+     is mixed by nature (real reach beside example cards, story 6b.5), and a screen-level-only
+     marker would either lie about the real half or hide the example half.
+
+     ⚠️ It uses the NEUTRAL ramp on purpose. `--accent-document` (amber) is reserved for the
+     documenting gesture (story 6b.1's arbitration, guarded by a test): the marker states a fact
+     about the content, it does not invite an action, and borrowing the gesture's colour would
+     make the reservation mean nothing. -#}
+<p class="example-marker">
+  <span class="example-marker-badge">{{ s.example_badge }}</span>
+  {{ s.example_sentence }}
+</p>

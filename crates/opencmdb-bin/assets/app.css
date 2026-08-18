@@ -354,3 +354,33 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 }
 
 .screen { padding: 24px; max-width: 980px; }
+
+/* ── The example-data marker (story 6b.3) ─────────────────────────────────
+   ⚠️ The NEUTRAL ramp, never `--accent-document`: the amber is reserved for the documenting
+   gesture (story 6b.1), and a marker that states a fact must not wear the colour that means
+   "this is the gesture". */
+.example-marker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-neutral-300);
+  border-left: 3px solid var(--color-neutral-500);
+  border-radius: var(--radius-sm);
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-700);
+  font-size: 13px;
+}
+
+.example-marker-badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-neutral-300);
+  color: var(--color-neutral-900);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

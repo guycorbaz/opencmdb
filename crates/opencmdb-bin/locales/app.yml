@@ -164,3 +164,34 @@ nav.diagnostic:
 nav.onboarding:
   en: "Commissioning"
   fr: "Mise en service"
+
+# ── The example-data marker (story 6b.3) ──────────────────────────────────
+# ⚠️ ONE key pair for the whole product (AC1): a badge and a sentence. A second pair would be the
+# per-screen improvisation the criterion forbids.
+example.badge:
+  en: "Example"
+  fr: "Exemple"
+example.sentence:
+  en: "This content is a demonstration — it does not come from your network."
+  fr: "Ce contenu est une démonstration — il ne provient pas de votre réseau."
+devices.title:
+  en: "Devices"
+  fr: "Appareils"
+devices.name:
+  en: "Name"
+  fr: "Nom"
+devices.ipv4:
+  en: "Address"
+  fr: "Adresse"
+devices.mac:
+  en: "Hardware address"
+  fr: "Adresse matérielle"
+devices.role:
+  en: "Role"
+  fr: "Rôle"
+unplaced.title:
+  en: "Sightings not placed"
+  fr: "Observations non rattachées"
+unplaced.reason:
+  en: "Why"
+  fr: "Pourquoi"

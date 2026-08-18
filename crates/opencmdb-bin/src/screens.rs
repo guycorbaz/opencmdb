@@ -51,6 +51,29 @@ pub(crate) enum Screen {
     Onboarding,
 }
 
+/// What a screen's content IS, and therefore whether it owes the operator a marker.
+///
+/// 🔴 **Three variants and not two, and that is a consequence of Guy's arbitration rather than a
+/// preference.** Story 6b.3 ships the example dataset with ONE witness screen; the eight screens
+/// whose own story has not landed hold nothing at all. With only `Fed` and `Example`, those eight
+/// would have to be declared *example* — and the marker would then tell the operator that an empty
+/// `<main>` is a demonstration, which is false. `Empty` exists so the product can say *"nothing
+/// here yet"* instead of *"this nothing is a demo"*.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Nature {
+    /// The screen shows what the product really observed and really holds. It owes NO marker, and
+    /// carrying one would be a lie in the other direction.
+    Fed,
+    /// The screen shows the example dataset. It owes the marker, on the smallest unit that carries
+    /// example content.
+    Example,
+    /// ⚠️ **TEMPORARY, and it must be written as one.** The screen's own story has not landed, so
+    /// it holds nothing. This is a statement about the ROADMAP, not about the product's data —
+    /// **when story 6b.9 closes there should be no `Empty` left**, and a reviewer meeting one after
+    /// that date has found a story that shipped without its content.
+    Empty,
+}
+
 /// The three groups the mock's navigation is divided into, in its order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NavGroup {
@@ -128,6 +151,42 @@ impl Screen {
     pub(crate) fn title_key(self) -> &'static str {
         self.label_key()
     }
+
+    /// What this screen's content is, and therefore whether it owes the marker.
+    ///
+    /// 🔴 **A `match`, deliberately, and never a field with a default.** AC4 requires that *"a route
+    /// added without a declared nature must FAIL rather than default"*, and this is the carrier: a
+    /// new `Screen` variant does not compile until someone decides what it shows. Story 6b.3's
+    /// validation measured it — a variant added without an arm here is `E0004`, in company with
+    /// [`Screen::href`], [`Screen::label_key`] and [`Screen::group`].
+    ///
+    /// ⚠️ **The OTHER half of AC4 is carried by a lint and not by this crate, and the limit is
+    /// stated rather than implied.** A variant wired into every `match` here but omitted from
+    /// [`Screen::ALL`] still compiles: what catches it is `dead_code` under
+    /// `cargo clippy --workspace --locked -- -D warnings`, CI's invocation. Measured with its
+    /// qualifications: the obvious bypass — a `#[test]` constructing the variant — does NOT disable
+    /// it, because clippy without `--all-targets` never compiles `cfg(test)` code; but a line of
+    /// PRODUCTION code constructing such a variant WOULD silence it. ⚠️ And `dead_code` is **not**
+    /// part of `cargo xtask ci`, so a developer running only the gates never sees that red.
+    /// **Nothing in this suite pins that dependency.**
+    pub(crate) fn nature(self) -> Nature {
+        match self {
+            // The one screen fed by what the product really observed (story 6b.2, `page::triage`).
+            Screen::Triage => Nature::Fed,
+            // The witness screen, filled from the example dataset (Guy's arbitration, 2026-08-19).
+            Screen::Devices => Nature::Example,
+            // ⚠️ Each of these becomes `Example` in ITS OWN story, listed beside it. Until then the
+            // screen holds nothing and says so — see [`Nature::Empty`].
+            Screen::Dashboard  // story 6b.5
+            | Screen::Device   // story 6b.6
+            | Screen::Apps     // story 6b.7
+            | Screen::Ipam     // story 6b.7
+            | Screen::Sources  // story 6b.8
+            | Screen::Alerts   // story 6b.8
+            | Screen::Diagnostic // story 6b.9
+            | Screen::Onboarding => Nature::Empty, // story 6b.9
+        }
+    }
 }
 
 impl NavGroup {
@@ -153,25 +212,42 @@ impl NavGroup {
 pub(crate) fn router(perimeter: Option<String>) -> Router {
     let mut router = Router::new();
     for screen in Screen::ALL {
-        if screen == Screen::Triage {
-            continue; // fed by the real gap, and therefore on the main router
+        if screen.nature() == Nature::Fed {
+            // 🔑 Keyed on the NATURE, not on the identity: `Screen::Triage` was named here until
+            // story 6b.3, and the two would drift the day a second screen becomes fed. Now the
+            // exclusion and the body-dispatch below read the same decision.
+            continue;
         }
         let perimeter = perimeter.clone();
         router = router.route(
             screen.href(),
-            get(move || async move { empty_screen(screen, perimeter) }),
+            get(move || async move { demonstration_screen(screen, perimeter) }),
         );
     }
     router
 }
 
-/// A screen with no content yet: the frame, and nothing in the main column.
+/// A demonstration screen, rendered according to what its content IS.
 ///
-/// ⚠️ It renders empty ON PURPOSE. Story 6b.3 owns the example dataset and the marker that says
-/// so; filling these screens here would satisfy this story's criteria while destroying the next
-/// story's subject.
-fn empty_screen(screen: Screen, perimeter: Option<String>) -> Response {
-    Html(render_shell(Shell::new(screen, perimeter), String::new())).into_response()
+/// 🔑 **The body is chosen by [`Screen::nature`], never by the screen's identity.** That is what
+/// makes the marker impossible to forget: a screen declared `Example` gets example content AND the
+/// marker from the same decision, so there is no arrangement of this function in which content
+/// arrives unmarked.
+///
+/// ⚠️ An `Empty` screen renders an empty `<main>` and **no marker**, which is the point of
+/// [`Nature::Empty`]: marking it would tell the operator that a blank screen is a demonstration.
+/// Its own story (named beside its arm in `nature`) fills it.
+fn demonstration_screen(screen: Screen, perimeter: Option<String>) -> Response {
+    let body = match screen.nature() {
+        Nature::Example => crate::page::devices_example_body(),
+        Nature::Empty => String::new(),
+        // Unreachable by construction: `router` never merges a `Fed` screen — those need the pool
+        // and live on the main router. It is `unreachable!` rather than a silent fallback so the
+        // day someone changes `nature` without changing `router`, the test says WHICH assumption
+        // broke instead of quietly serving a blank page.
+        Nature::Fed => unreachable!("a Fed screen is not merged onto the pool-free router"),
+    };
+    Html(render_shell(Shell::new(screen, perimeter), body)).into_response()
 }
 
 #[cfg(test)]
