@@ -75,7 +75,24 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-18  # 6b.2 CONTEXTED -> `ready-for-dev`. 🔴 FOUR arbitrations are put to
+last_updated: 2026-08-18  # 6b.2 ✅ ARBITRATED by Guy (five decisions, before any code), governing
+                          # sentence: **THE MOCK PREVAILS**. Ten nav entries in three groups and
+                          # NO Topology (UX-DR33 retired, registered); the header is the mock's
+                          # three static slots with the mock's version replaced by
+                          # `CARGO_PKG_VERSION`; `/device` as the mock has it, for now; `/`
+                          # REDIRECTS to `/triage`; and NO Tailwind chain, again.
+                          # 🔑 Arbitration 2 DISSOLVED a contradiction instead of resolving it:
+                          # with no "last observation" in the header there is no MAX(observed_at),
+                          # so the shell reads NOTHING and the epic's constraint 1 ("no demo
+                          # screen opens a connection") holds STRUCTURALLY -- the compiler carries
+                          # it, since no handler takes a pool. The cheapest way to satisfy two
+                          # contradictory requirements was to notice one of them was not in the
+                          # reference. ⚠️ `epics.md`'s four-part header now ships three; registered.
+                          # 🔴 And a trap the contexting found: the mock writes `href="#"` on all
+                          # ten entries because its nav is JavaScript -- so transcribing the
+                          # reference FAITHFULLY produces the defect AC3 forbids (M5b).
+                          # NEXT = `create-story validate`, TWO fresh-context layers, MANDATORY.
+                          # (Earlier the same day) 6b.2 CONTEXTED -> `ready-for-dev`. 🔴 FOUR arbitrations are put to
                           # Guy BEFORE dev, and two are contradictions rather than choices:
                           # (§1) the mock's nav CONTRADICTS UX-DR33 (`epics.md:278`) on two axes --
                           # ten entries against six, and "Topologie" appears ZERO times in the

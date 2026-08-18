@@ -3657,3 +3657,57 @@ headless browser and a live `mariadb:10.11.11`._
   the story carried the prescription, and it was not run.** A prescribed check that nobody executes
   is worth exactly as much as no check. **Owner: Epic 6b's retrospective** — the question is not the
   two rows but why a story that names this defect class twice still commits it.
+
+## Deferred from: story 6b.2's contexting (2026-08-18)
+
+_Guy's governing arbitration was **the mock prevails**, taken on 2026-08-18 before any code. Each row
+below is a consequence of that sentence, recorded rather than absorbed — a story may not edit
+`epics.md` or the UX spec._
+
+- 🔴 **UX-DR33's Topology entry is RETIRED by the mock.** `epics.md:278` records a six-entry
+  left-nav — *"Inbox · Dashboard · Devices · IPAM · Applications · **Topology**"* — while the mock
+  carries **ten entries in three groups** and **"Topologie" appears ZERO times in its 496 KB** (all
+  four spellings checked). The epic's own AC for story 6b.2 says ten, so the mock wins; what must not
+  be silent is the retirement. 🔑 Read it precisely: UX-DR33's own sentence already calls interactive
+  graphical topology **Growth**, so what is lost is a nav entry to a screen no epic in this plan
+  builds — neither a feature nor an oversight. **Owner: Epic 6b's retrospective.**
+
+- 🔴 **`epics.md`'s header for story 6b.2 asks for four things and three ship.** The AC reads
+  *"the header (brand, tagline, perimeter, last observation)"*; the mock's header is brand, tagline
+  and a version string, and Guy took the mock. 🔑 **The arbitration did not resolve the collision
+  between that AC and the epic's own constraint 1 — it DISSOLVED it**: with no *last observation*
+  there is no `MAX(observed_at)`, so the shell reads nothing and *"no demo screen opens a
+  connection"* holds structurally rather than by discipline. ⚠️ The two facts are **unplaced, not
+  lost**: the perimeter is a commissioning fact (**owner: story 6b.9**) and the last observation a
+  dashboard one (**owner: story 6b.5**). **Owner of the `epics.md` divergence: Epic 6b's
+  retrospective.**
+
+- ⚠️ **`/device` addresses no device, and the story's own AC promises bookmarkability.** The mock
+  carries *Fiche appareil* as a nav peer of *Appareils* — a click-through artefact that shows the
+  screen without a device existing. Guy: do as the mock does for now. The honest shape is
+  `/devices/{id}`, which needs an id, which needs 6b.3's example dataset or Epic 6's real devices.
+  **Owner: story 6b.6** (*Inventory and device record*), where the screen gains content and the
+  choice becomes concrete.
+
+- ⚠️ **The `/` redirect target is to be re-examined when the dashboard stops being mixed.** `/`
+  redirects to `/triage` because `epics.md` makes 6b.4's triage the screen fed by the REAL gap while
+  6b.5's dashboard is mixed by construction (the real reach section beside example stat cards and
+  sparklines) — and the person who installs the product arrives at `/`, which is exactly whom the
+  change proposal's marker defends. Guy's preference is the dashboard on the ordinary
+  admin-tool convention, and it becomes the right answer once the dashboard is mostly fed.
+  🔑 The re-examination is cheap **because the redirect is separate from the screen**: its target is
+  one line. **Owner: story 6b.5.**
+
+- ⚠️ **The bookmark sweep.** `/` stops being the reconciliation card. `README.md`, both LaTeX manuals,
+  the `gh-pages` landing site and `docker/README.dockerhub.md` all point at it. A 303 keeps every
+  link working, so nothing breaks — but the documents describe a one-page product and will be wrong
+  in substance. **Owner: story 6b.12** (the release story, which already owns the docs sweep).
+
+- 🔑 **The Tailwind chain row is RE-OWNED again, and its criterion is sharpened.** Story 6b.1
+  registered it to 6b.2 on *"the first screen story that writes a utility class"*. 6b.2 is that
+  story and writes none: Guy chose hand-authored again, the shell being of the order of ten rules.
+  **The criterion becomes *"the first story that needs a utility the hand-authored sheet cannot
+  express"*** — plausibly 6b.4 or 6b.6. All four measured spellings stay attached to the original
+  row above; the sharpest for whoever lands it is that **preflight ALONE changes ten computed styles
+  and collapses the first-boot `<h1>`**. ⚠️ *A criterion that names a story rather than a condition
+  will be wrong the moment the story arrives and the condition has not.*

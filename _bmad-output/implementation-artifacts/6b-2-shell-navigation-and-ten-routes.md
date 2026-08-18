@@ -25,155 +25,135 @@ cannot carry a bare French string in a product whose NFR26 is EN + FR.
 
 ---
 
-## 1. 🔴 The mock's navigation contradicts a RECORDED UX decision, on two axes
+## 0. ✅ THE FIVE ARBITRATIONS, taken by Guy on 2026-08-18 before a line of code
 
-Measured, by extracting the mock's `<nav>` and counting: **ten entries in three groups**, and
-**"Topologie" appears ZERO times in the mock's 496 KB** (all four spellings checked).
+**The governing sentence is Guy's own: *the mock prevails*.** It settles §1, §2 and §3 at a stroke,
+and §2's resolution is the interesting one — it does not resolve the collision, it **dissolves** it.
 
-| Mock's group | Entries (`data-screen`, label) |
-|---|---|
-| **Boucle** | `triage` *Triage* · `dashboard` *Tableau de bord* |
-| **Inventaire** | `devices` *Appareils* · `device` *Fiche appareil* · `apps` *Applications* · `ipam` *IPAM* |
-| **Machine** | `sources` *Sources* · `alerts` *Alertes* · `diagnostic` *Auto-diagnostic* · `onboarding` *Mise en service* |
-
-Against that, **UX-DR33** — a recorded UX decision, `epics.md:278` — prescribes:
-
-> *"Shallow left-nav (Inbox · Dashboard · Devices · IPAM · Applications · **Topology**)"*
-
-🔴 **Six entries against ten, and the one UX-DR33 names that the mock does not have is Topology.**
-The epic's AC says *"the navigation over the **ten** entries"*, so the mock wins by Guy's decision (3)
-of 2026-08-13 — and the consequence is that **the topology loses its navigation entry while a
-recorded decision still names it**. That is not this story's call to make silently:
-
-- ⚠️ **REGISTER it** (a story may not edit `epics.md` or the UX spec), owner Epic 6b's retrospective;
-- the five entries the mock adds and UX-DR33 does not name (`device`, `sources`, `alerts`,
-  `diagnostic`, `onboarding`) are the same divergence in the other direction, and they are what
-  stories 6b.6–6b.9 build. They need no arbitration — the epic's decomposition already assigns them.
-- 🔑 *The interactive graphical topology is Growth by UX-DR33's own sentence*, so what is lost is a
-  nav entry to a screen nothing builds in this epic. **State that, so nobody reads the omission as an
-  oversight and nobody reads it as "topology is cut".**
-
----
-
-## 2. 🔴 The AC's header asks for two facts the mock does not show, and one of them collides with the epic's OWN constraint 1
-
-The AC: *"it carries the header (brand, tagline, **perimeter**, **last observation**)"*. The mock's
-header, extracted verbatim:
-
-```
-opencmdb  ·  observé vs déclaré — l'écart est le produit  ·  v0.1.1 · maquette
-```
-
-So **brand and tagline are the mock's; perimeter and last observation are the AC's own addition**,
-and the mock's third slot is a version string ending in the word *maquette* — which obviously does
-not ship.
-
-Where those two facts would come from, measured:
-
-- **perimeter** — `OPENCMDB_SCAN_CIDR`, read at `main.rs:334` inside the startup path. It is **not**
-  in `AppConfig` (story 6.1 put the document switch and the Basic pair there, not this) and it is
-  read via `std::env::var` at the point of use. ⚠️ Story 6.1's rule is that **configuration enters as
-  a PARAMETER** — *"not one new test mutates an env var"* — so putting `OPENCMDB_SCAN_CIDR` in the
-  header means moving it into `AppConfig` first, which is a real change to the composition root.
-- **last observation** — a `MAX(observed_at)` over `observation_record`. There is no such reader
-  today; `repo.rs` reads facts and links, not a global maximum.
-
-🔴 **AND HERE IS THE COLLISION.** Epic 6b's **constraint 1** says, in its own words:
-
-> *"the example dataset lives in the handler/template layer, and **no demo screen opens a
-> connection**"*
-
-The header renders on **every** screen, eight of which are demonstrations in this epic. A header
-carrying *last observation* is a database read. **So the AC and the constraint cannot both hold as
-written**, and the three honest resolutions are:
-
-| | Resolution | Cost |
+| § | Question | Decision |
 |---|---|---|
-| **(a)** | The header's dynamic half renders **only on fed screens**; demo screens carry brand + tagline + version | the frame is not identical across screens, which is a visible inconsistency — and it is arguably HONEST, since a demo screen has no last observation |
-| **(b)** | The shell always reads, so every screen touches the database | **violates constraint 1 literally**, and constraint 1 exists because story 5.12 had to sanction `docker/seed-example.sql` as a write site — the promise is that a demo cannot be mistaken for real data |
-| **(c)** | The header's dynamic half is **hoisted out of the shell** into the fed screens' own content | the AC's word *"header"* is then not met as written; the facts appear, one level down |
+| 1 | mock's ten entries vs UX-DR33's six | **the mock.** Ten entries, three groups, **no Topology** |
+| 2 | the header's *perimeter* and *last observation* | **the mock's header** — brand, tagline, version — with *"v0.1.1 · maquette"* replaced by the RELEASE version. **Neither of the AC's two extra facts ships.** |
+| 3 | `device`, a detail screen with no address | **as the mock does, for now**; revisit later |
+| 4 | what becomes of `/` | **`/` redirects to `/triage`**, and `/dashboard` exists in its own right |
+| 5 | the Tailwind chain | **not now.** Hand-authored, as 6b.1 |
 
-**Recommendation: (a)** — it keeps constraint 1 intact, and the difference is not a defect but the
-truth (*a demonstration has no last observation*). ⚠️ **Guy's call, and it must be taken BEFORE dev**:
-each option changes the shell's signature, and (b) would put a database read on the path of every
-example screen for the rest of the epic.
+### 0a. 🔑 Why arbitration 2 is the one that matters: it removes a database read from every screen
 
----
+The story put three costed resolutions to Guy for a collision between the epic's own AC (*a header
+carrying "last observation"*) and the epic's own constraint 1 (*no demo screen opens a connection*).
+**Guy took none of the three: he took the mock's header, which carries neither fact.**
 
-## 3. `device` is a DETAIL screen with a navigation entry, and it has no address
+So there is **no dynamic half**, **no `MAX(observed_at)` reader**, **no `OPENCMDB_SCAN_CIDR` moved
+into `AppConfig`** — and constraint 1 holds without an aménagement, because the shell reads nothing
+at all. 🔑 *The cheapest way to satisfy two contradictory requirements was to notice that one of them
+was not in the reference.*
 
-The mock's nav carries `device` — *Fiche appareil* — as a peer of `devices`. In the mock that is an
-artefact of a click-through demo: it shows the screen without needing a device to exist.
+⚠️ **What this costs, stated rather than buried: `epics.md`'s AC for this story is NOT met as
+written.** It asks for a header of four things and three ship. **Registered**, owner Epic 6b's
+retrospective — a story may not edit `epics.md`.
 
-🔴 **The AC's promise is *"each screen has its own address … I can link to one, bookmark it"*, and a
-device record without an identifier cannot satisfy it.** `/device` bookmarks nothing; `/devices/{id}`
-bookmarks a device that does not exist yet (Epic 6's L2 grouping is what mints them, stories
-6.5–6.19).
+### 0b. The version string, and the one interpretation this story takes on its own
 
-The three shapes, and only the third keeps both promises:
-
-1. `/device` rendering a fixed example — the mock's own behaviour, and it makes the URL a lie the day
-   real devices exist;
-2. `/devices/{id}` with no id reachable — the nav entry then links to nothing, which the epic's AC
-   forbids (*"the navigation shows all ten from the first day"*);
-3. **`/devices/{id}` as the real address, and the nav entry points at an EXAMPLE id** — the example
-   dataset is 6b.3's, so this story defines the route shape and 6b.3 supplies the id that makes the
-   nav entry honest.
-
-**Take (3), and state the dependency**: 6b.2 owes the route, 6b.3 owes the id and the marker. ⚠️ *A
-nav entry that 404s is worse than one that says "example".*
+The mock reads `v0.1.1 · maquette`. Guy: *replace the mock's version number with the release's*.
+**Taken as `env!("CARGO_PKG_VERSION")`, read at compile time** — `0.1.1` today, and `0.2.0` by itself
+the day story 6b.12 bumps `Cargo.toml`. A number hardcoded in a template is a number that lies on a
+release day, and `metrics.rs:22` already reads it that way, so the idiom exists in this crate.
+The word *maquette* does not ship.
 
 ---
 
-## 4. What becomes of `/`, which is the product's only screen today
+## 1. ✅ ARBITRATED — the mock's navigation, and what that retires
 
-`main.rs:359-363` has five routes; `/` is `page::index`, the reconciliation card, and `/gap` is its
-HTMX fragment. This story takes the router to **fifteen**.
+Extracted from the mock's `<nav>` and counted: **ten entries in three groups**, and **"Topologie"
+appears ZERO times in its 496 KB** (all four spellings checked).
 
-🔴 **`/` cannot stay the reconciliation card and also be a shell screen.** Three options:
+| Group | Entries (`data-screen` → label) |
+|---|---|
+| **Boucle** | `triage` → *Triage* · `dashboard` → *Tableau de bord* |
+| **Inventaire** | `devices` → *Appareils* · `device` → *Fiche appareil* · `apps` → *Applications* · `ipam` → *IPAM* |
+| **Machine** | `sources` → *Sources* · `alerts` → *Alertes* · `diagnostic` → *Auto-diagnostic* · `onboarding` → *Mise en service* |
 
-- **`/` redirects to `/triage`** (303), and the card's content moves to the triage screen in 6b.4;
-- **`/` IS the triage screen** and `/triage` does not exist — but then the nav's current-entry
-  marking has two addresses for one screen, and `aria-current` becomes ambiguous;
-- `/` becomes the dashboard, per the mock's own default screen.
+🔴 **UX-DR33 (`epics.md:278`) prescribes six entries including Topology, and the mock retires it.**
+The decision is Guy's and it is recorded; what must not happen is the retirement being *silent*.
+**Registered**, owner Epic 6b's retrospective. 🔑 State it precisely so it is misread in neither
+direction: UX-DR33's own sentence already calls interactive graphical topology **Growth**, so what
+is lost is a nav entry to a screen no epic in this plan builds — not a feature, and not an oversight.
 
-**Recommendation: `/` redirects to `/triage`.** The mock opens on `triage`, the epic's story order
-puts the real gap in the triage screen (6b.4), and a redirect keeps every existing bookmark working —
-⚠️ **including the one in `README.md`, the manuals and the landing site**, which is 6b.12's sweep and
-must be registered here rather than discovered there.
+The five entries the mock adds that UX-DR33 does not name (`device`, `sources`, `alerts`,
+`diagnostic`, `onboarding`) need no arbitration: stories 6b.6–6b.9 already build them.
 
-⚠️ **`/gap` must keep working unchanged**: story 5.14b's reach sections and the HTMX refresh ride it,
-and the AC says HTMX swaps fragments *within* a screen. Do not move it in this story.
+---
+
+## 2. ✅ ARBITRATED — the header is the mock's, and it reads nothing
+
+```
+opencmdb   ·   observé vs déclaré — l'écart est le produit   ·   v{CARGO_PKG_VERSION}
+```
+
+Three slots, all static. See §0a for what this dissolves and §0b for the version.
+
+⚠️ The perimeter and the last observation are **not lost, they are unplaced**: the perimeter is a
+commissioning fact (story 6b.9, *Mise en service*) and the last observation is a dashboard fact
+(6b.5, which already carries the reach section). **Registered so neither is rediscovered as missing.**
 
 ---
 
-## 5. The Tailwind chain: this story is its registered owner, and the question is now live
+## 3. ✅ ARBITRATED — `device` behaves as the mock does, and the debt is named
 
-`deferred-work.md` names **story 6b.2** as the owner of 6b.1's withdrawn AC1/AC5/AC6, on the
-criterion *"the first screen story that writes a utility class"*. Read the register entry **before
-writing a line**: it carries four spellings D55 does not contain, each measured on v4.3.3
-(`source(none)`, `@theme static`, the two narrow imports instead of the full one, and the
-`@source inline()` htmx entries that can never be generated).
+The nav carries `device` (*Fiche appareil*) as a peer of `devices`, which in the mock is a
+click-through artefact: it shows the screen without a device existing. Guy: **do as the mock does for
+now.** So the route is `/device`, rendering the shell like the other nine.
 
-🔴 **But the criterion is a CHOICE this story makes, not a fact it inherits.** 6b.1 measured that the
-intersection between the classes the templates carry and the utilities Tailwind emits is **empty**.
-This story adds a shell — a header, a sticky sidebar, a two-column grid — and it can be written
-either way:
-
-- **hand-authored classes**, continuing 6b.1: the sheet grows by ~40 lines, no chain, no ninth gate;
-- **utilities**, which finally gives the chain something to generate and makes 6b.1's withdrawn ACs
-  land here.
-
-⚠️ **Whichever is chosen, the four measurements above are load-bearing** — and note the one with the
-sharpest consequence for THIS story: **preflight alone changes ten computed styles on the existing
-page and collapses the first-boot `<h1>`.** If the chain lands, it lands with
-`@import "tailwindcss/theme"` + `"tailwindcss/utilities"` and never the bare import.
-
-**Recommendation: hand-authored, and move the chain to the first story that needs a utility the sheet
-cannot express.** The shell is ten rules; a build step whose output is ten rules is not yet earning
-its ninth gate. But this is Guy's to weigh, and it is the same shape as 6b.1's §7.
+🔴 **What that owes, and it must be written down rather than felt later**: this story's own AC
+promises *"each screen has its own address … I can link to one, bookmark it"*, and **`/device` is the
+one entry for which that promise is hollow** — it addresses no device. The honest shape is
+`/devices/{id}`, and it needs an id, which needs either 6b.3's example dataset or Epic 6's real
+devices. **Registered**, owner story 6b.6 (*Inventory and device record*), which is where the screen
+gains content and the choice becomes concrete.
 
 ---
+
+## 4. ✅ ARBITRATED — `/` redirects to `/triage`
+
+Guy's shape, and it is better than the one this story first recommended: **the redirect is separate
+from the screen**, so every one of the ten keeps exactly one address and `aria-current` has one case
+rather than two.
+
+**The target is `/triage` rather than `/dashboard`**, on a measurement rather than a taste: `epics.md`
+makes **6b.4's triage the screen fed by the REAL gap** (*"today's card becomes the mock's two-pane
+triage"*) while **6b.5's dashboard is mixed by construction** — the real reach section beside example
+stat cards and sparklines. Redirecting `/` at the dashboard would land every visitor, and every
+existing link in the README, the manuals, the landing site and Docker Hub, on the product's **most
+half-demonstration screen** — which is exactly the risk the change proposal names: *"ten screens of
+which eight are examples is a product that looks far more finished than it is"*, whose only defence
+is a marker aimed at **the person who installs it**. That person arrives at `/`.
+
+🔑 **And the arbitration is cheap to revisit precisely because of Guy's shape**: a redirect's target
+is one line. **Registered** — owner story 6b.5 — to re-examine the target when the dashboard stops
+being mixed.
+
+⚠️ `/gap` keeps working unchanged: story 5.14b's reach sections and the HTMX refresh ride it, and the
+AC says HTMX swaps fragments *within* a screen. **The bookmark sweep** (README, the two manuals, the
+`gh-pages` landing site, `docker/README.dockerhub.md`) is **registered for 6b.12**, not discovered.
+
+---
+
+## 5. ✅ ARBITRATED — no Tailwind chain, again, and the criterion is now explicit
+
+`deferred-work.md` names this story as the owner of 6b.1's withdrawn AC1/AC5/AC6, on the criterion
+*"the first screen story that writes a utility class"*. **This story writes none: Guy's decision is
+hand-authored, as 6b.1.** The shell is a header, a sticky 208px sidebar and a two-column grid — of
+the order of ten rules, and a build chain whose output is ten rules has not yet earned a ninth gate.
+
+⚠️ **The register row is re-owned rather than discharged**, and its criterion is sharpened from *"the
+first screen story"* (which this one is, and which turned out not to be the deciding property) to
+**"the first story that needs a utility the hand-authored sheet cannot express"** — plausibly 6b.4 or
+6b.6. Its four measured spellings stay attached, and the sharpest one for whoever lands it:
+**preflight ALONE changes ten computed styles and collapses the first-boot `<h1>`.**
+
+---
+
 
 ## 6. What the shell must NOT break
 
@@ -192,90 +172,104 @@ Measured on `master` at `b1ce1a5`:
 
 ## Acceptance Criteria
 
-Derived from `epics.md`'s three bullets for 6b.2, each made measurable. **AC5–AC7 are this story's own
-additions**, and §2/§3/§4 must be arbitrated before AC1 can be written in code.
+Derived from `epics.md`'s three bullets and **scoped by §0's five arbitrations**. AC5–AC9 are this
+story's own additions.
 
-**AC1 — the frame, on every screen.**
-Every one of the ten routes renders the header (brand, tagline, version) and the navigation over the
-**ten** entries **in the mock's three groups**, with the current entry marked `aria-current="page"`.
-A test asserts the count is exactly ten and that exactly one entry carries `aria-current` per screen.
-🔴 The header's *perimeter* and *last observation* halves depend on §2's arbitration.
+**AC1 — the frame, identical on all ten screens.**
+Every route renders the mock's header — **brand · tagline · `v{CARGO_PKG_VERSION}`**, three static
+slots, the word *maquette* absent — and the navigation over the **ten** entries in the mock's **three
+groups**, with the current entry marked `aria-current="page"`.
+Tests: the entry count is **exactly ten**; the group count is **exactly three**; **exactly one**
+entry carries `aria-current` on each of the ten screens (not *at least one*); the version rendered
+equals `env!("CARGO_PKG_VERSION")` and the template contains no literal version number.
+🔴 **The header carries NO perimeter and NO last observation** (§0a) — and a test asserts that
+absence, because it is a decision rather than an omission and the next reader must meet it.
 
 **AC2 — one URL per screen, server-rendered, deep-linkable cold.**
-Ten routes, each rendering its screen **server-side**. No client-side router, no screen chosen by
-JavaScript — asserted by a test that renders each route and finds its own marker, and by the absence
-of any screen-switching script in `app.js`. HTMX swaps fragments **within** a screen only: `/gap`
-still serves the reconciliation fragment and no route swaps another screen in.
+Ten routes render server-side. **No client-side router and no screen chosen by JavaScript**: a test
+renders each route in isolation and finds that screen's own marker, and `app.js` gains no
+screen-switching code — measured baseline, **zero occurrences of `router` or `screen` in its 482
+bytes**. HTMX swaps fragments **within** a screen only.
 
-**AC3 — all ten are shown from the first day, and none of them lies.**
-The navigation lists ten entries on every screen. ⚠️ **This story must not hide, disable or grey an
-entry** — the honesty is 6b.3's, and hiding entries would silently satisfy this AC while destroying
-the next story's subject. A test asserts all ten are present and that none carries `disabled`,
-`hidden` or an empty `href`.
+**AC3 — all ten are offered from the first day, and none is quietly withheld.**
+⚠️ **This story must not hide, disable, grey or empty an entry.** The honesty of showing ten screens
+that are mostly empty is story 6b.3's subject, and pre-empting it here would satisfy this AC while
+destroying the next story's.
+🔑 **Write this guard as a PROPERTY, not a list.** Story 6b.1 shipped five guards defeated by
+ordinary gestures; an entry can be withheld at least six ways — `hidden`, `disabled`,
+`display:none`, `visibility:hidden`, an empty or `#` href, or simply not being emitted. The guard
+must assert that each of the ten renders **an `<a>` with a non-empty `href` that a router accepts**,
+and state which classes of withholding it cannot see.
 
-**AC4 — no demo route opens a database connection** (epic constraint 1).
-The nine routes this story adds hold **no pool** — the same structural carrier story 6.1 used for the
-document route, where adding `State<MySqlPool>` to the handler **fails to compile**. 🔑 That is a
-guard the compiler holds, not a test that can rot.
+**AC4 — the shell reads NOTHING, and the compiler holds it.**
+None of the ten handlers takes `State<MySqlPool>`. 🔑 Story 6.1 measured this carrier: adding the
+extractor **fails to compile** (`E0277` on the `Handler` bound). That is stronger than a test, and
+after §0a it covers the whole shell rather than the demo screens alone — **epic constraint 1 is met
+structurally, not by discipline.**
 
-**AC5 — `/` keeps working, and so does every existing bookmark.**
-`/` resolves (redirect or screen, per §4) and `/gap` is byte-identical in behaviour. A test asserts
-the reconciliation fragment still renders with story 5.14b's two reach sections.
+**AC5 — `/` redirects to `/triage`, and every existing bookmark still resolves.**
+`/` answers a redirect (303) to `/triage`; `/gap` is unchanged in behaviour and still serves the
+reconciliation fragment with story 5.14b's two reach sections. A test asserts both.
 
 **AC6 — every label is a key, in both locales.**
-The ten entries, the three group headings and the header strings exist in `locales/app.yml` under
-**both** `fr` and `en` (NFR26). A test asserts no template carries a bare non-ASCII string and that
-every key used resolves in both locales. ⚠️ 6b.10 owns the ~100 mock strings; these ~15 are this
-story's own and must not be left for it.
+The ten entries, the three group headings and the header's tagline live in `locales/app.yml` under
+**both** `fr` and `en`. Baseline measured: **32 top-level entries, and not one is missing a locale**
+— so the guard is *"no key regresses to a single locale"*, asserted over the whole file rather than
+over the new keys. A test also asserts no template carries a bare non-ASCII string.
 
-**AC7 — `is_public` is unchanged**, and the pin at `auth.rs:173` proves it: ten new screens, zero new
-public paths.
+**AC7 — `is_public` is unchanged**: ten new screens, zero new public paths. The pin at `auth.rs:173`
+is the carrier.
 
-**AC8 — the live test count lives HERE**, in this file (story 6.1's AC8 rule, F2), and is not copied
+**AC8 — the divergences of §0 reach the register, and it is VERIFIED by reading the register.**
+Five rows: UX-DR33's retired Topology entry; `epics.md`'s four-part header of which three ship;
+`/device`'s hollow bookmark promise (owner 6b.6); the redirect target to re-examine (owner 6b.5);
+the bookmark sweep (owner 6b.12). Plus the Tailwind row re-owned with its sharpened criterion.
+🔴 **Read `deferred-work.md` and count what is there — do not count what you wrote here.** Story
+6b.1 asserted two registrations that were never written, in a story whose own §Traps had prescribed
+this very check.
+
+**AC9 — the live test count lives HERE**, in this file (story 6.1's AC8 rule, F2), and is not copied
 into `CLAUDE.md`, `docs/project-context.md` or `sprint-status.yaml`.
 
----
 
 ## Tasks / Subtasks
 
-- [ ] **T0 — the four arbitrations of §2, §3, §4 and §5, with Guy, BEFORE code**
-- [ ] **T1 — the shell** (AC1, AC6): `_shell.html` + `_nav.html` partials; the ten entries in three
-      groups; `aria-current`; the header
-- [ ] **T2 — the ten routes** (AC2, AC4): handlers holding no pool; the screen enum; `/devices/{id}`
-      per §3
-- [ ] **T3 — `/` and `/gap`** (AC5) per §4's arbitration
-- [ ] **T4 — the copy** (AC6): ~15 keys, `fr` + `en`
-- [ ] **T5 — the guards** (AC1–AC7), each written to red before it passes
-- [ ] **T6 — look at all ten screens** in a browser. ⚠️ Story 6b.1's T6 logged HTTP statuses and
-      called it looking; *a status code is not a look*
-- [ ] **T7 — the register**: §1's UX-DR33 divergence, §4's bookmark sweep for 6b.12, and whatever
-      §5 defers. 🔴 **Then VERIFY the rows exist by reading the register, not by reading this list** —
-      story 6b.1 claimed two registrations that were never written, and its own §Traps had
-      prescribed exactly that check
-- [ ] **T8 — prove-to-red**, predictions written FIRST
+**Scoped by §0.** No Tailwind, no chain, no `xtask` subcommand; no database read anywhere in the shell.
 
----
+- [ ] **T1 — the shell** (AC1, AC6): `_shell.html` + `_nav.html` partials; ten entries in three
+      groups; `aria-current`; the header's three static slots with `CARGO_PKG_VERSION`
+- [ ] **T2 — the ten routes** (AC2, AC4): handlers holding **no pool**; `/device` as the mock has it
+- [ ] **T3 — `/` and `/gap`** (AC5): 303 to `/triage`; `/gap` untouched
+- [ ] **T4 — the copy** (AC6): ~15 keys, `fr` + `en`
+- [ ] **T5 — the guards** (AC1–AC7), each written to red before it passes, and AC3's written as a
+      PROPERTY with its blind spots stated
+- [ ] **T6 — look at all ten screens** in a browser. ⚠️ *A status code is not a look* — 6b.1's T6
+      logged HTTP statuses and called it looking, and the review said so
+- [ ] **T7 — the register** (AC8): the five rows of §0, plus the Tailwind row re-owned with its
+      sharpened criterion. 🔴 **Then verify by READING `deferred-work.md`**, not by re-reading this list
+- [ ] **T8 — prove-to-red**, predictions written FIRST
 
 ## Prove-to-red — the mutations this story owes
 
 | # | Mutation | Prediction |
 |---|---|---|
-| M1 | Drop one nav entry | AC1/AC3's count reds |
-| M2 | Mark two entries `aria-current` | AC1 reds — *exactly one*, not *at least one* |
-| M3 | Give a screen handler `State<MySqlPool>` | **fails to COMPILE** (story 6.1's measured carrier) |
-| M4 | Add a screen-switching branch to `app.js` | AC2 reds |
-| M5 | `hidden` on the entry whose screen is emptiest | AC3 reds — the mutation this story exists to forbid |
-| M6 | Remove one `en` key, leaving `fr` | AC6 reds |
-| M7 | Add `/devices` to `is_public` | AC7's pin reds |
-| M8 | Break `/gap`'s fragment | AC5 reds |
-| M9 | Serve a screen from JavaScript instead of the route | AC2 reds cold-load |
-| M10 (control) | Reorder two entries within a group | green — order within a group is not pinned by anything, and that is deliberate |
+| M1 | Drop one nav entry | AC1/AC3 red — the count is exactly ten |
+| M2 | Mark two entries `aria-current` | AC1 red — *exactly one*, never *at least one* |
+| M3 | Give a screen handler `State<MySqlPool>` | **fails to COMPILE** (`E0277`, story 6.1's measured carrier) — the only compiler-carried red, recorded as such |
+| M4 | Add a screen-switching branch to `app.js` | AC2 red |
+| M5 | `hidden` on the entry whose screen is emptiest | AC3 red — **the shape this story is most likely to take by accident** |
+| M5b | `href="#"` on one entry (the mock's own spelling!) | AC3 red — ⚠️ the mock writes `href="#"` on all ten, so this is the mutation the mock itself would introduce |
+| M6 | Remove one `en` key, leaving `fr` | AC6 red |
+| M7 | Add `/devices` to `is_public` | AC7's pin red |
+| M8 | Break `/gap`'s fragment | AC5 red |
+| M9 | Hardcode `v0.2.0` in the header template | AC1 red — the version must come from the crate |
+| M10 | Put a `MAX(observed_at)` read back in the shell | AC4 red **at compile time** — §0a's dissolution made structural |
+| M11 (control) | Reorder two entries within a group | green — order within a group is pinned by nothing, deliberately |
 
-⚠️ **M3 is the only compiler-carried red and it must be recorded as such** — story 6.1 measured
-`E0277` on the `Handler` bound. **M5 is the one that matters**: it is the shape this story is most
-likely to take by accident.
-
----
+⚠️ **M5b is the one to design carefully**: the mock's own markup is `<a href="#" data-screen="…">`,
+because its navigation is JavaScript. Transcribing the mock faithfully therefore PRODUCES the defect
+AC3 forbids — *the reference itself is the adversary here*, which is why M5b is a row rather than a
+footnote.
 
 ## Dev Notes
 
