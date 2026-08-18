@@ -3763,4 +3763,8 @@ below is a consequence of that sentence, recorded rather than absorbed — a sto
   requires the left nav to collapse to a bottom bar or drawer. 🔴 **"The mock prevails" is unbounded
   as Guy stated it, and applied to responsive it means shipping a desktop-only shell** — a fourth
   collision of the same family as the nav, the header and `device`, which story 6b.2's contexting did
-  not raise. **Owner: Epic 6b's retrospective**, unless Guy scopes it into a story first.
+  not raise. ✅ **ARBITRATED by Guy on 2026-08-18: not now, we will see later.** The shell ships
+  desktop-only, as the mock has it — so this is **deferred by decision**, not pending an owner. It is
+  scoped when someone opens the product on a telephone, or when story 6b.12 has to describe the
+  release's limits. ⚠️ **NFR24's ≥44px touch targets are NOT covered by this deferral** — a touch
+  target is not a breakpoint, and that obligation stays with story 6b.11.

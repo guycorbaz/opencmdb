@@ -37,6 +37,7 @@ and §2's resolution is the interesting one — it does not resolve the collisio
 | 3 | `device`, a detail screen with no address | **as the mock does, for now**; revisit later |
 | 4 | what becomes of `/` | **`/` redirects to `/triage`**, and `/dashboard` exists in its own right |
 | 5 | the Tailwind chain | **not now.** Hand-authored, as 6b.1 |
+| 6 | responsive: the mock has none, the UX spec mandates three breakpoints | **not now**, we will see later |
 
 ### 0a. 🔴 THE REASON THIS STORY FIRST GAVE FOR ARBITRATION 2 WAS FALSE, and the validation refuted it
 
@@ -128,6 +129,28 @@ the header** (brand, tagline), a **third arrives in the nav footer** (the perime
 fourth is registered, **and a fifth slot the AC never asked for is added** (the version). 🔴 The
 first draft wrote *"four asked, three ship"*, wrong twice over: it counted the version among the
 four, and it had not yet placed the perimeter. **Registered**, owner Epic 6b's retrospective.
+
+### 0a-quinquies. ✅ ARBITRATED — no responsive in this story (Guy, 2026-08-18)
+
+Raised by the validation as a **fourth collision of the same family** as the nav, the header and
+`device`, and not seen at contexting. Measured: the mock has **zero `@media` rules** and **zero skip
+links**, and is a fixed `grid-template-columns: 208px minmax(0, 1fr)`. The UX spec mandates
+mobile-first with breakpoints at ≤360 / 768 / 1280 (`:1530-1545`), a mobile bottom nav with a
+permanent search magnifier, skip links (`:1568`), and a left nav that *"collapses to a bottom bar /
+drawer on mobile"* (`:841`).
+
+**Guy: not now.** The shell ships desktop-only, as the mock has it. ⚠️ **Registered**, and the
+register row's owner is no longer *"the retrospective unless Guy scopes it"* — it is **deferred by
+decision**, to be scoped when someone opens the product on a telephone or when the release story
+needs to describe it.
+
+🔑 **What this changes in the numbers**: the gap-hunt's 18 rules included one breakpoint, so the
+committed shell is nearer **15**, and its *"30–40 built to the spec"* is now a future story's figure
+rather than this one's. §5's arbitration is unaffected either way.
+
+⚠️ **What it does NOT change**: the ≥44px touch-target obligation (NFR24) against the mock's ~30px
+nav entries is **not** a responsive question — it applies to a desktop pointer and a touch screen
+alike. It stays registered with story 6b.11, untouched by this decision.
 
 ### 0b. The version string, and the one interpretation this story takes on its own
 
