@@ -116,10 +116,13 @@ mod tests {
     ///
     /// 🔑 **It asserts two different things, and they catch different mistakes.** That the value
     /// LOOKS like a key catches the literal (measured: M8 reds). That it RESOLVES is aimed at the
-    /// typo, since `rust-i18n` renders an unknown key as its own name — ⚠️ **and that half is
-    /// currently carried by NOTHING that has been measured**: the mutation written for it (M8b)
-    /// never ran, because the tree it ran against did not compile and the driver's filter hid it.
-    /// Registered rather than claimed. Do not read the second `assert` as proven.
+    /// typo, since `rust-i18n` renders an unknown key as its own name. **Both halves are measured**
+    /// — M8 plants a literal, M8b plants `example.role.storag`, and each reds this test alone.
+    ///
+    /// ⚠️ M8b first came back GREEN and the green was an artefact, worth recording because it cost
+    /// real work: the mutation ran against a tree that **did not compile**, and the driver grepped
+    /// for `FAILED` test lines, which a compile failure does not produce. *A mutation that does not
+    /// build measures nothing, and a filter that cannot see the difference reports it as a pass.*
     #[test]
     fn the_example_copy_is_translated_rather_than_typed() {
         let mut checked = 0_usize;

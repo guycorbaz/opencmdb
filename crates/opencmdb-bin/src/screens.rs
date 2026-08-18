@@ -12,6 +12,14 @@
 //! `.with_state(pool)`, this sub-router's state is `()`, so the same handler **fails to
 //! compile**. The shape is the carrier; the sentence is only its description.
 //!
+//! 🔑 **Story 6b.3's AC3 — *"no database connection is opened and no row is written, and a test
+//! says so"* — is discharged HERE, by this shape, and NO RUNTIME TEST WAS ADDED FOR IT.** That is a
+//! decision, not an omission, and the reason is that a run-time assertion would be strictly WEAKER
+//! than what already holds: a test can only observe that no query ran on the paths it happens to
+//! exercise, while the type refuses the extractor on every path there will ever be. Writing one
+//! would also be the epic's own dominant defect — a guard placed where the defect cannot occur.
+//! The story's validation re-measured the carrier (`E0308`) before this sentence was written.
+//!
 //! ⚠️ `/triage` is deliberately NOT here. It is the one screen `epics.md` feeds with the real
 //! gap (story 6b.4), and it renders today's reconciliation card, so it needs the pool and stays
 //! on the main router. Nine screens without, one with — constraint 1 is about demonstrations,

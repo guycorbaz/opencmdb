@@ -75,7 +75,35 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.3 ✅ VALIDATED, two fresh-context layers, and it paid for itself.
+last_updated: 2026-08-19  # 6b.3 -> `review`: IMPLEMENTED. The product shows example content for the
+                          # first time, and says so. `Nature` (Fed/Example/Empty) on `Screen` by a
+                          # compiler-checked match; ONE partial + ONE key pair for the marker;
+                          # `example_data.rs` (no connection, constraint 1); `/devices` filled in TWO
+                          # sections, each carrying the marker; the partition asserted over the ROUTE
+                          # TABLE on the real HTTP body. **591 -> 613 tests.**
+                          # 🔴 TWO DEFECTS FOUND BY LOOKING, neither reachable by any test:
+                          # (1) the example data rendered in ENGLISH under a French UI, whole suite
+                          # green, because a literal is not a key and the locale guard only sees
+                          # keys -- an NFR26 violation with no possible carrier. Fixed into keys,
+                          # closed by a guard asserting the value IS a key AND RESOLVES.
+                          # (2) the partition's Fed half was gated on `DATABASE_URL`, which does not
+                          # govern the code: `lazy_pool()` is a hardcoded dead URL, so that half
+                          # could never pass and was never attempted. Found by running WITH a
+                          # database (500 vs 200). *A gate keyed on a fact that does not govern the
+                          # code under test is not a gate.*
+                          # ⚠️ AC4 is PARTIALLY met and says so: `Screen::ALL`'s blind half is closed
+                          # by `clippy -D warnings` -- measured M2: build passes, 613 tests pass,
+                          # ALL EIGHT GATES GREEN, only clippy reds. A dev running `cargo xtask ci`
+                          # alone never sees it, and NOTHING PINS IT. Ninth-gate question -> GUY.
+                          # ⚠️ AC2 = mechanism met, MIXED specimen stated (-> 6b.5). AC3 met BY
+                          # CITATION, no runtime test added, on purpose.
+                          # ⚠️ The driver lied twice: a mutation run on a non-compiling tree read as
+                          # GREEN, and `git checkout -- <file>` silently discarded the i18n fix
+                          # (story 6.1's incident, reproduced). Both re-run on a committed base.
+                          # Suite run BOTH ways: 0.07s without a DB, 5.71s against a live
+                          # mariadb:10.11.11 -- the tell that the DB half really ran.
+                          # NEXT = `code-review` 6b.3 (three layers, different model).
+                          # (Earlier the same day) 6b.3 ✅ VALIDATED, two fresh-context layers, and it paid for itself.
                           # Layer 1 (fact-check): 30 assertions verified, 28 confirmed, 2 REFUTED --
                           # both mine, and the graver one was a PREMISE OF THE ARBITRATION ("each of
                           # 6b.5-6b.9 titled `(example)`" -- TWO of five). The two load-bearing
@@ -3164,7 +3192,7 @@ development_status:
   epic-6b: in-progress
   6b-1-design-system-tokens-and-accent: done
   6b-2-shell-navigation-and-ten-routes: done
-  6b-3-example-data-marker-and-its-gate: in-progress
+  6b-3-example-data-marker-and-its-gate: review
   6b-4-triage-screen-on-the-real-gap: backlog
   6b-5-dashboard-real-reach-beside-examples: backlog
   6b-6-inventory-and-device-record: backlog

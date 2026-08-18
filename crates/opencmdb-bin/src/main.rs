@@ -836,11 +836,19 @@ mod tests {
     /// [`screens::Screen::ALL`], drives the REAL `app()` — auth layer included — and reads the
     /// bytes the browser would receive. It never opens a template.
     ///
-    /// ⚠️ **The `Fed` half is `DATABASE_URL`-gated, and that is not laziness.** With a lazy pool
-    /// and no database, `/triage` answers 500 and its body carries no marker — so *"a fed screen
-    /// carries no marker"* would pass **because nothing rendered at all**. That is the guard placed
-    /// where the defect cannot occur, which this epic has now shipped five times. Asserting it
-    /// means asserting it against a page that really rendered.
+    /// ⚠️ **The `Fed` half needs a REAL pool, and that is not laziness.** With a dead pool,
+    /// `/triage` answers 500 and its body carries no marker — so *"a fed screen carries no marker"*
+    /// would pass **because nothing rendered at all**. That is the guard placed where the defect
+    /// cannot occur, which this epic has now shipped five times.
+    ///
+    /// 🔴 **The first version of this test gated that half on `DATABASE_URL` being set, and the
+    /// condition was measuring the wrong thing** — found by running the suite WITH a database, at
+    /// which point it reddened at once (`left: 500, right: 200`). `lazy_pool()` is a hardcoded
+    /// dead URL (`…:3306/none`) and ignores `DATABASE_URL` entirely, so the environment variable
+    /// says nothing about the pool the test uses: the `Fed` half could never have passed, and with
+    /// the variable unset it was never even attempted. *A gate keyed on a fact that does not govern
+    /// the code under test is not a gate.* It now connects and migrates, like every other
+    /// database-backed test in this crate.
     ///
     /// 🔑 **The count assertion at the end is load-bearing and must not be tidied away.** Story
     /// 6b.3's validation measured it: with content dispatched from `nature()`, promoting a second
@@ -854,16 +862,32 @@ mod tests {
         let mut example_screens = 0_usize;
         let mut probed = 0_usize;
 
+        // A real pool when one is reachable, so the `Fed` half asserts over a page that RENDERED.
+        let (pool, fed_reachable) = match std::env::var("DATABASE_URL") {
+            Ok(url) => {
+                let pool = MySqlPool::connect(&url).await.expect("connect");
+                sqlx::migrate!("./migrations")
+                    .run(&pool)
+                    .await
+                    .expect("migrate");
+                (pool, true)
+            }
+            Err(_) => {
+                eprintln!("the fed half of the partition needs DATABASE_URL — demo screens only");
+                (lazy_pool(), false)
+            }
+        };
+
         for screen in screens::Screen::ALL {
             let nature = screen.nature();
             if nature == screens::Nature::Example {
                 example_screens += 1;
             }
-            if nature == screens::Nature::Fed && std::env::var("DATABASE_URL").is_err() {
-                // Said, not skipped in silence — see this test's doc.
+            if nature == screens::Nature::Fed && !fed_reachable {
+                // Said on stderr above, never skipped in silence — see this test's doc.
                 continue;
             }
-            let response = app(lazy_pool(), config(false, Some(pair())))
+            let response = app(pool.clone(), config(false, Some(pair())))
                 .oneshot(
                     Request::builder()
                         .uri(screen.href())

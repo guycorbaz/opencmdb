@@ -1,6 +1,6 @@
 # Story 6b.3: The example-data marker, and the gate that keeps it honest
 
-Status: ready-for-dev
+Status: review
 
 Epic: 6b — *L'interface de la maquette*. **Third story**, after 6b.1 put the design system in the
 binary and 6b.2 gave the product ten addresses. It is the story the previous one deferred to BY
@@ -260,34 +260,34 @@ the story, from a recount, not from this paragraph**.
       before any production code** — `dead_code` DOES catch an unlisted variant under
       `clippy -D warnings`, and a `nature()` match reds on a new variant. ⚠️ Read §0c's three
       qualifications: the closure is partial, it lives outside `cargo xtask ci`, and nothing pins it
-- [ ] **T1 — the nature, in the type** (AC4): `Nature` — **`Fed` / `Example` / `Empty`** (§0a) — on
+- [x] **T1 — the nature, in the type** (AC4): `Nature` — **`Fed` / `Example` / `Empty`** (§0a) — on
       `screens::Screen` through a `match`, so the compiler refuses a screen with no declared nature.
       ⚠️ `Empty` carries a doc comment saying it is TEMPORARY and must be gone when 6b.9 closes
-- [ ] **T2 — the partition over the ROUTE TABLE** (AC4), not inside the templates: every demo surface
+- [x] **T2 — the partition over the ROUTE TABLE** (AC4), not inside the templates: every demo surface
       carries the marker, every fed surface does not, driven through the real router and asserted on
       the **HTTP body**, never on the template source. ⚠️ **It is `DATABASE_URL`-gated and therefore
       INVISIBLE locally** — `/triage` is the only `Fed` screen and needs a real pool (measured ~5.9 s
       with a database against 0.06 s without). Say so where the test lives, or a local green reads as
       coverage it is not
-- [ ] **T3 — one partial, one key pair, one treatment** (AC1): `_example_marker.html`, `fr` + `en`,
+- [x] **T3 — one partial, one key pair, one treatment** (AC1): `_example_marker.html`, `fr` + `en`,
       no `--accent-document`
-- [ ] **T3b — the example DATASET and the witness screen** (§0a, §0a-bis): the dataset, and
+- [x] **T3b — the example DATASET and the witness screen** (§0a, §0a-bis): the dataset, and
       `/devices` filled from it. ⚠️ It must not open a connection — the demo router's state is `()`
       and that is what keeps AC3 true (§0d). A dataset that needs a READ breaks the carrier
-- [ ] **T4 — the smallest unit** (AC2): the mechanism, demonstrated at SECTION granularity inside
+- [x] **T4 — the smallest unit** (AC2): the mechanism, demonstrated at SECTION granularity inside
       `/devices`. ⚠️ The MIXED specimen (real beside example) is 6b.5's — record AC2 as *mechanism
       met, mixed specimen stated*, never as simply met
-- [ ] **T5 — AC3 by CITATION** (§0d): the compile carrier already holds it; add no runtime test, and
+- [x] **T5 — AC3 by CITATION** (§0d): the compile carrier already holds it; add no runtime test, and
       record why the absence is deliberate
-- [ ] **T6 — look at every screen in a browser**, `OPENCMDB_LOCALE=fr` exported first (the default is
+- [x] **T6 — look at every screen in a browser**, `OPENCMDB_LOCALE=fr` exported first (the default is
       `en`, `main.rs:344`). *A status code is not a look* — 6b.1 and 6b.2 were both caught on this.
       ⚠️ That citation read `main.rs:291` in this file's first draft, copied from story 6b.2's own
       dossier where it was true; **verified and corrected at contexting**. Every line number here was
       re-measured against `932c570` — treat them as dated the day they are read, not as durable
-- [ ] **T7 — the register**, both directions: `grep -n "6b.3" deferred-work.md` **before starting and
+- [x] **T7 — the register**, both directions: `grep -n "6b.3" deferred-work.md` **before starting and
       before finishing**. ⚠️ Four consecutive stories have missed a row naming them
-- [ ] **T8 — the count sweep** (§0f): recount, then correct `eight`/`nine` from the recount
-- [ ] **T9 — prove-to-red**, predictions written FIRST, **and every prescribed row executed**
+- [x] **T8 — the count sweep** (§0f): recount, then correct `eight`/`nine` from the recount
+- [x] **T9 — prove-to-red**, predictions written FIRST, **and every prescribed row executed**
 
 ## Prove-to-red — deliberately short
 
@@ -349,8 +349,95 @@ I flagged at contexting were settled by someone other than me** — which is wha
 
 ### Agent Model Used
 
-### Debug Log References
+Claude Opus 5 (1M context), 2026-08-19.
+
+### Debug Log References — the mutation pass, every prescribed row EXECUTED
+
+🔑 **Seven rows were prescribed and nine were run** (M8/M8b were added when looking found a defect
+the table had not imagined). Story 6b.2 prescribed eighteen and played seven; that is the failure
+this table was sized against. **Carriers are named per row — *"every red assertion-carried"* is NOT
+claimed, and two rows diverged from their prediction.**
+
+| # | Mutation | Predicted | MEASURED | Carrier |
+|---|---|---|---|---|
+| M1 | `Screen` variant wired into `href`/`label_key`/`group`, no `nature()` arm | fails to compile | ✅ `error[E0004]: non-exhaustive patterns: 'Screen::Probe' not covered` | compiler |
+| M2 | variant wired everywhere, omitted from `Screen::ALL` | unknown by design | 🔴 **build passes, 613 tests pass, `cargo xtask ci` ALL EIGHT GATES GREEN** — only `clippy -D warnings` reds (`variant 'Probe' is never constructed`) | lint, outside the project's own gates |
+| M3 | `/devices` `Example` → `Fed` | partition reds | ✅ 1 red — ⚠️ **but carried by the PREMISE assertion (`probed >= 9`), not by the marker check**: a `Fed` screen leaves the pool-free router, so the loop never probes it and the premise is what notices | named assertion (premise), not the one predicted |
+| M4 | `/triage` `Fed` → `Example` | partition reds | ⚠️ **15 red, not 1** — `/triage` is then merged onto BOTH routers and axum panics at construction (*"Overlapping method route"*), so every test that builds `app()` dies | panic at router construction |
+| M5 | marker's `fr` half deleted | AC1 red | ✅ 1 red, `every_key_carries_both_locales` | named assertion |
+| M6 | `--accent-document` in the marker | 6b.1's guard reds — *"verify before believing"* | ✅ 1 red — **my doubt was REFUTED**: the guard reads `templates/` at run time, so a brand-new partial is covered | named assertion |
+| M7 | an `Empty` screen → `Example` | ⚠️ prediction already corrected at validation | ✅ 1 red, on the COUNT assertion — and with the count deleted, **385 green**: the per-screen loop notices nothing, exactly as the validation measured | named assertion (count), sole carrier |
+| M8 | an English literal back in place of a `role_key` | *(not prescribed — written after looking)* | ✅ 1 red | named assertion |
+| M8b | a key that looks right but does not resolve (`example.role.storag`) | *(not prescribed)* | ✅ 1 red | named assertion |
+
+⚠️ **The driver lied twice, and both are recorded because both cost real work.** M8b first came back
+GREEN: it ran against a tree that **did not compile**, and the driver grepped for `FAILED` test
+lines, which a compile failure does not produce. And the tree did not compile because
+`git checkout -- <file>` had reverted that file to the last COMMIT — which predated the i18n fix,
+silently discarding it. *Story 6.1's incident, reproduced by me: a file revert equals a mutation
+revert only on a committed baseline.* Both mutations were re-run on a committed base and both red.
 
 ### Completion Notes List
 
+🔴 **Two defects were found by LOOKING at the screen, and neither was reachable by any test.**
+
+1. **The example data rendered in English under a French interface** — *Storage*, *Network*,
+   *No declared record matches this address* — with the whole suite green, because a literal is not
+   a key and `every_key_carries_both_locales` can only see keys. An NFR26 violation with no possible
+   carrier on the locale side. Fixed by making the copy i18n KEYS, and closed by a new guard
+   asserting both that each value IS a key and that it RESOLVES (M8, M8b). ⚠️ **This is what T6
+   exists for**: *a status code is not a look*, and neither is a green suite.
+
+2. **The partition's `Fed` half was gated on a fact that does not govern the code under test.** It
+   skipped unless `DATABASE_URL` was set — but `lazy_pool()` is a hardcoded dead URL and ignores that
+   variable entirely, so the `Fed` half could never have passed and was never even attempted. Found
+   by running the suite WITH a database, where it reddened at once (`left: 500, right: 200`). It now
+   connects and migrates like every other database-backed test. *A gate keyed on a fact that does not
+   govern the code under test is not a gate.*
+
+**AC by AC, and two are deliberately NOT ticked as fully met:**
+
+- **AC1 — MET.** One partial, one key pair, one treatment. The neutral ramp, never `--accent-document`.
+- **AC2 — MECHANISM MET, MIXED SPECIMEN STATED.** Two sections on `/devices`, each carrying the
+  marker, proves placement below screen level. The case AC2 names — real beside example in one frame
+  — needs the dashboard and is story 6b.5's. Registered.
+- **AC3 — MET BY CITATION, and no runtime test was added.** The `Router<()>` shape refuses
+  `State<MySqlPool>` at compile time; a run-time assertion would be strictly weaker and would be the
+  epic's own dominant defect. The reasoning is in `screens.rs`'s module doc, not only here.
+- **AC4 — PARTIALLY MET, and it must not be written otherwise.** The nature is a compiler-checked
+  `match`; the partition runs over the route table on the real HTTP body. But `Screen::ALL`'s blind
+  half is closed by `clippy`, **outside `cargo xtask ci`**, and nothing in the suite pins it (M2).
+  Put to Guy as a ninth-gate question rather than decided.
+
+**591 → 613 tests** (386 bin + 161 core + 66 xtask). Eight gates green, fmt and clippy clean, and the
+suite was run BOTH ways: 0.07 s without a database and 5.71 s against a live `mariadb:10.11.11`,
+which is the tell that the database-backed half really executed.
+
+⚠️ **T6 was a real look**, not a status sweep: the server was run against a live database with
+`OPENCMDB_LOCALE=fr`, and `/devices`, an `Empty` screen and `/triage` were read as rendered text.
+That is what found defect 1. **It is still not a visual check in a browser** — no browser was
+available in this environment — so typography, spacing and colour remain unverified by eye.
+
 ### File List
+
+| File | Change |
+|---|---|
+| `crates/opencmdb-bin/src/example_data.rs` | **new** — the example dataset, i18n keys for its copy, and the guard that keeps it translated |
+| `crates/opencmdb-bin/templates/_example_marker.html` | **new** — the marker: one partial, one key pair |
+| `crates/opencmdb-bin/templates/_devices_example.html` | **new** — the witness screen's two sections |
+| `crates/opencmdb-bin/src/screens.rs` | `Nature`, `Screen::nature()`, the body dispatch, AC3's citation, the count sweep |
+| `crates/opencmdb-bin/src/page.rs` | the resolved view structs, `devices_example_body()`, the new strings, the count sweep |
+| `crates/opencmdb-bin/src/main.rs` | `mod example_data`, and the route-table partition test |
+| `crates/opencmdb-bin/locales/app.yml` | 14 keys, both locales |
+| `crates/opencmdb-bin/assets/app.css` | the marker's treatment, on the neutral ramp |
+| `crates/opencmdb-bin/templates/_nav.html` | the count sweep |
+| `_bmad-output/implementation-artifacts/deferred-work.md` | five rows |
+
+### Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-19 | Contexted: six findings, four needing arbitration. The marker is specified by no document the project has — measured against the mock and the UX spec. |
+| 2026-08-19 | Arbitrated by Guy: the dataset ships with ONE witness screen, which forces a third nature (`Empty`). |
+| 2026-08-19 | Validated by two fresh-context layers: 30 assertions checked, 2 refuted (both mine, one a premise of the arbitration); the gap-hunt BUILT the mechanism and found that my own M7 does not guard what I claimed. |
+| 2026-08-19 | Implemented. 591 → 613 tests, eight gates green. Nine mutations run, nine measured, two diverging from prediction. Two defects found by LOOKING that no test could reach. |
