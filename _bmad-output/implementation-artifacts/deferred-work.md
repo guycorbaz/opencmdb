@@ -3328,7 +3328,11 @@ story 5.14b's AC10 failed exactly there).
   (the FR coverage map already assigns it there; recorded at Epic 6's decomposition).
 - **(h) Basic's closure — real sessions** (users, revocation, a login form; one shared credential
   authenticates a caller, not a person). **Owner: Epic 19.**
-- **(i) The D37 filename drift**: the vendored file is `htmx.min.js` unversioned where
+- **(i) The D37 filename drift** — ✅ **DISCHARGED by story 6b.1 (2026-08-18)**: the asset is now
+  `assets/vendor/htmx-2.0.4.min.js`, the version read from the file itself (`version:"2.0.4"`), the
+  template updated, and both directions pinned — the versioned path is embedded and served (200),
+  the old one is **404**, measured through the running binary. _(Original wording follows.)_
+  The vendored file was `htmx.min.js` unversioned where
   `architecture.md:3406` names a versioned filename. **Owner: Epic 6b story 6b.1.**
 - **(j) 🔴 CSRF protection for the write route.** ✅ **CLOSED by story 6.2's Origin check**
   (contexted + validated 2026-08-14, §5): a browser holding the cached Basic credential and a

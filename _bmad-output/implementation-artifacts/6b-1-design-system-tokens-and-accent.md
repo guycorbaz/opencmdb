@@ -1,6 +1,6 @@
 # Story 6b.1: The design system — tokens, typography, and the accent that stays reserved
 
-Status: ready-for-dev
+Status: review
 
 Epic: 6b — *L'interface de la maquette* (inserted 2026-08-13 by correct-course,
 `sprint-change-proposal-2026-08-13.md`). **First story of the epic**, so `epic-6b` moves to
@@ -436,33 +436,33 @@ one `<script src>`. ⚠️ It was absent from the first draft — **the second c
 
 **Scoped to §7's option (1).** No Tailwind binary, no `tailwind.css`, no new xtask subcommand.
 
-- [ ] **T1 — tokens** (AC2, AC3, AC1′)
-  - [ ] Port §2's tokens into `app.css`; keep the dark set present and unreferenced
-  - [ ] Remove `data-theme="dark"` from `gap.html`
-  - [ ] Rewrite `app.css`'s header — it describes a walking-skeleton state this story ends
-- [ ] **T2 — typefaces** (AC2)
-  - [ ] Fetch the five `.woff2` + `OFL.txt` from `jpt/barlow` (`fonts/woff2/`); place under
+- [x] **T1 — tokens** (AC2, AC3, AC1′)
+  - [x] Port §2's tokens into `app.css`; keep the dark set present and unreferenced
+  - [x] Remove `data-theme="dark"` from `gap.html`
+  - [x] Rewrite `app.css`'s header — it describes a walking-skeleton state this story ends
+- [x] **T2 — typefaces** (AC2)
+  - [x] Fetch the five `.woff2` + `OFL.txt` from `jpt/barlow` (`fonts/woff2/`); place under
         `assets/fonts/`. ⚠️ `touch src/page.rs` before any build, or the embed is stale and silent
-  - [ ] `@font-face` for the five faces; `--font-body` / `--font-heading` per the mock
-  - [ ] Assert no external font request from the sheet or any template
-- [ ] **T3 — the accent** (AC4)
-  - [ ] Rename **both** definitions (`:12`, `:22`) to `--accent-document`
-  - [ ] Move the **four** structural uses (`:62`, `:77`, `:78`, `:83`) to the mock's blue
-  - [ ] Check `page.rs:1163` still holds
-- [ ] **T4 — D37** (AC7b)
-  - [ ] `htmx.min.js` → versioned filename under `assets/vendor/`; update `gap.html`'s `<script>`
-  - [ ] Mark register row (i) discharged
-- [ ] **T5 — the guards** (AC3, AC4, AC2)
-  - [ ] The AC3 second-direction assertion, **written to red on M7b** before it is believed
-- [ ] **T6 — regression** (AC7)
-  - [ ] Full suite against a live MariaDB; strings, routes and i18n keys unchanged
-  - [ ] Look at the page (`/run`) — the colour and typeface change is the point, and nobody has
+  - [x] `@font-face` for the five faces; `--font-body` / `--font-heading` per the mock
+  - [x] Assert no external font request from the sheet or any template
+- [x] **T3 — the accent** (AC4)
+  - [x] Rename **both** definitions (`:12`, `:22`) to `--accent-document`
+  - [x] Move the **four** structural uses (`:62`, `:77`, `:78`, `:83`) to the mock's blue
+  - [x] Check `page.rs:1163` still holds
+- [x] **T4 — D37** (AC7b)
+  - [x] `htmx.min.js` → versioned filename under `assets/vendor/`; update `gap.html`'s `<script>`
+  - [x] Mark register row (i) discharged
+- [x] **T5 — the guards** (AC3, AC4, AC2)
+  - [x] The AC3 second-direction assertion, **written to red on M7b** before it is believed
+- [x] **T6 — regression** (AC7)
+  - [x] Full suite against a live MariaDB; strings, routes and i18n keys unchanged
+  - [x] Look at the page (`/run`) — the colour and typeface change is the point, and nobody has
         seen it yet
-- [ ] **T7 — the register** (§7b)
-  - [ ] AC1/AC5/AC6 re-owned to 6b.2 **with the five measurements attached**
-  - [ ] The four other §1 documents, `epics.md:2108`'s stale *"seven gates"*, D55's stale trap
+- [x] **T7 — the register** (§7b)
+  - [x] AC1/AC5/AC6 re-owned to 6b.2 **with the five measurements attached**
+  - [x] The four other §1 documents, `epics.md:2108`'s stale *"seven gates"*, D55's stale trap
         narrative, and the `assets/` public-namespace question
-- [ ] **T8 — prove-to-red**, predictions written BEFORE execution
+- [x] **T8 — prove-to-red**, predictions written BEFORE execution
 
 ## Prove-to-red — the mutations this story owes
 
@@ -590,15 +590,129 @@ worth landing in this story at all, given that it generates nothing the UI uses.
 
 ### Agent Model Used
 
-_(filled by dev-story)_
+Claude Opus 5 (1M context), 2026-08-18. Built and mutated against a live `mariadb:10.11.11`
+(container `opencmdb-story6b1`, `mysql://root:story6b1@127.0.0.1:13322/opencmdb_test`) — ports 3306
+and 3307 are held by unrelated projects and were not touched.
 
-### Debug Log References
+### AC8 — THE LIVE COUNT (this file is its only home)
 
-### Completion Notes List
+**597 → 598 tests: 371 bin + 161 core + 66 xtask.** Eight gates green (`views-hash` ℹ STALE by
+design), `cargo fmt --all --check` clean, `cargo clippy --workspace --all-targets -- -D warnings`
+clean. 28 fixtures, trap gate still RED at 26/15/11, `opencmdb-core` untouched.
+
+⚠️ **The elapsed time is the tell, never the count**: 5.2 s with `DATABASE_URL` against the live
+database, 0.05 s without — and the count is *identical* either way, because the DB-backed tests
+`return` when the variable is unset.
+
+### Implementation Plan (as executed)
+
+Red first, per task. The order was T2/T4 (assets on disk) before T1 (the sheet), because a
+`@font-face` cannot be asserted against a file that is not there yet.
+
+1. **Six guards written FIRST, five observed red**, each read from its own panic message. The sixth
+   (`ac3_the_dark_token_set_is_still_present`) was green from the start — the dark block already
+   existed — and becomes load-bearing only after T1 rewrites the sheet; M7 is what proves it.
+2. **T2** — the five faces + `OFL.txt` fetched from `jpt/barlow` into `assets/fonts/`, byte sizes
+   identical to the story's table (58 964 / 59 180 / 60 492 / 58 652 / 60 508 = 297 796).
+3. **T4** — `git mv assets/htmx.min.js assets/vendor/htmx-2.0.4.min.js`, version read from the file
+   itself (`version:"2.0.4"`), `gap.html`'s `<script src>` updated.
+4. **T1/T3** — `app.css` rewritten: the mock's tokens in an unconditional `:root`, the product's
+   semantic aliases mapped onto them, the dark set kept in `:root[data-theme="dark"]`,
+   `--accent` → `--accent-document` (both definitions), the four structural consumers moved to the
+   mock's blue, `body`/`h1`/`h2`/`.mono` onto the mock's faces. 150 → 281 lines.
+5. **T5–T8** — the two guards the validation demanded, the mutation pass, the register.
+
+### Debug Log — prove-to-red, predictions FIRST, each carrier read from its own message
+
+| # | Mutation | Predicted | Observed | Carrier |
+|---|---|---|---|---|
+| M4 | `@import url(https://fonts.googleapis.com/…)` in the sheet | AC2 reds | ✅ 1 red — `ac2_five_faces…` | assertion (`app.css must fetch nothing from the network`) |
+| M5 | `--accent-document` on `.tagline` (structure) | AC4 reds | ✅ 1 red — `ac4_the_amber…` | assertion (count at zero) |
+| M5b | move only the border + outline, leaving `.refresh`'s colour and hover amber — **the story's own wrong instruction, made into a mutation** | AC4 reds | ✅ 1 red | assertion |
+| M6 | put `data-theme="dark"` back on `gap.html` | AC3's template half reds | ✅ 1 red — `ac3_no_template_selects_a_theme` | assertion |
+| M7 | delete the dark token block | AC3's *"still present"* half reds | ✅ 1 red — `ac3_the_dark_token_set…` | **assertion** (`page.rs:1436`) — ⚠️ the validation prototype measured this `.expect()`-carried; on this tree it is a named `assert!`, and the difference is the test, not the mutation |
+| M7b | a live rule reads a token defined **only** in the dark block | 🔴 the prototype measured this **GREEN** | ✅ 1 red — `ac3_no_live_rule_depends_on_a_conditional_block` (`page.rs:1498`) | assertion |
+| M8 | remove one `.woff2` (after `touch src/page.rs`) | AC2 reds | ✅ 1 red | **`panic!`-carried** (`{face} is declared by the sheet but not embedded`) — not assertion-carried, and it is not recorded as such |
+| ~~M9~~ | rename `.identity` → `.identity-reach` | the existing `.identity` guard reds | 🔴 **GREEN — mutation MIS-DESIGNED**: the guard scans `starts_with(".identity")` and `.identity-reach` still starts with it. The mutation tested a preserved prefix, not a rename |
+| M9-bis | rename `.identity` → `.reach-block` | as M9 intended | ✅ 1 red — `the_identity_sections_own_rules_never_reach_for_the_accent`, on its **premise** (`block.len() >= 4`), exactly as that guard's own message promises | assertion |
+| ~~M10′~~ | change a hex in the light palette | green (*"the look is meant to change"*) | 🔴 **RED — control MIS-DESIGNED**: `--color-surface` is one of the six values AC2 pins, so the "control" mutated a pinned value |
+| M10′-bis (control) | change `--color-neutral-300`, a hex **no test pins** | green | ✅ green | — |
+
+**Eleven ids: nine executable mutations (nine reds), one control green by design, and two rows
+struck out as mis-designed.** Carriers are MIXED and named per row — one `panic!`-carried (M8), the
+rest assertion-carried, **zero compiler-carried**. *"Every red assertion-carried"* is **not**
+claimed.
+
+🔑 **Two findings the pass itself produced, and both are about the pass rather than the code:**
+
+- **M9 and M10′ were both mis-designed, and in the same way** — each mutated something that could
+  not test what its row claimed (a preserved prefix; a pinned value). This is the project's
+  *"a mutation named for one thing and applied to another"* class, twice in one table, and it was
+  caught only because both results contradicted a written prediction. **A prediction is what makes a
+  mis-designed mutation visible**; without one, M10′'s red would have been filed as a success.
+- 🔴 **M7b now reds where the validation prototype measured it GREEN — and that is the whole reason
+  this story has a second AC3 guard.** The gap-hunt layer wrote AC3's assertion exactly as the story
+  first prescribed it and found the *"referenced by nothing"* half carried by nothing. The guard
+  shipped here is different: it asserts that **every token a live rule reads is defined in the
+  unconditional `:root` block**, which is a property rather than an enumeration.
+
+### Completion Notes
+
+- 🔴 **The test-first order caught an omission of my own, which is the day's clearest evidence for
+  it**: `ac3_no_template_selects_a_theme` reddened on `gap.html` because I had rewritten the whole
+  stylesheet and **never removed `data-theme="dark"`** — the one line T1 names explicitly. Without
+  that guard the task would have been ticked with the product still selecting the dark theme, and
+  every other test would have stayed green.
+- 🔴 **A second hole closed before it could ship**: the first AC2 guard read only the *sheet*, so it
+  asserted that a `@font-face` was DECLARED, never that a face was embedded — M8 would have stayed
+  green over a product serving 404 for every glyph. Five `Assets::get` reads plus a length floor now
+  carry it (a truncated placeholder passes a presence check).
+- **Measured through the running binary** (release, live DB, HTTP Basic configured):
+  `/assets/app.css` 200 (10 649 B, was 5 564), `/assets/fonts/Barlow-Regular.woff2` 200 `font/woff2`,
+  `/assets/fonts/OFL.txt` 200, `/assets/vendor/htmx-2.0.4.min.js` 200, **`/assets/htmx.min.js` 404**
+  — so D37 is closed in both directions — and `/` 401 without credentials, story 6.1's posture
+  intact. The served page carries `<html lang="en">` with no theme attribute.
+- **Binary: 9 778 272 B.** ⚠️ I did **not** measure the before/after delta on this tree; the story's
+  `+292.9 KiB` is the validation prototype's figure and is cited as such rather than re-asserted as
+  mine.
+- ⚠️ **`cargo fmt --all --check` first reported clean because of a shell mistake of mine** (`head`
+  succeeding made the `&& echo` fire regardless of the exit code). It was NOT clean; formatted and
+  re-verified on the exit code. And clippy reddened once — `manual_pattern_char_comparison` in the
+  new token scanner — fixed to `split([')', ',', ' '])`.
+- **The chain is absent by decision** (§7, option (1)): no Tailwind binary, no `tailwind.css`, no new
+  `xtask` subcommand. `app.css`'s header now says so and points at the register entry, so the next
+  reader meets the four spellings D55 lacks before writing any of them.
+- ⚠️ **The elevation tokens are carried and used by nothing** — the UX spec bans shadows. Stated in
+  the sheet where a future reader will meet it.
 
 ### File List
 
+| File | Change |
+|---|---|
+| `crates/opencmdb-bin/assets/app.css` | rewritten on the mock's tokens; 150 → 281 lines |
+| `crates/opencmdb-bin/assets/fonts/Barlow-Regular.woff2` | **new** (58 964 B) |
+| `crates/opencmdb-bin/assets/fonts/Barlow-Medium.woff2` | **new** (59 180 B) |
+| `crates/opencmdb-bin/assets/fonts/Barlow-Bold.woff2` | **new** (60 492 B) |
+| `crates/opencmdb-bin/assets/fonts/BarlowCondensed-Regular.woff2` | **new** (58 652 B) |
+| `crates/opencmdb-bin/assets/fonts/BarlowCondensed-SemiBold.woff2` | **new** (60 508 B) |
+| `crates/opencmdb-bin/assets/fonts/OFL.txt` | **new** (4 377 B, SIL OFL 1.1) |
+| `crates/opencmdb-bin/assets/vendor/htmx-2.0.4.min.js` | **renamed** from `assets/htmx.min.js` (D37) |
+| `crates/opencmdb-bin/templates/gap.html` | `data-theme` removed; versioned htmx path |
+| `crates/opencmdb-bin/src/page.rs` | seven new guards + two helpers in the test module |
+| `_bmad-output/implementation-artifacts/deferred-work.md` | row (i) discharged; the chain registered with its measurements |
+| `_bmad-output/implementation-artifacts/sprint-status.yaml` | status transitions |
+| `_bmad-output/implementation-artifacts/6b-1-design-system-tokens-and-accent.md` | this record |
+
+**`opencmdb-core` is byte-identical. No migration. `_gap_card.html` untouched.**
+
 ### Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-18 | Story contexted. §1 measured the absent Tailwind chain; §3 measured that the mock carries no font bytes. |
+| 2026-08-18 | Validated by two fresh-context layers — fact-check (10 of 62 claims refuted, 5 HIGH) and gap-hunt (built the chain; four of the story's predictions refuted, plus one of D55's). |
+| 2026-08-18 | Rescoped on Guy's arbitration: option (1), the tokens now and the chain later. AC1/AC5/AC6 re-owned to 6b.2 with their measurements. |
+| 2026-08-18 | Implemented. 597 → 598 tests, eight gates green. Eleven mutation ids: nine reds, one control, two rows struck out as mis-designed. Two guards of my own were measured hollow and repaired before shipping. |
 
 | Date | Change |
 |---|---|

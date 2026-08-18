@@ -75,7 +75,25 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-18  # 6b.1 ✅ VALIDATED (two fresh-context layers) and ARBITRATED by Guy --
+last_updated: 2026-08-18  # 6b.1 -> `review`: IMPLEMENTED. The product is LIGHT and in Barlow --
+                          # the first change to what the operator sees since story 5.14b, and the
+                          # first time the mock's system is in the binary. `app.css` 150 -> 281
+                          # lines, five faces + OFL.txt embedded (measured served: 200 font/woff2),
+                          # `--accent` -> `--accent-document` across all six sites, D37 closed in
+                          # BOTH directions (versioned path 200, old path 404). NO Tailwind chain,
+                          # by Guy's arbitration. 🔴 The test-first order caught an omission of the
+                          # implementer's: the whole sheet was rewritten while `data-theme="dark"`
+                          # stayed in gap.html -- the one line T1 names -- and every other test was
+                          # green. 🔴 A second guard was measured hollow before shipping: the first
+                          # AC2 test read only the SHEET, so it asserted a @font-face was DECLARED
+                          # and never that a face was EMBEDDED. Eleven mutation ids: nine reds, one
+                          # control green, and TWO rows struck out as MIS-DESIGNED (a preserved
+                          # prefix; a pinned value) -- caught only because both contradicted a
+                          # written prediction. Carriers mixed: one panic!-carried, zero
+                          # compiler-carried; "every red assertion-carried" is NOT claimed.
+                          # The live count lives in the STORY FILE (its AC8), never here.
+                          # NEXT = `code-review`, on a DIFFERENT model from the implementer.
+                          # (Earlier the same day) 6b.1 ✅ VALIDATED (two fresh-context layers) and ARBITRATED by Guy --
                           # **option (1): the mock's tokens now, the Tailwind chain LATER**, with
                           # AC1/AC5/AC6 re-owned to story 6b.2 and the five measurements that
                           # produced the decision attached to them in `deferred-work.md`.
@@ -2970,7 +2988,7 @@ development_status:
   # storage layer), and the release CHANGES THE PRODUCT'S COLOUR (`gap.html` hardcodes
   # `data-theme="dark"`, the mock is light-only) — named in the release notes, never discovered.
   epic-6b: in-progress
-  6b-1-design-system-tokens-and-accent: ready-for-dev
+  6b-1-design-system-tokens-and-accent: review
   6b-2-shell-navigation-and-ten-routes: backlog
   6b-3-example-data-marker-and-its-gate: backlog
   6b-4-triage-screen-on-the-real-gap: backlog

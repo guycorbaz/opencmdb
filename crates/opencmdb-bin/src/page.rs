@@ -1310,4 +1310,235 @@ mod tests {
             "the conflict and the now-unobserved field"
         );
     }
+
+    // ── Story 6b.1: the design system ────────────────────────────────────
+    //
+    // These read the committed stylesheet and the templates as TEXT. That is a deliberate
+    // limit, stated once here rather than in each test: an assertion over CSS is an
+    // enumeration, and a more specific selector elsewhere can override any rule they check.
+    // What they carry is that the SOURCE says what the story says it says.
+
+    /// The stylesheet, as bytes, for every test in this section.
+    fn sheet() -> &'static str {
+        include_str!("../assets/app.css")
+    }
+
+    /// Both templates, concatenated — what the browser is told to fetch.
+    fn templates() -> [&'static str; 2] {
+        [
+            include_str!("../templates/gap.html"),
+            include_str!("../templates/_gap_card.html"),
+        ]
+    }
+
+    /// Every `--token` DEFINED inside the first `:root {` block — the one that always applies.
+    fn unconditional_tokens(css: &str) -> Vec<String> {
+        let start = css
+            .find(":root {")
+            .expect("the base :root block must exist");
+        let end = css[start..].find('}').expect("the :root block must close") + start;
+        css[start..end]
+            .lines()
+            .filter_map(|l| l.trim().strip_prefix("--"))
+            .filter_map(|l| l.split(':').next())
+            .map(|name| format!("--{name}"))
+            .collect()
+    }
+
+    /// AC2 — the palette is the mock's, not the walking skeleton's.
+    #[test]
+    fn ac2_the_sheet_carries_the_mocks_light_base_and_ramps() {
+        let css = sheet();
+        for (token, value) in [
+            ("--color-bg", "#f2f2f3"),
+            ("--color-surface", "#e9e9ea"),
+            ("--color-text", "#1d1f20"),
+            ("--color-accent", "#5980a6"),
+            ("--color-neutral-500", "#98989b"),
+            ("--color-accent-700", "#416180"),
+        ] {
+            assert!(
+                css.contains(&format!("{token}: {value}")),
+                "the mock's token {token} must carry {value}"
+            );
+        }
+    }
+
+    /// AC2 — the typefaces are embedded, and nothing is fetched from the network.
+    ///
+    /// The second half is the one that matters for the single-binary promise: a `@font-face`
+    /// pointing at a CDN would render identically on the developer's machine and fail on an
+    /// air-gapped one.
+    #[test]
+    fn ac2_five_faces_are_declared_and_no_request_leaves_the_product() {
+        let css = sheet();
+        for face in [
+            "fonts/Barlow-Regular.woff2",
+            "fonts/Barlow-Medium.woff2",
+            "fonts/Barlow-Bold.woff2",
+            "fonts/BarlowCondensed-Regular.woff2",
+            "fonts/BarlowCondensed-SemiBold.woff2",
+        ] {
+            assert!(css.contains(face), "the sheet must declare {face}");
+        }
+        assert_eq!(
+            css.matches("@font-face").count(),
+            5,
+            "five faces, and the count is what tells you when a sixth arrives unannounced"
+        );
+
+        // 🔴 Declaring a face in the sheet is not shipping it. Measured on 2026-08-18: `cargo
+        // build` does not see a NEW file under `assets/` — the binary is built, reports
+        // `Finished`, and embeds nothing — so a test reading only the CSS would pass over a
+        // product that serves 404 for every glyph. These five reads are what M8 reddens.
+        for face in [
+            "fonts/Barlow-Regular.woff2",
+            "fonts/Barlow-Medium.woff2",
+            "fonts/Barlow-Bold.woff2",
+            "fonts/BarlowCondensed-Regular.woff2",
+            "fonts/BarlowCondensed-SemiBold.woff2",
+        ] {
+            let embedded = Assets::get(face)
+                .unwrap_or_else(|| panic!("{face} is declared by the sheet but not embedded"));
+            assert!(
+                embedded.data.len() > 40_000,
+                "{face} is embedded but truncated ({} bytes) — a placeholder would pass a \
+                 presence check",
+                embedded.data.len()
+            );
+        }
+
+        // The licence travels with the fonts (SIL OFL 1.1 requires it), and it is served
+        // rather than hidden — measured: `/assets/fonts/OFL.txt` answers 200. That is the
+        // licence doing its job, not a leak.
+        assert!(
+            Assets::get("fonts/OFL.txt").is_some(),
+            "OFL 1.1 requires the notice to travel with the faces"
+        );
+
+        for (name, text) in [("app.css", css)]
+            .into_iter()
+            .chain(["gap.html", "_gap_card.html"].into_iter().zip(templates()))
+        {
+            for probe in ["http://", "https://", "//fonts.", "@import url("] {
+                assert!(
+                    !text.contains(probe),
+                    "{name} must fetch nothing from the network, found {probe:?}"
+                );
+            }
+        }
+    }
+
+    /// AC3 — the dark set is still in the sheet.
+    #[test]
+    fn ac3_the_dark_token_set_is_still_present() {
+        let css = sheet();
+        assert!(
+            css.contains(r#"[data-theme="dark"]"#),
+            "the dark token block must still be in the sheet — its return is a story, not an \
+             excavation"
+        );
+        assert!(
+            css.contains("#0f1420"),
+            "the dark background must still be there; deleting the block is what this catches"
+        );
+    }
+
+    /// AC3, first direction — the light set is what renders, because nothing selects the other.
+    ///
+    /// This is a claim about the TEMPLATES, not about the sheet: the dark block is inert only
+    /// for as long as no `data-theme` attribute reaches a browser. The two halves of AC3 are
+    /// two claims and need two tests — checking the sheet says nothing about the markup.
+    #[test]
+    fn ac3_no_template_selects_a_theme() {
+        for (name, html) in ["gap.html", "_gap_card.html"].into_iter().zip(templates()) {
+            assert!(
+                !html.contains("data-theme"),
+                "{name} must select no theme — the light set renders because it is the \
+                 unconditional one, and story 6b.1 removed the hardcoded dark attribute"
+            );
+        }
+    }
+
+    /// AC3, second direction — 🔴 the half a prototype measured GREEN before this test existed.
+    ///
+    /// *"Referenced by nothing"* is not carried by checking the TEMPLATE for `data-theme`: that
+    /// is a different claim. A rule outside the conditional block may read a token the block
+    /// alone defines, and then the sheet depends on a theme nothing selects — silently, because
+    /// `var()` on an undefined token simply yields nothing.
+    ///
+    /// So: every token a live rule uses must be defined UNCONDITIONALLY.
+    #[test]
+    fn ac3_no_live_rule_depends_on_a_conditional_block() {
+        let css = sheet();
+        let unconditional = unconditional_tokens(css);
+        assert!(
+            unconditional.len() >= 8,
+            "the premise: the base :root block must define the palette ({} found) — if this \
+             scan goes empty the test below asserts nothing",
+            unconditional.len()
+        );
+
+        let mut used: Vec<String> = Vec::new();
+        for (i, _) in css.match_indices("var(--") {
+            let rest = &css[i + 4..];
+            let name = rest
+                .split([')', ',', ' '])
+                .next()
+                .unwrap_or("");
+            used.push(name.to_string());
+        }
+        assert!(
+            used.len() >= 20,
+            "the premise: the sheet must actually use its tokens ({} uses found)",
+            used.len()
+        );
+
+        for token in &used {
+            assert!(
+                unconditional.contains(token),
+                "{token} is read by a live rule but is not defined in the base :root block — \
+                 the sheet would then depend on a theme no template selects"
+            );
+        }
+    }
+
+    /// AC4 — the amber is named for the gesture, and no structure reaches for it.
+    #[test]
+    fn ac4_the_amber_is_reserved_for_the_documenting_gesture() {
+        let css = sheet();
+        assert!(
+            css.contains("--accent-document:"),
+            "the amber must be named for what it means"
+        );
+        assert!(
+            !css.contains("--accent:"),
+            "the bare `--accent` must be gone — a token that names a colour rather than a \
+             gesture is what let structure borrow it"
+        );
+        assert_eq!(
+            css.matches("var(--accent-document)").count(),
+            0,
+            "story 6.4 adds the first legitimate use; until then the honest count is zero, and \
+             this number is what tells you when one arrives"
+        );
+    }
+
+    /// AC7b — D37: the vendored asset carries its version in its filename.
+    #[test]
+    fn ac7b_htmx_is_vendored_under_its_versioned_name() {
+        let gap = include_str!("../templates/gap.html");
+        assert!(
+            gap.contains("/assets/vendor/htmx-2.0.4.min.js"),
+            "D37: the version belongs in the filename, so an upgrade is visible in the diff"
+        );
+        assert!(
+            !gap.contains("/assets/htmx.min.js"),
+            "the unversioned path must be gone, not merely unused"
+        );
+        assert!(
+            Assets::get("vendor/htmx-2.0.4.min.js").is_some(),
+            "and the file must actually be embedded under that name"
+        );
+    }
 }
