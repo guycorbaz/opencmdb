@@ -1195,4 +1195,119 @@ mod tests {
             );
         }
     }
+
+    /// 🔴 Story 6.3's code review — NFR5's divergence boundary, measured through the PRODUCTION
+    /// path instead of a hand-assembled call.
+    ///
+    /// The story's first implementation asserted this boundary from `main.rs` by handing
+    /// `gap::reconcile` in-memory `Observation` clones taken BEFORE ingestion, with a
+    /// hand-supplied perimeter tuple. Two review layers found it independently: that proves the
+    /// pure function's contract — which `opencmdb-core`'s own tests already cover — and **not** the
+    /// path that decides WHICH observations feed a reconcile. AC5's own prose had named the risk
+    /// ("a re-derivation of `build_view`'s perimeter selection in `main.rs`, a second oracle free
+    /// to drift") and the implementation did it anyway.
+    ///
+    /// This one reads the observations back from the store and lets `build_view` choose the
+    /// perimeter, which is what task T3 prescribed all along.
+    #[tokio::test]
+    async fn the_divergence_boundary_holds_through_the_real_page_build() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping divergence-boundary page test: DATABASE_URL unset");
+            return;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        for statement in [
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+            "DELETE FROM declared_attribute",
+        ] {
+            sqlx::query(statement).execute(&pool).await.expect("clean");
+        }
+
+        let scope = Scope {
+            l2_domain: L2DomainId::from_uuid(Uuid::from_u128(0x6301)),
+            vantage: VantageId::from_uuid(Uuid::nil()),
+        };
+        let connector = ConnectorId::from_uuid(Uuid::from_u128(0x6302));
+        let sighting = |id: u128, host: &str| Observation {
+            obs_id: ObsId::from_uuid(Uuid::from_u128(id)),
+            connector_id: connector,
+            observed_at: chrono::DateTime::from_timestamp(1_700_002_000 + id as i64, 0)
+                .expect("in range"),
+            scope,
+            facts: vec![
+                Fact::IpV4 {
+                    addr: "192.0.2.60".parse().expect("a documentation address"),
+                },
+                Fact::Hostname {
+                    name: host.to_string(),
+                    source: opencmdb_core::observation::HostnameSource::Dns,
+                },
+            ],
+            raw: None,
+        };
+        let ingest = |pool: MySqlPool, observations: Vec<Observation>| async move {
+            let mut source = crate::fixture_connector::FixtureConnector::from_observations(
+                connector,
+                opencmdb_core::observation::Capabilities {
+                    as_of: chrono::DateTime::from_timestamp(1_700_000_000, 0).expect("in range"),
+                    kinds: std::collections::BTreeSet::from([
+                        opencmdb_core::observation::FactKind::IpV4,
+                        opencmdb_core::observation::FactKind::Hostname,
+                    ]),
+                },
+                vec![scope],
+                "story 6.3 divergence boundary",
+                observations,
+            )
+            .expect("the in-memory stream must load");
+            crate::scan_pass::poll_ingest_resolve(
+                &mut source,
+                chrono::DateTime::from_timestamp(1_700_002_500, 0).expect("in range"),
+                &pool,
+            )
+            .await;
+        };
+
+        // The declared side, as the documenting gesture leaves it.
+        for (key, value) in [("ipv4", "192.0.2.60"), ("hostname", "nas")] {
+            crate::repo::insert_declared_attribute(&pool, "e63", key, value)
+                .await
+                .expect("declare");
+        }
+
+        // ONE contradicting sighting in perimeter -> the divergence OPENS.
+        ingest(pool.clone(), vec![sighting(0x6310, "intruder")]).await;
+        let (view, _) = reconcile_view(&pool).await.expect("build the page's state");
+        assert_eq!(view.gaps.len(), 1, "the divergence opens");
+        assert_eq!(view.gaps[0].field, "hostname");
+        assert_eq!(view.gaps[0].declared, "nas");
+        assert_eq!(view.gaps[0].observed, "intruder");
+        assert_eq!(
+            view.abstention_count, 0,
+            "nothing abstains while one sighting carries the field"
+        );
+
+        // A SECOND, DISAGREEING sighting -> the gap CLOSES into two abstentions. FR16 working:
+        // never picked, never merged. This is the shape a real network produces, and it is why
+        // `epics.md:1790`'s "a divergence opens" is unreachable while the older sighting lives.
+        ingest(pool.clone(), vec![sighting(0x6311, "nas")]).await;
+        let (view, _) = reconcile_view(&pool).await.expect("build the page's state");
+        assert!(
+            view.gaps.is_empty(),
+            "two disagreeing sightings must not pick one, yet {} gap(s) opened",
+            view.gaps.len()
+        );
+        assert_eq!(
+            view.abstention_count, 2,
+            "the conflict and the now-unobserved field"
+        );
+    }
 }

@@ -3425,3 +3425,138 @@ Re-read against the story's AC8 list.
   a same-key multi-value observation reachable** (a connector emitting multi-value facts, or the
   entity model of 6.5). The fix then is either to refuse a self-conflicting projection or to model
   multiple values — a decision that story owns, not 6.2.
+
+## Deferred from: story-6-3-nfr5-remaining-assertions (2026-08-15)
+
+- ✅ **NFR5's register row from story 5.12 is DISCHARGED — and its width is stated rather than
+  implied.** `deferred-work.md:2894-2900` left assertions **(1)** and **(2)** owned by *"the triage
+  epic"*; both are now measured. ⚠️ **What "covered" means here**: assertion (2) is carried by a
+  behavioural snapshot AND by the eighth gate, because on the tree that introduced them nothing
+  could move the row; assertion (1)'s *unchanged* half is unconditional, while its *a divergence
+  opens* half needed the test to delete the documented sighting (rows below). *"NFR5 is covered by
+  anti-regression tests" is now TRUE at that width and no wider.* **No owner — closed.**
+
+- 🔴 **`epics.md:1724` says NFR5 *"(assertions 2 and 3)"* where the PRD's ordering and the
+  register make the parked pair **(1) and (2)*** — assertion 3 is the one story 5.12 covered.
+  ⚠️ `epics.md` itself contradicts this at `:1786`/`:1790`, which correctly say *"second"* and
+  *"first"*; only the epic header is wrong. `sprint-status.yaml`'s comment repeated the error and
+  was corrected in place at contexting. `epics.md` NOT edited. **Owner: Epic 6's retrospective.**
+
+- 🔴 **`epics.md:1790`'s *"a divergence opens … through the new write path"* is UNSATISFIABLE as
+  written, and the measurement is the deliverable.** The declared value can only come from the
+  documented observation, so that observation is in the store, so every contradicting ingestion is
+  a CONFLICT — `(gaps, abstentions) = (0, 2)`, FR16 working. **Guy's arbitration (2026-08-15):
+  the test DELETES the documented sighting**, modelling *the old sighting aged out*; refused with
+  their reasons were seeding the declared row manually (loses *"through the new write path"*) and
+  dropping the half (stops measuring drift detection, which D22 makes the property keeping NFR5
+  alive). ⚠️ **No production code path performs that DELETE.** **Owner: Epic 6's retrospective.**
+
+- 🔴 **On the SHIPPED connector, NFR5's divergence half can NEVER fire.** `arp_ping` emits `ipv4`
+  + `rtt`; `rtt` is not declarable, so `ipv4` is the only declarable field — **and it is also the
+  perimeter key**, so an in-perimeter observation agrees with it by definition. *The divergence
+  half is a property of fixtures today, not of the product on a real network.* **Owner: the
+  connector story that emits a MAC or a hostname** — which already inherits story 5.14's two
+  shielded races.
+
+- ⚠️ **The divergence figure is a property of the FIXTURE, not of the shape.** The story predicted
+  `(1, 1)` for the single-sighting case; implementing it measured `(1, 0)`, because a realistic
+  re-scan carries the SAME MAC and nothing abstains. Both are now pinned in one test (same-MAC →
+  `(1, 0)`, MAC-less → `(1, 1)`). *A figure quoted without the fixture that produced it is not a
+  measurement.* **No owner — a measurement, kept so it is not re-derived.**
+
+- ⚠️ **`DELETE` is deliberately outside the `observed-immutable` verb list**, on story 5.12's own
+  reasoning for `declared_attribute` (`:2872-2877`): a bulk delete is data loss, a different
+  invariant. ⚠️ Here it is also concrete — `docker/seed-example.sql:24` carries a live
+  `DELETE FROM observation_record`, so the verb would red the committed tree and buy an exemption
+  for a shipped file that has no test. **Owner: the story that first needs a data-retention
+  guarantee** (5.12's own owner for the same call).
+
+- ⚠️ **D15's sibling rule is held by NEITHER gate**: *"`declared_attribute.entity_id` is NEVER
+  updated. Ever. No UPDATE"* — `architecture.md:1064-1069` calls it *"the most dangerous line of
+  SQL in this project, and it looks like a routine refactor"*. `authorship` guards the AUTHOR of a
+  declared write, `observed-immutable` guards a different table. **Owner: story 6.5** (the
+  entity/device schema story, which is where `entity_id` acquires meaning).
+
+- 🔴 **A stale `SANCTIONED_READS` entry is caught by NOTHING** — measured at this story's
+  validation by planting `("crates/does/not/exist.rs", Some("no_such_function"))`: 62/62 xtask
+  tests green, gate green. `the_allowlist_sanctions_a_place_and_not_a_name` walks
+  `SANCTIONED_SITES` **only**. ⚠️ This story avoided the hole rather than closing it — it WIDENED
+  the existing sanctioned reader instead of adding an entry — so the hole stands for whoever adds
+  the next one. **Owner: Epic 6's retrospective** (it is a gap in 5.12's apparatus that 6.2
+  widened without extending its guard).
+
+- 🔴 **A story-6.2 review patch marked `[x]` applied is NOT in the shipped tree.** `same_origin`
+  guards `Origin` multiplicity with `get_all` (`document.rs:253`) but reads `Host` with `.get()`
+  (`document.rs:271`) — the asymmetry the patch existed to remove. Either it was lost to the
+  `git checkout -- <file>` class 6.2's own Dev Notes warn about, or the checkbox is wrong. **Not
+  fixed here** (out of this story's subject). **Owner: Epic 19** for the fix; **Epic 6's
+  retrospective** for the lost-patch question, which is a process finding.
+
+- ⚠️ **6.1's `lazy_pool()` row (`:3347`) comes due and is RE-REGISTERED with its reason.** This
+  story added test helpers but none of them touch `lazy_pool`: its guards take `DB_TEST_LOCK` and
+  connect explicitly, so the coupling to whatever answers `127.0.0.1:3306` is untouched and
+  unmeasured here. **Owner: story 6.4** — the next story to add test helpers — rather than *"the
+  next story"* a third time.
+
+- ⚠️ **Retro action item 4 — *fix the mutation driver once, in `xtask`* — is still UNASSIGNED and
+  NOT DONE** (`epic-5-retro-2026-08-12.md:208-211`). This story's pass ran on the same driver and
+  paid for it once: **M6 was not executable as designed** (a precondition guard fires before the
+  comparison — story 5.13's assertion-order family, a fourth occurrence), caught only because the
+  result contradicted the prediction. **Owner: needs Guy's go-ahead.**
+
+- ⚠️ **`CHAR(36)` strips trailing spaces on retrieval**, so a padding-only difference is invisible
+  to the observation snapshot. It bounds the phrase *"byte-identical"*; nothing this story writes
+  can produce such a difference. **No owner — a stated limit.**
+
+- 🔑 **The `GRANT` (story 5.12's *voie B*) now has the standalone row it never had** — it was
+  referenced only at `:3161`, inside another row. It is the real closure of the
+  **guard-neutralisation** class for BOTH gates: `authorship` and `observed-immutable` are text
+  matchers over a tree an author can edit, and *the guard of the guard is a privilege the database
+  refuses*. A least-privilege grant (no `UPDATE` on `observation_record` for the application user)
+  would hold what no gate can. **Owner: unassigned — a deployment/privilege decision, and it
+  belongs with the story that hardens the container's database user.**
+
+- ⚠️ **A retired identifier survives in TWO places, and one of them is a BROKEN rustdoc link that
+  no gate can see.** `SANCTIONED_FNS` was renamed `SANCTIONED_SITES` at story 5.12's repair.
+  It still stands at `deferred-work.md:2891` — inside the very row story 6.2 discharged, telling
+  the next implementer to edit a constant that no longer exists — and it stood at
+  `xtask/src/main.rs:1451` as an intra-doc link `[`SANCTIONED_FNS`]` to a nonexistent item.
+  🔑 **The code one is FIXED here** (a false doc is a defect, `CLAUDE.md`); the register line is
+  left for its owner rather than edited across stories. ⚠️ **What this exposes is a hole in the
+  apparatus**: `rustdoc::broken_intra_doc_links` is warn-by-default and fires only under
+  `cargo doc`, which no gate runs, so a dangling doc link is invisible to `clippy -D warnings`
+  and to `cargo xtask ci` alike — and the `vocabulary` gate (D65) checks an enumerated denylist,
+  not link targets.
+  🔴 **And running the check found MORE than the claim asserted — which is why the claim was run.**
+  `cargo doc -p xtask --no-deps` reports **four** unresolved links, not one: `SANCTIONED_FNS`,
+  `AUTHORSHIP_PROBES` **twice** (a `#[cfg(test)]` constant linked from a non-test doc, so it can
+  never resolve), and `statement_after` — ⚠️ **that last one created by THIS story's own rename**
+  to `statement_after_of`, caught only because the verification ran. Both of this story's are
+  fixed; the two `AUTHORSHIP_PROBES` ones are pre-existing and left for the owner. **Owner: Epic
+  6's retrospective** for the register line, for the two residual links, and for whether CI should
+  run `cargo doc` with warnings denied — measured cost: it would have caught three of these four
+  at the commit that introduced them.
+
+## Deferred from: code review of story 6.3 (2026-08-15)
+
+- ⚠️ **Should a gate cover TABLE-level replacement at all, or only row-level overwrites?** The code
+  review measured `RENAME TABLE observation_record TO old, shadow TO observation_record` and
+  `ALTER TABLE observation_record DROP COLUMN raw` both GREEN. The shadow-swap is a well-known
+  zero-downtime technique that replaces a table's entire contents — *an overwrite in spirit, with
+  no row-level verb firing*. It is symmetric with the `DELETE`/data-loss exclusion both gates
+  already took deliberately, so it is a SCOPE question rather than a defect, and it belongs to the
+  pair of gates rather than to this story. **Owner: Epic 6's retrospective**, alongside the two
+  other gate-scope questions this story registered.
+
+- ⚠️ **NFR5's residual width after story 6.3 — the row AC7 enumerated and the first pass never
+  wrote** (caught by the code review; *a re-read that reads only what you wrote cannot find what
+  you did not write*). Both gates are TRIPWIRES, and story 5.12's stated classes still stand:
+  **`'engine'` passes the DDL CHECK** (`CHECK (actor_id <> 'scanner')` bans one value, not a
+  property — measured at 5.12); **a table name assembled at runtime is invisible** to either text
+  matcher; and **`docker/seed-example.sql` is a whole-file sanctioned site with no test**, so an
+  edit changing its actor to a non-human one would pass. Story 6.3 adds three more measured
+  residuals of its own: a write **through a VIEW**, a **`RENAME TABLE` shadow-swap**, and two
+  **false positives** (ordinary prose, a filter-only JOIN) that a contributor must resolve by
+  rephrasing rather than by adding the first allowlist entry. **Owner: Epic 19** for the privilege
+  half (the `GRANT` that closes guard neutralisation for both gates); **the seed-file story** for
+  the last of 5.12's three.

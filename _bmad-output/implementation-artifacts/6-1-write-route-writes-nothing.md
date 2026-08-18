@@ -1,6 +1,6 @@
 # Story 6.1: The write route exists, and it writes nothing
 
-Status: review
+Status: done
 
 <!-- ✍️ REWRITTEN 2026-08-14 on the rewrite brief the validation of 2026-08-12 produced, after Guy
      decided HTTP Basic on 2026-08-14 — a decision taken ON a measurement: the browser bench of
