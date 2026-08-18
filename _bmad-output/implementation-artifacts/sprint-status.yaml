@@ -75,7 +75,23 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-18  # 6b.1 -> `done`: PR #95 squash-merged as `0b42bd0` after a green CI
+last_updated: 2026-08-18  # 6b.2 CONTEXTED -> `ready-for-dev`. 🔴 FOUR arbitrations are put to
+                          # Guy BEFORE dev, and two are contradictions rather than choices:
+                          # (§1) the mock's nav CONTRADICTS UX-DR33 (`epics.md:278`) on two axes --
+                          # ten entries against six, and "Topologie" appears ZERO times in the
+                          # mock's 496 KB, so the topology loses its nav entry while a RECORDED
+                          # decision still names it; (§2) the AC's header asks for "perimeter" and
+                          # "last observation", which the mock does not show, and *last observation
+                          # is a DATABASE READ on every screen* -- colliding head-on with the
+                          # epic's own constraint 1 ("no demo screen opens a connection"). Three
+                          # resolutions costed, (a) recommended; (§3) the nav carries `device`,
+                          # a DETAIL screen with no addressable URL, against an AC promising
+                          # bookmarkability; (§4) what becomes of `/`, the product's only screen.
+                          # Plus (§5): this story is the REGISTERED owner of 6b.1's withdrawn
+                          # Tailwind ACs, and whether the chain lands here is a choice, not an
+                          # inheritance -- the shell is ten rules.
+                          # NEXT = `create-story validate`, TWO fresh-context layers, MANDATORY.
+                          # (Earlier the same day) 6b.1 -> `done`: PR #95 squash-merged as `0b42bd0` after a green CI
                           # run (1m07). **The product is LIGHT and set in Barlow** -- the first
                           # operator-visible change since 5.14b. Next: 6b.2 (the shell: header,
                           # navigation, ten routes), which INHERITS the Tailwind chain with the
@@ -3014,7 +3030,7 @@ development_status:
   # `data-theme="dark"`, the mock is light-only) — named in the release notes, never discovered.
   epic-6b: in-progress
   6b-1-design-system-tokens-and-accent: done
-  6b-2-shell-navigation-and-ten-routes: backlog
+  6b-2-shell-navigation-and-ten-routes: ready-for-dev
   6b-3-example-data-marker-and-its-gate: backlog
   6b-4-triage-screen-on-the-real-gap: backlog
   6b-5-dashboard-real-reach-beside-examples: backlog
