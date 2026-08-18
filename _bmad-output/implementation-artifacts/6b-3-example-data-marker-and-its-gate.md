@@ -65,8 +65,36 @@ the partition has a real positive case. The remaining eight screens keep the *em
 their own story fills them, which requires a **third** nature (fed / example / **empty**) rather
 than the two the AC names.
 
-**→ ARBITRATION REQUIRED. The task list below is written for the third reading and must be rescoped
-if Guy chooses another.**
+**→ ✅ ARBITRATED (Guy, 2026-08-19): the THIRD reading — the example DATASET, the marker, the gate,
+and ONE witness screen filled from it.** The eight remaining demonstration screens keep an `empty`
+nature until their own story fills them, so stories 6b.5–6b.9 keep their subject and `epics.md` is
+NOT edited (a story may not; the divergence is registered instead).
+
+🔑 **Three natures, therefore, not two** — `Fed`, `Example`, `Empty` — and that is a consequence of
+the arbitration rather than a preference: with two natures, the eight unfilled screens would have to
+be declared *example*, and the marker would then assert that an empty `<main>` is a demonstration.
+⚠️ **`Empty` is a temporary nature and must be written as one**: it is a statement that the screen's
+own story has not landed, and the day 6b.9 closes there should be no `Empty` left. Give it a doc
+comment that says so, so it is retired rather than inherited.
+
+### §0a-bis. ✅ WHICH screen is the witness, and what it costs — decided at contexting
+
+**`/devices`.** It carries the richest example content (a list, with sections), which is what lets
+AC2's *smallest unit* be demonstrated at SECTION granularity inside one screen rather than only at
+screen level.
+
+⚠️ **The cost, stated rather than discovered later**: `/devices` belongs to story **6b.6**
+(*"Inventory and device record (example)"*). Filling it here takes part of that story's subject.
+What 6b.6 keeps is the **device RECORD** (`/device`), the `/devices/{id}` routing debt already
+registered against it, and the fidelity pass over the list this story roughs in. **Registered**, so
+6b.6's author meets a narrowed scope rather than a surprise.
+
+🔴 **And AC2's *mixed* case is still NOT met by this, which must not be blurred.** Demonstrating the
+smallest unit at section granularity proves the MECHANISM attaches below screen level; it does not
+produce the case AC2 actually names — *real content beside example content in one frame*. That case
+needs the dashboard's reach section, which is story 6b.5's deliverable (§0e). **AC2 ships as: the
+mechanism MET, its mixed specimen STATED and owned by 6b.5.** Recording it as fully met would be the
+sentence this epic has now been caught writing five times.
 
 ### §0b. 🔴 THE MARKER IS SPECIFIED BY NO DOCUMENT THIS PROJECT HAS — measured, not supposed
 
@@ -204,15 +232,20 @@ the story, from a recount, not from this paragraph**.
 - [ ] **T0 — the two measurements that precede design** (§0c): does `dead_code` under `-D warnings`
       catch a `Screen` variant absent from `ALL`? And does a `nature()` `match` red on a new variant?
       Both answers change T2's shape
-- [ ] **T1 — the nature, in the type** (AC4): `Nature` on `screens::Screen` through a `match`, so the
-      compiler refuses a screen with no declared nature. ⚠️ Two variants or three — §0a decides
+- [ ] **T1 — the nature, in the type** (AC4): `Nature` — **`Fed` / `Example` / `Empty`** (§0a) — on
+      `screens::Screen` through a `match`, so the compiler refuses a screen with no declared nature.
+      ⚠️ `Empty` carries a doc comment saying it is TEMPORARY and must be gone when 6b.9 closes
 - [ ] **T2 — the partition over the ROUTE TABLE** (AC4), not inside the templates: every demo surface
       carries the marker, every fed surface does not, driven through the real router. ⚠️ Close
       `Screen::ALL`'s blind half first or the test can silently lose a row
 - [ ] **T3 — one partial, one key pair, one treatment** (AC1): `_example_marker.html`, `fr` + `en`,
       no `--accent-document`
-- [ ] **T4 — the smallest unit** (AC2): the mechanism; ⚠️ its specimen is §0a's business and AC2 is
-      **stated, not met**, unless one exists
+- [ ] **T3b — the example DATASET and the witness screen** (§0a, §0a-bis): the dataset, and
+      `/devices` filled from it. ⚠️ It must not open a connection — the demo router's state is `()`
+      and that is what keeps AC3 true (§0d). A dataset that needs a READ breaks the carrier
+- [ ] **T4 — the smallest unit** (AC2): the mechanism, demonstrated at SECTION granularity inside
+      `/devices`. ⚠️ The MIXED specimen (real beside example) is 6b.5's — record AC2 as *mechanism
+      met, mixed specimen stated*, never as simply met
 - [ ] **T5 — AC3 by CITATION** (§0d): the compile carrier already holds it; add no runtime test, and
       record why the absence is deliberate
 - [ ] **T6 — look at every screen in a browser**, `OPENCMDB_LOCALE=fr` exported first (the default is
@@ -227,7 +260,7 @@ the story, from a recount, not from this paragraph**.
 
 ## Prove-to-red — deliberately short
 
-🔑 Six rows, not eighteen. Story 6b.2's lesson is that an unplayed row is a lie about coverage; the
+🔑 Seven rows, not eighteen. Story 6b.2's lesson is that an unplayed row is a lie about coverage; the
 number below is chosen so that every one of them WILL be played.
 
 | # | Mutation | Prediction |
@@ -236,6 +269,7 @@ number below is chosen so that every one of them WILL be played.
 | M2 | Add a `Screen` variant, wire everything, omit it from `Screen::ALL` | ⚠️ **prediction unknown on purpose** — §0c/T0 measures it. If GREEN, that is the story's finding and AC4 is not met until it is closed |
 | M3 | Flip one demo screen's nature to *fed* | the partition test reds — the marker vanishes where it is owed |
 | M4 | Flip `/triage`'s nature to *example* | the partition test reds in the OTHER direction — a fed surface must never carry the marker |
+| M7 | Flip an `Empty` screen's nature to `Example` | the partition test reds — ⚠️ **this is the arbitration's own guard**: with the marker on an empty `<main>`, the product asserts that a blank screen is a demonstration, which is the false sentence §0a exists to prevent |
 | M5 | Delete the marker partial's `fr` half, keep `en` | AC1 red via `every_key_carries_both_locales` — the NFR26 direction 6b.2 measured green before its guard existed |
 | M6 | Give the marker `--accent-document` | 6b.1's reservation guard reds — ⚠️ **verify this before believing it**: the guard may scan only `app.css` and the templates it knew about |
 

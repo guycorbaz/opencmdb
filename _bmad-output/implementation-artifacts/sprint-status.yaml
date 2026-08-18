@@ -75,7 +75,25 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.3 CONTEXTED -> `ready-for-dev`. 🔴 SIX findings, and FOUR need Guy
+last_updated: 2026-08-19  # 6b.3 ✅ ARBITRATED by Guy on finding (a), before any code: the story
+                          # ships the example DATASET, the marker, the gate, AND ONE WITNESS SCREEN
+                          # filled from it -- not the mechanism alone, and not all nine screens.
+                          # 🔑 THEREFORE THREE NATURES, not two: `Fed` / `Example` / `Empty`. With
+                          # two, the eight unfilled screens would have to be declared *example* and
+                          # the marker would assert that an empty `<main>` is a demonstration --
+                          # the exact false sentence the finding was about. `Empty` is TEMPORARY by
+                          # decision and must be gone when 6b.9 closes.
+                          # ✅ WITNESS = `/devices`, decided at contexting for its section-bearing
+                          # content. ⚠️ Its COST is stated, not discovered: `/devices` belongs to
+                          # story 6b.6, which keeps the device RECORD, the `/devices/{id}` debt and
+                          # the fidelity pass -- registered so 6b.6 meets a narrowed scope.
+                          # 🔴 AC2 ships as MECHANISM MET + MIXED SPECIMEN STATED: section-level
+                          # placement proves the marker attaches below screen level, but the case
+                          # AC2 names -- real content BESIDE example content in one frame -- needs
+                          # the dashboard's reach section and is 6b.5's. Recording AC2 as simply met
+                          # would be the sentence this epic has been caught writing five times.
+                          # `epics.md` is NOT edited; the divergence is registered.
+                          # (Earlier the same day) 6b.3 CONTEXTED -> `ready-for-dev`. 🔴 SIX findings, and FOUR need Guy
                           # BEFORE any code. (a) SCOPE CONTRADICTION: `epics.md` puts the example
                           # CONTENT in 6b.5-6b.9 and titles 6b.3 "the marker and its gate", while
                           # `screens.rs:170` -- merged in `d8cc438` -- says 6b.3 "owns the example
