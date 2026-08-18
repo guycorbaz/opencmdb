@@ -3067,7 +3067,7 @@ development_status:
   # `data-theme="dark"`, the mock is light-only) — named in the release notes, never discovered.
   epic-6b: in-progress
   6b-1-design-system-tokens-and-accent: done
-  6b-2-shell-navigation-and-ten-routes: ready-for-dev
+  6b-2-shell-navigation-and-ten-routes: review
   6b-3-example-data-marker-and-its-gate: backlog
   6b-4-triage-screen-on-the-real-gap: backlog
   6b-5-dashboard-real-reach-beside-examples: backlog

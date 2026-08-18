@@ -278,7 +278,7 @@ one. The two sqlx traps it warned about were both real and are both handled in t
 - **Deployment:** Docker (Synology Container Manager) priority; native binary also supported.
 - **Discovery:** first-class **zero-privilege UniFi connector** + generic ARP/ping scanner
   (NET_RAW → ping-only fallback). Connectors isolated behind a Rust `Connector` trait, contract-tested.
-- **Web stack:** HTMX + Askama templates + Tailwind (standalone CLI, no Node; assets via `rust-embed`,
+- **Web stack:** HTMX + Askama templates + **hand-authored CSS on the mock's tokens** (⚠️ NOT Tailwind: the chain is deferred, see `deferred-work.md`; assets via `rust-embed`,
   generated CSS committed). **Polling, not SSE, at MVP.** Internal tokio scheduler (no cron/Redis/workers).
 - **UI:** bilingual EN/FR; **docs English-only**. Dark theme default. WCAG 2.1 AA on key views.
 - **Audience:** unified (advanced home-labber = SMB-without-IT). Single admin at MVP;

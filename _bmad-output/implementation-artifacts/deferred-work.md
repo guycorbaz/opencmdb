@@ -3768,3 +3768,32 @@ below is a consequence of that sentence, recorded rather than absorbed — a sto
   scoped when someone opens the product on a telephone, or when story 6b.12 has to describe the
   release's limits. ⚠️ **NFR24's ≥44px touch targets are NOT covered by this deferral** — a touch
   target is not a breakpoint, and that obligation stays with story 6b.11.
+
+## Discharged by story 6b.2 (2026-08-18)
+
+- ✅ **The four documents describing a Tailwind chain that does not exist** (row `:3608`, owner
+  story 6b.2) — **DISCHARGED**. `.gitignore:40`, `xtask/Cargo.toml:2-3`, `CLAUDE.md`'s stack line and
+  `docs/project-context.md:279` now say that `app.css` is hand-authored and that the chain is
+  deferred, pointing here for the four spellings. ⚠️ `xtask/Cargo.toml` also announced a
+  `cargo xtask recapture` that does not exist; that sentence is corrected in the same pass and
+  verified against `main.rs`, which dispatches `ci` alone.
+
+- ✅ **`assets/` as a public unauthenticated namespace** (row `:3616`, owner story 6b.2) — **DECIDED
+  rather than inherited, and the decision is: it stays as it is.** The row asked the question
+  because D55's prescribed tree would put the Tailwind build INPUT inside the embed folder, where it
+  would ship and be publicly readable. **The chain is deferred again, so no build input exists to
+  ship** — and everything `assets/` currently holds is meant to be fetched by an unauthenticated
+  browser: the stylesheet, the fonts, htmx, `app.js`. 🔑 The decision is therefore *the namespace is
+  correct for what it holds today*, and the obligation moves WITH the chain: **whoever lands
+  `tailwind.css` must place it outside `assets/` or state that shipping it is accepted.** Re-owned to
+  the Tailwind row rather than left as a standing question.
+
+- ✅ **The radius branch** (row `:3641`, owner story 6b.2) — **TAKEN, and it is the mock's.** The row
+  demanded a choice: the mock's 2/4/7px scale, or the UX spec's `3px` everywhere with the three
+  tokens deleted. Story 6b.2 is the first story to build a screen from the scale, and its navigation
+  entries use **`var(--radius-sm)`** — so the mock's scale now has a consumer and the tokens are no
+  longer dead weight. ⚠️ The UX spec's *"Radius `3px` everywhere"* (`:839`) is therefore **diverged
+  from by decision**, consistent with Guy's *"the mock prevails"*, and the four pre-existing
+  `border-radius: 3px` literals in `app.css` are left alone rather than churned — they belong to the
+  card and the buttons, which no story has revisited. **Owner of the spec sentence: Epic 6b's
+  retrospective.**

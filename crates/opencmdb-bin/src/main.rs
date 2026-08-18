@@ -30,6 +30,7 @@ mod permute;
 mod repo;
 mod resolver;
 mod scan_pass;
+mod screens;
 mod trap_gate;
 
 // The i18n seam (D39/D66): user-facing strings resolve through `t!()` against `locales/`. EN is
@@ -103,6 +104,15 @@ pub(crate) struct AppConfig {
     /// refuses (401) WITHOUT the challenge header (arbitration 6): a challenge nothing can
     /// satisfy is an infinite browser dialog on every unupgraded deployment.
     pub(crate) basic: Option<BasicCredentials>,
+    /// `OPENCMDB_SCAN_CIDR`: the subnet the startup scan sweeps, and — since story 6b.2 — the
+    /// **perimeter the shell displays** in its navigation footer, as the reference mock does.
+    ///
+    /// `None` when unset: the product then scans nothing and the footer says so rather than
+    /// showing an empty value. ⚠️ It enters here as a PARAMETER rather than being read at the
+    /// point of use (story 6.1's rule — not one test in this crate mutates an env var), and it
+    /// is **not validated here**: an invalid CIDR is refused by the scan with a named error, and
+    /// displaying what the operator configured is more honest than displaying nothing.
+    pub(crate) scan_cidr: Option<String>,
 }
 
 /// Why [`AppConfig::from_env`] refuses a configuration — at boot, with the variable named,
@@ -201,6 +211,9 @@ impl AppConfig {
             },
         };
         // Empty counts as unset — `scrape_authorized`'s precedent (unset OR empty, both closed).
+        // Empty counts as unset here too: an operator who blanks the variable to disable the
+        // scan must not then see an empty perimeter rendered as if it were a value.
+        let scan_cidr = lookup("OPENCMDB_SCAN_CIDR").filter(|value| !value.trim().is_empty());
         let user = lookup("OPENCMDB_BASIC_USER").filter(|value| !value.is_empty());
         let password = lookup("OPENCMDB_BASIC_PASSWORD").filter(|value| !value.is_empty());
         let basic = match (user, password) {
@@ -245,6 +258,7 @@ impl AppConfig {
         Ok(Self {
             document_enabled,
             basic,
+            scan_cidr,
         })
     }
 }
@@ -331,7 +345,7 @@ async fn run() -> anyhow::Result<()> {
     // Optional one-shot startup scan: the real ARP/ping connector (Story 3.5) pings a declared
     // subnet and ingests observations, so the page shows genuinely observed state. Unset → the
     // page renders the declared side only. The periodic scheduler (FR6) is a later story.
-    if let Ok(cidr) = std::env::var("OPENCMDB_SCAN_CIDR") {
+    if let Some(cidr) = config.scan_cidr.clone() {
         spawn_startup_scan(database_url.clone(), clock.now(), cidr);
     }
 
@@ -356,12 +370,18 @@ async fn run() -> anyhow::Result<()> {
 /// of the layer a route lands.
 fn app(pool: MySqlPool, config: AppConfig) -> Router {
     let mut router = Router::new()
-        .route("/", get(page::index))
+        .route("/", get(redirect_to_triage))
+        .route("/triage", get(page::triage))
         .route("/gap", get(page::gap_fragment))
         .route("/assets/{*path}", get(page::asset))
         .route("/metrics", get(metrics::handler))
         .route("/healthz", get(healthz))
-        .with_state(pool.clone());
+        .with_state(pool.clone())
+        // 🔴 The nine demonstration screens are merged AFTER `.with_state`, so their router's
+        // state is `()` and not the pool. That is what makes epic constraint 1 enforceable:
+        // give one of those handlers `State<MySqlPool>` and it fails to COMPILE. Merged before,
+        // or built on the main router, the same handler compiles and the guard is a sentence.
+        .merge(screens::router(config.scan_cidr.clone()));
     if config.document_enabled {
         // The switch governs EXISTENCE only (arbitration 4): merged above the layer, the route
         // is auth-gated exactly like every other non-public path. The pool lives INSIDE the
@@ -478,6 +498,24 @@ fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
             );
         });
     });
+}
+
+/// `/` sends the operator to the triage screen.
+///
+/// # Why a redirect rather than making `/` the screen
+///
+/// Guy's arbitration (2026-08-18): separating the redirect from the screen keeps **one address
+/// per screen**, so `aria-current` has one case rather than two, and every bookmark that ever
+/// pointed at `/` still resolves — the README, both manuals, the landing site and the Docker Hub
+/// page all point here (their prose is story 6b.12's sweep).
+///
+/// The target is `/triage` rather than `/dashboard` on a measurement rather than a taste:
+/// `epics.md` makes the triage screen the one fed by the REAL gap, while the dashboard is mixed
+/// by construction — a real reach section beside example cards. The person who installs the
+/// product arrives here, and that is exactly whom the example-data marker defends.
+/// ⚠️ Registered for re-examination by story 6b.5; it costs one line, because the target is one.
+async fn redirect_to_triage() -> axum::response::Redirect {
+    axum::response::Redirect::to("/triage")
 }
 
 /// Readiness: `200 OK` when the database answers a trivial query, `503` when it does not.
@@ -604,6 +642,9 @@ mod tests {
         AppConfig {
             document_enabled,
             basic,
+            // Story 6b.2: the shell's perimeter. `None` here so every pre-existing test keeps
+            // exercising the shape it was written for; the perimeter has its own tests.
+            scan_cidr: None,
         }
     }
 
@@ -1249,10 +1290,41 @@ mod tests {
         // directly, no env mutation, so no interaction with `DB_TEST_LOCK`'s env-free rule.
         // ⚠️ This is the ONE pre-6.1 test the visibility change breaks, and it breaks only
         // where `DATABASE_URL` exists (CI) — a green local suite says nothing here.
-        let response = app(pool, config(false, Some(pair())))
+        // 🔴 Story 6b.2 made `/` a redirect, so this test now covers BOTH halves — and it is the
+        // SECOND time it is the sole casualty of a decision about `/`, which the comment above
+        // recorded for the first. The redirect first:
+        let redirect = app(pool.clone(), config(false, Some(pair())))
             .oneshot(
                 Request::builder()
                     .uri("/")
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "s3cret"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            redirect.status(),
+            StatusCode::SEE_OTHER,
+            "`/` sends the operator to the triage screen rather than being one"
+        );
+        assert_eq!(
+            redirect
+                .headers()
+                .get(axum::http::header::LOCATION)
+                .and_then(|value| value.to_str().ok()),
+            Some("/triage"),
+            "and the target is the FED screen, not the mixed dashboard"
+        );
+
+        // Then the screen it points at, which must still show the real gap.
+        let response = app(pool, config(false, Some(pair())))
+            .oneshot(
+                Request::builder()
+                    .uri("/triage")
                     .header(
                         axum::http::header::AUTHORIZATION,
                         basic_header("op", "s3cret"),

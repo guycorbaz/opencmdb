@@ -25,6 +25,96 @@ use crate::repo::{
 #[folder = "assets/"]
 struct Assets;
 
+// ── The shell (story 6b.2) ───────────────────────────────────────────
+
+/// One navigation entry, shaped for the template.
+struct NavEntry {
+    /// The entry's own address — never `#`, which is what the mock writes.
+    href: &'static str,
+    /// The translated label.
+    label: String,
+    /// Whether this is the screen being rendered; exactly one entry per render is `true`.
+    current: bool,
+}
+
+/// One of the mock's three navigation groups, with its entries.
+struct NavGroupView {
+    /// The translated group heading.
+    heading: String,
+    /// The entries, in the mock's order.
+    entries: Vec<NavEntry>,
+}
+
+/// Everything the frame needs, and deliberately nothing else.
+///
+/// 🔑 There is no database handle here and no field that could hold one: the shell renders on
+/// ten screens, eight of which are demonstrations, and epic constraint 1 forbids those to open a
+/// connection. The perimeter arrives from `AppConfig`, the version from the crate.
+pub(crate) struct Shell {
+    screen: crate::screens::Screen,
+    perimeter: Option<String>,
+}
+
+impl Shell {
+    /// The frame for one screen.
+    pub(crate) fn new(screen: crate::screens::Screen, perimeter: Option<String>) -> Self {
+        Self { screen, perimeter }
+    }
+}
+
+/// The frame, rendered around a screen's body.
+///
+/// `body` is inserted unescaped: it is template output, not user input. The only caller that
+/// passes a non-empty body is `/triage`, which passes the reconciliation card.
+pub(crate) fn render_shell(shell: Shell, body: String) -> String {
+    let groups: Vec<NavGroupView> = crate::screens::NavGroup::ALL
+        .iter()
+        .map(|group| NavGroupView {
+            heading: rust_i18n::t!(group.heading_key()).to_string(),
+            entries: crate::screens::Screen::ALL
+                .iter()
+                .filter(|screen| screen.group() == *group)
+                .map(|screen| NavEntry {
+                    href: screen.href(),
+                    label: rust_i18n::t!(screen.label_key()).to_string(),
+                    current: *screen == shell.screen,
+                })
+                .collect(),
+        })
+        .collect();
+
+    ShellPage {
+        lang: rust_i18n::locale().to_string(),
+        title: rust_i18n::t!(shell.screen.title_key()).to_string(),
+        title_separator: "—",
+        version: env!("CARGO_PKG_VERSION"),
+        perimeter: shell
+            .perimeter
+            .unwrap_or_else(|| rust_i18n::t!("nav.perimeter_unset").to_string()),
+        groups,
+        s: strings(),
+        body,
+    }
+    .render()
+    .unwrap_or_else(|error| {
+        tracing::error!(%error, "the shell failed to render");
+        String::from("<!doctype html><title>opencmdb</title><p>render error")
+    })
+}
+
+#[derive(Template)]
+#[template(path = "_shell.html")]
+struct ShellPage {
+    lang: String,
+    title: String,
+    title_separator: &'static str,
+    version: &'static str,
+    perimeter: String,
+    groups: Vec<NavGroupView>,
+    s: Strings,
+    body: String,
+}
+
 // ── View models (what the templates render) ──────────────────────────
 
 struct KeyValue {
@@ -128,6 +218,10 @@ struct ReconciledView {
 /// these instead of literals, so every rendered string flows through `rust-i18n`.
 struct Strings {
     tagline: String,
+    /// The navigation's accessible name (story 6b.2).
+    nav_label: String,
+    /// The perimeter label in the navigation footer, as the mock shows it (story 6b.2).
+    nav_perimeter: String,
     entity: String,
     refresh: String,
     declared: String,
@@ -156,6 +250,8 @@ fn strings() -> Strings {
     use rust_i18n::t;
     Strings {
         tagline: t!("page.tagline").to_string(),
+        nav_label: t!("nav.label").to_string(),
+        nav_perimeter: t!("nav.perimeter").to_string(),
         entity: t!("page.entity").to_string(),
         refresh: t!("page.refresh").to_string(),
         declared: t!("page.declared").to_string(),
@@ -185,14 +281,6 @@ fn strings() -> Strings {
 // returns EARLY with a fully-zeroed `ReconciledView` when no declared entity exists, so an identity
 // count carried inside it would be silently zeroed in exactly the deployment the section exists for
 // — a fresh install that has scanned and declared nothing.
-#[derive(Template)]
-#[template(path = "gap.html")]
-struct GapPage {
-    view: ReconciledView,
-    identity: IdentityView,
-    s: Strings,
-}
-
 #[derive(Template)]
 #[template(path = "_gap_card.html")]
 struct GapFragment {
@@ -458,14 +546,42 @@ fn server_error(error: sqlx::Error) -> Response {
     (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
 }
 
-/// `GET /` — the full page.
-pub async fn index(State(pool): State<MySqlPool>) -> Response {
+/// `GET /triage` — the shell, with today's reconciliation card inside it.
+///
+/// # Why this handler exists, and why it is not on the demonstration sub-router
+///
+/// 🔴 Story 6b.2 turned `/` into a redirect. Without this handler nothing would route to the
+/// reconciliation card at all — `/gap` serves the *fragment*, and the page that hosted it is
+/// gone — so the product's ONLY fed screen would have vanished between this story and 6b.4, in
+/// an epic whose purpose is to make the product more usable. The validation layer measured the
+/// second half of that: `index` became dead code and `clippy -D warnings` failed.
+///
+/// It therefore keeps `State<MySqlPool>` and lives on the main router, while the nine
+/// demonstration screens sit on a pool-free one. Epic constraint 1 is about demonstrations, and
+/// it is enforced exactly where it applies.
+///
+/// Story 6b.4 replaces this body with the mock's two-pane triage; the frame it renders into stays.
+pub async fn triage(State(pool): State<MySqlPool>) -> Response {
+    let perimeter = std::env::var("OPENCMDB_SCAN_CIDR").ok();
     match reconcile_view(&pool).await {
-        Ok((view, identity)) => render(GapPage {
-            view,
-            identity,
-            s: strings(),
-        }),
+        Ok((view, identity)) => {
+            let card = GapFragment {
+                view,
+                identity,
+                s: strings(),
+            };
+            match card.render() {
+                Ok(body) => Html(render_shell(
+                    Shell::new(crate::screens::Screen::Triage, perimeter),
+                    body,
+                ))
+                .into_response(),
+                Err(error) => {
+                    tracing::error!(%error, "rendering the triage card");
+                    (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
+                }
+            }
+        }
         Err(response) => response,
     }
 }
@@ -604,13 +720,7 @@ mod tests {
         let view = build_view(Vec::new(), Vec::new(), None);
         assert!(!view.has_entity);
         // The empty state renders honestly (default locale `en`).
-        let html = GapPage {
-            view,
-            identity: no_reach(),
-            s: strings(),
-        }
-        .render()
-        .unwrap();
+        let html = triage_html(view, no_reach());
         assert!(html.contains("No declared record yet"));
     }
 
@@ -713,13 +823,7 @@ mod tests {
         let identity = build_identity_view(vec![reach("abstained", Some("absence_of_proof"), 4)]);
 
         assert!(!view.has_entity, "the premise: nothing is declared");
-        let html = GapPage {
-            view,
-            identity,
-            s: strings(),
-        }
-        .render()
-        .unwrap();
+        let html = triage_html(view, identity);
 
         assert!(
             html.contains("No declared record yet"),
@@ -739,13 +843,7 @@ mod tests {
     /// green, because the branch rendered and nothing asserted on it.
     #[test]
     fn the_identity_section_says_so_when_nothing_has_been_observed() {
-        let html = GapPage {
-            view: build_view(Vec::new(), Vec::new(), None),
-            identity: no_reach(),
-            s: strings(),
-        }
-        .render()
-        .unwrap();
+        let html = triage_html(build_view(Vec::new(), Vec::new(), None), no_reach());
 
         assert!(
             html.contains("Nothing observed yet"),
@@ -783,13 +881,7 @@ mod tests {
             unknown.cause
         );
 
-        let html = GapPage {
-            view: build_view(Vec::new(), Vec::new(), None),
-            identity: view,
-            s: strings(),
-        }
-        .render()
-        .unwrap();
+        let html = triage_html(build_view(Vec::new(), Vec::new(), None), view);
         assert!(
             html.contains("a_cause_no_variant_names"),
             "and THE PAGE RENDERS — this is the assertion the whole design is for"
@@ -879,13 +971,10 @@ mod tests {
     /// branch instead.
     #[test]
     fn the_surface_states_both_limits_separately() {
-        let html = GapPage {
-            view: build_view(Vec::new(), Vec::new(), None),
-            identity: build_identity_view(vec![reach("abstained", Some("absence_of_proof"), 4)]),
-            s: strings(),
-        }
-        .render()
-        .unwrap();
+        let html = triage_html(
+            build_view(Vec::new(), Vec::new(), None),
+            build_identity_view(vec![reach("abstained", Some("absence_of_proof"), 4)]),
+        );
 
         assert!(
             html.contains("counts sightings, not devices"),
@@ -912,13 +1001,10 @@ mod tests {
             reach("match", None, 187),
         ];
         let render_once = || {
-            GapPage {
-                view: build_view(Vec::new(), Vec::new(), None),
-                identity: build_identity_view(rows.clone()),
-                s: strings(),
-            }
-            .render()
-            .unwrap()
+            triage_html(
+                build_view(Vec::new(), Vec::new(), None),
+                build_identity_view(rows.clone()),
+            )
         };
 
         assert_eq!(
@@ -933,13 +1019,10 @@ mod tests {
     /// **AC6** — no gauge, no percentage, no badge markup in the identity section.
     #[test]
     fn the_page_carries_no_gauge_and_no_percentage() {
-        let html = GapPage {
-            view: build_view(Vec::new(), Vec::new(), None),
-            identity: build_identity_view(vec![reach("abstained", Some("absence_of_proof"), 113)]),
-            s: strings(),
-        }
-        .render()
-        .unwrap();
+        let html = triage_html(
+            build_view(Vec::new(), Vec::new(), None),
+            build_identity_view(vec![reach("abstained", Some("absence_of_proof"), 113)]),
+        );
 
         // ⚠️ `html` is the WHOLE page, not the identity section. Strictly stronger, so no hole —
         // but say so, or this reds one day for a reason its name does not predict.
@@ -1022,13 +1105,10 @@ mod tests {
     /// `nothing_seen`; one half was fixed and the other missed.
     #[test]
     fn the_section_says_so_when_every_sighting_was_placed() {
-        let html = GapPage {
-            view: build_view(Vec::new(), Vec::new(), None),
-            identity: build_identity_view(vec![reach("match", None, 5)]),
-            s: strings(),
-        }
-        .render()
-        .unwrap();
+        let html = triage_html(
+            build_view(Vec::new(), Vec::new(), None),
+            build_identity_view(vec![reach("match", None, 5)]),
+        );
 
         assert!(
             html.contains("Every sighting was placed"),
@@ -1139,13 +1219,7 @@ mod tests {
         );
         assert_ne!(view.abstention_count, 7, "nor the other way round");
 
-        let html = GapPage {
-            view,
-            identity,
-            s: strings(),
-        }
-        .render()
-        .unwrap();
+        let html = triage_html(view, identity);
         assert!(
             !html.contains(">7<"),
             "and no rendered number is their sum: the two populations are declared FIELDS and \
@@ -1318,17 +1392,65 @@ mod tests {
     // enumeration, and a more specific selector elsewhere can override any rule they check.
     // What they carry is that the SOURCE says what the story says it says.
 
+    /// What `/triage` actually serves: the reconciliation card inside the shell.
+    ///
+    /// 🔑 Story 6b.2 removed `GapPage`/`gap.html` — the shell IS the document now — so tests that
+    /// rendered the standalone page render this instead. They gain rather than lose: they assert
+    /// over the bytes the product really sends, frame included.
+    fn triage_html(view: ReconciledView, identity: IdentityView) -> String {
+        let card = GapFragment {
+            view,
+            identity,
+            s: strings(),
+        }
+        .render()
+        .expect("the card renders");
+        render_shell(Shell::new(crate::screens::Screen::Triage, None), card)
+    }
+
     /// The stylesheet, as bytes, for every test in this section.
     fn sheet() -> &'static str {
         include_str!("../assets/app.css")
     }
 
-    /// Both templates, concatenated — what the browser is told to fetch.
-    fn templates() -> [&'static str; 2] {
-        [
-            include_str!("../templates/gap.html"),
-            include_str!("../templates/_gap_card.html"),
-        ]
+    /// **Every** template under `templates/`, read from disk at test time.
+    ///
+    /// 🔴 This ENUMERATES the directory; it does not list it. Story 6b.1's review rewrote two
+    /// guards as properties *"over the sheet AND both templates"*, keyed to a
+    /// `[&'static str; 2]` literal — and story 6b.2's validation measured what that costs: plant
+    /// `data-theme="dark"` in a NEW partial and `style="color: var(--accent-document)"` on ten
+    /// nav entries, and **607 tests stay green**, because a typed literal array does not fail to
+    /// compile when a file is added. *A guard repaired yesterday, undone by the ordinary act of
+    /// adding a file.*
+    ///
+    /// Reading the directory costs a filesystem call in a test and makes the omission
+    /// impossible: a template that exists is a template that is scanned.
+    ///
+    /// # Panics
+    ///
+    /// If `templates/` cannot be read — which means the test is running somewhere the source
+    /// tree is not, and every guard below would be vacuous rather than merely wrong.
+    fn templates() -> Vec<(String, String)> {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+        let mut found: Vec<(String, String)> = std::fs::read_dir(&dir)
+            .unwrap_or_else(|e| panic!("templates/ must be readable at {}: {e}", dir.display()))
+            .filter_map(Result::ok)
+            .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "html"))
+            .map(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let body = std::fs::read_to_string(entry.path())
+                    .unwrap_or_else(|e| panic!("reading {name}: {e}"));
+                (name, body)
+            })
+            .collect();
+        found.sort();
+        assert!(
+            found.len() >= 3,
+            "the premise: templates/ holds at least the card, the nav and the shell ({} found) \
+             — an empty scan would make every guard below assert nothing",
+            found.len()
+        );
+        found
     }
 
     /// The stylesheet with `/* … */` comments removed.
@@ -1429,7 +1551,7 @@ mod tests {
                 urls.push(rest[..end].trim().trim_matches(['"', '\'']).to_string());
             }
         }
-        for html in templates() {
+        for (_name, html) in templates() {
             for attr in ["src=\"", "href=\""] {
                 for (i, _) in html.match_indices(attr) {
                     let rest = &html[i + attr.len()..];
@@ -1523,11 +1645,23 @@ mod tests {
              scan that went empty would assert nothing below",
             urls.len()
         );
+        // 🔴 The property is *nothing leaves this product*, not *everything is an asset*: a
+        // template legitimately links `/gap` or `#`, and a first version of this guard reddened
+        // on `_gap_card.html`'s own anchor. An absolute-external reference is what must not
+        // exist — `scheme://host`, or the protocol-relative `//host` a four-probe list missed.
         for url in &urls {
             assert!(
-                url.starts_with("/assets/"),
-                "every reference must be served by this binary: {url:?} is not under /assets/ \
-                 — no CDN, no protocol-relative host, no @import"
+                !url.contains("://") && !url.starts_with("//"),
+                "nothing may be fetched from outside this binary: {url:?} names a host"
+            );
+        }
+        // The five faces specifically must come from our own asset route.
+        let faces: Vec<&String> = urls.iter().filter(|u| u.ends_with(".woff2")).collect();
+        assert_eq!(faces.len(), 5, "five faces, referenced from the sheet");
+        for face in faces {
+            assert!(
+                face.starts_with("/assets/fonts/"),
+                "a face must be served by us: {face:?}"
             );
         }
         assert!(
@@ -1561,7 +1695,7 @@ mod tests {
     /// two claims and need two tests — checking the sheet says nothing about the markup.
     #[test]
     fn ac3_no_template_selects_a_theme() {
-        for (name, html) in ["gap.html", "_gap_card.html"].into_iter().zip(templates()) {
+        for (name, html) in templates() {
             assert!(
                 !html.contains("data-theme"),
                 "{name} must select no theme — the light set renders because it is the \
@@ -1634,9 +1768,9 @@ mod tests {
             .into_iter()
             .filter(|token| token == "--accent-document")
             .collect();
-        for html in templates() {
+        for (_name, html) in templates() {
             amber_reads.extend(
-                tokens_read_by_rules(html)
+                tokens_read_by_rules(&html)
                     .into_iter()
                     .filter(|token| token == "--accent-document"),
             );
@@ -1669,7 +1803,9 @@ mod tests {
     /// AC7b — D37: the vendored asset carries its version in its filename.
     #[test]
     fn ac7b_htmx_is_vendored_under_its_versioned_name() {
-        let gap = include_str!("../templates/gap.html");
+        // Story 6b.2 replaced `gap.html` with the shell, which is now the document every
+        // screen renders inside — so this reads the shell instead.
+        let gap = include_str!("../templates/_shell.html");
         assert!(
             gap.contains("/assets/vendor/htmx-2.0.4.min.js"),
             "D37: the version belongs in the filename, so an upgrade is visible in the diff"

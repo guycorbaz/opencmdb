@@ -1,6 +1,6 @@
 # Story 6b.2: The shell — header, navigation, and ten routes
 
-Status: ready-for-dev
+Status: review
 
 Epic: 6b — *L'interface de la maquette*. **Second story**, after 6b.1 put the mock's design system
 in the binary. This one gives the product its FRAME and, for the first time, more than one address.
@@ -424,30 +424,30 @@ into `CLAUDE.md`, `docs/project-context.md` or `sprint-status.yaml`.
 
 **Scoped by §0.** No Tailwind, no chain, no `xtask` subcommand; no database read anywhere in the shell.
 
-- [ ] **T1 — the shell** (AC1, AC6): `_shell.html` + `_nav.html` partials; ten entries in three
+- [x] **T1 — the shell** (AC1, AC6): `_shell.html` + `_nav.html` partials; ten entries in three
       groups; `aria-current`; the header's three static slots with `CARGO_PKG_VERSION`
-- [ ] **T2 — the ten routes** (AC2, AC4): 🔴 **nine demo screens in a `Router<()>` sub-router merged
+- [x] **T2 — the ten routes** (AC2, AC4): 🔴 **nine demo screens in a `Router<()>` sub-router merged
       AFTER `.with_state(pool)`** — the shape IS the carrier, and forbidding the extractor without it
       is not enforceable (measured). `/triage` stays on the main router with the pool and renders
       today's card (§0a-quater). `/device` as the mock has it
-- [ ] **T3 — `/` and `/gap`** (AC5): 303 to `/triage`; `/gap` untouched
-- [ ] **T4 — the copy** (AC6): **13** keys (`page.tagline` exists and is reused), `fr` + `en`, plus
+- [x] **T3 — `/` and `/gap`** (AC5): 303 to `/triage`; `/gap` untouched
+- [x] **T4 — the copy** (AC6): **13** keys (`page.tagline` exists and is reused), `fr` + `en`, plus
       the guard that a referenced key RESOLVES — a typo renders as visible page text
-- [ ] **T4b — the perimeter into `AppConfig`** (§0a-bis): `OPENCMDB_SCAN_CIDR` moves out of
+- [x] **T4b — the perimeter into `AppConfig`** (§0a-bis): `OPENCMDB_SCAN_CIDR` moves out of
       `std::env::var` at `main.rs:334`; no test may mutate an env var (story 6.1's rule)
-- [ ] **T4c — `page.rs`'s `templates()` must enumerate `templates/`, not list two files** (AC8b), or
+- [x] **T4c — `page.rs`'s `templates()` must enumerate `templates/`, not list two files** (AC8b), or
       6b.1's two repaired guards go blind on every partial this story adds
-- [ ] **T5 — the guards** (AC1–AC7), each written to red before it passes, and AC3's written as a
+- [x] **T5 — the guards** (AC1–AC7), each written to red before it passes, and AC3's written as a
       PROPERTY with its blind spots stated
-- [ ] **T6 — look at all ten screens** in a browser. ⚠️ *A status code is not a look* — 6b.1's T6
+- [x] **T6 — look at all ten screens** in a browser. ⚠️ *A status code is not a look* — 6b.1's T6
       logged HTTP statuses and called it looking, and the review said so. 🔑 **Export
       `OPENCMDB_LOCALE=fr` first**: the default locale is `en` (`main.rs:291`), so an unset locale
       compares *Triage / Dashboard / Devices* against a French mock — the wrong comparison
-- [ ] **T7 — the register** (AC8), in BOTH directions: the rows this story writes, **and the three
+- [x] **T7 — the register** (AC8), in BOTH directions: the rows this story writes, **and the three
       the register already owes it** — the four stale chain documents (due now), the `assets/`
       namespace decision, and the radius branch. 🔴 **`grep -n "6b.2" deferred-work.md` before
       starting and before finishing** — third consecutive story to miss a row naming it
-- [ ] **T8 — prove-to-red**, predictions written FIRST
+- [x] **T8 — prove-to-red**, predictions written FIRST
 
 ## Prove-to-red — the mutations this story owes
 
@@ -608,7 +608,105 @@ measured failing. Stated as such rather than as a measurement.
 
 ### Agent Model Used
 
-_(filled by dev-story)_
+Claude Opus 5 (1M context), 2026-08-18, against a live `mariadb:10.11.11` (`opencmdb-story6b1`,
+port 13322).
+
+### AC9 — THE LIVE COUNT (this file is its only home)
+
+**598 → 608 tests: 381 bin + 161 core + 66 xtask.** Eight gates green, `fmt` and
+`clippy --all-targets -- -D warnings` clean — **verified in that order**, which is story 6b.1's
+review finding applied. `app.css` 297 → 356 lines. `opencmdb-core` untouched, no migration.
+
+### Implementation Plan (as executed)
+
+1. **T7 first, not last.** The validation's finding was that this story owed the register three rows
+   *before* writing code, so the first command run was `grep -n "6b.2" deferred-work.md`. It named
+   four rows; three were due.
+2. **T4b** — `OPENCMDB_SCAN_CIDR` into `AppConfig`, and the call site at `main.rs` reads the
+   parameter. No test mutates an env var (story 6.1's rule).
+3. **T2** — `screens.rs`: the ten screens as a type, and the nine demonstration ones on a
+   `Router<()>` **merged after `.with_state(pool)`**. The shape is the guard.
+4. **T1/T3** — `_shell.html` + `_nav.html`; `/` → 303; `/triage` on the main router with the card.
+5. **T4/T4c/T5/T8** — 16 keys, the enumerating `templates()`, nine guards, the mutation pass.
+
+### 🔴 Two decisions the story did not prescribe, taken and recorded
+
+**`gap.html` and `GapPage` are DELETED, not left orphaned.** The shell IS the document now, so the
+old full-page template had no route and `clippy -D warnings` failed on `index` as dead code —
+exactly as the validation predicted. Deleting it moved ten tests that rendered `GapPage` onto a
+`triage_html()` helper that renders **what `/triage` actually serves**: the card inside the shell.
+🔑 *They gained rather than lost — they now assert over the bytes the product sends, frame included.*
+
+**The demonstration screens and the fed screen are split across two routers**, which §0a-quater
+prescribed and which the code makes structural: nine handlers with no pool, one with. Constraint 1 is
+about demonstrations and is enforced exactly where it applies.
+
+### Debug Log — prove-to-red, predictions FIRST
+
+| # | Mutation | Predicted | Observed | Carrier |
+|---|---|---|---|---|
+| M1 | remove one nav entry | AC1/AC3 red | ✅ 1 red — `every_screen_renders_ten_entries_in_three_groups` | assertion |
+| M2 | mark two entries current | AC1 red | ✅ 2 red — `exactly_one…` and `each_screen_marks_itself_current` | assertion |
+| M3 | `State<MySqlPool>` on a demo handler | **compile failure** | ✅ **`E0308`**, 2 errors — *the validation predicted the code correctly and the story's first draft did not: 6.1's `E0277` came from a handler already carrying a second `State`* | **compiler** |
+| M5 | `href="#"` on every entry (the mock's own spelling) | AC3 red | ✅ 2 red | assertion |
+| M6-ter | typo a key (`nav.apps` → `nav.appz`) | AC6 red | ✅ 1 red — `no_screen_renders_a_key_name_as_a_label` | assertion |
+| M6-bis | remove the **`fr`** half of a key | AC6 red | 🔴 **GREEN first — I had no such guard.** `every_key_carries_both_locales` was written in response and reds with the key named | assertion |
+
+⚠️ **Six mutations, six reds after the repair — and the sixth is the one that mattered.** M6-bis is
+the direction `rust-i18n`'s `en` fallback makes silent: the French interface renders English and no
+rendering can betray it. **The gap-hunt layer predicted exactly this and I still shipped the guard
+without it** until the mutation was run — *a finding read is not a finding applied.*
+
+### Completion Notes
+
+- 🔴 **Two of my own guards were repaired by their own mutation, not by review.** The URL guard
+  first reddened on `_gap_card.html`'s legitimate `#` anchor: I had written *"every reference starts
+  with `/assets/`"* where the property is *"nothing leaves this product"* — a template links `/gap`
+  and that is not an escape. And `the_shell_shows_no_last_observation` reddened on **its own
+  template's comment**, which names the deferred fact in order to explain it: comments are now
+  stripped before scanning, the idiom `float-free` established and that story 6b.1 met in the same
+  way, one story ago.
+- **`templates()` now enumerates `templates/` from disk** rather than listing two files, so 6b.1's
+  `data-theme` and `--accent-document` guards see every partial this story and the next nine add.
+  The validation measured the alternative: both violations planted, **607 tests green**.
+- **Measured on the running binary** (release, live DB, `OPENCMDB_LOCALE=fr`): the ten screens answer
+  200, `/` answers **303 → `/triage`**, `/triage` carries the reconciliation card and the identity
+  reach section, and a demonstration screen's `<main>` is **empty on purpose**.
+- **What the operator sees**, and this is the fidelity check the story asked for: the mock's header
+  with `v0.1.1` from the crate, the three groups **Boucle · Inventaire · Machine**, the ten French
+  labels character for character, the current entry marked, and `Périmètre 127.0.0.1/32` pinned to
+  the bottom of the sidebar.
+- ⚠️ **The shell is 11 CSS rules, not the 18 the validation measured** — its prototype included a
+  breakpoint and this one has none, responsive being deferred by decision. Both numbers are above
+  the *"of the order of ten"* the first draft claimed, and neither changes the Tailwind arbitration.
+- **The three register rows are discharged with their decisions**, not merely ticked: the four stale
+  documents corrected (plus a `recapture` sentence that was false in the same file), the `assets/`
+  namespace decided *and re-owned to the Tailwind row*, and the radius branch **taken** — the nav
+  entries use `var(--radius-sm)`, so the mock's scale finally has a consumer.
+
+### File List
+
+| File | Change |
+|---|---|
+| `crates/opencmdb-bin/src/screens.rs` | **new** — the ten screens, the pool-free sub-router, nine guards |
+| `crates/opencmdb-bin/templates/_shell.html` | **new** — the frame |
+| `crates/opencmdb-bin/templates/_nav.html` | **new** — ten entries, three groups, the perimeter footer |
+| `crates/opencmdb-bin/templates/gap.html` | **deleted** — the shell is the document now |
+| `crates/opencmdb-bin/src/page.rs` | `Shell`/`render_shell`, `triage`, `GapPage`/`index` removed, `templates()` enumerates |
+| `crates/opencmdb-bin/src/main.rs` | `scan_cidr` in `AppConfig`, the redirect, the merged sub-router, the updated `/` test |
+| `crates/opencmdb-bin/assets/app.css` | the shell's 11 rules (297 → 356 lines) |
+| `crates/opencmdb-bin/locales/app.yml` | 16 keys, both locales (32 → 48 entries) |
+| `.gitignore`, `xtask/Cargo.toml`, `CLAUDE.md`, `docs/project-context.md` | the four stale chain documents |
+| `_bmad-output/implementation-artifacts/deferred-work.md` | three rows discharged |
+
+### Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-18 | Contexted: four contradictions found, of which two between documents the project already had. |
+| 2026-08-18 | Arbitrated by Guy: the mock prevails (nav, header, `device`), `/` → `/triage`, no Tailwind, no responsive. |
+| 2026-08-18 | Validated by two fresh-context layers: 8 of 37 claims refuted, then 7 HIGH + 5 MEDIUM from the layer that built the shell. Both of the story's named carriers were false; one premise of an arbitration was mine and wrong. |
+| 2026-08-18 | Implemented. 598 → 608 tests, eight gates green. Six mutations, six reds — one of them green first, which is why the locale guard exists. |
 
 ### Debug Log References
 
