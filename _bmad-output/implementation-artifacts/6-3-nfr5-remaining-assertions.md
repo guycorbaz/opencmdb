@@ -1,6 +1,6 @@
 # Story 6.3: NFR5's two remaining assertions are measured, not asserted
 
-Status: review
+Status: done
 
 <!-- ⚠️ CONTEXTED 2026-08-15, the day after story 6.2 merged (PR #91 → `ead7738`, docs flipped by
      PR #92 → `72dfe1f`). The tree this story extends is master at `72dfe1f`.

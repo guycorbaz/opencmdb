@@ -75,7 +75,21 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-15  # 6.3 -> `ready-for-dev`: contexted, and its own numbering comment
+last_updated: 2026-08-18  # 6.3 -> `done`: PR #93 squash-merged as `d284cfb` after a green CI run
+                          # (1m08) -- dev-story, the mutation pass, a three-layer code review on a
+                          # DIFFERENT model (12 patches, 1 deferral, 2 dismissed with the
+                          # measurement that dismissed them) and the merge. 🔑 The branch had been
+                          # pushed on 2026-08-15 and CI had NEVER run on it: `ci.yml` triggers on
+                          # `push: [master]` and on `pull_request` only, so a pushed feature
+                          # branch triggers nothing -- every green figure was LOCAL until the PR
+                          # existed. 🔑 Same day, `master`'s protection was extended to
+                          # administrators (`enforce_admins`, Guy's arbitration): PR-required, the
+                          # `ci` check, strict-up-to-date, linear history and the force-push ban
+                          # were all already in place and all bypassable by the repo owner -- that
+                          # was the only hole. Scope is `master` ALONE; `gh-pages` stays
+                          # direct-push (no check runs there) and `v*.*.*` tags are untouched.
+                          # Next: Epic 6b (the mock's interface), then 6.4.
+                          # (Earlier: 2026-08-15) 6.3 -> `ready-for-dev`: contexted, and its own numbering comment
                           # corrected (it said "assertions 2 and 3"; the parked pair is 1 and 2).
                           # ✅ VALIDATED same day, TWO fresh-context layers, BOTH of which BUILT a
                           # prototype of the prescribed eighth gate rather than reasoning about
@@ -2876,7 +2890,7 @@ development_status:
   # This comment read "assertions 2 and 3" until 2026-08-15 — WRONG, and it inherited the error
   # from `epics.md:1724`: assertion 3 is the one story 5.12 covered (`deferred-work.md:2896`).
   # `epics.md` is NOT edited; the divergence is registered with Epic 6's retrospective.
-  6-3-nfr5-remaining-assertions: review
+  6-3-nfr5-remaining-assertions: done
   # FR13(a), *the day-one case*; the gesture belongs to the CAUSE, not the count
   6-4-abstention-line-carries-the-gesture: backlog
   # story 5.9's three deferrals, as ONE schema story, with NO producer
