@@ -3744,3 +3744,23 @@ below is a consequence of that sentence, recorded rather than absorbed — a sto
   neither was registered. **Owner: story 6b.11** (the keyboard and focus contract, the epic's
   accessibility story) for the touch targets, **Epic 6b's retrospective** for the responsive
   prescription the reference silently drops.
+
+- 🔴 **Nobody owns axe-core on the ten routes, and the epic's own DoD requires it.** `epics.md:2113`
+  sets Epic 6b's Definition of Done as *"the a11y keyboard+focus gate … **axe-core green on the ten
+  routes**, and `cargo xtask ci` green"*. The ten routes come into existence in story 6b.2 and **no
+  story in the twelve-story breakdown owns running axe-core over them** — 6b.2's T6 is *"look at all
+  ten screens in a browser"*, which is not a checker. 🔑 It matters more than a missing chore:
+  story 6b.2's AC3 guard was measured to miss two withholding gestures — `display:none` written in
+  the STYLESHEET and `pointer-events:none` — and **closing those needs computed styles, which is
+  exactly what axe-core/Playwright provides**. The a11y obligation and the honesty guard's blind spot
+  are the same gap. **Owner: story 6b.11** (the keyboard layer and focus contract) or the epic's DoD
+  as a whole — **to be decided at the retrospective if 6b.11 does not take it.**
+
+- ⚠️ **The mock is desktop-only, and the UX spec mandates three breakpoints.** Measured: the mock has
+  **zero `@media` rules** and **zero skip links**, and is a fixed `grid-template-columns: 208px
+  minmax(0,1fr)`. The UX spec (`:1530-1545`, `:1568`) mandates mobile-first with breakpoints at
+  ≤360 / 768 / 1280, a mobile bottom nav with a permanent search magnifier, and skip links; `:841`
+  requires the left nav to collapse to a bottom bar or drawer. 🔴 **"The mock prevails" is unbounded
+  as Guy stated it, and applied to responsive it means shipping a desktop-only shell** — a fourth
+  collision of the same family as the nav, the header and `device`, which story 6b.2's contexting did
+  not raise. **Owner: Epic 6b's retrospective**, unless Guy scopes it into a story first.

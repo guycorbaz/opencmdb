@@ -75,7 +75,27 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-18  # 6b.2 ✅ ARBITRATED by Guy (five decisions, before any code), governing
+last_updated: 2026-08-18  # 6b.2 ✅ VALIDATED, two fresh-context layers, and it cost the story
+                          # dearly: **8 of 37 claims refuted** by the fact-check, **7 HIGH + 5
+                          # MEDIUM** by the gap-hunt, which BUILT the whole shell. 🔴 The two
+                          # carriers the story called its strongest were both measured FALSE:
+                          # AC4's compiler claim (the ten routes land on the main router, whose
+                          # state IS the pool -- it compiles; the carrier must be BUILT, as a
+                          # pool-free sub-router, and the error is E0308 not E0277) and AC7's pin
+                          # (an enumeration of six gated paths, none of them the ten new ones --
+                          # `/devices` public leaves 371 tests green). 🔴 A premise of GUY'S OWN
+                          # ARBITRATION was false and is corrected: the perimeter and the last
+                          # observation ARE in the mock, in the nav footer. Re-arbitrated -- the
+                          # perimeter ships (config, no DB read), the last observation goes to
+                          # 6b.5 -- and the re-arbitration RESTORES AC4, since a shell needing
+                          # config needs a pool-free state. 🔴 And two findings only building
+                          # could reach: `page::index` becomes dead code so `clippy -D warnings`
+                          # FAILS on day one (behind which the only fed screen would have gone
+                          # unreachable until 6b.4), and **story 6b.1's two repaired guards go
+                          # BLIND on new templates** -- both violations planted, 607 tests green.
+                          # ⚠️ THIRD consecutive story to miss a register row naming it by number.
+                          # NEXT = `dev-story` 6b.2, after Guy rules on the responsive question.
+                          # (Earlier the same day) 6b.2 ✅ ARBITRATED by Guy (five decisions, before any code), governing
                           # sentence: **THE MOCK PREVAILS**. Ten nav entries in three groups and
                           # NO Topology (UX-DR33 retired, registered); the header is the mock's
                           # three static slots with the mock's version replaced by

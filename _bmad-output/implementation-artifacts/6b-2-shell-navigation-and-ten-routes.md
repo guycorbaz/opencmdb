@@ -89,7 +89,16 @@ blanket `FromRef` makes the extractor legal — `page::index` already does exact
 
 **So the carrier is not inherited, it is BUILT**: the nine demonstration screens go in their own
 sub-router with a pool-free `ShellState`, merged into the main router on `document.rs`'s precedent.
-⚠️ **Prove it by adding the extractor and reading the compiler error**, not by citing 6.1.
+⚠️ **Prove it by adding the extractor and reading the compiler error**, not by citing 6.1 — and note
+that **the error CODE is shape-dependent**: on the pool-free sub-router the failure is **`E0308`**
+(`expected Router<()>, found Router<Pool<MySql>>`), not 6.1's `E0277`, which arose because
+`document_all` already carried a second `State`. *A mutation should predict "a compile failure" and
+record the code it gets.*
+
+🔑 **A second carrier of a different kind, measured and worth having**: point the pool at a dead port
+and the ten screens still answer **200** while the CONTROL `/gap` answers **500** and `/` answers
+**303**. The control is what makes it mean anything. ⚠️ It costs **30 s** on sqlx's default connect
+timeout unless the test pool sets a short `acquire_timeout` — set one.
 
 ### 0a-quater. Why `/triage` is NOT in that sub-router, and what it saves
 
@@ -213,8 +222,13 @@ AC says HTMX swaps fragments *within* a screen. **The bookmark sweep** (README, 
 
 `deferred-work.md` names this story as the owner of 6b.1's withdrawn AC1/AC5/AC6, on the criterion
 *"the first screen story that writes a utility class"*. **This story writes none: Guy's decision is
-hand-authored, as 6b.1.** The shell is a header, a sticky 208px sidebar and a two-column grid — of
-the order of ten rules, and a build chain whose output is ten rules has not yet earned a ninth gate.
+hand-authored, as 6b.1.** ⚠️ **The first draft said "of the order of ten rules" and the gap-hunt
+built it: 18 rules, 60 declarations, 115 lines — `app.css` 297 → 413, +39%.** And 18 is the FLOOR:
+it has one breakpoint where the UX spec asks for three, no skip link, no mobile bottom nav and no
+nav footer, so built to the spec it is comfortably 30–40. 🔑 **The arbitration survives the
+correction and that is why the figure is worth fixing**: a build chain whose output is 18
+hand-written rules is still not earning a ninth gate — but the next Tailwind conversation must start
+from a measured number rather than from ten.
 
 ⚠️ **The register row is re-owned rather than discharged**, and its criterion is sharpened from *"the
 first screen story"* (which this one is, and which turned out not to be the deciding property) to
@@ -247,6 +261,13 @@ Measured on `master` at `b1ce1a5`:
 Derived from `epics.md`'s three bullets and **scoped by §0's five arbitrations**. AC5–AC9 are this
 story's own additions.
 
+⚠️ **Before AC1: the shell may NOT use the amber.** 6b.1 pins `var(--accent-document)` at **exactly
+zero** uses until story **6.4**, which lands after this whole epic. The natural focus ring and the
+natural `aria-current` marking both reach for the accent — and the mock uses its blue for exactly
+that. **Mark the current entry and the focus ring with the neutrals** (`--color-neutral-200` was
+measured working) or with `--color-accent`, the mock's structural blue. *Meeting a red guard and
+widening it is the failure mode; this sentence exists to prevent it.*
+
 **AC1 — the frame, identical on all ten screens.**
 Every route renders the mock's header — **brand · tagline · `v{CARGO_PKG_VERSION}`**, three static
 slots, the word *maquette* absent — and the navigation over the **ten** entries in the mock's **three
@@ -254,8 +275,12 @@ groups**, with the current entry marked `aria-current="page"`.
 Tests: the entry count is **exactly ten**; the group count is **exactly three**; **exactly one**
 entry carries `aria-current` on each of the ten screens (not *at least one*); the version rendered
 equals `env!("CARGO_PKG_VERSION")` and the template contains no literal version number.
-🔴 **The header carries NO perimeter and NO last observation** (§0a) — and a test asserts that
-absence, because it is a decision rather than an omission and the next reader must meet it.
+🔴 **The header carries no perimeter and no last observation; the NAV FOOTER carries the perimeter**
+(§0a-bis). ⚠️ **Do not write the absence guard over the `<header>` element**: the gap-hunt measured
+that a test asserting *"the header carries neither fact"* passes over a shell that carries **both** in
+the sidebar — *the guard placed exactly where the defect cannot occur*. The assertion that means
+something is over the WHOLE shell: **`MAX(observed_at)` appears nowhere and no demo handler can
+reach the database** (AC4), while the perimeter is present and comes from `AppConfig`.
 
 **AC2 — one URL per screen, server-rendered, deep-linkable cold.**
 Ten routes render server-side. **No client-side router and no screen chosen by JavaScript**: a test
@@ -267,11 +292,24 @@ bytes**. HTMX swaps fragments **within** a screen only.
 ⚠️ **This story must not hide, disable, grey or empty an entry.** The honesty of showing ten screens
 that are mostly empty is story 6b.3's subject, and pre-empting it here would satisfy this AC while
 destroying the next story's.
-🔑 **Write this guard as a PROPERTY, not a list.** Story 6b.1 shipped five guards defeated by
-ordinary gestures; an entry can be withheld at least six ways — `hidden`, `disabled`,
-`display:none`, `visibility:hidden`, an empty or `#` href, or simply not being emitted. The guard
-must assert that each of the ten renders **an `<a>` with a non-empty `href` that a router accepts**,
-and state which classes of withholding it cannot see.
+🔑 **Write this guard as a PROPERTY, and state its blind spots — which the gap-hunt MEASURED by
+attacking a real implementation ten ways.** Eight gestures were caught (`hidden`, `aria-disabled`,
+inline `display:none`, `href="#"` on all ten, an entry behind a false conditional, an entry dropped
+from the route table, `<a>` → `<span>`, an href pointing at no route). **Two came back GREEN:**
+
+| | gesture | why the guard cannot see it |
+|---|---|---|
+| **A4** | `.nav-entry[href="/apps"] { display: none }` **in `app.css`** | it is in the STYLESHEET, not the markup — and in a hand-authored-CSS story that is exactly where anyone would write it |
+| **A9** | inline `pointer-events: none; opacity: .4` | the entry is visible, correctly href'd and route-backed; it simply cannot be clicked |
+
+🔴 **A guard covering all ten is NOT writable at the template-text level**, and the honest sentence
+belongs in the story rather than in a dev's head: *the guard covers the markup; the stylesheet and
+interaction-blocking are outside it, and closing them needs computed styles — axe-core or a headless
+browser over the ten routes.* Anything short of that loses to `opacity:0`, `font-size:0`,
+`height:0;overflow:hidden`, `clip-path:inset(100%)` or a `@media` block.
+⚠️ Two corrections to the first draft's list of six: **`disabled` is not valid on `<a>`** — the real
+spelling is `aria-disabled` — and `display:none` / `visibility:hidden` are **one** class, while the
+CSS-file location is a genuine second class the draft had merged away.
 
 **AC4 — the shell reads NOTHING, and the compiler holds it.**
 None of the ten handlers takes `State<MySqlPool>`. 🔑 Story 6.1 measured this carrier: adding the
@@ -288,6 +326,12 @@ sections.
 `DATABASE_URL`-gated, so on a dev machine it passes **by returning** and only CI would catch it —
 the exact trap this story's own Dev Notes warn about. **Update it deliberately**; do not discover it
 in CI.
+🔴 **And a second CI red the first draft did not see at all**: with `/` redirecting and `/gap`
+serving only the FRAGMENT, nothing routes to `page::index` / `GapPage` / `gap.html` any more, so
+`cargo clippy -- -D warnings` fails with *"function `index` is never used"* — measured. §0a-quater's
+decision (`/triage` renders today's card inside the shell) is what keeps `index` alive **and** keeps
+the product's only fed screen reachable; without it this story would silently empty the one screen
+that was full, in an epic whose purpose is to make the product more usable.
 
 **AC6 — every label is a key, in both locales.**
 The ten entries, the three group headings and the nav footer's perimeter label live in
@@ -296,7 +340,14 @@ The ten entries, the three group headings and the nav footer's perimeter label l
 (`locales/app.yml:5-7`), and `gap.html` already renders brand + tagline. **Two of the header's three
 slots ship today** — reuse them; a new `nav.tagline` would duplicate an existing key. Baseline measured: **32 top-level entries, and not one is missing a locale**
 — so the guard is *"no key regresses to a single locale"*, asserted over the whole file rather than
-over the new keys. A test also asserts no template carries a bare non-ASCII string.
+over the new keys. 🔴 **And a third guard the first draft did not have, measured: a TYPO'D KEY SHIPS AS VISIBLE PAGE
+TEXT.** `rust-i18n` renders a missing key as **its own name** — no panic, not empty — so
+`nav.apps` → `nav.appz` put the literal string `nav.appz` in the navigation with **all guards
+green**, confirmed on the wire. AC6 needs *"every key a handler references resolves"*, which neither
+YAML completeness nor template ASCII-ness expresses.
+⚠️ **The ASCII half must be narrowed to non-ASCII LETTERS**: `gap.html` and `_gap_card.html` already
+carry `—` and `·`, so *"no bare non-ASCII"* reds on the committed tree, over two files this story may
+not touch. *Typography is not copy, and `is_ascii()` cannot draw that line.*
 
 **AC7 — `is_public` is unchanged**: ten new screens, zero new public paths.
 🔴 **The pin at `auth.rs:173` does NOT carry this, measured**: its gated set is an ENUMERATION —
@@ -306,13 +357,41 @@ class, found in a story that names it twice. **The ten paths must be added to th
 better, the pin re-shaped as a property over the router's own path list, so the eleventh screen is
 covered without anyone remembering.
 
-**AC8 — the divergences of §0 reach the register, and it is VERIFIED by reading the register.**
-Five rows: UX-DR33's retired Topology entry; `epics.md`'s four-part header of which three ship;
-`/device`'s hollow bookmark promise (owner 6b.6); the redirect target to re-examine (owner 6b.5);
-the bookmark sweep (owner 6b.12). Plus the Tailwind row re-owned with its sharpened criterion.
-🔴 **Read `deferred-work.md` and count what is there — do not count what you wrote here.** Story
-6b.1 asserted two registrations that were never written, in a story whose own §Traps had prescribed
-this very check.
+**AC8 — the register, in BOTH directions.**
+
+*Rows this story writes*: UX-DR33's retired Topology entry (in **three** documents, not one);
+`epics.md`'s header, of which two ship in the header, one moves to the nav footer, one is deferred
+and a fifth slot is added; `/device`'s hollow bookmark promise (owner 6b.6); the redirect target to
+re-examine (owner 6b.5); the bookmark sweep (owner 6b.12); the last observation (owner 6b.5); the
+Tailwind row re-owned with its sharpened criterion.
+
+🔴 *Rows the register ALREADY NAMES THIS STORY AS OWNER OF, and the first draft addressed one of
+four* — found by the gap-hunt reading the register rather than the story:
+- **`:3608`** — the **four documents** that describe a Tailwind chain which does not exist
+  (`.gitignore:40`, `CLAUDE.md`'s stack line, `docs/project-context.md:279`, `xtask/Cargo.toml:2-3`,
+  which also announces a `recapture` subcommand that does not exist). §5 defers the chain **again**,
+  so these are **due now**;
+- **`:3616`** — *"`assets/` is a public unauthenticated namespace … decide it rather than inherit
+  it"*;
+- **`:3641`** — **the RADIUS divergence**: *"either it uses the mock's steps and the spec sentence is
+  corrected, or it keeps 3px and the three tokens are deleted rather than carried for ever."* A
+  shell that writes no `border-radius` takes **neither** branch, silently.
+
+🔑 **THIS IS THE THIRD CONSECUTIVE STORY to miss a register row that names it by number**, and the
+register says so at `:3629` — *"the question is not the row but why a register searched by hand keeps
+missing the rows that name the searcher."* ⚠️ **AC8's instruction was right and its SCOPE was wrong**:
+it told the dev to verify what they *wrote*, when the failure mode is what the register *already says
+they owe*. **`grep -n "6b.2" deferred-work.md` before starting, and again before finishing.**
+
+**AC8b — 🔴 story 6b.1's two repaired guards must SEE the templates this story adds.**
+`page.rs:1562` hardcodes `fn templates() -> [&'static str; 2]`, and 6b.1's review rewrote the
+`data-theme` and `--accent-document` guards as properties *"over the sheet AND both templates"*.
+**Measured by the gap-hunt: plant `data-theme="dark"` in `_shell.html` and
+`style="color: var(--accent-document)"` on all ten nav entries, and 607 tests stay GREEN** — confirmed
+on the wire with `curl`. A typed literal array does not fail to compile when a template is added, so
+**nothing forces the update**. This story doubles the template count and must therefore make that
+helper enumerate `templates/` rather than list it — and a test must red when a template is added and
+not scanned. 🔑 *A guard repaired yesterday is undone by the ordinary act of adding a file.*
 
 **AC9 — the live test count lives HERE**, in this file (story 6.1's AC8 rule, F2), and is not copied
 into `CLAUDE.md`, `docs/project-context.md` or `sprint-status.yaml`.
@@ -324,15 +403,27 @@ into `CLAUDE.md`, `docs/project-context.md` or `sprint-status.yaml`.
 
 - [ ] **T1 — the shell** (AC1, AC6): `_shell.html` + `_nav.html` partials; ten entries in three
       groups; `aria-current`; the header's three static slots with `CARGO_PKG_VERSION`
-- [ ] **T2 — the ten routes** (AC2, AC4): handlers holding **no pool**; `/device` as the mock has it
+- [ ] **T2 — the ten routes** (AC2, AC4): 🔴 **nine demo screens in a `Router<()>` sub-router merged
+      AFTER `.with_state(pool)`** — the shape IS the carrier, and forbidding the extractor without it
+      is not enforceable (measured). `/triage` stays on the main router with the pool and renders
+      today's card (§0a-quater). `/device` as the mock has it
 - [ ] **T3 — `/` and `/gap`** (AC5): 303 to `/triage`; `/gap` untouched
-- [ ] **T4 — the copy** (AC6): ~15 keys, `fr` + `en`
+- [ ] **T4 — the copy** (AC6): **13** keys (`page.tagline` exists and is reused), `fr` + `en`, plus
+      the guard that a referenced key RESOLVES — a typo renders as visible page text
+- [ ] **T4b — the perimeter into `AppConfig`** (§0a-bis): `OPENCMDB_SCAN_CIDR` moves out of
+      `std::env::var` at `main.rs:334`; no test may mutate an env var (story 6.1's rule)
+- [ ] **T4c — `page.rs`'s `templates()` must enumerate `templates/`, not list two files** (AC8b), or
+      6b.1's two repaired guards go blind on every partial this story adds
 - [ ] **T5 — the guards** (AC1–AC7), each written to red before it passes, and AC3's written as a
       PROPERTY with its blind spots stated
 - [ ] **T6 — look at all ten screens** in a browser. ⚠️ *A status code is not a look* — 6b.1's T6
-      logged HTTP statuses and called it looking, and the review said so
-- [ ] **T7 — the register** (AC8): the five rows of §0, plus the Tailwind row re-owned with its
-      sharpened criterion. 🔴 **Then verify by READING `deferred-work.md`**, not by re-reading this list
+      logged HTTP statuses and called it looking, and the review said so. 🔑 **Export
+      `OPENCMDB_LOCALE=fr` first**: the default locale is `en` (`main.rs:291`), so an unset locale
+      compares *Triage / Dashboard / Devices* against a French mock — the wrong comparison
+- [ ] **T7 — the register** (AC8), in BOTH directions: the rows this story writes, **and the three
+      the register already owes it** — the four stale chain documents (due now), the `assets/`
+      namespace decision, and the radius branch. 🔴 **`grep -n "6b.2" deferred-work.md` before
+      starting and before finishing** — third consecutive story to miss a row naming it
 - [ ] **T8 — prove-to-red**, predictions written FIRST
 
 ## Prove-to-red — the mutations this story owes
@@ -346,6 +437,10 @@ into `CLAUDE.md`, `docs/project-context.md` or `sprint-status.yaml`.
 | M5 | `hidden` on the entry whose screen is emptiest | AC3 red — **the shape this story is most likely to take by accident** |
 | M5b | `href="#"` on one entry (the mock's own spelling!) | AC3 red — ⚠️ the mock writes `href="#"` on all ten, so this is the mutation the mock itself would introduce |
 | M6 | Remove one `en` key, leaving `fr` | AC6 red |
+| M6-bis | Remove one **`fr`** key, leaving `en` | 🔴 **the dangerous direction, and the one the first draft missed**: `rust-i18n` falls back to `en`, so the French UI silently renders English — an NFR26 violation the renderer never betrays |
+| M6-ter | Typo a key name in a handler (`nav.apps` → `nav.appz`) | AC6 red — **measured GREEN before this guard existed**, with `nav.appz` rendered as the entry's visible label |
+| M14 | Add a template under `templates/` and leave `templates()` listing two | AC8b red — otherwise 6b.1's `data-theme` and `--accent-document` guards go blind (measured: 607 tests green with both violations planted) |
+| M15 | `.nav-entry[href="/apps"] { display: none }` in `app.css` | ⚠️ **GREEN by stated limit** — AC3 covers the markup, not the cascade. Recorded as a limit rather than hidden |
 | M7 | Add `/devices` to `is_public` | 🔴 **measured GREEN today** — the pin enumerates six gated paths and none of the ten is among them, so all 371 tests pass with `/devices` public. AC7's guard must be widened before this row can be believed |
 | M8 | Break `/gap`'s fragment | AC5 red |
 | M9 | Hardcode `v0.2.0` in the header template | AC1 red — the version must come from the crate |
@@ -425,7 +520,40 @@ character; *"Topologie"* absent from the whole file and all 19 decoded resources
 ten (M5b's premise); every figure in §6; and **all six register rows exist with the owners claimed —
 story 6b.1's defect is not repeated.**
 
-### Validation obligations for layer 2 (gap-hunt) — BUILD, do not read
+### ✅ VALIDATION, layer 2 (gap-hunt) — 2026-08-18, the shell was BUILT and attacked
+
+It wrote the whole thing — two partials, ten handlers, the redirect, 13 locale keys, 115 lines of
+CSS, nine guards — and ran it against a live `mariadb:10.11.11`. **Seven HIGH, five MEDIUM**, and
+four of them were invisible to the reading layer:
+
+- 🔴 **AC4 measured false**, independently of the fact-check, **plus the shape that restores it** and
+  the correction that the error code is `E0308`, not `E0277` (§0a-ter);
+- 🔴 **`page::index` becomes dead code and `clippy -D warnings` FAILS** — a CI red on day one, behind
+  which the product's only fed screen would have become unreachable until 6b.4 (AC5);
+- 🔴 **story 6b.1's two repaired guards go blind on the new templates**: both violations planted,
+  **607 tests green**, confirmed on the wire (AC8b);
+- 🔴 **AC3 attacked ten ways: eight caught, two green**, and neither is on the draft's list of six
+  (AC3);
+- 🔴 **a typo'd i18n key ships as visible page text** with every guard green, and **M6 pointed the
+  wrong way** — the fallback is `en`, so it is the FRENCH half whose loss is silent (AC6);
+- 🔴 **the shell may not use the amber**, pinned at zero uses until story 6.4 (before AC1);
+- ⚠️ the CSS is **18 rules, not ten** — 30–40 built to the spec — which corrects §5's figure **without
+  overturning its arbitration**;
+- ⚠️ **three register rows already name this story as owner** and the draft addressed one (AC8);
+- ⚠️ **nobody owns axe-core** on the ten routes the epic's DoD requires it for — registered, and it is
+  the same gap as AC3's two blind spots.
+
+✅ **What it confirmed by measurement**: M5b's premise (`href="#"` on all ten); the ten entries, three
+groups and absent Topology; **every figure in §6** — *"story 6b.1's record was wrong four ways; this
+one is clean"*; that `aria-current` survives a real render, with the trap that computing `current` in
+the template puts it where no unit test reaches; and that the redirect behaves for a browser GET
+(303, `location: /triage`, `curl -L` lands on 200).
+
+🔑 **One thing it could not do**: no headless browser in the worktree, so AC3's *"closing the two
+blind spots needs computed styles"* rests on the structure of the problem rather than on a checker
+measured failing. Stated as such rather than as a measurement.
+
+### Validation obligations for dev
 
 1. **§2's collision is the one to attack first.** Verify independently that the header's *last
    observation* cannot be rendered on a demo screen without violating constraint 1 — and if a fourth
