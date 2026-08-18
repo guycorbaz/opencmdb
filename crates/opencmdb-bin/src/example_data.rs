@@ -27,8 +27,14 @@ pub(crate) struct ExampleDevice {
     pub(crate) ipv4: &'static str,
     /// Its hardware address.
     pub(crate) mac: &'static str,
-    /// What it is for, in the operator's words.
-    pub(crate) role: &'static str,
+    /// The i18n KEY of what it is for.
+    ///
+    /// 🔴 A key and not a sentence, and the reason was found by LOOKING rather than by testing:
+    /// the first draft carried English literals here, so a French operator read *"Storage"* and
+    /// *"Network"* under a French interface — an NFR26 violation that the whole suite passed over,
+    /// because a literal is not a key and `every_key_carries_both_locales` can only see keys.
+    /// *Example data is still operator-visible copy.*
+    pub(crate) role_key: &'static str,
 }
 
 /// One sighting the example engine could not place on a device.
@@ -40,8 +46,9 @@ pub(crate) struct ExampleSighting {
     pub(crate) ipv4: &'static str,
     /// Its hardware address, when it gave one.
     pub(crate) mac: &'static str,
-    /// Why the example engine abstained, in the operator's words.
-    pub(crate) reason: &'static str,
+    /// The i18n KEY of why the example engine abstained — a key, for the reason given on
+    /// [`ExampleDevice::role_key`].
+    pub(crate) reason_key: &'static str,
 }
 
 /// The example inventory — RFC 5737 documentation addresses and RFC 7042 documentation MACs.
@@ -56,21 +63,21 @@ pub(crate) fn devices() -> Vec<ExampleDevice> {
             name: "nas-01",
             ipv4: "192.0.2.10",
             mac: "00:00:5E:00:53:10",
-            role: "Storage",
+            role_key: "example.role.storage",
         },
         ExampleDevice {
             id: "switch-core",
             name: "switch-core",
             ipv4: "192.0.2.2",
             mac: "00:00:5E:00:53:02",
-            role: "Network",
+            role_key: "example.role.network",
         },
         ExampleDevice {
             id: "printer-hall",
             name: "printer-hall",
             ipv4: "192.0.2.31",
             mac: "00:00:5E:00:53:31",
-            role: "Peripheral",
+            role_key: "example.role.peripheral",
         },
     ]
 }
@@ -81,12 +88,65 @@ pub(crate) fn unplaced_sightings() -> Vec<ExampleSighting> {
         ExampleSighting {
             ipv4: "192.0.2.57",
             mac: "00:00:5E:00:53:57",
-            reason: "No declared record matches this address",
+            reason_key: "example.reason.no_declared_match",
         },
         ExampleSighting {
             ipv4: "192.0.2.58",
             mac: "—",
-            reason: "Answered without a hardware address",
+            reason_key: "example.reason.no_hardware_address",
         },
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 🔴 **Every operator-visible sentence in the example dataset is a KEY, and every key
+    /// RESOLVES.**
+    ///
+    /// # Why this guard exists, and what found the defect it prevents
+    ///
+    /// Not a test. **Looking at the screen.** The first draft of this module carried English
+    /// literals — a French operator read *"Storage"*, *"Network"* and *"No declared record matches
+    /// this address"* under a fully French interface — and the whole suite was GREEN, because
+    /// `every_key_carries_both_locales` scans `app.yml` and a literal never reaches it. An NFR26
+    /// violation with no possible carrier on the locale side. *Example data is operator-visible
+    /// copy, and being fictional does not make it exempt.*
+    ///
+    /// 🔑 **It asserts two different things, and they catch different mistakes.** That the value
+    /// LOOKS like a key catches the literal (measured: M8 reds). That it RESOLVES is aimed at the
+    /// typo, since `rust-i18n` renders an unknown key as its own name — ⚠️ **and that half is
+    /// currently carried by NOTHING that has been measured**: the mutation written for it (M8b)
+    /// never ran, because the tree it ran against did not compile and the driver's filter hid it.
+    /// Registered rather than claimed. Do not read the second `assert` as proven.
+    #[test]
+    fn the_example_copy_is_translated_rather_than_typed() {
+        let mut checked = 0_usize;
+        let mut assert_key = |key: &str| {
+            assert!(
+                key.starts_with("example.") && !key.contains(' '),
+                "{key:?} is a literal, not a key: a sentence typed here renders in English under \
+                 a French interface, and no locale guard can see it"
+            );
+            assert_ne!(
+                rust_i18n::t!(key),
+                key,
+                "{key:?} resolves to its own name — an unknown key is rendered verbatim by \
+                 `rust-i18n`, which would put the key's text on the operator's screen"
+            );
+            checked += 1;
+        };
+        for device in devices() {
+            assert_key(device.role_key);
+        }
+        for sighting in unplaced_sightings() {
+            assert_key(sighting.reason_key);
+        }
+        assert!(
+            checked >= 5,
+            "the premise: the dataset carries at least five translated strings ({checked} seen) \
+             — an empty dataset would assert nothing"
+        );
+    }
 }

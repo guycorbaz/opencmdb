@@ -50,7 +50,7 @@ struct NavGroupView {
 /// Everything the frame needs, and deliberately nothing else.
 ///
 /// 🔑 There is no database handle here and no field that could hold one: the shell renders on
-/// ten screens, eight of which are demonstrations, and epic constraint 1 forbids those to open a
+/// ten screens, nine of which are demonstrations, and epic constraint 1 forbids those to open a
 /// connection. The perimeter arrives from `AppConfig`, the version from the crate.
 pub(crate) struct Shell {
     screen: crate::screens::Screen,
@@ -575,12 +575,32 @@ fn server_error(error: sqlx::Error) -> Response {
     (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
 }
 
+/// One example device, with its copy already resolved into the operator's language.
+///
+/// 🔴 The resolution happens HERE and not in the template, because `example_data` holds i18n KEYS
+/// rather than sentences — see [`crate::example_data::ExampleDevice::role_key`] for the defect
+/// that taught us the difference, which was found by looking at the screen and by nothing else.
+struct ExampleDeviceView {
+    id: &'static str,
+    name: &'static str,
+    ipv4: &'static str,
+    mac: &'static str,
+    role: String,
+}
+
+/// One example sighting the engine did not place, with its reason resolved.
+struct ExampleSightingView {
+    ipv4: &'static str,
+    mac: &'static str,
+    reason: String,
+}
+
 /// The witness screen's body — the example inventory, in two sections (story 6b.3).
 #[derive(Template)]
 #[template(path = "_devices_example.html")]
 struct DevicesExample {
-    devices: Vec<crate::example_data::ExampleDevice>,
-    sightings: Vec<crate::example_data::ExampleSighting>,
+    devices: Vec<ExampleDeviceView>,
+    sightings: Vec<ExampleSightingView>,
     s: Strings,
 }
 
@@ -594,8 +614,24 @@ struct DevicesExample {
 /// fallback string nobody would ever see.
 pub(crate) fn devices_example_body() -> String {
     DevicesExample {
-        devices: crate::example_data::devices(),
-        sightings: crate::example_data::unplaced_sightings(),
+        devices: crate::example_data::devices()
+            .into_iter()
+            .map(|device| ExampleDeviceView {
+                id: device.id,
+                name: device.name,
+                ipv4: device.ipv4,
+                mac: device.mac,
+                role: rust_i18n::t!(device.role_key).to_string(),
+            })
+            .collect(),
+        sightings: crate::example_data::unplaced_sightings()
+            .into_iter()
+            .map(|sighting| ExampleSightingView {
+                ipv4: sighting.ipv4,
+                mac: sighting.mac,
+                reason: rust_i18n::t!(sighting.reason_key).to_string(),
+            })
+            .collect(),
         s: strings(),
     }
     .render()

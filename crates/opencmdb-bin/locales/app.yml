@@ -195,3 +195,18 @@ unplaced.title:
 unplaced.reason:
   en: "Why"
   fr: "Pourquoi"
+example.role.storage:
+  en: "Storage"
+  fr: "Stockage"
+example.role.network:
+  en: "Network"
+  fr: "Réseau"
+example.role.peripheral:
+  en: "Peripheral"
+  fr: "Périphérique"
+example.reason.no_declared_match:
+  en: "No declared record matches this address"
+  fr: "Aucun enregistrement déclaré ne correspond à cette adresse"
+example.reason.no_hardware_address:
+  en: "Answered without a hardware address"
+  fr: "A répondu sans adresse matérielle"

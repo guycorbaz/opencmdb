@@ -13,7 +13,7 @@
   {%- endfor %}
   {#- The perimeter, as the mock shows it, pinned to the bottom of the sticky sidebar.
       🔑 It comes from `AppConfig`, never from the database: the shell renders on ten screens,
-      eight of which are demonstrations, and epic constraint 1 forbids those to open a
+      nine of which are demonstrations, and epic constraint 1 forbids those to open a
       connection. The mock's second footer line — "Dernière observation il y a 4 min" — is a
       `MAX(observed_at)` and is deferred to story 6b.5 for exactly that reason. -#}
   <div class="nav-footer">{{ s.nav_perimeter }} {{ perimeter }}</div>

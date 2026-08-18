@@ -1,4 +1,4 @@
-//! The shell: the mock's frame, its ten addresses, and the nine screens that hold no data yet.
+//! The shell: the mock's frame, its ten addresses, and the nine screens it renders without the store.
 //!
 //! # What this module is, and the one structural decision inside it
 //!
@@ -583,7 +583,7 @@ mod tests {
             assert!(
                 !code.to_lowercase().contains("observ"),
                 "{name}: the last observation is a MAX(observed_at) — a database read on ten \
-                 screens, eight of them demonstrations. Deferred to story 6b.5 (registered), and \
+                 screens, nine of them demonstrations. Deferred to story 6b.5 (registered), and \
                  the ABSENCE is asserted because it is a decision, not an omission"
             );
         }
