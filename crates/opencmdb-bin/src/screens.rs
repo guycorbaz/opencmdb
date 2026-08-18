@@ -392,6 +392,71 @@ mod tests {
         );
     }
 
+    /// AC1 / T4b — the perimeter has exactly ONE reader, and it is `AppConfig::from_env`.
+    ///
+    /// 🔴 This guard exists because the story shipped its own mutation. The table predicts M12
+    /// — *read the perimeter in the handler instead of `AppConfig`* — as a red; M12 was never
+    /// executed, and the first implementation of `/triage` WAS M12, with all 608 tests green.
+    ///
+    /// 🔑 The sibling guard cannot see it and is right about what it tests: it hands
+    /// `render_shell` a `None` directly, so it never reaches the code that *produces* the value.
+    /// The defect lives in the producer — `AppConfig::from_env` filters a blank value and a
+    /// second reader does not, so one fact rendered two ways on one shell. What must be
+    /// asserted is therefore the absence of a second reader, and that is a property of the
+    /// SOURCE: you cannot measure the absence of code by running it (story 5.12's rule).
+    ///
+    /// ⚠️ Its stated limits, both measured rather than supposed: it matches a line carrying the
+    /// variable's name AND a `var(`/`lookup(` call, so a reader that assembles the name at
+    /// runtime, or splits the call across two lines, is invisible to it. A tripwire against the
+    /// ordinary gesture, never a barrier — story 5.12's narrowing, applied rather than inherited.
+    #[test]
+    fn the_perimeter_has_a_single_reader() {
+        // 🔑 Assembled from two halves so the guard does not find ITSELF — measured: spelled
+        // whole, it reported its own matcher as a fourth reader.
+        const NEEDLE: &str = concat!("OPENCMDB_", "SCAN_CIDR");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut scanned = 0_usize;
+        let mut readers: Vec<String> = Vec::new();
+        for entry in std::fs::read_dir(&dir).expect("src/ must be readable") {
+            let path = entry.expect("a readable entry").path();
+            if path.extension().is_none_or(|ext| ext != "rs") {
+                continue;
+            }
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            let body = std::fs::read_to_string(&path).expect("a readable source file");
+            scanned += 1;
+            for (number, line) in body.lines().enumerate() {
+                // 🔑 Comments first, or this guard reds on the prose explaining it — the trap
+                // this story already met once today.
+                let code = line.split_once("//").map_or(line, |(before, _)| before);
+                // 🔑 A READ, not a mention. Named alone, the variable also appears in a
+                // `tracing::error!` string in `main.rs` — measured, and it is a log line, not a
+                // reader. A guard that reds on a log message is wrong in the second direction.
+                let reads = code.contains("var(") || code.contains("lookup(");
+                if code.contains(NEEDLE) && reads {
+                    readers.push(format!("{name}:{}", number + 1));
+                }
+            }
+        }
+        assert!(
+            scanned >= 15,
+            "the premise: src/ holds the crate's modules ({scanned} scanned) — an empty scan \
+             would assert nothing"
+        );
+        assert_eq!(
+            readers.len(),
+            1,
+            "the perimeter must have ONE reader and it must be `AppConfig::from_env`; found \
+             {readers:?}. A second reader does not filter what the first one filters, so a \
+             blanked variable renders `not configured` on nine screens and a dangling label on \
+             the tenth. Configuration enters as a PARAMETER (story 6.1)."
+        );
+        assert!(
+            readers[0].starts_with("main.rs:"),
+            "and that reader lives in `main.rs`, not in a handler: {readers:?}"
+        );
+    }
+
     /// AC1 — the header carries no last observation, and no screen reads the clock or the store.
     ///
     /// ⚠️ Written over the WHOLE shell rather than over the `<header>` element: the validation

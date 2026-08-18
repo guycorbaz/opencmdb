@@ -435,6 +435,10 @@ into `CLAUDE.md`, `docs/project-context.md` or `sprint-status.yaml`.
       the guard that a referenced key RESOLVES — a typo renders as visible page text
 - [x] **T4b — the perimeter into `AppConfig`** (§0a-bis): `OPENCMDB_SCAN_CIDR` moves out of
       `std::env::var` at `main.rs:334`; no test may mutate an env var (story 6.1's rule)
+      — ⚠️ **first ticked while UNMET**: it moved for the nine demonstration screens and stayed in
+      `page::triage`, the tenth. `AppConfig::from_env` discards a blank value and the second reader
+      did not, so a blanked variable rendered *"not configured"* on nine screens and a dangling
+      label on the screen `/` redirects to. Closed 2026-08-18 with its own guard
 - [x] **T4c — `page.rs`'s `templates()` must enumerate `templates/`, not list two files** (AC8b), or
       6b.1's two repaired guards go blind on every partial this story adds
 - [x] **T5 — the guards** (AC1–AC7), each written to red before it passes, and AC3's written as a
@@ -468,7 +472,7 @@ into `CLAUDE.md`, `docs/project-context.md` or `sprint-status.yaml`.
 | M8 | Break `/gap`'s fragment | AC5 red |
 | M9 | Hardcode `v0.2.0` in the header template | AC1 red — the version must come from the crate |
 | M10 | Put a `MAX(observed_at)` read into a demo screen | AC4 red at compile time, for the same reason as M3 — and note it is the LAST OBSERVATION specifically: the perimeter is config and legal (§0a-bis) |
-| M12 | Read the perimeter from `std::env::var` in the handler instead of `AppConfig` | a test reds — story 6.1's rule is that configuration enters as a PARAMETER, and no test may mutate an env var |
+| M12 | Read the perimeter from `std::env::var` in the handler instead of `AppConfig` | ~~a test reds~~ — 🔴 **NEVER EXECUTED, and the prediction was FALSE.** The shipped `page::triage` WAS this mutation, with 608 tests green: no test existed that could red, because the only perimeter guard hands `render_shell` a `None` directly and never reaches the producer. Closed 2026-08-18 by `the_perimeter_has_a_single_reader`, which reds on the shipped tree |
 | M13 | Serve `/triage` without the reconciliation card | AC5 reds — §0a-quater's regression, which the first draft did not see |
 | M11 (control) | Reorder two entries within a group | green — order within a group is pinned by nothing, deliberately |
 
@@ -613,7 +617,8 @@ port 13322).
 
 ### AC9 — THE LIVE COUNT (this file is its only home)
 
-**598 → 608 tests: 381 bin + 161 core + 66 xtask.** Eight gates green, `fmt` and
+**598 → 609 tests: 382 bin + 161 core + 66 xtask** _(608 at the implementation's close; the
+609th is `the_perimeter_has_a_single_reader`, added when M12 was finally executed)_. Eight gates green, `fmt` and
 `clippy --all-targets -- -D warnings` clean — **verified in that order**, which is story 6b.1's
 review finding applied. `app.css` 297 → 356 lines. `opencmdb-core` untouched, no migration.
 
@@ -707,6 +712,7 @@ without it** until the mutation was run — *a finding read is not a finding app
 | 2026-08-18 | Arbitrated by Guy: the mock prevails (nav, header, `device`), `/` → `/triage`, no Tailwind, no responsive. |
 | 2026-08-18 | Validated by two fresh-context layers: 8 of 37 claims refuted, then 7 HIGH + 5 MEDIUM from the layer that built the shell. Both of the story's named carriers were false; one premise of an arbitration was mine and wrong. |
 | 2026-08-18 | Implemented. 598 → 608 tests, eight gates green. Six mutations, six reds — one of them green first, which is why the locale guard exists. |
+| 2026-08-18 | 🔴 **M12 executed after the fact, and it refuted the record: the story SHIPPED its own mutation.** `page::triage` read `std::env::var("OPENCMDB_SCAN_CIDR")` — M12 exactly — while T4b was ticked `[x]`, and all 608 tests were green. Fixed: `TriageState` carries the perimeter, `/triage` moves to its own sub-router (merged above the auth layer — mutated and measured: below it, two DB-free auth pins red). New guard `the_perimeter_has_a_single_reader`, proven red on the shipped tree, naming `page.rs:565`. 608 → 609 tests. |
 
 ### Debug Log References
 

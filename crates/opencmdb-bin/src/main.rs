@@ -371,7 +371,6 @@ async fn run() -> anyhow::Result<()> {
 fn app(pool: MySqlPool, config: AppConfig) -> Router {
     let mut router = Router::new()
         .route("/", get(redirect_to_triage))
-        .route("/triage", get(page::triage))
         .route("/gap", get(page::gap_fragment))
         .route("/assets/{*path}", get(page::asset))
         .route("/metrics", get(metrics::handler))
@@ -381,7 +380,10 @@ fn app(pool: MySqlPool, config: AppConfig) -> Router {
         // state is `()` and not the pool. That is what makes epic constraint 1 enforceable:
         // give one of those handlers `State<MySqlPool>` and it fails to COMPILE. Merged before,
         // or built on the main router, the same handler compiles and the guard is a sentence.
-        .merge(screens::router(config.scan_cidr.clone()));
+        .merge(screens::router(config.scan_cidr.clone()))
+        // `/triage` carries the pool AND the perimeter, so the perimeter is a parameter rather
+        // than a second reading of the environment (story 6b.2's M12, shipped and now closed).
+        .merge(page::triage_router(pool.clone(), config.scan_cidr.clone()));
     if config.document_enabled {
         // The switch governs EXISTENCE only (arbitration 4): merged above the layer, the route
         // is auth-gated exactly like every other non-public path. The pool lives INSIDE the

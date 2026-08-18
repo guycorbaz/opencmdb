@@ -6,9 +6,11 @@
 //! DB read and the HTTP wrapping are the only impure edges.
 
 use askama::Template;
+use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
+use axum::routing::get;
 use opencmdb_core::observation::{
     ConnectorId, Fact, L2DomainId, ObsId, Observation, Scope, VantageId,
 };
@@ -546,6 +548,38 @@ fn server_error(error: sqlx::Error) -> Response {
     (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
 }
 
+/// What `/triage` needs: the store it reads, and the perimeter it displays.
+///
+/// 🔴 **The perimeter is a FIELD, never an `std::env::var` at the point of use.** Story 6b.2's
+/// own mutation table calls reading it in the handler **M12** and predicts a red — M12 was never
+/// executed, and the first implementation of this handler WAS M12, shipped, with the whole suite
+/// green. The cost was not stylistic: [`crate::AppConfig::from_env`] discards a blank value and a
+/// second reader does not, so a blanked variable rendered *"not configured"* on the nine
+/// demonstration screens and a dangling label on this one — one fact, one shell, two behaviours,
+/// on the very screen `/` redirects to.
+///
+/// Configuration enters as a PARAMETER (story 6.1's rule), and the sub-router is what carries it.
+#[derive(Clone)]
+pub(crate) struct TriageState {
+    /// The store the reconciliation card reads.
+    pub(crate) pool: MySqlPool,
+    /// The configured perimeter, already normalised by [`crate::AppConfig::from_env`] — `None`
+    /// when unset OR blank, which is why this handler must not re-derive it.
+    pub(crate) perimeter: Option<String>,
+}
+
+/// `/triage` on its own state, so the perimeter arrives as a parameter rather than being read.
+///
+/// # Returns
+///
+/// A router to be merged BEFORE `.layer(auth_deny)`, like every other route (story 6.1 §2): the
+/// screen is not public, and merging after the layer would bypass the middleware entirely.
+pub(crate) fn triage_router(pool: MySqlPool, perimeter: Option<String>) -> Router {
+    Router::new()
+        .route("/triage", get(triage))
+        .with_state(TriageState { pool, perimeter })
+}
+
 /// `GET /triage` — the shell, with today's reconciliation card inside it.
 ///
 /// # Why this handler exists, and why it is not on the demonstration sub-router
@@ -561,9 +595,9 @@ fn server_error(error: sqlx::Error) -> Response {
 /// it is enforced exactly where it applies.
 ///
 /// Story 6b.4 replaces this body with the mock's two-pane triage; the frame it renders into stays.
-pub async fn triage(State(pool): State<MySqlPool>) -> Response {
-    let perimeter = std::env::var("OPENCMDB_SCAN_CIDR").ok();
-    match reconcile_view(&pool).await {
+pub async fn triage(State(state): State<TriageState>) -> Response {
+    let perimeter = state.perimeter.clone();
+    match reconcile_view(&state.pool).await {
         Ok((view, identity)) => {
             let card = GapFragment {
                 view,
