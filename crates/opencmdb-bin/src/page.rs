@@ -1310,4 +1310,377 @@ mod tests {
             "the conflict and the now-unobserved field"
         );
     }
+
+    // ── Story 6b.1: the design system ────────────────────────────────────
+    //
+    // These read the committed stylesheet and the templates as TEXT. That is a deliberate
+    // limit, stated once here rather than in each test: an assertion over CSS is an
+    // enumeration, and a more specific selector elsewhere can override any rule they check.
+    // What they carry is that the SOURCE says what the story says it says.
+
+    /// The stylesheet, as bytes, for every test in this section.
+    fn sheet() -> &'static str {
+        include_str!("../assets/app.css")
+    }
+
+    /// Both templates, concatenated — what the browser is told to fetch.
+    fn templates() -> [&'static str; 2] {
+        [
+            include_str!("../templates/gap.html"),
+            include_str!("../templates/_gap_card.html"),
+        ]
+    }
+
+    /// The stylesheet with `/* … */` comments removed.
+    ///
+    /// 🔴 Scanning CSS **with** its comments is a measured defect here, not a theoretical one:
+    /// the radius comment in this sheet contains the text `var(--radius-*)` in order to say
+    /// that nothing reads those tokens, and the scanner below counted it as a read — the guard
+    /// reddened on a sentence. `xtask`'s `float-free` gate solved the same problem the same way
+    /// in story 5.4b, precisely so the architecture may be QUOTED without tripping a gate.
+    fn without_comments(css: &str) -> String {
+        let mut out = String::with_capacity(css.len());
+        let mut rest = css;
+        while let Some(start) = rest.find("/*") {
+            out.push_str(&rest[..start]);
+            match rest[start..].find("*/") {
+                Some(end) => rest = &rest[start + end + 2..],
+                None => return out,
+            }
+        }
+        out.push_str(rest);
+        out
+    }
+
+    /// Every `--token` defined in a `:root` block that **no condition wraps**.
+    ///
+    /// 🔴 This walks brace DEPTH rather than searching for the first `:root {`, and the review
+    /// measured why: a `@media (prefers-color-scheme: dark) { :root { … } }` placed above the
+    /// real block — an ordinary thing to write — made a first-match search return the
+    /// CONDITIONAL block's tokens, after which a live rule could read a value that exists only
+    /// under that condition while the guard stayed green.
+    ///
+    /// A `:root` at depth 0 applies always; one at depth 1 sits inside an at-rule and does not.
+    fn unconditional_tokens(css: &str) -> Vec<String> {
+        let css = without_comments(css);
+        let mut tokens = Vec::new();
+        let mut depth = 0usize;
+        let mut in_root = false;
+
+        for line in css.lines() {
+            let trimmed = line.trim();
+            if trimmed.ends_with('{') {
+                if depth == 0 {
+                    let name = trimmed.trim_end_matches('{').trim();
+                    in_root = name.split(',').any(|s| s.trim() == ":root");
+                }
+                depth += 1;
+                continue;
+            }
+            if trimmed.starts_with('}') {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    in_root = false;
+                }
+                continue;
+            }
+            if depth == 1
+                && in_root
+                && let Some(name) = trimmed.strip_prefix("--").and_then(|l| l.split(':').next())
+            {
+                tokens.push(format!("--{name}"));
+            }
+        }
+        tokens
+    }
+
+    /// Every `--token` a rule READS, in the spellings CSS actually permits.
+    ///
+    /// 🔴 `var( --x )` (spaces inside the parens) and `var(--x, fallback)` are ordinary CSS and
+    /// both defeated a plain `matches("var(--x)")` count — measured by the review, on the guard
+    /// that exists to keep the amber unused.
+    fn tokens_read_by_rules(css: &str) -> Vec<String> {
+        let css = without_comments(css).replace("var( ", "var(");
+        let mut used = Vec::new();
+        for (i, _) in css.match_indices("var(--") {
+            let rest = &css[i + 4..];
+            let name = rest.split([')', ',', ' ', '\n']).next().unwrap_or("");
+            if !name.is_empty() {
+                used.push(name.to_string());
+            }
+        }
+        used
+    }
+
+    /// Every URL the product tells a browser to fetch — from the sheet AND both templates.
+    ///
+    /// 🔴 The first no-external-request guard was a list of four probes (`http://`, `https://`,
+    /// `//fonts.`, `@import url(`). The review measured what it lets through:
+    /// `url(//evil-cdn.example.net/track.gif)` — a real cross-origin request every visiting
+    /// browser would make — because the `//fonts.` probe assumed the only protocol-relative
+    /// risk was a font CDN. *An enumeration of bad hosts cannot express "nothing leaves this
+    /// binary".* So the URLs are collected and the assertion states the property instead.
+    fn referenced_urls() -> Vec<String> {
+        let mut urls = Vec::new();
+        let css = without_comments(sheet());
+        for (i, _) in css.match_indices("url(") {
+            let rest = &css[i + 4..];
+            if let Some(end) = rest.find(')') {
+                urls.push(rest[..end].trim().trim_matches(['"', '\'']).to_string());
+            }
+        }
+        for html in templates() {
+            for attr in ["src=\"", "href=\""] {
+                for (i, _) in html.match_indices(attr) {
+                    let rest = &html[i + attr.len()..];
+                    if let Some(end) = rest.find('"') {
+                        urls.push(rest[..end].to_string());
+                    }
+                }
+            }
+        }
+        urls
+    }
+
+    /// AC2 — the palette is the mock's, not the walking skeleton's.
+    #[test]
+    fn ac2_the_sheet_carries_the_mocks_light_base_and_ramps() {
+        let css = sheet();
+        for (token, value) in [
+            ("--color-bg", "#f2f2f3"),
+            ("--color-surface", "#e9e9ea"),
+            ("--color-text", "#1d1f20"),
+            ("--color-accent", "#5980a6"),
+            ("--color-neutral-500", "#98989b"),
+            ("--color-accent-700", "#416180"),
+        ] {
+            assert!(
+                css.contains(&format!("{token}: {value}")),
+                "the mock's token {token} must carry {value}"
+            );
+        }
+    }
+
+    /// AC2 — the typefaces are embedded, and nothing is fetched from the network.
+    ///
+    /// The second half is the one that matters for the single-binary promise: a `@font-face`
+    /// pointing at a CDN would render identically on the developer's machine and fail on an
+    /// air-gapped one.
+    #[test]
+    fn ac2_five_faces_are_declared_and_no_request_leaves_the_product() {
+        let css = sheet();
+        for face in [
+            "fonts/Barlow-Regular.woff2",
+            "fonts/Barlow-Medium.woff2",
+            "fonts/Barlow-Bold.woff2",
+            "fonts/BarlowCondensed-Regular.woff2",
+            "fonts/BarlowCondensed-SemiBold.woff2",
+        ] {
+            assert!(css.contains(face), "the sheet must declare {face}");
+        }
+        assert_eq!(
+            css.matches("@font-face").count(),
+            5,
+            "five faces, and the count is what tells you when a sixth arrives unannounced"
+        );
+
+        // 🔴 Declaring a face in the sheet is not shipping it. Measured on 2026-08-18: `cargo
+        // build` does not see a NEW file under `assets/` — the binary is built, reports
+        // `Finished`, and embeds nothing — so a test reading only the CSS would pass over a
+        // product that serves 404 for every glyph. These five reads are what M8 reddens.
+        for face in [
+            "fonts/Barlow-Regular.woff2",
+            "fonts/Barlow-Medium.woff2",
+            "fonts/Barlow-Bold.woff2",
+            "fonts/BarlowCondensed-Regular.woff2",
+            "fonts/BarlowCondensed-SemiBold.woff2",
+        ] {
+            let embedded = Assets::get(face)
+                .unwrap_or_else(|| panic!("{face} is declared by the sheet but not embedded"));
+            assert!(
+                embedded.data.len() > 40_000,
+                "{face} is embedded but truncated ({} bytes) — a placeholder would pass a \
+                 presence check",
+                embedded.data.len()
+            );
+        }
+
+        // The licence travels with the fonts (SIL OFL 1.1 requires it), and it is served
+        // rather than hidden — measured: `/assets/fonts/OFL.txt` answers 200. That is the
+        // licence doing its job, not a leak.
+        assert!(
+            Assets::get("fonts/OFL.txt").is_some(),
+            "OFL 1.1 requires the notice to travel with the faces"
+        );
+
+        // 🔴 Not a probe list. Every URL the sheet and the templates hand a browser must be
+        // served by US — measured as a property, because the four-probe version let
+        // `url(//evil-cdn.example.net/track.gif)` through, a real cross-origin request.
+        let urls = referenced_urls();
+        assert!(
+            urls.len() >= 7,
+            "the premise: five faces + the sheet + htmx + app.js are referenced ({} found) — a \
+             scan that went empty would assert nothing below",
+            urls.len()
+        );
+        for url in &urls {
+            assert!(
+                url.starts_with("/assets/"),
+                "every reference must be served by this binary: {url:?} is not under /assets/ \
+                 — no CDN, no protocol-relative host, no @import"
+            );
+        }
+        assert!(
+            !without_comments(css).contains("@import"),
+            "an @import pulls a second sheet, and its URL is not one this guard can see"
+        );
+    }
+
+    /// AC3 — the dark set is still in the sheet.
+    ///
+    /// Its twin below asserts that nothing READS it. Two claims, two tests: deleting the block
+    /// and depending on the block are different defects, and M7/M7b are their two mutations.
+    #[test]
+    fn ac3_the_dark_token_set_is_still_present() {
+        let css = sheet();
+        assert!(
+            css.contains(r#"[data-theme="dark"]"#),
+            "the dark token block must still be in the sheet — its return is a story, not an \
+             excavation"
+        );
+        assert!(
+            css.contains("#0f1420"),
+            "the dark background must still be there; deleting the block is what this catches"
+        );
+    }
+
+    /// AC3, first direction — the light set is what renders, because nothing selects the other.
+    ///
+    /// This is a claim about the TEMPLATES, not about the sheet: the dark block is inert only
+    /// for as long as no `data-theme` attribute reaches a browser. The two halves of AC3 are
+    /// two claims and need two tests — checking the sheet says nothing about the markup.
+    #[test]
+    fn ac3_no_template_selects_a_theme() {
+        for (name, html) in ["gap.html", "_gap_card.html"].into_iter().zip(templates()) {
+            assert!(
+                !html.contains("data-theme"),
+                "{name} must select no theme — the light set renders because it is the \
+                 unconditional one, and story 6b.1 removed the hardcoded dark attribute"
+            );
+        }
+    }
+
+    /// AC3, second direction — 🔴 the half a prototype measured GREEN before this test existed.
+    ///
+    /// *"Referenced by nothing"* is not carried by checking the TEMPLATE for `data-theme`: that
+    /// is a different claim. A rule outside the conditional block may read a token the block
+    /// alone defines, and then the sheet depends on a theme nothing selects — silently, because
+    /// `var()` on an undefined token simply yields nothing.
+    ///
+    /// So: every token a live rule uses must be defined UNCONDITIONALLY.
+    #[test]
+    fn ac3_no_live_rule_depends_on_a_conditional_block() {
+        let css = sheet();
+        let unconditional = unconditional_tokens(css);
+        // ⚠️ These floors are the MEASURED counts, not round numbers an order of magnitude
+        // below them. A floor of 8 over 56 tokens catches only a TOTAL scan failure, never a
+        // partial one — and a partial mis-scope is what a brace inside a future comment or
+        // string would cause, since `unconditional_tokens` searches for `:root {` literally
+        // and stops at the first `}` with no depth tracking. Raise these with the sheet.
+        assert!(
+            unconditional.len() >= 56,
+            "the premise: the base :root block defines 56 tokens ({} found) — a scan that \
+             lost part of the block would still clear a low floor and then compare against an \
+             incomplete set",
+            unconditional.len()
+        );
+
+        let used = tokens_read_by_rules(css);
+        assert!(
+            used.len() >= 42,
+            "the premise: the sheet makes 42 `var()` reads ({} found) — same reasoning as the \
+             floor above",
+            used.len()
+        );
+
+        for token in &used {
+            assert!(
+                unconditional.contains(token),
+                "{token} is read by a live rule but is not defined in the base :root block — \
+                 the sheet would then depend on a theme no template selects"
+            );
+        }
+    }
+
+    /// AC4 — the amber is named for the gesture, and no structure reaches for it.
+    #[test]
+    fn ac4_the_amber_is_reserved_for_the_documenting_gesture() {
+        let css = sheet();
+        assert!(
+            css.contains("--accent-document:"),
+            "the amber must be named for what it means"
+        );
+        assert!(
+            !css.contains("--accent:"),
+            "the bare `--accent` must be gone — a token that names a colour rather than a \
+             gesture is what let structure borrow it"
+        );
+        // 🔴 Counting the literal `var(--accent-document)` was measured evadable THREE ways,
+        // each of them ordinary CSS or ordinary HTML: `var( --accent-document )` with spaces,
+        // `var(--accent-document, #b5793a)` with a fallback, and an inline `style=` attribute
+        // in a template the guard never read. So: scan the READS, normalised, in the sheet AND
+        // in both templates.
+        let mut amber_reads: Vec<String> = tokens_read_by_rules(css)
+            .into_iter()
+            .filter(|token| token == "--accent-document")
+            .collect();
+        for html in templates() {
+            amber_reads.extend(
+                tokens_read_by_rules(html)
+                    .into_iter()
+                    .filter(|token| token == "--accent-document"),
+            );
+        }
+        assert_eq!(
+            amber_reads.len(),
+            0,
+            "story 6.4 adds the first legitimate use; until then the honest count is zero, and \
+             this number is what tells you when one arrives — found {amber_reads:?}"
+        );
+
+        // 🔴 Absence is half the claim. Without the positive half, migrating `.refresh:hover`
+        // to `--color-accent-2` — the OTHER ramp, also defined unconditionally — leaves every
+        // check above green while the button renders in the wrong hue. Measured as a gap by
+        // the review's diff-only layer, which could not see the rest of the file.
+        for rule in [
+            ".card:focus { outline: 2px solid var(--color-accent);",
+            "  color: var(--color-accent);",
+            "  border: 1px solid var(--color-accent);",
+            ".refresh:hover { background: color-mix(in srgb, var(--color-accent) 12%",
+        ] {
+            assert!(
+                css.contains(rule),
+                "the four structural sites must read the mock's PRIMARY blue: {rule:?} is not \
+                 in the sheet"
+            );
+        }
+    }
+
+    /// AC7b — D37: the vendored asset carries its version in its filename.
+    #[test]
+    fn ac7b_htmx_is_vendored_under_its_versioned_name() {
+        let gap = include_str!("../templates/gap.html");
+        assert!(
+            gap.contains("/assets/vendor/htmx-2.0.4.min.js"),
+            "D37: the version belongs in the filename, so an upgrade is visible in the diff"
+        );
+        assert!(
+            !gap.contains("/assets/htmx.min.js"),
+            "the unversioned path must be gone, not merely unused"
+        );
+        assert!(
+            Assets::get("vendor/htmx-2.0.4.min.js").is_some(),
+            "and the file must actually be embedded under that name"
+        );
+    }
 }

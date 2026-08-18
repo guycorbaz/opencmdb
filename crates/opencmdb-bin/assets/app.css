@@ -1,26 +1,168 @@
-/* opencmdb — hand-authored design tokens (UX spec §Visual Design Foundation).
-   Dark is the default (home-lab audience); one token source drives both themes.
-   No Tailwind build step for the walking skeleton; no CDN — htmx is served locally. */
+/* opencmdb — hand-authored design tokens, on the reference mock's system (story 6b.1).
+   The mock (2026-08-13) is the interface reference; its palette and typefaces are adopted by
+   Guy's decision (3) of that day. LIGHT is what renders — `data-theme` is emitted by no
+   template — and the dark set below is kept, unreferenced, so its return is a story rather
+   than an excavation.
 
-:root,
+   ⚠️ This file is HAND-AUTHORED and there is no build step. `cargo xtask css` does not exist:
+   measured on 2026-08-18, the Tailwind chain generates nothing this UI uses (the intersection
+   between the classes these templates carry and the utilities Tailwind emits is EMPTY), so it
+   was deferred to story 6b.2 with its measurements — see `deferred-work.md`. Whoever adds the
+   chain reads that entry FIRST: it carries four spellings that D55 does not.
+
+   No CDN: htmx and the five Barlow faces are served from this binary. */
+
+/* ── Typefaces — embedded, never fetched (SIL OFL 1.1, see fonts/OFL.txt) ── */
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/assets/fonts/Barlow-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/assets/fonts/Barlow-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/assets/fonts/Barlow-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/assets/fonts/BarlowCondensed-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Barlow Condensed";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/assets/fonts/BarlowCondensed-SemiBold.woff2") format("woff2");
+}
+
+/* ── The mock's tokens, plus the product's semantic aliases ─────────────────
+   Every token a live rule reads is defined HERE, unconditionally. A test says so, because a
+   rule reading a token that only a `[data-theme]` block defines would depend on a theme no
+   template selects — and `var()` on an undefined token fails silently. */
+:root {
+  /* base */
+  --color-bg: #f2f2f3;
+  --color-surface: #e9e9ea;
+  --color-text: #1d1f20;
+  --color-accent: #5980a6;
+  --color-accent-2: #728fab;
+  --color-divider: color-mix(in srgb, #1d1f20 16%, transparent);
+
+  /* neutral ramp */
+  --color-neutral-100: #f5f5f8;
+  --color-neutral-200: #e7e7ea;
+  --color-neutral-300: #d4d4d7;
+  --color-neutral-400: #b7b7ba;
+  --color-neutral-500: #98989b;
+  --color-neutral-600: #7a7a7d;
+  --color-neutral-700: #5d5d60;
+  --color-neutral-800: #424244;
+  --color-neutral-900: #2b2b2d;
+
+  /* accent ramp — STRUCTURE: navigation, primary actions, selection */
+  --color-accent-100: #eef6ff;
+  --color-accent-200: #d6ebff;
+  --color-accent-300: #b5d9fd;
+  --color-accent-400: #94bce3;
+  --color-accent-500: #749dc4;
+  --color-accent-600: #597ea3;
+  --color-accent-700: #416180;
+  --color-accent-800: #2c455d;
+  --color-accent-900: #1d2d3d;
+
+  /* secondary accent ramp */
+  --color-accent-2-100: #eef6ff;
+  --color-accent-2-200: #d6ebff;
+  --color-accent-2-300: #bdd8f2;
+  --color-accent-2-400: #9ebbd8;
+  --color-accent-2-500: #7e9cb8;
+  --color-accent-2-600: #627d98;
+  --color-accent-2-700: #486077;
+  --color-accent-2-800: #314457;
+  --color-accent-2-900: #1f2d3a;
+
+  /* typography */
+  --font-heading: "Barlow Condensed", system-ui, sans-serif;
+  --font-heading-weight: 600;
+  --font-body: "Barlow", system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* scale — the mock's derived step, carried as it stands */
+  --space-1: 3.4px;
+  --space-2: 6.8px;
+  --space-3: 10.2px;
+  --space-4: 13.6px;
+  --space-6: 20.4px;
+  --space-8: 27.2px;
+
+  /* ⚠️ The mock's three-step radius scale, carried and READ BY NOTHING — measured: zero
+     `var(--radius-*)` uses, while all four `border-radius` rules are the literal `3px` the UX
+     spec requires ("Radius `3px` everywhere", ux-design-specification.md:839). So the product
+     stays spec-compliant and these three are dead weight, like the shadows. Guy's decision of
+     2026-08-13 adopts the mock's palette and TYPOGRAPHY; radius is neither, so the divergence
+     is left open rather than resolved here. Registered in `deferred-work.md`. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 7px;
+
+  /* ⚠️ THIRTY-NINE of the 56 tokens above are defined and read by NOTHING today — measured,
+     not estimated: the sheet makes 42 `var()` reads over 17 distinct tokens. That is the
+     design SYSTEM being carried whole while only one screen exists to spend it; stories 6b.2
+     onward are what give the ramps consumers. Two of those thirty-nine are a different case
+     and must not be read as pending:
+       - the three --shadow-* tokens are carried and will stay unused — the UX spec bans
+         shadows outright ("elevation via hairline borders, no shadows"), so using them would
+         contradict a specified rule. Registered as a divergence;
+       - --color-accent-2 and its ramp have no assigned role yet; the mock uses it for
+         secondary emphasis this page has none of.
+     🔑 The first draft of this comment claimed the shadows were the only unused tokens. They
+     are three of thirty-nine, and the review's diff-only layer asked the question that
+     produced this count. */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2b2b2d 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2b2b2d 16%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2b2b2d 22%, transparent);
+
+  /* ── The product's semantic aliases, mapped onto the mock ── */
+  --bg: var(--color-bg);
+  --surface: var(--color-surface);
+  --border: var(--color-divider);
+  --text: var(--color-text);
+  --muted: var(--color-neutral-600); /* observed = muted/grayed (factual, non-editable) */
+  --attention: var(--color-neutral-900); /* severity by luminosity + weight, never hue (no red) */
+
+  /* 🔴 The amber, named for what it MEANS. Reserved for the documenting gesture (FR13) and
+     used by NOTHING else — the mock's blue carries structure. Story 6.4 adds the first
+     legitimate use; a test pins the count at zero until then. */
+  --accent-document: #b5793a;
+}
+
+/* 🔴 The dark set — PRESENT AND SELECTED BY NOTHING. No template emits `data-theme`, and no
+   rule above reads a token this block alone defines (a test asserts both). Deferred by Guy on
+   2026-08-13 because the reference mock is light-only: a dark palette invented beside a light
+   reference is a palette redone the day someone sees it. ⚠️ Every existing deployment changes
+   colour with this story — story 6b.12 owes that sentence to the release notes. */
 :root[data-theme="dark"] {
   --bg: #0f1420;
   --surface: #161c2b;
   --border: #2a3346;
   --text: #e2e8f0;
-  --muted: #8a94a8; /* observed = muted/grayed (factual, non-editable) */
-  --accent: #d99a4e; /* amber — reserved for the document action, never decorative */
-  --attention: #f0f4fa; /* severity by luminosity + weight, never hue (no red) */
-}
-
-:root[data-theme="light"] {
-  --bg: #f6f7f9;
-  --surface: #ffffff;
-  --border: #dfe3ec;
-  --text: #1a2233;
-  --muted: #64708a;
-  --accent: #b5793a;
-  --attention: #0b1220;
+  --muted: #8a94a8;
+  --attention: #f0f4fa;
+  --accent-document: #d99a4e;
 }
 
 * { box-sizing: border-box; }
@@ -29,13 +171,13 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.4;
 }
 
 .mono {
-  font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -59,7 +201,7 @@ body {
   border-radius: 3px;
   padding: 24px;
 }
-.card:focus { outline: 2px solid var(--accent); outline-offset: 2px; } /* visible focus on HTMX swap */
+.card:focus { outline: 2px solid var(--color-accent); outline-offset: 2px; } /* visible focus on HTMX swap */
 
 .entity {
   display: flex;
@@ -68,25 +210,30 @@ body {
   gap: 12px;
   margin-bottom: 16px;
 }
-.entity h1 { font-size: 20px; font-weight: 600; margin: 0; }
+.entity h1 {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 22px;
+  margin: 0;
+}
 
 .refresh {
   min-height: 44px; /* touch target ≥ 44px (NFR24) */
   padding: 0 16px;
   background: transparent;
-  color: var(--accent);
-  border: 1px solid var(--accent);
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
   border-radius: 3px;
   font: inherit;
   cursor: pointer;
 }
-.refresh:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.refresh:hover { background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
 
 /* ── Declared (crisp) vs Observed (muted) ───────────────────────────── */
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 8px 0 8px; }
 @media (max-width: 620px) { .cols { grid-template-columns: 1fr; } }
 
-h2 { font-size: 14px; font-weight: 600; color: var(--muted); margin: 24px 0 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-heading-weight); color: var(--muted); margin: 24px 0 8px; text-transform: uppercase; letter-spacing: 0.06em; }
 
 .rows { margin: 0; }
 .rows .row { display: flex; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--border); }
@@ -134,8 +281,8 @@ h2 { font-size: 14px; font-weight: 600; color: var(--muted); margin: 24px 0 8px;
 .abstentions .cause { color: var(--muted); }
 
 /* ── Identity reach (story 5.14b) — the radar's range, not a debt ─────
-   ⚠️ Every colour here is --muted / --text / --border and NEVER --accent (the amber reserved for
-   the document action). A test reads these rules. Read it for exactly what it is: a check on the
+   ⚠️ Every colour here is --muted / --text / --border and NEVER --accent-document (the amber
+   reserved for the document action; the token was named `--accent` until story 6b.1). A test reads these rules. Read it for exactly what it is: a check on the
    TEXT OF THESE RULES, not on the resolved colour — a more specific selector elsewhere overrides
    them and the test stays green. The palette carries no red at all (see :root), and that is what
    carries "does not redden"; this block carries only its own honesty. */

@@ -3328,7 +3328,11 @@ story 5.14b's AC10 failed exactly there).
   (the FR coverage map already assigns it there; recorded at Epic 6's decomposition).
 - **(h) Basic's closure — real sessions** (users, revocation, a login form; one shared credential
   authenticates a caller, not a person). **Owner: Epic 19.**
-- **(i) The D37 filename drift**: the vendored file is `htmx.min.js` unversioned where
+- **(i) The D37 filename drift** — ✅ **DISCHARGED by story 6b.1 (2026-08-18)**: the asset is now
+  `assets/vendor/htmx-2.0.4.min.js`, the version read from the file itself (`version:"2.0.4"`), the
+  template updated, and both directions pinned — the versioned path is embedded and served (200),
+  the old one is **404**, measured through the running binary. _(Original wording follows.)_
+  The vendored file was `htmx.min.js` unversioned where
   `architecture.md:3406` names a versioned filename. **Owner: Epic 6b story 6b.1.**
 - **(j) 🔴 CSRF protection for the write route.** ✅ **CLOSED by story 6.2's Origin check**
   (contexted + validated 2026-08-14, §5): a browser holding the cached Basic credential and a
@@ -3560,3 +3564,96 @@ Re-read against the story's AC8 list.
   rephrasing rather than by adding the first allowlist entry. **Owner: Epic 19** for the privilege
   half (the `GRANT` that closes guard neutralisation for both gates); **the seed-file story** for
   the last of 5.12's three.
+
+## Deferred from: story 6b.1's contexting and validation (2026-08-18)
+
+_Guy arbitrated §7 as **option (1) — the mock's tokens now, the Tailwind chain later**. What follows
+is what that decision defers, WITH the measurements that produced it, so that nobody re-derives
+them. Every figure below was measured on Tailwind **v4.3.3** in a worktree prototype, with a
+headless browser and a live `mariadb:10.11.11`._
+
+- 🔴 **THE TAILWIND CHAIN — story 6b.1's withdrawn AC1, AC5 and AC6.** `cargo xtask css` does not
+  exist and does not land in 6b.1: measured, **the intersection between the 27 classes the templates
+  use and the 20 utilities Tailwind generates is EMPTY** — all 20 are false positives harvested from
+  Rust identifiers, so an AC5 gate would guard nothing. **Owner: story 6b.2**, the first screen story
+  that writes a utility class. It inherits four spellings that D55 does not contain and that were
+  each measured:
+  - **`@import "tailwindcss" source(none)`** — without it, auto-detection walks to the git root, so
+    (a) the `@source` trap D55 is written around **does not exist** (correct path, wrong path and no
+    `@source` at all give ONE sha256) and (b) `app.css` becomes **a function of the repository's
+    prose**: appending a sentence containing `grid-cols-3` to a planning document adds two rules to
+    the shipped sheet, and today's output already carries a `.top-3` harvested from
+    `competitive-analysis.md`. An AC6 staleness gate would therefore red on every docs-only commit.
+  - **`@theme static`** — plain `@theme` strips every variable no utility references; ten declared
+    tokens including `--color-accent-document` were absent from the output.
+  - **`@import "tailwindcss/theme"` + `"tailwindcss/utilities"`, never the full import** — preflight
+    alone changes **ten** computed styles on today's page: nine paragraphs lose their margins, and
+    the bare `<h1>` of the empty state (**the first-boot screen of a fresh install**) collapses from
+    28 px/700 to 14 px/400. With the two narrower imports the diff is empty.
+  - **the `htmx-request htmx-swapping htmx-settling` entries of D55's `@source inline()` example can
+    never be generated** (htmx adds them at runtime): a `>= 1` gate over them reds for ever. The
+    colour entries yield 0/15 until the theme defines the colours, then 15/15.
+
+- ⚠️ **`architecture.md`'s D55 carries a trap narrative that is stale on v4.3.3** — *"a wrong
+  `@source` … app.css is missing half its classes … you discover the colourless status pill in
+  production"*. **The DECISION holds** (`xtask css`, never `build.rs`); its EXAMPLE does not.
+  This is the second stale Tailwind statement in the planning artifacts, `architecture.md:619`'s
+  finding F16 being the first. **Owner: Epic 6b's retrospective** — a story does not edit the
+  architecture.
+
+- ⚠️ **FIVE documents describe a chain that does not exist**, and option (1) leaves them one story
+  longer: `.gitignore:40`, `CLAUDE.md`'s stack line, `docs/project-context.md:279`, and
+  **`xtask/Cargo.toml:2-3`** — the manifest of the crate itself, which also announces a
+  `cargo xtask recapture` that does not exist either. (`app.css`'s own header is the fifth and is
+  rewritten by 6b.1, being the file replaced.) **Owner: story 6b.2** for the four, **Epic 6b's
+  retrospective** for `recapture`.
+
+- ⚠️ **`assets/` is a public unauthenticated namespace, not a static-files directory** (story 6.1
+  shrank `is_public` to `/healthz` + `/assets/*`). Measured through the running binary: the gap page
+  returns 401 while `/assets/fonts/OFL.txt` returns **200 unauthenticated** — harmless, OFL 1.1
+  wanting the licence to travel with the fonts — but **D55's prescribed tree puts the build INPUT in
+  the same folder**, so `assets/tailwind.css` would ship in the binary and be publicly readable
+  (measured: 200, `text/css`). **Decide it rather than inherit it. Owner: story 6b.2.**
+
+- ⚠️ **`cargo build` does not see a NEW file under `assets/`** and ships a fontless binary in
+  silence — measured twice (`Finished in 0.08s`, `strings | grep -c "fonts/Barlow"` → 0); only
+  `touch src/page.rs` rebuilds. `rust-embed` registers a compiler dependency on files it ALREADY
+  embeds, and D55 forbids the `build.rs` that normally carries `cargo:rerun-if-changed`. **Owner:
+  every story that adds an asset**, starting with 6b.1's own T2.
+
+- ⚠️ **`epics.md:2108` states Epic 6b's Definition of Done as *"`cargo xtask ci` green — seven
+  gates"***; `run_ci` runs **eight** since story 6.3, and 6b.2's chain would make it nine. A story
+  does not edit `epics.md`. **Owner: Epic 6b's retrospective.**
+
+- 🔑 **A finding about the READING, not about any row: story 6b.1's first draft missed register row
+  (i), which names it as owner by number** — the second consecutive story to do so (story 6.3 missed
+  a 6.2 review patch marked applied but absent from the tree). **Owner: Epic 6b's retrospective** —
+  the question is not the row but why a register searched by hand keeps missing the rows that name
+  the searcher.
+
+- ⚠️ **The RADIUS divergence — the mock's 2/4/7px scale against the UX spec's `3px` everywhere.**
+  Story 6b.1's §2 said this was *"registered"* and it was not: **the claim was in the story and the
+  row was nowhere**, found by the code review's Acceptance Auditor. Recorded now, with the
+  measurement that sizes it: `app.css` makes **zero** `var(--radius-*)` reads and all four
+  `border-radius` rules carry the literal `3px` (`ux-design-specification.md:839`), so the rendered
+  product is spec-compliant and the three tokens are dead weight — exactly like the shadows. Guy's
+  decision of 2026-08-13 adopts the mock's palette and TYPOGRAPHY; radius is neither, so nothing was
+  arbitrated. **Owner: story 6b.2** (the first story to build a screen from the scale) — either it
+  uses the mock's steps and the spec sentence is corrected by a correct-course, or it keeps `3px` and
+  the three tokens are deleted rather than carried for ever.
+
+- ⚠️ **The OFL attribution in `README.md`.** Story 6b.1 embeds five Barlow faces under SIL OFL 1.1
+  and ships `OFL.txt` beside them (served, measured 200). Its §3 said the README attribution was
+  *"6b.12's business, registered"* — **the same false-registration pattern as the radius row above,
+  in the same story**. Recorded now. The licence obligation itself is DISCHARGED (the notice travels
+  with the fonts); what remains is the courtesy attribution in the project's own documents.
+  **Owner: story 6b.12** (the release story, which already owns the docs sweep).
+
+- 🔑 **A finding about the story's own SELF-CHECK, not about either row above.** Both "registered"
+  claims were written in the story and neither reached the register, in a story whose §Traps
+  explicitly told dev to *"confirm the divergences reach `deferred-work.md` with owners"* — and whose
+  validation obligations cite story 5.14b's identical failure (*"§11 required NINE register rows and
+  SEVEN landed"*, closed by a check that *"read only what you wrote"*). **The check was prescribed,
+  the story carried the prescription, and it was not run.** A prescribed check that nobody executes
+  is worth exactly as much as no check. **Owner: Epic 6b's retrospective** — the question is not the
+  two rows but why a story that names this defect class twice still commits it.

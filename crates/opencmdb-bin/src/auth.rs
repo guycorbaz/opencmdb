@@ -173,7 +173,18 @@ mod tests {
     fn is_public_is_exactly_healthz_and_assets() {
         assert!(is_public("/healthz"), "the liveness probe stays public");
         assert!(is_public("/assets/app.css"), "assets stay public");
-        assert!(is_public("/assets/htmx.min.js"), "assets stay public");
+        // Story 6b.1 moved this asset to `assets/vendor/htmx-2.0.4.min.js` (D37: the version
+        // belongs in the filename). The old literal was harmless here — this test exercises the
+        // `/assets/` PREFIX and never touches the filesystem — but a path that no longer exists
+        // is a false example, and the review found it by looking for the rename's leftovers.
+        assert!(
+            is_public("/assets/vendor/htmx-2.0.4.min.js"),
+            "assets stay public, subdirectories included"
+        );
+        assert!(
+            is_public("/assets/fonts/Barlow-Regular.woff2"),
+            "and the fonts"
+        );
         for gated in [
             "/",
             "/gap",

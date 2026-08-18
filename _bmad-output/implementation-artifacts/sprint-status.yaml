@@ -75,7 +75,75 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-18  # 6.3 -> `done`: PR #93 squash-merged as `d284cfb` after a green CI run
+last_updated: 2026-08-18  # 6b.1 CODE-REVIEWED (three layers, Sonnet 5 -- a different model from
+                          # the implementer) and REPAIRED: 14 findings, ALL applied. 🔴 The
+                          # headline is not a product defect: FIVE of the story's SEVEN guards
+                          # read as coverage and were none, each defeated by an ORDINARY
+                          # gesture -- an OS dark-mode media query above the real `:root`,
+                          # spaces inside `var( … )`, a CSS fallback value, an inline `style=`
+                          # attribute in a template the guard never read, and a
+                          # protocol-relative `url(//host/…)` that four fixed probes missed.
+                          # All five rebuilt as PROPERTIES rather than enumerations; M13-M19
+                          # red, five of them replaying a mutation that was GREEN before its
+                          # patch. 🔴 And the record itself was wrong four ways: the baseline
+                          # was 591 not 597 (the delta is +7, not +1), `cargo fmt --check` was
+                          # NOT clean on the committed tree (CI would have reddened -- clippy
+                          # was fixed by hand AFTER fmt and only clippy re-run), app.css's size
+                          # was wrong in both units, and TWO divergences the story called
+                          # "registered" were in no register. The last one is now three rows,
+                          # the third recording that the story's own §Traps PRESCRIBED the
+                          # check that would have caught it.
+                          # NEXT = `gh pr create` -- and note that a pushed branch triggers NO
+                          # CI (ci.yml fires on push:[master] and pull_request only).
+                          # (Earlier the same day) 6b.1 -> `review`: IMPLEMENTED. The product is LIGHT and in Barlow --
+                          # the first change to what the operator sees since story 5.14b, and the
+                          # first time the mock's system is in the binary. `app.css` 150 -> 281
+                          # lines, five faces + OFL.txt embedded (measured served: 200 font/woff2),
+                          # `--accent` -> `--accent-document` across all six sites, D37 closed in
+                          # BOTH directions (versioned path 200, old path 404). NO Tailwind chain,
+                          # by Guy's arbitration. 🔴 The test-first order caught an omission of the
+                          # implementer's: the whole sheet was rewritten while `data-theme="dark"`
+                          # stayed in gap.html -- the one line T1 names -- and every other test was
+                          # green. 🔴 A second guard was measured hollow before shipping: the first
+                          # AC2 test read only the SHEET, so it asserted a @font-face was DECLARED
+                          # and never that a face was EMBEDDED. Eleven mutation ids: nine reds, one
+                          # control green, and TWO rows struck out as MIS-DESIGNED (a preserved
+                          # prefix; a pinned value) -- caught only because both contradicted a
+                          # written prediction. Carriers mixed: one panic!-carried, zero
+                          # compiler-carried; "every red assertion-carried" is NOT claimed.
+                          # The live count lives in the STORY FILE (its AC8), never here.
+                          # NEXT = `code-review`, on a DIFFERENT model from the implementer.
+                          # (Earlier the same day) 6b.1 ✅ VALIDATED (two fresh-context layers) and ARBITRATED by Guy --
+                          # **option (1): the mock's tokens now, the Tailwind chain LATER**, with
+                          # AC1/AC5/AC6 re-owned to story 6b.2 and the five measurements that
+                          # produced the decision attached to them in `deferred-work.md`.
+                          # 🔴 The gap-hunt layer BUILT the chain (v4.3.3, headless browser, live
+                          # MariaDB) and refuted FOUR of the story's own predictions plus one of
+                          # D55's: the `@source` trap no longer exists (correct path, wrong path
+                          # and NO @source give one sha256); auto-detection makes app.css a
+                          # function of the repo's PROSE; `@theme` strips the tokens; M7 reds where
+                          # the draft called it uncarried while the unwritten M7b is GREEN; and
+                          # preflight ALONE breaks the first-boot screen. 🔑 The decisive
+                          # measurement: the intersection between the 27 classes the templates use
+                          # and the 20 utilities Tailwind generates is EMPTY -- so AC5 was a gate
+                          # over an empty set, this story's own quoted defect class applied to
+                          # itself. The fact-check layer refuted 10 of 62 claims, 5 HIGH.
+                          # NEXT = `dev-story` 6b.1, scoped to option (1).
+                          # (Earlier the same day) 6b.1 CONTEXTED -> `ready-for-dev`, and **EPIC 6b OPENS**. 🔴 The
+                          # contexting measured that the story's first AC presupposes a toolchain
+                          # this repository does NOT have: `cargo xtask css` does not exist (xtask
+                          # has ONE subcommand, `ci`), there is no `assets/tailwind.css`, no
+                          # `tools/` binary, and `app.css` is HAND-AUTHORED -- its own header says
+                          # so, while `.gitignore:40` and CLAUDE.md's stack line both call it
+                          # generated. Three documents disagree; two become true when this story
+                          # lands. 🔴 Second measurement: the reference mock carries NO font bytes
+                          # (one `base64` in 495 KB, inside its own viewer JS; every @font-face
+                          # src is an artifact-host UUID), so Barlow comes from `jpt/barlow` under
+                          # OFL 1.1 -- five faces, ~291 KB into the binary. ⚠️ A SPLIT QUESTION is
+                          # put to Guy in §7 (the CSS chain vs the design system: two deliverables,
+                          # one AC set -- Epic 5's shape, six insertions) and is NOT decided here.
+                          # NEXT = `create-story validate`, TWO fresh-context layers, MANDATORY.
+                          # (Earlier the same day) 6.3 -> `done`: PR #93 squash-merged as `d284cfb` after a green CI run
                           # (1m08) -- dev-story, the mutation pass, a three-layer code review on a
                           # DIFFERENT model (12 patches, 1 deferral, 2 dismissed with the
                           # measurement that dismissed them) and the merge. 🔑 The branch had been
@@ -2939,8 +3007,8 @@ development_status:
   # story 5.12 had to sanction it; a seeded demo row is indistinguishable from a real one at the
   # storage layer), and the release CHANGES THE PRODUCT'S COLOUR (`gap.html` hardcodes
   # `data-theme="dark"`, the mock is light-only) — named in the release notes, never discovered.
-  epic-6b: backlog
-  6b-1-design-system-tokens-and-accent: backlog
+  epic-6b: in-progress
+  6b-1-design-system-tokens-and-accent: review
   6b-2-shell-navigation-and-ten-routes: backlog
   6b-3-example-data-marker-and-its-gate: backlog
   6b-4-triage-screen-on-the-real-gap: backlog
