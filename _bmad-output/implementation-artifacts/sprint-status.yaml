@@ -75,7 +75,30 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-18  # 6b.2 ✅ VALIDATED, two fresh-context layers, and it cost the story
+last_updated: 2026-08-19  # 6b.2 -> `done`: PR #97 squash-merged as `d8cc438` after a green CI run,
+                          # code-reviewed first (three layers on a DIFFERENT model, each in its own
+                          # git worktree). The product has TEN ADDRESSES: shell, grouped nav, `/`
+                          # a 303 to `/triage`, `gap.html` deleted. **591 -> 611 tests.**
+                          # 🔴 THE STORY SHIPPED ITS OWN MUTATION: M12 (read the perimeter from
+                          # `std::env::var` in the handler) was predicted red, NEVER EXECUTED, and
+                          # was the shipped code -- 608 green with T4b ticked `[x]`. The guard that
+                          # should have caught it hands `render_shell` a `None` directly and never
+                          # reaches the producer: Epic 5's dominant class, in the story that
+                          # inherited the lesson. 🔴 The review found the family THREE more times --
+                          # no test named ONE of the ten routes (`/devices` public = 609 green, the
+                          # story's own M7, also never executed; and merged below `auth_deny`,
+                          # `GET /dashboard` = 200 OK), a guard whose comment claimed a perimeter it
+                          # did not walk, and `"\u{200B}".trim().is_empty() == false` letting a
+                          # zero-width space render as a blank. All four closed, each measured red
+                          # first. ⚠️ ELEVEN of eighteen prescribed mutations were never re-executed.
+                          # 🔑 CI is the FIRST measurement of the DB half: bin suite 0.06s local vs
+                          # 5.38s in CI -- the tell that the database-backed tests really ran.
+                          # ⚠️ Nine of ten screens render an EMPTY `<main>` with nothing saying so,
+                          # so **6b.3 is priority in the strict sense**; `/device` is the sharpest
+                          # case. 🔴 Every existing deployment changes address -- 6b.12 owes that to
+                          # the release notes, beside 6b.1's colour change.
+                          # NEXT = `create-story` 6b.3 (the example dataset and its marker).
+                          # (Earlier) 6b.2 ✅ VALIDATED, two fresh-context layers, and it cost the story
                           # dearly: **8 of 37 claims refuted** by the fact-check, **7 HIGH + 5
                           # MEDIUM** by the gap-hunt, which BUILT the whole shell. 🔴 The two
                           # carriers the story called its strongest were both measured FALSE:
@@ -3067,7 +3090,7 @@ development_status:
   # `data-theme="dark"`, the mock is light-only) — named in the release notes, never discovered.
   epic-6b: in-progress
   6b-1-design-system-tokens-and-accent: done
-  6b-2-shell-navigation-and-ten-routes: review
+  6b-2-shell-navigation-and-ten-routes: done
   6b-3-example-data-marker-and-its-gate: backlog
   6b-4-triage-screen-on-the-real-gap: backlog
   6b-5-dashboard-real-reach-beside-examples: backlog
