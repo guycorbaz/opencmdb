@@ -75,7 +75,13 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4 CODE-REVIEWED (three layers, Sonnet 5 -- a different model from
+last_updated: 2026-08-19  # 6b.4 -> `done`: PR #101 squash-merged as `cea6853` after a green CI run
+                          # (1m02s; bin suite 5.34 s in CI against 0.07 s locally). Branch deleted,
+                          # twins updated in this same push. **614 -> 625 tests**, eight gates green.
+                          # NEXT = `create-story` 6b.4b (the action bar and the gesture nature) --
+                          # ⚠️ its form and words are ALREADY arbitrated in 6b.4's §0b, so it starts
+                          # designed rather than with a question.
+                          # (Earlier the same day) 6b.4 CODE-REVIEWED (three layers, Sonnet 5 -- a different model from
                           # the implementer; each isolated) and REPAIRED. **0 decisions, 11 patches,
                           # 2 deferrals, 5 dismissed with the check that dismissed them.** 625 tests,
                           # eight gates green, fmt+clippy clean, against a live mariadb.
@@ -3438,7 +3444,7 @@ development_status:
   6b-1-design-system-tokens-and-accent: done
   6b-2-shell-navigation-and-ten-routes: done
   6b-3-example-data-marker-and-its-gate: done
-  6b-4-triage-screen-on-the-real-gap: review
+  6b-4-triage-screen-on-the-real-gap: done
   # 6b.4b INSERTED 2026-08-19 at story 6b.4's VALIDATION (Epic 6b: 12 -> 13 stories). Guy's
   # arbitration: 6b.4 keeps AC1 (the queue and the two photos with provenance and freshness) and AC3
   # (the age sort); 6b.4b takes AC2 -- the action bar and the GESTURE NATURE it needs. The reason is
