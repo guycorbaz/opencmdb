@@ -75,7 +75,41 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4 -> `done`: PR #101 squash-merged as `cea6853` after a green CI run
+last_updated: 2026-08-19  # 6b.4b CONTEXTED -> `ready-for-dev`. 🔑 It starts DESIGNED: its form, its
+                          # words and the *whether* were all settled before it began -- the form and
+                          # words by Guy's arbitration in 6b.4's §0b, the *whether* by his own
+                          # premise (2) of 2026-08-13 (`epics.md:2092`, *"the four gestures Epic 7
+                          # owns are visible and labelled"*, under a heading reading *"premises and
+                          # NOT open questions"*). ⚠️ 6b.4's contexting had put that last one to him
+                          # as if it were open; recorded so this story does not repeat it.
+                          # 🔴 ONE OPEN QUESTION, AND IT IS A MEASUREMENT: the arbitrated
+                          # `enum Gesture { Live { route }, Planned { owner } }` **does not compile
+                          # today** -- probed at contexting with the enum genuinely used and only
+                          # `Live` unconstructed: `error: variant 'Live' is never constructed` under
+                          # `clippy -D warnings`. And that is the state of the product, not an
+                          # artefact of the probe: **not one of the mock's five action-bar gestures
+                          # exists** (Merger is FR13(b)/Epic 7, Résoudre needs FR16/Epic 6, and
+                          # accept/snooze/attach/exclude have no column in any migration), and
+                          # `POST /document-all` is NOT one of them -- whole-entity, flag-gated off,
+                          # called by no template, a different gesture at a different granularity.
+                          # FOUR OPTIONS put to Guy, (d) RECOMMENDED: a STRUCT with an `Option`
+                          # route. Every gesture must still declare whether it has one, so *"looks
+                          # live and calls nothing"* stays UNREPRESENTABLE -- **the arbitrated
+                          # PROPERTY survives, only its spelling changes** -- and no unconstructed
+                          # variant reds the lint. 🔴 (b) `#[allow(dead_code)]` is refuse-worthy: that
+                          # lint is `Screen::ALL`'s only carrier outside `cargo xtask ci`, and 6b.3
+                          # spent a story building a test because it is silenceable. 🔴 (c) wiring
+                          # `/document-all` to the bar is refused: *a button that does something
+                          # other than what it says is worse than one that does nothing and says so*.
+                          # ⚠️ Also established: a PLANNED button must be NEUTRAL, never amber --
+                          # the amber means *"this IS the gesture"* and it is not one yet, so the
+                          # reservation guard stays at ZERO and row (e)'s narrowing remains story
+                          # **6.4**'s (6b.4's contexting misread `6.4` as itself; do not repeat).
+                          # And NO keyboard hint: constraint (6) says the mock's ⏎/⌫ are not a spec.
+                          # ⚠️ The operator still cannot DO anything after this story -- it turns *a
+                          # screen with nothing to click* into *a screen that says why*. 6.4 ends it.
+                          # NEXT = `create-story validate` 6b.4b (MANDATORY), then Guy's one ruling.
+                          # (Earlier the same day) 6b.4 -> `done`: PR #101 squash-merged as `cea6853` after a green CI run
                           # (1m02s; bin suite 5.34 s in CI against 0.07 s locally). Branch deleted,
                           # twins updated in this same push. **614 -> 625 tests**, eight gates green.
                           # NEXT = `create-story` 6b.4b (the action bar and the gesture nature) --
@@ -3452,7 +3486,7 @@ development_status:
   # every screen after this one, not just triage. Its form and words are ALREADY arbitrated in 6b.4's
   # §0b so that 6b.4b starts designed rather than with a question. `epics.md` NOT edited (a story may
   # not; only a retrospective may) -- the divergence is registered in deferred-work.md.
-  6b-4b-action-bar-and-the-gesture-nature: backlog
+  6b-4b-action-bar-and-the-gesture-nature: ready-for-dev
   6b-5-dashboard-real-reach-beside-examples: backlog
   6b-6-inventory-and-device-record: backlog
   6b-7-applications-and-ipam: backlog
