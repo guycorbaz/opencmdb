@@ -75,7 +75,159 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4b -> `done`: PR #103 squash-merged as `20e854c` after a green CI run
+last_updated: 2026-08-19  # 6b.5 CODE-REVIEWED (three layers, Sonnet 5) and REPAIRED. **0 decisions,
+                          # 12 patches, 2 deferrals, 3 dismissed.** 634 tests, eight gates green,
+                          # clippy and fmt clean, and NOW verified BOTH WAYS: 0.07 s without a
+                          # database, 10.56 s with one.
+                          # 🔴 **THE COMMIT SHIPPED A RED SUITE.** `probed >= 9` was a hardcoded
+                          # floor; making the dashboard `Mixed` added a SECOND nature the no-database
+                          # branch skips, so the count fell to 8 -- **and the breaking edit was three
+                          # lines above the assertion, in this story's own diff**. The Completion
+                          # Notes claimed *"0.05 s without a database"*: a figure carried over from
+                          # the previous session's habit and NEVER RUN on this tree. ⚠️ **CI supplies
+                          # a database, so CI was green and only the local path reddened** -- a floor
+                          # CI cannot check is a floor nobody re-reads. Now DERIVED from `Screen::ALL`.
+                          # 🔴 **AND THE DOMINANT CLASS RECURRED A FOURTH TIME, INSIDE THE GUARD
+                          # WRITTEN TO CLOSE THE THIRD**: the section-marker guard compared
+                          # `markers == sections` as TOTALS, so two markers in one section and none
+                          # in the other left the WHOLE SUITE GREEN, that guard included. Now
+                          # per-section, and the mutation reds.
+                          # 🔴 A REACHABLE CONTRADICTION THIS STORY CREATED: an observation ingested
+                          # but unresolved renders *"Rien d'observé pour l'instant"* directly above
+                          # *"Dernière observation il y a 8 h"*, in one div. This story is what
+                          # co-located the two populations, and **every test fed them from ONE
+                          # fixture**, so none could see it. Now said, and guarded by seeding them
+                          # independently.
+                          # ⚠️ Also: six sites saying *"nine demonstration screens"* for eight; a doc
+                          # saying *"three variants and not two"* six lines above the fourth this
+                          # story added; a comment claiming *"STATIC class literals throughout"*
+                          # falsified by line 46 of its own file (`spark-h{{ height }}`, with
+                          # `.spark-h8` missing -- epic constraint 5 live); the `"matched"` token
+                          # recurring sixty lines below the comment explaining it; a dead `.clone()`;
+                          # an unscoped anti-sum oracle; and M3's mechanism WRONG -- 26 red, all
+                          # `Overlapping method route`, which names a real coupling: the route is
+                          # hand-written and the exclusion derived, with nothing tying them.
+                          # 🔴 DEFERRED, and it is the sharpest: **the example half is VISUALLY
+                          # DOMINANT over the honest one** -- fabricated cards at 22 px mono with
+                          # sparklines against real counts in a body-size pill. *That is the exact
+                          # risk the user story names*, reached WITHOUT violating any criterion,
+                          # because the criteria cover presence and marking while the defect is
+                          # salience and no text guard can measure salience.
+                          # ⚠️ STAYS at `review`: `done` is the MERGE's business.
+                          # (Earlier the same day) 6b.5 -> `review`: IMPLEMENTED, shape (a). The dashboard is the product's
+                          # first MIXED screen: the real reach section INCLUDED (not re-drawn, so
+                          # arbitration 13's unit guard is inherited) beside two example sections,
+                          # each with its own HEADING and its own marker, plus the `MAX(observed_at)`
+                          # the register handed this story -- in the BODY, never the frame.
+                          # **629 -> 633 tests**, eight gates green, both ways (0.05 s / 5.6 s).
+                          # 🔴 **M1 TOOK FOUR ATTEMPTS TO RED, FOR THREE DIFFERENT REASONS**, and
+                          # each is a distinct way for a guard to be worthless, none visible by
+                          # reading: (1) the driver had NO ASSERT, so nothing was mutated; (2) the
+                          # fixture used `"matched"` where the token is `"match"`, so `placed`
+                          # rendered 0 and the oracle's `>2<` was satisfied by an EXAMPLE STAT CARD;
+                          # (3) the test helper built the body from the UN-COMPOSED identity while
+                          # the handler builds it from the view -- *the guard rendered a shape
+                          # production does not use*. Fixed at the root: the duplicated field is
+                          # GONE. ✅ And M1b keeps the control: the same sum guarded over the pure
+                          # builder alone stays GREEN, reproducing 5.14b exactly.
+                          # 🔴 **THE PASS DESTROYED WORK, third occurrence in this project**: the
+                          # script mixed a scratchpad restore with `git checkout --`, and `app.yml`
+                          # -- in the git set, not the snapshot -- went back to its last COMMIT,
+                          # deleting nine uncommitted keys. *A file revert equals a mutation revert
+                          # only on a committed baseline.* 🔑 New half: **one mechanism per script**,
+                          # because two sets always drift.
+                          # ⚠️ And the symptom exposed a THIRD source-against-artefact instance: a
+                          # key can be in `app.yml` and absent from the BINARY, and
+                          # `every_key_carries_both_locales` cannot tell -- it reads the file, `t!()`
+                          # reads the embedded copy.
+                          # ⚠️ One flake hypothesis of mine was REFUTED before being written as a
+                          # cause: six runs, three parallel and three single-threaded, 1 failure in
+                          # all six -- deterministic, not a race.
+                          # ✅ Seen in Chrome 151 in French: the real/example boundary IS legible
+                          # (heading, rule, marker) -- §0h addressed rather than asserted. ⚠️ Honest
+                          # limit: the reach section rendered its EMPTY state, so the populated case
+                          # is covered by unit tests and was NOT seen by eye.
+                          # ⚠️ STAYS at `review`: `done` is the MERGE's business.
+                          # (Earlier the same day) 6b.5 ✅ VALIDATED, two fresh-context layers, and BOTH refuted something
+                          # of mine. **Fact-check: 27 assertions, 25 confirmed, 1 REFUTED, 1 weaker.**
+                          # 🔴 The refutation is a UNIT error: *"eight register rows"* is eight
+                          # matching LINES from SEVEN rows (one wraps and names 6b.5 twice) -- the
+                          # right command on the wrong unit, story 5.8's family one epic later.
+                          # ⚠️ And §0a's described MECHANISM is weaker than written: the layer
+                          # declared the dashboard ALL THREE WAYS and ran the suite -- every red
+                          # lands on a different guard than the prose names (a witness count, a
+                          # probe premise, an OK status) and **the `Empty` case does not red at
+                          # all**. The structural conclusion holds; the sentence naming which
+                          # assertion notices did not. *A red that lands on a different guard than
+                          # the one you named* -- inside the paragraph warning about it.
+                          # 🔴 **GAP-HUNT: IT BUILT THE ALTERNATIVE AND REFUTED MY CENTRAL WORD.**
+                          # *"It MUST leave the pool-free router"* is FALSE as an absolute: a
+                          # pool-free `/dashboard` whose reach section arrives by `hx-get` from a
+                          # separate pool-bearing route was built, served and SCREENSHOTTED working.
+                          # 🔑 And the register had already pointed at it -- `/gap`'s orphaned
+                          # fragment consumer is handed to THIS story in one of the rows §0c counts.
+                          # ⚠️ **But the cost was MEASURED and it is what decides**: the partition
+                          # asserts on ONE synchronous body, the fragment's counts arrive in a
+                          # SECOND request a `oneshot` client cannot drive, and AC1 would then need
+                          # two coordinated assertions or a headless-browser test **not in CI**. No
+                          # way was found to keep both. *The conclusion survives; the reason I gave
+                          # for it did not -- and a decision explained by a false premise is one
+                          # nobody can re-derive.*
+                          # ✅ Shape (a) `Nature::Mixed` RECOMMENDED on a measurement: exactly THREE
+                          # `E0004` sites (one production, two test), forcing both the marker and
+                          # the pending-badge decision, nothing silently defaulting.
+                          # ✅ §0d confirmed BY BUILDING: the guard over the pure builder alone stays
+                          # green under a planted sum; the same guard at the composition catches it.
+                          # 🔴 THREE MORE, each now a deliverable: the route-table partition CANNOT
+                          # catch a per-section regression (measured green, a sibling guard is
+                          # needed and does not exist); the marker's SCOPE is ambiguous beside real
+                          # content (seen in a browser -- no heading, no divider, it reads as
+                          # annotating the real numbers above it); and the CSS brace hole is
+                          # confirmed with the exact conditional class a mixed screen invites.
+                          # ⚠️ AC2's *"no history"* is OVERSTATED -- four temporal columns persist --
+                          # but right in spirit: a naive curve over raw rows would draw the UX
+                          # spec's BANNED GROWING COUNTER, since nothing supersedes an abstention.
+                          # NEXT = Guy's ruling on §0a (now FOUR shapes), then `dev-story` 6b.5.
+                          # (Earlier the same day) 6b.5 CONTEXTED -> `ready-for-dev`. 🔴 ONE STRUCTURAL QUESTION, and it
+                          # touches story 6b.2's central guard. **A MIXED screen has no nature**:
+                          # `Nature` is a property of the WHOLE screen, and the route-table
+                          # partition asserts `Fed | Empty => !carries` — so a dashboard that is real
+                          # on one section and example on the others REDS IT under all three
+                          # natures (declared Fed or Empty it carries a marker it must not; declared
+                          # Example it calls the reach section a demonstration). 🔑 Story 6b.3's AC2
+                          # predicted this in words -- *"a screen-level-only marker would either lie
+                          # about the real half or hide the example half"* -- and this is where the
+                          # sentence stops being a prediction.
+                          # 🔴 AND IT MUST LEAVE THE POOL-FREE ROUTER: the reach section reads
+                          # `count_engine_reach`, so `/dashboard` moves to the pool-bearing router
+                          # and the `Router<()>` type-refusal that story 6b.2 chose *because
+                          # "forbidding it by discipline is worth nothing"* stops holding for that
+                          # screen. THREE shapes put to Guy -- (a) a fourth nature `Mixed`, (b)
+                          # natures per SECTION (truest to 6b.3's AC2, biggest change), (c) `Fed`
+                          # with a per-section assertion (smallest diff, ⚠️ but it makes `Fed` mean
+                          # *"reads the store"* rather than *"owes no marker"*, and a type whose doc
+                          # goes false is this project's most-caught defect). The pool question is
+                          # separate and also his.
+                          # ⚠️ Constraint 1's last clause -- *"no demo screen opens a connection"* --
+                          # meets a screen it did not anticipate. Not violated in substance (its
+                          # subject is example data being WRITTEN); violated in letter if *"demo
+                          # screen"* includes one with demo sections. Register the reading.
+                          # 🔴 The last observation is BANNED FROM THE FRAME by
+                          # `the_shell_shows_no_last_observation` while **the mock puts it in the nav
+                          # footer** -- it goes in the body, and that is a divergence from *"the mock
+                          # prevails"* to register.
+                          # 🔴 The ANTI-SUM guard must sit AT THE COMPOSITION: 5.14b's own pass
+                          # measured its guard GREEN because it asserted that two pure builders do
+                          # not add each other's counts and neither of them can. This story creates
+                          # the SECOND impure edge where a sum can be written.
+                          # ⚠️ AC2 asserts two absences (no last visit, no sparkline history) --
+                          # **verify rather than repeat**: `observed_at` and `valid_from`/`valid_to`
+                          # do persist some history. And AC3's E17 clause may NOT be narrowed here,
+                          # by its own words -- register, do not tidy.
+                          # ✅ Eight register rows name 6b.5, including the `/` redirect (one line)
+                          # and `/gap`'s orphaned fragment.
+                          # NEXT = `create-story validate` 6b.5 (MANDATORY), then Guy's ruling.
+                          # (Earlier the same day) 6b.4b -> `done`: PR #103 squash-merged as `20e854c` after a green CI run
                           # (1m09s; bin suite 6.13 s in CI against 0.05 s locally). Branch deleted,
                           # twins updated in this same push. **625 -> 629 tests**, eight gates green.
                           # 🔑 EPIC 6b IS NOW 4 of 13 DONE (6b.1, 6b.2, 6b.3, 6b.4, 6b.4b -> five
@@ -3619,7 +3771,7 @@ development_status:
   # §0b so that 6b.4b starts designed rather than with a question. `epics.md` NOT edited (a story may
   # not; only a retrospective may) -- the divergence is registered in deferred-work.md.
   6b-4b-action-bar-and-the-gesture-nature: done
-  6b-5-dashboard-real-reach-beside-examples: backlog
+  6b-5-dashboard-real-reach-beside-examples: review
   6b-6-inventory-and-device-record: backlog
   6b-7-applications-and-ipam: backlog
   6b-8-sources-and-alerts: backlog

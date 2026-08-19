@@ -637,3 +637,41 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
   text-transform: uppercase;
   white-space: nowrap;
 }
+
+/* ── The dashboard: real reach beside labelled example sections (story 6b.5) ──
+   🔴 The two halves are told apart by a HEADING and a rule, never by hue. Seen in a browser at this
+   story's validation: with nothing between them, the example marker reads as though it annotates the
+   real numbers above it — the marker's text was accurate and its SCOPE was not. */
+.dashboard { display: flex; flex-direction: column; gap: 8px; }
+
+.dashboard-real { padding-bottom: 8px; }
+.dashboard-example {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.last-observed { margin: 12px 0 0; font-size: 12px; }
+
+.cards { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; }
+.stat { flex: 1 1 12rem; min-width: 0; }
+.stat-label { margin: 0; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.stat-value { margin: 4px 0 8px; font-size: 22px; }
+
+/* A sparkline of BARS, drawn from example heights. ⚠️ A curve over the product's real rows would
+   climb with every scan whatever the network did — nothing supersedes an abstention (stories
+   5.14/5.14b) — which is the growing counter the UX spec's first hard ban forbids. */
+.spark { display: flex; align-items: flex-end; gap: 2px; height: 20px; }
+.spark-bar { width: 4px; background: var(--color-neutral-400); }
+.spark-h1 { height: 10%; }
+.spark-h2 { height: 20%; }
+.spark-h3 { height: 30%; }
+.spark-h4 { height: 45%; }
+.spark-h5 { height: 55%; }
+.spark-h6 { height: 70%; }
+.spark-h7 { height: 80%; }
+/* 🔴 `.spark-h8` was MISSING until the code review. The class is built in Rust
+   (`class="spark-bar spark-h{{ height }}"`), so it contains a brace and the stylesheet guard skips
+   the whole attribute — epic constraint 5's *"a class built in Rust is invisible to the static
+   scanner"*, live. No card used 8, so nothing broke; nothing would have caught it either. */
+.spark-h8 { height: 90%; }
+.spark-h9 { height: 100%; }

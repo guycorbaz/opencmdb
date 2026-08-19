@@ -346,3 +346,40 @@ gesture.attach:
 gesture.exclude:
   en: "Exclude"
   fr: "Exclure"
+
+# ── The dashboard: real reach beside labelled example sections (story 6b.5) ──
+dash.real_heading:
+  en: "What the product really knows"
+  fr: "Ce que le produit sait vraiment"
+dash.example_heading:
+  en: "At a glance"
+  fr: "En un coup d'œil"
+# ⚠️ A `MAX(observed_at)`, in the BODY only — the shell guard bans it from the frame, and the mock
+# puts it in the nav footer, which is a divergence this story registers rather than follows.
+dash.last_observed:
+  en: "Last observed"
+  fr: "Dernière observation"
+dash.never_observed:
+  en: "Nothing has been observed yet."
+  fr: "Rien n'a encore été observé."
+dash.since_heading:
+  en: "What grew since your last visit"
+  fr: "Ce qui a grandi depuis votre dernière visite"
+# 🔴 The product has NO notion of a visit — measured, no session or per-operator state anywhere.
+dash.since_body:
+  en: "Three devices appeared and one drift closed."
+  fr: "Trois appareils sont apparus et un écart s'est refermé."
+dash.card.devices:
+  en: "Devices"
+  fr: "Appareils"
+dash.card.drifts:
+  en: "Open drifts"
+  fr: "Écarts ouverts"
+dash.card.sources:
+  en: "Live sources"
+  fr: "Sources actives"
+# 🔴 A scan has landed and the identity pass has not placed any of it: the included reach section
+# then says *"nothing observed yet"* over a real instant. Found at story 6b.5's code review.
+dash.pending_resolution:
+  en: "A scan has landed; the identity pass has not placed any of it yet."
+  fr: "Un scan est arrivé ; la passe d'identité n'en a encore rattaché aucune partie."

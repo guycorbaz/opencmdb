@@ -417,7 +417,7 @@ fn app(pool: MySqlPool, config: AppConfig) -> Router {
         .route("/metrics", get(metrics::handler))
         .route("/healthz", get(healthz))
         .with_state(pool.clone())
-        // 🔴 The nine demonstration screens are merged AFTER `.with_state`, so their router's
+        // 🔴 The pool-free screens are merged AFTER `.with_state`, so their router's
         // state is `()` and not the pool. That is what makes epic constraint 1 enforceable:
         // give one of those handlers `State<MySqlPool>` and it fails to COMPILE. Merged before,
         // or built on the main router, the same handler compiles and the guard is a sentence.
@@ -887,7 +887,7 @@ mod tests {
             if matches!(nature, screens::Nature::Example(_)) {
                 example_screens += 1;
             }
-            if nature == screens::Nature::Fed && !fed_reachable {
+            if matches!(nature, screens::Nature::Fed | screens::Nature::Mixed) && !fed_reachable {
                 // Said on stderr above, never skipped in silence — see this test's doc.
                 continue;
             }
@@ -922,6 +922,17 @@ mod tests {
                     "{} shows the example dataset and must say so",
                     screen.href()
                 ),
+                // 🔑 A MIXED screen carries the marker and MUST — on its example sections. This
+                // arm says only that the marker is present somewhere; **which section carries it is
+                // a property inside one body and the route table cannot see it**. The sibling guard
+                // `every_example_section_carries_its_own_marker` owns that, because story 6b.5's
+                // validation measured this oracle staying GREEN when one section of two lost its
+                // marker: the other section's string is enough to satisfy a `contains`.
+                screens::Nature::Mixed => assert!(
+                    carries,
+                    "{} is mixed and its example sections must say so",
+                    screen.href()
+                ),
                 screens::Nature::Fed | screens::Nature::Empty => assert!(
                     !carries,
                     "{} carries the marker and must not: a fed screen would be calling the \
@@ -941,19 +952,39 @@ mod tests {
                      than a deliberate one",
                     screen.href()
                 ),
-                screens::Nature::Fed | screens::Nature::Example(_) => assert!(
-                    !says_pending,
-                    "{} carries the *not built yet* line over content it actually has",
-                    screen.href()
-                ),
+                screens::Nature::Fed | screens::Nature::Example(_) | screens::Nature::Mixed => {
+                    assert!(
+                        !says_pending,
+                        "{} carries the *not built yet* line over content it actually has",
+                        screen.href()
+                    )
+                }
             }
             probed += 1;
         }
 
-        assert!(
-            probed >= 9,
-            "the premise: at least the nine pool-free screens were probed ({probed}) — a loop \
-             that went empty would assert nothing"
+        // 🔴 DERIVED from the route table, never a literal — and the literal is why this test was
+        // RED on the committed tree. It read `probed >= 9`, a hardcoded floor written when exactly
+        // one screen (`Triage`, `Fed`) was skipped without a database. Story 6b.5 made the dashboard
+        // `Mixed`, which the same branch also skips, so the count fell to 8 and the suite failed —
+        // **and the edit that broke it was three lines above this assertion, in the same diff**.
+        // ⚠️ CI supplies a database, so CI stayed green and only the local path reddened: a floor
+        // that CI cannot check is a floor nobody re-reads. Counting the screens the loop was
+        // *supposed* to reach makes it impossible to go stale again.
+        let expected = screens::Screen::ALL
+            .iter()
+            .filter(|screen| {
+                fed_reachable
+                    || !matches!(
+                        screen.nature(),
+                        screens::Nature::Fed | screens::Nature::Mixed
+                    )
+            })
+            .count();
+        assert_eq!(
+            probed, expected,
+            "the premise: every screen the loop should reach was probed — a loop that went empty, \
+             or one whose skip rule drifted from the route table, would assert nothing"
         );
         assert_eq!(
             example_screens, 1,

@@ -4140,3 +4140,115 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   ⚠️ **All three passed every test.** The common defence is cheap and was what caught (2): **grep the
   artefact you are about to believe** — the served HTML, the rendered string, the actual binary —
   rather than the source you just edited. **Owner: Epic 6b's retrospective.**
+
+## Deferred from: story 6b.5's validation (2026-08-19)
+
+- 🔴 **AC2's *"the history a sparkline draws does not exist yet"* is OVERSTATED, and its spirit is
+  right for a reason the criterion does not give.** Measured: **four** temporal columns are persisted
+  — `observation_record.observed_at`, `identity_link.valid_from`/`valid_to`,
+  `declared_attribute.updated_at`, `interface.first_seen_at`/`last_seen_at` — and nothing in the
+  production path purges superseded rows, so **the raw material exists today with no migration**.
+  🔑 **What does not exist is a MEANINGFUL history**: stories 5.14/5.14b measured that nothing
+  supersedes an abstention across scans, so a curve drawn over the raw rows **rises with every scan
+  whatever the network did** — the UX spec's banned growing counter, arbitration 13's own sentence
+  applied to a shape rather than a number. Deduplicating it is Epic 6's grouping work. **Owner: Epic
+  6b's retrospective** for the criterion's wording (a story may not edit an AC), and **Epic 6** for
+  the history itself.
+
+- 🔴 **AC2 asks for the marker's PRESENCE and says nothing about its LEGIBILITY beside real
+  content** — and on a mixed screen that is the thing that matters. Seen in a browser at 6b.5's
+  validation: the real reach block sits directly above a bordered `EXAMPLE` box with **no heading and
+  no divider between them**, and the marker reads as though it might annotate the real numbers above
+  it. *A bare reuse of `_example_marker.html` is enough on a wholly-example screen, where it covers
+  the whole `<main>`, and it is not enough on a mixed one.* **Owner: story 6b.5** (a heading or
+  divider before each example section), and **Epic 6b's retrospective** for the criterion.
+
+- 🔴 **The route-table partition CANNOT catch a per-section marker regression, and no sibling guard
+  exists.** Measured: with two example sections and the marker dropped from one, the screen-level
+  oracle (`body.contains("example-marker-badge")`) stays **GREEN** because the other section still
+  carries the string; a section-level oracle reds `left: 2, right: 1`. The partition is a property of
+  the route table and this is a property inside one body — it cannot be extended, only joined.
+  **Owner: story 6b.5.**
+
+- 🔴 **The CSS guard's brace-skipping hole is confirmed with the exact pattern a mixed screen
+  invites.** `class="dashboard-section {% if identity.has_any %}is-real{% else %}is-example{% endif %}"`
+  with **none** of the three classes defined in `app.css` leaves
+  `every_class_a_template_names_is_defined_in_the_stylesheet` **GREEN**. Already registered from
+  6b.4b as a hole; now measured with a realistic dashboard shape rather than a probe. **Owner: story
+  6b.5** (use static class literals) **or the first story that widens the guard.**
+
+- ⚠️ **A fragment route would need its own auth coverage, and that was NOT verified.** The validation
+  added `GET /dashboard-reach` above the `auth_deny` layer and observed it inherit the deny-by-default
+  posture, **but did not check an unauthenticated request returns 401**. If any fragment-based shape
+  is chosen, that check is a deliverable — story 6b.2's review found that a route added to `is_public`
+  left 609 tests green. **Owner: story 6b.5, conditional on the shape Guy chooses.**
+
+## Deferred from: story 6b.5's implementation (2026-08-19)
+
+- 🔴 **`git checkout -- <file>` DESTROYED UNCOMMITTED WORK for the third time in this project**, and
+  the mechanism is worth more than the incident. Story 6b.5's mutation script restored some files
+  from a scratchpad copy and others with `git checkout --`; `locales/app.yml` was in the second set
+  and not in the snapshot, so restoring it after M5 reverted it to the last COMMIT and **silently
+  deleted nine uncommitted keys**. 🔑 *A file revert equals a mutation revert only on a committed
+  baseline* — story 6.1 recorded that sentence, story 6b.3 reproduced the incident, and this is the
+  third. **The new half is the cause**: mixing two restore mechanisms in one script guarantees the
+  boundary is crossed, because the snapshot set and the git set drift. **One mechanism per script.**
+  **Owner: Epic 6b's retrospective.**
+
+- ⚠️ **A locale key can be in the file and absent from the binary, and the guard cannot tell.**
+  `every_key_carries_both_locales` reads `app.yml`; `t!()` reads the copy `rust_i18n::i18n!` embedded
+  at compile time. When the file lost its keys the guard stayed green and the page rendered
+  `dash.last_observed` as its own name. 🔑 **Source against artefact, a third distinct instance** —
+  after a `<button>` measured for a `<span>` and a screenshot of a stale binary. **Owner: the first
+  story that adds a guard over `app.yml`** — resolve through `t!()`, as story 6b.4b's digit guard now
+  does, rather than parsing the file.
+
+- ⚠️ **The dashboard's REACH SECTION was never seen populated in a browser.** The look was taken with
+  a seeded observation and an abstained link, and the section still rendered its empty state because
+  the seeded row did not reach `count_engine_reach`'s filter. The populated case is covered by unit
+  tests over the rendered body; it has not been seen by eye. **Owner: story 6b.12's release sweep**,
+  or the first story that seeds engine reach for a visual check.
+
+- ⚠️ **`/dashboard` is now on the pool-bearing router, and `/` still redirects to `/triage`.** The
+  register asks for the redirect target to be re-examined *"when the dashboard stops being mixed"* —
+  it has not; it is mixed by construction and will stay so until 6b.5's example sections are replaced
+  by fed ones. The re-examination is done and the answer is **not yet**. **Owner: the story that makes
+  the dashboard mostly fed.**
+
+## Deferred from: code review of story 6b.5 (2026-08-19)
+
+- ✅ **CONSTRAINT 1's READING, registered here because §0b promised to and did not.**
+  `epics.md:2096` ends *"no demo screen opens a connection"*, and `/dashboard` now opens one. **The
+  clause is not violated in substance**: its stated subject is that example rows must never become
+  indistinguishable from real ones **at the storage layer**, and the dashboard's two queries are
+  `SELECT`s while `example_cards()` touches no connection at all. **It is violated in letter** if
+  *"demo screen"* is read to include a screen with demo sections. The reading taken: the clause
+  governs WRITES and demonstration CONTENT, and a mixed screen's real half is neither — narrowed in
+  writing on story 5.12's precedent rather than pretended to still hold whole. ⚠️ Every other
+  divergence in this story got a row; this one had only prose inside the story file until the
+  Acceptance Auditor noticed. **Owner: Epic 6b's retrospective**, which may reword the constraint.
+
+- 🔴 **`/dashboard`'s ROUTE is hand-written while its EXCLUSION is derived from `nature()`, and
+  nothing ties them.** Measured at the review: declaring the dashboard anything other than
+  `Fed`/`Mixed` makes `screens::router` register `/dashboard` while `triage_router`'s literal route
+  still stands, and axum **panics at construction** — *"Overlapping method route"* — reddening 26
+  tests. The panic is loud, which is why this is a coupling rather than a defect; but the two
+  declarations live in different files and only a crash connects them. **Owner: the first story that
+  adds a second `Mixed` or `Fed` screen**, which is when a table-driven registration stops being
+  optional.
+
+- 🔴 **THE EXAMPLE HALF IS VISUALLY DOMINANT OVER THE HONEST ONE, and no criterion or guard can see
+  it.** Rendered and read at the review: the fabricated cards are 22 px mono with a sparkline; the
+  real counts sit in a body-size pill. *"37 / 4 / 2"*, invented, are the loudest thing on the screen;
+  *"2 sightings placed"*, real, is the quietest. 🔑 **That is the exact risk the story's user story
+  names** — *"so that the honest part is not diluted by the demonstration around it"* — reached
+  **without violating a single acceptance criterion**, because the criteria cover presence and
+  marking while the defect is salience, and a text guard cannot measure salience. **Owner: Epic 6b's
+  retrospective** for a criterion, **story 6b.12's release sweep** for the design pass.
+
+- ⚠️ **The dashboard handler's two reads are not transactional together.** A resolver pass writing
+  between `count_engine_reach` and `last_observed_at` shows a reach snapshot and an instant from two
+  moments. Display-only, self-correcting on refresh, and the same shape `reconcile_view` has carried
+  since 5.14b. ⚠️ Note the interaction: the *pending-resolution* line added at this review is
+  computed from both, so a race can make it flicker — it cannot make it lie, since either state is
+  one the store really held. **Owner: the first story that needs a consistent read across both.**
