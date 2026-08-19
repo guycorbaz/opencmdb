@@ -174,6 +174,18 @@ example.badge:
 example.sentence:
   en: "This content is a demonstration — it does not come from your network."
   fr: "Ce contenu est une démonstration — il ne provient pas de votre réseau."
+
+# ── The *not built yet* line an `Empty` screen carries (story 6b.3's code review) ──────────
+# 🔴 A SECOND pair, and it is not the per-screen improvisation AC1 forbids: it says a different
+# thing to a different population. The marker says *what you are reading is not yours*; this says
+# *there is nothing here yet*. Sharing one pair would make the product call a blank screen a
+# demonstration, which is the trap `Nature::Empty` exists to avoid.
+pending.badge:
+  en: "Not yet"
+  fr: "À venir"
+pending.sentence:
+  en: "This screen is not built yet. Nothing here comes from your network."
+  fr: "Cet écran n'est pas encore construit. Rien ici ne provient de votre réseau."
 devices.title:
   en: "Devices"
   fr: "Appareils"

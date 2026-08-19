@@ -73,13 +73,57 @@ pub(crate) enum Nature {
     /// carrying one would be a lie in the other direction.
     Fed,
     /// The screen shows the example dataset. It owes the marker, on the smallest unit that carries
-    /// example content.
-    Example,
+    /// example content — and it **names WHICH example content**, which is the whole point of the
+    /// payload.
+    ///
+    /// 🔴 **The variant carries its content so that "declared `Example` with nothing of its own"
+    /// cannot be written.** Until story 6b.3's code review this read `Example` with no payload and
+    /// the body was dispatched from the nature alone, which meant any second screen declared
+    /// `Example` silently rendered the DEVICE inventory under its own heading — the compiler
+    /// enforced that a nature was DECLARED, never that the content MATCHED the screen. The sole
+    /// carrier was a bookkeeping count assertion that a future tidy-up would delete as redundant.
+    /// Guy's arbitration (2026-08-19): close it in the TYPE, on story 5.6's precedent — that story
+    /// closed the self-pair in `CandidatePair::new` rather than in a test, and this story's own AC3
+    /// argues the same way, that a compile refusal beats an assertion.
+    Example(ExampleContent),
     /// ⚠️ **TEMPORARY, and it must be written as one.** The screen's own story has not landed, so
     /// it holds nothing. This is a statement about the ROADMAP, not about the product's data —
     /// **when story 6b.9 closes there should be no `Empty` left**, and a reviewer meeting one after
     /// that date has found a story that shipped without its content.
+    ///
+    /// 🔑 **An `Empty` screen SAYS SO, and it did not until story 6b.3's code review.** It rendered
+    /// a blank `<main>` with nothing on it, so eight of the ten screens read as broken rather than
+    /// as deliberate — while `epics.md:2092`, one of Guy's own four premises of 2026-08-13, reads
+    /// *"all ten screens ship; those whose code is not implemented show an example dataset with a
+    /// text saying so"*. That sentence was surfaced by no layer of contexting, validation or
+    /// arbitration; the review found it. Guy's arbitration (2026-08-19): the eight screens get the
+    /// sentence NOW, through [`crate::page::not_built_yet_body`]. ⚠️ **It is the premise's spirit
+    /// and not its letter** — a *"not built yet"* line is not *"an example dataset"*, and the
+    /// dataset stays owed by stories 6b.5–6b.9, each of which replaces this sentence with its own
+    /// content.
     Empty,
+}
+
+/// Which body an [`Nature::Example`] screen shows.
+///
+/// 🔑 **One variant today, and that is not a reason to collapse it into the nature.** Stories
+/// 6b.5–6b.9 each add a screen with its own example content; this enum is where each one declares
+/// what it shows, and the payload on [`Nature::Example`] is what makes declaring the nature without
+/// declaring the content impossible to express.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExampleContent {
+    /// The example inventory: the device list and the sightings the example engine did not place
+    /// (story 6b.3's witness screen).
+    DevicesInventory,
+}
+
+impl ExampleContent {
+    /// Render this content's body.
+    fn render(self) -> String {
+        match self {
+            ExampleContent::DevicesInventory => crate::page::devices_example_body(),
+        }
+    }
 }
 
 /// The three groups the mock's navigation is divided into, in its order.
@@ -168,21 +212,19 @@ impl Screen {
     /// validation measured it — a variant added without an arm here is `E0004`, in company with
     /// [`Screen::href`], [`Screen::label_key`] and [`Screen::group`].
     ///
-    /// ⚠️ **The OTHER half of AC4 is carried by a lint and not by this crate, and the limit is
-    /// stated rather than implied.** A variant wired into every `match` here but omitted from
-    /// [`Screen::ALL`] still compiles: what catches it is `dead_code` under
-    /// `cargo clippy --workspace --locked -- -D warnings`, CI's invocation. Measured with its
-    /// qualifications: the obvious bypass — a `#[test]` constructing the variant — does NOT disable
-    /// it, because clippy without `--all-targets` never compiles `cfg(test)` code; but a line of
-    /// PRODUCTION code constructing such a variant WOULD silence it. ⚠️ And `dead_code` is **not**
-    /// part of `cargo xtask ci`, so a developer running only the gates never sees that red.
-    /// **Nothing in this suite pins that dependency.**
+    /// 🔑 **The OTHER half of AC4 — that the variant reaches [`Screen::ALL`] — is pinned by
+    /// `every_variant_of_a_navigated_enum_is_listed_in_all` in this file's test module**, and that
+    /// guard is story 6b.3's code review, not the story. Until then the only carrier was `dead_code`
+    /// under `cargo clippy --workspace --locked -- -D warnings`, which is **outside
+    /// `cargo xtask ci`** — a developer running only the eight gates never saw the red — and which
+    /// the review measured **silenced by one ordinary line of production code** constructing the
+    /// variant anywhere. See that test for what it does and does not promise.
     pub(crate) fn nature(self) -> Nature {
         match self {
             // The one screen fed by what the product really observed (story 6b.2, `page::triage`).
             Screen::Triage => Nature::Fed,
             // The witness screen, filled from the example dataset (Guy's arbitration, 2026-08-19).
-            Screen::Devices => Nature::Example,
+            Screen::Devices => Nature::Example(ExampleContent::DevicesInventory),
             // ⚠️ Each of these becomes `Example` in ITS OWN story, listed beside it. Until then the
             // screen holds nothing and says so — see [`Nature::Empty`].
             Screen::Dashboard  // story 6b.5
@@ -242,13 +284,16 @@ pub(crate) fn router(perimeter: Option<String>) -> Router {
 /// marker from the same decision, so there is no arrangement of this function in which content
 /// arrives unmarked.
 ///
-/// ⚠️ An `Empty` screen renders an empty `<main>` and **no marker**, which is the point of
-/// [`Nature::Empty`]: marking it would tell the operator that a blank screen is a demonstration.
-/// Its own story (named beside its arm in `nature`) fills it.
+/// ⚠️ An `Empty` screen carries the *not built yet* line and **never the example marker**, which is
+/// the point of [`Nature::Empty`]: marking it as example data would tell the operator that a blank
+/// screen is a demonstration. Its own story (named beside its arm in `nature`) replaces the line
+/// with real example content.
 fn demonstration_screen(screen: Screen, perimeter: Option<String>) -> Response {
     let body = match screen.nature() {
-        Nature::Example => crate::page::devices_example_body(),
-        Nature::Empty => String::new(),
+        // 🔑 The CONTENT comes from the nature's payload, so no screen can be `Example` without
+        // having said what it shows — see [`Nature::Example`] for the defect this closes.
+        Nature::Example(content) => content.render(),
+        Nature::Empty => crate::page::not_built_yet_body(),
         // Unreachable by construction: `router` never merges a `Fed` screen — those need the pool
         // and live on the main router. It is `unreachable!` rather than a silent fallback so the
         // day someone changes `nature` without changing `router`, the test says WHICH assumption
@@ -611,6 +656,127 @@ mod tests {
                     frame.iter().any(|(scanned, _)| *scanned == quoted),
                     "{name} includes {quoted:?}, which this guard does not scan — add it to \
                      `frame`, or the ban stops covering the frame it names"
+                );
+            }
+        }
+    }
+
+    /// 🔴 **Every variant of a navigated enum is listed in its `ALL`, in BOTH directions.**
+    ///
+    /// # What this pins, and why it is a test rather than a ninth gate
+    ///
+    /// `Screen::ALL` and `NavGroup::ALL` are literal arrays, and **the compiler does not check an
+    /// array for exhaustiveness**. A variant wired into every `match` — `href`, `label_key`,
+    /// `group`, `nature` — and left out of `ALL` compiles cleanly and disappears from the
+    /// navigation, from the routing, and from every test that iterates the table, including the
+    /// route-table partition AC4 asks for. That is *the eleventh screen* AC4 names.
+    ///
+    /// 🔑 **Story 6b.3 reasoned that pinning it would have to be a GATE, and the reasoning was
+    /// misapplied.** Story 5.12's rule — *you cannot measure the absence of code by running code* —
+    /// governs an UNBOUNDED absence: no file in the tree, including files that do not exist yet.
+    /// The property here is bounded and present: do the variants declared in this file appear in
+    /// the array declared in this file? Both constructs exist now, in one place, and reading the
+    /// source measures it exactly. **The idiom is already in this very module** —
+    /// `every_key_carries_both_locales` reads `include_str!("../locales/app.yml")` and
+    /// `the_perimeter_has_a_single_reader` walks `src/`.
+    ///
+    /// ⚠️ **What it replaces was measured DEFEATED.** Until story 6b.3's code review the only
+    /// carrier was `dead_code` under `cargo clippy --workspace --locked -- -D warnings`. That lint
+    /// lives **outside `cargo xtask ci`**, so a developer running only the eight gates never saw
+    /// the red; and the review measured that **one throw-away line of production code constructing
+    /// the variant — `let _bypass = Screen::Probe;`, nothing to do with `ALL` — makes clippy exit 0
+    /// while the variant is still missing from the array, the navigation, the routing and the
+    /// partition test.** This guard is inside `cargo test --workspace`, and no such line silences
+    /// it.
+    ///
+    /// ⚠️ **Its limit, written rather than implied — a TRIPWIRE against the ordinary gesture, never
+    /// a barrier** (story 5.12's narrowing, third application in this project). It reads THIS
+    /// file's text: move either enum to another module and the guard goes blind without a word.
+    /// It is aimed at the developer who adds a screen and forgets one place, which is the gesture
+    /// story 6b.2's review measured as the real one — not at anyone working around it.
+    ///
+    /// 🔑 **`NavGroup` is covered by the same property, and that is the argument for a property
+    /// over an enumeration**: its `ALL` is a literal `[NavGroup; 3]` with the identical hole, and a
+    /// guard written for `Screen` alone would have covered one of the two.
+    #[test]
+    fn every_variant_of_a_navigated_enum_is_listed_in_all() {
+        // 🔑 The needles are BUILT from the parameter rather than spelled, so the guard cannot
+        // find itself — `the_perimeter_has_a_single_reader` twelve screens above was measured
+        // reporting its own matcher as a reader before it was written this way.
+        fn variants(source: &str, enum_name: &str) -> Vec<String> {
+            let head = format!("enum {enum_name} {{");
+            let start = source
+                .find(&head)
+                .unwrap_or_else(|| panic!("no declaration of {enum_name} in this file"))
+                + head.len();
+            let rest = &source[start..];
+            let end = rest
+                .find("\n}")
+                .unwrap_or_else(|| panic!("{enum_name}'s declaration is not closed"));
+            rest[..end]
+                .lines()
+                .map(str::trim)
+                .filter(|line| {
+                    !line.is_empty() && !line.starts_with("//") && !line.starts_with('#')
+                })
+                .filter_map(|line| line.strip_suffix(','))
+                .filter(|name| {
+                    !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+                })
+                .map(str::to_string)
+                .collect()
+        }
+
+        fn listed(source: &str, enum_name: &str) -> Vec<String> {
+            let head = format!("const ALL: [{enum_name}; ");
+            let start = source
+                .find(&head)
+                .unwrap_or_else(|| panic!("no ALL for {enum_name}"));
+            let rest = &source[start..];
+            let open = rest.find("= [").expect("ALL's array must open") + 3;
+            let close = rest[open..].find("];").expect("ALL's array must close");
+            let qualified = format!("{enum_name}::");
+            rest[open..open + close]
+                .split(&qualified)
+                .skip(1)
+                .map(|tail| {
+                    tail.chars()
+                        .take_while(|c| c.is_alphanumeric() || *c == '_')
+                        .collect()
+                })
+                .collect()
+        }
+
+        let source = include_str!("screens.rs");
+        // (enum, the count below which the parse itself is suspect)
+        for (enum_name, floor) in [("Screen", 10_usize), ("NavGroup", 3)] {
+            let declared = variants(source, enum_name);
+            let in_all = listed(source, enum_name);
+
+            // 🔑 The premise FIRST: a parser that silently returned nothing would make every
+            // assertion below vacuously true, which is the shape this project keeps catching.
+            assert!(
+                declared.len() >= floor,
+                "the premise: {enum_name} must declare at least {floor} variants and the parse \
+                 found {} — a guard reading nothing asserts nothing",
+                declared.len()
+            );
+
+            for variant in &declared {
+                assert!(
+                    in_all.contains(variant),
+                    "{enum_name}::{variant} is declared but absent from {enum_name}::ALL. It \
+                     compiles, and it vanishes from the navigation, the routing and every test \
+                     that iterates the table — AC4's *eleventh screen*"
+                );
+            }
+            // The other direction: an entry naming a variant that no longer exists cannot compile,
+            // but one whose spelling drifts inside a comment or a doc example can — and an ALL
+            // longer than the enum means the parse is reading something it should not.
+            for entry in &in_all {
+                assert!(
+                    declared.contains(entry),
+                    "{enum_name}::ALL names {entry:?}, which this file does not declare"
                 );
             }
         }

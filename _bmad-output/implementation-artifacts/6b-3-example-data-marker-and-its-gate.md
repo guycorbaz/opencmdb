@@ -289,6 +289,182 @@ the story, from a recount, not from this paragraph**.
 - [x] **T8 — the count sweep** (§0f): recount, then correct `eight`/`nine` from the recount
 - [x] **T9 — prove-to-red**, predictions written FIRST, **and every prescribed row executed**
 
+### Review Findings — three layers, 2026-08-19
+
+Blind Hunter (diff only, no repository access), Edge Case Hunter (own worktree, live
+`mariadb:10.11.11`, every mutation re-executed), Acceptance Auditor (own worktree, `epics.md` and
+the twins). All three on Sonnet 5 — a different model from the implementer. **3 decision-needed,
+10 patch, 1 defer, 4 dismissed with the check that dismissed them — all three decisions arbitrated by
+Guy and all ten patches APPLIED on 2026-08-19, each guard proven to red before it passed.**
+
+🔑 **Three of the story's own recorded measurements were refuted by re-execution** (M3's carrier, M4's
+count, M7's aftermath) — the mutation table was believed rather than replayed, in the story whose own
+Dev Notes warn that its driver lied twice. 🔴 **And one finding was reachable by NO layer alone**: the
+Blind Hunter could only suspect the CSS, the Edge Case Hunter verified the marker's classes and not
+the content's, and it took a third recount to confirm it.
+
+#### Decision-needed
+
+- [x] [Review][Decision] ✅ **ARBITRATED (Guy, 2026-08-19): option (e) — a source-scanning TEST, not a
+      ninth gate and not clippy-in-`xtask`.** 🔑 The story's §0c(iii) reasoning was MISAPPLIED and
+      that is what had closed the cheap door: story 5.12's *"you cannot measure the absence of code
+      by running code"* governs an UNBOUNDED absence — no file in the tree, including files that do
+      not exist yet. This property is bounded and present: **does `Screen::ALL` name every variant of
+      `enum Screen`**, both constructs in one file, both existing now. A test reading the source
+      measures it exactly, and **the idiom is already in this very file** — `every_key_carries_both_locales`
+      reads `include_str!("../locales/app.yml")`, `the_perimeter_has_a_single_reader` walks `src/`;
+      the story's own Dev Notes name both as the model. It runs under `cargo test --workspace`, so M2
+      reds in the suite where none of the eight gates sees it. **Option (b) is refused on a
+      MEASUREMENT, not a preference**: clippy inside `cargo xtask ci` does not survive the bypass
+      line. **And `NavGroup::ALL` carries the identical hole** (a literal `[NavGroup; 3]`) — one
+      property covers both enums where a gate written for `Screen` would cover one. ⚠️ **Its limit is
+      to be WRITTEN, not implied**: a tripwire against the ordinary gesture, never a barrier — move the
+      enum to another file and it goes blind (story 5.12's narrowing, third application).
+
+      *Original finding:* **AC4's only carrier is defeated by one ordinary line** —
+      `Screen::ALL` is a literal array; a variant wired into every `match` and omitted from it passes
+      the build, all 613 tests and **all eight `cargo xtask ci` gates**, reddening only
+      `clippy -D warnings` (M2, re-confirmed independently by two layers). 🔴 **New measurement: the
+      Edge Case Hunter added one throw-away production line — `let _bypass = Screen::Probe;` inside
+      `router()`, nothing to do with `ALL` — and `clippy --workspace --locked -- -D warnings` exits
+      0 while the variant is still absent from `ALL`, from the navigation, from the routing and from
+      the partition test itself.** So AC4's carrier is not merely external to the project's gates; it
+      is silenced by a gesture nobody would recognise as dangerous. The story reserved this question
+      for Guy; the measurement is what changed. Options: (a) a ninth `xtask` gate asserting the
+      source property (`Screen::ALL` names every variant); (b) add `clippy -D warnings` to
+      `cargo xtask ci`, which closes M2 but not the bypass; (c) accept it as a TRIPWIRE and narrow the
+      promise in writing, on story 5.12's precedent; (d) defer to 6b.6.
+- [x] [Review][Decision] ✅ **ARBITRATED (Guy, 2026-08-19): option (a) — the eight screens get the
+      sentence NOW.** The mechanism exists (`Nature::Empty` already dispatches a body; it returns
+      `String::new()`): one partial, one key pair in `fr`+`en`, and the partition test gains an
+      assertion that every `Empty` screen carries it. 🔑 **The divergence from `epics.md:2092`
+      DISAPPEARS rather than being registered** — no premise of Guy's is quietly revised, and the
+      epic's own goal sentence (*"every screen states truthfully whether what it shows comes from the
+      product or from an example dataset"*) becomes true for ten screens instead of one. It takes
+      nothing from 6b.5–6b.9, which ship example CONTENT: a *"not built yet"* sentence is not example
+      content and is REPLACED when the content lands — which is exactly what `Nature::Empty`'s doc
+      already promises, a temporary nature that must be gone when 6b.9 closes. ⚠️ **Not to be
+      overstated**: the sentence is not *"an example dataset with a text saying so"*. It meets the
+      premise's spirit, not its letter; the dataset stays owed by 6b.5–6b.9.
+
+      *Original finding:* **`epics.md:2092` is a premise of Guy's own and eight screens do not meet
+      it** — *"all ten screens ship; those whose code is not implemented show an example dataset with
+      a text saying so"*, written 2026-08-13 under the heading *"this epic's premises and not open
+      questions"*. Measured: eight screens are `Nature::Empty => String::new()`, byte-identical to
+      what they rendered before this story — no dataset, no text, nothing. ⚠️ **Neither contexting,
+      nor either fresh-context validation layer, nor the arbitration itself surfaced that sentence**,
+      and no register row records a divergence from it. **The bound, stated so the finding is not
+      inflated**: *"all ten screens ship"* is plausibly a property of the EPIC at its close —
+      `epics.md` itself places the example content in 6b.5–6b.9 — in which case nothing is violated
+      today. What holds under BOTH readings is narrower and still true: this story's own motivation
+      (*"nine screens read as broken, so 6b.3 is priority in the strict sense"*) is met for ONE
+      screen; for the other eight the only change is a type no operator can see. Options: (a) the
+      eight get the sentence now — the mechanism exists, it costs one partial and one key pair;
+      (b) record the 2026-08-19 arbitration as a deliberate revision of the 2026-08-13 premise;
+      (c) leave it and register the divergence against 6b.5–6b.9.
+- [x] [Review][Decision] ✅ **ARBITRATED (Guy, 2026-08-19): option (c) — the nature CARRIES its
+      content.** `Nature::Example(ExampleContent)`, one variant today, so declaring a screen `Example`
+      obliges naming its content and **"declared `Example` with no content of its own" becomes
+      unrepresentable**. This is story 5.6's gesture — the self-pair closed IN THE TYPE rather than in
+      a test — and it is what this story's own AC3 argues for: a compile refusal beats an assertion,
+      and the assertion standing here is the one M7 records as deletable by a future tidy-up. 🔴
+      **Option (a) was WITHDRAWN at the arbitration, not chosen against**: a `match` on the screen
+      already has an arm for every screen, so flipping an existing screen from `Empty` to `Example`
+      forces nothing — *it does not close what it looks like it closes*. ⚠️ **The deflation, recorded
+      because it is real**: the defect needs a SECOND `Example` screen, which story 6b.5 adds, and its
+      author would see the device inventory appear under the dashboard by looking. Option (b) plus a
+      referral to 6b.5 was defensible at zero cost; (c) was taken because the window opens at the very
+      next story rather than someday, and forty lines close the class.
+
+      *Original finding:* **`Nature::Example` dispatches a screen-agnostic body** —
+      `screens.rs:250` is `Nature::Example => crate::page::devices_example_body()`, and
+      `page.rs:615` `devices_example_body()` **takes no screen argument**. Declaring any second
+      screen `Example` renders the device inventory under that screen's own heading, and the sole
+      carrier is a bookkeeping count assertion the story's own M7 row records as deletable by a
+      future tidy-up. The story saw half of this as a coverage question; it is also a production one —
+      the compiler enforces that a nature is DECLARED, never that the content MATCHES the screen.
+      Options: (a) key the body on the SCREEN so a second `Example` screen fails to compile until it
+      declares its content — compiler-carried, which is the preference this story's own AC3 argues
+      for; (b) keep the count assertion and its comment; (c) `Nature::Example(…)` carrying its body
+      in the type.
+
+#### Patch
+
+- [x] [Review][Patch] The headline test count is false on its left half: `591 → 613` where the
+      baseline is 611 — the story's own Dev Notes say so, and 386+161+66=613 makes the delta +2, not
+      +22. `591` is story 6b.2's baseline reused, and `sprint-status.yaml:182` carries the correct
+      `591 → 611` for 6b.2 twelve lines from the wrong figure [6b-3-example-data-marker-and-its-gate.md:412, :443; sprint-status.yaml:83]
+- [x] [Review][Patch] The tracking file's contexting entry says the mutation table is *"deliberately
+      SIX rows"*; the table delivered in the same commit has seven, and the Debug Log says *"seven
+      prescribed, nine run"* [sprint-status.yaml:175]
+- [x] [Review][Patch] **The i18n guard cannot catch a wrong key that resolves.** Measured live:
+      setting `role_key: "example.badge"` on `nas-01` — a real key from the wrong namespace — leaves
+      **all 613 tests green, all eight gates green, clippy clean**, and `/devices` renders
+      *"Exemple"* in the Role column where *"Stockage"* belongs. M8/M8b check SHAPE (starts with
+      `example.`) and RESOLVABILITY (`!= itself`), never WHICH key. Epic 5's dominant class again, in
+      the guard this story added to close an operator-visible i18n defect. Fix: assert the namespace
+      matches the field (`example.role.*`, `example.reason.*`), and prove it to red with the measured
+      mutation [example_data.rs]
+- [x] [Review][Patch] **`.screen-section` is used twice and defined nowhere, and `.rows` is a
+      definition-list ruleset applied to a `<table>`.** `_devices_example.html:8,37` carry
+      `class="screen-section"`, absent from `app.css`; `class="rows"` on both tables inherits
+      `margin: 0` and nothing else, since every descendant rule (`.rows .row`, `.rows dt`,
+      `.rows dd`) targets the `<dl>` shape `_gap_card.html` uses. **The sheet contains no `table`,
+      `th` or `td` rule at all.** So the one witness screen this story exists to produce renders as
+      browser-default tables inside unstyled sections. 🔑 **This is precisely what the missing browser
+      hid**: the served TEXT is correct in every respect a layer measured — content, escaping, French
+      — and the visual result is not. **The bound**: §0a-bis already registers *"the fidelity pass over
+      the list this story roughs in"* to 6b.6, so the polish is owed elsewhere; what is a defect here
+      is a class that matches nothing and a ruleset borrowed for a shape it does not fit — **reuse of
+      the design system in appearance and none in fact** [_devices_example.html:8,11,37,40; app.css]
+- [x] [Review][Patch] **The stale register row 6b.2's review left is now contradicted by this story's
+      own measurement.** `deferred-work.md:3821-3825` still reads *"Not confirmed: it was not measured
+      whether `dead_code` under `-D warnings` catches it"* and *"Owner: story 6b.6"* — while §0c
+      quotes that row, MEASURES the thing it calls unconfirmed, and reassigns the question to Guy
+      forty lines below. Two owners and a false *"not confirmed"* in one register. 🔑 **And T7's check
+      structurally could not catch it**: it prescribes `grep -n "6b.3"`, and the row never names 6b.3
+      — *a grep on your own name cannot find the row that speaks about you without naming you.* Fix
+      the row, and record the lesson where T7 lives [deferred-work.md:3821]
+- [x] [Review][Patch] **M3's carrier is misrecorded.** The table says it reds on the premise assertion
+      `probed >= 9`; re-executed, it reds on the status assertion two lines earlier —
+      `left: 404, right: 200` at `main.rs:903`. The cause is worth more than the correction: a screen
+      flipped to `Fed` leaves the pool-free router (dynamic, keyed on `nature()`) but **nothing adds it
+      to the main router, whose inclusion is hardcoded to `/triage`** — so it 404s instead of ever
+      reaching the premise. Record the asymmetry, not just the carrier [6b-3…md, M3 row; main.rs:424-427, :903]
+- [x] [Review][Patch] M4's count is wrong: **25 failed**, not 15 (`361 passed; 25 failed`, panic
+      *"Overlapping method route… GET /triage"* at `main.rs:427`). The panic message matches; the
+      figure does not [6b-3…md, M4 row]
+- [x] [Review][Patch] M7's aftermath is off by one: deleting the sole-carrier assertion leaves
+      **386 green**, not 385 — deleting an assertion does not remove a test. The behavioural claim
+      (the guard vanishes, a second `Example` screen goes unnoticed) is confirmed [6b-3…md, M7 row]
+- [x] [Review][Patch] `ExampleSighting::mac`'s doc comment says *"when it gave one"* — an
+      `Option<&str>` sentence over a field that is a hard `"—"` literal rendered straight into the
+      HTML. Make the doc true or the type honest; a false doc is a defect and the weaker true
+      sentence is preferred [example_data.rs]
+- [x] [Review][Patch] Record the four refuted suspicions in the story, with the check that refuted
+      each, so the next reader does not re-chase them: **(1)** an inlined stylesheet would make
+      `body.contains("example-marker-badge")` match on every page and destroy the partition's
+      negative half — refuted, `/dashboard` and `/triage` carry **zero** occurrences in the live body;
+      **(2)** `.rows`/`.mono` missing from the sheet — refuted, both exist (`.screen-section` is the
+      one that does not); **(3)** a `#[test]` constructing an unlisted variant would silence
+      `dead_code` like production code — refuted, `clippy` without `--all-targets` never compiles
+      `#[cfg(test)]`; **(4)** `epics.md:2330`'s *"the eight example screens"* looked like a fourth
+      site of the count defect — refuted, it is **correct, and correct by accident**: the arbitration
+      pulled `/devices` forward, leaving exactly eight for 6b.5–6b.9. Nothing records that its
+      correctness is accidental [6b-3…md]
+
+#### Defer
+
+- [x] [Review][Defer] **The look is still unverified by eye, for the third consecutive story** —
+      no browser was available in this environment either, so typography, spacing, colour contrast
+      and badge alignment remain unmeasured. This review found the CSS defect by RECOUNTING the
+      sheet, not by seeing the page; a recount catches a class that matches nothing and cannot catch
+      a page that is merely ugly. The epic's own DoD already names axe-core green on the ten routes.
+      **Owner: Epic 6b's DoD, with story 6b.12's release sweep** — deferred, environmental, not
+      caused by this change [_devices_example.html, app.css]
+
+---
+
 ## Prove-to-red — deliberately short
 
 🔑 Seven rows, not eighteen. Story 6b.2's lesson is that an unplayed row is a lie about coverage; the
@@ -362,13 +538,31 @@ claimed, and two rows diverged from their prediction.**
 |---|---|---|---|---|
 | M1 | `Screen` variant wired into `href`/`label_key`/`group`, no `nature()` arm | fails to compile | ✅ `error[E0004]: non-exhaustive patterns: 'Screen::Probe' not covered` | compiler |
 | M2 | variant wired everywhere, omitted from `Screen::ALL` | unknown by design | 🔴 **build passes, 613 tests pass, `cargo xtask ci` ALL EIGHT GATES GREEN** — only `clippy -D warnings` reds (`variant 'Probe' is never constructed`) | lint, outside the project's own gates |
-| M3 | `/devices` `Example` → `Fed` | partition reds | ✅ 1 red — ⚠️ **but carried by the PREMISE assertion (`probed >= 9`), not by the marker check**: a `Fed` screen leaves the pool-free router, so the loop never probes it and the premise is what notices | named assertion (premise), not the one predicted |
-| M4 | `/triage` `Fed` → `Example` | partition reds | ⚠️ **15 red, not 1** — `/triage` is then merged onto BOTH routers and axum panics at construction (*"Overlapping method route"*), so every test that builds `app()` dies | panic at router construction |
+| M3 | `/devices` `Example` → `Fed` | partition reds | ✅ 1 red — 🔴 **and the recorded carrier was WRONG, corrected by the code review's re-execution**: it reds on the STATUS assertion two lines earlier, `left: 404, right: 200` at `main.rs:903`, never on the premise `probed >= 9`. 🔑 The cause is worth more than the correction: the demo router's exclusion is DYNAMIC (keyed on `nature()`) while **the main router's inclusion is hardcoded to `/triage` alone**, so a screen that becomes `Fed` is merged nowhere and 404s | named assertion (status), not the premise this table first claimed |
+| M4 | `/triage` `Fed` → `Example` | partition reds | ⚠️ **25 red, not 1 and not the 15 this table first recorded** (`361 passed; 25 failed`, re-measured by the code review) — `/triage` is then merged onto BOTH routers and axum panics at construction (*"Overlapping method route… GET /triage"*, `main.rs:427`), so every test that builds `app()` dies. The panic message was right; the figure was not | panic at router construction |
 | M5 | marker's `fr` half deleted | AC1 red | ✅ 1 red, `every_key_carries_both_locales` | named assertion |
 | M6 | `--accent-document` in the marker | 6b.1's guard reds — *"verify before believing"* | ✅ 1 red — **my doubt was REFUTED**: the guard reads `templates/` at run time, so a brand-new partial is covered | named assertion |
-| M7 | an `Empty` screen → `Example` | ⚠️ prediction already corrected at validation | ✅ 1 red, on the COUNT assertion — and with the count deleted, **385 green**: the per-screen loop notices nothing, exactly as the validation measured | named assertion (count), sole carrier |
+| M7 | an `Empty` screen → `Example` | ⚠️ prediction already corrected at validation | ✅ 1 red, on the COUNT assertion — and with the count deleted, **386 green** (not the 385 first recorded: deleting an assertion does not remove a test). The behavioural claim is confirmed — the per-screen loop notices nothing. ⚠️ **The count is no longer the SOLE carrier since M12**: the nature now carries its content | named assertion (count); the type carries the other half |
 | M8 | an English literal back in place of a `role_key` | *(not prescribed — written after looking)* | ✅ 1 red | named assertion |
 | M8b | a key that looks right but does not resolve (`example.role.storag`) | *(not prescribed)* | ✅ 1 red | named assertion |
+
+**The code review's own pass — four mutations, four measured, every one on a committed-equivalent
+base** (the files were copied to a scratchpad and restored from the copy, never `git checkout --`:
+that gesture is what destroyed an uncommitted fix in this story and in story 6.1 before it). Run
+against a live `mariadb:10.11.11`, so the database-backed half really executed (bin suite 5.6–5.8 s
+against 0.06 s without).
+
+| # | Mutation | Predicted | MEASURED | Carrier |
+|---|---|---|---|---|
+| M9 | a `Screen` variant wired into `href`/`label_key`/`group`/`nature`, omitted from `Screen::ALL` | the new guard reds **in the suite**, where M2 left all 613 green | ✅ **1 red**, `screens.rs:772` — *"Screen::Probe is declared but absent from Screen::ALL"*. Build succeeds, as under M2; the difference is that `cargo test --workspace` now notices | named assertion |
+| M10 | `not_built_yet_body` returns `String::new()` — an `Empty` screen stops saying it is not built | the partition's new half reds | ✅ **1 red**, `main.rs:938` — *"/dashboard is not built yet and must say so"* | named assertion |
+| M11 | `role_key: "example.badge"` — a real key that resolves, from the wrong namespace | reds, where the Edge Case Hunter measured it **GREEN across all 613 tests, all eight gates and clippy** | ✅ **1 red**, `example_data.rs:151` — *"is a real key that resolves, and it is the WRONG one"* | named assertion |
+| M12 | a second screen declared `Nature::Example` without naming its content | fails to COMPILE | ✅ `error[E0308]: match arms have incompatible types`, and the compiler names the cause itself: *"`Example` defines an enum variant constructor here, which should be called"* | compiler |
+
+⚠️ **M12's refusal is real and its MESSAGE is not the crisp one**: `E0308` speaks of arm types rather
+than of a missing content, because a payload-carrying variant used bare is a constructor function.
+Recorded as measured rather than as hoped — the refusal is what closes the class, the diagnostic is
+merely adequate.
 
 ⚠️ **The driver lied twice, and both are recorded because both cost real work.** M8b first came back
 GREEN: it ran against a tree that **did not compile**, and the driver grepped for `FAILED` test
@@ -404,12 +598,24 @@ revert only on a committed baseline.* Both mutations were re-run on a committed 
 - **AC3 — MET BY CITATION, and no runtime test was added.** The `Router<()>` shape refuses
   `State<MySqlPool>` at compile time; a run-time assertion would be strictly weaker and would be the
   epic's own dominant defect. The reasoning is in `screens.rs`'s module doc, not only here.
-- **AC4 — PARTIALLY MET, and it must not be written otherwise.** The nature is a compiler-checked
-  `match`; the partition runs over the route table on the real HTTP body. But `Screen::ALL`'s blind
-  half is closed by `clippy`, **outside `cargo xtask ci`**, and nothing in the suite pins it (M2).
-  Put to Guy as a ninth-gate question rather than decided.
+- **AC4 — PARTIALLY MET AT THE STORY'S CLOSE; MET AFTER THE CODE REVIEW, with its limit stated.**
+  The nature is a compiler-checked `match` and the partition runs over the route table on the real
+  HTTP body — both true as shipped. What was missing was `Screen::ALL`'s blind half: closed by
+  `clippy` alone, **outside `cargo xtask ci`**, with nothing in the suite pinning it (M2) — and the
+  review measured that carrier **defeated by one throw-away production line** constructing the
+  variant. Guy's arbitration (2026-08-19): a source-scanning TEST, not a ninth gate and not
+  clippy-in-`xtask`. 🔑 The story's reasoning that it *"would have to be a gate"* was misapplied —
+  story 5.12's rule governs an unbounded absence, and this property is bounded and present in one
+  file. ⚠️ **The limit is written, not implied**: a tripwire against the ordinary gesture, never a
+  barrier — move either enum to another module and the guard goes blind. And `NavGroup::ALL` had the
+  identical hole, which is why the guard is a property over both enums rather than an enumeration
+  for one.
 
-**591 → 613 tests** (386 bin + 161 core + 66 xtask). Eight gates green, fmt and clippy clean, and the
+**611 → 613 tests** (386 bin + 161 core + 66 xtask) at the story's close, **611 → 614** after the
+code review. ⚠️ This read **591 → 613** in two places here and one in `sprint-status.yaml` until the
+review recounted it: `591` is story 6b.2's baseline, reused. The Dev Notes above state 611, and
+386+161+66 makes the delta **+2**, not +22 — a dated figure and a living one in one sentence, and it
+is always the living one that rots. Eight gates green, fmt and clippy clean, and the
 suite was run BOTH ways: 0.07 s without a database and 5.71 s against a live `mariadb:10.11.11`,
 which is the tell that the database-backed half really executed.
 
@@ -431,7 +637,20 @@ available in this environment — so typography, spacing and colour remain unver
 | `crates/opencmdb-bin/locales/app.yml` | 14 keys, both locales |
 | `crates/opencmdb-bin/assets/app.css` | the marker's treatment, on the neutral ramp |
 | `crates/opencmdb-bin/templates/_nav.html` | the count sweep |
-| `_bmad-output/implementation-artifacts/deferred-work.md` | five rows |
+| `_bmad-output/implementation-artifacts/deferred-work.md` | five rows, plus one from the code review |
+
+**Added by the code review (2026-08-19):**
+
+| File | Change |
+|---|---|
+| `crates/opencmdb-bin/templates/_not_built_yet.html` | **new** — the line an `Empty` screen carries, on its own classes so the partition asserts both directions for both markers |
+| `crates/opencmdb-bin/src/screens.rs` | `Nature::Example(ExampleContent)`, the new `ExampleContent` enum, the `Empty` dispatch, and `every_variant_of_a_navigated_enum_is_listed_in_all` |
+| `crates/opencmdb-bin/src/page.rs` | `not_built_yet_body`, the `NotBuiltYet` template struct, two `Strings` fields, and the sighting MAC resolved from an `Option` |
+| `crates/opencmdb-bin/src/example_data.rs` | `mac: Option<&'static str>` so its doc is true, and the i18n guard's THIRD half — the key's namespace |
+| `crates/opencmdb-bin/src/main.rs` | the partition's second half (`Empty` says so) and the count assertion's corrected comment |
+| `crates/opencmdb-bin/locales/app.yml` | `pending.badge` and `pending.sentence`, both locales |
+| `crates/opencmdb-bin/assets/app.css` | `.not-yet`, `.not-yet-badge`, and **`.screen-section` / `.grid`, which were used by the template and defined nowhere** |
+| `crates/opencmdb-bin/templates/_devices_example.html` | `class="rows"` → `class="grid"`: `.rows` is a `<dl>` ruleset and matched nothing on a `<table>` |
 
 ### Change Log
 
@@ -440,4 +659,5 @@ available in this environment — so typography, spacing and colour remain unver
 | 2026-08-19 | Contexted: six findings, four needing arbitration. The marker is specified by no document the project has — measured against the mock and the UX spec. |
 | 2026-08-19 | Arbitrated by Guy: the dataset ships with ONE witness screen, which forces a third nature (`Empty`). |
 | 2026-08-19 | Validated by two fresh-context layers: 30 assertions checked, 2 refuted (both mine, one a premise of the arbitration); the gap-hunt BUILT the mechanism and found that my own M7 does not guard what I claimed. |
-| 2026-08-19 | Implemented. 591 → 613 tests, eight gates green. Nine mutations run, nine measured, two diverging from prediction. Two defects found by LOOKING that no test could reach. |
+| 2026-08-19 | Implemented. 611 → 613 tests, eight gates green. Nine mutations run, nine measured, two diverging from prediction. Two defects found by LOOKING that no test could reach. |
+| 2026-08-19 | **Code-reviewed (three layers, Sonnet 5 — a different model from the implementer) and REPAIRED.** 3 decisions taken by Guy, 10 patches, 1 deferral, 4 dismissed with the check that dismissed them. 611 → **614 tests**, eight gates green, fmt and clippy clean, measured against a live `mariadb:10.11.11` (bin suite 5.80 s against 0.06 s without). Four review mutations, four measured. 🔴 Three of the story's OWN recorded measurements were refuted by re-execution (M3's carrier, M4's count, M7's aftermath) — the table had been believed rather than replayed, in the story whose Dev Notes warn that its driver lied twice. 🔴 One finding was reachable by NO layer alone: the CSS the witness screen depends on. |

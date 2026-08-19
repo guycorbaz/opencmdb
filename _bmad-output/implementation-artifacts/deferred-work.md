@@ -3821,8 +3821,18 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
 - ⚠️ **`Screen::ALL` is a literal array and the compiler does not check it for exhaustiveness.**
   `href`, `label_key` and `group` are `match`es and DO red on a new variant (measured: three
   `E0004`), but a variant wired into all three and left out of `ALL` disappears silently from both
-  the navigation and the routing. **Not confirmed**: it was not measured whether `dead_code` under
-  `-D warnings` catches it. **Owner: story 6b.6**, the next story to add a screen.
+  the navigation and the routing. ~~**Not confirmed**: it was not measured whether `dead_code` under
+  `-D warnings` catches it. **Owner: story 6b.6**, the next story to add a screen.~~
+  ✅ **CLOSED 2026-08-19 by story 6b.3 and its code review, and this row is corrected rather than
+  left standing.** Measured (6b.3's T0): `dead_code` under `clippy -D warnings` DOES catch it — but
+  that lint is outside `cargo xtask ci`, and the review then measured it **silenced by one
+  throw-away line of production code** constructing the variant. Guy's arbitration: a source-scanning
+  TEST, `every_variant_of_a_navigated_enum_is_listed_in_all` in `screens.rs`, covering `NavGroup::ALL`
+  by the same property. 🔑 **The lesson is about the CHECK, not the hole**: story 6b.3's T7 prescribed
+  `grep -n "6b.3"` over this register in both directions, and **this row never names 6b.3**, so the
+  check as written could not surface the row its own §0c was quoting. *A grep on your own name cannot
+  find the row that speaks about you without naming you* — the fifth consecutive story to miss a
+  register row, and the first to measure why.
 
 - ⚠️ **`.wrap` in `app.css` has no consumer** since `gap.html` was deleted — its only user was that
   file's `<main class="wrap">`. Orphan rule, no impact, and **no guard detects dead CSS at all**.
@@ -3896,3 +3906,17 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   each add to it. **It must not drift into `fixtures/`**, which is sha256-locked evidence for the
   identity engine, and the day it approaches the `file-size` ceiling it is split by screen rather
   than grown. **Owner: story 6b.9**, as the last one to add to it.
+
+## Deferred from: code review of story 6b.3 (2026-08-19)
+
+- ⚠️ **The look is still unverified by eye, for the THIRD consecutive story.** No browser was
+  available in the implementation environment, nor in any of the three review layers': typography,
+  spacing, colour contrast and badge alignment on the ten screens remain unmeasured. 🔑 **What this
+  review learned about the limit is worth more than the limit**: it DID find a real CSS defect —
+  `.screen-section` used twice and defined nowhere, `.rows` (a `<dl>` ruleset) applied to a
+  `<table>`, and no `table`/`th`/`td` rule anywhere in the sheet — but it found it by **recounting
+  the stylesheet**, not by seeing the page. *A recount catches a class that matches nothing; it
+  cannot catch a page that is merely ugly.* The served TEXT was verified correct in every respect
+  three layers could measure — content, escaping, French locale — and the visual result was not.
+  Epic 6b's own DoD already names axe-core green on the ten routes, which is a different check again
+  (a11y, not fidelity). **Owner: Epic 6b's DoD, with story 6b.12's release sweep.**

@@ -859,6 +859,10 @@ mod tests {
     #[tokio::test]
     async fn the_marker_partition_follows_every_screens_declared_nature() {
         let marker = "example-marker-badge";
+        // 🔑 The *not built yet* line has its OWN class, and the partition asserts both directions
+        // for both of them: an `Empty` screen must say it is not built and must NOT be called a
+        // demonstration. Sharing one class would turn this test green for the wrong reason.
+        let not_yet = "not-yet-badge";
         let mut example_screens = 0_usize;
         let mut probed = 0_usize;
 
@@ -880,7 +884,7 @@ mod tests {
 
         for screen in screens::Screen::ALL {
             let nature = screen.nature();
-            if nature == screens::Nature::Example {
+            if matches!(nature, screens::Nature::Example(_)) {
                 example_screens += 1;
             }
             if nature == screens::Nature::Fed && !fed_reachable {
@@ -911,8 +915,9 @@ mod tests {
                 .expect("a rendered body");
             let body = String::from_utf8(body.to_vec()).expect("the page is UTF-8");
             let carries = body.contains(marker);
+            let says_pending = body.contains(not_yet);
             match nature {
-                screens::Nature::Example => assert!(
+                screens::Nature::Example(_) => assert!(
                     carries,
                     "{} shows the example dataset and must say so",
                     screen.href()
@@ -922,6 +927,23 @@ mod tests {
                     "{} carries the marker and must not: a fed screen would be calling the \
                      operator's own network a demonstration, and an empty one would be calling \
                      a blank page one",
+                    screen.href()
+                ),
+            }
+            // 🔴 The other half of Guy's arbitration of 2026-08-19: a screen whose story has not
+            // landed SAYS SO. Eight screens rendered a blank `<main>` with nothing on it until this
+            // story's code review, against `epics.md:2092` — *"those whose code is not implemented
+            // show an example dataset with a text saying so"*, a premise no layer had surfaced.
+            match nature {
+                screens::Nature::Empty => assert!(
+                    says_pending,
+                    "{} is not built yet and must say so, or it reads as a broken screen rather \
+                     than a deliberate one",
+                    screen.href()
+                ),
+                screens::Nature::Fed | screens::Nature::Example(_) => assert!(
+                    !says_pending,
+                    "{} carries the *not built yet* line over content it actually has",
                     screen.href()
                 ),
             }
@@ -936,10 +958,13 @@ mod tests {
         assert_eq!(
             example_screens, 1,
             "exactly ONE witness screen carries the example dataset (Guy's arbitration, \
-             2026-08-19). ⚠️ THIS ASSERTION IS NOT REDUNDANT WITH THE LOOP ABOVE: content is \
-             dispatched from `nature()`, so a second `Example` screen renders example content AND \
-             its marker, and every per-screen check stays true. Delete this line and nothing \
-             notices that the product grew a witness screen nobody decided on"
+             2026-08-19). ⚠️ It is still not redundant with the loop above — a second `Example` \
+             screen renders content AND its marker, so every per-screen check stays true — but it \
+             is no longer the SOLE carrier it was when this story shipped: since the code review, \
+             `Nature::Example` carries its content, so a second witness screen must NAME what it \
+             shows instead of silently inheriting the device inventory. This line notices that the \
+             product grew a witness screen nobody decided on; the type notices that one shows the \
+             wrong thing"
         );
     }
 

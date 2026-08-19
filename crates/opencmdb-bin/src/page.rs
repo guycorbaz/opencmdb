@@ -226,6 +226,10 @@ struct Strings {
     example_badge: String,
     /// The example-data marker's sentence (story 6b.3).
     example_sentence: String,
+    /// The *not built yet* badge an `Empty` screen carries (story 6b.3's code review).
+    pending_badge: String,
+    /// The *not built yet* sentence an `Empty` screen carries (story 6b.3's code review).
+    pending_sentence: String,
     /// The witness screen's inventory heading (story 6b.3).
     devices_title: String,
     /// Column: the device's name (story 6b.3).
@@ -273,6 +277,8 @@ fn strings() -> Strings {
         nav_label: t!("nav.label").to_string(),
         example_badge: t!("example.badge").to_string(),
         example_sentence: t!("example.sentence").to_string(),
+        pending_badge: t!("pending.badge").to_string(),
+        pending_sentence: t!("pending.sentence").to_string(),
         devices_title: t!("devices.title").to_string(),
         devices_name: t!("devices.name").to_string(),
         devices_ipv4: t!("devices.ipv4").to_string(),
@@ -591,8 +597,22 @@ struct ExampleDeviceView {
 /// One example sighting the engine did not place, with its reason resolved.
 struct ExampleSightingView {
     ipv4: &'static str,
-    mac: &'static str,
+    /// The hardware address, or the typographic placeholder when the sighting gave none.
+    ///
+    /// 🔑 The absence is resolved HERE and not stored as a sentinel in the dataset, for the same
+    /// reason the role is: `example_data` holds facts, this struct holds what is displayed. The
+    /// dataset's field is an `Option` and its doc comment is therefore true — it read *"when it
+    /// gave one"* over a hard `"—"` literal until story 6b.3's code review, which is a false doc,
+    /// and a false doc is a defect.
+    mac: String,
     reason: String,
+}
+
+/// An `Empty` screen's body — the one line that says the screen is not built yet.
+#[derive(Template)]
+#[template(path = "_not_built_yet.html")]
+struct NotBuiltYet {
+    s: Strings,
 }
 
 /// The witness screen's body — the example inventory, in two sections (story 6b.3).
@@ -628,7 +648,9 @@ pub(crate) fn devices_example_body() -> String {
             .into_iter()
             .map(|sighting| ExampleSightingView {
                 ipv4: sighting.ipv4,
-                mac: sighting.mac,
+                // An em dash, and locale-neutral on purpose: it is a typographic placeholder for
+                // an absent value, not a word, so it needs no key and reads the same in both.
+                mac: sighting.mac.unwrap_or("—").to_string(),
                 reason: rust_i18n::t!(sighting.reason_key).to_string(),
             })
             .collect(),
@@ -636,6 +658,27 @@ pub(crate) fn devices_example_body() -> String {
     }
     .render()
     .expect("the example inventory template and its struct are compiled together")
+}
+
+/// What an `Empty` screen shows: one line saying the screen is not built yet.
+///
+/// 🔴 **It replaces a blank `<main>`, and the difference is not cosmetic.** Eight of the ten screens
+/// rendered nothing at all, so the product read as eight broken screens rather than eight deliberate
+/// ones — while `epics.md:2092`, one of Guy's own premises of 2026-08-13, requires that a screen
+/// whose code is not implemented say so. Story 6b.3's code review found that sentence; contexting,
+/// both validation layers and the arbitration itself had all passed over it.
+///
+/// ⚠️ It says the screen is not built. It does **not** say the screen shows example data — that
+/// would be [`Nature::Empty`](crate::screens::Nature::Empty)'s own trap, telling the operator a
+/// blank page is a demonstration.
+///
+/// # Panics
+///
+/// Never in practice, for the reason given on [`devices_example_body`].
+pub(crate) fn not_built_yet_body() -> String {
+    NotBuiltYet { s: strings() }
+        .render()
+        .expect("the not-built-yet template and its struct are compiled together")
 }
 
 /// What `/triage` needs: the store it reads, and the perimeter it displays.
