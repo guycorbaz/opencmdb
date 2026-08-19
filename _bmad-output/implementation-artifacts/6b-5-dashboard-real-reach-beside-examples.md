@@ -1,6 +1,6 @@
 # Story 6b.5: The dashboard — the real reach section beside labelled example sections
 
-Status: review
+Status: done
 
 Epic: 6b — *L'interface de la maquette*. **Fifth numbered slot**, after 6b.4b closed the triage
 screen's action bar. It is the story the epic has been pointing at since its first arbitration:

@@ -75,7 +75,19 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.5 CODE-REVIEWED (three layers, Sonnet 5) and REPAIRED. **0 decisions,
+last_updated: 2026-08-19  # 6b.5 -> `done`: PR #105 squash-merged as `b8a5795` after a green CI run
+                          # (1m20s; bin suite 6.11 s in CI). Branch deleted, twins updated in this
+                          # same push. **629 -> 634 tests**, eight gates green, verified BOTH ways.
+                          # 🔑 EPIC 6b: FIVE numbered slots done (6b.1-6b.5) plus the 6b.4b
+                          # insertion -- six story files of thirteen stories.
+                          # NEXT = `create-story` 6b.6 (inventory and the device record). ⚠️ It
+                          # inherits a NARROWED scope by name: story 6b.3 pulled `/devices` forward
+                          # as its witness screen, so 6b.6 keeps the device RECORD (`/device`), the
+                          # `/devices/{id}` routing debt, and the fidelity pass over the list 6b.3
+                          # roughed in. ⚠️ And it is the FIRST story to add a screen since
+                          # `Screen::ALL` gained its source-scanning guard -- the register row that
+                          # named 6b.6 as that hole's owner is CLOSED (story 6b.3 did it).
+                          # (Earlier the same day) 6b.5 CODE-REVIEWED (three layers, Sonnet 5) and REPAIRED. **0 decisions,
                           # 12 patches, 2 deferrals, 3 dismissed.** 634 tests, eight gates green,
                           # clippy and fmt clean, and NOW verified BOTH WAYS: 0.07 s without a
                           # database, 10.56 s with one.
@@ -3771,7 +3783,7 @@ development_status:
   # §0b so that 6b.4b starts designed rather than with a question. `epics.md` NOT edited (a story may
   # not; only a retrospective may) -- the divergence is registered in deferred-work.md.
   6b-4b-action-bar-and-the-gesture-nature: done
-  6b-5-dashboard-real-reach-beside-examples: review
+  6b-5-dashboard-real-reach-beside-examples: done
   6b-6-inventory-and-device-record: backlog
   6b-7-applications-and-ipam: backlog
   6b-8-sources-and-alerts: backlog
