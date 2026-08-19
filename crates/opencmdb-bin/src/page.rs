@@ -226,6 +226,16 @@ struct Strings {
     example_badge: String,
     /// The example-data marker's sentence (story 6b.3).
     example_sentence: String,
+    /// The triage screen's own heading (story 6b.4).
+    triage_title: String,
+    /// The queue's count line — a fact in a sentence, never a badge (story 6b.4).
+    triage_pending: String,
+    /// The age-sort toggle's label (story 6b.4, AC3).
+    triage_sort_age: String,
+    /// The sentence that says what a triage row IS (story 6b.4).
+    triage_lede: String,
+    /// What the queue says when there is nothing to triage (story 6b.4).
+    triage_empty: String,
     /// The *not built yet* badge an `Empty` screen carries (story 6b.3's code review).
     pending_badge: String,
     /// The *not built yet* sentence an `Empty` screen carries (story 6b.3's code review).
@@ -277,6 +287,11 @@ fn strings() -> Strings {
         nav_label: t!("nav.label").to_string(),
         example_badge: t!("example.badge").to_string(),
         example_sentence: t!("example.sentence").to_string(),
+        triage_title: t!("triage.title").to_string(),
+        triage_pending: t!("triage.pending").to_string(),
+        triage_sort_age: t!("triage.sort_age").to_string(),
+        triage_lede: t!("triage.lede").to_string(),
+        triage_empty: t!("triage.empty").to_string(),
         pending_badge: t!("pending.badge").to_string(),
         pending_sentence: t!("pending.sentence").to_string(),
         devices_title: t!("devices.title").to_string(),
@@ -560,6 +575,443 @@ fn build_view(
     }
 }
 
+// ── Story 6b.4: the triage screen, on the real gap ───────────────────
+
+/// Where a value came from and how fresh it is — one discreet line under each photo.
+///
+/// 🔑 **Both sides carry one**, which is AC1's *"neither side is the truth"* made structural: an
+/// observation can be stale or from a blind source, and a declaration can be outdated. A pane
+/// without its meta-line invites the reader to treat that side as fact.
+struct MetaLine {
+    /// The source — a connector for the observed side, an origin for the declared one.
+    source: String,
+    /// How long ago, already rendered in the operator's language.
+    freshness: String,
+}
+
+/// One row of the triage queue.
+struct QueueRow {
+    /// The stable selector this row is addressed by (`?sel=`).
+    id: String,
+    /// The row's own link, with the selector ESCAPED and the sort preserved.
+    ///
+    /// 🔴 Built here rather than in the template. `url_escape` existed from the first draft and was
+    /// applied only to the sort toggle, while the queue link wrote `?sel={{ row.id }}` raw — Askama
+    /// escapes HTML, never a query string. ⚠️ **Measured NOT reachable in production** (`entity_id`
+    /// is a `Uuid::now_v7()` at every call site and no operator path chooses it), so this was a
+    /// latent inconsistency and not a live defect — fixed because the function's own doc already
+    /// warns that an attribute key is operator-supplied, and the day one is, this is where it lands.
+    href: String,
+    /// The row's kind, in the operator's language.
+    kind: String,
+    /// The entity the row is about.
+    entity: String,
+    /// The field, for a row the engine names one for; empty otherwise.
+    field: String,
+    /// The declared value, when there is one.
+    declared: String,
+    /// The observed value, when there is one.
+    observed: String,
+    /// How many fields this row stands for, WITH its unit — FR16b's *"one line and one gesture,
+    /// not N failures"*. ⚠️ A bare number beside an address reads as noise; measured by looking.
+    count: String,
+    /// Whether this is a cause row, and therefore whether `count` is worth showing.
+    counted: bool,
+    /// The observed side's freshness, right-aligned as the mock puts it.
+    seen: String,
+    /// Seconds since the newest in-perimeter observation — the sort key, never displayed.
+    age_seconds: i64,
+    /// Whether this row is the selected one.
+    selected: bool,
+}
+
+/// The detail pane: the two photos, side by side, each with its own meta-line.
+struct DetailPane {
+    /// The selected row's kind.
+    kind: String,
+    /// The entity.
+    entity: String,
+    /// The field, when the row names one.
+    field: String,
+    /// The declared value.
+    declared: String,
+    /// Where the declared value came from and when it was written.
+    declared_meta: MetaLine,
+    /// The observed value.
+    observed: String,
+    /// Which connector reported it and when.
+    observed_meta: MetaLine,
+}
+
+/// Everything `/triage` renders: the queue, the selection, and the sort's state.
+struct TriageView {
+    /// The queue, already ordered.
+    rows: Vec<QueueRow>,
+    /// The selected row's two photos, when a row is selected.
+    selected: Option<DetailPane>,
+    /// How many rows the queue holds.
+    total: usize,
+    /// Whether the age sort is on. ⚠️ **Off by default** — AC3, and the ban is not that age is
+    /// hidden but that it is never brandished.
+    sort_by_age: bool,
+    /// The href that toggles the sort, preserving the selection.
+    sort_href: String,
+}
+
+/// Render an interval as the operator reads it — *"il y a 4 min"*.
+///
+/// 🔴 **`now` is a PARAMETER and that is the whole point.** The builder reads no clock, so one store
+/// renders identically twice; the instant is taken once at the impure edge. ⚠️ Story 5.14b's guard
+/// `the_view_builder_has_no_clock_so_one_store_renders_identically` does **not** protect this:
+/// story 6b.4's validation measured that it calls `build_view` with EMPTY inputs, so a clock in the
+/// populated branch is never reached — and `SystemTime::now()` compiles freely where
+/// `chrono::Utc::now()` does not. The guard that covers this function is written in this file's test
+/// module and named for what it does.
+fn relative_time(
+    now: chrono::DateTime<chrono::Utc>,
+    then: chrono::DateTime<chrono::Utc>,
+) -> String {
+    use rust_i18n::t;
+    let seconds = (now - then).num_seconds();
+    if seconds < 0 {
+        // A source dated in the future is not an error to hide behind a negative duration.
+        return t!("time.ahead").to_string();
+    }
+    let minutes = seconds / 60;
+    if minutes < 1 {
+        return t!("time.just_now").to_string();
+    }
+    if minutes < 60 {
+        return t!("time.minutes", n = minutes).to_string();
+    }
+    let hours = minutes / 60;
+    if hours < 24 {
+        return t!("time.hours", n = hours).to_string();
+    }
+    t!("time.days", n = hours / 24).to_string()
+}
+
+/// PURE: shape the real gap into the mock's queue and its two photos.
+///
+/// # What a queue row IS, and why `Ambigu` is not one
+///
+/// 🔑 **The row vocabulary is MEASURED, not chosen.** Of the mock's five kinds, three are already
+/// typed by the engine — a [`Gap`](opencmdb_core::gap::Gap) is *Écart*,
+/// `AbstentionCause::NoObservedValue` is *Absence* and `ConflictingObservations` is *Conflit* —
+/// *Nouveau* is an observed address no declared entity claims, and **`Ambigu` is omitted because it
+/// has no producer**: it needs FR16's ranked candidates, which `link_candidate` stores and nothing
+/// reads. Epic 6's.
+///
+/// 🔑 **A cause row is ONE line carrying its count, never N rows.** That is FR16b's rule verbatim —
+/// *"each cause is one line and one gesture, not N failures"* — and not a simplification: the engine
+/// returns `abstentions` as a count per cause and names no field, so N rows would mean re-deriving
+/// in the adapter a rule the engine owns.
+///
+/// ⚠️ `OutOfPerimeter` is NOT a row. `reconcile` is written for ONE perimeter, so every pass counts
+/// every other entity's observations as out of perimeter — noise of the loop, not a fact about the
+/// entity. Surfacing it would put one row per entity per other entity on the operator's screen.
+#[allow(clippy::too_many_arguments)]
+fn build_triage(
+    declared: Vec<(String, String, String)>,
+    provenance: Vec<crate::repo::DeclaredProvenance>,
+    observations: Vec<crate::repo::ObservedBatch>,
+    now: chrono::DateTime<chrono::Utc>,
+    selected: Option<&str>,
+    sort_by_age: bool,
+) -> TriageView {
+    use rust_i18n::t;
+
+    // Group declared attributes by entity, preserving first-seen order (as `build_view` does).
+    let mut entities: Vec<(String, Vec<(String, String)>)> = Vec::new();
+    for (entity_id, key, value) in declared {
+        match entities.iter_mut().find(|(id, _)| *id == entity_id) {
+            Some((_, attrs)) => attrs.push((key, value)),
+            None => entities.push((entity_id, vec![(key, value)])),
+        }
+    }
+    let ipv4_of = |attrs: &[(String, String)]| -> Option<String> {
+        attrs
+            .iter()
+            .find(|(k, _)| k == "ipv4")
+            .map(|(_, v)| v.clone())
+    };
+
+    // The declared side's provenance, keyed for lookup. Display only — never the comparison.
+    let provenance_of = |entity: &str, field: &str| -> Option<&crate::repo::DeclaredProvenance> {
+        provenance
+            .iter()
+            .find(|p| p.entity_id == entity && p.attr_key == field)
+    };
+
+    let obs: Vec<Observation> = observations
+        .iter()
+        .map(|batch| observation_from_facts(batch.facts.clone()))
+        .collect();
+
+    let mut rows: Vec<QueueRow> = Vec::new();
+    let mut panes: Vec<(String, DetailPane)> = Vec::new();
+    let mut claimed: Vec<String> = Vec::new();
+
+    for (entity_id, attrs) in &entities {
+        let Some(ipv4) = ipv4_of(attrs) else { continue };
+        claimed.push(ipv4.clone());
+
+        // The newest in-perimeter observation is this entity's freshness and its source.
+        let newest = observations
+            .iter()
+            .filter(|b| in_perimeter(&b.facts, &ipv4))
+            .max_by_key(|b| b.observed_at);
+        let (observed_source, observed_seen, age_seconds) = match newest {
+            Some(b) => (
+                source_label(&b.connector_id),
+                relative_time(now, b.observed_at),
+                (now - b.observed_at).num_seconds().max(0),
+            ),
+            None => (
+                t!("meta.no_source").to_string(),
+                t!("meta.never_seen").to_string(),
+                i64::MAX,
+            ),
+        };
+
+        // 🔴 A CAUSE row is about the whole entity, so its declared meta-line is the entity's most
+        // recent declared write — never `None`. Passing `None` made the Absence pane say *"2 champs
+        // déclarés"* over a meta-line reading *"Rien de déclaré"*: two contradictory sentences about
+        // the same side, in the same pane. **Found by looking at the screen, by nothing else.**
+        let entity_provenance = provenance
+            .iter()
+            .filter(|p| p.entity_id == *entity_id)
+            .max_by_key(|p| p.updated_at);
+
+        let result = reconcile(("ipv4", &ipv4), attrs, &obs);
+
+        for gap in &result.gaps {
+            let id = format!("ecart:{entity_id}:{}", gap.field);
+            let declared_meta = declared_meta_line(provenance_of(entity_id, &gap.field), now);
+            rows.push(QueueRow {
+                href: row_href(&id, sort_by_age),
+                id: id.clone(),
+                kind: t!("triage.kind.ecart").to_string(),
+                entity: ipv4.clone(),
+                field: gap.field.clone(),
+                declared: gap.declared.clone(),
+                observed: gap.observed.clone(),
+                count: String::new(),
+                counted: false,
+                seen: observed_seen.clone(),
+                age_seconds,
+                selected: false,
+            });
+            panes.push((
+                id,
+                DetailPane {
+                    kind: t!("triage.kind.ecart").to_string(),
+                    entity: ipv4.clone(),
+                    field: gap.field.clone(),
+                    declared: gap.declared.clone(),
+                    declared_meta,
+                    observed: gap.observed.clone(),
+                    observed_meta: MetaLine {
+                        source: observed_source.clone(),
+                        freshness: observed_seen.clone(),
+                    },
+                },
+            ));
+        }
+
+        for (cause, count) in &result.abstentions {
+            let (slug, label) = match cause {
+                AbstentionCause::NoObservedValue => ("absence", t!("triage.kind.absence")),
+                AbstentionCause::ConflictingObservations => ("conflit", t!("triage.kind.conflit")),
+                // Noise of the loop, never a fact about this entity — see this function's doc.
+                AbstentionCause::OutOfPerimeter => continue,
+            };
+            let id = format!("{slug}:{entity_id}");
+            rows.push(QueueRow {
+                href: row_href(&id, sort_by_age),
+                id: id.clone(),
+                kind: label.to_string(),
+                entity: ipv4.clone(),
+                field: String::new(),
+                declared: String::new(),
+                observed: String::new(),
+                count: t!("triage.n_fields", n = *count).to_string(),
+                counted: true,
+                seen: observed_seen.clone(),
+                age_seconds,
+                selected: false,
+            });
+            panes.push((
+                id,
+                DetailPane {
+                    kind: label.to_string(),
+                    entity: ipv4.clone(),
+                    field: String::new(),
+                    declared: t!("triage.cause.declared_side", n = *count).to_string(),
+                    declared_meta: declared_meta_line(entity_provenance, now),
+                    observed: match cause {
+                        AbstentionCause::NoObservedValue => t!("triage.cause.nothing_observed"),
+                        _ => t!("triage.cause.sources_disagree"),
+                    }
+                    .to_string(),
+                    observed_meta: MetaLine {
+                        source: observed_source.clone(),
+                        freshness: observed_seen.clone(),
+                    },
+                },
+            ));
+        }
+    }
+
+    // `Nouveau`: an observed address no declared entity claims.
+    let mut seen_new: Vec<String> = Vec::new();
+    for batch in &observations {
+        for (field, value) in batch.facts.iter().filter_map(display_fact) {
+            if field != "ipv4" || claimed.contains(&value) || seen_new.contains(&value) {
+                continue;
+            }
+            seen_new.push(value.clone());
+            let id = format!("nouveau:{value}");
+            let seen = relative_time(now, batch.observed_at);
+            rows.push(QueueRow {
+                href: row_href(&id, sort_by_age),
+                id: id.clone(),
+                kind: t!("triage.kind.nouveau").to_string(),
+                entity: value.clone(),
+                field: "ipv4".to_string(),
+                declared: String::new(),
+                observed: value.clone(),
+                count: String::new(),
+                counted: false,
+                seen: seen.clone(),
+                age_seconds: (now - batch.observed_at).num_seconds().max(0),
+                selected: false,
+            });
+            panes.push((
+                id,
+                DetailPane {
+                    kind: t!("triage.kind.nouveau").to_string(),
+                    entity: value.clone(),
+                    field: "ipv4".to_string(),
+                    declared: t!("triage.cause.nothing_declared").to_string(),
+                    declared_meta: declared_meta_line(None, now),
+                    observed: value,
+                    observed_meta: MetaLine {
+                        source: source_label(&batch.connector_id),
+                        freshness: seen,
+                    },
+                },
+            ));
+        }
+    }
+
+    // AC3: age sorting is available and OFF by default — oldest first when on.
+    if sort_by_age {
+        rows.sort_by_key(|r| std::cmp::Reverse(r.age_seconds));
+    }
+
+    let chosen = selected
+        .filter(|id| rows.iter().any(|r| r.id == *id))
+        .map(str::to_string)
+        .or_else(|| rows.first().map(|r| r.id.clone()));
+    for row in &mut rows {
+        row.selected = Some(&row.id) == chosen.as_ref();
+    }
+    // 🔑 The toggle PRESERVES the selection, so sorting never silently moves the operator's row.
+    let sort_href = match (&chosen, sort_by_age) {
+        (Some(id), true) => format!("/triage?sel={}", url_escape(id)),
+        (None, true) => "/triage".to_string(),
+        (Some(id), false) => format!("/triage?sort=age&sel={}", url_escape(id)),
+        (None, false) => "/triage?sort=age".to_string(),
+    };
+    let selected = chosen.and_then(|id| {
+        panes
+            .into_iter()
+            .find(|(pane_id, _)| *pane_id == id)
+            .map(|(_, pane)| pane)
+    });
+
+    TriageView {
+        total: rows.len(),
+        rows,
+        selected,
+        sort_by_age,
+        sort_href,
+    }
+}
+
+/// The observed side's source, as an operator can read it.
+///
+/// 🔴 **The product has NO connector registry** — no table, no name, nothing but the UUID
+/// `arp_ping.rs` mints for itself. The mock shows *"UniFi"* because its fixture invented one.
+/// Rendering the whole UUID is honest and useless: measured by looking, the meta-line read
+/// *"cccccccc-0000-0000-0000-00000000unif · il y a 4 min"*, which tells the operator nothing and
+/// pushes the freshness off the line. So the id is SHORTENED and labelled for what it is.
+///
+/// ⚠️ **This is a stated limit, not a design**: a name per source is what the mock shows and what
+/// the operator needs, and it belongs with the screen that owns sources — registered against story
+/// 6b.8. Until then, showing a short id is the true sentence.
+fn source_label(connector_id: &str) -> String {
+    let short: String = connector_id.chars().take(8).collect();
+    rust_i18n::t!("meta.source_id", id = short).to_string()
+}
+
+/// The declared side's meta-line: its origin and when it was written, or an honest absence.
+fn declared_meta_line(
+    provenance: Option<&crate::repo::DeclaredProvenance>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> MetaLine {
+    use rust_i18n::t;
+    match provenance {
+        Some(p) => MetaLine {
+            source: t!(origin_key(&p.origin)).to_string(),
+            freshness: relative_time(now, p.updated_at),
+        },
+        None => MetaLine {
+            source: t!("meta.nothing_declared").to_string(),
+            freshness: String::new(),
+        },
+    }
+}
+
+/// A queue row's link: its selector, escaped, with the sort preserved.
+fn row_href(id: &str, sort_by_age: bool) -> String {
+    match sort_by_age {
+        true => format!("/triage?sel={}&sort=age", url_escape(id)),
+        false => format!("/triage?sel={}", url_escape(id)),
+    }
+}
+
+/// Percent-escape a row selector for a query string.
+///
+/// ⚠️ Deliberately NARROW: a selector is built by this module from an entity id, a slug and a field
+/// name, so the set of characters that can appear is small — but *"the set is small"* is a property
+/// of today's inputs, not of the type, and a hostname or an attribute key is operator-supplied. The
+/// escape is therefore over a KEEP-list, never a ban-list: anything not plainly safe is escaped.
+fn url_escape(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for byte in raw.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b':' => {
+                out.push(byte as char);
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
+/// The i18n key for a declared value's origin. An unfamiliar token is LABELLED, never a 500 —
+/// story 5.14b's arbitration 11: a display may not be the place a write starts failing.
+fn origin_key(origin: &str) -> &'static str {
+    match origin {
+        "manual" => "origin.manual",
+        "adopted" => "origin.adopted",
+        "imported" => "origin.imported",
+        _ => "origin.unknown",
+    }
+}
+
 // ── The impure edges: DB read + HTTP handlers ────────────────────────
 
 /// Load the declared + observed state and build the view. `OPENCMDB_ENTITY_IPV4` selects the
@@ -569,8 +1021,61 @@ async fn reconcile_view(pool: &MySqlPool) -> Result<(ReconciledView, IdentityVie
     let observations = load_observation_facts(pool).await.map_err(server_error)?;
     let reach = count_engine_reach(pool).await.map_err(server_error)?;
     let preferred = std::env::var("OPENCMDB_ENTITY_IPV4").ok();
+    // 🔑 The comparison gets FACTS ONLY. `ObservedBatch` carries the source and the instant for the
+    // triage screen's meta-lines; `build_view` is handed neither, and the declared side's
+    // provenance is not loaded on this path at all — see `load_declared_provenance_for_display`.
+    let facts: Vec<Vec<Fact>> = observations.into_iter().map(|b| b.facts).collect();
     Ok((
-        build_view(declared, observations, preferred),
+        build_view(declared, facts, preferred),
+        build_identity_view(reach),
+    ))
+}
+
+/// The wall clock, read at the impure edge and nowhere else.
+///
+/// 🔴 **`chrono::Utc::now()` does not exist here and that is deliberate**: `chrono` is declared
+/// `default-features = false`, so its `clock` feature is off workspace-wide and the call is a
+/// compile error (measured: `E0599`). ⚠️ **But the flag stops `chrono`, not `std`** — this function
+/// reads `SystemTime`, which compiles freely, and so would the same call inside a pure builder.
+/// *The feature flag is a guard against one spelling, never against reading the clock.* That is why
+/// [`build_triage`] takes its instant as a parameter and has a test of its own.
+fn now_utc() -> chrono::DateTime<chrono::Utc> {
+    let since_epoch = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    chrono::DateTime::from_timestamp(
+        i64::try_from(since_epoch.as_secs()).unwrap_or(i64::MAX),
+        since_epoch.subsec_nanos(),
+    )
+    .unwrap_or_else(|| {
+        chrono::DateTime::from_timestamp(0, 0).expect("the epoch is a valid instant")
+    })
+}
+
+/// Load what `/triage` needs and build it. **This is the only impure edge that reads the clock.**
+///
+/// 🔴 The instant is taken HERE, once, and passed into [`build_triage`] as a parameter — so the
+/// builder stays pure and one store renders identically twice.
+async fn triage_view(
+    pool: &MySqlPool,
+    selected: Option<&str>,
+    sort_by_age: bool,
+) -> Result<(TriageView, IdentityView), Response> {
+    let declared = load_declared_attributes(pool).await.map_err(server_error)?;
+    let provenance = crate::repo::load_declared_provenance_for_display(pool)
+        .await
+        .map_err(server_error)?;
+    let observations = load_observation_facts(pool).await.map_err(server_error)?;
+    let reach = count_engine_reach(pool).await.map_err(server_error)?;
+    Ok((
+        build_triage(
+            declared,
+            provenance,
+            observations,
+            now_utc(),
+            selected,
+            sort_by_age,
+        ),
         build_identity_view(reach),
     ))
 }
@@ -728,29 +1233,57 @@ pub(crate) fn triage_router(pool: MySqlPool, perimeter: Option<String>) -> Route
 /// it is enforced exactly where it applies.
 ///
 /// Story 6b.4 replaces this body with the mock's two-pane triage; the frame it renders into stays.
-pub async fn triage(State(state): State<TriageState>) -> Response {
+pub async fn triage(
+    State(state): State<TriageState>,
+    axum::extract::Query(query): axum::extract::Query<TriageQuery>,
+) -> Response {
     let perimeter = state.perimeter.clone();
-    match reconcile_view(&state.pool).await {
-        Ok((view, identity)) => {
-            let card = GapFragment {
-                view,
+    // ⚠️ AC3: age sorting is OFF unless the operator asked for it, by name. Any other value of
+    // `sort` is off — a typo must not silently brandish age.
+    let sort_by_age = query.sort.as_deref() == Some("age");
+    match triage_view(&state.pool, query.sel.as_deref(), sort_by_age).await {
+        Ok((triage, identity)) => {
+            let body = TriageBody {
+                triage,
                 identity,
                 s: strings(),
             };
-            match card.render() {
+            match body.render() {
                 Ok(body) => Html(render_shell(
                     Shell::new(crate::screens::Screen::Triage, perimeter),
                     body,
                 ))
                 .into_response(),
                 Err(error) => {
-                    tracing::error!(%error, "rendering the triage card");
+                    tracing::error!(%error, "rendering the triage screen");
                     (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
                 }
             }
         }
         Err(response) => response,
     }
+}
+
+/// What the operator's URL says about the triage screen: which row, and whether age sorts it.
+///
+/// 🔑 Both are OPTIONAL and both default to the quiet answer — no selection means the first row,
+/// and no `sort` means the queue's own order. AC3's *"off by default"* is this `Option` being
+/// `None`, not a stored preference.
+#[derive(serde::Deserialize, Default)]
+pub struct TriageQuery {
+    /// The selected row's id, as `build_triage` minted it.
+    pub sel: Option<String>,
+    /// `age` turns the age sort on. Anything else, including a typo, leaves it off.
+    pub sort: Option<String>,
+}
+
+/// The triage screen's body: the mock's two panes, above story 5.14b's reach section.
+#[derive(Template)]
+#[template(path = "_triage.html")]
+struct TriageBody {
+    triage: TriageView,
+    identity: IdentityView,
+    s: Strings,
 }
 
 /// `GET /gap` — just the card, for HTMX refresh swaps.
@@ -887,7 +1420,7 @@ mod tests {
         let view = build_view(Vec::new(), Vec::new(), None);
         assert!(!view.has_entity);
         // The empty state renders honestly (default locale `en`).
-        let html = triage_html(view, no_reach());
+        let html = gap_card_html(view, no_reach());
         assert!(html.contains("No declared record yet"));
     }
 
@@ -990,7 +1523,7 @@ mod tests {
         let identity = build_identity_view(vec![reach("abstained", Some("absence_of_proof"), 4)]);
 
         assert!(!view.has_entity, "the premise: nothing is declared");
-        let html = triage_html(view, identity);
+        let html = gap_card_html(view, identity);
 
         assert!(
             html.contains("No declared record yet"),
@@ -1010,7 +1543,7 @@ mod tests {
     /// green, because the branch rendered and nothing asserted on it.
     #[test]
     fn the_identity_section_says_so_when_nothing_has_been_observed() {
-        let html = triage_html(build_view(Vec::new(), Vec::new(), None), no_reach());
+        let html = gap_card_html(build_view(Vec::new(), Vec::new(), None), no_reach());
 
         assert!(
             html.contains("Nothing observed yet"),
@@ -1048,7 +1581,7 @@ mod tests {
             unknown.cause
         );
 
-        let html = triage_html(build_view(Vec::new(), Vec::new(), None), view);
+        let html = gap_card_html(build_view(Vec::new(), Vec::new(), None), view);
         assert!(
             html.contains("a_cause_no_variant_names"),
             "and THE PAGE RENDERS — this is the assertion the whole design is for"
@@ -1138,7 +1671,7 @@ mod tests {
     /// branch instead.
     #[test]
     fn the_surface_states_both_limits_separately() {
-        let html = triage_html(
+        let html = gap_card_html(
             build_view(Vec::new(), Vec::new(), None),
             build_identity_view(vec![reach("abstained", Some("absence_of_proof"), 4)]),
         );
@@ -1168,7 +1701,7 @@ mod tests {
             reach("match", None, 187),
         ];
         let render_once = || {
-            triage_html(
+            gap_card_html(
                 build_view(Vec::new(), Vec::new(), None),
                 build_identity_view(rows.clone()),
             )
@@ -1186,7 +1719,7 @@ mod tests {
     /// **AC6** — no gauge, no percentage, no badge markup in the identity section.
     #[test]
     fn the_page_carries_no_gauge_and_no_percentage() {
-        let html = triage_html(
+        let html = gap_card_html(
             build_view(Vec::new(), Vec::new(), None),
             build_identity_view(vec![reach("abstained", Some("absence_of_proof"), 113)]),
         );
@@ -1272,7 +1805,7 @@ mod tests {
     /// `nothing_seen`; one half was fixed and the other missed.
     #[test]
     fn the_section_says_so_when_every_sighting_was_placed() {
-        let html = triage_html(
+        let html = gap_card_html(
             build_view(Vec::new(), Vec::new(), None),
             build_identity_view(vec![reach("match", None, 5)]),
         );
@@ -1386,7 +1919,7 @@ mod tests {
         );
         assert_ne!(view.abstention_count, 7, "nor the other way round");
 
-        let html = triage_html(view, identity);
+        let html = gap_card_html(view, identity);
         assert!(
             !html.contains(">7<"),
             "and no rendered number is their sum: the two populations are declared FIELDS and \
@@ -1559,12 +2092,15 @@ mod tests {
     // enumeration, and a more specific selector elsewhere can override any rule they check.
     // What they carry is that the SOURCE says what the story says it says.
 
-    /// What `/triage` actually serves: the reconciliation card inside the shell.
+    /// The reconciliation CARD inside the shell — what `GET /gap` serves.
     ///
-    /// 🔑 Story 6b.2 removed `GapPage`/`gap.html` — the shell IS the document now — so tests that
-    /// rendered the standalone page render this instead. They gain rather than lose: they assert
-    /// over the bytes the product really sends, frame included.
-    fn triage_html(view: ReconciledView, identity: IdentityView) -> String {
+    /// 🔴 **This was called `triage_html` and the name went false on 2026-08-19**, when story 6b.4
+    /// replaced the triage body with the two panes. It renders `GapFragment` directly and never
+    /// touches the route, so **the whole body of `/triage` was swapped and all 387 bin tests stayed
+    /// green**. A helper named for a route it does not serve is the dominant defect class wearing a
+    /// filename: *reading it could not find that, because it is correct about what it renders.*
+    /// Renamed to what it is; `/triage` now has route-level tests of its own below.
+    fn gap_card_html(view: ReconciledView, identity: IdentityView) -> String {
         let card = GapFragment {
             view,
             identity,
@@ -1593,23 +2129,47 @@ mod tests {
     /// Reading the directory costs a filesystem call in a test and makes the omission
     /// impossible: a template that exists is a template that is scanned.
     ///
+    /// 🔴 **RECURSIVE since story 6b.4's code review, and it was not before.** `read_dir` does not
+    /// descend, so **every guard built on this helper was blind to a subdirectory** — measured:
+    /// `style="color: var(--accent-document);"` planted in `templates/sub2/_leak.html` left
+    /// `ac4_the_amber_is_reserved_for_the_documenting_gesture` GREEN, which is exactly the
+    /// smuggling vector that guard's own comment says it was hardened against, and an undefined
+    /// class in `templates/sub/_partial.html` left the new stylesheet guard green too. Askama
+    /// accepts `path = "sub/_partial.html"` today, so this is **the ordinary gesture of organising
+    /// templates**, not an evasion. 🔑 *Two independently-written guards, one shared helper, one
+    /// hole* — and the fix belongs here rather than in either of them.
+    ///
+    /// Names are returned RELATIVE to `templates/` (`sub/_partial.html`, not `_partial.html`), so a
+    /// failure message names a path the reader can open.
+    ///
     /// # Panics
     ///
     /// If `templates/` cannot be read — which means the test is running somewhere the source
     /// tree is not, and every guard below would be vacuous rather than merely wrong.
     fn templates() -> Vec<(String, String)> {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
-        let mut found: Vec<(String, String)> = std::fs::read_dir(&dir)
-            .unwrap_or_else(|e| panic!("templates/ must be readable at {}: {e}", dir.display()))
-            .filter_map(Result::ok)
-            .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "html"))
-            .map(|entry| {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                let body = std::fs::read_to_string(entry.path())
-                    .unwrap_or_else(|e| panic!("reading {name}: {e}"));
-                (name, body)
-            })
-            .collect();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+        fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<(String, String)>) {
+            let entries = std::fs::read_dir(dir).unwrap_or_else(|e| {
+                panic!("templates/ must be readable at {}: {e}", dir.display())
+            });
+            for entry in entries.filter_map(Result::ok) {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, root, out);
+                } else if path.extension().is_some_and(|ext| ext == "html") {
+                    let name = path
+                        .strip_prefix(root)
+                        .unwrap_or(&path)
+                        .to_string_lossy()
+                        .into_owned();
+                    let body = std::fs::read_to_string(&path)
+                        .unwrap_or_else(|e| panic!("reading {name}: {e}"));
+                    out.push((name, body));
+                }
+            }
+        }
+        let mut found: Vec<(String, String)> = Vec::new();
+        walk(&root, &root, &mut found);
         found.sort();
         assert!(
             found.len() >= 3,
@@ -1985,5 +2545,505 @@ mod tests {
             Assets::get("vendor/htmx-2.0.4.min.js").is_some(),
             "and the file must actually be embedded under that name"
         );
+    }
+
+    // ── Story 6b.4: the triage screen, on the real gap ────────────────
+
+    /// An instant, `seconds` after the epoch.
+    fn at(seconds: i64) -> chrono::DateTime<chrono::Utc> {
+        chrono::DateTime::from_timestamp(seconds, 0).expect("a valid instant")
+    }
+
+    /// One observed batch: its source, its instant, its facts.
+    fn batch(source: &str, seconds: i64, facts: Vec<Fact>) -> crate::repo::ObservedBatch {
+        crate::repo::ObservedBatch {
+            connector_id: source.into(),
+            observed_at: at(seconds),
+            facts,
+        }
+    }
+
+    /// One declared attribute's provenance, for the display side.
+    fn prov(
+        entity: &str,
+        key: &str,
+        origin: &str,
+        seconds: i64,
+    ) -> crate::repo::DeclaredProvenance {
+        crate::repo::DeclaredProvenance {
+            entity_id: entity.into(),
+            attr_key: key.into(),
+            origin: origin.into(),
+            updated_at: at(seconds),
+        }
+    }
+
+    /// 🔴 **The builder reads NO clock, and this is the guard that says so for `build_triage`.**
+    ///
+    /// # Why story 5.14b's guard does not cover this and a new one was needed
+    ///
+    /// `the_view_builder_has_no_clock_so_one_store_renders_identically` hands `build_view` EMPTY
+    /// declared rows and EMPTY observations, so nothing in its populated branch is ever reached —
+    /// measured by story 6b.4's validation. And the carrier everyone assumed, `chrono`'s
+    /// `default-features = false`, only stops one SPELLING: `chrono::Utc::now()` is `E0599` here,
+    /// while `std::time::SystemTime::now()` compiles freely. *A feature flag is a guard against a
+    /// name, never against reading the clock.*
+    ///
+    /// So this guard feeds a POPULATED store and asserts the output is a function of the instant it
+    /// was GIVEN: same store, two different `now`s, two different freshness strings; same store,
+    /// the same `now` twice, byte-identical rows.
+    #[test]
+    fn build_triage_reads_no_clock_of_its_own() {
+        let declared = vec![
+            declared_row("e1", "ipv4", "192.0.2.10"),
+            declared_row("e1", "hostname", "nas"),
+        ];
+        let observations = vec![batch(
+            "unifi",
+            0,
+            vec![ipv4("192.0.2.10"), hostname("other")],
+        )];
+        let build = |now| {
+            build_triage(
+                declared.clone(),
+                vec![prov("e1", "hostname", "manual", 0)],
+                observations.clone(),
+                now,
+                None,
+                false,
+            )
+        };
+
+        // The same instant twice: identical, down to the rendered freshness.
+        let a = build(at(3_600));
+        let b = build(at(3_600));
+        assert_eq!(
+            a.rows.iter().map(|r| r.seen.clone()).collect::<Vec<_>>(),
+            b.rows.iter().map(|r| r.seen.clone()).collect::<Vec<_>>(),
+            "one store, one instant, twice — the builder must be a pure function of its inputs"
+        );
+
+        // A different instant: the freshness MOVES, which proves the instant is the one passed in
+        // and not one the builder went and read.
+        let later = build(at(7_200));
+        assert_ne!(
+            a.rows[0].seen, later.rows[0].seen,
+            "the freshness must follow the `now` the caller supplied — if it does not, this guard \
+             is measuring nothing and a clock inside the builder would be invisible to it"
+        );
+    }
+
+    /// The relative time is rendered from the interval, in the operator's language.
+    ///
+    /// ⚠️ **Interpolated, not concatenated**: *"4 min ago"* against *"il y a 4 min"* put the number
+    /// on opposite sides, so a `format!` of a translated word and a number is correct in exactly one
+    /// language. That is an NFR26 defect no locale guard can see, because both halves ARE keys.
+    #[test]
+    fn relative_time_reads_in_both_languages_and_at_the_boundaries() {
+        rust_i18n::set_locale("en");
+        assert_eq!(relative_time(at(100), at(60)), "just now");
+        assert_eq!(relative_time(at(3_540), at(0)), "59 min ago");
+        // The boundary: 60 minutes is one hour, not "60 min".
+        assert_eq!(relative_time(at(3_600), at(0)), "1 h ago");
+        assert_eq!(relative_time(at(90_000), at(0)), "1 d ago");
+        // A source dated in the future is STATED, never rendered as a negative duration.
+        assert_eq!(relative_time(at(0), at(60)), "dated ahead");
+
+        rust_i18n::set_locale("fr");
+        assert_eq!(relative_time(at(3_540), at(0)), "il y a 59 min");
+        assert_eq!(relative_time(at(3_600), at(0)), "il y a 1 h");
+        rust_i18n::set_locale("en");
+    }
+
+    /// 🔴 **The queue's row vocabulary is the engine's, and `Ambigu` is absent because nothing
+    /// produces it.**
+    ///
+    /// Of the mock's five kinds, three are already typed by `gap::reconcile` — a `Gap` is *Écart*,
+    /// `NoObservedValue` is *Absence*, `ConflictingObservations` is *Conflit* — *Nouveau* is an
+    /// observed address no declared entity claims, and `Ambigu` needs FR16's ranked candidates,
+    /// which `link_candidate` stores and nothing reads. **Epic 6's, and its absence is asserted so
+    /// nobody adds a row the engine cannot fill.**
+    ///
+    /// ⚠️ `OutOfPerimeter` is never a row: `reconcile` is written for ONE perimeter, so each pass
+    /// counts every OTHER entity's observations as out of perimeter. It is noise of the loop, and
+    /// surfacing it would put one row per entity per other entity on the operator's screen.
+    #[test]
+    fn the_queue_carries_the_four_kinds_the_engine_can_produce_and_no_others() {
+        let declared = vec![
+            // A drift: hostname declared `nas`, observed `intruder`.
+            declared_row("drift", "ipv4", "192.0.2.10"),
+            declared_row("drift", "hostname", "nas"),
+            // An absence: a declared field no observation reports.
+            declared_row("absent", "ipv4", "192.0.2.20"),
+            declared_row("absent", "hostname", "unseen"),
+            // A conflict: two observations disagree on the hostname.
+            declared_row("clash", "ipv4", "192.0.2.30"),
+            declared_row("clash", "hostname", "either"),
+        ];
+        let observations = vec![
+            batch("unifi", 10, vec![ipv4("192.0.2.10"), hostname("intruder")]),
+            batch("unifi", 20, vec![ipv4("192.0.2.20")]),
+            batch("unifi", 30, vec![ipv4("192.0.2.30"), hostname("one")]),
+            batch("arp", 40, vec![ipv4("192.0.2.30"), hostname("two")]),
+            // An address nobody declared.
+            batch("arp", 50, vec![ipv4("192.0.2.99")]),
+        ];
+        let view = build_triage(declared, Vec::new(), observations, at(1_000), None, false);
+
+        let kinds: Vec<&str> = view.rows.iter().map(|r| r.kind.as_str()).collect();
+        assert!(kinds.contains(&"Drift"), "a Gap must be a row: {kinds:?}");
+        assert!(
+            kinds.contains(&"Absence"),
+            "NoObservedValue must be a row: {kinds:?}"
+        );
+        assert!(
+            kinds.contains(&"Conflict"),
+            "ConflictingObservations must be a row: {kinds:?}"
+        );
+        assert!(
+            kinds.contains(&"New"),
+            "an undeclared observed address must be a row: {kinds:?}"
+        );
+        assert!(
+            !view.rows.iter().any(|r| r.id.contains("outofperimeter")),
+            "`OutOfPerimeter` is noise of the per-entity loop, never a row the operator sees"
+        );
+        // FR16b: a cause is ONE line carrying its count, never N failures.
+        let absence = view
+            .rows
+            .iter()
+            .find(|r| r.kind == "Absence")
+            .expect("the absence row");
+        assert!(
+            absence.counted && absence.count.contains('1'),
+            "a cause row carries its count WITH its unit — *one line and one gesture, not N \
+             failures* (FR16b) — and a bare number beside an address reads as noise: {:?}",
+            absence.count
+        );
+        assert!(
+            absence.count.chars().any(|c| c.is_alphabetic()),
+            "the count carries a unit, not a naked digit: {:?}",
+            absence.count
+        );
+    }
+
+    /// 🔴 **AC3: age sorting is available and OFF by default — and this guard pins the ORDER.**
+    ///
+    /// ⚠️ **The shape matters more than the assertion.** Story 6b.4's validation built the other
+    /// shape — a guard asserting only that *the toggle changes something* — and measured it **GREEN
+    /// under the exact mutation it exists to catch** (flip the default to on). This one compares the
+    /// default order against the queue's own order and reds.
+    #[test]
+    fn the_age_sort_is_off_by_default_and_oldest_first_when_on() {
+        let declared = vec![
+            declared_row("young", "ipv4", "192.0.2.10"),
+            declared_row("young", "hostname", "a"),
+            declared_row("old", "ipv4", "192.0.2.20"),
+            declared_row("old", "hostname", "b"),
+        ];
+        let observations = vec![
+            // `young` was seen at t=900 (recent), `old` at t=10 (ancient).
+            batch("unifi", 900, vec![ipv4("192.0.2.10"), hostname("z")]),
+            batch("unifi", 10, vec![ipv4("192.0.2.20"), hostname("z")]),
+        ];
+        let build = |sort| {
+            build_triage(
+                declared.clone(),
+                Vec::new(),
+                observations.clone(),
+                at(1_000),
+                None,
+                sort,
+            )
+        };
+
+        let default_order: Vec<String> = build(false).rows.iter().map(|r| r.id.clone()).collect();
+        let sorted_order: Vec<String> = build(true).rows.iter().map(|r| r.id.clone()).collect();
+
+        // OFF by default: the queue keeps the declaration order, `young` first.
+        assert!(
+            default_order[0].contains("young"),
+            "off by default means the queue's own order, not age's: {default_order:?}"
+        );
+        // ON: oldest first. The ban is not that age is hidden — it is that it is never brandished.
+        assert!(
+            sorted_order[0].contains("old"),
+            "sorting by age puts the oldest first: {sorted_order:?}"
+        );
+        assert_ne!(
+            default_order, sorted_order,
+            "the two orders must differ, or this fixture cannot tell the default from the sort"
+        );
+    }
+
+    /// 🔴 **AC1: BOTH photos carry their own provenance and their own freshness.**
+    ///
+    /// *Neither side is the truth* — an observation can be stale or from a blind source, and a
+    /// declaration can be outdated. A pane whose meta-line is missing invites the reader to treat
+    /// that side as fact, which is the one thing this screen exists not to do.
+    #[test]
+    fn both_photos_carry_a_provenance_and_a_freshness_of_their_own() {
+        let declared = vec![
+            declared_row("e1", "ipv4", "192.0.2.10"),
+            declared_row("e1", "hostname", "nas"),
+        ];
+        let observations = vec![batch(
+            "unifi",
+            0,
+            vec![ipv4("192.0.2.10"), hostname("other")],
+        )];
+        let view = build_triage(
+            declared,
+            vec![prov("e1", "hostname", "adopted", 2_400)],
+            observations,
+            at(3_000),
+            None,
+            false,
+        );
+        let pane = view.selected.expect("the first row is selected");
+
+        assert_eq!(pane.declared_meta.source, "Adopted from an observation");
+        assert_eq!(pane.declared_meta.freshness, "10 min ago");
+        // The SHORT id, labelled — never the whole UUID (see `source_label`).
+        assert_eq!(pane.observed_meta.source, "Source unifi");
+        assert_eq!(pane.observed_meta.freshness, "50 min ago");
+        assert_ne!(
+            (&pane.declared_meta.source, &pane.declared_meta.freshness),
+            (&pane.observed_meta.source, &pane.observed_meta.freshness),
+            "the two meta-lines must be the two sides' OWN facts — equal ones would mean the pane \
+             is showing one side's provenance twice"
+        );
+    }
+
+    /// An unfamiliar `origin` token is LABELLED and counted, never a 500.
+    ///
+    /// 🔑 Story 5.14b's arbitration 11, applied to a second column: `declared_attribute.origin` is
+    /// a plain `VARCHAR(16)` with no `CHECK`, so an invented token inserts cleanly. Turning it into
+    /// an error here would move the failure from the DISPLAY to the WRITE — *a display story may not
+    /// be the place a write starts failing.*
+    #[test]
+    fn an_unfamiliar_origin_is_labelled_rather_than_fatal() {
+        let declared = vec![
+            declared_row("e1", "ipv4", "192.0.2.10"),
+            declared_row("e1", "hostname", "nas"),
+        ];
+        let view = build_triage(
+            declared,
+            vec![prov("e1", "hostname", "smuggled", 0)],
+            vec![batch(
+                "unifi",
+                0,
+                vec![ipv4("192.0.2.10"), hostname("other")],
+            )],
+            at(60),
+            None,
+            false,
+        );
+        let pane = view.selected.expect("the first row is selected");
+        assert_eq!(pane.declared_meta.source, "Unfamiliar origin");
+    }
+
+    /// The selection survives the sort toggle, and an unknown `?sel=` falls back to the first row.
+    #[test]
+    fn the_selection_is_addressable_and_survives_the_sort() {
+        let declared = vec![
+            declared_row("e1", "ipv4", "192.0.2.10"),
+            declared_row("e1", "hostname", "nas"),
+        ];
+        let observations = vec![batch(
+            "unifi",
+            0,
+            vec![ipv4("192.0.2.10"), hostname("other")],
+        )];
+        let view = build_triage(
+            declared.clone(),
+            Vec::new(),
+            observations.clone(),
+            at(60),
+            Some("ecart:e1:hostname"),
+            false,
+        );
+        assert!(
+            view.rows
+                .iter()
+                .any(|r| r.selected && r.id == "ecart:e1:hostname")
+        );
+        assert!(
+            view.sort_href.contains("sort=age") && view.sort_href.contains("sel="),
+            "the toggle must carry the selection, or sorting silently moves the operator's row: {}",
+            view.sort_href
+        );
+
+        // An id nobody minted selects the first row rather than nothing — a URL survives a queue
+        // that changed under it.
+        let stale = build_triage(
+            declared,
+            Vec::new(),
+            observations,
+            at(60),
+            Some("ecart:vanished:hostname"),
+            false,
+        );
+        assert!(
+            stale.selected.is_some(),
+            "a stale selector falls back, never blanks the pane"
+        );
+    }
+
+    /// The queue's empty state says so, rather than rendering an empty list.
+    #[test]
+    fn an_empty_queue_says_it_is_empty() {
+        let view = build_triage(Vec::new(), Vec::new(), Vec::new(), at(0), None, false);
+        assert_eq!(view.total, 0);
+        assert!(view.selected.is_none());
+        let html = TriageBody {
+            triage: view,
+            identity: no_reach(),
+            s: strings(),
+        }
+        .render()
+        .expect("the triage body renders");
+        assert!(
+            html.contains("You are up to date"),
+            "an empty queue must SAY it is empty, not render an empty list"
+        );
+    }
+
+    /// The rendered triage body carries both panes and both meta-lines.
+    #[test]
+    fn the_triage_body_renders_the_queue_and_the_two_photos() {
+        let declared = vec![
+            declared_row("e1", "ipv4", "192.0.2.10"),
+            declared_row("e1", "hostname", "nas"),
+        ];
+        let view = build_triage(
+            declared,
+            vec![prov("e1", "hostname", "manual", 0)],
+            vec![batch(
+                "unifi",
+                0,
+                vec![ipv4("192.0.2.10"), hostname("intruder")],
+            )],
+            at(600),
+            None,
+            false,
+        );
+        let html = TriageBody {
+            triage: view,
+            identity: no_reach(),
+            s: strings(),
+        }
+        .render()
+        .expect("the triage body renders");
+
+        assert!(html.contains("queue"), "the queue pane renders");
+        assert!(html.contains("photos"), "the two-photo pane renders");
+        assert!(
+            html.contains("nas") && html.contains("intruder"),
+            "both values render"
+        );
+        assert!(
+            html.contains("Entered by hand"),
+            "the declared meta-line renders"
+        );
+        assert!(
+            html.contains("unifi"),
+            "the observed meta-line names its source"
+        );
+        assert!(html.contains("10 min ago"), "the freshness renders");
+        // Story 5.14b's reach section survived the body swap — it was extracted, not deleted.
+        assert!(
+            html.contains("identity"),
+            "the reach section must survive: no acceptance criterion asked to remove it"
+        );
+    }
+
+    /// 🔴 **No template names a CSS class this stylesheet does not define.**
+    ///
+    /// # The defect this exists for, and why no earlier layer could see it
+    ///
+    /// Story 6b.3 shipped `_devices_example.html` carrying `class="screen-section"`, which
+    /// `app.css` did not define, and `class="rows"` on a `<table>` — `.rows` being a `<dl>` ruleset
+    /// written for `_gap_card.html`, so every descendant rule matched nothing. The sheet had no
+    /// `table`, `th` or `td` rule at all, and **the one witness screen that story existed to produce
+    /// rendered as browser defaults.** Three review layers measured the served TEXT correct in every
+    /// respect; the page was not. It was caught by RECOUNTING the sheet, and only after the fact.
+    ///
+    /// 🔑 **A PROPERTY over the directory, never a list.** It enumerates `templates/` at run time
+    /// and the sheet's selectors at run time, so a class added to a NEW partial is covered the day
+    /// the file exists — the failure mode story 6b.2's validation measured on a guard keyed to a
+    /// `[&str; 2]` literal.
+    ///
+    /// ⚠️ **That sentence was FALSE when it was first written, and the review measured it.** The walk
+    /// was a flat `read_dir`, so a class planted in `templates/sub/_partial.html` left this guard
+    /// green while the same class in a top-level file reddened it — *"covered the day the file
+    /// exists"* held for one directory only. It now uses the shared [`templates`] walker, which was
+    /// made recursive for the same reason and in the same pass; the inherited `--accent-document`
+    /// guard had the identical hole through the identical helper.
+    ///
+    /// ⚠️ **The exemption list is EMPTY, and that is the point** (story 6.3's idiom): the one form
+    /// of allowlist nobody can quietly widen. A class that needs no rule gets a real one — `.col`
+    /// is a grid child and `min-width: 0` is what lets it shrink — rather than an entry here.
+    ///
+    /// ⚠️ **Its limit, written rather than implied**: this is a TRIPWIRE against the ordinary
+    /// gesture of naming a class and forgetting the rule. It reads `class="…"` literals only, so a
+    /// class assembled in Rust or interpolated by askama is invisible to it, and it says nothing
+    /// about whether a rule that EXISTS is the right one — `.rows` on a `<table>` would still pass.
+    /// *Only a browser can answer that, and no story in this epic has had one yet.*
+    #[test]
+    fn every_class_a_template_names_is_defined_in_the_stylesheet() {
+        const EXEMPT: [&str; 0] = [];
+
+        // 🔑 The SHARED walker, not a second one of my own. It was a flat `read_dir` here and in
+        // `templates()` both, and the review measured the consequence: an undefined class planted
+        // in `templates/sub/_partial.html` left this guard GREEN while the same class in a
+        // top-level file reddened it. One helper, one fix, and this guard cannot drift from the
+        // others again — the DRY rule doing real work rather than tidying.
+        let scanned_files = templates();
+        let mut used: Vec<(String, String)> = Vec::new();
+        let mut scanned = 0_usize;
+        for (name, source) in &scanned_files {
+            let name = name.clone();
+            scanned += 1;
+            for (index, _) in source.match_indices("class=\"") {
+                let rest = &source[index + "class=\"".len()..];
+                let Some(end) = rest.find('"') else { continue };
+                let literal = &rest[..end];
+                // An askama expression inside the attribute is not a literal class name.
+                if literal.contains('{') {
+                    continue;
+                }
+                for class in literal.split_whitespace() {
+                    used.push((name.clone(), class.to_string()));
+                }
+            }
+        }
+
+        let sheet = sheet();
+        let defined = |class: &str| -> bool {
+            sheet.match_indices(&format!(".{class}")).any(|(at, _)| {
+                // A selector ends at a character that cannot continue an identifier; otherwise
+                // `.count` would be "defined" by a rule for `.counter`.
+                sheet[at + 1 + class.len()..]
+                    .chars()
+                    .next()
+                    .is_none_or(|c| !c.is_alphanumeric() && c != '-' && c != '_')
+            })
+        };
+
+        // The premise FIRST: a walk that found nothing would make every assertion below vacuous.
+        assert!(
+            scanned >= 5 && used.len() >= 20,
+            "the premise: this guard must have read the templates ({scanned} file(s), \
+             {} class use(s)) — a walk that went empty asserts nothing",
+            used.len()
+        );
+        for (template, class) in &used {
+            assert!(
+                EXEMPT.contains(&class.as_str()) || defined(class),
+                "{template} names `.{class}` and `app.css` defines no rule for it — it renders as \
+                 a browser default, which no test can see and only a look can catch (story 6b.3)"
+            );
+        }
     }
 }

@@ -3920,3 +3920,125 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   three layers could measure — content, escaping, French locale — and the visual result was not.
   Epic 6b's own DoD already names axe-core green on the ten routes, which is a different check again
   (a11y, not fidelity). **Owner: Epic 6b's DoD, with story 6b.12's release sweep.**
+
+## Deferred from: story 6b.4, the triage screen (2026-08-19)
+
+- 🔴 **`epics.md` is NOT edited and Epic 6b now has THIRTEEN stories, not twelve.** Story 6b.4b was
+  INSERTED at 6b.4's validation (Guy, 2026-08-19): 6b.4 keeps AC1 (the queue, the two photos with
+  their provenance and freshness) and AC3 (the age sort); **6b.4b takes AC2** — the action bar and the
+  gesture nature it needs. The reason is DEPENDENCY, not size: AC2's mechanism is specified by no
+  document this project has and it governs every screen after this one. A story may not edit an
+  acceptance criterion or an epic; **only a retrospective may**. **Owner: Epic 6b's retrospective**,
+  which must also correct `epics.md:2108`'s *"seven gates"* (there are eight since story 6.3) — a
+  drift this story measured to be registered **nowhere** before now.
+
+- 🔑 **The gesture nature's form and words are arbitrated IN ADVANCE, in story 6b.4's §0b**, so 6b.4b
+  starts designed rather than with a question: `enum Gesture { Live { route }, Planned { owner } }`,
+  one partial, one key pair. 🔴 **`<button disabled>` was refused on NFR25** — a disabled button
+  leaves the tab order and disappears from a screen reader, so the blind operator is not even told the
+  gesture exists; `aria-disabled="true"` on a non-activatable button keeps the announcement. ⚠️ And
+  **the owning story's number stays out of the surface**: *"arrives in 6.4"* turns the label into a
+  calendar, therefore a promise — what story 5.14b refused. **Owner: story 6b.4b.**
+
+- ⚠️ **`SANCTIONED_READS` gains its first PRODUCTION entry, and the shape is the decision.** Story 6.2
+  admitted one test-only reader of the provenance columns; story 6b.4 needs `origin` on screen.
+  Guy's arbitration: **two readers** — `load_declared_attributes` stays provenance-free because it
+  feeds the divergence computation (`page.rs:568`), and a new `load_declared_provenance_for_display`
+  goes only to the view. 🔑 A bare sanction on the existing reader was refused because it would put
+  provenance inside the scope of the very path the gate protects *"by accident"*. ⚠️ **Still a
+  TRIPWIRE, never a barrier**: nothing stops a future story routing provenance into `build_view`
+  another way, and the real closure remains a database privilege — story 5.12's own voie B, still
+  unowned. **Owner: Epic 19, with 5.12's `GRANT`.**
+
+- 🔴 **`Ambigu` is omitted from the queue's row vocabulary because it has no producer.** Measured: of
+  the mock's five kinds, `Écart`, `Absence` and `Conflit` are already typed by `gap::reconcile`
+  (`AbstentionCause::NoObservedValue` / `ConflictingObservations`, `gap/mod.rs:49-57`), `Nouveau` is a
+  small set difference, and `Ambigu` needs FR16's ranked candidates, which `link_candidate` stores and
+  nothing reads. **Owner: Epic 6** (stories 6.13/6.14), and the queue must gain the row the day it
+  lands rather than being rediscovered then.
+
+- ⚠️ **`the_view_builder_has_no_clock_so_one_store_renders_identically` proves nothing about
+  `build_view`.** Measured at 6b.4's validation: that guard calls `build_view` with EMPTY declared and
+  observations, so a clock read in its populated branch is never reached; and `SystemTime::now()`
+  compiles freely where `chrono::Utc::now()` does not (no `clock` feature). The guard is real proof
+  only for `build_identity_view`. **Owner: story 6b.4**, which must write the missing half rather than
+  inherit a guard that reads as coverage.
+
+- ⚠️ **`reconcile` is written for ONE perimeter and the queue loops it — and the cost is now
+  MEASURED rather than described.** Every pass re-classifies every other entity's observations as
+  `OutOfPerimeter` noise, O(N·M) over the corpus. Measured at story 6b.4's code review against a live
+  database: `/triage` takes **~0.13 s at 300 declared entities and 4.4 s at 2000 entities × ~2300
+  observations**. Nothing bounds it and no test asserts a ceiling. Correct at fixture scale; a shape
+  to revisit when the reference-scale generator meets the triage screen. **Owner: story 6.16.**
+
+## Deferred from: story 6b.4's implementation (2026-08-19)
+
+- 🔴 **THE PRODUCT HAS NO CONNECTOR REGISTRY, and the triage screen is where that first shows.**
+  `observation_record.connector_id` is a bare `CHAR(36)`; there is **no table, no name, nothing**
+  behind it (measured: five tables in the migrations, none of them a source registry, and
+  `arp_ping.rs` mints its own id with no name anywhere). The reference mock's observed meta-line
+  reads *"UniFi · vu il y a 3 min"* — its fixture invented that name. **Found by LOOKING**: the
+  meta-line rendered *"cccccccc-0000-0000-0000-00000000unif · il y a 4 min"*, which tells the
+  operator nothing and pushes the freshness off the line. Shipped as a SHORT labelled id
+  (*"Source unifi001"*), which is the true sentence today. ⚠️ A name per source is what the operator
+  needs and what the mock shows. **Owner: story 6b.8 (*Sources and alerts*)**, the screen that owns
+  sources — and the day it lands, `page::source_label` is where the name arrives.
+
+- ⚠️ **`/gap` is no longer embedded by any page.** Story 6b.4 replaced the triage body with the two
+  panes, so `_gap_card.html` — and its HTMX refresh button targeting `#gap-card` — is reachable only
+  by requesting `/gap` directly. It remains a tested fragment endpoint with its own auth and J3
+  coverage, and **the mock's triage has no refresh button either**, so removing it from the screen is
+  fidelity rather than loss. What is now unowned is the *fragment's consumer*. **Owner: story 6b.5**,
+  whose dashboard is the next page that may want a refreshable card, or 6b.12's release sweep.
+
+- ⚠️ **`xtask/src/main.rs` is at 1908 code lines against the 2000 ceiling** — the largest file in the
+  workspace, and this story added 14 to it (the second `SANCTIONED_READS` entry and its doctrine).
+  The house rule is *split, not grown*, and story 6.3 already moved one gate out to
+  `xtask/src/observed_immutable.rs` for exactly this reason. **Owner: the next story that adds an
+  `xtask` gate**, which must split rather than append.
+
+- 🔴 **A guard cannot notice a read breaking if it never touches the read.** Mutation M1 froze
+  `observed_at` inside `load_observation_facts` and **the whole suite stayed GREEN**: every unit test
+  built `ObservedBatch` by hand, so the column round-trip the story exists to add was carried by
+  nothing. Closed here by a route-level assertion computing the expected day count from the stored
+  instant. 🔑 **The transferable half**: a story that widens a `SELECT` needs one guard that reads
+  through the database, and hand-built fixtures of the widened type will pass whatever the query
+  does. **Owner: recorded for Epic 6b's retrospective.**
+
+- ⚠️ **`Ambigu` and the mock's grouped-by-motif view are both absent, for different reasons.**
+  `Ambigu` has no producer (already registered above, Epic 6). The **grouped view** — the mock's
+  *"Vue groupée par motif"* with its bulk *"Merger les N"* — is not in this story's acceptance
+  criteria at all and has **no bulk write route** behind it (`document.rs` handles one subject).
+  Recorded so nobody reads its absence as an omission. **Owner: FR17's bulk triage, unscheduled.**
+
+
+## Deferred from: code review of story 6b.4 (2026-08-19)
+
+- ⚠️ **Two declared entities sharing one `ipv4` render two visually identical queue rows.** Seeded
+  live at the code review: both read `192.0.2.60` with nothing on the line to tell them apart. No
+  crash — row ids are namespaced by `entity_id`, so nothing collides — but the operator cannot
+  distinguish them. 🔑 The only distinguisher available today is a UUID, which is noise; what the row
+  needs is a **name**, and naming an entity is grouping. **Owner: Epic 6**, with the device record.
+
+- ⚠️ **`triage_view` issues three queries with no shared snapshot.** A write landing between the
+  declared read and the provenance read could show a field whose meta-line says *"Nothing declared"*.
+  Pre-existing shape — `reconcile_view` has had two unsynchronised reads since story 5.14b — no AC
+  promises snapshot isolation, and `declared_attribute` is insert-never-overwrite so no row can
+  vanish. **Owner: the first story that needs a consistent read across both.**
+
+- 🔴 **ISSUE #38 RECURRED TWICE during story 6b.4's code review**, and the record is added here
+  because the issue's own rule is that a symptom may be recorded and a CAUSE may not be written
+  without naming the check that would refute it. The pattern:
+  `page::tests::the_identity_section_is_visible_without_a_declared_entity` failed once during an M2
+  run and once during an M4 run, then passed on immediate rerun with **zero code change**, both
+  times, in a worktree whose `git status` was verified clean before and after. **No cause is named.**
+  Two more data points for whoever investigates #38: it is not confined to the fixture tests where it
+  was first seen, and it survives into a story that touched neither that test nor its subject.
+
+- 🔑 **A METHOD finding for Epic 6b's retrospective: a delta confirmed by one of its two terms is not
+  confirmed.** The Acceptance Auditor certified *"611 → 625 tests"* as ✅ CONFIRMED by recomputing
+  `398 + 161 + 66 = 625` — the right-hand side — while the Blind Hunter, which had **only the diff**,
+  refuted it by noticing the baseline is 614. ⚠️ **The layer with repository access validated the
+  false figure and the blind one caught it**, which is the argument for keeping that layer blind, and
+  a reason to state in the Auditor's mandate that a claim of the form *"A → B"* requires measuring A.
+  **Owner: Epic 6b's retrospective.**

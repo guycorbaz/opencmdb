@@ -458,23 +458,115 @@ where
     Ok(rows)
 }
 
-/// Load each observation's `facts` JSON, deserialized into `Vec<Fact>` (oldest first). The engine
-/// compares the facts in Rust — the JSON never round-trips through SQL comparison (D10).
-pub async fn load_observation_facts<'e, E>(
+/// One declared attribute's PROVENANCE and FRESHNESS — for DISPLAY, and for nothing else.
+///
+/// 🔴 **This type exists so the divergence computation cannot see what it carries** (story 6b.4,
+/// Guy's arbitration). See [`load_declared_provenance_for_display`].
+#[derive(Clone)]
+pub struct DeclaredProvenance {
+    /// The entity the attribute belongs to.
+    pub entity_id: String,
+    /// The attribute's key.
+    pub attr_key: String,
+    /// How the value was obtained — `manual`, `adopted` or `imported` (`0001_initial.sql:14`).
+    pub origin: String,
+    /// When the declared value was last written.
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Load each declared attribute's provenance and freshness, **for display only**.
+///
+/// # Why this is a SECOND reader and not a widening of [`load_declared_attributes`]
+///
+/// 🔴 **FR13's invariant is that the DIVERGENCE COMPUTATION never consults how a declared value was
+/// obtained** — the `authorship` gate's own doctrine says so, and that it guards against a future
+/// story reading provenance into that path *by accident*. [`load_declared_attributes`] is exactly
+/// that path: `page::reconcile_view` hands its rows to `build_view`, which reconciles. Widening it
+/// would have put `origin` inside the divergence computation's scope and left only a gate entry
+/// standing between the two.
+///
+/// So there are two readers. The comparison gets `(entity, key, value)` and **cannot** see
+/// provenance because it is never passed it; the view gets this, and the gate sanctions this
+/// function BY NAME. Guy's arbitration, 2026-08-19.
+///
+/// ⚠️ **A TRIPWIRE, never a barrier** (story 5.12's precedent): nothing stops a future story routing
+/// provenance into `build_view` another way. The real closure is a database privilege, registered
+/// with story 5.12's own voie B.
+///
+/// # Errors
+///
+/// A `sqlx::Error` on a backend failure, or on an `updated_at` that does not parse as RFC 3339.
+pub async fn load_declared_provenance_for_display<'e, E>(
     executor: E,
-) -> Result<Vec<Vec<opencmdb_core::observation::Fact>>, sqlx::Error>
+) -> Result<Vec<DeclaredProvenance>, sqlx::Error>
 where
     E: Executor<'e, Database = MySql>,
 {
-    let rows: Vec<(String,)> =
-        sqlx::query_as("SELECT facts FROM observation_record ORDER BY observed_at")
-            .fetch_all(executor)
-            .await?;
+    // `updated_at` round-trips through TEXT: sqlx here has no `chrono` feature, so a `DATETIME(6)`
+    // cannot be decoded natively — the same reason and the same idiom as `load_observation_by_id`.
+    let rows: Vec<(String, String, String, String)> = sqlx::query_as(
+        "SELECT entity_id, attr_key, origin, \
+             DATE_FORMAT(updated_at, '%Y-%m-%dT%H:%i:%s.%fZ') \
+             FROM declared_attribute ORDER BY entity_id, attr_key",
+    )
+    .fetch_all(executor)
+    .await?;
+    rows.into_iter()
+        .map(|(entity_id, attr_key, origin, updated_at)| {
+            Ok(DeclaredProvenance {
+                entity_id,
+                attr_key,
+                origin,
+                updated_at: chrono::DateTime::parse_from_rfc3339(&updated_at)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                    .with_timezone(&chrono::Utc),
+            })
+        })
+        .collect()
+}
+
+/// One observation as the page reads it: its facts, and **where and when they came from**.
+#[derive(Clone)]
+pub struct ObservedBatch {
+    /// The connector that reported it — the observed side's provenance.
+    pub connector_id: String,
+    /// When the source dated it — the observed side's freshness.
+    pub observed_at: chrono::DateTime<chrono::Utc>,
+    /// The facts themselves.
+    pub facts: Vec<opencmdb_core::observation::Fact>,
+}
+
+/// Load each observation's facts with its source and its instant (oldest first). The engine
+/// compares the facts in Rust — the JSON never round-trips through SQL comparison (D10).
+///
+/// 🔑 `connector_id` and `observed_at` are the OBSERVED side's provenance and freshness, and they
+/// are **not** guarded columns: the `authorship` gate's `PROVENANCE_COLUMNS` names three columns of
+/// `declared_attribute` and none of `observation_record`. The asymmetry is FR13's: the ban is on
+/// consulting how a DECLARED value was obtained.
+///
+/// # Errors
+///
+/// A `sqlx::Error` on a backend failure, on a facts payload that is not valid JSON, or on an
+/// `observed_at` that does not parse as RFC 3339.
+pub async fn load_observation_facts<'e, E>(executor: E) -> Result<Vec<ObservedBatch>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String, String, String)> = sqlx::query_as(
+        "SELECT connector_id, DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%s.%fZ'), facts \
+         FROM observation_record ORDER BY observed_at",
+    )
+    .fetch_all(executor)
+    .await?;
     let mut out = Vec::with_capacity(rows.len());
-    for (facts,) in rows {
-        let parsed: Vec<opencmdb_core::observation::Fact> =
-            serde_json::from_str(&facts).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
-        out.push(parsed);
+    for (connector_id, observed_at, facts) in rows {
+        out.push(ObservedBatch {
+            connector_id,
+            observed_at: chrono::DateTime::parse_from_rfc3339(&observed_at)
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+                .with_timezone(&chrono::Utc),
+            facts: serde_json::from_str(&facts).map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+        });
     }
     Ok(out)
 }

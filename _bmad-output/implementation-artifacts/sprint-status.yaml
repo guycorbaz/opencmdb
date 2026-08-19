@@ -75,7 +75,201 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.3 -> `done`: PR #99 squash-merged as `d1bb128` after a green CI run
+last_updated: 2026-08-19  # 6b.4 CODE-REVIEWED (three layers, Sonnet 5 -- a different model from
+                          # the implementer; each isolated) and REPAIRED. **0 decisions, 11 patches,
+                          # 2 deferrals, 5 dismissed with the check that dismissed them.** 625 tests,
+                          # eight gates green, fmt+clippy clean, against a live mariadb.
+                          # 🔴 THE TWO STRUCTURAL FINDINGS ARE BOTH ABOUT GUARDS, AND ONE IS NOT THIS
+                          # STORY'S: the shared `templates()` helper used a FLAT `read_dir`, so an
+                          # undefined class in `templates/sub/_partial.html` left the new stylesheet
+                          # guard GREEN -- and `style="color: var(--accent-document)"` in a
+                          # subdirectory left story 6b.1's amber reservation guard green too, which
+                          # is exactly the smuggling vector its own comment claims to be hardened
+                          # against. Askama accepts `path = "sub/…"` today, so this is the ORDINARY
+                          # gesture of organising templates. 🔑 *Two independently-written guards,
+                          # one shared helper, one hole* -- fixed at the helper, M9 reds both.
+                          # ⚠️ And the new guard's doc sentence *"covered the day the file exists"*
+                          # was FALSE when written, which here is the defect rather than the hole.
+                          # 🔴 M2'S RECORDED CARRIER WAS MISATTRIBUTED: my mutation flipped the
+                          # handler's flag, which also flips `aria-pressed`, so the route test
+                          # reddened on the toggle's STATE, not the ORDER. The route fixture seeded
+                          # ONE entity, and **with n = 1 an ordering is structurally unobservable**.
+                          # *A mutation that changes two things attributes its red to whichever you
+                          # were looking at.* Closed: a second entity is seeded, and M2-bis (the
+                          # surgical form) now reds 2 for the right reasons.
+                          # 🔑 THE METHOD FINDING, and it is the sharpest: the Auditor certified
+                          # *"611 -> 625 tests"* as ✅ CONFIRMED by recomputing 398+161+66=625 -- the
+                          # RIGHT-hand side -- while the Blind Hunter, with ONLY the diff, refuted it
+                          # (the baseline is 614; 611 is 6b.3's, reused). **The equipped layer
+                          # validated the false figure and the blind one caught it.** *Verifying a
+                          # delta means verifying both terms.* ⚠️ And the figure is story 6b.3's own
+                          # defect reproduced two days later. -> Epic 6b's retrospective.
+                          # Also patched: `url_escape` existed and was not applied to the queue link
+                          # (⚠️ measured NOT reachable -- `entity_id` is always a v7 UUID -- so
+                          # LATENT, not live); the route test read the clock a second time and could
+                          # straddle midnight (issue #38's family, now ±1 tolerant); 27 locale keys,
+                          # not 22.
+                          # ✅ REFUTED by measurement, recorded so nobody re-chases: no XSS (Askama
+                          # escapes, tested with a script tag and an onerror img seeded in raw SQL);
+                          # hostile `?sel=` (quote, angle brackets, newline, lone %, 10 kB) all 200;
+                          # `?sort=bogus` stays off; and the pending COUNT is not the banned badge --
+                          # the ban names nav items, the shape is what the spec prescribes verbatim,
+                          # and nothing changes colour, weight or position with the number.
+                          # ⚠️ Deferred: two entities on one ipv4 render indistinguishable rows
+                          # (-> Epic 6, it needs a NAME and naming is grouping); three unsynchronised
+                          # reads (pre-existing shape); and 🔴 **ISSUE #38 RECURRED TWICE** during the
+                          # mutation runs -- no cause named, only the pattern.
+                          # ⚠️ O(N·M) is now MEASURED: 0.13 s at 300 entities, **4.4 s at 2000**.
+                          # ⚠️ STAYS at `review`: `done` is the MERGE's business.
+                          # (Earlier the same day) 6b.4 -> `review`: IMPLEMENTED, scoped to AC1 + AC3. `/triage` is the
+                          # mock's two panes on the REAL gap: a queue of four measured kinds, and
+                          # two photos each carrying its OWN provenance and freshness. **614 -> 625
+                          # tests** (398 bin + 161 core + 66 xtask), eight gates green, fmt+clippy
+                          # clean, run BOTH ways (0.07 s without a database, 5.15 s against a live
+                          # `mariadb:10.11.11` -- the tell that the DB half executed).
+                          # 🔴 FOUR DEFECTS FOUND BY LOOKING, none reachable by any test: the
+                          # Absence pane said *"2 champs déclarés"* over *"Rien de déclaré"* (two
+                          # opposite sentences about one side); the observed source rendered as a
+                          # RAW UUID -- and **my own route test REQUIRED it**, asserting
+                          # `contains(<full uuid>)`, so it passed on the defect (*a test that pins
+                          # the ugly thing is a test that requires it*); a `Nouveau` row drew an
+                          # arrow pointing from nothing; and a cause row showed a bare count.
+                          # 🔴 AND A FIFTH, found by RENAMING: `page::tests::triage_html` rendered
+                          # `GapFragment` directly and never touched the route, so **the entire body
+                          # of /triage was replaced with all 387 bin tests green**. Ten tests were
+                          # built on it. Renamed; /triage now has a route-level test.
+                          # 🔴 THE MUTATION PASS'S OWN FINDING: **M1 came back GREEN** -- freezing
+                          # `observed_at` in the repo left the whole suite green, because every unit
+                          # test built `ObservedBatch` BY HAND and the widened column's round-trip
+                          # was carried by nothing. *A guard that never touches the read cannot
+                          # notice the read breaking.* Closed, then 1 red.
+                          # 🔑 AND M6 SETTLES THE VALIDATION'S CLAIM BY MEASUREMENT: a clock inside
+                          # the pure builder reds the NEW guard (4 tests) while story 5.14b's, run
+                          # alone on the same mutation, stays GREEN. `chrono::Utc::now()` is E0599
+                          # here; `SystemTime::now()` is not -- *a feature flag guards a spelling,
+                          # never the act of reading a clock.*
+                          # Eight mutations, eight measured, carriers MIXED and named per row (M3's
+                          # first red is a `.expect()` panic, M8's is a gate message) -- *"every red
+                          # assertion-carried"* is NOT claimed. Every one on a scratchpad-restored
+                          # base, never `git checkout --`.
+                          # 🔑 Two guards added that no AC asked for, each because a defect had
+                          # already happened: the clock guard for `build_view`, and *every class a
+                          # template names is defined in the stylesheet* (6b.3 shipped
+                          # `.screen-section` defined nowhere). ⚠️ The second states its own limit:
+                          # it reads `class="…"` literals and says NOTHING about whether an existing
+                          # rule is the right one -- `.rows` on a `<table>` would still pass.
+                          # ⚠️ Registered: **no connector registry exists** (`connector_id` is a bare
+                          # UUID, no table, no name -- the mock's "UniFi" was its fixture's
+                          # invention) -> story 6b.8; `/gap` is no longer embedded by any page ->
+                          # 6b.5/6b.12; `xtask/src/main.rs` is at 1908 of 2000 code lines.
+                          # ⚠️ T7 was a REAL look in French against seeded rows -- and STILL not a
+                          # browser, for the fourth consecutive story.
+                          # NEXT = `code-review` 6b.4 (three layers, a different model).
+                          # (Earlier the same day) 6b.4 ✅ ARBITRATED by Guy (three rulings, before any code), governing
+                          # `dev-story`. **(1) THE SPLIT IS TAKEN -- 6b.4b INSERTED, Epic 6b -> 13
+                          # stories**: 6b.4 keeps AC1+AC3, 6b.4b takes the action bar. `epics.md` NOT
+                          # edited; registered instead. **(2) The dead-gesture mechanism is a GESTURE
+                          # NATURE CLOSED IN THE TYPE** -- `enum Gesture { Live { route }, Planned
+                          # { owner } }`, one partial, one key pair (fr *"À venir" / "Ce geste n'est
+                          # pas encore construit."*, en *"Not yet" / "This gesture is not built
+                          # yet."*). 🔴 `<button disabled>` REFUSED ON NFR25: a disabled button leaves
+                          # the tab order and vanishes from a screen reader, so the blind operator is
+                          # not even told the gesture exists -- `aria-disabled` keeps the
+                          # announcement. ⚠️ And the owning story's NUMBER stays out of the surface:
+                          # *"arrives in 6.4"* turns the label into a calendar, therefore a promise,
+                          # which is what 5.14b refused. **(3) `origin` may be read for DISPLAY, via
+                          # a SECOND reader** -- `load_declared_attributes` stays provenance-free
+                          # because it feeds the divergence computation (`page.rs:568`), a new
+                          # `load_declared_provenance_for_display` goes only to the view, and
+                          # `SANCTIONED_READS` gains ONE entry naming path AND function. 🔑 A bare
+                          # sanction on the EXISTING reader was refused: it would put provenance
+                          # inside the scope of the path the gate exists to protect *"by accident"*.
+                          # Two readers make the divergence computation STRUCTURALLY unable to see it.
+                          # 🔴 AND ONE FINDING ABOUT THE CONTEXTING ITSELF: half of §0c was never an
+                          # open question -- Guy's premise (2) of 2026-08-13 (*"the four gestures
+                          # Epic 7 owns are visible and labelled"*, under the heading *"premises and
+                          # NOT open questions"*) had already decided it, and the count lands exactly
+                          # on the mock's four secondary buttons. *Reading a document as if it had not
+                          # already decided is the same error as citing a line without opening it* --
+                          # made twice in one day, once on a story number and once here.
+                          # NEXT = `dev-story` 6b.4, scoped to AC1 + AC3.
+                          # (Earlier the same day) 6b.4 ✅ VALIDATED, two fresh-context layers, and it paid for itself
+                          # BEFORE a line of code. **Fact-check: 61 assertions, 59 confirmed, 2
+                          # REFUTED, both mine.** 🔴 The load-bearing one is a STORY NUMBER, not a
+                          # line number: register row (e)'s *"Owner: story 6.4"* does NOT mean this
+                          # story -- 6.4 is *"The abstention line carries the gesture"*
+                          # (`epics.md:1794`), sequenced AFTER all of Epic 6b, and three further rows
+                          # use the name the same way; the register predates Epic 6b's insertion. So
+                          # the `--accent` narrowing is NOT owed here; T6 and M5 rewritten.
+                          # *The trap was a number that reads like this one's.* (Also: 63 locale
+                          # keys, not 62.)
+                          # **Gap-hunt: it BUILT the plumbing against a live mariadb.** 🔴 ITS
+                          # HEADLINE, MISSED BY CONTEXTING ENTIRELY: reading `origin` for DISPLAY
+                          # REDS THE `authorship` GATE -- `SANCTIONED_READS` allows ONE test-only
+                          # reader of the three provenance columns, so this story would be the FIRST
+                          # legitimate PRODUCTION one and needs its own arbitration (story 6.2's
+                          # precedent). **That REFUTES the split's first rationale**: AC1 is not
+                          # arbitration-free either, so T0 is THREE arbitrations, not two.
+                          # 🔴 Second refutation: FOUR of the mock's five row kinds are producible
+                          # today, not two -- the story cited `gap::project` where `gap::reconcile`
+                          # already TYPES `Absence` and `Conflit` (`gap/mod.rs:49-57`); proven with
+                          # four seeded scenarios. Only `Ambigu` has no producer. ⚠️ And the cost the
+                          # story lacked: `reconcile` is written for ONE perimeter, so looping it
+                          # per entity is O(N·M) with every other entity's observations as
+                          # `OutOfPerimeter` noise.
+                          # 🔴 Third: M6's prediction is WRONG -- `chrono::Utc::now()` will not
+                          # compile (no `clock` feature) but `SystemTime::now()` does, and a bucketed
+                          # clock left the guard GREEN; worse, that guard calls `build_view` with
+                          # EMPTY data, so it proves clock-freedom for `build_identity_view` and, for
+                          # `build_view` -- the function this story touches -- NOTHING.
+                          # ✅ M2's warning reproduced LIVE: the order-pinning guard reds, the
+                          # *"does the toggle do something"* guard stays GREEN under the exact
+                          # mutation it exists to catch. The dominant class, measured not cited.
+                          # 🔑 Four undocumented seams named: `sqlx` has NO `chrono` feature so every
+                          # DATETIME goes through `DATE_FORMAT` + `parse_from_rfc3339` (the pattern
+                          # already exists at `repo.rs:371`); `read_declared_provenance_for_test` is
+                          # the right MODEL with the wrong SANCTION; `uuid` has no `v4`, house
+                          # convention `now_v7()`; no D47 issue, core untouched.
+                          # 🔑 And the operator question answered more sharply than asked: the ONE
+                          # live gesture (`POST /document-all`) has NO BUTTON IN THE MOCK AT ALL --
+                          # the bar is not merely all-dead, it does not even offer the live one.
+                          # NEXT = Guy's THREE rulings, then `dev-story` 6b.4 on the chosen scope.
+                          # (Earlier the same day) 6b.4 CONTEXTED -> `ready-for-dev`. 🔴 SEVEN findings, THREE needing Guy
+                          # BEFORE any code. (a) THE SCOPE: the story carries FOUR deliverables and
+                          # three start from NOTHING -- the queue (`build_view` selects ONE entity and
+                          # returns), the provenance/freshness plumbing, the action bar, the age sort.
+                          # **SPLIT RECOMMENDED, 6b.4b INSERTED** (AC1+AC3 stay, AC2 moves) -- and the
+                          # reason is DEPENDENCY, not size: AC2 cannot be written until (b) and (c) are
+                          # settled, and neither is about the triage screen. (b) 🔴 *"labelled per
+                          # 6b.3"* NAMES A MECHANISM THAT DOES NOT EXIST: 6b.3 classifies CONTENT
+                          # (screen/section), never a CONTROL, and `Screen::Triage` is `Fed`, which its
+                          # own doc says "owes NO marker". A dead Merger button is not example data --
+                          # a different axis. Story 6b.3's own §0b, one story later. (c) 🔴 APPLIED
+                          # LITERALLY TODAY THE ACTION BAR IS FIVE BUTTONS OF WHICH FIVE ARE DEAD
+                          # (`/document-all` is whole-entity, flag-gated, off by default and called by
+                          # NO template; Résoudre needs FR16; accept/snooze/attach/exclude have no
+                          # column anywhere; and story 6.4 is sequenced AFTER Epic 6b) -- which runs
+                          # into Guy's own recorded decision of 2026-08-12, *"announcing an absent
+                          # gesture is a promise"* (`deferred-work.md:3283`). 🔑 The retrospective's
+                          # unasked question, asked on purpose: what does the operator DO with an
+                          # action bar in which nothing acts?
+                          # ✅ ONE SUSPICION OF MINE MEASURED AND REFUTED: the freshness does NOT
+                          # collide with `the_shell_shows_no_last_observation` -- that guard scans
+                          # `_shell.html` + `_nav.html` only and excludes `_gap_card.html` BY NAME.
+                          # ✅ And provenance + freshness are SUPPLIED BY THE SCHEMA ON BOTH SIDES
+                          # (`0001_initial.sql:14-17,27-28`); they are dropped at the SELECT. The mock
+                          # is WEAKER than the AC here (5 of its 8 declared rows carry no date at all)
+                          # -- fixture laziness, not design: follow the AC and the spec, not the mock.
+                          # ⚠️ Inherited: the `--accent` guard must be RE-EXAMINED not merely satisfied
+                          # (`:3319`, condition lifted now 6b.1 landed), and NFR25 names this screen a
+                          # key view while NOBODY owns axe-core (`:3748`).
+                          # ⚠️ THE CONTEXTING'S OWN LESSON: three of the four register line numbers the
+                          # analysis supplied were WRONG, and the claim that the epic's stale
+                          # *"seven gates"* DoD was registered is FALSE -- `grep -n "seven gates"`
+                          # returns nothing. Every citation in the story was re-measured before being
+                          # written. *A citation believed is a citation wrong.*
+                          # NEXT = `create-story validate` 6b.4 (MANDATORY), then Guy's three rulings.
+                          # (Earlier the same day) 6b.3 -> `done`: PR #99 squash-merged as `d1bb128` after a green CI run
                           # (1m04s; bin suite 5.48 s in CI against 0.06 s locally -- the tell that
                           # the database-backed half really executed). Branch deleted, twins updated
                           # in this same push. **611 -> 614 tests**, eight gates green.
@@ -3244,7 +3438,15 @@ development_status:
   6b-1-design-system-tokens-and-accent: done
   6b-2-shell-navigation-and-ten-routes: done
   6b-3-example-data-marker-and-its-gate: done
-  6b-4-triage-screen-on-the-real-gap: backlog
+  6b-4-triage-screen-on-the-real-gap: review
+  # 6b.4b INSERTED 2026-08-19 at story 6b.4's VALIDATION (Epic 6b: 12 -> 13 stories). Guy's
+  # arbitration: 6b.4 keeps AC1 (the queue and the two photos with provenance and freshness) and AC3
+  # (the age sort); 6b.4b takes AC2 -- the action bar and the GESTURE NATURE it needs. The reason is
+  # DEPENDENCY, not size: AC2's mechanism is invented by no document this project has, and it governs
+  # every screen after this one, not just triage. Its form and words are ALREADY arbitrated in 6b.4's
+  # §0b so that 6b.4b starts designed rather than with a question. `epics.md` NOT edited (a story may
+  # not; only a retrospective may) -- the divergence is registered in deferred-work.md.
+  6b-4b-action-bar-and-the-gesture-nature: backlog
   6b-5-dashboard-real-reach-beside-examples: backlog
   6b-6-inventory-and-device-record: backlog
   6b-7-applications-and-ipam: backlog

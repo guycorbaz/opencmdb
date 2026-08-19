@@ -1,0 +1,86 @@
+{#- The triage screen: the mock's two panes, on the gap the product really computes (story 6b.4).
+
+     🔑 Server-rendered, one URL per state — epic constraint 4. The selection is `?sel=`, the sort is
+     `?sort=age`, and there is no client router: the mock's runtime is not this product's.
+
+     ⚠️ There is no action bar here, by decision and not by omission: the gestures and the label a
+     not-yet-built one wears are story 6b.4b's, whose form and words are already arbitrated. -#}
+<section class="triage">
+  <div class="triage-head">
+    <h1>{{ s.triage_title }}</h1>
+    {#- 🔑 A COUNT, never a badge. The UX spec's first hard ban is *"no badge, no growing counter —
+         '47' is not information, it is a reproach disguised as a number"*. It reads as a fact in a
+         sentence, in the same tone at 3 rows and at 3000, and nothing recolours with it. -#}
+    <p class="muted">{{ s.triage_pending }} <span class="count">{{ triage.total }}</span></p>
+    <a class="btn-sort{% if triage.sort_by_age %} on{% endif %}"
+       href="{{ triage.sort_href }}"
+       {% if triage.sort_by_age %}aria-pressed="true"{% else %}aria-pressed="false"{% endif %}>{{ s.triage_sort_age }}</a>
+  </div>
+
+  <p class="muted lede">{{ s.triage_lede }}</p>
+
+  {% if triage.rows.is_empty() %}
+    <p class="clear">{{ s.triage_empty }}</p>
+  {% else %}
+  <div class="triage-panes">
+    {#- ── Pane one: the queue ───────────────────────────────────────── -#}
+    <ol class="queue">
+    {% for row in triage.rows %}
+      <li class="queue-row{% if row.selected %} selected{% endif %}">
+        {#- The href is built in Rust with the selector percent-escaped: Askama escapes HTML, never
+             a query string, and this link wrote `?sel={{ row.id }}` raw until the code review. -#}
+        <a href="{{ row.href }}"
+           {% if row.selected %}aria-current="true"{% endif %}>
+          <span class="kind mono">{{ row.kind }}</span>
+          <span class="subject">
+            <span class="entity mono">{{ row.entity }}</span>
+            {% if !row.field.is_empty() %}<span class="field mono">{{ row.field }}</span>{% endif %}
+            {% if row.counted %}<span class="count">{{ row.count }}</span>{% endif %}
+            {#- The field diff, as the mock puts it: the declared value, the arrow, the observed
+                 one. Rendered only where the engine names both — a cause row has neither. -#}
+            {#- ⚠️ BOTH sides or neither. A `Nouveau` row has no declared value, and rendering the
+                 arrow alone gave *"→ observé 192.0.2.99"* — an arrow pointing from nothing. Found
+                 by looking; no test could see it. -#}
+            {% if !row.declared.is_empty() && !row.observed.is_empty() %}
+            <span class="diff mono">
+              <span class="declared">{{ row.declared }}</span>
+              <span class="arrow">{{ s.arrow_observed }}</span>
+              <span class="observed">{{ row.observed }}</span>
+            </span>
+            {% endif %}
+          </span>
+          {#- The freshness of the OBSERVED side, right-aligned as the mock places it. -#}
+          <span class="seen mono">{{ row.seen }}</span>
+        </a>
+      </li>
+    {% endfor %}
+    </ol>
+
+    {#- ── Pane two: the two photos, side by side ─────────────────────
+         🔴 Each side carries its own provenance and its own freshness, and that is AC1's *"neither
+         side is the truth"* made structural rather than asserted: an observation can be stale or
+         from a blind source, and a declaration can be outdated. A pane without its meta-line invites
+         the reader to treat that side as fact. -#}
+    {% if let Some(pane) = triage.selected %}
+    <aside class="photos">
+      <p class="kind mono">{{ pane.kind }}</p>
+      <h2 class="mono">{{ pane.entity }}{% if !pane.field.is_empty() %} · {{ pane.field }}{% endif %}</h2>
+      <div class="cols">
+        <div class="col photo declared">
+          <h3>{{ s.declared }}</h3>
+          <p class="value mono">{{ pane.declared }}</p>
+          <p class="meta muted">{{ pane.declared_meta.source }}{% if !pane.declared_meta.freshness.is_empty() %} · {{ pane.declared_meta.freshness }}{% endif %}</p>
+        </div>
+        <div class="col photo observed">
+          <h3>{{ s.observed }}</h3>
+          <p class="value mono">{{ pane.observed }}</p>
+          <p class="meta muted">{{ pane.observed_meta.source }}{% if !pane.observed_meta.freshness.is_empty() %} · {{ pane.observed_meta.freshness }}{% endif %}</p>
+        </div>
+      </div>
+    </aside>
+    {% endif %}
+  </div>
+  {% endif %}
+
+{% include "_identity_section.html" %}
+</section>
