@@ -62,7 +62,11 @@ stories):
 
 The reason is not size but **dependency**: AC2 cannot be written until §0b's mechanism is invented and
 §0c's contradiction is arbitrated, and neither of those is about the triage screen — both are
-product-wide decisions that will govern every screen after this one. ⚠️ **The alternative is
+product-wide decisions that will govern every screen after this one. ⚠️ **This paragraph first added
+*"and AC1 can be built as it stands"*, which the validation REFUTED: reading `origin` for display reds
+the `authorship` gate (§0h), so AC1 needs an arbitration of its own.** The split still holds — it is
+now *three* arbitrations across two stories rather than two across one — but its argument is weaker
+than first written, and the honest form is that argument. ⚠️ **The alternative is
 defensible and must be recorded if chosen**: keep all three, accept that the story opens with two
 arbitrations, and take them in one sitting.
 
@@ -124,6 +128,15 @@ retrospective found the method never asks, asked here on purpose: what does the 
 action bar in which nothing acts?** An honest answer may be *"show none of them yet"*, which the AC
 does not permit and only Guy may authorise.
 
+🔴 **AND THE VALIDATION MADE IT SHARPER THAN THE STORY HAD.** Verified gesture by gesture
+(`grep -rn` over `templates/` and `locales/` → zero hits; `grep -rn "snoozed\|excluded\|gap_accepted"
+migrations/*.sql` → zero hits): **the ONE gesture with a real live backend today —
+`POST /document-all`, whole-entity adoption — has NO BUTTON IN THE MOCK'S ACTION BAR AT ALL.** The
+mock's five buttons all sit at granularities that do not exist (field-level merge, ranked-candidate
+resolve, snooze/exclude/attach state), while the one thing the operator could actually do is
+**invisible to the mock's vocabulary**. 🔑 *So the bar is not merely all-dead: it does not even offer
+the single live gesture.* That is the fact the arbitration should turn on.
+
 ### §0d. ⚠️ THE QUEUE IS THE LARGEST PIECE AND IT STARTS FROM NOTHING
 
 `build_view` (`page.rs:469-561`) selects **one** perimeter entity — `OPENCMDB_ENTITY_IPV4`, or the
@@ -131,14 +144,28 @@ first declared entity carrying an `ipv4` — and reconciles it alone. There is n
 awaiting triage, no selection state, no ordering, no count.
 
 The mock's queue is one row per **gap**, carrying a kind (`Nouveau` / `Conflit` / `Écart` / `Absence` /
-`Ambigu`), a title, an object id, the field diff, and a freshness on the right. ⚠️ **Three of those
-five kinds have no producer in this product today**: `Ambigu` is Epic 6's (FR16), and `Conflit` and
-`Absence` are distinctions `gap::project` does not draw — it returns a flat
-`Vec<(String, String)>` (`crates/opencmdb-core/src/gap/mod.rs:88`).
+`Ambigu`), a title, an object id, the field diff, and a freshness on the right.
 
-🔑 **So the queue's ROW VOCABULARY is a decision this story must take and record**, not a thing it can
-copy. The honest minimum is the kinds the engine can actually distinguish today; anything richer is
-example data on a `Fed` screen, which is the one thing this epic forbids.
+🔴 **THIS PARAGRAPH FIRST CLAIMED THREE OF THE FIVE KINDS HAVE NO PRODUCER. THE VALIDATION REFUTED IT
+BY BUILDING ONE — FOUR OF FIVE ARE PRODUCIBLE TODAY.** The error was citing the wrong function:
+`gap::project` (`gap/mod.rs:88`) is flat, but **`gap::reconcile`, which consumes it, already TYPES the
+distinctions** — `AbstentionCause::NoObservedValue` and `AbstentionCause::ConflictingObservations`
+(`gap/mod.rs:49-57`) are `Absence` and `Conflit`, and both already render on `/triage` today in the
+abstentions section. Measured with four seeded scenarios against a live database:
+
+```
+PROBE queue rows = [("192.0.2.99", Nouveau), ("entity-absence", Absence),
+                    ("entity-conflit", Conflit), ("entity-ecart", Ecart)]
+```
+
+So **`Écart`, `Absence` and `Conflit` are already typed by the engine**; **`Nouveau`** is a small new
+computation (~15 lines: declared-ipv4 set minus observed-ipv4 set); **only `Ambigu` genuinely has no
+producer** — FR16, Epic 6's.
+
+⚠️ **And the validation found the cost the story had not**: `reconcile` is written for ONE perimeter,
+so looping it per entity re-classifies every *other* entity's observations as `OutOfPerimeter` noise
+on each pass — O(N·M) reconciles over the corpus. The row vocabulary is real; **the queue's
+implementation must discard that noise per entity, and no existing code does.**
 
 ### §0e. ✅ PROVENANCE AND FRESHNESS ARE SUPPLIED BY THE SCHEMA ON BOTH SIDES — and the mock is WEAKER than the AC
 
@@ -170,8 +197,9 @@ which story 5.14b's review found is *the real carrier* of the no-clock-in-the-vi
 ✅ **A SUSPICION OF MINE, MEASURED AND REFUTED — recorded so nobody re-chases it.** I suspected AC1's
 freshness collided with `screens.rs`'s guard `the_shell_shows_no_last_observation`. It does not: that
 guard scans exactly `_shell.html` and `_nav.html` (`screens.rs:610-613`), and its own comment excludes
-`_gap_card.html` **by name** — *"it SHOWS observed values, which is its whole job; what is banned is
-the last-observation INSTANT, a `MAX(observed_at)`, and it is banned from the frame"*. Per-row
+`_gap_card.html` **by name**, verbatim (`screens.rs:607-609`): *"`_gap_card.html` is deliberately NOT
+here: it SHOWS observed values, which is its whole job. What is banned is the last-observation INSTANT
+(a `MAX(observed_at)`), and it is banned from the frame, which renders on all ten screens."* Per-row
 freshness is a different fact from a different query. ⚠️ **The ban does still bite one way**: a
 freshness widget hoisted into the header or the nav footer WOULD collide, and that global figure is
 registered to **story 6b.5** (`deferred-work.md:3724`).
@@ -200,12 +228,21 @@ decision, not a transcription.
 
 ### §0g. ⚠️ TWO INHERITED DEBTS LAND HERE, one by name and one by nobody
 
-- **The `--accent` guard must be NARROWED by this story, and the register says so**
-  (`deferred-work.md:3319`): *"6.4's Document button in that section will be legitimately amber; a
-  top-level class evades the guard entirely (measured). 6.4 must **re-examine** the guard — narrow it
-  to the counter and cause lines — not merely satisfy it … **conditional on 6b.1's ordering**."*
-  🔑 **6b.1 has landed** (`0b42bd0`), so the condition is lifted and this story is the second lander.
-  The guard is `the_identity_sections_own_rules_never_reach_for_the_accent` (`page.rs:1405`).
+- 🔴 **THE `--accent` GUARD IS **NOT** THIS STORY'S, and the first draft of this section said it was
+  — refuted by the validation, whose refutation is worth more than the row.** Register row (e)
+  (`deferred-work.md:3319`) reads *"**story 6.4**'s Document button in that section will be
+  legitimately amber … 6.4 must re-examine the guard … **Owner: story 6.4, conditional on 6b.1's
+  ordering**."* ⚠️ **`6.4` and `6b.4` are DIFFERENT STORIES**: story 6.4 is *"The abstention line
+  carries the gesture"* (`epics.md:1794`), sequenced **after the whole of Epic 6b**
+  (`epics.md:2090`). The register predates Epic 6b's insertion, and three further rows (`:3307`,
+  `:3413`, `:3502`) use *"story 6.4"* the same way. **The row's own reason cannot apply here**: under
+  §0a's split this story ships **no live Document button at all** — that button is precisely what is
+  deferred to 6.4 — so there is no legitimate amber in 6b.4's scope to justify re-examining the guard.
+  🔑 *The trap is not a wrong line number; it is a story NUMBER that reads like this one.* What
+  remains true and much weaker: `the_identity_sections_own_rules_never_reach_for_the_accent`
+  (`page.rs:1405`) still guards the identity region, and this story renders beside it — **do not break
+  it, and do not narrow it either**, because narrowing it here would spend story 6.4's arbitration
+  before its author arrives.
 - **NFR25 names this screen as a key view and NOBODY owns its check.** The PRD (`prd.md:1397-1402`)
   makes axe-core 0-violations a *blocking floor* on the **inbox** — the pre-mock name for `/triage`, mapped
   by the spec's own interaction table (`ux-design-specification.md:1350`:
@@ -223,6 +260,35 @@ decision, not a transcription.
   wrong*: **three of the four register line numbers that report supplied were also wrong**, and every
   one in this story was re-measured before being written down. The DoD line itself is a
   retrospective's to fix — a story may not edit an epic — and it is registered by this story.
+
+### §0h. 🔴 READING `origin` FOR DISPLAY REDS THE `authorship` GATE — measured, and contexting missed it entirely
+
+**This is the validation's headline, and it changes §0a's argument.** AC1 asks for *provenance* on the
+declared side. The gap-hunt widened the `SELECT` to include `origin`, as the AC asks, and ran the real
+gate:
+
+```
+cargo run -p xtask -- ci
+🔴 authorship  1 unsanctioned access(es) to declared_attribute:
+    crates/opencmdb-bin/src/repo.rs:458: a read of declared_attribute names `origin` — FR13
+```
+
+`xtask/src/main.rs:1196-1199` allows **exactly ONE** reader of
+`PROVENANCE_COLUMNS = ["origin_obs_id", "actor_id", "origin"]` (`:1205`), and it is the **test-only**
+`read_declared_provenance_for_test`. Removing `origin` and keeping `updated_at` turns the gate green
+again — confirmed both through `cargo xtask ci` and through the gate's own
+`the_authorship_gate_is_green_on_the_real_tree`.
+
+🔑 **So freshness is free and provenance is not.** `updated_at` is not a guarded column;
+`origin` — the source badge the mock's provenance line needs — is. **This story would be the FIRST
+legitimate PRODUCTION reader of a provenance column**, where story 6.2 had to arbitrate a named
+`SANCTIONED_READS` entry for a test-only one (its §6.5).
+
+🔴 **The consequence for §0a: AC1 needs an arbitration too, and the split's stated rationale was
+therefore incomplete.** The story first argued *"AC2 cannot be written until two things are settled,
+and AC1 can"*. False. **T0 is THREE arbitrations, not two**, whichever scope Guy chooses — and the
+third is on a gate six stories deep in this project's history that this story's contexting never
+mentioned.
 
 ---
 
@@ -252,11 +318,27 @@ decision, not a transcription.
   to save a struct.
 - **`crates/opencmdb-bin/src/screens.rs`** (305 code lines) — `Screen::Triage` is `Nature::Fed`, which
   is why it stays on the pool-bearing router while the other nine are pool-free.
-- **`locales/app.yml`** — 62 key pairs, `fr` + `en`, guarded by `every_key_carries_both_locales`.
+- **`locales/app.yml`** — **63** key pairs, `fr` + `en`, guarded by `every_key_carries_both_locales`.
 - **`assets/app.css`** — the mock's tokens since 6b.1; `.grid`, `.screen-section`, `.example-marker`
   and `.not-yet` since 6b.3. ⚠️ `--accent-document` (amber) is **reserved for the documenting
   gesture** and guarded — see §0g, this story is the one that must re-examine that guard rather than
   merely satisfy it.
+
+### The seams that fight back — measured by the validation, not predicted
+
+- 🔴 **`sqlx` carries NO `chrono` feature** (`crates/opencmdb-bin/Cargo.toml:51`), so a `DATETIME(6)`
+  column **cannot be decoded natively**. Every timestamp must go
+  `DATE_FORMAT(col, '%Y-%m-%dT%H:%i:%s.%fZ')` then `chrono::DateTime::parse_from_rfc3339`. 🔑 **That
+  pattern already exists, verbatim, at `repo.rs:371`** in `load_observation_by_id` — **reuse it or
+  extract it, do not rediscover it** (the DRY rule, and the story's first draft cited neither).
+- 🔑 **`read_declared_provenance_for_test` (`repo.rs:182-216`) is the closest existing analog** — a
+  `#[cfg(test)]`-only reader already selecting all seven columns including `origin` and `updated_at`.
+  ⚠️ **Copying its shape into production runs straight into §0h's gate collision.** It is the right
+  model and the wrong sanction.
+- ⚠️ **`uuid` is declared with `features = ["v7"]` only** (`Cargo.toml:61`): `Uuid::new_v4()` is
+  `E0599`. The house convention is `now_v7()`, at 40+ call sites.
+- ✅ **No D47 problem**: the whole plumbing lives in `opencmdb-bin`; `opencmdb-core` is untouched by
+  the validation's spike, and it must stay that way — a `DateTime` has no business in the domain.
 
 ### The house rules this story will be judged against
 
@@ -301,9 +383,12 @@ decision, not a transcription.
 
 **Written for §0a's SPLIT — AC1 and AC3 only. Rescope on Guy's answer before starting.**
 
-- [ ] **T0 — the two arbitrations, BEFORE any code** (§0b, §0c): the dead-gesture mechanism's form and
-      words, and whether an all-dead action bar ships at all. ⚠️ Both are AC2's and both belong to
-      6b.4b if the split is taken — but **neither may be decided by a developer**
+- [ ] **T0 — the THREE arbitrations, BEFORE any code** (§0b, §0c, §0h): the dead-gesture mechanism's
+      form and words; whether an all-dead action bar ships at all; and **whether production may read
+      `origin` for display, which needs a named `SANCTIONED_READS` entry on story 6.2's precedent**.
+      ⚠️ The first two are AC2's and go to 6b.4b under the split; **the third is AC1's and stays
+      here** — it was missing from the first draft and the validation found it by running the gate.
+      **None may be decided by a developer**
 - [ ] **T1 — the provenance and freshness plumbing** (AC1): widen `load_declared_attributes` and
       `load_observation_facts` to return `origin`/`updated_at` and `connector_id`/`observed_at`, and
       carry them into the view structs. ⚠️ **Not through `opencmdb-core`** — D47, and `gap::project`
@@ -317,9 +402,10 @@ decision, not a transcription.
       and the spec on the declared side, **not the mock's unpopulated fixture** (§0e)
 - [ ] **T5 — sort by age, OFF by default** (AC3), with a guard that reds if the default flips —
       *the ban is not that age is hidden, it is that age is never brandished*
-- [ ] **T6 — the `--accent` guard, RE-EXAMINED and not merely satisfied** (§0g), narrowed to the
-      counter and cause lines, with the mutation that proves the narrowing still catches what the
-      guard was for
+- [ ] **T6 — leave the `--accent` guard ALONE, and verify it still holds** (§0g). ⚠️ **Its narrowing
+      belongs to story 6.4, not to this one** — the validation refuted the first draft's claim that
+      the register assigned it here. This story renders beside the identity region: keep the guard
+      green, do not widen it, do not narrow it
 - [ ] **T7 — LOOK at the screen**, `OPENCMDB_LOCALE=fr`, against a live database with real rows.
       🔴 **And say whether a browser was used.** Three stories running have shipped without one
 - [ ] **T8 — the register**, both directions (§0f, §0g). ⚠️ `grep -n "6b.4"` is **provably
@@ -336,11 +422,11 @@ believed rather than replayed.
 | # | Mutation | Prediction |
 |---|---|---|
 | M1 | Drop `observed_at` from the widened `SELECT` | the freshness guard reds. ⚠️ **Predict the CARRIER, not just the colour** — if it reds by `.expect()` on a missing column rather than on an assertion, say so |
-| M2 | Flip the age sort's default to ON | AC3's guard reds. ⚠️ If it stays green, the guard is asserting the toggle EXISTS rather than its DEFAULT, which is the guard-where-the-defect-cannot-occur shape |
+| M2 | Flip the age sort's default to ON | ✅ **ALREADY MEASURED by the validation, on a spike, and the warning reproduced LIVE**: a guard pinning the default's exact ORDER reds (`left: [newest, middle, oldest]` / `right: [newest, oldest, middle]`); a guard asserting only that *the toggle changes something* **stays GREEN under the exact mutation it exists to catch**. Write the first shape; the second is the dominant defect class |
 | M3 | Return an empty queue from the query | the empty state renders and the count guard reds — **and if the whole suite stays green, the queue is tested by nothing** |
 | M4 | Give the declared side the observed side's meta-line | reds. This is AC1's *"neither side is the truth"* made measurable rather than asserted |
-| M5 | Widen the `--accent` guard back to the whole `.identity` region | ⚠️ **prediction unknown on purpose** — §0g says the guard must be re-EXAMINED. If nothing reds, the narrowing was untested and T6 is not done |
-| M6 | Render a relative time from `SystemTime::now()` inside the pure builder | story 5.14b's clock guard reds. ⚠️ **If it does not**, that guard is carried by `chrono`'s feature flag alone and this story has just learned it the hard way |
+| M5 | Reach for `--accent-document` from a rule this story adds near the identity region | the existing guard reds — this story must not break it. ⚠️ **It must not NARROW it either**: the narrowing is story 6.4's, and §0g records why the first draft got that wrong |
+| M6 | Render a relative time from `SystemTime::now()` inside the pure builder | 🔴 **MEASURED AND THE PREDICTION IS REFUTED — the guard does NOT red.** `chrono::Utc::now()` fails to COMPILE (`E0599`, no `clock` feature), but `SystemTime::now()` compiles freely, and a minute-bucketed clock wired into `build_identity_view` left `the_view_builder_has_no_clock_so_one_store_renders_identically` **GREEN** (two calls microseconds apart floor to the same minute). ⚠️ **And the stronger half**: that guard calls `build_view` with EMPTY declared/observations, so a clock in `build_view`'s POPULATED branch — where freshness will live — is **never reached at all**. The guard proves clock-freedom for `build_identity_view` and, for `build_view`, **nothing**. This story must write that guard, not inherit it |
 
 ## References
 
@@ -353,7 +439,42 @@ believed rather than replayed.
 - `_bmad-output/implementation-artifacts/6b-3-example-data-marker-and-its-gate.md` — §0b's precedent (a marker no document specified), and the four lessons its review left
 - `_bmad-output/implementation-artifacts/deferred-work.md:3283` — *"announcing an absent gesture is a promise"* (§0c) · `:3319` — the `--accent` narrowing · `:3724` — the last-observation deferral · `:3748-3755` — the unowned axe-core check
 - `crates/opencmdb-bin/src/page.rs`, `repo.rs`, `screens.rs`, `templates/_gap_card.html` — what exists today
-- The mock: `~/travail/Projets actuels/opencmdb/documents/opencmdb - maquette.html` — **outside this repository**, 496 KB on two lines (a bundled export, not raw JSX): search it by decoding the blob, `grep -n` is useless on it
+- The mock: `~/travail/Projets actuels/opencmdb/documents/opencmdb - maquette.html` — **outside this repository**, 496 KB in 390 lines of which **two** (376 and 388) carry ~96% of the bytes — a bundled export, not raw JSX. Search it by decoding the blob; `grep -n` degenerates to a single useless hit on those two lines
+
+## Validation record — two fresh-context layers, 2026-08-19
+
+**Mandatory here** (Guy, Epic 4 retrospective): every story is validated by two fresh-context agents
+before `dev-story`. Both ran on a different model, each in its own git worktree.
+
+**Layer 1, fact-check — 61 assertions verified one by one, 59 confirmed, 2 REFUTED, both mine.**
+🔴 **The load-bearing refutation is a STORY NUMBER, not a line number**: register row (e)'s
+*"Owner: story 6.4"* does **not** mean this story. Story 6.4 is *"The abstention line carries the
+gesture"* (`epics.md:1794`), sequenced after the whole of Epic 6b, and three further rows use the name
+the same way — the register predates Epic 6b's insertion. So the `--accent` narrowing is **not owed
+here**, T6 and M5 were rewritten, and *the trap was a number that reads like this one's*. Also
+refuted: 63 locale keys, not 62. Two claims were confirmed but weaker than written (the mock is 390
+lines of which two carry 96% of the bytes; one bracketed "quotation" was a paraphrase, now verbatim
+with its line).
+
+**Layer 2, gap-hunt — it BUILT the plumbing** against a live `mariadb:10.11` and measured every seam.
+🔴 **Its headline is the finding contexting missed entirely: reading `origin` for display REDS the
+`authorship` gate** — `SANCTIONED_READS` allows one test-only reader of the three provenance columns,
+so this story would be the first legitimate PRODUCTION one and needs its own arbitration (§0h).
+**That refutes the split's first rationale**, which had said AC1 was arbitration-free. 🔴 **Second
+refutation: four of the mock's five row kinds are producible today, not two** — the story cited
+`gap::project` where `gap::reconcile` already types `Absence` and `Conflit`; proven with four seeded
+scenarios. 🔴 **Third: M6's prediction is wrong** — the clock guard does not red on
+`SystemTime::now()`, and it never reaches `build_view`'s populated branch at all. ✅ **And M2's
+warning reproduced live**: the good guard reds, the *"does the toggle do something"* guard stays green
+under the exact mutation it exists to catch.
+
+🔑 **What this pass changed, and it is why the step is not optional**: one arbitration was ADDED
+before a line of code, two of the story's own claims about the engine and the guards were replaced by
+measurements, four undocumented seams were named (`sqlx` has no `chrono` feature, so timestamps go
+through `DATE_FORMAT`; the pattern already exists at `repo.rs:371`; `read_declared_provenance_for_test`
+is the right model with the wrong sanction; `uuid` has no `v4`), and the operator question was
+answered more sharply than the story had asked it — **the one live gesture has no button in the mock
+at all**.
 
 ## Dev Agent Record
 
@@ -369,4 +490,5 @@ believed rather than replayed.
 
 | Date | Change |
 |---|---|
+| 2026-08-19 | Validated by two fresh-context layers. Fact-check: 61 assertions, 59 confirmed, **2 refuted, both mine** — the `--accent` row belongs to story **6.4**, a different story, and the trap was a number that reads like this one's. Gap-hunt: it BUILT the plumbing and found that **reading `origin` for display reds the `authorship` gate**, which adds a THIRD arbitration and refutes the split's first rationale; that **four of five row kinds are producible today, not two**; and that **M6's clock guard does not red** and never reaches `build_view` at all. |
 | 2026-08-19 | Contexted: seven findings, three needing Guy's arbitration. The story carries four deliverables and a SPLIT is recommended; *"labelled per 6b.3"* names a mechanism that does not exist; and applied literally today the action bar would ship five buttons of which five are dead, against a recorded decision that *announcing an absent gesture is a promise*. |

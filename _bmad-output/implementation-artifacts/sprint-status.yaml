@@ -75,7 +75,48 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4 CONTEXTED -> `ready-for-dev`. 🔴 SEVEN findings, THREE needing Guy
+last_updated: 2026-08-19  # 6b.4 ✅ VALIDATED, two fresh-context layers, and it paid for itself
+                          # BEFORE a line of code. **Fact-check: 61 assertions, 59 confirmed, 2
+                          # REFUTED, both mine.** 🔴 The load-bearing one is a STORY NUMBER, not a
+                          # line number: register row (e)'s *"Owner: story 6.4"* does NOT mean this
+                          # story -- 6.4 is *"The abstention line carries the gesture"*
+                          # (`epics.md:1794`), sequenced AFTER all of Epic 6b, and three further rows
+                          # use the name the same way; the register predates Epic 6b's insertion. So
+                          # the `--accent` narrowing is NOT owed here; T6 and M5 rewritten.
+                          # *The trap was a number that reads like this one's.* (Also: 63 locale
+                          # keys, not 62.)
+                          # **Gap-hunt: it BUILT the plumbing against a live mariadb.** 🔴 ITS
+                          # HEADLINE, MISSED BY CONTEXTING ENTIRELY: reading `origin` for DISPLAY
+                          # REDS THE `authorship` GATE -- `SANCTIONED_READS` allows ONE test-only
+                          # reader of the three provenance columns, so this story would be the FIRST
+                          # legitimate PRODUCTION one and needs its own arbitration (story 6.2's
+                          # precedent). **That REFUTES the split's first rationale**: AC1 is not
+                          # arbitration-free either, so T0 is THREE arbitrations, not two.
+                          # 🔴 Second refutation: FOUR of the mock's five row kinds are producible
+                          # today, not two -- the story cited `gap::project` where `gap::reconcile`
+                          # already TYPES `Absence` and `Conflit` (`gap/mod.rs:49-57`); proven with
+                          # four seeded scenarios. Only `Ambigu` has no producer. ⚠️ And the cost the
+                          # story lacked: `reconcile` is written for ONE perimeter, so looping it
+                          # per entity is O(N·M) with every other entity's observations as
+                          # `OutOfPerimeter` noise.
+                          # 🔴 Third: M6's prediction is WRONG -- `chrono::Utc::now()` will not
+                          # compile (no `clock` feature) but `SystemTime::now()` does, and a bucketed
+                          # clock left the guard GREEN; worse, that guard calls `build_view` with
+                          # EMPTY data, so it proves clock-freedom for `build_identity_view` and, for
+                          # `build_view` -- the function this story touches -- NOTHING.
+                          # ✅ M2's warning reproduced LIVE: the order-pinning guard reds, the
+                          # *"does the toggle do something"* guard stays GREEN under the exact
+                          # mutation it exists to catch. The dominant class, measured not cited.
+                          # 🔑 Four undocumented seams named: `sqlx` has NO `chrono` feature so every
+                          # DATETIME goes through `DATE_FORMAT` + `parse_from_rfc3339` (the pattern
+                          # already exists at `repo.rs:371`); `read_declared_provenance_for_test` is
+                          # the right MODEL with the wrong SANCTION; `uuid` has no `v4`, house
+                          # convention `now_v7()`; no D47 issue, core untouched.
+                          # 🔑 And the operator question answered more sharply than asked: the ONE
+                          # live gesture (`POST /document-all`) has NO BUTTON IN THE MOCK AT ALL --
+                          # the bar is not merely all-dead, it does not even offer the live one.
+                          # NEXT = Guy's THREE rulings, then `dev-story` 6b.4 on the chosen scope.
+                          # (Earlier the same day) 6b.4 CONTEXTED -> `ready-for-dev`. 🔴 SEVEN findings, THREE needing Guy
                           # BEFORE any code. (a) THE SCOPE: the story carries FOUR deliverables and
                           # three start from NOTHING -- the queue (`build_view` selects ONE entity and
                           # returns), the provenance/freshness plumbing, the action bar, the age sort.
