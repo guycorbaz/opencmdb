@@ -353,26 +353,29 @@ growth** — `CLAUDE.md`'s *"split, not grown"*.
 
 ## Tasks / Subtasks
 
-**TWO rulings are Guy's and gate the rest: T0 (the glossary axis, §0a) and T0b (where the record
-sits, §0h). Neither placement of `/devices/{id}` is free.**
+✅ **THE THREE ARBITRATIONS ARE TAKEN (Guy, 2026-08-19), each recorded with the option refused.**
 
-- [ ] **T0 — Guy's ruling** (§0a): the canonical glossary is **binding** and has **no state axis**.
-      Extending it is not a story's business. Three shapes:
-      **(a) — RECOMMENDED: Guy adds the state axis to the binding table now**, in the PRD and the UX
-      spec, and this story implements it. 🔑 *It is the smallest act that lets AC2 be satisfied as
-      written*, and UX-DR61/UX-DR64 (`epics.md:319,324`) already owe both the table and its lint.
-      **(b)** The story ships the five words and **registers the axis to the retrospective**. ⚠️ Then
-      AC2's *"checked against"* is satisfied by nothing, which is what it exists to prevent.
-      **(c)** The story ships **only words already in the product** (`écart`, `concordent`, *"Rien de
-      déclaré"*) and registers the rest. Honest; ⚠️ diverges visibly from the mock.
-- [ ] **T0b — Guy's ruling** (§0h): `/devices/{id}` **on** `Screen` (nav ships a literal `{id}`, every
-      guard accepts it) or **off** it (a static route shadows the param route for the one URL the
-      guards probe, after which the handler may ignore its slug with 636 tests and clippy green).
-      Whichever is chosen, **the story owes the route a guard of its own** — no inherited one covers it
-- [ ] **T0c — decide what a state word IS** (§0l): the mock renders **seven** strings for devices,
-      three of them `Écart · <suffix>`. Exact membership reds on the mock's own copy; a prefix match
-      accepts anything. ⚠️ This is AC2, not a rendering detail
-- [ ] **T1 — the state axis** (AC2), on Guy's ruling: five words, each with its EN pair, its meaning,
+- **T0 — the glossary gains a STATE axis, and Guy added it.** Five binding rows now sit under the
+  eleven gesture rows in **both** `prd.md` and `ux-design-specification.md`. 🔑 **The justification was
+  already in the document**: its own reason for retiring `ignore` is that *"every other verb describes
+  the OBJECT'S STATE"* — and it carried no state noun at all. 🔑 **And the five ARE Guy's three-case
+  taxonomy of 2026-08-12**, exactly: *software decides* (`concordant`, `gap`, `conflict`) · *operator
+  lifts the doubt* (`ambiguous`) · *operator creates the entity* (`undeclared`). ⚠️ **`gap`/`écart` is
+  the SAME pair as the gesture axis, not a second term.** Refused: deferring to the retrospective
+  (AC2's check would rest on nothing) and shipping only words already in the product (visible
+  divergence from the mock).
+- **T0b — the record route sits OFF `Screen`.** Refused: a `Screen` variant, which compiles without a
+  warning while shipping a literal `href="/devices/{id}"` in eleven navigations that every existing
+  guard accepts. ⚠️ **The chosen cost is nameable and must therefore be paid**: a static route shadows
+  the param route for the exact URL the guards probe, so **the story owes the route a test of its
+  own** — fetch a NON-canonical slug and an unknown slug through `app()`.
+- **T0c — a suffix is a rendering detail, not a term.** `Écart · 2 champs` **is** the word `écart`;
+  the check matches before the separator. Refused: seven glossary rows (the table would describe
+  rendering) and banning the suffix (the operator loses *how many fields diverge*).
+
+- [x] **T0 / T0b / T0c — arbitrated above.** The glossary edit is **DONE** (both documents, eight
+      gates re-run green); the other two bind the tasks below
+- [ ] **T1 — implement the state axis** (AC2), on Guy's ruling: five words, each with its EN pair, its meaning,
       and 🔴 **the reconciliation §0c found** — `Écart` and `Conflit` appear on TWO axes and nothing
       records that they mean the same state in both. *One term, one meaning* is the table's own rule
 - [ ] **T2 — the lint** (AC2, UX-DR64), in **BOTH forms** (§0j) and with its limit WRITTEN: a
@@ -380,9 +383,10 @@ sits, §0h). Neither placement of `/devices/{id}` is free.**
       `app.yml` — a key can be in the YAML and absent from the binary (6b.5). ⚠️ Four measured
       defeats to close first: an empty population, English resolution, a wrapping `<strong>`, and
       **AC1's own filter bar**
-- [ ] **T2b — the fork on `Écart`** (§0k): reuse `triage.kind.ecart` (one word one key, but 6b.4's
-      copy serves this screen) or mint `state.ecart` (two keys, one word, and UX-DR64's uniqueness
-      breaks). ⚠️ Do not discover this at the gate
+- [ ] **T2b — one term, one key** (§0k): the glossary now makes it a REQUIREMENT, not a preference.
+      ⚠️ Reuse the key that already renders *Écart* rather than minting a second — UX-DR64's *"glossary
+      uniqueness"* breaks on two keys for one word. Registered if a rename is needed: the rendered
+      bytes must be identical, and `/triage` is not this story's screen to re-copy
 - [ ] **T3 — withdraw the drift claim** (§0c) and register instead what is real: the product renders
       `Concordant`/`Non déclaré` **in other words already** (`app.yml:28`, `:301`). ⚠️ Do NOT touch
       6b.4's shipped copy — that screen is not this story's
@@ -398,8 +402,10 @@ sits, §0h). Neither placement of `/devices/{id}` is free.**
       marker deleted from `/devices`'s second section leaves **634 green**. ⚠️ **Unify the section
       anchor first** (`screen-section` vs `dashboard-example` vs a third), or the guard is a third
       enumeration
-- [ ] **T6 — `/devices/{id}`** (§0f), on 6b.3's slugs. 🔴 **It cannot be a `Screen` variant**, so it
-      is covered by neither the `Screen::ALL` guard nor the auth-perimeter test — **give it both**
+- [ ] **T6 — `/devices/{id}` OFF `Screen`** (T0b), on 6b.3's slugs. 🔴 **Covered by no inherited
+      guard**: write a route test through `app()` fetching (a) a **non-canonical** slug — not the one
+      the nav points at, which a static route shadows — and (b) a slug no device carries. ⚠️ And name
+      its auth: an off-`Screen` route is protected by the `is_public` property, tested by nothing
 - [ ] **T7 — LOOK at both screens in a BROWSER**, `OPENCMDB_LOCALE=fr`. Chrome 151 / Firefox 153 are
       installed. ⚠️ **Rebuild first** — `cargo test` builds the test target, not `target/debug/opencmdb`
 - [ ] **T8 — the register, BOTH directions.** ⚠️ Five rows name 6b.6 (`deferred-work.md:3689, 3710,

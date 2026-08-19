@@ -1350,6 +1350,38 @@ the rule requires._
 | Resolving inbox items | **triage** | **triage** | document / accept-gap / attach / create / **exclude** / snooze |
 | A discovery origin | **source** | **source** | UniFi controller, generic scan, manual |
 
+#### The STATE axis (binding — added 2026-08-19 by Guy's arbitration, story 6b.6)
+
+_Every row above is a **gesture** — what the operator DOES. This grammar's own justification for
+retiring `ignore` is that *"every other verb describes the **OBJECT'S STATE** or the relation between
+two records"* — and until story 6b.6 the table carried **no state noun at all**. The inventory screen
+is the first surface that must name what an object **IS**. The same rule governs: **one term, one
+translation, one meaning.**_
+
+| Concept | EN (docs, API, code — **and a UI locale**) | FR (UI) | Meaning |
+|---|---|---|---|
+| Declared and observed agree, field by field | **concordant** | **concordant** | There is no gap. **The software decided; nothing is asked of the operator** |
+| The difference between them, as an object's state | **gap** | **écart** | ⚠️ **The SAME binding pair as the gesture axis above** — the core object, seen as a state. **Not a second term** |
+| Two observations disagree **with each other** | **conflict** | **conflit** | Source against source, **not observed against declared** — a distinct question from `gap`. `gap::AbstentionCause::ConflictingObservations` |
+| Several possible identities for one object | **ambiguous** | **ambigu** | **The operator LIFTS THE DOUBT.** `identity::cascade::IdentityAbstentionCause::Ambiguous` |
+| Observed, and no declared record claims it | **undeclared** | **non déclaré** | **The operator CREATES THE ENTITY** — the documenting gesture (FR13) |
+
+🔑 **These five ARE Guy's three-case taxonomy of 2026-08-12, and the mapping is exact**: *no ambiguity
+→ the software decides* (`concordant`, `gap`, `conflict`); *ambiguity → the operator lifts the doubt*
+(`ambiguous`); *unknown → the operator creates the entity* (`undeclared`). A sixth state that fits none
+of the three cases is a sign the taxonomy has changed, not that the table is short.
+
+⚠️ **A suffix is a rendering detail, not a term** (Guy, 2026-08-19). The mock renders *"Écart · 1
+champ"*, *"Écart · 2 champs"* and *"Écart · présence"*: **the term is `écart`** and what follows the
+separator qualifies it. A glossary check matches the term before the separator.
+
+⚠️ **The queue's `kindLabel` axis is a THIRD list and is NOT this one.** The triage queue answers *why
+this row is in your worklist* (`Écart`, `Absence`, `Conflit`, `Nouveau`) where the inventory answers
+*what this object is*. `Nouveau` and `undeclared` describe one underlying situation from two framings,
+and **their reconciliation is registered, not decided here** — merging them would rewrite a shipped
+screen's copy on a story that does not own it.
+
+
 **Retired, and not to be reintroduced:** `accept-as-declared` (**it named only the new-discovery case
 and hid the dominant one — re-discovery of an already-declared device**) · `merge` **in English** (it
 names the forbidden operation; the pillar is *linked, never merged* — the French UI verb « Merger » is
