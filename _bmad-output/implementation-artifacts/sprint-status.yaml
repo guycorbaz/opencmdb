@@ -75,7 +75,24 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4b ✅ VALIDATED, two fresh-context layers, and it changed the answer.
+last_updated: 2026-08-19  # 6b.4b ✅ ARBITRATED by Guy, before any code: **option (a), the ENUM with
+                          # `Planned` alone**, taken OVER my recommendation (d). 🔑 The reason is the
+                          # one thing the validation could not take away: with `Planned` alone there
+                          # is no unconstructed variant, so clippy is clean today, and **the day
+                          # story 6.4 adds `Live`, `E0004` forces every `match` site to be
+                          # revisited** -- a compiler-forced moment of attention at exactly the right
+                          # time, which (d) has none of, ever. Since the validation established that
+                          # NEITHER shape can stop a route pointing at nothing, the property was
+                          # never the deciding factor; the moment is.
+                          # ✅ Measured buildable WITH ITS CONTROL: `owner` lives in the type and is
+                          # read by nothing, and clippy is clean -- ⚠️ and my EXPLANATION was refuted
+                          # by its own control (I supposed `#[derive(Debug)]` was reading the field;
+                          # re-run without `Debug`, still clean). *The measurement stands, the story
+                          # I had for it did not, and it is not written down as if it did.*
+                          # ⚠️ The promise is NARROWED in writing (5.12's precedent): a labelling and
+                          # typing DISCIPLINE, never a compiler-enforced guarantee.
+                          # NEXT = `dev-story` 6b.4b.
+                          # (Earlier the same day) 6b.4b ✅ VALIDATED, two fresh-context layers, and it changed the answer.
                           # **Fact-check: 36 assertions, 34 confirmed, 2 flagged, both mine** -- and
                           # ✅ it CLOSED an escape hatch I had only inferred, by WRITING the test: a
                           # `#[cfg(test)]` construction of `Live` does NOT silence the lint, because

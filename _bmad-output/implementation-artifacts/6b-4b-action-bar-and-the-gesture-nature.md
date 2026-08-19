@@ -64,7 +64,32 @@ behind `OPENCMDB_DOCUMENT_ENABLED` which defaults to `false`, and is called by n
 the mock's field-level `Merger` wearing a different name; it is a different gesture at a different
 granularity.
 
-**→ PUT TO GUY. Four options, with what each costs:**
+**→ ✅ ARBITRATED (Guy, 2026-08-19): option (a) — the ENUM, with `Planned` alone. `Live` arrives with
+story 6.4.**
+
+🔑 **Chosen over my own recommendation (d), and the reason is the one thing the validation could not
+take away**: with `Planned` alone there is **no unconstructed variant** — so clippy is clean today —
+and **the day story 6.4 adds `Live`, `E0004` forces every `match` site to be revisited**. That is a
+compiler-forced moment of attention at exactly the right time, and option (d) has none, ever. Since
+the validation established that **neither shape can stop a route from pointing at nothing** (see
+below), the property was never the deciding factor; the moment of attention is.
+
+✅ **And option (a) is measured buildable, with the control that makes the measurement mean
+something.** The concern was that `owner` — which §0b keeps in the type and off the screen — is read
+by nothing and would red `dead_code`. Probed with the enum genuinely matched and `owner` deliberately
+unread: **clippy clean**. ⚠️ **And my explanation for why was REFUTED by its own control**: I supposed
+`#[derive(Debug)]` was reading the field, so the probe was re-run **without** `Debug` — still clean.
+The lint simply does not fire on an enum-variant field here. *The measurement stands; the story I had
+for it did not, and it is not written down as if it did.*
+
+⚠️ **The promise is narrowed in writing all the same** (story 5.12's precedent): what ships is a
+**labelling and typing discipline, not a compiler-enforced guarantee**. Nothing stops a future route
+from going nowhere; the closure for that is a route typed as a member of a closed set, registered to
+story 6.4 where the set stops being empty.
+
+---
+
+**The four options as they were put, kept with what each costs:**
 
 - **(d) — RECOMMENDED, but on a NARROWER promise than this section first wrote.**
   `Gesture { label_key, route: Option<&'static str> }` compiles clean, needs no `#[allow]`, and the
@@ -264,10 +289,14 @@ and assume it is covered.
 
 **Written for §0a's option (d). Rescope on Guy's answer before starting.**
 
-- [ ] **T0 — Guy's ruling on §0a**, the only open question. ⚠️ Everything else is already decided
-      (§0b, §0c) and must not be reopened
-- [ ] **T1 — the gesture type** (AC1): every gesture declares whether it has a route, so a control
-      that looks live and calls nothing cannot be written. ⚠️ **No `#[allow(dead_code)]`**
+- [x] **T0 — Guy's ruling on §0a**: ✅ **option (a), the enum with `Planned` alone**, taken over my
+      recommendation (d) because it keeps the one compiler-forced moment — `E0004` at every `match`
+      the day story 6.4 adds `Live`. ⚠️ Everything else was already decided (§0b, §0c) and is not
+      reopened
+- [ ] **T1 — the gesture type** (AC1): `enum Gesture { Planned { owner } }`, one variant today, so
+      adding `Live` in story 6.4 reds every `match` (`E0004`). ⚠️ **No `#[allow(dead_code)]`** — and
+      none is needed: measured clean, with and without `Debug`. ⚠️ **Do NOT write that the type makes
+      a dead route unrepresentable** — the validation measured that no shape does (§0a)
 - [ ] **T2 — one partial, one key pair** (AC1, §0b): `aria-disabled="true"` and **never** `disabled`;
       the words as arbitrated; **no story number in the surface**. ⚠️ **And WRITE the two guards M2
       and M3 name** — neither exists on `master`, and the mutation table read as though they did
