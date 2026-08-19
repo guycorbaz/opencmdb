@@ -75,7 +75,47 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.5 CONTEXTED -> `ready-for-dev`. 🔴 ONE STRUCTURAL QUESTION, and it
+last_updated: 2026-08-19  # 6b.5 ✅ VALIDATED, two fresh-context layers, and BOTH refuted something
+                          # of mine. **Fact-check: 27 assertions, 25 confirmed, 1 REFUTED, 1 weaker.**
+                          # 🔴 The refutation is a UNIT error: *"eight register rows"* is eight
+                          # matching LINES from SEVEN rows (one wraps and names 6b.5 twice) -- the
+                          # right command on the wrong unit, story 5.8's family one epic later.
+                          # ⚠️ And §0a's described MECHANISM is weaker than written: the layer
+                          # declared the dashboard ALL THREE WAYS and ran the suite -- every red
+                          # lands on a different guard than the prose names (a witness count, a
+                          # probe premise, an OK status) and **the `Empty` case does not red at
+                          # all**. The structural conclusion holds; the sentence naming which
+                          # assertion notices did not. *A red that lands on a different guard than
+                          # the one you named* -- inside the paragraph warning about it.
+                          # 🔴 **GAP-HUNT: IT BUILT THE ALTERNATIVE AND REFUTED MY CENTRAL WORD.**
+                          # *"It MUST leave the pool-free router"* is FALSE as an absolute: a
+                          # pool-free `/dashboard` whose reach section arrives by `hx-get` from a
+                          # separate pool-bearing route was built, served and SCREENSHOTTED working.
+                          # 🔑 And the register had already pointed at it -- `/gap`'s orphaned
+                          # fragment consumer is handed to THIS story in one of the rows §0c counts.
+                          # ⚠️ **But the cost was MEASURED and it is what decides**: the partition
+                          # asserts on ONE synchronous body, the fragment's counts arrive in a
+                          # SECOND request a `oneshot` client cannot drive, and AC1 would then need
+                          # two coordinated assertions or a headless-browser test **not in CI**. No
+                          # way was found to keep both. *The conclusion survives; the reason I gave
+                          # for it did not -- and a decision explained by a false premise is one
+                          # nobody can re-derive.*
+                          # ✅ Shape (a) `Nature::Mixed` RECOMMENDED on a measurement: exactly THREE
+                          # `E0004` sites (one production, two test), forcing both the marker and
+                          # the pending-badge decision, nothing silently defaulting.
+                          # ✅ §0d confirmed BY BUILDING: the guard over the pure builder alone stays
+                          # green under a planted sum; the same guard at the composition catches it.
+                          # 🔴 THREE MORE, each now a deliverable: the route-table partition CANNOT
+                          # catch a per-section regression (measured green, a sibling guard is
+                          # needed and does not exist); the marker's SCOPE is ambiguous beside real
+                          # content (seen in a browser -- no heading, no divider, it reads as
+                          # annotating the real numbers above it); and the CSS brace hole is
+                          # confirmed with the exact conditional class a mixed screen invites.
+                          # ⚠️ AC2's *"no history"* is OVERSTATED -- four temporal columns persist --
+                          # but right in spirit: a naive curve over raw rows would draw the UX
+                          # spec's BANNED GROWING COUNTER, since nothing supersedes an abstention.
+                          # NEXT = Guy's ruling on §0a (now FOUR shapes), then `dev-story` 6b.5.
+                          # (Earlier the same day) 6b.5 CONTEXTED -> `ready-for-dev`. 🔴 ONE STRUCTURAL QUESTION, and it
                           # touches story 6b.2's central guard. **A MIXED screen has no nature**:
                           # `Nature` is a property of the WHOLE screen, and the route-table
                           # partition asserts `Fed | Empty => !carries` — so a dashboard that is real

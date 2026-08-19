@@ -46,18 +46,50 @@ Nature::Example(_) => assert!(carries,  "… shows the example dataset and must 
 Nature::Fed | Nature::Empty => assert!(!carries, "… carries the marker and must not"),
 ```
 
-🔴 **A dashboard that is real on one section and example on the others reds this test under every
-existing nature**: declared `Fed` or `Empty`, it carries a marker and must not; declared
-`Example(_)`, it says the reach section is a demonstration, which is false. **Story 6b.3's AC2 said
-this in advance** — *"a screen-level-only marker would either lie about the real half or hide the
-example half"* — and this is the story where the sentence stops being a prediction.
+**Story 6b.3's AC2 said this in advance** — *"a screen-level-only marker would either lie about the
+real half or hide the example half"* — and this is the story where the sentence stops being a
+prediction.
 
-🔴 **AND IT MUST LEAVE THE POOL-FREE ROUTER, which dissolves story 6b.2's structural guard for this
-screen.** `screens::router` excludes only `Nature::Fed` (`screens.rs:262-270`) and returns a
-`Router<()>` whose doc says *"change it to `Router<MySqlPool>` and the whole guard evaporates"*. The
-reach section reads `count_engine_reach` — it **needs the pool**. So `/dashboard` moves to the main
-router, and for that screen the compile-time refusal of `State<MySqlPool>` — which story 6b.2 chose
-precisely because *"forbidding it by discipline is worth nothing"* — **stops holding**.
+⚠️ **The first draft went on to name a mechanism, and the validation MEASURED that it is not what
+fires.** It declared the dashboard all three ways and ran the suite: under `Example(_)` the test reds
+on the **witness-count** assertion (`left: 2, right: 1`), under `Fed` on a **probe-count premise**
+(*"at least the nine pool-free screens were probed (8)"*) or, with a database, on an **OK-status**
+check — and under `Empty`, **the suite stays GREEN**, because content is dispatched from `nature()`
+itself, so the *"real on one section, Empty on the rest"* case cannot even be constructed until §0a is
+resolved. 🔑 *The structural conclusion is sound and independently reproducible; the sentence naming
+which assertion notices was not.* **A red that lands on a different guard than the one you named is
+the defect this project has caught four times** — including inside the very paragraph warning about
+it.
+
+🔴 **AND THE POOL QUESTION — where this section first said the dashboard *"MUST"* leave the pool-free
+router. The validation REFUTED that word by building the alternative, and then measured why the
+conclusion survives anyway.**
+
+`screens::router` excludes only `Nature::Fed` (`screens.rs:262`) and returns a `Router<()>` whose doc
+says *"change it to `Router<MySqlPool>` and the whole guard evaporates"* — the phrase is `screens.rs`'s
+own module doc, attributed there to story 6b.2's validation. The reach section reads
+`count_engine_reach` (`repo.rs:1325`, which takes an `Executor`), so the screen needs the pool.
+
+✅ **A FOURTH SHAPE EXISTS AND WAS BUILT**: keep `/dashboard` on the pool-free router and fetch the
+reach section as an **htmx fragment from a separate pool-bearing route** — the idiom
+`_gap_card.html`'s refresh button already uses. The validation built it: it compiles, `/dashboard`'s
+served HTML never touches the pool, `GET /dashboard-reach` returns the real section, and a headless
+browser shows the placeholder swapped for *"Sightings placed 2 · not placed 0"*. 🔑 **And the register
+had already pointed at it** — `deferred-work.md:3991` hands `/gap`'s orphaned fragment consumer to
+**this story**, in one of the very rows §0c counts. *The option was sitting inside a row this section
+cites.*
+
+🔴 **But it costs something measured, and the cost is what decides.** The route-table partition
+asserts on **one synchronous HTTP body**. Under the fragment design the real counts arrive in a
+**second** request that the test's `oneshot` client cannot drive, so verifying AC1 needs either two
+coordinated assertions or a real headless-browser test — a capability this project first used
+yesterday and **which is not in CI**. The validation tried and **found no way to keep both the
+pool-free router and the single-response test shape**.
+
+⚠️ **So the conclusion stands and the REASON in the first draft was wrong.** It is not a compiler
+necessity; it is a trade of compile-time safety against the testability of the composed page. *A
+decision explained by a false premise is one nobody can re-derive*, which is why the premise is
+replaced rather than quietly kept.
 
 **→ PUT TO GUY. Three shapes, with what each costs:**
 
@@ -89,7 +121,10 @@ includes a screen with demo sections. **Register the reading; do not quietly pic
 
 ### §0c. ✅ EIGHT REGISTER ROWS NAME THIS STORY — read them before starting, not after
 
-Measured: `grep -c "6b\.5" deferred-work.md` → **8**. The load-bearing ones:
+⚠️ **SEVEN rows, not eight, and the correction is the lesson.** `grep -c "6b\.5" deferred-work.md`
+returns **8** — and that counts matching **physical lines**, while the sentence claimed **register
+rows**. One row wraps and names 6b.5 twice. 🔑 *The command was right and the unit was not* — story
+5.8's `checked > 0` against `checked == 21`, one story family later. The load-bearing rows:
 
 - 🔴 **The last observation is this story's** (`:3724`) — a `MAX(observed_at)`, re-arbitrated by Guy on
   2026-08-18 as *"the perimeter ships and the last observation waits"*. ⚠️ **And it is BANNED from the
@@ -122,12 +157,26 @@ that rises because the product looked many times is the radar's range, not the o
 ### §0e. ⚠️ TWO THINGS THE AC SAYS DO NOT EXIST — verify before believing either
 
 AC2 asserts that **the product has no notion of a last visit** and that **the history a sparkline
-draws does not exist**. The first is almost certainly true (no session, no per-operator state
-anywhere). ⚠️ **The second deserves a measurement rather than a repetition**: `observation_record`
-carries `observed_at` per row and `identity_link` carries `valid_from`/`valid_to`, so *some* history
-is persisted. **Establish precisely what a sparkline would need and whether it exists**, and if part
-of it does, say so — an AC that overstates an absence is still an AC, and the divergence is
-registered rather than argued.
+draws does not exist**. Both were measured by the validation.
+
+✅ **The first is TRUE and now established rather than assumed**: `grep -rn "session\|cookie\|last_visit"`
+over `crates/` returns nothing outside this story's own file. There is no per-operator state anywhere.
+
+🔴 **The second is OVERSTATED, and its spirit is right for a reason the AC does not give.** **Four**
+temporal columns are persisted, not the two the first draft named — `observation_record.observed_at`,
+`identity_link.valid_from`/`valid_to`, `declared_attribute.updated_at`, and
+`interface.first_seen_at`/`last_seen_at` — and nothing in the production path purges superseded rows.
+So the **raw material exists today, with no migration needed**.
+
+🔑 **But a sparkline drawn naively over it would draw the UX spec's BANNED GROWING COUNTER.** Stories
+5.14/5.14b measured that **nothing supersedes an abstention across scans**: each scan mints a fresh
+`obs_id`, so the raw row count rises with every scan whatever the network did. *A curve that climbs
+because the product looked many times is the radar's range, not the operator's debt* — arbitration
+13's own sentence, applied to a shape rather than a number. **What does not exist is a MEANINGFUL,
+deduplicated history**, and building one is Epic 6's grouping work.
+
+⚠️ **So the AC is right in substance and wrong in its stated reason.** Register the divergence; do not
+repeat the flat absence, and do not build the naive sparkline over real rows to prove the point.
 
 ### §0f. ⚠️ E17's CLAUSE MAY NOT BE NARROWED HERE, and the AC says so itself
 
@@ -135,6 +184,36 @@ AC3 states that `epics.md` E17's *"rich stat-card/sparkline/trend analytics"* cl
 **must be narrowed by a retrospective or a correct-course, never by a story**. ⚠️ So this story
 **registers** the narrowing it would want and does not perform it. Reading that sentence as
 permission to tidy the epic would be the one thing it explicitly forbids.
+
+### §0g. 🔴 THE EXISTING PARTITION CANNOT CATCH A PER-SECTION REGRESSION, and a sibling guard does not exist
+
+Measured by building a two-example-section body and dropping the marker from **one** of them:
+
+- the **screen-level** oracle — `body.contains("example-marker-badge")`, which is what the route-table
+  partition asserts — **stays GREEN**, because the other section still carries the string;
+- a **section-level** oracle — *count the sections, count the markers, compare* — reds `left: 2,
+  right: 1`.
+
+🔑 **So AC2 is not covered by any guard that exists.** The route-table partition cannot be extended
+to it — it is a property of the route table and this is a property inside one body — so a **sibling**
+guard is a deliverable of this story, not a refinement of an existing one. ⚠️ It was named in §0a's
+prose and absent from the task list until now.
+
+### §0h. 🔴 SEEN IN A BROWSER: the marker's SCOPE is ambiguous on a mixed screen
+
+The validation assembled the prototype, rendered it against a live database and looked. The real
+Identity block (*"Sightings placed 2 · not placed 0"*) sits **directly above** a bordered `EXAMPLE`
+box with **no heading and no divider between them** — and at a glance the marker reads as though it
+might be annotating the real numbers above it.
+
+🔑 **The text is accurate about what follows it; the LAYOUT is not.** A bare reuse of
+`_example_marker.html` is enough on a wholly-`Example` screen, where the marker unambiguously covers
+the whole `<main>`, and **it is not enough on a mixed one**. ⚠️ **Whatever shape ships, each example
+section needs its own heading or divider before the marker**, or the real/example boundary reads as
+noise rather than as a boundary — which is the one thing this screen exists to draw.
+
+⚠️ **And AC2 does not ask for this**: it speaks to the marker's PRESENCE, never to its legibility
+beside real content. Registered as a divergence rather than assumed.
 
 ---
 
@@ -190,13 +269,31 @@ permission to tidy the epic would be the one thing it explicitly forbids.
 
 **Written for §0a option (a). Rescope on Guy's answer before starting.**
 
-- [ ] **T0 — Guy's ruling on §0a**: the nature of a mixed screen, and whether `/dashboard` moves to
-      the pool-bearing router. ⚠️ **Neither may be decided by a developer**
-- [ ] **T1 — the reach section, unchanged in substance** (AC1): include
-      `_identity_section.html`, the same persisted counts, the unit **sightings**
+- [ ] **T0 — Guy's ruling on §0a**: the nature of a mixed screen, and the pool question — now a
+      choice between **three single-response shapes** and a **fourth, fragment-based one the
+      validation BUILT** (§0a). ⚠️ **Neither may be decided by a developer.** 🔑 The validation
+      recommends **(a) `Nature::Mixed`** on a measurement: it produces exactly **three `E0004`
+      sites** — one production, two test — so the compiler forces both the marker AND the
+      pending-badge decision and nothing silently defaults
+- [ ] **T1 — the reach section, unchanged in substance** (AC1): **INCLUDE `_identity_section.html`**,
+      the same persisted counts, the unit **sightings**. 🔑 **Including it inherits arbitration 13's
+      unit guard for free** (measured — `page.rs:1933` asserts the *"counts sightings, not devices"*
+      note renders) ⚠️ **conditional on including the partial rather than hand-rolling the markup**;
+      duplicate it and that guard goes blind
 - [ ] **T2 — the anti-sum guard AT THE COMPOSITION** (AC1, §0d), with the mutation that adds the two
       populations and proves it reds. ⚠️ A guard over the pure builders is measured worthless
-- [ ] **T3 — the example surfaces carry the marker** (AC2), at SECTION granularity
+- [ ] **T3 — the example surfaces carry the marker** (AC2), at SECTION granularity — ⚠️ **and write
+      the SIBLING guard that checks it** (§0g): the route-table partition is screen-level and was
+      MEASURED green when one section of two lost its marker. It cannot be extended; a new shape is
+      a deliverable
+- [ ] **T3b — a heading or divider before each example section** (§0h): seen in a browser, a bare
+      marker under the real block reads as though it annotates the numbers ABOVE it. ⚠️ AC2 asks for
+      the marker's presence, never its legibility beside real content — registered
+- [ ] **T3c — use STATIC class literals for the real and example halves**, or widen the guard first.
+      ⚠️ **Measured**: `class="dashboard-section {% if … %}is-real{% else %}is-example{% endif %}"`
+      with none of the three defined in `app.css` leaves
+      `every_class_a_template_names_is_defined_in_the_stylesheet` **GREEN** — the brace-skipping hole,
+      confirmed with the exact pattern a mixed screen invites
 - [ ] **T4 — the last observation** (§0c), in the BODY and never in the frame, with the divergence
       from the mock registered
 - [ ] **T5 — verify AC2's two absences** (§0e) rather than repeating them; register any overstatement
@@ -210,12 +307,12 @@ permission to tidy the epic would be the one thing it explicitly forbids.
 
 | # | Mutation | Prediction |
 |---|---|---|
-| M1 | sum the two populations at the composition | AC1's guard reds. ⚠️ **If a guard over the pure builders is written instead, it stays GREEN** — 5.14b measured exactly that |
-| M2 | drop the marker from one example section | the section-level partition reds — ⚠️ **not** the route-table one, which is screen-level and would stay green |
-| M3 | declare the dashboard wholly `Example` | the reach section is called a demonstration; predict WHICH assertion notices, and whether any does |
-| M4 | render the last observation in `_nav.html` | `the_shell_shows_no_last_observation` reds |
-| M5 | swap the unit from *sightings* to *devices* | AC1's unit guard reds — arbitration 13 |
-| M6 | read the clock inside the new pure builder | the new clock guard reds. ⚠️ **Write it; 5.14b's proves nothing about a populated builder** |
+| M1 | sum the two populations at the composition | ✅ **BOTH SHAPES BUILT AND MEASURED by the validation**: the guard over the pure builder alone stays **GREEN** under a sum planted three calls away; the same guard written AT the composition catches it (`left: 2, right: 3`). 4/4. *5.14b's lesson reproduces exactly* |
+| M2 | drop the marker from one example section | ✅ **SETTLED BY THE VALIDATION, exactly as predicted**: the screen-level oracle stays **GREEN** (the other section still carries the string), a section-level one reds `left: 2, right: 1`. The sibling guard of §0g is what this row measures |
+| M3 | declare the dashboard wholly `Example` | ⚠️ **UNMEASURED by the validation, with the command to settle it**: declare `Example(ExampleContent::DashboardStub)` whose content embeds the real fragment's `hx-get`, then run the partition test. By inspection **nothing scans inside an `Example` body for a live pool-backed reference**, so it would likely stay green — which would itself be the finding |
+| M4 | render the last observation in `_nav.html` | ✅ **CONFIRMED** — reds at `screens.rs:658`. 🔑 **And the converse was measured too**: the same text in the screen's BODY leaves the suite green and **cannot trip the guard by accident**, because the body arrives as `{{ body\|safe }}` and the guard's self-widening loop follows only `{% include %}` directives inside the two frame files |
+| M5 | swap the unit from *sightings* to *devices* | ✅ **The guard already exists** (`page.rs:1933`) and is inherited **for free** — ⚠️ **conditional on including `_identity_section.html`** rather than duplicating its markup. Hand-roll the reach markup and this row measures nothing |
+| M6 | read the clock inside the new pure builder | ⚠️ **UNMEASURED — no builder exists yet.** The idiom to copy is `build_triage_reads_no_clock_of_its_own` (`page.rs:2849`, `now` as a parameter). ⚠️ AC2/AC3 keep the sparkline on static example data, so no live clock read is implied — **if the implementation needs none, say so and drop the row rather than writing a guard over nothing** |
 
 ## References
 
@@ -225,6 +322,41 @@ permission to tidy the epic would be the one thing it explicitly forbids.
 - `_bmad-output/implementation-artifacts/6b-3-example-data-marker-and-its-gate.md` — AC2's mixed specimen, owed here
 - `_bmad-output/implementation-artifacts/6b-4b-action-bar-and-the-gesture-nature.md` — assert on the render, and grep the artefact you believe
 - `crates/opencmdb-bin/src/screens.rs`, `src/page.rs`, `templates/_identity_section.html`
+
+## Validation record — two fresh-context layers, 2026-08-19
+
+**Mandatory here** (Guy, Epic 4 retrospective). Both on a different model, each in its own worktree.
+
+**Layer 1, fact-check — 27 assertions verified, 25 confirmed, 1 REFUTED, 1 true-but-weaker.**
+🔴 The refutation is a UNIT error of mine: *"eight register rows"* is **eight matching LINES from
+SEVEN rows** — one wraps and names 6b.5 twice. The command was right; the unit was not. ⚠️ And §0a's
+described mechanism is weaker than written: the layer declared the dashboard **all three ways and ran
+the suite**, and every red lands on a different guard than the prose names — a witness count, a probe
+premise, an OK status — while the `Empty` case **does not red at all**. ✅ It also refuted **its own**
+suspicion that a quotation was fabricated: *"forbidding it by discipline is worth nothing"* is
+genuine, in `screens.rs`'s module doc rather than in story 6b.2's markdown.
+
+**Layer 2, gap-hunt — it BUILT the alternative and refuted the story's central word.**
+🔴 *"It MUST leave the pool-free router"* is **false as an absolute**: a pool-free `/dashboard` whose
+reach section arrives by `hx-get` from a separate pool-bearing route was built, served and
+screenshotted working. 🔑 **And the register had already pointed at it** — `/gap`'s orphaned fragment
+consumer is handed to this story in one of the rows §0c counts. ⚠️ **But the cost was measured and it
+is what decides**: the route-table partition asserts on ONE synchronous body, and the fragment's
+counts arrive in a second request a `oneshot` client cannot drive, so AC1 would need two coordinated
+assertions or a headless-browser test **that is not in CI**. The layer found **no way to keep both**.
+*So the conclusion survives and the reason given for it did not — and a decision explained by a false
+premise is one nobody can re-derive.*
+
+✅ **Shape (a) recommended on a measurement**: `Nature::Mixed` produces exactly **three `E0004`
+sites** — one production, two test — forcing both the marker and the pending-badge decision, with
+nothing silently defaulting; the suite is green after patching all three.
+
+✅ **§0d confirmed by building**: the guard over the pure builder alone stays green under a planted
+sum, the same guard at the composition catches it. 5.14b's lesson reproduces exactly.
+
+🔴 **And the two findings only a browser and a build could give**: the marker's SCOPE is ambiguous
+beside real content (§0h), and the CSS guard's brace-skipping hole was confirmed **with the exact
+conditional class a mixed screen invites** (§0g/T3c).
 
 ## Dev Agent Record
 
@@ -240,4 +372,5 @@ permission to tidy the epic would be the one thing it explicitly forbids.
 
 | Date | Change |
 |---|---|
+| 2026-08-19 | Validated by two fresh-context layers. Fact-check: 27 assertions, 25 confirmed, 🔴 **1 refuted — *"eight register rows"* is eight LINES from seven rows**, the right command on the wrong unit — and §0a's described mechanism measured to fire on other guards than it names. Gap-hunt: it **BUILT the fragment alternative** and refuted *"must leave the pool-free router"* as an absolute, then **measured the cost that keeps the conclusion** — the partition asserts on one synchronous body and the fragment's counts arrive in a second request. 🔴 Plus: the existing partition **cannot** catch a per-section regression (measured green), the marker's scope is **ambiguous beside real content** (seen in a browser), and the CSS brace hole is confirmed with the exact pattern this screen invites. |
 | 2026-08-19 | Contexted. 🔴 ONE structural question, and it touches story 6b.2's central guard: a MIXED screen has no nature, the route-table partition reds on it under all three, and the reach section needs the POOL — so `/dashboard` must leave the `Router<()>` whose type refusal was the guard. Three shapes put to Guy. Plus: constraint 1's *"no demo screen opens a connection"* meets a screen it did not anticipate; the last observation is banned from the frame while the mock puts it there; and the anti-sum guard must sit at the composition, which is where 5.14b's measured green. |

@@ -4140,3 +4140,45 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   ⚠️ **All three passed every test.** The common defence is cheap and was what caught (2): **grep the
   artefact you are about to believe** — the served HTML, the rendered string, the actual binary —
   rather than the source you just edited. **Owner: Epic 6b's retrospective.**
+
+## Deferred from: story 6b.5's validation (2026-08-19)
+
+- 🔴 **AC2's *"the history a sparkline draws does not exist yet"* is OVERSTATED, and its spirit is
+  right for a reason the criterion does not give.** Measured: **four** temporal columns are persisted
+  — `observation_record.observed_at`, `identity_link.valid_from`/`valid_to`,
+  `declared_attribute.updated_at`, `interface.first_seen_at`/`last_seen_at` — and nothing in the
+  production path purges superseded rows, so **the raw material exists today with no migration**.
+  🔑 **What does not exist is a MEANINGFUL history**: stories 5.14/5.14b measured that nothing
+  supersedes an abstention across scans, so a curve drawn over the raw rows **rises with every scan
+  whatever the network did** — the UX spec's banned growing counter, arbitration 13's own sentence
+  applied to a shape rather than a number. Deduplicating it is Epic 6's grouping work. **Owner: Epic
+  6b's retrospective** for the criterion's wording (a story may not edit an AC), and **Epic 6** for
+  the history itself.
+
+- 🔴 **AC2 asks for the marker's PRESENCE and says nothing about its LEGIBILITY beside real
+  content** — and on a mixed screen that is the thing that matters. Seen in a browser at 6b.5's
+  validation: the real reach block sits directly above a bordered `EXAMPLE` box with **no heading and
+  no divider between them**, and the marker reads as though it might annotate the real numbers above
+  it. *A bare reuse of `_example_marker.html` is enough on a wholly-example screen, where it covers
+  the whole `<main>`, and it is not enough on a mixed one.* **Owner: story 6b.5** (a heading or
+  divider before each example section), and **Epic 6b's retrospective** for the criterion.
+
+- 🔴 **The route-table partition CANNOT catch a per-section marker regression, and no sibling guard
+  exists.** Measured: with two example sections and the marker dropped from one, the screen-level
+  oracle (`body.contains("example-marker-badge")`) stays **GREEN** because the other section still
+  carries the string; a section-level oracle reds `left: 2, right: 1`. The partition is a property of
+  the route table and this is a property inside one body — it cannot be extended, only joined.
+  **Owner: story 6b.5.**
+
+- 🔴 **The CSS guard's brace-skipping hole is confirmed with the exact pattern a mixed screen
+  invites.** `class="dashboard-section {% if identity.has_any %}is-real{% else %}is-example{% endif %}"`
+  with **none** of the three classes defined in `app.css` leaves
+  `every_class_a_template_names_is_defined_in_the_stylesheet` **GREEN**. Already registered from
+  6b.4b as a hole; now measured with a realistic dashboard shape rather than a probe. **Owner: story
+  6b.5** (use static class literals) **or the first story that widens the guard.**
+
+- ⚠️ **A fragment route would need its own auth coverage, and that was NOT verified.** The validation
+  added `GET /dashboard-reach` above the `auth_deny` layer and observed it inherit the deny-by-default
+  posture, **but did not check an unauthenticated request returns 401**. If any fragment-based shape
+  is chosen, that check is a deliverable — story 6b.2's review found that a route added to `is_public`
+  left 609 tests green. **Owner: story 6b.5, conditional on the shape Guy chooses.**
