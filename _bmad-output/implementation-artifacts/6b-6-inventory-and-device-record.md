@@ -1,6 +1,6 @@
 # Story 6b.6: Inventory and device record (example)
 
-Status: ready-for-dev
+Status: review
 
 Epic: 6b — *L'interface de la maquette*. **Sixth numbered slot.** ⚠️ **Its scope was NARROWED before
 it began**: story 6b.3 pulled `/devices` forward as its witness screen, so what remains here is the
@@ -375,65 +375,84 @@ growth** — `CLAUDE.md`'s *"split, not grown"*.
 
 - [x] **T0 / T0b / T0c — arbitrated above.** The glossary edit is **DONE** (both documents, eight
       gates re-run green); the other two bind the tasks below
-- [ ] **T1 — implement the state axis** (AC2), on Guy's ruling: five words, each with its EN pair, its meaning,
+- [x] **T1 — implement the state axis** (AC2), on Guy's ruling: five words, each with its EN pair, its meaning,
       and 🔴 **the reconciliation §0c found** — `Écart` and `Conflit` appear on TWO axes and nothing
       records that they mean the same state in both. *One term, one meaning* is the table's own rule
-- [ ] **T2 — the lint** (AC2, UX-DR64), in **BOTH forms** (§0j) and with its limit WRITTEN: a
+- [x] **T2 — the lint** (AC2, UX-DR64), in **BOTH forms** (§0j) and with its limit WRITTEN: a
       render-side extractor **and** a namespace-derived check resolving both locales. 🔴 Never parse
       `app.yml` — a key can be in the YAML and absent from the binary (6b.5). ⚠️ Four measured
       defeats to close first: an empty population, English resolution, a wrapping `<strong>`, and
       **AC1's own filter bar**
-- [ ] **T2b — one term, one key** (§0k): the glossary now makes it a REQUIREMENT, not a preference.
+- [x] **T2b — one term, one key** (§0k): the glossary now makes it a REQUIREMENT, not a preference.
       ⚠️ Reuse the key that already renders *Écart* rather than minting a second — UX-DR64's *"glossary
       uniqueness"* breaks on two keys for one word. Registered if a rename is needed: the rendered
       bytes must be identical, and `/triage` is not this story's screen to re-copy
-- [ ] **T3 — withdraw the drift claim** (§0c) and register instead what is real: the product renders
+- [x] **T3 — withdraw the drift claim** (§0c) and register instead what is real: the product renders
       `Concordant`/`Non déclaré` **in other words already** (`app.yml:28`, `:301`). ⚠️ Do NOT touch
       6b.4's shipped copy — that screen is not this story's
-- [ ] **T4 — the inventory's shape** (AC1): the mock's eight filters by type, one row per object with
+- [x] **T4 — the inventory's shape** (AC1): the mock's eight filters by type, one row per object with
       its declared state and its last observation
-- [ ] **T4b — grow the dataset** (§0p): three devices cannot feed seven filters — **at least four
+- [x] **T4b — grow the dataset** (§0p): three devices cannot feed seven filters — **at least four
       render an empty table**, a state with no copy, no key and no marker decision. ⚠️ `role_key` is
       not the mock's `type` axis, and **`source` must NOT be invented here** (no connector registry;
       6b.8's)
-- [ ] **T5 — the device record** (AC1): field by field, *Hébergé ici*, the composite identity, the
+- [x] **T5 — the device record** (AC1): field by field, *Hébergé ici*, the composite identity, the
       observation history — all example, all marked **per section**
-- [ ] **T5b — WRITE the per-section marker guard** (§0i): none exists for these screens — measured, a
+- [x] **T5b — WRITE the per-section marker guard** (§0i): none exists for these screens — measured, a
       marker deleted from `/devices`'s second section leaves **634 green**. ⚠️ **Unify the section
       anchor first** (`screen-section` vs `dashboard-example` vs a third), or the guard is a third
       enumeration
-- [ ] **T6 — `/devices/{id}` OFF `Screen`** (T0b), on 6b.3's slugs. 🔴 **Covered by no inherited
+- [x] **T6 — `/devices/{id}` OFF `Screen`** (T0b), on 6b.3's slugs. 🔴 **Covered by no inherited
       guard**: write a route test through `app()` fetching (a) a **non-canonical** slug — not the one
       the nav points at, which a static route shadows — and (b) a slug no device carries. ⚠️ And name
       its auth: an off-`Screen` route is protected by the `is_public` property, tested by nothing
-- [ ] **T7 — LOOK at both screens in a BROWSER**, `OPENCMDB_LOCALE=fr`. Chrome 151 / Firefox 153 are
+- [x] **T7 — LOOK at both screens in a BROWSER**, `OPENCMDB_LOCALE=fr`. Chrome 151 / Firefox 153 are
       installed. ⚠️ **Rebuild first** — `cargo test` builds the test target, not `target/debug/opencmdb`
-- [ ] **T8 — the register, BOTH directions.** ⚠️ Five rows name 6b.6 (`deferred-work.md:3689, 3710,
+- [x] **T8 — the register, BOTH directions.** ⚠️ Five rows name 6b.6 (`deferred-work.md:3689, 3710,
       3825, 3860, 3898`), one struck through as CLOSED
-- [ ] **T9 — prove-to-red**, predictions FIRST, every row executed, ⚠️ **and the suite run BOTH ways**
+- [x] **T9 — prove-to-red**, predictions FIRST, every row executed, ⚠️ **and the suite run BOTH ways**
       — 6b.5 shipped a red no-database suite behind a green CI
-- [ ] **T10 — SPLIT before writing** (§0g): `page.rs` 1575 / 2000, and 6b.4 alone added 533. Plan the
+- [x] **T10 — SPLIT before writing** (§0g): `page.rs` 1575 / 2000, and 6b.4 alone added 533. Plan the
       module; do not discover the gate
-- [ ] **T11 — register, do not fix here** (§0q): a doc under `docs/` is outside `gate_vocabulary`'s
+- [x] **T11 — register, do not fix here** (§0q): a doc under `docs/` is outside `gate_vocabulary`'s
       hardcoded seven-path `DOCS` list (a planted one left all eight gates green); and
       `every_key_carries_both_locales` floors at 47 with a message saying *"48"* while `app.yml`
       carries **108**. ⚠️ And the `set_locale` race (§0m) — **registered with its control, NOT as
       issue #38's cause**
 
-## Prove-to-red
+## Prove-to-red — executed
 
-| # | Mutation | Prediction |
-|---|---|---|
-| M1 | render a state word absent from the glossary | T2's guard reds. ⚠️ **Predict GREEN for the four §0j shapes until each is closed** — empty population, `<strong>` wrap, unclassed filter bar, English resolution |
-| M2 | a state word as a literal instead of a key | the example-copy guard reds on its **shape** half (`example_data.rs:146`), not the namespace one. ⚠️ **Predict GREEN on a NEW struct** — the guard iterates two functions only |
-| M3 | drop the marker from ONE example section of the record | 🔴 **Predict GREEN before T5b exists** — measured on the committed tree, 634 green with `/devices`'s second marker deleted. After T5b, red |
-| M4 | the record handler ignores its slug (device #1 for every URL) | 🔴 **Predict GREEN with clippy clean** — the gap-hunt measured 636 green. Red only after T6's own test fetches a **non-canonical** slug through `app()` |
-| M4b | `/devices/does-not-exist` | **404** by axum's default. ⚠️ `/devices/%7Bid%7D` → **200** (percent-decoded before `Path`) |
-| M5 | a `Screen` variant omitted from `Screen::ALL` | 6b.3's guard reds |
-| M6 | `/devices/{id}` dropped from the auth perimeter | 🔴 **Predict GREEN before T6's guard** — the perimeter test iterates `Screen::ALL`, which cannot represent this route (§0h) |
-| M7 | echo the raw path segment into the 404 body | 🔴 **XSS, and the suite stays green** — 6b.4's clearance was over templates (§0n) |
-| M8 | `class="statepill statepill-{{ … }}"`, both undefined | **GREEN**; the control `class="statepill"` reds (§0o) |
-| M9 | delete the `/devices/{id}` registration entirely | **GREEN** in `cargo xtask ci`; caught by clippy's dead-code alone, **which is outside the gates** |
+**Thirteen rows: eleven reds, one compiler-carried, one GREEN by measurement.** Carriers are named
+per row and *"every red assertion-carried"* is **not** claimed. One restore mechanism only — a
+scratchpad snapshot, never `git checkout --`, the gesture that destroyed uncommitted work three
+times in this project.
+
+| # | Mutation | Result | Carrier |
+|---|---|---|---|
+| M1 | a state renders a key outside the glossary | **RED ×2** | both glossary guards, each by its own named assertion — the enum-side and the render-side |
+| M2 | a literal `t!` key that does not exist | **RED ×3** | `every_literal_key_…`, plus the render-side key guard and a block assertion |
+| M3 | a template re-includes the marker beside the dispatch's | 🔑 **COMPILER** (`E0609`) | ⚠️ Once the marker left the templates, `ExampleStrings` stopped carrying `example_badge` — **a double marker became unrepresentable in the type**, which is stronger than the assertion written for it. That assertion is therefore carried by the compiler for these two templates, and by itself only for a struct that still has the field |
+| M4 | the record handler ignores its slug | **RED ×2** | `the_record_route_answers_a_non_canonical_slug` — 🔑 exactly the mutation the gap-hunt measured leaving **636 tests and clippy green** under the shadowed-route design |
+| M5 | the route renders with `ScreenQuery::default()` | **RED ×1** | the route-level filter test. ⚠️ **This mutation was the shipped code** until a browser showed it; the pure filter test stayed green through it |
+| M6 | the unknown page echoes the slug (and drops the sentence) | **RED ×1** | ⚠️ on *"an unknown slug must be SAID"* — **the FIRST assertion, not the anti-XSS one it was named for.** Story 5.13's assertion-order family, fifth occurrence |
+| M6b | the same, sentence KEPT | **RED ×1** | 🔑 the anti-XSS assertion itself (`main.rs:1230`). **M6b is what proves it load-bearing; M6 alone credited the wrong assertion** |
+| M7 | a `statepill-*` rule deleted from `app.css` | **RED ×1** | the pill-modifier guard — the one the generic stylesheet guard structurally cannot see |
+| M8 | a variant dropped from `ObjectState::ALL` | **RED ×3** | 🔑 the variant-in-`ALL` guard fires, which is what the extension from one file to three bought |
+| M9 | a filter offered with no device behind it | **RED ×1** | `no_filter_the_bar_offers_is_empty` |
+| M10 | a key-valued field printed unresolved | **RED ×1** | the render-side key guard — the second of the two defects a browser found |
+| M11 | a marker deleted from the dashboard's second example section | **RED ×2** | both per-section guards |
+| M12 | `values_are_keys` set on a FACTUAL field | ✅ **GREEN, by measurement** | ⚠️ `t!` renders an unknown key verbatim, so resolving `"192.0.2.10"` yields `"192.0.2.10"`. **The flag protects one direction only**, and its doc now says so |
+
+⚠️ **Two rows first came back GREEN and both were MY DRIVER, not a weak guard** — a `sed` that
+replaced a string with itself, and a `sed` with `\n` in the pattern, which GNU sed does not match
+across lines. Caught because `RED=0` contradicted a prediction; had the prediction been *"green"*,
+both would have been filed as confirmations. *The mutation driver lies*, fourth epic running — and
+the driver now `exit 9`s when the mutation does not apply.
+
+**The suite was run BOTH ways**, story 6b.5's lesson: **0.04 s** without `DATABASE_URL` and
+**4.77 s** with one against a live `mariadb:10.11` on port **13316** — the clock is the tell that
+the database-backed tests genuinely executed. ⚠️ Port **3306 belongs to another project's
+container**, which the context names as a trap and which was avoided rather than discovered.
 
 ## References
 
@@ -453,16 +472,108 @@ growth** — `CLAUDE.md`'s *"split, not grown"*.
 
 ### Agent Model Used
 
-### Debug Log References
+Claude Opus 5 (1M context).
 
-### Completion Notes List
+### Completion Notes
+
+⚠️ **THE LIVE COUNT FOR THE PROJECT LIVES HERE**: **634 → 652 tests** (425 bin + 161 core + 66
+xtask), eight gates green, clippy clean, 28 fixtures, trap gate still RED at 26/15/11,
+`opencmdb-core` byte-identical, no migration, `epics.md` **not** edited. `page.rs` **1575 → 1482**
+code lines; the largest file in the workspace is still `xtask/src/main.rs` at 1908.
+
+🔴 **THE STORY'S CENTRE WAS AC2, AND ITS FIRST DRAFT WAS WRONG ABOUT IT IN THREE WAYS.** The
+fact-check layer refuted them and the corrected findings are sharper than the ones they replaced —
+the refutation is kept in §0 rather than quietly overwritten. The canonical glossary **exists**, in
+three places; the draft established its absence by looking in two directories, which is the exact
+defect story 5.13b shipped. What replaced it: **the glossary is binding, and carries not one of
+AC2's five words, because its eleven rows are all GESTURES** — and its own preamble is AC2's warning
+with *gesture* changed to *state*. Guy added the state axis to both `prd.md` and
+`ux-design-specification.md` on 2026-08-19; **a story may not edit a binding artefact, so it is his
+act, recorded as one.**
+
+🔑 **The five states ARE Guy's three-case taxonomy of 2026-08-12, exactly and without forcing** —
+*software decides* (`concordant`, `gap`, `conflict`) · *operator lifts the doubt* (`ambiguous`) ·
+*operator creates the entity* (`undeclared`) — and `gap`/`écart` is the **same binding pair as the
+gesture axis**, which settles the story's open fork: one word, one meaning, **one key**, where a
+second would have broken UX-DR64's glossary uniqueness.
+
+🔴 **THE GLOSSARY CHECK'S FIRST RUN REDDENED ON THE PRODUCT'S CORE TERM.** The binding table says
+`gap` / `écart`; the English UI said **"Drift"**, "No drift", "Open drifts", "one drift closed" —
+four sites, on the one term the table calls *"the core object; the product"*, under a preamble that
+forbids synonyms in so many words. The French was already right everywhere and the code already said
+`gap`: the sole test pinning it asserted `contains("Drift")` under a message reading *"a **Gap** must
+be a row"*. **A guard written to satisfy a criterion found a two-story-old defect in its first
+second of life.**
+
+🔴 **FOUR MORE DEFECTS WERE FOUND BY LOOKING AT THE PAGE IN A BROWSER, AND NO TEST COULD REACH ANY
+OF THEM.** Each passed the whole suite, eight gates and clippy first:
+
+1. two headings resolved `devices.unplaced_*`, keys that do not exist, so the page rendered **its own
+   key names**. `rust-i18n` renders an unknown key verbatim; `every_key_carries_both_locales` asks
+   whether keys *in* `app.yml` have two languages, and a key absent from the file is not in its
+   population at all;
+2. the record's *Rôle* row printed `example.role.storage` **as a value**, invisible even to the guard
+   just written (the key is data, not a `t!` argument);
+3. `/devices?kind=printer` served **all eight devices** — the route's closure took no argument while
+   the filter test called the pure builder. Epic 5's dominant class, and story 6b.4's `triage_html`
+   was the same shape. ⚠️ **And the fix itself missed**: the parameter was threaded through three
+   signatures and the arm still passed `Default::default()`. **Rust does not lint an unused function
+   PARAMETER**, so nothing warned;
+4. the record shipped **four identical marker banners down one page** — story 6b.4b's finding
+   reproduced, invisible because every marker guard asks whether the marker is PRESENT.
+
+🔑 **The fourth resolved into the story's best structural change, by reading story 6b.3's own rule
+precisely**: the marker goes on the smallest unit that is **entirely** example — the SECTION on a
+`Mixed` screen, the SCREEN on an `Example` one. It is now emitted by the **dispatch** rather than
+included by each template, which is strictly stronger: it comes from the same `match` arm as the
+body, so a screen declared `Example` cannot render content without it. ⚠️ **That immediately exposed
+the record route**, which is off `Screen` and bypasses the dispatch — it served four sections with no
+marker at all until the partition test named it. *The skip in `router` buys structural safety on one
+axis and costs it on another*, and the marker call there is explicit rather than implied.
+
+🔴 **`/devices/{id}` is the first address `Screen::ALL` structurally cannot represent**, because
+`Screen::href` returns a `&'static str` used as a route PATTERN and FETCHED as a URL. Guy chose
+**off `Screen`** over a variant that compiles without a warning while shipping a literal
+`href="/devices/{id}"` in eleven navigations. ⚠️ The cost is nameable and was therefore paid: no
+inherited guard covers the route, so it carries two of its own — a **non-canonical** slug and an
+unknown one, both through `app()`. M4 is exactly the mutation the gap-hunt measured leaving 636 tests
+and clippy green under the alternative.
+
+⚠️ **The section anchor is unified for real, and the unification had a cost worth recording.**
+`_devices_example.html` said `screen-section` while `_dashboard.html` said `dashboard-example`, so
+6b.5's per-section guard covered the dashboard and **nothing covered the witness screen** — measured
+on the committed tree, a marker deleted from `/devices`'s second section left **all 634 green**.
+Widening the dashboard's class then silently unmatched four needles spelled `class="dashboard-example"`:
+*an anchor that includes the attribute opening is defeated by the ordinary gesture of adding a class.*
+
+⚠️ **What this story does NOT close, stated plainly**: `Ambigu` is rendered but **unreachable in the
+engine** (`Supports`/`Opposes` have no producer until Epic 6's `l2-*` rules); there is **no
+containment data of any kind**, so *Hosted here* is example in the strongest sense; `criticality`,
+`app` and `owner` are in the mock and were **deliberately not rendered**, being three more nouns with
+no glossary row; and the queue's `kindLabel` axis (`Absence`, `Nouveau`) is **still outside the
+binding table** — reconciling it changes story 6b.4's shipped copy, which is not this story's.
+
+✅ **The suite was run BOTH ways** (0.04 s without a database, 4.77 s against a live
+`mariadb:10.11` on port 13316 — the clock is the tell), and **T7 was a real browser look**, in
+French, at 1280 px, on two rebuilt-binary captures. ⚠️ 390 px remains knowingly broken.
 
 ### File List
+
+- `crates/opencmdb-bin/src/state_vocabulary.rs` — NEW
+- `crates/opencmdb-bin/src/example_screens.rs` — NEW
+- `crates/opencmdb-bin/templates/_device_record.html` — NEW
+- `crates/opencmdb-bin/templates/_device_unknown.html` — NEW
+- `crates/opencmdb-bin/src/example_data.rs` · `screens.rs` · `page.rs` · `main.rs`
+- `crates/opencmdb-bin/templates/_devices_example.html` · `_dashboard.html`
+- `crates/opencmdb-bin/locales/app.yml` · `assets/app.css`
+- `_bmad-output/planning-artifacts/prd.md` · `ux-design-specification.md` — **Guy's arbitration**
+- `_bmad-output/implementation-artifacts/deferred-work.md` · `sprint-status.yaml`
 
 ### Change Log
 
 | Date | Change |
 |---|---|
+| 2026-08-19 | **Developed.** 634 → 652 tests, eight gates green, `page.rs` 1575 → 1482 (the split came first, not after the gate said so). 🔴 The glossary check's **first run** reddened on the product's core term: the binding table says `gap`/`écart` and the English UI said *"Drift"* at four sites. 🔴 **Four more defects found by looking at the page in a browser**, each green through the whole suite first — two headings rendering their own key names, a value printed as a key, `?kind=printer` serving all eight devices (and the fix threading a parameter Rust does not lint as unused), and **four identical marker banners** on the record. 🔑 The last resolved into the story's best change: the marker follows the screen's NATURE and is emitted by the DISPATCH, so a screen declared `Example` cannot render content without it — which then exposed the record route, off `Screen` and bypassing the dispatch. **Thirteen mutation rows: eleven red, one compiler-carried, one GREEN by measurement**; ⚠️ two first came back green and **both were my driver, not a weak guard**. |
 | 2026-08-19 | **Gap-hunt folded in — it BUILT both designs and neither is free.** 🔴 **The most expensive thing: `Screen::href()` is a route pattern AND a fetchable URL, and `/devices/{id}` cannot be both.** ON `Screen`, the nav ships a literal `href="/devices/{id}"` that every existing guard accepts; OFF it, a static route shadows the param route for exactly the URL the guards probe — after which **the handler may ignore its slug and serve device #1 for `/devices/does-not-exist` with 636 tests and `clippy -D warnings` green**. A parameterised route is the first address `Screen::ALL` structurally cannot represent. 🔴 **I re-measured the marker hole myself on the committed tree**: deleting the marker from `/devices`'s second section leaves **634 green** — the witness screen has no per-section guard, so the draft's M3 prediction was false and the story must WRITE one. 🔴 **AC2's guard is worth nothing in four measured ways** — an empty population, English resolution, a `<strong>` wrap, and **AC1's own filter bar**. 🔴 **The mock renders SEVEN device states, three of them `Écart · <suffix>`**, so AC2's five words are a simplification and exact membership reds on the mock's own copy. Also: `Écart` under two keys breaks UX-DR64's uniqueness; a reproducible `set_locale` race (with its control, **not** claimed as issue #38's cause); reflected XSS on the obvious 404; the state pill's own class idiom blinds 6b.4's stylesheet guard; three devices cannot feed seven filters; and two live defects registered — a doc under `docs/` sits outside `gate_vocabulary`, and `every_key_carries_both_locales` floors at 47 while `app.yml` carries 108. |
 | 2026-08-19 | **§0 REWRITTEN after the fact-check refuted its three central claims.** 🔴 The canonical glossary **EXISTS** (`ux-design-specification.md:1332`, `prd.md:985`) — the draft's absence was established over two directories, the very defect this project has a rule against. 🔑 **And the corrected finding is sharper**: the glossary is binding, carries **not one** of AC2's five words, and is a vocabulary of **GESTURES** where AC2 asks about **STATES** — its own preamble is AC2's warning with *gesture* changed to *state*, so the criterion is asking to extend the table to a second axis, which is a PLANNING act and not a story's. 🔴 The **reference mock was never opened** and carries every word the draft reported missing, plus the eight filters and the record's four blocks. 🔴 There is **no vocabulary drift**: the mock has three state axes, 6b.4 shipped one correctly, and the item against it is withdrawn. 🔴 `Ambigu` **has three producers** — the draft confused `identity::cascade::IdentityAbstentionCause` with `gap::AbstentionCause`, story 5.14b's own review finding, in the story about vocabulary. Also corrected: `/devices/{id}` **cannot** be a `Screen` variant (`href` returns `&'static str`), so it is covered by neither guard and this story owes both; `page.rs` is at 1575/2000 with two screens to add. |
 | 2026-08-19 | Contexted (first draft, superseded above). 🔴 The story's centre is AC2, and **the canonical glossary it demands does not exist** — the `vocabulary` gate is a retired-term check over four pairs, not a list of live words. **Third AC in this epic pointing at an artefact the project lacks.** 🔴 **Three of the five state words appear nowhere but in the criterion naming them**, and **`Conflit` was already shipped by story 6b.4** — one story before the story meant to check it — leaving the product with **two state vocabularies** that overlap on two words and diverge on five. |

@@ -75,7 +75,7 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.6 contexted -> `ready-for-dev`; its centre is AC2, whose canonical glossary does not exist
+last_updated: 2026-08-19  # 6b.6 -> `review`: inventory + device record; the glossary gained its state axis
                           # (1m20s; bin suite 6.11 s in CI). Branch deleted, twins updated in this
                           # same push. **629 -> 634 tests**, eight gates green, verified BOTH ways.
                           # 🔑 EPIC 6b: FIVE numbered slots done (6b.1-6b.5) plus the 6b.4b
@@ -3784,7 +3784,7 @@ development_status:
   # not; only a retrospective may) -- the divergence is registered in deferred-work.md.
   6b-4b-action-bar-and-the-gesture-nature: done
   6b-5-dashboard-real-reach-beside-examples: done
-  6b-6-inventory-and-device-record: ready-for-dev
+  6b-6-inventory-and-device-record: review
   6b-7-applications-and-ipam: backlog
   6b-8-sources-and-alerts: backlog
   6b-9-self-diagnostic-and-commissioning: backlog

@@ -4252,3 +4252,53 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   since 5.14b. ⚠️ Note the interaction: the *pending-resolution* line added at this review is
   computed from both, so a race can make it flicker — it cannot make it lie, since either state is
   one the store really held. **Owner: the first story that needs a consistent read across both.**
+
+---
+
+## Registered by story 6b.6 (2026-08-19) — inventory and device record
+
+- 🔴 **`Nouveau` (triage queue) and `undeclared` (inventory) name one situation from two framings.**
+  The mock has THREE state axes — `kindLabel` on the queue, `state` on the inventory, a third on
+  sources — and the product now implements two of them. The glossary's state axis was added by Guy
+  on 2026-08-19 and covers the inventory's; the queue's four words (`Écart`, `Absence`, `Conflit`,
+  `Nouveau`) are **not** in it. Reconciling them changes story 6b.4's shipped copy, which is not
+  6b.6's to change. **Owner: Epic 6b's retrospective.**
+
+- ⚠️ **`criticality` is in the mock's *Hosted here* block and was deliberately NOT rendered.** It
+  would introduce a third vocabulary axis (critical / normal / low) with no glossary row and no
+  producer, which is exactly what AC2 says to register rather than introduce. Same for `app` and
+  `owner`. **Owner: the story that gives the product containment data** (Epic 6 / Growth).
+
+- ⚠️ **A new document under `docs/` sits outside `gate_vocabulary`.** Its `DOCS` list
+  (`xtask/src/main.rs:396`) is seven hardcoded paths; a planted `docs/state-vocabulary.md` left all
+  eight gates green. The glossary lives in `prd.md` and `ux-design-specification.md`, which ARE in
+  the list, so nothing is open today — **but the day a state vocabulary gets its own file, its path
+  must be added in the same commit.** Owner: whoever writes that file.
+
+- ⚠️ **`every_key_carries_both_locales` floors at `checked >= 47` on a message reading *"48 entries
+  minus `_version`"*, and `app.yml` now carries ~140.** The floor is stale by ninety and its message
+  states a false count. Bounded (other guards red on a mass deletion) but it is a premise nobody
+  re-reads — story 6b.5 shipped a red suite behind exactly this shape. **Owner: Epic 6b's
+  retrospective.**
+
+- ⚠️ **A needle spelled `class="…"` breaks when a second class is added.** Story 6b.5's dashboard
+  guards read `class="dashboard-example"`; widening the attribute to `class="dashboard-example
+  example-section"` silently unmatched all four. Fixed here by keying on the class NAME alone
+  (`DASHBOARD_EXAMPLE_ANCHOR`), and the general lesson — *an anchor that includes the attribute
+  opening is defeated by the ordinary gesture of adding a class* — belongs with the other
+  guard-shape lessons. **Owner: Epic 6b's retrospective.**
+
+- ⚠️ **Rust does not lint an unused function PARAMETER.** The query was threaded through the
+  router, `demonstration_screen` and `ExampleContent::render`, and the arm still passed
+  `Default::default()`: the filter did nothing, `clippy -D warnings` was clean, and only a
+  route-level test saw it. Nothing to fix; worth carrying as a known blind spot beside *"a guard
+  placed where the defect cannot occur"*. **Owner: Epic 6b's retrospective.**
+
+- ⚠️ **The nav's *Fiche appareil* entry points at a concrete example device** (`/devices/nas-01`),
+  because `Screen::href` returns a `&'static str` and a record needs an id. It is right for a
+  demonstration and wrong the day the record is fed: the entry should then address the device the
+  operator selected, or disappear. **Owner: Epic 6's record story.**
+
+- ⚠️ **The example marker renders above the *Retour à l'inventaire* link** on the record, because
+  the dispatch prepends it to the body. Defensible (it qualifies the whole page) and noticed only
+  by looking. **Owner: story 6b.12's visual sweep.**

@@ -106,6 +106,12 @@ pub(crate) struct ExampleField {
     /// columns with 649 tests, eight gates and clippy green. A helper that resolved *"anything
     /// that looks like a key"* would have hidden the same mistake behind a heuristic; the flag
     /// makes each field say which kind of value it carries.
+    ///
+    /// ⚠️ **It protects ONE direction, measured.** Mutation M12 sets it to `true` on a field whose
+    /// values are addresses and the whole suite stays **GREEN**: `rust_i18n::t!` renders an unknown
+    /// key verbatim, so resolving `"192.0.2.10"` yields `"192.0.2.10"` and nothing changes on the
+    /// screen. The flag catches *a key printed raw*; it does not catch *a fact needlessly
+    /// resolved*, and the second costs nothing — but the promise must not be read as covering both.
     pub(crate) values_are_keys: bool,
 }
 
