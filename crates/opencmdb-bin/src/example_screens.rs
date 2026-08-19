@@ -333,7 +333,16 @@ pub(crate) fn record_body(id: &str) -> Option<String> {
                     FieldRow {
                         label: rust_i18n::t!(field.label_key).to_string(),
                         declared: show(field.declared),
-                        observed: show(field.observed),
+                        // 🔑 Two observed values on one line when two sources disagree. A
+                        // `Conflict` row whose observed column held an em dash was measured
+                        // indistinguishable from an absence — the blind review layer saw it in the
+                        // constants, and the screen exists to show what a state LOOKS like.
+                        observed: match field.observed_alt {
+                            Some(other) => {
+                                format!("{} ≠ {}", show(field.observed), show(Some(other)))
+                            }
+                            None => show(field.observed),
+                        },
                         state: StateView::new(field.state, None),
                     }
                 })

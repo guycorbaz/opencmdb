@@ -746,5 +746,7 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 
 /* The section anchor a marker guard reads. Story 6b.6 unified it: this file styles the layout
    through .screen-section, and .example-section carries no visual weight of its own — it exists so
-   ONE guard can ask "does every example section have exactly one marker?" across every screen. */
+   ONE ANCHOR serves the marker guards on every screen. ⚠️ Not one RULE: an `Example` screen is
+   checked for exactly one marker over its whole page, a `Mixed` one per section, because the
+   marker's scope follows the screen's nature. The anchor is shared; the assertion is not. */
 .example-section { }

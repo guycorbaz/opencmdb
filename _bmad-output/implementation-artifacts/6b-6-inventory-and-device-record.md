@@ -476,10 +476,24 @@ Claude Opus 5 (1M context).
 
 ### Completion Notes
 
-⚠️ **THE LIVE COUNT FOR THE PROJECT LIVES HERE**: **634 → 652 tests** (425 bin + 161 core + 66
-xtask), eight gates green, clippy clean, 28 fixtures, trap gate still RED at 26/15/11,
-`opencmdb-core` byte-identical, no migration, `epics.md` **not** edited. `page.rs` **1575 → 1482**
-code lines; the largest file in the workspace is still `xtask/src/main.rs` at 1908.
+⚠️ **THE LIVE COUNT FOR THE PROJECT LIVES HERE**: **634 → 653 tests** (426 bin + 161 core + 66
+xtask), eight gates green, clippy clean, 28 fixtures, trap gate still RED at 26/15/11, no migration,
+`epics.md` **not** edited. `page.rs` **1575 → 1524** code lines (measured with the `file-size`
+gate's own rule, lines before the first `#[cfg(test)]`); the largest file in the workspace is still
+`xtask/src/main.rs` at 1908.
+
+🔴 **The figure read *"1482"* until the code review, and the BLIND layer caught it from the diff's
+own hunk arithmetic while two layers had the tree.** 1482 was true for about twenty minutes and
+went stale the moment `example_marker()` was added; it was never re-measured. *A number written in
+flight, inside the story whose own §0 warns about numbers written in flight* — fourth occurrence in
+this epic.
+
+⚠️ **`opencmdb-core` is NOT byte-identical, and the claim was narrowed rather than defended.** One
+doc line there defined a `Gap` as *"a drift"* — the retired synonym, as the DEFINITION, in the
+domain crate — and the promise of non-modification is exactly what would have sheltered it. Story
+5.13b's finding, live: **a promise of non-modification protects behaviour and shelters false
+sentences.** Narrowed to *no BEHAVIOUR change in `opencmdb-core`*; the sentence is corrected in
+place and a test renamed.
 
 🔴 **THE STORY'S CENTRE WAS AC2, AND ITS FIRST DRAFT WAS WRONG ABOUT IT IN THREE WAYS.** The
 fact-check layer refuted them and the corrected findings are sharper than the ones they replaced —

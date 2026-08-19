@@ -842,6 +842,32 @@ mod tests {
     /// 🔑 **`NavGroup` is covered by the same property, and that is the argument for a property
     /// over an enumeration**: its `ALL` is a literal `[NavGroup; 3]` with the identical hole, and a
     /// guard written for `Screen` alone would have covered one of the two.
+    /// 🔴 **The navigation's device address names a device that EXISTS.**
+    ///
+    /// `Screen::Device.href()` is the literal `"/devices/nas-01"` — a slug of
+    /// [`crate::example_data`] with nothing tying the two together at compile time, because
+    /// [`Screen::href`] returns a `&'static str` and a record needs an id. **Rename or remove that
+    /// device and the product's own primary link to the record silently degrades to the
+    /// *unknown device* page**: a real, tested and WRONG 200, with no compiler error and no
+    /// inherited guard positioned to see it.
+    ///
+    /// 🔑 Found by the review layer that had **only the diff** — it could not check the slug
+    /// against the dataset, so it asked what happens when the two drift, which is the question
+    /// having both in front of you does not prompt.
+    #[test]
+    fn the_navigations_device_address_names_a_device_that_exists() {
+        let href = Screen::Device.href();
+        let slug = href
+            .strip_prefix(RECORD_PREFIX)
+            .unwrap_or_else(|| panic!("{href} must live under {RECORD_PREFIX}"));
+        assert!(
+            crate::example_data::device_by_id(slug).is_some(),
+            "the navigation points at {href} and no example device carries the slug {slug:?} — \
+             the entry would render the *unknown device* page, which is a correct 200 for a wrong \
+             reason"
+        );
+    }
+
     #[test]
     fn every_variant_of_a_navigated_enum_is_listed_in_all() {
         // 🔑 The needles are BUILT from the parameter rather than spelled, so the guard cannot

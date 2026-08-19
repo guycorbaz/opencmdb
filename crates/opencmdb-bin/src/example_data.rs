@@ -95,7 +95,24 @@ pub(crate) struct ExampleField {
     pub(crate) declared: Option<&'static str>,
     /// What the product observed, or `None` when nothing answered for it.
     pub(crate) observed: Option<&'static str>,
+    /// What a SECOND source observed, when two disagree — [`ObjectState::Conflict`]'s whole shape.
+    ///
+    /// 🔴 **Found by the blind review layer, from the constants alone.** `Conflict` is defined as
+    /// *"two observations disagree WITH EACH OTHER — source against source"*, and the first draft
+    /// gave its field `observed: None`: the row rendered an em dash, identical to a `Gap` of
+    /// absence, differing only by the colour of a pill. **A demonstration screen exists to show
+    /// what a state LOOKS like, and that one looked like a different state.**
+    pub(crate) observed_alt: Option<&'static str>,
     /// This field's own state.
+    ///
+    /// ⚠️ **Not every state of the axis is a FIELD state, and the distinction was found at this
+    /// story's code review.** [`Concordant`](ObjectState::Concordant), [`Gap`](ObjectState::Gap)
+    /// and [`Conflict`](ObjectState::Conflict) compare a declared value against an observed one, so
+    /// they belong to a field. [`Ambiguous`](ObjectState::Ambiguous) is about which OBJECT a
+    /// sighting belongs to and [`Undeclared`](ObjectState::Undeclared) about whether an object has
+    /// a record at all: **both are properties of the device, not of one of its fields.** Putting
+    /// `Ambiguous` on a field was a category error the screen made look ordinary. The glossary does
+    /// not yet carry the distinction; it is registered rather than introduced here.
     pub(crate) state: ObjectState,
     /// Whether [`declared`](ExampleField::declared) and [`observed`](ExampleField::observed) hold
     /// i18n KEYS rather than factual values.
@@ -218,6 +235,7 @@ const NAS_FIELDS: &[ExampleField] = &[
         label_key: "example.field.ipv4",
         declared: Some("192.0.2.10"),
         observed: Some("192.0.2.10"),
+        observed_alt: None,
         state: ObjectState::Concordant,
         values_are_keys: false,
     },
@@ -225,6 +243,7 @@ const NAS_FIELDS: &[ExampleField] = &[
         label_key: "example.field.mac",
         declared: Some("00:00:5E:00:53:10"),
         observed: Some("00:00:5E:00:53:10"),
+        observed_alt: None,
         state: ObjectState::Concordant,
         values_are_keys: false,
     },
@@ -232,6 +251,7 @@ const NAS_FIELDS: &[ExampleField] = &[
         label_key: "example.field.role",
         declared: Some("example.role.storage"),
         observed: Some("example.role.storage"),
+        observed_alt: None,
         state: ObjectState::Concordant,
         values_are_keys: true,
     },
@@ -287,6 +307,7 @@ const SWITCH_FIELDS: &[ExampleField] = &[
         label_key: "example.field.ipv4",
         declared: Some("192.0.2.3"),
         observed: Some("192.0.2.2"),
+        observed_alt: None,
         state: ObjectState::Gap,
         values_are_keys: false,
     },
@@ -294,6 +315,7 @@ const SWITCH_FIELDS: &[ExampleField] = &[
         label_key: "example.field.mac",
         declared: Some("00:00:5E:00:53:02"),
         observed: Some("00:00:5E:00:53:02"),
+        observed_alt: None,
         state: ObjectState::Concordant,
         values_are_keys: false,
     },
@@ -301,6 +323,7 @@ const SWITCH_FIELDS: &[ExampleField] = &[
         label_key: "example.field.role",
         declared: Some("example.role.network"),
         observed: Some("example.role.network"),
+        observed_alt: None,
         state: ObjectState::Concordant,
         values_are_keys: true,
     },
@@ -333,6 +356,7 @@ const PRINTER_FIELDS: &[ExampleField] = &[
         label_key: "example.field.ipv4",
         declared: None,
         observed: Some("192.0.2.31"),
+        observed_alt: None,
         state: ObjectState::Undeclared,
         values_are_keys: false,
     },
@@ -340,6 +364,7 @@ const PRINTER_FIELDS: &[ExampleField] = &[
         label_key: "example.field.mac",
         declared: None,
         observed: Some("00:00:5E:00:53:31"),
+        observed_alt: None,
         state: ObjectState::Undeclared,
         values_are_keys: false,
     },
@@ -372,6 +397,7 @@ const VM_FIELDS: &[ExampleField] = &[
         label_key: "example.field.ipv4",
         declared: Some("192.0.2.40"),
         observed: Some("192.0.2.41"),
+        observed_alt: None,
         state: ObjectState::Gap,
         values_are_keys: false,
     },
@@ -379,6 +405,7 @@ const VM_FIELDS: &[ExampleField] = &[
         label_key: "example.field.mac",
         declared: Some("00:00:5E:00:53:40"),
         observed: Some("00:00:5E:00:53:41"),
+        observed_alt: None,
         state: ObjectState::Gap,
         values_are_keys: false,
     },
@@ -386,6 +413,7 @@ const VM_FIELDS: &[ExampleField] = &[
         label_key: "example.field.role",
         declared: Some("example.role.application"),
         observed: Some("example.role.application"),
+        observed_alt: None,
         state: ObjectState::Concordant,
         values_are_keys: true,
     },
@@ -423,6 +451,7 @@ const CT_FIELDS: &[ExampleField] = &[
         label_key: "example.field.ipv4",
         declared: Some("192.0.2.42"),
         observed: Some("192.0.2.42"),
+        observed_alt: None,
         state: ObjectState::Concordant,
         values_are_keys: false,
     },
@@ -430,6 +459,7 @@ const CT_FIELDS: &[ExampleField] = &[
         label_key: "example.field.role",
         declared: Some("example.role.application"),
         observed: Some("example.role.application"),
+        observed_alt: None,
         state: ObjectState::Concordant,
         values_are_keys: true,
     },
@@ -462,13 +492,15 @@ const FW_FIELDS: &[ExampleField] = &[
         label_key: "example.field.ipv4",
         declared: Some("192.0.2.1"),
         observed: Some("192.0.2.1"),
+        observed_alt: None,
         state: ObjectState::Concordant,
         values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.mac",
         declared: Some("00:00:5E:00:53:01"),
-        observed: None,
+        observed: Some("00:00:5E:00:53:01"),
+        observed_alt: Some("00:00:5E:00:53:F1"),
         state: ObjectState::Conflict,
         values_are_keys: false,
     },
@@ -501,14 +533,16 @@ const DESK_FIELDS: &[ExampleField] = &[
         label_key: "example.field.ipv4",
         declared: Some("192.0.2.77"),
         observed: Some("192.0.2.77"),
+        observed_alt: None,
         state: ObjectState::Concordant,
         values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.mac",
         declared: Some("00:00:5E:00:53:77"),
-        observed: None,
-        state: ObjectState::Ambiguous,
+        observed: Some("00:00:5E:00:53:77"),
+        observed_alt: None,
+        state: ObjectState::Concordant,
         values_are_keys: false,
     },
 ];
@@ -544,6 +578,7 @@ const SRV_FIELDS: &[ExampleField] = &[
         label_key: "example.field.ipv4",
         declared: Some("192.0.2.12"),
         observed: None,
+        observed_alt: None,
         state: ObjectState::Gap,
         values_are_keys: false,
     },
@@ -551,6 +586,7 @@ const SRV_FIELDS: &[ExampleField] = &[
         label_key: "example.field.mac",
         declared: Some("00:00:5E:00:53:12"),
         observed: None,
+        observed_alt: None,
         state: ObjectState::Gap,
         values_are_keys: false,
     },

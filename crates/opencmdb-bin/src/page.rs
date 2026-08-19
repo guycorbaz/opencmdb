@@ -271,7 +271,7 @@ struct Strings {
     observed: String,
     no_observation: String,
     the_gap: String,
-    no_drift: String,
+    no_gap: String,
     arrow_observed: String,
     reach: String,
     reach_hint: String,
@@ -319,7 +319,7 @@ fn strings() -> Strings {
         observed: t!("page.observed").to_string(),
         no_observation: t!("page.no_observation").to_string(),
         the_gap: t!("page.the_gap").to_string(),
-        no_drift: t!("page.no_drift").to_string(),
+        no_gap: t!("page.no_gap").to_string(),
         arrow_observed: t!("page.arrow_observed").to_string(),
         reach: t!("page.reach").to_string(),
         reach_hint: t!("page.reach_hint").to_string(),
@@ -1211,9 +1211,15 @@ struct NotBuiltYet {
 /// [`Example`](crate::screens::Nature::Example) screen every section is example, so the smallest
 /// such unit **is the screen** — and marking it four times says nothing the first one did not.
 ///
-/// ⚠️ **And emitting it from the dispatch is STRONGER than including it from a template**: the
-/// marker now comes from the same `match` arm as the body, so a screen declared `Example` cannot
-/// render content without it. It was a template include that a new screen could simply omit.
+/// ⚠️ **Emitting it from the dispatch is stronger than a template include, and the promise is
+/// NARROWED to what is true** (story 5.12's precedent). For a screen served by
+/// [`crate::screens::router`]'s generic loop the marker comes from the same `match` arm as the
+/// body, so it cannot be forgotten. 🔴 **It is NOT a universal guarantee, and the counterexample
+/// ships in the same commit**: `Screen::Device` is `Example` and is served by `device_record`,
+/// outside that `match` — the first version of that handler rendered four example sections with no
+/// marker at all, and only `the_marker_partition_follows_every_screens_declared_nature` said so.
+/// *A route off `Screen` is off the dispatch too.* The blind review layer found this sentence
+/// asserting the unqualified version.
 ///
 /// # Panics
 ///
@@ -1343,7 +1349,7 @@ fn example_cards() -> Vec<StatCardView> {
             spark: vec![3, 5, 4, 6, 6, 7, 9],
         },
         StatCardView {
-            label: t!("dash.card.drifts").to_string(),
+            label: t!("dash.card.gaps").to_string(),
             value: "4",
             spark: vec![7, 6, 6, 4, 5, 3, 4],
         },

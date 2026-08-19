@@ -1073,8 +1073,9 @@ mod tests {
         }
         assert_eq!(
             checked, 13,
-            "the premise: ten screens, two record addresses and `/` ({checked} probed) — a loop \
-             that went empty would assert nothing"
+            "the premise: thirteen addresses ({checked} probed) — ten screens, of which `Screen::Device` \
+             is ITSELF a record address, plus two more chained here and `/`. A loop that went \
+             empty would assert nothing"
         );
     }
 

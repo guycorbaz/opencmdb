@@ -23,7 +23,7 @@ page.no_observation:
 page.the_gap:
   en: "The gap"
   fr: "L'écart"
-page.no_drift:
+page.no_gap:
   en: "✓ No gap — declared and observed agree on every compared field."
   fr: "✓ Aucun écart — le déclaré et l'observé concordent sur chaque champ comparé."
 page.arrow_observed:
@@ -372,7 +372,7 @@ dash.since_body:
 dash.card.devices:
   en: "Devices"
   fr: "Appareils"
-dash.card.drifts:
+dash.card.gaps:
   en: "Open gaps"
   fr: "Écarts ouverts"
 dash.card.sources:
