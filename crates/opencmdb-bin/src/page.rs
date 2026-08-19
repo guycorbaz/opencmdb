@@ -1195,6 +1195,42 @@ struct NotBuiltYet {
     s: Strings,
 }
 
+/// The example-data marker, rendered ONCE for a wholly-example screen.
+///
+/// # Why the screen and not each section, on an `Example` screen
+///
+/// 🔴 **Found by looking at the record in a browser.** Its four example sections each included the
+/// marker, so the page carried **four identical banners** saying *"Ce contenu est une démonstration
+/// — il ne provient pas de votre réseau."* one under the other. That is story 6b.4b's finding
+/// exactly — a per-control copy turning a compact row into a stack repeating itself — and no test
+/// could see it, because every guard asks whether the marker is PRESENT.
+///
+/// 🔑 **The rule that resolves it is story 6b.3's own, read precisely**: the marker goes on the
+/// smallest unit that is ENTIRELY example. On a [`Mixed`](crate::screens::Nature::Mixed) screen
+/// that unit is the section, and the dashboard still marks each of its example sections. On an
+/// [`Example`](crate::screens::Nature::Example) screen every section is example, so the smallest
+/// such unit **is the screen** — and marking it four times says nothing the first one did not.
+///
+/// ⚠️ **And emitting it from the dispatch is STRONGER than including it from a template**: the
+/// marker now comes from the same `match` arm as the body, so a screen declared `Example` cannot
+/// render content without it. It was a template include that a new screen could simply omit.
+///
+/// # Panics
+///
+/// Never in practice, for the reason given on [`not_built_yet_body`].
+pub(crate) fn example_marker() -> String {
+    ExampleMarker { s: strings() }
+        .render()
+        .expect("the marker template and its struct are compiled together")
+}
+
+/// The example marker on its own — one partial, one key pair, as story 6b.3 requires.
+#[derive(Template)]
+#[template(path = "_example_marker.html")]
+struct ExampleMarker {
+    s: Strings,
+}
+
 /// What an `Empty` screen shows: one line saying the screen is not built yet.
 ///
 /// 🔴 **It replaces a blank `<main>`, and the difference is not cosmetic.** Eight of the ten screens
@@ -3725,60 +3761,73 @@ mod tests {
         );
     }
 
-    /// 🔴 **Every example SECTION carries exactly one marker, counted ONE AT A TIME.**
+    /// 🔴 **The marker's scope follows the screen's NATURE, and every example section is covered
+    /// exactly once — counted ONE AT A TIME.**
     ///
-    /// # Why per-section, and why this screen had nothing at all
+    /// # Two rules, because there are two natures
     ///
-    /// Story 6b.5 shipped `every_example_section_carries_its_own_marker` — anchored on
-    /// `class="dashboard-example"` and reading the dashboard alone. **The witness screen story
-    /// 6b.3 shipped was covered by NOTHING**, and story 6b.6's validation measured it on the
-    /// committed tree: deleting the marker from the second of `/devices`'s two sections left all
-    /// **634 tests green**.
+    /// - an [`Example`](crate::screens::Nature::Example) screen is example all the way through, so
+    ///   the smallest unit that is ENTIRELY example is the SCREEN: **exactly one marker**. The
+    ///   record shipped **four identical banners down one page** before a browser showed it —
+    ///   story 6b.4b's finding reproduced, and no guard could see it because every one of them
+    ///   asks whether the marker is PRESENT;
+    /// - a [`Mixed`](crate::screens::Nature::Mixed) screen carries real content beside example
+    ///   content, so the unit is the SECTION: **one marker per example section**, which is story
+    ///   6b.5's rule and which a screen-level marker would break in both directions.
     ///
-    /// 🔑 **Two anchors meant two guards, and only one was written.** `class="example-section"` is
-    /// now the single anchor, and this guard reads it wherever it appears. ⚠️ It counts **per
-    /// section**: story 6b.5 measured that a guard comparing TOTALS cannot tell *"each section has
-    /// one"* from *"they happen to add up"* — two markers in one section and none in the other left
-    /// its whole suite green, that guard included.
+    /// 🔑 **Per section, never in total.** Story 6b.5 measured that a totals comparison cannot tell
+    /// *"each section has one"* from *"they happen to add up"* — two markers in one section and
+    /// none in the other left its whole suite green, that guard included.
+    ///
+    /// ⚠️ It reads the COMPOSED body: the marker is emitted by the dispatch in
+    /// [`crate::screens`], so a guard over `inventory_body` alone would find none at all.
     #[test]
-    fn every_example_section_carries_exactly_one_marker() {
+    fn every_example_section_is_covered_by_exactly_one_marker() {
         let badge = rust_i18n::t!("example.badge").to_string();
-        let mut sections = 0_usize;
-        for (screen, html) in [
+
+        for (screen, body) in [
             (
                 "/devices",
                 crate::example_screens::inventory_body(&Default::default()),
             ),
             (
-                "/devices/nas-01",
+                "/devices/{id}",
                 crate::example_screens::record_body("nas-01").expect("nas-01 is an example device"),
             ),
-            // 🔑 The dashboard, through the SAME anchor. Its own guard reads `dashboard-example`;
-            // this one reads `example-section`, which every example section of every screen now
-            // carries. **That is the unification, and it is why this guard lives here**: the three
-            // renderers are only reachable together from this module.
-            ("/dashboard", rendered_dashboard(Some(at(0)))),
         ] {
-            // Split on the anchor: each fragment after the first IS one section, up to the next.
-            for fragment in html.split(EXAMPLE_SECTION_ANCHOR).skip(1) {
-                let section = fragment
-                    .split_once(EXAMPLE_SECTION_ANCHOR)
-                    .map_or(fragment, |(head, _)| head);
-                let markers = section.matches(badge.as_str()).count();
-                assert_eq!(
-                    markers, 1,
-                    "an example section of {screen} carries {markers} marker(s) and must carry \
-                     exactly one — counted per SECTION, because a total cannot tell \"each has \
-                     one\" from \"they add up\""
-                );
-                sections += 1;
-            }
+            let served = format!("{}{}", example_marker(), body);
+            let markers = served.matches(badge.as_str()).count();
+            assert_eq!(
+                markers, 1,
+                "{screen} is example all the way through and must carry exactly ONE marker; it \
+                 carries {markers}. Four identical banners down one page is what a per-section \
+                 marker produced on the record, and only a browser showed it"
+            );
+            assert!(
+                !body.contains(badge.as_str()),
+                "{screen}'s own body carries a marker as well as the dispatch's — the two stack, \
+                 and the dispatch is where it belongs so a new screen cannot omit it"
+            );
         }
-        // The premise: a split that matched nothing would make the loop vacuous.
+
+        let dashboard = rendered_dashboard(Some(at(0)));
+        let mut sections = 0_usize;
+        for fragment in dashboard.split(EXAMPLE_SECTION_ANCHOR).skip(1) {
+            let section = fragment
+                .split_once(EXAMPLE_SECTION_ANCHOR)
+                .map_or(fragment, |(head, _)| head);
+            let markers = section.matches(badge.as_str()).count();
+            assert_eq!(
+                markers, 1,
+                "an example section of /dashboard carries {markers} marker(s) and must carry \
+                 exactly one — counted per SECTION, because a total cannot tell \"each has one\" \
+                 from \"they add up\""
+            );
+            sections += 1;
+        }
         assert_eq!(
-            sections, 8,
-            "the premise: two example sections on the inventory, four on the record and two on \
-             the dashboard ({sections} seen)"
+            sections, 2,
+            "the premise: the dashboard has two example sections ({sections} seen)"
         );
     }
 }

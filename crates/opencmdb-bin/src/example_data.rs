@@ -97,6 +97,16 @@ pub(crate) struct ExampleField {
     pub(crate) observed: Option<&'static str>,
     /// This field's own state.
     pub(crate) state: ObjectState,
+    /// Whether [`declared`](ExampleField::declared) and [`observed`](ExampleField::observed) hold
+    /// i18n KEYS rather than factual values.
+    ///
+    /// 🔴 **An explicit flag and not a guess.** Most compared fields are addresses, MACs and
+    /// serials — data, locale-neutral, printed as they are. The *role* is a translated word, and
+    /// the first draft printed its key: the record rendered *"example.role.storage"* in both
+    /// columns with 649 tests, eight gates and clippy green. A helper that resolved *"anything
+    /// that looks like a key"* would have hidden the same mistake behind a heuristic; the flag
+    /// makes each field say which kind of value it carries.
+    pub(crate) values_are_keys: bool,
 }
 
 /// One object this device hosts — FR29's *"Hosted here"*, ONE containment hop.
@@ -203,18 +213,21 @@ const NAS_FIELDS: &[ExampleField] = &[
         declared: Some("192.0.2.10"),
         observed: Some("192.0.2.10"),
         state: ObjectState::Concordant,
+        values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.mac",
         declared: Some("00:00:5E:00:53:10"),
         observed: Some("00:00:5E:00:53:10"),
         state: ObjectState::Concordant,
+        values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.role",
         declared: Some("example.role.storage"),
         observed: Some("example.role.storage"),
         state: ObjectState::Concordant,
+        values_are_keys: true,
     },
 ];
 
@@ -269,18 +282,21 @@ const SWITCH_FIELDS: &[ExampleField] = &[
         declared: Some("192.0.2.3"),
         observed: Some("192.0.2.2"),
         state: ObjectState::Gap,
+        values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.mac",
         declared: Some("00:00:5E:00:53:02"),
         observed: Some("00:00:5E:00:53:02"),
         state: ObjectState::Concordant,
+        values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.role",
         declared: Some("example.role.network"),
         observed: Some("example.role.network"),
         state: ObjectState::Concordant,
+        values_are_keys: true,
     },
 ];
 
@@ -312,12 +328,14 @@ const PRINTER_FIELDS: &[ExampleField] = &[
         declared: None,
         observed: Some("192.0.2.31"),
         state: ObjectState::Undeclared,
+        values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.mac",
         declared: None,
         observed: Some("00:00:5E:00:53:31"),
         state: ObjectState::Undeclared,
+        values_are_keys: false,
     },
 ];
 
@@ -349,18 +367,21 @@ const VM_FIELDS: &[ExampleField] = &[
         declared: Some("192.0.2.40"),
         observed: Some("192.0.2.41"),
         state: ObjectState::Gap,
+        values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.mac",
         declared: Some("00:00:5E:00:53:40"),
         observed: Some("00:00:5E:00:53:41"),
         state: ObjectState::Gap,
+        values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.role",
         declared: Some("example.role.application"),
         observed: Some("example.role.application"),
         state: ObjectState::Concordant,
+        values_are_keys: true,
     },
 ];
 
@@ -397,12 +418,14 @@ const CT_FIELDS: &[ExampleField] = &[
         declared: Some("192.0.2.42"),
         observed: Some("192.0.2.42"),
         state: ObjectState::Concordant,
+        values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.role",
         declared: Some("example.role.application"),
         observed: Some("example.role.application"),
         state: ObjectState::Concordant,
+        values_are_keys: true,
     },
 ];
 
@@ -434,12 +457,14 @@ const FW_FIELDS: &[ExampleField] = &[
         declared: Some("192.0.2.1"),
         observed: Some("192.0.2.1"),
         state: ObjectState::Concordant,
+        values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.mac",
         declared: Some("00:00:5E:00:53:01"),
         observed: None,
         state: ObjectState::Conflict,
+        values_are_keys: false,
     },
 ];
 
@@ -471,12 +496,14 @@ const DESK_FIELDS: &[ExampleField] = &[
         declared: Some("192.0.2.77"),
         observed: Some("192.0.2.77"),
         state: ObjectState::Concordant,
+        values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.mac",
         declared: Some("00:00:5E:00:53:77"),
         observed: None,
         state: ObjectState::Ambiguous,
+        values_are_keys: false,
     },
 ];
 
@@ -512,12 +539,14 @@ const SRV_FIELDS: &[ExampleField] = &[
         declared: Some("192.0.2.12"),
         observed: None,
         state: ObjectState::Gap,
+        values_are_keys: false,
     },
     ExampleField {
         label_key: "example.field.mac",
         declared: Some("00:00:5E:00:53:12"),
         observed: None,
         state: ObjectState::Gap,
+        values_are_keys: false,
     },
 ];
 

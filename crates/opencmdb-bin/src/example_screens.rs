@@ -35,10 +35,6 @@ pub(crate) struct ScreenQuery {
 /// than sentences — see [`crate::example_data::ExampleDevice::role_key`] for the defect that taught
 /// us the difference, which was found by looking at the screen and by nothing else.
 pub(crate) struct ExampleStrings {
-    /// The example marker's badge — the field name is shared with `_example_marker.html`.
-    example_badge: String,
-    /// The example marker's sentence.
-    example_sentence: String,
     /// The inventory's heading.
     devices_title: String,
     /// The accessible name of the filter bar.
@@ -88,8 +84,6 @@ pub(crate) struct ExampleStrings {
 /// Resolve the copy both screens share.
 fn example_strings() -> ExampleStrings {
     ExampleStrings {
-        example_badge: rust_i18n::t!("example.badge").to_string(),
-        example_sentence: rust_i18n::t!("example.sentence").to_string(),
         devices_title: rust_i18n::t!("devices.title").to_string(),
         filter_label: rust_i18n::t!("devices.filter_label").to_string(),
         filter_all: rust_i18n::t!("devices.filter_all").to_string(),
@@ -101,8 +95,8 @@ fn example_strings() -> ExampleStrings {
         devices_state: rust_i18n::t!("devices.state").to_string(),
         devices_seen: rust_i18n::t!("devices.seen").to_string(),
         devices_none: rust_i18n::t!("devices.none").to_string(),
-        unplaced_title: rust_i18n::t!("devices.unplaced_title").to_string(),
-        unplaced_reason: rust_i18n::t!("devices.unplaced_reason").to_string(),
+        unplaced_title: rust_i18n::t!("unplaced.title").to_string(),
+        unplaced_reason: rust_i18n::t!("unplaced.reason").to_string(),
         record_fields: rust_i18n::t!("record.fields").to_string(),
         record_declared: rust_i18n::t!("record.declared").to_string(),
         record_observed: rust_i18n::t!("record.observed").to_string(),
@@ -327,11 +321,21 @@ pub(crate) fn record_body(id: &str) -> Option<String> {
             fields: device
                 .fields
                 .iter()
-                .map(|field| FieldRow {
-                    label: rust_i18n::t!(field.label_key).to_string(),
-                    declared: field.declared.unwrap_or(dash).to_string(),
-                    observed: field.observed.unwrap_or(dash).to_string(),
-                    state: StateView::new(field.state, None),
+                .map(|field| {
+                    // 🔴 The flag, not a heuristic: the *role* row's values are KEYS and every
+                    // other row's are facts. The first draft printed the key — see
+                    // `no_i18n_key_reaches_the_screen` for the two ways that stayed green.
+                    let show = |value: Option<&'static str>| match (value, field.values_are_keys) {
+                        (None, _) => dash.to_string(),
+                        (Some(value), true) => rust_i18n::t!(value).to_string(),
+                        (Some(value), false) => value.to_string(),
+                    };
+                    FieldRow {
+                        label: rust_i18n::t!(field.label_key).to_string(),
+                        declared: show(field.declared),
+                        observed: show(field.observed),
+                        state: StateView::new(field.state, None),
+                    }
                 })
                 .collect(),
             hosted: device
@@ -629,5 +633,147 @@ mod tests {
     fn a_device_that_hosts_nothing_says_so() {
         let html = record_body("switch-core").expect("switch-core is in the example dataset");
         assert!(html.contains(rust_i18n::t!("record.hosted_none").to_string().as_str()));
+    }
+
+    /// 🔴 **Every i18n key spelled as a literal in the view code EXISTS — and this was found by
+    /// LOOKING at the screen, by nothing else.**
+    ///
+    /// # The defect
+    ///
+    /// Story 6b.6's first render put **`devices.unplaced_title`** and **`devices.unplaced_reason`**
+    /// on the operator's screen, in place of the two headings they were meant to resolve: the keys
+    /// are `unplaced.title` and `unplaced.reason`, and the new module invented a `devices.` prefix
+    /// for them. `rust-i18n` renders an unknown key **verbatim**, so nothing failed — 649 tests,
+    /// eight gates and clippy all green over a page showing its own key names.
+    ///
+    /// 🔑 **Why no existing guard could see it.** `every_key_carries_both_locales` reads `app.yml`
+    /// and asks *"does every key have two languages?"* — a key that is not in the file is not in
+    /// its population at all. `the_example_copy_is_translated_rather_than_typed` checks the
+    /// dataset's `example.*` keys, not a template heading. And story 6b.6's own state-word guard
+    /// covers state words. *Three guards over copy, and a heading rendering its own key passed all
+    /// three.*
+    ///
+    /// ⚠️ **The limit, written**: it reads `t!("…")` with a LITERAL key. A key held in a variable —
+    /// which is how [`crate::example_data`]'s fields work, and which
+    /// `the_example_copy_is_translated_rather_than_typed` covers instead — is invisible here. The
+    /// two guards are complements, and neither is a barrier.
+    #[test]
+    fn every_literal_key_in_the_view_code_resolves() {
+        let mut checked = 0_usize;
+        for (file, source) in [
+            ("example_screens.rs", include_str!("example_screens.rs")),
+            ("page.rs", include_str!("page.rs")),
+            ("screens.rs", include_str!("screens.rs")),
+        ] {
+            // ⚠️ A BOUNDARY, not a substring: the first draft split on `t!("` and matched inside
+            // `format!(".{}"`, reporting `".{}"` as a missing key. *A matcher without a boundary
+            // finds the language it is written in.*
+            for (at, _) in source.match_indices("t!(\"") {
+                let before = source[..at].chars().next_back();
+                if before.is_some_and(|c| c.is_alphanumeric() || c == '_') {
+                    continue;
+                }
+                let Some((key, _)) = source[at + 4..].split_once('"') else {
+                    continue;
+                };
+                // A key is a dotted path with no interpolation in it.
+                if !key.contains('.') || key.contains(' ') || key.contains('{') {
+                    continue;
+                }
+                assert_ne!(
+                    rust_i18n::t!(key),
+                    key,
+                    "{file} resolves {key:?} and no such key exists — `rust-i18n` renders an \
+                     unknown key verbatim, so this reaches the operator's screen as its own name \
+                     while every test stays green"
+                );
+                checked += 1;
+            }
+        }
+        assert!(
+            checked >= 60,
+            "the premise: at least sixty literal keys were checked ({checked} seen) — a scan that \
+             matched nothing would assert nothing"
+        );
+    }
+
+    /// 🔴 **No i18n KEY reaches the operator's screen — the render-side half, and the only guard
+    /// that could have caught either of this story's two i18n defects.**
+    ///
+    /// # Two defects, one class, three guards blind to both
+    ///
+    /// Story 6b.6 shipped two of these in one afternoon and **both were found by looking at the
+    /// page**, with 649 tests, eight gates and clippy green over each:
+    ///
+    /// - two section headings resolved `devices.unplaced_*`, keys that do not exist, so the page
+    ///   showed its own key names — closed by
+    ///   [`every_literal_key_in_the_view_code_resolves`](tests::every_literal_key_in_the_view_code_resolves);
+    /// - the record's *Rôle* row carried `example.role.storage` **as a VALUE**, because the dataset
+    ///   stores keys and that column printed them raw. That one is invisible to the literal-key
+    ///   guard (the key is data, not a `t!` argument) **and** to
+    ///   `the_example_copy_is_translated_rather_than_typed` (which checks the fields it knows,
+    ///   `role_key` and `reason_key`, not a new struct's).
+    ///
+    /// 🔑 **The two are one class — an i18n key on the screen — and only a check on the SERVED
+    /// PAGE spans it.** Every guard that reads the source, the dataset or the locale file is
+    /// looking at one end of a pipe whose other end is what the operator sees. *A guard that never
+    /// reads the render cannot see what was rendered.*
+    ///
+    /// ⚠️ **The limit**: it recognises a key by SHAPE — a dotted lowercase token with no space. A
+    /// key spelled unlike a key is invisible, and so is a legitimate value that looks like one
+    /// (none today: the dataset's values are addresses, MACs, serials and proper nouns).
+    #[test]
+    fn no_i18n_key_reaches_the_screen() {
+        fn keyish(word: &str) -> bool {
+            let word = word.trim_matches(|c: char| !c.is_alphanumeric() && c != '.' && c != '_');
+            word.contains('.')
+                && word.split('.').count() >= 2
+                && word.split('.').all(|part| {
+                    !part.is_empty()
+                        && part
+                            .chars()
+                            .all(|c| c.is_ascii_lowercase() || c == '_' || c.is_ascii_digit())
+                })
+                // An address is dotted too, and every part of it is digits.
+                && !word.split('.').all(|part| part.chars().all(|c| c.is_ascii_digit()))
+        }
+
+        let mut pages = vec![("/devices", inventory_body(&ScreenQuery::default()))];
+        for device in example_data::devices() {
+            pages.push((
+                "/devices/{id}",
+                record_body(device.id).expect("every listed device has a record"),
+            ));
+        }
+        pages.push(("/devices/unknown", unknown_device_body()));
+
+        let mut checked = 0_usize;
+        for (screen, html) in &pages {
+            // Only the TEXT: an `href`, a `class` and an Askama comment legitimately carry dotted
+            // tokens, and the operator reads none of them.
+            let mut text = String::new();
+            let mut depth = 0_usize;
+            for c in html.chars() {
+                match c {
+                    '<' => depth += 1,
+                    '>' => depth = depth.saturating_sub(1),
+                    _ if depth == 0 => text.push(c),
+                    _ => {}
+                }
+            }
+            for word in text.split_whitespace() {
+                assert!(
+                    !keyish(word),
+                    "{screen} renders {word:?}, which is an i18n KEY and not a word — the \
+                     operator reads the key's name where the translation belongs, and no guard \
+                     over the source, the dataset or the locale file can see it"
+                );
+                checked += 1;
+            }
+        }
+        assert!(
+            checked >= 200,
+            "the premise: at least two hundred rendered words were inspected ({checked} seen)"
+        );
     }
 }

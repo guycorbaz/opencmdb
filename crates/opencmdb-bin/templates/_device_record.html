@@ -13,7 +13,6 @@
 
 <section class="screen-section example-section">
   <h3>{{ s.record_fields }}</h3>
-  {% include "_example_marker.html" %}
   <table class="grid">
     <thead>
       <tr>
@@ -41,7 +40,6 @@
      strongest sense. -#}
 <section class="screen-section example-section">
   <h3>{{ s.record_hosted }}</h3>
-  {% include "_example_marker.html" %}
   {%- if hosted.is_empty() %}
   <p class="empty">{{ s.record_hosted_none }}</p>
   {%- else %}
@@ -60,7 +58,6 @@
 
 <section class="screen-section example-section">
   <h3>{{ s.record_identity }}</h3>
-  {% include "_example_marker.html" %}
   <table class="grid">
     <tbody>
       {%- for part in identity %}
@@ -75,7 +72,6 @@
 
 <section class="screen-section example-section">
   <h3>{{ s.record_history }}</h3>
-  {% include "_example_marker.html" %}
   <table class="grid">
     <tbody>
       {%- for line in history %}

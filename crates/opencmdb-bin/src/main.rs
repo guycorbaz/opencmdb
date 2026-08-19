@@ -1078,6 +1078,50 @@ mod tests {
         );
     }
 
+    /// 🔴 **The filter narrows THROUGH THE ROUTE — the guard that could see what the pure one
+    /// could not.**
+    ///
+    /// `the_filter_narrows_and_says_so_when_it_matches_nothing` calls `inventory_body` directly and
+    /// was **green over a route that ignored the query entirely**: the router's closure took no
+    /// arguments and the content was rendered with `ScreenQuery::default()`, so
+    /// `/devices?kind=printer` served all eight devices. Found by looking at the running server.
+    ///
+    /// 🔑 Epic 5's dominant class — *a guard placed where the defect cannot occur reads as coverage
+    /// and is none* — and story 6b.4's `triage_html` was the same shape: a helper that renders what
+    /// production does not.
+    #[tokio::test]
+    async fn the_filter_narrows_through_the_real_route() {
+        let app = app(lazy_pool(), config(false, Some(pair())));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/devices?kind=printer")
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "s3cret"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = String::from_utf8(
+            axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
+        let rows = body.matches("data-device-id=").count();
+        assert_eq!(
+            rows, 1,
+            "?kind=printer must narrow to the one printer; {rows} rows came back, which means the \
+             route is not reading its query"
+        );
+        assert!(body.contains(r#"data-device-id="printer-hall""#));
+    }
+
     /// 🔴 **The record route answers a NON-CANONICAL slug, and this is the only thing that holds
     /// it.**
     ///

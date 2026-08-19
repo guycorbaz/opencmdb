@@ -156,11 +156,13 @@ pub(crate) enum ExampleContent {
 
 impl ExampleContent {
     /// Render this content's body.
-    fn render(self) -> String {
+    fn render(self, query: &crate::example_screens::ScreenQuery) -> String {
         match self {
-            ExampleContent::DevicesInventory => crate::example_screens::inventory_body(
-                &crate::example_screens::ScreenQuery::default(),
-            ),
+            // ⚠️ `query`, not `ScreenQuery::default()`. It read `default()` after the parameter
+            // had been threaded through the router, `demonstration_screen` and this signature —
+            // and **nothing warned**: Rust does not lint an unused function PARAMETER. The route
+            // filtered nothing while every pure test stayed green. Only the route test saw it.
+            ExampleContent::DevicesInventory => crate::example_screens::inventory_body(query),
             // Unreachable by construction, and by the SAME mechanism as `Nature::Fed` below:
             // `router` never registers this screen's address, because the parameterised route
             // serves it. It is `unreachable!` rather than a silent fallback so that the day
@@ -346,7 +348,18 @@ pub(crate) fn router(perimeter: Option<String>) -> Router {
         let perimeter = perimeter.clone();
         router = router.route(
             screen.href(),
-            get(move || async move { demonstration_screen(screen, perimeter) }),
+            get(
+                // 🔴 **The query is EXTRACTED, and it was not until a look at the running server.**
+                // The closure took no arguments and `ExampleContent::render` called the inventory
+                // with `ScreenQuery::default()`, so `/devices?kind=printer` served all eight
+                // devices while `the_filter_narrows_…` — which calls the pure builder directly —
+                // stayed green. Epic 5's dominant class: *a guard placed where the defect cannot
+                // occur reads as coverage and is none*, and story 6b.4's `triage_html` was the same
+                // shape. `the_filter_narrows_through_the_real_route` is the guard that can see it.
+                move |axum::extract::Query(query): axum::extract::Query<
+                    crate::example_screens::ScreenQuery,
+                >| async move { demonstration_screen(screen, perimeter, &query) },
+            ),
         );
     }
     {
@@ -379,8 +392,18 @@ pub(crate) const RECORD_ROUTE: &str = "/devices/{id}";
 /// operator the feature does not exist. 🔴 The slug is **never echoed** — see
 /// `_device_unknown.html` for the reflected-XSS shape that refuses.
 fn device_record(id: &str, perimeter: Option<String>) -> Response {
-    let body = crate::example_screens::record_body(id)
-        .unwrap_or_else(crate::example_screens::unknown_device_body);
+    // 🔑 The marker, from the same place `demonstration_screen` gets it. This route does not go
+    // through that function — it is the one address off `Screen` — and the first version of it
+    // therefore served four example sections with no marker at all. `Screen::Device`'s nature is
+    // `Example`, so the partition test named it immediately; the point is that the skip in
+    // `router` buys structural safety on one axis and costs it on another, which is why this call
+    // is here and not implied.
+    let body = format!(
+        "{}{}",
+        crate::page::example_marker(),
+        crate::example_screens::record_body(id)
+            .unwrap_or_else(crate::example_screens::unknown_device_body)
+    );
     Html(render_shell(Shell::new(Screen::Device, perimeter), body)).into_response()
 }
 
@@ -395,11 +418,20 @@ fn device_record(id: &str, perimeter: Option<String>) -> Response {
 /// the point of [`Nature::Empty`]: marking it as example data would tell the operator that a blank
 /// screen is a demonstration. Its own story (named beside its arm in `nature`) replaces the line
 /// with real example content.
-fn demonstration_screen(screen: Screen, perimeter: Option<String>) -> Response {
+fn demonstration_screen(
+    screen: Screen,
+    perimeter: Option<String>,
+    query: &crate::example_screens::ScreenQuery,
+) -> Response {
     let body = match screen.nature() {
-        // 🔑 The CONTENT comes from the nature's payload, so no screen can be `Example` without
-        // having said what it shows — see [`Nature::Example`] for the defect this closes.
-        Nature::Example(content) => content.render(),
+        // 🔑 **The CONTENT and the MARKER come from the same decision**, so no screen can be
+        // `Example` without having said what it shows and without saying it IS an example — see
+        // [`Nature::Example`] for the defect the payload closes, and
+        // [`crate::page::example_marker`] for why the marker is emitted here rather than included
+        // by each template.
+        Nature::Example(content) => {
+            format!("{}{}", crate::page::example_marker(), content.render(query))
+        }
         Nature::Empty => crate::page::not_built_yet_body(),
         // Unreachable by construction: `router` never merges a `Fed` screen — those need the pool
         // and live on the main router. It is `unreachable!` rather than a silent fallback so the
