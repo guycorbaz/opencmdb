@@ -75,7 +75,16 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4b CODE-REVIEWED (three layers, Sonnet 5) and REPAIRED. **0
+last_updated: 2026-08-19  # 6b.4b -> `done`: PR #103 squash-merged as `20e854c` after a green CI run
+                          # (1m09s; bin suite 6.13 s in CI against 0.05 s locally). Branch deleted,
+                          # twins updated in this same push. **625 -> 629 tests**, eight gates green.
+                          # 🔑 EPIC 6b IS NOW 4 of 13 DONE (6b.1, 6b.2, 6b.3, 6b.4, 6b.4b -> five
+                          # story files, four numbered slots plus the insertion).
+                          # NEXT = `create-story` 6b.5 (the dashboard: the real reach section beside
+                          # labelled example sections). ⚠️ It inherits three things by name: the
+                          # global last-observation figure (registered to it since 6b.2), the
+                          # AC2 MIXED specimen story 6b.3 owed it, and `/gap`'s orphaned fragment.
+                          # (Earlier the same day) 6b.4b CODE-REVIEWED (three layers, Sonnet 5) and REPAIRED. **0
                           # decisions, 9 patches, 1 deferral, 4 dismissed with their check.** 629
                           # tests, eight gates green, clippy and fmt clean.
                           # 🔴 THE FOUR HIGH FINDINGS ARE ONE MISTAKE MADE FOUR TIMES: **every guard
@@ -3609,7 +3618,7 @@ development_status:
   # every screen after this one, not just triage. Its form and words are ALREADY arbitrated in 6b.4's
   # §0b so that 6b.4b starts designed rather than with a question. `epics.md` NOT edited (a story may
   # not; only a retrospective may) -- the divergence is registered in deferred-work.md.
-  6b-4b-action-bar-and-the-gesture-nature: review
+  6b-4b-action-bar-and-the-gesture-nature: done
   6b-5-dashboard-real-reach-beside-examples: backlog
   6b-6-inventory-and-device-record: backlog
   6b-7-applications-and-ipam: backlog
