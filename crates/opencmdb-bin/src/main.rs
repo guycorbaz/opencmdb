@@ -15,6 +15,7 @@ mod auth;
 mod dburl;
 mod document;
 mod example_data;
+mod example_screens;
 mod fault_injection;
 mod fixture_connector;
 mod fixtures;
@@ -32,6 +33,7 @@ mod repo;
 mod resolver;
 mod scan_pass;
 mod screens;
+mod state_vocabulary;
 mod trap_gate;
 
 // The i18n seam (D39/D66): user-facing strings resolve through `t!()` against `locales/`. EN is
@@ -863,7 +865,7 @@ mod tests {
         // for both of them: an `Empty` screen must say it is not built and must NOT be called a
         // demonstration. Sharing one class would turn this test green for the wrong reason.
         let not_yet = "not-yet-badge";
-        let mut example_screens = 0_usize;
+        let mut example_contents: Vec<(&str, screens::ExampleContent)> = Vec::new();
         let mut probed = 0_usize;
 
         // A real pool when one is reachable, so the `Fed` half asserts over a page that RENDERED.
@@ -884,8 +886,8 @@ mod tests {
 
         for screen in screens::Screen::ALL {
             let nature = screen.nature();
-            if matches!(nature, screens::Nature::Example(_)) {
-                example_screens += 1;
+            if let screens::Nature::Example(content) = nature {
+                example_contents.push((screen.href(), content));
             }
             if matches!(nature, screens::Nature::Fed | screens::Nature::Mixed) && !fed_reachable {
                 // Said on stderr above, never skipped in silence — see this test's doc.
@@ -986,17 +988,34 @@ mod tests {
             "the premise: every screen the loop should reach was probed — a loop that went empty, \
              or one whose skip rule drifted from the route table, would assert nothing"
         );
+        // 🔴 **TWO witness screens now, and the second is a DECISION rather than a drift.** This
+        // read `1` with a message calling a second one *"a witness screen nobody decided on"* —
+        // story 6b.6 is the one somebody decided on, and bumping the number without rewriting the
+        // sentence would have left a false explanation standing over a true count.
         assert_eq!(
-            example_screens, 1,
-            "exactly ONE witness screen carries the example dataset (Guy's arbitration, \
-             2026-08-19). ⚠️ It is still not redundant with the loop above — a second `Example` \
-             screen renders content AND its marker, so every per-screen check stays true — but it \
-             is no longer the SOLE carrier it was when this story shipped: since the code review, \
-             `Nature::Example` carries its content, so a second witness screen must NAME what it \
-             shows instead of silently inheriting the device inventory. This line notices that the \
-             product grew a witness screen nobody decided on; the type notices that one shows the \
-             wrong thing"
+            example_contents.len(),
+            2,
+            "the witness screens are the inventory (story 6b.3) and the device record (6b.6), and \
+             a third is a screen that grew example content without a story deciding it should: \
+             {example_contents:?}"
         );
+        // 🔑 **The property that actually grows, and it is not the count.** Two screens declaring
+        // the SAME `ExampleContent` is one screen silently rendering another's body under its own
+        // heading — the defect story 6b.3's code review closed in the TYPE by giving
+        // `Nature::Example` a payload. The count notices an undecided screen; this notices a screen
+        // showing the wrong thing, and it stays true however many witness screens ship.
+        for (index, (href, content)) in example_contents.iter().enumerate() {
+            if let Some((other, _)) = example_contents
+                .iter()
+                .take(index)
+                .find(|(_, seen)| seen == content)
+            {
+                panic!(
+                    "{href} and {other} both declare {content:?}: one of them is rendering the \
+                     other's body under its own heading"
+                );
+            }
+        }
     }
 
     /// 🔴 **Every screen of the shell answers 401 without a credential — named, one by one.**
@@ -1026,7 +1045,13 @@ mod tests {
         for path in screens::Screen::ALL
             .iter()
             .map(|screen| screen.href())
-            .chain(["/"])
+            // 🔴 The record route is OFF `Screen`, so this loop could not see it — the first
+            // address in this product `Screen::ALL` structurally cannot represent. Story 6b.2's
+            // review found that a screen named by no test answered 200 when merged below the auth
+            // layer; an off-`Screen` route is protected by the same `is_public` property and was
+            // likewise carried by nothing. Both a KNOWN slug and an unknown one, because they take
+            // different branches inside the handler.
+            .chain(["/devices/printer-hall", "/devices/does-not-exist", "/"])
         {
             let app = app(lazy_pool(), config(false, Some(pair())));
             let response = app
@@ -1047,10 +1072,127 @@ mod tests {
             checked += 1;
         }
         assert_eq!(
-            checked, 11,
-            "the premise: ten screens plus `/` ({checked} probed) — a loop that went empty \
-             would assert nothing"
+            checked, 13,
+            "the premise: ten screens, two record addresses and `/` ({checked} probed) — a loop \
+             that went empty would assert nothing"
         );
+    }
+
+    /// 🔴 **The record route answers a NON-CANONICAL slug, and this is the only thing that holds
+    /// it.**
+    ///
+    /// # Why it needs a test of its own
+    ///
+    /// `Screen::href` returns a `&'static str` used as a route PATTERN by `screens::router` and
+    /// FETCHED as a URL by the partition and auth guards. `/devices/{id}` cannot be both, so the
+    /// record's address sits **off `Screen`** (Guy's arbitration, 2026-08-19) and **no inherited
+    /// guard covers it**. Story 6b.6's validation built the alternative and measured what it costs:
+    /// with a static route registered beside the parameterised one, the static wins for exactly the
+    /// URL the guards probe — after which the handler could **ignore its slug entirely, serve
+    /// device #1 for `/devices/does-not-exist`, and leave 636 tests plus `clippy -D warnings`
+    /// green**.
+    ///
+    /// 🔑 **A non-canonical slug is the whole point.** `Screen::Device.href()` is
+    /// `/devices/nas-01`, so a test fetching only that address is satisfied by a handler that
+    /// ignores its input. This one asks for a device the navigation does not point at.
+    #[tokio::test]
+    async fn the_record_route_answers_a_non_canonical_slug() {
+        // ⚠️ **The oracle is the ADDRESS, not the name**, and the reason is a measurement: the
+        // shell's navigation carries `href="/devices/nas-01"` on every page, because
+        // `Screen::Device` is the record's entry and an entry must point somewhere. A name-based
+        // oracle therefore matched the NAVIGATION and reported the wrong device as served. *A guard
+        // that reads the whole page must key on something the frame cannot contain.*
+        for (slug, expected, refused) in [
+            // The address the navigation points at.
+            ("nas-01", "192.0.2.10", "192.0.2.31"),
+            // 🔑 NOT the navigation's address: a handler ignoring its slug reds here and nowhere.
+            ("printer-hall", "192.0.2.31", "192.0.2.10"),
+        ] {
+            let app = app(lazy_pool(), config(false, Some(pair())));
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri(format!("/devices/{slug}"))
+                        .header(
+                            axum::http::header::AUTHORIZATION,
+                            basic_header("op", "s3cret"),
+                        )
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "/devices/{slug} must render"
+            );
+            let body = String::from_utf8(
+                axum::body::to_bytes(response.into_body(), usize::MAX)
+                    .await
+                    .unwrap()
+                    .to_vec(),
+            )
+            .unwrap();
+            assert!(
+                body.contains(expected),
+                "/devices/{slug} must show {expected}"
+            );
+            assert!(
+                !body.contains(refused),
+                "/devices/{slug} shows {refused}: the handler is ignoring its slug"
+            );
+        }
+    }
+
+    /// 🔴 **A slug no device carries says so, and the slug is never echoed back.**
+    ///
+    /// The obvious implementation — `format!` of the path segment into `Html` — is reflected XSS,
+    /// measured at this story's validation serving `<script>alert(1)</script>` back with a 200.
+    /// Story 6b.4's review verified *"no XSS"* over TEMPLATES; the record's unknown case is the
+    /// first place in this product where a raw path segment could be echoed at all.
+    ///
+    /// ⚠️ It answers **200 and a page**, not 404: the address is a real screen reached from the
+    /// product's own navigation, and what is unknown is the slug.
+    #[tokio::test]
+    async fn an_unknown_slug_is_answered_without_echoing_it() {
+        for slug in ["does-not-exist", "%3Cscript%3Ealert(1)%3C%2Fscript%3E"] {
+            let app = app(lazy_pool(), config(false, Some(pair())));
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri(format!("/devices/{slug}"))
+                        .header(
+                            axum::http::header::AUTHORIZATION,
+                            basic_header("op", "s3cret"),
+                        )
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = String::from_utf8(
+                axum::body::to_bytes(response.into_body(), usize::MAX)
+                    .await
+                    .unwrap()
+                    .to_vec(),
+            )
+            .unwrap();
+            assert!(
+                body.contains(&rust_i18n::t!("record.unknown").to_string()),
+                "an unknown slug must be SAID"
+            );
+            assert!(
+                !body.contains("<script>"),
+                "the slug reached the page unescaped: reflected XSS"
+            );
+            assert!(
+                !body.contains("alert(1)"),
+                "the slug is echoed back at all, escaped or not — it teaches the operator nothing \
+                 and it is the shape that regresses"
+            );
+        }
     }
 
     /// A valid credential REACHES a formerly-public page: anything but 401, and never the

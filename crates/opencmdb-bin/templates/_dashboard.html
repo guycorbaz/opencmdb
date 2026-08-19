@@ -43,7 +43,7 @@
   </div>
 
   {#- ── The example half. One heading, one marker, then the cards. -#}
-  <div class="dashboard-example">
+  <div class="dashboard-example example-section">
     <h2>{{ s.dash_example_heading }}</h2>
     {% include "_example_marker.html" %}
     <div class="cards">
@@ -65,7 +65,7 @@
   {#- ── "What grew since your last visit" — an example section of its own, because the product has
        NO notion of a last visit: measured, `grep -rn "session|cookie|last_visit"` over `crates/`
        returns nothing. -#}
-  <div class="dashboard-example">
+  <div class="dashboard-example example-section">
     <h2>{{ s.dash_since_heading }}</h2>
     {% include "_example_marker.html" %}
     <p class="muted">{{ s.dash_since_body }}</p>

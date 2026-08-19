@@ -675,3 +675,76 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
    scanner"*, live. No card used 8, so nothing broke; nothing would have caught it either. */
 .spark-h8 { height: 90%; }
 .spark-h9 { height: 100%; }
+
+/* ── The inventory's filter bar and the device record (story 6b.6) ────────────────────────────
+   ⚠️ Every colour here is the NEUTRAL ramp or the STRUCTURE accent, and never --accent-document:
+   story 6b.1 reserves the amber for the documenting gesture alone, and a state pill is a
+   statement about an object, never an invitation to act on it. */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+.filter {
+  display: inline-block;
+  padding: 4px 12px;
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  color: var(--color-neutral-700);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+.filter:hover { border-color: var(--color-accent-400); }
+.filter.is-active {
+  background: var(--color-accent-100);
+  border-color: var(--color-accent-400);
+  color: var(--color-accent-800);
+}
+
+/* The empty case of a filter, and of a record block that holds nothing. It is a SENTENCE, not a
+   blank area: a table that renders no rows tells the operator nothing about why. */
+.empty {
+  margin: 0;
+  color: var(--color-neutral-600);
+  font-style: italic;
+}
+
+.record-back { margin: 0 0 16px; font-size: 0.875rem; }
+.record-head { margin: 0 0 24px; }
+.record-head h2 { margin: 0 0 4px; }
+.record-sub {
+  margin: 0;
+  color: var(--color-neutral-600);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 🔴 The state pill. Its modifier is interpolated (`class="statepill {{ … }}"`), and story 6b.4's
+   stylesheet guard SKIPS any class attribute containing a brace — measured at 6b.6's validation
+   with its control: `class="statepill statepill-{{ id }}"` with both undefined stays GREEN, while
+   the bare `class="statepill"` reds. So these five rules are covered by a guard of their own,
+   `every_state_pill_modifier_is_defined_in_the_stylesheet`, which iterates ObjectState rather than
+   reading the template. A widget whose class the generic guard cannot see needs a specific one. */
+.statepill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-divider);
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-800);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.statepill-concordant { background: var(--color-neutral-100); color: var(--color-neutral-700); }
+.statepill-gap        { background: var(--color-accent-100); color: var(--color-accent-800); border-color: var(--color-accent-300); }
+.statepill-conflict   { background: var(--color-neutral-200); color: var(--color-neutral-900); border-color: var(--color-neutral-400); }
+.statepill-ambiguous  { background: var(--color-neutral-100); color: var(--color-neutral-700); border-style: dashed; }
+.statepill-undeclared { background: var(--color-neutral-200); color: var(--color-neutral-800); }
+
+/* The section anchor a marker guard reads. Story 6b.6 unified it: this file styles the layout
+   through .screen-section, and .example-section carries no visual weight of its own — it exists so
+   ONE guard can ask "does every example section have exactly one marker?" across every screen. */
+.example-section { }
