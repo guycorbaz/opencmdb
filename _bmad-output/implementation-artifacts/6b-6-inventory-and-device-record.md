@@ -422,7 +422,7 @@ growth** — `CLAUDE.md`'s *"split, not grown"*.
 
 ## Prove-to-red — executed
 
-**Thirteen rows: eleven reds, one compiler-carried, one GREEN by measurement.** Carriers are named
+**Fifteen rows after the code review: thirteen reds, one compiler-carried, one GREEN by measurement.** (Thirteen rows at implementation; M2b and M13 were added by the review.) Carriers are named
 per row and *"every red assertion-carried"* is **not** claimed. One restore mechanism only — a
 scratchpad snapshot, never `git checkout --`, the gesture that destroyed uncommitted work three
 times in this project.
@@ -430,9 +430,10 @@ times in this project.
 | # | Mutation | Result | Carrier |
 |---|---|---|---|
 | M1 | a state renders a key outside the glossary | **RED ×2** | both glossary guards, each by its own named assertion — the enum-side and the render-side |
-| M2 | a literal `t!` key that does not exist | **RED ×3** | `every_literal_key_…`, plus the render-side key guard and a block assertion |
+| M2 | `rust_i18n::t!("record.hosted")` → `"record.hosted_bogus"` | **RED ×3** | `every_literal_key_…`, `no_i18n_key_reaches_the_screen`, and `the_record_carries_the_four_blocks_ac1_names`. ⚠️ **The KEY had to be named.** The row first read *"a literal key that does not exist"*, and the acceptance auditor could not reproduce ×3 — it tried other keys and got 2 or 4. *The count is a property of the key, not of the mutation class* |
+| M2b | `rust_i18n::t!("devices.none")` → bogus — a key **no block assertion reads** | **RED ×1** | 🔑 `every_literal_key_…` **alone**, which is the honest statement: the redundancy M2 shows is an artefact of the key chosen, and for most keys the literal-key guard is the **sole** carrier. M2 without M2b overstates the coverage |
 | M3 | a template re-includes the marker beside the dispatch's | 🔑 **COMPILER** (`E0609`) | ⚠️ Once the marker left the templates, `ExampleStrings` stopped carrying `example_badge` — **a double marker became unrepresentable in the type**, which is stronger than the assertion written for it. That assertion is therefore carried by the compiler for these two templates, and by itself only for a struct that still has the field |
-| M4 | the record handler ignores its slug | **RED ×2** | `the_record_route_answers_a_non_canonical_slug` — 🔑 exactly the mutation the gap-hunt measured leaving **636 tests and clippy green** under the shadowed-route design |
+| M4 | the record handler ignores its slug | **RED ×2** | `the_record_route_answers_a_non_canonical_slug` **and** `an_unknown_slug_is_answered_without_echoing_it` — the row named only the first, which the acceptance auditor caught. 🔑 Exactly the mutation the gap-hunt measured leaving **636 tests and clippy green** under the shadowed-route design |
 | M5 | the route renders with `ScreenQuery::default()` | **RED ×1** | the route-level filter test. ⚠️ **This mutation was the shipped code** until a browser showed it; the pure filter test stayed green through it |
 | M6 | the unknown page echoes the slug (and drops the sentence) | **RED ×1** | ⚠️ on *"an unknown slug must be SAID"* — **the FIRST assertion, not the anti-XSS one it was named for.** Story 5.13's assertion-order family, fifth occurrence |
 | M6b | the same, sentence KEPT | **RED ×1** | 🔑 the anti-XSS assertion itself (`main.rs:1230`). **M6b is what proves it load-bearing; M6 alone credited the wrong assertion** |
@@ -442,6 +443,7 @@ times in this project.
 | M10 | a key-valued field printed unresolved | **RED ×1** | the render-side key guard — the second of the two defects a browser found |
 | M11 | a marker deleted from the dashboard's second example section | **RED ×2** | both per-section guards |
 | M12 | `values_are_keys` set on a FACTUAL field | ✅ **GREEN, by measurement** | ⚠️ `t!` renders an unknown key verbatim, so resolving `"192.0.2.10"` yields `"192.0.2.10"`. **The flag protects one direction only**, and its doc now says so |
+| M13 | `Screen::Device.href()` → a slug no device carries | **RED ×1** | `the_navigations_device_address_names_a_device_that_exists`, added at the code review — before it, the product's own primary link to the record degraded to the *unknown device* page with **no red anywhere** |
 
 ⚠️ **Two rows first came back GREEN and both were MY DRIVER, not a weak guard** — a `sed` that
 replaced a string with itself, and a `sed` with `\n` in the pattern, which GNU sed does not match
