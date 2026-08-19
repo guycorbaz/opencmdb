@@ -3968,3 +3968,43 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   every other entity's observations as `OutOfPerimeter` noise — O(N·M) over the corpus. Correct today
   at fixture scale, and a shape to revisit when the reference-scale generator (story 6.16) meets the
   triage screen. **Owner: story 6.16.**
+
+## Deferred from: story 6b.4's implementation (2026-08-19)
+
+- 🔴 **THE PRODUCT HAS NO CONNECTOR REGISTRY, and the triage screen is where that first shows.**
+  `observation_record.connector_id` is a bare `CHAR(36)`; there is **no table, no name, nothing**
+  behind it (measured: five tables in the migrations, none of them a source registry, and
+  `arp_ping.rs` mints its own id with no name anywhere). The reference mock's observed meta-line
+  reads *"UniFi · vu il y a 3 min"* — its fixture invented that name. **Found by LOOKING**: the
+  meta-line rendered *"cccccccc-0000-0000-0000-00000000unif · il y a 4 min"*, which tells the
+  operator nothing and pushes the freshness off the line. Shipped as a SHORT labelled id
+  (*"Source unifi001"*), which is the true sentence today. ⚠️ A name per source is what the operator
+  needs and what the mock shows. **Owner: story 6b.8 (*Sources and alerts*)**, the screen that owns
+  sources — and the day it lands, `page::source_label` is where the name arrives.
+
+- ⚠️ **`/gap` is no longer embedded by any page.** Story 6b.4 replaced the triage body with the two
+  panes, so `_gap_card.html` — and its HTMX refresh button targeting `#gap-card` — is reachable only
+  by requesting `/gap` directly. It remains a tested fragment endpoint with its own auth and J3
+  coverage, and **the mock's triage has no refresh button either**, so removing it from the screen is
+  fidelity rather than loss. What is now unowned is the *fragment's consumer*. **Owner: story 6b.5**,
+  whose dashboard is the next page that may want a refreshable card, or 6b.12's release sweep.
+
+- ⚠️ **`xtask/src/main.rs` is at 1908 code lines against the 2000 ceiling** — the largest file in the
+  workspace, and this story added 14 to it (the second `SANCTIONED_READS` entry and its doctrine).
+  The house rule is *split, not grown*, and story 6.3 already moved one gate out to
+  `xtask/src/observed_immutable.rs` for exactly this reason. **Owner: the next story that adds an
+  `xtask` gate**, which must split rather than append.
+
+- 🔴 **A guard cannot notice a read breaking if it never touches the read.** Mutation M1 froze
+  `observed_at` inside `load_observation_facts` and **the whole suite stayed GREEN**: every unit test
+  built `ObservedBatch` by hand, so the column round-trip the story exists to add was carried by
+  nothing. Closed here by a route-level assertion computing the expected day count from the stored
+  instant. 🔑 **The transferable half**: a story that widens a `SELECT` needs one guard that reads
+  through the database, and hand-built fixtures of the widened type will pass whatever the query
+  does. **Owner: recorded for Epic 6b's retrospective.**
+
+- ⚠️ **`Ambigu` and the mock's grouped-by-motif view are both absent, for different reasons.**
+  `Ambigu` has no producer (already registered above, Epic 6). The **grouped view** — the mock's
+  *"Vue groupée par motif"* with its bulk *"Merger les N"* — is not in this story's acceptance
+  criteria at all and has **no bulk write route** behind it (`document.rs` handles one subject).
+  Recorded so nobody reads its absence as an omission. **Owner: FR17's bulk triage, unscheduled.**

@@ -1189,14 +1189,28 @@ const SANCTIONED_SITES: [(&str, Option<&str>); 4] = [
 /// 6.2 shipped the first legitimate reader: a test that verifies the adopted rows carry
 /// `origin='adopted'` / `origin_obs_id=subject`. Production reads NO provenance (the
 /// already-documented refusal rides the unique index, not a `SELECT`), so this admits exactly
-/// ONE site — the test verifier.
+/// TWO sites since story 6b.4 — the test verifier, and the display reader.
+///
+/// 🔑 **The second entry is a SHAPE as much as a sanction** (Guy's arbitration, 2026-08-19). Story
+/// 6b.4 shows the declared side's provenance on the triage screen, which FR13 permits — the ban is
+/// on the DIVERGENCE COMPUTATION consulting it. Widening `load_declared_attributes`, whose rows go
+/// straight to `build_view`, would have put provenance inside the scope of the very path this gate
+/// protects, leaving nothing but this list between them. Instead there are two readers: the
+/// comparison's, which cannot see provenance because it is never given it, and this one, which goes
+/// only to the view.
 ///
 /// ⚠️ TRIPWIRE, not a barrier (story 5.12's precedent): it protects against a future story
 /// reading provenance into a divergence path BY ACCIDENT, never against a determined one.
-const SANCTIONED_READS: [(&str, Option<&str>); 1] = [(
-    "crates/opencmdb-bin/src/repo.rs",
-    Some("read_declared_provenance_for_test"),
-)];
+const SANCTIONED_READS: [(&str, Option<&str>); 2] = [
+    (
+        "crates/opencmdb-bin/src/repo.rs",
+        Some("read_declared_provenance_for_test"),
+    ),
+    (
+        "crates/opencmdb-bin/src/repo.rs",
+        Some("load_declared_provenance_for_display"),
+    ),
+];
 
 /// The provenance columns a divergence computation may never read (FR13, NFR5's second clause).
 ///

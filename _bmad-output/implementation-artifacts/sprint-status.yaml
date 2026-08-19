@@ -75,7 +75,51 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4 ✅ ARBITRATED by Guy (three rulings, before any code), governing
+last_updated: 2026-08-19  # 6b.4 -> `review`: IMPLEMENTED, scoped to AC1 + AC3. `/triage` is the
+                          # mock's two panes on the REAL gap: a queue of four measured kinds, and
+                          # two photos each carrying its OWN provenance and freshness. **611 -> 625
+                          # tests** (398 bin + 161 core + 66 xtask), eight gates green, fmt+clippy
+                          # clean, run BOTH ways (0.07 s without a database, 5.15 s against a live
+                          # `mariadb:10.11.11` -- the tell that the DB half executed).
+                          # 🔴 FOUR DEFECTS FOUND BY LOOKING, none reachable by any test: the
+                          # Absence pane said *"2 champs déclarés"* over *"Rien de déclaré"* (two
+                          # opposite sentences about one side); the observed source rendered as a
+                          # RAW UUID -- and **my own route test REQUIRED it**, asserting
+                          # `contains(<full uuid>)`, so it passed on the defect (*a test that pins
+                          # the ugly thing is a test that requires it*); a `Nouveau` row drew an
+                          # arrow pointing from nothing; and a cause row showed a bare count.
+                          # 🔴 AND A FIFTH, found by RENAMING: `page::tests::triage_html` rendered
+                          # `GapFragment` directly and never touched the route, so **the entire body
+                          # of /triage was replaced with all 387 bin tests green**. Ten tests were
+                          # built on it. Renamed; /triage now has a route-level test.
+                          # 🔴 THE MUTATION PASS'S OWN FINDING: **M1 came back GREEN** -- freezing
+                          # `observed_at` in the repo left the whole suite green, because every unit
+                          # test built `ObservedBatch` BY HAND and the widened column's round-trip
+                          # was carried by nothing. *A guard that never touches the read cannot
+                          # notice the read breaking.* Closed, then 1 red.
+                          # 🔑 AND M6 SETTLES THE VALIDATION'S CLAIM BY MEASUREMENT: a clock inside
+                          # the pure builder reds the NEW guard (4 tests) while story 5.14b's, run
+                          # alone on the same mutation, stays GREEN. `chrono::Utc::now()` is E0599
+                          # here; `SystemTime::now()` is not -- *a feature flag guards a spelling,
+                          # never the act of reading a clock.*
+                          # Eight mutations, eight measured, carriers MIXED and named per row (M3's
+                          # first red is a `.expect()` panic, M8's is a gate message) -- *"every red
+                          # assertion-carried"* is NOT claimed. Every one on a scratchpad-restored
+                          # base, never `git checkout --`.
+                          # 🔑 Two guards added that no AC asked for, each because a defect had
+                          # already happened: the clock guard for `build_view`, and *every class a
+                          # template names is defined in the stylesheet* (6b.3 shipped
+                          # `.screen-section` defined nowhere). ⚠️ The second states its own limit:
+                          # it reads `class="…"` literals and says NOTHING about whether an existing
+                          # rule is the right one -- `.rows` on a `<table>` would still pass.
+                          # ⚠️ Registered: **no connector registry exists** (`connector_id` is a bare
+                          # UUID, no table, no name -- the mock's "UniFi" was its fixture's
+                          # invention) -> story 6b.8; `/gap` is no longer embedded by any page ->
+                          # 6b.5/6b.12; `xtask/src/main.rs` is at 1908 of 2000 code lines.
+                          # ⚠️ T7 was a REAL look in French against seeded rows -- and STILL not a
+                          # browser, for the fourth consecutive story.
+                          # NEXT = `code-review` 6b.4 (three layers, a different model).
+                          # (Earlier the same day) 6b.4 ✅ ARBITRATED by Guy (three rulings, before any code), governing
                           # `dev-story`. **(1) THE SPLIT IS TAKEN -- 6b.4b INSERTED, Epic 6b -> 13
                           # stories**: 6b.4 keeps AC1+AC3, 6b.4b takes the action bar. `epics.md` NOT
                           # edited; registered instead. **(2) The dead-gesture mechanism is a GESTURE
@@ -3348,7 +3392,7 @@ development_status:
   6b-1-design-system-tokens-and-accent: done
   6b-2-shell-navigation-and-ten-routes: done
   6b-3-example-data-marker-and-its-gate: done
-  6b-4-triage-screen-on-the-real-gap: ready-for-dev
+  6b-4-triage-screen-on-the-real-gap: review
   # 6b.4b INSERTED 2026-08-19 at story 6b.4's VALIDATION (Epic 6b: 12 -> 13 stories). Guy's
   # arbitration: 6b.4 keeps AC1 (the queue and the two photos with provenance and freshness) and AC3
   # (the age sort); 6b.4b takes AC2 -- the action bar and the GESTURE NATURE it needs. The reason is

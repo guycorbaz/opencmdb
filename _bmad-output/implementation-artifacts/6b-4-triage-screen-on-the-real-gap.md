@@ -1,6 +1,6 @@
 # Story 6b.4: The triage screen, on the real gap
 
-Status: ready-for-dev
+Status: review
 
 Epic: 6b — *L'interface de la maquette*. **Fourth story**, after 6b.1 put the design system in the
 binary, 6b.2 gave the product ten addresses, and 6b.3 gave the example screens their marker. It is
@@ -441,38 +441,38 @@ with its design settled rather than with a question.
       reader stays provenance-free because it feeds the divergence computation. ⚠️ §0c's other half
       was never open: Guy's premise (2) of 2026-08-13 had already decided that unbuilt gestures are
       *visible and labelled*
-- [ ] **T1 — the provenance and freshness plumbing** (AC1, §0h): ⚠️ **`load_declared_attributes` is
+- [x] **T1 — the provenance and freshness plumbing** (AC1, §0h): ⚠️ **`load_declared_attributes` is
       NOT widened** — it feeds the divergence computation and stays `(key, value)`. Add
       `load_declared_provenance_for_display` returning `(key, origin, updated_at)`, and widen
       `load_observation_facts` to `(connector_id, observed_at, facts)`. Then **one named
       `SANCTIONED_READS` entry**, path AND function. ⚠️ **Not through `opencmdb-core`** — D47, and
       `gap::project` has no business holding a timestamp. 🔑 The `DATE_FORMAT` + `parse_from_rfc3339`
       pattern **already exists at `repo.rs:371`** — reuse it, `sqlx` has no `chrono` feature
-- [ ] **T2 — the relative-time convention** (AC1): *"il y a 4 min"*, in both locales, as a display
+- [x] **T2 — the relative-time convention** (AC1): *"il y a 4 min"*, in both locales, as a display
       concern. 🔴 **And WRITE the clock guard for `build_view`, do not inherit one**: the validation
       measured that `the_view_builder_has_no_clock_so_one_store_renders_identically` calls `build_view`
       with EMPTY data, so it proves clock-freedom for `build_identity_view` and, for the function this
       story fills, **nothing** — and `SystemTime::now()` compiles freely where `chrono::Utc::now()`
       does not
-- [ ] **T3 — the queue** (AC1): its row vocabulary is **measured, not chosen** (§0d) — `Écart`,
+- [x] **T3 — the queue** (AC1): its row vocabulary is **measured, not chosen** (§0d) — `Écart`,
       `Absence` and `Conflit` come from `gap::reconcile`'s own types, `Nouveau` is a ~15-line set
       difference, and **`Ambigu` is omitted because it has no producer** (FR16, Epic 6's). Plus its
       query, ordering, selection and empty state. ⚠️ **Discard the `OutOfPerimeter` noise per entity**
       — `reconcile` is written for ONE perimeter and looping it is O(N·M)
-- [ ] **T4 — the two photos** (AC1): the detail pane, each side with its meta-line. ⚠️ Follow the AC
+- [x] **T4 — the two photos** (AC1): the detail pane, each side with its meta-line. ⚠️ Follow the AC
       and the spec on the declared side, **not the mock's unpopulated fixture** (§0e)
-- [ ] **T5 — sort by age, OFF by default** (AC3), with a guard that reds if the default flips —
+- [x] **T5 — sort by age, OFF by default** (AC3), with a guard that reds if the default flips —
       *the ban is not that age is hidden, it is that age is never brandished*
-- [ ] **T6 — leave the `--accent` guard ALONE, and verify it still holds** (§0g). ⚠️ **Its narrowing
+- [x] **T6 — leave the `--accent` guard ALONE, and verify it still holds** (§0g). ⚠️ **Its narrowing
       belongs to story 6.4, not to this one** — the validation refuted the first draft's claim that
       the register assigned it here. This story renders beside the identity region: keep the guard
       green, do not widen it, do not narrow it
-- [ ] **T7 — LOOK at the screen**, `OPENCMDB_LOCALE=fr`, against a live database with real rows.
+- [x] **T7 — LOOK at the screen**, `OPENCMDB_LOCALE=fr`, against a live database with real rows.
       🔴 **And say whether a browser was used.** Three stories running have shipped without one
-- [ ] **T8 — the register**, both directions (§0f, §0g). ⚠️ `grep -n "6b.4"` is **provably
+- [x] **T8 — the register**, both directions (§0f, §0g). ⚠️ `grep -n "6b.4"` is **provably
       insufficient** — story 6b.3's review found a row its own contexting was quoting that a name-grep
       could not surface, *because the row never named the story*. Search the SUBJECTS too
-- [ ] **T9 — prove-to-red**, predictions written FIRST, **and every prescribed row executed**
+- [x] **T9 — prove-to-red**, predictions written FIRST, **and every prescribed row executed**
 
 ## Prove-to-red — deliberately short
 
@@ -541,16 +541,102 @@ at all**.
 
 ### Agent Model Used
 
-### Debug Log References
+Claude Opus 5 (1M context), 2026-08-19. Built and mutated against a live `mariadb:10.11.11` on
+port 13421.
+
+### Debug Log References — the mutation pass, every prescribed row EXECUTED
+
+🔑 **Six rows were prescribed and EIGHT were run** (M7 and M8 were added when the work created guards
+the table had not imagined). **Carriers are named per row; *"every red assertion-carried"* is NOT
+claimed** — M3's first red is a `.expect()` panic and M8's is a gate message.
+
+| # | Mutation | Predicted | MEASURED | Carrier |
+|---|---|---|---|---|
+| M1 | freeze `observed_at` inside `load_observation_facts` | the freshness guard reds | 🔴 **GREEN on first measurement — and that is this story's finding.** Every unit test built `ObservedBatch` BY HAND, so the column round-trip T1 exists to add was carried by **nothing**. Closed by a route-level assertion computing the expected day count from the stored instant; re-run: **1 red**, on its named assertion | named assertion, *after* the hole was closed |
+| M2 | the age sort defaults to ON | AC3's guard reds | ✅ **2 red** — the order-pinning guard and the route test. ⚠️ The validation had measured the OTHER shape (*"does the toggle change something"*) staying green under this exact mutation; the shape shipped is the one that reds | named assertion |
+| M3 | the queue emptied before render | the empty state renders, the count guard reds | ✅ **9 red** — ⚠️ **carriers MIXED**: the first is `.expect("the first row is selected")`, a PANIC, not an assertion. Recorded rather than smoothed | panic (`.expect`) + named assertions |
+| M4 | the declared side gets the observed side's meta-line | reds — AC1's *"neither side is the truth"* made measurable | ✅ **4 red** | named assertion |
+| M5 | the new CSS reaches for `--accent-document` | story 6b.1's reservation guard reds | ✅ **1 red**, and its message confirms the count is still **zero** legitimate uses — this story neither broke the guard nor narrowed it, which was Guy's ruling | named assertion |
+| M6 | a clock read INSIDE the pure builder | ⚠️ the validation predicted 5.14b's guard would NOT catch it | ✅ **4 red on the new guard** — and 🔴 **story 5.14b's guard, run alone on the SAME mutation, stays GREEN**. The validation's finding is now a measurement rather than an argument, and it is why the new guard was written | named assertion |
+| M7 | delete the rule for a class a template names | *(not prescribed — written after the CSS work)* | ✅ **1 red**, naming the file and the class | named assertion |
+| M8 | `origin` read by the COMPARISON's reader | *(not prescribed — written after §0h's arbitration)* | ✅ the `authorship` gate goes **RED**, which is the two-reader shape doing its job | gate message |
+
+⚠️ **Every mutation ran on a scratchpad-restored base, never `git checkout --`** — the gesture that
+destroyed an uncommitted fix in stories 6.1 and 6b.3. Each restore was verified by md5 before the
+next row.
 
 ### Completion Notes List
 
+🔴 **FOUR DEFECTS WERE FOUND BY LOOKING AT THE SCREEN, and no test could reach any of them.**
+
+1. **The Absence pane contradicted itself.** It read *"Déclaré: 2 champ(s) déclaré(s)"* over a
+   meta-line saying *"Rien de déclaré"* — two opposite sentences about one side, because a cause row
+   was passed `None` provenance. Fixed: a cause row's meta-line is the entity's most recent declared
+   write.
+2. **The observed source was a raw UUID.** *"cccccccc-0000-0000-0000-00000000unif · il y a 4 min"* —
+   it tells the operator nothing and pushes the freshness off the line. 🔴 **And my own route test
+   REQUIRED it**: it asserted `contains(<full uuid>)`, so it passed on the defect. *A test that pins
+   the ugly thing is a test that requires it.* Now a short labelled id, with the whole UUID asserted
+   **absent**, and the missing connector registry registered against story 6b.8.
+3. **A `Nouveau` row rendered an arrow pointing from nothing** — *"→ observé 192.0.2.99"*. The diff
+   now needs BOTH sides.
+4. **A cause row showed a bare count** beside an address — *"192.0.2.20  2"*. It carries its unit now.
+
+🔴 **AND A FIFTH, FOUND BY RENAMING RATHER THAN BY LOOKING**: `page::tests::triage_html` was a helper
+that rendered `GapFragment` directly and never touched the route. **The entire body of `/triage` was
+replaced and all 387 bin tests stayed green.** Ten tests were built on it. *A helper named for a route
+it does not serve is the dominant defect class wearing a filename, and reading it could not find that,
+because it is correct about what it renders.* Renamed to `gap_card_html`; `/triage` now has a
+route-level test that drives the real router against a real database.
+
+**AC by AC:**
+
+- **AC1 — MET.** The queue and the two photos, each side carrying its own provenance and its own
+  freshness, on the gap the product really computes. ⚠️ **The declared side follows the AC and the UX
+  spec, not the mock**, whose fixture leaves five of its eight declared meta-lines with no date at
+  all — fixture laziness, not design (§0e).
+- **AC2 — NOT IN SCOPE.** The action bar is story 6b.4b's by Guy's arbitration; its mechanism, form
+  and words are already settled in §0b so that story starts designed.
+- **AC3 — MET.** The sort is offered and **off by default**, and the guard pins the ORDER rather than
+  the toggle's existence — the shape the validation measured green under its own mutation.
+
+🔑 **Two guards were added that no acceptance criterion asked for, each because a defect had already
+happened**: `build_triage_reads_no_clock_of_its_own` (5.14b's guard proves nothing about
+`build_view`, measured under M6) and `every_class_a_template_names_is_defined_in_the_stylesheet`
+(story 6b.3 shipped `.screen-section` defined nowhere, and only a recount found it). ⚠️ **The second
+states its own limit**: it reads `class="…"` literals, so a class built in Rust is invisible to it,
+and **it says nothing about whether an existing rule is the RIGHT one** — `.rows` on a `<table>` would
+still pass. *Only a browser answers that.*
+
+**611 → 625 tests** (398 bin + 161 core + 66 xtask). Eight gates green, fmt and clippy clean, and the
+suite was run BOTH ways: **0.07 s without a database and 5.15 s against a live `mariadb:10.11.11`**,
+which is the tell that the database-backed half really executed.
+
+⚠️ **T7 was a real look**, in French, against a live database with seeded rows — a drift, an absence,
+a conflict and an undeclared address — read as rendered text through the running server. **It is
+still not a browser**: the CSS was recounted, never seen, so typography, spacing, contrast and the
+sticky sidebar's behaviour remain unverified by eye, for the fourth consecutive story.
+
 ### File List
+
+| File | Change |
+|---|---|
+| `crates/opencmdb-bin/src/repo.rs` | **`load_declared_provenance_for_display`** (the second reader, §0h), `DeclaredProvenance`, `ObservedBatch`, and `load_observation_facts` widened to carry the source and the instant |
+| `crates/opencmdb-bin/src/page.rs` | `TriageView`/`QueueRow`/`DetailPane`/`MetaLine`, `build_triage`, `relative_time`, `source_label`, `declared_meta_line`, `origin_key`, `url_escape`, `now_utc`, `triage_view`, the rewired `triage` handler and `TriageQuery`; the renamed `gap_card_html`; nine new guards |
+| `crates/opencmdb-bin/src/main.rs` | the route-level `/triage` test, through the real router against a live database |
+| `crates/opencmdb-bin/templates/_triage.html` | **new** — the two panes |
+| `crates/opencmdb-bin/templates/_identity_section.html` | **new** — story 5.14b's reach section, EXTRACTED (a pure move) so the body swap did not delete it |
+| `crates/opencmdb-bin/templates/_gap_card.html` | includes the extracted partial; `/gap` renders as before |
+| `crates/opencmdb-bin/assets/app.css` | the triage screen's rules — and every class it names is now defined, which a new guard asserts |
+| `crates/opencmdb-bin/locales/app.yml` | 22 keys, both locales, the relative time INTERPOLATED because the word order differs |
+| `xtask/src/main.rs` | `SANCTIONED_READS` 1 → 2 entries, with the shape's doctrine |
+| `_bmad-output/implementation-artifacts/deferred-work.md` | five rows |
 
 ### Change Log
 
 | Date | Change |
 |---|---|
+| 2026-08-19 | Implemented, scoped to AC1 + AC3. 611 → **625 tests**, eight gates green. Eight mutations run, eight measured — 🔴 **M1 came back GREEN and that is the finding** (the widened column's round-trip was carried by nothing), and 🔴 **M6 reds the new clock guard while story 5.14b's stays GREEN on the same mutation**. **Four defects found by LOOKING**, none reachable by any test — and a fifth found by renaming a helper: the whole body of `/triage` had been replaced with all 387 bin tests green. |
 | 2026-08-19 | **Arbitrated by Guy (three rulings, before any code).** (1) The SPLIT is taken — **6b.4b INSERTED, Epic 6b → 13 stories**; this story keeps AC1 + AC3. (2) The dead-gesture mechanism is a **gesture nature closed in the TYPE**, with its words fixed here so 6b.4b starts designed — and 🔴 `<button disabled>` **refused on NFR25**, because a disabled button leaves the tab order and vanishes from a screen reader. (3) `origin` may be read for **display**, through a **SECOND reader**, so the divergence computation stays structurally unable to see provenance. 🔴 And one finding about the contexting itself: half of §0c was **never an open question** — Guy's premise (2) of 2026-08-13 had already decided that unbuilt gestures are *visible and labelled*. |
 | 2026-08-19 | Validated by two fresh-context layers. Fact-check: 61 assertions, 59 confirmed, **2 refuted, both mine** — the `--accent` row belongs to story **6.4**, a different story, and the trap was a number that reads like this one's. Gap-hunt: it BUILT the plumbing and found that **reading `origin` for display reds the `authorship` gate**, which adds a THIRD arbitration and refutes the split's first rationale; that **four of five row kinds are producible today, not two**; and that **M6's clock guard does not red** and never reaches `build_view` at all. |
 | 2026-08-19 | Contexted: seven findings, three needing Guy's arbitration. The story carries four deliverables and a SPLIT is recommended; *"labelled per 6b.3"* names a mechanism that does not exist; and applied literally today the action bar would ship five buttons of which five are dead, against a recorded decision that *announcing an absent gesture is a promise*. |

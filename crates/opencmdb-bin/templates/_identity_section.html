@@ -1,0 +1,40 @@
+{#- Story 5.14b's reach section, EXTRACTED to a partial by story 6b.4 — a pure move, no behaviour
+     change. It is included by `_gap_card.html` (so `/gap` renders byte-identically) and by
+     `_triage.html`, which replaced that card as the triage screen's body. Extracting rather than
+     duplicating is the DRY rule; leaving it behind would have DELETED shipped, honest, fed content
+     that no acceptance criterion asked to remove. -#}
+{#- The identity section sits OUTSIDE the `has_entity` gate on purpose (story 5.14b): a fresh
+    install that has scanned and declared nothing is the default at first boot, and it is exactly
+    the deployment this section is for. -#}
+<div class="identity">
+  <h2>{{ s.identity_title }}</h2>
+  {% if identity.has_any %}
+    <p class="pair">
+      <span class="muted">{{ s.identity_placed }}</span> <span class="count">{{ identity.placed }}</span>
+      <span class="sep">·</span>
+      <span class="muted">{{ s.identity_not_placed }}</span> <span class="count">{{ identity.not_placed }}</span>
+    </p>
+    {% if identity.causes.is_empty() %}
+      <p class="muted">{{ s.identity_all_placed }}</p>
+    {% else %}
+    <p class="muted">{{ s.identity_because }}</p>
+    <ul class="abstentions">
+    {% for c in identity.causes %}
+      <li><span class="cause">{{ c.cause }}</span> <span class="count">{{ c.count }}</span></li>
+    {% endfor %}
+    </ul>
+    {% endif %}
+    {%- if !identity.settled.is_empty() %}
+    <p class="muted">{{ s.identity_settled }}</p>
+    <ul class="abstentions">
+    {% for r in identity.settled %}
+      <li><span class="cause">{{ r.cause }}</span> <span class="count">{{ r.count }}</span></li>
+    {% endfor %}
+    </ul>
+    {%- endif %}
+    <p class="muted note">{{ s.identity_unit }}</p>
+    <p class="muted note">{{ s.identity_floor }}</p>
+  {% else %}
+    <p class="muted">{{ s.identity_nothing_seen }}</p>
+  {% endif %}
+</div>

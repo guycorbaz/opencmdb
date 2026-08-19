@@ -222,3 +222,98 @@ example.reason.no_declared_match:
 example.reason.no_hardware_address:
   en: "Answered without a hardware address"
   fr: "A répondu sans adresse matérielle"
+
+# ── The triage screen, on the real gap (story 6b.4) ───────────────────────
+triage.title:
+  en: "Triage"
+  fr: "Triage"
+triage.pending:
+  en: "Pending"
+  fr: "En attente"
+triage.sort_age:
+  en: "Sort by age"
+  fr: "Trier par ancienneté"
+# ⚠️ The lede says what a ROW is, which is what makes the queue readable without a legend.
+triage.lede:
+  en: "Each line is a question: the network shows one value, your documentation shows another."
+  fr: "Chaque ligne est une question : le réseau montre une valeur, votre documentation en montre une autre."
+triage.empty:
+  en: "You are up to date."
+  fr: "Vous êtes à jour."
+triage.kind.ecart:
+  en: "Drift"
+  fr: "Écart"
+triage.kind.absence:
+  en: "Absence"
+  fr: "Absence"
+triage.kind.conflit:
+  en: "Conflict"
+  fr: "Conflit"
+triage.kind.nouveau:
+  en: "New"
+  fr: "Nouveau"
+# 🔑 FR16b: each cause is ONE line carrying its count, never N failures.
+triage.cause.declared_side:
+  en: "%{n} declared field(s)"
+  fr: "%{n} champ(s) déclaré(s)"
+triage.cause.nothing_observed:
+  en: "No source reported a value"
+  fr: "Aucune source n'a rapporté de valeur"
+triage.cause.sources_disagree:
+  en: "Two sources disagree — the engine refuses to pick"
+  fr: "Deux sources divergent — le moteur refuse de trancher"
+triage.cause.nothing_declared:
+  en: "Nothing declared at this address"
+  fr: "Rien de déclaré à cette adresse"
+
+# ── Provenance and freshness: the meta-line under each photo (story 6b.4) ──
+# ⚠️ An unfamiliar `origin` token is LABELLED, never a 500 (story 5.14b's arbitration 11: a display
+# may not be the place a write starts failing). `declared_attribute.origin` carries no CHECK.
+origin.manual:
+  en: "Entered by hand"
+  fr: "Saisi à la main"
+origin.adopted:
+  en: "Adopted from an observation"
+  fr: "Adopté depuis une observation"
+origin.imported:
+  en: "Imported"
+  fr: "Importé"
+origin.unknown:
+  en: "Unfamiliar origin"
+  fr: "Origine non reconnue"
+# ⚠️ The product has NO connector registry — `connector_id` is a bare UUID and nothing names it.
+# The whole UUID on screen tells the operator nothing; a short id labelled for what it is does.
+# A real name per source is registered against story 6b.8.
+meta.source_id:
+  en: "Source %{id}"
+  fr: "Source %{id}"
+triage.n_fields:
+  en: "%{n} field(s)"
+  fr: "%{n} champ(s)"
+meta.no_source:
+  en: "No source"
+  fr: "Aucune source"
+meta.never_seen:
+  en: "never seen"
+  fr: "jamais vu"
+meta.nothing_declared:
+  en: "Nothing declared"
+  fr: "Rien de déclaré"
+# ⚠️ The relative time is INTERPOLATED because the word order differs between the two languages —
+# "4 min ago" against "il y a 4 min". A concatenation would be correct in one language only.
+time.just_now:
+  en: "just now"
+  fr: "à l'instant"
+time.minutes:
+  en: "%{n} min ago"
+  fr: "il y a %{n} min"
+time.hours:
+  en: "%{n} h ago"
+  fr: "il y a %{n} h"
+time.days:
+  en: "%{n} d ago"
+  fr: "il y a %{n} j"
+# A source dated in the future is stated, not hidden behind a negative duration.
+time.ahead:
+  en: "dated ahead"
+  fr: "daté dans le futur"
