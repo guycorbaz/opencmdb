@@ -4214,3 +4214,41 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   it has not; it is mixed by construction and will stay so until 6b.5's example sections are replaced
   by fed ones. The re-examination is done and the answer is **not yet**. **Owner: the story that makes
   the dashboard mostly fed.**
+
+## Deferred from: code review of story 6b.5 (2026-08-19)
+
+- ✅ **CONSTRAINT 1's READING, registered here because §0b promised to and did not.**
+  `epics.md:2096` ends *"no demo screen opens a connection"*, and `/dashboard` now opens one. **The
+  clause is not violated in substance**: its stated subject is that example rows must never become
+  indistinguishable from real ones **at the storage layer**, and the dashboard's two queries are
+  `SELECT`s while `example_cards()` touches no connection at all. **It is violated in letter** if
+  *"demo screen"* is read to include a screen with demo sections. The reading taken: the clause
+  governs WRITES and demonstration CONTENT, and a mixed screen's real half is neither — narrowed in
+  writing on story 5.12's precedent rather than pretended to still hold whole. ⚠️ Every other
+  divergence in this story got a row; this one had only prose inside the story file until the
+  Acceptance Auditor noticed. **Owner: Epic 6b's retrospective**, which may reword the constraint.
+
+- 🔴 **`/dashboard`'s ROUTE is hand-written while its EXCLUSION is derived from `nature()`, and
+  nothing ties them.** Measured at the review: declaring the dashboard anything other than
+  `Fed`/`Mixed` makes `screens::router` register `/dashboard` while `triage_router`'s literal route
+  still stands, and axum **panics at construction** — *"Overlapping method route"* — reddening 26
+  tests. The panic is loud, which is why this is a coupling rather than a defect; but the two
+  declarations live in different files and only a crash connects them. **Owner: the first story that
+  adds a second `Mixed` or `Fed` screen**, which is when a table-driven registration stops being
+  optional.
+
+- 🔴 **THE EXAMPLE HALF IS VISUALLY DOMINANT OVER THE HONEST ONE, and no criterion or guard can see
+  it.** Rendered and read at the review: the fabricated cards are 22 px mono with a sparkline; the
+  real counts sit in a body-size pill. *"37 / 4 / 2"*, invented, are the loudest thing on the screen;
+  *"2 sightings placed"*, real, is the quietest. 🔑 **That is the exact risk the story's user story
+  names** — *"so that the honest part is not diluted by the demonstration around it"* — reached
+  **without violating a single acceptance criterion**, because the criteria cover presence and
+  marking while the defect is salience, and a text guard cannot measure salience. **Owner: Epic 6b's
+  retrospective** for a criterion, **story 6b.12's release sweep** for the design pass.
+
+- ⚠️ **The dashboard handler's two reads are not transactional together.** A resolver pass writing
+  between `count_engine_reach` and `last_observed_at` shows a reach snapshot and an instant from two
+  moments. Display-only, self-correcting on refresh, and the same shape `reconcile_view` has carried
+  since 5.14b. ⚠️ Note the interaction: the *pending-resolution* line added at this review is
+  computed from both, so a race can make it flicker — it cannot make it lie, since either state is
+  one the store really held. **Owner: the first story that needs a consistent read across both.**

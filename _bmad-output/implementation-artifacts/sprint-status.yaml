@@ -75,7 +75,46 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.5 -> `review`: IMPLEMENTED, shape (a). The dashboard is the product's
+last_updated: 2026-08-19  # 6b.5 CODE-REVIEWED (three layers, Sonnet 5) and REPAIRED. **0 decisions,
+                          # 12 patches, 2 deferrals, 3 dismissed.** 634 tests, eight gates green,
+                          # clippy and fmt clean, and NOW verified BOTH WAYS: 0.07 s without a
+                          # database, 10.56 s with one.
+                          # 🔴 **THE COMMIT SHIPPED A RED SUITE.** `probed >= 9` was a hardcoded
+                          # floor; making the dashboard `Mixed` added a SECOND nature the no-database
+                          # branch skips, so the count fell to 8 -- **and the breaking edit was three
+                          # lines above the assertion, in this story's own diff**. The Completion
+                          # Notes claimed *"0.05 s without a database"*: a figure carried over from
+                          # the previous session's habit and NEVER RUN on this tree. ⚠️ **CI supplies
+                          # a database, so CI was green and only the local path reddened** -- a floor
+                          # CI cannot check is a floor nobody re-reads. Now DERIVED from `Screen::ALL`.
+                          # 🔴 **AND THE DOMINANT CLASS RECURRED A FOURTH TIME, INSIDE THE GUARD
+                          # WRITTEN TO CLOSE THE THIRD**: the section-marker guard compared
+                          # `markers == sections` as TOTALS, so two markers in one section and none
+                          # in the other left the WHOLE SUITE GREEN, that guard included. Now
+                          # per-section, and the mutation reds.
+                          # 🔴 A REACHABLE CONTRADICTION THIS STORY CREATED: an observation ingested
+                          # but unresolved renders *"Rien d'observé pour l'instant"* directly above
+                          # *"Dernière observation il y a 8 h"*, in one div. This story is what
+                          # co-located the two populations, and **every test fed them from ONE
+                          # fixture**, so none could see it. Now said, and guarded by seeding them
+                          # independently.
+                          # ⚠️ Also: six sites saying *"nine demonstration screens"* for eight; a doc
+                          # saying *"three variants and not two"* six lines above the fourth this
+                          # story added; a comment claiming *"STATIC class literals throughout"*
+                          # falsified by line 46 of its own file (`spark-h{{ height }}`, with
+                          # `.spark-h8` missing -- epic constraint 5 live); the `"matched"` token
+                          # recurring sixty lines below the comment explaining it; a dead `.clone()`;
+                          # an unscoped anti-sum oracle; and M3's mechanism WRONG -- 26 red, all
+                          # `Overlapping method route`, which names a real coupling: the route is
+                          # hand-written and the exclusion derived, with nothing tying them.
+                          # 🔴 DEFERRED, and it is the sharpest: **the example half is VISUALLY
+                          # DOMINANT over the honest one** -- fabricated cards at 22 px mono with
+                          # sparklines against real counts in a body-size pill. *That is the exact
+                          # risk the user story names*, reached WITHOUT violating any criterion,
+                          # because the criteria cover presence and marking while the defect is
+                          # salience and no text guard can measure salience.
+                          # ⚠️ STAYS at `review`: `done` is the MERGE's business.
+                          # (Earlier the same day) 6b.5 -> `review`: IMPLEMENTED, shape (a). The dashboard is the product's
                           # first MIXED screen: the real reach section INCLUDED (not re-drawn, so
                           # arbitration 13's unit guard is inherited) beside two example sections,
                           # each with its own HEADING and its own marker, plus the `MAX(observed_at)`

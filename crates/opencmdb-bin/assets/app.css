@@ -669,4 +669,9 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 .spark-h5 { height: 55%; }
 .spark-h6 { height: 70%; }
 .spark-h7 { height: 80%; }
+/* 🔴 `.spark-h8` was MISSING until the code review. The class is built in Rust
+   (`class="spark-bar spark-h{{ height }}"`), so it contains a brace and the stylesheet guard skips
+   the whole attribute — epic constraint 5's *"a class built in Rust is invisible to the static
+   scanner"*, live. No card used 8, so nothing broke; nothing would have caught it either. */
+.spark-h8 { height: 90%; }
 .spark-h9 { height: 100%; }

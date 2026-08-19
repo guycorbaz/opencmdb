@@ -378,3 +378,8 @@ dash.card.drifts:
 dash.card.sources:
   en: "Live sources"
   fr: "Sources actives"
+# 🔴 A scan has landed and the identity pass has not placed any of it: the included reach section
+# then says *"nothing observed yet"* over a real instant. Found at story 6b.5's code review.
+dash.pending_resolution:
+  en: "A scan has landed; the identity pass has not placed any of it yet."
+  fr: "Un scan est arrivé ; la passe d'identité n'en a encore rattaché aucune partie."

@@ -329,6 +329,94 @@ beside real content. Registered as a divergence rather than assumed.
       `6.4` / `6b.4` / `6b.5` are different stories
 - [x] **T8 — prove-to-red**, predictions FIRST, every row executed
 
+### Review Findings — three layers, 2026-08-19
+
+Blind Hunter (diff only), Edge Case Hunter (own worktree, live `mariadb:10.11.11`, Chrome 151),
+Acceptance Auditor (own worktree, the spec, the twins, its own renders). All three on Sonnet 5.
+**0 decision-needed, 12 patch, 2 defer, 3 dismissed with the check that dismissed them.**
+
+🔴 **THE COMMIT SHIPS A RED SUITE**, and the claim that it does not was never measured on this tree.
+🔴 **AND THE STORY'S OWN DEFECT CLASS RECURRED A FOURTH TIME — inside the guard written to close it.**
+
+🔑 **All twelve applied.** ⚠️ The suite is now green **both ways** — `407 passed` at **0.07 s**
+without a database and **10.56 s** with one — and *that pair of figures is the one the Completion
+Notes claimed and never measured*.
+
+#### Patch
+
+- [x] [Review][Patch] 🔴 **`cargo test --workspace` FAILS without a database, and the Completion
+      Notes claim otherwise.** `probed >= 9` (`main.rs:966`) is a hardcoded floor; making the
+      dashboard `Mixed` added a SECOND nature the no-database branch skips, so the count is **8**.
+      Reproduced: `405 passed; 1 failed`. ⚠️ **The edit that broke it is three lines above the
+      assertion, in this story's own diff** — and *"0.05 s without a database"* was carried over from
+      the previous session's habit, **never run on this tree**. 🔑 **CI would not have caught it**: CI
+      supplies a database, so CI is green and only the local path reds. Fix the floor by DERIVING it
+      from `Screen::ALL` and the natures, so it cannot go stale again
+- [x] [Review][Patch] 🔴 **A FOURTH occurrence of the dominant defect class, in the sibling guard
+      written to close the third.** `every_example_section_carries_its_own_marker` compares
+      `markers == sections` **as totals**. Measured: two markers in the first example section and
+      **zero in the second** — net 2 and 2 — leaves the **entire suite green**, including that guard.
+      *It cannot tell "each section has exactly one" from "they happen to add up."* Count per section
+- [x] [Review][Patch] 🔴 **A reachable contradiction on the dashboard's own real half, guarded by
+      nothing.** An observation with no `identity_link` — the ordinary state between an ingest and the
+      identity pass — renders *"Rien d'observé pour l'instant — lancez un scan"* **directly above**
+      *"Dernière observation il y a 8 h"*, inside one `dashboard-real` div. 🔑 **This story is what
+      co-located those two populations for the first time**, and every test feeds them consistently
+      from one fixture, so no render-level test can see it. Seed them independently and reconcile the
+      copy
+- [x] [Review][Patch] 🔴 **`Nature`'s own doc is false, six lines above the variant this story
+      added**: *"Three variants and not two"* — there are **four** — and *"the eight screens whose own
+      story has not landed"* — there are **seven**
+- [x] [Review][Patch] 🔴 **Six sites say *"nine demonstration screens"* and there are eight**:
+      `screens.rs:1`, `:8`, `:282`, `main.rs:420`, `page.rs:1315`, `:1462`. A count sweep this story
+      owed and skipped — the seventh site is the test floor above, which is why this one broke a test
+      rather than only a sentence
+- [x] [Review][Patch] 🔴 **M3's recorded mechanism is wrong, and the truth names a real hazard.** The
+      row says *"3+ red … the route disappears"*; measured, **26 red, every one
+      `Overlapping method route. Handler for GET /dashboard already exists`** — axum panics at
+      construction because `screens::router` stops excluding the screen while `triage_router`'s
+      **hand-written** `/dashboard` route still stands. 🔑 *The route is registered by hand and the
+      exclusion by `nature()`; nothing ties them.* Record the mechanism and the coupling
+- [x] [Review][Patch] 🔴 **`_dashboard.html`'s own comment says *"STATIC class literals throughout"*
+      and line 46 renders `class="spark-bar spark-h{{ height }}"`** — the exact brace-containing shape
+      the comment warns about, invisible to the stylesheet guard by its own admission. **And
+      `.spark-h8` is missing** (defined: 1-7 and 9). No card uses 8 today, so nothing breaks — *an
+      authoring bug behind a guard that cannot see it*
+- [x] [Review][Patch] **The wrong outcome token recurs sixty lines below the comment explaining it.**
+      `page.rs:3668` uses `reach("matched", …)` where the engine's token is `"match"` — harmless
+      there (the test reads only the freshness) but it shows the fix was **patched at the one site the
+      mutation hit**, not closed
+- [x] [Review][Patch] **A dead `.clone()` in the handler** (`page.rs:1437`): `identity` is never read
+      again, and the `Clone` derives were added for the duplicated field that no longer exists
+- [x] [Review][Patch] **The anti-sum oracle is a bare `contains("17")` over the whole page** —
+      fixture-coupled, and blind to a sum split across markup. Scope it to the two `dashboard-*`
+      sections, as its sibling assertions already are
+- [x] [Review][Patch] ⚠️ **§0b promised to register constraint 1's reading and did not.** Seven rows
+      were added to the register and none carries it. The argument is judged sound by the Auditor —
+      the clause's subject is example data being WRITTEN, and both queries are `SELECT`s — **the gap
+      is the paper trail, which is the thing the section itself asked for**
+- [x] [Review][Patch] **M6's row omits a compile-carried half**: `chrono::Utc::now()` inside the
+      builder is `E0599`, and only `SystemTime::now()` produces the runtime red. Record both, as
+      story 6b.4 did
+
+#### Defer
+
+- [x] [Review][Defer] 🔴 **The example half is visually DOMINANT over the honest one, which inverts
+      the user story's own purpose.** The fabricated cards render at **22 px mono with a sparkline**;
+      the real counts render in a body-size pill. *"37 / 4 / 2"*, invented, are the loudest thing on
+      the screen; *"2 sightings placed"*, real, is the quietest. ⚠️ **No AC covers relative visual
+      weight** — they cover presence and marking — and **no guard can**: they assert text, never
+      salience. 🔑 *This is exactly the risk the story exists to prevent* (*"so that the honest part
+      is not diluted by the demonstration around it"*), reached without violating a single criterion.
+      It needs a design pass and a criterion, not a patch. **Owner: Epic 6b's retrospective** for the
+      criterion and **story 6b.12's release sweep** for the pass — deferred
+- [x] [Review][Defer] ⚠️ **The handler's two reads are not transactional together**, so a resolver
+      pass writing between them shows a reach snapshot and an instant from two moments. Display-only,
+      self-correcting on refresh, and the same shape `reconcile_view` has carried since 5.14b.
+      **Owner: the first story that needs a consistent read across both** — deferred, pre-existing
+
+---
+
 ## Prove-to-red — deliberately short
 
 | # | Mutation | Prediction |
@@ -402,10 +490,10 @@ reading.
 | M1 | sum the two populations at the composition | 🔴 **green ×3, then red.** (1) The driver had **no assert**, so the pattern never matched and nothing was mutated — *the mutation-driver-lies class, mine*. (2) The fixture used `"matched"` where the engine's token is **`"match"`**, so `placed` rendered as **0**, and the oracle's `>2<` was satisfied by an **example stat card**. (3) The test helper built `DashboardBody` from the **un-composed** identity while the handler builds it from the view — *the guard rendered a shape production does not use*. Fixed at the root: the duplicated field is **gone**, the template reads `view.identity`, and the fixture's 11/6 collide with no card | named assertion |
 | M1b | the same sum, guarded over the pure builder alone | ✅ **GREEN by design** — the shape story 5.14b shipped, reproduced. *Neither builder can add what it never sees* | — (control) |
 | M2 | drop the marker from one example section of two | ✅ **1 red**, the new sibling guard. ⚠️ The route-table partition stays green, exactly as the validation measured | named assertion |
-| M3 | declare the dashboard wholly `Example` | ✅ **3+ red**, including two auth tests — the screen leaves the pool-bearing router and its route disappears | named assertions |
+| M3 | declare the dashboard wholly `Example` | 🔴 **THE RECORDED MECHANISM WAS WRONG, and the truth names a real coupling.** Not *"3+ red, the route disappears"* — measured at the code review: **26 red, every one `panicked … Overlapping method route. Handler for GET /dashboard already exists`** at router construction. `screens::router` stops excluding the screen while `triage_router`'s **hand-written** `/dashboard` route still stands, so axum sees two handlers for one path. ⚠️ *The route is registered by hand and the exclusion by `nature()`, and nothing ties them* — the Blind Hunter suspected it from the diff alone and the Edge Case Hunter measured it | panic at router construction |
 | M4 | the last observation planted in `_nav.html` | ✅ **1 red**, `the_shell_shows_no_last_observation` | named assertion |
 | M5 | the unit *sightings* → *devices* | ✅ **2 red** — the inheritance from `_identity_section.html` is real | named assertions |
-| M6 | a clock read inside `build_dashboard` | ✅ **2 red**, the new clock guard first | named assertion |
+| M6 | a clock read inside `build_dashboard` | ✅ **2 red** with `SystemTime::now()`, the new clock guard first. ⚠️ **And the row omitted a compile-carried half**, added at the review: `chrono::Utc::now()` is `E0599` here (`default-features = false`), so only the `std` spelling produces a runtime red — *a feature flag guards a name, never the act of reading a clock*, story 6b.4's sentence, and this row should have carried it | named assertion; compiler for the `chrono` spelling |
 
 🔴 **AND THE PASS DESTROYED WORK, which is recorded because it cost a full debugging cycle.** The
 mutation script restored some files from a scratchpad copy and others with `git checkout --`.
@@ -445,8 +533,16 @@ finding addressed rather than asserted. ⚠️ **An honest limit**: the reach se
 state, because the seeded link did not reach `count_engine_reach`'s filter — the populated case is
 covered by unit tests and **was not seen by eye**.
 
-**629 → 633 tests** (406 bin + 161 core + 66 xtask). Eight gates green, fmt and clippy clean, run both
-ways: **0.05 s** without a database and **5.6 s** against a live `mariadb:10.11.11`.
+**629 → 634 tests** (407 bin + 161 core + 66 xtask) after the code review. Eight gates green, fmt and
+clippy clean, run both ways: **0.07 s** without a database and **10.56 s** against a live
+`mariadb:10.11.11`.
+
+🔴 **This paragraph claimed *"0.05 s without a database"* and the suite was RED there.** The figure
+was carried over from the previous session's habit and **never run on this tree**: `probed >= 9` was
+a hardcoded floor, making the dashboard `Mixed` added a second nature the no-database branch skips,
+and the count fell to 8 — with the breaking edit three lines above the assertion, in this story's own
+diff. ⚠️ **CI supplies a database, so CI was green and only the local path reddened**: a floor CI
+cannot check is a floor nobody re-reads. The floor is now DERIVED from `Screen::ALL`.
 
 ### File List
 
@@ -464,6 +560,7 @@ ways: **0.05 s** without a database and **5.6 s** against a live `mariadb:10.11.
 
 | Date | Change |
 |---|---|
+| 2026-08-19 | **Code-reviewed (three layers, Sonnet 5) and REPAIRED.** 0 decisions, 12 patches, 2 deferrals, 3 dismissed. 🔴 **The commit shipped a RED SUITE without a database** — a hardcoded `probed >= 9` floor this story's own edit invalidated three lines above it — while the Completion Notes claimed 0.05 s green there, a figure never run on this tree. CI could not catch it: CI has a database. 🔴 **And the dominant defect class recurred a FOURTH time, inside the guard written to close the third**: the section-marker guard compared totals, so two markers here and none there left the whole suite green. 🔴 A reachable contradiction this story created by co-locating two populations — *"nothing observed yet"* above a real instant — invisible to every test because they all fed both from one fixture. Plus six false *"nine screens"* sites, a doc saying *"three variants"* for four, a comment falsified by line 46 of its own file, and M3's mechanism wrong (26 red, `Overlapping method route`). ⚠️ Deferred: **the example half is visually dominant over the honest one** — the story's own stated risk, reached without violating a criterion. |
 | 2026-08-19 | Implemented, shape (a). 629 → **633 tests**, eight gates green. 🔴 **M1 took FOUR attempts to red, for THREE different reasons** — a driver without an assert, a fixture whose wrong token made `placed` render 0 while an example card satisfied the oracle, and a test helper that built the body differently from the handler. Each is a distinct way for a guard to be worthless and none was visible by reading. 🔴 **And the pass destroyed work**: mixing a scratchpad restore with `git checkout --` reverted `app.yml` to its last commit and deleted nine uncommitted keys — story 6.1's incident, third occurrence. ⚠️ One flake hypothesis of mine was refuted by six runs before it could be written down as a cause. |
 | 2026-08-19 | Validated by two fresh-context layers. Fact-check: 27 assertions, 25 confirmed, 🔴 **1 refuted — *"eight register rows"* is eight LINES from seven rows**, the right command on the wrong unit — and §0a's described mechanism measured to fire on other guards than it names. Gap-hunt: it **BUILT the fragment alternative** and refuted *"must leave the pool-free router"* as an absolute, then **measured the cost that keeps the conclusion** — the partition asserts on one synchronous body and the fragment's counts arrive in a second request. 🔴 Plus: the existing partition **cannot** catch a per-section regression (measured green), the marker's scope is **ambiguous beside real content** (seen in a browser), and the CSS brace hole is confirmed with the exact pattern this screen invites. |
 | 2026-08-19 | Contexted. 🔴 ONE structural question, and it touches story 6b.2's central guard: a MIXED screen has no nature, the route-table partition reds on it under all three, and the reach section needs the POOL — so `/dashboard` must leave the `Router<()>` whose type refusal was the guard. Three shapes put to Guy. Plus: constraint 1's *"no demo screen opens a connection"* meets a screen it did not anticipate; the last observation is banned from the frame while the mock puts it there; and the anti-sum guard must sit at the composition, which is where 5.14b's measured green. |

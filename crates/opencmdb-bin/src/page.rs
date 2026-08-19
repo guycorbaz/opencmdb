@@ -232,6 +232,8 @@ struct Strings {
     dash_real_heading: String,
     /// The dashboard's example-half heading (story 6b.5).
     dash_example_heading: String,
+    /// What the dashboard says when a scan has landed and the identity pass has not run (6b.5).
+    dash_pending_resolution: String,
     /// The label before the last-observation instant (story 6b.5).
     dash_last_observed: String,
     /// What the dashboard says when nothing has ever been observed (story 6b.5).
@@ -310,6 +312,7 @@ fn strings() -> Strings {
         example_sentence: t!("example.sentence").to_string(),
         dash_real_heading: t!("dash.real_heading").to_string(),
         dash_example_heading: t!("dash.example_heading").to_string(),
+        dash_pending_resolution: t!("dash.pending_resolution").to_string(),
         dash_last_observed: t!("dash.last_observed").to_string(),
         dash_never_observed: t!("dash.never_observed").to_string(),
         dash_since_heading: t!("dash.since_heading").to_string(),
@@ -1362,6 +1365,15 @@ struct DashboardView {
     last_observed: Option<String>,
     /// The example figures. ⚠️ Example, and each carries the marker on its own section.
     cards: Vec<StatCardView>,
+    /// True when something HAS been observed and the identity pass has not placed any of it yet.
+    ///
+    /// 🔴 **This story is what created the state that needs saying.** It co-located two populations
+    /// for the first time — the engine's reach and the last observation — and they can legitimately
+    /// disagree: an observation ingested but not yet resolved leaves `count_engine_reach` empty
+    /// while `MAX(observed_at)` is recent. The page then read *"Nothing observed yet — run a scan"*
+    /// directly above *"Last observed 8 h ago"*, in one div. Found at the code review by seeding the
+    /// two independently; **every test fed them from one fixture, so none could see it.**
+    pending_resolution: bool,
 }
 
 /// The dashboard's body: the real reach section beside labelled example sections (story 6b.5).
@@ -1411,6 +1423,7 @@ fn build_dashboard(
     now: chrono::DateTime<chrono::Utc>,
 ) -> DashboardView {
     DashboardView {
+        pending_resolution: !identity.has_any && last_observed_at.is_some(),
         identity,
         last_observed: last_observed_at.map(|then| relative_time(now, then)),
         cards: example_cards(),
@@ -1433,8 +1446,7 @@ pub async fn dashboard(State(state): State<TriageState>) -> Response {
         Ok(instant) => instant,
         Err(error) => return server_error(error),
     };
-    let identity = build_identity_view(reach);
-    let view = build_dashboard(identity.clone(), last, now_utc());
+    let view = build_dashboard(build_identity_view(reach), last, now_utc());
     let body = DashboardBody { view, s: strings() };
     match body.render() {
         Ok(body) => Html(render_shell(
@@ -1460,7 +1472,7 @@ pub async fn dashboard(State(state): State<TriageState>) -> Response {
 /// second half of that: `index` became dead code and `clippy -D warnings` failed.
 ///
 /// It therefore keeps `State<MySqlPool>` and lives on the main router, while the nine
-/// demonstration screens sit on a pool-free one. Epic constraint 1 is about demonstrations, and
+/// pool-free screens sit on a `Router<()>`. Epic constraint 1 is about demonstrations, and
 /// it is enforced exactly where it applies.
 ///
 /// Story 6b.4 replaces this body with the mock's two-pane triage; the frame it renders into stays.
@@ -3599,8 +3611,11 @@ mod tests {
         assert!(real.contains(">6<"), "the not-placed count renders: {real}");
         // 🔴 Their sum must appear NOWHERE on the page. A `17` could only have been written by
         // adding two populations the product deliberately keeps apart (arbitration 10).
+        // ⚠️ Scoped to the REAL half, like its two siblings. Over the whole page this was
+        // fixture-coupled — any unrelated `17` would have reddened it — and it is the real half
+        // that could carry a sum at all.
         assert!(
-            !html.contains("17"),
+            !real.contains("17"),
             "the two populations were SUMMED: 11 + 6 reached the page as 17. They count different \
              things and adding them invents a number the product does not hold (arbitration 10)"
         );
@@ -3629,19 +3644,32 @@ mod tests {
     #[test]
     fn every_example_section_carries_its_own_marker() {
         let html = rendered_dashboard(Some(at(0)));
-        let sections = html.matches("class=\"dashboard-example\"").count();
-        let markers = html.matches("example-marker-badge").count();
+        // 🔴 PER SECTION, and the totals form was measured worthless. This guard compared
+        // `markers == sections` until the code review planted **two** markers in the first example
+        // section and **none** in the second — net two and two — and **the entire suite stayed
+        // green, this guard included**. *It could not tell "each section has exactly one" from
+        // "they happen to add up."* A FOURTH occurrence of the class it was written to close.
+        let sections: Vec<&str> = html.split("class=\"dashboard-example\"").skip(1).collect();
         assert!(
-            sections >= 2,
-            "the premise: the dashboard carries at least two example sections ({sections} seen) — \
-             with one, this guard cannot tell a per-section rule from a per-screen one"
+            sections.len() >= 2,
+            "the premise: the dashboard carries at least two example sections ({}) — with one, \
+             this guard cannot tell a per-section rule from a per-screen one",
+            sections.len()
         );
-        assert_eq!(
-            markers, sections,
-            "every example section must carry its own marker. The route-table partition CANNOT \
-             catch this — measured: with two sections and one marker it stays green, because the \
-             surviving section satisfies its `contains`"
-        );
+        for (index, section) in sections.iter().enumerate() {
+            // Each slice runs to the next example section, so a marker cannot be counted twice.
+            let body = section
+                .split("class=\"dashboard-example\"")
+                .next()
+                .unwrap_or(section);
+            assert_eq!(
+                body.matches("example-marker-badge").count(),
+                1,
+                "example section {index} must carry EXACTLY ONE marker. The route-table partition \
+                 cannot catch a missing one (measured: it stays green), and a totals check cannot \
+                 catch a misplaced one (measured: two here and none there stays green too)"
+            );
+        }
         // And the real half must NOT be marked: that is the other direction of the same rule.
         let real = html
             .split("class=\"dashboard-real\"")
@@ -3665,7 +3693,10 @@ mod tests {
     /// name, never the act of reading a clock.*
     #[test]
     fn build_dashboard_reads_no_clock_of_its_own() {
-        let identity = build_identity_view(vec![reach("matched", None, 1)]);
+        // `"match"` — the engine's token. This read `"matched"` until the code review, sixty lines
+        // below the comment explaining that exact mistake: the fix had been patched at the one site
+        // a mutation happened to hit, not closed.
+        let identity = build_identity_view(vec![reach("match", None, 1)]);
         let build = |now| build_dashboard(identity.clone(), Some(at(0)), now);
 
         let a = build(at(600));
@@ -3703,6 +3734,55 @@ mod tests {
         assert!(
             !never.contains("Last observed"),
             "and it does not render the label with nothing after it"
+        );
+    }
+
+    /// 🔴 **A scan that has landed but not been resolved is SAID, not left as a contradiction.**
+    ///
+    /// # The state this story created, and why no test could see it
+    ///
+    /// `count_engine_reach` and `last_observed_at` are two populations, and story 6b.5 is what put
+    /// them in one div for the first time. They can legitimately disagree: an observation ingested
+    /// and not yet resolved leaves the reach empty while `MAX(observed_at)` is recent, and the page
+    /// then read *"Nothing observed yet — run a scan"* directly above *"Last observed 8 h ago"*.
+    /// ⚠️ **Every other test in this file feeds the two from ONE fixture** — the same synthetic
+    /// identity beside the same instant — so the divergence was unreachable by the whole suite until
+    /// the code review seeded them independently against a live database.
+    #[test]
+    fn a_scan_that_has_landed_unresolved_is_said_rather_than_contradicted() {
+        // Reach EMPTY, an observation RECENT — the ordinary state between an ingest and the pass.
+        let unresolved = build_dashboard(build_identity_view(Vec::new()), Some(at(0)), at(600));
+        assert!(
+            unresolved.pending_resolution,
+            "reach empty beside a real instant is the state that needs saying"
+        );
+        let html = DashboardBody {
+            view: unresolved,
+            s: strings(),
+        }
+        .render()
+        .expect("the dashboard renders");
+        assert!(
+            html.contains("A scan has landed"),
+            "the page must reconcile the two, or it says nothing was observed above the instant \
+             proving something was: {html}"
+        );
+
+        // And it must NOT say it when the two agree, in either direction.
+        let resolved = build_dashboard(
+            build_identity_view(vec![reach("match", None, 1)]),
+            Some(at(0)),
+            at(600),
+        );
+        assert!(
+            !resolved.pending_resolution,
+            "a store whose reach is populated is not pending resolution"
+        );
+        let empty = build_dashboard(build_identity_view(Vec::new()), None, at(600));
+        assert!(
+            !empty.pending_resolution,
+            "a store that has observed NOTHING is not pending resolution either — it is empty, and \
+             the included section already says so"
         );
     }
 }

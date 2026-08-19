@@ -1,11 +1,13 @@
-//! The shell: the mock's frame, its ten addresses, and the nine screens it renders without the store.
+//! The shell: the mock's frame, its ten addresses, and the EIGHT screens it renders without the store.
 //!
 //! # What this module is, and the one structural decision inside it
 //!
 //! Story 6b.2 gives the product more than one address for the first time. Ten screens, each
 //! server-rendered at its own URL — no client-side router, no screen chosen by JavaScript.
 //!
-//! 🔴 **The nine demonstration screens live on a `Router<()>`, and that shape is a GUARD.**
+//! 🔴 **The EIGHT pool-free screens live on a `Router<()>`, and that shape is a GUARD.** ⚠️ Nine
+//! until story 6b.5 made the dashboard `Mixed`; the count is written here in ONE place and derived
+//! everywhere it is asserted, because the literal that was not derived broke a test.
 //! Epic 6b's constraint 1 says no demo screen opens a database connection, and the validation
 //! measured that forbidding it by discipline is worth nothing: on the main router — whose state
 //! IS the pool — a handler may take `State<MySqlPool>` and it compiles cleanly. Merged *after*
@@ -61,7 +63,10 @@ pub(crate) enum Screen {
 
 /// What a screen's content IS, and therefore whether it owes the operator a marker.
 ///
-/// 🔴 **Three variants and not two, and that is a consequence of Guy's arbitration rather than a
+/// 🔴 **FOUR variants since story 6b.5, and each was forced rather than chosen.** This read *"three
+/// variants and not two"* until that story added [`Mixed`](Nature::Mixed) six lines below the
+/// sentence and left it standing — the code review caught it. The original three were a consequence
+/// of Guy's arbitration rather than a
 /// preference.** Story 6b.3 ships the example dataset with ONE witness screen; the eight screens
 /// whose own story has not landed hold nothing at all. With only `Fed` and `Example`, those eight
 /// would have to be declared *example* — and the marker would then tell the operator that an empty
@@ -279,7 +284,8 @@ impl NavGroup {
     }
 }
 
-/// The nine demonstration screens, on a **pool-free** router (see this module's doc).
+/// The eight pool-free screens (see this module's doc). ⚠️ `Fed` and `Mixed` are both excluded:
+/// each reads the store.
 ///
 /// # Returns
 ///
@@ -610,8 +616,9 @@ mod tests {
             1,
             "the perimeter must have ONE reader and it must be `AppConfig::from_env`; found \
              {readers:?}. A second reader does not filter what the first one filters, so a \
-             blanked variable renders `not configured` on nine screens and a dangling label on \
-             the tenth. Configuration enters as a PARAMETER (story 6.1)."
+             blanked variable renders `not configured` on every demonstration screen and a \
+             dangling label on the fed one — nine and one when story 6b.2 measured it, eight and \
+             two since 6b.5. Configuration enters as a PARAMETER (story 6.1)."
         );
         assert!(
             readers[0].starts_with("main.rs:"),
