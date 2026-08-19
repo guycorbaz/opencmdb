@@ -75,7 +75,46 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4b -> `done`: PR #103 squash-merged as `20e854c` after a green CI run
+last_updated: 2026-08-19  # 6b.5 CONTEXTED -> `ready-for-dev`. 🔴 ONE STRUCTURAL QUESTION, and it
+                          # touches story 6b.2's central guard. **A MIXED screen has no nature**:
+                          # `Nature` is a property of the WHOLE screen, and the route-table
+                          # partition asserts `Fed | Empty => !carries` — so a dashboard that is real
+                          # on one section and example on the others REDS IT under all three
+                          # natures (declared Fed or Empty it carries a marker it must not; declared
+                          # Example it calls the reach section a demonstration). 🔑 Story 6b.3's AC2
+                          # predicted this in words -- *"a screen-level-only marker would either lie
+                          # about the real half or hide the example half"* -- and this is where the
+                          # sentence stops being a prediction.
+                          # 🔴 AND IT MUST LEAVE THE POOL-FREE ROUTER: the reach section reads
+                          # `count_engine_reach`, so `/dashboard` moves to the pool-bearing router
+                          # and the `Router<()>` type-refusal that story 6b.2 chose *because
+                          # "forbidding it by discipline is worth nothing"* stops holding for that
+                          # screen. THREE shapes put to Guy -- (a) a fourth nature `Mixed`, (b)
+                          # natures per SECTION (truest to 6b.3's AC2, biggest change), (c) `Fed`
+                          # with a per-section assertion (smallest diff, ⚠️ but it makes `Fed` mean
+                          # *"reads the store"* rather than *"owes no marker"*, and a type whose doc
+                          # goes false is this project's most-caught defect). The pool question is
+                          # separate and also his.
+                          # ⚠️ Constraint 1's last clause -- *"no demo screen opens a connection"* --
+                          # meets a screen it did not anticipate. Not violated in substance (its
+                          # subject is example data being WRITTEN); violated in letter if *"demo
+                          # screen"* includes one with demo sections. Register the reading.
+                          # 🔴 The last observation is BANNED FROM THE FRAME by
+                          # `the_shell_shows_no_last_observation` while **the mock puts it in the nav
+                          # footer** -- it goes in the body, and that is a divergence from *"the mock
+                          # prevails"* to register.
+                          # 🔴 The ANTI-SUM guard must sit AT THE COMPOSITION: 5.14b's own pass
+                          # measured its guard GREEN because it asserted that two pure builders do
+                          # not add each other's counts and neither of them can. This story creates
+                          # the SECOND impure edge where a sum can be written.
+                          # ⚠️ AC2 asserts two absences (no last visit, no sparkline history) --
+                          # **verify rather than repeat**: `observed_at` and `valid_from`/`valid_to`
+                          # do persist some history. And AC3's E17 clause may NOT be narrowed here,
+                          # by its own words -- register, do not tidy.
+                          # ✅ Eight register rows name 6b.5, including the `/` redirect (one line)
+                          # and `/gap`'s orphaned fragment.
+                          # NEXT = `create-story validate` 6b.5 (MANDATORY), then Guy's ruling.
+                          # (Earlier the same day) 6b.4b -> `done`: PR #103 squash-merged as `20e854c` after a green CI run
                           # (1m09s; bin suite 6.13 s in CI against 0.05 s locally). Branch deleted,
                           # twins updated in this same push. **625 -> 629 tests**, eight gates green.
                           # 🔑 EPIC 6b IS NOW 4 of 13 DONE (6b.1, 6b.2, 6b.3, 6b.4, 6b.4b -> five
@@ -3619,7 +3658,7 @@ development_status:
   # §0b so that 6b.4b starts designed rather than with a question. `epics.md` NOT edited (a story may
   # not; only a retrospective may) -- the divergence is registered in deferred-work.md.
   6b-4b-action-bar-and-the-gesture-nature: done
-  6b-5-dashboard-real-reach-beside-examples: backlog
+  6b-5-dashboard-real-reach-beside-examples: ready-for-dev
   6b-6-inventory-and-device-record: backlog
   6b-7-applications-and-ipam: backlog
   6b-8-sources-and-alerts: backlog
