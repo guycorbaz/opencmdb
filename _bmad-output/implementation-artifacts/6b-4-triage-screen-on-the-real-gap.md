@@ -53,8 +53,9 @@ work, three of which start from **nothing at all**:
 contexting a story that carried two ideas. This one carries four, and the fourth — the action bar —
 needs an arbitration and an invented surface before a line of it can be written.
 
-**→ RECOMMENDED, and put to Guy rather than taken:** **SPLIT**, with **6b.4b INSERTED** (Epic 6b → 13
-stories):
+**→ ✅ ARBITRATED (Guy, 2026-08-19): SPLIT TAKEN. 6b.4b is INSERTED — Epic 6b → 13 stories.**
+⚠️ `epics.md` is **NOT edited** (a story may not; only a retrospective may); the divergence is
+registered instead.
 
 - **6b.4** keeps **AC1 and AC3** — the queue, the two photos with their provenance and freshness, and
   the age sort. One coherent deliverable: *the screen shows the real gap, honestly and completely.*
@@ -92,10 +93,27 @@ but no text, badge or treatment for *"this button does not work yet"* exists any
 mock** (every button there is live in the demo), not in the UX spec, not in 6b.3's shipped templates.
 
 🔑 **This is 6b.3's own §0b, one story later and on a different axis**: *the mock cannot prevail,
-because it has nothing to prevail with.* It needs an arbitration on **the form and the words**,
-recorded WITH the alternatives refused — a disabled button with a tooltip, a ghost button with an
-inline note, a labelled group heading, or the gesture simply absent until it exists each say something
-different about what the operator should expect.
+because it has nothing to prevail with.*
+
+**→ ✅ ARBITRATED (Guy, 2026-08-19): a GESTURE NATURE, closed in the TYPE.** An
+`enum Gesture { Live { route }, Planned { owner } }`, one partial, one key pair — so adding a gesture
+**forces declaring its state**, and `Live` **carries its route**, which makes *"a button that looks
+live and calls nothing"* unrepresentable. Story 5.6's idiom and story 6b.3's, one axis over.
+
+**The words**, a pair distinct from 6b.3's because they say a different thing to a different
+population: **fr** — badge *« À venir »*, sentence *« Ce geste n'est pas encore construit. »*;
+**en** — *"Not yet"*, *"This gesture is not built yet."*
+
+**Refused, each with its reason:** a bare partial applied by hand (nothing obliges anyone to use it,
+and a dead button can still pass for live); 🔴 **`<button disabled>` — refused on NFR25**: a disabled
+button **leaves the tab order and disappears from a screen reader**, so the blind operator is not even
+told the gesture exists; `aria-disabled="true"` on a non-activatable button keeps the announcement.
+And a separate *"À venir"* group heading, which is honest but **diverges from the mock's form**, which
+6b.2's *"the mock prevails"* forbids without an explicit decision.
+
+⚠️ **And one thing deliberately NOT in the surface**: the owning story's number. *"Arrives in 6.4"* is
+not information for the operator, and it turns the label into a **calendar, therefore a promise** —
+exactly what story 5.14b refused. The owner lives in the type, never on the screen.
 
 ### §0c. 🔴 TODAY THE ACTION BAR WOULD BE ENTIRELY DEAD — and that collides with a recorded decision of Guy's
 
@@ -115,13 +133,24 @@ The mock's action bar carries **five** gestures: `Merger`/`Résoudre` (primary),
 
 **So AC2, applied literally today, ships an action bar of five buttons of which five are dead.**
 
+🔴 **AND HALF OF THIS SECTION WAS NEVER AN OPEN QUESTION — it was put to Guy as one, and his own
+premise had already answered it.** `epics.md:2092`, decision **(2)** of 2026-08-13, under the heading
+*"this epic's premises and **not open questions**"*: *"the same rule applies INSIDE an implemented
+screen — **the four gestures Epic 7 owns are visible and labelled**."* The count lands exactly:
+*Accepter l'écart*, *Mettre en veille*, *Rattacher*, *Exclure* are **four**, and the fifth — *Merger* —
+is covered by AC2's own sentence. **The *whether* is closed; only the form was open (§0b).**
+🔑 *Reading a document as if it had not already decided is the same error as citing a line without
+opening it* — this story's contexting made it twice in one day, once on a story number and once here.
+
 🔴 **And that runs into a decision Guy already took, in the opposite direction.** Story 5.14b,
 recorded in `deferred-work.md:3283`: the abstention section stays **DESCRIPTIVE** and does **not**
 announce its gesture — *"because announcing an absent gesture is a promise"*. AC2 asks for five
 announced absent gestures.
 
-⚠️ **The two are reconcilable and the reconciliation is exactly what needs deciding**: AC2's answer to
-*"a promise"* is *"labelled"* — the label is what turns a promise into a statement of intent. But
+⚠️ **The two are reconcilable and Guy's premise (2) is the reconciliation** — it is later than 5.14b
+and more specific: 5.14b governs a **descriptive section**, the premise governs **gestures inside an
+implemented screen**. AC2's answer to *"a promise"* is *"labelled"*, and the label is what turns a
+promise into a statement of intent. But
 whether that holds for **five** dead buttons including the primary, on the product's signature screen,
 is a judgement about the operator's experience and not a deduction. 🔑 **The question Epic 5's
 retrospective found the method never asks, asked here on purpose: what does the operator DO with an
@@ -284,7 +313,27 @@ again — confirmed both through `cargo xtask ci` and through the gate's own
 legitimate PRODUCTION reader of a provenance column**, where story 6.2 had to arbitrate a named
 `SANCTIONED_READS` entry for a test-only one (its §6.5).
 
-🔴 **The consequence for §0a: AC1 needs an arbitration too, and the split's stated rationale was
+**→ ✅ ARBITRATED (Guy, 2026-08-19): TWO READERS, and the sanction names only the display one.**
+`load_declared_attributes` stays **unchanged** — `(key, value)`, no provenance — and it is what feeds
+the comparison; a **new** `load_declared_provenance_for_display` returns `(key, origin, updated_at)`
+and goes **only to the view**; `SANCTIONED_READS` gains **one** entry naming that path **and** that
+function (the `(path, Option<fn>)` shape already exists, and story 6b.3's review measured yesterday
+that a name-only key lets a write through from elsewhere).
+
+🔑 **Why a bare sanction on the existing reader was REFUSED, and it is not a style point**:
+`load_declared_attributes` is consumed at `page.rs:568` by `reconcile_view` → `build_view`, **which IS
+the divergence computation**. Sanctioning it would put provenance inside the scope of the very path
+the gate exists to protect, and the gate's own doc says it guards against that *"BY ACCIDENT"*. With
+two readers the divergence computation is **structurally unable** to see provenance, because it is
+never passed it — and the gate goes back to being the tripwire it claims to be instead of the only
+thing holding.
+
+⚠️ **The cost, stated rather than discovered later**: two reads of `declared_attribute` instead of
+one, joined at the view. ⚠️ **And the limit, written rather than implied**: this is a **TRIPWIRE, never
+a barrier** — nothing stops a future story routing provenance into `build_view` another way; the real
+closure is a database privilege, which story 5.12 already registered as its own voie B.
+
+🔴 **The consequence for §0a: AC1 needed an arbitration too, and the split's stated rationale was
 therefore incomplete.** The story first argued *"AC2 cannot be written until two things are settled,
 and AC1 can"*. False. **T0 is THREE arbitrations, not two**, whichever scope Guy chooses — and the
 third is on a gate six stories deep in this project's history that this story's contexting never
@@ -381,23 +430,35 @@ mentioned.
 
 ## Tasks / Subtasks
 
-**Written for §0a's SPLIT — AC1 and AC3 only. Rescope on Guy's answer before starting.**
+**✅ SCOPED BY GUY'S ARBITRATION (2026-08-19): AC1 and AC3 only. AC2 — the action bar and its gesture
+nature — is story 6b.4b's**, whose form and words are already arbitrated in §0b so that story starts
+with its design settled rather than with a question.
 
-- [ ] **T0 — the THREE arbitrations, BEFORE any code** (§0b, §0c, §0h): the dead-gesture mechanism's
-      form and words; whether an all-dead action bar ships at all; and **whether production may read
-      `origin` for display, which needs a named `SANCTIONED_READS` entry on story 6.2's precedent**.
-      ⚠️ The first two are AC2's and go to 6b.4b under the split; **the third is AC1's and stays
-      here** — it was missing from the first draft and the validation found it by running the gate.
-      **None may be decided by a developer**
-- [ ] **T1 — the provenance and freshness plumbing** (AC1): widen `load_declared_attributes` and
-      `load_observation_facts` to return `origin`/`updated_at` and `connector_id`/`observed_at`, and
-      carry them into the view structs. ⚠️ **Not through `opencmdb-core`** — D47, and `gap::project`
-      has no business holding a timestamp
+- [x] **T0 — the arbitrations, taken BEFORE any code** (§0a, §0b, §0h): ✅ **the split is TAKEN**
+      (6b.4b inserted, AC2 moves); ✅ **the gesture nature is decided in the type with its words**
+      (6b.4b's to build, settled here so it starts designed); ✅ **production may read `origin` for
+      display through a SECOND reader**, with one named `SANCTIONED_READS` entry — the existing
+      reader stays provenance-free because it feeds the divergence computation. ⚠️ §0c's other half
+      was never open: Guy's premise (2) of 2026-08-13 had already decided that unbuilt gestures are
+      *visible and labelled*
+- [ ] **T1 — the provenance and freshness plumbing** (AC1, §0h): ⚠️ **`load_declared_attributes` is
+      NOT widened** — it feeds the divergence computation and stays `(key, value)`. Add
+      `load_declared_provenance_for_display` returning `(key, origin, updated_at)`, and widen
+      `load_observation_facts` to `(connector_id, observed_at, facts)`. Then **one named
+      `SANCTIONED_READS` entry**, path AND function. ⚠️ **Not through `opencmdb-core`** — D47, and
+      `gap::project` has no business holding a timestamp. 🔑 The `DATE_FORMAT` + `parse_from_rfc3339`
+      pattern **already exists at `repo.rs:371`** — reuse it, `sqlx` has no `chrono` feature
 - [ ] **T2 — the relative-time convention** (AC1): *"il y a 4 min"*, in both locales, as a display
-      concern. ⚠️ Re-read story 5.14b's finding first: the real carrier of the clock-freedom guard is
-      `chrono`'s `default-features = false`, **not** the test that claims to pin it
-- [ ] **T3 — the queue** (AC1): its row vocabulary decided and RECORDED (§0d — only the kinds the
-      engine can distinguish today), its query, its ordering, its selection, its empty state
+      concern. 🔴 **And WRITE the clock guard for `build_view`, do not inherit one**: the validation
+      measured that `the_view_builder_has_no_clock_so_one_store_renders_identically` calls `build_view`
+      with EMPTY data, so it proves clock-freedom for `build_identity_view` and, for the function this
+      story fills, **nothing** — and `SystemTime::now()` compiles freely where `chrono::Utc::now()`
+      does not
+- [ ] **T3 — the queue** (AC1): its row vocabulary is **measured, not chosen** (§0d) — `Écart`,
+      `Absence` and `Conflit` come from `gap::reconcile`'s own types, `Nouveau` is a ~15-line set
+      difference, and **`Ambigu` is omitted because it has no producer** (FR16, Epic 6's). Plus its
+      query, ordering, selection and empty state. ⚠️ **Discard the `OutOfPerimeter` noise per entity**
+      — `reconcile` is written for ONE perimeter and looping it is O(N·M)
 - [ ] **T4 — the two photos** (AC1): the detail pane, each side with its meta-line. ⚠️ Follow the AC
       and the spec on the declared side, **not the mock's unpopulated fixture** (§0e)
 - [ ] **T5 — sort by age, OFF by default** (AC3), with a guard that reds if the default flips —
@@ -490,5 +551,6 @@ at all**.
 
 | Date | Change |
 |---|---|
+| 2026-08-19 | **Arbitrated by Guy (three rulings, before any code).** (1) The SPLIT is taken — **6b.4b INSERTED, Epic 6b → 13 stories**; this story keeps AC1 + AC3. (2) The dead-gesture mechanism is a **gesture nature closed in the TYPE**, with its words fixed here so 6b.4b starts designed — and 🔴 `<button disabled>` **refused on NFR25**, because a disabled button leaves the tab order and vanishes from a screen reader. (3) `origin` may be read for **display**, through a **SECOND reader**, so the divergence computation stays structurally unable to see provenance. 🔴 And one finding about the contexting itself: half of §0c was **never an open question** — Guy's premise (2) of 2026-08-13 had already decided that unbuilt gestures are *visible and labelled*. |
 | 2026-08-19 | Validated by two fresh-context layers. Fact-check: 61 assertions, 59 confirmed, **2 refuted, both mine** — the `--accent` row belongs to story **6.4**, a different story, and the trap was a number that reads like this one's. Gap-hunt: it BUILT the plumbing and found that **reading `origin` for display reds the `authorship` gate**, which adds a THIRD arbitration and refutes the split's first rationale; that **four of five row kinds are producible today, not two**; and that **M6's clock guard does not red** and never reaches `build_view` at all. |
 | 2026-08-19 | Contexted: seven findings, three needing Guy's arbitration. The story carries four deliverables and a SPLIT is recommended; *"labelled per 6b.3"* names a mechanism that does not exist; and applied literally today the action bar would ship five buttons of which five are dead, against a recorded decision that *announcing an absent gesture is a promise*. |

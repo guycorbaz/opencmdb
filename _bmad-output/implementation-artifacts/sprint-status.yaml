@@ -75,7 +75,35 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4 ✅ VALIDATED, two fresh-context layers, and it paid for itself
+last_updated: 2026-08-19  # 6b.4 ✅ ARBITRATED by Guy (three rulings, before any code), governing
+                          # `dev-story`. **(1) THE SPLIT IS TAKEN -- 6b.4b INSERTED, Epic 6b -> 13
+                          # stories**: 6b.4 keeps AC1+AC3, 6b.4b takes the action bar. `epics.md` NOT
+                          # edited; registered instead. **(2) The dead-gesture mechanism is a GESTURE
+                          # NATURE CLOSED IN THE TYPE** -- `enum Gesture { Live { route }, Planned
+                          # { owner } }`, one partial, one key pair (fr *"À venir" / "Ce geste n'est
+                          # pas encore construit."*, en *"Not yet" / "This gesture is not built
+                          # yet."*). 🔴 `<button disabled>` REFUSED ON NFR25: a disabled button leaves
+                          # the tab order and vanishes from a screen reader, so the blind operator is
+                          # not even told the gesture exists -- `aria-disabled` keeps the
+                          # announcement. ⚠️ And the owning story's NUMBER stays out of the surface:
+                          # *"arrives in 6.4"* turns the label into a calendar, therefore a promise,
+                          # which is what 5.14b refused. **(3) `origin` may be read for DISPLAY, via
+                          # a SECOND reader** -- `load_declared_attributes` stays provenance-free
+                          # because it feeds the divergence computation (`page.rs:568`), a new
+                          # `load_declared_provenance_for_display` goes only to the view, and
+                          # `SANCTIONED_READS` gains ONE entry naming path AND function. 🔑 A bare
+                          # sanction on the EXISTING reader was refused: it would put provenance
+                          # inside the scope of the path the gate exists to protect *"by accident"*.
+                          # Two readers make the divergence computation STRUCTURALLY unable to see it.
+                          # 🔴 AND ONE FINDING ABOUT THE CONTEXTING ITSELF: half of §0c was never an
+                          # open question -- Guy's premise (2) of 2026-08-13 (*"the four gestures
+                          # Epic 7 owns are visible and labelled"*, under the heading *"premises and
+                          # NOT open questions"*) had already decided it, and the count lands exactly
+                          # on the mock's four secondary buttons. *Reading a document as if it had not
+                          # already decided is the same error as citing a line without opening it* --
+                          # made twice in one day, once on a story number and once here.
+                          # NEXT = `dev-story` 6b.4, scoped to AC1 + AC3.
+                          # (Earlier the same day) 6b.4 ✅ VALIDATED, two fresh-context layers, and it paid for itself
                           # BEFORE a line of code. **Fact-check: 61 assertions, 59 confirmed, 2
                           # REFUTED, both mine.** 🔴 The load-bearing one is a STORY NUMBER, not a
                           # line number: register row (e)'s *"Owner: story 6.4"* does NOT mean this
@@ -3321,6 +3349,14 @@ development_status:
   6b-2-shell-navigation-and-ten-routes: done
   6b-3-example-data-marker-and-its-gate: done
   6b-4-triage-screen-on-the-real-gap: ready-for-dev
+  # 6b.4b INSERTED 2026-08-19 at story 6b.4's VALIDATION (Epic 6b: 12 -> 13 stories). Guy's
+  # arbitration: 6b.4 keeps AC1 (the queue and the two photos with provenance and freshness) and AC3
+  # (the age sort); 6b.4b takes AC2 -- the action bar and the GESTURE NATURE it needs. The reason is
+  # DEPENDENCY, not size: AC2's mechanism is invented by no document this project has, and it governs
+  # every screen after this one, not just triage. Its form and words are ALREADY arbitrated in 6b.4's
+  # §0b so that 6b.4b starts designed rather than with a question. `epics.md` NOT edited (a story may
+  # not; only a retrospective may) -- the divergence is registered in deferred-work.md.
+  6b-4b-action-bar-and-the-gesture-nature: backlog
   6b-5-dashboard-real-reach-beside-examples: backlog
   6b-6-inventory-and-device-record: backlog
   6b-7-applications-and-ipam: backlog

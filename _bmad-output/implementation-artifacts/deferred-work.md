@@ -3920,3 +3920,51 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   three layers could measure — content, escaping, French locale — and the visual result was not.
   Epic 6b's own DoD already names axe-core green on the ten routes, which is a different check again
   (a11y, not fidelity). **Owner: Epic 6b's DoD, with story 6b.12's release sweep.**
+
+## Deferred from: story 6b.4, the triage screen (2026-08-19)
+
+- 🔴 **`epics.md` is NOT edited and Epic 6b now has THIRTEEN stories, not twelve.** Story 6b.4b was
+  INSERTED at 6b.4's validation (Guy, 2026-08-19): 6b.4 keeps AC1 (the queue, the two photos with
+  their provenance and freshness) and AC3 (the age sort); **6b.4b takes AC2** — the action bar and the
+  gesture nature it needs. The reason is DEPENDENCY, not size: AC2's mechanism is specified by no
+  document this project has and it governs every screen after this one. A story may not edit an
+  acceptance criterion or an epic; **only a retrospective may**. **Owner: Epic 6b's retrospective**,
+  which must also correct `epics.md:2108`'s *"seven gates"* (there are eight since story 6.3) — a
+  drift this story measured to be registered **nowhere** before now.
+
+- 🔑 **The gesture nature's form and words are arbitrated IN ADVANCE, in story 6b.4's §0b**, so 6b.4b
+  starts designed rather than with a question: `enum Gesture { Live { route }, Planned { owner } }`,
+  one partial, one key pair. 🔴 **`<button disabled>` was refused on NFR25** — a disabled button
+  leaves the tab order and disappears from a screen reader, so the blind operator is not even told the
+  gesture exists; `aria-disabled="true"` on a non-activatable button keeps the announcement. ⚠️ And
+  **the owning story's number stays out of the surface**: *"arrives in 6.4"* turns the label into a
+  calendar, therefore a promise — what story 5.14b refused. **Owner: story 6b.4b.**
+
+- ⚠️ **`SANCTIONED_READS` gains its first PRODUCTION entry, and the shape is the decision.** Story 6.2
+  admitted one test-only reader of the provenance columns; story 6b.4 needs `origin` on screen.
+  Guy's arbitration: **two readers** — `load_declared_attributes` stays provenance-free because it
+  feeds the divergence computation (`page.rs:568`), and a new `load_declared_provenance_for_display`
+  goes only to the view. 🔑 A bare sanction on the existing reader was refused because it would put
+  provenance inside the scope of the very path the gate protects *"by accident"*. ⚠️ **Still a
+  TRIPWIRE, never a barrier**: nothing stops a future story routing provenance into `build_view`
+  another way, and the real closure remains a database privilege — story 5.12's own voie B, still
+  unowned. **Owner: Epic 19, with 5.12's `GRANT`.**
+
+- 🔴 **`Ambigu` is omitted from the queue's row vocabulary because it has no producer.** Measured: of
+  the mock's five kinds, `Écart`, `Absence` and `Conflit` are already typed by `gap::reconcile`
+  (`AbstentionCause::NoObservedValue` / `ConflictingObservations`, `gap/mod.rs:49-57`), `Nouveau` is a
+  small set difference, and `Ambigu` needs FR16's ranked candidates, which `link_candidate` stores and
+  nothing reads. **Owner: Epic 6** (stories 6.13/6.14), and the queue must gain the row the day it
+  lands rather than being rediscovered then.
+
+- ⚠️ **`the_view_builder_has_no_clock_so_one_store_renders_identically` proves nothing about
+  `build_view`.** Measured at 6b.4's validation: that guard calls `build_view` with EMPTY declared and
+  observations, so a clock read in its populated branch is never reached; and `SystemTime::now()`
+  compiles freely where `chrono::Utc::now()` does not (no `clock` feature). The guard is real proof
+  only for `build_identity_view`. **Owner: story 6b.4**, which must write the missing half rather than
+  inherit a guard that reads as coverage.
+
+- ⚠️ **`reconcile` is written for ONE perimeter and the queue loops it.** Every pass re-classifies
+  every other entity's observations as `OutOfPerimeter` noise — O(N·M) over the corpus. Correct today
+  at fixture scale, and a shape to revisit when the reference-scale generator (story 6.16) meets the
+  triage screen. **Owner: story 6.16.**
