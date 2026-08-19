@@ -1,0 +1,49 @@
+{#- The action bar: the mock's five controls, and what each of them is (story 6b.4b).
+
+     🔴 NOT ONE of them is live today. `Merger` is field-level documenting, FR13(b) and Epic 7's;
+     `Résoudre` needs FR16's ranked candidates, Epic 6's; and accept / snooze / attach / exclude have
+     no column in any migration. `POST /document-all` is not one of them either — it adopts a whole
+     entity, is off by default, and is a different gesture at a different granularity.
+
+     🔑 They are SHOWN AND LABELLED rather than hidden, which is Guy's premise (2) of 2026-08-13:
+     *the four gestures Epic 7 owns are visible and labelled*. A screen with nothing to click should
+     say why, not look broken.
+
+     🔴 `aria-disabled` AND `tabindex="0"`, never the native `disabled`. ⚠️ **The first version
+     shipped the `aria-disabled` half alone and delivered exactly what it was refusing**: measured in
+     Chrome at the code review, a `<span role="button" aria-disabled="true">` with no `tabindex` has
+     `tabIndex -1`, refuses `.focus()`, and forty dispatched Tab presses never reach it. The
+     validation had measured a `<button>`, which is focusable by nature; a `<span>` is not, and
+     `role="button"` grants nothing. *A measurement taken on one thing and applied to another.* The
+     control needs BOTH: `aria-disabled` so it is announced as unavailable rather than removed, and
+     `tabindex` so it is in the tab order at all.
+
+     🔑 And the sentence is a VISIBLE element, not a `title=`. It sat in a tooltip until the code
+     review: invisible to a keyboard, to a touch screen, and inconsistently announced by screen
+     readers — while §0b's whole argument is that a screen with nothing to click should TELL the
+     operator why. The badge alone does not say it.
+
+     ⚠️ Two full elements with STATIC class literals rather than one with a conditional class. Story
+     6b.4's stylesheet guard skips any `class` attribute containing a brace, so the conditional form
+     would leave these classes unchecked — 6b.3's `.screen-section` defect, reachable again through
+     the ordinary way of writing this markup. -#}
+<div class="action-bar" role="group">
+{% for gesture in gestures %}
+  {% match gesture.not_built %}
+  {%- when Some with (_note) %}
+  <span class="btn-gesture planned" role="button" aria-disabled="true" tabindex="0"
+        aria-describedby="gesture-not-built">
+    {{ gesture.label }}
+    <span class="gesture-badge">{{ s.gesture_badge }}</span>
+  </span>
+  {%- when None %}
+  <span class="btn-gesture live">{{ gesture.label }}</span>
+  {%- endmatch %}
+{% endfor %}
+{#- 🔴 ONE visible sentence for the group, and every control POINTS at it with `aria-describedby`.
+     Seen in a browser: rendered inside each control it appeared FIVE TIMES, turning a compact row
+     into a stack that dominated the pane and saying the same thing over and over. A `title=` was
+     worse still — invisible to a keyboard and to a touch screen. This shape keeps both properties
+     that matter: the sentence is VISIBLE once, and a screen reader announces it on EACH control. -#}
+<p id="gesture-not-built" class="gesture-note">{{ s.gesture_not_built }}</p>
+</div>

@@ -4042,3 +4042,101 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   false figure and the blind one caught it**, which is the argument for keeping that layer blind, and
   a reason to state in the Auditor's mandate that a claim of the form *"A → B"* requires measuring A.
   **Owner: Epic 6b's retrospective.**
+## Deferred from: story 6b.4b's validation (2026-08-19)
+
+- 🔴 **A BROWSER WAS AVAILABLE ALL ALONG, and four consecutive stories deferred the visual check on a
+  premise nobody measured.** Verified: `google-chrome --version` → **151.0.7922.169**, and `firefox`
+  is installed too. Stories 6b.1, 6b.2, 6b.3 and 6b.4 each recorded *"no browser was available in
+  this environment"* and each deferred typography, spacing, contrast and layout on that sentence.
+  🔑 *A limit believed is a limit unmeasured* — nobody ran `command -v`. **Consequence: the epic's
+  axe-core obligation and the four deferred visual passes are no longer blocked by the environment**,
+  and story 6b.4b's own T6 is a real browser check. **Owner: Epic 6b's retrospective** for the
+  process lesson, and **story 6b.12's release sweep** for the four unpaid visual passes.
+
+- 🔴 **Story 6b.4's stylesheet guard has TWO holes, both measured.** `every_class_a_template_names_is
+  _defined_in_the_stylesheet` (a) scans raw template bytes **including Askama comments**, so writing
+  the pattern `class="…"` in a `{#- … -#}` comment reds it; and (b) **silently skips any `class="…"`
+  containing `{`**, so the ordinary conditional form
+  `class="btn-gesture{% if … %} live{% else %} planned{% endif %}"` goes entirely unchecked — *story
+  6b.3's `.screen-section` defect, reachable again through the natural way to write the markup*.
+  ⚠️ Widening (b) is not free: an Askama expression is not a class name, and the guard would have to
+  parse the literal rather than skip it. **Owner: story 6b.4b**, which is the story that walks into
+  hole (b), or the first story that needs a conditional class.
+
+- ⚠️ **`aria-disabled` does not stop htmx, and story 6.4 will meet that.** htmx respects the native
+  `disabled` attribute or `hx-disabled-elt`, nothing else — so a planned gesture that later gains an
+  `hx-post` while keeping only `aria-disabled` would fire. Harmless today: no `hx-*` attribute exists
+  on any planned gesture. ⚠️ And `Gesture { route: Option<&'static str> }` says nothing about the HTTP
+  METHOD, while these are actions rather than navigations. **Owner: story 6.4**, which wires the first
+  live gesture.
+
+- 🔑 **The real closure for "a route that goes nowhere" is a CLOSED SET, and it cannot be built yet.**
+  Measured at 6b.4b's validation: neither the arbitrated enum nor the recommended struct prevents a
+  gesture from pointing at a route that does not exist — clippy's dead-code lint asks only whether a
+  variant was instantiated *with any value*. A `route` typed as a member of the application's actual
+  routes would make it unrepresentable; today that set would be **empty**, which is the same wall from
+  the other side. **Owner: story 6.4.**
+
+## Deferred from: story 6b.4b's implementation (2026-08-19)
+
+- 🔴 **THE DESKTOP-ONLY DEFERRAL IS NOW A MEASUREMENT, and the register said it would be scoped
+  "when someone opens the product on a telephone".** Story 6b.4b did: rendered in Chrome 151 at
+  **390 × 844**, `/triage` is **unusable** — the left nav does not collapse and eats ~200 px of the
+  390, the queue rows overflow horizontally with the address clipped mid-value (`192.0.`), the field
+  diff wraps to one word per line, and the count is cut off. ⚠️ **This is NOT a defect of story
+  6b.4b**: responsive was **deferred by Guy's decision of 2026-08-18** (*"not now, we will see
+  later"*), and the shell is story 6b.2's. What changes is that the deferral now has a screenshot
+  behind it instead of a sentence. **Owner: unchanged — the deferral stands**, and story 6b.12 has
+  what it needs to describe the release's limits precisely.
+
+- ⚠️ **Story 6b.4's stylesheet guard still scans Askama COMMENTS, and 6b.4b's new guard hit the same
+  wall on its first run.** `a_planned_gesture_carries_aria_disabled_never_the_native_attribute`
+  reddened on `_action_bar.html`, whose comment *explains why the native attribute is refused* —
+  **a guard that cannot tell code from prose forbids explaining itself**. Fixed here by reusing
+  `screens.rs`'s comment-stripping idiom. 🔴 **`every_class_a_template_names_is_defined_in_the
+  _stylesheet` still has it**, along with its second hole (it skips any `class="…"` containing a
+  brace). **Owner: the first story that needs a conditional class**, or Epic 6b's retrospective.
+
+- 🔴 **ISSUE #38 RECURRED A THIRD TIME on 2026-08-19**, during story 6b.4b's implementation:
+  `fixtures::tests::a_decision_carrying_an_abstention_cause_is_refused` failed once inside a full
+  workspace run with `Os { code: 2, kind: NotFound }`, and passed on the next run with **zero code
+  change** — verified by re-running it alone on a stashed (clean) tree and again on the working tree.
+  **No cause is named**, per the issue's own rule. Three recurrences in one day, across two stories
+  and three different tests, none of them touching the subject under change.
+
+- ⚠️ **`Gesture` has ONE variant and that is a dated state, not a design.** Story 6.4 adds `Live`, and
+  the day it does, `E0004` reds every `match` on the type — **measured** (`non-exhaustive patterns:
+  'Gesture::Live { .. }' not covered`). That red is the point of Guy's arbitration and must be
+  answered by wiring, never by a catch-all arm. **Owner: story 6.4.**
+
+## Deferred from: code review of story 6b.4b (2026-08-19)
+
+- ⚠️ **The *"labelled per 6b.3"* divergence is REGISTERED here, because the story presented it as
+  settled design rather than as a departure from the criterion's letter.** `epics.md:2186` says the
+  unbuilt gestures are *"shown and labelled **per 6b.3**"*. Story 6b.3 shipped two mechanisms
+  (`_example_marker.html` for example CONTENT, `_not_built_yet.html` for an unbuilt SCREEN); story
+  6b.4b adds a **third**, for an unbuilt CONTROL, with its own partial, key pair and classes. 🔑 That
+  is the right reading — *"per 6b.3"* names the DISCIPLINE (one partial, one key pair, one treatment,
+  never a per-screen improvisation) rather than the literal partial, and it traces to Guy's
+  arbitration. ⚠️ But a story may not edit an AC, and the house rule is that a divergence from its
+  letter is raised and registered. It is registered now. **Owner: Epic 6b's retrospective**, which
+  may reword the criterion; a story may not.
+
+- ⚠️ **The comment-stripper hides everything after an unterminated `{#`.** Named by the Edge Case
+  Hunter as plausible and **not planted**: `strip` returns the empty string for the remainder of a
+  file when `#}` is missing, so a native `disabled` after a typo'd comment would be invisible. 🔑 The
+  render-level rewrite makes it moot for the action-bar guard — which now reads the served HTML — and
+  leaves it standing for every other source-scanning guard in `screens.rs` and `page.rs`. Settle it
+  with: `sed` a malformed `{#` into a template and re-run those guards. **Owner: the first story that
+  touches one of them.**
+
+- 🔑 **A LESSON FOR THE RETROSPECTIVE, and it is the story's third occurrence in one day of the same
+  shape: a measurement that landed on the wrong artefact.** (1) The validation measured
+  `aria-disabled` on a `<button>` and the story shipped a `<span>`, so the accessibility property was
+  argued for and not delivered. (2) The first screenshot of the repair was taken against a **stale
+  binary** — `cargo test` builds the test target, not `target/debug/opencmdb` — and showed the defect
+  that had just been fixed, complete with an attribute planted by mutation M8. (3) Story 6b.4's M2
+  attributed its red to the property being watched rather than the one the mutation changed.
+  ⚠️ **All three passed every test.** The common defence is cheap and was what caught (2): **grep the
+  artefact you are about to believe** — the served HTML, the rendered string, the actual binary —
+  rather than the source you just edited. **Owner: Epic 6b's retrospective.**

@@ -513,7 +513,22 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
   text-transform: uppercase;
   color: var(--muted);
 }
-.subject { display: flex; gap: 8px; flex-wrap: wrap; min-width: 0; }
+/* 🔴 4px between the subject's two lines, not 12. Seen in a browser at 1200 px: the field diff was
+   orphaned below the address by a gap wide enough to read as a separate row. The first thing four
+   stories of "no browser available" hid. */
+.subject { display: flex; gap: 4px 8px; flex-wrap: wrap; min-width: 0; }
+
+/* 🔴 A count INSIDE a queue row is lighter than the row's subject, and this is not a preference.
+   Seen in a browser: the filled pill inherited from story 5.14b's identity section was the most
+   prominent thing on its row — heavier than the address it counts — which inverts what the operator
+   should read first and edges toward the badge the UX spec's first hard ban forbids. Outside the
+   queue the pill is unchanged; 5.14b's section keeps its own treatment. */
+.queue .count {
+  background: none;
+  padding: 0;
+  color: var(--muted);
+  font-weight: 400;
+}
 .subject .field { color: var(--muted); }
 .seen { font-size: 12px; color: var(--muted); white-space: nowrap; }
 
@@ -555,3 +570,70 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 /* The queue row's field diff — declared, the arrow, observed. Weight and ink, never hue. */
 .diff { display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; min-width: 0; }
 .diff .arrow { color: var(--muted); }
+
+/* ── The action bar: five controls, none of them live (story 6b.4b) ───────
+   🔴 NEUTRAL, never `--accent-document`. The amber means *"this IS the documenting gesture"*, and
+   none of these is one yet: a dead control in the gesture's colour would spend the reservation's
+   meaning before the gesture arrives. Story 6b.1's guard asserts the legitimate-use count is still
+   ZERO, and story 6.4 is what moves it. */
+.action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.btn-gesture {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* A planned control is legible and plainly inert: muted ink, a dashed edge, and the cursor a
+   pointing hand never claims. 🔴 It is focusable because the markup carries `tabindex="0"` — NOT
+   because it carries `aria-disabled`. This comment claimed focusability from the wrong attribute
+   until the code review measured that the shipped `<span>` had `tabIndex -1` and refused `.focus()`
+   outright. `aria-disabled` says *unavailable*; `tabindex` says *reachable*; the control needs both,
+   and neither implies the other. */
+.btn-gesture.planned {
+  border-style: dashed;
+  color: var(--muted);
+  cursor: default;
+}
+
+/* Reserved for the day a gesture is live (story 6.4). Deliberately quiet: the amber belongs to the
+   documenting gesture alone, and this rule must not borrow it. */
+.btn-gesture.live {
+  color: var(--text);
+  border-color: var(--color-neutral-500);
+}
+
+/* The sentence, VISIBLE. It lived in a `title=` until the code review — invisible to a keyboard and
+   to a touch screen, inconsistently announced by screen readers, and the one thing §0b's argument
+   turns on. It wraps to its own line inside the control. */
+.gesture-note {
+  flex-basis: 100%;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.gesture-badge {
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-neutral-200);
+  color: var(--color-neutral-700);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}

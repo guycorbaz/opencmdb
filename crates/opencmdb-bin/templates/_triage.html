@@ -3,8 +3,8 @@
      🔑 Server-rendered, one URL per state — epic constraint 4. The selection is `?sel=`, the sort is
      `?sort=age`, and there is no client router: the mock's runtime is not this product's.
 
-     ⚠️ There is no action bar here, by decision and not by omission: the gestures and the label a
-     not-yet-built one wears are story 6b.4b's, whose form and words are already arbitrated. -#}
+     ⚠️ The action bar arrived with story 6b.4b, and NOT ONE of its five controls is live — see
+     `_action_bar.html` for why that is a decision and not an omission. -#}
 <section class="triage">
   <div class="triage-head">
     <h1>{{ s.triage_title }}</h1>
@@ -77,6 +77,9 @@
           <p class="meta muted">{{ pane.observed_meta.source }}{% if !pane.observed_meta.freshness.is_empty() %} · {{ pane.observed_meta.freshness }}{% endif %}</p>
         </div>
       </div>
+      {#- The action bar goes UNDER the two photos, where the mock puts it. -#}
+      {% let gestures = pane.gestures %}
+      {% include "_action_bar.html" %}
     </aside>
     {% endif %}
   </div>

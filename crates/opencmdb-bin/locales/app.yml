@@ -317,3 +317,32 @@ time.days:
 time.ahead:
   en: "dated ahead"
   fr: "daté dans le futur"
+
+# ── The action bar: five controls, none of them live yet (story 6b.4b) ────
+# 🔴 NO STORY NUMBER in any of these values. *"Arrives in 6.4"* would turn the label into a calendar,
+# therefore a promise — what story 5.14b refused. The owner lives in the type, never on the screen,
+# and a guard asserts that these values carry no digit.
+gesture.badge:
+  en: "Not yet"
+  fr: "À venir"
+gesture.not_built:
+  en: "This gesture is not built yet."
+  fr: "Ce geste n'est pas encore construit."
+gesture.merge:
+  en: "Merge"
+  fr: "Merger"
+gesture.resolve:
+  en: "Resolve"
+  fr: "Résoudre"
+gesture.accept_gap:
+  en: "Accept the gap"
+  fr: "Accepter l'écart"
+gesture.snooze:
+  en: "Snooze"
+  fr: "Mettre en veille"
+gesture.attach:
+  en: "Attach"
+  fr: "Rattacher"
+gesture.exclude:
+  en: "Exclude"
+  fr: "Exclure"

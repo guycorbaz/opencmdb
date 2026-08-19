@@ -75,7 +75,164 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4 -> `done`: PR #101 squash-merged as `cea6853` after a green CI run
+last_updated: 2026-08-19  # 6b.4b CODE-REVIEWED (three layers, Sonnet 5) and REPAIRED. **0
+                          # decisions, 9 patches, 1 deferral, 4 dismissed with their check.** 629
+                          # tests, eight gates green, clippy and fmt clean.
+                          # 🔴 THE FOUR HIGH FINDINGS ARE ONE MISTAKE MADE FOUR TIMES: **every guard
+                          # this story wrote checks the SOURCE, and every defect lives in the
+                          # RENDER.** (a) an attribute assembled in Rust and emitted with `|safe` --
+                          # an idiom this codebase already uses -- put a real native `disabled` in
+                          # the served page, guards GREEN; (b) a bare uppercase `DISABLED` slipped a
+                          # case-sensitive matcher, and the render test's own `" disabled="` missed
+                          # it because a boolean attribute has no `=`; (c) a YAML BLOCK SCALAR made
+                          # the digit guard walk past *"Ce geste arrive avec la story 6.4, prevu au
+                          # sprint 12"*, which then RENDERED on all five controls in French with
+                          # every guard green; (d) neither guard could see `tabindex`, the DOM
+                          # property their spelling was only a proxy for.
+                          # 🔑 One change of level fixes all four: assert on the RENDERED HTML and
+                          # on the RESOLVED string, never on the template or the YAML. *A guard that
+                          # reads the source measures what was written, never what was served.*
+                          # 🔴 AND THE FIVE CONTROLS WERE NOT KEYBOARD-REACHABLE AT ALL: a `<span
+                          # role="button" aria-disabled="true">` with no `tabindex` has `tabIndex -1`
+                          # and refuses `.focus()`; forty dispatched Tab presses reached none of
+                          # them. **The story argued for a property its own markup did not deliver**
+                          # -- the validation had measured a `<button>`, a `<span>` was built.
+                          # Reached by ALL THREE layers, two of them pressing Tab in Chrome 151.
+                          # 🔴 The repair found TWO MORE only a browser could see: the visible
+                          # sentence repeated on each control was NOISE (now one `<p>` for the group
+                          # with `aria-describedby` from each control -- visible once, announced
+                          # five times); and **the first screenshot of that fix was a LIE because the
+                          # BINARY WAS STALE** -- `cargo test` builds the test target, not
+                          # `target/debug/opencmdb`, so the running server still carried mutation
+                          # M8's planted attribute and the screenshot showed the defect just fixed.
+                          # 🔑 *A screenshot of a stale binary is not a look at your code* -- and
+                          # that is the THIRD time in one day a measurement landed on the wrong
+                          # artefact. The cheap defence, which is what caught it: **grep the artefact
+                          # you are about to believe**, not the source you just edited.
+                          # ⚠️ Registered: the *"labelled per 6b.3"* divergence (a third mechanism,
+                          # right reading, but presented as settled design rather than raised) ->
+                          # Epic 6b's retrospective; and the unterminated-`{#` hole in every other
+                          # source-scanning guard.
+                          # ⚠️ STAYS at `review`: `done` is the MERGE's business.
+                          # (Earlier the same day) 6b.4b -> `review`: IMPLEMENTED. The action bar ships with the mock's five
+                          # controls, **not one of them live**, each carrying its badge and its
+                          # sentence -- Guy's premise (2) made visible. `Résoudre` follows the CAUSE,
+                          # never the translated label. **625 -> 629 tests** (402 bin + 161 core +
+                          # 66 xtask), eight gates green, run both ways (0.05 s / 5.85 s).
+                          # 🔑 M7 MEASURES THE PROPERTY THE ARBITRATION WAS CHOSEN FOR: adding `Live`
+                          # gives `error[E0004]: non-exhaustive patterns` on every `match`. The
+                          # compiler forces the revisit at exactly the right moment -- measured, not
+                          # argued. ⚠️ And M1 is recorded **NOT EXECUTABLE**: option (a) has no route
+                          # field until 6.4 adds one, which is a consequence of the arbitration
+                          # rather than an omission.
+                          # 🔴 MY OWN NEW GUARD REDDENED ON ITS OWN EXPLANATION: it scans templates
+                          # for the native `disabled`, and `_action_bar.html`'s comment explains why
+                          # that attribute is refused -- *a guard that cannot tell code from prose
+                          # forbids explaining itself*. **The exact hole the validation had just
+                          # measured in story 6b.4's stylesheet guard**, walked into with a brand-new
+                          # guard an hour later. Fixed by REUSING `screens.rs`'s stripping idiom;
+                          # 6b.4's guard still has it, registered.
+                          # 🔴 AND A BROWSER FINALLY LOOKED AT THIS PRODUCT (Chrome 151, installed
+                          # all along). Two defects at 1200 px, reachable by no test: the `1 champ(s)`
+                          # count rendered as 5.14b's FILLED PILL and was **heavier than the address
+                          # it counts**, inverting what the operator reads first and edging toward
+                          # the badge the UX spec bans; and the field diff was orphaned below its
+                          # address by a 12 px gap. Both fixed and re-shot.
+                          # ⚠️ At 390 px the screen is UNUSABLE -- nav not collapsing, address
+                          # clipped mid-value, diff one word per line. **NOT this story's defect**:
+                          # responsive was deferred by Guy on 2026-08-18 and the shell is 6b.2's. The
+                          # register said it would be scoped *"when someone opens the product on a
+                          # telephone"* -- this story did, and **the deferral now has a screenshot
+                          # behind it instead of a sentence**.
+                          # 🔑 Two guards written that the mutation table had PRESUPPOSED (the
+                          # validation caught that M2 and M3 named guards which did not exist).
+                          # 🔴 Issue #38 recurred a THIRD time today, in a third test. No cause named.
+                          # ⚠️ STAYS at `review`: `done` is the MERGE's business.
+                          # (Earlier the same day) 6b.4b ✅ ARBITRATED by Guy, before any code: **option (a), the ENUM with
+                          # `Planned` alone**, taken OVER my recommendation (d). 🔑 The reason is the
+                          # one thing the validation could not take away: with `Planned` alone there
+                          # is no unconstructed variant, so clippy is clean today, and **the day
+                          # story 6.4 adds `Live`, `E0004` forces every `match` site to be
+                          # revisited** -- a compiler-forced moment of attention at exactly the right
+                          # time, which (d) has none of, ever. Since the validation established that
+                          # NEITHER shape can stop a route pointing at nothing, the property was
+                          # never the deciding factor; the moment is.
+                          # ✅ Measured buildable WITH ITS CONTROL: `owner` lives in the type and is
+                          # read by nothing, and clippy is clean -- ⚠️ and my EXPLANATION was refuted
+                          # by its own control (I supposed `#[derive(Debug)]` was reading the field;
+                          # re-run without `Debug`, still clean). *The measurement stands, the story
+                          # I had for it did not, and it is not written down as if it did.*
+                          # ⚠️ The promise is NARROWED in writing (5.12's precedent): a labelling and
+                          # typing DISCIPLINE, never a compiler-enforced guarantee.
+                          # NEXT = `dev-story` 6b.4b.
+                          # (Earlier the same day) 6b.4b ✅ VALIDATED, two fresh-context layers, and it changed the answer.
+                          # **Fact-check: 36 assertions, 34 confirmed, 2 flagged, both mine** -- and
+                          # ✅ it CLOSED an escape hatch I had only inferred, by WRITING the test: a
+                          # `#[cfg(test)]` construction of `Live` does NOT silence the lint, because
+                          # `clippy --workspace` without `--all-targets` never compiles cfg(test).
+                          # **Gap-hunt: it BUILT BOTH options.** 🔴 ITS CENTRAL FINDING REFUTES MY
+                          # RECOMMENDATION'S JUSTIFICATION BY RUNNING IT: under option (d),
+                          # `route: Some("/does-not-exist")` reds **NOTHING** -- 398 tests, clippy and
+                          # eight gates green -- and the control renders as a genuine live link,
+                          # indistinguishable in a screenshot. *"The arbitrated property survives,
+                          # only its spelling changes"* is FALSE: not merely representable, UNGUARDED.
+                          # 🔑 AND THE ENUM WAS NEVER MUCH BETTER: constructing ONE `Live` with a
+                          # bogus route makes the *"never constructed"* error VANISH -- clippy asks
+                          # only whether a variant was instantiated with ANY value. Its forcing power
+                          # was a one-shot whole-crate check that goes dark the day 6.4 lands.
+                          # **NO OPTION SHIPS THE PROPERTY AS STATED**, so §0a now NARROWS the promise
+                          # (story 5.12's precedent) instead of claiming one, and the real closure --
+                          # a route typed as a member of a CLOSED SET -- is registered to story 6.4,
+                          # where it becomes buildable because the set stops being empty.
+                          # 🔴 AND A BROWSER EXISTS: `google-chrome` **151.0.7922.169** and `firefox`
+                          # are installed. **FOUR consecutive stories deferred the visual check on a
+                          # premise nobody ever measured** -- nobody ran `command -v`. *A limit
+                          # believed is a limit unmeasured.* The bar was rendered and read at 1200 px
+                          # and 390 px: it reads as *deliberately not built*, not broken.
+                          # ✅ And Guy's NFR25 arbitration is confirmed by a REAL DOM: `aria-disabled`
+                          # keeps focus and fires its click; the native `disabled` refuses both.
+                          # ⚠️ Two holes measured in story 6b.4's stylesheet guard -- it scans Askama
+                          # COMMENTS, and it **silently skips any `class="…"` containing `{`**, which
+                          # is exactly how one would naturally write this story's live/planned toggle
+                          # (6b.3's defect reachable again). Plus: branch on the CAUSE not the
+                          # translated `kind` string (6b.3's wrong-namespace defect waiting), and M2
+                          # and M3 presuppose guards that DO NOT EXIST -- uncredited scope, now named.
+                          # NEXT = Guy's ONE ruling on §0a, then `dev-story` 6b.4b.
+                          # (Earlier the same day) 6b.4b CONTEXTED -> `ready-for-dev`. 🔑 It starts DESIGNED: its form, its
+                          # words and the *whether* were all settled before it began -- the form and
+                          # words by Guy's arbitration in 6b.4's §0b, the *whether* by his own
+                          # premise (2) of 2026-08-13 (`epics.md:2092`, *"the four gestures Epic 7
+                          # owns are visible and labelled"*, under a heading reading *"premises and
+                          # NOT open questions"*). ⚠️ 6b.4's contexting had put that last one to him
+                          # as if it were open; recorded so this story does not repeat it.
+                          # 🔴 ONE OPEN QUESTION, AND IT IS A MEASUREMENT: the arbitrated
+                          # `enum Gesture { Live { route }, Planned { owner } }` **does not compile
+                          # today** -- probed at contexting with the enum genuinely used and only
+                          # `Live` unconstructed: `error: variant 'Live' is never constructed` under
+                          # `clippy -D warnings`. And that is the state of the product, not an
+                          # artefact of the probe: **not one of the mock's five action-bar gestures
+                          # exists** (Merger is FR13(b)/Epic 7, Résoudre needs FR16/Epic 6, and
+                          # accept/snooze/attach/exclude have no column in any migration), and
+                          # `POST /document-all` is NOT one of them -- whole-entity, flag-gated off,
+                          # called by no template, a different gesture at a different granularity.
+                          # FOUR OPTIONS put to Guy, (d) RECOMMENDED: a STRUCT with an `Option`
+                          # route. Every gesture must still declare whether it has one, so *"looks
+                          # live and calls nothing"* stays UNREPRESENTABLE -- **the arbitrated
+                          # PROPERTY survives, only its spelling changes** -- and no unconstructed
+                          # variant reds the lint. 🔴 (b) `#[allow(dead_code)]` is refuse-worthy: that
+                          # lint is `Screen::ALL`'s only carrier outside `cargo xtask ci`, and 6b.3
+                          # spent a story building a test because it is silenceable. 🔴 (c) wiring
+                          # `/document-all` to the bar is refused: *a button that does something
+                          # other than what it says is worse than one that does nothing and says so*.
+                          # ⚠️ Also established: a PLANNED button must be NEUTRAL, never amber --
+                          # the amber means *"this IS the gesture"* and it is not one yet, so the
+                          # reservation guard stays at ZERO and row (e)'s narrowing remains story
+                          # **6.4**'s (6b.4's contexting misread `6.4` as itself; do not repeat).
+                          # And NO keyboard hint: constraint (6) says the mock's ⏎/⌫ are not a spec.
+                          # ⚠️ The operator still cannot DO anything after this story -- it turns *a
+                          # screen with nothing to click* into *a screen that says why*. 6.4 ends it.
+                          # NEXT = `create-story validate` 6b.4b (MANDATORY), then Guy's one ruling.
+                          # (Earlier the same day) 6b.4 -> `done`: PR #101 squash-merged as `cea6853` after a green CI run
                           # (1m02s; bin suite 5.34 s in CI against 0.07 s locally). Branch deleted,
                           # twins updated in this same push. **614 -> 625 tests**, eight gates green.
                           # NEXT = `create-story` 6b.4b (the action bar and the gesture nature) --
@@ -3452,7 +3609,7 @@ development_status:
   # every screen after this one, not just triage. Its form and words are ALREADY arbitrated in 6b.4's
   # §0b so that 6b.4b starts designed rather than with a question. `epics.md` NOT edited (a story may
   # not; only a retrospective may) -- the divergence is registered in deferred-work.md.
-  6b-4b-action-bar-and-the-gesture-nature: backlog
+  6b-4b-action-bar-and-the-gesture-nature: review
   6b-5-dashboard-real-reach-beside-examples: backlog
   6b-6-inventory-and-device-record: backlog
   6b-7-applications-and-ipam: backlog
