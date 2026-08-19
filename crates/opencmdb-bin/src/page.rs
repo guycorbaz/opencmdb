@@ -3789,7 +3789,12 @@ mod tests {
     /// [`crate::screens`], so a guard over `inventory_body` alone would find none at all.
     #[test]
     fn every_example_section_is_covered_by_exactly_one_marker() {
-        let badge = rust_i18n::t!("example.badge").to_string();
+        // 🔴 **The badge's CLASS, not its text.** Counting the word was a plain substring count
+        // with no delimiters: the edge-case review measured an unresolved key `Example.Kind.bogus`
+        // inflating the count to 9 across eight device rows, because the untranslated badge reads
+        // *"Example"*. A false positive there is a false NEGATIVE waiting on any defect whose text
+        // does not collide. *An oracle that counts a word counts every word that contains it.*
+        let badge = r#"class="example-marker-badge""#;
 
         for (screen, body) in [
             (
@@ -3802,7 +3807,7 @@ mod tests {
             ),
         ] {
             let served = format!("{}{}", example_marker(), body);
-            let markers = served.matches(badge.as_str()).count();
+            let markers = served.matches(badge).count();
             assert_eq!(
                 markers, 1,
                 "{screen} is example all the way through and must carry exactly ONE marker; it \
@@ -3810,7 +3815,7 @@ mod tests {
                  marker produced on the record, and only a browser showed it"
             );
             assert!(
-                !body.contains(badge.as_str()),
+                !body.contains(badge),
                 "{screen}'s own body carries a marker as well as the dispatch's — the two stack, \
                  and the dispatch is where it belongs so a new screen cannot omit it"
             );
@@ -3822,7 +3827,7 @@ mod tests {
             let section = fragment
                 .split_once(EXAMPLE_SECTION_ANCHOR)
                 .map_or(fragment, |(head, _)| head);
-            let markers = section.matches(badge.as_str()).count();
+            let markers = section.matches(badge).count();
             assert_eq!(
                 markers, 1,
                 "an example section of /dashboard carries {markers} marker(s) and must carry \

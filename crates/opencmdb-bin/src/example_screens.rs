@@ -733,18 +733,28 @@ mod tests {
     /// (none today: the dataset's values are addresses, MACs, serials and proper nouns).
     #[test]
     fn no_i18n_key_reaches_the_screen() {
+        // ⚠️ **Case-INSENSITIVE, and the widening is a code-review finding.** It required every
+        // segment to be lowercase, so a key with an uppercase part — `Zorp.Kind.bogus` — went
+        // through unseen, and the edge-case layer measured it rendering on a live page with the
+        // whole suite green. The control it kept: the same key in lowercase WAS caught, so the
+        // blind spot needed both a non-literal construction and a capital.
+        //
+        // 🔑 The discriminator against false positives is **two segments carrying a letter**, not
+        // the case: it separates `example.role.storage` from a version like `v0.1.1` (one lettered
+        // segment) and from an address like `192.0.2.10` (none), both of which are legitimate text
+        // on these very screens.
         fn keyish(word: &str) -> bool {
             let word = word.trim_matches(|c: char| !c.is_alphanumeric() && c != '.' && c != '_');
-            word.contains('.')
-                && word.split('.').count() >= 2
-                && word.split('.').all(|part| {
-                    !part.is_empty()
-                        && part
-                            .chars()
-                            .all(|c| c.is_ascii_lowercase() || c == '_' || c.is_ascii_digit())
+            let parts: Vec<&str> = word.split('.').collect();
+            parts.len() >= 2
+                && parts.iter().all(|part| {
+                    !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
                 })
-                // An address is dotted too, and every part of it is digits.
-                && !word.split('.').all(|part| part.chars().all(|c| c.is_ascii_digit()))
+                && parts
+                    .iter()
+                    .filter(|part| part.chars().any(|c| c.is_ascii_alphabetic()))
+                    .count()
+                    >= 2
         }
 
         let mut pages = vec![("/devices", inventory_body(&ScreenQuery::default()))];

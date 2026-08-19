@@ -962,6 +962,32 @@ mod tests {
                     )
                 }
             }
+            // 🔴 **The body a screen SERVES matches the content it DECLARES**, and nothing
+            // checked that until this story's code review. A screen addressed under
+            // `/devices/` was swallowed by the record route: it compiled with zero warnings, its
+            // render arm went silently dead, and the address served the *unknown device* page —
+            // while every existing check passed. The marker check sees only PRESENCE, and
+            // `device_record` prefixes the marker unconditionally, so it was satisfied by the
+            // wrong body.
+            //
+            // 🔑 A `match` and not a lookup table: a new `ExampleContent` variant does not compile
+            // until someone says what its screen must actually show.
+            if let screens::Nature::Example(content) = nature {
+                let witness = match content {
+                    screens::ExampleContent::DevicesInventory => {
+                        rust_i18n::t!("unplaced.title").to_string()
+                    }
+                    screens::ExampleContent::DeviceRecord => {
+                        rust_i18n::t!("record.identity").to_string()
+                    }
+                };
+                assert!(
+                    body.contains(&witness),
+                    "{} declares {content:?} and its body does not contain {witness:?} — the \
+                     screen is serving somebody else's content, or none",
+                    screen.href()
+                );
+            }
             probed += 1;
         }
 

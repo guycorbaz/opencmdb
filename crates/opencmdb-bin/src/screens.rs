@@ -314,7 +314,21 @@ impl NavGroup {
 pub(crate) fn router(perimeter: Option<String>) -> Router {
     let mut router = Router::new();
     for screen in Screen::ALL {
-        if screen.href().starts_with(RECORD_PREFIX) {
+        if screen
+            .href()
+            .strip_prefix(RECORD_PREFIX)
+            .is_some_and(|slug| crate::example_data::device_by_id(slug).is_some())
+        {
+            // ⚠️ **The skip names a REAL device, and the narrowing is a code-review finding.** It
+            // read `starts_with(RECORD_PREFIX)` alone, which swallowed **any** future screen
+            // addressed under `/devices/` — measured: a `Screen` with `href() = "/devices/backup"`
+            // and its own `ExampleContent` compiled with **zero warnings**, its render arm became
+            // silently dead, and the address served the *unknown device* page. The three tests
+            // that reddened were all bookkeeping COUNTS whose messages read *"update this
+            // number"*, and doing so left 652 tests, clippy and eight gates green over a screen
+            // serving the wrong body. Epic 5's dominant class, inside a guard written for this
+            // story. Now a screen the record route cannot actually serve falls through and gets
+            // its own static route, which axum matches ahead of the parameterised one.
             // 🔴 **Served by the parameterised route registered below, never by this loop**, and
             // the skip is the whole of Guy's arbitration of 2026-08-19 (*"hors de `Screen`"*).
             //

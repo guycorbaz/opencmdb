@@ -422,7 +422,7 @@ growth** — `CLAUDE.md`'s *"split, not grown"*.
 
 ## Prove-to-red — executed
 
-**Fifteen rows after the code review: thirteen reds, one compiler-carried, one GREEN by measurement.** (Thirteen rows at implementation; M2b and M13 were added by the review.) Carriers are named
+**Seventeen rows after the code review: fifteen reds, one compiler-carried, one GREEN by measurement.** (Thirteen rows at implementation; M2b, M13, M14 and M15 were added by the review.) Carriers are named
 per row and *"every red assertion-carried"* is **not** claimed. One restore mechanism only — a
 scratchpad snapshot, never `git checkout --`, the gesture that destroyed uncommitted work three
 times in this project.
@@ -443,6 +443,8 @@ times in this project.
 | M10 | a key-valued field printed unresolved | **RED ×1** | the render-side key guard — the second of the two defects a browser found |
 | M11 | a marker deleted from the dashboard's second example section | **RED ×2** | both per-section guards |
 | M12 | `values_are_keys` set on a FACTUAL field | ✅ **GREEN, by measurement** | ⚠️ `t!` renders an unknown key verbatim, so resolving `"192.0.2.10"` yields `"192.0.2.10"`. **The flag protects one direction only**, and its doc now says so |
+| M14 | the route skip widened back to `starts_with`, plus a screen at `/devices/backup` | **RED ×3** | 🔴 the NEW content-identity assertion, naming the swallowed screen. **Before it: zero errors, zero warnings, and the three reds were bookkeeping COUNTS whose messages read *"update this number"* — doing so left 652 tests, clippy and eight gates green over a screen serving the wrong body** |
+| M15 | `/devices` renders the RECORD's body | **RED ×2** | the same assertion, plus the filter test |
 | M13 | `Screen::Device.href()` → a slug no device carries | **RED ×1** | `the_navigations_device_address_names_a_device_that_exists`, added at the code review — before it, the product's own primary link to the record degraded to the *unknown device* page with **no red anywhere** |
 
 ⚠️ **Two rows first came back GREEN and both were MY DRIVER, not a weak guard** — a `sed` that
