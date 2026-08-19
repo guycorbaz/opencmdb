@@ -75,7 +75,12 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.3 CODE-REVIEWED (three layers, Sonnet 5 -- a different model from the
+last_updated: 2026-08-19  # 6b.3 -> `done`: PR #99 squash-merged as `d1bb128` after a green CI run
+                          # (1m04s; bin suite 5.48 s in CI against 0.06 s locally -- the tell that
+                          # the database-backed half really executed). Branch deleted, twins updated
+                          # in this same push. **611 -> 614 tests**, eight gates green.
+                          # Next: story 6b.4 (the triage screen on the real gap).
+                          # (Earlier the same day) 6b.3 CODE-REVIEWED (three layers, Sonnet 5 -- a different model from the
                           # implementer; each in its own git worktree) and REPAIRED. **3 decisions by
                           # Guy, 10 patches, 1 deferral, 4 dismissed with the check that dismissed
                           # them.** 611 -> **614 tests** (387 bin + 161 core + 66 xtask), eight gates
@@ -3238,7 +3243,7 @@ development_status:
   epic-6b: in-progress
   6b-1-design-system-tokens-and-accent: done
   6b-2-shell-navigation-and-ten-routes: done
-  6b-3-example-data-marker-and-its-gate: review
+  6b-3-example-data-marker-and-its-gate: done
   6b-4-triage-screen-on-the-real-gap: backlog
   6b-5-dashboard-real-reach-beside-examples: backlog
   6b-6-inventory-and-device-record: backlog
