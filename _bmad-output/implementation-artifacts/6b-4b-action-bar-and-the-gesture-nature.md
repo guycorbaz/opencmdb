@@ -1,6 +1,6 @@
 # Story 6b.4b: The action bar, and the gesture nature it needs
 
-Status: review
+Status: done
 
 Epic: 6b — *L'interface de la maquette*. **INSERTED at story 6b.4's validation** (Guy, 2026-08-19),
 taking Epic 6b from twelve stories to thirteen. It carries **AC2 of `epics.md`'s story 6b.4**, which
