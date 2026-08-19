@@ -13,7 +13,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::observation::{Fact, Observation};
 
-/// A field on which the declared value and the observed value disagree — a drift.
+/// A field on which the declared value and the observed value disagree — **a gap**.
+///
+/// ⚠️ It read *"a drift"* until story 6b.6. The canonical glossary binds `gap`/« écart » for this
+/// concept and its preamble forbids synonyms in so many words, and the EN column governs *"docs,
+/// API and code"*, not only the UI. 🔑 The story promised `opencmdb-core` would be *untouched*, and
+/// that promise is what would have sheltered this line — story 5.13b's finding exactly: **a promise
+/// of non-modification protects behaviour and shelters false sentences.** Narrowed there to *no
+/// BEHAVIOUR change*, and the sentence corrected in place.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Gap {
     pub field: String,
@@ -205,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn surfaces_exactly_the_drift_gap() {
+    fn surfaces_exactly_the_disagreeing_field() {
         let d = declared(&[("ipv4", "192.0.2.10"), ("hostname", "nas")]);
         let obs = vec![obs(vec![ip(192, 0, 2, 10), host("intruder")])];
         let r = reconcile(("ipv4", "192.0.2.10"), &d, &obs);

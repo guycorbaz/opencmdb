@@ -142,15 +142,34 @@ pub(crate) enum Nature {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExampleContent {
     /// The example inventory: the device list and the sightings the example engine did not place
-    /// (story 6b.3's witness screen).
+    /// (story 6b.3's witness screen, filled out to the mock's shape by story 6b.6).
     DevicesInventory,
+    /// One device's record — its fields, what it hosts, its composite identity, its observation
+    /// history (story 6b.6).
+    ///
+    /// ⚠️ **This content is NOT served by the generic loop in [`router`].** Its address is a
+    /// parameterised route, which [`Screen`] structurally cannot represent: [`Screen::href`] returns
+    /// a `&'static str` used both as a route PATTERN and as a URL the guards FETCH, and
+    /// `/devices/{id}` cannot be both. See [`router`] for the skip and for what it costs.
+    DeviceRecord,
 }
 
 impl ExampleContent {
     /// Render this content's body.
-    fn render(self) -> String {
+    fn render(self, query: &crate::example_screens::ScreenQuery) -> String {
         match self {
-            ExampleContent::DevicesInventory => crate::page::devices_example_body(),
+            // ⚠️ `query`, not `ScreenQuery::default()`. It read `default()` after the parameter
+            // had been threaded through the router, `demonstration_screen` and this signature —
+            // and **nothing warned**: Rust does not lint an unused function PARAMETER. The route
+            // filtered nothing while every pure test stayed green. Only the route test saw it.
+            ExampleContent::DevicesInventory => crate::example_screens::inventory_body(query),
+            // Unreachable by construction, and by the SAME mechanism as `Nature::Fed` below:
+            // `router` never registers this screen's address, because the parameterised route
+            // serves it. It is `unreachable!` rather than a silent fallback so that the day
+            // someone deletes the skip, a test says WHICH assumption broke.
+            ExampleContent::DeviceRecord => unreachable!(
+                "the device record is served by the parameterised route, not by the generic loop"
+            ),
         }
     }
 }
@@ -191,7 +210,7 @@ impl Screen {
             Screen::Triage => "/triage",
             Screen::Dashboard => "/dashboard",
             Screen::Devices => "/devices",
-            Screen::Device => "/device",
+            Screen::Device => "/devices/nas-01",
             Screen::Apps => "/apps",
             Screen::Ipam => "/ipam",
             Screen::Sources => "/sources",
@@ -257,10 +276,11 @@ impl Screen {
             Screen::Dashboard => Nature::Mixed,
             // The witness screen, filled from the example dataset (Guy's arbitration, 2026-08-19).
             Screen::Devices => Nature::Example(ExampleContent::DevicesInventory),
+            // The device record, served by the parameterised route (story 6b.6).
+            Screen::Device => Nature::Example(ExampleContent::DeviceRecord),
             // ⚠️ Each of these becomes `Example` in ITS OWN story, listed beside it. Until then the
             // screen holds nothing and says so — see [`Nature::Empty`].
-            Screen::Device   // story 6b.6
-            | Screen::Apps     // story 6b.7
+            Screen::Apps       // story 6b.7
             | Screen::Ipam     // story 6b.7
             | Screen::Sources  // story 6b.8
             | Screen::Alerts   // story 6b.8
@@ -294,6 +314,42 @@ impl NavGroup {
 pub(crate) fn router(perimeter: Option<String>) -> Router {
     let mut router = Router::new();
     for screen in Screen::ALL {
+        if screen
+            .href()
+            .strip_prefix(RECORD_PREFIX)
+            .is_some_and(|slug| crate::example_data::device_by_id(slug).is_some())
+        {
+            // ⚠️ **The skip names a REAL device, and the narrowing is a code-review finding.** It
+            // read `starts_with(RECORD_PREFIX)` alone, which swallowed **any** future screen
+            // addressed under `/devices/` — measured: a `Screen` with `href() = "/devices/backup"`
+            // and its own `ExampleContent` compiled with **zero warnings**, its render arm became
+            // silently dead, and the address served the *unknown device* page. The three tests
+            // that reddened were all bookkeeping COUNTS whose messages read *"update this
+            // number"*, and doing so left 652 tests, clippy and eight gates green over a screen
+            // serving the wrong body. Epic 5's dominant class, inside a guard written for this
+            // story. Now a screen the record route cannot actually serve falls through and gets
+            // its own static route, which axum matches ahead of the parameterised one.
+            // 🔴 **Served by the parameterised route registered below, never by this loop**, and
+            // the skip is the whole of Guy's arbitration of 2026-08-19 (*"hors de `Screen`"*).
+            //
+            // `Screen::href` returns a `&'static str` that this loop uses as a route PATTERN while
+            // the partition and auth-perimeter tests FETCH it as a URL. A parameterised path cannot
+            // be both, so the record's address is the first in this product that `Screen::ALL`
+            // structurally cannot represent. The story's validation BUILT both alternatives:
+            //
+            // - a `Screen` variant with `href() = "/devices/{id}"` **compiles without a warning**
+            //   and ships a literal `href="/devices/{id}"` in all eleven navigations, which every
+            //   existing guard accepts;
+            // - registering this screen's address statically as well **shadows** the parameterised
+            //   route for exactly the URL the guards probe — after which the record handler was
+            //   measured able to ignore its slug entirely, serve device #1 for
+            //   `/devices/does-not-exist`, and leave 636 tests and `clippy -D warnings` green.
+            //
+            // Skipping makes the shadow unrepresentable rather than merely tested. ⚠️ The cost is
+            // that no INHERITED guard covers this route, so it carries two of its own — see
+            // `the_record_route_answers_a_non_canonical_slug` and its unknown-slug twin.
+            continue;
+        }
         if matches!(screen.nature(), Nature::Fed | Nature::Mixed) {
             // 🔑 Keyed on the NATURE, not on the identity: `Screen::Triage` was named here until
             // story 6b.3, and the two would drift the day a second screen becomes fed. Now the
@@ -306,10 +362,63 @@ pub(crate) fn router(perimeter: Option<String>) -> Router {
         let perimeter = perimeter.clone();
         router = router.route(
             screen.href(),
-            get(move || async move { demonstration_screen(screen, perimeter) }),
+            get(
+                // 🔴 **The query is EXTRACTED, and it was not until a look at the running server.**
+                // The closure took no arguments and `ExampleContent::render` called the inventory
+                // with `ScreenQuery::default()`, so `/devices?kind=printer` served all eight
+                // devices while `the_filter_narrows_…` — which calls the pure builder directly —
+                // stayed green. Epic 5's dominant class: *a guard placed where the defect cannot
+                // occur reads as coverage and is none*, and story 6b.4's `triage_html` was the same
+                // shape. `the_filter_narrows_through_the_real_route` is the guard that can see it.
+                move |axum::extract::Query(query): axum::extract::Query<
+                    crate::example_screens::ScreenQuery,
+                >| async move { demonstration_screen(screen, perimeter, &query) },
+            ),
+        );
+    }
+    {
+        let perimeter = perimeter.clone();
+        router = router.route(
+            RECORD_ROUTE,
+            get(
+                move |axum::extract::Path(id): axum::extract::Path<String>| async move {
+                    device_record(&id, perimeter)
+                },
+            ),
         );
     }
     router
+}
+
+/// Every address the parameterised record route covers.
+///
+/// 🔑 A PREFIX and not a list: `router` skips whatever it covers, so adding a screen under it can
+/// never leave two routes racing for one address.
+pub(crate) const RECORD_PREFIX: &str = "/devices/";
+
+/// The record route's pattern, in axum's syntax.
+pub(crate) const RECORD_ROUTE: &str = "/devices/{id}";
+
+/// One device's record, or the page that says the slug names no device.
+///
+/// ⚠️ The unknown case answers **200 and a page**, not 404. The address is a real screen of the
+/// product reached from its own navigation; what is unknown is the slug, and a 404 would tell the
+/// operator the feature does not exist. 🔴 The slug is **never echoed** — see
+/// `_device_unknown.html` for the reflected-XSS shape that refuses.
+fn device_record(id: &str, perimeter: Option<String>) -> Response {
+    // 🔑 The marker, from the same place `demonstration_screen` gets it. This route does not go
+    // through that function — it is the one address off `Screen` — and the first version of it
+    // therefore served four example sections with no marker at all. `Screen::Device`'s nature is
+    // `Example`, so the partition test named it immediately; the point is that the skip in
+    // `router` buys structural safety on one axis and costs it on another, which is why this call
+    // is here and not implied.
+    let body = format!(
+        "{}{}",
+        crate::page::example_marker(),
+        crate::example_screens::record_body(id)
+            .unwrap_or_else(crate::example_screens::unknown_device_body)
+    );
+    Html(render_shell(Shell::new(Screen::Device, perimeter), body)).into_response()
 }
 
 /// A demonstration screen, rendered according to what its content IS.
@@ -323,11 +432,20 @@ pub(crate) fn router(perimeter: Option<String>) -> Router {
 /// the point of [`Nature::Empty`]: marking it as example data would tell the operator that a blank
 /// screen is a demonstration. Its own story (named beside its arm in `nature`) replaces the line
 /// with real example content.
-fn demonstration_screen(screen: Screen, perimeter: Option<String>) -> Response {
+fn demonstration_screen(
+    screen: Screen,
+    perimeter: Option<String>,
+    query: &crate::example_screens::ScreenQuery,
+) -> Response {
     let body = match screen.nature() {
-        // 🔑 The CONTENT comes from the nature's payload, so no screen can be `Example` without
-        // having said what it shows — see [`Nature::Example`] for the defect this closes.
-        Nature::Example(content) => content.render(),
+        // 🔑 **The CONTENT and the MARKER come from the same decision**, so no screen can be
+        // `Example` without having said what it shows and without saying it IS an example — see
+        // [`Nature::Example`] for the defect the payload closes, and
+        // [`crate::page::example_marker`] for why the marker is emitted here rather than included
+        // by each template.
+        Nature::Example(content) => {
+            format!("{}{}", crate::page::example_marker(), content.render(query))
+        }
         Nature::Empty => crate::page::not_built_yet_body(),
         // Unreachable by construction: `router` never merges a `Fed` screen — those need the pool
         // and live on the main router. It is `unreachable!` rather than a silent fallback so the
@@ -738,6 +856,32 @@ mod tests {
     /// 🔑 **`NavGroup` is covered by the same property, and that is the argument for a property
     /// over an enumeration**: its `ALL` is a literal `[NavGroup; 3]` with the identical hole, and a
     /// guard written for `Screen` alone would have covered one of the two.
+    /// 🔴 **The navigation's device address names a device that EXISTS.**
+    ///
+    /// `Screen::Device.href()` is the literal `"/devices/nas-01"` — a slug of
+    /// [`crate::example_data`] with nothing tying the two together at compile time, because
+    /// [`Screen::href`] returns a `&'static str` and a record needs an id. **Rename or remove that
+    /// device and the product's own primary link to the record silently degrades to the
+    /// *unknown device* page**: a real, tested and WRONG 200, with no compiler error and no
+    /// inherited guard positioned to see it.
+    ///
+    /// 🔑 Found by the review layer that had **only the diff** — it could not check the slug
+    /// against the dataset, so it asked what happens when the two drift, which is the question
+    /// having both in front of you does not prompt.
+    #[test]
+    fn the_navigations_device_address_names_a_device_that_exists() {
+        let href = Screen::Device.href();
+        let slug = href
+            .strip_prefix(RECORD_PREFIX)
+            .unwrap_or_else(|| panic!("{href} must live under {RECORD_PREFIX}"));
+        assert!(
+            crate::example_data::device_by_id(slug).is_some(),
+            "the navigation points at {href} and no example device carries the slug {slug:?} — \
+             the entry would render the *unknown device* page, which is a correct 200 for a wrong \
+             reason"
+        );
+    }
+
     #[test]
     fn every_variant_of_a_navigated_enum_is_listed_in_all() {
         // 🔑 The needles are BUILT from the parameter rather than spelled, so the guard cannot
@@ -787,9 +931,18 @@ mod tests {
                 .collect()
         }
 
-        let source = include_str!("screens.rs");
-        // (enum, the count below which the parse itself is suspect)
-        for (enum_name, floor) in [("Screen", 10_usize), ("NavGroup", 3)] {
+        // 🔑 **Three files, not one, since story 6b.6.** The guard read `screens.rs` alone while
+        // its own doc called the hole it closes *"the variant that never reaches `ALL`"* — a
+        // property of every enum with an `ALL`, not of this file. `ObjectState::ALL` is
+        // `#[cfg(test)]`, which makes the hole WIDER there rather than narrower: nothing in
+        // production would notice the omission at all.
+        // (source, enum, the count below which the parse itself is suspect)
+        for (source, enum_name, floor) in [
+            (include_str!("screens.rs"), "Screen", 10_usize),
+            (include_str!("screens.rs"), "NavGroup", 3),
+            (include_str!("state_vocabulary.rs"), "ObjectState", 5),
+            (include_str!("example_data.rs"), "DeviceKind", 7),
+        ] {
             let declared = variants(source, enum_name);
             let in_all = listed(source, enum_name);
 

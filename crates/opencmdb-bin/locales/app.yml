@@ -23,8 +23,8 @@ page.no_observation:
 page.the_gap:
   en: "The gap"
   fr: "L'écart"
-page.no_drift:
-  en: "✓ No drift — declared and observed agree on every compared field."
+page.no_gap:
+  en: "✓ No gap — declared and observed agree on every compared field."
   fr: "✓ Aucun écart — le déclaré et l'observé concordent sur chaque champ comparé."
 page.arrow_observed:
   en: "→ observed"
@@ -241,7 +241,7 @@ triage.empty:
   en: "You are up to date."
   fr: "Vous êtes à jour."
 triage.kind.ecart:
-  en: "Drift"
+  en: "Gap"
   fr: "Écart"
 triage.kind.absence:
   en: "Absence"
@@ -367,13 +367,13 @@ dash.since_heading:
   fr: "Ce qui a grandi depuis votre dernière visite"
 # 🔴 The product has NO notion of a visit — measured, no session or per-operator state anywhere.
 dash.since_body:
-  en: "Three devices appeared and one drift closed."
+  en: "Three devices appeared and one gap closed."
   fr: "Trois appareils sont apparus et un écart s'est refermé."
 dash.card.devices:
   en: "Devices"
   fr: "Appareils"
-dash.card.drifts:
-  en: "Open drifts"
+dash.card.gaps:
+  en: "Open gaps"
   fr: "Écarts ouverts"
 dash.card.sources:
   en: "Live sources"
@@ -383,3 +383,151 @@ dash.card.sources:
 dash.pending_resolution:
   en: "A scan has landed; the identity pass has not placed any of it yet."
   fr: "Un scan est arrivé ; la passe d'identité n'en a encore rattaché aucune partie."
+
+# ── The glossary's STATE axis (story 6b.6, Guy's arbitration 2026-08-19) ──────────────────────
+# 🔴 These are BINDING pairs, transcribed from `prd.md` / `ux-design-specification.md`. A word here
+# that diverges from the table reds `every_state_word_is_in_the_binding_glossary`.
+# ⚠️ There is deliberately NO `state.ecart`: « Écart » is the SAME binding pair as the gesture
+# axis' `gap`, so it renders through `triage.kind.ecart` — one term, one meaning, ONE key.
+state.concordant:
+  en: "Concordant"
+  fr: "Concordant"
+state.conflict:
+  en: "Conflict"
+  fr: "Conflit"
+state.ambiguous:
+  en: "Ambiguous"
+  fr: "Ambigu"
+state.undeclared:
+  en: "Undeclared"
+  fr: "Non déclaré"
+
+# ── The inventory and the device record (story 6b.6) ─────────────────────────────────────────
+devices.filter_label:
+  en: "Filter by kind"
+  fr: "Filtrer par type"
+devices.filter_all:
+  en: "All"
+  fr: "Tous"
+devices.kind:
+  en: "Kind"
+  fr: "Type"
+devices.state:
+  en: "State"
+  fr: "État"
+devices.seen:
+  en: "Last observed"
+  fr: "Dernière observation"
+# 🔴 A filter that matches nothing SAYS SO. Eight devices over seven kinds means no filter is
+# empty today, but a filter whose empty case has no copy is a blank table with no explanation.
+devices.none:
+  en: "No device of this kind."
+  fr: "Aucun appareil de ce type."
+example.kind.server:
+  en: "Servers"
+  fr: "Serveurs"
+example.kind.vm:
+  en: "Virtual machines"
+  fr: "Machines virtuelles"
+example.kind.container:
+  en: "Containers"
+  fr: "Conteneurs"
+example.kind.appliance:
+  en: "Appliances"
+  fr: "Appliances"
+example.kind.network:
+  en: "Network"
+  fr: "Réseau"
+example.kind.printer:
+  en: "Printers"
+  fr: "Imprimantes"
+example.kind.workstation:
+  en: "Workstations"
+  fr: "Postes"
+example.role.application:
+  en: "Application"
+  fr: "Application"
+example.role.security:
+  en: "Security"
+  fr: "Sécurité"
+example.role.workstation:
+  en: "Workstation"
+  fr: "Poste de travail"
+# ⚠️ A QUALIFIER, never a term: « Écart · 2 champs » is the word *écart* qualified (Guy, 2026-08-19).
+example.qualifier.one_field:
+  en: "1 field"
+  fr: "1 champ"
+example.qualifier.two_fields:
+  en: "2 fields"
+  fr: "2 champs"
+example.qualifier.presence:
+  en: "presence"
+  fr: "présence"
+example.field.ipv4:
+  en: "Address"
+  fr: "Adresse"
+example.field.mac:
+  en: "Hardware address"
+  fr: "Adresse matérielle"
+example.field.role:
+  en: "Role"
+  fr: "Rôle"
+example.hosted.service:
+  en: "Service"
+  fr: "Service"
+example.identity.l2_domain:
+  en: "Layer-2 domain"
+  fr: "Domaine de niveau 2"
+example.identity.mac:
+  en: "Interface"
+  fr: "Interface"
+example.identity.serial:
+  en: "Serial number"
+  fr: "Numéro de série"
+example.history.seen:
+  en: "Observed"
+  fr: "Observé"
+example.history.first_seen:
+  en: "First seen"
+  fr: "Première observation"
+example.history.last_seen:
+  en: "Last seen — nothing since"
+  fr: "Dernière observation — plus rien depuis"
+example.history.address_changed:
+  en: "Address changed"
+  fr: "Adresse changée"
+example.history.conflicting_sources:
+  en: "Two sources disagree"
+  fr: "Deux sources se contredisent"
+example.history.several_candidates:
+  en: "Several possible identities"
+  fr: "Plusieurs identités possibles"
+record.fields:
+  en: "Field by field"
+  fr: "Champ par champ"
+record.declared:
+  en: "Declared"
+  fr: "Déclaré"
+record.observed:
+  en: "Observed"
+  fr: "Observé"
+# 🔑 FR29: ONE containment hop, no traversal, and never called "Impact" (UX-DR29).
+record.hosted:
+  en: "Hosted here"
+  fr: "Hébergé ici"
+record.hosted_none:
+  en: "Nothing is hosted here."
+  fr: "Rien n'est hébergé ici."
+record.identity:
+  en: "Composite identity"
+  fr: "Identité composite"
+record.history:
+  en: "Observation history"
+  fr: "Historique d'observation"
+record.back:
+  en: "Back to the inventory"
+  fr: "Retour à l'inventaire"
+# 🔴 The slug is NOT echoed back — see `_device_unknown.html`.
+record.unknown:
+  en: "No device carries this identifier."
+  fr: "Aucun appareil ne porte cet identifiant."

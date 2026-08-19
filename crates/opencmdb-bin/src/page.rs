@@ -263,20 +263,6 @@ struct Strings {
     pending_badge: String,
     /// The *not built yet* sentence an `Empty` screen carries (story 6b.3's code review).
     pending_sentence: String,
-    /// The witness screen's inventory heading (story 6b.3).
-    devices_title: String,
-    /// Column: the device's name (story 6b.3).
-    devices_name: String,
-    /// Column: the address (story 6b.3).
-    devices_ipv4: String,
-    /// Column: the hardware address (story 6b.3).
-    devices_mac: String,
-    /// Column: what the device is for (story 6b.3).
-    devices_role: String,
-    /// The witness screen's second heading — sightings the engine did not place (story 6b.3).
-    unplaced_title: String,
-    /// Column: why a sighting was not placed (story 6b.3).
-    unplaced_reason: String,
     /// The perimeter label in the navigation footer, as the mock shows it (story 6b.2).
     nav_perimeter: String,
     entity: String,
@@ -285,7 +271,7 @@ struct Strings {
     observed: String,
     no_observation: String,
     the_gap: String,
-    no_drift: String,
+    no_gap: String,
     arrow_observed: String,
     reach: String,
     reach_hint: String,
@@ -326,13 +312,6 @@ fn strings() -> Strings {
         gesture_not_built: t!("gesture.not_built").to_string(),
         pending_badge: t!("pending.badge").to_string(),
         pending_sentence: t!("pending.sentence").to_string(),
-        devices_title: t!("devices.title").to_string(),
-        devices_name: t!("devices.name").to_string(),
-        devices_ipv4: t!("devices.ipv4").to_string(),
-        devices_mac: t!("devices.mac").to_string(),
-        devices_role: t!("devices.role").to_string(),
-        unplaced_title: t!("unplaced.title").to_string(),
-        unplaced_reason: t!("unplaced.reason").to_string(),
         nav_perimeter: t!("nav.perimeter").to_string(),
         entity: t!("page.entity").to_string(),
         refresh: t!("page.refresh").to_string(),
@@ -340,7 +319,7 @@ fn strings() -> Strings {
         observed: t!("page.observed").to_string(),
         no_observation: t!("page.no_observation").to_string(),
         the_gap: t!("page.the_gap").to_string(),
-        no_drift: t!("page.no_drift").to_string(),
+        no_gap: t!("page.no_gap").to_string(),
         arrow_observed: t!("page.arrow_observed").to_string(),
         reach: t!("page.reach").to_string(),
         reach_hint: t!("page.reach_hint").to_string(),
@@ -1209,33 +1188,6 @@ fn server_error(error: sqlx::Error) -> Response {
     (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
 }
 
-/// One example device, with its copy already resolved into the operator's language.
-///
-/// 🔴 The resolution happens HERE and not in the template, because `example_data` holds i18n KEYS
-/// rather than sentences — see [`crate::example_data::ExampleDevice::role_key`] for the defect
-/// that taught us the difference, which was found by looking at the screen and by nothing else.
-struct ExampleDeviceView {
-    id: &'static str,
-    name: &'static str,
-    ipv4: &'static str,
-    mac: &'static str,
-    role: String,
-}
-
-/// One example sighting the engine did not place, with its reason resolved.
-struct ExampleSightingView {
-    ipv4: &'static str,
-    /// The hardware address, or the typographic placeholder when the sighting gave none.
-    ///
-    /// 🔑 The absence is resolved HERE and not stored as a sentinel in the dataset, for the same
-    /// reason the role is: `example_data` holds facts, this struct holds what is displayed. The
-    /// dataset's field is an `Option` and its doc comment is therefore true — it read *"when it
-    /// gave one"* over a hard `"—"` literal until story 6b.3's code review, which is a false doc,
-    /// and a false doc is a defect.
-    mac: String,
-    reason: String,
-}
-
 /// An `Empty` screen's body — the one line that says the screen is not built yet.
 #[derive(Template)]
 #[template(path = "_not_built_yet.html")]
@@ -1243,49 +1195,46 @@ struct NotBuiltYet {
     s: Strings,
 }
 
-/// The witness screen's body — the example inventory, in two sections (story 6b.3).
-#[derive(Template)]
-#[template(path = "_devices_example.html")]
-struct DevicesExample {
-    devices: Vec<ExampleDeviceView>,
-    sightings: Vec<ExampleSightingView>,
-    s: Strings,
-}
-
-/// Render the example inventory that the witness screen shows.
+/// The example-data marker, rendered ONCE for a wholly-example screen.
+///
+/// # Why the screen and not each section, on an `Example` screen
+///
+/// 🔴 **Found by looking at the record in a browser.** Its four example sections each included the
+/// marker, so the page carried **four identical banners** saying *"Ce contenu est une démonstration
+/// — il ne provient pas de votre réseau."* one under the other. That is story 6b.4b's finding
+/// exactly — a per-control copy turning a compact row into a stack repeating itself — and no test
+/// could see it, because every guard asks whether the marker is PRESENT.
+///
+/// 🔑 **The rule that resolves it is story 6b.3's own, read precisely**: the marker goes on the
+/// smallest unit that is ENTIRELY example. On a [`Mixed`](crate::screens::Nature::Mixed) screen
+/// that unit is the section, and the dashboard still marks each of its example sections. On an
+/// [`Example`](crate::screens::Nature::Example) screen every section is example, so the smallest
+/// such unit **is the screen** — and marking it four times says nothing the first one did not.
+///
+/// ⚠️ **Emitting it from the dispatch is stronger than a template include, and the promise is
+/// NARROWED to what is true** (story 5.12's precedent). For a screen served by
+/// [`crate::screens::router`]'s generic loop the marker comes from the same `match` arm as the
+/// body, so it cannot be forgotten. 🔴 **It is NOT a universal guarantee, and the counterexample
+/// ships in the same commit**: `Screen::Device` is `Example` and is served by `device_record`,
+/// outside that `match` — the first version of that handler rendered four example sections with no
+/// marker at all, and only `the_marker_partition_follows_every_screens_declared_nature` said so.
+/// *A route off `Screen` is off the dispatch too.* The blind review layer found this sentence
+/// asserting the unqualified version.
 ///
 /// # Panics
 ///
-/// Never in practice: the template is compiled into the binary by askama and its inputs are
-/// constants, so a failure here would mean the template no longer matches its struct — which is a
-/// compile error, not a run-time one. The `expect` states that rather than hiding it behind a
-/// fallback string nobody would ever see.
-pub(crate) fn devices_example_body() -> String {
-    DevicesExample {
-        devices: crate::example_data::devices()
-            .into_iter()
-            .map(|device| ExampleDeviceView {
-                id: device.id,
-                name: device.name,
-                ipv4: device.ipv4,
-                mac: device.mac,
-                role: rust_i18n::t!(device.role_key).to_string(),
-            })
-            .collect(),
-        sightings: crate::example_data::unplaced_sightings()
-            .into_iter()
-            .map(|sighting| ExampleSightingView {
-                ipv4: sighting.ipv4,
-                // An em dash, and locale-neutral on purpose: it is a typographic placeholder for
-                // an absent value, not a word, so it needs no key and reads the same in both.
-                mac: sighting.mac.unwrap_or("—").to_string(),
-                reason: rust_i18n::t!(sighting.reason_key).to_string(),
-            })
-            .collect(),
-        s: strings(),
-    }
-    .render()
-    .expect("the example inventory template and its struct are compiled together")
+/// Never in practice, for the reason given on [`not_built_yet_body`].
+pub(crate) fn example_marker() -> String {
+    ExampleMarker { s: strings() }
+        .render()
+        .expect("the marker template and its struct are compiled together")
+}
+
+/// The example marker on its own — one partial, one key pair, as story 6b.3 requires.
+#[derive(Template)]
+#[template(path = "_example_marker.html")]
+struct ExampleMarker {
+    s: Strings,
 }
 
 /// What an `Empty` screen shows: one line saying the screen is not built yet.
@@ -1400,7 +1349,7 @@ fn example_cards() -> Vec<StatCardView> {
             spark: vec![3, 5, 4, 6, 6, 7, 9],
         },
         StatCardView {
-            label: t!("dash.card.drifts").to_string(),
+            label: t!("dash.card.gaps").to_string(),
             value: "4",
             spark: vec![7, 6, 6, 4, 5, 3, 4],
         },
@@ -1575,6 +1524,22 @@ fn content_type(path: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    /// The ONE anchor every example section carries, on every screen (story 6b.6).
+    ///
+    /// 🔴 Before this story `_devices_example.html` said `screen-section` and `_dashboard.html`
+    /// said `dashboard-example`, so story 6b.5's per-section guard covered the dashboard and
+    /// **nothing covered the witness screen** — measured on the committed tree, a marker deleted
+    /// from `/devices`'s second section left all 634 tests green. *Two anchors meant two guards,
+    /// and only one was written.*
+    const EXAMPLE_SECTION_ANCHOR: &str = "example-section\"";
+
+    /// The dashboard's own section anchor, as story 6b.5's guards read it.
+    ///
+    /// ⚠️ It lost its trailing `class="` when story 6b.6 widened the attribute to carry both
+    /// classes. A needle that includes the opening `class="` breaks on the ordinary gesture of
+    /// adding a second class — which is a limit worth knowing, not just a fix.
+    const DASHBOARD_EXAMPLE_ANCHOR: &str = "dashboard-example";
+
     use super::*;
 
     fn declared_row(entity: &str, key: &str, value: &str) -> (String, String, String) {
@@ -2881,9 +2846,21 @@ mod tests {
     /// ⚠️ **Interpolated, not concatenated**: *"4 min ago"* against *"il y a 4 min"* put the number
     /// on opposite sides, so a `format!` of a translated word and a number is correct in exactly one
     /// language. That is an NFR26 defect no locale guard can see, because both halves ARE keys.
+    /// 🔴 **`set_locale` was called here, and it is process-wide.** Story 6b.6's validation
+    /// measured the consequence with its control: this test run beside
+    /// `build_view_empty_when_no_declared_entity` at `--test-threads=2` reddened **18 times out of
+    /// 60**, and **0 out of 30** single-threaded — a reproducible race, on a comment eleven hundred
+    /// lines above that says in so many words that `set_locale` *"is NOT used, and must not be"*.
+    /// It reddened a run of story 6b.6 itself. The French half now resolves the KEY with an explicit
+    /// locale instead of moving the whole process, so the two halves can no longer collide.
+    ///
+    /// ⚠️ The French half is therefore one step weaker: it checks the TRANSLATION and its
+    /// interpolation, not `relative_time`'s branch selection, which the English half covers. That is
+    /// the trade, stated rather than hidden — and it costs nothing here, because the branch
+    /// selection is language-independent by construction.
     #[test]
     fn relative_time_reads_in_both_languages_and_at_the_boundaries() {
-        rust_i18n::set_locale("en");
+        use rust_i18n::t;
         assert_eq!(relative_time(at(100), at(60)), "just now");
         assert_eq!(relative_time(at(3_540), at(0)), "59 min ago");
         // The boundary: 60 minutes is one hour, not "60 min".
@@ -2892,10 +2869,11 @@ mod tests {
         // A source dated in the future is STATED, never rendered as a negative duration.
         assert_eq!(relative_time(at(0), at(60)), "dated ahead");
 
-        rust_i18n::set_locale("fr");
-        assert_eq!(relative_time(at(3_540), at(0)), "il y a 59 min");
-        assert_eq!(relative_time(at(3_600), at(0)), "il y a 1 h");
-        rust_i18n::set_locale("en");
+        // 🔑 The property this half exists for: *"4 min ago"* against *"il y a 4 min"* put the
+        // number on OPPOSITE sides, so a `format!` of a translated word and a number is correct in
+        // exactly one language. Resolving with an explicit locale keeps that measurable.
+        assert_eq!(t!("time.minutes", n = 59, locale = "fr"), "il y a 59 min");
+        assert_eq!(t!("time.hours", n = 1, locale = "fr"), "il y a 1 h");
     }
 
     /// 🔴 **The queue's row vocabulary is the engine's, and `Ambigu` is absent because nothing
@@ -2934,7 +2912,10 @@ mod tests {
         let view = build_triage(declared, Vec::new(), observations, at(1_000), None, false);
 
         let kinds: Vec<&str> = view.rows.iter().map(|r| r.kind.as_str()).collect();
-        assert!(kinds.contains(&"Drift"), "a Gap must be a row: {kinds:?}");
+        // ⚠️ « Gap » and not « Drift »: story 6b.6's glossary check found that the English
+        // locale rendered a SYNONYM for the product's core term, which the binding table
+        // forbids in so many words. This assertion's own message already said *"a Gap"*.
+        assert!(kinds.contains(&"Gap"), "a Gap must be a row: {kinds:?}");
         assert!(
             kinds.contains(&"Absence"),
             "NoObservedValue must be a row: {kinds:?}"
@@ -3604,7 +3585,7 @@ mod tests {
         let real = html
             .split("class=\"dashboard-real\"")
             .nth(1)
-            .and_then(|rest| rest.split("class=\"dashboard-example\"").next())
+            .and_then(|rest| rest.split(DASHBOARD_EXAMPLE_ANCHOR).next())
             .expect("the real section renders before the example ones");
 
         assert!(real.contains(">11<"), "the placed count renders: {real}");
@@ -3649,7 +3630,7 @@ mod tests {
         // section and **none** in the second — net two and two — and **the entire suite stayed
         // green, this guard included**. *It could not tell "each section has exactly one" from
         // "they happen to add up."* A FOURTH occurrence of the class it was written to close.
-        let sections: Vec<&str> = html.split("class=\"dashboard-example\"").skip(1).collect();
+        let sections: Vec<&str> = html.split(DASHBOARD_EXAMPLE_ANCHOR).skip(1).collect();
         assert!(
             sections.len() >= 2,
             "the premise: the dashboard carries at least two example sections ({}) — with one, \
@@ -3659,7 +3640,7 @@ mod tests {
         for (index, section) in sections.iter().enumerate() {
             // Each slice runs to the next example section, so a marker cannot be counted twice.
             let body = section
-                .split("class=\"dashboard-example\"")
+                .split(DASHBOARD_EXAMPLE_ANCHOR)
                 .next()
                 .unwrap_or(section);
             assert_eq!(
@@ -3674,7 +3655,7 @@ mod tests {
         let real = html
             .split("class=\"dashboard-real\"")
             .nth(1)
-            .and_then(|rest| rest.split("class=\"dashboard-example\"").next())
+            .and_then(|rest| rest.split(DASHBOARD_EXAMPLE_ANCHOR).next())
             .expect("the real section renders first");
         assert!(
             !real.contains("example-marker-badge"),
@@ -3783,6 +3764,81 @@ mod tests {
             !empty.pending_resolution,
             "a store that has observed NOTHING is not pending resolution either — it is empty, and \
              the included section already says so"
+        );
+    }
+
+    /// 🔴 **The marker's scope follows the screen's NATURE, and every example section is covered
+    /// exactly once — counted ONE AT A TIME.**
+    ///
+    /// # Two rules, because there are two natures
+    ///
+    /// - an [`Example`](crate::screens::Nature::Example) screen is example all the way through, so
+    ///   the smallest unit that is ENTIRELY example is the SCREEN: **exactly one marker**. The
+    ///   record shipped **four identical banners down one page** before a browser showed it —
+    ///   story 6b.4b's finding reproduced, and no guard could see it because every one of them
+    ///   asks whether the marker is PRESENT;
+    /// - a [`Mixed`](crate::screens::Nature::Mixed) screen carries real content beside example
+    ///   content, so the unit is the SECTION: **one marker per example section**, which is story
+    ///   6b.5's rule and which a screen-level marker would break in both directions.
+    ///
+    /// 🔑 **Per section, never in total.** Story 6b.5 measured that a totals comparison cannot tell
+    /// *"each section has one"* from *"they happen to add up"* — two markers in one section and
+    /// none in the other left its whole suite green, that guard included.
+    ///
+    /// ⚠️ It reads the COMPOSED body: the marker is emitted by the dispatch in
+    /// [`crate::screens`], so a guard over `inventory_body` alone would find none at all.
+    #[test]
+    fn every_example_section_is_covered_by_exactly_one_marker() {
+        // 🔴 **The badge's CLASS, not its text.** Counting the word was a plain substring count
+        // with no delimiters: the edge-case review measured an unresolved key `Example.Kind.bogus`
+        // inflating the count to 9 across eight device rows, because the untranslated badge reads
+        // *"Example"*. A false positive there is a false NEGATIVE waiting on any defect whose text
+        // does not collide. *An oracle that counts a word counts every word that contains it.*
+        let badge = r#"class="example-marker-badge""#;
+
+        for (screen, body) in [
+            (
+                "/devices",
+                crate::example_screens::inventory_body(&Default::default()),
+            ),
+            (
+                "/devices/{id}",
+                crate::example_screens::record_body("nas-01").expect("nas-01 is an example device"),
+            ),
+        ] {
+            let served = format!("{}{}", example_marker(), body);
+            let markers = served.matches(badge).count();
+            assert_eq!(
+                markers, 1,
+                "{screen} is example all the way through and must carry exactly ONE marker; it \
+                 carries {markers}. Four identical banners down one page is what a per-section \
+                 marker produced on the record, and only a browser showed it"
+            );
+            assert!(
+                !body.contains(badge),
+                "{screen}'s own body carries a marker as well as the dispatch's — the two stack, \
+                 and the dispatch is where it belongs so a new screen cannot omit it"
+            );
+        }
+
+        let dashboard = rendered_dashboard(Some(at(0)));
+        let mut sections = 0_usize;
+        for fragment in dashboard.split(EXAMPLE_SECTION_ANCHOR).skip(1) {
+            let section = fragment
+                .split_once(EXAMPLE_SECTION_ANCHOR)
+                .map_or(fragment, |(head, _)| head);
+            let markers = section.matches(badge).count();
+            assert_eq!(
+                markers, 1,
+                "an example section of /dashboard carries {markers} marker(s) and must carry \
+                 exactly one — counted per SECTION, because a total cannot tell \"each has one\" \
+                 from \"they add up\""
+            );
+            sections += 1;
+        }
+        assert_eq!(
+            sections, 2,
+            "the premise: the dashboard has two example sections ({sections} seen)"
         );
     }
 }

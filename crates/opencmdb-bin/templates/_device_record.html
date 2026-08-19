@@ -1,0 +1,85 @@
+{#- The device record: four example sections, each carrying its own marker (story 6b.6).
+
+     ⚠️ FOUR sections and four markers. Story 6b.5 measured that a guard comparing TOTALS cannot
+     tell *"each section has one"* from *"they happen to add up"*, so the guard reads
+     `example-section` one at a time — and this screen is the first with more than two. -#}
+<p class="record-back"><a href="/devices">{{ s.record_back }}</a></p>
+
+<header class="record-head">
+  <h2>{{ name }}</h2>
+  <p class="record-sub">{{ kind }} · <span class="mono">{{ ipv4 }}</span>
+    <span class="statepill {{ state.modifier }}">{{ state.term }}{{ state.qualifier }}</span></p>
+</header>
+
+<section class="screen-section example-section">
+  <h3>{{ s.record_fields }}</h3>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>{{ s.devices_name }}</th>
+        <th>{{ s.record_declared }}</th>
+        <th>{{ s.record_observed }}</th>
+        <th>{{ s.devices_state }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {%- for field in fields %}
+      <tr>
+        <td>{{ field.label }}</td>
+        <td class="mono">{{ field.declared }}</td>
+        <td class="mono">{{ field.observed }}</td>
+        <td><span class="statepill {{ field.state.modifier }}">{{ field.state.term }}</span></td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</section>
+
+{#- FR29: ONE containment hop, no traversal, and never called *Impact*. ARCH-38 makes `hosts`
+     lookup-only; the product holds no containment data at all, so this is example in the
+     strongest sense. -#}
+<section class="screen-section example-section">
+  <h3>{{ s.record_hosted }}</h3>
+  {%- if hosted.is_empty() %}
+  <p class="empty">{{ s.record_hosted_none }}</p>
+  {%- else %}
+  <table class="grid">
+    <tbody>
+      {%- for item in hosted %}
+      <tr>
+        <td>{{ item.name }}</td>
+        <td>{{ item.kind }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  {%- endif %}
+</section>
+
+<section class="screen-section example-section">
+  <h3>{{ s.record_identity }}</h3>
+  <table class="grid">
+    <tbody>
+      {%- for part in identity %}
+      <tr>
+        <td>{{ part.label }}</td>
+        <td class="mono">{{ part.value }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="screen-section example-section">
+  <h3>{{ s.record_history }}</h3>
+  <table class="grid">
+    <tbody>
+      {%- for line in history %}
+      <tr>
+        <td class="mono">{{ line.when }}</td>
+        <td>{{ line.what }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</section>

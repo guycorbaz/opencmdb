@@ -1,0 +1,12 @@
+{#- A slug no device carries. It says so, and it says it through a TEMPLATE.
+
+     🔴 The obvious implementation echoes the path segment with `format!` into `Html`, which is
+     reflected XSS — measured at this story's validation:
+     `/devices/%3Cscript%3E…` served the script back with a 200. Story 6b.4's review verified *"no
+     XSS"* over TEMPLATES; the record's 404 is the first place a raw path segment could be echoed.
+     🔑 **The slug is not echoed at all.** Askama would escape it, but the operator learns nothing
+     from being shown back what they typed, and not echoing it is the shape that cannot regress. -#}
+<section class="screen-section">
+  <p class="empty">{{ s.record_unknown }}</p>
+  <p class="record-back"><a href="/devices">{{ s.record_back }}</a></p>
+</section>
