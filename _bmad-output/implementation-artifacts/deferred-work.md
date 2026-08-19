@@ -3964,10 +3964,12 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   only for `build_identity_view`. **Owner: story 6b.4**, which must write the missing half rather than
   inherit a guard that reads as coverage.
 
-- ⚠️ **`reconcile` is written for ONE perimeter and the queue loops it.** Every pass re-classifies
-  every other entity's observations as `OutOfPerimeter` noise — O(N·M) over the corpus. Correct today
-  at fixture scale, and a shape to revisit when the reference-scale generator (story 6.16) meets the
-  triage screen. **Owner: story 6.16.**
+- ⚠️ **`reconcile` is written for ONE perimeter and the queue loops it — and the cost is now
+  MEASURED rather than described.** Every pass re-classifies every other entity's observations as
+  `OutOfPerimeter` noise, O(N·M) over the corpus. Measured at story 6b.4's code review against a live
+  database: `/triage` takes **~0.13 s at 300 declared entities and 4.4 s at 2000 entities × ~2300
+  observations**. Nothing bounds it and no test asserts a ceiling. Correct at fixture scale; a shape
+  to revisit when the reference-scale generator meets the triage screen. **Owner: story 6.16.**
 
 ## Deferred from: story 6b.4's implementation (2026-08-19)
 
@@ -4008,3 +4010,35 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   *"Vue groupée par motif"* with its bulk *"Merger les N"* — is not in this story's acceptance
   criteria at all and has **no bulk write route** behind it (`document.rs` handles one subject).
   Recorded so nobody reads its absence as an omission. **Owner: FR17's bulk triage, unscheduled.**
+
+
+## Deferred from: code review of story 6b.4 (2026-08-19)
+
+- ⚠️ **Two declared entities sharing one `ipv4` render two visually identical queue rows.** Seeded
+  live at the code review: both read `192.0.2.60` with nothing on the line to tell them apart. No
+  crash — row ids are namespaced by `entity_id`, so nothing collides — but the operator cannot
+  distinguish them. 🔑 The only distinguisher available today is a UUID, which is noise; what the row
+  needs is a **name**, and naming an entity is grouping. **Owner: Epic 6**, with the device record.
+
+- ⚠️ **`triage_view` issues three queries with no shared snapshot.** A write landing between the
+  declared read and the provenance read could show a field whose meta-line says *"Nothing declared"*.
+  Pre-existing shape — `reconcile_view` has had two unsynchronised reads since story 5.14b — no AC
+  promises snapshot isolation, and `declared_attribute` is insert-never-overwrite so no row can
+  vanish. **Owner: the first story that needs a consistent read across both.**
+
+- 🔴 **ISSUE #38 RECURRED TWICE during story 6b.4's code review**, and the record is added here
+  because the issue's own rule is that a symptom may be recorded and a CAUSE may not be written
+  without naming the check that would refute it. The pattern:
+  `page::tests::the_identity_section_is_visible_without_a_declared_entity` failed once during an M2
+  run and once during an M4 run, then passed on immediate rerun with **zero code change**, both
+  times, in a worktree whose `git status` was verified clean before and after. **No cause is named.**
+  Two more data points for whoever investigates #38: it is not confined to the fixture tests where it
+  was first seen, and it survives into a story that touched neither that test nor its subject.
+
+- 🔑 **A METHOD finding for Epic 6b's retrospective: a delta confirmed by one of its two terms is not
+  confirmed.** The Acceptance Auditor certified *"611 → 625 tests"* as ✅ CONFIRMED by recomputing
+  `398 + 161 + 66 = 625` — the right-hand side — while the Blind Hunter, which had **only the diff**,
+  refuted it by noticing the baseline is 614. ⚠️ **The layer with repository access validated the
+  false figure and the blind one caught it**, which is the argument for keeping that layer blind, and
+  a reason to state in the Auditor's mandate that a claim of the form *"A → B"* requires measuring A.
+  **Owner: Epic 6b's retrospective.**

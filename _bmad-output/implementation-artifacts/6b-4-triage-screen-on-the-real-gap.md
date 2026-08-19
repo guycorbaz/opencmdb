@@ -474,6 +474,109 @@ with its design settled rather than with a question.
       could not surface, *because the row never named the story*. Search the SUBJECTS too
 - [x] **T9 — prove-to-red**, predictions written FIRST, **and every prescribed row executed**
 
+### Review Findings — three layers, 2026-08-19
+
+Blind Hunter (diff only), Edge Case Hunter (own worktree, live `mariadb:10.11`, every mutation
+re-executed), Acceptance Auditor (own worktree, `epics.md`, the UX spec and the twins). All three on
+Sonnet 5 — a different model from the implementer. **0 decision-needed, 11 patch, 2 defer, 5
+dismissed with the check that dismissed them.**
+
+🔴 **The two structural findings are both about GUARDS, and one of them is not this story's.**
+🔑 **And the sharpest observation is about the METHOD**: two layers reached opposite verdicts on the
+same claim, because one of them checked half of it.
+
+#### 🔑 What the layers taught about each other
+
+- 🔴 **The Auditor certified *"611 → 625 tests"* as ✅ CONFIRMED. It is false.** It recomputed
+  `398 + 161 + 66 = 625` — the right-hand side — and stopped. The Blind Hunter, which had **only the
+  diff**, caught that the baseline is **614** (`sprint-status.yaml:229`: 6b.3 closed at *"611 → 614"*)
+  and that `611 + 14 ≠ 625`, the real delta being `614 + 11`. *Verifying a delta means verifying both
+  of its terms; a claim of the form "A → B" confirmed by measuring B alone is not confirmed.*
+  ⚠️ **And the figure itself is story 6b.3's own defect reproduced one story later** — that review
+  caught *"591 → 613"* where the baseline was 611, and this story wrote *"611 → 625"* where it is 614.
+- 🔑 **The blind layer beat the equipped one on this, and that is the argument for keeping it blind.**
+  The Auditor had the repository and used it to check the total; the Blind Hunter had nothing but the
+  numbers in front of it and had to make them add up.
+
+#### Patch
+
+- [x] [Review][Patch] **The test count's baseline is wrong in three places: `611 → 625` where it is
+      `614 → 625`.** Confirmed against `sprint-status.yaml:229` and by counting the eleven tests this
+      diff adds [6b-4…md:611, the Change Log row; sprint-status.yaml:80]
+- [x] [Review][Patch] **The File List says 22 locale keys and the diff adds 27** — measured twice,
+      by both the Blind Hunter and the Auditor independently (62 → 89 top-level keys, no duplicates)
+      [6b-4…md:631]
+- [x] [Review][Patch] 🔴 **The new CSS guard is blind to a SUBDIRECTORY, and its own doc claims
+      otherwise.** `std::fs::read_dir` is not recursive: a class defined nowhere, planted in
+      `templates/sub/_partial.html`, leaves the guard **green** — measured, with a control in a new
+      TOP-LEVEL file that correctly reds. Askama supports `path = "sub/_partial.html"` today, so this
+      is the ordinary gesture of organising templates, not an evasion. ⚠️ **The doc's sentence
+      *"covered the day the file exists"* is therefore FALSE**, which on this project is the defect,
+      not the hole [page.rs:2949]
+- [x] [Review][Patch] 🔴 **THE SAME BLIND SPOT IS IN AN INHERITED GUARD, and it is worse there.**
+      `ac4_the_amber_is_reserved_for_the_documenting_gesture` — story 6b.1's `--accent-document`
+      reservation, the one mutation M5 exercises — calls the SAME non-recursive `templates()` helper.
+      Measured: `style="color: var(--accent-document);"` in `templates/sub2/_leak.html` leaves it
+      **green**, which is precisely the smuggling vector its own comment says it was hardened
+      against. 🔑 *Two independently-written guards, one shared helper, one hole* — fixing
+      `templates()` fixes both, and both need a prove-to-red [page.rs:2116]
+- [x] [Review][Patch] 🔴 **M2's recorded carrier is UNREACHABLE, and the fixture is why.** The table
+      says *"2 red — the order-pinning guard and the route test"*. Re-measured with a surgical
+      mutation (invert only the sort branch): **1 red**. The route test seeds **one** declared entity
+      with **one** drifting field, so its response holds exactly one queue row — **with n = 1 a sort
+      order is structurally unobservable**, and no age-sort mutation can red it whatever its shape.
+      The second red I recorded came from my mutation also flipping `aria-pressed`, which is the
+      toggle's STATE and not the ORDER. *A mutation that changes two things attributes its red to
+      whichever you were looking at.* Fix both: seed a second row so the route can observe an order,
+      and correct the row [main.rs:2520; 6b-4…md, M2]
+- [x] [Review][Patch] **`url_escape` exists for this and is not called where it matters.** The queue
+      link writes `?sel={{ row.id }}` raw; only `sort_href` escapes. ⚠️ **The Edge Case Hunter
+      measured it NOT reachable in production** — `entity_id` is minted by `Uuid::now_v7()` at every
+      call site and no operator path chooses it — so this is a **latent inconsistency, not a live
+      defect**, and it is written that way. Fixed anyway: the escape is two lines and the function's
+      own doc already warns that a key is operator-supplied [_triage.html:30]
+- [x] [Review][Patch] **The route test reads the clock a SECOND time and can straddle midnight.** It
+      computes `observed_days` from its own `SystemTime::now()` after the render, and compares to
+      what the page produced from `now_utc()`. Two independent reads across a UTC day boundary differ by
+      one and the assertion fails with nothing broken — issue #38's family, reintroduced by this
+      story. Tolerate ±1 day and say why [main.rs:2630]
+- [x] [Review][Patch] Record the O(N·M) cost as a MEASUREMENT rather than prose: `/triage` against
+      **2000 declared entities × ~2300 observations takes 4.4 s**, against ~0.13 s at 300 entities
+      [deferred-work.md, the `reconcile` row]
+- [x] [Review][Patch] Record that **issue #38 recurred twice during this review's mutation runs** —
+      `page::tests::the_identity_section_is_visible_without_a_declared_entity` failed once and passed
+      on immediate rerun with zero code change, twice. ⚠️ **No cause is named**, per the house rule;
+      only the reproduction pattern, for whoever investigates #38 next
+- [x] [Review][Patch] Record the four refuted suspicions with the check that refuted each, so nobody
+      re-chases them: **(1)** XSS through a declared or observed value — refuted, Askama's
+      auto-escaping holds in both the queue diff and the detail pane, measured with
+      `<script>alert(1)</script>` and `"><img src=x onerror=alert(2)>` seeded through raw SQL;
+      **(2)** hostile `?sel=` — `"`, `<`, `>`, an embedded newline, a lone `%`, 10 kB — all 200,
+      falling back to the first row; **(3)** `?sort=bogus` leaves the sort off; **(4)** the *"pending"*
+      count reads as a badge and breaks the UX spec's first hard ban — refuted: the ban's own test
+      names nav items and icons, the shape shipped is what the spec prescribes verbatim
+      (*"Pending · 23 fields, across 14 devices"*), the class is 5.14b's unchanged, and **nothing
+      changes colour, weight or position with the number**, checked at 0 and populated
+- [x] [Review][Patch] Record the method finding above — a delta confirmed by one of its two terms —
+      where the next reviewer meets it
+
+#### Defer
+
+- [x] [Review][Defer] **Two declared entities sharing one `ipv4` render two visually identical queue
+      rows.** Seeded live: both read `192.0.2.60` with nothing on the line to tell them apart. No
+      crash — the row ids are namespaced by `entity_id`, so nothing collides — but the operator
+      cannot distinguish them. ⚠️ The only distinguisher available today is a UUID, which is noise;
+      what the row needs is a NAME, and naming an entity is grouping. **Owner: Epic 6**, with the
+      device record — deferred, and not caused by this change [page.rs, `build_triage`]
+- [x] [Review][Defer] **`triage_view` issues three queries with no shared snapshot**, so a write
+      landing between the declared read and the provenance read could show a field whose meta-line
+      says *"Nothing declared"*. Pre-existing shape — `reconcile_view` has had two unsynchronised
+      reads since 5.14b — no AC promises snapshot isolation, and `declared_attribute` is
+      insert-never-overwrite so no row can vanish. **Owner: the first story that needs a consistent
+      read across both** — deferred, pre-existing
+
+---
+
 ## Prove-to-red — deliberately short
 
 🔑 Six rows, chosen so that every one of them WILL be played. Story 6b.2 wrote eighteen and played
@@ -553,13 +656,19 @@ claimed** — M3's first red is a `.expect()` panic and M8's is a gate message.
 | # | Mutation | Predicted | MEASURED | Carrier |
 |---|---|---|---|---|
 | M1 | freeze `observed_at` inside `load_observation_facts` | the freshness guard reds | 🔴 **GREEN on first measurement — and that is this story's finding.** Every unit test built `ObservedBatch` BY HAND, so the column round-trip T1 exists to add was carried by **nothing**. Closed by a route-level assertion computing the expected day count from the stored instant; re-run: **1 red**, on its named assertion | named assertion, *after* the hole was closed |
-| M2 | the age sort defaults to ON | AC3's guard reds | ✅ **2 red** — the order-pinning guard and the route test. ⚠️ The validation had measured the OTHER shape (*"does the toggle change something"*) staying green under this exact mutation; the shape shipped is the one that reds | named assertion |
+| M2 | the age sort defaults to ON | AC3's guard reds | ✅ **2 red** — 🔴 **but the second red was MISATTRIBUTED, and the code review measured why.** My mutation flipped the handler's flag, which also flips `aria-pressed`, so the route test reddened on the toggle's STATE and not on the ORDER. Re-measured with a surgical mutation (invert only the sort branch): **1 red**. The route fixture seeded ONE entity with ONE drifting field, and **with n = 1 an ordering is structurally unobservable** — no age-sort mutation could red it whatever its shape. *A mutation that changes two things attributes its red to whichever you were looking at.* Closed by seeding a second entity; **M2-bis**, the surgical form, now reds **2** for the right reasons | named assertions (order, both) |
 | M3 | the queue emptied before render | the empty state renders, the count guard reds | ✅ **9 red** — ⚠️ **carriers MIXED**: the first is `.expect("the first row is selected")`, a PANIC, not an assertion. Recorded rather than smoothed | panic (`.expect`) + named assertions |
 | M4 | the declared side gets the observed side's meta-line | reds — AC1's *"neither side is the truth"* made measurable | ✅ **4 red** | named assertion |
 | M5 | the new CSS reaches for `--accent-document` | story 6b.1's reservation guard reds | ✅ **1 red**, and its message confirms the count is still **zero** legitimate uses — this story neither broke the guard nor narrowed it, which was Guy's ruling | named assertion |
 | M6 | a clock read INSIDE the pure builder | ⚠️ the validation predicted 5.14b's guard would NOT catch it | ✅ **4 red on the new guard** — and 🔴 **story 5.14b's guard, run alone on the SAME mutation, stays GREEN**. The validation's finding is now a measurement rather than an argument, and it is why the new guard was written | named assertion |
 | M7 | delete the rule for a class a template names | *(not prescribed — written after the CSS work)* | ✅ **1 red**, naming the file and the class | named assertion |
 | M8 | `origin` read by the COMPARISON's reader | *(not prescribed — written after §0h's arbitration)* | ✅ the `authorship` gate goes **RED**, which is the two-reader shape doing its job | gate message |
+
+**The code review's own row:**
+
+| # | Mutation | Predicted | MEASURED | Carrier |
+|---|---|---|---|---|
+| M9 | an undefined class and a `--accent-document` leak planted in `templates/sub/` | ⚠️ unknown — the review measured BOTH guards green there | ✅ after making the shared `templates()` walker RECURSIVE, **both red**: the stylesheet guard names `sub/_probe.html` and its class, and story 6b.1's amber guard names the leak. Control: the restored tree is green | named assertions, both |
 
 ⚠️ **Every mutation ran on a scratchpad-restored base, never `git checkout --`** — the gesture that
 destroyed an uncommitted fix in stories 6.1 and 6b.3. Each restore was verified by md5 before the
@@ -608,7 +717,10 @@ states its own limit**: it reads `class="…"` literals, so a class built in Rus
 and **it says nothing about whether an existing rule is the RIGHT one** — `.rows` on a `<table>` would
 still pass. *Only a browser answers that.*
 
-**611 → 625 tests** (398 bin + 161 core + 66 xtask). Eight gates green, fmt and clippy clean, and the
+**614 → 625 tests** (398 bin + 161 core + 66 xtask). ⚠️ This read **611 → 625** until the code
+review: 611 is story 6b.3's baseline, reused, and `611 + 14 ≠ 625` — the real delta is `614 + 11`.
+🔴 **Story 6b.3's own review caught the identical defect one story earlier** (*"591 → 613"* where the
+baseline was 611), which makes this its second occurrence in two days. Eight gates green, fmt and clippy clean, and the
 suite was run BOTH ways: **0.07 s without a database and 5.15 s against a live `mariadb:10.11.11`**,
 which is the tell that the database-backed half really executed.
 
@@ -628,7 +740,7 @@ sticky sidebar's behaviour remain unverified by eye, for the fourth consecutive 
 | `crates/opencmdb-bin/templates/_identity_section.html` | **new** — story 5.14b's reach section, EXTRACTED (a pure move) so the body swap did not delete it |
 | `crates/opencmdb-bin/templates/_gap_card.html` | includes the extracted partial; `/gap` renders as before |
 | `crates/opencmdb-bin/assets/app.css` | the triage screen's rules — and every class it names is now defined, which a new guard asserts |
-| `crates/opencmdb-bin/locales/app.yml` | 22 keys, both locales, the relative time INTERPOLATED because the word order differs |
+| `crates/opencmdb-bin/locales/app.yml` | **27** keys, both locales (62 → 89 top-level, no duplicates — this said 22 until the review recounted it, twice, independently), the relative time INTERPOLATED because the word order differs |
 | `xtask/src/main.rs` | `SANCTIONED_READS` 1 → 2 entries, with the shape's doctrine |
 | `_bmad-output/implementation-artifacts/deferred-work.md` | five rows |
 
@@ -636,7 +748,7 @@ sticky sidebar's behaviour remain unverified by eye, for the fourth consecutive 
 
 | Date | Change |
 |---|---|
-| 2026-08-19 | Implemented, scoped to AC1 + AC3. 611 → **625 tests**, eight gates green. Eight mutations run, eight measured — 🔴 **M1 came back GREEN and that is the finding** (the widened column's round-trip was carried by nothing), and 🔴 **M6 reds the new clock guard while story 5.14b's stays GREEN on the same mutation**. **Four defects found by LOOKING**, none reachable by any test — and a fifth found by renaming a helper: the whole body of `/triage` had been replaced with all 387 bin tests green. |
+| 2026-08-19 | Implemented, scoped to AC1 + AC3. 614 → **625 tests**, eight gates green. Eight mutations run, eight measured — 🔴 **M1 came back GREEN and that is the finding** (the widened column's round-trip was carried by nothing), and 🔴 **M6 reds the new clock guard while story 5.14b's stays GREEN on the same mutation**. **Four defects found by LOOKING**, none reachable by any test — and a fifth found by renaming a helper: the whole body of `/triage` had been replaced with all 387 bin tests green. |
 | 2026-08-19 | **Arbitrated by Guy (three rulings, before any code).** (1) The SPLIT is taken — **6b.4b INSERTED, Epic 6b → 13 stories**; this story keeps AC1 + AC3. (2) The dead-gesture mechanism is a **gesture nature closed in the TYPE**, with its words fixed here so 6b.4b starts designed — and 🔴 `<button disabled>` **refused on NFR25**, because a disabled button leaves the tab order and vanishes from a screen reader. (3) `origin` may be read for **display**, through a **SECOND reader**, so the divergence computation stays structurally unable to see provenance. 🔴 And one finding about the contexting itself: half of §0c was **never an open question** — Guy's premise (2) of 2026-08-13 had already decided that unbuilt gestures are *visible and labelled*. |
 | 2026-08-19 | Validated by two fresh-context layers. Fact-check: 61 assertions, 59 confirmed, **2 refuted, both mine** — the `--accent` row belongs to story **6.4**, a different story, and the trap was a number that reads like this one's. Gap-hunt: it BUILT the plumbing and found that **reading `origin` for display reds the `authorship` gate**, which adds a THIRD arbitration and refutes the split's first rationale; that **four of five row kinds are producible today, not two**; and that **M6's clock guard does not red** and never reaches `build_view` at all. |
 | 2026-08-19 | Contexted: seven findings, three needing Guy's arbitration. The story carries four deliverables and a SPLIT is recommended; *"labelled per 6b.3"* names a mechanism that does not exist; and applied literally today the action bar would ship five buttons of which five are dead, against a recorded decision that *announcing an absent gesture is a promise*. |

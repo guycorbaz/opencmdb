@@ -2516,9 +2516,20 @@ mod tests {
             sqlx::query(statement).execute(&pool).await.expect("clean");
         }
 
+        // 🔴 TWO entities, and the second is not decoration. The first version seeded ONE, so the
+        // response held ONE queue row — and **with n = 1 a sort order is structurally
+        // unobservable**, which the code review measured: no age-sort mutation could red this test
+        // whatever its shape, while the mutation table recorded it as a carrier.
+        // *A fixture of one cannot witness an ordering.*
         let entity = uuid::Uuid::now_v7().to_string();
+        let older = uuid::Uuid::now_v7().to_string();
         for (key, value) in [("ipv4", "192.0.2.10"), ("hostname", "nas")] {
             repo::insert_declared_attribute(&pool, &entity, key, value)
+                .await
+                .expect("declare");
+        }
+        for (key, value) in [("ipv4", "192.0.2.20"), ("hostname", "old-box")] {
+            repo::insert_declared_attribute(&pool, &older, key, value)
                 .await
                 .expect("declare");
         }
@@ -2545,6 +2556,23 @@ mod tests {
         repo::insert_observation(&pool, &observation)
             .await
             .expect("observe");
+        let ancient = opencmdb_core::observation::Observation {
+            obs_id: opencmdb_core::observation::ObsId::from_uuid(uuid::Uuid::now_v7()),
+            observed_at: chrono::DateTime::from_timestamp(1_600_000_000, 0).expect("an instant"),
+            facts: vec![
+                opencmdb_core::observation::Fact::IpV4 {
+                    addr: "192.0.2.20".parse().unwrap(),
+                },
+                opencmdb_core::observation::Fact::Hostname {
+                    name: "stranger".into(),
+                    source: opencmdb_core::observation::HostnameSource::Dns,
+                },
+            ],
+            ..observation.clone()
+        };
+        repo::insert_observation(&pool, &ancient)
+            .await
+            .expect("observe the older one");
 
         let body = |response: axum::response::Response| async move {
             let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
@@ -2627,10 +2655,26 @@ mod tests {
         .expect("an instant")
             - observation.observed_at)
             .num_days();
+        // ⚠️ ±1 day, and the tolerance is the point rather than a shrug. The page read the clock
+        // once at render; this assertion reads it again afterwards. Two independent reads that
+        // straddle midnight UTC differ by one, and the test would fail with nothing broken —
+        // issue #38's family, reintroduced by the first version of this line. What is under test
+        // is that the freshness comes from the STORED instant at all, which a thousand-day-old
+        // fixture makes unmistakable either way.
+        let rendered_days: Vec<i64> = html
+            .split(" d ago")
+            .filter_map(|before| {
+                before
+                    .rsplit(|c: char| !c.is_ascii_digit())
+                    .next()
+                    .filter(|digits| !digits.is_empty())
+                    .and_then(|digits| digits.parse().ok())
+            })
+            .collect();
         assert!(
-            html.contains(&format!("{observed_days} d ago")),
+            rendered_days.iter().any(|d| (d - observed_days).abs() <= 1),
             "the observed side's freshness must come from the stored `observed_at` — expected \
-             {observed_days} d ago"
+             about {observed_days} d ago, the page rendered {rendered_days:?}"
         );
 
         // AC3: the sort is OFF unless asked, and the toggle is offered.
@@ -2649,6 +2693,27 @@ mod tests {
         assert!(
             sorted.contains("aria-pressed=\"true\""),
             "asking for the sort turns it on"
+        );
+
+        // 🔑 With two rows the ORDER is observable, which a one-row fixture could never witness:
+        // oldest first when the sort is on, the queue's own order when it is off.
+        let first_row = |page: &str| -> String {
+            page.split("class=\"entity mono\">")
+                .nth(1)
+                .and_then(|rest| rest.split('<').next())
+                .unwrap_or_default()
+                .to_string()
+        };
+        assert_eq!(
+            first_row(&html),
+            "192.0.2.10",
+            "off by default: the queue keeps its own order, the recently-seen entity first"
+        );
+        assert_eq!(
+            first_row(&sorted),
+            "192.0.2.20",
+            "sorting by age puts the OLDEST first — and this assertion is unreachable with a \
+             one-row fixture, which is why the second entity is seeded"
         );
 
         for statement in [

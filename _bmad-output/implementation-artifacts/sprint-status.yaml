@@ -75,9 +75,55 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4 -> `review`: IMPLEMENTED, scoped to AC1 + AC3. `/triage` is the
+last_updated: 2026-08-19  # 6b.4 CODE-REVIEWED (three layers, Sonnet 5 -- a different model from
+                          # the implementer; each isolated) and REPAIRED. **0 decisions, 11 patches,
+                          # 2 deferrals, 5 dismissed with the check that dismissed them.** 625 tests,
+                          # eight gates green, fmt+clippy clean, against a live mariadb.
+                          # 🔴 THE TWO STRUCTURAL FINDINGS ARE BOTH ABOUT GUARDS, AND ONE IS NOT THIS
+                          # STORY'S: the shared `templates()` helper used a FLAT `read_dir`, so an
+                          # undefined class in `templates/sub/_partial.html` left the new stylesheet
+                          # guard GREEN -- and `style="color: var(--accent-document)"` in a
+                          # subdirectory left story 6b.1's amber reservation guard green too, which
+                          # is exactly the smuggling vector its own comment claims to be hardened
+                          # against. Askama accepts `path = "sub/…"` today, so this is the ORDINARY
+                          # gesture of organising templates. 🔑 *Two independently-written guards,
+                          # one shared helper, one hole* -- fixed at the helper, M9 reds both.
+                          # ⚠️ And the new guard's doc sentence *"covered the day the file exists"*
+                          # was FALSE when written, which here is the defect rather than the hole.
+                          # 🔴 M2'S RECORDED CARRIER WAS MISATTRIBUTED: my mutation flipped the
+                          # handler's flag, which also flips `aria-pressed`, so the route test
+                          # reddened on the toggle's STATE, not the ORDER. The route fixture seeded
+                          # ONE entity, and **with n = 1 an ordering is structurally unobservable**.
+                          # *A mutation that changes two things attributes its red to whichever you
+                          # were looking at.* Closed: a second entity is seeded, and M2-bis (the
+                          # surgical form) now reds 2 for the right reasons.
+                          # 🔑 THE METHOD FINDING, and it is the sharpest: the Auditor certified
+                          # *"611 -> 625 tests"* as ✅ CONFIRMED by recomputing 398+161+66=625 -- the
+                          # RIGHT-hand side -- while the Blind Hunter, with ONLY the diff, refuted it
+                          # (the baseline is 614; 611 is 6b.3's, reused). **The equipped layer
+                          # validated the false figure and the blind one caught it.** *Verifying a
+                          # delta means verifying both terms.* ⚠️ And the figure is story 6b.3's own
+                          # defect reproduced two days later. -> Epic 6b's retrospective.
+                          # Also patched: `url_escape` existed and was not applied to the queue link
+                          # (⚠️ measured NOT reachable -- `entity_id` is always a v7 UUID -- so
+                          # LATENT, not live); the route test read the clock a second time and could
+                          # straddle midnight (issue #38's family, now ±1 tolerant); 27 locale keys,
+                          # not 22.
+                          # ✅ REFUTED by measurement, recorded so nobody re-chases: no XSS (Askama
+                          # escapes, tested with a script tag and an onerror img seeded in raw SQL);
+                          # hostile `?sel=` (quote, angle brackets, newline, lone %, 10 kB) all 200;
+                          # `?sort=bogus` stays off; and the pending COUNT is not the banned badge --
+                          # the ban names nav items, the shape is what the spec prescribes verbatim,
+                          # and nothing changes colour, weight or position with the number.
+                          # ⚠️ Deferred: two entities on one ipv4 render indistinguishable rows
+                          # (-> Epic 6, it needs a NAME and naming is grouping); three unsynchronised
+                          # reads (pre-existing shape); and 🔴 **ISSUE #38 RECURRED TWICE** during the
+                          # mutation runs -- no cause named, only the pattern.
+                          # ⚠️ O(N·M) is now MEASURED: 0.13 s at 300 entities, **4.4 s at 2000**.
+                          # ⚠️ STAYS at `review`: `done` is the MERGE's business.
+                          # (Earlier the same day) 6b.4 -> `review`: IMPLEMENTED, scoped to AC1 + AC3. `/triage` is the
                           # mock's two panes on the REAL gap: a queue of four measured kinds, and
-                          # two photos each carrying its OWN provenance and freshness. **611 -> 625
+                          # two photos each carrying its OWN provenance and freshness. **614 -> 625
                           # tests** (398 bin + 161 core + 66 xtask), eight gates green, fmt+clippy
                           # clean, run BOTH ways (0.07 s without a database, 5.15 s against a live
                           # `mariadb:10.11.11` -- the tell that the DB half executed).

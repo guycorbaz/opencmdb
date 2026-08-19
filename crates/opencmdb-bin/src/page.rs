@@ -593,6 +593,15 @@ struct MetaLine {
 struct QueueRow {
     /// The stable selector this row is addressed by (`?sel=`).
     id: String,
+    /// The row's own link, with the selector ESCAPED and the sort preserved.
+    ///
+    /// 🔴 Built here rather than in the template. `url_escape` existed from the first draft and was
+    /// applied only to the sort toggle, while the queue link wrote `?sel={{ row.id }}` raw — Askama
+    /// escapes HTML, never a query string. ⚠️ **Measured NOT reachable in production** (`entity_id`
+    /// is a `Uuid::now_v7()` at every call site and no operator path chooses it), so this was a
+    /// latent inconsistency and not a live defect — fixed because the function's own doc already
+    /// warns that an attribute key is operator-supplied, and the day one is, this is where it lands.
+    href: String,
     /// The row's kind, in the operator's language.
     kind: String,
     /// The entity the row is about.
@@ -780,6 +789,7 @@ fn build_triage(
             let id = format!("ecart:{entity_id}:{}", gap.field);
             let declared_meta = declared_meta_line(provenance_of(entity_id, &gap.field), now);
             rows.push(QueueRow {
+                href: row_href(&id, sort_by_age),
                 id: id.clone(),
                 kind: t!("triage.kind.ecart").to_string(),
                 entity: ipv4.clone(),
@@ -818,6 +828,7 @@ fn build_triage(
             };
             let id = format!("{slug}:{entity_id}");
             rows.push(QueueRow {
+                href: row_href(&id, sort_by_age),
                 id: id.clone(),
                 kind: label.to_string(),
                 entity: ipv4.clone(),
@@ -863,6 +874,7 @@ fn build_triage(
             let id = format!("nouveau:{value}");
             let seen = relative_time(now, batch.observed_at);
             rows.push(QueueRow {
+                href: row_href(&id, sort_by_age),
                 id: id.clone(),
                 kind: t!("triage.kind.nouveau").to_string(),
                 entity: value.clone(),
@@ -959,6 +971,14 @@ fn declared_meta_line(
             source: t!("meta.nothing_declared").to_string(),
             freshness: String::new(),
         },
+    }
+}
+
+/// A queue row's link: its selector, escaped, with the sort preserved.
+fn row_href(id: &str, sort_by_age: bool) -> String {
+    match sort_by_age {
+        true => format!("/triage?sel={}&sort=age", url_escape(id)),
+        false => format!("/triage?sel={}", url_escape(id)),
     }
 }
 
@@ -2109,23 +2129,47 @@ mod tests {
     /// Reading the directory costs a filesystem call in a test and makes the omission
     /// impossible: a template that exists is a template that is scanned.
     ///
+    /// 🔴 **RECURSIVE since story 6b.4's code review, and it was not before.** `read_dir` does not
+    /// descend, so **every guard built on this helper was blind to a subdirectory** — measured:
+    /// `style="color: var(--accent-document);"` planted in `templates/sub2/_leak.html` left
+    /// `ac4_the_amber_is_reserved_for_the_documenting_gesture` GREEN, which is exactly the
+    /// smuggling vector that guard's own comment says it was hardened against, and an undefined
+    /// class in `templates/sub/_partial.html` left the new stylesheet guard green too. Askama
+    /// accepts `path = "sub/_partial.html"` today, so this is **the ordinary gesture of organising
+    /// templates**, not an evasion. 🔑 *Two independently-written guards, one shared helper, one
+    /// hole* — and the fix belongs here rather than in either of them.
+    ///
+    /// Names are returned RELATIVE to `templates/` (`sub/_partial.html`, not `_partial.html`), so a
+    /// failure message names a path the reader can open.
+    ///
     /// # Panics
     ///
     /// If `templates/` cannot be read — which means the test is running somewhere the source
     /// tree is not, and every guard below would be vacuous rather than merely wrong.
     fn templates() -> Vec<(String, String)> {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
-        let mut found: Vec<(String, String)> = std::fs::read_dir(&dir)
-            .unwrap_or_else(|e| panic!("templates/ must be readable at {}: {e}", dir.display()))
-            .filter_map(Result::ok)
-            .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "html"))
-            .map(|entry| {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                let body = std::fs::read_to_string(entry.path())
-                    .unwrap_or_else(|e| panic!("reading {name}: {e}"));
-                (name, body)
-            })
-            .collect();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+        fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<(String, String)>) {
+            let entries = std::fs::read_dir(dir).unwrap_or_else(|e| {
+                panic!("templates/ must be readable at {}: {e}", dir.display())
+            });
+            for entry in entries.filter_map(Result::ok) {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, root, out);
+                } else if path.extension().is_some_and(|ext| ext == "html") {
+                    let name = path
+                        .strip_prefix(root)
+                        .unwrap_or(&path)
+                        .to_string_lossy()
+                        .into_owned();
+                    let body = std::fs::read_to_string(&path)
+                        .unwrap_or_else(|e| panic!("reading {name}: {e}"));
+                    out.push((name, body));
+                }
+            }
+        }
+        let mut found: Vec<(String, String)> = Vec::new();
+        walk(&root, &root, &mut found);
         found.sort();
         assert!(
             found.len() >= 3,
@@ -2930,6 +2974,13 @@ mod tests {
     /// the file exists — the failure mode story 6b.2's validation measured on a guard keyed to a
     /// `[&str; 2]` literal.
     ///
+    /// ⚠️ **That sentence was FALSE when it was first written, and the review measured it.** The walk
+    /// was a flat `read_dir`, so a class planted in `templates/sub/_partial.html` left this guard
+    /// green while the same class in a top-level file reddened it — *"covered the day the file
+    /// exists"* held for one directory only. It now uses the shared [`templates`] walker, which was
+    /// made recursive for the same reason and in the same pass; the inherited `--accent-document`
+    /// guard had the identical hole through the identical helper.
+    ///
     /// ⚠️ **The exemption list is EMPTY, and that is the point** (story 6.3's idiom): the one form
     /// of allowlist nobody can quietly widen. A class that needs no rule gets a real one — `.col`
     /// is a grid child and `min-width: 0` is what lets it shrink — rather than an entry here.
@@ -2943,20 +2994,16 @@ mod tests {
     fn every_class_a_template_names_is_defined_in_the_stylesheet() {
         const EXEMPT: [&str; 0] = [];
 
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+        // 🔑 The SHARED walker, not a second one of my own. It was a flat `read_dir` here and in
+        // `templates()` both, and the review measured the consequence: an undefined class planted
+        // in `templates/sub/_partial.html` left this guard GREEN while the same class in a
+        // top-level file reddened it. One helper, one fix, and this guard cannot drift from the
+        // others again — the DRY rule doing real work rather than tidying.
+        let scanned_files = templates();
         let mut used: Vec<(String, String)> = Vec::new();
         let mut scanned = 0_usize;
-        for entry in std::fs::read_dir(&dir).expect("templates/ must be readable") {
-            let path = entry.expect("a readable entry").path();
-            if path.extension().and_then(|e| e.to_str()) != Some("html") {
-                continue;
-            }
-            let name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .expect("a template name")
-                .to_string();
-            let source = std::fs::read_to_string(&path).expect("a readable template");
+        for (name, source) in &scanned_files {
+            let name = name.clone();
             scanned += 1;
             for (index, _) in source.match_indices("class=\"") {
                 let rest = &source[index + "class=\"".len()..];

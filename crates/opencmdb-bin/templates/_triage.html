@@ -27,7 +27,9 @@
     <ol class="queue">
     {% for row in triage.rows %}
       <li class="queue-row{% if row.selected %} selected{% endif %}">
-        <a href="/triage?sel={{ row.id }}{% if triage.sort_by_age %}&amp;sort=age{% endif %}"
+        {#- The href is built in Rust with the selector percent-escaped: Askama escapes HTML, never
+             a query string, and this link wrote `?sel={{ row.id }}` raw until the code review. -#}
+        <a href="{{ row.href }}"
            {% if row.selected %}aria-current="true"{% endif %}>
           <span class="kind mono">{{ row.kind }}</span>
           <span class="subject">
