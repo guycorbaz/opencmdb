@@ -1,6 +1,6 @@
 # Story 6b.3: The example-data marker, and the gate that keeps it honest
 
-Status: review
+Status: done
 
 Epic: 6b — *L'interface de la maquette*. **Third story**, after 6b.1 put the design system in the
 binary and 6b.2 gave the product ten addresses. It is the story the previous one deferred to BY
