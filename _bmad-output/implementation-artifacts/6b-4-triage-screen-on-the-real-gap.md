@@ -1,6 +1,6 @@
 # Story 6b.4: The triage screen, on the real gap
 
-Status: review
+Status: done
 
 Epic: 6b — *L'interface de la maquette*. **Fourth story**, after 6b.1 put the design system in the
 binary, 6b.2 gave the product ten addresses, and 6b.3 gave the example screens their marker. It is
