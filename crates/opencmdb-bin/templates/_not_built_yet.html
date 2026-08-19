@@ -1,0 +1,18 @@
+{#- The *not built yet* line: what an `Empty` screen says instead of saying nothing (story 6b.3's
+     code review, Guy's arbitration of 2026-08-19).
+
+     🔴 It exists because `epics.md:2092` — one of Guy's four premises of 2026-08-13, written under
+     the heading *"this epic's premises and not open questions"* — reads *"all ten screens ship;
+     those whose code is not implemented show an example dataset with a text saying so"*, and eight
+     screens were rendering a blank `<main>` with nothing on it. ⚠️ This is the premise's SPIRIT,
+     not its letter: a *"not built yet"* line is not an example dataset, and the dataset stays owed
+     by stories 6b.5–6b.9, each of which replaces this line with its own content.
+
+     🔑 Its classes are deliberately NOT the marker's. The route-table partition asserts that no
+     `Empty` screen carries `example-marker-badge`, and reusing that class here would make the
+     product call a blank screen a demonstration — the very thing `Nature::Empty` exists to prevent
+     — while turning the partition's negative half green for the wrong reason. -#}
+<p class="not-yet">
+  <span class="not-yet-badge">{{ s.pending_badge }}</span>
+  {{ s.pending_sentence }}
+</p>

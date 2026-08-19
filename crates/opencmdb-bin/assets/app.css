@@ -354,3 +354,98 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 }
 
 .screen { padding: 24px; max-width: 980px; }
+
+/* ── The example-data marker (story 6b.3) ─────────────────────────────────
+   ⚠️ The NEUTRAL ramp, never `--accent-document`: the amber is reserved for the documenting
+   gesture (story 6b.1), and a marker that states a fact must not wear the colour that means
+   "this is the gesture". */
+.example-marker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-neutral-300);
+  border-left: 3px solid var(--color-neutral-500);
+  border-radius: var(--radius-sm);
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-700);
+  font-size: 13px;
+}
+
+.example-marker-badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-neutral-300);
+  color: var(--color-neutral-900);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── The *not built yet* line (story 6b.3's code review) ──────────────────
+   ⚠️ Deliberately QUIETER than the example marker and on its own classes. It states an absence,
+   not a property of content the operator is reading, and it must never be mistaken for the marker
+   — the route-table partition asserts both directions on both classes. */
+.not-yet {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--color-neutral-300);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.not-yet-badge {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--color-neutral-200);
+  color: var(--color-neutral-700);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── A screen's own section, and the tables inside it (story 6b.3's code review) ──
+   🔴 Both classes below were MISSING and the defect was invisible to every layer that read the
+   served TEXT. `_devices_example.html` carried `class="screen-section"`, which this sheet did not
+   define, and `class="rows"` on a `<table>` — `.rows` is a definition-list ruleset written for
+   `_gap_card.html`, so every descendant rule (`.rows .row`, `.rows dt`, `.rows dd`) matched
+   nothing and the tables inherited `margin: 0` alone. The sheet had no `table`, `th` or `td` rule
+   at all, so the one witness screen the story exists to produce rendered as browser defaults.
+   *Reuse of the design system in appearance and none in fact.*
+   ⚠️ This is the STRUCTURE, not the fidelity pass: §0a-bis registers the list's fidelity to story
+   6b.6, which owns the device record. */
+.screen-section { margin: 0 0 32px; }
+.screen-section:last-child { margin-bottom: 0; }
+
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.grid th,
+.grid td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.grid th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom-width: 2px;
+}
+
+.grid tbody tr:last-child td { border-bottom: none; }

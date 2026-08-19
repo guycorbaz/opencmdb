@@ -1,0 +1,58 @@
+{#- The witness screen's body: the example inventory, in TWO sections (story 6b.3).
+
+     🔴 The marker is included by each SECTION, not once by the screen — that is AC2's *smallest
+     unit* made operational rather than asserted. The dashboard (story 6b.5) will be mixed, with a
+     real reach section beside example cards, and a screen-level marker would then either lie about
+     the real half or hide the example half. Placing it per section here means that screen inherits
+     a mechanism instead of inventing one. -#}
+<section class="screen-section">
+  <h2>{{ s.devices_title }}</h2>
+  {% include "_example_marker.html" %}
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>{{ s.devices_name }}</th>
+        <th>{{ s.devices_ipv4 }}</th>
+        <th>{{ s.devices_mac }}</th>
+        <th>{{ s.devices_role }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {%- for device in devices %}
+      {#- 🔑 The slug is IN the markup, not merely in the data. The register records that story
+           6b.6's `/devices/{id}` "needs an id, which needs 6b.3's example dataset": emitting it
+           here is what makes each row addressable, and it is also what makes the field READ —
+           `clippy -D warnings` refused it as dead while it was carried for a future story alone. -#}
+      <tr data-device-id="{{ device.id }}">
+        <td>{{ device.name }}</td>
+        <td class="mono">{{ device.ipv4 }}</td>
+        <td class="mono">{{ device.mac }}</td>
+        <td>{{ device.role }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="screen-section">
+  <h2>{{ s.unplaced_title }}</h2>
+  {% include "_example_marker.html" %}
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>{{ s.devices_ipv4 }}</th>
+        <th>{{ s.devices_mac }}</th>
+        <th>{{ s.unplaced_reason }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {%- for sighting in sightings %}
+      <tr>
+        <td class="mono">{{ sighting.ipv4 }}</td>
+        <td class="mono">{{ sighting.mac }}</td>
+        <td>{{ sighting.reason }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</section>

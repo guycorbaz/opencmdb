@@ -75,7 +75,154 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.2 -> `done`: PR #97 squash-merged as `d8cc438` after a green CI run,
+last_updated: 2026-08-19  # 6b.3 CODE-REVIEWED (three layers, Sonnet 5 -- a different model from the
+                          # implementer; each in its own git worktree) and REPAIRED. **3 decisions by
+                          # Guy, 10 patches, 1 deferral, 4 dismissed with the check that dismissed
+                          # them.** 611 -> **614 tests** (387 bin + 161 core + 66 xtask), eight gates
+                          # green, fmt and clippy clean, measured against a live `mariadb:10.11.11`
+                          # (bin suite 5.93 s against 0.06 s without -- the tell that the DB half ran).
+                          # 🔴 THREE of the story's OWN recorded measurements were refuted by
+                          # re-execution: M3's carrier (the STATUS assertion, 404 vs 200 -- and the
+                          # cause is the real finding: the demo router's exclusion is dynamic while
+                          # the main router's inclusion is hardcoded to /triage), M4's count (25, not
+                          # 15), M7's aftermath (386, not 385). *The table had been believed rather
+                          # than replayed*, in the story whose Dev Notes warn its driver lied twice.
+                          # 🔴 ONE FINDING WAS REACHABLE BY NO LAYER ALONE: `.screen-section` used
+                          # twice and defined nowhere, `.rows` (a `<dl>` ruleset) on a `<table>`, and
+                          # NO table/th/td rule in the sheet -- so the witness screen the story exists
+                          # to produce rendered as browser defaults. The Blind Hunter could only
+                          # suspect it, the Edge Case Hunter checked the marker's classes and not the
+                          # content's. 🔑 *Found by RECOUNTING the sheet, not by seeing the page: the
+                          # served TEXT was correct in every respect three layers could measure.*
+                          # 🔴 And the i18n guard could not catch a WRONG key that RESOLVES --
+                          # `role_key: "example.badge"` left all 613 tests, all eight gates and clippy
+                          # green while /devices rendered "Exemple" where "Stockage" belongs. Epic 5's
+                          # dominant class, inside the guard added to close an i18n defect.
+                          # GUY'S THREE ARBITRATIONS (2026-08-19), each recorded with the option
+                          # refused: (1) AC4's `Screen::ALL` half is pinned by a source-scanning TEST,
+                          # NOT a ninth gate and NOT clippy-in-xtask -- the story's "it would have to
+                          # be a gate" misapplied story 5.12's rule, which governs an UNBOUNDED
+                          # absence, where this property is bounded and present in one file; clippy
+                          # was refused on a MEASUREMENT (one throw-away production line silences it),
+                          # and `NavGroup::ALL` had the identical hole, so it is a property over both
+                          # enums. (2) The eight `Empty` screens GET THE SENTENCE NOW: `epics.md:2092`
+                          # is one of Guy's own premises of 2026-08-13 -- *"those whose code is not
+                          # implemented show an example dataset with a text saying so"* -- and no
+                          # layer of contexting, validation or arbitration had surfaced it. ⚠️ Spirit,
+                          # not letter: the dataset stays owed by 6b.5-6b.9. (3) `Nature::Example`
+                          # CARRIES its content, so "declared Example with nothing of its own" is
+                          # unrepresentable (story 5.6's precedent, closed in the TYPE) -- option (a),
+                          # a match on the screen, was WITHDRAWN at the arbitration because every
+                          # screen already has an arm, so it does not close what it looks like it
+                          # closes. Four review mutations, four measured (M9/M10/M11 assertion-carried,
+                          # M12 compiler-carried), each on a scratchpad-restored base, never
+                          # `git checkout --` -- the gesture that destroyed an uncommitted fix here and
+                          # in 6.1. ⚠️ STAYS at `review`: `done` is the MERGE's business.
+                          # ⚠️ Deferred: the look is STILL unverified by eye for the third consecutive
+                          # story (no browser in any environment) -> Epic 6b's DoD with 6b.12.
+                          # (Earlier the same day) 6b.3 -> `review`: IMPLEMENTED. The product shows example content for the
+                          # first time, and says so. `Nature` (Fed/Example/Empty) on `Screen` by a
+                          # compiler-checked match; ONE partial + ONE key pair for the marker;
+                          # `example_data.rs` (no connection, constraint 1); `/devices` filled in TWO
+                          # sections, each carrying the marker; the partition asserted over the ROUTE
+                          # TABLE on the real HTTP body. **611 -> 613 tests** (591 was 6b.2's
+                          # baseline, reused; corrected at the code review, which took it to 614).
+                          # 🔴 TWO DEFECTS FOUND BY LOOKING, neither reachable by any test:
+                          # (1) the example data rendered in ENGLISH under a French UI, whole suite
+                          # green, because a literal is not a key and the locale guard only sees
+                          # keys -- an NFR26 violation with no possible carrier. Fixed into keys,
+                          # closed by a guard asserting the value IS a key AND RESOLVES.
+                          # (2) the partition's Fed half was gated on `DATABASE_URL`, which does not
+                          # govern the code: `lazy_pool()` is a hardcoded dead URL, so that half
+                          # could never pass and was never attempted. Found by running WITH a
+                          # database (500 vs 200). *A gate keyed on a fact that does not govern the
+                          # code under test is not a gate.*
+                          # ⚠️ AC4 is PARTIALLY met and says so: `Screen::ALL`'s blind half is closed
+                          # by `clippy -D warnings` -- measured M2: build passes, 613 tests pass,
+                          # ALL EIGHT GATES GREEN, only clippy reds. A dev running `cargo xtask ci`
+                          # alone never sees it, and NOTHING PINS IT. Ninth-gate question -> GUY.
+                          # ⚠️ AC2 = mechanism met, MIXED specimen stated (-> 6b.5). AC3 met BY
+                          # CITATION, no runtime test added, on purpose.
+                          # ⚠️ The driver lied twice: a mutation run on a non-compiling tree read as
+                          # GREEN, and `git checkout -- <file>` silently discarded the i18n fix
+                          # (story 6.1's incident, reproduced). Both re-run on a committed base.
+                          # Suite run BOTH ways: 0.07s without a DB, 5.71s against a live
+                          # mariadb:10.11.11 -- the tell that the DB half really ran.
+                          # NEXT = `code-review` 6b.3 (three layers, different model).
+                          # (Earlier the same day) 6b.3 ✅ VALIDATED, two fresh-context layers, and it paid for itself.
+                          # Layer 1 (fact-check): 30 assertions verified, 28 confirmed, 2 REFUTED --
+                          # both mine, and the graver one was a PREMISE OF THE ARBITRATION ("each of
+                          # 6b.5-6b.9 titled `(example)`" -- TWO of five). The two load-bearing
+                          # claims were reproduced BY COMPILATION: triple E0004, and E0308 on
+                          # `State<MySqlPool>` in the pool-free sub-router.
+                          # Layer 2 (gap-hunt) BUILT the whole mechanism against a live
+                          # mariadb:10.11.11 -- Nature, the marker, the dataset, /devices filled, the
+                          # route-table partition on the real HTTP body. Compiles, 611 -> 612, gates
+                          # and clippy green, file-size unmoved.
+                          # ✅ T0 ANSWERED BEFORE ANY PRODUCTION CODE: `dead_code` DOES catch a
+                          # `Screen` absent from `ALL` under `clippy -D warnings`, and the obvious
+                          # bypass (a #[test] constructing it) FAILS because clippy without
+                          # --all-targets never compiles cfg(test). ⚠️ But it holds by a property of
+                          # the GATE, not of the language; it lives OUTSIDE `cargo xtask ci`, so a
+                          # dev running only the gates never sees the red; and NOTHING PINS IT.
+                          # AC4's closure is PARTIAL -- say so, never "AC4 met" alone.
+                          # 🔴 THE CENTRAL FINDING: MY OWN mutation M7 does not guard what I said it
+                          # guards. Content dispatched from `nature()` makes the lying-marker case
+                          # STRUCTURALLY IMPOSSIBLE, so M7's sole carrier is a bookkeeping assertion
+                          # a future tidy-up would delete as redundant. Only BUILDING could reach it.
+                          # ✅ Two of my suspicions REFUTED: the `--accent-document` guard survives a
+                          # brand-new template (it reads the directory), and AC3's compile carrier
+                          # holds -- so T5 "cite, add no test" is right. ⚠️ T2 is DATABASE_URL-gated
+                          # and invisible locally (~5.9s with a DB vs 0.06s without).
+                          # NEXT = `dev-story` 6b.3.
+                          # (Earlier the same day) 6b.3 ✅ ARBITRATED by Guy on finding (a), before any code: the story
+                          # ships the example DATASET, the marker, the gate, AND ONE WITNESS SCREEN
+                          # filled from it -- not the mechanism alone, and not all nine screens.
+                          # 🔑 THEREFORE THREE NATURES, not two: `Fed` / `Example` / `Empty`. With
+                          # two, the eight unfilled screens would have to be declared *example* and
+                          # the marker would assert that an empty `<main>` is a demonstration --
+                          # the exact false sentence the finding was about. `Empty` is TEMPORARY by
+                          # decision and must be gone when 6b.9 closes.
+                          # ✅ WITNESS = `/devices`, decided at contexting for its section-bearing
+                          # content. ⚠️ Its COST is stated, not discovered: `/devices` belongs to
+                          # story 6b.6, which keeps the device RECORD, the `/devices/{id}` debt and
+                          # the fidelity pass -- registered so 6b.6 meets a narrowed scope.
+                          # 🔴 AC2 ships as MECHANISM MET + MIXED SPECIMEN STATED: section-level
+                          # placement proves the marker attaches below screen level, but the case
+                          # AC2 names -- real content BESIDE example content in one frame -- needs
+                          # the dashboard's reach section and is 6b.5's. Recording AC2 as simply met
+                          # would be the sentence this epic has been caught writing five times.
+                          # `epics.md` is NOT edited; the divergence is registered.
+                          # (Earlier the same day) 6b.3 CONTEXTED -> `ready-for-dev`. 🔴 SIX findings, and FOUR need Guy
+                          # BEFORE any code. (a) SCOPE CONTRADICTION: `epics.md` puts the example
+                          # CONTENT in 6b.5-6b.9 and titles 6b.3 "the marker and its gate", while
+                          # `screens.rs:170` -- merged in `d8cc438` -- says 6b.3 "owns the example
+                          # dataset AND the marker". On the first reading this story marks nine
+                          # EMPTY screens, and a marker over an empty screen says "this emptiness is
+                          # an example", which is false. A third reading (mechanism + ONE specimen,
+                          # and a THIRD nature `empty`) is what the task list assumes.
+                          # (b) 🔴 THE MARKER IS SPECIFIED BY NO DOCUMENT THIS PROJECT HAS, measured:
+                          # the mock (390 lines) carries NO marker -- the only `demo` hits are base64
+                          # font payloads -- and the UX spec is SILENT. "The mock prevails" gives
+                          # nothing here; this story INVENTS an operator-visible surface, a first for
+                          # Epic 6b, and needs an arbitration on form and words.
+                          # (c) AC4's carrier is HALF-BLIND and the register gave the blind half to
+                          # the WRONG story: a `nature()` match IS compiler-checked, but `Screen::ALL`
+                          # is a literal array that is NOT, so a fully-wired variant absent from `ALL`
+                          # vanishes from nav, routing AND any test iterating it -- *the eleventh
+                          # screen* AC4 names. Register says owner 6b.6; AC4 makes it 6b.3's.
+                          # (d) AC3 IS ALREADY DISCHARGED by 6b.2's `Router<()>` (E0308); a runtime
+                          # test would be strictly WEAKER and is the very class AC4 quotes -- cite,
+                          # do not add. (e) AC2's mixed specimen DOES NOT EXIST (the dashboard is
+                          # empty until 6b.5), so AC2 is STATED not met unless (a) supplies one.
+                          # (f) ⚠️ "eight of which are demonstrations" is FALSE in THREE files
+                          # (`page.rs:53`, `screens.rs:510`, `_nav.html:16`) against "nine" in four --
+                          # shipped in `d8cc438` and missed by ALL THREE review layers.
+                          # 🔑 The mutation table is deliberately SEVEN rows, not eighteen: 6b.2
+                          # prescribed 18 and played 7, and BOTH holes that reached production (M12,
+                          # M7) were rows written at contexting and never played.
+                          # NEXT = `create-story validate` 6b.3 (MANDATORY), then Guy's four rulings.
+                          # (Earlier the same day) 6b.2 -> `done`: PR #97 squash-merged as `d8cc438` after a green CI run,
                           # code-reviewed first (three layers on a DIFFERENT model, each in its own
                           # git worktree). The product has TEN ADDRESSES: shell, grouped nav, `/`
                           # a 303 to `/triage`, `gap.html` deleted. **591 -> 611 tests.**
@@ -3091,7 +3238,7 @@ development_status:
   epic-6b: in-progress
   6b-1-design-system-tokens-and-accent: done
   6b-2-shell-navigation-and-ten-routes: done
-  6b-3-example-data-marker-and-its-gate: backlog
+  6b-3-example-data-marker-and-its-gate: review
   6b-4-triage-screen-on-the-real-gap: backlog
   6b-5-dashboard-real-reach-beside-examples: backlog
   6b-6-inventory-and-device-record: backlog

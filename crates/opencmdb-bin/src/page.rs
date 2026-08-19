@@ -50,7 +50,7 @@ struct NavGroupView {
 /// Everything the frame needs, and deliberately nothing else.
 ///
 /// 🔑 There is no database handle here and no field that could hold one: the shell renders on
-/// ten screens, eight of which are demonstrations, and epic constraint 1 forbids those to open a
+/// ten screens, nine of which are demonstrations, and epic constraint 1 forbids those to open a
 /// connection. The perimeter arrives from `AppConfig`, the version from the crate.
 pub(crate) struct Shell {
     screen: crate::screens::Screen,
@@ -222,6 +222,28 @@ struct Strings {
     tagline: String,
     /// The navigation's accessible name (story 6b.2).
     nav_label: String,
+    /// The example-data marker's badge (story 6b.3).
+    example_badge: String,
+    /// The example-data marker's sentence (story 6b.3).
+    example_sentence: String,
+    /// The *not built yet* badge an `Empty` screen carries (story 6b.3's code review).
+    pending_badge: String,
+    /// The *not built yet* sentence an `Empty` screen carries (story 6b.3's code review).
+    pending_sentence: String,
+    /// The witness screen's inventory heading (story 6b.3).
+    devices_title: String,
+    /// Column: the device's name (story 6b.3).
+    devices_name: String,
+    /// Column: the address (story 6b.3).
+    devices_ipv4: String,
+    /// Column: the hardware address (story 6b.3).
+    devices_mac: String,
+    /// Column: what the device is for (story 6b.3).
+    devices_role: String,
+    /// The witness screen's second heading — sightings the engine did not place (story 6b.3).
+    unplaced_title: String,
+    /// Column: why a sighting was not placed (story 6b.3).
+    unplaced_reason: String,
     /// The perimeter label in the navigation footer, as the mock shows it (story 6b.2).
     nav_perimeter: String,
     entity: String,
@@ -253,6 +275,17 @@ fn strings() -> Strings {
     Strings {
         tagline: t!("page.tagline").to_string(),
         nav_label: t!("nav.label").to_string(),
+        example_badge: t!("example.badge").to_string(),
+        example_sentence: t!("example.sentence").to_string(),
+        pending_badge: t!("pending.badge").to_string(),
+        pending_sentence: t!("pending.sentence").to_string(),
+        devices_title: t!("devices.title").to_string(),
+        devices_name: t!("devices.name").to_string(),
+        devices_ipv4: t!("devices.ipv4").to_string(),
+        devices_mac: t!("devices.mac").to_string(),
+        devices_role: t!("devices.role").to_string(),
+        unplaced_title: t!("unplaced.title").to_string(),
+        unplaced_reason: t!("unplaced.reason").to_string(),
         nav_perimeter: t!("nav.perimeter").to_string(),
         entity: t!("page.entity").to_string(),
         refresh: t!("page.refresh").to_string(),
@@ -546,6 +579,106 @@ fn server_error(error: sqlx::Error) -> Response {
     let repo_error = classify(error);
     tracing::error!(?repo_error, "loading the page's state failed");
     (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
+}
+
+/// One example device, with its copy already resolved into the operator's language.
+///
+/// 🔴 The resolution happens HERE and not in the template, because `example_data` holds i18n KEYS
+/// rather than sentences — see [`crate::example_data::ExampleDevice::role_key`] for the defect
+/// that taught us the difference, which was found by looking at the screen and by nothing else.
+struct ExampleDeviceView {
+    id: &'static str,
+    name: &'static str,
+    ipv4: &'static str,
+    mac: &'static str,
+    role: String,
+}
+
+/// One example sighting the engine did not place, with its reason resolved.
+struct ExampleSightingView {
+    ipv4: &'static str,
+    /// The hardware address, or the typographic placeholder when the sighting gave none.
+    ///
+    /// 🔑 The absence is resolved HERE and not stored as a sentinel in the dataset, for the same
+    /// reason the role is: `example_data` holds facts, this struct holds what is displayed. The
+    /// dataset's field is an `Option` and its doc comment is therefore true — it read *"when it
+    /// gave one"* over a hard `"—"` literal until story 6b.3's code review, which is a false doc,
+    /// and a false doc is a defect.
+    mac: String,
+    reason: String,
+}
+
+/// An `Empty` screen's body — the one line that says the screen is not built yet.
+#[derive(Template)]
+#[template(path = "_not_built_yet.html")]
+struct NotBuiltYet {
+    s: Strings,
+}
+
+/// The witness screen's body — the example inventory, in two sections (story 6b.3).
+#[derive(Template)]
+#[template(path = "_devices_example.html")]
+struct DevicesExample {
+    devices: Vec<ExampleDeviceView>,
+    sightings: Vec<ExampleSightingView>,
+    s: Strings,
+}
+
+/// Render the example inventory that the witness screen shows.
+///
+/// # Panics
+///
+/// Never in practice: the template is compiled into the binary by askama and its inputs are
+/// constants, so a failure here would mean the template no longer matches its struct — which is a
+/// compile error, not a run-time one. The `expect` states that rather than hiding it behind a
+/// fallback string nobody would ever see.
+pub(crate) fn devices_example_body() -> String {
+    DevicesExample {
+        devices: crate::example_data::devices()
+            .into_iter()
+            .map(|device| ExampleDeviceView {
+                id: device.id,
+                name: device.name,
+                ipv4: device.ipv4,
+                mac: device.mac,
+                role: rust_i18n::t!(device.role_key).to_string(),
+            })
+            .collect(),
+        sightings: crate::example_data::unplaced_sightings()
+            .into_iter()
+            .map(|sighting| ExampleSightingView {
+                ipv4: sighting.ipv4,
+                // An em dash, and locale-neutral on purpose: it is a typographic placeholder for
+                // an absent value, not a word, so it needs no key and reads the same in both.
+                mac: sighting.mac.unwrap_or("—").to_string(),
+                reason: rust_i18n::t!(sighting.reason_key).to_string(),
+            })
+            .collect(),
+        s: strings(),
+    }
+    .render()
+    .expect("the example inventory template and its struct are compiled together")
+}
+
+/// What an `Empty` screen shows: one line saying the screen is not built yet.
+///
+/// 🔴 **It replaces a blank `<main>`, and the difference is not cosmetic.** Eight of the ten screens
+/// rendered nothing at all, so the product read as eight broken screens rather than eight deliberate
+/// ones — while `epics.md:2092`, one of Guy's own premises of 2026-08-13, requires that a screen
+/// whose code is not implemented say so. Story 6b.3's code review found that sentence; contexting,
+/// both validation layers and the arbitration itself had all passed over it.
+///
+/// ⚠️ It says the screen is not built. It does **not** say the screen shows example data — that
+/// would be [`Nature::Empty`](crate::screens::Nature::Empty)'s own trap, telling the operator a
+/// blank page is a demonstration.
+///
+/// # Panics
+///
+/// Never in practice, for the reason given on [`devices_example_body`].
+pub(crate) fn not_built_yet_body() -> String {
+    NotBuiltYet { s: strings() }
+        .render()
+        .expect("the not-built-yet template and its struct are compiled together")
 }
 
 /// What `/triage` needs: the store it reads, and the perimeter it displays.

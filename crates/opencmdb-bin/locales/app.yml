@@ -164,3 +164,61 @@ nav.diagnostic:
 nav.onboarding:
   en: "Commissioning"
   fr: "Mise en service"
+
+# ── The example-data marker (story 6b.3) ──────────────────────────────────
+# ⚠️ ONE key pair for the whole product (AC1): a badge and a sentence. A second pair would be the
+# per-screen improvisation the criterion forbids.
+example.badge:
+  en: "Example"
+  fr: "Exemple"
+example.sentence:
+  en: "This content is a demonstration — it does not come from your network."
+  fr: "Ce contenu est une démonstration — il ne provient pas de votre réseau."
+
+# ── The *not built yet* line an `Empty` screen carries (story 6b.3's code review) ──────────
+# 🔴 A SECOND pair, and it is not the per-screen improvisation AC1 forbids: it says a different
+# thing to a different population. The marker says *what you are reading is not yours*; this says
+# *there is nothing here yet*. Sharing one pair would make the product call a blank screen a
+# demonstration, which is the trap `Nature::Empty` exists to avoid.
+pending.badge:
+  en: "Not yet"
+  fr: "À venir"
+pending.sentence:
+  en: "This screen is not built yet. Nothing here comes from your network."
+  fr: "Cet écran n'est pas encore construit. Rien ici ne provient de votre réseau."
+devices.title:
+  en: "Devices"
+  fr: "Appareils"
+devices.name:
+  en: "Name"
+  fr: "Nom"
+devices.ipv4:
+  en: "Address"
+  fr: "Adresse"
+devices.mac:
+  en: "Hardware address"
+  fr: "Adresse matérielle"
+devices.role:
+  en: "Role"
+  fr: "Rôle"
+unplaced.title:
+  en: "Sightings not placed"
+  fr: "Observations non rattachées"
+unplaced.reason:
+  en: "Why"
+  fr: "Pourquoi"
+example.role.storage:
+  en: "Storage"
+  fr: "Stockage"
+example.role.network:
+  en: "Network"
+  fr: "Réseau"
+example.role.peripheral:
+  en: "Peripheral"
+  fr: "Périphérique"
+example.reason.no_declared_match:
+  en: "No declared record matches this address"
+  fr: "Aucun enregistrement déclaré ne correspond à cette adresse"
+example.reason.no_hardware_address:
+  en: "Answered without a hardware address"
+  fr: "A répondu sans adresse matérielle"

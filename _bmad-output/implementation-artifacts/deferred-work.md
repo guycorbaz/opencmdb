@@ -3821,8 +3821,18 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
 - ⚠️ **`Screen::ALL` is a literal array and the compiler does not check it for exhaustiveness.**
   `href`, `label_key` and `group` are `match`es and DO red on a new variant (measured: three
   `E0004`), but a variant wired into all three and left out of `ALL` disappears silently from both
-  the navigation and the routing. **Not confirmed**: it was not measured whether `dead_code` under
-  `-D warnings` catches it. **Owner: story 6b.6**, the next story to add a screen.
+  the navigation and the routing. ~~**Not confirmed**: it was not measured whether `dead_code` under
+  `-D warnings` catches it. **Owner: story 6b.6**, the next story to add a screen.~~
+  ✅ **CLOSED 2026-08-19 by story 6b.3 and its code review, and this row is corrected rather than
+  left standing.** Measured (6b.3's T0): `dead_code` under `clippy -D warnings` DOES catch it — but
+  that lint is outside `cargo xtask ci`, and the review then measured it **silenced by one
+  throw-away line of production code** constructing the variant. Guy's arbitration: a source-scanning
+  TEST, `every_variant_of_a_navigated_enum_is_listed_in_all` in `screens.rs`, covering `NavGroup::ALL`
+  by the same property. 🔑 **The lesson is about the CHECK, not the hole**: story 6b.3's T7 prescribed
+  `grep -n "6b.3"` over this register in both directions, and **this row never names 6b.3**, so the
+  check as written could not surface the row its own §0c was quoting. *A grep on your own name cannot
+  find the row that speaks about you without naming you* — the fifth consecutive story to miss a
+  register row, and the first to measure why.
 
 - ⚠️ **`.wrap` in `app.css` has no consumer** since `gap.html` was deleted — its only user was that
   file's `<main class="wrap">`. Orphan rule, no impact, and **no guard detects dead CSS at all**.
@@ -3860,3 +3870,53 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   or deleted template fails the **build**, not merely the tests (`{% include %}` resolves at macro
   expansion); and dropping the `continue` on `Screen::Triage` makes axum panic at router
   construction (*"Overlapping method route"*, 12 tests red) rather than double-registering silently.
+
+## Deferred from: story 6b.3, the example-data marker (2026-08-19)
+
+- 🔴 **AC4's second half is carried by a LINT THIS SUITE DOES NOT PIN.** A `Screen` variant wired
+  into every `match` but omitted from `Screen::ALL` disappears from the navigation, the routing and
+  every test that iterates the table. Measured on the tree: the build passes, **all 613 tests pass,
+  and `cargo xtask ci` reports all eight gates green** — only
+  `cargo clippy --workspace --locked -- -D warnings` reds, with `variant 'Probe' is never
+  constructed`. ⚠️ **So a developer running only the project's own gates never sees it**, and the
+  guard holds by a property of the invocation (no `--all-targets`, so `cfg(test)` code is not
+  compiled and a test constructing the variant cannot silence it) rather than of the language. A
+  line of PRODUCTION code constructing such a variant WOULD silence it. **Owner: Guy** — the
+  question is whether to pin it as a ninth gate, which is the only shape that can assert the absence
+  of a row; the story raised it rather than deciding it.
+
+- ⚠️ **AC2's mixed specimen is NOT met and must not be read as met.** Section-level placement is
+  shipped and measured (two sections on `/devices`, each carrying the marker), which proves the
+  mechanism attaches below screen level. The case AC2 literally names — *real content beside example
+  content in one frame* — needs the dashboard's reach section. **Owner: story 6b.5.**
+
+- ⚠️ **`Nature::Empty` is TEMPORARY and must not be inherited.** Eight screens carry it, each named
+  beside its arm with the story that fills it (6b.5 … 6b.9). **When 6b.9 closes there should be no
+  `Empty` left**; a reviewer meeting one after that date has found a story that shipped without its
+  content. **Owner: story 6b.9.**
+
+- ⚠️ **`/devices` was filled by this story and belongs to 6b.6.** Guy's arbitration made it the
+  witness screen. What 6b.6 keeps: the device RECORD (`/device`), the `/devices/{id}` routing debt
+  already registered against it, and the fidelity pass over the list roughed in here. 🔑 The example
+  devices carry **stable slugs** (`nas-01`, `switch-core`, `printer-hall`), emitted as
+  `data-device-id` in the markup, precisely so that story can route on them. **Owner: story 6b.6.**
+
+- ⚠️ **The example dataset is prose in a Rust module, and it will grow.** `example_data.rs` is the
+  only home for demonstration content that cannot open a connection (constraint 1). Stories 6b.5–6b.9
+  each add to it. **It must not drift into `fixtures/`**, which is sha256-locked evidence for the
+  identity engine, and the day it approaches the `file-size` ceiling it is split by screen rather
+  than grown. **Owner: story 6b.9**, as the last one to add to it.
+
+## Deferred from: code review of story 6b.3 (2026-08-19)
+
+- ⚠️ **The look is still unverified by eye, for the THIRD consecutive story.** No browser was
+  available in the implementation environment, nor in any of the three review layers': typography,
+  spacing, colour contrast and badge alignment on the ten screens remain unmeasured. 🔑 **What this
+  review learned about the limit is worth more than the limit**: it DID find a real CSS defect —
+  `.screen-section` used twice and defined nowhere, `.rows` (a `<dl>` ruleset) applied to a
+  `<table>`, and no `table`/`th`/`td` rule anywhere in the sheet — but it found it by **recounting
+  the stylesheet**, not by seeing the page. *A recount catches a class that matches nothing; it
+  cannot catch a page that is merely ugly.* The served TEXT was verified correct in every respect
+  three layers could measure — content, escaping, French locale — and the visual result was not.
+  Epic 6b's own DoD already names axe-core green on the ten routes, which is a different check again
+  (a11y, not fidelity). **Owner: Epic 6b's DoD, with story 6b.12's release sweep.**
