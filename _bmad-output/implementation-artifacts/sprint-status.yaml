@@ -75,7 +75,42 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.3 -> `done`: PR #99 squash-merged as `d1bb128` after a green CI run
+last_updated: 2026-08-19  # 6b.4 CONTEXTED -> `ready-for-dev`. 🔴 SEVEN findings, THREE needing Guy
+                          # BEFORE any code. (a) THE SCOPE: the story carries FOUR deliverables and
+                          # three start from NOTHING -- the queue (`build_view` selects ONE entity and
+                          # returns), the provenance/freshness plumbing, the action bar, the age sort.
+                          # **SPLIT RECOMMENDED, 6b.4b INSERTED** (AC1+AC3 stay, AC2 moves) -- and the
+                          # reason is DEPENDENCY, not size: AC2 cannot be written until (b) and (c) are
+                          # settled, and neither is about the triage screen. (b) 🔴 *"labelled per
+                          # 6b.3"* NAMES A MECHANISM THAT DOES NOT EXIST: 6b.3 classifies CONTENT
+                          # (screen/section), never a CONTROL, and `Screen::Triage` is `Fed`, which its
+                          # own doc says "owes NO marker". A dead Merger button is not example data --
+                          # a different axis. Story 6b.3's own §0b, one story later. (c) 🔴 APPLIED
+                          # LITERALLY TODAY THE ACTION BAR IS FIVE BUTTONS OF WHICH FIVE ARE DEAD
+                          # (`/document-all` is whole-entity, flag-gated, off by default and called by
+                          # NO template; Résoudre needs FR16; accept/snooze/attach/exclude have no
+                          # column anywhere; and story 6.4 is sequenced AFTER Epic 6b) -- which runs
+                          # into Guy's own recorded decision of 2026-08-12, *"announcing an absent
+                          # gesture is a promise"* (`deferred-work.md:3283`). 🔑 The retrospective's
+                          # unasked question, asked on purpose: what does the operator DO with an
+                          # action bar in which nothing acts?
+                          # ✅ ONE SUSPICION OF MINE MEASURED AND REFUTED: the freshness does NOT
+                          # collide with `the_shell_shows_no_last_observation` -- that guard scans
+                          # `_shell.html` + `_nav.html` only and excludes `_gap_card.html` BY NAME.
+                          # ✅ And provenance + freshness are SUPPLIED BY THE SCHEMA ON BOTH SIDES
+                          # (`0001_initial.sql:14-17,27-28`); they are dropped at the SELECT. The mock
+                          # is WEAKER than the AC here (5 of its 8 declared rows carry no date at all)
+                          # -- fixture laziness, not design: follow the AC and the spec, not the mock.
+                          # ⚠️ Inherited: the `--accent` guard must be RE-EXAMINED not merely satisfied
+                          # (`:3319`, condition lifted now 6b.1 landed), and NFR25 names this screen a
+                          # key view while NOBODY owns axe-core (`:3748`).
+                          # ⚠️ THE CONTEXTING'S OWN LESSON: three of the four register line numbers the
+                          # analysis supplied were WRONG, and the claim that the epic's stale
+                          # *"seven gates"* DoD was registered is FALSE -- `grep -n "seven gates"`
+                          # returns nothing. Every citation in the story was re-measured before being
+                          # written. *A citation believed is a citation wrong.*
+                          # NEXT = `create-story validate` 6b.4 (MANDATORY), then Guy's three rulings.
+                          # (Earlier the same day) 6b.3 -> `done`: PR #99 squash-merged as `d1bb128` after a green CI run
                           # (1m04s; bin suite 5.48 s in CI against 0.06 s locally -- the tell that
                           # the database-backed half really executed). Branch deleted, twins updated
                           # in this same push. **611 -> 614 tests**, eight gates green.
@@ -3244,7 +3279,7 @@ development_status:
   6b-1-design-system-tokens-and-accent: done
   6b-2-shell-navigation-and-ten-routes: done
   6b-3-example-data-marker-and-its-gate: done
-  6b-4-triage-screen-on-the-real-gap: backlog
+  6b-4-triage-screen-on-the-real-gap: ready-for-dev
   6b-5-dashboard-real-reach-beside-examples: backlog
   6b-6-inventory-and-device-record: backlog
   6b-7-applications-and-ipam: backlog
