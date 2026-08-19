@@ -75,7 +75,40 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4b CONTEXTED -> `ready-for-dev`. 🔑 It starts DESIGNED: its form, its
+last_updated: 2026-08-19  # 6b.4b ✅ VALIDATED, two fresh-context layers, and it changed the answer.
+                          # **Fact-check: 36 assertions, 34 confirmed, 2 flagged, both mine** -- and
+                          # ✅ it CLOSED an escape hatch I had only inferred, by WRITING the test: a
+                          # `#[cfg(test)]` construction of `Live` does NOT silence the lint, because
+                          # `clippy --workspace` without `--all-targets` never compiles cfg(test).
+                          # **Gap-hunt: it BUILT BOTH options.** 🔴 ITS CENTRAL FINDING REFUTES MY
+                          # RECOMMENDATION'S JUSTIFICATION BY RUNNING IT: under option (d),
+                          # `route: Some("/does-not-exist")` reds **NOTHING** -- 398 tests, clippy and
+                          # eight gates green -- and the control renders as a genuine live link,
+                          # indistinguishable in a screenshot. *"The arbitrated property survives,
+                          # only its spelling changes"* is FALSE: not merely representable, UNGUARDED.
+                          # 🔑 AND THE ENUM WAS NEVER MUCH BETTER: constructing ONE `Live` with a
+                          # bogus route makes the *"never constructed"* error VANISH -- clippy asks
+                          # only whether a variant was instantiated with ANY value. Its forcing power
+                          # was a one-shot whole-crate check that goes dark the day 6.4 lands.
+                          # **NO OPTION SHIPS THE PROPERTY AS STATED**, so §0a now NARROWS the promise
+                          # (story 5.12's precedent) instead of claiming one, and the real closure --
+                          # a route typed as a member of a CLOSED SET -- is registered to story 6.4,
+                          # where it becomes buildable because the set stops being empty.
+                          # 🔴 AND A BROWSER EXISTS: `google-chrome` **151.0.7922.169** and `firefox`
+                          # are installed. **FOUR consecutive stories deferred the visual check on a
+                          # premise nobody ever measured** -- nobody ran `command -v`. *A limit
+                          # believed is a limit unmeasured.* The bar was rendered and read at 1200 px
+                          # and 390 px: it reads as *deliberately not built*, not broken.
+                          # ✅ And Guy's NFR25 arbitration is confirmed by a REAL DOM: `aria-disabled`
+                          # keeps focus and fires its click; the native `disabled` refuses both.
+                          # ⚠️ Two holes measured in story 6b.4's stylesheet guard -- it scans Askama
+                          # COMMENTS, and it **silently skips any `class="…"` containing `{`**, which
+                          # is exactly how one would naturally write this story's live/planned toggle
+                          # (6b.3's defect reachable again). Plus: branch on the CAUSE not the
+                          # translated `kind` string (6b.3's wrong-namespace defect waiting), and M2
+                          # and M3 presuppose guards that DO NOT EXIST -- uncredited scope, now named.
+                          # NEXT = Guy's ONE ruling on §0a, then `dev-story` 6b.4b.
+                          # (Earlier the same day) 6b.4b CONTEXTED -> `ready-for-dev`. 🔑 It starts DESIGNED: its form, its
                           # words and the *whether* were all settled before it began -- the form and
                           # words by Guy's arbitration in 6b.4's §0b, the *whether* by his own
                           # premise (2) of 2026-08-13 (`epics.md:2092`, *"the four gestures Epic 7

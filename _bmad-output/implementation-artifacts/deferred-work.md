@@ -4042,3 +4042,37 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   false figure and the blind one caught it**, which is the argument for keeping that layer blind, and
   a reason to state in the Auditor's mandate that a claim of the form *"A → B"* requires measuring A.
   **Owner: Epic 6b's retrospective.**
+## Deferred from: story 6b.4b's validation (2026-08-19)
+
+- 🔴 **A BROWSER WAS AVAILABLE ALL ALONG, and four consecutive stories deferred the visual check on a
+  premise nobody measured.** Verified: `google-chrome --version` → **151.0.7922.169**, and `firefox`
+  is installed too. Stories 6b.1, 6b.2, 6b.3 and 6b.4 each recorded *"no browser was available in
+  this environment"* and each deferred typography, spacing, contrast and layout on that sentence.
+  🔑 *A limit believed is a limit unmeasured* — nobody ran `command -v`. **Consequence: the epic's
+  axe-core obligation and the four deferred visual passes are no longer blocked by the environment**,
+  and story 6b.4b's own T6 is a real browser check. **Owner: Epic 6b's retrospective** for the
+  process lesson, and **story 6b.12's release sweep** for the four unpaid visual passes.
+
+- 🔴 **Story 6b.4's stylesheet guard has TWO holes, both measured.** `every_class_a_template_names_is
+  _defined_in_the_stylesheet` (a) scans raw template bytes **including Askama comments**, so writing
+  the pattern `class="…"` in a `{#- … -#}` comment reds it; and (b) **silently skips any `class="…"`
+  containing `{`**, so the ordinary conditional form
+  `class="btn-gesture{% if … %} live{% else %} planned{% endif %}"` goes entirely unchecked — *story
+  6b.3's `.screen-section` defect, reachable again through the natural way to write the markup*.
+  ⚠️ Widening (b) is not free: an Askama expression is not a class name, and the guard would have to
+  parse the literal rather than skip it. **Owner: story 6b.4b**, which is the story that walks into
+  hole (b), or the first story that needs a conditional class.
+
+- ⚠️ **`aria-disabled` does not stop htmx, and story 6.4 will meet that.** htmx respects the native
+  `disabled` attribute or `hx-disabled-elt`, nothing else — so a planned gesture that later gains an
+  `hx-post` while keeping only `aria-disabled` would fire. Harmless today: no `hx-*` attribute exists
+  on any planned gesture. ⚠️ And `Gesture { route: Option<&'static str> }` says nothing about the HTTP
+  METHOD, while these are actions rather than navigations. **Owner: story 6.4**, which wires the first
+  live gesture.
+
+- 🔑 **The real closure for "a route that goes nowhere" is a CLOSED SET, and it cannot be built yet.**
+  Measured at 6b.4b's validation: neither the arbitrated enum nor the recommended struct prevents a
+  gesture from pointing at a route that does not exist — clippy's dead-code lint asks only whether a
+  variant was instantiated *with any value*. A `route` typed as a member of the application's actual
+  routes would make it unrepresentable; today that set would be **empty**, which is the same wall from
+  the other side. **Owner: story 6.4.**
