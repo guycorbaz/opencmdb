@@ -136,6 +136,7 @@ struct AbstentionRow {
 }
 
 /// One cause line of the identity engine's reach — *"N sightings, because …"*.
+#[derive(Clone)]
 struct IdentityCauseRow {
     cause: String,
     count: i64,
@@ -180,6 +181,7 @@ struct IdentityCauseRow {
 /// needs a write surface the product does not have. **Announcing an absent gesture is a promise;
 /// this section stays descriptive until the gesture is there** (Guy, 2026-08-12). The taxonomy is
 /// registered as the criterion for both.
+#[derive(Clone)]
 struct IdentityView {
     /// Sightings the engine placed on an interface — case one, `Match`.
     placed: i64,
@@ -226,6 +228,18 @@ struct Strings {
     example_badge: String,
     /// The example-data marker's sentence (story 6b.3).
     example_sentence: String,
+    /// The dashboard's real-half heading (story 6b.5).
+    dash_real_heading: String,
+    /// The dashboard's example-half heading (story 6b.5).
+    dash_example_heading: String,
+    /// The label before the last-observation instant (story 6b.5).
+    dash_last_observed: String,
+    /// What the dashboard says when nothing has ever been observed (story 6b.5).
+    dash_never_observed: String,
+    /// The heading of the *what grew since your last visit* section (story 6b.5).
+    dash_since_heading: String,
+    /// Its body — an example, because the product has no notion of a visit (story 6b.5).
+    dash_since_body: String,
     /// The triage screen's own heading (story 6b.4).
     triage_title: String,
     /// The queue's count line — a fact in a sentence, never a badge (story 6b.4).
@@ -294,6 +308,12 @@ fn strings() -> Strings {
         nav_label: t!("nav.label").to_string(),
         example_badge: t!("example.badge").to_string(),
         example_sentence: t!("example.sentence").to_string(),
+        dash_real_heading: t!("dash.real_heading").to_string(),
+        dash_example_heading: t!("dash.example_heading").to_string(),
+        dash_last_observed: t!("dash.last_observed").to_string(),
+        dash_never_observed: t!("dash.never_observed").to_string(),
+        dash_since_heading: t!("dash.since_heading").to_string(),
+        dash_since_body: t!("dash.since_body").to_string(),
         triage_title: t!("triage.title").to_string(),
         triage_pending: t!("triage.pending").to_string(),
         triage_sort_age: t!("triage.sort_age").to_string(),
@@ -1315,7 +1335,118 @@ pub(crate) struct TriageState {
 pub(crate) fn triage_router(pool: MySqlPool, perimeter: Option<String>) -> Router {
     Router::new()
         .route("/triage", get(triage))
+        .route("/dashboard", get(dashboard))
         .with_state(TriageState { pool, perimeter })
+}
+
+/// One example figure on the dashboard, with its copy already resolved.
+struct StatCardView {
+    /// What it counts, in the operator's language.
+    label: String,
+    /// The figure itself — a STRING, because it is decoration and never arithmetic.
+    value: &'static str,
+    /// The shape a sparkline would draw, as a bare list of heights.
+    spark: Vec<u8>,
+}
+
+/// Everything `/dashboard` renders: the product's real reach, and the example surfaces beside it.
+///
+/// 🔴 **Two populations, never summed** (arbitration 10) — and the guard for that lives at the
+/// COMPOSITION and not on either builder, because story 5.14b measured its own guard GREEN when it
+/// asserted a property two pure builders cannot violate: neither sees the other's numbers, so
+/// neither can add them. This struct is where they meet, so this is where a sum could be written.
+struct DashboardView {
+    /// The real reach, exactly as story 5.14b shipped it and `/triage` renders it.
+    identity: IdentityView,
+    /// How long ago the product last observed anything — a `MAX(observed_at)`, in the BODY only.
+    last_observed: Option<String>,
+    /// The example figures. ⚠️ Example, and each carries the marker on its own section.
+    cards: Vec<StatCardView>,
+}
+
+/// The dashboard's body: the real reach section beside labelled example sections (story 6b.5).
+#[derive(Template)]
+#[template(path = "_dashboard.html")]
+struct DashboardBody {
+    /// 🔴 **ONE source for the identity counts, and that is not tidying.** This struct carried its
+    /// own `identity` field beside `view.identity` until the mutation pass: the handler filled it
+    /// from the view and the TEST HELPER filled it from the un-composed original, so **the guard
+    /// rendered a shape production does not use** and mutation M1 — a sum planted at the
+    /// composition — left it green. *Two fields holding one fact will be filled from two places,
+    /// and the test's place is the one nobody ships.* The template now reads `view.identity`.
+    view: DashboardView,
+    s: Strings,
+}
+
+/// PURE: the example half. It reads nothing and depends on nothing.
+fn example_cards() -> Vec<StatCardView> {
+    use rust_i18n::t;
+    vec![
+        StatCardView {
+            label: t!("dash.card.devices").to_string(),
+            value: "37",
+            spark: vec![3, 5, 4, 6, 6, 7, 9],
+        },
+        StatCardView {
+            label: t!("dash.card.drifts").to_string(),
+            value: "4",
+            spark: vec![7, 6, 6, 4, 5, 3, 4],
+        },
+        StatCardView {
+            label: t!("dash.card.sources").to_string(),
+            value: "2",
+            spark: vec![1, 1, 2, 2, 2, 2, 2],
+        },
+    ]
+}
+
+/// PURE: assemble the real reach and the example surfaces into one view.
+///
+/// 🔴 **`now` is a PARAMETER.** The builder reads no clock, so one store renders identically twice;
+/// the instant is taken once at the impure edge. Story 5.14b's clock guard does **not** cover a
+/// populated builder — story 6b.4's review measured that — so this one has its own.
+fn build_dashboard(
+    identity: IdentityView,
+    last_observed_at: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> DashboardView {
+    DashboardView {
+        identity,
+        last_observed: last_observed_at.map(|then| relative_time(now, then)),
+        cards: example_cards(),
+    }
+}
+
+/// `GET /dashboard` — the real reach section beside labelled example sections.
+///
+/// ⚠️ **On the pool-bearing router, by Guy's arbitration of 2026-08-19.** Its real half reads the
+/// store, so it cannot live on `screens::router`'s `Router<()>`; the compile-time refusal of
+/// `State<MySqlPool>` therefore does not hold for this one screen, and holds for the eight that
+/// remain. See [`crate::screens::Nature::Mixed`] for the cost and the alternative that was refused.
+pub async fn dashboard(State(state): State<TriageState>) -> Response {
+    let perimeter = state.perimeter.clone();
+    let reach = match count_engine_reach(&state.pool).await {
+        Ok(rows) => rows,
+        Err(error) => return server_error(error),
+    };
+    let last = match crate::repo::last_observed_at(&state.pool).await {
+        Ok(instant) => instant,
+        Err(error) => return server_error(error),
+    };
+    let identity = build_identity_view(reach);
+    let view = build_dashboard(identity.clone(), last, now_utc());
+    let body = DashboardBody { view, s: strings() };
+    match body.render() {
+        Ok(body) => Html(render_shell(
+            Shell::new(crate::screens::Screen::Dashboard, perimeter),
+            body,
+        ))
+        .into_response(),
+        Err(error) => {
+            tracing::error!(%error, "rendering the dashboard");
+            (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
+        }
+    }
 }
 
 /// `GET /triage` — the shell, with today's reconciliation card inside it.
@@ -3411,6 +3542,167 @@ mod tests {
         assert!(
             html.contains("Accept the gap") && html.contains("Exclude"),
             "the four Epic 7 gestures are VISIBLE and labelled — Guy's premise (2) of 2026-08-13"
+        );
+    }
+
+    // ── Story 6b.5: the dashboard, real reach beside labelled examples ──
+
+    /// The dashboard's body, rendered on a store that has seen something.
+    fn rendered_dashboard(last: Option<chrono::DateTime<chrono::Utc>>) -> String {
+        // 🔴 `"match"`, not `"matched"` — the first draft of this fixture used the wrong token, it
+        // fell into `build_identity_view`'s unknown-outcome arm, and **`placed` rendered as 0**.
+        // ⚠️ And the counts are 11 and 6 on purpose: their sum, 17, collides with none of the
+        // example cards' values (37, 4, 2), which is what the first draft's `2` did — it was
+        // satisfied by a stat card and asserted nothing about the real half at all.
+        let identity = build_identity_view(vec![
+            reach("match", None, 11),
+            reach("abstained", Some("absence_of_proof"), 6),
+        ]);
+        let view = build_dashboard(identity, last, at(600));
+        DashboardBody { view, s: strings() }
+            .render()
+            .expect("the dashboard body renders")
+    }
+
+    /// 🔴 **The two populations are never summed — and this guard sits at the COMPOSITION.**
+    ///
+    /// # Why here and not on either builder, which is the whole point
+    ///
+    /// Story 5.14b wrote this guard over the two pure builders and **its own mutation pass measured
+    /// it GREEN**: it asserted that `build_view` and `build_identity_view` do not add each other's
+    /// counts, and **neither of them can**, since neither sees the other's numbers. *A guard placed
+    /// where the defect cannot occur reads as coverage and is none* — the epic's dominant class, and
+    /// its cleanest specimen. Story 6b.5's validation reproduced both halves by building them: the
+    /// builder-level guard stays green under a sum planted at the composition; the same guard
+    /// written HERE catches it (`left: 2, right: 3`).
+    ///
+    /// 🔑 This is where the two meet, so this is where a sum could be written — and the assertion is
+    /// over the RENDERED body, because the operator reads the render and not the struct.
+    ///
+    /// ⚠️ Arbitration 13's UNIT is inherited rather than restated: the dashboard **includes**
+    /// `_identity_section.html`, so the *"counts sightings, not devices"* note is the same one
+    /// `/triage` renders and the same guard covers it. **Hand-roll that markup and this inheritance
+    /// silently ends.**
+    #[test]
+    fn the_dashboard_never_sums_the_two_populations() {
+        let html = rendered_dashboard(Some(at(0)));
+        // 🔑 Scoped to the REAL half. Asserted over the whole page, a bare `>11<` could be satisfied
+        // by an example card — which is exactly how the first version of this guard passed while
+        // measuring nothing.
+        let real = html
+            .split("class=\"dashboard-real\"")
+            .nth(1)
+            .and_then(|rest| rest.split("class=\"dashboard-example\"").next())
+            .expect("the real section renders before the example ones");
+
+        assert!(real.contains(">11<"), "the placed count renders: {real}");
+        assert!(real.contains(">6<"), "the not-placed count renders: {real}");
+        // 🔴 Their sum must appear NOWHERE on the page. A `17` could only have been written by
+        // adding two populations the product deliberately keeps apart (arbitration 10).
+        assert!(
+            !html.contains("17"),
+            "the two populations were SUMMED: 11 + 6 reached the page as 17. They count different \
+             things and adding them invents a number the product does not hold (arbitration 10)"
+        );
+        // And the unit, inherited from the included partial rather than restated here.
+        assert!(
+            html.contains("sightings, not devices"),
+            "the honest unit must reach the page — and it does so because the dashboard INCLUDES \
+             `_identity_section.html`; duplicating that markup would end this inheritance silently"
+        );
+    }
+
+    /// 🔴 **Every example section carries its OWN marker — the sibling the route table cannot be.**
+    ///
+    /// # Why a second guard, measured rather than argued
+    ///
+    /// The route-table partition asserts `body.contains("example-marker-badge")`, which is a
+    /// property of the whole response. Story 6b.5's validation built a two-example-section body and
+    /// dropped the marker from **one**: the screen-level oracle **stayed GREEN**, because the other
+    /// section still carries the string; a section-level oracle reds `left: 2, right: 1`. 🔑 *The
+    /// partition is a property of the ROUTE TABLE and this is a property inside one BODY — it cannot
+    /// be extended, only joined.*
+    ///
+    /// ⚠️ Its limit: it counts sections and markers on the rendered page. It cannot say the marker is
+    /// on the RIGHT section, only that no example section is missing one — and it says nothing about
+    /// whether the boundary is legible, which is why the template also carries a heading per section.
+    #[test]
+    fn every_example_section_carries_its_own_marker() {
+        let html = rendered_dashboard(Some(at(0)));
+        let sections = html.matches("class=\"dashboard-example\"").count();
+        let markers = html.matches("example-marker-badge").count();
+        assert!(
+            sections >= 2,
+            "the premise: the dashboard carries at least two example sections ({sections} seen) — \
+             with one, this guard cannot tell a per-section rule from a per-screen one"
+        );
+        assert_eq!(
+            markers, sections,
+            "every example section must carry its own marker. The route-table partition CANNOT \
+             catch this — measured: with two sections and one marker it stays green, because the \
+             surviving section satisfies its `contains`"
+        );
+        // And the real half must NOT be marked: that is the other direction of the same rule.
+        let real = html
+            .split("class=\"dashboard-real\"")
+            .nth(1)
+            .and_then(|rest| rest.split("class=\"dashboard-example\"").next())
+            .expect("the real section renders first");
+        assert!(
+            !real.contains("example-marker-badge"),
+            "the REAL section carries the marker: the product would be calling the operator's own \
+             counts a demonstration"
+        );
+    }
+
+    /// 🔴 **`build_dashboard` reads no clock of its own**, and this guard is written rather than
+    /// inherited.
+    ///
+    /// Story 5.14b's `the_view_builder_has_no_clock_so_one_store_renders_identically` hands
+    /// `build_view` EMPTY inputs, so its populated branch is never reached — story 6b.4's review
+    /// measured that. And the carrier everyone assumed, `chrono`'s `default-features = false`, only
+    /// stops one SPELLING: `std::time::SystemTime::now()` compiles freely. *A feature flag guards a
+    /// name, never the act of reading a clock.*
+    #[test]
+    fn build_dashboard_reads_no_clock_of_its_own() {
+        let identity = build_identity_view(vec![reach("matched", None, 1)]);
+        let build = |now| build_dashboard(identity.clone(), Some(at(0)), now);
+
+        let a = build(at(600));
+        let b = build(at(600));
+        assert_eq!(
+            a.last_observed, b.last_observed,
+            "one store, one instant, twice — the builder must be a pure function of its inputs"
+        );
+        let later = build(at(7_200));
+        assert_ne!(
+            a.last_observed, later.last_observed,
+            "the freshness must follow the `now` the caller supplied — if it does not, this guard \
+             measures nothing and a clock inside the builder would be invisible to it"
+        );
+    }
+
+    /// The last observation renders in the BODY, and the shell never learns of it.
+    ///
+    /// 🔑 The converse was measured at validation: the same text placed in the body **cannot** trip
+    /// `the_shell_shows_no_last_observation`, because the body arrives as `{{ body|safe }}` and that
+    /// guard's self-widening loop follows only `{% include %}` directives inside the two frame
+    /// files. The two facts are independent, which is why both are asserted.
+    #[test]
+    fn the_last_observation_renders_in_the_body_and_says_so_when_there_is_none() {
+        let seen = rendered_dashboard(Some(at(0)));
+        assert!(
+            seen.contains("Last observed") && seen.contains("10 min ago"),
+            "the last observation renders from the stored instant"
+        );
+        let never = rendered_dashboard(None);
+        assert!(
+            never.contains("Nothing has been observed yet"),
+            "a store that has seen nothing SAYS so rather than rendering an empty label"
+        );
+        assert!(
+            !never.contains("Last observed"),
+            "and it does not render the label with nothing after it"
         );
     }
 }

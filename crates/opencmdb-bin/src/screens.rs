@@ -72,6 +72,30 @@ pub(crate) enum Nature {
     /// The screen shows what the product really observed and really holds. It owes NO marker, and
     /// carrying one would be a lie in the other direction.
     Fed,
+    /// The screen is **real in one section and example in the others**, and it owes the marker on
+    /// each example section — never on the screen.
+    ///
+    /// # Why a fourth variant, and why not one of the three
+    ///
+    /// 🔴 Story 6b.3's AC2 predicted this in words: *"a screen-level-only marker would either lie
+    /// about the real half or hide the example half"*. The dashboard is where the sentence stops
+    /// being a prediction — declared [`Fed`](Nature::Fed) it carries a marker it must not, declared
+    /// [`Example`](Nature::Example) it calls the real reach section a demonstration, and declared
+    /// [`Empty`](Nature::Empty) it claims to hold nothing while holding the product's own counts.
+    ///
+    /// 🔑 **Guy's arbitration (2026-08-19), taken on a measurement**: adding this variant produces
+    /// exactly **three `E0004` sites** — the body dispatch below and the partition test's two match
+    /// arms — so the compiler forces both the marker decision and the pending-badge decision, and
+    /// nothing silently defaults.
+    ///
+    /// ⚠️ **A `Mixed` screen is NOT on the pool-free router**, and that is the cost the arbitration
+    /// accepted: its real half reads the store, so `/dashboard` sits with `/triage` and for that one
+    /// screen the compile-time refusal of `State<MySqlPool>` no longer holds. The guard survives for
+    /// the eight screens that remain, and is narrowed in writing for this one (story 5.12's
+    /// precedent). 🔴 **A fragment-loaded reach section WAS built at validation and refused on a
+    /// measured cost**: the route-table partition asserts on ONE synchronous body, and a second
+    /// request is one a `oneshot` client cannot drive.
+    Mixed,
     /// The screen shows the example dataset. It owes the marker, on the smallest unit that carries
     /// example content — and it **names WHICH example content**, which is the whole point of the
     /// payload.
@@ -223,12 +247,14 @@ impl Screen {
         match self {
             // The one screen fed by what the product really observed (story 6b.2, `page::triage`).
             Screen::Triage => Nature::Fed,
+            // Real reach beside labelled example sections — the one screen that is mixed by
+            // construction (story 6b.5, Guy's arbitration of 2026-08-19).
+            Screen::Dashboard => Nature::Mixed,
             // The witness screen, filled from the example dataset (Guy's arbitration, 2026-08-19).
             Screen::Devices => Nature::Example(ExampleContent::DevicesInventory),
             // ⚠️ Each of these becomes `Example` in ITS OWN story, listed beside it. Until then the
             // screen holds nothing and says so — see [`Nature::Empty`].
-            Screen::Dashboard  // story 6b.5
-            | Screen::Device   // story 6b.6
+            Screen::Device   // story 6b.6
             | Screen::Apps     // story 6b.7
             | Screen::Ipam     // story 6b.7
             | Screen::Sources  // story 6b.8
@@ -262,10 +288,13 @@ impl NavGroup {
 pub(crate) fn router(perimeter: Option<String>) -> Router {
     let mut router = Router::new();
     for screen in Screen::ALL {
-        if screen.nature() == Nature::Fed {
+        if matches!(screen.nature(), Nature::Fed | Nature::Mixed) {
             // 🔑 Keyed on the NATURE, not on the identity: `Screen::Triage` was named here until
             // story 6b.3, and the two would drift the day a second screen becomes fed. Now the
             // exclusion and the body-dispatch below read the same decision.
+            // ⚠️ `Mixed` joined `Fed` at story 6b.5: its real half reads the store, so it cannot
+            // live on a `Router<()>`. That is the cost Guy's arbitration accepted, and it is
+            // narrowed rather than hidden — see [`Nature::Mixed`].
             continue;
         }
         let perimeter = perimeter.clone();
@@ -298,7 +327,11 @@ fn demonstration_screen(screen: Screen, perimeter: Option<String>) -> Response {
         // and live on the main router. It is `unreachable!` rather than a silent fallback so the
         // day someone changes `nature` without changing `router`, the test says WHICH assumption
         // broke instead of quietly serving a blank page.
+        // Unreachable for the same reason and by the same mechanism: `router` skips both, because
+        // both read the store. Kept as two arms rather than one so the message names which
+        // assumption broke.
         Nature::Fed => unreachable!("a Fed screen is not merged onto the pool-free router"),
+        Nature::Mixed => unreachable!("a Mixed screen is not merged onto the pool-free router"),
     };
     Html(render_shell(Shell::new(screen, perimeter), body)).into_response()
 }

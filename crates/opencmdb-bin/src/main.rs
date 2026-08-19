@@ -887,7 +887,7 @@ mod tests {
             if matches!(nature, screens::Nature::Example(_)) {
                 example_screens += 1;
             }
-            if nature == screens::Nature::Fed && !fed_reachable {
+            if matches!(nature, screens::Nature::Fed | screens::Nature::Mixed) && !fed_reachable {
                 // Said on stderr above, never skipped in silence — see this test's doc.
                 continue;
             }
@@ -922,6 +922,17 @@ mod tests {
                     "{} shows the example dataset and must say so",
                     screen.href()
                 ),
+                // 🔑 A MIXED screen carries the marker and MUST — on its example sections. This
+                // arm says only that the marker is present somewhere; **which section carries it is
+                // a property inside one body and the route table cannot see it**. The sibling guard
+                // `every_example_section_carries_its_own_marker` owns that, because story 6b.5's
+                // validation measured this oracle staying GREEN when one section of two lost its
+                // marker: the other section's string is enough to satisfy a `contains`.
+                screens::Nature::Mixed => assert!(
+                    carries,
+                    "{} is mixed and its example sections must say so",
+                    screen.href()
+                ),
                 screens::Nature::Fed | screens::Nature::Empty => assert!(
                     !carries,
                     "{} carries the marker and must not: a fed screen would be calling the \
@@ -941,11 +952,13 @@ mod tests {
                      than a deliberate one",
                     screen.href()
                 ),
-                screens::Nature::Fed | screens::Nature::Example(_) => assert!(
-                    !says_pending,
-                    "{} carries the *not built yet* line over content it actually has",
-                    screen.href()
-                ),
+                screens::Nature::Fed | screens::Nature::Example(_) | screens::Nature::Mixed => {
+                    assert!(
+                        !says_pending,
+                        "{} carries the *not built yet* line over content it actually has",
+                        screen.href()
+                    )
+                }
             }
             probed += 1;
         }

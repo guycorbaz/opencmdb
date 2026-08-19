@@ -1,0 +1,61 @@
+{#- The dashboard: the product's real reach beside labelled example sections (story 6b.5).
+
+     🔴 This screen is MIXED by construction, and it is the reason `Nature::Mixed` exists. Story
+     6b.3's AC2 predicted the shape of the problem — *"a screen-level-only marker would either lie
+     about the real half or hide the example half"* — so the marker sits on each EXAMPLE section and
+     never on the screen.
+
+     🔴 Each example section carries its own HEADING before its marker, and that is not decoration.
+     Seen in a browser at this story's validation: a bare marker directly under the real block reads
+     as though it annotates the numbers ABOVE it, because nothing marks where real ends and example
+     begins. AC2 asks for the marker's presence and says nothing about its legibility beside real
+     content; this is the part the criterion does not cover.
+
+     ⚠️ STATIC class literals throughout. The stylesheet guard silently skips any `class` attribute
+     containing a brace, and the validation confirmed it with the exact conditional a mixed screen
+     invites — `class="dashboard-section {% if … %}is-real{% else %}is-example{% endif %}"` with none
+     of the three defined, guard green. -#}
+<section class="dashboard">
+
+  {#- ── The real half. Story 5.14b's section, INCLUDED and not re-drawn: including it inherits
+       arbitration 13's unit guard for free, and hand-rolling the markup would blind it. -#}
+  <div class="dashboard-real">
+    <h2>{{ s.dash_real_heading }}</h2>
+    {% let identity = view.identity %}{% include "_identity_section.html" %}
+    {% if let Some(seen) = view.last_observed %}
+    {#- The last observation — a `MAX(observed_at)`, in the BODY and never in the frame. -#}
+    <p class="muted last-observed">{{ s.dash_last_observed }} {{ seen }}</p>
+    {% else %}
+    <p class="muted last-observed">{{ s.dash_never_observed }}</p>
+    {% endif %}
+  </div>
+
+  {#- ── The example half. One heading, one marker, then the cards. -#}
+  <div class="dashboard-example">
+    <h2>{{ s.dash_example_heading }}</h2>
+    {% include "_example_marker.html" %}
+    <div class="cards">
+    {% for card in view.cards %}
+      <div class="card stat">
+        <p class="stat-label">{{ card.label }}</p>
+        <p class="stat-value mono">{{ card.value }}</p>
+        {#- The sparkline: bars, not a curve. It draws EXAMPLE heights — the product has no
+             deduplicated history, and a curve over the raw rows would climb with every scan
+             whatever the network did, which is the growing counter the UX spec bans. -#}
+        <span class="spark" aria-hidden="true">
+        {%- for height in card.spark %}<span class="spark-bar spark-h{{ height }}"></span>{% endfor %}
+        </span>
+      </div>
+    {% endfor %}
+    </div>
+  </div>
+
+  {#- ── "What grew since your last visit" — an example section of its own, because the product has
+       NO notion of a last visit: measured, `grep -rn "session|cookie|last_visit"` over `crates/`
+       returns nothing. -#}
+  <div class="dashboard-example">
+    <h2>{{ s.dash_since_heading }}</h2>
+    {% include "_example_marker.html" %}
+    <p class="muted">{{ s.dash_since_body }}</p>
+  </div>
+</section>

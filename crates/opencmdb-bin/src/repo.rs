@@ -458,6 +458,38 @@ where
     Ok(rows)
 }
 
+/// The instant of the most recent observation, or `None` when nothing has been observed.
+///
+/// 🔴 **A `MAX(observed_at)`, and the register handed it to story 6b.5 by name**
+/// (`deferred-work.md:3724`). ⚠️ It is **banned from the shell**: story 6b.2 measured that the mock
+/// puts it in the nav footer, Guy re-arbitrated that *"the perimeter ships and the last observation
+/// waits"*, and `screens.rs`'s `the_shell_shows_no_last_observation` reds on the word in either
+/// frame template. It belongs to the dashboard's BODY and nowhere else.
+///
+/// # Errors
+///
+/// A `sqlx::Error` on a backend failure, or on an instant that does not parse as RFC 3339.
+pub async fn last_observed_at<'e, E>(
+    executor: E,
+) -> Result<Option<chrono::DateTime<chrono::Utc>>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    // TEXT again: sqlx here has no `chrono` feature, so a DATETIME(6) cannot decode natively.
+    let row: (Option<String>,) = sqlx::query_as(
+        "SELECT DATE_FORMAT(MAX(observed_at), '%Y-%m-%dT%H:%i:%s.%fZ') FROM observation_record",
+    )
+    .fetch_one(executor)
+    .await?;
+    row.0
+        .map(|instant| {
+            chrono::DateTime::parse_from_rfc3339(&instant)
+                .map(|parsed| parsed.with_timezone(&chrono::Utc))
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+        })
+        .transpose()
+}
+
 /// One declared attribute's PROVENANCE and FRESHNESS — for DISPLAY, and for nothing else.
 ///
 /// 🔴 **This type exists so the divergence computation cannot see what it carries** (story 6b.4,

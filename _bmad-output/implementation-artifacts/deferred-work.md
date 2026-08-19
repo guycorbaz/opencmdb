@@ -4182,3 +4182,35 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   posture, **but did not check an unauthenticated request returns 401**. If any fragment-based shape
   is chosen, that check is a deliverable — story 6b.2's review found that a route added to `is_public`
   left 609 tests green. **Owner: story 6b.5, conditional on the shape Guy chooses.**
+
+## Deferred from: story 6b.5's implementation (2026-08-19)
+
+- 🔴 **`git checkout -- <file>` DESTROYED UNCOMMITTED WORK for the third time in this project**, and
+  the mechanism is worth more than the incident. Story 6b.5's mutation script restored some files
+  from a scratchpad copy and others with `git checkout --`; `locales/app.yml` was in the second set
+  and not in the snapshot, so restoring it after M5 reverted it to the last COMMIT and **silently
+  deleted nine uncommitted keys**. 🔑 *A file revert equals a mutation revert only on a committed
+  baseline* — story 6.1 recorded that sentence, story 6b.3 reproduced the incident, and this is the
+  third. **The new half is the cause**: mixing two restore mechanisms in one script guarantees the
+  boundary is crossed, because the snapshot set and the git set drift. **One mechanism per script.**
+  **Owner: Epic 6b's retrospective.**
+
+- ⚠️ **A locale key can be in the file and absent from the binary, and the guard cannot tell.**
+  `every_key_carries_both_locales` reads `app.yml`; `t!()` reads the copy `rust_i18n::i18n!` embedded
+  at compile time. When the file lost its keys the guard stayed green and the page rendered
+  `dash.last_observed` as its own name. 🔑 **Source against artefact, a third distinct instance** —
+  after a `<button>` measured for a `<span>` and a screenshot of a stale binary. **Owner: the first
+  story that adds a guard over `app.yml`** — resolve through `t!()`, as story 6b.4b's digit guard now
+  does, rather than parsing the file.
+
+- ⚠️ **The dashboard's REACH SECTION was never seen populated in a browser.** The look was taken with
+  a seeded observation and an abstained link, and the section still rendered its empty state because
+  the seeded row did not reach `count_engine_reach`'s filter. The populated case is covered by unit
+  tests over the rendered body; it has not been seen by eye. **Owner: story 6b.12's release sweep**,
+  or the first story that seeds engine reach for a visual check.
+
+- ⚠️ **`/dashboard` is now on the pool-bearing router, and `/` still redirects to `/triage`.** The
+  register asks for the redirect target to be re-examined *"when the dashboard stops being mixed"* —
+  it has not; it is mixed by construction and will stay so until 6b.5's example sections are replaced
+  by fed ones. The re-examination is done and the answer is **not yet**. **Owner: the story that makes
+  the dashboard mostly fed.**

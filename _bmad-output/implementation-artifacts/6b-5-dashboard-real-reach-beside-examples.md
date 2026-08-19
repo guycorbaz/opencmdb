@@ -1,6 +1,6 @@
 # Story 6b.5: The dashboard — the real reach section beside labelled example sections
 
-Status: ready-for-dev
+Status: review
 
 Epic: 6b — *L'interface de la maquette*. **Fifth numbered slot**, after 6b.4b closed the triage
 screen's action bar. It is the story the epic has been pointing at since its first arbitration:
@@ -91,7 +91,32 @@ necessity; it is a trade of compile-time safety against the testability of the c
 decision explained by a false premise is one nobody can re-derive*, which is why the premise is
 replaced rather than quietly kept.
 
-**→ PUT TO GUY. Three shapes, with what each costs:**
+**→ ✅ ARBITRATED (Guy, 2026-08-19): shape (a) — a fourth nature, `Nature::Mixed`, on the
+POOL-BEARING router.**
+
+🔑 **Taken on the validation's measurement, not on a preference**: `Nature::Mixed` produces exactly
+**three `E0004` sites** — one in `demonstration_screen`'s body dispatch and two in the partition test
+— so the compiler forces both the marker decision AND the pending-badge decision, and nothing
+silently defaults. It is also the codebase's own idiom, `ExampleContent` carrying its payload, closed
+in the type on story 5.6's precedent.
+
+🔴 **The fragment shape is REFUSED, and refused on the cost that was measured rather than on
+taste.** It works — the validation built it, served it and screenshotted it — but the route-table
+partition asserts on **one synchronous HTTP body**, and a fragment's counts arrive in a second
+request a `oneshot` client cannot drive. Verifying AC1 would then need two coordinated assertions or
+a headless-browser test **which is not in CI**. *The single-response shape is what keeps the guard
+that story 6b.3 built, and a guard that has to grow a browser to keep working is a guard about to
+stop working.*
+
+⚠️ **What this costs, written rather than implied**: `/dashboard` leaves the `Router<()>`, so for that
+one screen the compile-time refusal of `State<MySqlPool>` **stops holding** — the guard survives for
+the eight screens that remain pool-free and is **narrowed in writing** for this one (story 5.12's
+precedent). ⚠️ And **constraint 1 keeps its force where it matters**: no example data is written, and
+the example sections still read nothing.
+
+---
+
+**The four shapes as they were put, kept with what each costs:**
 
 - **(a) A fourth nature, `Mixed`.** The partition gains an arm — a compiler-forced one, `E0004` — and
   the assertion for `Mixed` becomes *carries the marker AND is not wholly example*. ⚠️ It is a
@@ -269,39 +294,40 @@ beside real content. Registered as a divergence rather than assumed.
 
 **Written for §0a option (a). Rescope on Guy's answer before starting.**
 
-- [ ] **T0 — Guy's ruling on §0a**: the nature of a mixed screen, and the pool question — now a
+- [x] **T0 — Guy's ruling on §0a**: ✅ **shape (a), `Nature::Mixed`, on the pool-bearing router** —
+      the fragment shape refused on its measured cost to the single-response test. *(original)*: the nature of a mixed screen, and the pool question — now a
       choice between **three single-response shapes** and a **fourth, fragment-based one the
       validation BUILT** (§0a). ⚠️ **Neither may be decided by a developer.** 🔑 The validation
       recommends **(a) `Nature::Mixed`** on a measurement: it produces exactly **three `E0004`
       sites** — one production, two test — so the compiler forces both the marker AND the
       pending-badge decision and nothing silently defaults
-- [ ] **T1 — the reach section, unchanged in substance** (AC1): **INCLUDE `_identity_section.html`**,
+- [x] **T1 — the reach section, unchanged in substance** (AC1): **INCLUDE `_identity_section.html`**,
       the same persisted counts, the unit **sightings**. 🔑 **Including it inherits arbitration 13's
       unit guard for free** (measured — `page.rs:1933` asserts the *"counts sightings, not devices"*
       note renders) ⚠️ **conditional on including the partial rather than hand-rolling the markup**;
       duplicate it and that guard goes blind
-- [ ] **T2 — the anti-sum guard AT THE COMPOSITION** (AC1, §0d), with the mutation that adds the two
+- [x] **T2 — the anti-sum guard AT THE COMPOSITION** (AC1, §0d), with the mutation that adds the two
       populations and proves it reds. ⚠️ A guard over the pure builders is measured worthless
-- [ ] **T3 — the example surfaces carry the marker** (AC2), at SECTION granularity — ⚠️ **and write
+- [x] **T3 — the example surfaces carry the marker** (AC2), at SECTION granularity — ⚠️ **and write
       the SIBLING guard that checks it** (§0g): the route-table partition is screen-level and was
       MEASURED green when one section of two lost its marker. It cannot be extended; a new shape is
       a deliverable
-- [ ] **T3b — a heading or divider before each example section** (§0h): seen in a browser, a bare
+- [x] **T3b — a heading or divider before each example section** (§0h): seen in a browser, a bare
       marker under the real block reads as though it annotates the numbers ABOVE it. ⚠️ AC2 asks for
       the marker's presence, never its legibility beside real content — registered
-- [ ] **T3c — use STATIC class literals for the real and example halves**, or widen the guard first.
+- [x] **T3c — use STATIC class literals for the real and example halves**, or widen the guard first.
       ⚠️ **Measured**: `class="dashboard-section {% if … %}is-real{% else %}is-example{% endif %}"`
       with none of the three defined in `app.css` leaves
       `every_class_a_template_names_is_defined_in_the_stylesheet` **GREEN** — the brace-skipping hole,
       confirmed with the exact pattern a mixed screen invites
-- [ ] **T4 — the last observation** (§0c), in the BODY and never in the frame, with the divergence
+- [x] **T4 — the last observation** (§0c), in the BODY and never in the frame, with the divergence
       from the mock registered
-- [ ] **T5 — verify AC2's two absences** (§0e) rather than repeating them; register any overstatement
-- [ ] **T6 — LOOK at the screen in a BROWSER**, `OPENCMDB_LOCALE=fr`, against a live database. ⚠️
+- [x] **T5 — verify AC2's two absences** (§0e) rather than repeating them; register any overstatement
+- [x] **T6 — LOOK at the screen in a BROWSER**, `OPENCMDB_LOCALE=fr`, against a live database. ⚠️
       **Rebuild the binary first** — `cargo test` does not
-- [ ] **T7 — the register, BOTH directions** (§0c). ⚠️ A name-grep is provably insufficient, and
+- [x] **T7 — the register, BOTH directions** (§0c). ⚠️ A name-grep is provably insufficient, and
       `6.4` / `6b.4` / `6b.5` are different stories
-- [ ] **T8 — prove-to-red**, predictions FIRST, every row executed
+- [x] **T8 — prove-to-red**, predictions FIRST, every row executed
 
 ## Prove-to-red — deliberately short
 
@@ -362,15 +388,82 @@ conditional class a mixed screen invites** (§0g/T3c).
 
 ### Agent Model Used
 
-### Debug Log References
+Claude Opus 5 (1M context), 2026-08-19. Built and mutated against a live `mariadb:10.11.11` on port
+13430, and rendered in Google Chrome 151.
+
+### Debug Log References — the mutation pass, and M1's THREE false greens
+
+🔑 **Six rows prescribed, seven run — and M1 took FOUR attempts to red, for THREE different
+reasons.** Each false green was a distinct way for a guard to be worthless, and none was visible by
+reading.
+
+| # | Mutation | MEASURED | Carrier |
+|---|---|---|---|
+| M1 | sum the two populations at the composition | 🔴 **green ×3, then red.** (1) The driver had **no assert**, so the pattern never matched and nothing was mutated — *the mutation-driver-lies class, mine*. (2) The fixture used `"matched"` where the engine's token is **`"match"`**, so `placed` rendered as **0**, and the oracle's `>2<` was satisfied by an **example stat card**. (3) The test helper built `DashboardBody` from the **un-composed** identity while the handler builds it from the view — *the guard rendered a shape production does not use*. Fixed at the root: the duplicated field is **gone**, the template reads `view.identity`, and the fixture's 11/6 collide with no card | named assertion |
+| M1b | the same sum, guarded over the pure builder alone | ✅ **GREEN by design** — the shape story 5.14b shipped, reproduced. *Neither builder can add what it never sees* | — (control) |
+| M2 | drop the marker from one example section of two | ✅ **1 red**, the new sibling guard. ⚠️ The route-table partition stays green, exactly as the validation measured | named assertion |
+| M3 | declare the dashboard wholly `Example` | ✅ **3+ red**, including two auth tests — the screen leaves the pool-bearing router and its route disappears | named assertions |
+| M4 | the last observation planted in `_nav.html` | ✅ **1 red**, `the_shell_shows_no_last_observation` | named assertion |
+| M5 | the unit *sightings* → *devices* | ✅ **2 red** — the inheritance from `_identity_section.html` is real | named assertions |
+| M6 | a clock read inside `build_dashboard` | ✅ **2 red**, the new clock guard first | named assertion |
+
+🔴 **AND THE PASS DESTROYED WORK, which is recorded because it cost a full debugging cycle.** The
+mutation script restored some files from a scratchpad copy and others with `git checkout --`.
+`locales/app.yml` was in the second set and **not** in the snapshot, so restoring it after M5 reverted
+it to the last COMMIT and **silently deleted this story's nine new keys**. The symptom was
+`dash.last_observed` rendering as its own name, and the guard that should have caught it — 
+`every_key_carries_both_locales` — reads the **file**, while `t!()` reads the **embedded copy**:
+source against artefact, one more time. 🔑 *Story 6.1's incident, reproduced here for the third time
+in this project: **a file revert equals a mutation revert only on a committed baseline**, and mixing
+two restore mechanisms in one script guarantees the boundary is crossed.*
+
+⚠️ **And one hypothesis of mine was refuted before it could be written down as a cause.** The failure
+looked like the flake of issue #38, so the suite was run three times in parallel and three times
+**single-threaded**: 1 failure in all six. Deterministic, not a race — and the `set_locale` story I
+had ready was wrong.
 
 ### Completion Notes List
 
+**AC by AC:**
+
+- **AC1 — MET.** The reach section is **included**, not re-drawn, so it is unchanged in substance and
+  arbitration 13's unit guard is inherited rather than restated (M5 proves the inheritance real).
+  🔴 The anti-sum guard sits **at the composition**, and M1b measures why: the same guard over the
+  pure builder alone stays green under the same mutation.
+- **AC2 — MET.** Each example section carries its own heading and its own marker, and a **sibling
+  guard** counts sections against markers — the route-table partition cannot, measured.
+- **AC3 — MET as scoped.** The sparkline renders over example heights, as bars. ⚠️ **E17's clause is
+  NOT narrowed here**, by its own words; the wording is registered for a retrospective.
+
+🔑 **`Nature::Mixed` behaved exactly as the validation measured**: adding it produced three `E0004`
+sites and nothing defaulted silently.
+
+⚠️ **Seen in a browser** (Chrome 151, French, live database): heading → identity → *"Dernière
+observation il y a 7 min"* → rule → **EN UN COUP D'ŒIL** with its marker and three cards → rule →
+*"ce qui a grandi"* with its own marker. **The real/example boundary is legible**, which is §0h's
+finding addressed rather than asserted. ⚠️ **An honest limit**: the reach section rendered its EMPTY
+state, because the seeded link did not reach `count_engine_reach`'s filter — the populated case is
+covered by unit tests and **was not seen by eye**.
+
+**629 → 633 tests** (406 bin + 161 core + 66 xtask). Eight gates green, fmt and clippy clean, run both
+ways: **0.05 s** without a database and **5.6 s** against a live `mariadb:10.11.11`.
+
 ### File List
+
+| File | Change |
+|---|---|
+| `crates/opencmdb-bin/src/screens.rs` | **`Nature::Mixed`**, `Screen::Dashboard` declared with it, and `router` excluding it beside `Fed` |
+| `crates/opencmdb-bin/src/page.rs` | `DashboardView`, `StatCardView`, `DashboardBody`, `build_dashboard`, `example_cards`, the `dashboard` handler, the `/dashboard` route, and four guards |
+| `crates/opencmdb-bin/src/repo.rs` | `last_observed_at` — the `MAX(observed_at)` the register handed this story |
+| `crates/opencmdb-bin/src/main.rs` | the partition's `Mixed` arms, forced by `E0004` |
+| `crates/opencmdb-bin/templates/_dashboard.html` | **new** — the real half, then two example sections each with a heading and a marker |
+| `crates/opencmdb-bin/locales/app.yml` | 9 keys, both locales |
+| `crates/opencmdb-bin/assets/app.css` | the dashboard's rules, the stat cards and the bar sparkline |
 
 ### Change Log
 
 | Date | Change |
 |---|---|
+| 2026-08-19 | Implemented, shape (a). 629 → **633 tests**, eight gates green. 🔴 **M1 took FOUR attempts to red, for THREE different reasons** — a driver without an assert, a fixture whose wrong token made `placed` render 0 while an example card satisfied the oracle, and a test helper that built the body differently from the handler. Each is a distinct way for a guard to be worthless and none was visible by reading. 🔴 **And the pass destroyed work**: mixing a scratchpad restore with `git checkout --` reverted `app.yml` to its last commit and deleted nine uncommitted keys — story 6.1's incident, third occurrence. ⚠️ One flake hypothesis of mine was refuted by six runs before it could be written down as a cause. |
 | 2026-08-19 | Validated by two fresh-context layers. Fact-check: 27 assertions, 25 confirmed, 🔴 **1 refuted — *"eight register rows"* is eight LINES from seven rows**, the right command on the wrong unit — and §0a's described mechanism measured to fire on other guards than it names. Gap-hunt: it **BUILT the fragment alternative** and refuted *"must leave the pool-free router"* as an absolute, then **measured the cost that keeps the conclusion** — the partition asserts on one synchronous body and the fragment's counts arrive in a second request. 🔴 Plus: the existing partition **cannot** catch a per-section regression (measured green), the marker's scope is **ambiguous beside real content** (seen in a browser), and the CSS brace hole is confirmed with the exact pattern this screen invites. |
 | 2026-08-19 | Contexted. 🔴 ONE structural question, and it touches story 6b.2's central guard: a MIXED screen has no nature, the route-table partition reds on it under all three, and the reach section needs the POOL — so `/dashboard` must leave the `Router<()>` whose type refusal was the guard. Three shapes put to Guy. Plus: constraint 1's *"no demo screen opens a connection"* meets a screen it did not anticipate; the last observation is banned from the frame while the mock puts it there; and the anti-sum guard must sit at the composition, which is where 5.14b's measured green. |

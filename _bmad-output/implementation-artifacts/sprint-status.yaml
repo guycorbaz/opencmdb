@@ -75,7 +75,41 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.5 ✅ VALIDATED, two fresh-context layers, and BOTH refuted something
+last_updated: 2026-08-19  # 6b.5 -> `review`: IMPLEMENTED, shape (a). The dashboard is the product's
+                          # first MIXED screen: the real reach section INCLUDED (not re-drawn, so
+                          # arbitration 13's unit guard is inherited) beside two example sections,
+                          # each with its own HEADING and its own marker, plus the `MAX(observed_at)`
+                          # the register handed this story -- in the BODY, never the frame.
+                          # **629 -> 633 tests**, eight gates green, both ways (0.05 s / 5.6 s).
+                          # 🔴 **M1 TOOK FOUR ATTEMPTS TO RED, FOR THREE DIFFERENT REASONS**, and
+                          # each is a distinct way for a guard to be worthless, none visible by
+                          # reading: (1) the driver had NO ASSERT, so nothing was mutated; (2) the
+                          # fixture used `"matched"` where the token is `"match"`, so `placed`
+                          # rendered 0 and the oracle's `>2<` was satisfied by an EXAMPLE STAT CARD;
+                          # (3) the test helper built the body from the UN-COMPOSED identity while
+                          # the handler builds it from the view -- *the guard rendered a shape
+                          # production does not use*. Fixed at the root: the duplicated field is
+                          # GONE. ✅ And M1b keeps the control: the same sum guarded over the pure
+                          # builder alone stays GREEN, reproducing 5.14b exactly.
+                          # 🔴 **THE PASS DESTROYED WORK, third occurrence in this project**: the
+                          # script mixed a scratchpad restore with `git checkout --`, and `app.yml`
+                          # -- in the git set, not the snapshot -- went back to its last COMMIT,
+                          # deleting nine uncommitted keys. *A file revert equals a mutation revert
+                          # only on a committed baseline.* 🔑 New half: **one mechanism per script**,
+                          # because two sets always drift.
+                          # ⚠️ And the symptom exposed a THIRD source-against-artefact instance: a
+                          # key can be in `app.yml` and absent from the BINARY, and
+                          # `every_key_carries_both_locales` cannot tell -- it reads the file, `t!()`
+                          # reads the embedded copy.
+                          # ⚠️ One flake hypothesis of mine was REFUTED before being written as a
+                          # cause: six runs, three parallel and three single-threaded, 1 failure in
+                          # all six -- deterministic, not a race.
+                          # ✅ Seen in Chrome 151 in French: the real/example boundary IS legible
+                          # (heading, rule, marker) -- §0h addressed rather than asserted. ⚠️ Honest
+                          # limit: the reach section rendered its EMPTY state, so the populated case
+                          # is covered by unit tests and was NOT seen by eye.
+                          # ⚠️ STAYS at `review`: `done` is the MERGE's business.
+                          # (Earlier the same day) 6b.5 ✅ VALIDATED, two fresh-context layers, and BOTH refuted something
                           # of mine. **Fact-check: 27 assertions, 25 confirmed, 1 REFUTED, 1 weaker.**
                           # 🔴 The refutation is a UNIT error: *"eight register rows"* is eight
                           # matching LINES from SEVEN rows (one wraps and names 6b.5 twice) -- the
@@ -3698,7 +3732,7 @@ development_status:
   # §0b so that 6b.4b starts designed rather than with a question. `epics.md` NOT edited (a story may
   # not; only a retrospective may) -- the divergence is registered in deferred-work.md.
   6b-4b-action-bar-and-the-gesture-nature: done
-  6b-5-dashboard-real-reach-beside-examples: ready-for-dev
+  6b-5-dashboard-real-reach-beside-examples: review
   6b-6-inventory-and-device-record: backlog
   6b-7-applications-and-ipam: backlog
   6b-8-sources-and-alerts: backlog
