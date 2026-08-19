@@ -319,6 +319,107 @@ and assume it is covered.
       the story NUMBER twice
 - [x] **T8 — prove-to-red**, predictions FIRST, every prescribed row executed
 
+### Review Findings — three layers, 2026-08-19
+
+Blind Hunter (diff only), Edge Case Hunter (own worktree, live `mariadb:10.11`, raw CDP against
+Chrome 151), Acceptance Auditor (own worktree, the spec, the twins, and its own CDP probes). All
+three on Sonnet 5. **0 decision-needed, 9 patch, 1 defer, 4 dismissed with the check that dismissed
+them.**
+
+🔴 **THE FOUR HIGH FINDINGS ARE ONE MISTAKE MADE FOUR TIMES: every guard this story wrote checks the
+SOURCE, and every defect lives in the RENDERED RESULT.** The template-scanner cannot see an attribute
+assembled in Rust; the YAML-scanner cannot see a block scalar; neither can see the DOM property their
+spelling is a proxy for. *A guard that reads the source measures what was written, never what was
+served.*
+
+🔑 **And the accessibility defect was reached by all three layers independently** — the blind one from
+the markup alone, the other two by pressing Tab in a real browser.
+
+🔑 **All nine applied, and applying them found two more that only a browser could see** — recorded
+below rather than folded in silently.
+
+#### The two the repair itself found
+
+- 🔴 **The visible sentence, repeated on each of the five controls, was NOISE.** Moving it out of
+  `title=` was right; putting a copy inside every control turned a compact row into a stack that
+  dominated the pane and said the same thing five times. **Seen in Chrome, not deduced.** The shape
+  that keeps both properties: **one visible `<p>` for the group, and every control points at it with
+  `aria-describedby`** — visible once, announced five times. Confirmed in the served HTML
+  (1 sentence, 5 references) and re-shot.
+- 🔴 **AND THE FIRST SCREENSHOT OF THE FIX WAS A LIE, because the binary was stale.** `cargo test`
+  builds the test target, not `target/debug/opencmdb`; the running server was still the one built
+  during mutation **M8**, and the served page carried M8's planted `disabled` attribute. The
+  screenshot showed the defect I had just fixed. 🔑 *A screenshot of a stale binary is not a look at
+  your code* — and this is the third time in one day that a measurement landed on the wrong artefact
+  (after the `<button>`-measured-for-a-`<span>` and the mutation named for one thing applied to
+  another). Caught only because the rendered HTML was grepped instead of trusted.
+
+#### Patch
+
+- [x] [Review][Patch] 🔴 **THE FIVE CONTROLS ARE NOT KEYBOARD-REACHABLE, and the story's own
+      justification argues for the property its markup does not deliver.** The shipped element is
+      `<span role="button" aria-disabled="true">` with **no `tabindex`**. Measured live in Chrome via
+      CDP, with the control that makes it mean something:
+      `{"btn": tabIndex 0}`, `{"spanNoTab": tabIndex -1}`, `{"spanTab0": tabIndex 0}` — and on the
+      real page, `el.focus()` is **refused** (`activeElementTag: "BODY"`) and **40 dispatched Tab
+      presses never land on any control**. 🔑 So §0b's whole argument — *"a disabled control leaves
+      the tab order, so the blind operator is not even told the gesture exists"* — describes exactly
+      what shipped. **The validation measured a `<button>`; a `<span>` was built.** *A measurement
+      taken on one thing and applied to another.* Two sentences in the diff are therefore FALSE and
+      must be corrected, not merely patched around: `app.css`'s *"It stays FOCUSABLE"* and the test
+      doc's *"keeps `tabIndex 0`, `focus()` succeeds"* [_action_bar.html:25; app.css; page.rs]
+- [x] [Review][Patch] 🔴 **The `aria-disabled` guard is DEFEATED by an attribute assembled in Rust.**
+      A `&'static str` field holding `"disabled"`, rendered with `|safe` — **an idiom this codebase
+      already uses** (`_shell.html:26`, `{{ body|safe }}`) — puts a real native `disabled` in the
+      served HTML while both guards stay green, because the literal never appears in the `.html`
+      source. Measured, with the served markup printed:
+      `<span … aria-disabled="true" disabled title="…">` [page.rs]
+- [x] [Review][Patch] 🔴 **The same guard is CASE-SENSITIVE and HTML attribute names are not.** A
+      bare uppercase `DISABLED` passes: `match_indices("disabled")` never matches it, the premise
+      `occurrences >= 1` is still satisfied by the surviving `aria-` hits, and the render test's own
+      `!html.contains(" disabled=")` misses it too — **a bare boolean attribute has no `=`**. A
+      browser treats `DISABLED` identically [page.rs]
+- [x] [Review][Patch] 🔴 **The digit guard is BLIND TO A YAML BLOCK SCALAR, and the escape renders
+      live.** With `fr: |` and the sentence on a continuation line, `split_once(": ")` finds nothing
+      and the guard `continue`s past it. Measured end to end: *"Ce geste arrive avec la story 6.4,
+      prevu au sprint 12"* renders **on all five controls** in French while every guard stays green
+      — **exactly what §0b's arbitration exists to forbid**, reached with one ordinary, valid YAML
+      idiom on one of eight keys [page.rs]
+- [x] [Review][Patch] 🔑 **The fix for the three guard holes is ONE change of level: assert on the
+      RENDERED result.** Scan the rendered HTML rather than the template source (which closes the
+      Rust-assembled attribute and lets the haystack be lower-cased once), and resolve the
+      `gesture.*` keys through `t!()` in both locales rather than parsing the YAML (which closes the
+      block scalar and every other syntax the file may legally use). *The source is what was written;
+      the render is what the operator gets, and the operator is who the guard is for.*
+- [x] [Review][Patch] **The premise assertion's sentence is stronger than its own code**:
+      it reads *"at least sixteen values"* and enforces `checked >= 12`. Deleting two whole key pairs
+      leaves it passing while its own message is false [page.rs]
+- [x] [Review][Patch] ⚠️ **The premise `occurrences >= 1` is a coincidental defence, not a designed
+      one.** It only catches an evasion that removes the corpus's SOLE occurrence of the word — true
+      today only because no other template mentions it, and false the day one does. Say so, or make
+      it count what it means to count [page.rs]
+- [x] [Review][Patch] **`owner` is wrong for one of the two primary branches.** `action_bar` hardcodes
+      `owner: "6.4"` whether the primary is `gesture.merge` or `gesture.resolve` — and §0a itself says
+      *Résoudre* needs FR16's candidates, **Epic 6's**. Invisible today because nothing reads `owner`,
+      which is exactly why it will still be wrong when something does [page.rs]
+- [x] [Review][Patch] ⚠️ **The *"labelled per 6b.3"* divergence is real and is NOT registered as
+      one.** Story 6b.3 shipped two mechanisms; this adds a third, on a different axis, which is
+      defensible and traces to Guy's arbitration — **but the story's own header says a divergence
+      from an AC's letter is raised in §0 and registered**, and this one is presented as settled
+      design. A gap in the paper trail the house rule asks for, not in the merits
+
+#### Defer
+
+- [x] [Review][Defer] ⚠️ **The comment-stripper returns the empty string for the rest of a file when
+      a `{#` is never closed**, so a native `disabled` placed after a typo'd comment would be hidden.
+      Plausible and **not planted** — the Edge Case Hunter names it as unmeasured, with the command
+      that would settle it (`sed` a malformed `{#` into a template and re-run the guard). ⚠️ The
+      render-level rewrite above makes it moot for THIS guard, and leaves it standing for
+      `screens.rs`'s and `page.rs`'s other source-scanning guards. **Owner: the first story that
+      touches one of them** — deferred, pre-existing
+
+---
+
 ## Prove-to-red — deliberately short
 
 🔑 Five rows, sized so that every one WILL be played.
@@ -396,6 +497,15 @@ the arbitration rather than an omission** — and it is recorded as such rather 
 | M6 | branch the primary on the TRANSLATED label instead of the cause | *(not prescribed — written because the trap was named at validation)* | ✅ **1 red** — the bar test catches `Résoudre` no longer following the conflict | named assertion |
 | M7 | **story 6.4 adds `Live`** | ⚠️ the whole point of option (a) | ✅ **`error[E0004]: non-exhaustive patterns: 'Gesture::Live { .. }' not covered`** — the compiler forces every `match` to be revisited, at exactly the moment it is worth forcing. **This is the property the arbitration was chosen for, and it is measured rather than argued** | compiler |
 
+**The code review's own pass — four evasions that beat the shipped guards, all four now red:**
+
+| # | Mutation | MEASURED before the repair | MEASURED after |
+|---|---|---|---|
+| M8 | a `disabled` attribute assembled in Rust and emitted with `\|safe` | 🔴 **GREEN** — the literal never appears in the `.html`, and the served page carried `<span … aria-disabled="true" disabled>` | ✅ **1 red**, on the rendered HTML |
+| M9 | a bare uppercase `DISABLED` | 🔴 **GREEN** — `match_indices` is case-sensitive and a bare boolean attribute has no `=`, which the render test also keyed on | ✅ **1 red** |
+| M10 | the sentence as a YAML block scalar carrying *"story 6.4, sprint 12"* | 🔴 **GREEN** — `split_once(": ")` never matches a continuation line, and the promise **rendered live on all five controls in French** | ✅ **1 red**, through the resolver |
+| M11 | the `tabindex` removed | 🔴 **GREEN** — nothing pinned it, which is how the defect shipped | ✅ **1 red** |
+
 ⚠️ Every mutation ran on a scratchpad-restored base, never `git checkout --`.
 
 ### Completion Notes List
@@ -456,6 +566,7 @@ suite was run **both ways**: **0.05 s** without a database and **5.85 s** agains
 
 | Date | Change |
 |---|---|
+| 2026-08-19 | **Code-reviewed (three layers, Sonnet 5) and REPAIRED.** 0 decisions, 9 patches, 1 deferral, 4 dismissed with their check. 🔴 **The four HIGH findings were ONE mistake made four times: every guard checked the SOURCE and every defect lived in the RENDER.** An attribute assembled in Rust, a bare uppercase `DISABLED`, a YAML block scalar, and the DOM property the spelling was a proxy for — all four green before, all four red after one change of level. 🔴 **And the five controls were not keyboard-reachable at all**: a `<span role="button">` with no `tabindex` has `tabIndex -1` and refuses focus, so the story argued for a property its markup did not deliver — reached by all three layers, two of them pressing Tab in Chrome. 🔴 The repair then found two more only a browser could see, including a screenshot taken against a **stale binary** that still carried mutation M8's planted attribute. |
 | 2026-08-19 | Implemented. 625 → **629 tests**, eight gates green. Seven mutations: five prescribed and two added, with 🔑 **M7 measuring the property the arbitration was chosen for** — adding `Live` reds every `match` with `E0004` — and ⚠️ **M1 recorded NOT EXECUTABLE**, since option (a) has no route field until 6.4. 🔴 My own new guard reddened on its own explanation, the exact hole the validation had just found elsewhere. 🔴 **And a browser finally looked**: two defects visible at 1200 px and reachable by no test, and the desktop-only deferral now has a screenshot behind it. |
 | 2026-08-19 | Validated by two fresh-context layers. Fact-check: 36 assertions, 34 confirmed, 2 flagged (both mine) — and it CLOSED the escape hatch I had only inferred, by writing the test. Gap-hunt: it BUILT both options and 🔴 **refuted my recommendation's justification** — under option (d) a route that goes nowhere reds nothing and renders as a genuine live link, and **the enum was never much better** (one bogus `Live` silences its lint). **No option ships the property as stated**, so §0a narrows the promise. 🔴 **And a BROWSER EXISTS** — Chrome 151 and Firefox — so four stories deferred the visual check on a premise nobody measured. |
 | 2026-08-19 | Contexted. 🔴 ONE open question and it is a measurement: the arbitrated `enum Gesture { Live, Planned }` **does not compile today** — `error: variant 'Live' is never constructed` under `clippy -D warnings`, because not one of the mock's five gestures exists and `/document-all` is not one of them. Four options put to Guy, with a struct carrying an `Option` route recommended: the arbitrated PROPERTY survives, only its spelling changes. Everything else was already decided — the form, the words, and the *whether*, which Guy's own premise (2) settled on 2026-08-13. |

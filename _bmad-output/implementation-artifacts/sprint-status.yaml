@@ -75,7 +75,46 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4b -> `review`: IMPLEMENTED. The action bar ships with the mock's five
+last_updated: 2026-08-19  # 6b.4b CODE-REVIEWED (three layers, Sonnet 5) and REPAIRED. **0
+                          # decisions, 9 patches, 1 deferral, 4 dismissed with their check.** 629
+                          # tests, eight gates green, clippy and fmt clean.
+                          # 🔴 THE FOUR HIGH FINDINGS ARE ONE MISTAKE MADE FOUR TIMES: **every guard
+                          # this story wrote checks the SOURCE, and every defect lives in the
+                          # RENDER.** (a) an attribute assembled in Rust and emitted with `|safe` --
+                          # an idiom this codebase already uses -- put a real native `disabled` in
+                          # the served page, guards GREEN; (b) a bare uppercase `DISABLED` slipped a
+                          # case-sensitive matcher, and the render test's own `" disabled="` missed
+                          # it because a boolean attribute has no `=`; (c) a YAML BLOCK SCALAR made
+                          # the digit guard walk past *"Ce geste arrive avec la story 6.4, prevu au
+                          # sprint 12"*, which then RENDERED on all five controls in French with
+                          # every guard green; (d) neither guard could see `tabindex`, the DOM
+                          # property their spelling was only a proxy for.
+                          # 🔑 One change of level fixes all four: assert on the RENDERED HTML and
+                          # on the RESOLVED string, never on the template or the YAML. *A guard that
+                          # reads the source measures what was written, never what was served.*
+                          # 🔴 AND THE FIVE CONTROLS WERE NOT KEYBOARD-REACHABLE AT ALL: a `<span
+                          # role="button" aria-disabled="true">` with no `tabindex` has `tabIndex -1`
+                          # and refuses `.focus()`; forty dispatched Tab presses reached none of
+                          # them. **The story argued for a property its own markup did not deliver**
+                          # -- the validation had measured a `<button>`, a `<span>` was built.
+                          # Reached by ALL THREE layers, two of them pressing Tab in Chrome 151.
+                          # 🔴 The repair found TWO MORE only a browser could see: the visible
+                          # sentence repeated on each control was NOISE (now one `<p>` for the group
+                          # with `aria-describedby` from each control -- visible once, announced
+                          # five times); and **the first screenshot of that fix was a LIE because the
+                          # BINARY WAS STALE** -- `cargo test` builds the test target, not
+                          # `target/debug/opencmdb`, so the running server still carried mutation
+                          # M8's planted attribute and the screenshot showed the defect just fixed.
+                          # 🔑 *A screenshot of a stale binary is not a look at your code* -- and
+                          # that is the THIRD time in one day a measurement landed on the wrong
+                          # artefact. The cheap defence, which is what caught it: **grep the artefact
+                          # you are about to believe**, not the source you just edited.
+                          # ⚠️ Registered: the *"labelled per 6b.3"* divergence (a third mechanism,
+                          # right reading, but presented as settled design rather than raised) ->
+                          # Epic 6b's retrospective; and the unterminated-`{#` hole in every other
+                          # source-scanning guard.
+                          # ⚠️ STAYS at `review`: `done` is the MERGE's business.
+                          # (Earlier the same day) 6b.4b -> `review`: IMPLEMENTED. The action bar ships with the mock's five
                           # controls, **not one of them live**, each carrying its badge and its
                           # sentence -- Guy's premise (2) made visible. `Résoudre` follows the CAUSE,
                           # never the translated label. **625 -> 629 tests** (402 bin + 161 core +

@@ -241,6 +241,8 @@ struct Strings {
     /// ⚠️ A pair of its own, distinct from `pending_*`: that one says *this SCREEN is not built*, and
     /// a control is a different population saying a different thing.
     gesture_badge: String,
+    /// The one sentence the action bar shows, pointed at by every planned control (story 6b.4b).
+    gesture_not_built: String,
     /// The *not built yet* badge an `Empty` screen carries (story 6b.3's code review).
     pending_badge: String,
     /// The *not built yet* sentence an `Empty` screen carries (story 6b.3's code review).
@@ -298,6 +300,7 @@ fn strings() -> Strings {
         triage_lede: t!("triage.lede").to_string(),
         triage_empty: t!("triage.empty").to_string(),
         gesture_badge: t!("gesture.badge").to_string(),
+        gesture_not_built: t!("gesture.not_built").to_string(),
         pending_badge: t!("pending.badge").to_string(),
         pending_sentence: t!("pending.sentence").to_string(),
         devices_title: t!("devices.title").to_string(),
@@ -681,8 +684,21 @@ struct GestureView {
 /// already translated — would reproduce story 6b.3's `role_key: "example.badge"` defect, a real,
 /// resolving, wrong value that every shape and resolvability check passes.
 fn action_bar(primary_key: &'static str) -> Vec<GestureView> {
+    // ⚠️ The primary's owner FOLLOWS the primary: *Merger* is story 6.4's (FR13(a) on the
+    // abstention line), *Résoudre* needs FR16's ranked candidates and is Epic 6's. This read "6.4"
+    // for both until the code review — invisible, because nothing renders `owner`, which is exactly
+    // why it would still have been wrong the day something did.
+    let primary_owner = match primary_key {
+        "gesture.resolve" => "6",
+        _ => "6.4",
+    };
     [
-        (primary_key, Gesture::Planned { owner: "6.4" }),
+        (
+            primary_key,
+            Gesture::Planned {
+                owner: primary_owner,
+            },
+        ),
         ("gesture.accept_gap", Gesture::Planned { owner: "7" }),
         ("gesture.snooze", Gesture::Planned { owner: "7" }),
         ("gesture.attach", Gesture::Planned { owner: "7" }),
@@ -3133,115 +3149,154 @@ mod tests {
 
     // ── Story 6b.4b: the action bar, and the gesture nature ───────────
 
-    /// 🔴 **A planned control carries `aria-disabled`, and NEVER the native `disabled`.**
+    /// The triage body as it reaches the wire, on a store that produces one drift row.
     ///
-    /// # Why this guard exists, and why the distinction is not stylistic
-    ///
-    /// Measured in a real DOM at this story's validation: with `aria-disabled="true"` the control
-    /// keeps `tabIndex 0`, `focus()` succeeds and the click event fires; with the native `disabled`
-    /// attribute **focus is refused and no event fires at all**. So a `disabled` control leaves the
-    /// tab order and disappears from a screen reader — **the blind operator is not even told the
-    /// gesture exists**, which is the opposite of what showing it is for. NFR25, and Guy's
-    /// arbitration of 2026-08-19.
-    ///
-    /// 🔑 **A PROPERTY over every template, not a check on this one.** It walks the shared recursive
-    /// [`templates`] walker, so a control added to a new partial — in a subdirectory or not — is
-    /// covered the day the file exists.
-    ///
-    /// ⚠️ **Its limit, written rather than implied**: it reads the attribute's SPELLING. It cannot
-    /// see a `disabled` attribute set from JavaScript, and it says nothing about htmx — which
-    /// respects the native attribute or `hx-disabled-elt` and **ignores `aria-disabled` entirely**.
-    /// No `hx-*` attribute exists on any gesture today; the day story 6.4 wires one, that is a
-    /// different guard's job and it is registered.
-    #[test]
-    fn a_planned_gesture_carries_aria_disabled_never_the_native_attribute() {
-        // 🔴 COMMENTS STRIPPED FIRST, and this guard learned that the hard way: its own first run
-        // reddened on `_action_bar.html`, whose comment EXPLAINS why the native attribute is
-        // refused. A guard that cannot tell code from prose forbids explaining itself — the same
-        // trap story 6b.1 met when a radius comment contained the text its scanner counted, and the
-        // same one the validation had just measured in story 6b.4's stylesheet guard. The idiom is
-        // `screens.rs`'s, reused rather than rewritten.
-        let strip = |source: &str| -> String {
-            source
-                .split("{#")
-                .enumerate()
-                .map(|(i, part)| {
-                    if i == 0 {
-                        part.to_string()
-                    } else {
-                        part.split_once("#}")
-                            .map(|(_, rest)| rest)
-                            .unwrap_or("")
-                            .to_string()
-                    }
-                })
-                .collect()
-        };
-        let mut occurrences = 0_usize;
-        for (name, source) in templates() {
-            let source = strip(&source);
-            for (at, _) in source.match_indices("disabled") {
-                occurrences += 1;
-                let preceded_by_aria = at >= 5 && &source[at - 5..at] == "aria-";
-                // `hx-disabled-elt` is htmx's own attribute and names no control as disabled.
-                let is_htmx_elt = source[at..].starts_with("disabled-elt");
-                assert!(
-                    preceded_by_aria || is_htmx_elt,
-                    "{name} uses the native `disabled` attribute. A disabled control leaves the tab \
-                     order and vanishes from a screen reader, so the operator is not even told the \
-                     gesture exists — use `aria-disabled=\"true\"` on a non-activatable element \
-                     (NFR25, measured in a real DOM)"
-                );
-            }
-        }
-        assert!(
-            occurrences >= 1,
-            "the premise: at least one template must mention the attribute ({occurrences} seen) — \
-             a walk that found none would assert nothing"
+    /// 🔑 Shared by the guards that must read the RENDER rather than the source — see
+    /// [`a_planned_control_is_reachable_and_never_natively_disabled`] for what reading the source
+    /// cost this story.
+    fn rendered_triage_body() -> String {
+        let declared = vec![
+            declared_row("e1", "ipv4", "192.0.2.10"),
+            declared_row("e1", "hostname", "nas"),
+        ];
+        let view = build_triage(
+            declared,
+            Vec::new(),
+            vec![batch(
+                "unifi",
+                0,
+                vec![ipv4("192.0.2.10"), hostname("other")],
+            )],
+            at(600),
+            None,
+            false,
         );
+        TriageBody {
+            triage: view,
+            identity: no_reach(),
+            s: strings(),
+        }
+        .render()
+        .expect("the triage body renders")
     }
 
-    /// 🔴 **No gesture's copy names the story that will build it.**
+    /// 🔴 **A planned control is REACHABLE by keyboard, announced as unavailable, and never
+    /// natively disabled — asserted on the RENDERED HTML.**
     ///
-    /// *"Arrives in 6.4"* is not information for the operator: it turns the label into a **calendar,
-    /// therefore a promise**, which is exactly what story 5.14b refused when it kept the abstention
-    /// section descriptive. Guy's arbitration: **the owner lives in the type, never on the screen** —
-    /// `Gesture::Planned { owner }` carries it and nothing renders it.
+    /// # Why this reads the render and not the template, which is the whole lesson
     ///
-    /// ⚠️ **A digit is the proxy, and the proxy is the limit.** A version, a date or a quarter would
-    /// all carry one; *"soon"* would not, and this guard would not catch it. It is a tripwire against
-    /// the ordinary gesture of being helpful, never a barrier against a determined promise.
+    /// Its first version scanned the template source for the word `disabled`, and the code review
+    /// defeated it three ways in one afternoon: **an attribute assembled in Rust** and emitted with
+    /// `|safe` — an idiom this codebase already uses — put a real native `disabled` in the served
+    /// page while the guard stayed green, because the literal never appears in the `.html`; **a bare
+    /// uppercase `DISABLED`** slipped past a case-sensitive `match_indices`, and HTML attribute names
+    /// are not case-sensitive; and it could not see `tabindex` at all, which is the DOM property the
+    /// spelling was only ever a proxy for. 🔑 *A guard that reads the source measures what was
+    /// written, never what was served — and the operator gets what was served.*
+    ///
+    /// 🔴 **The defect it now pins was real and shipped.** Measured in Chrome via CDP at the code
+    /// review: `<span role="button" aria-disabled="true">` **with no `tabindex` has `tabIndex -1`,
+    /// refuses `.focus()` outright, and forty dispatched Tab presses never reach it** — with the
+    /// control that makes it mean something, a `<button>` and a `<span tabindex="0">` both measuring
+    /// `tabIndex 0`. The story's justification for choosing `aria-disabled` over `disabled` was
+    /// therefore arguing for a property its own markup did not deliver; the validation had measured
+    /// a `<button>` and a `<span>` was built.
+    ///
+    /// ⚠️ **Its limit, written rather than implied**: it reads the rendered STRING. It cannot see an
+    /// attribute a script adds later, and it says nothing about what a screen reader actually
+    /// announces — only that the control is in the tab order and marked unavailable. An axe-core
+    /// pass over the ten routes is the epic's DoD and is registered as unowned.
     #[test]
-    fn no_gesture_copy_names_the_story_that_will_build_it() {
-        let yaml = include_str!("../locales/app.yml");
-        let mut key = String::new();
-        let mut checked = 0_usize;
-        for line in yaml.lines() {
-            let trimmed = line.trim_end();
-            if let Some(name) = trimmed.strip_suffix(':')
-                && !trimmed.starts_with(' ')
-                && !trimmed.starts_with('#')
-            {
-                key = name.to_string();
-                continue;
-            }
-            if !key.starts_with("gesture.") {
-                continue;
-            }
-            let Some((_, value)) = trimmed.split_once(": ") else {
-                continue;
-            };
-            checked += 1;
+    fn a_planned_control_is_reachable_and_never_natively_disabled() {
+        let html = rendered_triage_body().to_lowercase();
+
+        // Every `role="button"` must carry a `tabindex`, or it is not in the tab order at all.
+        let roles = html.matches("role=\"button\"").count();
+        assert!(
+            roles >= 5,
+            "the premise: the bar renders at least the mock's five controls ({roles} seen) — a \
+             render that produced none would assert nothing"
+        );
+        for (at, _) in html.match_indices("role=\"button\"") {
+            let element = &html[html[..at].rfind('<').unwrap_or(0)..];
+            let element = &element[..element.find('>').unwrap_or(element.len())];
             assert!(
-                !value.chars().any(|c| c.is_ascii_digit()),
-                "{key} renders {value} — a gesture's copy must not name the story that will build \
-                 it: a number turns the label into a calendar, therefore a promise (story 5.14b)"
+                element.contains("tabindex="),
+                "a control with role=\"button\" and no tabindex has tabIndex -1: it refuses focus \
+                 and no amount of Tab reaches it, which is exactly the outcome `aria-disabled` was \
+                 chosen to avoid (NFR25, measured in Chrome). Element: {element}"
+            );
+            assert!(
+                element.contains("aria-disabled="),
+                "a planned control must be ANNOUNCED unavailable, not merely inert: {element}"
             );
         }
+
+        // The native attribute, in any casing, whether or not it carries a value. A bare boolean
+        // attribute has no `=`, which the first version of this check also missed.
+        for (at, _) in html.match_indices("disabled") {
+            let before = &html[..at];
+            assert!(
+                before.ends_with("aria-") || before.ends_with("hx-"),
+                "the rendered page carries a NATIVE `disabled` attribute. It removes the control \
+                 from the tab order entirely — the operator is not even told the gesture exists. \
+                 Use `aria-disabled` with a `tabindex`"
+            );
+        }
+    }
+
+    /// 🔴 **No gesture's copy names the story that will build it — in either language.**
+    ///
+    /// *"Arrives in 6.4"* is not information for the operator: it turns the label into a **calendar,
+    /// therefore a promise**, which is what story 5.14b refused. Guy's arbitration: the owner lives
+    /// in the type and nothing renders it.
+    ///
+    /// # Why this resolves the key instead of parsing the file
+    ///
+    /// 🔴 Its first version read `app.yml` line by line and split on `": "`. The code review defeated
+    /// it with **a YAML block scalar** — `fr: |` and the sentence on the next line — which that split
+    /// never matches, so the guard walked past it: *"Ce geste arrive avec la story 6.4, prevu au
+    /// sprint 12"* rendered **on all five controls, in French, with every guard green**. 🔑 The file
+    /// has many legal syntaxes for one value and the resolver has one answer; **reading the KEY names
+    /// from the file and the VALUES from `t!()` makes the syntax irrelevant.**
+    ///
+    /// ⚠️ **A digit is the proxy and the proxy is the limit.** A version, a date or a quarter all
+    /// carry one; *"bientôt"* does not, and this guard would not catch it. A tripwire against the
+    /// ordinary gesture of being helpful, never a barrier against a determined promise.
+    #[test]
+    fn no_gesture_copy_names_the_story_that_will_build_it() {
+        // The key NAMES come from the file — a robust parse, one identifier per line. The VALUES
+        // come from the resolver, which is what the operator actually reads.
+        let keys: Vec<String> = include_str!("../locales/app.yml")
+            .lines()
+            .filter_map(|line| line.strip_suffix(':'))
+            .filter(|name| name.starts_with("gesture."))
+            .map(str::to_string)
+            .collect();
         assert!(
-            checked >= 12,
-            "the premise: the six gestures plus their badge and sentence in two locales is at least \
-             sixteen values ({checked} seen) — a scan that found none would assert nothing"
+            keys.len() >= 8,
+            "the premise: the six gestures plus the badge and the sentence is at least eight keys \
+             ({} seen) — a scan that found none would assert nothing",
+            keys.len()
+        );
+        let mut checked = 0_usize;
+        for key in &keys {
+            for locale in ["en", "fr"] {
+                let value = rust_i18n::t!(key.as_str(), locale = locale).to_string();
+                assert_ne!(&value, key, "{key} does not resolve in {locale}");
+                assert!(
+                    !value.chars().any(|c| c.is_ascii_digit()),
+                    "{key} renders {value:?} in {locale} — a gesture's copy must not name the story \
+                     that will build it: a number turns the label into a calendar, therefore a \
+                     promise (story 5.14b)"
+                );
+                checked += 1;
+            }
+        }
+        assert_eq!(
+            checked,
+            keys.len() * 2,
+            "every key must have been checked in BOTH locales"
         );
     }
 
@@ -3329,13 +3384,29 @@ mod tests {
             5,
             "all five controls are announced as disabled without leaving the tab order"
         );
+        // ⚠️ The native attribute in ANY casing and with or without a value — a bare boolean
+        // attribute has no `=`, which this check missed until the code review planted `DISABLED`.
+        // The dedicated guard above owns this property; the duplication is deliberate, so a reader
+        // of THIS test is not left believing the render is unchecked.
         assert!(
-            !html.contains(" disabled=") && !html.contains("<button"),
-            "never the native attribute, and never a <button> that would carry it by habit"
+            !html.to_lowercase().contains("<button"),
+            "never a <button>, which would carry the native attribute by habit"
+        );
+        assert_eq!(
+            html.matches("aria-describedby=\"gesture-not-built\"")
+                .count(),
+            5,
+            "every control POINTS at the one sentence, so a screen reader announces it per control \
+             without five visible copies — seen in a browser, repeating it inside each control \
+             turned a compact row into a stack that said the same thing five times"
         );
         assert!(
-            html.contains("This gesture is not built yet"),
-            "the sentence says what the badge alone cannot"
+            html.contains(
+                "id=\"gesture-not-built\" class=\"gesture-note\">This gesture is not built yet"
+            ),
+            "the sentence is VISIBLE TEXT, not a `title=` — it sat in a tooltip until the code \
+             review, invisible to a keyboard and to a touch screen, while the whole argument for \
+             showing a dead control is that it TELLS the operator why"
         );
         assert!(
             html.contains("Accept the gap") && html.contains("Exclude"),

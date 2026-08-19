@@ -4108,3 +4108,35 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   the day it does, `E0004` reds every `match` on the type — **measured** (`non-exhaustive patterns:
   'Gesture::Live { .. }' not covered`). That red is the point of Guy's arbitration and must be
   answered by wiring, never by a catch-all arm. **Owner: story 6.4.**
+
+## Deferred from: code review of story 6b.4b (2026-08-19)
+
+- ⚠️ **The *"labelled per 6b.3"* divergence is REGISTERED here, because the story presented it as
+  settled design rather than as a departure from the criterion's letter.** `epics.md:2186` says the
+  unbuilt gestures are *"shown and labelled **per 6b.3**"*. Story 6b.3 shipped two mechanisms
+  (`_example_marker.html` for example CONTENT, `_not_built_yet.html` for an unbuilt SCREEN); story
+  6b.4b adds a **third**, for an unbuilt CONTROL, with its own partial, key pair and classes. 🔑 That
+  is the right reading — *"per 6b.3"* names the DISCIPLINE (one partial, one key pair, one treatment,
+  never a per-screen improvisation) rather than the literal partial, and it traces to Guy's
+  arbitration. ⚠️ But a story may not edit an AC, and the house rule is that a divergence from its
+  letter is raised and registered. It is registered now. **Owner: Epic 6b's retrospective**, which
+  may reword the criterion; a story may not.
+
+- ⚠️ **The comment-stripper hides everything after an unterminated `{#`.** Named by the Edge Case
+  Hunter as plausible and **not planted**: `strip` returns the empty string for the remainder of a
+  file when `#}` is missing, so a native `disabled` after a typo'd comment would be invisible. 🔑 The
+  render-level rewrite makes it moot for the action-bar guard — which now reads the served HTML — and
+  leaves it standing for every other source-scanning guard in `screens.rs` and `page.rs`. Settle it
+  with: `sed` a malformed `{#` into a template and re-run those guards. **Owner: the first story that
+  touches one of them.**
+
+- 🔑 **A LESSON FOR THE RETROSPECTIVE, and it is the story's third occurrence in one day of the same
+  shape: a measurement that landed on the wrong artefact.** (1) The validation measured
+  `aria-disabled` on a `<button>` and the story shipped a `<span>`, so the accessibility property was
+  argued for and not delivered. (2) The first screenshot of the repair was taken against a **stale
+  binary** — `cargo test` builds the test target, not `target/debug/opencmdb` — and showed the defect
+  that had just been fixed, complete with an attribute planted by mutation M8. (3) Story 6b.4's M2
+  attributed its red to the property being watched rather than the one the mutation changed.
+  ⚠️ **All three passed every test.** The common defence is cheap and was what caught (2): **grep the
+  artefact you are about to believe** — the served HTML, the rendered string, the actual binary —
+  rather than the source you just edited. **Owner: Epic 6b's retrospective.**

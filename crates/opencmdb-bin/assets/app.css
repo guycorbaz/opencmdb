@@ -588,7 +588,8 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 .btn-gesture {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 2px 6px;
   padding: 5px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -597,7 +598,11 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 }
 
 /* A planned control is legible and plainly inert: muted ink, a dashed edge, and the cursor a
-   pointing hand never claims. It stays FOCUSABLE — `aria-disabled`, never `disabled`. */
+   pointing hand never claims. 🔴 It is focusable because the markup carries `tabindex="0"` — NOT
+   because it carries `aria-disabled`. This comment claimed focusability from the wrong attribute
+   until the code review measured that the shipped `<span>` had `tabIndex -1` and refused `.focus()`
+   outright. `aria-disabled` says *unavailable*; `tabindex` says *reachable*; the control needs both,
+   and neither implies the other. */
 .btn-gesture.planned {
   border-style: dashed;
   color: var(--muted);
@@ -609,6 +614,16 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 .btn-gesture.live {
   color: var(--text);
   border-color: var(--color-neutral-500);
+}
+
+/* The sentence, VISIBLE. It lived in a `title=` until the code review — invisible to a keyboard and
+   to a touch screen, inconsistently announced by screen readers, and the one thing §0b's argument
+   turns on. It wraps to its own line inside the control. */
+.gesture-note {
+  flex-basis: 100%;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .gesture-badge {
