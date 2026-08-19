@@ -236,6 +236,11 @@ struct Strings {
     triage_lede: String,
     /// What the queue says when there is nothing to triage (story 6b.4).
     triage_empty: String,
+    /// The badge a not-yet-built GESTURE carries (story 6b.4b).
+    ///
+    /// ⚠️ A pair of its own, distinct from `pending_*`: that one says *this SCREEN is not built*, and
+    /// a control is a different population saying a different thing.
+    gesture_badge: String,
     /// The *not built yet* badge an `Empty` screen carries (story 6b.3's code review).
     pending_badge: String,
     /// The *not built yet* sentence an `Empty` screen carries (story 6b.3's code review).
@@ -292,6 +297,7 @@ fn strings() -> Strings {
         triage_sort_age: t!("triage.sort_age").to_string(),
         triage_lede: t!("triage.lede").to_string(),
         triage_empty: t!("triage.empty").to_string(),
+        gesture_badge: t!("gesture.badge").to_string(),
         pending_badge: t!("pending.badge").to_string(),
         pending_sentence: t!("pending.sentence").to_string(),
         devices_title: t!("devices.title").to_string(),
@@ -625,8 +631,77 @@ struct QueueRow {
     selected: bool,
 }
 
+/// What a control on the action bar IS.
+///
+/// # One variant today, and that is the decision rather than a limitation
+///
+/// 🔑 **Guy's arbitration (2026-08-19), taken over a struct carrying an `Option` route**, and taken
+/// for a reason the validation established by BUILDING both: with `Planned` alone there is no
+/// unconstructed variant, so `clippy -D warnings` is clean today — and **the day story 6.4 adds
+/// `Live`, `E0004` forces every `match` on this type to be revisited.** That is a compiler-forced
+/// moment of attention at exactly the moment it is worth having, and the struct shape has none.
+///
+/// ⚠️ **What this type does NOT do, stated because the first draft claimed it did.** It does not make
+/// *"a button that looks live and calls nothing"* unrepresentable. The validation measured that
+/// under a struct a route pointing nowhere reds nothing and renders as a genuine live link — and
+/// that the enum is no better, because `clippy`'s dead-code lint asks only whether a variant was
+/// instantiated **with any value**, never whether the value means anything. **This is a labelling
+/// and typing DISCIPLINE, not a compiler-enforced guarantee** (story 5.12's narrowing, applied
+/// again). The closure — a route typed as a member of a closed set — is registered to story 6.4,
+/// where that set stops being empty.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Gesture {
+    /// The product does not have this gesture yet.
+    ///
+    /// ⚠️ `owner` lives HERE and never on the screen: *"arrives in 6.4"* would turn the label into a
+    /// calendar, therefore a promise, which story 5.14b refused. Nothing reads it, and `dead_code`
+    /// does not red on it — measured, with the `#[derive(Debug)]` hypothesis tested and refuted.
+    Planned {
+        /// The story that will build it.
+        owner: &'static str,
+    },
+}
+
+/// One control of the action bar, resolved for rendering.
+struct GestureView {
+    /// Its label, in the operator's language.
+    label: String,
+    /// The sentence shown when the gesture is not built — `None` once it is.
+    ///
+    /// 🔑 **ONE field, and the template branches on it**, so the rendered state cannot disagree with
+    /// the nature: there is no second *"is it live"* flag to drift out of step. It is produced by a
+    /// `match` on [`Gesture`], which is what makes story 6.4's `Live` a compile error here.
+    not_built: Option<String>,
+}
+
+/// The mock's action bar: five controls, in its order, none of them live today.
+///
+/// 🔴 **`primary` is chosen from the row's CAUSE, never from its translated label.** The mock shows
+/// *Résoudre* on a conflict and *Merger* elsewhere; branching on `DetailPane::kind` — which is
+/// already translated — would reproduce story 6b.3's `role_key: "example.badge"` defect, a real,
+/// resolving, wrong value that every shape and resolvability check passes.
+fn action_bar(primary_key: &'static str) -> Vec<GestureView> {
+    [
+        (primary_key, Gesture::Planned { owner: "6.4" }),
+        ("gesture.accept_gap", Gesture::Planned { owner: "7" }),
+        ("gesture.snooze", Gesture::Planned { owner: "7" }),
+        ("gesture.attach", Gesture::Planned { owner: "7" }),
+        ("gesture.exclude", Gesture::Planned { owner: "7" }),
+    ]
+    .into_iter()
+    .map(|(label_key, gesture)| GestureView {
+        label: rust_i18n::t!(label_key).to_string(),
+        not_built: match gesture {
+            Gesture::Planned { .. } => Some(rust_i18n::t!("gesture.not_built").to_string()),
+        },
+    })
+    .collect()
+}
+
 /// The detail pane: the two photos, side by side, each with its own meta-line.
 struct DetailPane {
+    /// The action bar — the mock's five controls, and what each of them is.
+    gestures: Vec<GestureView>,
     /// The selected row's kind.
     kind: String,
     /// The entity.
@@ -805,6 +880,7 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
+                    gestures: action_bar("gesture.merge"),
                     kind: t!("triage.kind.ecart").to_string(),
                     entity: ipv4.clone(),
                     field: gap.field.clone(),
@@ -844,6 +920,13 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
+                    // 🔴 From the CAUSE, never from the translated label: the mock shows *Résoudre*
+                    // on a conflict and *Merger* elsewhere, and branching on the rendered string is
+                    // story 6b.3's wrong-namespace defect waiting.
+                    gestures: action_bar(match cause {
+                        AbstentionCause::ConflictingObservations => "gesture.resolve",
+                        _ => "gesture.merge",
+                    }),
                     kind: label.to_string(),
                     entity: ipv4.clone(),
                     field: String::new(),
@@ -890,6 +973,7 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
+                    gestures: action_bar("gesture.merge"),
                     kind: t!("triage.kind.nouveau").to_string(),
                     entity: value.clone(),
                     field: "ipv4".to_string(),
@@ -3045,5 +3129,217 @@ mod tests {
                  a browser default, which no test can see and only a look can catch (story 6b.3)"
             );
         }
+    }
+
+    // ── Story 6b.4b: the action bar, and the gesture nature ───────────
+
+    /// 🔴 **A planned control carries `aria-disabled`, and NEVER the native `disabled`.**
+    ///
+    /// # Why this guard exists, and why the distinction is not stylistic
+    ///
+    /// Measured in a real DOM at this story's validation: with `aria-disabled="true"` the control
+    /// keeps `tabIndex 0`, `focus()` succeeds and the click event fires; with the native `disabled`
+    /// attribute **focus is refused and no event fires at all**. So a `disabled` control leaves the
+    /// tab order and disappears from a screen reader — **the blind operator is not even told the
+    /// gesture exists**, which is the opposite of what showing it is for. NFR25, and Guy's
+    /// arbitration of 2026-08-19.
+    ///
+    /// 🔑 **A PROPERTY over every template, not a check on this one.** It walks the shared recursive
+    /// [`templates`] walker, so a control added to a new partial — in a subdirectory or not — is
+    /// covered the day the file exists.
+    ///
+    /// ⚠️ **Its limit, written rather than implied**: it reads the attribute's SPELLING. It cannot
+    /// see a `disabled` attribute set from JavaScript, and it says nothing about htmx — which
+    /// respects the native attribute or `hx-disabled-elt` and **ignores `aria-disabled` entirely**.
+    /// No `hx-*` attribute exists on any gesture today; the day story 6.4 wires one, that is a
+    /// different guard's job and it is registered.
+    #[test]
+    fn a_planned_gesture_carries_aria_disabled_never_the_native_attribute() {
+        // 🔴 COMMENTS STRIPPED FIRST, and this guard learned that the hard way: its own first run
+        // reddened on `_action_bar.html`, whose comment EXPLAINS why the native attribute is
+        // refused. A guard that cannot tell code from prose forbids explaining itself — the same
+        // trap story 6b.1 met when a radius comment contained the text its scanner counted, and the
+        // same one the validation had just measured in story 6b.4's stylesheet guard. The idiom is
+        // `screens.rs`'s, reused rather than rewritten.
+        let strip = |source: &str| -> String {
+            source
+                .split("{#")
+                .enumerate()
+                .map(|(i, part)| {
+                    if i == 0 {
+                        part.to_string()
+                    } else {
+                        part.split_once("#}")
+                            .map(|(_, rest)| rest)
+                            .unwrap_or("")
+                            .to_string()
+                    }
+                })
+                .collect()
+        };
+        let mut occurrences = 0_usize;
+        for (name, source) in templates() {
+            let source = strip(&source);
+            for (at, _) in source.match_indices("disabled") {
+                occurrences += 1;
+                let preceded_by_aria = at >= 5 && &source[at - 5..at] == "aria-";
+                // `hx-disabled-elt` is htmx's own attribute and names no control as disabled.
+                let is_htmx_elt = source[at..].starts_with("disabled-elt");
+                assert!(
+                    preceded_by_aria || is_htmx_elt,
+                    "{name} uses the native `disabled` attribute. A disabled control leaves the tab \
+                     order and vanishes from a screen reader, so the operator is not even told the \
+                     gesture exists — use `aria-disabled=\"true\"` on a non-activatable element \
+                     (NFR25, measured in a real DOM)"
+                );
+            }
+        }
+        assert!(
+            occurrences >= 1,
+            "the premise: at least one template must mention the attribute ({occurrences} seen) — \
+             a walk that found none would assert nothing"
+        );
+    }
+
+    /// 🔴 **No gesture's copy names the story that will build it.**
+    ///
+    /// *"Arrives in 6.4"* is not information for the operator: it turns the label into a **calendar,
+    /// therefore a promise**, which is exactly what story 5.14b refused when it kept the abstention
+    /// section descriptive. Guy's arbitration: **the owner lives in the type, never on the screen** —
+    /// `Gesture::Planned { owner }` carries it and nothing renders it.
+    ///
+    /// ⚠️ **A digit is the proxy, and the proxy is the limit.** A version, a date or a quarter would
+    /// all carry one; *"soon"* would not, and this guard would not catch it. It is a tripwire against
+    /// the ordinary gesture of being helpful, never a barrier against a determined promise.
+    #[test]
+    fn no_gesture_copy_names_the_story_that_will_build_it() {
+        let yaml = include_str!("../locales/app.yml");
+        let mut key = String::new();
+        let mut checked = 0_usize;
+        for line in yaml.lines() {
+            let trimmed = line.trim_end();
+            if let Some(name) = trimmed.strip_suffix(':')
+                && !trimmed.starts_with(' ')
+                && !trimmed.starts_with('#')
+            {
+                key = name.to_string();
+                continue;
+            }
+            if !key.starts_with("gesture.") {
+                continue;
+            }
+            let Some((_, value)) = trimmed.split_once(": ") else {
+                continue;
+            };
+            checked += 1;
+            assert!(
+                !value.chars().any(|c| c.is_ascii_digit()),
+                "{key} renders {value} — a gesture's copy must not name the story that will build \
+                 it: a number turns the label into a calendar, therefore a promise (story 5.14b)"
+            );
+        }
+        assert!(
+            checked >= 12,
+            "the premise: the six gestures plus their badge and sentence in two locales is at least \
+             sixteen values ({checked} seen) — a scan that found none would assert nothing"
+        );
+    }
+
+    /// The bar carries the mock's five controls, all planned, and `Résoudre` follows the CAUSE.
+    ///
+    /// 🔴 **The primary is chosen from the cause, never from the translated `kind`.** Branching on
+    /// the rendered string would be story 6b.3's `role_key: "example.badge"` defect: a real,
+    /// resolving, wrong value that every shape and resolvability check passes.
+    #[test]
+    fn the_bar_shows_five_planned_controls_and_resolve_follows_the_cause() {
+        let declared = vec![
+            declared_row("drift", "ipv4", "192.0.2.10"),
+            declared_row("drift", "hostname", "nas"),
+            declared_row("clash", "ipv4", "192.0.2.30"),
+            declared_row("clash", "hostname", "either"),
+        ];
+        let observations = vec![
+            batch("unifi", 10, vec![ipv4("192.0.2.10"), hostname("intruder")]),
+            batch("unifi", 30, vec![ipv4("192.0.2.30"), hostname("one")]),
+            batch("arp", 40, vec![ipv4("192.0.2.30"), hostname("two")]),
+        ];
+        let pane_for = |sel: &str| {
+            build_triage(
+                declared.clone(),
+                Vec::new(),
+                observations.clone(),
+                at(1_000),
+                Some(sel),
+                false,
+            )
+            .selected
+            .expect("the selected row has a pane")
+        };
+
+        let drift = pane_for("ecart:drift:hostname");
+        assert_eq!(
+            drift.gestures.len(),
+            5,
+            "the mock's bar carries five controls"
+        );
+        assert!(
+            drift.gestures.iter().all(|g| g.not_built.is_some()),
+            "not one of the five exists today — every control is planned"
+        );
+        assert_eq!(drift.gestures[0].label, "Merge", "a drift offers Merge");
+
+        let conflict = pane_for("conflit:clash");
+        assert_eq!(
+            conflict.gestures[0].label, "Resolve",
+            "a CONFLICT offers Resolve — and the choice comes from the cause, not from the \
+             translated kind string"
+        );
+    }
+
+    /// The rendered bar says the gesture is not built, and says it in the operator's language.
+    #[test]
+    fn the_rendered_bar_says_the_gesture_is_not_built() {
+        let declared = vec![
+            declared_row("e1", "ipv4", "192.0.2.10"),
+            declared_row("e1", "hostname", "nas"),
+        ];
+        let view = build_triage(
+            declared,
+            Vec::new(),
+            vec![batch(
+                "unifi",
+                0,
+                vec![ipv4("192.0.2.10"), hostname("other")],
+            )],
+            at(600),
+            None,
+            false,
+        );
+        let html = TriageBody {
+            triage: view,
+            identity: no_reach(),
+            s: strings(),
+        }
+        .render()
+        .expect("the triage body renders");
+
+        assert!(html.contains("action-bar"), "the bar renders");
+        assert_eq!(
+            html.matches("aria-disabled=\"true\"").count(),
+            5,
+            "all five controls are announced as disabled without leaving the tab order"
+        );
+        assert!(
+            !html.contains(" disabled=") && !html.contains("<button"),
+            "never the native attribute, and never a <button> that would carry it by habit"
+        );
+        assert!(
+            html.contains("This gesture is not built yet"),
+            "the sentence says what the badge alone cannot"
+        );
+        assert!(
+            html.contains("Accept the gap") && html.contains("Exclude"),
+            "the four Epic 7 gestures are VISIBLE and labelled — Guy's premise (2) of 2026-08-13"
+        );
     }
 }

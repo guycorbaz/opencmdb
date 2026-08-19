@@ -1,6 +1,6 @@
 # Story 6b.4b: The action bar, and the gesture nature it needs
 
-Status: ready-for-dev
+Status: review
 
 Epic: 6b — *L'interface de la maquette*. **INSERTED at story 6b.4's validation** (Guy, 2026-08-19),
 taking Epic 6b from twelve stories to thirteen. It carries **AC2 of `epics.md`'s story 6b.4**, which
@@ -293,31 +293,31 @@ and assume it is covered.
       recommendation (d) because it keeps the one compiler-forced moment — `E0004` at every `match`
       the day story 6.4 adds `Live`. ⚠️ Everything else was already decided (§0b, §0c) and is not
       reopened
-- [ ] **T1 — the gesture type** (AC1): `enum Gesture { Planned { owner } }`, one variant today, so
+- [x] **T1 — the gesture type** (AC1): `enum Gesture { Planned { owner } }`, one variant today, so
       adding `Live` in story 6.4 reds every `match` (`E0004`). ⚠️ **No `#[allow(dead_code)]`** — and
       none is needed: measured clean, with and without `Debug`. ⚠️ **Do NOT write that the type makes
       a dead route unrepresentable** — the validation measured that no shape does (§0a)
-- [ ] **T2 — one partial, one key pair** (AC1, §0b): `aria-disabled="true"` and **never** `disabled`;
+- [x] **T2 — one partial, one key pair** (AC1, §0b): `aria-disabled="true"` and **never** `disabled`;
       the words as arbitrated; **no story number in the surface**. ⚠️ **And WRITE the two guards M2
       and M3 name** — neither exists on `master`, and the mutation table read as though they did
       (§0h)
-- [ ] **T3 — the five gestures in the detail pane**, in the mock's order, with `Merger`/`Résoudre`
+- [x] **T3 — the five gestures in the detail pane**, in the mock's order, with `Merger`/`Résoudre`
       following the row's kind as the mock does. 🔴 **Branch on the CAUSE, never on the translated
       `kind` string** — that is story 6b.3's wrong-namespace defect waiting (§0h). ⚠️ And use two
       static class literals rather than one conditional one, or the stylesheet guard skips them
       silently (§0g)
-- [ ] **T4 — NEUTRAL, not amber** (§0d): leave `ac4_the_amber_is_reserved_for_the_documenting_gesture`
+- [x] **T4 — NEUTRAL, not amber** (§0d): leave `ac4_the_amber_is_reserved_for_the_documenting_gesture`
       at **zero** and do not narrow it — that is story 6.4's
-- [ ] **T5 — no keyboard hint, no key binding** (§0e), and the absence recorded as a decision
-- [ ] **T6 — LOOK at the screen IN A BROWSER**, `OPENCMDB_LOCALE=fr`, against a live database.
+- [x] **T5 — no keyboard hint, no key binding** (§0e), and the absence recorded as a decision
+- [x] **T6 — LOOK at the screen IN A BROWSER**, `OPENCMDB_LOCALE=fr`, against a live database.
       🔴 **`google-chrome` 151 and `firefox` are installed** (§0i) — the *"no browser available"*
       sentence four stories carried was never measured. Screenshot at desktop AND mobile width; a row
       of five controls is layout, and layout is what a text dump cannot show
-- [ ] **T7 — the register, BOTH directions.** ⚠️ `grep -n "6b.4b"` is **provably insufficient**: story
+- [x] **T7 — the register, BOTH directions.** ⚠️ `grep -n "6b.4b"` is **provably insufficient**: story
       6b.3's review found a row its own contexting was quoting that a name-grep could not surface,
       and story 6b.4's contexting **misread `story 6.4` as itself**. Search the SUBJECTS, and check
       the story NUMBER twice
-- [ ] **T8 — prove-to-red**, predictions FIRST, every prescribed row executed
+- [x] **T8 — prove-to-red**, predictions FIRST, every prescribed row executed
 
 ## Prove-to-red — deliberately short
 
@@ -377,15 +377,85 @@ story's live/planned toggle — plus three traps the task list did not warn abou
 
 ### Agent Model Used
 
-### Debug Log References
+Claude Opus 5 (1M context), 2026-08-19. Built and mutated against a live `mariadb:10.11.11` on port
+13423, and **rendered in Google Chrome 151** at 1200 px and 390 px.
+
+### Debug Log References — the mutation pass
+
+🔑 **Five rows were prescribed and SEVEN were run.** M6 and M7 were added when the work created the
+things they measure. ⚠️ **M1 turned out NOT EXECUTABLE on the shipped shape, which is a consequence of
+the arbitration rather than an omission** — and it is recorded as such rather than as a green.
+
+| # | Mutation | Predicted | MEASURED | Carrier |
+|---|---|---|---|---|
+| M1 | give a gesture a route it does not have | ⚠️ known green from the validation | 🔴 **NOT EXECUTABLE**: option (a) ships `Gesture::Planned { owner }` and there **is no route field** until story 6.4 adds `Live { route }`. The mutation becomes executable the day that variant exists, and the validation already measured what it will show | — |
+| M2 | the native `disabled` in place of `aria-disabled` | reds, once the guard exists | ✅ **2 red** — the new guard, and the render test | named assertions |
+| M3 | a story number in the rendered copy | reds, once the guard exists | ✅ **1 red** — *"gesture.not_built renders … a number turns the label into a calendar"* | named assertion |
+| M4 | `--accent-document` on a planned control | story 6b.1's guard reds | ✅ **1 red** on the EXISTING guard, count `left: 1, right: 0` — the reservation is intact and this story did not narrow it | named assertion |
+| M5 | the `fr` half of the badge deleted | `every_key_carries_both_locales` reds | ✅ **1 red** on the EXISTING guard | named assertion |
+| M6 | branch the primary on the TRANSLATED label instead of the cause | *(not prescribed — written because the trap was named at validation)* | ✅ **1 red** — the bar test catches `Résoudre` no longer following the conflict | named assertion |
+| M7 | **story 6.4 adds `Live`** | ⚠️ the whole point of option (a) | ✅ **`error[E0004]: non-exhaustive patterns: 'Gesture::Live { .. }' not covered`** — the compiler forces every `match` to be revisited, at exactly the moment it is worth forcing. **This is the property the arbitration was chosen for, and it is measured rather than argued** | compiler |
+
+⚠️ Every mutation ran on a scratchpad-restored base, never `git checkout --`.
 
 ### Completion Notes List
 
+🔴 **THE FIRST RUN OF MY OWN NEW GUARD REDDENED ON ITS OWN EXPLANATION.**
+`a_planned_gesture_carries_aria_disabled_never_the_native_attribute` scans templates for the native
+attribute — and `_action_bar.html`'s comment *explains why that attribute is refused*, so the guard
+forbade explaining itself. 🔑 **This is the exact hole the validation had just measured in story
+6b.4's stylesheet guard**, walked into with a brand-new guard one hour later. Fixed by reusing
+`screens.rs`'s comment-stripping idiom rather than writing a second one; 6b.4's guard still has it,
+registered.
+
+🔴 **AND A BROWSER FINALLY LOOKED AT THIS PRODUCT.** Chrome 151 was installed all along — four
+stories deferred the visual check on a sentence nobody had tested. Two defects were visible at
+1200 px and reachable by no test:
+
+1. **The count pill outweighed its row's subject.** `1 champ(s)` rendered as the filled pill inherited
+   from story 5.14b's identity section and was **the most prominent thing on its row — heavier than
+   the address it counts**, inverting what the operator should read first and edging toward the badge
+   the UX spec's first hard ban forbids. Now plain muted text inside the queue; 5.14b's own section
+   keeps its treatment.
+2. **The field diff was orphaned** below its address by a 12 px gap wide enough to read as a separate
+   row. Now 4 px between the subject's two lines.
+
+⚠️ **And at 390 px the screen is unusable** — the nav does not collapse, the address is clipped
+mid-value, the diff wraps to one word per line. 🔑 **That is NOT this story's defect**: responsive was
+**deferred by Guy's decision of 2026-08-18** and the shell is 6b.2's. What changed is that the
+register said the deferral would be scoped *"when someone opens the product on a telephone"* — **this
+story did, and the deferral now has a screenshot behind it instead of a sentence.**
+
+**AC by AC:**
+
+- **AC1 — MET.** The bar carries the mock's five controls in its order, `Résoudre` follows the CAUSE
+  and never the translated label, and **not one of the five is live**, each carrying the badge and the
+  sentence. ⚠️ **The promise is NARROWED and not claimed**: this is a labelling and typing discipline,
+  **not** a compiler-enforced guarantee — the validation measured that no shape prevents a route from
+  pointing at nothing, and the closure is registered to story 6.4.
+
+🔑 **Two guards were written that the mutation table had presupposed** — the validation caught that
+M2 and M3 named guards which did not exist, and that was uncredited scope until it was named.
+
+**625 → 629 tests** (402 bin + 161 core + 66 xtask). Eight gates green, fmt and clippy clean, and the
+suite was run **both ways**: **0.05 s** without a database and **5.85 s** against a live
+`mariadb:10.11.11`.
+
 ### File List
+
+| File | Change |
+|---|---|
+| `crates/opencmdb-bin/src/page.rs` | `Gesture` (one variant, by arbitration), `GestureView`, `action_bar`, `DetailPane::gestures` wired at the three construction sites, one new `Strings` field, and four guards |
+| `crates/opencmdb-bin/templates/_action_bar.html` | **new** — the five controls, `aria-disabled` and never `disabled`, two static class literals |
+| `crates/opencmdb-bin/templates/_triage.html` | includes the bar under the two photos; its *"there is no action bar here"* comment is now false and corrected |
+| `crates/opencmdb-bin/locales/app.yml` | 8 keys, both locales, **and no digit in any of them** |
+| `crates/opencmdb-bin/assets/app.css` | the bar's rules — neutral, never `--accent-document` — plus the two fixes a browser found |
+| `_bmad-output/implementation-artifacts/deferred-work.md` | four rows |
 
 ### Change Log
 
 | Date | Change |
 |---|---|
+| 2026-08-19 | Implemented. 625 → **629 tests**, eight gates green. Seven mutations: five prescribed and two added, with 🔑 **M7 measuring the property the arbitration was chosen for** — adding `Live` reds every `match` with `E0004` — and ⚠️ **M1 recorded NOT EXECUTABLE**, since option (a) has no route field until 6.4. 🔴 My own new guard reddened on its own explanation, the exact hole the validation had just found elsewhere. 🔴 **And a browser finally looked**: two defects visible at 1200 px and reachable by no test, and the desktop-only deferral now has a screenshot behind it. |
 | 2026-08-19 | Validated by two fresh-context layers. Fact-check: 36 assertions, 34 confirmed, 2 flagged (both mine) — and it CLOSED the escape hatch I had only inferred, by writing the test. Gap-hunt: it BUILT both options and 🔴 **refuted my recommendation's justification** — under option (d) a route that goes nowhere reds nothing and renders as a genuine live link, and **the enum was never much better** (one bogus `Live` silences its lint). **No option ships the property as stated**, so §0a narrows the promise. 🔴 **And a BROWSER EXISTS** — Chrome 151 and Firefox — so four stories deferred the visual check on a premise nobody measured. |
 | 2026-08-19 | Contexted. 🔴 ONE open question and it is a measurement: the arbitrated `enum Gesture { Live, Planned }` **does not compile today** — `error: variant 'Live' is never constructed` under `clippy -D warnings`, because not one of the mock's five gestures exists and `/document-all` is not one of them. Four options put to Guy, with a struct carrying an `Option` route recommended: the arbitrated PROPERTY survives, only its spelling changes. Everything else was already decided — the form, the words, and the *whether*, which Guy's own premise (2) settled on 2026-08-13. |

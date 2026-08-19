@@ -75,7 +75,41 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.4b ✅ ARBITRATED by Guy, before any code: **option (a), the ENUM with
+last_updated: 2026-08-19  # 6b.4b -> `review`: IMPLEMENTED. The action bar ships with the mock's five
+                          # controls, **not one of them live**, each carrying its badge and its
+                          # sentence -- Guy's premise (2) made visible. `Résoudre` follows the CAUSE,
+                          # never the translated label. **625 -> 629 tests** (402 bin + 161 core +
+                          # 66 xtask), eight gates green, run both ways (0.05 s / 5.85 s).
+                          # 🔑 M7 MEASURES THE PROPERTY THE ARBITRATION WAS CHOSEN FOR: adding `Live`
+                          # gives `error[E0004]: non-exhaustive patterns` on every `match`. The
+                          # compiler forces the revisit at exactly the right moment -- measured, not
+                          # argued. ⚠️ And M1 is recorded **NOT EXECUTABLE**: option (a) has no route
+                          # field until 6.4 adds one, which is a consequence of the arbitration
+                          # rather than an omission.
+                          # 🔴 MY OWN NEW GUARD REDDENED ON ITS OWN EXPLANATION: it scans templates
+                          # for the native `disabled`, and `_action_bar.html`'s comment explains why
+                          # that attribute is refused -- *a guard that cannot tell code from prose
+                          # forbids explaining itself*. **The exact hole the validation had just
+                          # measured in story 6b.4's stylesheet guard**, walked into with a brand-new
+                          # guard an hour later. Fixed by REUSING `screens.rs`'s stripping idiom;
+                          # 6b.4's guard still has it, registered.
+                          # 🔴 AND A BROWSER FINALLY LOOKED AT THIS PRODUCT (Chrome 151, installed
+                          # all along). Two defects at 1200 px, reachable by no test: the `1 champ(s)`
+                          # count rendered as 5.14b's FILLED PILL and was **heavier than the address
+                          # it counts**, inverting what the operator reads first and edging toward
+                          # the badge the UX spec bans; and the field diff was orphaned below its
+                          # address by a 12 px gap. Both fixed and re-shot.
+                          # ⚠️ At 390 px the screen is UNUSABLE -- nav not collapsing, address
+                          # clipped mid-value, diff one word per line. **NOT this story's defect**:
+                          # responsive was deferred by Guy on 2026-08-18 and the shell is 6b.2's. The
+                          # register said it would be scoped *"when someone opens the product on a
+                          # telephone"* -- this story did, and **the deferral now has a screenshot
+                          # behind it instead of a sentence**.
+                          # 🔑 Two guards written that the mutation table had PRESUPPOSED (the
+                          # validation caught that M2 and M3 named guards which did not exist).
+                          # 🔴 Issue #38 recurred a THIRD time today, in a third test. No cause named.
+                          # ⚠️ STAYS at `review`: `done` is the MERGE's business.
+                          # (Earlier the same day) 6b.4b ✅ ARBITRATED by Guy, before any code: **option (a), the ENUM with
                           # `Planned` alone**, taken OVER my recommendation (d). 🔑 The reason is the
                           # one thing the validation could not take away: with `Planned` alone there
                           # is no unconstructed variant, so clippy is clean today, and **the day
@@ -3536,7 +3570,7 @@ development_status:
   # every screen after this one, not just triage. Its form and words are ALREADY arbitrated in 6b.4's
   # §0b so that 6b.4b starts designed rather than with a question. `epics.md` NOT edited (a story may
   # not; only a retrospective may) -- the divergence is registered in deferred-work.md.
-  6b-4b-action-bar-and-the-gesture-nature: ready-for-dev
+  6b-4b-action-bar-and-the-gesture-nature: review
   6b-5-dashboard-real-reach-beside-examples: backlog
   6b-6-inventory-and-device-record: backlog
   6b-7-applications-and-ipam: backlog

@@ -4076,3 +4076,35 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   variant was instantiated *with any value*. A `route` typed as a member of the application's actual
   routes would make it unrepresentable; today that set would be **empty**, which is the same wall from
   the other side. **Owner: story 6.4.**
+
+## Deferred from: story 6b.4b's implementation (2026-08-19)
+
+- 🔴 **THE DESKTOP-ONLY DEFERRAL IS NOW A MEASUREMENT, and the register said it would be scoped
+  "when someone opens the product on a telephone".** Story 6b.4b did: rendered in Chrome 151 at
+  **390 × 844**, `/triage` is **unusable** — the left nav does not collapse and eats ~200 px of the
+  390, the queue rows overflow horizontally with the address clipped mid-value (`192.0.`), the field
+  diff wraps to one word per line, and the count is cut off. ⚠️ **This is NOT a defect of story
+  6b.4b**: responsive was **deferred by Guy's decision of 2026-08-18** (*"not now, we will see
+  later"*), and the shell is story 6b.2's. What changes is that the deferral now has a screenshot
+  behind it instead of a sentence. **Owner: unchanged — the deferral stands**, and story 6b.12 has
+  what it needs to describe the release's limits precisely.
+
+- ⚠️ **Story 6b.4's stylesheet guard still scans Askama COMMENTS, and 6b.4b's new guard hit the same
+  wall on its first run.** `a_planned_gesture_carries_aria_disabled_never_the_native_attribute`
+  reddened on `_action_bar.html`, whose comment *explains why the native attribute is refused* —
+  **a guard that cannot tell code from prose forbids explaining itself**. Fixed here by reusing
+  `screens.rs`'s comment-stripping idiom. 🔴 **`every_class_a_template_names_is_defined_in_the
+  _stylesheet` still has it**, along with its second hole (it skips any `class="…"` containing a
+  brace). **Owner: the first story that needs a conditional class**, or Epic 6b's retrospective.
+
+- 🔴 **ISSUE #38 RECURRED A THIRD TIME on 2026-08-19**, during story 6b.4b's implementation:
+  `fixtures::tests::a_decision_carrying_an_abstention_cause_is_refused` failed once inside a full
+  workspace run with `Os { code: 2, kind: NotFound }`, and passed on the next run with **zero code
+  change** — verified by re-running it alone on a stashed (clean) tree and again on the working tree.
+  **No cause is named**, per the issue's own rule. Three recurrences in one day, across two stories
+  and three different tests, none of them touching the subject under change.
+
+- ⚠️ **`Gesture` has ONE variant and that is a dated state, not a design.** Story 6.4 adds `Live`, and
+  the day it does, `E0004` reds every `match` on the type — **measured** (`non-exhaustive patterns:
+  'Gesture::Live { .. }' not covered`). That red is the point of Guy's arbitration and must be
+  answered by wiring, never by a catch-all arm. **Owner: story 6.4.**
