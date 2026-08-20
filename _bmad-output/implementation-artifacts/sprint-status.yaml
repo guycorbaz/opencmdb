@@ -75,7 +75,18 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-20  # 6b.7 -> `review`, CODE-REVIEWED (three layers, Sonnet 5, each isolated)
+last_updated: 2026-08-20  # 6b.7 -> `done`: PR #109 squash-merged as `f32c268` after a green CI run
+                          # (1m07s). Branch deleted, twins updated in this same push.
+                          # 🔑 EPIC 6b: SEVEN numbered slots done (6b.1-6b.7) plus the 6b.4b
+                          # insertion -- EIGHT story files of thirteen stories. NEXT =
+                          # `create-story` 6b.8 (sources and alerts). ⚠️ It inherits the sharpest
+                          # honest surface of the epic: `epics.md:2250` says *"what this source
+                          # cannot see"* is **REAL, not example** -- story 5.14 measured that the
+                          # shipped ARP/ping connector emits `IpV4` and `Rtt` and **no MAC, ever**,
+                          # so the product genuinely knows the boundary of its own sight. It also
+                          # inherits FOUR nouns still outside the binding table and the a11y gate
+                          # that exists nowhere.
+                          # (Earlier the same day) CODE-REVIEWED (three layers, Sonnet 5, isolated)
                           # and REPAIRED. **5 patches, 1 finding refuted with its check, 0
                           # arbitrations.** **653 -> 668 tests** (441 bin + 161 core + 66 xtask),
                           # eight gates green, clippy and fmt clean.
@@ -3882,7 +3893,7 @@ development_status:
   6b-4b-action-bar-and-the-gesture-nature: done
   6b-5-dashboard-real-reach-beside-examples: done
   6b-6-inventory-and-device-record: done
-  6b-7-applications-and-ipam: review
+  6b-7-applications-and-ipam: done
   6b-8-sources-and-alerts: backlog
   6b-9-self-diagnostic-and-commissioning: backlog
   6b-10-copy-fr-and-en: backlog

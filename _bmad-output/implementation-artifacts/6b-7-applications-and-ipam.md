@@ -1,6 +1,6 @@
 # Story 6b.7: Applications and IPAM (example)
 
-Status: review
+Status: done
 
 Epic: 6b — *L'interface de la maquette*. **Seventh numbered slot, eighth story file** (6b.4b was
 inserted at 6b.4's validation). It takes the `Empty` screen count from six to four.
