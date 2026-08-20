@@ -208,6 +208,40 @@ pub enum FactKind {
     Rtt,
 }
 
+impl FactKind {
+    /// Every kind a source could declare, in the enum's own order.
+    ///
+    /// # Why this exists, and why it is a `const` rather than a `match`
+    ///
+    /// 🔴 **Story 6b.8 needs the COMPLEMENT** — *what a source cannot see* is
+    /// `ALL \ Capabilities::kinds`, and the shipped ARP/ping connector declares two of these seven,
+    /// so the operator-facing answer is five kinds derived at runtime with no database and no
+    /// invention. That is the one section of `/sources` its acceptance criterion requires to be
+    /// REAL.
+    ///
+    /// ⚠️ **`FactKind` is `#[non_exhaustive]`, so a downstream crate cannot match it exhaustively**:
+    /// any `match` in `opencmdb-bin` needs a `_` arm, and once that arm exists it is permanently
+    /// silent — an eighth kind would fall into the wildcard and the screen would UNDER-report what
+    /// a source cannot see, which is the lie in the safe-looking direction. The story's validation
+    /// measured exactly that: an eighth variant left out of this list passed the suite, `clippy -D
+    /// warnings` and all eight gates.
+    ///
+    /// 🔑 **The carrier is therefore a TEST and it is named here so the link is not lost**:
+    /// `crate::screens::tests::every_variant_of_a_navigated_enum_is_listed_in_all` in
+    /// `opencmdb-bin` reads this file with `include_str!` and reds when a variant is declared and
+    /// absent from this list. It is one row in that guard's table; without it, nothing at all
+    /// catches the omission.
+    pub const ALL: [FactKind; 7] = [
+        FactKind::Mac,
+        FactKind::IpV4,
+        FactKind::Hostname,
+        FactKind::DhcpLease,
+        FactKind::Uplink,
+        FactKind::OuiVendor,
+        FactKind::Rtt,
+    ];
+}
+
 impl Fact {
     /// The [`FactKind`] discriminant of this fact.
     pub fn kind(&self) -> FactKind {

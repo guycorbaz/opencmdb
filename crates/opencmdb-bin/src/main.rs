@@ -995,6 +995,12 @@ mod tests {
                     screens::ExampleContent::IpamOccupancy => {
                         rust_i18n::t!("ipam.grid_label").to_string()
                     }
+                    // ⚠️ A column heading, not the screen's title: `alerts.title` is *"Alertes"*,
+                    // which the shell's own navigation carries on EVERY page. A witness must be
+                    // distinctive to its BODY, and the property below is what enforces it.
+                    screens::ExampleContent::AlertList => {
+                        rust_i18n::t!("alerts.subject").to_string()
+                    }
                 };
                 assert!(
                     body.contains(&witness),
@@ -1082,10 +1088,11 @@ mod tests {
         // notice a screen showing the wrong thing.
         assert_eq!(
             example_contents.len(),
-            4,
-            "the witness screens are the inventory (6b.3), the device record (6b.6) and the \
-             applications and IPAM frames (6b.7), and a fifth is a screen that grew example \
-             content without a story deciding it should: {example_contents:?}"
+            5,
+            "the witness screens are the inventory (6b.3), the device record (6b.6), the \
+             applications and IPAM frames (6b.7) and the alert list (6b.8), and a sixth is a \
+             screen that grew example content without a story deciding it should: \
+             {example_contents:?}"
         );
         // 🔴 **A WITNESS IS ONLY A WITNESS IF IT IS DISTINCTIVE, and nothing said so until story
         // 6b.7.** `demonstration_screen` prepends the example marker to every `Example` body, so

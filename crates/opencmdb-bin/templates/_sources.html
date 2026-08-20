@@ -1,0 +1,76 @@
+{#- The sources screen: the product's real capability boundary (story 6b.8).
+
+     🔴 THIS SECTION IS REAL, and it is the first of this epic that is. `FactKind::ALL` minus the
+     connector's own declaration — five kinds, derived at runtime, no database, no invention. It
+     carries NO example marker, because it is not an example.
+
+     ⚠️ It is what the source is BUILT to observe, not what it observed at the last scan. FR7 says
+     the descriptor is not a static property of a source, and the product really does produce the
+     dated one — once per scan, inside `PollSummary` — but nothing persists it, so a request-time
+     screen cannot read it. FR7's static half only, and the copy says so rather than dressing a
+     constant as a measurement. -#}
+<section class="screen-section">
+  <h2>{{ s.title }}</h2>
+  <p class="screen-lede">{{ s.lede }}</p>
+
+  {%- match source %}
+  {%- when None %}
+  {#- 🔴 ZERO configured sources. The story's first draft assumed one throughout; a real boot with
+       `OPENCMDB_SCAN_CIDR` unset has none, and listing a source the product was never asked to
+       build would be the same fabrication the liveness arbitration refuses. -#}
+  <p class="empty">{{ s.no_source }}</p>
+  {%- when Some with (source) %}
+  <div class="source-card">
+    <p class="source-name">{{ source.name }}</p>
+    {#- 🔑 No `match`: a `SourceView` cannot exist without a perimeter, so the arm that handled its
+         absence could never execute. The code review caught the dead branch. -#}
+    <p class="source-meta">{{ s.perimeter_label }} <span class="mono">{{ source.perimeter }}</span></p>
+    {#- 🔴 A perimeter the product REFUSED, said so instead of shown as if it were live. The product
+         already knows: `subnet_hosts` rejected it and the scan never ran. Rendering the string with
+         nothing beside it presented a refused configuration as an in-force one. -#}
+    {%- if source.refused %}
+    <p class="source-refused">{{ s.refused }}</p>
+    {%- endif %}
+
+    {#- 🔑 The POSITIVE half beside the negative one. The UX spec's card pairs *Observes:* with
+         *Cannot see:*, and AC1 quotes only the second — delivering only the second would be the
+         spec's illustration cut in half. -#}
+    <h3>{{ s.observes_title }}</h3>
+    <ul class="kind-list">
+      {%- for kind in source.observes %}
+      <li><span class="kind-name">{{ kind.label }}</span> <span class="muted">{{ kind.meaning }}</span></li>
+      {%- endfor %}
+    </ul>
+
+    <h3>{{ s.cannot_see_title }}</h3>
+    <ul class="kind-list">
+      {%- for kind in source.cannot_see %}
+      <li><span class="kind-name">{{ kind.label }}</span> <span class="muted">{{ kind.meaning }}</span></li>
+      {%- endfor %}
+    </ul>
+    {#- 🔑 The UNLOCK framing, not the fault framing. The spec is explicit: *"Not 'fix your source'
+         but 'I could grant it the raw-socket privilege and it would read addresses'"* — and reduced
+         scope is a capability to unlock, which is this story's own user-story line. -#}
+    <p class="source-unlock">{{ s.unlock }}</p>
+
+    {#- 🔴 THE LIVENESS AXIS, AND IT CARRIES NO COLOUR. The product can establish *an observation
+         arrived at T*; it cannot establish *this source is blind*, which is a verdict nothing
+         computes. Deriving it from silence would read a clock and invent an incident, which FR8
+         exists to forbid.
+         ⚠️ The spec prescribes a colour for BOTH liveness values, so this is a DIVERGENCE and is
+         registered as one — not conformance. -#}
+    <h3>{{ s.freshness_title }}</h3>
+    {%- match source.last_observed %}
+    {%- when Some with (ago) %}
+    <p class="source-freshness">{{ ago }}</p>
+    {%- when None %}
+    {#- 🔴 `None` is FOUR states of the world — never scanned, scanned and nobody answered, an
+         INVALID perimeter the product refused, a blank one — and `MAX(observed_at)` is NULL in all
+         four. Measured on four live boots. The copy states the ambiguity rather than picking one. -#}
+    <p class="source-freshness">{{ s.never }}</p>
+    <p class="muted">{{ s.ambiguity }}</p>
+    {%- endmatch %}
+    <p class="muted">{{ s.incident_axis }}</p>
+  </div>
+  {%- endmatch %}
+</section>

@@ -1132,6 +1132,49 @@ pub(crate) fn apps() -> Vec<ExampleApp> {
     ]
 }
 
+/// One row of the example alert list — Epic 16's frame (story 6b.8).
+///
+/// # 🔑 The three kinds come from FR30, not from the mock
+///
+/// The reference mock invents severities (*critical · high · …*), which would be **a fourth value
+/// set with no glossary row** — the shape story 6b.7 arbitrated one story earlier, and the register
+/// already carries five nouns and three value sets owed to Epic 15. `prd.md:941` names the three
+/// alerts the product will actually raise: *an unknown device appearing, a documented IP unseen for
+/// N days, and an IP conflict.* **Those are the rows**, and they introduce no vocabulary the plan
+/// does not already bind.
+///
+/// ⚠️ **No severity field.** Not an omission: a severity is a judgement, and the product has no
+/// producer for one.
+pub(crate) struct ExampleAlert {
+    /// The i18n KEY of what happened — a key, for the reason given on [`ExampleDevice::role_key`].
+    pub(crate) what_key: &'static str,
+    /// What it is about — an address or a device name, therefore locale-neutral data.
+    pub(crate) subject: &'static str,
+    /// When, as an ISO-ish instant: locale-neutral, so it needs no key.
+    pub(crate) when: &'static str,
+}
+
+/// The example alerts, one per kind FR30 names.
+pub(crate) fn alerts() -> Vec<ExampleAlert> {
+    vec![
+        ExampleAlert {
+            what_key: "example.alert.unknown_device",
+            subject: "192.0.2.58",
+            when: "2026-08-19 08:14",
+        },
+        ExampleAlert {
+            what_key: "example.alert.unseen",
+            subject: "printer-hall",
+            when: "2026-08-18 22:40",
+        },
+        ExampleAlert {
+            what_key: "example.alert.address_conflict",
+            subject: "192.0.2.41",
+            when: "2026-08-19 14:02",
+        },
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,4 +1,4 @@
-//! The shell: the mock's frame, its ten addresses, and the EIGHT screens it renders without the store.
+//! The shell: the mock's frame, its ten addresses, and the SEVEN screens it renders without the store.
 //!
 //! # What this module is, and the one structural decision inside it
 //!
@@ -156,6 +156,8 @@ pub(crate) enum ExampleContent {
     AppsInventory,
     /// The example subnet occupancy — Epic 14's frame (story 6b.7).
     IpamOccupancy,
+    /// The example alert list — Epic 16's frame (story 6b.8).
+    AlertList,
 }
 
 impl ExampleContent {
@@ -178,6 +180,7 @@ impl ExampleContent {
             // underscore there is a statement rather than a habit.
             ExampleContent::AppsInventory => crate::example_screens::apps_body(query),
             ExampleContent::IpamOccupancy => crate::example_screens::ipam_body(query),
+            ExampleContent::AlertList => crate::example_screens::alerts_body(query),
         }
     }
 }
@@ -291,9 +294,23 @@ impl Screen {
             // Epic 15's and Epic 14's frames, filled from the example dataset (story 6b.7).
             Screen::Apps => Nature::Example(ExampleContent::AppsInventory),
             Screen::Ipam => Nature::Example(ExampleContent::IpamOccupancy),
-            Screen::Sources  // story 6b.8
-            | Screen::Alerts   // story 6b.8
-            | Screen::Diagnostic // story 6b.9
+            // 🔴 **`Fed`, NOT `Mixed` — and the story said `Mixed` until the code was written.**
+            // Its §0e reasoned that `/sources` would hold a real capability section beside an
+            // example alert list. It does not: AC3 puts the alert list on its OWN screen, which
+            // `Screen::ALL` has carried since story 6b.2, so **every section of `/sources` is real**
+            // and the screen owes no marker at all. Declaring it `Mixed` would have made the
+            // route-table partition demand a marker for example content that does not exist.
+            // 🔑 *A nature is a statement about what the screen SHOWS, and the screen turned out to
+            // show something simpler than the plan for it.*
+            //
+            // ⚠️ Its route was registered in `page::triage_router` BEFORE this line changed, and the
+            // order is a measurement: a nature changed with the route forgotten reds **nothing**
+            // locally and exactly one test in CI — the loop skips `Fed` and `Mixed` alike when no
+            // database is reachable — while the mirror mistake reds eighteen.
+            Screen::Sources => Nature::Fed,
+            // Epic 16's frame, example all the way through (story 6b.8).
+            Screen::Alerts => Nature::Example(ExampleContent::AlertList),
+            Screen::Diagnostic // story 6b.9
             | Screen::Onboarding => Nature::Empty, // story 6b.9
         }
     }
@@ -313,7 +330,12 @@ impl NavGroup {
     }
 }
 
-/// The eight pool-free screens (see this module's doc). ⚠️ `Fed` and `Mixed` are both excluded:
+/// The seven pool-free screens (see this module's doc). ⚠️ Seven since story 6b.8 made
+/// `Sources` **`Fed`** — its content is real and it reads the store, so it lives on the main router
+/// with `/triage` and `/dashboard`. This sentence said *`Mixed`* until the code review: the story
+/// planned `Mixed`, the code shipped `Fed`, and **the doc kept the plan's word twenty lines below the
+/// arm that refutes it** — the dominant defect of this project, in the commit that corrects the same
+/// slip elsewhere. ⚠️ `Fed` and `Mixed` are both excluded:
 /// each reads the store.
 ///
 /// # Returns
@@ -951,6 +973,23 @@ mod tests {
             (include_str!("screens.rs"), "NavGroup", 3),
             (include_str!("state_vocabulary.rs"), "ObjectState", 5),
             (include_str!("example_data.rs"), "DeviceKind", 7),
+            // 🔴 **A CROSS-CRATE ROW, and it is the ONLY thing that catches an eighth `FactKind`.**
+            // `FactKind` is `#[non_exhaustive]`, so `opencmdb-bin` cannot match it exhaustively —
+            // the `_` arm the compiler demands is permanently silent, and a new kind would drop
+            // out of `/sources`' *what this source cannot see* list without a word. Story 6b.8's
+            // validation measured a planted eighth variant passing the suite, clippy and all eight
+            // gates; with this row it reds by name.
+            // ⚠️ `include_str!` is a COMPILE-TIME file read, not a dependency: the `frontier` gate
+            // stays green, verified. And if `observation/mod.rs` MOVES, this row does **not** go
+            // blind — the crate fails to compile, loudly. 🔑 *The doc said "goes blind" until the
+            // code review; that word belongs to a guard that keeps passing while checking nothing,
+            // which is the opposite of what a missing `include_str!` path does.* What would make it
+            // blind is the enum being RENAMED, which the row's own name argument would then miss.
+            (
+                include_str!("../../opencmdb-core/src/observation/mod.rs"),
+                "FactKind",
+                7,
+            ),
         ] {
             let declared = variants(source, enum_name);
             let in_all = listed(source, enum_name);
@@ -967,9 +1006,17 @@ mod tests {
             for variant in &declared {
                 assert!(
                     in_all.contains(variant),
+                    // ⚠️ The consequence is named GENERICALLY since story 6b.8 added a
+                    // `FactKind` row: this message said *"it vanishes from the navigation, the
+                    // routing"*, which is true for `Screen` and meaningless for an enum that has
+                    // nothing to do with either — the review layer that planted an eighth
+                    // `FactKind` read the red and found the text describing another enum's world.
+                    // *A guard that fires with the wrong explanation sends its reader looking in
+                    // the wrong place.*
                     "{enum_name}::{variant} is declared but absent from {enum_name}::ALL. It \
-                     compiles, and it vanishes from the navigation, the routing and every test \
-                     that iterates the table — AC4's *eleventh screen*"
+                     compiles, and it then vanishes from everything that iterates that list — \
+                     the navigation for `Screen`, the *what this source cannot see* complement \
+                     for `FactKind` — with no error and no warning anywhere"
                 );
             }
             // The other direction: an entry naming a variant that no longer exists cannot compile,
