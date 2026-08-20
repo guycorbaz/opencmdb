@@ -4302,3 +4302,97 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
 - ⚠️ **The example marker renders above the *Retour à l'inventaire* link** on the record, because
   the dispatch prepends it to the body. Defensible (it qualifies the whole page) and noticed only
   by looking. **Owner: story 6b.12's visual sweep.**
+
+---
+
+## Registered by story 6b.7 (2026-08-20) — applications and IPAM
+
+- 🔴 **FIVE nouns on the applications screen are in NO binding table** — `application`, `owner`,
+  `criticality`, `exposure` and `host` — **and three of them carry VALUE SETS that are not in one
+  either**: criticality (*Critique · Élevée · Moyenne · Faible*), exposure (*Interne · Reverse proxy ·
+  Publiée · Hors périmètre*) and owner (*Direction · Prestataire IT · Comptabilité · Atelier ·
+  Marketing*). ⚠️ **This supersedes the row story 6b.6 registered**, which named three nouns and
+  assigned them to *"the story that gives the product containment data (Epic 6 / Growth)"* — an owner
+  the plan itself falsified, since `epics.md:2240` required two of them to be rendered here. 🔑 **Guy's
+  arbitration of 2026-08-20, option (c)**: render owner and criticality, **do not render `exposure`**,
+  register the rest. Extending the binding table was refused as **PREMATURE, not wrong** — the measured
+  cost is five rows *plus three value SCALES*, and a scale is a new KIND of row in a table whose every
+  row reads *one concept, one translation*. ⚠️ `host` is rendered anyway, because an application that
+  runs nowhere is not an application (FR28's containment, already on the device record as *Hosted
+  here*). **Owner: Epic 15**, which is where option (a) becomes the closure.
+
+- 🔴 **`conflit` carries two meanings, and one of them has a binding row that says something else.**
+  The glossary's `conflict` is *two observations disagree with each other — source against source*;
+  the IPAM panel names FR24, *two devices answering on one address*. `prd.md:988` forbids one word
+  carrying two meanings in so many words. **Guy, 2026-08-20: qualify — « Conflit d'adresse » — on the
+  *"Écart · 2 champs"* precedent, and register the collision.** ✅ Measured: nothing in the codebase
+  can see it (`one_word_is_rendered_by_one_key` compares `ObjectState` keys only, and planting
+  `fr: "Conflit"` on a new IPAM key left the suite green). It joins the `Nouveau`/`undeclared`
+  collision above. **Owner: Epic 6b's retrospective.**
+
+- 🔴 **THE TWO "BINDING" GLOSSARIES HAVE DRIFTED.** `ux-design-specification.md` carries **eleven**
+  gesture rows, `prd.md` **ten**: the UX spec has `| Attach a discovery to an existing record |
+  attach | rattacher |`, which in the PRD survives only inside the `triage` row's meaning cell and in
+  FR14. 🔑 For any criterion reading *"checked against the canonical glossary"* — this story's AC4,
+  story 6b.6's AC2 — **there is no single glossary**. Not this story's to reconcile. **Owner: Epic 6b's
+  retrospective.**
+
+- 🔴 **THE APPLICATIONS TABLE SHOWS A GAP AND DOES NOT NAME IT.** *Nextcloud — déclarée 28.0.4 ·
+  observée 29.0.1* sits beside *Sage 50 — 2024.1 · 2024.1*, and **nothing distinguishes them**: no
+  pill, no colour, no word, on the product whose founding sentence is *"the gap is the product"*. The
+  mock does the same and AC2 asks only that owner and criticality be shown as unobservable, so fixing
+  it here would be inventing scope — but the state vocabulary exists (`ObjectState`, five binding
+  rows) and this is the first screen that displays a divergence without using it. **Found by looking
+  at the page; no guard can see it. Owner: Epic 15.**
+
+- 🔴 **A MUTATION DRIVER CAN LIE BY FAILING TO *UN*APPLY.** `shutil.copy2` preserves the original
+  mtime, so restoring a template left cargo seeing a file older than the artefact that embedded it —
+  and askama compiles templates INTO the binary. **Two full suite runs reported one test red over a
+  clean `git status`**, the mutation still living in the compiled artefact. ⚠️ Caught only because a
+  failure contradicted a just-measured green; as a *pass* it would have been filed as a confirmation.
+  The `mutation driver lies` family, fifth epic running, in a form the earlier ones did not have.
+  **Restore with `copy` plus an explicit `utime`, and re-verify any template mutation.** Owner: every
+  story that runs a mutation pass — carry it to Epic 6b's retrospective.
+
+- ⚠️ **`state_of`'s priority order hides a contradiction in the data.** `used` is tested before
+  `reserved`, so an octet in both lists renders silently as *used* — a deliberate corruption of the
+  dataset changed no cell, no count and no test. Closed here by `no_octet_is_both_occupied_and_reserved`,
+  and the general shape is worth carrying: **a priority order is a rendering decision and must not
+  double as a repair.** Owner: Epic 6b's retrospective.
+
+- ⚠️ **`aria-label` on a bare `<div>` is PROHIBITED by ARIA 1.2** (it maps to `generic`), which makes
+  the naive reading of AC1 — keep the mock's `<div>` cells and add labels — worse than the mock. The
+  grid ships as a labelled list instead. ⚠️ **And the repository has NO accessibility check at all**:
+  no axe-core, no headless browser, and until this story **not one test asserted on an `aria-*`
+  attribute**, while `epics.md:2108` makes axe-core on the ten routes this epic's Definition of Done
+  and `epics.md:316` names the occupancy grid a WCAG 2.1 AA key view. **Owner: story 6b.11**, with
+  6b.12's sweep.
+
+- ⚠️ **A /24 has 254 hosts and the mock draws 256 free ones.** `CellState::Structural` and a
+  254-denominator are this story's answer for an example screen; the day Epic 14 reads a real subnet,
+  the same question returns with DHCP ranges, gateways and CIDRs other than /24. **Owner: Epic 14.**
+
+- ⚠️ **In the IPAM legend, *libre* and *réseau ou diffusion* are hard to tell apart at 10 px.** Both
+  mean *not assignable to you*, so the confusion is low-harm, and the grid's corners read correctly at
+  full size. Noticed only by looking. **Owner: story 6b.12's visual sweep.**
+
+- ⚠️ **`every_key_carries_both_locales` floors at `checked >= 47` on a message reading *"48 entries
+  minus `_version`"*, its doc claims a baseline of 32, and `app.yml` now carries 184.** Three stale
+  numbers in one guard, worse by 31 keys after this story. Registered by 6b.6, restated here because
+  it grew. **Owner: Epic 6b's retrospective.**
+
+- ⚠️ **`ipam.next_free_none` is UNREACHABLE, not merely untested.** No committed subnet is full, so
+  the *"the subnet is full"* copy reaches no screen in any test — measured by a review layer rather
+  than supposed. `a_full_subnet_has_no_next_free_address` now guards the FUNCTION against a synthetic
+  subnet, with a control that the committed three are not full; **the RENDER of that sentence is
+  carried by nothing.** Putting a full subnet in the example dataset to exercise one line would be
+  shaping the demonstration around the test. **Owner: Epic 14**, where a full subnet is an ordinary
+  state rather than a fixture.
+
+- 🔴 **A REVIEW LAYER CAN ONLY AUDIT WHAT ITS INPUT CONTAINS, and this one was asked to audit what
+  had been excluded from it.** The Acceptance Auditor reported story 6b.7's AC4 as NOT MET — *"no
+  register rows in `deferred-work.md`"* — which was true of the diff it was given (`crates/` only,
+  planning documents deliberately left out) and false of the tree. 🔑 The finding is correct about
+  its input and the mistake is the reviewer's brief, not the layer's reading. **Rule for the next
+  story: a layer asked to audit registrations, statuses or counts must be handed the files those live
+  in, or told in the brief that they are out of scope and why.** Owner: Epic 6b's retrospective.

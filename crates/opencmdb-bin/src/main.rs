@@ -866,6 +866,10 @@ mod tests {
         // demonstration. Sharing one class would turn this test green for the wrong reason.
         let not_yet = "not-yet-badge";
         let mut example_contents: Vec<(&str, screens::ExampleContent)> = Vec::new();
+        // The witness each example screen is checked by, and the bodies to check them against —
+        // see the distinctiveness property below.
+        let mut witnesses: Vec<(&str, String)> = Vec::new();
+        let mut example_bodies: Vec<(&str, String)> = Vec::new();
         let mut probed = 0_usize;
 
         // A real pool when one is reachable, so the `Fed` half asserts over a page that RENDERED.
@@ -980,6 +984,17 @@ mod tests {
                     screens::ExampleContent::DeviceRecord => {
                         rust_i18n::t!("record.identity").to_string()
                     }
+                    // 🔴 **A witness must be DISTINCTIVE to its screen, and until story 6b.7 that
+                    // was advice.** The validation measured both witnesses set to the example
+                    // marker's own text — a string `demonstration_screen` prepends to EVERY example
+                    // body — and the two screens could then serve each other's content with the
+                    // whole suite green. `witnesses` below turns the advice into a property.
+                    screens::ExampleContent::AppsInventory => {
+                        rust_i18n::t!("apps.criticality").to_string()
+                    }
+                    screens::ExampleContent::IpamOccupancy => {
+                        rust_i18n::t!("ipam.grid_label").to_string()
+                    }
                 };
                 assert!(
                     body.contains(&witness),
@@ -987,7 +1002,50 @@ mod tests {
                      screen is serving somebody else's content, or none",
                     screen.href()
                 );
+                witnesses.push((screen.href(), witness));
+                example_bodies.push((screen.href(), body.clone()));
+
+                // 🔴 **EXACTLY ONE marker on a fully-example screen, asserted over the ROUTE TABLE.**
+                // The sibling guard in `page.rs` owns the per-SECTION rule for the `Mixed`
+                // dashboard; this one owns every `Example` screen, and until story 6b.7 neither
+                // covered a screen the two of them did not name. Measured at that story's
+                // validation: a second `example-marker-badge` planted in the applications body left
+                // **zero tests red**, which is story 6b.6's shipped *"four identical banners down
+                // one page"* defect reachable again on a new screen.
+                assert_eq!(
+                    body.matches(marker).count(),
+                    1,
+                    "{} is example all the way through and must carry exactly ONE marker",
+                    screen.href()
+                );
+
+                // 🔑 **Every section of an example screen carries the anchor**, so the day the
+                // screen becomes `Mixed` the per-section guard has something to count. The anchor is
+                // free to add and impossible to retrofit once the sections exist and nobody
+                // remembers which were example.
+                assert_eq!(
+                    body.matches("screen-section").count(),
+                    body.matches("example-section").count(),
+                    "{} has a section that is not marked as example content — `example-section` is \
+                     the ONE anchor the marker guards read, and a section without it is invisible \
+                     to them",
+                    screen.href()
+                );
             }
+
+            // 🔴 **NO SCREEN RENDERS AN i18n KEY, asserted on the real HTTP body of ALL TEN.** The
+            // guard that owned this was an enumeration of the pages `example_screens` happened to
+            // build; story 6b.6 shipped two headings resolving to keys that did not exist, and
+            // story 6b.7's validation measured the same defect landing on a new screen with the
+            // whole suite green. `rust-i18n` renders an unknown key verbatim, so the page shows the
+            // key's own name and every other guard passes.
+            let keys = example_screens::key_names_in_text(&body);
+            assert!(
+                keys.is_empty(),
+                "{} renders {keys:?}, which are i18n KEYS and not words — the operator reads the \
+                 key's name where the translation belongs",
+                screen.href()
+            );
             probed += 1;
         }
 
@@ -1014,17 +1072,40 @@ mod tests {
             "the premise: every screen the loop should reach was probed — a loop that went empty, \
              or one whose skip rule drifted from the route table, would assert nothing"
         );
-        // 🔴 **TWO witness screens now, and the second is a DECISION rather than a drift.** This
-        // read `1` with a message calling a second one *"a witness screen nobody decided on"* —
-        // story 6b.6 is the one somebody decided on, and bumping the number without rewriting the
-        // sentence would have left a false explanation standing over a true count.
+        // 🔴 **FOUR witness screens now, and every one is a DECISION rather than a drift.** This
+        // read `1`, then `2`, each time with a message naming the stories that decided them —
+        // *"bumping the number without rewriting the sentence would leave a false explanation
+        // standing over a true count"* is story 6b.6's own warning, and this is the third bump.
+        // ⚠️ The count is a bookkeeping assertion whose failure message reads *update this number*,
+        // which a developer follows: it is kept because it is the only thing that notices a screen
+        // that GREW example content with no story behind it, and the two properties below are what
+        // notice a screen showing the wrong thing.
         assert_eq!(
             example_contents.len(),
-            2,
-            "the witness screens are the inventory (story 6b.3) and the device record (6b.6), and \
-             a third is a screen that grew example content without a story deciding it should: \
-             {example_contents:?}"
+            4,
+            "the witness screens are the inventory (6b.3), the device record (6b.6) and the \
+             applications and IPAM frames (6b.7), and a fifth is a screen that grew example \
+             content without a story deciding it should: {example_contents:?}"
         );
+        // 🔴 **A WITNESS IS ONLY A WITNESS IF IT IS DISTINCTIVE, and nothing said so until story
+        // 6b.7.** `demonstration_screen` prepends the example marker to every `Example` body, so
+        // any string taken from the marker satisfies every witness for all time — measured at that
+        // story's validation, with both witnesses set to the marker's text and **zero tests red**
+        // while the two screens served each other's content.
+        for (href, witness) in &witnesses {
+            let carriers: Vec<&str> = example_bodies
+                .iter()
+                .filter(|(_, body)| body.contains(witness))
+                .map(|(other, _)| *other)
+                .collect();
+            assert_eq!(
+                carriers,
+                vec![*href],
+                "{href}'s witness {witness:?} must appear in ITS body and in no other. Appearing \
+                 everywhere means it was taken from something every example screen carries — the \
+                 marker, the shell — and it then proves nothing about which body was served"
+            );
+        }
         // 🔑 **The property that actually grows, and it is not the count.** Two screens declaring
         // the SAME `ExampleContent` is one screen silently rendering another's body under its own
         // heading — the defect story 6b.3's code review closed in the TYPE by giving
@@ -1147,6 +1228,56 @@ mod tests {
              route is not reading its query"
         );
         assert!(body.contains(r#"data-device-id="printer-hall""#));
+    }
+
+    /// 🔴 **The subnet selector narrows THROUGH THE ROUTE**, for the reason its sibling above
+    /// exists.
+    ///
+    /// `an_unrecognised_subnet_shows_no_grid_and_says_so` calls `ipam_body` directly and is
+    /// therefore blind to the one mutation this screen is most exposed to: **Rust does not lint an
+    /// unused function parameter**, so a `subnet` threaded through the router,
+    /// `demonstration_screen` and `ExampleContent::render` with the arm still passing
+    /// `Default::default()` leaves every pure test green while the selector does nothing. That is
+    /// story 6b.6's `?kind=printer` defect verbatim, on a screen written three stories later.
+    ///
+    /// 🔑 The oracle is an ADDRESS from the chosen subnet, not the count of cells: every subnet
+    /// draws 256, so a cell count is satisfied by whichever grid was served.
+    #[tokio::test]
+    async fn the_subnet_selector_narrows_through_the_real_route() {
+        for (slug, prefix, other) in [
+            ("workshop", "198.51.100.", "192.0.2."),
+            ("guest", "203.0.113.", "192.0.2."),
+        ] {
+            let response = app(lazy_pool(), config(false, Some(pair())))
+                .oneshot(
+                    Request::builder()
+                        .uri(format!("/ipam?subnet={slug}"))
+                        .header(
+                            axum::http::header::AUTHORIZATION,
+                            basic_header("op", "s3cret"),
+                        )
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let body = String::from_utf8(
+                axum::body::to_bytes(response.into_body(), usize::MAX)
+                    .await
+                    .unwrap()
+                    .to_vec(),
+            )
+            .unwrap();
+            assert!(
+                body.contains(prefix),
+                "?subnet={slug} must draw {prefix}0/24 — the route is not reading its query"
+            );
+            assert!(
+                !body.contains(&format!("{other}1 ·")),
+                "?subnet={slug} served the default subnet's addresses as well"
+            );
+        }
     }
 
     /// 🔴 **The record route answers a NON-CANONICAL slug, and this is the only thing that holds

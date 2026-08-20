@@ -152,6 +152,10 @@ pub(crate) enum ExampleContent {
     /// a `&'static str` used both as a route PATTERN and as a URL the guards FETCH, and
     /// `/devices/{id}` cannot be both. See [`router`] for the skip and for what it costs.
     DeviceRecord,
+    /// The example application inventory — Epic 15's frame (story 6b.7).
+    AppsInventory,
+    /// The example subnet occupancy — Epic 14's frame (story 6b.7).
+    IpamOccupancy,
 }
 
 impl ExampleContent {
@@ -170,6 +174,10 @@ impl ExampleContent {
             ExampleContent::DeviceRecord => unreachable!(
                 "the device record is served by the parameterised route, not by the generic loop"
             ),
+            // ⚠️ Both take the query and one of them ignores it — see `apps_body`'s doc for why the
+            // underscore there is a statement rather than a habit.
+            ExampleContent::AppsInventory => crate::example_screens::apps_body(query),
+            ExampleContent::IpamOccupancy => crate::example_screens::ipam_body(query),
         }
     }
 }
@@ -280,9 +288,10 @@ impl Screen {
             Screen::Device => Nature::Example(ExampleContent::DeviceRecord),
             // ⚠️ Each of these becomes `Example` in ITS OWN story, listed beside it. Until then the
             // screen holds nothing and says so — see [`Nature::Empty`].
-            Screen::Apps       // story 6b.7
-            | Screen::Ipam     // story 6b.7
-            | Screen::Sources  // story 6b.8
+            // Epic 15's and Epic 14's frames, filled from the example dataset (story 6b.7).
+            Screen::Apps => Nature::Example(ExampleContent::AppsInventory),
+            Screen::Ipam => Nature::Example(ExampleContent::IpamOccupancy),
+            Screen::Sources  // story 6b.8
             | Screen::Alerts   // story 6b.8
             | Screen::Diagnostic // story 6b.9
             | Screen::Onboarding => Nature::Empty, // story 6b.9

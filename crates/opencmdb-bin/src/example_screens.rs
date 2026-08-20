@@ -27,6 +27,14 @@ use crate::state_vocabulary::{ObjectState, term_of};
 pub(crate) struct ScreenQuery {
     /// The device kind the inventory is filtered by, as [`DeviceKind::slug`] spells it.
     pub(crate) kind: Option<String>,
+    /// The subnet the occupancy grid shows, as [`example_data::ExampleSubnet::slug`] spells it.
+    ///
+    /// ⚠️ **One type for every demonstration screen means `/devices?subnet=x` parses and is
+    /// ignored**, and `/ipam?kind=x` likewise. That is accepted rather than overlooked: the router's
+    /// loop is generic over [`crate::screens::Screen`], and a per-screen extractor would mean leaving
+    /// that loop — which is what keeps the marker impossible to forget. `serde` ignores unknown
+    /// fields here already, so the shared type widens nothing.
+    pub(crate) subnet: Option<String>,
 }
 
 /// The copy these two screens need, resolved once into the operator's language.
@@ -391,6 +399,386 @@ pub(crate) fn unknown_device_body() -> String {
     .expect("the unknown-device template and its struct are compiled together")
 }
 
+/// The copy the applications screen needs, resolved once into the operator's language.
+///
+/// 🔑 Its own struct, for the reason this module's doc gives: a shared flat struct would grow by a
+/// dozen fields for screens it does not render, and the halves would start depending on each other's
+/// copy.
+pub(crate) struct AppsStrings {
+    /// The screen's heading.
+    title: String,
+    /// The sentence AC2 exists for — *nothing will ever observe them*.
+    lede: String,
+    /// Column: the application.
+    name: String,
+    /// Column: where it runs.
+    host: String,
+    /// Column: the documented version.
+    declared: String,
+    /// Column: the version the host reported.
+    observed: String,
+    /// Column: who answers for it.
+    owner: String,
+    /// Column: how critical it is.
+    criticality: String,
+    /// What the *host* cell says when the application runs outside the perimeter.
+    no_host: String,
+}
+
+/// Resolve the applications screen's copy.
+fn apps_strings() -> AppsStrings {
+    AppsStrings {
+        title: rust_i18n::t!("apps.title").to_string(),
+        lede: rust_i18n::t!("apps.lede").to_string(),
+        name: rust_i18n::t!("apps.name").to_string(),
+        host: rust_i18n::t!("apps.host").to_string(),
+        declared: rust_i18n::t!("apps.declared").to_string(),
+        observed: rust_i18n::t!("apps.observed").to_string(),
+        owner: rust_i18n::t!("apps.owner").to_string(),
+        criticality: rust_i18n::t!("apps.criticality").to_string(),
+        no_host: rust_i18n::t!("apps.no_host").to_string(),
+    }
+}
+
+/// One row of the example application inventory, resolved for rendering.
+pub(crate) struct AppRow {
+    name: &'static str,
+    /// The host's name, or the sentence that says it runs outside the perimeter.
+    host: String,
+    /// The record's address when there is a host, so the row links where the inventory does.
+    host_id: Option<&'static str>,
+    declared: &'static str,
+    /// The observed version, or the typographic placeholder for *nothing evaluated it*.
+    observed: String,
+    owner: &'static str,
+    /// The criticality, RESOLVED — it is a key (Guy, 2026-08-20), unlike [`AppRow::owner`].
+    criticality: String,
+}
+
+/// The applications screen's body.
+#[derive(Template)]
+#[template(path = "_apps_example.html")]
+struct Apps {
+    apps: Vec<AppRow>,
+    s: AppsStrings,
+}
+
+/// Render the example application inventory.
+///
+/// ⚠️ The query is taken and deliberately unused: this screen offers no filter, and taking the
+/// parameter keeps every demonstration screen on one signature. *Rust does not lint an unused
+/// function parameter* — story 6b.6 threaded a query through three signatures and left the arm
+/// passing `Default::default()`, so the underscore here is a statement, not a habit.
+///
+/// # Panics
+///
+/// Never in practice, for the reason given on [`inventory_body`].
+pub(crate) fn apps_body(_query: &ScreenQuery) -> String {
+    let s = apps_strings();
+    let devices = example_data::devices();
+    Apps {
+        apps: example_data::apps()
+            .into_iter()
+            .map(|app| AppRow {
+                name: app.name,
+                host: match app.host {
+                    Some(slug) => devices
+                        .iter()
+                        .find(|device| device.id == slug)
+                        .map(|device| device.name.to_string())
+                        // Unreachable while the guard below holds; a slug naming no device is a
+                        // dataset defect, and saying so beats rendering the raw slug.
+                        .unwrap_or_else(|| slug.to_string()),
+                    None => s.no_host.clone(),
+                },
+                host_id: app.host,
+                declared: app.declared_version,
+                // The same em dash the inventory uses for an absent MAC: locale-neutral, therefore
+                // no key, and one placeholder across the product.
+                observed: app.observed_version.unwrap_or("—").to_string(),
+                owner: app.owner,
+                criticality: rust_i18n::t!(app.criticality_key).to_string(),
+            })
+            .collect(),
+        s,
+    }
+    .render()
+    .expect("the applications template and its struct are compiled together")
+}
+
+/// The copy the IPAM screen needs, resolved once.
+pub(crate) struct IpamStrings {
+    /// The screen's heading.
+    title: String,
+    /// *One cell, one address.*
+    lede: String,
+    /// The accessible name of the subnet selector.
+    selector_label: String,
+    /// The accessible name of the grid itself.
+    grid_label: String,
+    /// The *next free address* panel's heading.
+    next_free: String,
+    /// The *address conflict* panel's heading — qualified on purpose (Guy, 2026-08-20).
+    conflict_title: String,
+    /// The sentence explaining the conflict.
+    conflict_lede: String,
+    /// What the row of the device declared at the address says.
+    conflict_declared: String,
+    /// What the row of the device also answering says.
+    conflict_observed: String,
+    /// The link into the triage.
+    conflict_link: String,
+    /// What the screen says for a subnet slug nothing names.
+    unknown_subnet: String,
+    /// The occupancy line, already assembled with its three counts.
+    occupancy: String,
+}
+
+/// One cell of the occupancy grid.
+pub(crate) struct CellView {
+    /// Its accessible name — the address and its state, which AC1 requires **per cell**.
+    label: String,
+    /// The CSS modifier, from [`example_data::CellState::modifier`].
+    modifier: &'static str,
+}
+
+/// One tab of the subnet selector.
+pub(crate) struct SubnetTab {
+    slug: &'static str,
+    label: String,
+    active: bool,
+}
+
+/// One line of the conflict panel.
+pub(crate) struct ConflictLine {
+    /// The device's name.
+    name: &'static str,
+    /// Its record's address.
+    id: &'static str,
+    /// What is said about it — declared here, or seen with a lease.
+    note: String,
+}
+
+/// The IPAM screen's body.
+#[derive(Template)]
+#[template(path = "_ipam_example.html")]
+struct Ipam {
+    tabs: Vec<SubnetTab>,
+    /// `None` when the query names a subnet that does not exist — see [`ipam_body`].
+    cells: Option<Vec<CellView>>,
+    /// The four state words, in [`example_data::CellState`]'s order.
+    ///
+    /// 🔑 **Words only — the legend's CSS classes are LITERALS in the template**, on purpose: they
+    /// are what makes the cells' Rust-chosen modifiers visible to the stylesheet guard. Carrying the
+    /// modifier here as well would let a tidy-up render the legend from it, which is exactly the
+    /// change the validation measured turning the guard green over a colourless grid.
+    legend: Vec<String>,
+    next_free: String,
+    conflict: Vec<ConflictLine>,
+    conflict_ipv4: &'static str,
+    s: IpamStrings,
+}
+
+/// Render the example subnet occupancy.
+///
+/// 🔴 **An unrecognised `subnet` shows NO grid and says so**, which is the policy the sibling screen
+/// already states: [`inventory_body`]'s doc reads *"an unrecognised `kind` narrows to nothing rather
+/// than silently showing everything: a filter that ignores its input is the shape story 6b.4's review
+/// caught on `?sort=`"*. The validation's prototype silently served the first subnet, which would
+/// have shipped **two screens with opposite policies for one gesture**.
+///
+/// # Panics
+///
+/// Never in practice, for the reason given on [`inventory_body`].
+pub(crate) fn ipam_body(query: &ScreenQuery) -> String {
+    let subnets = example_data::subnets();
+    let asked = query.subnet.as_deref().filter(|slug| !slug.is_empty());
+    let selected = match asked {
+        Some(slug) => example_data::subnet_by_slug(slug),
+        None => example_data::subnets().into_iter().next(),
+    };
+    let conflict = example_data::address_conflict();
+    let devices = example_data::devices();
+    let name_of = |slug: &str| -> &'static str {
+        devices
+            .iter()
+            .find(|device| device.id == slug)
+            .map(|device| device.name)
+            // Unreachable while `the_conflict_panel_names_devices_that_exist` holds.
+            .unwrap_or("—")
+    };
+
+    let occupancy = match &selected {
+        Some(subnet) => {
+            let (used, reserved, free) = subnet.occupancy();
+            rust_i18n::t!(
+                "ipam.occupancy",
+                used = used.to_string(),
+                reserved = reserved.to_string(),
+                free = free.to_string()
+            )
+            .to_string()
+        }
+        None => String::new(),
+    };
+    let next_free = match &selected {
+        Some(subnet) => match subnet.next_free() {
+            Some(octet) => format!("{}.{octet}", subnet.prefix),
+            None => rust_i18n::t!("ipam.next_free_none").to_string(),
+        },
+        None => String::new(),
+    };
+
+    let s = IpamStrings {
+        title: rust_i18n::t!("ipam.title").to_string(),
+        lede: rust_i18n::t!("ipam.lede").to_string(),
+        selector_label: rust_i18n::t!("ipam.selector_label").to_string(),
+        grid_label: rust_i18n::t!("ipam.grid_label").to_string(),
+        next_free: rust_i18n::t!("ipam.next_free").to_string(),
+        conflict_title: rust_i18n::t!("ipam.conflict_title").to_string(),
+        conflict_lede: rust_i18n::t!("ipam.conflict_lede").to_string(),
+        conflict_declared: rust_i18n::t!("ipam.conflict_declared").to_string(),
+        conflict_observed: rust_i18n::t!("ipam.conflict_observed").to_string(),
+        conflict_link: rust_i18n::t!("ipam.conflict_link").to_string(),
+        unknown_subnet: rust_i18n::t!("ipam.unknown_subnet").to_string(),
+        occupancy,
+    };
+
+    Ipam {
+        tabs: subnets
+            .iter()
+            .map(|subnet| SubnetTab {
+                slug: subnet.slug,
+                label: format!("{} · {}", subnet.cidr, subnet.name),
+                active: selected
+                    .as_ref()
+                    .is_some_and(|chosen| chosen.slug == subnet.slug),
+            })
+            .collect(),
+        cells: selected.as_ref().map(|subnet| {
+            (0..=255u8)
+                .map(|octet| {
+                    let state = subnet.state_of(octet);
+                    CellView {
+                        // 🔑 The address AND its state, per cell — AC1's literal requirement. The
+                        // mock puts one label on the container and a `title` on each cell, which
+                        // names nothing to a screen reader.
+                        label: format!(
+                            "{}.{octet} · {}",
+                            subnet.prefix,
+                            rust_i18n::t!(state.label_key())
+                        ),
+                        modifier: state.modifier(),
+                    }
+                })
+                .collect()
+        }),
+        legend: [
+            example_data::CellState::Used,
+            example_data::CellState::Reserved,
+            example_data::CellState::Free,
+            example_data::CellState::Structural,
+        ]
+        .into_iter()
+        .map(|state| rust_i18n::t!(state.label_key()).to_string())
+        .collect(),
+        next_free,
+        conflict: vec![
+            ConflictLine {
+                name: name_of(conflict.declared_device),
+                id: conflict.declared_device,
+                note: s.conflict_declared.clone(),
+            },
+            ConflictLine {
+                name: name_of(conflict.observed_device),
+                id: conflict.observed_device,
+                note: format!(
+                    "{} · {}",
+                    s.conflict_observed,
+                    rust_i18n::t!("ipam.conflict_lease", at = conflict.lease_seen)
+                ),
+            },
+        ],
+        conflict_ipv4: conflict.ipv4,
+        s,
+    }
+    .render()
+    .expect("the IPAM template and its struct are compiled together")
+}
+
+/// Every word of `html`'s visible TEXT that looks like an i18n key rather than a translation.
+///
+/// # Why this is a shared helper since story 6b.7
+///
+/// 🔴 The guard that used it was an **ENUMERATION of pages** — `/devices`, the eight records, the
+/// unknown page — so the two screens story 6b.7 adds were outside its population entirely. Measured
+/// at that story's validation: a `criticality_key` naming a key that does not exist rendered the key
+/// name on `/apps` with **zero tests red**, while the control (the same defect on a device's
+/// `role_key`) reddened two. *rust-i18n renders an unknown key verbatim, and
+/// `every_key_carries_both_locales` asks only whether the keys IN `app.yml` have two languages — a
+/// key absent from the file is not in its population at all.*
+///
+/// 🔑 So the detector lives here and `main.rs`'s route-table guard applies it to the real HTTP body
+/// of **every** screen. This module keeps its own caller for the record pages, which no route in
+/// `Screen::ALL` reaches.
+///
+/// ⚠️ **Case-INSENSITIVE, and the widening is story 6b.6's code review.** It required every segment
+/// to be lowercase, so `Zorp.Kind.bogus` went through unseen. The discriminator against false
+/// positives is **two segments carrying a letter**, not the case: it separates `example.role.storage`
+/// from a version like `v0.1.1` (one lettered segment) and from an address like `192.0.2.10` (none),
+/// both of which are legitimate text on these very screens.
+#[cfg(test)]
+pub(crate) fn key_names_in_text(html: &str) -> Vec<String> {
+    fn keyish(word: &str) -> bool {
+        let word = word.trim_matches(|c: char| !c.is_alphanumeric() && c != '.' && c != '_');
+        let parts: Vec<&str> = word.split('.').collect();
+        parts.len() >= 2
+            && parts.iter().all(|part| {
+                !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            })
+            && parts
+                .iter()
+                .filter(|part| part.chars().any(|c| c.is_ascii_alphabetic()))
+                .count()
+                >= 2
+    }
+
+    visible_text(html)
+        .split_whitespace()
+        .filter(|word| keyish(word))
+        .map(str::to_string)
+        .collect()
+}
+
+/// What the operator actually reads: `html` with every tag removed.
+///
+/// 🔴 **Separated from [`key_names_in_text`] because a premise assertion was measured counting the
+/// wrong thing.** The guard below accumulated `html.split_whitespace().count()` — raw markup, so
+/// every `href`, `class` and tag name counted as an inspected word — under a message claiming
+/// *"rendered words were inspected"*. Its floor was then satisfied by markup whatever the page said.
+/// Found by the review layer that had the diff and nothing else. *A counter that stops measuring
+/// what its message names is a floor nobody re-reads*, which is the family this very file's
+/// neighbouring guard warns about.
+///
+/// ⚠️ Tag-depth and not a parser: it is a test helper over templates this repository controls, and
+/// it must stay conservative — text it wrongly discards is text this guard stops checking.
+#[cfg(test)]
+pub(crate) fn visible_text(html: &str) -> String {
+    // Only the TEXT: an `href`, a `class` and an Askama comment legitimately carry dotted tokens,
+    // and the operator reads none of them.
+    let mut text = String::new();
+    let mut depth = 0_usize;
+    for c in html.chars() {
+        match c {
+            '<' => depth += 1,
+            '>' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => text.push(c),
+            _ => {}
+        }
+    }
+    text
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -534,6 +922,9 @@ mod tests {
         let all = body_of(&ScreenQuery::default());
         let printers = body_of(&ScreenQuery {
             kind: Some("printer".into()),
+            // Explicit rather than `..Default::default()`: a spread absorbs the NEXT field
+            // silently, and the compiler-forced revisit is the point.
+            subnet: None,
         });
         assert!(all.contains("nas-01") && all.contains("printer-hall"));
         assert!(
@@ -545,6 +936,9 @@ mod tests {
         // filter matched when it did not.
         let bogus = body_of(&ScreenQuery {
             kind: Some("no-such-kind".into()),
+            // Explicit rather than `..Default::default()`: a spread absorbs the NEXT field
+            // silently, and the compiler-forced revisit is the point.
+            subnet: None,
         });
         assert!(
             !bogus.contains("nas-01"),
@@ -566,6 +960,9 @@ mod tests {
         for kind in DeviceKind::ALL {
             let html = body_of(&ScreenQuery {
                 kind: Some(kind.slug().into()),
+                // Explicit rather than `..Default::default()`: a spread absorbs the NEXT field
+                // silently, and the compiler-forced revisit is the point.
+                subnet: None,
             });
             assert!(
                 !html.contains(rust_i18n::t!("devices.none").to_string().as_str()),
@@ -731,32 +1128,236 @@ mod tests {
     /// ⚠️ **The limit**: it recognises a key by SHAPE — a dotted lowercase token with no space. A
     /// key spelled unlike a key is invisible, and so is a legitimate value that looks like one
     /// (none today: the dataset's values are addresses, MACs, serials and proper nouns).
+    /// AC1 — **every cell of the grid carries its own `aria-label`**, and it names the address.
+    ///
+    /// 🔴 **Measured carried by NOTHING before this test existed**: at the story's validation,
+    /// replacing every `aria-label` with the mock's own `title` left **zero tests red**, and the
+    /// repository then held no axe-core, no headless browser and **not one assertion on an `aria-*`
+    /// attribute at all**. ⚠️ Past tense on purpose — story 6b.7 adds three, this one and the two
+    /// below, and the sentence was written in the present until a review layer pointed out that its
+    /// own commit falsifies it. `epics.md:316` names this grid by name as a WCAG 2.1 AA key view,
+    /// and the epic's axe-core gate (`epics.md:2108`) is still owed by nobody's story.
+    #[test]
+    fn every_cell_of_the_grid_carries_its_own_aria_label() {
+        let html = ipam_body(&ScreenQuery::default());
+        let cells = html.matches("<li class=\"ipam-cell").count();
+        assert_eq!(
+            cells, 256,
+            "a /24 is drawn as 256 cells — 254 hosts plus the network and broadcast addresses"
+        );
+        // One label per cell, counted on the CELLS rather than on the document: the grid's own
+        // container carries one too, and a count over the whole body would be satisfied by it.
+        let labelled = html
+            .match_indices("<li class=\"ipam-cell")
+            .filter(|(at, _)| {
+                let rest = &html[*at..];
+                let end = rest.find('>').expect("a tag closes");
+                rest[..end].contains("aria-label=\"")
+            })
+            .count();
+        assert_eq!(
+            labelled, 256,
+            "AC1: an `aria-label` PER CELL. A `title` is not an accessible name for a list item, \
+             and one label on the container names the grid rather than the address"
+        );
+        for octet in [0_u8, 1, 41, 254, 255] {
+            let expected = format!("192.0.2.{octet} · ");
+            assert!(
+                html.contains(&expected),
+                "the label of .{octet} must name its own address, not its position"
+            );
+        }
+    }
+
+    /// The grid is a LIST laid out by CSS Grid, and never the mock's `role="img"`.
+    ///
+    /// 🔑 `role="img"` is *Children Presentational: True*, so 256 labels inside it are announced as
+    /// one sentence; and `aria-label` on a bare `<div>` maps to `generic`, where ARIA 1.2 prohibits
+    /// it outright. `role="list"` is explicit because `list-style: none` is known to drop the role
+    /// in Safari/VoiceOver. Chrome 151's accessibility tree was read at validation to confirm the
+    /// `listitem` keeps its name.
+    #[test]
+    fn the_grid_is_a_labelled_list_and_not_a_presentational_image() {
+        let html = ipam_body(&ScreenQuery::default());
+        assert!(
+            html.contains("class=\"ipam-grid\" role=\"list\""),
+            "the grid must keep its list role explicitly"
+        );
+        assert!(
+            !html.contains("role=\"img\""),
+            "role=\"img\" makes the whole subtree presentational and swallows all 256 labels"
+        );
+    }
+
+    /// 🔴 An unrecognised `subnet` shows **no grid** and says so — the sibling screen's policy.
+    ///
+    /// [`inventory_body`]'s own doc: *"an unrecognised `kind` narrows to nothing rather than
+    /// silently showing everything: a filter that ignores its input is the shape story 6b.4's review
+    /// caught on `?sort=`"*. The validation's prototype served the first subnet instead, which would
+    /// have shipped **two screens with opposite policies for one gesture**.
+    #[test]
+    fn an_unrecognised_subnet_shows_no_grid_and_says_so() {
+        let html = ipam_body(&ScreenQuery {
+            kind: None,
+            subnet: Some("no-such-subnet".into()),
+        });
+        assert!(
+            !html.contains("ipam-grid"),
+            "a subnet nothing names must not draw somebody else's grid"
+        );
+        assert!(
+            html.contains(&rust_i18n::t!("ipam.unknown_subnet").to_string()),
+            "and it must say why the grid is absent"
+        );
+        // The control: a slug that DOES name a subnet draws one, so the assertion above is not
+        // satisfied by a screen that never draws a grid at all.
+        let known = ipam_body(&ScreenQuery {
+            kind: None,
+            subnet: Some("workshop".into()),
+        });
+        assert!(known.contains("ipam-grid"), "the control must draw a grid");
+        assert!(
+            known.contains("198.51.100."),
+            "and it must be the workshop's own addresses — a selector that parses its input and \
+             then ignores it renders the first subnet, and Rust does not lint an unused parameter"
+        );
+    }
+
+    /// The selector offers every subnet, marks the one in force, and never says `aria-current="page"`.
+    ///
+    /// ⚠️ **Measured invisible before this test**: `exactly_one_entry_is_current_on_each_screen`
+    /// renders the shell with an EMPTY body, so a second `aria-current="page"` inside a screen's
+    /// content is outside its population. Two of them in one document is an ARIA error, and the
+    /// inventory's filter bar already established `"true"` as the idiom for a control — which makes
+    /// `"page"` a coin flip for whoever writes the next selector.
+    #[test]
+    fn the_subnet_selector_marks_one_tab_and_never_claims_to_be_the_page() {
+        let html = ipam_body(&ScreenQuery::default());
+        for subnet in example_data::subnets() {
+            assert!(
+                html.contains(&format!("/ipam?subnet={}", subnet.slug)),
+                "{} must be offered by the selector",
+                subnet.cidr
+            );
+        }
+        // ⚠️ **The negative comes FIRST, and the order is a measurement.** With the count above it,
+        // swapping `"true"` for `"page"` reddened on *"exactly one tab is in force"* — a true
+        // failure naming the wrong cause, and the assertion that exists for this defect was never
+        // reached. Story 5.13's assertion-order finding, which this project has now met five times.
+        assert!(
+            !html.contains("aria-current=\"page\""),
+            "`page` belongs to the shell's navigation; a second one inside the body is an ARIA \
+             error on a WCAG key view"
+        );
+        assert_eq!(
+            html.matches("aria-current=\"true\"").count(),
+            1,
+            "exactly one tab is in force"
+        );
+    }
+
+    /// 🔴 The legend names every cell modifier as a **literal**, and that redundancy is deliberate.
+    ///
+    /// `every_class_a_template_names_is_defined_in_the_stylesheet` skips any class attribute
+    /// carrying an Askama expression, so the cells — whose modifier comes from a Rust `match` — are
+    /// invisible to it. **Measured at validation**: write the legend the DRY way, from the same
+    /// `CellState` data the cells use, and deleting `.ipam-cell-used` from the sheet leaves the
+    /// whole suite green while every occupied cell ships with no colour. That is
+    /// `_dashboard.html:58`'s `spark-h8` reproduced, *caused by the tidy gesture*.
+    ///
+    /// 🔑 This test is what stops the tidy-up: the literals are load-bearing, and their loss is a
+    /// silent loss of coverage rather than a visible one.
+    #[test]
+    fn the_legend_names_every_cell_modifier_as_a_literal() {
+        let template = include_str!("../templates/_ipam_example.html");
+        for state in [
+            example_data::CellState::Used,
+            example_data::CellState::Reserved,
+            example_data::CellState::Free,
+            example_data::CellState::Structural,
+        ] {
+            let literal = format!("ipam-cell {}\"", state.modifier());
+            assert!(
+                template.contains(&literal),
+                "the legend must name {:?} as a literal class: it is the only way the stylesheet \
+                 guard can see a modifier the cells choose in Rust",
+                state.modifier()
+            );
+        }
+    }
+
+    /// AC2 — the applications screen says, on the screen, that the owner and the criticality are
+    /// declared and that nothing will ever observe them.
+    #[test]
+    fn the_apps_screen_states_that_owner_and_criticality_are_unobservable() {
+        let html = apps_body(&ScreenQuery::default());
+        let lede = rust_i18n::t!("apps.lede").to_string();
+        assert!(
+            html.contains(&lede),
+            "AC2's sentence is the reason this screen exists and belongs ON it, not only in the \
+             story file"
+        );
+        for header in ["apps.owner", "apps.criticality"] {
+            assert!(
+                html.contains(&rust_i18n::t!(header).to_string()),
+                "{header} must be a column of the table"
+            );
+        }
+        for app in example_data::apps() {
+            assert!(
+                html.contains(app.owner),
+                "{} must show its owner — a proper noun, rendered as data",
+                app.name
+            );
+            assert!(
+                html.contains(&rust_i18n::t!(app.criticality_key).to_string()),
+                "{} must show its criticality — a classification, rendered from a key",
+                app.name
+            );
+        }
+    }
+
+    /// 🔴 The screen renders **no exposure column** — Guy's arbitration of 2026-08-20, option (c).
+    ///
+    /// ⚠️ A negative assertion, deliberately: the mock has the column, the copy for it is one line
+    /// away, and the reason not to ship it is a vocabulary decision that lives in a document. This
+    /// is what makes the decision survive the next person who compares the screen to the mock.
+    #[test]
+    fn the_apps_screen_renders_no_exposure_column() {
+        let html = apps_body(&ScreenQuery::default());
+        for word in ["Exposition", "Exposure", "Reverse proxy", "Hors périmètre"] {
+            assert!(
+                !html.contains(word),
+                "{word:?} is on the screen. Exposure is a fourth vocabulary axis with four values \
+                 and no glossary row; option (b) — render it and register it — was refused. \
+                 Rendering it needs a new arbitration, not a column"
+            );
+        }
+    }
+
+    /// An application hosted outside the perimeter says so rather than linking nowhere.
+    #[test]
+    fn an_application_without_a_host_says_so_rather_than_linking_nowhere() {
+        let html = apps_body(&ScreenQuery::default());
+        assert!(
+            html.contains(&rust_i18n::t!("apps.no_host").to_string()),
+            "the row hosted outside the perimeter must say so"
+        );
+        for app in example_data::apps() {
+            let Some(host) = app.host else { continue };
+            assert!(
+                html.contains(&format!("/devices/{host}")),
+                "{} must link to its host's record, as the inventory does",
+                app.name
+            );
+        }
+    }
+
     #[test]
     fn no_i18n_key_reaches_the_screen() {
-        // ⚠️ **Case-INSENSITIVE, and the widening is a code-review finding.** It required every
-        // segment to be lowercase, so a key with an uppercase part — `Zorp.Kind.bogus` — went
-        // through unseen, and the edge-case layer measured it rendering on a live page with the
-        // whole suite green. The control it kept: the same key in lowercase WAS caught, so the
-        // blind spot needed both a non-literal construction and a capital.
-        //
-        // 🔑 The discriminator against false positives is **two segments carrying a letter**, not
-        // the case: it separates `example.role.storage` from a version like `v0.1.1` (one lettered
-        // segment) and from an address like `192.0.2.10` (none), both of which are legitimate text
-        // on these very screens.
-        fn keyish(word: &str) -> bool {
-            let word = word.trim_matches(|c: char| !c.is_alphanumeric() && c != '.' && c != '_');
-            let parts: Vec<&str> = word.split('.').collect();
-            parts.len() >= 2
-                && parts.iter().all(|part| {
-                    !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-                })
-                && parts
-                    .iter()
-                    .filter(|part| part.chars().any(|c| c.is_ascii_alphabetic()))
-                    .count()
-                    >= 2
-        }
-
+        // 🔑 The detector is [`key_names_in_text`], shared with `main.rs`'s route-table guard since
+        // story 6b.7 — see its doc for the enumeration this list used to be, and for what that cost.
+        // This caller keeps the RECORD pages, which no route in `Screen::ALL` reaches.
         let mut pages = vec![("/devices", inventory_body(&ScreenQuery::default()))];
         for device in example_data::devices() {
             pages.push((
@@ -768,27 +1369,14 @@ mod tests {
 
         let mut checked = 0_usize;
         for (screen, html) in &pages {
-            // Only the TEXT: an `href`, a `class` and an Askama comment legitimately carry dotted
-            // tokens, and the operator reads none of them.
-            let mut text = String::new();
-            let mut depth = 0_usize;
-            for c in html.chars() {
-                match c {
-                    '<' => depth += 1,
-                    '>' => depth = depth.saturating_sub(1),
-                    _ if depth == 0 => text.push(c),
-                    _ => {}
-                }
-            }
-            for word in text.split_whitespace() {
-                assert!(
-                    !keyish(word),
-                    "{screen} renders {word:?}, which is an i18n KEY and not a word — the \
-                     operator reads the key's name where the translation belongs, and no guard \
-                     over the source, the dataset or the locale file can see it"
-                );
-                checked += 1;
-            }
+            let keys = key_names_in_text(html);
+            assert!(
+                keys.is_empty(),
+                "{screen} renders {keys:?}, which are i18n KEYS and not words — the operator \
+                 reads the key's name where the translation belongs, and no guard over the \
+                 source, the dataset or the locale file can see it"
+            );
+            checked += visible_text(html).split_whitespace().count();
         }
         assert!(
             checked >= 200,

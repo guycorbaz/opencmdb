@@ -531,3 +531,100 @@ record.back:
 record.unknown:
   en: "No device carries this identifier."
   fr: "Aucun appareil ne porte cet identifiant."
+
+# ── Applications (story 6b.7, Epic 15's frame — example data) ────────────────
+apps.title:
+  en: "Applications and software"
+  fr: "Applications et logiciels"
+apps.lede:
+  en: "What the business runs, where it runs, and who answers for it. The observed version comes from the host; the owner and the criticality are declared — nothing will ever observe them."
+  fr: "Ce que l'entreprise utilise, où cela tourne, qui en répond. La version observée vient de l'hôte ; le propriétaire et la criticité sont déclarés — rien ne les observera jamais."
+apps.name:
+  en: "Application"
+  fr: "Application"
+apps.host:
+  en: "Host"
+  fr: "Hôte"
+apps.declared:
+  en: "Declared version"
+  fr: "Version déclarée"
+apps.observed:
+  en: "Observed version"
+  fr: "Version observée"
+apps.owner:
+  en: "Owner"
+  fr: "Propriétaire"
+apps.criticality:
+  en: "Criticality"
+  fr: "Criticité"
+apps.no_host:
+  en: "hosted outside the perimeter"
+  fr: "hébergé hors du périmètre"
+example.criticality.critical:
+  en: "Critical"
+  fr: "Critique"
+example.criticality.high:
+  en: "High"
+  fr: "Élevée"
+example.criticality.medium:
+  en: "Medium"
+  fr: "Moyenne"
+example.criticality.low:
+  en: "Low"
+  fr: "Faible"
+
+# ── IPAM (story 6b.7, Epic 14's frame — example data) ────────────────────────
+ipam.title:
+  en: "IPAM"
+  fr: "IPAM"
+ipam.lede:
+  en: "Occupancy by subnet. One cell, one address."
+  fr: "Occupation par sous-réseau. Une case, une adresse."
+ipam.selector_label:
+  en: "Subnet"
+  fr: "Sous-réseau"
+ipam.grid_label:
+  en: "Subnet occupancy grid"
+  fr: "Grille d'occupation du sous-réseau"
+ipam.state.used:
+  en: "used"
+  fr: "utilisée"
+ipam.state.reserved:
+  en: "reserved"
+  fr: "réservée"
+ipam.state.free:
+  en: "free"
+  fr: "libre"
+ipam.state.structural:
+  en: "network or broadcast"
+  fr: "réseau ou diffusion"
+ipam.occupancy:
+  en: "%{used} used · %{reserved} reserved · %{free} free, of 254 hosts"
+  fr: "%{used} utilisées · %{reserved} réservées · %{free} libres, sur 254 hôtes"
+ipam.next_free:
+  en: "Next free address"
+  fr: "Prochaine adresse libre"
+ipam.next_free_none:
+  en: "None — the subnet is full"
+  fr: "Aucune — le sous-réseau est plein"
+ipam.unknown_subnet:
+  en: "No subnet is named by this address. Choose one above."
+  fr: "Aucun sous-réseau ne porte ce nom. Choisissez-en un ci-dessus."
+ipam.conflict_title:
+  en: "Address conflict"
+  fr: "Conflit d'adresse"
+ipam.conflict_lede:
+  en: "Two devices answer here. These are the two:"
+  fr: "Deux appareils répondent. Voici lesquels :"
+ipam.conflict_declared:
+  en: "declared here"
+  fr: "déclaré ici"
+ipam.conflict_observed:
+  en: "also answering"
+  fr: "répond aussi"
+ipam.conflict_lease:
+  en: "DHCP lease seen %{at}"
+  fr: "bail DHCP vu %{at}"
+ipam.conflict_link:
+  en: "Settle it in the triage"
+  fr: "Trancher dans le triage"

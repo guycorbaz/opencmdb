@@ -773,6 +773,365 @@ pub(crate) fn unplaced_sightings() -> Vec<ExampleSighting> {
     ]
 }
 
+/// One application in the example inventory — story 6b.7, Epic 15's frame.
+///
+/// # The vocabulary this struct carries, and the arbitration that shaped it
+///
+/// 🔴 **Five of the nouns this screen would name are in NO binding table**: `application`, `owner`,
+/// `criticality`, `exposure` and `host`. Story 6b.6 registered the first three and deliberately did
+/// not render them (`deferred-work.md:4267`); this story's own AC requires two of them, which is how
+/// the register's owner assignment came to be falsified by the plan it was written under.
+///
+/// 🔑 **Guy's arbitration of 2026-08-20, option (c): render what the criterion NAMES and register the
+/// rest.** So there is `owner` and there is `criticality_key` — and **there is no `exposure` field**,
+/// because rendering a whole fourth axis with four values that no criterion asks for is what option
+/// (b) would have cost. Extending the binding glossary was refused as **premature, not wrong**: it
+/// would take five rows plus three value SCALES, and a scale is a new kind of row in a table whose
+/// every row reads *one concept, one translation*. Epic 15 is where that closure belongs.
+///
+/// ⚠️ **`host` stays and is registered with the other four.** An application that runs nowhere is not
+/// an application: it is FR28's containment, the device record already renders it as *Hosted here*,
+/// and dropping it would gut the screen to satisfy a rule about vocabulary.
+pub(crate) struct ExampleApp {
+    /// What it is called — a proper noun, therefore data and not a key.
+    pub(crate) name: &'static str,
+    /// The slug of the device it runs on, or `None` when it runs outside the perimeter.
+    ///
+    /// 🔑 **An `Option`, because one row really has no host** — *Site vitrine* is hosted elsewhere,
+    /// and it is the row of which AC2's *"declared and unobservable"* is most true. The first draft
+    /// of this story prescribed a test requiring every host to name a device, which that row
+    /// falsifies; the absence is modelled rather than papered over ([`ExampleSighting::mac`]'s
+    /// precedent).
+    pub(crate) host: Option<&'static str>,
+    /// The version the operator documented — locale-neutral data.
+    pub(crate) declared_version: &'static str,
+    /// The version the host reported, or `None` when nothing evaluated it.
+    pub(crate) observed_version: Option<&'static str>,
+    /// Who answers for it — **data, not a key** (Guy, 2026-08-20).
+    ///
+    /// 🔑 An owner is a **proper noun**, like a device's [`ExampleDevice::name`]: *Comptabilité* is
+    /// the name of a team, and translating it would rename a real thing. ⚠️ The opposite mistake is
+    /// the one that ships silently — the validation measured that with the owners as literals
+    /// **`/apps` renders five French words inside the English UI with the whole suite green**, which
+    /// is story 6b.6's `role_key` defect verbatim. The distinction is *proper noun* against
+    /// *classification*, and it is decided per field rather than per screen.
+    pub(crate) owner: &'static str,
+    /// The i18n KEY of how critical it is — **a key** (Guy, 2026-08-20).
+    ///
+    /// 🔑 Criticality is a **closed classification the product will one day compute**, so it is copy
+    /// the operator reads in their own language. ⚠️ Its four values carry **no glossary row**, which
+    /// is registered rather than introduced: see this struct's own doc.
+    pub(crate) criticality_key: &'static str,
+}
+
+/// One subnet of the example IPAM screen — story 6b.7, Epic 14's frame.
+///
+/// # Why the occupancy is a LIST and never a formula
+///
+/// 🔴 `epics.md:2236` bans the mock's `(i * 37) % 256 < used`: *"a fake that varies is a fake no test
+/// can pin and no screenshot can compare."* So a cell's state is a **membership lookup** against the
+/// two committed lists below, never an arithmetic predicate — which makes the grid a function of data
+/// a reviewer can read and a test can pin address by address.
+///
+/// ⚠️ The story's first draft feared the size of that (*"~110 literals … verbose but honest"*) and
+/// offered to shrink the mock's numbers. Measured at validation, all three subnets come to **175
+/// octets over 16 lines** after `cargo fmt`. The mock's counts are kept.
+pub(crate) struct ExampleSubnet {
+    /// What the query string carries for it.
+    pub(crate) slug: &'static str,
+    /// Its CIDR, as the operator reads it — locale-neutral data.
+    pub(crate) cidr: &'static str,
+    /// What the operator called it — a proper noun, therefore data (see [`ExampleApp::owner`]).
+    pub(crate) name: &'static str,
+    /// The first three octets, so a cell can name its own address.
+    pub(crate) prefix: &'static str,
+    /// The host octets that are occupied.
+    pub(crate) used: &'static [u8],
+    /// The host octets held back — a DHCP range, a static pool.
+    pub(crate) reserved: &'static [u8],
+}
+
+/// The four states a cell of the occupancy grid can be in.
+///
+/// 🔴 **`Structural` exists because a /24 carries 256 ADDRESSES and 254 HOSTS**, and the mock does
+/// not: it loops `for i = 0..256`, draws `.0` and `.255` as ordinary free cells, and its *next free
+/// address* panel then names the NETWORK address. The validation reproduced that on a real build
+/// before the defect was inherited. ⚠️ And the story's own first draft prescribed a test asserting
+/// the counts *"sum to 256"*, which would have pinned the defect as the expected behaviour — *a test
+/// that pins the ugly thing is a test that requires it* (story 6b.4).
+///
+/// 🔑 The occupancy line therefore counts over the **254 hosts**, and the two structural cells are in
+/// none of its three numbers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CellState {
+    /// Something answers there.
+    Used,
+    /// Held back deliberately — a DHCP range or a static pool.
+    Reserved,
+    /// Available.
+    Free,
+    /// The network or the broadcast address: not a host, and not the operator's to assign.
+    Structural,
+}
+
+impl CellState {
+    /// The CSS modifier this state renders through.
+    ///
+    /// 🔴 **A `&'static str` chosen by a `match`, and the classes in the template are LITERALS.**
+    /// Epic 6b's constraint 5: a class *built* in Rust is invisible to
+    /// `every_class_a_template_names_is_defined_in_the_stylesheet`, which skips any `class="…"`
+    /// containing `{`. The shipped specimen is `_dashboard.html:58`'s `spark-h{{ height }}`, whose
+    /// `.spark-h8` was missing from the sheet for a whole story. See the legend in
+    /// `_ipam_example.html` for the deliberate redundancy that carries this guard.
+    pub(crate) fn modifier(self) -> &'static str {
+        match self {
+            CellState::Used => "ipam-cell-used",
+            CellState::Reserved => "ipam-cell-reserved",
+            CellState::Free => "ipam-cell-free",
+            CellState::Structural => "ipam-cell-structural",
+        }
+    }
+
+    /// The i18n KEY of the word that names this state to a screen reader and in the legend.
+    pub(crate) fn label_key(self) -> &'static str {
+        match self {
+            CellState::Used => "ipam.state.used",
+            CellState::Reserved => "ipam.state.reserved",
+            CellState::Free => "ipam.state.free",
+            CellState::Structural => "ipam.state.structural",
+        }
+    }
+}
+
+impl ExampleSubnet {
+    /// What state the host octet `octet` is in.
+    ///
+    /// 🔑 A lookup, never a predicate — see this struct's own doc for the ban it obeys.
+    pub(crate) fn state_of(&self, octet: u8) -> CellState {
+        if octet == 0 || octet == 255 {
+            CellState::Structural
+        } else if self.used.contains(&octet) {
+            CellState::Used
+        } else if self.reserved.contains(&octet) {
+            CellState::Reserved
+        } else {
+            CellState::Free
+        }
+    }
+
+    /// The lowest host address nothing occupies, or `None` when the subnet is full.
+    ///
+    /// 🔑 **Derived from the same lists the grid renders**, so the address this names cannot be one
+    /// the grid draws as occupied — which a test pins. ⚠️ It starts at 1 and stops at 254: the mock's
+    /// `findIndex` started at 0 and answered with the network address.
+    pub(crate) fn next_free(&self) -> Option<u8> {
+        (1..=254).find(|octet| self.state_of(*octet) == CellState::Free)
+    }
+
+    /// How many host addresses are in each of the three operator-facing states.
+    ///
+    /// # Returns
+    ///
+    /// `(used, reserved, free)`, counted over the **254 hosts** — the structural pair is in none of
+    /// them. 🔑 The occupancy line renders these, so the line and the grid are **two representations
+    /// of one fact**: a deliberate redundancy in the sense `CLAUDE.md` sanctions, and pinned by a
+    /// test rather than trusted. The mock computes its line from independent scalars and can
+    /// therefore disagree with the cells it drew.
+    pub(crate) fn occupancy(&self) -> (usize, usize, usize) {
+        let mut counts = (0, 0, 0);
+        for octet in 1..=254u8 {
+            match self.state_of(octet) {
+                CellState::Used => counts.0 += 1,
+                CellState::Reserved => counts.1 += 1,
+                CellState::Free => counts.2 += 1,
+                CellState::Structural => unreachable!("1..=254 excludes the structural pair"),
+            }
+        }
+        counts
+    }
+}
+
+/// The office subnet's occupied hosts — **including every address the inventory ships**, so the two
+/// screens describe one network rather than two.
+const OFFICE_USED: &[u8] = &[
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 31, 41, 42, 51, 52, 53,
+    54, 55, 56, 57, 58, 59, 60, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 101, 102, 103, 104, 105,
+    106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124,
+    125, 126, 127, 128, 129, 130, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213,
+    214, 215, 216, 217, 218, 219, 220, 221, 222, 223,
+];
+
+/// The office subnet's DHCP range.
+const OFFICE_RESERVED: &[u8] = &[
+    240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253,
+];
+
+/// The workshop subnet's occupied hosts.
+const WORKSHOP_USED: &[u8] = &[
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 100, 101, 102,
+    103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118,
+];
+
+/// The workshop subnet's DHCP range.
+const WORKSHOP_RESERVED: &[u8] = &[247, 248, 249, 250, 251, 252, 253, 254];
+
+/// The guest subnet's occupied hosts.
+const GUEST_USED: &[u8] = &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/// The guest subnet's DHCP range.
+const GUEST_RESERVED: &[u8] = &[251, 252, 253, 254];
+
+/// The example subnets, in the mock's order.
+///
+/// ⚠️ **Three RFC 5737 blocks, one per subnet** — TEST-NET-1, TEST-NET-2 and TEST-NET-3 — for the
+/// reason the module doc gives: a published screenshot must name nobody's network. The mock uses
+/// `192.168.10/20/30`, which are addresses that belong to somebody.
+pub(crate) fn subnets() -> Vec<ExampleSubnet> {
+    vec![
+        ExampleSubnet {
+            slug: "office",
+            cidr: "192.0.2.0/24",
+            name: "Bureau",
+            prefix: "192.0.2",
+            used: OFFICE_USED,
+            reserved: OFFICE_RESERVED,
+        },
+        ExampleSubnet {
+            slug: "workshop",
+            cidr: "198.51.100.0/24",
+            name: "Atelier",
+            prefix: "198.51.100",
+            used: WORKSHOP_USED,
+            reserved: WORKSHOP_RESERVED,
+        },
+        ExampleSubnet {
+            slug: "guest",
+            cidr: "203.0.113.0/24",
+            name: "Invités",
+            prefix: "203.0.113",
+            used: GUEST_USED,
+            reserved: GUEST_RESERVED,
+        },
+    ]
+}
+
+/// The subnet a slug names, or `None` when it names none.
+pub(crate) fn subnet_by_slug(slug: &str) -> Option<ExampleSubnet> {
+    subnets().into_iter().find(|subnet| subnet.slug == slug)
+}
+
+/// The example address conflict — FR24, and the pair the IPAM panel names.
+///
+/// 🔴 **The panel is titled *« Conflit d'adresse »* and the qualifier is load-bearing** (Guy,
+/// 2026-08-20). The binding glossary's `conflict` row means *two observations disagree with each
+/// other — source against source*; **two appliances answering on one address is a different fact**,
+/// and `prd.md:988` forbids one word carrying two meanings. The qualifier disambiguates without
+/// minting a term, exactly as *"Écart · 2 champs"* qualifies `écart`. The collision itself is
+/// registered, not settled here.
+///
+/// 🔑 Both devices EXIST in [`devices()`] and the address is one the office grid draws as **used** —
+/// the mock names a ninth device that is in no dataset, at an address its own grid may not occupy.
+/// ⚠️ Neither device carries [`ObjectState::Conflict`], deliberately: that state is the OTHER
+/// conflict, and demonstrating both on one pair would blur the distinction the title exists to make.
+pub(crate) struct ExampleAddressConflict {
+    /// The disputed address.
+    pub(crate) ipv4: &'static str,
+    /// The slug of the device declared at it.
+    pub(crate) declared_device: &'static str,
+    /// The slug of the device also answering there.
+    pub(crate) observed_device: &'static str,
+    /// When the second device's lease was seen — locale-neutral data.
+    pub(crate) lease_seen: &'static str,
+}
+
+/// The address conflict the example IPAM screen shows.
+pub(crate) fn address_conflict() -> ExampleAddressConflict {
+    ExampleAddressConflict {
+        ipv4: "192.0.2.41",
+        declared_device: "vm-billing",
+        observed_device: "desk-anna",
+        lease_seen: "2026-08-19 14:02",
+    }
+}
+
+/// The example applications, in the mock's order.
+///
+/// 🔑 **Every host names a device [`devices()`] really ships.** The mock's own hosts (`DOCKER-01`,
+/// `VM-AD-01`, …) name machines that exist in no dataset here, so seven of the eight rows are
+/// re-pointed; the eighth has no host at all and says so.
+pub(crate) fn apps() -> Vec<ExampleApp> {
+    vec![
+        ExampleApp {
+            name: "Nextcloud",
+            host: Some("ct-registry"),
+            declared_version: "28.0.4",
+            observed_version: Some("29.0.1"),
+            owner: "Direction",
+            criticality_key: "example.criticality.high",
+        },
+        ExampleApp {
+            name: "Active Directory",
+            host: Some("srv-app-02"),
+            declared_version: "2022",
+            // 🔑 The one row nothing evaluated — an absence, resolved in the view layer.
+            observed_version: None,
+            owner: "Prestataire IT",
+            criticality_key: "example.criticality.critical",
+        },
+        ExampleApp {
+            name: "Sage 50",
+            host: Some("vm-billing"),
+            declared_version: "2024.1",
+            observed_version: Some("2024.1"),
+            owner: "Comptabilité",
+            criticality_key: "example.criticality.critical",
+        },
+        ExampleApp {
+            name: "Traefik",
+            host: Some("ct-registry"),
+            declared_version: "3.0",
+            observed_version: Some("3.0.4"),
+            owner: "Prestataire IT",
+            criticality_key: "example.criticality.high",
+        },
+        ExampleApp {
+            name: "Sauvegarde Hyper Backup",
+            host: Some("nas-01"),
+            declared_version: "4.1",
+            observed_version: Some("4.2"),
+            owner: "Direction",
+            criticality_key: "example.criticality.critical",
+        },
+        ExampleApp {
+            name: "GLPI",
+            host: Some("ct-registry"),
+            declared_version: "10.0.15",
+            observed_version: Some("10.0.15"),
+            owner: "Prestataire IT",
+            criticality_key: "example.criticality.medium",
+        },
+        ExampleApp {
+            name: "Supervision caméras",
+            host: Some("desk-anna"),
+            declared_version: "5.2",
+            observed_version: Some("5.2"),
+            owner: "Atelier",
+            criticality_key: "example.criticality.low",
+        },
+        ExampleApp {
+            name: "Site vitrine",
+            // 🔴 Hosted OUTSIDE the perimeter, on no device at all — the row of which AC2's
+            // *"declared and unobservable"* is most true, and the counterexample to any test
+            // requiring every application to name a device.
+            host: None,
+            declared_version: "2024",
+            observed_version: None,
+            owner: "Marketing",
+            criticality_key: "example.criticality.low",
+        },
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -807,6 +1166,215 @@ mod tests {
     /// real work: the mutation ran against a tree that **did not compile**, and the driver grepped
     /// for `FAILED` test lines, which a compile failure does not produce. *A mutation that does not
     /// build measures nothing, and a filter that cannot see the difference reports it as a pass.*
+    /// Every application runs on a device this dataset really ships — or on none, and says so.
+    ///
+    /// 🔴 **Seven of the mock's eight hosts name machines that exist in no dataset here**
+    /// (`DOCKER-01`, `VM-AD-01`, …), so they are re-pointed. Without this guard the applications
+    /// screen would link to `/devices/DOCKER-01`, which serves the *unknown device* page — a 200,
+    /// therefore invisible to every status check.
+    #[test]
+    fn every_application_runs_on_a_device_that_exists_or_on_none() {
+        let slugs: Vec<&str> = devices().iter().map(|device| device.id).collect();
+        let mut hosted = 0_usize;
+        for app in apps() {
+            let Some(host) = app.host else { continue };
+            assert!(
+                slugs.contains(&host),
+                "{} is hosted on {host:?}, which names no device — the row would link to the \
+                 unknown-device page, and that answers 200",
+                app.name
+            );
+            hosted += 1;
+        }
+        // 🔑 The `None` row is the point of the `Option`, so BOTH cases are asserted present: a
+        // dataset where every host were `None` would pass the loop above and demonstrate nothing.
+        assert_eq!(
+            hosted,
+            apps().len() - 1,
+            "exactly one application has no host"
+        );
+        assert!(
+            apps().iter().any(|app| app.host.is_none()),
+            "the dataset must keep the application hosted outside the perimeter — it is the row \
+             of which *declared and unobservable* is most true"
+        );
+    }
+
+    /// 🔴 **The two lists are DISJOINT, and this guard exists because a mutation came back green.**
+    ///
+    /// [`ExampleSubnet::state_of`] tests `used` before `reserved`, so an octet in both is silently
+    /// resolved as *used*: the mutation that put `41` into the office subnet's reserved list — a
+    /// deliberate corruption of the data — changed no cell, no count and no test. **The lists are
+    /// not orthogonal, and a priority order hides a contradiction in the dataset rather than
+    /// showing it.**
+    ///
+    /// 🔑 What that measured is not that the guards are weak but that the DATA can be incoherent
+    /// without saying so. A subnet claiming an address is both occupied and held back is a defect;
+    /// the priority order is a rendering decision and must not double as a repair.
+    #[test]
+    fn no_octet_is_both_occupied_and_reserved() {
+        for subnet in subnets() {
+            for octet in subnet.reserved {
+                assert!(
+                    !subnet.used.contains(octet),
+                    "{}: .{octet} is in both lists. `state_of` resolves it silently as `used`, so \
+                     the contradiction renders as an ordinary cell and no count moves",
+                    subnet.cidr
+                );
+            }
+        }
+    }
+
+    /// The occupancy line's three numbers are counts over the same data the grid draws.
+    ///
+    /// 🔴 **A /24 carries 256 ADDRESSES and 254 HOSTS**, and the mock conflates them: it draws
+    /// `.0` and `.255` as ordinary free cells and computes its line as `256 - used - reserved` from
+    /// independent scalars, which can disagree with the cells it drew. ⚠️ This story's own first
+    /// draft prescribed a test asserting the three numbers *"sum to 256"* — which would have pinned
+    /// the defect as the expected behaviour.
+    #[test]
+    fn the_occupancy_line_counts_the_same_cells_the_grid_draws() {
+        for subnet in subnets() {
+            let (used, reserved, free) = subnet.occupancy();
+            let drawn = |wanted: CellState| {
+                (0..=255u8)
+                    .filter(|octet| subnet.state_of(*octet) == wanted)
+                    .count()
+            };
+            assert_eq!(used, drawn(CellState::Used), "{}: used", subnet.cidr);
+            assert_eq!(
+                reserved,
+                drawn(CellState::Reserved),
+                "{}: reserved",
+                subnet.cidr
+            );
+            assert_eq!(free, drawn(CellState::Free), "{}: free", subnet.cidr);
+            assert_eq!(
+                used + reserved + free,
+                254,
+                "{}: the three counts cover the HOSTS, and a /24 has 254 of them — not 256",
+                subnet.cidr
+            );
+            assert_eq!(
+                drawn(CellState::Structural),
+                2,
+                "{}: the network and broadcast addresses are drawn and counted apart",
+                subnet.cidr
+            );
+        }
+    }
+
+    /// The address the *next free* panel names is one the grid draws as free, and is a host.
+    ///
+    /// 🔴 The mock's `findIndex` starts at 0, so its panel names the NETWORK address. Reproduced on
+    /// a real build at this story's validation before it could be inherited.
+    #[test]
+    fn the_next_free_address_is_a_free_host() {
+        for subnet in subnets() {
+            let octet = subnet.next_free().expect("no example subnet is full");
+            assert_eq!(
+                subnet.state_of(octet),
+                CellState::Free,
+                "{}: the panel would name an address the grid draws as occupied",
+                subnet.cidr
+            );
+            assert!(
+                (1..=254).contains(&octet),
+                "{}: {octet} is the network or the broadcast address, which is not the \
+                 operator's to assign",
+                subnet.cidr
+            );
+            // The LOWEST free host, not merely some free host: a scan that skipped one would still
+            // satisfy the two assertions above.
+            for lower in 1..octet {
+                assert_ne!(
+                    subnet.state_of(lower),
+                    CellState::Free,
+                    "{}: {lower} is free and lower than the address the panel names",
+                    subnet.cidr
+                );
+            }
+        }
+    }
+
+    /// A subnet with no free host answers `None`, and the copy for it exists.
+    ///
+    /// ⚠️ **The RENDER of that copy is carried by nothing, and saying so is the point.** No committed
+    /// subnet is full, so `ipam.next_free_none` reaches no screen in any test — a review layer
+    /// measured the path unreachable rather than merely untested. Putting a full subnet in the
+    /// example dataset to exercise one sentence would be shaping the demonstration around the test,
+    /// so what is guarded here is the FUNCTION; the sentence's rendering waits for Epic 14, where a
+    /// full subnet is an ordinary state rather than a fixture. **Registered.**
+    #[test]
+    fn a_full_subnet_has_no_next_free_address() {
+        let full: Vec<u8> = (1..=254).collect();
+        let subnet = ExampleSubnet {
+            slug: "full",
+            cidr: "192.0.2.0/24",
+            name: "Plein",
+            prefix: "192.0.2",
+            used: full.leak(),
+            reserved: &[],
+        };
+        assert_eq!(subnet.next_free(), None, "a full subnet offers no address");
+        let (used, reserved, free) = subnet.occupancy();
+        assert_eq!((used, reserved, free), (254, 0, 0));
+        // The control: the committed subnets are NOT full, so the assertion above is not satisfied
+        // by a `next_free` that answers `None` for everything.
+        for committed in subnets() {
+            assert!(
+                committed.next_free().is_some(),
+                "{}: the example subnets must keep a free address, or the panel this story ships \
+                 shows its empty state on every screen",
+                committed.cidr
+            );
+        }
+    }
+
+    /// The conflict panel names two devices that exist, at an address the grid draws as used.
+    ///
+    /// 🔑 The mock names `PC-COMPTA-02`, a ninth device in no dataset, at an address its own grid
+    /// may not occupy. ⚠️ And **neither device carries [`ObjectState::Conflict`]** on purpose: that
+    /// state is the OTHER conflict — *source against source* — and demonstrating both on one pair
+    /// would blur the very distinction the panel's qualified title exists to make.
+    #[test]
+    fn the_conflict_names_devices_that_exist_at_an_address_the_grid_occupies() {
+        let conflict = address_conflict();
+        for slug in [conflict.declared_device, conflict.observed_device] {
+            assert!(
+                device_by_id(slug).is_some(),
+                "the conflict names {slug:?}, which is no device"
+            );
+            assert_ne!(
+                device_by_id(slug).expect("just checked").state,
+                ObjectState::Conflict,
+                "{slug:?} carries the state `conflict`, which is source-against-source — using it \
+                 here blurs the distinction the panel's title is qualified to make"
+            );
+        }
+        assert_ne!(
+            conflict.declared_device, conflict.observed_device,
+            "a device does not conflict with itself"
+        );
+        let office = subnet_by_slug("office").expect("the office subnet");
+        let octet: u8 = conflict
+            .ipv4
+            .rsplit('.')
+            .next()
+            .and_then(|last| last.parse().ok())
+            .expect("the conflict address ends in an octet");
+        assert!(
+            conflict.ipv4.starts_with(office.prefix),
+            "the conflict must sit in a subnet the grid draws"
+        );
+        assert_eq!(
+            office.state_of(octet),
+            CellState::Used,
+            "the grid must draw the disputed address as occupied — a conflict on a cell shown \
+             free is a screen contradicting itself"
+        );
+    }
+
     #[test]
     fn the_example_copy_is_translated_rather_than_typed() {
         let mut checked = 0_usize;
@@ -831,16 +1399,53 @@ mod tests {
             );
             checked += 1;
         };
+        // 🔴 **EVERY key-bearing field, and it was TWO until story 6b.7.** This loop read
+        // `role_key` and `reason_key` only, while the dataset already carried five more —
+        // `DeviceKind::label_key`, `ExampleField::label_key`, `ExampleHosted::kind_key`,
+        // `ExampleIdentityPart::label_key` and `ExampleHistoryLine::what_key` — none of them
+        // covered. ⚠️ It read as strong coverage because it is the FIRST thing to red when a
+        // `role_key` is broken; an enumeration that catches the case you test is exactly the shape
+        // *"a guard placed where the defect cannot occur"* takes when the defect moves one field
+        // over. Closing the five is in scope here because this story is what makes the hole
+        // load-bearing: `criticality_key` would have been the eighth uncovered field.
+        for kind in DeviceKind::ALL {
+            assert_key(kind.label_key(), "example.kind.");
+        }
         for device in devices() {
             assert_key(device.role_key, "example.role.");
+            if let Some(qualifier) = device.qualifier_key {
+                assert_key(qualifier, "example.qualifier.");
+            }
+            for field in device.fields {
+                assert_key(field.label_key, "example.field.");
+            }
+            for hosted in device.hosted {
+                assert_key(hosted.kind_key, "example.hosted.");
+            }
+            for part in device.identity {
+                assert_key(part.label_key, "example.identity.");
+            }
+            for line in device.history {
+                assert_key(line.what_key, "example.history.");
+            }
         }
         for sighting in unplaced_sightings() {
             assert_key(sighting.reason_key, "example.reason.");
         }
+        for app in apps() {
+            // 🔑 `criticality_key` and NOT `owner`: Guy's arbitration of 2026-08-20 makes
+            // criticality a closed classification (a key) and an owner a proper noun (data). The
+            // distinction is decided per field, and this loop is where the key half is enforced.
+            assert_key(app.criticality_key, "example.criticality.");
+        }
         assert!(
-            checked >= 5,
-            "the premise: the dataset carries at least five translated strings ({checked} seen) \
-             — an empty dataset would assert nothing"
+            checked >= 80,
+            "the premise: the dataset carries at least eighty translated strings ({checked} seen) \
+             — **87 at story 6b.7**, over the seven field kinds now covered rather than the two \
+             this guard used to read. ⚠️ A floor is only a guard while it is near what is there: \
+             `every_key_carries_both_locales` sits at 47 for a file carrying 184, which is \
+             registered. This one is set just under the measured figure so it catches a mass \
+             deletion without reddening when one row moves"
         );
     }
 }
