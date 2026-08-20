@@ -3981,8 +3981,16 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   meta-line rendered *"cccccccc-0000-0000-0000-00000000unif · il y a 4 min"*, which tells the
   operator nothing and pushes the freshness off the line. Shipped as a SHORT labelled id
   (*"Source unifi001"*), which is the true sentence today. ⚠️ A name per source is what the operator
-  needs and what the mock shows. **Owner: story 6b.8 (*Sources and alerts*)**, the screen that owns
-  sources — and the day it lands, `page::source_label` is where the name arrives.
+  needs and what the mock shows. ~~**Owner: story 6b.8 (*Sources and alerts*)**, the screen that owns
+  sources — and the day it lands, `page::source_label` is where the name arrives.~~
+  ↺ **NARROWED, NOT CLOSED, by story 6b.8 on 2026-08-20.** That story landed and **did not touch
+  `page::source_label`**: `/sources` names its source from the connector's own code, while `/triage`
+  still shows the rolling truncated id. 🔴 And the sentence above was measured FALSE in a second way —
+  `source_label` renders **the top 32 bits of a v7 UUID's millisecond field**, so it is a clock
+  reading that rolls every ≈65 s and two different sources can share it. **Owner moves to Epic 11**
+  (*Source UniFi complète*, v0.9), which covers FR1/FR2/FR5/FR6/FR7 and is where a stable source
+  identity belongs. ⚠️ Struck through rather than deleted: what 6b.4 registered was true when written,
+  and what changed is named beside it.
 
 - ⚠️ **`/gap` is no longer embedded by any page.** Story 6b.4 replaced the triage body with the two
   panes, so `_gap_card.html` — and its HTMX refresh button targeting `#gap-card` — is reachable only
@@ -4396,3 +4404,98 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   its input and the mistake is the reviewer's brief, not the layer's reading. **Rule for the next
   story: a layer asked to audit registrations, statuses or counts must be handed the files those live
   in, or told in the brief that they are out of scope and why.** Owner: Epic 6b's retrospective.
+
+---
+
+## Registered by story 6b.8 (2026-08-20) — sources and alerts
+
+- 🔴 **FR7 IS COVERED ON ITS STATIC HALF ONLY, and the dated descriptor is TRACED rather than
+  persisted.** `PollSummary { capabilities, scopes_covered }` — FR7's dated descriptor and FR5's
+  liveness unit — is computed on every scan and was **discarded at `scan_pass.rs`'s seam** by an
+  `if let Err(...)` that legitimately drops the `Ok` payload, with nothing the compiler could say.
+  Story 6b.8 binds and logs it. 🔑 **Persisting it was refused with its PRECONDITION named** (Guy,
+  2026-08-20): a per-source descriptor cannot be stored without a stable source identity, and
+  `connector_id` is minted fresh at every boot, so a table keyed on it would grow by a row per
+  restart. **Owner: Epic 11** for the identity, then **D32 / Epic 13** for the row-per-scan versus
+  current-row question. *A register row that names its precondition is actionable; one that says
+  "later" is not.*
+
+- 🔴 **AC2 IS MET ON ONE HALF AND NOT ON THE OTHER, and shipping it that way is a DIVERGENCE from the
+  UX spec.** `ux-design-specification.md:1113` gives liveness **a colour for BOTH values** — `live`
+  the calm token, `blind` neutral and desaturated — and paints `live` green in its mock. Story 6b.8
+  ships **no colour at all**, because the product cannot compute `blind` and therefore cannot assert
+  `live` either; a green dot would be the fabricated verdict FR8 exists to forbid. **Met on *never two
+  amber pills*, NOT met on *blind gets a colour*. Owner: Epic 13.**
+
+- 🔴 **`connector_id` IS MINTED FRESH AT EVERY BOOT** (`main.rs`, inside the startup scan thread), so
+  every restart writes observations under a new source identity. A *Sources* screen built from
+  `SELECT DISTINCT connector_id` would grow by one row per restart, and every previous boot would read
+  *last heard from: three days ago* and look **blind** — the data manufacturing the appearance of dead
+  sources. 6b.8 avoids it by listing CONFIGURED sources and reading an **unkeyed** `MAX(observed_at)`,
+  correct today precisely because there is one source. **Owner: Epic 11.**
+
+- 🔴 **`page::source_label` RENDERS A TRUNCATED TIMESTAMP.** It takes the first 8 characters of the
+  connector UUID — the top 32 bits of a v7's millisecond field. Measured over three live boots: two
+  six seconds apart got **different** labels, two others the **same** one; it rolls every ≈65 s. **The
+  operator-visible source id is a clock reading, and two different sources can share it.** ⚠️ It feeds
+  **`/triage`**, not `/sources`, and story 6b.8 did not touch it — so the registry row story 6b.4
+  opened is **narrowed, not closed**: `/sources` now names its source, `/triage` still shows the
+  rolling id. **Owner: Epic 11.**
+
+- 🔴 **`MAX(observed_at) IS NULL` IS FOUR STATES OF THE WORLD.** Measured on four live boots against
+  four fresh databases: never scanned, scanned and nobody answered, an **invalid perimeter the product
+  refused**, and a blank perimeter — all NULL. FR8's own distinction fails at boot level. ⚠️ The
+  invalid case is the sharpest: `AppConfig::from_env` does not validate the CIDR, only
+  `ArpPingConnector::from_cidr` does, **inside a detached thread whose `tracing::error!` nobody
+  reads**. 6b.8 states the ambiguity on screen rather than picking a reading. **Owner: Epic 13** for
+  the axis, and the boot-time validation is worth its own look.
+
+- ⚠️ **A SECOND `Mixed` SCREEN WOULD HAVE NO PER-SECTION MARKER COVERAGE.** Measured at the story's
+  validation: a `Mixed` screen with two example sections, the second carrying no marker at all, left
+  **668/668 green WITH a database**. Both per-section guards start from `rendered_dashboard(…)` and
+  split on a class only `_dashboard.html` carries, and the route-table loop's anchor assertion sits
+  inside `if let Nature::Example(content)`. 🔑 **6b.8 does not trip it** — `/sources` turned out `Fed`,
+  not `Mixed` — **so the hole is still open and the next `Mixed` screen falls into it.** Epic 5's
+  dominant class, sixth consecutive story. **Owner: Epic 6b's retrospective.**
+
+- 🔴 **A NATURE CHANGED WITHOUT ITS ROUTE IS A SILENT 404; THE MIRROR MISTAKE IS THIRTY LOUD REDS.**
+  The route-table loop `continue`s on `Fed`/`Mixed` when no database is reachable, so **every guard in
+  it is `DATABASE_URL`-gated for those screens** and a forgotten route reds nothing locally and one
+  test in CI. `every_screen_is_refused_without_a_credential` cannot help: it asserts 401, which
+  `auth_deny` returns above routing. **Register the route first.** Documented at both sites in 6b.8;
+  worth a general guard. **Owner: Epic 6b's retrospective.**
+
+- ⚠️ **The i18n key detector joined across tags with no separator**, so `…an example.</p><p>No source…`
+  became `example.No` and read as a dotted key — **a false positive the guard manufactured**, on
+  correct copy, found only by running `/sources` against a live database. Fixed by pushing a space at
+  every tag boundary. *A check that fails for the wrong reason is worth nothing.* Nothing open; carried
+  as a guard-shape lesson. **Owner: Epic 6b's retrospective.**
+
+- ⚠️ **The spec's own example of what a source cannot see (`addresses · ports · OS`) does not map onto
+  `FactKind`.** `OS` is not a variant at all; `Hostname`, `DhcpLease` and `OuiVendor` are absent from
+  the spec's list. **The spec's illustration and the computable truth disagree**, and 6b.8 renders the
+  computable one. **Owner: Epic 6b's retrospective**, or the spec's next revision.
+
+- ⚠️ **The five `FactKind` nouns are display copy with no binding-glossary row** — `Mac`, `Hostname`,
+  `DhcpLease`, `Uplink`, `OuiVendor` — the same shape story 6b.7 arbitrated for the applications
+  screen. Registered rather than introduced. **Owner: Epic 15**, with 6b.7's five nouns.
+
+- ⚠️ **`ping-only` is a SCOPE LABEL the spec prescribes and 6b.8 does not render.** The spec puts it
+  *beside the name*, neutral and never a colour; §0c arbitrated the source's NAME and the two slots
+  were conflated. **Owner: Epic 13**, where the descriptor in force becomes a runtime fact.
+
+- 🔴 **`AppConfig::from_env` DOES NOT VALIDATE THE PERIMETER, and the refusal happens in a detached
+  thread whose error nobody reads.** Measured at story 6b.8's code review: booting with
+  `OPENCMDB_SCAN_CIDR=nonsense` logs `ERROR invalid OPENCMDB_SCAN_CIDR — skipping scan` and the
+  product then runs normally, silently scanning nothing. 6b.8's `/sources` now SAYS the perimeter was
+  refused — using the connector's own parser, so screen and scan cannot disagree — **but the product
+  still boots on a configuration it has already rejected.** The right closure is a boot-time refusal
+  by name, on story 6.1's precedent (*a half-configured pair refuses at boot*). **Owner: whoever next
+  touches `AppConfig`.**
+
+- ⚠️ **`not evaluated` / « non évalué » is the spec's BINDING word for an out-of-capability field
+  (`ux-design-specification.md:1130`) and appears nowhere in the product.** Story 6b.8 ticked a task
+  claiming it was used and shipped nothing — measured absent from the whole tree, in both languages,
+  by two review layers independently. ⚠️ The omission is defensible: it is a **device-record** slot,
+  not a sources-screen one, and the record shows no field a source cannot observe yet. **Owner: the
+  story that renders such a field.** The lesson is the ticked box, not the word.

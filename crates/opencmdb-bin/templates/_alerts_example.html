@@ -1,0 +1,28 @@
+{#- The alert list: Epic 16's frame on the example dataset (story 6b.8).
+
+     🔑 The three rows are FR30's three alert kinds — an unknown device appearing, a documented IP
+     unseen for N days, an IP conflict — and NOT the mock's invented severities, which would be a
+     fourth value set with no glossary row. There is no severity column: a severity is a judgement,
+     and the product has no producer for one. -#}
+<section class="screen-section example-section">
+  <h2>{{ s.title }}</h2>
+  <p class="screen-lede">{{ s.lede }}</p>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>{{ s.what }}</th>
+        <th>{{ s.subject }}</th>
+        <th>{{ s.when }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {%- for alert in alerts %}
+      <tr>
+        <td>{{ alert.what }}</td>
+        <td class="mono">{{ alert.subject }}</td>
+        <td class="mono muted">{{ alert.when }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</section>

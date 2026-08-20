@@ -12,7 +12,7 @@ use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 use opencmdb_core::observation::{
-    ConnectorId, Fact, L2DomainId, ObsId, Observation, Scope, VantageId,
+    ConnectorId, Fact, FactKind, L2DomainId, ObsId, Observation, Scope, VantageId,
 };
 use opencmdb_core::{AbstentionCause, reconcile};
 use sqlx::MySqlPool;
@@ -1288,6 +1288,15 @@ pub(crate) fn triage_router(pool: MySqlPool, perimeter: Option<String>) -> Route
     Router::new()
         .route("/triage", get(triage))
         .route("/dashboard", get(dashboard))
+        // 🔴 **REGISTER THE ROUTE BEFORE CHANGING THE NATURE, and the order is a MEASUREMENT.**
+        // Story 6b.8's validation built both mistakes: a nature changed with the route forgotten
+        // reds **nothing** locally — 668/668 green, no warning — and exactly one test in CI, because
+        // the route-table loop `continue`s on `Mixed` when no database is reachable; the address
+        // simply 404s, and `every_screen_is_refused_without_a_credential` cannot help because it
+        // asserts 401, which `auth_deny` returns above routing. The mirror mistake — route added,
+        // nature forgotten — reds **18 tests**, all `Overlapping method route`.
+        // *The wrong order is silent; the right order fails loudly.*
+        .route("/sources", get(sources))
         .with_state(TriageState { pool, perimeter })
 }
 
@@ -1405,6 +1414,200 @@ pub async fn dashboard(State(state): State<TriageState>) -> Response {
         .into_response(),
         Err(error) => {
             tracing::error!(%error, "rendering the dashboard");
+            (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
+        }
+    }
+}
+
+/// One capability line: a fact kind the source does or does not observe, with its sentence.
+struct KindLine {
+    /// The kind's name, in the operator's language.
+    label: String,
+    /// What its presence or absence MEANS to the operator — the unlock framing, never the fault one.
+    meaning: String,
+}
+
+/// Everything `/sources` renders: the product's real capability boundary, and its real freshness.
+struct SourceView {
+    /// The source's name, resolved — a TYPE name (see [`crate::arp_ping::SOURCE_NAME_KEY`]).
+    name: String,
+    /// Whether the product REFUSED this perimeter — measured with the connector's own parser.
+    ///
+    /// 🔴 A refused perimeter shown as an in-force one is the sharpest thing the code review found
+    /// on this screen: the product already knows the configuration is bad, and said so in a log
+    /// nobody reads. See [`build_sources`].
+    refused: bool,
+    /// The perimeter it was configured with.
+    ///
+    /// 🔑 **Not an `Option`, and the code review is why.** `build_sources` returns `None` outright
+    /// when no perimeter is configured, so inside a `SourceView` this could never be absent — and
+    /// the template carried a `when None` arm that could never execute. *A branch placed where the
+    /// case cannot occur reads as handling and is none.*
+    perimeter: String,
+    /// What it is built to observe.
+    observes: Vec<KindLine>,
+    /// What it is built NOT to observe — the section AC1 requires to be real.
+    cannot_see: Vec<KindLine>,
+    /// How long ago anything was observed, or `None`.
+    ///
+    /// 🔴 **`None` is FOUR different states of the world and the screen says so.** Story 6b.8's
+    /// validation booted the real binary four times against four fresh databases: never scanned,
+    /// scanned-and-nobody-answered, an INVALID perimeter the product refused, and a blank one — all
+    /// four leave `MAX(observed_at)` NULL. FR8's own distinction fails at boot level, so the copy
+    /// states the ambiguity instead of picking one reading.
+    last_observed: Option<String>,
+}
+
+/// The sources screen's body.
+#[derive(Template)]
+#[template(path = "_sources.html")]
+struct SourcesBody {
+    /// `None` when no source is configured at all — the case the story's first draft assumed away.
+    source: Option<SourceView>,
+    s: SourceStrings,
+}
+
+/// The copy `/sources` needs, resolved once.
+struct SourceStrings {
+    title: String,
+    lede: String,
+    observes_title: String,
+    cannot_see_title: String,
+    unlock: String,
+    freshness_title: String,
+    never: String,
+    ambiguity: String,
+    incident_axis: String,
+    perimeter_label: String,
+    no_source: String,
+    /// What the screen says when the product REFUSED the configured perimeter.
+    refused: String,
+}
+
+/// Resolve `/sources`' copy.
+fn source_strings() -> SourceStrings {
+    SourceStrings {
+        title: rust_i18n::t!("sources.title").to_string(),
+        lede: rust_i18n::t!("sources.lede").to_string(),
+        observes_title: rust_i18n::t!("sources.observes").to_string(),
+        cannot_see_title: rust_i18n::t!("sources.cannot_see").to_string(),
+        unlock: rust_i18n::t!("sources.unlock").to_string(),
+        freshness_title: rust_i18n::t!("sources.freshness").to_string(),
+        never: rust_i18n::t!("sources.never").to_string(),
+        ambiguity: rust_i18n::t!("sources.ambiguity").to_string(),
+        incident_axis: rust_i18n::t!("sources.incident_axis").to_string(),
+        perimeter_label: rust_i18n::t!("sources.perimeter").to_string(),
+        no_source: rust_i18n::t!("sources.no_source").to_string(),
+        refused: rust_i18n::t!("sources.refused").to_string(),
+    }
+}
+
+/// The i18n keys of one [`FactKind`]'s name and of what it means to the operator.
+///
+/// 🔑 **A `match` on a `FactKind`, and the `_` arm is FORCED by `#[non_exhaustive]`** — the compiler
+/// cannot carry exhaustiveness across the crate boundary, so a wildcard is mandatory and is then
+/// permanently silent.
+///
+/// 🔴 **The fallback returns a GENERIC pair, and the doc said *"the kind's `Debug` name"* until the
+/// code review caught it two lines above the code that refutes it.** Every unmapped kind would render
+/// *identically* — *"Unrecognised kind"* — with nothing on the page telling an operator or a
+/// log-reading developer WHICH one appeared.
+///
+/// ⚠️ **And `FactKind::ALL`'s cross-crate guard does not protect THIS map.** It pins `ALL` against the
+/// enum's declaration; it says nothing about whether each member has a key pair here. So an eighth
+/// kind correctly added to `ALL` would satisfy that guard and still render *"Genre non reconnu"* on
+/// `/sources` — *a guard placed where the defect cannot occur*, one field over. Closed by
+/// [`crate::page::tests::every_fact_kind_has_its_own_sentence`], which reds on exactly that.
+fn kind_keys(kind: FactKind) -> (&'static str, &'static str) {
+    match kind {
+        FactKind::Mac => ("kind.mac", "kind.mac.meaning"),
+        FactKind::IpV4 => ("kind.ipv4", "kind.ipv4.meaning"),
+        FactKind::Hostname => ("kind.hostname", "kind.hostname.meaning"),
+        FactKind::DhcpLease => ("kind.dhcp_lease", "kind.dhcp_lease.meaning"),
+        FactKind::Uplink => ("kind.uplink", "kind.uplink.meaning"),
+        FactKind::OuiVendor => ("kind.oui_vendor", "kind.oui_vendor.meaning"),
+        FactKind::Rtt => ("kind.rtt", "kind.rtt.meaning"),
+        _ => ("kind.unknown", "kind.unknown.meaning"),
+    }
+}
+
+/// Build one capability line.
+fn kind_line(kind: FactKind) -> KindLine {
+    let (label, meaning) = kind_keys(kind);
+    KindLine {
+        label: rust_i18n::t!(label).to_string(),
+        meaning: rust_i18n::t!(meaning).to_string(),
+    }
+}
+
+/// Build the sources view. Pure: the caller supplies the instant and the perimeter.
+///
+/// ⚠️ **No clock here** — `now` is a parameter, on the precedent of every view builder in this file.
+fn build_sources(
+    perimeter: Option<String>,
+    last: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<SourceView> {
+    // 🔴 **NO PERIMETER, NO SOURCE.** The story's first draft assumed one configured source
+    // throughout; the validation measured that with `OPENCMDB_SCAN_CIDR` unset there are ZERO, and
+    // the screen had no copy for it. Listing a source the product was never asked to build would be
+    // the same fabrication the liveness arbitration refuses.
+    // 🔑 The `?` on the field below is the ONLY place this is decided — it read `perimeter.as_ref()?`
+    // here as well, and two refusals of one fact drift.
+    let (observes, cannot_see) = crate::arp_ping::observes_and_cannot_see();
+    // 🔴 **A PERIMETER THE PRODUCT REFUSED IS NOT A PERIMETER, and the screen said otherwise.**
+    // Measured at the code review by booting with `OPENCMDB_SCAN_CIDR=nonsense`: the log carried
+    // `ERROR invalid OPENCMDB_SCAN_CIDR — skipping scan`, and this screen rendered a full source
+    // card reading *"Périmètre nonsense"* with the generic four-state sentence under it — **the
+    // rejected string PRESENTED AS AN IN-FORCE VALUE**. That is worse than the ambiguity the story
+    // registered: it is not *we cannot tell which of four*, it is *we are showing you a
+    // configuration we already refused, as though it were live*.
+    //
+    // 🔑 `subnet_hosts` is the SAME parser the connector uses, so the screen and the scan agree by
+    // construction rather than by two readings of one rule. ⚠️ `AppConfig::from_env` still does not
+    // validate the CIDR — the refusal happens in a detached thread whose error nobody reads — and
+    // moving it to boot time is registered rather than done here.
+    let refused = crate::arp_ping::subnet_hosts(perimeter.as_deref().unwrap_or_default()).is_err();
+    Some(SourceView {
+        name: rust_i18n::t!(crate::arp_ping::SOURCE_NAME_KEY).to_string(),
+        refused,
+        perimeter: perimeter?,
+        observes: observes.into_iter().map(kind_line).collect(),
+        cannot_see: cannot_see.into_iter().map(kind_line).collect(),
+        last_observed: last.map(|instant| relative_time(now, instant)),
+    })
+}
+
+/// `GET /sources` — what the product's sources can and cannot see.
+///
+/// 🔴 **The capability section is REAL** (AC1): it is `FactKind::ALL` minus the connector's own
+/// declaration, five kinds derived at runtime with no database and no invention. ⚠️ It is **what the
+/// source is BUILT to observe**, not what it observed — FR7's static half only, and the copy says so.
+///
+/// 🔴 **The liveness axis carries NO COLOUR** (AC2, Guy's arbitration of 2026-08-20). The product can
+/// establish *an observation arrived at T*; it cannot establish *this source is blind*, which is a
+/// verdict nothing computes — deriving it from silence would read a clock and INVENT an incident,
+/// which FR8 exists to forbid. ⚠️ **The spec prescribes a colour for BOTH liveness values**, so this
+/// is a DIVERGENCE and not conformance: AC2 ships met on its *never two amber pills* half and **not
+/// met** on its *blind gets a colour* half. The incident axis arrives with **Epic 13**, which
+/// `score.rs`, `connector/mod.rs` and `epics.md` all already name.
+pub async fn sources(State(state): State<TriageState>) -> Response {
+    let last = match crate::repo::last_observed_at(&state.pool).await {
+        Ok(instant) => instant,
+        Err(error) => return server_error(error),
+    };
+    let body = SourcesBody {
+        source: build_sources(state.perimeter.clone(), last, now_utc()),
+        s: source_strings(),
+    };
+    match body.render() {
+        Ok(body) => Html(render_shell(
+            Shell::new(crate::screens::Screen::Sources, state.perimeter),
+            body,
+        ))
+        .into_response(),
+        Err(error) => {
+            tracing::error!(%error, "rendering the sources screen");
             (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
         }
     }
@@ -2800,6 +3003,232 @@ mod tests {
     /// So this guard feeds a POPULATED store and asserts the output is a function of the instant it
     /// was GIVEN: same store, two different `now`s, two different freshness strings; same store,
     /// the same `now` twice, byte-identical rows.
+    /// The `/sources` body as it is served, without the shell.
+    fn rendered_sources(
+        perimeter: Option<String>,
+        last: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> String {
+        SourcesBody {
+            source: build_sources(perimeter, last, at(600)),
+            s: source_strings(),
+        }
+        .render()
+        .expect("the sources template and its struct are compiled together")
+    }
+
+    /// 🔴 **AC1 — the capability boundary is REAL, and it is derived rather than listed.**
+    ///
+    /// The complement is `FactKind::ALL` minus what the connector declares. Five kinds today, and
+    /// the test names them — but it also asserts the PARTITION, so the day an eighth kind exists the
+    /// two halves still cover it. ⚠️ A `#[test]` cannot add an enum variant; the eighth-kind case is
+    /// a mutation, and its carrier is the cross-crate row in
+    /// `screens::tests::every_variant_of_a_navigated_enum_is_listed_in_all`.
+    #[test]
+    fn what_the_source_cannot_see_is_derived_from_the_connectors_own_declaration() {
+        let (observes, cannot_see) = crate::arp_ping::observes_and_cannot_see();
+        assert_eq!(
+            observes,
+            vec![FactKind::IpV4, FactKind::Rtt],
+            "the shipped connector observes an address and a round-trip time, and story 5.14 pinned \
+             that it declares no MAC, ever"
+        );
+        assert_eq!(
+            cannot_see,
+            vec![
+                FactKind::Mac,
+                FactKind::Hostname,
+                FactKind::DhcpLease,
+                FactKind::Uplink,
+                FactKind::OuiVendor,
+            ],
+            "and the five it cannot see are the complement — this is the one section of /sources \
+             that AC1 requires to be REAL"
+        );
+        // The PARTITION, which survives an eighth kind where the two literals above would not.
+        let mut union = observes.clone();
+        union.extend(cannot_see.iter().copied());
+        union.sort();
+        let mut all = FactKind::ALL.to_vec();
+        all.sort();
+        assert_eq!(union, all, "the two halves must cover every kind");
+        assert!(
+            !observes.iter().any(|kind| cannot_see.contains(kind)),
+            "and must not overlap"
+        );
+    }
+
+    /// 🔴 **EVERY KIND HAS ITS OWN SENTENCE, and nothing checked that until the code review.**
+    ///
+    /// `FactKind::ALL`'s cross-crate guard pins the CONSTANT against the enum's declaration. It says
+    /// nothing about [`kind_keys`], so an eighth kind correctly added to `ALL` would satisfy it and
+    /// still fall into the `_` arm — rendering *"Unrecognised kind"* on `/sources`, identically for
+    /// every unmapped kind, with the page giving no clue which one appeared. **A guard placed where
+    /// the defect cannot occur, one field over**, and the blind review layer found it from the diff
+    /// alone by noticing that the two guarantees are not the same guarantee.
+    ///
+    /// 🔑 It also pins DISTINCTNESS: two kinds sharing a key pair would render the same sentence for
+    /// two different facts, which no count and no resolution check can see.
+    #[test]
+    fn every_fact_kind_has_its_own_sentence() {
+        let mut seen: Vec<(&str, &str)> = Vec::new();
+        for kind in FactKind::ALL {
+            let (label, meaning) = kind_keys(kind);
+            assert_ne!(
+                label, "kind.unknown",
+                "{kind:?} falls into the `_` arm and would render *Unrecognised kind* — the \
+                 `FactKind::ALL` guard cannot see this, because it pins the CONSTANT and not this map"
+            );
+            assert_ne!(meaning, "kind.unknown.meaning", "{kind:?}");
+            assert!(
+                !seen.contains(&(label, meaning)),
+                "{kind:?} shares its key pair with another kind: two different facts would render \
+                 one sentence, which no resolution check can notice"
+            );
+            // Both keys must RESOLVE — `rust-i18n` renders an unknown key verbatim.
+            assert_ne!(rust_i18n::t!(label), label, "{label} does not resolve");
+            assert_ne!(
+                rust_i18n::t!(meaning),
+                meaning,
+                "{meaning} does not resolve"
+            );
+            seen.push((label, meaning));
+        }
+        assert_eq!(seen.len(), FactKind::ALL.len());
+    }
+
+    /// 🔴 **AC2 — the liveness axis carries NO COLOUR, and this is what stops one appearing.**
+    ///
+    /// The product can establish *an observation arrived at T*; it cannot establish *this source is
+    /// blind*, which is a verdict nothing computes. ⚠️ **This is a DIVERGENCE from the UX spec**,
+    /// which prescribes a colour for BOTH liveness values — registered, not conformance.
+    ///
+    /// ⚠️ **A TRIPWIRE, NOT A BARRIER, and the narrowing is the code review's** (story 5.12's
+    /// precedent, applied again). This asserts the absence of six hand-picked spellings; an inline
+    /// `style="color:…"`, a differently-named CSS variable or a `class="dot-live"` would pass
+    /// undetected. *An enumeration cannot claim the completeness of a property* — read it as *"a
+    /// future story will not paint this axis by accident"*, never as *"this axis cannot be painted"*.
+    #[test]
+    fn the_liveness_axis_carries_no_colour_and_no_verdict() {
+        let html = rendered_sources(Some("192.0.2.0/24".into()), Some(at(0)));
+        for banned in [
+            "statepill",
+            "badge",
+            "pill",
+            "--color-accent-700",
+            "is-blind",
+            "is-live",
+        ] {
+            assert!(
+                !html.contains(banned),
+                "/sources must carry no {banned:?}: a colour on this axis asserts a verdict the \
+                 product cannot compute, and deriving `blind` from silence would invent an incident"
+            );
+        }
+        // And the sentence that says the incident axis is not built must be there.
+        assert!(
+            html.contains(&rust_i18n::t!("sources.incident_axis").to_string()),
+            "the screen must say that the blind/live question is not answered yet"
+        );
+    }
+
+    /// 🔴 **A REFUSED PERIMETER SAYS SO, and it did not until the code review.**
+    ///
+    /// Measured by booting the real binary with `OPENCMDB_SCAN_CIDR=nonsense`: the log carried
+    /// `ERROR invalid OPENCMDB_SCAN_CIDR — skipping scan` and the screen rendered *"Périmètre
+    /// nonsense"* with the generic four-state sentence under it — **the rejected string presented as
+    /// an in-force value.** Not the ambiguity the story registered: *we cannot tell which of four* is
+    /// one thing, *we are showing a configuration we already refused as though it were live* is
+    /// another.
+    ///
+    /// 🔑 The check uses the connector's OWN parser, so the screen and the scan cannot disagree.
+    #[test]
+    fn a_refused_perimeter_says_so_rather_than_reading_as_configured() {
+        let bad = rendered_sources(Some("nonsense".into()), None);
+        assert!(
+            bad.contains(&rust_i18n::t!("sources.refused").to_string()),
+            "a perimeter the product refused must be named as refused"
+        );
+        // The control: a VALID perimeter must not carry the sentence, or it would say every
+        // configuration was refused and mean nothing.
+        let good = rendered_sources(Some("192.0.2.0/24".into()), None);
+        assert!(!good.contains(&rust_i18n::t!("sources.refused").to_string()));
+        // ⚠️ And a refused perimeter is still SHOWN — the operator must see what was rejected, or
+        // they cannot fix it. What changed is that it is no longer shown as if it were live.
+        assert!(bad.contains("nonsense"));
+    }
+
+    /// 🔴 **`None` is FOUR states of the world and the screen says so.**
+    ///
+    /// Measured on four live boots at the story's validation: never scanned, scanned and nobody
+    /// answered, an INVALID perimeter the product refused, and a blank one — `MAX(observed_at)` is
+    /// NULL in all four, so FR8's own distinction fails at boot level.
+    #[test]
+    fn a_silent_source_states_the_ambiguity_rather_than_picking_a_reading() {
+        let html = rendered_sources(Some("192.0.2.0/24".into()), None);
+        assert!(html.contains(&rust_i18n::t!("sources.never").to_string()));
+        assert!(
+            html.contains(&rust_i18n::t!("sources.ambiguity").to_string()),
+            "saying only *nothing observed* would let the operator read it as *the source is fine \
+             and the network is empty*, which is one of four readings and not the measured one"
+        );
+        // The control: with an observation, the ambiguity sentence is gone and a duration is shown.
+        let seen = rendered_sources(Some("192.0.2.0/24".into()), Some(at(0)));
+        assert!(!seen.contains(&rust_i18n::t!("sources.ambiguity").to_string()));
+    }
+
+    /// 🔴 **No perimeter, no source** — and the screen says that instead of inventing one.
+    ///
+    /// The story's first draft assumed one configured source throughout; a real boot with
+    /// `OPENCMDB_SCAN_CIDR` unset has none.
+    #[test]
+    fn no_configured_perimeter_means_no_source_rather_than_an_invented_one() {
+        let html = rendered_sources(None, None);
+        assert!(html.contains(&rust_i18n::t!("sources.no_source").to_string()));
+        let name = rust_i18n::t!(crate::arp_ping::SOURCE_NAME_KEY).to_string();
+        assert!(
+            !html.contains(&name),
+            "listing a source the product was never asked to build is the fabrication the liveness \
+             arbitration refuses, in the other direction"
+        );
+        // The control: with a perimeter, the source IS named.
+        let configured = rendered_sources(Some("192.0.2.0/24".into()), None);
+        assert!(configured.contains(&name));
+    }
+
+    /// The screen carries BOTH halves of the spec's card — *Observes* as well as *Cannot see*.
+    #[test]
+    fn the_screen_shows_what_the_source_observes_and_not_only_what_it_cannot() {
+        let html = rendered_sources(Some("192.0.2.0/24".into()), Some(at(0)));
+        for key in ["sources.observes", "sources.cannot_see", "sources.unlock"] {
+            assert!(
+                html.contains(&rust_i18n::t!(key).to_string()),
+                "{key} belongs on the screen: AC1 quotes the negative half only, and delivering \
+                 only the negative half is the spec's illustration cut in two"
+            );
+        }
+        // Every kind's own sentence is rendered, not just its name.
+        let (observes, cannot_see) = crate::arp_ping::observes_and_cannot_see();
+        for kind in observes.into_iter().chain(cannot_see) {
+            let (label, meaning) = kind_keys(kind);
+            assert!(html.contains(&rust_i18n::t!(label).to_string()), "{label}");
+            assert!(
+                html.contains(&rust_i18n::t!(meaning).to_string()),
+                "{meaning}"
+            );
+        }
+    }
+
+    /// The view builder reads no clock of its own — the house rule for every builder in this file.
+    #[test]
+    fn build_sources_reads_no_clock_of_its_own() {
+        let a = build_sources(Some("192.0.2.0/24".into()), Some(at(0)), at(600));
+        let b = build_sources(Some("192.0.2.0/24".into()), Some(at(0)), at(600));
+        assert_eq!(
+            a.expect("a source").last_observed,
+            b.expect("a source").last_observed
+        );
+    }
+
     #[test]
     fn build_triage_reads_no_clock_of_its_own() {
         let declared = vec![

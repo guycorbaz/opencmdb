@@ -825,3 +825,25 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 }
 .panel-value { margin: 8px 0 12px; font-size: 22px; }
 .conflict-parties { margin: 8px 0 12px; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+
+/* ── Sources — story 6b.8, the epic's first REAL section ─────────────────────
+   ⚠️ No colour on the liveness axis, deliberately: the product can establish *an observation
+   arrived at T* and cannot establish *this source is blind*, so a green dot would assert a verdict
+   nothing computes. The UX spec prescribes a colour for both liveness values; shipping none is a
+   DIVERGENCE, registered as one. */
+
+.source-card { border: 1px solid var(--border); padding: 18px 20px; max-width: 70ch; }
+.source-name { margin: 0; font-family: var(--font-heading, inherit); font-size: 20px; }
+.source-meta { margin: 4px 0 18px; font-size: 12px; color: var(--muted); }
+.source-card h3 {
+  margin: 18px 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.kind-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.8; }
+.kind-name { font-weight: 500; }
+.source-unlock { margin: 14px 0 0; font-size: 13px; max-width: 60ch; }
+.source-freshness { margin: 0 0 4px; font-size: 15px; }
+.source-refused { margin: 4px 0 18px; font-size: 13px; }

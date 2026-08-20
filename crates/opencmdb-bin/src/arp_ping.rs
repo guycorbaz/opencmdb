@@ -208,6 +208,69 @@ pub(crate) fn declared_kinds() -> BTreeSet<FactKind> {
     BTreeSet::from([FactKind::IpV4, FactKind::Rtt])
 }
 
+/// What this connector is BUILT to observe, and what it is built NOT to observe.
+///
+/// # Returns
+///
+/// `(observes, cannot_see)` — [`declared_kinds`] and its complement over [`FactKind::ALL`], each in
+/// the enum's own order.
+///
+/// # 🔴 What this is, and what it is NOT — story 6b.8's honesty hinges on the distinction
+///
+/// This is **what the source is BUILT to observe**, read from a compile-time constant. It is **not**
+/// what it observed at the last scan. FR7 says in so many words that the descriptor *"is not a static
+/// property of the source"* and that it *"travels with each batch"* — and the product really does
+/// produce that dated descriptor, once per scan, inside [`PollSummary`]. ⚠️ **Nothing persists it**,
+/// so a request-time screen cannot read it, and 6b.8's arbitration was to render the static half and
+/// SAY that is what it is rather than dress a constant as a measurement.
+///
+/// 🔑 **So `/sources` delivers FR7's static half only, and the story says so.** Persisting the real
+/// descriptor has a precondition that does not exist yet — a stable source identity, which is
+/// Epic 11's — and an accumulation decision that is D32's and Epic 13's. Registered with both named.
+///
+/// ⚠️ The complement is derived from [`FactKind::ALL`], never from a second literal list: two
+/// representations of one fact drift, and the guard that keeps `ALL` complete is a cross-crate row in
+/// `screens.rs`'s `every_variant_of_a_navigated_enum_is_listed_in_all` — see [`FactKind::ALL`].
+pub(crate) fn observes_and_cannot_see() -> (Vec<FactKind>, Vec<FactKind>) {
+    let declared = declared_kinds();
+    let observes: Vec<FactKind> = FactKind::ALL
+        .iter()
+        .copied()
+        .filter(|kind| declared.contains(kind))
+        .collect();
+    let cannot_see: Vec<FactKind> = FactKind::ALL
+        .iter()
+        .copied()
+        .filter(|kind| !declared.contains(kind))
+        .collect();
+    (observes, cannot_see)
+}
+
+/// The name this source carries on screen.
+///
+/// # 🔑 A TYPE name, and that is the true sentence today
+///
+/// Story 6b.4 registered that **the product has no connector registry** — `observation_record
+/// .connector_id` is a bare `CHAR(36)` with no table behind it — and assigned the row to story 6b.8.
+/// Guy's arbitration of 2026-08-20 (option (a) refined): the product has **one connector of one kind
+/// and no notion of a source INSTANCE at all**, so naming the TYPE is honest and a table would invent
+/// instance identity before anything can create instances.
+///
+/// ⚠️ **The limit, written rather than discovered**: this does not survive a second source configured
+/// at runtime (FR1's UniFi controller, or several scopes for the scanner). The day that exists, a
+/// stable source identity is the answer — **Epic 11, `Source UniFi complète`**, which covers FR1,
+/// FR2, FR5, FR6 and FR7.
+/// 🔴 **A KEY, and it shipped as an English LITERAL until someone looked at the screen.** The story's
+/// own §0c wrote the name in French — *« Balayage ARP/ping »* — and the code carried
+/// `"ARP/ping sweep"`, which rendered under a fully French interface with the whole suite green.
+/// **Story 6b.6's `role_key` defect verbatim, in the story that quotes it**: a literal is not a key,
+/// and `every_key_carries_both_locales` can only see keys.
+///
+/// ⚠️ **And it is a KEY rather than data by the same rule story 6b.7 arbitrated**: an owner's name is
+/// a proper noun and stays untranslated; a source's TYPE is a **classification**, and a
+/// classification is copy the operator reads in their own language.
+pub(crate) const SOURCE_NAME_KEY: &str = "sources.name.arp_ping";
+
 /// The facts one answered host yields — the emission half.
 ///
 /// 🔴 **This is the half that carries the structural zero**, because `join` reads FACTS and never

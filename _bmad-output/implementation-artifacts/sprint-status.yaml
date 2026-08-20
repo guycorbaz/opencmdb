@@ -75,7 +75,111 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-20  # 6b.7 -> `done`: PR #109 squash-merged as `f32c268` after a green CI run
+last_updated: 2026-08-20  # 6b.8 -> `review`, CODE-REVIEWED (three layers, Sonnet 5, each isolated)
+                          # and REPAIRED. **8 patches, 0 arbitrations.** **668 -> 676 tests**
+                          # (449 bin + 161 core + 66 xtask), eight gates green.
+                          # 🔴 THE BLIND LAYER FOUND BOTH HIGHS AGAIN -- three stories running -- and
+                          # both were MY sentences: a module doc saying 6b.8 made `Sources` `Mixed`
+                          # twenty lines below the arm setting it to `Fed`, and a doc claiming a
+                          # `Debug` fallback where the code returns a fixed pair. 🔑 From the second
+                          # it DEDUCED, with no repository access, a hole neither sighted layer
+                          # named: the cross-crate guard pins the CONSTANT, not the key map, so an
+                          # eighth kind added correctly still renders *Unrecognised kind*.
+                          # 🔴 THE MUTATING LAYER FOUND WHAT ONLY A BOOT SHOWS: with
+                          # `OPENCMDB_SCAN_CIDR=nonsense` the screen rendered *Périmètre nonsense* as
+                          # an IN-FORCE value under a generic ambiguity sentence -- stronger than the
+                          # ambiguity registered. Closed with the connector's OWN parser.
+                          # 🔴 THE AUDITOR CAUGHT TWO NUMBERS PRETENDING TO BE ONE: M6 is 18 without
+                          # a database and 30 with one; the table said 30 and §0e said 18.
+                          # ⚠️ A ticked task that delivered nothing (`not evaluated`, absent from the
+                          # whole tree) and a register row left silently false at its origin -- both
+                          # corrected, the second struck through rather than deleted.
+                          # ✅ EVERY guard the story claims was measured and fired.
+                          # (Earlier) dev-story done; `done` is the MERGE's business.
+                          # **668 -> 674 tests** (447 bin + 161 core + 66 xtask), eight gates green,
+                          # clippy and fmt clean, run BOTH ways: 0.39 s without a database, ~5.8 s
+                          # against a live mariadb:10.11 on 13321. Looked at in Chrome 151, French,
+                          # on a rebuilt binary.
+                          # 🔑 **THE EPIC'S FIRST WHOLLY REAL SCREEN**: `/sources` shows
+                          # `FactKind::ALL` minus the connector's own declaration -- five kinds, no
+                          # database, no fixture, no invention -- and carries NO example marker.
+                          # 🔴 THE STORY SAID `Mixed` AND THE CODE IS `Fed`, corrected while
+                          # building: AC3 puts the alert list on its OWN screen, so every section of
+                          # /sources is real and it owes no marker. A nature is a statement about
+                          # what the screen SHOWS.
+                          # 🔴 AC2 ships MET on *never two amber pills* and **NOT MET** on *blind
+                          # gets a colour* -- a DIVERGENCE from the spec, registered as one.
+                          # 🔴 FR7 is covered on its STATIC half only; the dated descriptor is now
+                          # bound and TRACED at `scan_pass.rs` instead of silently discarded.
+                          # 🔴 The browser found the source name shipping as an ENGLISH LITERAL under
+                          # a French UI -- while the story's own §0c had written it in French. And
+                          # the first screenshot of the fix was a LIE because the binary was stale.
+                          # ⚠️ The route-level key guard fired for the WRONG REASON: the extractor
+                          # joined across tags, turning correct copy into `example.No`.
+                          # **Eight mutations, eight reds**; M6 gives 30 reds, all `Overlapping
+                          # method route` -- the loud half of the ordering hazard, confirmed live.
+                          # (Earlier) VALIDATED (two fresh-context layers) and the
+                          # story file REWRITTEN on their measurements. 🔴 TWELVE claims of the draft
+                          # refuted, including its CENTRAL premise: *"blind exists nowhere -- no
+                          # type, no function"* is FALSE. `pub enum SourceState {}` exists,
+                          # uninhabited, naming **Epic 13**; `is_blinding()` exists; and 🔴
+                          # **`PollSummary { capabilities, scopes_covered }` -- FR7's DATED
+                          # descriptor and FR5's liveness unit -- is COMPUTED ON EVERY SCAN AND
+                          # THROWN AWAY** at `scan_pass.rs:80` (`if let Err` drops the Ok payload and
+                          # the compiler says nothing). The conclusion survives; the reason did not,
+                          # and the wrong reason hid the cheapest closure.
+                          # 🔴 **D32 already specifies this** and the draft cited NO architecture
+                          # decision: `Live { last_ok }` IS the fact the arbitration renders, so the
+                          # arbitration is a SUBSET of D32, not an alternative -- which makes it
+                          # re-derivable instead of merely endorsed.
+                          # 🔴 A source registry is **Epic 11 (v0.9)**, not Epic 17 (v0.15): Guy
+                          # weighed option (b) against a distance six epics too far.
+                          # 🔴 A second `Mixed` screen has ZERO per-section marker coverage, measured
+                          # green WITH a database; and a nature changed without its route is a silent
+                          # 404 that reds NOTHING locally and 1 in CI, while the mirror mistake reds
+                          # 18. **Register the route first.**
+                          # 🔴 The prescribed liveness reader cannot tell FOUR states apart -- never
+                          # scanned, scanned-nobody-home, INVALID perimeter, blank perimeter -- all
+                          # NULL; and the invalid case is a misconfiguration the product already
+                          # detected and buried in a detached thread's log.
+                          # 🔴 `page::source_label` renders a TRUNCATED TIMESTAMP (two boots 6 s apart
+                          # got different labels, two others the same; it rolls every ~65 s) and it
+                          # feeds /triage, not /sources.
+                          # ⚠️ `FactKind` is `#[non_exhaustive]`, so the draft's exhaustive-match
+                          # fallback is unavailable -- but the guard it called out of perimeter is ONE
+                          # `include_str!` row away and was measured red.
+                          # ✅ THIRD ARBITRATION TAKEN (Guy, 2026-08-20): **do NOT persist the
+                          # discarded `PollSummary`.** The deciding argument is a PRECONDITION and not
+                          # a scope preference: a per-source descriptor cannot be persisted without a
+                          # stable source identity, which §0c just established as Epic 11's -- a table
+                          # keyed on the boot-minted `connector_id` would reproduce the growing-rows
+                          # defect in a fresh table. And a second decision hides inside it (one row
+                          # per scan, or one current row superseded?), which is D32's and Epic 13's.
+                          # What ships instead: bind and TRACE the summary (three lines, no schema),
+                          # render `declared_kinds()` while SAYING it is *what the source is built to
+                          # observe*, and register the persistence with its precondition NAMED.
+                          # 🔴 STATED AND NOT MET: AC1 delivers FR7's STATIC half only, while FR7 says
+                          # the descriptor *is not a static property of the source*. **6b.8 does not
+                          # close FR7**, on the NFR5 precedent. Capturing it now was refused as a PLAN
+                          # change -- that is a correct-course, not a screen story.
+                          # (Earlier) story file created. ⚠️ **T0 BLOCKS: AC2 names
+                          # TWO axes and the product can produce ONE.** Measured across the whole
+                          # tree: `blind` exists NOWHERE as a state -- no table, no column, no type,
+                          # no function; five tables in the migrations, none a source registry. The
+                          # capability axis IS real (`arp_ping::declared_kinds()` = {IpV4, Rtt}, and
+                          # `FactKind` has seven variants, so *what this source cannot see* is a
+                          # five-kind complement derivable at runtime with no database). 🔴 Deriving
+                          # `blind` from silence would read a clock and INVENT an incident, which
+                          # FR8 exists to forbid. Contexting recommends rendering the FACT (*last
+                          # heard from*) with NO COLOUR and saying the incident axis is not built.
+                          # 🔴 Second arbitration: the source has NO NAME -- `connector_id` is a bare
+                          # CHAR(36) -- and story 6b.4 assigned that register row to THIS story by
+                          # name. A registry is a migration and a write path, which is large to hide
+                          # in a screen story.
+                          # ⚠️ Adding `FactKind::ALL` touches `opencmdb-core` and breaks the
+                          # *byte-identical* line six stories have carried: narrow it to *no
+                          # BEHAVIOUR change* rather than defend it (story 5.13b's finding).
+                          # (Earlier) 6b.7 -> `done`: PR #109 squash-merged as `f32c268` after a green CI run
                           # (1m07s). Branch deleted, twins updated in this same push.
                           # 🔑 EPIC 6b: SEVEN numbered slots done (6b.1-6b.7) plus the 6b.4b
                           # insertion -- EIGHT story files of thirteen stories. NEXT =
@@ -3894,7 +3998,7 @@ development_status:
   6b-5-dashboard-real-reach-beside-examples: done
   6b-6-inventory-and-device-record: done
   6b-7-applications-and-ipam: done
-  6b-8-sources-and-alerts: backlog
+  6b-8-sources-and-alerts: review
   6b-9-self-diagnostic-and-commissioning: backlog
   6b-10-copy-fr-and-en: backlog
   6b-11-keyboard-layer-and-focus-contract: backlog

@@ -706,6 +706,64 @@ pub(crate) fn ipam_body(query: &ScreenQuery) -> String {
     .expect("the IPAM template and its struct are compiled together")
 }
 
+/// The copy the alert list needs, resolved once.
+pub(crate) struct AlertStrings {
+    /// The screen's heading.
+    title: String,
+    /// The sentence saying what this list is and is not.
+    lede: String,
+    /// Column: what happened.
+    what: String,
+    /// Column: what it is about.
+    subject: String,
+    /// Column: when.
+    when: String,
+}
+
+/// One rendered alert row.
+pub(crate) struct AlertRow {
+    what: String,
+    subject: &'static str,
+    when: &'static str,
+}
+
+/// The alert list's body.
+#[derive(Template)]
+#[template(path = "_alerts_example.html")]
+struct Alerts {
+    alerts: Vec<AlertRow>,
+    s: AlertStrings,
+}
+
+/// Render the example alert list — Epic 16's frame.
+///
+/// ⚠️ The query is taken and unused, for the reason given on [`apps_body`].
+///
+/// # Panics
+///
+/// Never in practice, for the reason given on [`inventory_body`].
+pub(crate) fn alerts_body(_query: &ScreenQuery) -> String {
+    Alerts {
+        alerts: example_data::alerts()
+            .into_iter()
+            .map(|alert| AlertRow {
+                what: rust_i18n::t!(alert.what_key).to_string(),
+                subject: alert.subject,
+                when: alert.when,
+            })
+            .collect(),
+        s: AlertStrings {
+            title: rust_i18n::t!("alerts.title").to_string(),
+            lede: rust_i18n::t!("alerts.lede").to_string(),
+            what: rust_i18n::t!("alerts.what").to_string(),
+            subject: rust_i18n::t!("alerts.subject").to_string(),
+            when: rust_i18n::t!("alerts.when").to_string(),
+        },
+    }
+    .render()
+    .expect("the alerts template and its struct are compiled together")
+}
+
 /// Every word of `html`'s visible TEXT that looks like an i18n key rather than a translation.
 ///
 /// # Why this is a shared helper since story 6b.7
@@ -770,7 +828,21 @@ pub(crate) fn visible_text(html: &str) -> String {
     let mut depth = 0_usize;
     for c in html.chars() {
         match c {
-            '<' => depth += 1,
+            // 🔴 **A SPACE AT EVERY TAG BOUNDARY, and it took a live database to find out why.**
+            // Without it the extractor joins across tags with nothing between them, so
+            // `<p>…from an example.</p><p>No source is configured…` becomes `…example.No source…`
+            // and `example.No` reads as a dotted i18n key. Story 6b.8's `/sources` reddened the
+            // route-level guard on exactly that — **a FALSE POSITIVE manufactured by the helper**,
+            // on copy that is correct.
+            // 🔑 The cost of the fix is nil and the cost of the bug was a guard that cries wolf:
+            // *a check that fails for the wrong reason is worth nothing*, and one that fails often
+            // enough for the wrong reason gets deleted by whoever meets it next.
+            '<' => {
+                if depth == 0 {
+                    text.push(' ');
+                }
+                depth += 1;
+            }
             '>' => depth = depth.saturating_sub(1),
             _ if depth == 0 => text.push(c),
             _ => {}

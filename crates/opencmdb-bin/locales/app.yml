@@ -628,3 +628,118 @@ ipam.conflict_lease:
 ipam.conflict_link:
   en: "Settle it in the triage"
   fr: "Trancher dans le triage"
+
+# ── Sources (story 6b.8) — the REAL capability boundary ──────────────────────
+sources.title:
+  en: "Sources"
+  fr: "Sources"
+sources.lede:
+  en: "Where the observed state comes from, and what it cannot reach. This section is real: it is read from the connector itself, not from an example."
+  fr: "D'où vient l'état observé, et ce qu'il ne peut pas atteindre. Cette section est réelle : elle est lue sur le connecteur lui-même, pas sur un exemple."
+sources.perimeter:
+  en: "Perimeter"
+  fr: "Périmètre"
+sources.observes:
+  en: "What it observes"
+  fr: "Ce qu'elle observe"
+sources.cannot_see:
+  en: "What it cannot see"
+  fr: "Ce qu'elle ne peut pas voir"
+sources.unlock:
+  en: "Reduced scope is not a fault to repair. It is a capability to unlock: granted the raw-socket privilege, this source would read hardware addresses."
+  fr: "Une portée réduite n'est pas un défaut à réparer. C'est une capacité à débloquer : si on lui accordait le privilège de socket brut, cette source lirait les adresses matérielles."
+sources.freshness:
+  en: "Last observation"
+  fr: "Dernière observation"
+sources.never:
+  en: "Nothing has been observed yet."
+  fr: "Rien n'a encore été observé."
+sources.ambiguity:
+  en: "That sentence covers four situations the product cannot yet tell apart: never scanned, scanned and nobody answered, a perimeter it refused, and a blank perimeter."
+  fr: "Cette phrase recouvre quatre situations que le produit ne sait pas encore distinguer : jamais scanné, scanné sans réponse, un périmètre qu'il a refusé, et un périmètre vide."
+sources.incident_axis:
+  en: "Whether a source has gone blind is a separate question, and the product does not answer it yet — it arrives with the source-outage work."
+  fr: "Savoir si une source est devenue aveugle est une autre question, et le produit n'y répond pas encore — cela arrive avec le travail sur les pannes de source."
+sources.no_source:
+  en: "No source is configured. Declare a perimeter to scan and this screen will describe what that source can and cannot see."
+  fr: "Aucune source n'est configurée. Déclarez un périmètre à scanner et cet écran décrira ce que cette source peut et ne peut pas voir."
+kind.mac:
+  en: "Hardware address"
+  fr: "Adresse matérielle"
+kind.mac.meaning:
+  en: "identifies an interface across address changes — without it, two addresses cannot be recognised as one machine"
+  fr: "identifie une interface à travers les changements d'adresse — sans elle, deux adresses ne peuvent pas être reconnues comme une seule machine"
+kind.ipv4:
+  en: "IPv4 address"
+  fr: "Adresse IPv4"
+kind.ipv4.meaning:
+  en: "where something answered"
+  fr: "là où quelque chose a répondu"
+kind.hostname:
+  en: "Host name"
+  fr: "Nom d'hôte"
+kind.hostname.meaning:
+  en: "the name a machine gives itself — one of the signals that group several interfaces onto one device"
+  fr: "le nom qu'une machine se donne — l'un des signaux qui regroupent plusieurs interfaces sur un même appareil"
+kind.dhcp_lease:
+  en: "DHCP lease"
+  fr: "Bail DHCP"
+kind.dhcp_lease.meaning:
+  en: "who was given which address, and until when"
+  fr: "qui a reçu quelle adresse, et jusqu'à quand"
+kind.uplink:
+  en: "Connection point"
+  fr: "Point de raccordement"
+kind.uplink.meaning:
+  en: "which switch port or access point a machine hangs from — the topology signal"
+  fr: "le port de commutateur ou le point d'accès dont une machine dépend — le signal de topologie"
+kind.oui_vendor:
+  en: "Vendor"
+  fr: "Fabricant"
+kind.oui_vendor.meaning:
+  en: "who made the interface, derived from its hardware address"
+  fr: "qui a fabriqué l'interface, déduit de son adresse matérielle"
+kind.rtt:
+  en: "Round-trip time"
+  fr: "Temps d'aller-retour"
+kind.rtt.meaning:
+  en: "how long a probe took to come back"
+  fr: "le temps mis par une sonde pour revenir"
+kind.unknown:
+  en: "Unrecognised kind"
+  fr: "Genre non reconnu"
+kind.unknown.meaning:
+  en: "this build knows the kind exists and has no sentence for it yet"
+  fr: "cette version sait que ce genre existe et n'a pas encore de phrase pour lui"
+
+# ── Alerts (story 6b.8, Epic 16's frame — example data) ──────────────────────
+alerts.title:
+  en: "Alerts"
+  fr: "Alertes"
+alerts.lede:
+  en: "What the product would tell you about, once it raises alerts. These three are the kinds it will raise; the rows below are an example."
+  fr: "Ce dont le produit vous avertirait, une fois qu'il lèvera des alertes. Ces trois genres sont ceux qu'il lèvera ; les lignes ci-dessous sont un exemple."
+alerts.what:
+  en: "What happened"
+  fr: "Ce qui s'est passé"
+alerts.subject:
+  en: "About"
+  fr: "Concerne"
+alerts.when:
+  en: "When"
+  fr: "Quand"
+example.alert.unknown_device:
+  en: "An unknown device appeared"
+  fr: "Un appareil inconnu est apparu"
+example.alert.unseen:
+  en: "A documented address has not been seen for 7 days"
+  fr: "Une adresse documentée n'a pas été vue depuis 7 jours"
+example.alert.address_conflict:
+  en: "Two devices answer on one address"
+  fr: "Deux appareils répondent sur une adresse"
+sources.name.arp_ping:
+  en: "ARP/ping sweep"
+  fr: "Balayage ARP/ping"
+sources.refused:
+  en: "This perimeter was refused: it is not a valid IPv4 CIDR, so no scan has run. Nothing below has been observed because nothing was asked."
+  fr: "Ce périmètre a été refusé : ce n'est pas un CIDR IPv4 valide, donc aucun balayage n'a eu lieu. Rien n'a été observé ci-dessous parce que rien n'a été demandé."

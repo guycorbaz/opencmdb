@@ -78,17 +78,42 @@ pub(crate) async fn poll_ingest_resolve<C: Connector>(
     pool: &MySqlPool,
 ) -> ScanOutcome {
     let mut sink = VecSink::default();
-    if let Err(error) = connector
+    // 🔴 **THE `Ok` PAYLOAD WAS DISCARDED HERE, AND THE COMPILER COULD NOT SAY SO.** This read
+    // `if let Err(error) = connector.poll(...)`, which legitimately drops the `Ok(PollSummary)` —
+    // and that summary carries the two things the whole *source state* design turns on:
+    // **FR7's DATED capability descriptor** and **FR5's liveness unit** (`scopes_covered`), produced
+    // once per scan and thrown away every time.
+    //
+    // ⚠️ Story 6b.8 found it while establishing that the liveness axis has no producer, and its
+    // first draft asserted *"no type, no function"* — false, and false in the direction that hid the
+    // cheapest closure. **Binding and tracing it is the whole of what that story ships here**: the
+    // dated descriptor becomes observable to an operator reading the log, at the cost of no schema.
+    //
+    // 🔑 **Persisting it was REFUSED with its precondition named** (Guy, 2026-08-20): a per-source
+    // descriptor cannot be stored without a stable source identity — `connector_id` is minted fresh
+    // at every boot (`main.rs`), so a table keyed on it would grow by a row per restart — and the
+    // identity is **Epic 11's**. The row-per-scan versus current-row question is **D32's and
+    // Epic 13's**. Registered with both named rather than decided in a screen story.
+    let summary = match connector
         .poll(now, &mut sink, CancellationToken::new())
         .await
     {
-        tracing::warn!(?error, "scan failed");
-        return ScanOutcome {
-            ingested: 0,
-            failed: 0,
-            resolution: None,
-        };
-    }
+        Ok(summary) => summary,
+        Err(error) => {
+            tracing::warn!(?error, "scan failed");
+            return ScanOutcome {
+                ingested: 0,
+                failed: 0,
+                resolution: None,
+            };
+        }
+    };
+    tracing::info!(
+        capabilities = ?summary.capabilities.kinds,
+        as_of = %summary.capabilities.as_of,
+        scopes_covered = summary.scopes_covered.len(),
+        "poll summary — FR7's dated descriptor, observable here and persisted nowhere"
+    );
 
     let repo = MariaRepository::new(pool.clone());
     let mut landed: Vec<Observation> = Vec::new();
