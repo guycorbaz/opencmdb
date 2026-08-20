@@ -75,7 +75,104 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-19  # 6b.6 -> `done`: PR #107 squash-merged as `7cc1602` after a green CI run
+last_updated: 2026-08-20  # 6b.7 -> `review`, CODE-REVIEWED (three layers, Sonnet 5, each isolated)
+                          # and REPAIRED. **5 patches, 1 finding refuted with its check, 0
+                          # arbitrations.** **653 -> 668 tests** (441 bin + 161 core + 66 xtask),
+                          # eight gates green, clippy and fmt clean.
+                          # 🔴 THE BLIND LAYER FOUND THE HIGH AGAIN, in the code this story wrote to
+                          # close a defect of the same family: the rewritten key guard's premise
+                          # counter measured RAW MARKUP under a message promising *"rendered words"*,
+                          # so its floor was satisfied by tags whatever the page said. Second story
+                          # running where the layer with no repository access beats two that have it.
+                          # 🔴 THE AUDITOR REFUTED THE STORY'S OWN AC6 HEADLINE by reading the tree:
+                          # the named marker guard was never edited -- a property was ADDED beside an
+                          # enumeration left standing, and *superseded* is not *converted*.
+                          # ⚠️ A ticked task's either/or was discharged in NEITHER branch (the
+                          # planned *Réserver* control, absent with no sentence saying why); the
+                          # decision is now written at the site with its cost.
+                          # ✅ REFUTED with the check: the auditor's AC4 NOT MET is an artefact of the
+                          # review scope -- the diff handed to the layers was `crates/` only, so the
+                          # ten register rows were invisible to it. The lesson is the reviewer's, not
+                          # the layer's, and it is registered.
+                          # ✅ The mutating layer measured EVERY guard and found none green: nine
+                          # plants, nine reds, plus a hostile query battery (duplicate keys -> 400
+                          # from axum's extractor; nothing reflected anywhere) and both locales.
+                          # (Earlier) dev-story done; `done` is the MERGE's business.
+                          # **653 -> 667 tests** (440 bin + 161 core + 66 xtask), eight gates green,
+                          # clippy and fmt clean, suite run BOTH ways: 0.49 s without a database and
+                          # 5.92 s against a live mariadb:10.11 on port 13317. Looked at in Chrome
+                          # 151, in French, on a REBUILT binary.
+                          # 🔴 THREE inherited guards were ENUMERATIONS and are now PROPERTIES over
+                          # `Screen::ALL` / the whole dataset -- each measured GREEN on the two new
+                          # screens with a control that reds. The copy guard read 2 key-bearing
+                          # fields of 7 and now covers 87 strings.
+                          # 🔴 A WITNESS IS ONLY A WITNESS IF IT IS DISTINCTIVE: both witnesses set
+                          # to the marker's own text left ZERO tests red while the two screens served
+                          # each other's body. Now a property.
+                          # 🔴 TWO mutations came back GREEN and both refutations are the deliverable:
+                          # `state_of`'s priority order hid a corrupted dataset (closed by a new
+                          # guard), and **the DRIVER lied by failing to UNapply** -- `copy2` preserves
+                          # mtime, askama compiles templates into the binary, and two full runs
+                          # reported a red test over a clean `git status`.
+                          # 🔴 A /24 has 254 HOSTS, not 256: the mock's *next free address* names the
+                          # NETWORK address, and this story's own draft prescribed a test that would
+                          # have pinned the defect.
+                          # ⚠️ The look found what no guard can: the applications table shows a gap
+                          # and does not name it. Registered to Epic 15, not fixed.
+                          # (Earlier) VALIDATED and ARBITRATED. ✅ **T0 IS DISCHARGED
+                          # and development is UNBLOCKED**: Guy took (c) -- render owner and
+                          # criticality, DO NOT render `exposure`, register the five nouns and the
+                          # three value sets; criticality is an i18n KEY, owner values are DATA
+                          # (measured: as literals, /apps renders five French words under an English
+                          # UI with the whole suite green); and the IPAM panel is titled « Conflit
+                          # d'adresse » -- qualified on the « Écart · 2 champs » precedent rather than
+                          # minting a term, and registered. 🔑 (a) -- extending the binding table --
+                          # was refused as PREMATURE and not as wrong, on the measured cost that it is
+                          # five rows PLUS three value SCALES, which is a new kind of row; it is
+                          # recorded as Epic 15's closure. ⚠️ **No binding artefact was edited by
+                          # anyone**, and `host` stays rendered while being registered with the other
+                          # four (an application that runs nowhere is not an application).
+                          # (Earlier) two fresh-context layers ran and the story file was REWRITTEN on
+                          # their measurements.
+                          # story file REWRITTEN on their measurements. 🔴 The validation refuted
+                          # ELEVEN claims of the draft, three of which would have shipped a screen
+                          # with NO GUARD over it: `every_example_section_is_covered_by_exactly_one_marker`,
+                          # `no_i18n_key_reaches_the_screen` and
+                          # `the_example_copy_is_translated_rather_than_typed` are all ENUMERATIONS of
+                          # screens/fields, and each was MEASURED GREEN on /apps and /ipam with a
+                          # control that reds. Epic 5's dominant class, six times in one story's
+                          # inheritance. 🔴 AC1's own requirement is carried by nothing: replacing
+                          # every cell's `aria-label` by `title` leaves 0 red, and the repository
+                          # contains no axe-core, no headless browser and NOT ONE test asserting on an
+                          # `aria-*` attribute -- while `epics.md:2108` makes axe-core this epic's DoD
+                          # and `epics.md:316` names the occupancy grid as a WCAG key view. 🔴 A /24
+                          # has 254 hosts, not 256: the prototype announced *"next free address:
+                          # 192.0.2.0"* -- the network address -- and the draft's own prescribed test
+                          # ("sums to 256") would have PINNED the defect. ⚠️ Also measured: the DRY
+                          # legend makes the stylesheet guard green over a cell shipping with no
+                          # colour (`spark-h8` reproduced, caused by the tidy gesture), and the
+                          # legend's swatches render at ZERO WIDTH in Chrome with every guard green.
+                          # (Earlier the same day) story file created. ⚠️ **T0 BLOCKS DEVELOPMENT ON AC2**:
+                          # (`6b-7-applications-and-ipam.md`). ⚠️ **T0 BLOCKS DEVELOPMENT ON AC2**:
+                          # the story's own AC requires rendering `owner` and `criticality`, which
+                          # story 6b.6 deliberately REFUSED and REGISTERED (`deferred-work.md:4267`)
+                          # with a DIFFERENT owner -- *"the story that gives the product containment
+                          # data (Epic 6 / Growth)"*. Four nouns are outside the binding glossary
+                          # (`application`, `owner`, `criticality`, and `exposure`, which the
+                          # register did not even name), and **only Guy may extend a binding
+                          # artefact** -- the precedent is his own state-axis edit of 2026-08-19.
+                          # 🔴 Second arbitration owed: `conflit` names FR24's *same IP on two MACs*
+                          # on the IPAM screen while the glossary's `conflict` row means *source
+                          # against source*. Two meanings, one word, which the table's own preamble
+                          # forbids in so many words. Same shape as the registered
+                          # `Nouveau`/`undeclared` collision.
+                          # ⚠️ Contexting also found AC1's *`aria-label` per cell* INCOMPATIBLE with
+                          # the mock's `role="img"` container, which makes the subtree presentational
+                          # and all 256 labels unreadable -- NFR25 is this epic's DoD, so the shape
+                          # is decided in the story, not at the keyboard.
+                          # (Earlier the same day) PR #108 squash-merged as `a647187`: 6b.6's status
+                          # commit. Epic 6b stands at 7 of 13, nothing outstanding in the repository.
+                          # (2026-08-19) 6b.6 -> `done`: PR #107 squash-merged as `7cc1602` after a green CI run
                           # (1m20s; bin suite 6.11 s in CI). Branch deleted, twins updated in this
                           # same push. **629 -> 634 tests**, eight gates green, verified BOTH ways.
                           # 🔑 EPIC 6b: FIVE numbered slots done (6b.1-6b.5) plus the 6b.4b
@@ -3785,7 +3882,7 @@ development_status:
   6b-4b-action-bar-and-the-gesture-nature: done
   6b-5-dashboard-real-reach-beside-examples: done
   6b-6-inventory-and-device-record: done
-  6b-7-applications-and-ipam: backlog
+  6b-7-applications-and-ipam: review
   6b-8-sources-and-alerts: backlog
   6b-9-self-diagnostic-and-commissioning: backlog
   6b-10-copy-fr-and-en: backlog

@@ -1,0 +1,102 @@
+{#- The subnet occupancy: Epic 14's frame on the example dataset (story 6b.7).
+
+     🔴 THE GRID IS A LABELLED LIST, NOT THE MOCK'S `role="img"`. AC1 requires an `aria-label` PER
+     CELL; the mock puts one label on a `role="img"` container, which makes its whole subtree
+     presentational — 256 labels inside it would be announced as one sentence. And `aria-label` on a
+     bare `<div>` maps to `generic`, where ARIA 1.2 PROHIBITS it (an axe-core `aria-prohibited-attr`
+     violation), so the naive fix is worse than the mock. A `<ul role="list">` laid out by CSS Grid
+     keeps `listitem` with its name intact — measured in Chrome 151 over the accessibility tree at
+     this story's validation. `role="list"` is explicit because `list-style: none` is known to drop
+     the role in Safari/VoiceOver, and it costs nothing.
+
+     ⚠️ `epics.md:316` (UX-DR71) names this occupancy grid BY NAME as one of five WCAG 2.1 AA key
+     views. -#}
+<section class="screen-section example-section">
+  <h2>{{ s.title }}</h2>
+  <p class="screen-lede">{{ s.lede }}</p>
+
+  {#- Links, not buttons: deep-linkable, and no JavaScript is owed to see a grid.
+       ⚠️ `aria-current="true"`, never `"page"`: the shell's nav already uses `"page"` for the screen
+       in force, and two `aria-current="page"` in one document is an ARIA error. The inventory's
+       filter bar set this idiom first. -#}
+  <nav class="filters" aria-label="{{ s.selector_label }}">
+    {%- for tab in tabs %}
+    <a class="filter{% if tab.active %} is-active{% endif %}"
+       {% if tab.active %}aria-current="true"{% endif %}
+       href="/ipam?subnet={{ tab.slug }}">{{ tab.label }}</a>
+    {%- endfor %}
+  </nav>
+
+  {%- match cells %}
+  {%- when None %}
+  {#- 🔴 The same policy as the sibling screen: an unrecognised slug narrows to NOTHING and says so.
+       Silently serving the first subnet would tell the operator their selection took when it did
+       not — story 6b.4's `?sort=` finding, and `inventory_body`'s doc says it in so many words. -#}
+  <p class="empty">{{ s.unknown_subnet }}</p>
+  {%- when Some with (cells) %}
+  <div class="ipam-layout">
+    <div>
+      <ul class="ipam-grid" role="list" aria-label="{{ s.grid_label }}">
+        {%- for cell in cells %}
+        <li class="ipam-cell {{ cell.modifier }}" aria-label="{{ cell.label }}"></li>
+        {%- endfor %}
+      </ul>
+
+      {#- 🔑 THE LEGEND'S CLASSES ARE LITERALS, AND THAT IS A DELIBERATE REDUNDANCY.
+           `every_class_a_template_names_is_defined_in_the_stylesheet` skips any class
+           attribute carrying an Askama expression, so the cells above — whose modifier comes from a Rust `match` — are
+           invisible to it. Measured at validation: write this legend the DRY way, from the same
+           `CellState` data the cells use, and deleting `.ipam-cell-used` from the sheet leaves the
+           WHOLE SUITE GREEN while every occupied cell ships with no colour. That is
+           `_dashboard.html:58`'s `spark-h8` reproduced, caused by the tidy gesture.
+           These four literals are what carries the guard. `the_legend_names_every_cell_modifier_as_a_literal`
+           pins them against the day someone refactors them away. -#}
+      <p class="ipam-legend">
+        <span class="ipam-key"><span class="ipam-cell ipam-cell-used"></span>{{ legend[0] }}</span>
+        <span class="ipam-key"><span class="ipam-cell ipam-cell-reserved"></span>{{ legend[1] }}</span>
+        <span class="ipam-key"><span class="ipam-cell ipam-cell-free"></span>{{ legend[2] }}</span>
+        <span class="ipam-key"><span class="ipam-cell ipam-cell-structural"></span>{{ legend[3] }}</span>
+        <span class="ipam-occupancy">{{ s.occupancy }}</span>
+      </p>
+    </div>
+
+    <div class="ipam-rail">
+      {#- 🔴 THE MOCK'S *« Réserver cette adresse »* BUTTON IS DELIBERATELY NOT HERE, and the
+           decision is written rather than left as an omission.
+
+           Story 6b.4b's `Gesture::Planned { owner }` exists precisely so a gesture the product does
+           not have yet can be shown and labelled, and Guy's premise (2) of 2026-08-13 requires that
+           — but it says *"the same rule applies INSIDE an implemented screen — the four gestures
+           Epic 7 owns"*, and this is neither: the screen is 100 % example content and reserving an
+           address is Epic 14's FR21. Rendering a planned control over a fabricated subnet would
+           announce a gesture against data that does not exist, which is hollow twice over.
+
+           ⚠️ The cost is stated: `/triage` shows five dead controls and says why, and this screen
+           shows none, so the two are inconsistent until Epic 14 gives IPAM a real subnet. That
+           inconsistency is the price of not promising a gesture over invented data, and it is the
+           narrower of the two errors. -#}
+      <div class="ipam-panel">
+        <p class="panel-label">{{ s.next_free }}</p>
+        <p class="panel-value mono">{{ next_free }}</p>
+      </div>
+
+      {#- 🔴 « Conflit d'adresse », and the qualifier is the whole point (Guy, 2026-08-20). The
+           binding glossary's `conflict` means *two observations disagree with each other — source
+           against source*; two appliances answering on one address is a different fact, and
+           `prd.md:988` forbids one word carrying two meanings. The qualifier disambiguates without
+           minting a term, exactly as *"Écart · 2 champs"* qualifies `écart`. -#}
+      <div class="ipam-panel">
+        <p class="panel-label">{{ s.conflict_title }}</p>
+        <p class="panel-value mono">{{ conflict_ipv4 }}</p>
+        <p>{{ s.conflict_lede }}</p>
+        <ul class="conflict-parties">
+          {%- for party in conflict %}
+          <li><a href="/devices/{{ party.id }}">{{ party.name }}</a> <span class="muted">{{ party.note }}</span></li>
+          {%- endfor %}
+        </ul>
+        <p><a href="/triage">{{ s.conflict_link }}</a></p>
+      </div>
+    </div>
+  </div>
+  {%- endmatch %}
+</section>

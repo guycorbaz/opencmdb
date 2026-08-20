@@ -1,0 +1,47 @@
+{#- The application inventory: Epic 15's frame on the example dataset (story 6b.7).
+
+     🔑 SIX columns, where the mock has seven. *Exposition* is deliberately not rendered — Guy's
+     arbitration of 2026-08-20, option (c): render what the criterion NAMES and register the rest.
+     Its four values carry no glossary row, and no acceptance criterion asks for them.
+
+     ⚠️ `class="example-section"` is the ONE anchor the marker guards read. -#}
+<section class="screen-section example-section">
+  <h2>{{ s.title }}</h2>
+
+  {#- 🔴 AC2's sentence, ON THE SCREEN and not only in the story file: *"the owner and the criticality
+       are declared — nothing will ever observe them"* is the reason this screen exists, and a
+       criterion satisfied only in a document is a criterion nobody can read. -#}
+  <p class="screen-lede">{{ s.lede }}</p>
+
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>{{ s.name }}</th>
+        <th>{{ s.host }}</th>
+        <th>{{ s.declared }}</th>
+        <th>{{ s.observed }}</th>
+        <th>{{ s.owner }}</th>
+        <th>{{ s.criticality }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {%- for app in apps %}
+      <tr>
+        <td>{{ app.name }}</td>
+        {#- The host links where the inventory links, so one network reads as one network. The row
+             with no host says so instead of linking nowhere. -#}
+        <td>
+          {%- match app.host_id %}
+          {%- when Some with (id) %}<a href="/devices/{{ id }}">{{ app.host }}</a>
+          {%- when None %}<span class="muted">{{ app.host }}</span>
+          {%- endmatch %}
+        </td>
+        <td class="mono">{{ app.declared }}</td>
+        <td class="mono muted">{{ app.observed }}</td>
+        <td class="muted">{{ app.owner }}</td>
+        <td>{{ app.criticality }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</section>

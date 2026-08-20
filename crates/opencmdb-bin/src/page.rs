@@ -3796,6 +3796,22 @@ mod tests {
         // does not collide. *An oracle that counts a word counts every word that contains it.*
         let badge = r#"class="example-marker-badge""#;
 
+        // 🔴 **WHAT THIS LOOP OWNS SINCE STORY 6b.7, and what it no longer claims.** AC6 of that
+        // story named this guard as one of three enumerations to turn into a property, and the
+        // review found that it was **not converted**: the page-level *exactly one marker* rule is
+        // now asserted over `Screen::ALL` on the real HTTP body, in `main.rs`'s route-table guard,
+        // which is where a screen this module cannot build is finally covered.
+        //
+        // 🔑 **This loop is kept anyway, and NOT as a duplicate**: the assertion below it —
+        // *the body carries no marker of its own* — is a property the route-table guard cannot
+        // express, because it sees only the SERVED page, where a template-side marker and the
+        // dispatch's are indistinguishable. Two markers stacking is what the route-table count
+        // catches; a marker that has MOVED from the dispatch into a template is what this catches,
+        // and that move is silent until a second screen forgets to make it.
+        //
+        // ⚠️ The enumeration below is therefore deliberate and narrow: two bodies this module can
+        // build directly. It is **not** a claim of coverage over the ten screens, and reading it as
+        // one is what the review corrected.
         for (screen, body) in [
             (
                 "/devices",
