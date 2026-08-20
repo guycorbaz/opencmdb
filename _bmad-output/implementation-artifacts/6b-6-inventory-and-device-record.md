@@ -1,6 +1,6 @@
 # Story 6b.6: Inventory and device record (example)
 
-Status: review
+Status: done
 
 Epic: 6b — *L'interface de la maquette*. **Sixth numbered slot.** ⚠️ **Its scope was NARROWED before
 it began**: story 6b.3 pulled `/devices` forward as its witness screen, so what remains here is the
