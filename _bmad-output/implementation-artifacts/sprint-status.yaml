@@ -75,7 +75,19 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-20  # 6b.8 -> `review`, CODE-REVIEWED (three layers, Sonnet 5, each isolated)
+last_updated: 2026-08-20  # 6b.8 -> `done`: PR #111 squash-merged as `b18495a` after a green CI run
+                          # (59s). Branch deleted, twins updated in this same push.
+                          # 🔑 EPIC 6b: EIGHT numbered slots done (6b.1-6b.8) plus the 6b.4b
+                          # insertion -- NINE story files of thirteen. NEXT = `create-story` 6b.9
+                          # (self-diagnostic and commissioning), the LAST of the example-content
+                          # stories: it takes the `Empty` count from two to ZERO.
+                          # ⚠️ 6b.9 inherits the same shape 6b.8 just proved workable -- `epics.md`
+                          # requires its rows to be **measured at runtime, not written into a
+                          # template** (version, database engine and version, migrations applied,
+                          # last scan and its duration, the reach counts) -- so it is the SECOND
+                          # screen whose centre must be real, and the first that reads the database
+                          # ABOUT ITSELF.
+                          # (Earlier the same day) CODE-REVIEWED (three layers, Sonnet 5, isolated)
                           # and REPAIRED. **8 patches, 0 arbitrations.** **668 -> 676 tests**
                           # (449 bin + 161 core + 66 xtask), eight gates green.
                           # 🔴 THE BLIND LAYER FOUND BOTH HIGHS AGAIN -- three stories running -- and
@@ -3998,7 +4010,7 @@ development_status:
   6b-5-dashboard-real-reach-beside-examples: done
   6b-6-inventory-and-device-record: done
   6b-7-applications-and-ipam: done
-  6b-8-sources-and-alerts: review
+  6b-8-sources-and-alerts: done
   6b-9-self-diagnostic-and-commissioning: backlog
   6b-10-copy-fr-and-en: backlog
   6b-11-keyboard-layer-and-focus-contract: backlog

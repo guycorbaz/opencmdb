@@ -1,6 +1,6 @@
 # Story 6b.8: Sources and alerts
 
-Status: review
+Status: done
 
 Epic: 6b — *L'interface de la maquette*. **Eighth numbered slot, ninth story file.** It takes the
 `Empty` screen count from four to two, and it is **the first screen of this epic whose most important
