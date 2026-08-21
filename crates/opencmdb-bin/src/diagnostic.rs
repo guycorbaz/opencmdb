@@ -739,6 +739,21 @@ mod tests {
             .join("\n")
     }
 
+    /// The value rendered beside ONE label, found by its key.
+    ///
+    /// 🔑 Needed because a `contains` over the whole page cannot say WHICH row carries a figure —
+    /// see the assertion in `every_store_row_carries_the_value_the_store_returned`.
+    fn row_value(view: &DiagnosticView, label_key: &str) -> String {
+        let label = rust_i18n::t!(label_key).to_string();
+        view.groups
+            .iter()
+            .flat_map(|group| group.rows.iter())
+            .find(|row| row.key == label)
+            .unwrap_or_else(|| panic!("no row is labelled {label:?}"))
+            .value
+            .clone()
+    }
+
     fn at(seconds: i64) -> chrono::DateTime<chrono::Utc> {
         chrono::DateTime::from_timestamp(seconds, 0).expect("representable")
     }
@@ -765,10 +780,21 @@ mod tests {
                  {rendered}"
             );
         }
-        assert!(
-            rendered.contains("11 sightings") && rendered.contains("26 sightings"),
-            "placed and not placed are rendered, in SIGHTINGS on both sides — story 5.14b's code \
-             review found them in different units side by side\n{rendered}"
+        // 🔴 **ROW BY ROW, and the first version of this assertion could not tell them apart.**
+        // It read `contains("11 sightings") && contains("26 sightings")`, which is satisfied
+        // whichever row carries which figure — mutation M6 swapped the two outcome filters and left
+        // it GREEN. *An oracle that counts a word counts it wherever it is* (story 6b.6's finding,
+        // reproduced here by a guard written after it).
+        assert_eq!(
+            row_value(&view, "diagnostic.placed"),
+            "11 sightings",
+            "the PLACED row carries the placed count"
+        );
+        assert_eq!(
+            row_value(&view, "diagnostic.not_placed"),
+            "26 sightings",
+            "and the NOT-PLACED row carries the other one — both in SIGHTINGS, story 5.14b's code \
+             review having found them in different units side by side"
         );
     }
 
@@ -920,9 +946,12 @@ mod tests {
     /// reference mock's security phrases *even to deny them*.
     #[test]
     fn the_screen_states_no_security_property_the_product_does_not_hold() {
-        let facts = facts(security_posture(true, true));
-        let view = build_diagnostic(&facts, Some(&store()), None, at(0));
-        let rendered = values(&view).to_lowercase();
+        // 🔴 **THE RENDERED PAGE, and the first version of this guard read the BUILDER.** Mutation
+        // M7 planted *"Toutes les surfaces HTTP sont authentifiées."* as a literal in the template
+        // and left the whole suite GREEN: `build_diagnostic`'s output cannot contain a sentence the
+        // template adds. That is story 6b.4b's headline — *every guard read the source and every
+        // defect lived in the render* — inside the guard this story wrote to close it.
+        let rendered = rendered_body().to_lowercase();
         for claim in [
             "all http surfaces",
             "toutes authentifiées",
@@ -1064,14 +1093,20 @@ mod tests {
             controls,
             "and every one is announced as unavailable rather than removed"
         );
-        // A bare `disabled` has no `=`, and an attribute assembled in Rust and emitted with
-        // `|safe` would carry it — both shapes slipped 6b.4b's first guards.
+        // 🔴 **A TOKEN scan, and the enumeration it replaces was defeated by a NEWLINE.** The
+        // first version tested three literals — `" disabled>"`, `" disabled "`, `" disabled="` —
+        // and mutation M8b planted a bare uppercase `DISABLED` followed by a line break, which none
+        // of them matches. A boolean attribute has no `=`, `aria-disabled` must not be mistaken for
+        // it, and the separator can be ANY whitespace: *an enumeration cannot claim the
+        // completeness of a property* (story 5.12, and 6b.4b measured this same class on this same
+        // attribute).
+        let native_disabled = html
+            .split(|c: char| c.is_whitespace() || c == '>')
+            .any(|token| token == "disabled" || token.starts_with("disabled="));
         assert!(
-            !html.contains(" disabled>")
-                && !html.contains(" disabled ")
-                && !html.contains(" disabled="),
-            "no NATIVE disabled attribute: it leaves the tab order, and a blind operator is then \
-             not even told the gesture exists\n{html}"
+            !native_disabled,
+            "a NATIVE disabled attribute reached the page: it leaves the tab order, and a blind \
+             operator is then not even told the gesture exists\n{html}"
         );
         assert_eq!(
             html.matches("aria-describedby=\"diag-gesture-not-built\"")
