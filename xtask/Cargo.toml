@@ -19,3 +19,10 @@ sha2 = "0.11.0"
 # The fixture MANIFEST is TOML (D56). Already in the workspace tree; no new supply chain.
 toml = "0.8.23"
 walkdir = "2.5.0"
+# The locale file is YAML and the `copy-vocabulary` gate is a DENYLIST, so a value it fails to
+# parse reads GREEN — a hole, not a false alarm. Story 6b.10's validation built both parses and
+# measured a naive line split missing SEVEN of twelve legal shapes (block scalars `|`/`>`/`|-`,
+# a flow mapping, a four-space indent, a plain multi-line continuation, a nested key). ⚠️ Already
+# in `Cargo.lock` via `config` → `opencmdb-bin`, so this adds ONE line to the lockfile and NO
+# crate to the supply chain — measured with `cargo tree -i yaml-rust2` before it was taken.
+yaml-rust2 = "0.11.0"

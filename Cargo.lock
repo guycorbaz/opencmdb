@@ -3069,6 +3069,7 @@ dependencies = [
  "sha2 0.11.0",
  "toml 0.8.23",
  "walkdir",
+ "yaml-rust2",
 ]
 
 [[package]]

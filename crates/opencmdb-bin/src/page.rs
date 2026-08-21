@@ -914,7 +914,7 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
-                    gestures: action_bar("gesture.merge"),
+                    gestures: action_bar("gesture.document"),
                     kind: t!("triage.kind.ecart").to_string(),
                     entity: ipv4.clone(),
                     field: gap.field.clone(),
@@ -959,7 +959,7 @@ fn build_triage(
                     // story 6b.3's wrong-namespace defect waiting.
                     gestures: action_bar(match cause {
                         AbstentionCause::ConflictingObservations => "gesture.resolve",
-                        _ => "gesture.merge",
+                        _ => "gesture.document",
                     }),
                     kind: label.to_string(),
                     entity: ipv4.clone(),
@@ -1007,7 +1007,7 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
-                    gestures: action_bar("gesture.merge"),
+                    gestures: action_bar("gesture.document"),
                     kind: t!("triage.kind.nouveau").to_string(),
                     entity: value.clone(),
                     field: "ipv4".to_string(),
@@ -4100,21 +4100,42 @@ mod tests {
             .expect("the selected row has a pane")
         };
 
-        let drift = pane_for("ecart:drift:hostname");
+        let gap_row = pane_for("ecart:drift:hostname");
         assert_eq!(
-            drift.gestures.len(),
+            gap_row.gestures.len(),
             5,
             "the mock's bar carries five controls"
         );
         assert!(
-            drift.gestures.iter().all(|g| g.not_built.is_some()),
+            gap_row.gestures.iter().all(|g| g.not_built.is_some()),
             "not one of the five exists today — every control is planned"
         );
-        assert_eq!(drift.gestures[0].label, "Merge", "a drift offers Merge");
+
+        // 🔴 **This assertion was the ONE test standing between the product and story 6b.10's
+        // arbitration 1, and it carried BOTH retired terms in one line**: it read
+        // `assert_eq!(…, "Merge", "a drift offers Merge")` — `Merge`, which the binding glossary
+        // retires in English by name, asserted under a message saying `drift`, the synonym story
+        // 6b.6 retired for `gap`. *A test that pins the ugly thing is a test that requires it*
+        // (story 6b.4), and this one required the defect for two stories running.
+        //
+        // 🔑 It now compares against the RESOLVED KEY, because what this test is about is **which
+        // gesture is primary**, never how that gesture is worded. The premise below is what keeps
+        // that from being vacuous.
+        let documenting = rust_i18n::t!("gesture.document").to_string();
+        let resolving = rust_i18n::t!("gesture.resolve").to_string();
+        assert_ne!(
+            documenting, resolving,
+            "the premise: the two gestures are worded differently, or the pair below would pass \
+             whichever one the code selected"
+        );
+        assert_eq!(
+            gap_row.gestures[0].label, documenting,
+            "a GAP row's primary control is the DOCUMENTING gesture"
+        );
 
         let conflict = pane_for("conflit:clash");
         assert_eq!(
-            conflict.gestures[0].label, "Resolve",
+            conflict.gestures[0].label, resolving,
             "a CONFLICT offers Resolve — and the choice comes from the cause, not from the \
              translated kind string"
         );

@@ -32,18 +32,28 @@
 //!     DUPLICATE KEY UPDATE`. Its allowlist is **EMPTY**, which the committed tree
 //!     supports. ⚠️ A TRIPWIRE, not a barrier, and `DELETE` is deliberately outside its
 //!     verb list — see [`observed_immutable`] for both, with their measurements.
+//!   - **copy-vocabulary** (D65 volet C / NFR26, story 6b.10): the binding glossary's retired
+//!     terms may not survive in the INTERFACE COPY. Reads
+//!     `crates/opencmdb-bin/locales/app.yml` — which volet A skips, its walk being `.rs`-only —
+//!     with a REAL YAML parse, because a denylist that fails to parse a value reports green.
+//!     Its denylist is **per locale**: `merge` is retired in English while the French « Merger »
+//!     is the BINDING translation of `document`, and a flat list cannot say that. ⚠️ Scoped to
+//!     that one file on a MEASURED refusal, not a preference — see [`copy_vocabulary`].
 //!   - **views-hash** (informational): whether `architecture-views.md`'s `sourceSha256`
 //!     still matches `architecture.md`. A mismatch means the views file is stale and
 //!     should be regenerated at the next milestone — reported, never a hard failure.
 //!
-//! ⚠️ **Eight gates plus views-hash.** This list is the file's account of itself, and story
+//! ⚠️ **NINE gates plus views-hash.** This list is the file's account of itself, and story
 //! 5.12's code review caught it enumerating SIX while the file implemented seven. Adding a
-//! gate below without adding it here is the same defect again.
+//! gate below without adding it here is the same defect again — which is why the row above and
+//! the call in [`run_ci`] were written in one edit, and why `xtask` carries a test that counts
+//! the two against each other rather than trusting whoever comes next to remember.
 
 // Documentation is a project rule (CLAUDE.md): every public item carries a doc comment.
 // `warn` for now, graduating to `-D missing_docs` once the tree is clean.
 #![deny(missing_docs)]
 
+mod copy_vocabulary;
 mod observed_immutable;
 
 use std::collections::HashSet;
@@ -201,6 +211,10 @@ fn run_ci() -> Result<bool> {
     let (g7, m7) = observed_immutable::gate_observed_immutable(&root)?;
     report("observed-immutable", g7, &m7);
     ok &= g7;
+
+    let (g8, m8) = copy_vocabulary::gate_copy_vocabulary(&root)?;
+    report("copy-vocabulary", g8, &m8);
+    ok &= g8;
 
     let m3 = check_views_hash(&root)?;
     println!("  ℹ  {:<18} {m3}", "views-hash");
@@ -2105,6 +2119,84 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
 
     fn entry_of(path: &str) -> Vec<CorpusEntry> {
         vec![CorpusEntry::File(path.to_string())]
+    }
+
+    /// 🔴 **The file's account of itself matches the file** — the module doc's gate list against
+    /// the gates [`run_ci`] actually reports.
+    ///
+    /// # Why this is a test and not a habit
+    ///
+    /// Story 5.12's code review caught this very module doc enumerating **six** gates while the
+    /// file implemented **seven**: the gate that story had just added was missing from the list
+    /// the file gives of itself. The doc then said, in so many words, *"adding a gate below
+    /// without adding it here is the same defect again"* — a sentence asking the next author to
+    /// remember, which is exactly the thing nobody does.
+    ///
+    /// 🔑 Story 6b.10 adds the ninth gate and turns that sentence into a check. It also pins the
+    /// **count** in the doc's summary line, because that is the number the review found wrong.
+    ///
+    /// ⚠️ Its limit: it reads this file's own source, so it can only see gates wired through
+    /// [`report`]. `views-hash` is reported with a bare `println!` because it is informational and
+    /// never fails, and it is named here rather than silently skipped.
+    #[test]
+    fn the_module_doc_lists_exactly_the_gates_run_ci_reports() {
+        let source = include_str!("main.rs");
+        let code = source
+            .find("\nfn main()")
+            .map_or(source, |at| &source[..at]);
+
+        let documented: Vec<&str> = code
+            .lines()
+            .filter_map(|line| line.trim_start().strip_prefix("//!   - **"))
+            .filter_map(|rest| rest.split("**").next())
+            .collect();
+        // Everything `run_ci` announces, in the order it announces it.
+        let reported: Vec<&str> = source
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("report(\""))
+            .filter_map(|rest| rest.split('"').next())
+            .collect();
+
+        assert_eq!(
+            documented.len(),
+            reported.len() + 1,
+            "the doc lists {documented:?} and the file reports {reported:?} (plus the \
+             informational `views-hash`) — this list is the file's account of itself, and story \
+             5.12's review caught it six-against-seven"
+        );
+        for gate in &reported {
+            assert!(
+                documented.contains(gate),
+                "`{gate}` is wired into run_ci and missing from the module doc — {documented:?}"
+            );
+        }
+        assert_eq!(
+            documented.last(),
+            Some(&"views-hash"),
+            "the informational check is listed last, and it is the one exception to the \
+             one-row-per-`report` rule"
+        );
+
+        // 🔴 The COUNT in the summary line, which is the number 5.12's review found false.
+        let summary = code
+            .lines()
+            .find(|line| line.contains("gates plus views-hash"))
+            .expect("the doc summarises how many gates there are");
+        let spelled = [
+            "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN",
+            "ELEVEN", "TWELVE",
+        ];
+        let claimed = spelled
+            .iter()
+            .position(|word| summary.to_uppercase().contains(word))
+            .map(|at| at + 1)
+            .expect("the summary spells the gate count");
+        assert_eq!(
+            claimed,
+            reported.len(),
+            "the doc claims {claimed} gates and run_ci reports {} — {summary:?}",
+            reported.len()
+        );
     }
 
     /// A private directory per test: a shared constant path races between concurrent runs and

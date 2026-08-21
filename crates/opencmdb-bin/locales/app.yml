@@ -331,8 +331,14 @@ gesture.badge:
 gesture.not_built:
   en: "This gesture is not built yet."
   fr: "Ce geste n'est pas encore construit."
-gesture.merge:
-  en: "Merge"
+# 🔴 `gesture.document`, NOT `gesture.merge`, and the English value is `Document` — Guy's
+# arbitration 1 of 2026-08-21, story 6b.10. The binding glossary retires `merge` IN ENGLISH by
+# name (`prd.md:1037`, `ux-design-specification.md:1386`): *"it names the forbidden operation —
+# the founding pillar is linked, never merged"*. The FRENCH « Merger » is the FIXED translation
+# of `document` and carries no such claim, so it is unchanged. The key name is in scope too: the
+# glossary's first column is "EN (docs, API, code)".
+gesture.document:
+  en: "Document"
   fr: "Merger"
 gesture.resolve:
   en: "Resolve"
