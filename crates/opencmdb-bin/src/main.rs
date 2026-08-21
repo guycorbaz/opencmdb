@@ -13,6 +13,7 @@
 mod arp_ping;
 mod auth;
 mod dburl;
+mod diagnostic;
 mod document;
 mod example_data;
 mod example_screens;
@@ -39,6 +40,13 @@ mod trap_gate;
 // The i18n seam (D39/D66): user-facing strings resolve through `t!()` against `locales/`. EN is
 // the fallback; the source YAML is greppable so the D65 vocabulary gate can later lint it.
 rust_i18n::i18n!("locales", fallback = "en");
+
+/// This build's version, and the ONE place the crate reads it.
+///
+/// 🔑 Story 6b.9 put a second version on the screen (the diagnostic's *Moteur* group) beside the
+/// one the shell has shown since 6b.2. Two `env!` sites would be two representations of one fact,
+/// which is exactly the redundancy `CLAUDE.md`'s DRY rule forbids when no test pins them together.
+pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Serializes the DB-touching tests: they share one MariaDB (CI's service) and would otherwise
 /// race on `migrate!` — two concurrent migrations both insert version 1 into `_sqlx_migrations`,
@@ -116,6 +124,18 @@ pub(crate) struct AppConfig {
     /// is **not validated here**: an invalid CIDR is refused by the scan with a named error, and
     /// displaying what the operator configured is more honest than displaying nothing.
     pub(crate) scan_cidr: Option<String>,
+    /// `OPENCMDB_METRICS_TOKEN`: the Bearer token `/metrics` requires, or `None` when unset or
+    /// empty — in which case the scrape is refused (the secure default, unchanged).
+    ///
+    /// 🔴 **It moved HERE at story 6b.9, and that removed a reader rather than adding one.**
+    /// `scrape_authorized` read the environment inside the request path, and the diagnostic screen
+    /// needs to report whether a token is configured. A second reader would have re-created story
+    /// 6b.2's shipped M12 — and with teeth: [`carries_a_visible_glyph`] would have treated a token
+    /// of `" "` as unset while `scrape_authorized` refuses only on `is_empty()`, so `/metrics`
+    /// would have been protected while the screen reported it open. ⚠️ The filter below is
+    /// therefore `!is_empty()` and **not** `carries_a_visible_glyph`: the rule is
+    /// `scrape_authorized`'s, moved, not rewritten.
+    pub(crate) metrics_token: Option<String>,
 }
 
 /// Whether a configured value carries at least one character an operator could SEE.
@@ -257,6 +277,9 @@ impl AppConfig {
         // Empty counts as unset here too: an operator who blanks the variable to disable the
         // scan must not then see an empty perimeter rendered as if it were a value.
         let scan_cidr = lookup("OPENCMDB_SCAN_CIDR").filter(|value| carries_a_visible_glyph(value));
+        // ⚠️ `!is_empty()`, deliberately — see the field's doc. Widening this to
+        // `carries_a_visible_glyph` would change `/metrics`' behaviour, which this story does not.
+        let metrics_token = lookup("OPENCMDB_METRICS_TOKEN").filter(|value| !value.is_empty());
         let user = lookup("OPENCMDB_BASIC_USER").filter(|value| !value.is_empty());
         let password = lookup("OPENCMDB_BASIC_PASSWORD").filter(|value| !value.is_empty());
         let basic = match (user, password) {
@@ -302,6 +325,7 @@ impl AppConfig {
             document_enabled,
             basic,
             scan_cidr,
+            metrics_token,
         })
     }
 }
@@ -325,8 +349,10 @@ impl Clock for SystemClock {
 async fn main() -> std::process::ExitCode {
     // Hold the file-log writer guard for the whole process (dropping it flushes + stops the
     // writer). It must outlive `run`, and be dropped only after the fatal error below is logged.
-    let _log_guard = init_tracing();
-    match run().await {
+    // ⚠️ The DESCRIPTOR travels with the guard: `run` needs it for the diagnostic screen, and it
+    // must be the one this call installed rather than a second reading of the environment.
+    let (_log_guard, log) = init_tracing();
+    match run(log).await {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
             // Returning `Err` from `main` prints through `Termination`, on stderr, bypassing the
@@ -342,7 +368,7 @@ async fn main() -> std::process::ExitCode {
 
 /// Everything that can fail on the way up. Split out of `main` so a failure is logged through
 /// `tracing` — reaching the log files — instead of being printed past the subscriber.
-async fn run() -> anyhow::Result<()> {
+async fn run(log: diagnostic::LogDescriptor) -> anyhow::Result<()> {
     // Select the UI locale (default `en`); user-facing strings resolve through `t!()`.
     let locale = std::env::var("OPENCMDB_LOCALE").unwrap_or_else(|_| "en".to_string());
     rust_i18n::set_locale(&locale);
@@ -388,15 +414,24 @@ async fn run() -> anyhow::Result<()> {
     // Optional one-shot startup scan: the real ARP/ping connector (Story 3.5) pings a declared
     // subnet and ingests observations, so the page shows genuinely observed state. Unset → the
     // page renders the declared side only. The periodic scheduler (FR6) is a later story.
+    // 🔑 Where the scan pass publishes what it did, and where `/diagnostic` reads it. Empty until
+    // a pass completes — and *empty* is a rendered state saying **no pass since this boot**, which
+    // is the honest answer for a fresh process and for an unconfigured perimeter alike.
+    let scan_report = diagnostic::ScanReportSlot::default();
     if let Some(cidr) = config.scan_cidr.clone() {
-        spawn_startup_scan(database_url.clone(), clock.now(), cidr);
+        spawn_startup_scan(database_url.clone(), clock.now(), cidr, scan_report.clone());
     }
+    let diagnostic_facts = diagnostic::DiagnosticFacts::new(
+        log,
+        diagnostic::security_posture(config.basic.is_some(), config.metrics_token.is_some()),
+        scan_report,
+    );
 
     let listener = tokio::net::TcpListener::bind(&bind)
         .await
         .with_context(|| format!("binding {bind}"))?;
     tracing::info!(%bind, "opencmdb listening");
-    axum::serve(listener, app(pool, config))
+    axum::serve(listener, app(pool, config, diagnostic_facts))
         .await
         .context("serving the HTTP app")?;
     Ok(())
@@ -411,7 +446,7 @@ async fn run() -> anyhow::Result<()> {
 /// middleware entirely — axum's own doc says so — and a POST with no credential reached its
 /// handler). The switch decides what the `Router` CARRIES; it must never decide on which side
 /// of the layer a route lands.
-fn app(pool: MySqlPool, config: AppConfig) -> Router {
+fn app(pool: MySqlPool, config: AppConfig, diagnostic: diagnostic::DiagnosticFacts) -> Router {
     let mut router = Router::new()
         .route("/", get(redirect_to_triage))
         .route("/gap", get(page::gap_fragment))
@@ -426,7 +461,11 @@ fn app(pool: MySqlPool, config: AppConfig) -> Router {
         .merge(screens::router(config.scan_cidr.clone()))
         // `/triage` carries the pool AND the perimeter, so the perimeter is a parameter rather
         // than a second reading of the environment (story 6b.2's M12, shipped and now closed).
-        .merge(page::triage_router(pool.clone(), config.scan_cidr.clone()));
+        .merge(page::triage_router(
+            pool.clone(),
+            config.scan_cidr.clone(),
+            diagnostic,
+        ));
     if config.document_enabled {
         // The switch governs EXISTENCE only (arbitration 4): merged above the layer, the route
         // is auth-gated exactly like every other non-public path. The pool lives INSIDE the
@@ -453,7 +492,12 @@ fn app(pool: MySqlPool, config: AppConfig) -> Router {
 /// scheduler's Send story for later). `block_on` on a single-thread runtime imposes no `Send`
 /// bound, and a fresh pool avoids sharing connections across runtimes. The periodic scheduler
 /// (FR6) will supersede this.
-fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
+fn spawn_startup_scan(
+    database_url: String,
+    now: Timestamp,
+    cidr: String,
+    report: diagnostic::ScanReportSlot,
+) {
     use opencmdb_core::observation::{ConnectorId, L2DomainId, Scope, VantageId};
     use uuid::Uuid;
 
@@ -535,6 +579,16 @@ fn spawn_startup_scan(database_url: String, now: Timestamp, cidr: String) {
             // sitting in it (a duplicated sweep, above) while the sentence claimed three lines.
             // **A region you have not counted is not a region you have measured.**
             let outcome = crate::scan_pass::poll_ingest_resolve(&mut connector, now, &pool).await;
+            // 🔑 Publish what the pass did, so `/diagnostic` reports a MEASURED pass rather than a
+            // maximum over observation instants — which story 6b.9 measured not moving at all when
+            // a scan succeeded over an empty subnet. ⚠️ This `Arc` clone and this write are the
+            // uncarried half of that story's arbitration (c′): the measurement itself lives inside
+            // `poll_ingest_resolve`, which a `FixtureConnector` drives end to end, but this line
+            // sits in the detached thread `scan_pass`'s module doc names as unassertable. A
+            // poisoned lock is not worth failing a scan over.
+            if let Ok(mut slot) = report.write() {
+                *slot = outcome.report;
+            }
             tracing::info!(
                 ingested = outcome.ingested,
                 failed = outcome.failed,
@@ -588,18 +642,40 @@ fn load_bind_address() -> anyhow::Result<String> {
 /// Configure tracing: always to stdout (so `docker logs` works), and — when `OPENCMDB_LOG_DIR`
 /// is set — additionally to a DAILY-rotating file (`opencmdb.YYYY-MM-DD.log`) for on-NAS
 /// debugging. Level filtering comes from `OPENCMDB_LOG` (e.g. `info`, `opencmdb=debug,warn`),
-/// defaulting to `info`. Returns the non-blocking writer's guard, which must be held for the
-/// process's lifetime, or `None` when only stdout is active.
+/// defaulting to `info`.
+///
+/// # Returns
+///
+/// The non-blocking writer's guard — which must be held for the process's lifetime, and is `None`
+/// when only stdout is active — and the [`LogDescriptor`](diagnostic::LogDescriptor) describing
+/// what was actually INSTALLED.
+///
+/// 🔴 **The descriptor is returned rather than re-derived from the environment, and that is story
+/// 6b.9's arbitration made structural.** Built the other way — one `AppConfig` field per variable —
+/// the diagnostic screen was measured shipping two false rows: it named a log directory while
+/// `build_file_writer` had returned `None` and printed *"file logging disabled — cannot use …"*,
+/// and it showed `OPENCMDB_LOG=notalevel` as the level in force when the filter actually installed
+/// was `notalevel=trace` — a TARGET at trace, under which the product logs nothing of its own. That
+/// is story 6b.8's own finding — a refused `OPENCMDB_SCAN_CIDR` rendered as an in-force perimeter —
+/// one story later. 🔑 *The environment is the request; this is the answer.*
 ///
 /// File logging degrades gracefully: if the directory cannot be written, it logs a warning to
 /// stderr and continues with stdout only — a missing/unwritable log mount never crashes startup.
 #[must_use]
-fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
+fn init_tracing() -> (
+    Option<tracing_appender::non_blocking::WorkerGuard>,
+    diagnostic::LogDescriptor,
+) {
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::{EnvFilter, Layer, Registry, fmt};
 
     let directives = std::env::var("OPENCMDB_LOG").unwrap_or_else(|_| "info".to_string());
+    // ⚠️ What the FILTER holds, not what the variable said. `EnvFilter::new` parses lossily, and
+    // the two diverge in more than one way: `opencmdb=nope` collapses to `error`, while a bare
+    // `notalevel` becomes the TARGET `notalevel=trace`. Measured, both — see
+    // `diagnostic::tests::the_filter_in_force_is_not_the_variable_that_was_typed`.
+    let installed_directives = EnvFilter::new(&directives).to_string();
     let mut layers: Vec<Box<dyn Layer<Registry> + Send + Sync>> = Vec::new();
 
     // Always to stdout, so `docker logs` works.
@@ -610,8 +686,10 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
     );
 
     // Additionally to a daily-rotating file when `OPENCMDB_LOG_DIR` is set and writable.
+    let mut file = None;
     let guard = match build_file_writer() {
-        Some((writer, guard)) => {
+        Some((writer, guard, descriptor)) => {
+            file = Some(descriptor);
             layers.push(
                 // No ANSI colour codes in files — they are read as plain text.
                 fmt::layer()
@@ -626,7 +704,13 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
     };
 
     Registry::default().with(layers).init();
-    guard
+    (
+        guard,
+        diagnostic::LogDescriptor {
+            directives: installed_directives,
+            file,
+        },
+    )
 }
 
 /// A non-blocking, DAILY-rotating file writer from `OPENCMDB_LOG_DIR` (retention
@@ -635,6 +719,7 @@ fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
 fn build_file_writer() -> Option<(
     tracing_appender::non_blocking::NonBlocking,
     tracing_appender::non_blocking::WorkerGuard,
+    diagnostic::LogFile,
 )> {
     let dir = std::env::var("OPENCMDB_LOG_DIR").ok()?;
     if dir.is_empty() {
@@ -652,7 +737,19 @@ fn build_file_writer() -> Option<(
         .max_log_files(retention)
         .build(&dir)
     {
-        Ok(appender) => Some(tracing_appender::non_blocking(appender)),
+        Ok(appender) => {
+            let (writer, guard) = tracing_appender::non_blocking(appender);
+            // 🔑 Returned only on the SUCCESS arm, which is the whole point: the screen must never
+            // name a directory the appender could not open.
+            Some((
+                writer,
+                guard,
+                diagnostic::LogFile {
+                    directory: dir,
+                    retention,
+                },
+            ))
+        }
         Err(error) => {
             eprintln!("opencmdb: file logging disabled — cannot use {dir:?}: {error}");
             None
@@ -690,7 +787,27 @@ mod tests {
             // Story 6b.2: the shell's perimeter. `None` here so every pre-existing test keeps
             // exercising the shape it was written for; the perimeter has its own tests.
             scan_cidr: None,
+            // Story 6b.9: `/metrics`' token moved out of the request path into the config, so it
+            // is set HERE rather than through `std::env::set_var` — which two tests used to do.
+            metrics_token: None,
         }
+    }
+
+    /// The diagnostic facts a route test needs, with nothing installed and nothing configured.
+    ///
+    /// 🔑 **A test that wants a different posture builds one**, rather than mutating the process.
+    /// Story 6.1's rule — *not one test in this crate mutates an environment variable* — is what
+    /// story 6b.9's move of `OPENCMDB_METRICS_TOKEN` into [`AppConfig`] finally made true for
+    /// `/metrics` as well.
+    fn facts() -> diagnostic::DiagnosticFacts {
+        diagnostic::DiagnosticFacts::new(
+            diagnostic::LogDescriptor {
+                directives: "info".to_string(),
+                file: None,
+            },
+            diagnostic::security_posture(false, false),
+            diagnostic::ScanReportSlot::default(),
+        )
     }
 
     /// `Authorization: Basic base64(user:password)`.
@@ -742,7 +859,7 @@ mod tests {
     /// shapes and proves nothing (M1's carrier).
     #[tokio::test]
     async fn without_the_switch_an_authenticated_post_reaches_the_empty_fallback() {
-        let app = app(lazy_pool(), config(false, Some(pair())));
+        let app = app(lazy_pool(), config(false, Some(pair())), facts());
         let response = app
             .oneshot(document_post(
                 Some(&basic_header("op", "s3cret")),
@@ -762,7 +879,7 @@ mod tests {
     /// non-empty body (here 422: `x` is not an observation id).
     #[tokio::test]
     async fn with_the_switch_the_same_authenticated_post_reaches_the_route() {
-        let app = app(lazy_pool(), config(true, Some(pair())));
+        let app = app(lazy_pool(), config(true, Some(pair())), facts());
         let response = app
             .oneshot(document_post(
                 Some(&basic_header("op", "s3cret")),
@@ -794,7 +911,7 @@ mod tests {
             .await
             .expect("migrate");
         let subject = uuid::Uuid::now_v7(); // never inserted → unknown
-        let response = app(pool, config(true, Some(pair())))
+        let response = app(pool, config(true, Some(pair())), facts())
             .oneshot(document_post(
                 Some(&basic_header("op", "s3cret")),
                 &format!("subject={subject}"),
@@ -815,7 +932,7 @@ mod tests {
     #[tokio::test]
     async fn formerly_public_pages_challenge_without_a_credential() {
         for path in ["/", "/gap"] {
-            let app = app(lazy_pool(), config(false, Some(pair())));
+            let app = app(lazy_pool(), config(false, Some(pair())), facts());
             let response = app
                 .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
                 .await
@@ -861,9 +978,20 @@ mod tests {
     #[tokio::test]
     async fn the_marker_partition_follows_every_screens_declared_nature() {
         let marker = "example-marker-badge";
-        // 🔑 The *not built yet* line has its OWN class, and the partition asserts both directions
-        // for both of them: an `Empty` screen must say it is not built and must NOT be called a
-        // demonstration. Sharing one class would turn this test green for the wrong reason.
+        // 🔴 **The *not built yet* line is GONE, and this is what carries its absence.** Story
+        // 6b.9 filled the last two screens and `Nature::Empty` went with them. **Eight artefacts,
+        // itemised rather than counted** — the code review asked for the list, and a number nobody
+        // can recount is a number nobody can check:
+        //
+        //   named by the compiler (3): the `Nature::Empty` variant; the arm in `Screen::nature`
+        //   that produced it; the arm in `demonstration_screen`.
+        //   named by NOTHING (5): `page::not_built_yet_body`; `page::NotBuiltYet` with its template
+        //   `_not_built_yet.html`; the `Strings::pending_badge` / `pending_sentence` fields; the
+        //   `pending.badge` / `pending.sentence` locale keys; the `.not-yet` / `.not-yet-badge`
+        //   rules in `app.css`.
+        //
+        // This needle covers the last two: reintroduce the line on any screen and the universal
+        // below reds, where a deleted assertion would have said nothing.
         let not_yet = "not-yet-badge";
         let mut example_contents: Vec<(&str, screens::ExampleContent)> = Vec::new();
         // The witness each example screen is checked by, and the bodies to check them against —
@@ -897,7 +1025,7 @@ mod tests {
                 // Said on stderr above, never skipped in silence — see this test's doc.
                 continue;
             }
-            let response = app(pool.clone(), config(false, Some(pair())))
+            let response = app(pool.clone(), config(false, Some(pair())), facts())
                 .oneshot(
                     Request::builder()
                         .uri(screen.href())
@@ -939,33 +1067,27 @@ mod tests {
                     "{} is mixed and its example sections must say so",
                     screen.href()
                 ),
-                screens::Nature::Fed | screens::Nature::Empty => assert!(
+                screens::Nature::Fed => assert!(
                     !carries,
                     "{} carries the marker and must not: a fed screen would be calling the \
-                     operator's own network a demonstration, and an empty one would be calling \
-                     a blank page one",
+                     operator's own network a demonstration",
                     screen.href()
                 ),
             }
-            // 🔴 The other half of Guy's arbitration of 2026-08-19: a screen whose story has not
-            // landed SAYS SO. Eight screens rendered a blank `<main>` with nothing on it until this
-            // story's code review, against `epics.md:2092` — *"those whose code is not implemented
-            // show an example dataset with a text saying so"*, a premise no layer had surfaced.
-            match nature {
-                screens::Nature::Empty => assert!(
-                    says_pending,
-                    "{} is not built yet and must say so, or it reads as a broken screen rather \
-                     than a deliberate one",
-                    screen.href()
-                ),
-                screens::Nature::Fed | screens::Nature::Example(_) | screens::Nature::Mixed => {
-                    assert!(
-                        !says_pending,
-                        "{} carries the *not built yet* line over content it actually has",
-                        screen.href()
-                    )
-                }
-            }
+            // 🔴 **A UNIVERSAL since story 6b.9: no screen says *not built yet*, because none is.**
+            // Guy's arbitration of 2026-08-19 gave the eight then-empty screens that line — they
+            // rendered a blank `<main>` until story 6b.3's code review, against `epics.md:2092`.
+            // Stories 6b.5 to 6b.9 replaced it with real or example content one screen at a time,
+            // and `Nature::Empty`'s own doc had promised since 6b.3 that none would be left when
+            // 6b.9 closed. 🔑 *That promise is now carried by the type* — the variant does not
+            // exist — **and by this assertion**, which is what catches the half the type cannot:
+            // the class, the copy and the partial, none of which the compiler can see.
+            assert!(
+                !says_pending,
+                "{} carries the *not built yet* line over content it actually has — no screen \
+                 holds nothing any more, and `Nature::Empty` was deleted with the line",
+                screen.href()
+            );
             // 🔴 **The body a screen SERVES matches the content it DECLARES**, and nothing
             // checked that until this story's code review. A screen addressed under
             // `/devices/` was swallowed by the record route: it compiled with zero warnings, its
@@ -1000,6 +1122,12 @@ mod tests {
                     // distinctive to its BODY, and the property below is what enforces it.
                     screens::ExampleContent::AlertList => {
                         rust_i18n::t!("alerts.subject").to_string()
+                    }
+                    // ⚠️ NOT `commissioning.title`: that string is *"Mise en service"*, which the
+                    // shell's navigation carries on every page — the trap the alert witness above
+                    // records. The baseline block's action is distinctive to this body.
+                    screens::ExampleContent::Commissioning => {
+                        rust_i18n::t!("commissioning.action").to_string()
                     }
                 };
                 assert!(
@@ -1078,20 +1206,25 @@ mod tests {
             "the premise: every screen the loop should reach was probed — a loop that went empty, \
              or one whose skip rule drifted from the route table, would assert nothing"
         );
-        // 🔴 **FOUR witness screens now, and every one is a DECISION rather than a drift.** This
-        // read `1`, then `2`, each time with a message naming the stories that decided them —
-        // *"bumping the number without rewriting the sentence would leave a false explanation
-        // standing over a true count"* is story 6b.6's own warning, and this is the third bump.
+        // 🔴 **SIX witness screens now, and every one is a DECISION rather than a drift.** This
+        // read `1`, then `2`, then `5`, each time with a message naming the stories that decided
+        // them — *"bumping the number without rewriting the sentence would leave a false
+        // explanation standing over a true count"* is story 6b.6's own warning, and this is the
+        // fourth bump.
         // ⚠️ The count is a bookkeeping assertion whose failure message reads *update this number*,
         // which a developer follows: it is kept because it is the only thing that notices a screen
         // that GREW example content with no story behind it, and the two properties below are what
         // notice a screen showing the wrong thing.
+        // 🔑 **And it is now the LAST such bump this epic can make**: `Screen::ALL` holds ten
+        // screens, six carry example content, three are fed by the store and one is mixed — so
+        // every address is accounted for and a seventh witness could only come from a NEW screen.
         assert_eq!(
             example_contents.len(),
-            5,
+            6,
             "the witness screens are the inventory (6b.3), the device record (6b.6), the \
-             applications and IPAM frames (6b.7) and the alert list (6b.8), and a sixth is a \
-             screen that grew example content without a story deciding it should: \
+             applications and IPAM frames (6b.7), the alert list (6b.8) and the commissioning \
+             walk-through (6b.9), and a seventh is a screen that grew example content without a \
+             story deciding it should: \
              {example_contents:?}"
         );
         // 🔴 **A WITNESS IS ONLY A WITNESS IF IT IS DISTINCTIVE, and nothing said so until story
@@ -1167,7 +1300,7 @@ mod tests {
             // different branches inside the handler.
             .chain(["/devices/printer-hall", "/devices/does-not-exist", "/"])
         {
-            let app = app(lazy_pool(), config(false, Some(pair())));
+            let app = app(lazy_pool(), config(false, Some(pair())), facts());
             let response = app
                 .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
                 .await
@@ -1206,7 +1339,7 @@ mod tests {
     /// production does not.
     #[tokio::test]
     async fn the_filter_narrows_through_the_real_route() {
-        let app = app(lazy_pool(), config(false, Some(pair())));
+        let app = app(lazy_pool(), config(false, Some(pair())), facts());
         let response = app
             .oneshot(
                 Request::builder()
@@ -1255,7 +1388,7 @@ mod tests {
             ("workshop", "198.51.100.", "192.0.2."),
             ("guest", "203.0.113.", "192.0.2."),
         ] {
-            let response = app(lazy_pool(), config(false, Some(pair())))
+            let response = app(lazy_pool(), config(false, Some(pair())), facts())
                 .oneshot(
                     Request::builder()
                         .uri(format!("/ipam?subnet={slug}"))
@@ -1317,7 +1450,7 @@ mod tests {
             // 🔑 NOT the navigation's address: a handler ignoring its slug reds here and nowhere.
             ("printer-hall", "192.0.2.31", "192.0.2.10"),
         ] {
-            let app = app(lazy_pool(), config(false, Some(pair())));
+            let app = app(lazy_pool(), config(false, Some(pair())), facts());
             let response = app
                 .oneshot(
                     Request::builder()
@@ -1366,7 +1499,7 @@ mod tests {
     #[tokio::test]
     async fn an_unknown_slug_is_answered_without_echoing_it() {
         for slug in ["does-not-exist", "%3Cscript%3Ealert(1)%3C%2Fscript%3E"] {
-            let app = app(lazy_pool(), config(false, Some(pair())));
+            let app = app(lazy_pool(), config(false, Some(pair())), facts());
             let response = app
                 .oneshot(
                     Request::builder()
@@ -1409,7 +1542,7 @@ mod tests {
     /// `server_error`; asserting 200 needs a database and belongs to the one CI-gated test.
     #[tokio::test]
     async fn a_valid_credential_reaches_a_formerly_public_page() {
-        let app = app(lazy_pool(), config(false, Some(pair())));
+        let app = app(lazy_pool(), config(false, Some(pair())), facts());
         let response = app
             .oneshot(
                 Request::builder()
@@ -1432,7 +1565,7 @@ mod tests {
     #[tokio::test]
     async fn half_right_pairs_are_refused_with_the_challenge() {
         for header in [basic_header("op", "wrong"), basic_header("who", "s3cret")] {
-            let app = app(lazy_pool(), config(false, Some(pair())));
+            let app = app(lazy_pool(), config(false, Some(pair())), facts());
             let response = app
                 .oneshot(
                     Request::builder()
@@ -1460,7 +1593,7 @@ mod tests {
             )
         }];
         for header in refused {
-            let app = app(lazy_pool(), config(false, Some(pair())));
+            let app = app(lazy_pool(), config(false, Some(pair())), facts());
             let response = app
                 .oneshot(
                     Request::builder()
@@ -1476,7 +1609,7 @@ mod tests {
         }
 
         // Mixed-case scheme, correct pair: accepted (RFC 7235 §2.1 — M12 reds this).
-        let mixed_case_app = app(lazy_pool(), config(false, Some(pair())));
+        let mixed_case_app = app(lazy_pool(), config(false, Some(pair())), facts());
         let mixed = format!(
             "bAsIc {}",
             base64::engine::general_purpose::STANDARD.encode("op:s3cret")
@@ -1502,7 +1635,7 @@ mod tests {
             user: "op".to_string(),
             password: "a:b".to_string(),
         };
-        let colon_app = app(lazy_pool(), config(false, Some(colon_pair)));
+        let colon_app = app(lazy_pool(), config(false, Some(colon_pair)), facts());
         let response = colon_app
             .oneshot(
                 Request::builder()
@@ -1524,7 +1657,7 @@ mod tests {
     /// trap of `HeaderMap::get`'s first-value semantics.
     #[tokio::test]
     async fn two_authorization_headers_are_refused_end_to_end() {
-        let app = app(lazy_pool(), config(false, Some(pair())));
+        let app = app(lazy_pool(), config(false, Some(pair())), facts());
         let response = app
             .oneshot(
                 Request::builder()
@@ -1550,7 +1683,7 @@ mod tests {
     #[tokio::test]
     async fn an_unset_pair_refuses_without_the_challenge() {
         for path in ["/", "/gap", "/anything"] {
-            let app = app(lazy_pool(), config(false, None));
+            let app = app(lazy_pool(), config(false, None), facts());
             let response = app
                 .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
                 .await
@@ -1570,7 +1703,7 @@ mod tests {
     /// and the page-path challenge tests never touch the conditional registration.
     #[tokio::test]
     async fn the_write_route_challenges_without_a_credential() {
-        let app = app(lazy_pool(), config(true, Some(pair())));
+        let app = app(lazy_pool(), config(true, Some(pair())), facts());
         let response = app.oneshot(document_post(None, "subject=x")).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         assert_eq!(www_authenticate(&response).as_deref(), Some(CHALLENGE));
@@ -1581,7 +1714,7 @@ mod tests {
     /// holds, a Basic header is never `Bearer <token>`.
     #[tokio::test]
     async fn metrics_does_not_accept_basic_and_never_advertises_it() {
-        let app = app(lazy_pool(), config(false, Some(pair())));
+        let app = app(lazy_pool(), config(false, Some(pair())), facts());
         let response = app
             .oneshot(
                 Request::builder()
@@ -1608,7 +1741,7 @@ mod tests {
     /// 503 is the handler's own answer, not the layer's 401).
     #[tokio::test]
     async fn the_public_surface_stays_reachable_without_a_credential() {
-        let assets_app = app(lazy_pool(), config(false, Some(pair())));
+        let assets_app = app(lazy_pool(), config(false, Some(pair())), facts());
         let response = assets_app
             .oneshot(
                 Request::builder()
@@ -1620,7 +1753,7 @@ mod tests {
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let healthz_app = app(lazy_pool(), config(false, Some(pair())));
+        let healthz_app = app(lazy_pool(), config(false, Some(pair())), facts());
         let response = healthz_app
             .oneshot(
                 Request::builder()
@@ -1846,7 +1979,7 @@ mod tests {
             .run(&pool)
             .await
             .expect("run migrations");
-        let response = app(pool, config(false, None))
+        let response = app(pool, config(false, None), facts())
             .oneshot(
                 Request::builder()
                     .uri("/healthz")
@@ -1943,7 +2076,7 @@ mod tests {
         // 🔴 Story 6b.2 made `/` a redirect, so this test now covers BOTH halves — and it is the
         // SECOND time it is the sole casualty of a decision about `/`, which the comment above
         // recorded for the first. The redirect first:
-        let redirect = app(pool.clone(), config(false, Some(pair())))
+        let redirect = app(pool.clone(), config(false, Some(pair())), facts())
             .oneshot(
                 Request::builder()
                     .uri("/")
@@ -1971,7 +2104,7 @@ mod tests {
         );
 
         // Then the screen it points at, which must still show the real gap.
-        let response = app(pool, config(false, Some(pair())))
+        let response = app(pool, config(false, Some(pair())), facts())
             .oneshot(
                 Request::builder()
                     .uri("/triage")
@@ -2052,7 +2185,7 @@ mod tests {
             .expect("ingest");
 
         // Document it — a braced spelling of the real id (the canonical-form closure, §2).
-        let response = app(pool.clone(), config(true, Some(pair())))
+        let response = app(pool.clone(), config(true, Some(pair())), facts())
             .oneshot(document_post(
                 Some(&basic_header("op", "s3cret")),
                 &format!("subject={{{}}}", subject.as_uuid()),
@@ -2260,7 +2393,7 @@ mod tests {
             "the pass must have placed the sighting, or 'the link is intact' asserts nothing"
         );
 
-        let response = app(pool.clone(), config(true, Some(pair())))
+        let response = app(pool.clone(), config(true, Some(pair())), facts())
             .oneshot(document_post(
                 Some(&basic_header("op", "s3cret")),
                 &format!("subject={}", subject.as_uuid()),
@@ -2307,7 +2440,7 @@ mod tests {
         seed_and_resolve(&pool, &observation).await;
 
         // Document it once, so the SECOND attempt is the 409 the unique index raises.
-        let first = app(pool.clone(), config(true, Some(pair())))
+        let first = app(pool.clone(), config(true, Some(pair())), facts())
             .oneshot(document_post(
                 Some(&basic_header("op", "s3cret")),
                 &format!("subject={}", subject.as_uuid()),
@@ -2324,7 +2457,7 @@ mod tests {
             .expect("load links");
         assert!(!observations_before.is_empty() && !links_before.is_empty());
 
-        let refused = app(pool.clone(), config(true, Some(pair())))
+        let refused = app(pool.clone(), config(true, Some(pair())), facts())
             .oneshot(document_post(
                 Some(&basic_header("op", "s3cret")),
                 &format!("subject={}", subject.as_uuid()),
@@ -2396,7 +2529,7 @@ mod tests {
             "an Rtt-only sighting still carries a current abstention link, or this compares nothing"
         );
 
-        let refused = app(pool.clone(), config(true, Some(pair())))
+        let refused = app(pool.clone(), config(true, Some(pair())), facts())
             .oneshot(document_post(
                 Some(&basic_header("op", "s3cret")),
                 &format!("subject={}", subject.as_uuid()),
@@ -2474,7 +2607,7 @@ mod tests {
     async fn document_one(pool: &MySqlPool, observation: Observation) -> (ObsId, String) {
         let subject = observation.obs_id;
         seed_and_resolve(pool, &observation).await;
-        let response = app(pool.clone(), config(true, Some(pair())))
+        let response = app(pool.clone(), config(true, Some(pair())), facts())
             .oneshot(document_post(
                 Some(&basic_header("op", "s3cret")),
                 &format!("subject={}", subject.as_uuid()),
@@ -2764,7 +2897,7 @@ mod tests {
             .await
             .expect("ingest");
 
-        let response = app(pool.clone(), config(true, Some(pair())))
+        let response = app(pool.clone(), config(true, Some(pair())), facts())
             .oneshot(document_post(
                 Some(&basic_header("op", "s3cret")),
                 &format!("subject={}", subject.as_uuid()),
@@ -2792,7 +2925,7 @@ mod tests {
         let pool =
             MySqlPool::connect_lazy("mysql://root:x@127.0.0.1:3306/none").expect("lazy pool");
 
-        let get = |uri: &str, bearer: Option<&str>| {
+        let probe = |uri: &str, bearer: Option<&str>, token: Option<&str>| {
             let mut builder = Request::builder().uri(uri.to_string());
             if let Some(token) = bearer {
                 builder =
@@ -2800,11 +2933,17 @@ mod tests {
             }
             let request = builder.body(Body::empty()).unwrap();
             // No Basic pair here: this test is about the Bearer branch and deny-by-default.
-            app(pool.clone(), config(false, None)).oneshot(request)
+            // 🔑 **The token is a PARAMETER since story 6b.9**, so this closure takes it instead of
+            // the process's environment. What it replaces was three `unsafe { std::env::set_var }`
+            // calls in one test — the last environment mutation in this crate, and the reason
+            // story 6.1's *"not one test mutates an env var"* rule was not yet true of `/metrics`.
+            let mut config = config(false, None);
+            config.metrics_token = token.map(str::to_string);
+            app(pool.clone(), config, facts()).oneshot(request)
         };
 
         // No scrape token configured → `/metrics` is closed; an un-allowlisted path is denied.
-        unsafe { std::env::remove_var("OPENCMDB_METRICS_TOKEN") };
+        let get = |uri: &str, bearer: Option<&str>| probe(uri, bearer, None);
         assert_eq!(
             get("/metrics", None).await.unwrap().status(),
             StatusCode::UNAUTHORIZED
@@ -2821,7 +2960,7 @@ mod tests {
         );
 
         // With a token, the correct Bearer scrapes; a wrong one is refused.
-        unsafe { std::env::set_var("OPENCMDB_METRICS_TOKEN", "s3cret") };
+        let get = |uri: &str, bearer: Option<&str>| probe(uri, bearer, Some("s3cret"));
         let ok = get("/metrics", Some("s3cret")).await.unwrap();
         assert_eq!(ok.status(), StatusCode::OK);
         let body = axum::body::to_bytes(ok.into_body(), usize::MAX)
@@ -2835,7 +2974,6 @@ mod tests {
             get("/metrics", Some("wrong")).await.unwrap().status(),
             StatusCode::UNAUTHORIZED
         );
-        unsafe { std::env::remove_var("OPENCMDB_METRICS_TOKEN") };
     }
 
     /// The i18n `t!()` seam resolves EN and FR. Uses an explicit `locale =` so it never mutates the
@@ -2973,7 +3111,7 @@ mod tests {
                 .unwrap()
         };
 
-        let response = app(pool.clone(), config(false, Some(pair())))
+        let response = app(pool.clone(), config(false, Some(pair())), facts())
             .oneshot(get("/triage"))
             .await
             .unwrap();
@@ -3066,7 +3204,7 @@ mod tests {
              is that it is never brandished"
         );
         let sorted = body(
-            app(pool.clone(), config(false, Some(pair())))
+            app(pool.clone(), config(false, Some(pair())), facts())
                 .oneshot(get("/triage?sort=age"))
                 .await
                 .unwrap(),

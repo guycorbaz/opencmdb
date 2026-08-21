@@ -42,7 +42,7 @@ pub async fn auth_deny(State(config): State<AppConfig>, request: Request, next: 
     // the default arm like any unknown path and is answered with the Basic challenge, so a
     // scraper must use the canonical path (measured at review).
     if path == "/metrics" {
-        if scrape_authorized(&request) {
+        if scrape_authorized(&request, config.metrics_token.as_deref()) {
             return next.run(request).await;
         }
         // Never the Basic challenge on this branch (arbitration 6 / F14): a Prometheus does not
@@ -69,7 +69,7 @@ pub async fn auth_deny(State(config): State<AppConfig>, request: Request, next: 
 /// collapse `..` — so no gated content is reachable through the prefix today. The day a
 /// normalizing hop or a second `/assets/`-prefixed route lands, this classification and the
 /// router disagree: re-measure then.
-fn is_public(path: &str) -> bool {
+pub(crate) fn is_public(path: &str) -> bool {
     path == "/healthz" || path.starts_with("/assets/")
 }
 
@@ -142,13 +142,23 @@ fn basic_authorized(request: &Request, pair: &BasicCredentials) -> bool {
     user == pair.user && password == pair.password
 }
 
-/// The scrape is authorized only if `OPENCMDB_METRICS_TOKEN` is set (non-empty) and the request
-/// carries it as `Authorization: Bearer <token>`. Unset token → no scrape (secure default).
+/// The scrape is authorized only if a token is configured (non-empty) and the request carries it
+/// as `Authorization: Bearer <token>`. No token → no scrape (the secure default, unchanged).
 ///
-/// ⚠️ Deliberately still an env read (story 6.1 arbitration 5 leaves `/metrics` untouched), and
-/// deliberately case-SENSITIVE on `Bearer` — a recorded defect owned by Epic 19, not fixed here.
-fn scrape_authorized(request: &Request) -> bool {
-    let Ok(expected) = std::env::var("OPENCMDB_METRICS_TOKEN") else {
+/// 🔴 **The token arrives as a PARAMETER since story 6b.9, and that removed a reader.** It used to
+/// be `std::env::var("OPENCMDB_METRICS_TOKEN")` here, in the request path (story 6.1's
+/// arbitration 5 left `/metrics` untouched). The diagnostic screen must report whether a token is
+/// configured, and a second reader for it would have been story 6b.2's shipped M12 — with the two
+/// readers disagreeing on a token of `" "`, which `AppConfig`'s perimeter filter discards and this
+/// function accepts. `auth_deny` already carried `State<AppConfig>`, so the fix was to move the
+/// read, not to duplicate it. ⚠️ **The RULE did not move with it**: `AppConfig` filters this one on
+/// `!is_empty()`, exactly as the `expected.is_empty()` check below did, so `/metrics` behaves as
+/// before.
+///
+/// ⚠️ Still deliberately case-SENSITIVE on `Bearer` — a recorded defect owned by Epic 19, not fixed
+/// here.
+fn scrape_authorized(request: &Request, expected: Option<&str>) -> bool {
+    let Some(expected) = expected else {
         return false;
     };
     if expected.is_empty() {

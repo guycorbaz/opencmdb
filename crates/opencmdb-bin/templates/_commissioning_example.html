@@ -1,0 +1,52 @@
+{#- Commissioning: adopting the observed state as a baseline — Epic 9's frame (story 6b.9).
+
+     🔴 THE MOCK CALLS THIS AN ONBOARDING AND THE UX SPECIFICATION CORRECTS THAT. F11: *"bootstrap is
+     a MODE, not an onboarding. Filing it under 'first run' was a design error: the wall recurs on
+     every large migration… the baselining flow stays available for life, gated by VOLUME, never by
+     a `first_run` flag."* The copy below therefore speaks of a baseline available whenever the
+     volume calls for it, never of a first day — and story 6b.9 renamed the screen and its address
+     to match.
+
+     ⚠️ EXAMPLE ALL THE WAY THROUGH, and the marker comes from the dispatch rather than from here
+     (story 6b.6): `Screen::Commissioning` is `Nature::Example`, so `demonstration_screen` emits the
+     marker from the same `match` arm that chooses this body.
+
+     🔴 THE PRIMARY CONTROL IS NOT LIVE. Adopting a baseline writes a declared value for every
+     consistent object — Epic 9's — and it uses story 6b.4b's mechanism rather than a second one. -#}
+<section class="screen-section example-section">
+  <h2>{{ s.title }}</h2>
+  <p class="screen-lede">{{ s.lede }}</p>
+
+  <ol class="steps">
+    {%- for step in steps %}
+    <li class="step">
+      <span class="step-number">{{ step.number }}</span>
+      <span class="step-body">
+        <span class="step-title">{{ step.title }}</span>
+        <span class="step-detail">{{ step.detail }}</span>
+      </span>
+      <span class="step-status">{{ step.status }}</span>
+    </li>
+    {%- endfor %}
+  </ol>
+
+  <div class="baseline">
+    <div class="baseline-title">{{ s.baseline_title }}</div>
+    {#- 🔑 Three figures that PARTITION — total = consistent + divergent — pinned by
+         `commissioning_body`'s own test. A demonstration whose numbers do not add up teaches the
+         operator to distrust the real ones. -#}
+    <p class="baseline-figures">
+      <b class="mono">{{ total }}</b> {{ s.baseline_total }}<br>
+      <b class="mono">{{ consistent }}</b> {{ s.baseline_consistent }}<br>
+      <b class="mono">{{ divergent }}</b> {{ s.baseline_divergent }}
+    </p>
+    <div class="action-bar" role="group">
+      <span class="btn-gesture planned" role="button" aria-disabled="true" tabindex="0"
+            aria-describedby="baseline-not-built">
+        {{ s.baseline_action }}
+        <span class="gesture-badge">{{ s.gesture_badge }}</span>
+      </span>
+      <p id="baseline-not-built" class="gesture-note">{{ s.baseline_threshold }}</p>
+    </div>
+  </div>
+</section>

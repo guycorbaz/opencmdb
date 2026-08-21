@@ -764,6 +764,86 @@ pub(crate) fn alerts_body(_query: &ScreenQuery) -> String {
     .expect("the alerts template and its struct are compiled together")
 }
 
+/// One rendered commissioning step.
+pub(crate) struct StepRow {
+    /// Its ordinal.
+    number: &'static str,
+    /// Its title.
+    title: String,
+    /// The line under it.
+    detail: String,
+    /// Its status word.
+    status: String,
+}
+
+/// The commissioning screen's copy.
+struct CommissioningStrings {
+    title: String,
+    lede: String,
+    baseline_title: String,
+    baseline_total: String,
+    baseline_consistent: String,
+    baseline_divergent: String,
+    baseline_action: String,
+    baseline_threshold: String,
+    /// The *à venir* badge, from the SAME key `/triage` and `/diagnostic` use — one vocabulary for
+    /// one state, which is what the glossary's *one term, one translation* rule means in the UI.
+    gesture_badge: String,
+}
+
+/// The commissioning body.
+#[derive(Template)]
+#[template(path = "_commissioning_example.html")]
+struct Commissioning {
+    steps: Vec<StepRow>,
+    total: u32,
+    consistent: u32,
+    divergent: u32,
+    s: CommissioningStrings,
+}
+
+/// Render the example commissioning walk-through and its baselining block — Epic 9's frame.
+///
+/// 🔴 **The primary control is NOT live and is labelled**, through the same mechanism story 6b.4b
+/// built for `/triage`: adopting a baseline writes to `declared_attribute` for every consistent
+/// object, which is Epic 9's, and a live-looking button here would be a promise.
+///
+/// ⚠️ The query is taken and unused, for the reason given on [`apps_body`].
+///
+/// # Panics
+///
+/// Never in practice, for the reason given on [`inventory_body`].
+pub(crate) fn commissioning_body(_query: &ScreenQuery) -> String {
+    let baseline = example_data::commissioning_baseline();
+    Commissioning {
+        steps: example_data::commissioning_steps()
+            .into_iter()
+            .map(|step| StepRow {
+                number: step.number,
+                title: rust_i18n::t!(step.title_key).to_string(),
+                detail: rust_i18n::t!(step.detail_key).to_string(),
+                status: rust_i18n::t!(step.status_key).to_string(),
+            })
+            .collect(),
+        total: baseline.total,
+        consistent: baseline.consistent,
+        divergent: baseline.divergent,
+        s: CommissioningStrings {
+            title: rust_i18n::t!("commissioning.title").to_string(),
+            lede: rust_i18n::t!("commissioning.lede").to_string(),
+            baseline_title: rust_i18n::t!("commissioning.baseline").to_string(),
+            baseline_total: rust_i18n::t!("commissioning.total").to_string(),
+            baseline_consistent: rust_i18n::t!("commissioning.consistent").to_string(),
+            baseline_divergent: rust_i18n::t!("commissioning.divergent").to_string(),
+            baseline_action: rust_i18n::t!("commissioning.action").to_string(),
+            baseline_threshold: rust_i18n::t!("commissioning.threshold").to_string(),
+            gesture_badge: rust_i18n::t!("gesture.badge").to_string(),
+        },
+    }
+    .render()
+    .expect("the commissioning template and its struct are compiled together")
+}
+
 /// Every word of `html`'s visible TEXT that looks like an i18n key rather than a translation.
 ///
 /// # Why this is a shared helper since story 6b.7
@@ -1453,6 +1533,61 @@ mod tests {
         assert!(
             checked >= 200,
             "the premise: at least two hundred rendered words were inspected ({checked} seen)"
+        );
+    }
+
+    /// 🔴 **The commissioning screen carries a THIRD planned control, and no inherited guard sees
+    /// it.** Story 6b.4b's a11y guard reads `/triage`; story 6b.9's reads `/diagnostic`. This one
+    /// is on an example screen, and the pattern this whole story kept meeting is that *a guard is
+    /// correct about the screen it reads and blind to every other one*. So it gets its own.
+    #[test]
+    fn the_baseline_control_is_reachable_and_never_natively_disabled() {
+        let html = commissioning_body(&ScreenQuery::default()).to_lowercase();
+        assert_eq!(
+            html.matches("role=\"button\"").count(),
+            1,
+            "one planned control — adopting a baseline is Epic 9's, and it is shown rather than \
+             hidden (Guy's premise 2 of 2026-08-13)\n{html}"
+        );
+        assert!(
+            html.contains("tabindex=\"0\"") && html.contains("aria-disabled=\"true\""),
+            "it is in the tab order AND announced as unavailable — a `<span role=\"button\">` \
+             without `tabindex` has `tabIndex -1` and refuses `.focus()`\n{html}"
+        );
+        // A TOKEN scan: a bare boolean attribute has no `=`, and the separator can be any
+        // whitespace — an enumeration of `" disabled>"`-style literals was measured missing a
+        // newline on the sibling screen.
+        assert!(
+            !html
+                .split(|c: char| c.is_whitespace() || c == '>')
+                .any(|token| token == "disabled" || token.starts_with("disabled=")),
+            "no NATIVE disabled attribute\n{html}"
+        );
+        assert_eq!(
+            html.matches("aria-describedby=\"baseline-not-built\"")
+                .count(),
+            1,
+            "and it points at the one visible sentence saying why it is not live"
+        );
+    }
+
+    /// The three example figures PARTITION, and a demonstration whose numbers do not add up
+    /// teaches the operator to distrust the real ones.
+    #[test]
+    fn the_baseline_figures_add_up() {
+        let baseline = example_data::commissioning_baseline();
+        assert_eq!(
+            baseline.consistent + baseline.divergent,
+            baseline.total,
+            "{} consistent + {} divergent must be the {} observed",
+            baseline.consistent,
+            baseline.divergent,
+            baseline.total
+        );
+        assert!(
+            baseline.divergent > 0 && baseline.consistent > 0,
+            "and neither half is zero, or the screen demonstrates only one of the two states it \
+             exists to show"
         );
     }
 }

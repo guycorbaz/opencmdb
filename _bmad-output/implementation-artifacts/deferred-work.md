@@ -4499,3 +4499,77 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   by two review layers independently. ⚠️ The omission is defensible: it is a **device-record** slot,
   not a sources-screen one, and the record shows no field a source cannot observe yet. **Owner: the
   story that renders such a field.** The lesson is the ticked box, not the word.
+
+## Deferred from: story 6b.9 and its code review (2026-08-21)
+
+⚠️ **THESE ROWS WERE OWED BY THE STORY ITSELF AND WERE NOT WRITTEN UNTIL THE CODE REVIEW ASKED.**
+The story's §0d says *"register the divergence"*, its §0h says *"Register it with Epic 9"*, and its
+Completion Notes carry a section headed **REGISTERED RATHER THAN FIXED** listing three more — while
+`deferred-work.md` had not been touched since story 6b.8. 🔑 **Fourth occurrence of the class story
+6b.7 named against itself**, and the sharpest form yet: *a section that says "registered" is not a
+registration, and nothing in the story could tell the difference.* The cheap defence, for whoever
+reads this next: **derive the list of rows a story OWES from its own §0 and its arbitrations, then
+diff `deferred-work.md` before the commit** — a re-read that reads only what you wrote cannot find
+what you did not write (story 5.14b's sentence, met again).
+
+- 🔴 **`app.yml` IS INVISIBLE TO CARGO'S INCREMENTAL BUILD, and this is not story 6b.9's defect but
+  the project's.** Measured by the code review's mutating layer: with the binary already built,
+  changing ONLY `crates/opencmdb-bin/locales/app.yml` and running `cargo build --locked --bin
+  opencmdb` finishes in **0.07 s with no recompile**, and the new string is **absent from the
+  binary** (`strings | grep` = 0). `rust_i18n::i18n!("locales", …)` reads the file through a macro
+  that registers no Cargo dependency, so touching any `.rs` file is what forces the rebuild.
+  ⚠️ **Two consequences, both live.** (1) CI caches `target/` across runs, so a future PR that
+  changes only translation copy could be validated against the OLD strings. (2) **Any mutation that
+  edits `app.yml` alone and does not touch a `.rs` file measures nothing** — every mutation pass in
+  this epic that claimed to mutate a translation must be re-read with that in mind. **Owner: Epic 6b's
+  retrospective**, and story 6b.10 is the first story whose subject IS the translation file.
+- ⚠️ **AC2 ships MET IN SPIRIT and DIVERGENT IN LETTER, and the divergence is this row.** The
+  criterion says the rows the product cannot support *"carry the marker"*. Applied literally that
+  ships « Clé de chiffrement · hors du volume de données » under an *Exemple* badge — a false
+  security claim, correctly labelled, still on the screen and still quotable out of context, which
+  the criterion's own 🔴 paragraph calls worse than no screen. Guy's arbitration of 2026-08-21
+  (option (b)): the group carries TRUE rows instead, and nothing is marked because nothing is
+  fabricated. **Owner: Epic 6b's retrospective**, which owes the epic's AC a correction rather than
+  a story doing it silently.
+- ⚠️ **`baseline` / « Adopter l'état observé comme référence » is a GESTURE with no glossary row.**
+  The binding table carries eleven gestures and five states in the UX spec, ten and five in the PRD;
+  `baseline` is in neither. Story 6b.7's precedent governs: extending a binding table is a PLANNING
+  act and Guy's, and it was refused there as *premature, not wrong*. The commissioning screen is an
+  example surface, so nothing is decided by rendering it. **Owner: Epic 9**, where the gesture stops
+  being a demonstration.
+- 🔴 **`every_key_carries_both_locales` carries a floor of `checked >= 47` under a message reading
+  *"48 entries minus `_version`"*, and `app.yml` holds 284 keys.** The floor is **six times** below
+  what is there; story 6b.9 added 63 keys and did not move it, deliberately — *raising it silently
+  would hide how far it had drifted, and it is not this story's guard.* Story 6b.7's own sentence
+  applies: **a floor is only a guard while it equals what is there.** ⚠️ Whoever fixes it must decide
+  what the floor is FOR — a premise check that the file was read at all, or a count that must track
+  the file — because the two want different numbers. **Owner: story 6b.10**, whose subject is this
+  file, with a note to Epic 6b's retrospective.
+- ⚠️ **`epics.md:2108` states the epic-wide DoD as *"`cargo xtask ci` green — seven gates"* and the
+  tree has EIGHT** (story 6.3 added `observed-immutable`). The planning document is stale, not the
+  code. A story may not edit `epics.md`. **Owner: Epic 6b's retrospective.**
+- ⚠️ **The security screen's derived public-paths row is a tripwire with a MEASURED hole.** It agrees
+  with `auth::is_public` over a finite probe universe (`Screen::ALL` plus the fixed routes), so
+  widening the allowlist with a KNOWN address is caught by story 6b.2's perimeter guard — but the
+  review measured that widening it with a **brand-new, unprobed prefix** (`/secret-admin-panel`)
+  leaves **0 of 696 tests red** and the screen still claims the old perimeter. 🔑 The real closure is
+  a `is_public` that enumerates rather than predicates, or a probe universe derived from the ROUTER's
+  own route table. **Owner: Epic 19**, with the rest of the auth hardening.
+- ⚠️ **A PARAPHRASED false security claim slips the word guard and renders live** — measured: a
+  translation value reading *"none stored — this deployment cannot be breached by a remote
+  attacker"* left 696/696 green and appeared on the served page. The shape (no free-text arm) stops a
+  claim being TYPED into the row builder; it does not stop one entering through a translation. *An
+  enumeration cannot claim the completeness of a property*, third application in this epic. **Owner:
+  story 6b.10**, which reviews every string this epic introduced.
+- ⚠️ **The two controls under the diagnostic are not live and their owners are recorded here rather
+  than on the screen** (story 6b.4b's rule: an owner on a label is a calendar, therefore a promise).
+  *Vérifier maintenant* is an on-demand poll and belongs to **FR6's scheduler**; *Exporter le
+  journal* belongs to **Epic 13**, which owns the incident axis it would serve.
+- ⚠️ **FR36 is NOT closed by this screen and must not be read as closed.** `prd.md:949` makes it
+  *partial at MVP* = source health + the *"what changed since last visit"* view (FR18); 6b.9 ships a
+  facts table and neither the what-changed lead nor the trends. **Owner: Epic 17.**
+- ⚠️ **`STORE_READ_BUDGET` is two seconds for `/diagnostic` ALONE.** `/triage`, `/dashboard` and
+  `/sources` still answer a bare `500 internal error` when the pool is down — measured, and left
+  standing because widening the treatment to three more screens is a change to what they promise,
+  not a repair. **Owner: Epic 6b's retrospective**, which owes the question *should every screen
+  survive a dead store, or only the one about the store?*

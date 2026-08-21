@@ -60,6 +60,20 @@ pub(crate) struct ScanOutcome {
     /// The identity pass's own outcome, or `None` if the poll failed, nothing landed, or the pass
     /// was refused. A `None` here is always accompanied by a log line naming why.
     pub(crate) resolution: Option<Resolution>,
+    /// What this pass did, dated by the SOURCE and timed by this function — `None` when the poll
+    /// itself failed, because there was then no pass to report.
+    ///
+    /// 🔴 **Story 6b.9's arbitration (c′), and the reason it exists is a refutation.** That story
+    /// first meant to feed a *last scan* row from `MAX(observed_at)`; measured on a running binary,
+    /// a scan RAN and SUCCEEDED over an empty subnet and that maximum did not move — the screen
+    /// would have read *"2 years 9 months ago"* thirty seconds after the scan. 🔑 The honest value
+    /// was already here and discarded: `summary.capabilities.as_of`, bound and traced by story
+    /// 6b.8 after it was found dropped by an `if let Err(...)`.
+    ///
+    /// ⚠️ **The measurement lives HERE, inside the seam a `FixtureConnector` drives end to end**,
+    /// precisely so that arbitration (c′)'s uncarried part is the `Arc` clone in
+    /// `spawn_startup_scan` and nothing more.
+    pub(crate) report: Option<crate::diagnostic::ScanReport>,
 }
 
 /// Poll `connector`, ingest what it emits, and run the identity pass over what landed.
@@ -77,6 +91,10 @@ pub(crate) async fn poll_ingest_resolve<C: Connector>(
     now: Timestamp,
     pool: &MySqlPool,
 ) -> ScanOutcome {
+    // The pass's own duration, measured around poll + ingest + resolve. `Instant` and not the
+    // clock: this is an ELAPSED time, and the instant the row displays comes from the source's
+    // own dated descriptor rather than from here.
+    let started = std::time::Instant::now();
     let mut sink = VecSink::default();
     // 🔴 **THE `Ok` PAYLOAD WAS DISCARDED HERE, AND THE COMPILER COULD NOT SAY SO.** This read
     // `if let Err(error) = connector.poll(...)`, which legitimately drops the `Ok(PollSummary)` —
@@ -105,6 +123,9 @@ pub(crate) async fn poll_ingest_resolve<C: Connector>(
                 ingested: 0,
                 failed: 0,
                 resolution: None,
+                // No poll, no pass, nothing to report — and `None` renders as *no pass since this
+                // boot*, which is the truth rather than a zeroed row.
+                report: None,
             };
         }
     };
@@ -145,6 +166,15 @@ pub(crate) async fn poll_ingest_resolve<C: Connector>(
             ingested,
             failed,
             resolution: None,
+            // 🔑 A pass that found nothing IS a pass, and it is reported. This is the case the
+            // shipped connector produces on an empty subnet, and it is exactly the case
+            // `MAX(observed_at)` could not distinguish from *never scanned*.
+            report: Some(crate::diagnostic::ScanReport {
+                as_of: summary.capabilities.as_of,
+                duration: started.elapsed(),
+                ingested,
+                resolved: false,
+            }),
         };
     }
 
@@ -169,6 +199,12 @@ pub(crate) async fn poll_ingest_resolve<C: Connector>(
     ScanOutcome {
         ingested,
         failed,
+        report: Some(crate::diagnostic::ScanReport {
+            as_of: summary.capabilities.as_of,
+            duration: started.elapsed(),
+            ingested,
+            resolved: resolution.is_some(),
+        }),
         resolution,
     }
 }

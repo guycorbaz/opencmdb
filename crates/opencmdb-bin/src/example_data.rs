@@ -1175,6 +1175,84 @@ pub(crate) fn alerts() -> Vec<ExampleAlert> {
     ]
 }
 
+/// One step of the example commissioning walk-through.
+///
+/// 🔴 **The mock frames this as an ONBOARDING and the UX specification corrects that framing**:
+/// *"bootstrap is a MODE, not an onboarding. Filing it under 'first run' was a design error: the
+/// wall recurs on every large migration… the baselining flow stays available for life, gated by
+/// VOLUME, never by a `first_run` flag"* (F11). So the copy here speaks of a **baseline that can be
+/// adopted whenever the volume calls for it**, never of a first day.
+///
+/// ⚠️ **Every field that an operator READS is a key** — story 6b.6 measured a French UI rendering
+/// English literals with the whole suite green, and story 6b.3 measured a real key from the wrong
+/// namespace resolving to the wrong word.
+pub(crate) struct ExampleStep {
+    /// The step's ordinal, as the mock shows it (`01`…`04`). Locale-neutral.
+    pub(crate) number: &'static str,
+    /// The i18n key of the step's title.
+    pub(crate) title_key: &'static str,
+    /// The i18n key of the line under it.
+    pub(crate) detail_key: &'static str,
+    /// The i18n key of its status word.
+    pub(crate) status_key: &'static str,
+}
+
+/// The example commissioning steps — Epic 9's frame (story 6b.9).
+///
+/// ⚠️ The addresses are RFC 5737 documentation space, as everywhere in this dataset, so a published
+/// screenshot names nobody's network.
+pub(crate) fn commissioning_steps() -> Vec<ExampleStep> {
+    vec![
+        ExampleStep {
+            number: "01",
+            title_key: "example.step.database",
+            detail_key: "example.step.database.detail",
+            status_key: "example.step.done",
+        },
+        ExampleStep {
+            number: "02",
+            title_key: "example.step.source",
+            detail_key: "example.step.source.detail",
+            status_key: "example.step.done",
+        },
+        ExampleStep {
+            number: "03",
+            title_key: "example.step.perimeter",
+            detail_key: "example.step.perimeter.detail",
+            status_key: "example.step.done",
+        },
+        ExampleStep {
+            number: "04",
+            title_key: "example.step.first_pass",
+            detail_key: "example.step.first_pass.detail",
+            status_key: "example.step.done",
+        },
+    ]
+}
+
+/// The example baseline block: what an initial discovery would offer to adopt.
+///
+/// 🔑 **The three figures partition**: total = consistent + divergent, and the template asserts it
+/// nowhere because [`crate::example_screens::commissioning_body`]'s own test does. A demonstration
+/// whose numbers do not add up teaches the operator to distrust the real ones.
+pub(crate) struct ExampleBaseline {
+    /// Objects observed by the initial discovery.
+    pub(crate) total: u32,
+    /// Those the baselining can adopt without a decision.
+    pub(crate) consistent: u32,
+    /// Those carrying a divergence the baselining cannot settle alone.
+    pub(crate) divergent: u32,
+}
+
+/// The example baseline figures.
+pub(crate) fn commissioning_baseline() -> ExampleBaseline {
+    ExampleBaseline {
+        total: 412,
+        consistent: 383,
+        divergent: 29,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

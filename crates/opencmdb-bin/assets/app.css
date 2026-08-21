@@ -385,33 +385,6 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
   text-transform: uppercase;
 }
 
-/* ── The *not built yet* line (story 6b.3's code review) ──────────────────
-   ⚠️ Deliberately QUIETER than the example marker and on its own classes. It states an absence,
-   not a property of content the operator is reading, and it must never be mistaken for the marker
-   — the route-table partition asserts both directions on both classes. */
-.not-yet {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 8px 12px;
-  border: 1px dashed var(--color-neutral-300);
-  border-radius: var(--radius-sm);
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.not-yet-badge {
-  flex: none;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  background: var(--color-neutral-200);
-  color: var(--color-neutral-700);
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
 
 /* ── A screen's own section, and the tables inside it (story 6b.3's code review) ──
    🔴 Both classes below were MISSING and the defect was invisible to every layer that read the
@@ -847,3 +820,104 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 .source-unlock { margin: 14px 0 0; font-size: 13px; max-width: 60ch; }
 .source-freshness { margin: 0 0 4px; font-size: 15px; }
 .source-refused { margin: 4px 0 18px; font-size: 13px; }
+
+/* ── The self-diagnostic (story 6b.9) ─────────────────────────────────────
+   The mock's two-column grid of key/value groups. The values are mono because they are MEASURED
+   values — the same typographic promise the source card and the triage panes make.
+   ⚠️ Static class literals throughout: story 6b.4's stylesheet guard skips any `class` attribute
+   containing a brace, so a conditional class here would ship unchecked. */
+
+.diag-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 24px;
+  margin-top: 18px;
+}
+
+.diag-group { min-width: 0; }
+
+.diag-group-title {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.diag-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.diag-key { color: var(--muted); }
+
+.diag-value {
+  font-family: var(--mono);
+  text-align: right;
+}
+
+/* Said ONCE for the page. Neutral, never alarming: a store the screen could not read is a fact
+   about this moment, not an incident the product has diagnosed. */
+.diag-unreachable {
+  margin: 14px 0 0;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ── Commissioning, the example surface (story 6b.9) ──────────────────── */
+
+.steps {
+  margin: 18px 0 28px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 78ch;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: baseline;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+}
+
+.step-number {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.step-body { display: block; }
+.step-title { display: block; font-size: 15px; font-weight: 500; }
+.step-detail { display: block; margin-top: 3px; font-size: 13px; color: var(--muted); }
+
+.step-status {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.baseline {
+  padding: 22px 24px;
+  border: 1px solid var(--border);
+  max-width: 78ch;
+}
+
+.baseline-title {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.baseline-figures { margin: 10px 0 18px; font-size: 15px; line-height: 1.6; }

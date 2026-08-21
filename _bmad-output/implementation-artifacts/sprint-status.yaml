@@ -75,7 +75,207 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-20  # 6b.8 -> `done`: PR #111 squash-merged as `b18495a` after a green CI run
+last_updated: 2026-08-21  # 6b.9 CODE-REVIEWED (three layers, **Sonnet** — a different model —
+                          # each isolated) and REPAIRED. Still `review`; `done` is the MERGE's
+                          # business. **11 patches, 10 register rows written, 0 arbitrations.**
+                          # **696 -> 697 tests** (470 bin + 161 core + 66 xtask), eight gates green.
+                          # 🔴 **THE BLIND LAYER FOUND BOTH HIGHS — FOURTH STORY RUNNING — and both
+                          # were my own sentences.**
+                          #   H1: AC7's guard could not REACH the branch it exists for. The pool's
+                          #   `acquire_timeout(150 ms)` sits far below the 2 s budget, so the timeout
+                          #   arm was dead code under test -- and the test's own comment explained
+                          #   exactly why, in the language of a justification. ⚠️ M13 was red for a
+                          #   reason I had misread (its carrier was the constant assertion, not the
+                          #   timing one). 🔑 **The epic's dominant class a FOURTH time in one story,
+                          #   and the first instance NO MUTATION CAUGHT** -- a mutation can only red
+                          #   a guard that executes the mutated code. Closed by making the budget a
+                          #   parameter and driving a pool that HANGS; proved to red at 5.002 s.
+                          #   H2: the screen has **SEVENTEEN** rows and I wrote sixteen everywhere.
+                          #   Two layers counted it independently, one from the diff and one from the
+                          #   live render, and **nothing pinned the total**.
+                          # 🔴 **THE ACCEPTANCE LAYER FOUND THE REGISTER UNTOUCHED**: `deferred-work.md`
+                          # had not changed since 6b.8, while the story says *register the divergence*
+                          # twice and carries a section headed **REGISTERED RATHER THAN FIXED**.
+                          # 🔑 *A section that says "registered" is not a registration, and nothing
+                          # in the story could tell the difference.* Fourth occurrence of the class
+                          # 6b.7 named against itself. **Ten rows now written.**
+                          # 🔴 **THE EDGE LAYER FOUND A PROJECT-WIDE HAZARD**: `app.yml` is INVISIBLE
+                          # to Cargo's incremental build -- changing only the translation file
+                          # rebuilds in 0.07 s and the new string is ABSENT from the binary. CI
+                          # caches `target/`, and **any mutation editing `app.yml` alone measures
+                          # nothing**. Registered; 6b.10 is the first story whose subject IS that file.
+                          # ⚠️ Numbers corrected by the auditor: **284** keys not 285, **+63** not
+                          # +60, seventeen rows not sixteen. The test delta was verified on BOTH
+                          # terms (676 on `master`).
+                          # ⚠️ **AC10's browser look was NOT done by the implementation** -- it was
+                          # curl plus text extraction, and T9 was ticked citing Chrome. The review's
+                          # edge layer supplied the real look (Chrome 151 over CDP, genuine Tab
+                          # keypresses on both screens); recorded under the layer that did it.
+                          # ⚠️ **I destroyed work with `git checkout --` during the repair** -- fourth
+                          # occurrence in this project, in the story whose review had just named the
+                          # class. Redone and committed first.
+                          # ✅ AC7 reproduced END TO END on a real database paused mid-session: 200
+                          # in **2.002 s**, degraded rows correct, shell intact.
+                          #
+                          # (Earlier the same day) 6b.9 -> `review`: DEVELOPED.
+                          # **676 -> 696 tests** (469 bin + 161 core + 66 xtask), eight gates green,
+                          # clippy and fmt clean, run BOTH ways: **0.15 s** without a database and
+                          # **5.13 s** against a live mariadb:10.11 on port 13323.
+                          # 🔑 **`Nature::Empty` IS GONE** — the epic's ten screens now hold either
+                          # real content or labelled example content, and none holds nothing. The
+                          # compiler named three of the eight artefacts; the other five (a template,
+                          # two orphan keys, two `Strings` fields, two CSS classes) came off the
+                          # checklist, and M14 reds if the line comes back.
+                          # 🔑 **/diagnostic is the epic's SECOND wholly real screen**: sixteen rows,
+                          # four groups, every value measured at runtime, no marker because nothing
+                          # on it is an example.
+                          # ✅ ARBITRATION (c′) VINDICATED ON A LIVE BOOT: with a perimeter
+                          # configured the row reads *"dernier passage : à l'instant · 6 ms · 1
+                          # enregistrées (depuis ce démarrage)"* while `MAX(observed_at)` — the
+                          # refuted option — does not move on a successful scan.
+                          # ✅ ARBITRATION (b): the security group is a SHAPE. `security_rows` takes
+                          # a `SecurityPosture` and nothing else; the public row is DERIVED by
+                          # probing `is_public`; the credentials are bools, so the prescribed leak
+                          # guard became a compile property. ⚠️ `OPENCMDB_METRICS_TOKEN` moved into
+                          # `AppConfig` — that REMOVED a reader and retired the crate's LAST THREE
+                          # `std::env::set_var` calls in tests.
+                          # 🔴 **FOUR OF THE STORY'S OWN GUARDS CAME BACK GREEN**, each correct about
+                          # what it tested and none reachable by reading: an oracle that counts a
+                          # word wherever it is (M6), a guard on the BUILDER against a defect in the
+                          # RENDER (M7), an enumeration of whitespace defeated by a NEWLINE (M8b),
+                          # and an oracle comparing against the very constant it guards (M13).
+                          # ⚠️ M6 was green TWICE — the second time because the repaired assertions
+                          # ran on a hand-built struct while the swap lived in the READER. Third
+                          # occurrence of the epic's dominant class inside one story.
+                          # 🔴 **AC7 WAS DEFEATED BY A TIMEOUT NOBODY CONSIDERED**: the handler
+                          # rendered without the store exactly as asked — after THIRTY SECONDS,
+                          # sqlx's default acquire timeout, surfaced only because the test itself
+                          # took thirty seconds. Now a two-second budget with a wall-clock guard.
+                          # 🔴 **A CLAIM INHERITED FROM THE VALIDATION WAS REFUTED BY BOOTING**:
+                          # `EnvFilter` does NOT discard `notalevel`, it installs `notalevel=trace`
+                          # (a TARGET). The conclusion survives in a stronger form — `opencmdb=nope`
+                          # and `""` collapse to `error` — and is now pinned by a test.
+                          # ⚠️ **The mutation driver lied in a NEW way**: a batch edit script that
+                          # writes at the END lost three repairs to one failed anchor, silently.
+                          # Caught only because the re-run CONTRADICTED a prediction.
+                          # ⚠️ Found by LOOKING: *"constats rattachés : 2 constats"* — the unit was
+                          # in the label and in the value, and every test was satisfied.
+                          # **Eighteen mutations: seventeen reds and one compile refusal (E0308),
+                          # replayed in full after the repairs.**
+                          # ⚠️ REGISTERED, not fixed: `every_key_carries_both_locales` carries a
+                          # floor of **47** while `app.yml` holds **285** keys (this story added 60);
+                          # and `epics.md:2108` still says the DoD is *seven* gates.
+                          # ⚠️ Issue #38 recurred ONCE and was green on re-run. No cause named.
+                          #
+                          # (Earlier) 6b.9 `ready-for-dev`, VALIDATED, REWRITTEN, and its THREE ARBITRATIONS
+                          # TAKEN by Guy the same day. **Nothing blocks `dev-story`.**
+                          # ✅ ARBITRATION 1 -> (c′): an in-memory `ScanReport { as_of, duration,
+                          #    ingested, resolved }` scoped to *"depuis ce démarrage"*, so AC1 ships
+                          #    MET on all five facts. (d) refused because the product DOES hold the
+                          #    value; (a) stays refused on 6b.8's precedent; (b) is not an option --
+                          #    it was refuted by measurement, which is the difference between an
+                          #    option and a mistake.
+                          # ✅ ARBITRATION 2 -> (b): the security group ships as a SHAPE -- no
+                          #    free-text arm, the public row DERIVED by probing `is_public`, bools
+                          #    never credentials. (a) refused by AC2's own red paragraph; (c) refused
+                          #    because omitting a true fact to avoid a false one is a trade this
+                          #    screen does not have to make.
+                          # ✅ ARBITRATION 3 -> (a): `Screen::Commissioning`, `/commissioning`,
+                          #    `nav.commissioning`. (b) leaves standing exactly the half that stops
+                          #    being free to change at 6b.12; (c) is the only option that gets
+                          #    permanently more expensive by waiting.
+                          # (Earlier the same day) VALIDATED by two fresh-context layers and the
+                          # story file REWRITTEN on their measurements.
+                          # 🔴 **TWENTY-SIX claims of the first draft were REFUTED**, listed in a
+                          # recountable table at the story's §0j (26 rows, recounted).
+                          # 🔴 THE HEADLINE: THE DRAFT'S OWN RECOMMENDATION WAS THE DEFECT.
+                          # Arbitration 1 recommended showing `last_observed_at` as *the last scan*.
+                          # Measured on a live binary: a scan RAN and SUCCEEDED and `MAX(observed_at)`
+                          # DID NOT MOVE -- the row would have read *"il y a 2 ans 9 mois"* thirty
+                          # seconds after the scan. **AC1's fifth fact is missing on BOTH halves, not
+                          # one.** 🔑 And the product already computes the scan's instant --
+                          # `summary.capabilities.as_of`, bound and traced by 6b.8, persisted nowhere
+                          # -- which the draft never mentioned. Recommendation now **(c′)**: an
+                          # in-memory `ScanReport` scoped to *"depuis ce démarrage"*.
+                          # 🔴 BUILT AS THE DRAFT PRESCRIBED, THE JOURNAL GROUP SHIPS TWO FALSE ROWS:
+                          # file logging OFF while the screen names a directory, and an invalid level
+                          # (`parse_lossy` DISCARDED it) presented as in force. **Story 6b.8's own
+                          # HIGH finding, one story later, in a draft that cites it twice.** The fix
+                          # is a level change: show what `init_tracing` INSTALLED, not what the
+                          # environment holds.
+                          # 🔴 THE SECURITY GROUP SHIPS AS A **SHAPE**, NOT A WORD LIST: a French
+                          # literal of three mock claims planted in the template left **679/679 and
+                          # eight gates GREEN** -- *a literal is not a key*. No free-text arm; the
+                          # public row DERIVED by probing `is_public` (widening it left
+                          # `is_public_is_exactly_healthz_and_assets` GREEN); bools, never
+                          # credentials -- after which the prescribed leak guard is a COMPILE ERROR.
+                          # 🔴 TWO INHERITED GUARDS DO NOT COVER THIS SCREEN, both measured: 6b.4b's
+                          # a11y guard is `/triage`-scoped (two controls with no `tabindex` plus a
+                          # bare uppercase `DISABLED` -> 679/679 green) and 6b.5's per-section marker
+                          # guard is dashboard-scoped (2 markers in section 1 and 0 in three others
+                          # -> 0 red in BOTH conditions).
+                          # 🔴 `/diagnostic` MUST SURVIVE A DEAD DATABASE: on the shape the draft
+                          # said to copy, `/sources`, `/triage` and `/dashboard` all answer a bare
+                          # `500 internal error`. Half this screen needs no pool at all.
+                          # ⚠️ THE MIGRATION ROW IS A TAUTOLOGY: `run()` migrates before binding the
+                          # listener, and both divergent states REFUSE TO BOOT -- so applied ==
+                          # embedded on every instance that can answer HTTP. Carry the schema
+                          # VERSION, not a ratio.
+                          # ⚠️ AND `Nature::Empty`'s deletion is a CHECKLIST, not a promise: the
+                          # compiler names THREE sites and is blind to FIVE (a template, two orphan
+                          # keys, two `Strings` fields, two CSS classes, five rustdoc links).
+                          # ⚠️ The three ceiling figures were each +1 (**1727 / 787 / 1177**), and
+                          # the file nearest the ceiling is `xtask/src/main.rs` at **1908**, which
+                          # the draft omitted. Numbers written in flight, fifth story running.
+                          # ⚠️ Found in passing, NOT this story's: `every_key_carries_both_locales`
+                          # carries a floor of **47** under a message saying *48 entries* while
+                          # `app.yml` holds **220** -- 4.7x below what is there, in the guard this
+                          # story leans on, before the epic's largest key batch. And `epics.md:2108`
+                          # still says the DoD is *seven* gates; the tree has eight.
+                          #
+                          # (Earlier) 6b.9 -> `ready-for-dev`: story file created by `create-story`.
+                          # 🔴 THREE ARBITRATIONS ARE OPEN AND DUE BEFORE `dev-story` -- see the
+                          # story file's §0b, §0d and §0e:
+                          #   (1) AC1 names FIVE facts and the product holds FOUR AND A HALF. The
+                          #       last scan's DURATION is held by NOTHING: `ScanOutcome` times
+                          #       nothing, no migration carries a scan row, and `spawn_startup_scan`
+                          #       is a detached thread with its own runtime and pool that the HTTP
+                          #       app has no handle to. Persisting it is the same act story 6b.8
+                          #       REFUSED on 2026-08-20 (D32 / Epic 13 own the row-per-scan
+                          #       question). Contexting recommends showing the instant and writing
+                          #       AC1 as NOT MET on that half, on the NFR5/FR7 precedents.
+                          #   (2) AC2's LETTER, applied to the security group, ships a false
+                          #       security claim under an *Exemple* badge -- which its own 🔴
+                          #       paragraph argues against. Contexting recommends replacing the
+                          #       group with rows that are TRUE and measured.
+                          #   (3) `Screen::Onboarding` / `/onboarding` carries the framing the UX
+                          #       spec's F11 explicitly CORRECTED (*bootstrap is a MODE, not an
+                          #       onboarding*); the spec's own screen list says **Commissioning**.
+                          #       ⚠️ v0.2.0 is story 6b.12, so this is the LAST release-free moment
+                          #       to change the address.
+                          # 🔑 THE ROW-BY-ROW MEASUREMENT (mock's 16 diagnostic rows vs this tree):
+                          # **8 real, 3 false, 3 absent, 2 half**. The surprise is WHERE the truth
+                          # is -- *Journal* (directory, DAILY rotation, level, file retention) is
+                          # almost entirely real and displayed nowhere, while *Sécurité* is three
+                          # quarters false.
+                          # 🔴 AC2's CONCLUSION SURVIVES BUT ITS STATED REASON DOES NOT: story 6.1
+                          # shrank `is_public` to `/healthz` + `/assets/*` and put the FALLBACK
+                          # behind the layer -- `main.rs:744`'s committed test says *the
+                          # unauthenticated status is 401 in both shapes*. What stays true is that
+                          # two prefixes are public BY DECISION.
+                          # ⚠️ WHERE THE CODE GOES IS DECIDED BY A CEILING: `page.rs` is at **1728
+                          # code lines against 2000**, so the screen lands in a NEW
+                          # `diagnostic.rs` -- split before the gate asks, as 6b.6 did.
+                          # ⚠️ `/diagnostic` READS THE STORE -> `triage_router`, and the ROUTE IS
+                          # REGISTERED BEFORE THE NATURE CHANGES (wrong order: silent locally, 1 red
+                          # in CI; right order: 18 loud reds).
+                          # 🔑 `Nature::Empty` DIES HERE, and its death should be a COMPILE ERROR
+                          # rather than a sentence: delete the variant, `not_built_yet_body` and its
+                          # template, and let the compiler name the sites.
+                          # ⚠️ FR36 stays **Epic 17's** -- the PRD makes it *source health + what
+                          # changed since last visit*, and this story ships neither.
+                          #
+                          # (Earlier) 6b.8 -> `done`: PR #111 squash-merged as `b18495a` after a green CI run
                           # (59s). Branch deleted, twins updated in this same push.
                           # 🔑 EPIC 6b: EIGHT numbered slots done (6b.1-6b.8) plus the 6b.4b
                           # insertion -- NINE story files of thirteen. NEXT = `create-story` 6b.9
@@ -4011,7 +4211,7 @@ development_status:
   6b-6-inventory-and-device-record: done
   6b-7-applications-and-ipam: done
   6b-8-sources-and-alerts: done
-  6b-9-self-diagnostic-and-commissioning: backlog
+  6b-9-self-diagnostic-and-commissioning: review
   6b-10-copy-fr-and-en: backlog
   6b-11-keyboard-layer-and-focus-contract: backlog
   6b-12-release-0-2-0-and-its-documents: backlog

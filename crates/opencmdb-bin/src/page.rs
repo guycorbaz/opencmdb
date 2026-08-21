@@ -89,7 +89,10 @@ pub(crate) fn render_shell(shell: Shell, body: String) -> String {
         lang: rust_i18n::locale().to_string(),
         title: rust_i18n::t!(shell.screen.title_key()).to_string(),
         title_separator: "—",
-        version: env!("CARGO_PKG_VERSION"),
+        // 🔑 ONE source for the version, shared with the diagnostic screen (story 6b.9): two
+        // `env!` sites would be two representations of one fact, and this file already pins
+        // the rendered form.
+        version: crate::VERSION,
         perimeter: shell
             .perimeter
             .unwrap_or_else(|| rust_i18n::t!("nav.perimeter_unset").to_string()),
@@ -254,15 +257,13 @@ struct Strings {
     triage_empty: String,
     /// The badge a not-yet-built GESTURE carries (story 6b.4b).
     ///
-    /// ⚠️ A pair of its own, distinct from `pending_*`: that one says *this SCREEN is not built*, and
-    /// a control is a different population saying a different thing.
+    /// ⚠️ It was a pair of its own, distinct from the `pending_*` pair an `Empty` screen carried —
+    /// that one said *this SCREEN is not built*, a different population saying a different thing.
+    /// Story 6b.9 removed the last `Empty` screen and the pair with it; a control is now the only
+    /// thing in this product that says *not built*.
     gesture_badge: String,
     /// The one sentence the action bar shows, pointed at by every planned control (story 6b.4b).
     gesture_not_built: String,
-    /// The *not built yet* badge an `Empty` screen carries (story 6b.3's code review).
-    pending_badge: String,
-    /// The *not built yet* sentence an `Empty` screen carries (story 6b.3's code review).
-    pending_sentence: String,
     /// The perimeter label in the navigation footer, as the mock shows it (story 6b.2).
     nav_perimeter: String,
     entity: String,
@@ -310,8 +311,6 @@ fn strings() -> Strings {
         triage_empty: t!("triage.empty").to_string(),
         gesture_badge: t!("gesture.badge").to_string(),
         gesture_not_built: t!("gesture.not_built").to_string(),
-        pending_badge: t!("pending.badge").to_string(),
-        pending_sentence: t!("pending.sentence").to_string(),
         nav_perimeter: t!("nav.perimeter").to_string(),
         entity: t!("page.entity").to_string(),
         refresh: t!("page.refresh").to_string(),
@@ -655,7 +654,7 @@ struct QueueRow {
 /// again). The closure — a route typed as a member of a closed set — is registered to story 6.4,
 /// where that set stops being empty.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Gesture {
+pub(crate) enum Gesture {
     /// The product does not have this gesture yet.
     ///
     /// ⚠️ `owner` lives HERE and never on the screen: *"arrives in 6.4"* would turn the label into a
@@ -668,15 +667,15 @@ enum Gesture {
 }
 
 /// One control of the action bar, resolved for rendering.
-struct GestureView {
+pub(crate) struct GestureView {
     /// Its label, in the operator's language.
-    label: String,
+    pub(crate) label: String,
     /// The sentence shown when the gesture is not built — `None` once it is.
     ///
     /// 🔑 **ONE field, and the template branches on it**, so the rendered state cannot disagree with
     /// the nature: there is no second *"is it live"* flag to drift out of step. It is produced by a
     /// `match` on [`Gesture`], which is what makes story 6.4's `Live` a compile error here.
-    not_built: Option<String>,
+    pub(crate) not_built: Option<String>,
 }
 
 /// The mock's action bar: five controls, in its order, none of them live today.
@@ -694,26 +693,35 @@ fn action_bar(primary_key: &'static str) -> Vec<GestureView> {
         "gesture.resolve" => "6",
         _ => "6.4",
     };
-    [
-        (
-            primary_key,
-            Gesture::Planned {
-                owner: primary_owner,
-            },
-        ),
-        ("gesture.accept_gap", Gesture::Planned { owner: "7" }),
-        ("gesture.snooze", Gesture::Planned { owner: "7" }),
-        ("gesture.attach", Gesture::Planned { owner: "7" }),
-        ("gesture.exclude", Gesture::Planned { owner: "7" }),
-    ]
-    .into_iter()
-    .map(|(label_key, gesture)| GestureView {
-        label: rust_i18n::t!(label_key).to_string(),
-        not_built: match gesture {
-            Gesture::Planned { .. } => Some(rust_i18n::t!("gesture.not_built").to_string()),
-        },
-    })
-    .collect()
+    planned_gestures(&[
+        (primary_key, primary_owner),
+        ("gesture.accept_gap", "7"),
+        ("gesture.snooze", "7"),
+        ("gesture.attach", "7"),
+        ("gesture.exclude", "7"),
+    ])
+}
+
+/// Resolve a list of `(label key, owner)` pairs into controls that are not built yet.
+///
+/// 🔑 **The `match` on [`Gesture`] is what makes story 6.4's `Live` a compile error**, and it lives
+/// here so both callers inherit it — the triage bar's five controls and the diagnostic's two.
+/// ⚠️ **The CALLERS stay separate**, and that is a decision: `action_bar` carries the mock's five
+/// triage gestures with triage owners, the diagnostic carries two with different ones, and one
+/// builder for both would put two premises in one place where a future edit satisfies neither.
+pub(crate) fn planned_gestures(entries: &[(&'static str, &'static str)]) -> Vec<GestureView> {
+    entries
+        .iter()
+        .map(|(label_key, owner)| {
+            let gesture = Gesture::Planned { owner };
+            GestureView {
+                label: rust_i18n::t!(*label_key).to_string(),
+                not_built: match gesture {
+                    Gesture::Planned { .. } => Some(rust_i18n::t!("gesture.not_built").to_string()),
+                },
+            }
+        })
+        .collect()
 }
 
 /// The detail pane: the two photos, side by side, each with its own meta-line.
@@ -760,7 +768,7 @@ struct TriageView {
 /// populated branch is never reached — and `SystemTime::now()` compiles freely where
 /// `chrono::Utc::now()` does not. The guard that covers this function is written in this file's test
 /// module and named for what it does.
-fn relative_time(
+pub(crate) fn relative_time(
     now: chrono::DateTime<chrono::Utc>,
     then: chrono::DateTime<chrono::Utc>,
 ) -> String {
@@ -1141,7 +1149,7 @@ async fn reconcile_view(pool: &MySqlPool) -> Result<(ReconciledView, IdentityVie
 /// reads `SystemTime`, which compiles freely, and so would the same call inside a pure builder.
 /// *The feature flag is a guard against one spelling, never against reading the clock.* That is why
 /// [`build_triage`] takes its instant as a parameter and has a test of its own.
-fn now_utc() -> chrono::DateTime<chrono::Utc> {
+pub(crate) fn now_utc() -> chrono::DateTime<chrono::Utc> {
     let since_epoch = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default();
@@ -1188,13 +1196,6 @@ fn server_error(error: sqlx::Error) -> Response {
     (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
 }
 
-/// An `Empty` screen's body — the one line that says the screen is not built yet.
-#[derive(Template)]
-#[template(path = "_not_built_yet.html")]
-struct NotBuiltYet {
-    s: Strings,
-}
-
 /// The example-data marker, rendered ONCE for a wholly-example screen.
 ///
 /// # Why the screen and not each section, on an `Example` screen
@@ -1223,7 +1224,8 @@ struct NotBuiltYet {
 ///
 /// # Panics
 ///
-/// Never in practice, for the reason given on [`not_built_yet_body`].
+/// Never in practice: the template and this struct are compiled together, so a render failure
+/// means the binary was built from an inconsistent tree.
 pub(crate) fn example_marker() -> String {
     ExampleMarker { s: strings() }
         .render()
@@ -1235,27 +1237,6 @@ pub(crate) fn example_marker() -> String {
 #[template(path = "_example_marker.html")]
 struct ExampleMarker {
     s: Strings,
-}
-
-/// What an `Empty` screen shows: one line saying the screen is not built yet.
-///
-/// 🔴 **It replaces a blank `<main>`, and the difference is not cosmetic.** Eight of the ten screens
-/// rendered nothing at all, so the product read as eight broken screens rather than eight deliberate
-/// ones — while `epics.md:2092`, one of Guy's own premises of 2026-08-13, requires that a screen
-/// whose code is not implemented say so. Story 6b.3's code review found that sentence; contexting,
-/// both validation layers and the arbitration itself had all passed over it.
-///
-/// ⚠️ It says the screen is not built. It does **not** say the screen shows example data — that
-/// would be [`Nature::Empty`](crate::screens::Nature::Empty)'s own trap, telling the operator a
-/// blank page is a demonstration.
-///
-/// # Panics
-///
-/// Never in practice, for the reason given on [`devices_example_body`].
-pub(crate) fn not_built_yet_body() -> String {
-    NotBuiltYet { s: strings() }
-        .render()
-        .expect("the not-built-yet template and its struct are compiled together")
 }
 
 /// What `/triage` needs: the store it reads, and the perimeter it displays.
@@ -1276,6 +1257,12 @@ pub(crate) struct TriageState {
     /// The configured perimeter, already normalised by [`crate::AppConfig::from_env`] — `None`
     /// when unset OR blank, which is why this handler must not re-derive it.
     pub(crate) perimeter: Option<String>,
+    /// What `/diagnostic` reports about the product itself (story 6b.9).
+    ///
+    /// 🔑 **Facts, carried as data.** The log descriptor is what `init_tracing` INSTALLED and the
+    /// security posture is derived by probing `auth::is_public` — neither is re-read at the point
+    /// of use, which is story 6b.2's M12 applied rather than merely cited.
+    pub(crate) diagnostic: crate::diagnostic::DiagnosticFacts,
 }
 
 /// `/triage` on its own state, so the perimeter arrives as a parameter rather than being read.
@@ -1284,10 +1271,19 @@ pub(crate) struct TriageState {
 ///
 /// A router to be merged BEFORE `.layer(auth_deny)`, like every other route (story 6.1 §2): the
 /// screen is not public, and merging after the layer would bypass the middleware entirely.
-pub(crate) fn triage_router(pool: MySqlPool, perimeter: Option<String>) -> Router {
+pub(crate) fn triage_router(
+    pool: MySqlPool,
+    perimeter: Option<String>,
+    diagnostic: crate::diagnostic::DiagnosticFacts,
+) -> Router {
     Router::new()
         .route("/triage", get(triage))
         .route("/dashboard", get(dashboard))
+        // 🔴 Registered BEFORE `Screen::Diagnostic`'s nature changed, for the reason spelled out
+        // just below: re-measured on this very screen at story 6b.9, the right order reds nothing
+        // in either condition, nature-first reds 0 locally and 1 in CI, and route-first-only reds
+        // **19**, all `Overlapping method route. Handler for GET /diagnostic already exists`.
+        .route("/diagnostic", get(crate::diagnostic::diagnostic))
         // 🔴 **REGISTER THE ROUTE BEFORE CHANGING THE NATURE, and the order is a MEASUREMENT.**
         // Story 6b.8's validation built both mistakes: a nature changed with the route forgotten
         // reds **nothing** locally — 668/668 green, no warning — and exactly one test in CI, because
@@ -1297,7 +1293,11 @@ pub(crate) fn triage_router(pool: MySqlPool, perimeter: Option<String>) -> Route
         // nature forgotten — reds **18 tests**, all `Overlapping method route`.
         // *The wrong order is silent; the right order fails loudly.*
         .route("/sources", get(sources))
-        .with_state(TriageState { pool, perimeter })
+        .with_state(TriageState {
+            pool,
+            perimeter,
+            diagnostic,
+        })
 }
 
 /// One example figure on the dashboard, with its copy already resolved.
