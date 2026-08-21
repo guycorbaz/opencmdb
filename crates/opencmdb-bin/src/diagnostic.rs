@@ -2,11 +2,22 @@
 //!
 //! Story 6b.9. This is the second screen of Epic 6b whose centre is real rather than example, and
 //! the first that reads the database **about itself**. Its whole value is that the operator can
-//! believe it: a single decorative row destroys the other fifteen.
+//! believe it: a single decorative row destroys the other sixteen.
+//!
+//! ⚠️ **SEVENTEEN rows, not the reference mock's sixteen** — the *Journal* group carries five where
+//! the mock carries four, because file retention and rotation are two separate facts here and only
+//! one of them applies when nothing is written to a file. This read *"the other fifteen"* until the
+//! code review: **two layers counted seventeen independently, one from the diff alone and one from
+//! the live render**, and no test pinned the total. [`ROWS`] and the guard on it are what stop that
+//! recurring.
 //!
 //! # 🔴 Three shapes here are arbitrations, not preferences
 //!
-//! **(1) [`ScanReport`] exists because `MAX(observed_at)` is NOT the last scan.** The story's first
+//! **(1) — the story calls it arbitration `(c′)`, and the code cites it by that name — [`ScanReport`]
+//! exists because `MAX(observed_at)` is NOT the last scan.** ⚠️ The two labels are one decision: the
+//! letter is the story file's (options (a) to (d) were weighed there and (c′) chosen), the number is
+//! this list's. The blind review layer found `(c′)` cited FIVE times in code and defined nowhere in
+//! it — *a citation a reader cannot resolve from the material in front of them*. The story's first
 //! draft recommended feeding a *last scan* row from `repo::last_observed_at`, and the validation
 //! refuted it on a running binary: a scan RAN and SUCCEEDED over an empty subnet and
 //! `MAX(observed_at)` did not move — the row would have read *"2 years 9 months ago"* thirty
@@ -98,10 +109,16 @@ pub(crate) struct SecurityPosture {
     ///
     /// 🔑 **Read from the ONE reader.** `scrape_authorized` used to read the environment inside the
     /// request path; a second reader for this screen would have re-created story 6b.2's shipped M12
-    /// — and here with teeth, because `AppConfig::from_env` filters with `carries_a_visible_glyph`
-    /// while `scrape_authorized` refuses only on `is_empty()`, so a token of `" "` would protect
+    /// — and here with teeth, because a second reader would naturally have reused
+    /// `carries_a_visible_glyph`, which is what `scan_cidr` is filtered with, while
+    /// `scrape_authorized` refuses only on `is_empty()`: a token of `" "` would then have protected
     /// `/metrics` while this screen reported it unconfigured. `auth_deny` already took
     /// `State<AppConfig>`; the token moved there and the second reader was never created.
+    ///
+    /// ⚠️ **The ACTUAL filter is `!is_empty()`** (`AppConfig::from_env`) — the rule moved with the
+    /// read rather than being rewritten, so `/metrics` behaves exactly as before. This paragraph
+    /// read as a present-tense description of that filter until the blind review layer caught the
+    /// tense: *a counterfactual written in the indicative is a false sentence about the code.*
     pub(crate) metrics_token_configured: bool,
 }
 
@@ -194,6 +211,14 @@ pub(crate) fn security_posture(
     }
 }
 
+/// How many rows the screen renders, across all four groups.
+///
+/// 🔴 **A pinned total, because there was none and the prose was wrong.** The module doc said
+/// *fifteen others*, i.e. sixteen — the mock's count — while the screen builds seventeen;
+/// `every_group_of_the_enum_is_rendered_once` asserts the GROUP count and that no group is empty,
+/// and is satisfied whatever the rows do. *A number nothing counts is a number that drifts.*
+pub(crate) const ROWS: usize = 17;
+
 /// The four groups of the reference mock's diagnostic, in its order.
 ///
 /// 🔑 **An enum and not a `vec![…]` of headings.** The story's mutation M12 — delete one group —
@@ -279,6 +304,8 @@ pub(crate) struct StoreFacts {
 pub(crate) struct DiagnosticView {
     /// The four groups, in the mock's order.
     pub(crate) groups: Vec<DiagGroupView>,
+    /// Every row across every group — the figure [`ROWS`] pins.
+    pub(crate) row_count: usize,
     /// True when the store could not be read, so the page can say so once rather than per row.
     pub(crate) store_unreachable: bool,
 }
@@ -309,7 +336,7 @@ pub(crate) fn build_diagnostic(
 ) -> DiagnosticView {
     use rust_i18n::t;
     let unknown = t!("diagnostic.store_unreachable_value").to_string();
-    let groups = DiagGroup::ALL
+    let groups: Vec<DiagGroupView> = DiagGroup::ALL
         .iter()
         .map(|group| DiagGroupView {
             title: t!(group.heading_key()).to_string(),
@@ -383,8 +410,10 @@ pub(crate) fn build_diagnostic(
             },
         })
         .collect();
+    let row_count = groups.iter().map(|group| group.rows.len()).sum();
     DiagnosticView {
         groups,
+        row_count,
         store_unreachable: store.is_none(),
     }
 }
@@ -1094,6 +1123,16 @@ mod tests {
             view.groups.iter().all(|group| !group.rows.is_empty()),
             "a group with no rows is a heading over nothing"
         );
+        // 🔴 **The total, which nothing counted until the code review.** Two layers arrived at
+        // seventeen independently — one from the diff alone, one from the live render — against a
+        // module doc that said sixteen. ⚠️ It is a bookkeeping assertion whose message reads *update
+        // this number*, which a developer follows: it is kept because it is the only thing that
+        // notices a row appearing or vanishing, and because the figure is quoted in prose.
+        assert_eq!(
+            view.row_count, ROWS,
+            "the diagnostic renders {ROWS} rows; if that changed on purpose, change the module \
+             doc and the story's own figure with it"
+        );
     }
 
     // ── AC9: the two controls, at the RENDER level ───────────────────────────────────────
@@ -1139,6 +1178,14 @@ mod tests {
             !native_disabled,
             "a NATIVE disabled attribute reached the page: it leaves the tab order, and a blind \
              operator is then not even told the gesture exists\n{html}"
+        );
+        // 🔑 And the ROWS total again, at the RENDER level: the builder count cannot see a template
+        // that drops or duplicates a row, which is the half every guard in this story kept getting
+        // wrong.
+        assert_eq!(
+            html.matches("class=\"diag-row\"").count(),
+            ROWS,
+            "{ROWS} rows reach the page\n{html}"
         );
         assert_eq!(
             html.matches("aria-describedby=\"diag-gesture-not-built\"")

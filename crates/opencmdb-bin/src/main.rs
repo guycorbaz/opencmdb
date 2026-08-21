@@ -979,9 +979,18 @@ mod tests {
     async fn the_marker_partition_follows_every_screens_declared_nature() {
         let marker = "example-marker-badge";
         // 🔴 **The *not built yet* line is GONE, and this is what carries its absence.** Story
-        // 6b.9 filled the last two screens, `Nature::Empty` was deleted and the class with it —
-        // and the compiler could name only three of the eight artefacts involved. This needle is
-        // one of the five it could not see: reintroduce the line on any screen and the universal
+        // 6b.9 filled the last two screens and `Nature::Empty` went with them. **Eight artefacts,
+        // itemised rather than counted** — the code review asked for the list, and a number nobody
+        // can recount is a number nobody can check:
+        //
+        //   named by the compiler (3): the `Nature::Empty` variant; the arm in `Screen::nature`
+        //   that produced it; the arm in `demonstration_screen`.
+        //   named by NOTHING (5): `page::not_built_yet_body`; `page::NotBuiltYet` with its template
+        //   `_not_built_yet.html`; the `Strings::pending_badge` / `pending_sentence` fields; the
+        //   `pending.badge` / `pending.sentence` locale keys; the `.not-yet` / `.not-yet-badge`
+        //   rules in `app.css`.
+        //
+        // This needle covers the last two: reintroduce the line on any screen and the universal
         // below reds, where a deleted assertion would have said nothing.
         let not_yet = "not-yet-badge";
         let mut example_contents: Vec<(&str, screens::ExampleContent)> = Vec::new();
