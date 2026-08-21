@@ -161,7 +161,7 @@ nav.alerts:
 nav.diagnostic:
   en: "Self-diagnostic"
   fr: "Auto-diagnostic"
-nav.onboarding:
+nav.commissioning:
   en: "Commissioning"
   fr: "Mise en service"
 
@@ -180,12 +180,6 @@ example.sentence:
 # thing to a different population. The marker says *what you are reading is not yours*; this says
 # *there is nothing here yet*. Sharing one pair would make the product call a blank screen a
 # demonstration, which is the trap `Nature::Empty` exists to avoid.
-pending.badge:
-  en: "Not yet"
-  fr: "À venir"
-pending.sentence:
-  en: "This screen is not built yet. Nothing here comes from your network."
-  fr: "Cet écran n'est pas encore construit. Rien ici ne provient de votre réseau."
 devices.title:
   en: "Devices"
   fr: "Appareils"
@@ -743,3 +737,217 @@ sources.name.arp_ping:
 sources.refused:
   en: "This perimeter was refused: it is not a valid IPv4 CIDR, so no scan has run. Nothing below has been observed because nothing was asked."
   fr: "Ce périmètre a été refusé : ce n'est pas un CIDR IPv4 valide, donc aucun balayage n'a eu lieu. Rien n'a été observé ci-dessous parce que rien n'a été demandé."
+
+# ── The self-diagnostic (story 6b.9) ─────────────────────────────────────────
+# 🔴 Every VALUE on this screen is measured at runtime; only the labels live here.
+diagnostic.title:
+  en: "Self-diagnostic"
+  fr: "Auto-diagnostic"
+diagnostic.lede:
+  en: "The state of the tool itself. Facts, not a grade."
+  fr: "L'état de l'outil lui-même. Des faits, pas une note."
+diagnostic.store_unreachable:
+  en: "The database could not be read. What follows is what this process knows without it."
+  fr: "La base de données n'a pas pu être lue. Ce qui suit est ce que ce processus sait sans elle."
+diagnostic.store_unreachable_value:
+  en: "unreadable"
+  fr: "illisible"
+diagnostic.group.engine:
+  en: "Engine"
+  fr: "Moteur"
+diagnostic.group.observation:
+  en: "Observation"
+  fr: "Observation"
+diagnostic.group.security:
+  en: "Security"
+  fr: "Sécurité"
+diagnostic.group.journal:
+  en: "Journal"
+  fr: "Journal"
+diagnostic.version:
+  en: "version"
+  fr: "version"
+diagnostic.engine:
+  en: "database"
+  fr: "base de données"
+diagnostic.schema:
+  en: "schema"
+  fr: "schéma"
+diagnostic.schema_value:
+  en: "%{schema} · %{applied} of %{embedded} applied"
+  fr: "%{schema} · %{applied} sur %{embedded} appliquées"
+diagnostic.schema_embedded_only:
+  en: "%{n} migrations in this build"
+  fr: "%{n} migrations dans cette version"
+diagnostic.schema_none:
+  en: "no migration applied"
+  fr: "aucune migration appliquée"
+diagnostic.last_pass:
+  en: "last pass"
+  fr: "dernier passage"
+# ⚠️ The scoping is IN the value: a figure that resets at every restart must not read as an
+# all-time fact. Story 6b.9's arbitration (c′).
+diagnostic.last_pass_value:
+  en: "%{ago} · %{ms} ms · %{n} recorded (since this start-up)"
+  fr: "%{ago} · %{ms} ms · %{n} enregistrées (depuis ce démarrage)"
+# A pass whose identity half was refused, or which found nothing to resolve.
+diagnostic.last_pass_unresolved:
+  en: "%{ago} · %{ms} ms · %{n} recorded, nothing placed (since this start-up)"
+  fr: "%{ago} · %{ms} ms · %{n} enregistrées, aucun rattachement (depuis ce démarrage)"
+diagnostic.no_pass_since_boot:
+  en: "no pass since this start-up"
+  fr: "aucun passage depuis ce démarrage"
+diagnostic.observations:
+  en: "observations recorded"
+  fr: "constats enregistrés"
+diagnostic.observations_value:
+  en: "%{n} (all time)"
+  fr: "%{n} (depuis toujours)"
+diagnostic.placed:
+  en: "sightings placed"
+  fr: "constats rattachés"
+diagnostic.not_placed:
+  en: "sightings not placed"
+  fr: "constats non rattachés"
+diagnostic.sightings_value:
+  en: "%{n} sightings"
+  fr: "%{n} constats"
+diagnostic.data_retention:
+  en: "data retention"
+  fr: "rétention des données"
+# 🔴 The mock says *90 days · last state kept* and NOTHING purges anything here.
+diagnostic.data_retention_value:
+  en: "none — every observation and every link is kept"
+  fr: "aucune — chaque constat et chaque rattachement sont conservés"
+diagnostic.public_paths:
+  en: "reachable without a credential"
+  fr: "accessible sans identifiant"
+diagnostic.public_paths_none:
+  en: "nothing"
+  fr: "rien"
+diagnostic.basic:
+  en: "HTTP credential"
+  fr: "identifiant HTTP"
+diagnostic.configured:
+  en: "configured"
+  fr: "configuré"
+# 🔑 Not a weakness, and the copy must not read as one: with no pair configured every non-public
+# path answers 401 without a challenge. The product is closed by default.
+diagnostic.basic_unset:
+  en: "none configured — every other path is refused"
+  fr: "aucun configuré — toute autre adresse est refusée"
+diagnostic.metrics:
+  en: "/metrics"
+  fr: "/metrics"
+diagnostic.metrics_token_set:
+  en: "token required"
+  fr: "jeton requis"
+diagnostic.metrics_token_unset:
+  en: "no token configured — the scrape is refused"
+  fr: "aucun jeton configuré — la collecte est refusée"
+diagnostic.secrets:
+  en: "stored credentials"
+  fr: "identifiants stockés"
+# 🔴 The mock asserts a credential store and an encryption key. This product has neither.
+# 🔴 **Worded to deny WITHOUT reusing the mock's noun phrases, and that is not fastidiousness.**
+# The first draft read *"…holds no encryption key"* and the forbidden-claim guard fired on its own
+# copy — correctly: that guard is a substring check and cannot tell an assertion from its negation.
+# ⚠️ And neither can a SCREENSHOT: crop *"holds no encryption key"* mid-sentence and the product
+# appears to claim one. So the row names what is absent and who builds it.
+diagnostic.secrets_value:
+  en: "none stored — Epics 10 and 19 build credential storage"
+  fr: "aucun stocké — les épics 10 et 19 construisent le stockage d'identifiants"
+diagnostic.log_directory:
+  en: "directory"
+  fr: "répertoire"
+diagnostic.log_stdout_only:
+  en: "standard output only"
+  fr: "sortie standard seulement"
+diagnostic.log_rotation:
+  en: "rotation"
+  fr: "rotation"
+diagnostic.log_rotation_daily:
+  en: "daily"
+  fr: "quotidienne"
+diagnostic.log_no_rotation:
+  en: "none — nothing is written to a file"
+  fr: "aucune — rien n'est écrit dans un fichier"
+diagnostic.log_level:
+  en: "level in force"
+  fr: "niveau en vigueur"
+diagnostic.log_retention:
+  en: "files kept"
+  fr: "fichiers conservés"
+diagnostic.log_retention_value:
+  en: "%{n}"
+  fr: "%{n}"
+diagnostic.log_no_retention:
+  en: "not applicable"
+  fr: "sans objet"
+diagnostic.log_last_error:
+  en: "last error"
+  fr: "dernière erreur"
+# 🔴 Nothing stores an error here, and deriving one from silence would invent an incident (FR8).
+diagnostic.log_last_error_value:
+  en: "not recorded — this product keeps no error history"
+  fr: "non enregistrée — ce produit ne conserve aucun historique d'erreur"
+gesture.check_now:
+  en: "Check now"
+  fr: "Vérifier maintenant"
+gesture.export_log:
+  en: "Export the journal"
+  fr: "Exporter le journal"
+
+# ── Commissioning, the example surface (story 6b.9) ──────────────────────────
+commissioning.title:
+  en: "Commissioning"
+  fr: "Mise en service"
+# 🔴 The UX specification's F11: bootstrap is a MODE, not a first day.
+commissioning.lede:
+  en: "A wall of objects is normal, not a reproach. This baselining stays available for life: it is triggered by volume, never by a first start-up."
+  fr: "Un mur d'objets est normal, pas un reproche. Cette mise à niveau reste disponible à vie : elle se déclenche au volume, pas au premier démarrage."
+commissioning.baseline:
+  en: "Initial discovery"
+  fr: "Découverte initiale"
+commissioning.total:
+  en: "objects observed."
+  fr: "objets observés."
+commissioning.consistent:
+  en: "are consistent — nothing to decide."
+  fr: "sont cohérents — rien à décider."
+commissioning.divergent:
+  en: "carry a divergence this baselining cannot settle alone."
+  fr: "portent une divergence que cette mise à niveau ne peut pas trancher seule."
+commissioning.action:
+  en: "Adopt the observed state as the baseline"
+  fr: "Adopter l'état observé comme référence"
+commissioning.threshold:
+  en: "A confidence threshold holds the strange back — a device that changes address and name at once goes to triage rather than into the baseline."
+  fr: "Un seuil de confiance retient l'étrange — un appareil qui change d'adresse et de nom à la fois part au triage plutôt que dans la référence."
+example.step.done:
+  en: "done"
+  fr: "fait"
+example.step.database:
+  en: "Database"
+  fr: "Base de données"
+example.step.database.detail:
+  en: "MariaDB 10.11 reachable, schema migrated."
+  fr: "MariaDB 10.11 joignable, schéma migré."
+example.step.source:
+  en: "Connect a source"
+  fr: "Connecter une source"
+example.step.source.detail:
+  en: "Outbound HTTP, no network privilege. Connection test: 4 replies out of 4."
+  fr: "HTTP sortant, aucun privilège réseau. Test de connexion : 4 réponses sur 4."
+example.step.perimeter:
+  en: "Set the scan perimeter"
+  fr: "Définir le périmètre de scan"
+example.step.perimeter.detail:
+  en: "192.0.2.0/24 — you can add others later."
+  fr: "192.0.2.0/24 — vous pourrez en ajouter d'autres plus tard."
+example.step.first_pass:
+  en: "First pass"
+  fr: "Premier passage"
+example.step.first_pass.detail:
+  en: "254 addresses swept in 1.8 s. 412 sightings."
+  fr: "254 adresses balayées en 1,8 s. 412 constats."

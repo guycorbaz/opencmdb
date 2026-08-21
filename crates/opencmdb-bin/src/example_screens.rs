@@ -764,6 +764,86 @@ pub(crate) fn alerts_body(_query: &ScreenQuery) -> String {
     .expect("the alerts template and its struct are compiled together")
 }
 
+/// One rendered commissioning step.
+pub(crate) struct StepRow {
+    /// Its ordinal.
+    number: &'static str,
+    /// Its title.
+    title: String,
+    /// The line under it.
+    detail: String,
+    /// Its status word.
+    status: String,
+}
+
+/// The commissioning screen's copy.
+struct CommissioningStrings {
+    title: String,
+    lede: String,
+    baseline_title: String,
+    baseline_total: String,
+    baseline_consistent: String,
+    baseline_divergent: String,
+    baseline_action: String,
+    baseline_threshold: String,
+    /// The *à venir* badge, from the SAME key `/triage` and `/diagnostic` use — one vocabulary for
+    /// one state, which is what the glossary's *one term, one translation* rule means in the UI.
+    gesture_badge: String,
+}
+
+/// The commissioning body.
+#[derive(Template)]
+#[template(path = "_commissioning_example.html")]
+struct Commissioning {
+    steps: Vec<StepRow>,
+    total: u32,
+    consistent: u32,
+    divergent: u32,
+    s: CommissioningStrings,
+}
+
+/// Render the example commissioning walk-through and its baselining block — Epic 9's frame.
+///
+/// 🔴 **The primary control is NOT live and is labelled**, through the same mechanism story 6b.4b
+/// built for `/triage`: adopting a baseline writes to `declared_attribute` for every consistent
+/// object, which is Epic 9's, and a live-looking button here would be a promise.
+///
+/// ⚠️ The query is taken and unused, for the reason given on [`apps_body`].
+///
+/// # Panics
+///
+/// Never in practice, for the reason given on [`inventory_body`].
+pub(crate) fn commissioning_body(_query: &ScreenQuery) -> String {
+    let baseline = example_data::commissioning_baseline();
+    Commissioning {
+        steps: example_data::commissioning_steps()
+            .into_iter()
+            .map(|step| StepRow {
+                number: step.number,
+                title: rust_i18n::t!(step.title_key).to_string(),
+                detail: rust_i18n::t!(step.detail_key).to_string(),
+                status: rust_i18n::t!(step.status_key).to_string(),
+            })
+            .collect(),
+        total: baseline.total,
+        consistent: baseline.consistent,
+        divergent: baseline.divergent,
+        s: CommissioningStrings {
+            title: rust_i18n::t!("commissioning.title").to_string(),
+            lede: rust_i18n::t!("commissioning.lede").to_string(),
+            baseline_title: rust_i18n::t!("commissioning.baseline").to_string(),
+            baseline_total: rust_i18n::t!("commissioning.total").to_string(),
+            baseline_consistent: rust_i18n::t!("commissioning.consistent").to_string(),
+            baseline_divergent: rust_i18n::t!("commissioning.divergent").to_string(),
+            baseline_action: rust_i18n::t!("commissioning.action").to_string(),
+            baseline_threshold: rust_i18n::t!("commissioning.threshold").to_string(),
+            gesture_badge: rust_i18n::t!("gesture.badge").to_string(),
+        },
+    }
+    .render()
+    .expect("the commissioning template and its struct are compiled together")
+}
+
 /// Every word of `html`'s visible TEXT that looks like an i18n key rather than a translation.
 ///
 /// # Why this is a shared helper since story 6b.7

@@ -1,0 +1,63 @@
+{#- The self-diagnostic: the state of the tool itself. Facts, not a grade (story 6b.9).
+
+     🔴 EVERY ROW HERE IS MEASURED AT RUNTIME. There is no value written into this template — the
+     four groups come from `diagnostic::build_diagnostic`, which takes the store's answers, the
+     descriptor `init_tracing` installed and the security posture derived by probing `is_public`.
+     That is AC1, and it is why the screen carries NO example marker: nothing on it is an example.
+
+     🔴 THE SECURITY GROUP HAS NO FREE-TEXT ARM, and that is AC2's real carrier. Three of the
+     reference mock's security claims — *"toutes authentifiées"*, *"chiffrés au repos"*, *"hors du
+     volume de données"* — were planted here as a French literal during validation and left 679/679
+     tests and eight gates GREEN: a literal is not a key, and no guard in this tree can see one. So
+     the group's builder takes a `SecurityPosture` and nothing else; a false claim about security
+     cannot be TYPED into this screen, only derived from a bool or from a probed list.
+
+     🔴 AND IT RENDERS WITH THE DATABASE DOWN. `/sources`, `/triage` and `/dashboard` each answer a
+     bare `500 internal error` — no shell, no navigation — when the pool is dead, and the one state
+     in which an operator opens a self-diagnostic screen is exactly that one. Half of what is below
+     needs no pool at all. -#}
+<section class="screen-section">
+  <h2>{{ s.title }}</h2>
+  <p class="screen-lede">{{ s.lede }}</p>
+
+  {%- if view.store_unreachable %}
+  {#- Said ONCE for the page rather than repeated on each store-backed row. -#}
+  <p class="diag-unreachable">{{ s.store_unreachable }}</p>
+  {%- endif %}
+
+  <div class="diag-groups">
+    {%- for group in view.groups %}
+    <div class="diag-group">
+      <div class="diag-group-title">{{ group.title }}</div>
+      {%- for r in group.rows %}
+      <div class="diag-row">
+        <span class="diag-key">{{ r.key }}</span>
+        <span class="diag-value">{{ r.value }}</span>
+      </div>
+      {%- endfor %}
+    </div>
+    {%- endfor %}
+  </div>
+
+  {#- The two controls the mock puts here, neither of them live. The a11y contract is story
+       6b.4b's and was paid for in blood: `aria-disabled` AND `tabindex="0"` (a `<span
+       role="button">` without `tabindex` has `tabIndex -1` and forty dispatched Tab presses reach
+       none of them), and ONE visible sentence for the group that every control points at.
+       ⚠️ Two full elements with STATIC class literals rather than one with a conditional class:
+       story 6b.4's stylesheet guard skips any `class` attribute containing a brace. -#}
+  <div class="action-bar" role="group">
+  {%- for gesture in gestures %}
+    {%- match gesture.not_built %}
+    {%- when Some with (_note) %}
+    <span class="btn-gesture planned" role="button" aria-disabled="true" tabindex="0"
+          aria-describedby="diag-gesture-not-built">
+      {{ gesture.label }}
+      <span class="gesture-badge">{{ s.gesture_badge }}</span>
+    </span>
+    {%- when None %}
+    <span class="btn-gesture live">{{ gesture.label }}</span>
+    {%- endmatch %}
+  {%- endfor %}
+  <p id="diag-gesture-not-built" class="gesture-note">{{ s.gesture_not_built }}</p>
+  </div>
+</section>

@@ -1,4 +1,4 @@
-//! The shell: the mock's frame, its ten addresses, and the SEVEN screens it renders without the store.
+//! The shell: the mock's frame, its ten addresses, and the SIX screens it renders without the store.
 //!
 //! # What this module is, and the one structural decision inside it
 //!
@@ -57,21 +57,27 @@ pub(crate) enum Screen {
     Alerts,
     /// *Auto-diagnostic* — what the product knows about itself (6b.9).
     Diagnostic,
-    /// *Mise en service* — first-run guidance (6b.9).
-    Onboarding,
+    /// *Mise en service* — adopting the observed state as a baseline (6b.9).
+    ///
+    /// 🔴 **`Commissioning`, and it was `Onboarding` until story 6b.9.** The UX specification's F11
+    /// correction reads *"bootstrap is a MODE, not an onboarding. Filing it under 'first run' was a
+    /// design error: the wall recurs on every large migration"*, and the spec's own screen list
+    /// names this screen **Commissioning**. The operator-visible label already read *Mise en
+    /// service* in both locales; the identifier and the address were the last two artefacts still
+    /// carrying the retired framing. Guy's arbitration of 2026-08-21, taken while `v0.2.0` was
+    /// still ahead (story 6b.12) and the rename therefore free: **6 sites and one key**.
+    Commissioning,
 }
 
 /// What a screen's content IS, and therefore whether it owes the operator a marker.
 ///
-/// 🔴 **FOUR variants since story 6b.5, and each was forced rather than chosen.** This read *"three
-/// variants and not two"* until that story added [`Mixed`](Nature::Mixed) six lines below the
-/// sentence and left it standing — the code review caught it. The original three were a consequence
-/// of Guy's arbitration rather than a
-/// preference.** Story 6b.3 ships the example dataset with ONE witness screen; the eight screens
-/// whose own story has not landed hold nothing at all. With only `Fed` and `Example`, those eight
-/// would have to be declared *example* — and the marker would then tell the operator that an empty
-/// `<main>` is a demonstration, which is false. `Empty` exists so the product can say *"nothing
-/// here yet"* instead of *"this nothing is a demo"*.
+/// 🔴 **THREE variants since story 6b.9, and the count has moved twice — which is why it is written
+/// as a history rather than as a number.** It read *"three variants and not two"* while there were
+/// four (story 6b.5 added [`Mixed`](Nature::Mixed) six lines below the sentence and left it
+/// standing; the code review caught it). Story 6b.9 then removed `Empty`, whose own doc had
+/// promised since 6b.3 that *"when story 6b.9 closes there should be no `Empty` left"* — and that
+/// promise is now carried by the compiler instead of by a sentence: the variant does not exist, so
+/// a screen cannot be declared to hold nothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Nature {
     /// The screen shows what the product really observed and really holds. It owes NO marker, and
@@ -86,7 +92,8 @@ pub(crate) enum Nature {
     /// about the real half or hide the example half"*. The dashboard is where the sentence stops
     /// being a prediction — declared [`Fed`](Nature::Fed) it carries a marker it must not, declared
     /// [`Example`](Nature::Example) it calls the real reach section a demonstration, and declared
-    /// [`Empty`](Nature::Empty) it claims to hold nothing while holding the product's own counts.
+    /// declared to hold nothing (a nature story 6b.9 removed) it would claim to hold nothing while
+    /// holding the product's own counts.
     ///
     /// 🔑 **Guy's arbitration (2026-08-19), taken on a measurement**: adding this variant produces
     /// exactly **three `E0004` sites** — the body dispatch below and the partition test's two match
@@ -115,22 +122,6 @@ pub(crate) enum Nature {
     /// closed the self-pair in `CandidatePair::new` rather than in a test, and this story's own AC3
     /// argues the same way, that a compile refusal beats an assertion.
     Example(ExampleContent),
-    /// ⚠️ **TEMPORARY, and it must be written as one.** The screen's own story has not landed, so
-    /// it holds nothing. This is a statement about the ROADMAP, not about the product's data —
-    /// **when story 6b.9 closes there should be no `Empty` left**, and a reviewer meeting one after
-    /// that date has found a story that shipped without its content.
-    ///
-    /// 🔑 **An `Empty` screen SAYS SO, and it did not until story 6b.3's code review.** It rendered
-    /// a blank `<main>` with nothing on it, so eight of the ten screens read as broken rather than
-    /// as deliberate — while `epics.md:2092`, one of Guy's own four premises of 2026-08-13, reads
-    /// *"all ten screens ship; those whose code is not implemented show an example dataset with a
-    /// text saying so"*. That sentence was surfaced by no layer of contexting, validation or
-    /// arbitration; the review found it. Guy's arbitration (2026-08-19): the eight screens get the
-    /// sentence NOW, through [`crate::page::not_built_yet_body`]. ⚠️ **It is the premise's spirit
-    /// and not its letter** — a *"not built yet"* line is not *"an example dataset"*, and the
-    /// dataset stays owed by stories 6b.5–6b.9, each of which replaces this sentence with its own
-    /// content.
-    Empty,
 }
 
 /// Which body an [`Nature::Example`] screen shows.
@@ -158,6 +149,9 @@ pub(crate) enum ExampleContent {
     IpamOccupancy,
     /// The example alert list — Epic 16's frame (story 6b.8).
     AlertList,
+    /// The example commissioning walk-through and its baselining block — Epic 9's frame
+    /// (story 6b.9).
+    Commissioning,
 }
 
 impl ExampleContent {
@@ -181,6 +175,7 @@ impl ExampleContent {
             ExampleContent::AppsInventory => crate::example_screens::apps_body(query),
             ExampleContent::IpamOccupancy => crate::example_screens::ipam_body(query),
             ExampleContent::AlertList => crate::example_screens::alerts_body(query),
+            ExampleContent::Commissioning => crate::example_screens::commissioning_body(query),
         }
     }
 }
@@ -208,7 +203,7 @@ impl Screen {
         Screen::Sources,
         Screen::Alerts,
         Screen::Diagnostic,
-        Screen::Onboarding,
+        Screen::Commissioning,
     ];
 
     /// The screen's own address — one URL per screen, deep-linkable cold.
@@ -227,7 +222,7 @@ impl Screen {
             Screen::Sources => "/sources",
             Screen::Alerts => "/alerts",
             Screen::Diagnostic => "/diagnostic",
-            Screen::Onboarding => "/onboarding",
+            Screen::Commissioning => "/commissioning",
         }
     }
 
@@ -243,7 +238,7 @@ impl Screen {
             Screen::Sources => "nav.sources",
             Screen::Alerts => "nav.alerts",
             Screen::Diagnostic => "nav.diagnostic",
-            Screen::Onboarding => "nav.onboarding",
+            Screen::Commissioning => "nav.commissioning",
         }
     }
 
@@ -252,7 +247,7 @@ impl Screen {
         match self {
             Screen::Triage | Screen::Dashboard => NavGroup::Loop,
             Screen::Devices | Screen::Device | Screen::Apps | Screen::Ipam => NavGroup::Inventory,
-            Screen::Sources | Screen::Alerts | Screen::Diagnostic | Screen::Onboarding => {
+            Screen::Sources | Screen::Alerts | Screen::Diagnostic | Screen::Commissioning => {
                 NavGroup::Machine
             }
         }
@@ -289,8 +284,7 @@ impl Screen {
             Screen::Devices => Nature::Example(ExampleContent::DevicesInventory),
             // The device record, served by the parameterised route (story 6b.6).
             Screen::Device => Nature::Example(ExampleContent::DeviceRecord),
-            // ⚠️ Each of these becomes `Example` in ITS OWN story, listed beside it. Until then the
-            // screen holds nothing and says so — see [`Nature::Empty`].
+            // ⚠️ Each of these became `Example` in ITS OWN story, listed beside it.
             // Epic 15's and Epic 14's frames, filled from the example dataset (story 6b.7).
             Screen::Apps => Nature::Example(ExampleContent::AppsInventory),
             Screen::Ipam => Nature::Example(ExampleContent::IpamOccupancy),
@@ -310,8 +304,15 @@ impl Screen {
             Screen::Sources => Nature::Fed,
             // Epic 16's frame, example all the way through (story 6b.8).
             Screen::Alerts => Nature::Example(ExampleContent::AlertList),
-            Screen::Diagnostic // story 6b.9
-            | Screen::Onboarding => Nature::Empty, // story 6b.9
+            // 🔴 **`Fed`, and every section of it is real** (story 6b.9): the build, the store's
+            // own version and schema, what the last pass did, what has been recorded and placed,
+            // the security perimeter derived by probing `auth::is_public`, and the descriptor
+            // `init_tracing` installed. Nothing on it is fabricated, so it owes no marker —
+            // declaring it `Mixed` would make the partition demand a marker for example content
+            // that does not exist. *A nature is a statement about what the screen SHOWS.*
+            Screen::Diagnostic => Nature::Fed,
+            // Epic 9's baselining, example all the way through (story 6b.9).
+            Screen::Commissioning => Nature::Example(ExampleContent::Commissioning),
         }
     }
 }
@@ -459,10 +460,10 @@ fn device_record(id: &str, perimeter: Option<String>) -> Response {
 /// marker from the same decision, so there is no arrangement of this function in which content
 /// arrives unmarked.
 ///
-/// ⚠️ An `Empty` screen carries the *not built yet* line and **never the example marker**, which is
-/// the point of [`Nature::Empty`]: marking it as example data would tell the operator that a blank
-/// screen is a demonstration. Its own story (named beside its arm in `nature`) replaces the line
-/// with real example content.
+/// ⚠️ **There is no *not built yet* arm any more.** Story 6b.9 filled the last two screens, so
+/// [`Nature`] lost its `Empty` variant and the sentence with it: this product no longer has a screen
+/// that holds nothing. A future screen that does must add the variant back deliberately rather than
+/// inherit it — and the compiler will ask, because every `match` on a nature is exhaustive.
 fn demonstration_screen(
     screen: Screen,
     perimeter: Option<String>,
@@ -477,7 +478,6 @@ fn demonstration_screen(
         Nature::Example(content) => {
             format!("{}{}", crate::page::example_marker(), content.render(query))
         }
-        Nature::Empty => crate::page::not_built_yet_body(),
         // Unreachable by construction: `router` never merges a `Fed` screen — those need the pool
         // and live on the main router. It is `unreachable!` rather than a silent fallback so the
         // day someone changes `nature` without changing `router`, the test says WHICH assumption
