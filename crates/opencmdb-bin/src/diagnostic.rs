@@ -722,7 +722,7 @@ pub(crate) async fn diagnostic(
             tracing::error!(%error, "rendering the diagnostic screen");
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                "template error",
+                crate::page::render_error_body(),
             )
                 .into_response()
         }

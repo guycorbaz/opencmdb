@@ -20,6 +20,15 @@ page.observed:
 page.no_observation:
   en: "No in-perimeter observation yet."
   fr: "Aucune observation dans le périmètre pour l'instant."
+error.store_unreachable:
+  en: "The store did not answer. Nothing was lost — the observations and the documented records are intact; only this page could not be built. Try again, and see the self-diagnostic if it persists."
+  fr: "La base n'a pas répondu. Rien n'est perdu — les observations et les enregistrements documentés sont intacts ; seule cette page n'a pas pu être construite. Réessayez, et consultez l'auto-diagnostic si cela persiste."
+error.render_failed:
+  en: "This page could not be rendered. The data behind it is intact; the fault is in the display. Try again, and see the self-diagnostic if it persists."
+  fr: "Cette page n'a pas pu être affichée. Les données derrière elle sont intactes ; la panne est dans l'affichage. Réessayez, et consultez l'auto-diagnostic si cela persiste."
+page.gap_card_label:
+  en: "Reconciliation result"
+  fr: "Résultat de la réconciliation"
 page.the_gap:
   en: "The gap"
   fr: "L'écart"

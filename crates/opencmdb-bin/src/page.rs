@@ -227,6 +227,13 @@ struct Strings {
     tagline: String,
     /// The navigation's accessible name (story 6b.2).
     nav_label: String,
+    /// The reconciliation card's accessible name (story 6b.10).
+    ///
+    /// 🔴 It was an English LITERAL in `_gap_card.html` until story 6b.10's sweep, and it is the
+    /// clearest case that story exists for: copy a **sighted browser look cannot see**, on the
+    /// card that predates this epic. Nine French looks walked past it; one `grep` over the
+    /// templates' human-text attributes found it.
+    gap_card_label: String,
     /// The example-data marker's badge (story 6b.3).
     example_badge: String,
     /// The example-data marker's sentence (story 6b.3).
@@ -295,6 +302,7 @@ fn strings() -> Strings {
     Strings {
         tagline: t!("page.tagline").to_string(),
         nav_label: t!("nav.label").to_string(),
+        gap_card_label: t!("page.gap_card_label").to_string(),
         example_badge: t!("example.badge").to_string(),
         example_sentence: t!("example.sentence").to_string(),
         dash_real_heading: t!("dash.real_heading").to_string(),
@@ -1193,7 +1201,39 @@ async fn triage_view(
 fn server_error(error: sqlx::Error) -> Response {
     let repo_error = classify(error);
     tracing::error!(?repo_error, "loading the page's state failed");
-    (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
+    (StatusCode::INTERNAL_SERVER_ERROR, store_unreachable_body()).into_response()
+}
+
+/// What the operator reads when the store did not answer.
+///
+/// 🔴 **It was the bare English literal `"internal error"` until story 6b.10**, served at
+/// `/triage`, `/dashboard` and `/sources` — the ten screens' own addresses — on a French
+/// deployment. Guy's arbitration 2(a′): *an operator whose store is down must not be the one
+/// person who reads English on a French deployment.* It is the one path where the interface
+/// language silently stopped being the interface language, and it is reached exactly when the
+/// operator is least able to guess what happened.
+///
+/// 🔑 **It says what is NOT lost.** The UX spec's fourth microcopy rule is *error = cause + next
+/// step, never blame the user*; the fifth is *empty ≠ failure — calm, never alarming*. A store
+/// that did not answer has destroyed nothing: this product never overwrites an observation
+/// (NFR5) and never deletes a declared record, so the honest sentence is that the page could not
+/// be built, not that something is wrong with the data.
+///
+/// ⚠️ `t!` is a lookup in an embedded map — it opens no file, touches no store and cannot fail —
+/// so it is safe on this path. The **render-error** fallback in [`render_shell`] stays a plain
+/// literal by contrast, for the opposite reason: a page whose renderer has already failed is not
+/// the place to depend on the renderer.
+fn store_unreachable_body() -> String {
+    rust_i18n::t!("error.store_unreachable").to_string()
+}
+
+/// What the operator reads when a template failed to render but the data was fine.
+///
+/// A separate sentence from [`store_unreachable_body`] on purpose: the two failures have
+/// different causes and different next steps, and collapsing them into one *"internal error"* is
+/// what made the old body useless. See that function for the arbitration and the microcopy rules.
+pub(crate) fn render_error_body() -> String {
+    rust_i18n::t!("error.render_failed").to_string()
 }
 
 /// The example-data marker, rendered ONCE for a wholly-example screen.
@@ -1414,7 +1454,7 @@ pub async fn dashboard(State(state): State<TriageState>) -> Response {
         .into_response(),
         Err(error) => {
             tracing::error!(%error, "rendering the dashboard");
-            (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
+            (StatusCode::INTERNAL_SERVER_ERROR, render_error_body()).into_response()
         }
     }
 }
@@ -1608,7 +1648,7 @@ pub async fn sources(State(state): State<TriageState>) -> Response {
         .into_response(),
         Err(error) => {
             tracing::error!(%error, "rendering the sources screen");
-            (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
+            (StatusCode::INTERNAL_SERVER_ERROR, render_error_body()).into_response()
         }
     }
 }
@@ -1651,7 +1691,7 @@ pub async fn triage(
                 .into_response(),
                 Err(error) => {
                     tracing::error!(%error, "rendering the triage screen");
-                    (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
+                    (StatusCode::INTERNAL_SERVER_ERROR, render_error_body()).into_response()
                 }
             }
         }
@@ -1698,7 +1738,7 @@ fn render<T: Template>(template: T) -> Response {
         Ok(html) => Html(html).into_response(),
         Err(error) => {
             tracing::error!(%error, "rendering a template failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
+            (StatusCode::INTERNAL_SERVER_ERROR, render_error_body()).into_response()
         }
     }
 }
@@ -2557,6 +2597,182 @@ mod tests {
     ///
     /// If `templates/` cannot be read — which means the test is running somewhere the source
     /// tree is not, and every guard below would be vacuous rather than merely wrong.
+    /// AC1 — **no template hard-codes text a human reads out of an attribute.**
+    ///
+    /// 🔴 **This is the guard story 6b.10's sweep existed to produce, and the defect it found had
+    /// survived every story in this epic**: `_gap_card.html` opened with
+    /// `aria-label="Reconciliation result"` — English, on the French UI, since before Epic 6b.
+    ///
+    /// 🔑 **Why nine browser looks walked past it.** It is copy a **sighted** reader never sees.
+    /// The epic's method for catching an untranslated string was *look at the page*, and this is
+    /// precisely the class that method cannot reach. *A look at the page reads what the page
+    /// shows; a screen reader reads what it does not.*
+    ///
+    /// ⚠️ **The limit, written.** It is a list of attributes, and *an enumeration cannot claim the
+    /// completeness of a property* (story 5.12, fifth application here). A new ARIA attribute
+    /// carrying text is invisible until someone adds it below. It is a tripwire against the
+    /// ordinary gesture of typing a label into markup, never a barrier.
+    #[test]
+    fn no_template_hard_codes_text_a_human_reads_from_an_attribute() {
+        // Every attribute whose VALUE is prose rather than a token. `class`, `id`, `role`,
+        // `type`, `hx-*` and the `aria-*` attributes taking an idref or an enum are excluded on
+        // purpose: their values are not read aloud and not translated.
+        const PROSE_ATTRIBUTES: [&str; 8] = [
+            "aria-label",
+            "aria-description",
+            "aria-roledescription",
+            "aria-placeholder",
+            "aria-valuetext",
+            "title",
+            "alt",
+            "placeholder",
+        ];
+        let mut checked = 0_usize;
+        for (name, body) in templates() {
+            for attribute in PROSE_ATTRIBUTES {
+                let needle = format!("{attribute}=\"");
+                for (at, _) in body.match_indices(&needle) {
+                    // A boundary, not a substring: `aria-labelledby="…"` must not match
+                    // `aria-label`, and `data-title="…"` is not `title`.
+                    let before = body[..at].chars().next_back();
+                    if before.is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+                        continue;
+                    }
+                    let Some((value, _)) = body[at + needle.len()..].split_once('"') else {
+                        continue;
+                    };
+                    checked += 1;
+                    assert!(
+                        value.contains("{{") || value.contains("{%"),
+                        "{name} carries {attribute}=\"{value}\" as a LITERAL — it is read aloud \
+                         to an operator whose interface is in another language, and no browser \
+                         look can see it. Route it through a key."
+                    );
+                }
+            }
+        }
+        assert!(
+            checked >= 4,
+            "the premise: at least four prose attributes exist to inspect ({checked} seen) — a \
+             scan that matched nothing would assert nothing"
+        );
+    }
+
+    /// AC1 / arbitration 2(a′) — **a dead store answers in the operator's language.**
+    ///
+    /// 🔴 The body was the bare English literal `"internal error"`, served at `/triage`,
+    /// `/dashboard` and `/sources` — the ten screens' own addresses. Guy's arbitration of
+    /// 2026-08-21 brought it inside the perimeter: *an operator whose store is down must not be
+    /// the one person who reads English on a French deployment*, and it is the one path where the
+    /// interface language silently stopped being the interface language.
+    ///
+    /// 🔑 **Through the real handler helper and the real `Response`**, never through the constant:
+    /// story 6b.4b's finding is that every guard read the source and every defect lived in what
+    /// was served.
+    #[tokio::test]
+    async fn a_dead_store_answers_in_the_operators_language() {
+        let response = server_error(sqlx::Error::PoolTimedOut);
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .expect("the error body is small and in memory");
+        let body = String::from_utf8(body.to_vec()).expect("the body is UTF-8");
+        assert_ne!(
+            body, "internal error",
+            "the pre-6b.10 literal — English, at a French deployment's own screen addresses"
+        );
+        for locale in ["en", "fr"] {
+            let expected = rust_i18n::t!("error.store_unreachable", locale = locale).to_string();
+            assert_ne!(
+                expected, "error.store_unreachable",
+                "the key resolves in {locale}"
+            );
+        }
+        assert_eq!(body, rust_i18n::t!("error.store_unreachable").to_string());
+        // 🔑 The fourth microcopy rule is *cause + next step, never blame the user*, and the
+        // fifth is *empty ≠ failure — calm, never alarming*. A store that did not answer has
+        // destroyed nothing, and the body must say so rather than leaving the operator to guess.
+        for locale in ["en", "fr"] {
+            let sentence = rust_i18n::t!("error.store_unreachable", locale = locale).to_string();
+            assert!(
+                sentence.len() > 60,
+                "{locale}: a cause and a next step do not fit in a noun phrase — {sentence:?}"
+            );
+        }
+    }
+
+    /// AC1 / arbitration 2(a′) — and so does a template failure, with a DIFFERENT sentence.
+    ///
+    /// ⚠️ Two failures, two causes, two next steps. Collapsing them into one *"internal error"*
+    /// is what made the old body useless to the person reading it.
+    #[test]
+    fn a_render_failure_answers_in_the_operators_language_and_says_something_else() {
+        let rendered = render_error_body();
+        assert_ne!(rendered, "template error", "the pre-6b.10 literal");
+        assert_eq!(rendered, rust_i18n::t!("error.render_failed").to_string());
+        assert_ne!(
+            rendered,
+            store_unreachable_body(),
+            "a store that did not answer and a template that did not render are different \
+             failures with different next steps"
+        );
+    }
+
+    /// AC1 — **no response body pairs a status with an untranslated literal.**
+    ///
+    /// 🔑 **A source scan, and deliberately so**: this asserts the ABSENCE of a code path, and
+    /// *you cannot measure the absence of code by running code* (story 5.12's sentence, sixth
+    /// application). The two tests above measure what IS served; this one measures that no other
+    /// site was left behind — six existed before story 6b.10 and the sweep found them by reading.
+    ///
+    /// ⚠️ Its limit: a status paired with a literal assembled at run time is invisible here, as
+    /// is any file outside the two it reads — and `document.rs` is one of those, on purpose. See
+    /// the comment on the file list for what that costs and who owns it.
+    ///
+    /// 🔴 **It reddened on its own source the first time it ran**, because a file's test module
+    /// contains the guard's own needle as a string literal. *A matcher without a boundary finds
+    /// the language it is written in* — story 6b.6's sentence, met again — so it reads the CODE
+    /// half only, which is D56b's own line and the same cut the `file-size` gate makes.
+    #[test]
+    fn no_handler_pairs_a_status_with_an_untranslated_literal() {
+        /// Everything before the file's trailing `#[cfg(test)]` module (D56b: one per file).
+        fn code_half(source: &str) -> &str {
+            source
+                .find("\n#[cfg(test)]\n")
+                .map_or(source, |at| &source[..at])
+        }
+        let mut checked = 0_usize;
+        // 🔴 `document.rs` is DELIBERATELY absent, and the exclusion is written here rather than
+        // implied by the list. Adding it reds on
+        // `"documenting failed — the store did not accept the write"` — a real, English,
+        // operator-readable 500 body, which this guard found on its first run and which Guy's
+        // arbitration 2(a′) of 2026-08-21 places OUTSIDE story 6b.10: no template calls
+        // `POST /document-all` today, so translating its bodies now is copy nobody can reach,
+        // written against a gesture story 6.4 may reshape. **Owner: story 6.4**, which is the
+        // story that gives the route a caller. Widen this list there, not before.
+        for (file, source) in [
+            ("page.rs", code_half(include_str!("page.rs"))),
+            ("diagnostic.rs", code_half(include_str!("diagnostic.rs"))),
+        ] {
+            for (at, _) in source.match_indices("StatusCode::INTERNAL_SERVER_ERROR,") {
+                let tail = source[at..].split_once(',').map_or("", |(_, rest)| rest);
+                let argument = tail.trim_start();
+                checked += 1;
+                assert!(
+                    !argument.starts_with('"'),
+                    "{file} answers 500 with the literal {}, which reaches an operator whose \
+                     interface is in another language — route it through a key",
+                    argument.split('"').nth(1).unwrap_or(argument).trim()
+                );
+            }
+        }
+        assert!(
+            checked >= 5,
+            "the premise: the 500 sites are found ({checked} seen) — a scan that matched nothing \
+             would assert nothing"
+        );
+    }
+
     fn templates() -> Vec<(String, String)> {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
         fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<(String, String)>) {
