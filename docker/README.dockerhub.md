@@ -82,6 +82,10 @@ DATABASE_USERNAME=opencmdb
 DATABASE_PASSWORD=CHANGE_ME
 OPENCMDB_BIND=0.0.0.0:8080
 OPENCMDB_LOG=info
+# The interface language: `en` or `fr`, and a region suffix is accepted (`fr-CH`). ⚠️ Since
+# v0.2.0 an UNRECOGNISED value refuses to start, with the variable named — `FR`, `fr_CH` and
+# `zz` all used to boot silently in English, which no operator could diagnose. Leave it unset
+# or empty for the default (`en`).
 OPENCMDB_LOCALE=en
 # Optional: ping-scan this CIDR on startup (use your real LAN, e.g. 192.168.x.0/24).
 OPENCMDB_SCAN_CIDR=192.0.2.0/24

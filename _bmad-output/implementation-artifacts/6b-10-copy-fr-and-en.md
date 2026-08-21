@@ -1,6 +1,6 @@
 # Story 6b.10: The copy — FR and EN, every string a key
 
-Status: in-progress
+Status: review
 
 Epic: 6b — *L'interface de la maquette*. **Tenth numbered slot, eleventh story file.** It is the
 first story whose subject IS `crates/opencmdb-bin/locales/app.yml`, and — measured below — the first
@@ -789,134 +789,138 @@ which is the whole reason this project makes validation mandatory.
   - [x] (5) **(b)** — the locale axis is **left to review**, and AC5's browser pass IS that review,
         written down. The UX spec forbids defaulting this one; it was put and taken.
   - [x] Each recorded in §0 with the option refused and what refusing it costs.
-- [ ] **T1 — Close the build hazard FIRST, before any other measurement (AC: 4)**
-  - [ ] `crates/opencmdb-bin/build.rs` emitting `cargo::rerun-if-changed=locales/app.yml`.
-  - [ ] **Measure the STRING, not the rebuild**: change one value, `cargo build`, then
+- [x] **T1 — Close the build hazard FIRST, before any other measurement (AC: 4)**
+  - [x] `crates/opencmdb-bin/build.rs` emitting `cargo::rerun-if-changed=locales/app.yml`.
+  - [x] **Measure the STRING, not the rebuild**: change one value, `cargo build`, then
         **`grep -a <needle> target/debug/opencmdb`** for the new and the old value. Record both runs.
         🔴 **NOT `strings | grep`** — the validation measured it blind to **163 of 284 `fr:` values**,
         because GNU `strings` breaks its run on any multibyte character (§0e).
-  - [ ] Record which of this story's own mutation rows the fix makes meaningful. Do **not** re-audit
+  - [x] Record which of this story's own mutation rows the fix makes meaningful. Do **not** re-audit
         the eight earlier stories — that is Epic 6b's retrospective, and the row says so.
-- [ ] **T1b — Arbitration 4: `OPENCMDB_LOCALE` into `AppConfig`, refused by name (AC: 1)**
-  - [ ] The refusal **accepts what `rust-i18n` accepts, measured** — `fr-CH` renders
+- [x] **T1b — Arbitration 4: `OPENCMDB_LOCALE` into `AppConfig`, refused by name (AC: 1)**
+  - [x] The refusal **accepts what `rust-i18n` accepts, measured** — `fr-CH` renders
         « Tableau de bord » today and must keep doing so. **Do not enumerate `available_locales!()`**;
         that rejects the one region-qualified form that works (M5).
-  - [ ] It **removes a reader** rather than adding one (6b.9's precedent), and no new test mutates an
+  - [x] It **removes a reader** rather than adding one (6b.9's precedent), and no new test mutates an
         env var (6.1's rule).
-  - [ ] 🔴 **Breaking**: `OPENCMDB_LOCALE=FR` stops a deployment booting. Register the release-note
+  - [x] 🔴 **Breaking**: `OPENCMDB_LOCALE=FR` stops a deployment booting. Register the release-note
         line with 6b.12 **now**, and update `README.md:124` and `docker/README.dockerhub.md:85` in
         this push.
 
-- [ ] **T2 — Stand the bench up (AC: 5)**
-  - [ ] `mariadb:10.11` on a port that is **not 3306** (another project's container holds it).
+- [x] **T2 — Stand the bench up (AC: 5)**
+  - [x] `mariadb:10.11` on a port that is **not 3306** (another project's container holds it).
         ⚠️ 6b.6 **avoided it rather than discovering it**, and says so in its own text; the hard-way
         discovery was **story 5.9's validation**, which caught the trap *"before it could migrate
         another project's database"*. Apply migrations, export `DATABASE_URL`.
-  - [ ] Baseline the suite **both ways**: without `DATABASE_URL` and with. The **clock** is the tell
+  - [x] Baseline the suite **both ways**: without `DATABASE_URL` and with. The **clock** is the tell
         that the database-backed tests genuinely executed. Measured at `97c0e9a` by the validation:
         **697 tests** — 470 bin + 161 core + 66 xtask — eight gates green, bin suite **0.15 s** with
         no database.
-- [ ] **T3 — The sweep, re-run and widened (AC: 1)**
-  - [ ] Re-run §0c's four passes on the tree you are working on, not on the numbers in this file.
-  - [ ] Fix `_gap_card.html:1`'s `aria-label` → a key, both locales — **if arbitration 2 admits it**
+- [x] **T3 — The sweep, re-run and widened (AC: 1)**
+  - [x] Re-run §0c's four passes on the tree you are working on, not on the numbers in this file.
+  - [x] Fix `_gap_card.html:1`'s `aria-label` → a key, both locales — **if arbitration 2 admits it**
         (`/gap` is the eleventh address, not one of the ten screens; §0c states the scope).
-  - [ ] **Arbitration 2(a′): the six `500` / `template error` bodies become keys** —
+  - [x] **Arbitration 2(a′): the six `500` / `template error` bodies become keys** —
         `page.rs:1196`, `:1417`, `:1611`, `:1654`, `:1701`, `diagnostic.rs:725`, beside the
         render-error fallback at `:105-106`. ⚠️ **A `t!()` on a dead-store path is a call the fallback
         must survive**: the store being down is exactly when the process is least healthy, so resolve
         the key **before** the failing work where the shape allows it, and keep the last-resort
         fallback (`page.rs:105-106`) a plain literal — a render error is not the moment to depend on
         the renderer.
-  - [ ] Whatever else the re-run finds. ⚠️ **A finding this file does not list is not a reason to
+  - [x] Whatever else the re-run finds. ⚠️ **A finding this file does not list is not a reason to
         doubt the re-run; it is the re-run working.**
-- [ ] **T4 — Carrier 1: the ninth gate (AC: 2)**
-  - [ ] `xtask/src/copy_vocabulary.rs` — **not** `main.rs` (1908/2000 code lines, §0d).
-  - [ ] **Arbitration 1(a) lands FIRST** — the gate reds on the committed tree until it does
+- [x] **T4 — Carrier 1: the ninth gate (AC: 2)**
+  - [x] `xtask/src/copy_vocabulary.rs` — **not** `main.rs` (1908/2000 code lines, §0d).
+  - [x] **Arbitration 1(a) lands FIRST** — the gate reds on the committed tree until it does
         (measured: exactly two findings, `app.yml:325` the key name and `:326` the `en` value).
-  - [ ] **Per-locale** denylist, which no existing gate shape has: `merge` forbidden in `en`,
+  - [x] **Per-locale** denylist, which no existing gate shape has: `merge` forbidden in `en`,
         « Merger » binding in `fr`. Key **names** in scope too — with a matcher whose boundary set
         includes `_` and `.`, or `gesture.merge_all` passes (M1).
-  - [ ] 🔴 **A REAL YAML parse — `yaml-rust2`, already in `Cargo.lock` via `config`, one line to add.**
+  - [x] 🔴 **A REAL YAML parse — `yaml-rust2`, already in `Cargo.lock` via `config`, one line to add.**
         The *"state the limit"* branch is **withdrawn**: the naive parse misses 7 of 12 legal shapes
         and removing that limit costs one already-vendored crate (§0d).
-  - [ ] **A COMPLETENESS assertion** (`entries == 2 × keys + 1`) — the validation's own walker
+  - [x] **A COMPLETENESS assertion** (`entries == 2 × keys + 1`) — the validation's own walker
         silently dropped a key and the gate then read ✅ (§0d).
-  - [ ] ⚠️ Two things the validation hit while building it: wiring the gate costs **5 lines** in
+  - [x] ⚠️ Two things the validation hit while building it: wiring the gate costs **5 lines** in
         `main.rs` (1908 → 1913, 87 of headroom left — the inline gate would have breached 2000, so
         §0d's conclusion holds), and clippy `-D warnings` **rejects** the natural
         `Result<(Vec<Entry>, Vec<(String, usize)>)>` return as *"very complex type"* — it needs a type
         alias.
-  - [ ] Add the gate's row to `main.rs`'s module-doc list **in the same edit**, and correct the
+  - [x] Add the gate's row to `main.rs`'s module-doc list **in the same edit**, and correct the
         *"Eight gates"* sentence. The file's own doc says missing that is the defect story 5.12
         caught.
-  - [ ] Located verdicts, both directions: probes that must red **and** probes that must stay green,
+  - [x] Located verdicts, both directions: probes that must red **and** probes that must stay green,
         each pinned with the file and the line the gate names. Story 5.12's *"a pinned boolean proves
         THAT a gate fires and never WHERE."*
-- [ ] **T5 — Carrier 2: the glossary uniqueness test over RESOLVED values (AC: 2)**
-  - [ ] The **gesture axis** transcribed as a constant beside `BINDING_STATE_AXIS`, in
+- [x] **T5 — Carrier 2: the glossary uniqueness test over RESOLVED values (AC: 2)**
+  - [x] The **gesture axis** transcribed as a constant beside `BINDING_STATE_AXIS`, in
         `state_vocabulary.rs` or its own module — **transcribed, not derived**, and it must name
         **which** of the two disagreeing tables it transcribed (§0g).
-  - [ ] Key names from the file, values from `t!(key, locale = …)`, **both locales**, never
+  - [x] Key names from the file, values from `t!(key, locale = …)`, **both locales**, never
         `set_locale`.
-  - [ ] 🔴 **And this is where §0b's second diagonal is closed or is not**: today **no test in this
+  - [x] 🔴 **And this is where §0b's second diagonal is closed or is not**: today **no test in this
         crate can render a screen in a chosen locale** (241 `t!(` sites, zero `locale =` overrides),
         so a French value regressing to its own key leaves 702 tests and nine gates green — measured.
         A locale-parameterised render helper is what makes the French half assertable at all. **If it
         is out of scope, say so and register it**; do not leave the measurement unmentioned.
-  - [ ] Measure that neither carrier subsumes the other: a violation only carrier 1 catches (a key
+  - [x] Measure that neither carrier subsumes the other: a violation only carrier 1 catches (a key
         NAME), and one only carrier 2 catches (a value inside a block scalar).
-- [ ] **T6 — The floors (AC: 6)**
-  - [ ] `every_key_carries_both_locales` per **arbitration 3(d)**: the oracle is the SAME real YAML
+- [x] **T6 — The floors (AC: 6)**
+  - [x] `every_key_carries_both_locales` per **arbitration 3(d)**: the oracle is the SAME real YAML
         parse carrier 1 uses, over the **resolved key set**, plus the completeness assertion — **and
         its message rewritten**, since it states a false figure today.
-  - [ ] **Prove it against the nested shape** (M4″), which is the reason (d) exists: nest a key, drop
+  - [x] **Prove it against the nested shape** (M4″), which is the reason (d) exists: nest a key, drop
         its `fr` half, and the guard must red where every other option leaves 702 tests green.
-  - [ ] ⚠️ **A deleted key block is caught by NOTHING and (d) does not claim it** — register it.
-  - [ ] Check the sister floors in §0f. Leave none you touched stale.
-- [ ] **T7 — The `/diagnostic` word guard, widened once and NOT to exhaustion (AC: 2)**
-  - [ ] Widen the enumeration; **state the limit in the doc**, do not imply completeness.
-  - [ ] Re-run the register row's own paraphrase and record whether it now reds. If the shipped
+  - [x] ⚠️ **A deleted key block is caught by NOTHING and (d) does not claim it** — register it.
+  - [x] Check the sister floors in §0f. Leave none you touched stale. ⚠️ **`checked >= 60` against
+        172 literal keys is registered, not raised** — its message claims a PREMISE and not a
+        figure, so it is not the defect beside it; raising it would build the *"update this
+        number"* trap. `keys.len() >= 8` against 10 gesture keys is near what is there and already
+        carries a derived `assert_eq!`.
+- [x] **T7 — The `/diagnostic` word guard, widened once and NOT to exhaustion (AC: 2)**
+  - [x] Widen the enumeration; **state the limit in the doc**, do not imply completeness.
+  - [x] Re-run the register row's own paraphrase and record whether it now reds. If the shipped
         answer is *the enumeration only*, say so plainly.
-- [ ] **T8 — Mutation pass; run every row (AC: 4, 6)** — the table below.
-  - [ ] ⚠️ **Corrected by the validation (§0e): an `app.yml`-only mutation IS seen by `cargo test`**
+- [x] **T8 — Mutation pass; run every row (AC: 4, 6)** — the table below.
+  - [x] ⚠️ **Corrected by the validation (§0e): an `app.yml`-only mutation IS seen by `cargo test`**
         (two `include_str!`s in `#[cfg(test)]` modules give the test target a dep-info edge the binary
         does not have). What it is **not** seen by is anything reading `target/debug/opencmdb` — M0's
         `strings` receipt and T9's browser pass. **Run T1 first anyway**, because the edge is
         incidental and a refactor deleting either `include_str!` removes it silently.
-  - [ ] The driver exits **non-zero when a mutation fails to apply** (6b.6), **touches restored
+  - [x] The driver exits **non-zero when a mutation fails to apply** (6b.6), **touches restored
         files** (askama compiles templates into the binary — 6b.7), and **never mixes a scratchpad
         restore with `git checkout --`** (four occurrences, most recently in 6b.9's own review).
-  - [ ] **Commit before every prove-to-red.**
-- [ ] **T9 — LOOK AT THE ENGLISH UI, screen by screen, in a browser (AC: 5)**
-  - [ ] `google-chrome` **151.0.7922.169** and `firefox` **154.0** are installed — re-measured
+  - [x] **Commit before every prove-to-red.**
+- [x] **T9 — LOOK AT THE ENGLISH UI, screen by screen, in a browser (AC: 5)**
+  - [x] `google-chrome` **151.0.7922.169** and `firefox` **154.0** are installed — re-measured
         2026-08-21 (6b.4b found them after four stories had deferred on an unmeasured assumption;
         6b.6 recorded Firefox at 153, so **re-run `--version` rather than quoting this line**).
-  - [ ] **`OPENCMDB_LOCALE` unset or `=en`**, against a live database, on a **rebuilt** binary —
+  - [x] **`OPENCMDB_LOCALE` unset or `=en`**, against a live database, on a **rebuilt** binary —
         `cargo test` builds the test target, not `target/debug/opencmdb` (6b.4b).
-  - [ ] All ten routes, **plus `/devices/{id}` AND `/gap`** — ⚠️ the draft's T9 visited neither `/gap`
+  - [x] All ten routes, **plus `/devices/{id}` AND `/gap`** — ⚠️ the draft's T9 visited neither `/gap`
         nor its own §0c finding, while calling `/gap` *"the eleventh address"* and `/devices/{id}`
         something else. **Both are outside the ten; both get looked at.**
-  - [ ] Read against **all five Microcopy Rules** (`ux-design-specification.md:1446-1451`), not
+  - [x] Read against **all five Microcopy Rules** (`ux-design-specification.md:1446-1451`), not
         against an impression, and **rule 5 — *empty ≠ failure, calm never alarming*** — is the one
         this interface most needs, nine of its ten screens being placeholder or example surfaces.
         Report what it found; **do not report what it covered.**
-  - [ ] Then one French pass as a control, so a repair made for English is not measured only there.
-  - [ ] 🔑 **Arbitration 5(b): this pass IS the locale coverage, so it is WRITTEN DOWN** — which
+  - [x] Then one French pass as a control, so a repair made for English is not measured only there.
+  - [x] 🔑 **Arbitration 5(b): this pass IS the locale coverage, so it is WRITTEN DOWN** — which
         screens, which locale, which build, what was read and what was found. The UX spec's *"safe is
         not verified"* is discharged by looking; a look nobody recorded discharges nothing.
-- [ ] **T10 — Both runs, the gates, the documents (AC: all)**
-  - [ ] `cargo fmt --all --check` on the **committed** tree (6b.1 shipped a tree where it was red),
+- [x] **T10 — Both runs, the gates, the documents (AC: all)**
+  - [x] `cargo fmt --all --check` on the **committed** tree (6b.1 shipped a tree where it was red),
         `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace` **both
         ways**, `cargo xtask ci` — **nine** gates after T4.
-  - [ ] **Derive the register rows this story OWES from its own §0 and its arbitrations, then diff
+  - [x] **Derive the register rows this story OWES from its own §0 and its arbitrations, then diff
         `deferred-work.md` before the commit** — 6b.9's review found the register untouched under a
         section headed *REGISTERED RATHER THAN FIXED*. A re-read that reads only what you wrote
         cannot find what you did not write.
-  - [ ] The twins (`CLAUDE.md`, `docs/project-context.md`) and `sprint-status.yaml` in the same push.
-  - [ ] 🔴 **And the documents the draft's list MISSED**, found by the validation: `OPENCMDB_LOCALE` is
+  - [x] The twins (`CLAUDE.md`, `docs/project-context.md`) and `sprint-status.yaml` in the same push.
+  - [x] 🔴 **And the documents the draft's list MISSED**, found by the validation: `OPENCMDB_LOCALE` is
         documented at **`README.md:124`** and **`docker/README.dockerhub.md:85`**, and arbitration 4
         changes what those sentences promise. The docs-current-before-push rule names both.
-  - [ ] 🔴 **REGISTER THE RELEASE-NOTE OBLIGATIONS — the draft contained the words *release note*,
+  - [x] 🔴 **REGISTER THE RELEASE-NOTE OBLIGATIONS — the draft contained the words *release note*,
         *6b.12* and *breaking* exactly zero times.** Two operator-visible changes ship here: the
         English primary control relabels **Merge → Document**, and under arbitration 4-yes an existing
         deployment carrying `OPENCMDB_LOCALE=FR` **stops booting**. 6b.1 owes 6b.12 a colour line and
@@ -1030,10 +1034,152 @@ stops watching.
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context), 2026-08-21 — contexting, the two-layer validation, Guy's five
+arbitrations and the implementation in one session.
+
 ### Debug Log References
+
+- MariaDB `10.11.11` on port **13320** (3306 holds another project's container).
+- The binary was booted eight times against it, with and without credentials, in `en` and `fr`.
+- Mutation driver: `scratchpad/mutate.py` — exits **non-zero when a mutation fails to apply**, and
+  it did so once (M20, after `cargo fmt` moved the anchor), which is what it is for.
 
 ### Completion Notes List
 
+⚠️ **THE LIVE COUNT FOR THE WHOLE PROJECT LIVES HERE** (story 6.1's AC8): **697 → 720 tests**
+(485 bin + 161 core + 74 xtask), **nine gates green**, `app.yml` **287 keys / 984 lines**, 28
+fixtures, trap gate still RED 26/15/11. Suite measured **both ways**: **1.79 s** without a database
+and **5.75 s** against a live `mariadb:10.11.11` — the clock is the tell.
+
+#### 🔴 THE STORY'S SCHEDULED DELIVERABLE HAD ALREADY BEEN WRITTEN, AND THAT IS THE FINDING
+
+`epics.md:2296` budgeted *"32 keys today against roughly a hundred in the mock"*. Measured per merge
+commit, `app.yml` went **31 → 284** across Epic 6b's ten story files, **and every key already carried
+both locales** — 284 `en:`, 284 `fr:`, zero missing on either side. AC1's letter was met before this
+story opened. What nine stories writing French copy, browser-checking it in French, against a French
+mock could not produce is a **reading of the English column**, which is the DEFAULT locale.
+
+#### 🔴 BOTH OF THE STORY'S CENTRAL ARGUMENTS WERE REPLACED BY THE VALIDATION, AND THE SECOND WAS INVERTED
+
+- The design was *"two carriers separated by YAML syntax"*. **Both halves wrong**: the syntax
+  question has a one-line answer (`yaml-rust2` was already in `Cargo.lock`; the naive parse misses
+  **7 of 12** legal shapes), and the row picked to prove the carriers independent — a block scalar —
+  **reds both** under a real parse. **Measured, with a control**: what separates them is the
+  **FALLBACK**. A word retired in `fr`, in a key with no `fr` half → **carrier 1 GREEN** (it
+  announces its own success over it) and **carrier 2 RED**; a retired word in a key NAME → **carrier
+  1 RED, carrier 2 GREEN**.
+- The framing was *"the English UI has never been looked at"*. **Inverted**: 241 `t!(` call sites and
+  **zero** `locale =` overrides, so every render test runs in English. English carries ~470
+  assertions and **no human look**; **French carries nine human looks and no assertion** — measured
+  by setting `nav.dashboard`'s `fr` value to its own key name and watching 702 tests and nine gates
+  stay green, with the guard written for exactly that defect blind to it.
+
+#### 🔴 FOUR OF THIS STORY'S OWN GUARDS OR MUTATIONS CAME BACK GREEN, AND NONE WAS REACHABLE BY READING
+
+- **M18, twice.** Deleting `completeness()` from the gate reddened nothing: every test attacked the
+  helper and none ran the gate — story 5.12's finding verbatim, reproduced inside the gate written
+  with that lesson in hand. The end-to-end test written to close it **then failed to close it**,
+  because its oracle was `contains(A) || contains(B)` and the two refusals mask each other. *A guard
+  covered only by a disjunction is a guard nothing covers.* Each case now pins its own message.
+- **M9**, exactly as the table predicted: the constant oracle is a no-op **today**, because 287 *is*
+  today's count. **M9-bis** (constant + one new key) reds; **M9-ctl** (derived + the same key) stays
+  green. *A mutation whose prediction has two halves measures nothing until both are run.*
+- **The two-carrier agreement guard** reddened on its first run against a **legitimate** line:
+  `"merger"` sits in the gate as a NEGATIVE CONTROL beside `emerged` and `submerge`. *An unbounded
+  needle cannot tell a denylist entry from a mention of one.*
+- **The 500-literal source scan** reddened on **its own source** — a file's test module holds the
+  guard's needle as a literal. Bounded to the code half, D56b's own cut.
+
+#### 🔴 THREE COPY DEFECTS FOUND BY LOOKING, AND NOT ONE BROKE A TEST
+
+*"level in force"* (« niveau en vigueur » carried across), *"Settle it in the triage"* (« dans le
+triage »; English takes no article), and the seven `example.kind.*` labels, **plural where the same
+key is also a single device's KIND cell** — so the inventory said *"nas-01 · Servers"*. ⚠️ That set
+was **already inconsistent with itself**, six plurals and one singular, which is what made the
+mismatch visible. Fixed in both languages; the browser confirms both positions now read correctly.
+
+#### ⚠️ THE INSTRUMENT THE STORY PRESCRIBED FOR ITS OWN RECEIPT WAS BLIND
+
+`strings target/debug/opencmdb | grep` reports **0** for a value that IS in the binary: GNU `strings`
+breaks its run on any multibyte character, and **163 of the 287 `fr:` values carry one**. Measured
+with an ASCII control (`Dashboard`, found). Prescribed for a proof of presence, blind to presence.
+**`grep -a`**, throughout.
+
+#### ⚠️ AND A STALE ARTEFACT AGAIN, ON A RUNNING PROCESS THIS TIME
+
+After `setsid`, the shell's `$!` names the **wrapper**, not the server. Killing it left the old
+English instance holding the port; the French one failed to bind and died, and every *"French"* page
+read was the old server serving **pre-fix** copy. Caught only because the served text contradicted a
+`grep -a` of the binary taken two minutes earlier. Story 6b.4b's rule, applied to a process:
+**verify the artefact that ANSWERS, not the one you started.**
+
+#### ⚠️ AND I COMMITTED ONCE WITH CLIPPY RED
+
+`cargo fmt && cargo clippy … | grep …` takes the **pipeline's** exit status, which is `grep`'s, so a
+red lint scrolled past and the commit ran. Amended. It is story 6b.1's defect — *"`cargo fmt --check`
+was NOT clean on the committed tree, in the very note that narrates fixing a false clean"* — and its
+cheap defence is to redirect to a file and read `$?`, never to pipe a gate into a matcher.
+
+#### ⚠️ WHAT THE OPERATOR CAN DO WITH THIS, ASKED ON PURPOSE
+
+**Nothing new** — ten well-lit dead ends still, a count Epic 6b's retrospective owes a look. What
+changes is **who the product is for**: an operator who boots it without setting `OPENCMDB_LOCALE`
+gets the half nobody had read, and its primary control no longer carries the one word the founding
+pillar forbids. And a wrong `OPENCMDB_LOCALE` now says so at boot instead of silently answering in
+another language.
+
+### Mutation pass — 22 ids, carriers named per row
+
+| id | Mutation | Result |
+|---|---|---|
+| M0 | Revert `build.rs`, change a value, `grep -a` the binary | 🔴 **The AC4 receipt, measured**: sentinel **0** in the binary after `cargo build` (no `Compiling`), **3** in the test binary after `cargo test --no-run` |
+| M1 | Delete one `fr:` line | 🔴 1 red — the SILENT direction, caught only by the file guard |
+| M2 | Delete one `en:` line | 🔴 **3** red — the loud direction; the render guards see it too, which is the asymmetry the guard's doc describes |
+| M3 | `gesture.document`'s EN back to `"Merge"` | 🔴 **2 red in `cargo test` AND the gate RED** — both carriers, run separately because `cargo test` does not run `xtask ci` |
+| M4 | A forbidden word in a **block scalar** | 🔴 Reds **both** carriers under a real parse — so it does **not** separate them, contrary to the story's first design |
+| M4′ | A word retired in `fr`, key with **no `fr` half** | 🔴 **THE separating row**: carrier 1 **GREEN**, carrier 2 **RED**. The fallback, not the syntax |
+| M4″ | Nest a key, drop its `fr` half | 🔴 Reds `every_key_carries_both_locales` — under a line-shape parse this left everything green |
+| M5 | Retired word in the **key NAME** | 🔴 Carrier 1 **RED**, carrier 2 **GREEN** — the mirror of M4′ |
+| M8 | Restore the `aria-label` literal | 🔴 1 red |
+| M9 | Floor oracle → a constant equal to today's count | 🟢 **GREEN, as the table predicted** — a no-op today |
+| M9-bis | The same constant **plus one new key** | 🔴 1 red — what the row really predicts |
+| M9-ctl | The **derived** oracle plus the same key | 🟢 GREEN — the control that makes M9-bis mean something |
+| M10 | A `t!()` literal key that does not exist | 🔴 2 red |
+| M11 | Accept any `OPENCMDB_LOCALE` | 🔴 1 red |
+| M13 | Restore the `"internal error"` 500 body | 🔴 2 red — the render guard and the source scan |
+| M14 | Make the two error sentences identical | 🔴 1 red |
+| M15 | Doc says EIGHT while `run_ci` reports nine | 🔴 1 red |
+| M16 | A gate wired and not listed in the doc | 🔴 1 red |
+| M17 | `gate_vocabulary`'s word matcher (`_` = word char) | 🔴 2 red — `gesture.merge_all` would pass |
+| M18 | Delete the gate's `completeness()` call | 🟢 **GREEN twice**, then 🔴 1 red — see the notes above |
+| M20 | Delete the zero-entries refusal | 🔴 1 red · ⚠️ **and it first failed to APPLY**, the driver exiting non-zero after `cargo fmt` moved the anchor — which is what that exit code is for |
+| M21 | The register row's paraphrased security claim, **verbatim** | 🔴 1 red — on the PINNING, and it left 696/696 green at story 6b.9 |
+| M22 | A **seventh** security value beside the six pinned | 🔴 2 red |
+
+**19 reds, 3 greens by stated design (M4-as-separator, M9, M9-ctl), 2 greens that were DEFECTS and
+are now red (M18 ×2).** Carriers are mixed and named per row; *"every red assertion-carried"* is
+**not** claimed.
+
 ### File List
 
+- `crates/opencmdb-bin/build.rs` — **new**
+- `xtask/src/copy_vocabulary.rs` — **new** (the ninth gate)
+- `crates/opencmdb-bin/locales/app.yml`
+- `crates/opencmdb-bin/src/main.rs`, `page.rs`, `screens.rs`, `state_vocabulary.rs`, `diagnostic.rs`
+- `crates/opencmdb-bin/templates/_gap_card.html`
+- `crates/opencmdb-bin/Cargo.toml`, `xtask/Cargo.toml`, `Cargo.lock` (**one line each**, no new crate)
+- `xtask/src/main.rs`
+- `README.md`, `docker/README.dockerhub.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md` (**11 rows**), `sprint-status.yaml`,
+  `6b-10-copy-fr-and-en.md`
+
 ### Change Log
+
+| Date | Change |
+|---|---|
+| 2026-08-21 | Story created, VALIDATED by two fresh-context layers (12 HIGH findings), rewritten, five arbitrations taken by Guy |
+| 2026-08-21 | T1 `build.rs` · T1b `OPENCMDB_LOCALE` into `AppConfig` with a named boot refusal |
+| 2026-08-21 | T3 the sweep: the `aria-label` and the six 500 bodies become keys |
+| 2026-08-21 | T4 the ninth gate `copy-vocabulary` + arbitration 1(a)'s rename · T4b/T4c closing M18 |
+| 2026-08-21 | T5 carrier 2 · T6 the floor on arbitration 3(d) · T7 the security sentences pinned |
+| 2026-08-21 | T9 the browser look, three copy defects fixed · T10 documents and register |

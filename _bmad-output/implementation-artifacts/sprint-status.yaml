@@ -75,8 +75,38 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-21  # 6b.10 stays `ready-for-dev`: story file created, then VALIDATED by two
-                          # fresh-context layers and REWRITTEN on what they measured.
+last_updated: 2026-08-21  # 6b.10 -> `review`: DEVELOPED. 697 -> 720 tests (485 bin + 161 core +
+                          # 74 xtask), **NINE gates green** (the new `copy-vocabulary`), suite run
+                          # BOTH ways -- 1.79 s without a database, 5.75 s against a live
+                          # mariadb:10.11.11 on port 13320. NEXT = `code-review`, on a DIFFERENT
+                          # model, three isolated layers -- and KEEP THE BLIND LAYER BLIND: it has
+                          # found both HIGH findings for four stories running.
+                          # 🔴 The English UI was read for the first time and it gave up three copy
+                          # defects no test could see: two Gallicisms ("level in force", "Settle it
+                          # in the triage") and the seven `example.kind.*` labels, PLURAL where the
+                          # same key is also a single device's KIND cell -- "nas-01 · Servers".
+                          # NOT ONE of the three broke a test, which is this story's own point.
+                          # 🔴 FOUR of the story's own guards or mutations came back GREEN. M18
+                          # TWICE: the gate's `completeness()` call was uncarried (every test
+                          # attacked the helper -- 5.12's finding inside the gate written with that
+                          # lesson), and the end-to-end test written to close it FAILED to, its
+                          # oracle being `contains(A) || contains(B)` while the two refusals mask
+                          # each other. **A guard covered only by a disjunction is a guard nothing
+                          # covers.** M9 was a no-op today (287 IS today's count) -- M9-bis and
+                          # M9-ctl are what the row really predicted.
+                          # ⚠️ The instrument the story prescribed for its OWN receipt was blind:
+                          # `strings | grep` reports 0 for a value that IS in the binary, because
+                          # GNU strings breaks its run on any multibyte character -- 163 of the 287
+                          # `fr:` values carry one. Use `grep -a`.
+                          # ⚠️ And a stale artefact again, on a PROCESS this time: after `setsid`
+                          # the shell's $! names the WRAPPER, so killing it left the old English
+                          # server holding the port and every "French" page read was pre-fix copy.
+                          # ⚠️ And one commit went in with clippy RED -- `cargo clippy … | grep`
+                          # takes the PIPELINE's exit status. Amended; 6b.1's defect.
+                          #
+                          # (Earlier the same day) 6b.10 `ready-for-dev`: story file created, then
+                          # VALIDATED by two fresh-context layers and REWRITTEN on what they
+                          # measured.
                           # ALL FIVE §0h arbitrations TAKEN by Guy the same day; NEXT = `dev-story`.
                           # ✅ (1) **(a)** `gesture.merge` -> `gesture.document`, EN "Document", FR
                           #     « Merger » unchanged -- three literal sites and ONE test breaking,
@@ -4332,7 +4362,7 @@ development_status:
   6b-7-applications-and-ipam: done
   6b-8-sources-and-alerts: done
   6b-9-self-diagnostic-and-commissioning: done
-  6b-10-copy-fr-and-en: in-progress
+  6b-10-copy-fr-and-en: review
   6b-11-keyboard-layer-and-focus-contract: backlog
   6b-12-release-0-2-0-and-its-documents: backlog
   epic-6b-retrospective: required

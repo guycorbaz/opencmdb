@@ -4573,3 +4573,77 @@ what you did not write (story 5.14b's sentence, met again).
   standing because widening the treatment to three more screens is a change to what they promise,
   not a repair. **Owner: Epic 6b's retrospective**, which owes the question *should every screen
   survive a dead store, or only the one about the store?*
+
+## Deferred from: story 6b.10 (2026-08-21)
+
+⚠️ **Derived from the story's own §0 and its five arbitrations, then diffed against this file
+before the commit** — story 6b.9's review found that file untouched under a section headed
+*REGISTERED RATHER THAN FIXED*, and named the cheap defence. This is that defence, applied.
+
+- 🔴 **`epics.md:2296`'s AC3 is STALE and a story may not edit an AC.** It reads *"32 keys today
+  against roughly a hundred in the mock"*; the file went **31 → 287** keys across Epic 6b (per-commit
+  table in the story's §0a), so the ten story files added **253** against an estimate whose
+  comparable figure is ~68 — an overshoot of ≈3.7×. The criterion's *"a string added later in one
+  language only is exactly the defect this story exists to prevent"* describes a defect that **never
+  happened**: every story added its keys in pairs. **Owner: Epic 6b's retrospective**, which owes the
+  epic's AC a correction.
+- 🔴 **The two binding tables DISAGREE about the gesture axis and both call themselves binding.**
+  `ux-design-specification.md:1341-1351` carries **eleven** gesture rows; `prd.md:993-1002` carries
+  **ten** — `attach`/« rattacher » is missing from the PRD's. `state_vocabulary::BINDING_GESTURE_AXIS`
+  transcribes the UX spec's superset **and names its source**, because reconciling two planning
+  documents is a planning act and not a story's. **Owner: Guy**, at Epic 6b's retrospective.
+- ⚠️ **THREE gestures in `app.yml` have no glossary row**, not one: `gesture.resolve` (« Résoudre »,
+  Epic 6's FR16 ranked candidates), and story 6b.9's `gesture.check_now` and `gesture.export_log`.
+  `baseline` is a fourth of the same class, already owned by Epic 9. Story 6b.7's precedent governs
+  all of them — extending a binding table was refused there as *premature, not wrong*. They are now
+  ENUMERATED in `gesture_axis_tests::NOT_A_GLOSSARY_GESTURE` with a reason each, so a new gesture
+  cannot ship without the question being asked. **Owner: Guy / Epic 6b's retrospective.**
+- ⚠️ **The triage queue's `kindLabel` axis is a FOURTH list outside every binding table**
+  (`triage.kind.absence`, `.nouveau`), which `CLAUDE.md`'s 6b.6 row already registers. AC2's *"the
+  glossary uniqueness test cover them"* does not say whether *them* reaches that axis, and this story
+  did not decide it: reconciling `Nouveau` with `undeclared` rewrites shipped copy on a story that
+  does not own it, which is `prd.md:1031-1033`'s own sentence. **Owner: Epic 6b's retrospective.**
+- 🔴 **`document.rs` answers 500 with an English literal and it is OUTSIDE this story by arbitration.**
+  `no_handler_pairs_a_status_with_an_untranslated_literal` found it on its first run —
+  *"documenting failed — the store did not accept the write"* — and Guy's arbitration 2(a′) leaves
+  the write route's bodies to the story that gives the route a caller: no template calls
+  `POST /document-all` today, so translating them now is copy nobody can reach, written against a
+  gesture 6.4 may reshape. The exclusion is written **at the file list in the guard**, with the
+  owner. **Owner: story 6.4** — widen the list there.
+- ⚠️ **A key block deleted OUTRIGHT is caught by nothing**, and arbitration 3(d) does not claim it.
+  Both passes of `every_key_carries_both_locales` then agree the key is gone, because it is. The
+  render-side guards catch only what they happen to reference. **Owner: Epic 6b's retrospective**,
+  which owes the question *what would notice a key that simply vanished?*
+- ⚠️ **Pluralisation beyond `%{n}` does not exist**, and the browser look is where it shows: the
+  triage queue renders **`1 field(s)`** three times on the screen the product's own `/` redirects to,
+  in both languages. `rust-i18n` supports a plural form; adopting it is a change to every counted
+  string. **Owner: Epic 22** (*first-light soigné & bilingue complet*), which owns copy completeness.
+- ⚠️ **The security pinning pins the SENTENCES, not their truth.** *"none stored"* is true because no
+  credential table exists; the day one does, the test passes and the row lies. The mechanism that
+  would catch that is the derived-from-the-code shape story 6b.9 built for the public-paths row.
+  **Owner: Epic 19**, with the rest of the auth hardening.
+- ⚠️ **`copy-vocabulary` is scoped to `app.yml` and cannot stop a future story naming a route
+  `/merge` or a handler `merge_entity`.** Measured refusal, not a preference: `merge` has ~310
+  legitimate whole-word occurrences under `crates/`, 87 of them `must-merge` inside **fourteen
+  sha256-locked fixture files** which cannot be renamed without reddening the `fixtures` gate — and
+  `must-merge` is a trap-corpus pole the corpus needs precisely because the product does not merge.
+  The closure is `gate_vocabulary`'s volet-A denylist, and taking it means deciding about
+  `Expectation::MustMerge` first. **Owner: Epic 11**, which owns the identity-engine vocabulary.
+- 🔴 **BREAKING, and it owes story 6b.12 a release-note line**: `OPENCMDB_LOCALE` is now validated at
+  boot, so a deployment carrying `OPENCMDB_LOCALE=FR`, `fr_CH` or any unrecognised value **stops
+  starting**. `README.md` and `docker/README.dockerhub.md` are updated in this push; the release
+  notes are not this story's. It joins 6b.1's colour change and 6b.2's address change on 6b.12's
+  list. **Owner: story 6b.12.**
+- ⚠️ **A SISTER FLOOR is far below what is there, and it is deliberately NOT treated as the same
+  defect.** `example_screens::every_literal_key_in_the_view_code_resolves` asserts `checked >= 60`
+  and **172** literal `t!("…")` keys are actually inspected — 2.8× below. 🔑 **The distinction that
+  keeps this honest**: the floor this story fixed stated a FIGURE (*"48 entries"*) that had been
+  false since story 6b.3, whereas this one's message claims only *"a scan that matched nothing would
+  assert nothing"*, which is true and is all a premise check can claim. Raising it to 172 would
+  create the *"update this number"* trap story 6b.6's review measured a developer FOLLOWING, and
+  deriving it has no second source here — the guard is the only thing that counts those keys. **The
+  measurement is registered so the next reader has it; the fix is not obvious and is not this
+  story's.** ⚠️ Do not let this inherit the credit of the measured defect beside it (story 6b.6's
+  rule about keeping a suspicion separate from a measurement). **Owner: Epic 6b's retrospective.**
+- ⚠️ **`views-hash` is still `ℹ STALE`**, as it has been since issue #50. Untouched here by the
+  standing rule that it must not be regenerated inside a story. **Owner: the next milestone.**
