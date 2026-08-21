@@ -1008,6 +1008,15 @@ mod tests {
     /// a claim smuggled through a translation VALUE — and it is an enumeration, in two languages,
     /// against paraphrase. *An enumeration cannot claim the completeness of a property.*
     ///
+    /// 🔑 **Story 6b.10 gave it a stronger sibling and did NOT retire it, and the division of
+    /// labour is the point.** `every_sentence_the_security_group_can_render_is_pinned_in_both_
+    /// languages` pins each of the six sentences that group can render and proves the set closed
+    /// — which is a real closure, not a longer list, and it caught the register row's own
+    /// paraphrase on its first run. But it covers **only that group**. This test reads the WHOLE
+    /// rendered page, so a security claim planted in any other row's copy is its business and not
+    /// the pinning's. *Two carriers, different perimeters, neither subsuming the other* — the same
+    /// shape as this story's two vocabulary carriers.
+    ///
     /// ⚠️ **It cannot tell an assertion from its NEGATION, and it fired on this story's own copy
     /// to prove it**: the *stored credentials* row read *"…holds no encryption key"* and reddened
     /// here. The copy was rewritten rather than the guard weakened, and the reason is not the
@@ -1030,6 +1039,16 @@ mod tests {
             "chiffrés au repos",
             "encryption key",
             "clé de chiffrement",
+            // Widened ONCE at story 6b.10, from the paraphrase `deferred-work.md` records as
+            // having left 696/696 green and reached the served page. ⚠️ **Widened once and
+            // deliberately NOT to exhaustion**: an enumeration cannot claim the completeness of a
+            // property (story 5.12), and a longer list is a longer list, not a closure.
+            "cannot be breached",
+            "ne peut pas être compromis",
+            "secure by design",
+            "sécurisé par conception",
+            "no known vulnerabilit",
+            "aucune vulnérabilité connue",
         ] {
             assert!(
                 !rendered.contains(claim),
@@ -1037,6 +1056,101 @@ mod tests {
                  about security, made by the product about itself\n{rendered}"
             );
         }
+    }
+
+    /// 🔴 **AC2's first line made STRONGER by story 6b.10: every sentence the security group can
+    /// render is PINNED, in both languages, and the set is proven CLOSED.**
+    ///
+    /// # What this replaces, and why widening the word list was not enough
+    ///
+    /// `deferred-work.md` (story 6b.9's section) records the hole this closes: a translation value
+    /// reading *"none stored — this deployment cannot be breached by a remote attacker"* left
+    /// **696/696 green** and appeared on the served page. The shape stops a claim being TYPED into
+    /// the row builder — [`security_rows`] takes a [`SecurityPosture`] and nothing else — and it
+    /// does not stop one entering through the copy. The sibling word guard below is an
+    /// ENUMERATION against paraphrase, and *an enumeration cannot claim the completeness of a
+    /// property*: the paraphrase above contains none of its forbidden phrases.
+    ///
+    /// 🔑 **A closed set beats a longer list.** The group renders values from exactly six keys
+    /// plus the public-path data, and this pins each of them. A new claim can then only arrive by
+    /// EDITING a pinned sentence, which reds — and whoever reads that diff is looking at a
+    /// security sentence changing, which is the review this row has never had.
+    ///
+    /// ⚠️ **Its limit, and it is real**: this pins the sentences, not their truth. *"none stored"*
+    /// is true because no credential table exists; the day one does, this test passes and the row
+    /// lies. The mechanism that would catch THAT is the derived-from-the-code shape story 6b.9
+    /// built for the public-paths row, and extending it to the other three is not this story's.
+    #[test]
+    fn every_sentence_the_security_group_can_render_is_pinned_in_both_languages() {
+        // Each key, and the sentence it must resolve to. A change here is a SECURITY CLAIM
+        // changing: say why in the commit, and do not "update the expected value".
+        const PINNED: [(&str, &str, &str); 6] = [
+            ("diagnostic.public_paths_none", "nothing", "rien"),
+            ("diagnostic.configured", "configured", "configuré"),
+            (
+                "diagnostic.basic_unset",
+                "none configured — every other path is refused",
+                "aucun configuré — toute autre adresse est refusée",
+            ),
+            (
+                "diagnostic.metrics_token_set",
+                "token required",
+                "jeton requis",
+            ),
+            (
+                "diagnostic.metrics_token_unset",
+                "no token configured — the scrape is refused",
+                "aucun jeton configuré — la collecte est refusée",
+            ),
+            (
+                "diagnostic.secrets_value",
+                "none stored — Epics 10 and 19 build credential storage",
+                "aucun stocké — les épics 10 et 19 construisent le stockage d'identifiants",
+            ),
+        ];
+        for (key, en, fr) in PINNED {
+            assert_eq!(
+                rust_i18n::t!(key, locale = "en"),
+                en,
+                "{key} is a SECURITY sentence and it changed — this is not a number to update, it \
+                 is a claim the product makes about itself"
+            );
+            assert_eq!(rust_i18n::t!(key, locale = "fr"), fr, "{key}, in French");
+        }
+
+        // 🔴 **The set is CLOSED, and this is the half that makes the pinning worth anything.**
+        // Pinning six sentences proves nothing if a seventh can appear beside them. Every posture
+        // the type admits is rendered, and every value must be a pinned sentence or the
+        // public-path DATA — which is `auth::is_public`'s own list, not copy.
+        let mut seen = 0_usize;
+        for basic in [false, true] {
+            for metrics in [false, true] {
+                for paths in [Vec::new(), vec!["/healthz", "/assets/*"]] {
+                    let posture = SecurityPosture {
+                        public_paths: paths.clone(),
+                        basic_configured: basic,
+                        metrics_token_configured: metrics,
+                    };
+                    for row in security_rows(&posture) {
+                        seen += 1;
+                        let pinned = PINNED
+                            .iter()
+                            .any(|(_, en, _)| row.value == *en || row.value == paths.join(" · "));
+                        assert!(
+                            pinned,
+                            "the security group rendered {:?}, which is neither a pinned sentence \
+                             nor the public-path data — a claim about security has entered the \
+                             screen through a route this test cannot vouch for",
+                            row.value
+                        );
+                    }
+                }
+            }
+        }
+        assert_eq!(
+            seen, 32,
+            "eight postures × four rows — every branch was rendered"
+        );
     }
 
     /// ⚠️ **The unconfigured pair is NOT reported as a weakness**, because it is not one: every
