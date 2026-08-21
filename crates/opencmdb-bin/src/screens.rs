@@ -642,51 +642,119 @@ mod tests {
     /// AC6 — no key ever regresses to a single locale.
     ///
     /// 🔴 **This is the direction that is silent.** `rust-i18n` falls back to `en`, so deleting a
-    /// FRENCH value renders English inside the French interface and no render-time guard can
-    /// see it — measured: with `nav.alerts`' `fr` half removed, the whole suite stayed green.
-    /// The English direction is loud by comparison. So the assertion is over the FILE, in both
+    /// FRENCH value renders English inside the French interface and no render-time guard can see
+    /// it — measured: with `nav.alerts`' `fr` half removed, the whole suite stayed green. The
+    /// English direction is loud by comparison. So the assertion is over the FILE, in both
     /// directions, rather than over a rendering.
     ///
-    /// Baseline measured on `master`: 32 top-level entries, not one missing a locale. The guard
-    /// is therefore *"no key regresses"*, never *"add the missing ones"*.
+    /// # Why a real YAML parse, and why the old floor had to go — Guy's arbitration 3(d)
+    ///
+    /// 🔴 **The line-shape version of this guard was defeated by ORDINARY VALID YAML**, and story
+    /// 6b.10's validation measured it rather than suspecting it. Nesting resolves identically
+    /// through `t!`:
+    ///
+    /// ```yaml
+    /// gesture:
+    ///   badge:
+    ///     en: "Not yet"
+    /// ```
+    ///
+    /// `t!("gesture.badge")` returns the same value either way. Nest a key, remove its `fr` half,
+    /// and the result was **the whole suite and every gate GREEN** while
+    /// `t!("gesture.badge", locale = "fr")` rendered English — *literally the defect this test
+    /// exists to prevent*. A line-shape scan sees no key there at all, and a key that is not in
+    /// the population is not missing a locale.
+    ///
+    /// ⚠️ **And the guard did red on the nested shape — for the WRONG reason** (`gesture carries
+    /// []`, an unrelated false positive), whose message invited the repair that opens the hole.
+    /// *A guard that fails for the wrong reason is worth nothing*, and here it was worse than
+    /// nothing: it taught the developer to widen the gap.
+    ///
+    /// # The floor, and what a floor is FOR
+    ///
+    /// 🔴 It read `checked >= 47` under a message saying *"48 entries"* while the file held
+    /// **284** — six times below what was there, in a message stating a figure that had been
+    /// false since story 6b.3. `deferred-work.md` assigned the fix here and named the decision
+    /// rather than taking it: *a premise check that the file was read at all, or a count that must
+    /// track the file?*
+    ///
+    /// 🔑 **Guy took neither: the count is DERIVED.** `checked` must equal a second, independent
+    /// pass over the same document, so there is no number to maintain and no message to go stale —
+    /// `fixtures.rs`'s `expected()` idiom, which `CLAUDE.md` protects by name. The bare constant
+    /// that remains asserts only that the scan matched *something*, which is all a premise check
+    /// can honestly claim.
+    ///
+    /// ⚠️ **One class this still cannot catch, stated rather than implied**: a key block deleted
+    /// outright. Both passes then agree the key is gone, because it is. Nothing here can see that,
+    /// and it is registered rather than papered over.
     #[test]
     fn every_key_carries_both_locales() {
+        use yaml_rust2::{Yaml, YamlLoader};
+
         let yaml = include_str!("../locales/app.yml");
-        let mut key = String::new();
-        let mut locales: Vec<&str> = Vec::new();
-        let mut checked = 0usize;
-        let flush = |key: &str, locales: &mut Vec<&str>, checked: &mut usize| {
-            if key.is_empty() || key == "_version" {
-                locales.clear();
-                return;
+        let documents = YamlLoader::load_from_str(yaml).expect("the locale file is valid YAML");
+        let root = documents
+            .first()
+            .and_then(Yaml::as_hash)
+            .expect("the locale file is a mapping");
+
+        /// Every `(dotted key path, locales)` the document really carries, at any nesting depth.
+        fn walk(node: &Yaml, path: &str, out: &mut Vec<(String, Vec<String>)>) {
+            let Some(map) = node.as_hash() else { return };
+            let locales: Vec<String> = map
+                .iter()
+                .filter(|(_, value)| value.as_str().is_some())
+                .filter_map(|(key, _)| key.as_str().map(str::to_string))
+                .collect();
+            if !locales.is_empty() {
+                out.push((path.to_string(), locales));
             }
-            *checked += 1;
+            for (key, value) in map {
+                if value.as_hash().is_some()
+                    && let Some(key) = key.as_str()
+                {
+                    let child = if path.is_empty() {
+                        key.to_string()
+                    } else {
+                        format!("{path}.{key}")
+                    };
+                    walk(value, &child, out);
+                }
+            }
+        }
+
+        let mut entries: Vec<(String, Vec<String>)> = Vec::new();
+        walk(documents.first().expect("one document"), "", &mut entries);
+
+        let mut checked = 0_usize;
+        for (key, locales) in &entries {
+            // The document root also carries `_version: 2`, a scalar with no locale beneath it.
+            if key.is_empty() {
+                continue;
+            }
+            checked += 1;
             assert!(
-                locales.contains(&"en") && locales.contains(&"fr"),
+                locales.iter().any(|l| l == "en") && locales.iter().any(|l| l == "fr"),
                 "{key} carries {locales:?} — a key with only `en` renders English inside the \
                  French UI, silently, because rust-i18n falls back"
             );
-            locales.clear();
-        };
-        for line in yaml.lines() {
-            let trimmed = line.trim_end();
-            if trimmed.starts_with("  en:") {
-                locales.push("en");
-            } else if trimmed.starts_with("  fr:") {
-                locales.push("fr");
-            } else if let Some(name) = trimmed.strip_suffix(':')
-                && !name.starts_with(' ')
-                && !name.starts_with('#')
-            {
-                flush(&key, &mut locales, &mut checked);
-                key = name.to_string();
-            }
         }
-        flush(&key, &mut locales, &mut checked);
+
+        // 🔑 **The count is DERIVED, not believed**: a second, independent pass over the same
+        // document. Nothing to maintain, nothing to go stale — and a parse that silently stopped
+        // seeing two thirds of the file cannot satisfy both passes at once.
+        let translated = root
+            .iter()
+            .filter(|(_, value)| value.as_hash().is_some())
+            .count();
+        assert_eq!(
+            checked, translated,
+            "the two passes disagree about how many keys this file has — one of them has gone \
+             blind, and a floor that is a constant would notice neither"
+        );
         assert!(
-            checked >= 47,
-            "the premise: 48 entries minus `_version` ({checked} scanned) — a scan that found \
-             nothing would assert nothing"
+            checked > 0,
+            "the premise, and all a premise check can honestly claim: the scan matched something"
         );
     }
 

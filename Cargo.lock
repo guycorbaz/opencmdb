@@ -1401,6 +1401,7 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "uuid",
+ "yaml-rust2",
  "zeroize",
 ]
 
