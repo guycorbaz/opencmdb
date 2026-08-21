@@ -44,6 +44,7 @@
 // `warn` for now, graduating to `-D missing_docs` once the tree is clean.
 #![deny(missing_docs)]
 
+mod copy_vocabulary;
 mod observed_immutable;
 
 use std::collections::HashSet;
@@ -201,6 +202,10 @@ fn run_ci() -> Result<bool> {
     let (g7, m7) = observed_immutable::gate_observed_immutable(&root)?;
     report("observed-immutable", g7, &m7);
     ok &= g7;
+
+    let (g8, m8) = copy_vocabulary::gate_copy_vocabulary(&root)?;
+    report("copy-vocabulary", g8, &m8);
+    ok &= g8;
 
     let m3 = check_views_hash(&root)?;
     println!("  ℹ  {:<18} {m3}", "views-hash");
