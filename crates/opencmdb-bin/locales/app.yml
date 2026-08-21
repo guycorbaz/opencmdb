@@ -432,27 +432,33 @@ devices.seen:
 devices.none:
   en: "No device of this kind."
   fr: "Aucun appareil de ce type."
+# 🔴 SINGULAR, all seven. These labels are used in TWO positions — the inventory's filter chips
+# and a single device's *Kind* cell — and only one reading can be right in both. The plural made
+# the cell say *"nas-01 · Servers"*, which is wrong about one machine, while a filter chip in the
+# singular is merely a style choice. ⚠️ The set was also inconsistent with ITSELF: six plurals and
+# one singular (`network`), which is what made the mismatch visible when the English screen was
+# read at story 6b.10. Found by looking; no test could see it.
 example.kind.server:
-  en: "Servers"
-  fr: "Serveurs"
+  en: "Server"
+  fr: "Serveur"
 example.kind.vm:
-  en: "Virtual machines"
-  fr: "Machines virtuelles"
+  en: "Virtual machine"
+  fr: "Machine virtuelle"
 example.kind.container:
-  en: "Containers"
-  fr: "Conteneurs"
+  en: "Container"
+  fr: "Conteneur"
 example.kind.appliance:
-  en: "Appliances"
-  fr: "Appliances"
+  en: "Appliance"
+  fr: "Appliance"
 example.kind.network:
   en: "Network"
   fr: "Réseau"
 example.kind.printer:
-  en: "Printers"
-  fr: "Imprimantes"
+  en: "Printer"
+  fr: "Imprimante"
 example.kind.workstation:
-  en: "Workstations"
-  fr: "Postes"
+  en: "Workstation"
+  fr: "Poste"
 example.role.application:
   en: "Application"
   fr: "Application"
@@ -634,8 +640,10 @@ ipam.conflict_observed:
 ipam.conflict_lease:
   en: "DHCP lease seen %{at}"
   fr: "bail DHCP vu %{at}"
+# ⚠️ *"in the triage"* is « dans le triage » carried across; English takes no article here. The
+# glossary's `triage`/« triage » pair survives the fix — the term is kept, the article is dropped.
 ipam.conflict_link:
-  en: "Settle it in the triage"
+  en: "Settle it in triage"
   fr: "Trancher dans le triage"
 
 # ── Sources (story 6b.8) — the REAL capability boundary ──────────────────────
@@ -892,8 +900,11 @@ diagnostic.log_rotation_daily:
 diagnostic.log_no_rotation:
   en: "none — nothing is written to a file"
   fr: "aucune — rien n'est écrit dans un fichier"
+# ⚠️ « niveau en vigueur » is right in French and *"level in force"* is a Gallicism in English —
+# found by READING the English screen at story 6b.10, by nothing else. A test can check that a key
+# resolves; it cannot hear that a sentence was turned rather than written.
 diagnostic.log_level:
-  en: "level in force"
+  en: "current level"
   fr: "niveau en vigueur"
 diagnostic.log_retention:
   en: "files kept"
