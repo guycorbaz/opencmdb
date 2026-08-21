@@ -25,8 +25,7 @@
 //! **(3) [`LogDescriptor`] is what `init_tracing` INSTALLED, never what the environment holds.**
 //! Built the other way — an `AppConfig` field per variable, which is what the story first
 //! prescribed — the group was measured shipping two false rows: file logging OFF while the screen
-//! named a directory, and an invalid level that `EnvFilter`'s lossy parse had DISCARDED presented as
-//! the level in force. That is story 6b.8's own finding (`OPENCMDB_SCAN_CIDR=nonsense` rendered as
+//! named a directory, and a level the variable named but the subscriber did not install. That is story 6b.8's own finding (`OPENCMDB_SCAN_CIDR=nonsense` rendered as
 //! an in-force perimeter), one story later, in a design that cited it twice.
 //! 🔑 *The environment is the request; the descriptor is the answer, and a diagnostic screen must
 //! show the answer.*
@@ -111,8 +110,15 @@ pub(crate) struct SecurityPosture {
 /// See this module's doc for why this is a descriptor rather than three configuration fields.
 #[derive(Debug, Clone)]
 pub(crate) struct LogDescriptor {
-    /// The filter directives as `EnvFilter` itself renders them AFTER its lossy parse — so an
-    /// invalid directive shows as what survived, never as what was typed.
+    /// The filter directives as `EnvFilter` itself renders them AFTER its lossy parse — so the row
+    /// shows what is IN FORCE, never what was typed.
+    ///
+    /// ⚠️ **The two differ in more than one way, and the first draft of this doc named only one.**
+    /// `opencmdb=nope`, `!!!` and an empty value collapse to **`error`**; a bare `notalevel` is read
+    /// as a TARGET and becomes `notalevel=trace`, after which the product logs nothing of its own.
+    /// Both were measured — see `the_filter_in_force_is_not_the_variable_that_was_typed` — and the
+    /// second was found by BOOTING the binary, after the first had been written down as the whole
+    /// story.
     pub(crate) directives: String,
     /// The file sink, or `None` when only stdout is active — including when a directory WAS
     /// configured and could not be built.
@@ -490,10 +496,10 @@ fn journal_rows(log: &LogDescriptor) -> Vec<DiagRow> {
     vec![
         row("diagnostic.log_directory", directory),
         row("diagnostic.log_rotation", rotation),
-        // ⚠️ `EnvFilter`'s own rendering, AFTER its lossy parse. `EnvFilter::new` DISCARDS an
-        // invalid directive, so the variable's value and the filter in force can differ — measured:
-        // `OPENCMDB_LOG=notalevel` was thrown away and an environment-reading screen presented it
-        // as the level in force.
+        // ⚠️ `EnvFilter`'s own rendering, AFTER its lossy parse — so this row is the filter IN
+        // FORCE. The variable and the filter diverge in two measured ways, and the story's first
+        // draft knew only one: `opencmdb=nope` collapses to `error`, and a bare `notalevel` becomes
+        // the TARGET `notalevel=trace`. The second was found by booting the binary.
         row("diagnostic.log_level", log.directives.clone()),
         row("diagnostic.log_retention", retention),
         // Nothing stores an error in this product, so *"last error"* is named as absent rather
@@ -787,15 +793,26 @@ mod tests {
         // reproduced here by a guard written after it).
         assert_eq!(
             row_value(&view, "diagnostic.placed"),
-            "11 sightings",
+            "11",
             "the PLACED row carries the placed count"
         );
         assert_eq!(
             row_value(&view, "diagnostic.not_placed"),
-            "26 sightings",
-            "and the NOT-PLACED row carries the other one — both in SIGHTINGS, story 5.14b's code \
-             review having found them in different units side by side"
+            "26",
+            "and the NOT-PLACED row carries the other one"
         );
+        // 🔑 **The UNIT is in the label, and it is pinned there.** Story 5.14b's arbitration 13
+        // requires these counts to read as *sightings* and never as *devices* — a figure that rises
+        // because the product looked many times is the radar's range, not the operator's debt. The
+        // value is a bare number because the label already says it; this assertion is what stops
+        // the label losing it.
+        for key in ["diagnostic.placed", "diagnostic.not_placed"] {
+            let label = rust_i18n::t!(key).to_string();
+            assert!(
+                label.contains("sighting"),
+                "{key} must name its unit — it reads {label:?}"
+            );
+        }
     }
 
     /// The version comes from the crate, and from the one place the crate reads it.
@@ -1384,5 +1401,36 @@ mod tests {
              this, which is why the counts differ and neither is zero"
         );
         tx.rollback().await.expect("rollback");
+    }
+
+    /// 🔴 **The measurement the whole descriptor design rests on, pinned rather than asserted in
+    /// prose.** Story 6b.9's validation reported that `EnvFilter`'s lossy parse *"DISCARDS"* an
+    /// invalid directive, and the browser look refuted it for the input that matters most: a bare
+    /// word is read as a TARGET at `trace`, not thrown away.
+    ///
+    /// 🔑 **And the conclusion survives its wrong reason, in a stronger form.** For `!!!`,
+    /// `opencmdb=nope` and the empty string the filter really does collapse — to **`error`**, so a
+    /// screen reading the ENVIRONMENT would show `opencmdb=nope` while the process logs almost
+    /// nothing. *Whichever way the parse goes, what the variable says and what is in force differ*,
+    /// which is exactly why this screen renders the descriptor.
+    #[test]
+    fn the_filter_in_force_is_not_the_variable_that_was_typed() {
+        let installed = |raw: &str| tracing_subscriber::EnvFilter::new(raw).to_string();
+        // Unchanged when the directive is valid.
+        assert_eq!(installed("info"), "info");
+        assert_eq!(installed("opencmdb=debug,warn"), "opencmdb=debug,warn");
+        // A bare word is a TARGET, not a level — measured on a real boot with
+        // `OPENCMDB_LOG=notalevel`, where the screen showed `notalevel=trace` and the product then
+        // logged nothing of its own.
+        assert_eq!(installed("notalevel"), "notalevel=trace");
+        // And these really do collapse — to `error`, not to `info`.
+        for collapsing in ["!!!", "opencmdb=nope", ""] {
+            assert_eq!(
+                installed(collapsing),
+                "error",
+                "{collapsing:?} leaves a filter that shows almost nothing, while the variable \
+                 still reads as though a level had been chosen"
+            );
+        }
     }
 }

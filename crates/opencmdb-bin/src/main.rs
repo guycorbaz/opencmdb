@@ -654,9 +654,10 @@ fn load_bind_address() -> anyhow::Result<String> {
 /// 6b.9's arbitration made structural.** Built the other way — one `AppConfig` field per variable —
 /// the diagnostic screen was measured shipping two false rows: it named a log directory while
 /// `build_file_writer` had returned `None` and printed *"file logging disabled — cannot use …"*,
-/// and it showed `OPENCMDB_LOG=notalevel` as the level in force after `EnvFilter`'s lossy parse had
-/// DISCARDED it. That is story 6b.8's own finding — a refused `OPENCMDB_SCAN_CIDR` rendered as an
-/// in-force perimeter — one story later. 🔑 *The environment is the request; this is the answer.*
+/// and it showed `OPENCMDB_LOG=notalevel` as the level in force when the filter actually installed
+/// was `notalevel=trace` — a TARGET at trace, under which the product logs nothing of its own. That
+/// is story 6b.8's own finding — a refused `OPENCMDB_SCAN_CIDR` rendered as an in-force perimeter —
+/// one story later. 🔑 *The environment is the request; this is the answer.*
 ///
 /// File logging degrades gracefully: if the directory cannot be written, it logs a warning to
 /// stderr and continues with stdout only — a missing/unwritable log mount never crashes startup.
@@ -670,8 +671,10 @@ fn init_tracing() -> (
     use tracing_subscriber::{EnvFilter, Layer, Registry, fmt};
 
     let directives = std::env::var("OPENCMDB_LOG").unwrap_or_else(|_| "info".to_string());
-    // ⚠️ What the FILTER holds, not what the variable said. `EnvFilter::new` parses lossily, so an
-    // invalid directive is dropped silently and the two can differ.
+    // ⚠️ What the FILTER holds, not what the variable said. `EnvFilter::new` parses lossily, and
+    // the two diverge in more than one way: `opencmdb=nope` collapses to `error`, while a bare
+    // `notalevel` becomes the TARGET `notalevel=trace`. Measured, both — see
+    // `diagnostic::tests::the_filter_in_force_is_not_the_variable_that_was_typed`.
     let installed_directives = EnvFilter::new(&directives).to_string();
     let mut layers: Vec<Box<dyn Layer<Registry> + Send + Sync>> = Vec::new();
 

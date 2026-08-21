@@ -1535,4 +1535,59 @@ mod tests {
             "the premise: at least two hundred rendered words were inspected ({checked} seen)"
         );
     }
+
+    /// 🔴 **The commissioning screen carries a THIRD planned control, and no inherited guard sees
+    /// it.** Story 6b.4b's a11y guard reads `/triage`; story 6b.9's reads `/diagnostic`. This one
+    /// is on an example screen, and the pattern this whole story kept meeting is that *a guard is
+    /// correct about the screen it reads and blind to every other one*. So it gets its own.
+    #[test]
+    fn the_baseline_control_is_reachable_and_never_natively_disabled() {
+        let html = commissioning_body(&ScreenQuery::default()).to_lowercase();
+        assert_eq!(
+            html.matches("role=\"button\"").count(),
+            1,
+            "one planned control — adopting a baseline is Epic 9's, and it is shown rather than \
+             hidden (Guy's premise 2 of 2026-08-13)\n{html}"
+        );
+        assert!(
+            html.contains("tabindex=\"0\"") && html.contains("aria-disabled=\"true\""),
+            "it is in the tab order AND announced as unavailable — a `<span role=\"button\">` \
+             without `tabindex` has `tabIndex -1` and refuses `.focus()`\n{html}"
+        );
+        // A TOKEN scan: a bare boolean attribute has no `=`, and the separator can be any
+        // whitespace — an enumeration of `" disabled>"`-style literals was measured missing a
+        // newline on the sibling screen.
+        assert!(
+            !html
+                .split(|c: char| c.is_whitespace() || c == '>')
+                .any(|token| token == "disabled" || token.starts_with("disabled=")),
+            "no NATIVE disabled attribute\n{html}"
+        );
+        assert_eq!(
+            html.matches("aria-describedby=\"baseline-not-built\"")
+                .count(),
+            1,
+            "and it points at the one visible sentence saying why it is not live"
+        );
+    }
+
+    /// The three example figures PARTITION, and a demonstration whose numbers do not add up
+    /// teaches the operator to distrust the real ones.
+    #[test]
+    fn the_baseline_figures_add_up() {
+        let baseline = example_data::commissioning_baseline();
+        assert_eq!(
+            baseline.consistent + baseline.divergent,
+            baseline.total,
+            "{} consistent + {} divergent must be the {} observed",
+            baseline.consistent,
+            baseline.divergent,
+            baseline.total
+        );
+        assert!(
+            baseline.divergent > 0 && baseline.consistent > 0,
+            "and neither half is zero, or the screen demonstrates only one of the two states it \
+             exists to show"
+        );
+    }
 }

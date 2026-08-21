@@ -1,6 +1,6 @@
 # Story 6b.9: Self-diagnostic and commissioning
 
-Status: ready-for-dev
+Status: review
 
 Epic: 6b — *L'interface de la maquette*. **Ninth numbered slot, tenth story file.** It takes the
 `Empty` screen count from two to **ZERO**, and it is **the second screen of this epic whose centre
@@ -484,45 +484,45 @@ rename touches no doc; and AC2's own premise (a 400 above the middleware) is dea
   - [x] §0d → **(b)**, the security group as a SHAPE, with its three amendments.
   - [x] §0g → **(a)**, rename variant + route + key to `Commissioning` / `/commissioning`.
   - [x] Each recorded in §0 **with the option refused and what refusing it costs**.
-- [ ] **T1 — Stand the bench up first (AC: 10)**
-  - [ ] `mariadb:10.11` on a port that is **not 3306** (`kesh-mariadb-dev` holds it — confirmed).
+- [x] **T1 — Stand the bench up first (AC: 10)**
+  - [x] `mariadb:10.11` on a port that is **not 3306** (`kesh-mariadb-dev` holds it — confirmed).
         Apply migrations, export `DATABASE_URL`. Baseline is **676 tests**, **~0.05 s** without a
         database and **~5.5 s** with — the clock is the tell.
-- [ ] **T2 — The module, the route, and the pool-free half (AC: 1, 7, 10)**
-  - [ ] `crates/opencmdb-bin/src/diagnostic.rs`. **Register `/diagnostic` FIRST, then change the
+- [x] **T2 — The module, the route, and the pool-free half (AC: 1, 7, 10)**
+  - [x] `crates/opencmdb-bin/src/diagnostic.rs`. **Register `/diagnostic` FIRST, then change the
         nature** (§0f).
-  - [ ] **Split the pool-free half onto its own state** so version / embedded schema / security /
+  - [x] **Split the pool-free half onto its own state** so version / embedded schema / security /
         journal render with the store down (AC7), and so M3's guard is reachable without a database.
-- [ ] **T3 — The four groups (AC: 1, 4, 5, 6)**
-  - [ ] *Moteur*: version from the **one** source the shell already uses; `SELECT VERSION()`
+- [x] **T3 — The four groups (AC: 1, 4, 5, 6)**
+  - [x] *Moteur*: version from the **one** source the shell already uses; `SELECT VERSION()`
         **verbatim**, asserted by shape; the **schema version** rather than a ratio (§0d-bis), with
         the applied count guarded by a rolled-back `DELETE FROM _sqlx_migrations`; the last scan per
         T0's arbitration.
-  - [ ] *Observation*: observations recorded (say **all time**), sightings placed / not placed by
+  - [x] *Observation*: observations recorded (say **all time**), sightings placed / not placed by
         cause, both in **sightings** (5.14b's arbitration 13). Data retention: **nothing is purged**,
         qualified against the log retention.
-  - [ ] *Sécurité*: **no free-text arm**; the public row **derived by probing `is_public`**; bools,
+  - [x] *Sécurité*: **no free-text arm**; the public row **derived by probing `is_public`**; bools,
         never credentials; `/metrics` through `auth_deny`'s existing `State<AppConfig>`.
-  - [ ] *Journal*: the descriptor `init_tracing` **installed**, not the environment (§0e). *Dernière
+  - [x] *Journal*: the descriptor `init_tracing` **installed**, not the environment (§0e). *Dernière
         erreur*: absent — Epic 13, said not shown.
-- [ ] **T4 — `/commissioning` as an example surface (AC: 3)**
-  - [ ] New `ExampleContent` variant + body + dataset (mock's four steps and the baselining block),
+- [x] **T4 — `/commissioning` as an example surface (AC: 3)**
+  - [x] New `ExampleContent` variant + body + dataset (mock's four steps and the baselining block),
         **RFC 5737 / RFC 7042 only**. ⚠️ `example_contents.len() == 5` will red with a message reading
         *update this number* — a developer follows those (6b.6's review). The new witness must be
         **distinctive**, or the property that catches a screen serving another's body is defeated.
-- [ ] **T5 — Kill `Nature::Empty` by CHECKLIST (AC: 8)** — the three compiler sites plus the five
+- [x] **T5 — Kill `Nature::Empty` by CHECKLIST (AC: 8)** — the three compiler sites plus the five
       invisible artefacts in §0i, each ticked individually.
-- [ ] **T6 — The two planned gestures and their OWN guard (AC: 9)**
-  - [ ] Widen `Gesture`/`GestureView` to `pub(crate)`; **second builder** for two controls.
-  - [ ] A **render-level** a11y guard for this screen, premise count **2**, measured red on a
+- [x] **T6 — The two planned gestures and their OWN guard (AC: 9)**
+  - [x] Widen `Gesture`/`GestureView` to `pub(crate)`; **second builder** for two controls.
+  - [x] A **render-level** a11y guard for this screen, premise count **2**, measured red on a
         stripped `tabindex` and on a bare uppercase `DISABLED`.
-- [ ] **T7 — The guards the draft did not prescribe (AC: 5, 6, 7, 9)** — §0h's list, plus a
+- [x] **T7 — The guards the draft did not prescribe (AC: 5, 6, 7, 9)** — §0h's list, plus a
       per-section marker guard for this screen if it ships `Mixed`, plus the
       `every_key_carries_both_locales` floor (fix or register).
-- [ ] **T8 — Mutation pass; run every row (AC: 10)** — the corrected table below. Driver exits
+- [x] **T8 — Mutation pass; run every row (AC: 10)** — the corrected table below. Driver exits
       non-zero when a mutation fails to apply; **touch restored files** (askama compiles templates
       into the binary); never mix a scratchpad restore with `git checkout --`.
-- [ ] **T9 — Both runs, the browser, the documents (AC: 10)** — both wall-clocks; eight gates,
+- [x] **T9 — Both runs, the browser, the documents (AC: 10)** — both wall-clocks; eight gates,
       clippy, `fmt --check` on the committed tree; **Chrome, French, rebuilt binary**; twins and
       register rows in the same push.
 
@@ -591,18 +591,170 @@ actually run.* Not a gesture; an instrument.
 
 ## Dev Agent Record
 
+
 ### Agent Model Used
+
+Claude Opus 5 (1M context), 2026-08-21.
 
 ### Debug Log References
 
+- Bench: `mariadb:10.11` on port **13323** (port 3306 holds `kesh-mariadb-dev`, an unrelated
+  project's container). `SELECT VERSION()` → `10.11.16-MariaDB-ubu2204`.
+- Mutation driver: `scratchpad/mutate.py` — exits non-zero when a mutation fails to apply, restores
+  through `git checkout --` against a **committed** baseline only, and `touch`es every restored file
+  (askama compiles templates into the binary).
+- Browser/binary look: two real boots on a REBUILT binary, French locale — one with no perimeter,
+  one with `OPENCMDB_SCAN_CIDR=127.0.0.1/32`, `OPENCMDB_LOG=notalevel`, `OPENCMDB_LOG_DIR` set.
+
 ### Completion Notes List
 
+⚠️ **THE LIVE COUNT: 676 → 696 tests** (469 bin + 161 core + 66 xtask). **0.15 s** without a
+database and **5.13 s** against the live bench — the clock is the tell that the database-backed
+tests genuinely executed. Eight gates green, `clippy -D warnings` clean, `cargo fmt --check` clean on
+the committed tree. 28 fixtures, trap gate still RED at 26/15/11, `opencmdb-core` **no behaviour
+change** (untouched), no migration, no new dependency, `epics.md` and the UX spec not edited.
+
+**What shipped.** `/diagnostic` is the epic's second wholly real screen — sixteen rows across four
+groups, every value measured at runtime — and `/commissioning` is the last example surface. **`Nature::Empty`
+is gone**, so the epic's ten screens now hold either real content or labelled example content, and
+none holds nothing.
+
+#### 🔴 THE THREE ARBITRATIONS, AND WHAT BUILDING THEM CHANGED
+
+**(c′) — the scan report — is VINDICATED BY A LIVE BOOT.** With `OPENCMDB_SCAN_CIDR=127.0.0.1/32`
+the row reads *"dernier passage : à l'instant · 6 ms · 1 enregistrées (depuis ce démarrage)"* and
+the observation count moved 2 → 3. The refuted option (b) would have shown a `MAX(observed_at)`
+that a successful scan leaves untouched. The measurement lives in `poll_ingest_resolve`, which a
+`FixtureConnector` drives end to end; the `Arc` clone in `spawn_startup_scan` is the uncarried half
+and is written as such.
+
+**(b) — the security group as a SHAPE — is what made AC2 falsifiable.** `security_rows` takes a
+`SecurityPosture` and nothing else, so no sentence can be typed in; the public-paths row is derived
+by probing `auth::is_public` over `Screen::ALL` plus the fixed routes; the credentials are `bool`s,
+which turns the prescribed leak guard into a compile property. ⚠️ **`OPENCMDB_METRICS_TOKEN` moved
+into `AppConfig` and `scrape_authorized` now takes it as a parameter** — that REMOVED a reader
+rather than adding one, and it retired the **last three `std::env::set_var` calls in this crate's
+tests**, so story 6.1's *"not one test mutates an environment variable"* is now true of `/metrics`
+too.
+
+**(a) — the rename — cost exactly what the validation measured**: `Screen::Commissioning`,
+`/commissioning`, `nav.commissioning`; the old address 404s; no document touched.
+
+#### 🔴 FOUR OF THIS STORY'S OWN GUARDS CAME BACK GREEN, AND NONE WAS REACHABLE BY READING
+
+Each is the epic's dominant class — *a guard placed where the defect cannot occur reads as coverage
+and is none* — and each is CORRECT about what it tests:
+
+- **M6** swapped the placed/not-placed filters and changed nothing: the oracle read
+  `contains("11 sightings") && contains("26 sightings")`, satisfied whichever row carries which.
+  Fixed by asserting **row by row** — and then M6 was *still* green, because those assertions run on
+  a hand-built `StoreFacts` while the swap lives in the READER. 🔑 **Third occurrence in one story**;
+  closed by a database-backed test that seeds one placed and two unplaced sightings and reads them
+  back through `read_store`.
+- **M7** planted *"Toutes les surfaces HTTP sont authentifiées."* as a French literal in the template
+  and left the suite green: the guard read `build_diagnostic`'s output, and *a template's sentence
+  cannot appear in its builder's data*. Story 6b.4b's headline, verbatim. Now on the rendered HTML.
+- **M8b** slipped a bare uppercase `DISABLED` past three literal needles (`" disabled>"`,
+  `" disabled "`, `" disabled="`) because it was followed by a **newline**. Replaced by a token scan.
+- **M13** raised the store-read budget to sixty seconds and the timing assertion moved with it,
+  because it compared against `STORE_READ_BUDGET` itself. *An oracle that restates the expectation
+  cannot fail.* Now a literal bound.
+
+#### 🔴 AC7 WAS DEFEATED BY A TIMEOUT NOBODY HAD CONSIDERED, AND THE TEST THAT FOUND IT WAS MEASURING SOMETHING ELSE
+
+The handler rendered without the store exactly as AC7 asks — **after thirty seconds**, sqlx's
+default acquire timeout, which surfaced only because the end-to-end test itself took thirty seconds.
+*A page that eventually says the database is unreachable is not a page an operator can use when it
+is.* `STORE_READ_BUDGET` is two seconds, and the guard asserts a wall-clock bound.
+
+#### 🔴 A CLAIM I INHERITED FROM THE VALIDATION WAS REFUTED BY BOOTING THE BINARY
+
+Four documents said `EnvFilter`'s lossy parse *"DISCARDS"* an invalid directive. Measured:
+`OPENCMDB_LOG=notalevel` becomes **`notalevel=trace`** — a TARGET, not a discard — after which the
+product logs nothing of its own. 🔑 **The conclusion survives in a stronger form**: `opencmdb=nope`,
+`!!!` and the empty string collapse to **`error`**, so *whichever way the parse goes, the variable
+and the filter in force differ*. Pinned by
+`the_filter_in_force_is_not_the_variable_that_was_typed`, and the four sentences were corrected.
+
+#### ⚠️ THE MUTATION DRIVER LIED AGAIN, IN A NEW WAY, AND ONLY A CONTRADICTED PREDICTION CAUGHT IT
+
+Three guard repairs never reached the disk: the edit script writes at the END, and one failed anchor
+discarded every earlier edit silently. The re-run showed M6/M7/M8b still green **against a
+prediction that they would red** — had the prediction been *green*, the lost repairs would have been
+filed as confirmations. 🔑 *A batch edit that commits at the end is a batch edit that can lose
+everything before its first failure.* Fifth epic running for this family.
+
+#### ⚠️ FOUND BY LOOKING AT THE PAGE, INVISIBLE TO EVERY TEST
+
+*"constats rattachés : **2 constats**"* — the unit was in the label AND in the value. The assertions
+read `contains("2 sightings")` and were satisfied. The value is now a bare number and a new
+assertion pins the unit **on the label**, where story 5.14b's arbitration 13 requires it.
+
+#### ⚠️ REGISTERED RATHER THAN FIXED
+
+- **`every_key_carries_both_locales` carries a floor of `checked >= 47`** under a message reading
+  *"48 entries"* while `app.yml` holds **285 keys**. This story added 60 and did not touch the floor
+  — it is not this story's guard, and moving it silently would hide how far it had drifted. → Epic 6b's
+  retrospective, with story 6b.7's sentence: *a floor is only a guard while it equals what is there.*
+- **`epics.md:2108` still says the epic DoD is *seven* gates**; the tree has eight.
+- **The mock's *Vérifier maintenant* and *Exporter le journal* are not live**, owners FR6's scheduler
+  and Epic 13. **FR36 stays Epic 17's** — this screen ships facts, not the *what changed since last
+  visit* lead.
+- ⚠️ **Issue #38 recurred once** during development (`fixtures::tests::a_decision_carrying_an_abstention_cause_is_refused`,
+  a missing scratch path), green on the immediate re-run and on every run since. **No cause named** —
+  the house rule holds.
+
+### Mutation pass — eighteen mutations, seventeen reds and one compile refusal, replayed in full
+
+⚠️ Every row below was RE-EXECUTED after the guards were repaired; the table is the last run's
+output, not the first's. Two numbers where two conditions exist.
+
+| id | mutation | result |
+|---|---|---|
+| M1 | hardcode the applied-migration count | RED 1 — `the_applied_count_is_read_and_not_assumed` (needs a database) |
+| M2 | embedded count where applied belongs | RED 1 — same carrier. ⚠️ Both are the same mutation up to a constant, and both were GREEN until the guard read back **through `read_store`** inside the rolled-back transaction |
+| M3 | re-read `OPENCMDB_LOG` in the builder | RED 2 — and **without a database**, which the story's draft predicted it could not do |
+| M4 | diagnostic handler onto the pool-free router | RED 30 (`unreachable!` — see M5b) |
+| M5 | route deleted, nature kept | RED 2 — `the_route_answers_with_the_store_unreachable` + the marker partition |
+| M5b | route kept, nature reverted | RED 30 |
+| M6 | swap the placed / not-placed filter | RED 1 — `the_reader_puts_each_reach_count_on_its_own_row`. **Green twice before that guard existed** |
+| M7 | false security claim as a template literal | RED 1 — **green until the guard moved to the rendered HTML** |
+| M8 | strip `tabindex` | RED 1 |
+| M8b | bare uppercase `DISABLED` + newline | RED 1 — **green until the enumeration became a token scan** |
+| M9 | widen `is_public` with a known address | RED 1 — `every_screen_is_refused_without_a_credential` |
+| M10 | report a configured perimeter as a completed pass | RED 1 |
+| M11 | make a store failure a 500 again | RED 1 |
+| M12 | delete one group from `DiagGroup::ALL` | **COMPILE refusal** — `E0308` |
+| M13 | raise the store-read budget to 60 s | RED 1 — **green until the oracle stopped citing the constant it guards** |
+| M14 | reintroduce the *not built yet* line | RED 1 — the stylesheet guard, one of the five artefacts the compiler could not name |
+
 ### File List
+
+**New**
+- `crates/opencmdb-bin/src/diagnostic.rs`
+- `crates/opencmdb-bin/templates/_diagnostic.html`
+- `crates/opencmdb-bin/templates/_commissioning_example.html`
+
+**Modified**
+- `crates/opencmdb-bin/src/main.rs`, `page.rs`, `screens.rs`, `auth.rs`, `scan_pass.rs`,
+  `example_screens.rs`, `example_data.rs`
+- `crates/opencmdb-bin/locales/app.yml` (285 keys), `crates/opencmdb-bin/assets/app.css`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+**Deleted**
+- `crates/opencmdb-bin/templates/_not_built_yet.html`
+- `Nature::Empty`, `page::not_built_yet_body`, `page::NotBuiltYet`, `Strings::pending_badge`,
+  `Strings::pending_sentence`, the `pending.*` keys, `.not-yet` / `.not-yet-badge`
+
+**Sizes** (the gate's own rule — lines before the first `#[cfg(test)]`): `page.rs` **1727** and
+unchanged, `diagnostic.rs` **698**, `example_data.rs` **1255**, `example_screens.rs` **867**. Largest
+in the tree is `xtask/src/main.rs` at **1908**/2000.
 
 ### Change Log
 
 | Date | Change |
 |---|---|
 | 2026-08-21 | Story created by `create-story`. |
+| 2026-08-21 | **IMPLEMENTED.** 676 → **696 tests**, eight gates green, both runs recorded. Status → `review`; `done` is the MERGE's business. Four of the story's own guards were measured GREEN and repaired; AC7's timeout, the `EnvFilter` claim and the duplicated unit were each found by running or looking rather than by reading. |
 | 2026-08-21 | **THE THREE ARBITRATIONS TAKEN by Guy** — §0b **(c′)**, §0d **(b)**, §0g **(a)** — each recorded with the option refused and what refusing it costs. T0 closed: **no arbitration blocks `dev-story`.** |
 | 2026-08-21 | **VALIDATED by two fresh-context layers and REWRITTEN on their measurements** — twenty-six claims of the first draft refuted (§0j). Arbitration 1's recommendation **changed from (b) to (c′)** on a measurement that showed (b) shipping a false fact. Three new ACs (7, 8 as a checklist, 9). Status stays `ready-for-dev`. |

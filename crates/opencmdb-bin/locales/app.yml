@@ -809,9 +809,14 @@ diagnostic.placed:
 diagnostic.not_placed:
   en: "sightings not placed"
   fr: "constats non rattachés"
+# ⚠️ The bare number: the LABEL already carries the unit (*sightings placed* / *constats
+# rattachés*), and the first version rendered *"constats rattachés : 2 constats"*. Found by looking
+# at the page, invisible to every test — which asserted `contains("2 sightings")` and was satisfied.
+# 🔑 The unit itself is NOT dropped: story 5.14b's arbitration 13 requires it to be *sightings* and
+# never *devices*, and it is, once, where it belongs.
 diagnostic.sightings_value:
-  en: "%{n} sightings"
-  fr: "%{n} constats"
+  en: "%{n}"
+  fr: "%{n}"
 diagnostic.data_retention:
   en: "data retention"
   fr: "rétention des données"

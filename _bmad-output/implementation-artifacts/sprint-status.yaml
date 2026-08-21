@@ -75,7 +75,57 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-21  # 6b.9 `ready-for-dev`, VALIDATED, REWRITTEN, and its THREE ARBITRATIONS
+last_updated: 2026-08-21  # 6b.9 -> `review`: DEVELOPED. `done` is the MERGE's business.
+                          # **676 -> 696 tests** (469 bin + 161 core + 66 xtask), eight gates green,
+                          # clippy and fmt clean, run BOTH ways: **0.15 s** without a database and
+                          # **5.13 s** against a live mariadb:10.11 on port 13323.
+                          # 🔑 **`Nature::Empty` IS GONE** — the epic's ten screens now hold either
+                          # real content or labelled example content, and none holds nothing. The
+                          # compiler named three of the eight artefacts; the other five (a template,
+                          # two orphan keys, two `Strings` fields, two CSS classes) came off the
+                          # checklist, and M14 reds if the line comes back.
+                          # 🔑 **/diagnostic is the epic's SECOND wholly real screen**: sixteen rows,
+                          # four groups, every value measured at runtime, no marker because nothing
+                          # on it is an example.
+                          # ✅ ARBITRATION (c′) VINDICATED ON A LIVE BOOT: with a perimeter
+                          # configured the row reads *"dernier passage : à l'instant · 6 ms · 1
+                          # enregistrées (depuis ce démarrage)"* while `MAX(observed_at)` — the
+                          # refuted option — does not move on a successful scan.
+                          # ✅ ARBITRATION (b): the security group is a SHAPE. `security_rows` takes
+                          # a `SecurityPosture` and nothing else; the public row is DERIVED by
+                          # probing `is_public`; the credentials are bools, so the prescribed leak
+                          # guard became a compile property. ⚠️ `OPENCMDB_METRICS_TOKEN` moved into
+                          # `AppConfig` — that REMOVED a reader and retired the crate's LAST THREE
+                          # `std::env::set_var` calls in tests.
+                          # 🔴 **FOUR OF THE STORY'S OWN GUARDS CAME BACK GREEN**, each correct about
+                          # what it tested and none reachable by reading: an oracle that counts a
+                          # word wherever it is (M6), a guard on the BUILDER against a defect in the
+                          # RENDER (M7), an enumeration of whitespace defeated by a NEWLINE (M8b),
+                          # and an oracle comparing against the very constant it guards (M13).
+                          # ⚠️ M6 was green TWICE — the second time because the repaired assertions
+                          # ran on a hand-built struct while the swap lived in the READER. Third
+                          # occurrence of the epic's dominant class inside one story.
+                          # 🔴 **AC7 WAS DEFEATED BY A TIMEOUT NOBODY CONSIDERED**: the handler
+                          # rendered without the store exactly as asked — after THIRTY SECONDS,
+                          # sqlx's default acquire timeout, surfaced only because the test itself
+                          # took thirty seconds. Now a two-second budget with a wall-clock guard.
+                          # 🔴 **A CLAIM INHERITED FROM THE VALIDATION WAS REFUTED BY BOOTING**:
+                          # `EnvFilter` does NOT discard `notalevel`, it installs `notalevel=trace`
+                          # (a TARGET). The conclusion survives in a stronger form — `opencmdb=nope`
+                          # and `""` collapse to `error` — and is now pinned by a test.
+                          # ⚠️ **The mutation driver lied in a NEW way**: a batch edit script that
+                          # writes at the END lost three repairs to one failed anchor, silently.
+                          # Caught only because the re-run CONTRADICTED a prediction.
+                          # ⚠️ Found by LOOKING: *"constats rattachés : 2 constats"* — the unit was
+                          # in the label and in the value, and every test was satisfied.
+                          # **Eighteen mutations: seventeen reds and one compile refusal (E0308),
+                          # replayed in full after the repairs.**
+                          # ⚠️ REGISTERED, not fixed: `every_key_carries_both_locales` carries a
+                          # floor of **47** while `app.yml` holds **285** keys (this story added 60);
+                          # and `epics.md:2108` still says the DoD is *seven* gates.
+                          # ⚠️ Issue #38 recurred ONCE and was green on re-run. No cause named.
+                          #
+                          # (Earlier) 6b.9 `ready-for-dev`, VALIDATED, REWRITTEN, and its THREE ARBITRATIONS
                           # TAKEN by Guy the same day. **Nothing blocks `dev-story`.**
                           # ✅ ARBITRATION 1 -> (c′): an in-memory `ScanReport { as_of, duration,
                           #    ingested, resolved }` scoped to *"depuis ce démarrage"*, so AC1 ships
@@ -4119,7 +4169,7 @@ development_status:
   6b-6-inventory-and-device-record: done
   6b-7-applications-and-ipam: done
   6b-8-sources-and-alerts: done
-  6b-9-self-diagnostic-and-commissioning: ready-for-dev
+  6b-9-self-diagnostic-and-commissioning: review
   6b-10-copy-fr-and-en: backlog
   6b-11-keyboard-layer-and-focus-contract: backlog
   6b-12-release-0-2-0-and-its-documents: backlog
