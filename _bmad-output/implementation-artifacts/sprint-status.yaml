@@ -75,7 +75,24 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-21  # 6b.9 CODE-REVIEWED (three layers, **Sonnet** — a different model —
+last_updated: 2026-08-21  # 6b.9 -> `done`: PR #113 squash-merged as `81589ff` after a green CI run
+                          # (1m12s). Branch deleted, twins updated in this same push.
+                          # 🔑 EPIC 6b: NINE numbered slots done (6b.1-6b.9) plus the 6b.4b
+                          # insertion -- TEN story files of thirteen. NEXT = `create-story` 6b.10
+                          # (the copy, FR and EN, every string a key).
+                          # ⚠️ 6b.10 INHERITS TWO ROWS THIS STORY WROTE FOR IT, and one of them is
+                          # a hazard rather than a task: **`app.yml` is INVISIBLE to Cargo's
+                          # incremental build** -- a translation-only change rebuilds in 0.07 s and
+                          # the new string is ABSENT from the binary, CI caches `target/`, and any
+                          # mutation editing that file alone measures NOTHING. It is the first story
+                          # whose subject IS that file. The second row: a PARAPHRASED false security
+                          # claim slips the diagnostic's word guard and renders live.
+                          # ⚠️ And `every_key_carries_both_locales` carries a floor of **47** for
+                          # **284** keys -- six times below what is there.
+                          # 🔑 `Nature::Empty` IS DELETED: the ten screens hold either real content
+                          # or labelled example content, and none holds nothing.
+                          #
+                          # (Earlier the same day) 6b.9 CODE-REVIEWED (three layers, **Sonnet** — a different model —
                           # each isolated) and REPAIRED. Still `review`; `done` is the MERGE's
                           # business. **11 patches, 10 register rows written, 0 arbitrations.**
                           # **696 -> 697 tests** (470 bin + 161 core + 66 xtask), eight gates green.
@@ -4211,7 +4228,7 @@ development_status:
   6b-6-inventory-and-device-record: done
   6b-7-applications-and-ipam: done
   6b-8-sources-and-alerts: done
-  6b-9-self-diagnostic-and-commissioning: review
+  6b-9-self-diagnostic-and-commissioning: done
   6b-10-copy-fr-and-en: backlog
   6b-11-keyboard-layer-and-focus-contract: backlog
   6b-12-release-0-2-0-and-its-documents: backlog
