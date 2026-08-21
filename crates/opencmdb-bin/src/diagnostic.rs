@@ -1167,10 +1167,19 @@ mod tests {
         // not.** The first version of this test took THIRTY SECONDS — sqlx's default acquire
         // timeout — and passed, which is how the missing budget was found: the assertion said
         // *renders without the store* and the clock said *after half a minute*.
+        // 🔴 **A LITERAL bound, and the first version compared against `STORE_READ_BUDGET`
+        // itself.** Mutation M13 raised the budget to sixty seconds and the assertion moved with
+        // it — GREEN. *An oracle that restates the expectation instead of measuring the code cannot
+        // fail*, which is story 5.8's M5 family and one of this project's oldest recurring defects.
+        let waited = started.elapsed();
         assert!(
-            started.elapsed() < STORE_READ_BUDGET,
-            "the diagnostic waited {:?} for a store that is down; its budget is {STORE_READ_BUDGET:?}",
-            started.elapsed()
+            waited < std::time::Duration::from_secs(3),
+            "the diagnostic waited {waited:?} for a store that is down — AC7 is about being USABLE \
+             with the store down, and a page that answers eventually is not"
+        );
+        assert!(
+            STORE_READ_BUDGET <= std::time::Duration::from_secs(3),
+            "and the budget itself stays within what an operator will wait: {STORE_READ_BUDGET:?}"
         );
     }
 
