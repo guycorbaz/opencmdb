@@ -387,6 +387,19 @@ pub(crate) fn gate_copy_vocabulary(root: &Path) -> Result<(bool, String)> {
     if let Err(why) = entries.completeness() {
         return Ok((false, format!("{LOCALE_FILE}: {why}")));
     }
+    // 🔴 **Zero entries is a REFUSAL, not a pass**, and it is categorically different from a
+    // small number rather than a floor that will rot. A locale file that parses but yields
+    // nothing — truncated to a bare scalar, emptied, replaced — would otherwise be reported as
+    // *"no retired term in 0 key(s)"*, which is a denylist announcing success over a file it
+    // could not see. *A gate with nothing to lint has not passed; it has gone blind.*
+    if entries.entries.is_empty() {
+        return Ok((
+            false,
+            format!(
+                "{LOCALE_FILE}: parsed to NOTHING — a gate with nothing to lint has not passed"
+            ),
+        ));
+    }
     let found = findings(&entries);
     if found.is_empty() {
         let keys = entries
@@ -612,6 +625,38 @@ mod tests {
             message.contains("1 key(s)") && message.contains("2 translated value(s)"),
             "the green message counts what it actually read: {message}"
         );
+    }
+
+    /// 🔴 **The completeness refusal THROUGH THE GATE — and this test exists because the
+    /// mutation that should have produced it came back GREEN.**
+    ///
+    /// Story 6b.10's own T4 pass ran M18: *delete the `completeness()` call from
+    /// [`gate_copy_vocabulary`]*. It reddened **nothing**. The sibling test below asserts on
+    /// `completeness()` directly and is entirely CORRECT about what it tests; what nothing tested
+    /// was that the gate ever calls it. That is story 5.12's finding verbatim — *"the whole body
+    /// of `gate_declared_authorship` was deletable with the xtask suite green, because every test
+    /// attacked the helper"* — reproduced inside the gate written with that lesson in hand, and
+    /// caught only by running the mutation.
+    ///
+    /// 🔑 A document that PARSES and yields nothing is the reachable case: a bare top-level
+    /// scalar. Without both refusals the gate reports *"no retired term in 0 key(s)"* — success,
+    /// announced over a file it could not read.
+    #[test]
+    fn a_locale_file_the_gate_cannot_see_into_is_a_red_through_the_gate() {
+        let (ok, message) = gate_over("blind-scalar", "just a bare scalar\n");
+        assert!(!ok, "a document with no entries must RED: {message}");
+        assert!(
+            message.contains("nothing to lint") || message.contains("went blind"),
+            "and it must say WHY, not merely fail: {message}"
+        );
+
+        let (ok, message) = gate_over("blind-empty", "");
+        assert!(!ok, "an EMPTY locale file must RED too: {message}");
+
+        // The control: the same gate over a document it CAN see is green, so the two reds above
+        // are about blindness and not about the gate refusing everything.
+        let (ok, _) = gate_over("blind-control", "a.b:\n  en: \"x\"\n  fr: \"y\"\n");
+        assert!(ok, "the control passes, so the reds above mean something");
     }
 
     /// ⚠️ A file the gate cannot read or parse is a RED, never a green skip.
