@@ -643,15 +643,32 @@ mod tests {
     /// announced over a file it could not read.
     #[test]
     fn a_locale_file_the_gate_cannot_see_into_is_a_red_through_the_gate() {
+        // 🔴 **Each case pins the EXACT message, and the first draft of this test did not.** It
+        // accepted `contains("nothing to lint") || contains("went blind")`, and M18 stayed GREEN
+        // a second time: the two refusals mask each other, so an oracle joined by `||` cannot say
+        // which one fired and therefore holds when either is deleted. *A guard covered only by a
+        // disjunction is a guard nothing covers.*
+        //
+        // A bare scalar is COMPLETENESS: the parser emits one scalar and the collector, with no
+        // mapping open, records neither a key nor a value — 0 + 0 ≠ 1.
         let (ok, message) = gate_over("blind-scalar", "just a bare scalar\n");
-        assert!(!ok, "a document with no entries must RED: {message}");
         assert!(
-            message.contains("nothing to lint") || message.contains("went blind"),
-            "and it must say WHY, not merely fail: {message}"
+            !ok,
+            "a document the collector cannot see into must RED: {message}"
+        );
+        assert!(
+            message.contains("went blind"),
+            "and it must be the COMPLETENESS refusal that says so, not the empty one: {message}"
         );
 
+        // An empty document is the ZERO-ENTRIES refusal: nothing to count, so completeness holds
+        // vacuously and only the second guard is left.
         let (ok, message) = gate_over("blind-empty", "");
         assert!(!ok, "an EMPTY locale file must RED too: {message}");
+        assert!(
+            message.contains("nothing to lint"),
+            "and by the OTHER refusal — completeness holds vacuously here: {message}"
+        );
 
         // The control: the same gate over a document it CAN see is green, so the two reds above
         // are about blindness and not about the gate refusing everything.
