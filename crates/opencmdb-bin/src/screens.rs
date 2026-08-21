@@ -649,6 +649,44 @@ mod tests {
     ///
     /// Baseline measured on `master`: 32 top-level entries, not one missing a locale. The guard
     /// is therefore *"no key regresses"*, never *"add the missing ones"*.
+
+    /// GAP-HUNT carrier 2: key NAMES from the file, VALUES from the resolver.
+    #[test]
+    fn gaphunt_no_resolved_value_carries_a_retired_word() {
+        fn contains_word(hay: &str, needle: &str) -> bool {
+            let b = hay.as_bytes();
+            let nb = needle.as_bytes();
+            if nb.is_empty() || b.len() < nb.len() {
+                return false;
+            }
+            let is_w = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
+            (0..=(b.len() - nb.len())).any(|i| {
+                &b[i..i + nb.len()] == nb
+                    && (i == 0 || !is_w(b[i - 1]))
+                    && (i + nb.len() == b.len() || !is_w(b[i + nb.len()]))
+            })
+        }
+        let keys: Vec<String> = include_str!("../locales/app.yml")
+            .lines()
+            .filter_map(|l| l.strip_suffix(':'))
+            .filter(|n| !n.starts_with(' ') && !n.starts_with('#') && *n != "_version")
+            .map(str::to_string)
+            .collect();
+        assert!(keys.len() >= 200, "premise: {} keys scanned", keys.len());
+        let mut checked = 0usize;
+        for key in &keys {
+            for (locale, word) in [("en", "merge")] {
+                let v = rust_i18n::t!(key.as_str(), locale = locale).to_string();
+                assert!(
+                    !contains_word(&v.to_lowercase(), word),
+                    "{key} renders {v:?} in {locale} — '{word}' is retired in that language"
+                );
+                checked += 1;
+            }
+        }
+        assert_eq!(checked, keys.len(), "every key checked in the en column");
+    }
+
     #[test]
     fn every_key_carries_both_locales() {
         let yaml = include_str!("../locales/app.yml");

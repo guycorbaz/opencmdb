@@ -19,3 +19,5 @@ sha2 = "0.11.0"
 # The fixture MANIFEST is TOML (D56). Already in the workspace tree; no new supply chain.
 toml = "0.8.23"
 walkdir = "2.5.0"
+# Already in the workspace tree via `config`; no new supply chain.
+yaml-rust2 = "0.11.0"
