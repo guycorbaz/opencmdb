@@ -86,6 +86,11 @@ other fifteen.
 
 ### §0a. THE ROW-BY-ROW MEASUREMENT — the mock's sixteen rows against this tree
 
+⚠️ **The MOCK has sixteen; the screen that ships has SEVENTEEN** — the *Journal* group carries five,
+because rotation and file retention are two facts and only one of them applies when nothing is
+written to a file. This section's title is the mock's count and is correct as such; the Completion
+Notes said sixteen about the SCREEN until the code review counted.
+
 The mock is `~/travail/Projets actuels/opencmdb/documents/opencmdb - maquette.html`; its
 `diagGroups` array sits at offset ≈490 584 in the de-escaped source. **Four groups of four**, and
 the fact-check layer confirmed all sixteen key/value pairs **byte for byte**.
@@ -603,18 +608,26 @@ Claude Opus 5 (1M context), 2026-08-21.
 - Mutation driver: `scratchpad/mutate.py` — exits non-zero when a mutation fails to apply, restores
   through `git checkout --` against a **committed** baseline only, and `touch`es every restored file
   (askama compiles templates into the binary).
-- Browser/binary look: two real boots on a REBUILT binary, French locale — one with no perimeter,
-  one with `OPENCMDB_SCAN_CIDR=127.0.0.1/32`, `OPENCMDB_LOG=notalevel`, `OPENCMDB_LOG_DIR` set.
+- Binary look: two real boots on a REBUILT binary, French locale — one with no perimeter, one with
+  `OPENCMDB_SCAN_CIDR=127.0.0.1/32`, `OPENCMDB_LOG=notalevel`, `OPENCMDB_LOG_DIR` set. ⚠️ **These
+  were `curl` plus text extraction, NOT a browser**, and T9 was ticked citing *"Chrome, French"* —
+  a ticked task that delivered something different from what it says. The acceptance layer refused
+  to settle AC10 for exactly that reason and was right to.
+- **The browser look was supplied by the CODE REVIEW, not by the implementation**: its edge-case
+  layer drove both screens through a real headless **Chrome 151 over raw CDP**, dispatching genuine
+  `Tab` keydown/keyup, and confirmed every control is reached in the tab order as
+  `SPAN[role=button][tabindex=0]` with a singly-occurring `aria-describedby` target, no `|safe` in
+  either template and no duplicate `id` on either page. Recorded under the layer that did it.
 
 ### Completion Notes List
 
-⚠️ **THE LIVE COUNT: 676 → 696 tests** (469 bin + 161 core + 66 xtask). **0.15 s** without a
+⚠️ **THE LIVE COUNT: 676 → 697 tests** (470 bin + 161 core + 66 xtask, after the code review). **0.15 s** without a
 database and **5.13 s** against the live bench — the clock is the tell that the database-backed
 tests genuinely executed. Eight gates green, `clippy -D warnings` clean, `cargo fmt --check` clean on
 the committed tree. 28 fixtures, trap gate still RED at 26/15/11, `opencmdb-core` **no behaviour
 change** (untouched), no migration, no new dependency, `epics.md` and the UX spec not edited.
 
-**What shipped.** `/diagnostic` is the epic's second wholly real screen — sixteen rows across four
+**What shipped.** `/diagnostic` is the epic's second wholly real screen — **seventeen** rows across four
 groups, every value measured at runtime — and `/commissioning` is the last example surface. **`Nature::Empty`
 is gone**, so the epic's ten screens now hold either real content or labelled example content, and
 none holds nothing.
@@ -693,7 +706,7 @@ assertion pins the unit **on the label**, where story 5.14b's arbitration 13 req
 #### ⚠️ REGISTERED RATHER THAN FIXED
 
 - **`every_key_carries_both_locales` carries a floor of `checked >= 47`** under a message reading
-  *"48 entries"* while `app.yml` holds **285 keys**. This story added 60 and did not touch the floor
+  *"48 entries"* while `app.yml` holds **284 keys**. This story added **63** and did not touch the floor
   — it is not this story's guard, and moving it silently would hide how far it had drifted. → Epic 6b's
   retrospective, with story 6b.7's sentence: *a floor is only a guard while it equals what is there.*
 - **`epics.md:2108` still says the epic DoD is *seven* gates**; the tree has eight.
@@ -728,6 +741,80 @@ output, not the first's. Two numbers where two conditions exist.
 | M13 | raise the store-read budget to 60 s | RED 1 — **green until the oracle stopped citing the constant it guards** |
 | M14 | reintroduce the *not built yet* line | RED 1 — the stylesheet guard, one of the five artefacts the compiler could not name |
 
+
+### Code review — three layers, 2026-08-21, on a DIFFERENT model (Sonnet), each isolated
+
+**11 patches, 10 register rows written, 0 arbitrations. 696 → 697 tests.** Eight gates green,
+clippy and fmt clean, suite run both ways.
+
+🔴 **THE BLIND LAYER FOUND BOTH HIGH FINDINGS FOR THE FOURTH STORY RUNNING — the diff alone, no
+repository, no build — and both were my own sentences.**
+
+**H1 — AC7's guard could not reach the branch it exists for, and the test's own comment explained
+why in the language of a justification.** The end-to-end pool carries `acquire_timeout(150 ms)`,
+far below the 2 s budget, so `read_store_from` always resolved with an error and
+`tokio::time::timeout` never elapsed: *the arm that enforces the budget was dead code under test*.
+⚠️ And M13 was red for a reason I had misread — its carrier was the second assertion
+(`STORE_READ_BUDGET <= 3 s`), never the timing one. 🔑 **This is the epic's dominant class a FOURTH
+time in one story, and the first instance no mutation caught** — eighteen mutations ran past it,
+because a mutation can only red a guard that executes the mutated code. Closed by making the budget
+a PARAMETER (`store_within`) and driving a pool at a non-routable address, which hangs instead of
+refusing; proved to red at **5.002 s** when the budget is neutralised.
+
+**H2 — the screen has SEVENTEEN rows and I wrote sixteen everywhere.** Journal carries five where
+the mock carries four. Two layers counted it independently — one from the diff, one from the live
+render (17 `div.diag-row`) — and **nothing pinned the total**: the group guard asserts four groups
+and no empty group, and is satisfied whatever the rows do. Now `ROWS = 17`, asserted at the builder
+AND at the render level.
+
+🔴 **THE ACCEPTANCE LAYER FOUND THAT THE REGISTER WAS NEVER TOUCHED.** `deferred-work.md` had not
+changed since story 6b.8 — while §0d says *"register the divergence"*, §0h says *"Register it with
+Epic 9"*, and the Completion Notes carry a section headed **REGISTERED RATHER THAN FIXED**. 🔑 *A
+section that says "registered" is not a registration, and nothing in the story could tell the
+difference.* Fourth occurrence of the class story 6b.7 named against itself. **Ten rows are now
+written**, and the defence is recorded with them: derive what a story OWES from its own §0 and its
+arbitrations, then diff the register before the commit.
+
+🔴 **THE EDGE LAYER FOUND A HAZARD THAT IS THE PROJECT'S, NOT THIS STORY'S: `app.yml` is invisible
+to Cargo's incremental build.** Changing only the translation file and rebuilding finishes in
+**0.07 s with no recompile**, and the new string is **absent from the binary**. Two consequences,
+both live: CI caches `target/`, so a translation-only PR could be validated against the old strings;
+and **any mutation that edits `app.yml` alone measures nothing**. Registered, owner Epic 6b's
+retrospective — and story 6b.10 is the first whose subject IS that file.
+
+⚠️ **Two MEDIUMs, both false sentences of mine.** The code cites *"arbitration (c′)"* five times
+while the module doc numbers the same decision *(1)* and nothing ties them — *a citation a reader
+cannot resolve from the material in front of them*. And the `metrics_token` doc described a
+COUNTERFACTUAL filter (`carries_a_visible_glyph`) in the indicative, while the actual filter is
+`!is_empty()`. Both corrected in place. The *"eight artefacts"* of `Nature::Empty` are now itemised
+rather than counted.
+
+⚠️ **I DESTROYED WORK WITH `git checkout --` DURING THE REPAIR — the fourth occurrence in this
+project, committed in the story whose review had just named the class.** The budget repair was
+uncommitted when a prove-to-red reverted the file. Redone and committed first. *A file revert equals
+a mutation revert only on a COMMITTED baseline*, and the cheap defence is to commit before every
+prove-to-red rather than to remember the rule.
+
+✅ **What the layers CONFIRMED by measuring rather than reading**: AC7 reproduced end-to-end on a
+REAL database paused mid-session — **200 in 2.002 s**, degraded rows correct, shell intact; seven
+mutations re-executed and conformant, carrier and count included; the test delta verified on **both
+terms** (676 on `master`, 697 here); all four file sizes; the eight `Nature::Empty` artefacts
+genuinely absent; zero `std::env::set_var` left in this crate's tests; `/commissioning` 200 and
+`/onboarding` 404; and, in a real browser, every control reachable by `Tab` on both screens.
+
+✅ **Refuted, with the check, so nobody re-chases them**: the *"nothing placed"* sentence reads
+correctly when a scan simply found nothing (measured on an empty `/28`); a poisoned report lock
+degrades to *no pass since this start-up* by construction; `OPENCMDB_METRICS_TOKEN=" "` fails
+CLOSED, not open; a zero-width-space perimeter is filtered; an unwritable, blank or
+file-not-a-directory `OPENCMDB_LOG_DIR` all degrade to *standard output only* and never name a
+directory; 50 concurrent requests and 30 fired mid-scan all answer 200; and hostile input on both
+routes reflects nothing and 500s nothing.
+
+⚠️ **Two measured limits are now register rows rather than sentences**: a widening of `is_public`
+with a **brand-new, unprobed prefix** leaves 0/696 red and the screen still claims the old
+perimeter; and a **paraphrased** false security claim slips the word guard and renders live. Both
+are the stated shape of those guards — a tripwire, never a barrier — now measured instead of argued.
+
 ### File List
 
 **New**
@@ -738,7 +825,7 @@ output, not the first's. Two numbers where two conditions exist.
 **Modified**
 - `crates/opencmdb-bin/src/main.rs`, `page.rs`, `screens.rs`, `auth.rs`, `scan_pass.rs`,
   `example_screens.rs`, `example_data.rs`
-- `crates/opencmdb-bin/locales/app.yml` (285 keys), `crates/opencmdb-bin/assets/app.css`
+- `crates/opencmdb-bin/locales/app.yml` (**284** keys), `crates/opencmdb-bin/assets/app.css`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 
 **Deleted**
@@ -755,6 +842,7 @@ in the tree is `xtask/src/main.rs` at **1908**/2000.
 | Date | Change |
 |---|---|
 | 2026-08-21 | Story created by `create-story`. |
+| 2026-08-21 | **CODE-REVIEWED (three layers, Sonnet, each isolated) and REPAIRED.** The blind layer found BOTH HIGHs for the fourth story running, both of them my own sentences; the acceptance layer found the register untouched; the edge layer found an `app.yml`/Cargo hazard that is the project's, not this story's. **11 patches, 10 register rows, 0 arbitrations.** 696 → **697 tests**. |
 | 2026-08-21 | **IMPLEMENTED.** 676 → **696 tests**, eight gates green, both runs recorded. Status → `review`; `done` is the MERGE's business. Four of the story's own guards were measured GREEN and repaired; AC7's timeout, the `EnvFilter` claim and the duplicated unit were each found by running or looking rather than by reading. |
 | 2026-08-21 | **THE THREE ARBITRATIONS TAKEN by Guy** — §0b **(c′)**, §0d **(b)**, §0g **(a)** — each recorded with the option refused and what refusing it costs. T0 closed: **no arbitration blocks `dev-story`.** |
 | 2026-08-21 | **VALIDATED by two fresh-context layers and REWRITTEN on their measurements** — twenty-six claims of the first draft refuted (§0j). Arbitration 1's recommendation **changed from (b) to (c′)** on a measurement that showed (b) shipping a false fact. Three new ACs (7, 8 as a checklist, 9). Status stays `ready-for-dev`. |

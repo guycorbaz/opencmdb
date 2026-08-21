@@ -75,7 +75,49 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-21  # 6b.9 -> `review`: DEVELOPED. `done` is the MERGE's business.
+last_updated: 2026-08-21  # 6b.9 CODE-REVIEWED (three layers, **Sonnet** — a different model —
+                          # each isolated) and REPAIRED. Still `review`; `done` is the MERGE's
+                          # business. **11 patches, 10 register rows written, 0 arbitrations.**
+                          # **696 -> 697 tests** (470 bin + 161 core + 66 xtask), eight gates green.
+                          # 🔴 **THE BLIND LAYER FOUND BOTH HIGHS — FOURTH STORY RUNNING — and both
+                          # were my own sentences.**
+                          #   H1: AC7's guard could not REACH the branch it exists for. The pool's
+                          #   `acquire_timeout(150 ms)` sits far below the 2 s budget, so the timeout
+                          #   arm was dead code under test -- and the test's own comment explained
+                          #   exactly why, in the language of a justification. ⚠️ M13 was red for a
+                          #   reason I had misread (its carrier was the constant assertion, not the
+                          #   timing one). 🔑 **The epic's dominant class a FOURTH time in one story,
+                          #   and the first instance NO MUTATION CAUGHT** -- a mutation can only red
+                          #   a guard that executes the mutated code. Closed by making the budget a
+                          #   parameter and driving a pool that HANGS; proved to red at 5.002 s.
+                          #   H2: the screen has **SEVENTEEN** rows and I wrote sixteen everywhere.
+                          #   Two layers counted it independently, one from the diff and one from the
+                          #   live render, and **nothing pinned the total**.
+                          # 🔴 **THE ACCEPTANCE LAYER FOUND THE REGISTER UNTOUCHED**: `deferred-work.md`
+                          # had not changed since 6b.8, while the story says *register the divergence*
+                          # twice and carries a section headed **REGISTERED RATHER THAN FIXED**.
+                          # 🔑 *A section that says "registered" is not a registration, and nothing
+                          # in the story could tell the difference.* Fourth occurrence of the class
+                          # 6b.7 named against itself. **Ten rows now written.**
+                          # 🔴 **THE EDGE LAYER FOUND A PROJECT-WIDE HAZARD**: `app.yml` is INVISIBLE
+                          # to Cargo's incremental build -- changing only the translation file
+                          # rebuilds in 0.07 s and the new string is ABSENT from the binary. CI
+                          # caches `target/`, and **any mutation editing `app.yml` alone measures
+                          # nothing**. Registered; 6b.10 is the first story whose subject IS that file.
+                          # ⚠️ Numbers corrected by the auditor: **284** keys not 285, **+63** not
+                          # +60, seventeen rows not sixteen. The test delta was verified on BOTH
+                          # terms (676 on `master`).
+                          # ⚠️ **AC10's browser look was NOT done by the implementation** -- it was
+                          # curl plus text extraction, and T9 was ticked citing Chrome. The review's
+                          # edge layer supplied the real look (Chrome 151 over CDP, genuine Tab
+                          # keypresses on both screens); recorded under the layer that did it.
+                          # ⚠️ **I destroyed work with `git checkout --` during the repair** -- fourth
+                          # occurrence in this project, in the story whose review had just named the
+                          # class. Redone and committed first.
+                          # ✅ AC7 reproduced END TO END on a real database paused mid-session: 200
+                          # in **2.002 s**, degraded rows correct, shell intact.
+                          #
+                          # (Earlier the same day) 6b.9 -> `review`: DEVELOPED.
                           # **676 -> 696 tests** (469 bin + 161 core + 66 xtask), eight gates green,
                           # clippy and fmt clean, run BOTH ways: **0.15 s** without a database and
                           # **5.13 s** against a live mariadb:10.11 on port 13323.

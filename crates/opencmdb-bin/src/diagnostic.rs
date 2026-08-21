@@ -8,7 +8,8 @@
 //! the mock carries four, because file retention and rotation are two separate facts here and only
 //! one of them applies when nothing is written to a file. This read *"the other fifteen"* until the
 //! code review: **two layers counted seventeen independently, one from the diff alone and one from
-//! the live render**, and no test pinned the total. [`ROWS`] and the guard on it are what stop that
+//! the live render**, and no test pinned the total. `tests::ROWS` and the TWO guards on it — one
+//! over the built view, one over the rendered HTML — are what stop that
 //! recurring.
 //!
 //! # 🔴 Three shapes here are arbitrations, not preferences
@@ -211,14 +212,6 @@ pub(crate) fn security_posture(
     }
 }
 
-/// How many rows the screen renders, across all four groups.
-///
-/// 🔴 **A pinned total, because there was none and the prose was wrong.** The module doc said
-/// *fifteen others*, i.e. sixteen — the mock's count — while the screen builds seventeen;
-/// `every_group_of_the_enum_is_rendered_once` asserts the GROUP count and that no group is empty,
-/// and is satisfied whatever the rows do. *A number nothing counts is a number that drifts.*
-pub(crate) const ROWS: usize = 17;
-
 /// The four groups of the reference mock's diagnostic, in its order.
 ///
 /// 🔑 **An enum and not a `vec![…]` of headings.** The story's mutation M12 — delete one group —
@@ -304,8 +297,6 @@ pub(crate) struct StoreFacts {
 pub(crate) struct DiagnosticView {
     /// The four groups, in the mock's order.
     pub(crate) groups: Vec<DiagGroupView>,
-    /// Every row across every group — the figure [`ROWS`] pins.
-    pub(crate) row_count: usize,
     /// True when the store could not be read, so the page can say so once rather than per row.
     pub(crate) store_unreachable: bool,
 }
@@ -410,10 +401,8 @@ pub(crate) fn build_diagnostic(
             },
         })
         .collect();
-    let row_count = groups.iter().map(|group| group.rows.len()).sum();
     DiagnosticView {
         groups,
-        row_count,
         store_unreachable: store.is_none(),
     }
 }
@@ -747,6 +736,26 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use sqlx::MySqlPool;
     use tower::ServiceExt;
+
+    /// How many rows the screen renders, across all four groups.
+    ///
+    /// 🔴 **A pinned total, because there was none and the prose was wrong.** The module doc said
+    /// *"the other fifteen"* — i.e. sixteen, the reference mock's count — while the screen builds
+    /// **seventeen**; the *Journal* group carries five where the mock carries four. Two review
+    /// layers counted it independently, one from the diff alone and one from the live render, and
+    /// `every_group_of_the_enum_is_rendered_once` could not: it asserts the GROUP count and that no
+    /// group is empty, and is satisfied whatever the rows do. *A number nothing counts is a number
+    /// that drifts.*
+    ///
+    /// ⚠️ It lives in the test module rather than beside the builder: a production constant only
+    /// the suite reads is dead code, and `clippy -D warnings` says so. The count is a property of
+    /// the tests' expectation, not a parameter of the screen.
+    const ROWS: usize = 17;
+
+    /// Every row the view holds, across every group.
+    fn row_count(view: &DiagnosticView) -> usize {
+        view.groups.iter().map(|group| group.rows.len()).sum()
+    }
 
     /// A descriptor a real boot could produce, with values the ENVIRONMENT could not hold.
     ///
@@ -1129,7 +1138,8 @@ mod tests {
         // this number*, which a developer follows: it is kept because it is the only thing that
         // notices a row appearing or vanishing, and because the figure is quoted in prose.
         assert_eq!(
-            view.row_count, ROWS,
+            row_count(&view),
+            ROWS,
             "the diagnostic renders {ROWS} rows; if that changed on purpose, change the module \
              doc and the story's own figure with it"
         );
