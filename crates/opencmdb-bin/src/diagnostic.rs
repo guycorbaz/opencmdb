@@ -1293,4 +1293,96 @@ mod tests {
             "the manufactured divergence was rolled back"
         );
     }
+
+    /// 🔴 **`read_store` puts the placed count on the PLACED row, and this is the only guard that
+    /// can see it.** Mutation M6 swaps the two outcome filters; the pure-builder assertions cannot
+    /// notice, because they are handed a `StoreFacts` built by hand — *a guard on the builder
+    /// cannot see a defect in the reader*, which is Epic 5's dominant class and the THIRD time this
+    /// story met it. The rows are seeded so the two counts are DIFFERENT and neither is zero: equal
+    /// counts make a swap invisible, and a zero makes half the assertion vacuous.
+    #[tokio::test]
+    async fn the_reader_puts_each_reach_count_on_its_own_row() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping the reach-row test: DATABASE_URL unset");
+            return;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+
+        // Everything below is rolled back, so the fixture is untouched by this test.
+        let mut tx = pool.begin().await.expect("begin");
+        for statement in [
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+        ] {
+            sqlx::query(statement)
+                .execute(&mut *tx)
+                .await
+                .expect("clear");
+        }
+        let nil = crate::repo::ABSTAINED_SUBJECT;
+        let interface = "11111111-1111-4111-8111-111111111111";
+        sqlx::query(
+            "INSERT INTO interface (id, l2_domain, mac_canon, first_seen_at, last_seen_at) \
+             VALUES (?, ?, '02:00:00:00:00:01', '2026-01-01 00:00:00', '2026-01-01 00:00:00')",
+        )
+        .bind(interface)
+        .bind(nil)
+        .execute(&mut *tx)
+        .await
+        .expect("mint an interface");
+
+        // ONE placed sighting and TWO unplaced ones: different, and neither zero.
+        for (index, placed) in [(1, true), (2, false), (3, false)] {
+            let observation = format!("22222222-2222-4222-8222-00000000000{index}");
+            sqlx::query(
+                "INSERT INTO observation_record (id, connector_id, observed_at, l2_domain, \
+                 vantage, facts) VALUES (?, ?, '2026-01-01 00:00:00', ?, ?, '[]')",
+            )
+            .bind(&observation)
+            .bind(nil)
+            .bind(nil)
+            .bind(nil)
+            .execute(&mut *tx)
+            .await
+            .expect("record an observation");
+            let (outcome, rule, cause, interface_id) = if placed {
+                ("match", Some("l1-exact-mac"), None, Some(interface))
+            } else {
+                ("abstained", None, Some("absence_of_proof"), None)
+            };
+            sqlx::query(
+                "INSERT INTO identity_link (id, observation_id, interface_id, current_subject, \
+                 outcome, rule_id, abstention_cause, evidence, ruleset_version, decided_by, \
+                 valid_from, valid_to) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 1, 'ENGINE', \
+                 '2026-01-01 00:00:00', ?)",
+            )
+            .bind(format!("33333333-3333-4333-8333-00000000000{index}"))
+            .bind(&observation)
+            .bind(interface_id)
+            .bind(interface_id.unwrap_or(nil))
+            .bind(outcome)
+            .bind(rule)
+            .bind(cause)
+            .bind(crate::repo::OPEN_END)
+            .execute(&mut *tx)
+            .await
+            .expect("write a link");
+        }
+
+        let facts = read_store(&mut tx).await.expect("read the store");
+        assert_eq!(facts.placed, 1, "one sighting was placed on an interface");
+        assert_eq!(
+            facts.not_placed, 2,
+            "and two were not — a swap of the two outcome filters must not be able to satisfy \
+             this, which is why the counts differ and neither is zero"
+        );
+        tx.rollback().await.expect("rollback");
+    }
 }
