@@ -322,8 +322,8 @@ gesture.badge:
 gesture.not_built:
   en: "This gesture is not built yet."
   fr: "Ce geste n'est pas encore construit."
-gesture.merge:
-  en: "Merge"
+gesture.document:
+  en: "Document"
   fr: "Merger"
 gesture.resolve:
   en: "Resolve"

@@ -906,7 +906,7 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
-                    gestures: action_bar("gesture.merge"),
+                    gestures: action_bar("gesture.document"),
                     kind: t!("triage.kind.ecart").to_string(),
                     entity: ipv4.clone(),
                     field: gap.field.clone(),
@@ -951,7 +951,7 @@ fn build_triage(
                     // story 6b.3's wrong-namespace defect waiting.
                     gestures: action_bar(match cause {
                         AbstentionCause::ConflictingObservations => "gesture.resolve",
-                        _ => "gesture.merge",
+                        _ => "gesture.document",
                     }),
                     kind: label.to_string(),
                     entity: ipv4.clone(),
@@ -999,7 +999,7 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
-                    gestures: action_bar("gesture.merge"),
+                    gestures: action_bar("gesture.document"),
                     kind: t!("triage.kind.nouveau").to_string(),
                     entity: value.clone(),
                     field: "ipv4".to_string(),
@@ -3894,7 +3894,7 @@ mod tests {
             drift.gestures.iter().all(|g| g.not_built.is_some()),
             "not one of the five exists today — every control is planned"
         );
-        assert_eq!(drift.gestures[0].label, "Merge", "a drift offers Merge");
+        assert_eq!(drift.gestures[0].label, "Document", "a gap offers Document");
 
         let conflict = pane_for("conflit:clash");
         assert_eq!(
