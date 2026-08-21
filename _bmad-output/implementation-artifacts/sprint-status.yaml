@@ -75,7 +75,110 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-21  # 6b.9 -> `done`: PR #113 squash-merged as `81589ff` after a green CI run
+last_updated: 2026-08-21  # 6b.10 stays `ready-for-dev`: story file created, then VALIDATED by two
+                          # fresh-context layers and REWRITTEN on what they measured.
+                          # ALL FIVE §0h arbitrations TAKEN by Guy the same day; NEXT = `dev-story`.
+                          # ✅ (1) **(a)** `gesture.merge` -> `gesture.document`, EN "Document", FR
+                          #     « Merger » unchanged -- three literal sites and ONE test breaking,
+                          #     whose message still says `drift`.
+                          # ✅ (2) **(a')** the ten screens' rendered surface PLUS the six `500` /
+                          #     `template error` bodies served at those same addresses. That option
+                          #     did not exist in the draft; the gap-hunt found the class.
+                          # ✅ (3) **(d)** the floor derived over a REAL YAML parse on the resolved
+                          #     key set + a completeness assertion. (c) was the draft's pick and was
+                          #     measured insufficient before it could be taken.
+                          # ✅ (4) **YES** -- `OPENCMDB_LOCALE` into `AppConfig`, refused BY NAME at
+                          #     boot, the refusal accepting what `rust-i18n` accepts (MEASURED:
+                          #     `fr-CH` works), never an enumerated list. 🔴 BREAKING: a deployment
+                          #     carrying `OPENCMDB_LOCALE=FR` stops booting -> release-note line owed
+                          #     to 6b.12, plus `README.md:124` and `docker/README.dockerhub.md:85`.
+                          # ✅ (5) **(b)** the locale axis is LEFT TO REVIEW and AC5's browser pass
+                          #     IS that review, written down. The UX spec (:1440-1442) demands this
+                          #     one be TAKEN rather than defaulted, which is why it was put at all.
+                          #     🔑 And the inversion is what makes (b) right rather than merely
+                          #     affordable: a snapshot of a screen no test can render in French would
+                          #     be a baseline of the language nobody checks.
+                          # 🔑 In four of the five the RECOMMENDATION had been changed by the validation --
+                          # arbitration 1's cost, 2's option set, 3's winning option and 4's premise
+                          # were each wrong in the first draft. The arbitration put to Guy is not the
+                          # arbitration the story first wrote.
+                          # 🔴 THE VALIDATION WAS WORTH ITS COST AND THE FIGURE SAYS SO: **twelve HIGH
+                          # findings across the two layers, and BOTH of the story's central arguments
+                          # were replaced by better ones.**
+                          # 🔴 (1) The design was *"two carriers separated by YAML syntax"*. Both
+                          # halves wrong. The syntax question has a ONE-LINE answer (`yaml-rust2` is
+                          # already in `Cargo.lock` via `config`; the naive parse misses 7 of 12 legal
+                          # shapes, the real one 0) — so the *"state the limit"* branch is not a
+                          # trade-off. And the row the story picked to prove the carriers independent
+                          # (a block scalar) REDS BOTH with a real parse. What separates them is the
+                          # **FALLBACK**: a word retired in `fr`, in a key with no `fr` half, is
+                          # invisible to a file-reading gate and renders on the French screen.
+                          # 🔴 (2) The framing was *"the English UI has never been looked at"*. It is
+                          # INVERTED: 241 `t!(` call sites in the crate, **ZERO** carrying a
+                          # `locale =` override, so every render test runs in ENGLISH. English has
+                          # ~470 assertions and 0 human looks; **FRENCH has 9 looks and 0 assertions**
+                          # -- measured: setting `nav.dashboard`'s `fr` value to its own key name
+                          # leaves 702 tests and nine gates GREEN, and
+                          # `no_screen_renders_a_key_name_as_a_label` exists for that defect and is
+                          # blind to it. Epic 5's dominant class, one locale away.
+                          # 🔴 SHARPEST SINGLE FINDING: **nested YAML resolves identically and defeats
+                          # every parse.** Nest a key, drop its `fr` half -> 702 tests + nine gates
+                          # green while the French UI renders English -- literally the defect AC1
+                          # exists to prevent, through one valid idiom. Arbitration 3 gains a FOURTH
+                          # option; (a), (b) and (c) all miss it.
+                          # ⚠️ AND THE INSTRUMENT THE STORY PRESCRIBED WAS BLIND: `strings | grep`
+                          # cannot see **163 of 284 `fr:` values** (GNU strings breaks its run on any
+                          # multibyte char). Use `grep -a <needle> target/debug/opencmdb`.
+                          # ⚠️ The build hazard is NARROWER than `deferred-work.md` states: `cargo
+                          # build` does not see an `app.yml`-only change, **`cargo test` DOES** (two
+                          # `include_str!`s in `#[cfg(test)]` modules give the test target a dep-info
+                          # edge the binary lacks -- measured end to end with a sentinel: 0 in the
+                          # binary, 3 in the test binary). The register row's scope is corrected in
+                          # the same push; the edge is INCIDENTAL and `build.rs` makes it structural.
+                          # ⚠️ Six of the fact-check layer's findings were MY OWN SENTENCES, and the
+                          # two sharpest are one defect twice: **an enumeration written from memory
+                          # rather than run** -- the commit table skipped story 6b.7 (`f32c268`, 184
+                          # keys), and the microcopy checklist said four rules where there are FIVE,
+                          # citing a range that held three. Story 5.13b's rule, met again.
+                          # 🔑 The gap-hunt's WORKING PROTOTYPE is kept, not discarded: branch
+                          # `worktree-agent-a3b64a3115e908a71`, three commits, `copy_vocabulary.rs`
+                          # (298 lines) + carrier 2 + `build.rs`. Read it; do not merge it.
+                          # (Earlier the same day) 6b.10 -> story file created by `create-story`.
+                          # 🔴 CONTEXTING'S CENTRAL MEASUREMENT: the epic's AC says *"32 keys today
+                          # against roughly a hundred in the mock"* and it is STALE -- `app.yml`
+                          # went 31 keys (before 6b.1) -> **284** (after 6b.9), 253 added by the
+                          # nine stories against an estimate of ~100, and **every one carries BOTH
+                          # locales already** (284 `en:`, 284 `fr:`, zero missing). AC1's letter is
+                          # MET; the block of text 6b.10 was scheduled to write was written
+                          # incrementally by the stories before it.
+                          # 🔴 WHAT IS LEFT IS THE HALF NOBODY HAS LOOKED AT: the default locale is
+                          # **`en`** (`main.rs:373`) and EVERY browser look in this epic was
+                          # `OPENCMDB_LOCALE=fr` -- 6b.2, 6b.4, 6b.4b, 6b.5, 6b.6, 6b.7, 6b.8, 6b.9,
+                          # measured across the story files. Both i18n defects this epic shipped
+                          # were on the ENGLISH side and both were found by accident.
+                          # 🔴 AND THE SWEEP FOUND THE PROOF, ON THE PRIMARY CONTROL:
+                          # `gesture.merge` renders **"Merge"** in English -- the ONE word the
+                          # binding glossary retires by name (`prd.md:1035-1037`,
+                          # `ux-design-specification.md:1386`: *"it names the forbidden operation --
+                          # the founding pillar is linked, never merged"*), on `/triage`'s primary
+                          # button, while the FR half (« Merger ») is correct. It is story 6b.6's
+                          # *"Drift"* defect one story later on a different term. Arbitration 1.
+                          # ⚠️ Second sweep finding: `_gap_card.html:1` carries
+                          # `aria-label="Reconciliation result"` -- an English literal a SIGHTED
+                          # browser look cannot see. Template text nodes are otherwise clean.
+                          # 🔴 AC2's GATE IS A SEAM NOTED SINCE STORY 3.8 AND NEVER BUILT
+                          # (`app.yml:2` says so in the file's own header). `gate_vocabulary`'s
+                          # volet A skips anything not `.rs` (`xtask/src/main.rs:461`) and
+                          # `CODE_RETIRED` is LOCALE-BLIND -- it could not carry `merge`, forbidden
+                          # in one language and binding in the other. TWO carriers are prescribed,
+                          # neither subsuming the other (story 6.3's design), and the gate goes in
+                          # `xtask/src/copy_vocabulary.rs`: `main.rs` is at **1908/2000** code lines.
+                          # ⚠️ THE BUILD HAZARD IS RE-MEASURED ON THIS TREE and made AC4 -- closed
+                          # by a `build.rs`, not registered, because this story's own PR and its own
+                          # mutation pass both run THROUGH it. Prove the fix with `strings`, not
+                          # with a rebuild time.
+                          #
+                          # (Earlier the same day) 6b.9 -> `done`: PR #113 squash-merged as `81589ff` after a green CI run
                           # (1m12s). Branch deleted, twins updated in this same push.
                           # 🔑 EPIC 6b: NINE numbered slots done (6b.1-6b.9) plus the 6b.4b
                           # insertion -- TEN story files of thirteen. NEXT = `create-story` 6b.10
@@ -4229,7 +4332,7 @@ development_status:
   6b-7-applications-and-ipam: done
   6b-8-sources-and-alerts: done
   6b-9-self-diagnostic-and-commissioning: done
-  6b-10-copy-fr-and-en: backlog
+  6b-10-copy-fr-and-en: in-progress
   6b-11-keyboard-layer-and-focus-contract: backlog
   6b-12-release-0-2-0-and-its-documents: backlog
   epic-6b-retrospective: required
