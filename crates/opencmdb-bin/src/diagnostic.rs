@@ -634,6 +634,34 @@ async fn read_store_from(pool: &sqlx::MySqlPool) -> Result<StoreFacts, sqlx::Err
     read_store(&mut conn).await
 }
 
+/// The store's contribution, or `None` if it did not answer within `budget`.
+///
+/// 🔴 **The budget is a PARAMETER so a test can reach the branch that enforces it.** The end-to-end
+/// guard drives a pool that REFUSES fast, so `read_store_from` always resolved with an error long
+/// before the budget could elapse — the timeout arm was never executed, and its own test comment
+/// said so without noticing: *"an acquire timeout well under the handler's budget"* is a
+/// description of why that branch is unreachable, not of why the test is sound. Found by the blind
+/// review layer, from the diff alone, with no repository access.
+///
+/// 🔑 *A guard placed where the defect cannot occur reads as coverage and is none* — this epic's
+/// dominant class, a FOURTH time inside this story, and the first one no mutation caught.
+async fn store_within(pool: &sqlx::MySqlPool, budget: std::time::Duration) -> Option<StoreFacts> {
+    match tokio::time::timeout(budget, read_store_from(pool)).await {
+        Ok(Ok(facts)) => Some(facts),
+        Ok(Err(error)) => {
+            tracing::warn!(%error, "the diagnostic could not read the store — rendering without it");
+            None
+        }
+        Err(_elapsed) => {
+            tracing::warn!(
+                budget_ms = budget.as_millis(),
+                "the diagnostic's store read did not answer in time — rendering without it"
+            );
+            None
+        }
+    }
+}
+
 /// How long the diagnostic waits for the store before rendering without it.
 ///
 /// 🔴 **AC7 was defeated by a timeout nobody had thought about, and the test that proved it was
@@ -652,20 +680,7 @@ const STORE_READ_BUDGET: std::time::Duration = std::time::Duration::from_secs(2)
 pub(crate) async fn diagnostic(
     axum::extract::State(state): axum::extract::State<crate::page::TriageState>,
 ) -> Response {
-    let store = match tokio::time::timeout(STORE_READ_BUDGET, read_store_from(&state.pool)).await {
-        Ok(Ok(facts)) => Some(facts),
-        Ok(Err(error)) => {
-            tracing::warn!(%error, "the diagnostic could not read the store — rendering without it");
-            None
-        }
-        Err(_elapsed) => {
-            tracing::warn!(
-                budget_ms = STORE_READ_BUDGET.as_millis(),
-                "the diagnostic's store read did not answer in time — rendering without it"
-            );
-            None
-        }
-    };
+    let store = store_within(&state.pool, STORE_READ_BUDGET).await;
     // A poisoned lock must not take the screen down either: the report is a convenience, and the
     // rest of the page is what the operator came for.
     let scan = state.diagnostic.scan.read().ok().and_then(|slot| *slot);
@@ -1232,6 +1247,40 @@ mod tests {
         assert!(
             STORE_READ_BUDGET <= std::time::Duration::from_secs(3),
             "and the budget itself stays within what an operator will wait: {STORE_READ_BUDGET:?}"
+        );
+    }
+
+    /// 🔴 **The BUDGET branch, and nothing reached it until the blind review layer said so.**
+    /// `the_route_answers_with_the_store_unreachable` drives a pool that refuses in 150 ms, so
+    /// `read_store_from` always resolved with an error and `tokio::time::timeout` never elapsed —
+    /// *the arm that enforces the budget was dead code under test*, while the test's own comment
+    /// explained exactly why, in the language of a justification.
+    ///
+    /// 🔑 A pool pointed at a NON-ROUTABLE address hangs instead of refusing, which is what a slow
+    /// store does; the budget is a parameter so this costs 60 ms rather than two seconds.
+    /// ⚠️ Proved to red: replacing `budget` with an hour makes it wait **5.002 s** — the pool's own
+    /// acquire timeout — and fail on the bound below.
+    #[tokio::test]
+    async fn a_store_that_is_slow_rather_than_down_is_bounded_by_the_budget() {
+        // 10.255.255.1 is RFC 1918 space with no host: the TCP handshake hangs rather than being
+        // refused. The pool's own acquire timeout is set FAR above the budget on purpose — if the
+        // budget stopped working, this test would wait five seconds and fail on the bound below.
+        let pool = sqlx::mysql::MySqlPoolOptions::new()
+            .acquire_timeout(std::time::Duration::from_secs(5))
+            .connect_lazy("mysql://root:x@10.255.255.1:3306/none")
+            .expect("lazy pool");
+        let budget = std::time::Duration::from_millis(60);
+        let started = std::time::Instant::now();
+        let store = store_within(&pool, budget).await;
+        let waited = started.elapsed();
+        assert!(
+            store.is_none(),
+            "a store that does not answer inside its budget contributes nothing"
+        );
+        assert!(
+            waited < std::time::Duration::from_millis(600),
+            "the BUDGET bounded the wait, not the pool: {waited:?} against a 60 ms budget and a \
+             5 s acquire timeout"
         );
     }
 
