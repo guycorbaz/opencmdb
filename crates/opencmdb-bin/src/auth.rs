@@ -81,7 +81,29 @@ pub(crate) fn is_public(path: &str) -> bool {
 /// (code review): a challenge nothing can satisfy is an infinite browser dialog on every
 /// unupgraded deployment, and a scheme `/metrics` does not accept must not be advertised.
 fn deny() -> Response {
-    (StatusCode::UNAUTHORIZED, "authentication required").into_response()
+    (StatusCode::UNAUTHORIZED, authentication_required()).into_response()
+}
+
+/// What an unauthenticated operator reads, in the interface's own language.
+///
+/// 🔴 **It was the bare English literal `"authentication required"` until story 6b.10's code
+/// review.** Guy's arbitration 3 of 2026-08-22 brought it inside arbitration 2(a′)'s perimeter on
+/// that arbitration's own criterion — *"the ten screens' rendered surface plus the bodies served
+/// at those same addresses"*: this one is served at every one of the ten, **before any screen**,
+/// on every request until credentials are supplied. It is the FIRST body an operator of a closed
+/// deployment reads, and it was the one page of the product still speaking English to a French
+/// instance.
+///
+/// ⚠️ `/metrics` receives it too. That is a body and not a header, inert for a machine client,
+/// and the alternative — splitting screens from machines — was refused because the split does not
+/// fall where the audience does: the pair-unconfigured refusal goes through [`deny`] and a HUMAN
+/// reads it on `/triage`.
+///
+/// 🔑 Cause AND next step, per the UX spec's second microcopy rule: a 401 that says only
+/// *"authentication required"* tells an operator who configured nothing to do the one thing that
+/// cannot work.
+fn authentication_required() -> String {
+    rust_i18n::t!("auth.required").to_string()
 }
 
 /// A 401 carrying `WWW-Authenticate: Basic realm="opencmdb"` — emitted only when the pair is
@@ -90,7 +112,7 @@ fn challenge() -> Response {
     (
         StatusCode::UNAUTHORIZED,
         [(header::WWW_AUTHENTICATE, BASIC_CHALLENGE)],
-        "authentication required",
+        authentication_required(),
     )
         .into_response()
 }

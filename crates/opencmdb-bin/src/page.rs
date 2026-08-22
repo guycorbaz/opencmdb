@@ -227,6 +227,13 @@ struct Strings {
     tagline: String,
     /// The navigation's accessible name (story 6b.2).
     nav_label: String,
+    /// The reconciliation card's accessible name (story 6b.10).
+    ///
+    /// 🔴 It was an English LITERAL in `_gap_card.html` until story 6b.10's sweep, and it is the
+    /// clearest case that story exists for: copy a **sighted browser look cannot see**, on the
+    /// card that predates this epic. Nine French looks walked past it; one `grep` over the
+    /// templates' human-text attributes found it.
+    gap_card_label: String,
     /// The example-data marker's badge (story 6b.3).
     example_badge: String,
     /// The example-data marker's sentence (story 6b.3).
@@ -290,11 +297,34 @@ struct Strings {
     identity_settled: String,
 }
 
+/// A count and its noun, INFLECTED — `1 field`, `2 fields`, `1 champ`, `2 champs`.
+///
+/// 🔴 **`/triage` rendered `1 field(s)` and `1 champ(s) déclaré(s)` until story 6b.10's code
+/// review**, on the product's primary screen, while `/devices` showed the same fact as `1 field`
+/// and `2 fields` one click away. Found by LOOKING at the English column, which is what
+/// arbitration 5(b)'s browser pass is for; no test could see it, because a parenthetical plural
+/// is a perfectly resolvable key.
+///
+/// ⚠️ **Two forms are enough HERE and the reason is a measurement, not a convenience**: both call
+/// sites read a count out of `result.abstentions`, a map whose entries exist only when the cause
+/// occurred, so `n >= 1` and the zero case — where the two languages disagree, `0 fields` against
+/// `0 champ` — never arises. A third form would be copy nothing can reach. The day a caller can
+/// pass zero, this function is where that decision has to be taken.
+fn counted_fields(base: &str, count: usize) -> String {
+    let key = if count == 1 {
+        format!("{base}_one")
+    } else {
+        format!("{base}_other")
+    };
+    rust_i18n::t!(key.as_str(), n = count).to_string()
+}
+
 fn strings() -> Strings {
     use rust_i18n::t;
     Strings {
         tagline: t!("page.tagline").to_string(),
         nav_label: t!("nav.label").to_string(),
+        gap_card_label: t!("page.gap_card_label").to_string(),
         example_badge: t!("example.badge").to_string(),
         example_sentence: t!("example.sentence").to_string(),
         dash_real_heading: t!("dash.real_heading").to_string(),
@@ -906,7 +936,7 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
-                    gestures: action_bar("gesture.merge"),
+                    gestures: action_bar("gesture.document"),
                     kind: t!("triage.kind.ecart").to_string(),
                     entity: ipv4.clone(),
                     field: gap.field.clone(),
@@ -937,7 +967,7 @@ fn build_triage(
                 field: String::new(),
                 declared: String::new(),
                 observed: String::new(),
-                count: t!("triage.n_fields", n = *count).to_string(),
+                count: counted_fields("triage.n_fields", *count),
                 counted: true,
                 seen: observed_seen.clone(),
                 age_seconds,
@@ -951,12 +981,12 @@ fn build_triage(
                     // story 6b.3's wrong-namespace defect waiting.
                     gestures: action_bar(match cause {
                         AbstentionCause::ConflictingObservations => "gesture.resolve",
-                        _ => "gesture.merge",
+                        _ => "gesture.document",
                     }),
                     kind: label.to_string(),
                     entity: ipv4.clone(),
                     field: String::new(),
-                    declared: t!("triage.cause.declared_side", n = *count).to_string(),
+                    declared: counted_fields("triage.cause.declared_side", *count),
                     declared_meta: declared_meta_line(entity_provenance, now),
                     observed: match cause {
                         AbstentionCause::NoObservedValue => t!("triage.cause.nothing_observed"),
@@ -999,7 +1029,7 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
-                    gestures: action_bar("gesture.merge"),
+                    gestures: action_bar("gesture.document"),
                     kind: t!("triage.kind.nouveau").to_string(),
                     entity: value.clone(),
                     field: "ipv4".to_string(),
@@ -1193,7 +1223,39 @@ async fn triage_view(
 fn server_error(error: sqlx::Error) -> Response {
     let repo_error = classify(error);
     tracing::error!(?repo_error, "loading the page's state failed");
-    (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
+    (StatusCode::INTERNAL_SERVER_ERROR, store_unreachable_body()).into_response()
+}
+
+/// What the operator reads when the store did not answer.
+///
+/// 🔴 **It was the bare English literal `"internal error"` until story 6b.10**, served at
+/// `/triage`, `/dashboard` and `/sources` — the ten screens' own addresses — on a French
+/// deployment. Guy's arbitration 2(a′): *an operator whose store is down must not be the one
+/// person who reads English on a French deployment.* It is the one path where the interface
+/// language silently stopped being the interface language, and it is reached exactly when the
+/// operator is least able to guess what happened.
+///
+/// 🔑 **It says what is NOT lost.** The UX spec's fourth microcopy rule is *error = cause + next
+/// step, never blame the user*; the fifth is *empty ≠ failure — calm, never alarming*. A store
+/// that did not answer has destroyed nothing: this product never overwrites an observation
+/// (NFR5) and never deletes a declared record, so the honest sentence is that the page could not
+/// be built, not that something is wrong with the data.
+///
+/// ⚠️ `t!` is a lookup in an embedded map — it opens no file, touches no store and cannot fail —
+/// so it is safe on this path. The **render-error** fallback in [`render_shell`] stays a plain
+/// literal by contrast, for the opposite reason: a page whose renderer has already failed is not
+/// the place to depend on the renderer.
+fn store_unreachable_body() -> String {
+    rust_i18n::t!("error.store_unreachable").to_string()
+}
+
+/// What the operator reads when a template failed to render but the data was fine.
+///
+/// A separate sentence from [`store_unreachable_body`] on purpose: the two failures have
+/// different causes and different next steps, and collapsing them into one *"internal error"* is
+/// what made the old body useless. See that function for the arbitration and the microcopy rules.
+pub(crate) fn render_error_body() -> String {
+    rust_i18n::t!("error.render_failed").to_string()
 }
 
 /// The example-data marker, rendered ONCE for a wholly-example screen.
@@ -1394,15 +1456,67 @@ fn build_dashboard(
 /// store, so it cannot live on `screens::router`'s `Router<()>`; the compile-time refusal of
 /// `State<MySqlPool>` therefore does not hold for this one screen, and holds for the eight that
 /// remain. See [`crate::screens::Nature::Mixed`] for the cost and the alternative that was refused.
+/// How long a screen that CANNOT render without the store waits for it.
+///
+/// 🔴 **Story 6b.10 gave the store-down page a calm French sentence and nothing measured WHEN it
+/// arrives.** Its code review did: with a real MariaDB paused mid-session, `/triage` answered
+/// **500 in 30.002731 s** and `/dashboard` in **30.002711 s** — sqlx's default acquire timeout —
+/// while `/diagnostic` answered 200 in 2.003674 s on its own budget. *A calm sentence that takes
+/// half a minute to arrive is read as a fault of the product, not of the database.*
+///
+/// ⚠️ **Five seconds, not the diagnostic's two, and the difference is the point.** `/diagnostic`
+/// DEGRADES — it renders without the store, so it can afford to be impatient. These two cannot:
+/// the budget decides only how fast the honest refusal arrives, so it leaves a genuinely slow
+/// first connection room to succeed. Both are far under thirty.
+///
+/// 🔑 Guy's arbitration 4 of 2026-08-22, option (B), taken over setting `acquire_timeout` on the
+/// production pool: that governs the wait for a FREE connection, so under load it turns a
+/// legitimate wait into an error, and it would reach the scan pass as well.
+const PAGE_STORE_BUDGET: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// A store read bounded by `budget`, or the response the operator gets instead.
+///
+/// 🔴 **`budget` is a PARAMETER so a test can reach the elapsed arm** — story 6b.9 shipped a
+/// guard whose test pool refused faster than the budget, leaving the timeout branch dead code
+/// under test while its own comment described why. *A guard placed where the defect cannot occur
+/// reads as coverage and is none.*
+async fn store_within<T>(
+    budget: std::time::Duration,
+    read: impl Future<Output = Result<T, Response>>,
+) -> Result<T, Response> {
+    match tokio::time::timeout(budget, read).await {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(response)) => Err(response),
+        Err(_elapsed) => {
+            tracing::error!(
+                budget_ms = budget.as_millis(),
+                "the store did not answer within this screen's budget — refusing rather than \
+                 holding the browser"
+            );
+            Err(server_error(sqlx::Error::PoolTimedOut))
+        }
+    }
+}
+
 pub async fn dashboard(State(state): State<TriageState>) -> Response {
     let perimeter = state.perimeter.clone();
-    let reach = match count_engine_reach(&state.pool).await {
+    let reach = match store_within(PAGE_STORE_BUDGET, async {
+        count_engine_reach(&state.pool).await.map_err(server_error)
+    })
+    .await
+    {
         Ok(rows) => rows,
-        Err(error) => return server_error(error),
+        Err(response) => return response,
     };
-    let last = match crate::repo::last_observed_at(&state.pool).await {
+    let last = match store_within(PAGE_STORE_BUDGET, async {
+        crate::repo::last_observed_at(&state.pool)
+            .await
+            .map_err(server_error)
+    })
+    .await
+    {
         Ok(instant) => instant,
-        Err(error) => return server_error(error),
+        Err(response) => return response,
     };
     let view = build_dashboard(build_identity_view(reach), last, now_utc());
     let body = DashboardBody { view, s: strings() };
@@ -1414,7 +1528,7 @@ pub async fn dashboard(State(state): State<TriageState>) -> Response {
         .into_response(),
         Err(error) => {
             tracing::error!(%error, "rendering the dashboard");
-            (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
+            (StatusCode::INTERNAL_SERVER_ERROR, render_error_body()).into_response()
         }
     }
 }
@@ -1608,7 +1722,7 @@ pub async fn sources(State(state): State<TriageState>) -> Response {
         .into_response(),
         Err(error) => {
             tracing::error!(%error, "rendering the sources screen");
-            (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
+            (StatusCode::INTERNAL_SERVER_ERROR, render_error_body()).into_response()
         }
     }
 }
@@ -1636,7 +1750,12 @@ pub async fn triage(
     // ⚠️ AC3: age sorting is OFF unless the operator asked for it, by name. Any other value of
     // `sort` is off — a typo must not silently brandish age.
     let sort_by_age = query.sort.as_deref() == Some("age");
-    match triage_view(&state.pool, query.sel.as_deref(), sort_by_age).await {
+    match store_within(
+        PAGE_STORE_BUDGET,
+        triage_view(&state.pool, query.sel.as_deref(), sort_by_age),
+    )
+    .await
+    {
         Ok((triage, identity)) => {
             let body = TriageBody {
                 triage,
@@ -1651,7 +1770,7 @@ pub async fn triage(
                 .into_response(),
                 Err(error) => {
                     tracing::error!(%error, "rendering the triage screen");
-                    (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
+                    (StatusCode::INTERNAL_SERVER_ERROR, render_error_body()).into_response()
                 }
             }
         }
@@ -1698,7 +1817,7 @@ fn render<T: Template>(template: T) -> Response {
         Ok(html) => Html(html).into_response(),
         Err(error) => {
             tracing::error!(%error, "rendering a template failed");
-            (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
+            (StatusCode::INTERNAL_SERVER_ERROR, render_error_body()).into_response()
         }
     }
 }
@@ -2557,6 +2676,364 @@ mod tests {
     ///
     /// If `templates/` cannot be read — which means the test is running somewhere the source
     /// tree is not, and every guard below would be vacuous rather than merely wrong.
+    /// AC1 — **no template hard-codes text a human reads out of an attribute.**
+    ///
+    /// 🔴 **This is the guard story 6b.10's sweep existed to produce, and the defect it found had
+    /// survived every story in this epic**: `_gap_card.html` opened with
+    /// `aria-label="Reconciliation result"` — English, on the French UI, since before Epic 6b.
+    ///
+    /// 🔑 **Why nine browser looks walked past it.** It is copy a **sighted** reader never sees.
+    /// The epic's method for catching an untranslated string was *look at the page*, and this is
+    /// precisely the class that method cannot reach. *A look at the page reads what the page
+    /// shows; a screen reader reads what it does not.*
+    ///
+    /// ⚠️ **The limit, written.** It is a list of attributes, and *an enumeration cannot claim the
+    /// completeness of a property* (story 5.12, fifth application here). A new ARIA attribute
+    /// carrying text is invisible until someone adds it below. It is a tripwire against the
+    /// ordinary gesture of typing a label into markup, never a barrier.
+    #[test]
+    fn no_template_hard_codes_text_a_human_reads_from_an_attribute() {
+        // Every attribute whose VALUE is prose rather than a token. `class`, `id`, `role`,
+        // `type`, `hx-*` and the `aria-*` attributes taking an idref or an enum are excluded on
+        // purpose: their values are not read aloud and not translated.
+        /// Whether an attribute value carries prose OUTSIDE its Askama interpolations.
+        ///
+        /// 🔑 The question is never *"is an interpolation present"* — a value may hold one and
+        /// still ship English words beside it, which story 6b.10's code review measured. Strip
+        /// every `{{ … }}` and `{% … %}`, then ask whether any letter survives. Punctuation and
+        /// separators do not: `"{{ a }} — {{ b }}"` is composed, not written.
+        fn carries_prose(value: &str) -> bool {
+            let mut rest = value;
+            let mut bare = String::new();
+            while let Some(open) = rest.find("{{").or_else(|| rest.find("{%")) {
+                bare.push_str(&rest[..open]);
+                let close = if rest[open..].starts_with("{{") {
+                    "}}"
+                } else {
+                    "%}"
+                };
+                match rest[open..].find(close) {
+                    Some(at) => rest = &rest[open + at + close.len()..],
+                    // An unterminated interpolation is not something to reason past.
+                    None => return true,
+                }
+            }
+            bare.push_str(rest);
+            bare.chars().any(char::is_alphabetic)
+        }
+
+        const PROSE_ATTRIBUTES: [&str; 8] = [
+            "aria-label",
+            "aria-description",
+            "aria-roledescription",
+            "aria-placeholder",
+            "aria-valuetext",
+            "title",
+            "alt",
+            "placeholder",
+        ];
+        let mut checked = 0_usize;
+        for (name, body) in templates() {
+            for attribute in PROSE_ATTRIBUTES {
+                // 🔴 **BOTH quoting styles.** Until story 6b.10's code review this matched
+                // `attr="` alone, and a single-quoted English literal was measured served
+                // verbatim on the French page with 720/720 tests and nine gates green. HTML
+                // permits either quote and a developer reaching for one inside an Askama
+                // expression reaches for the other.
+                for quote in ['"', '\''] {
+                    let needle = format!("{attribute}={quote}");
+                    for (at, _) in body.match_indices(&needle) {
+                        // A boundary, not a substring: `data-title='…'` is not `title`.
+                        //
+                        // ⚠️ It does NOT earn its keep on `aria-labelledby`, which the needle
+                        // already excludes by carrying the `=` — a claim this comment made until
+                        // the same review measured it.
+                        let before = body[..at].chars().next_back();
+                        if before.is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+                            continue;
+                        }
+                        let Some((value, _)) = body[at + needle.len()..].split_once(quote) else {
+                            continue;
+                        };
+                        checked += 1;
+                        // 🔴 **What remains once the interpolations are removed**, not merely
+                        // whether one is present. `aria-label="Reconciliation result for {{ x }}"`
+                        // satisfied `contains("{{")` and shipped four English words to a French
+                        // screen reader. An empty value stays legal — `alt=""` is the correct
+                        // markup for a decorative image, and it reads nothing aloud.
+                        assert!(
+                            !carries_prose(value),
+                            "{name} carries {attribute}={quote}{value}{quote} with LITERAL prose \
+                             outside its interpolations — it is read aloud to an operator whose \
+                             interface is in another language, and no browser look can see it. \
+                             Route every word through a key."
+                        );
+                    }
+                }
+            }
+        }
+        // 🔑 An EQUALITY, not a floor. *A floor is only a guard while it equals what is there*
+        // (this file's own rule, quoted in three places): `>= 4` tolerated the silent loss of
+        // every prose attribute but four. Raise this deliberately when you add one.
+        assert_eq!(
+            checked, 6,
+            "the premise: six prose-attribute occurrences exist to inspect — a scan that \
+             matched fewer has stopped seeing part of the surface it names"
+        );
+    }
+
+    /// 🔴 **AC1 on the PRODUCER side — and this guard exists because its sibling reads the
+    /// TEMPLATE while the defect lives one file over.**
+    ///
+    /// Story 6b.10's code review measured the ordinary gesture: replace
+    /// `gap_card_label: t!("page.gap_card_label").to_string()` with a bare
+    /// `"Reconciliation result".to_string()`, leave the template untouched, and the removed
+    /// English string is back on the served page — in English, on a French deployment — with
+    /// 485/161/74 tests and all nine gates green. `no_template_hard_codes_text_a_human_reads…`
+    /// cannot see it: it is entirely CORRECT about what it tests, and the value it inspects is
+    /// `{{ s.gap_card_label }}`, an interpolation, whatever the interpolation resolves to.
+    ///
+    /// ⚠️ **A TRIPWIRE, not a barrier** (story 5.12's precedent, stated rather than implied). It
+    /// bounds ONE function — the constructor every template's `s.*` field comes from. A literal
+    /// reaching a template by any other route is outside it, and the day a second such
+    /// constructor exists this guard must name it too.
+    #[test]
+    fn every_field_of_the_shared_strings_comes_from_a_key() {
+        let source = include_str!("page.rs");
+        let at = source
+            .find("fn strings() -> Strings {")
+            .expect("the shared strings have one constructor");
+        let body = &source[at..];
+        let body = &body[..body.find("\n}\n").expect("the constructor is a function")];
+
+        let mut checked = 0_usize;
+        for line in body.lines() {
+            let line = line.trim();
+            // A field initialiser is `name: <expr>,` — never the signature, a `use`, or a brace.
+            let Some((name, value)) = line.split_once(':') else {
+                continue;
+            };
+            if !value.trim_end().ends_with(',') || name.contains(' ') || name.is_empty() {
+                continue;
+            }
+            checked += 1;
+            assert!(
+                value.contains("t!("),
+                "`strings().{name}` is fed by `{}` rather than by a key — every field here is \
+                 read by a template and shown to an operator, and a literal is invisible to the \
+                 template-side guard, which sees only `{{{{ s.{name} }}}}`",
+                value.trim().trim_end_matches(',')
+            );
+        }
+        // 🔑 The premise is DERIVED from the struct, never pinned as a number: a second pass
+        // over the declaration, so the two cannot drift apart and neither can rot.
+        let at = source
+            .find("struct Strings {")
+            .expect("the shared strings are one struct");
+        let declaration = &source[at..];
+        let declaration = &declaration[..declaration.find("\n}\n").expect("the struct closes")];
+        let fields = declaration
+            .lines()
+            .filter(|line| line.trim().ends_with(": String,"))
+            .count();
+        assert_eq!(
+            checked, fields,
+            "every field of `Strings` was inspected — a scan that reads fewer initialisers than \
+             the struct has fields has stopped seeing part of what it names"
+        );
+    }
+
+    /// 🔴 **A screen that cannot render without the store REFUSES within its budget, and the
+    /// test pool is deliberately SLOWER than the budget so the elapsed arm actually runs.**
+    ///
+    /// Story 6b.9 shipped the mirror of this guard with its pool set to refuse in 150 ms against
+    /// a 2 s budget: the timeout branch was dead code under test, and its own comment described
+    /// why while reading as a justification. The blind review layer found it from the diff alone.
+    /// Here the pool points at an address nothing answers, with an acquire timeout of thirty
+    /// seconds — the sqlx default this budget exists to escape — so the ONLY way the assertion
+    /// below can pass is through `store_within`'s elapsed arm.
+    ///
+    /// ⚠️ It asserts on the CLOCK, which no source-reading guard can do: story 6b.10's code
+    /// review measured `/triage` answering 500 in 30.002731 s with a body nothing found fault
+    /// with. *The sentence was right and the wait was the defect.*
+    #[tokio::test]
+    async fn a_screen_that_needs_the_store_refuses_within_its_budget() {
+        let pool = sqlx::mysql::MySqlPoolOptions::new()
+            .acquire_timeout(std::time::Duration::from_secs(30))
+            .connect_lazy("mysql://nobody:nothing@127.0.0.1:1/none")
+            .expect("a lazy pool needs no server");
+        let budget = std::time::Duration::from_millis(200);
+
+        let started = std::time::Instant::now();
+        let outcome = store_within(budget, async {
+            crate::repo::last_observed_at(&pool).await.map_err(|e| {
+                // Reached only if the pool refuses rather than hanging; either way the
+                // assertion below is about the CLOCK, not about which arm produced it.
+                server_error(e)
+            })
+        })
+        .await;
+        let waited = started.elapsed();
+
+        assert!(outcome.is_err(), "an unreachable store cannot be rendered");
+        assert!(
+            waited < budget * 4,
+            "the screen waited {waited:?} against a {budget:?} budget — the whole point is that \
+             the operator is not held for sqlx's thirty-second default while a calm sentence \
+             waits behind it"
+        );
+    }
+
+    /// AC1 / arbitration 2(a′) — **a dead store answers in the operator's language.**
+    ///
+    /// 🔴 The body was the bare English literal `"internal error"`, served at `/triage`,
+    /// `/dashboard` and `/sources` — the ten screens' own addresses. Guy's arbitration of
+    /// 2026-08-21 brought it inside the perimeter: *an operator whose store is down must not be
+    /// the one person who reads English on a French deployment*, and it is the one path where the
+    /// interface language silently stopped being the interface language.
+    ///
+    /// 🔑 **Through the real handler helper and the real `Response`**, never through the constant:
+    /// story 6b.4b's finding is that every guard read the source and every defect lived in what
+    /// was served.
+    #[tokio::test]
+    async fn a_dead_store_answers_in_the_operators_language() {
+        let response = server_error(sqlx::Error::PoolTimedOut);
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .expect("the error body is small and in memory");
+        let body = String::from_utf8(body.to_vec()).expect("the body is UTF-8");
+        assert_ne!(
+            body, "internal error",
+            "the pre-6b.10 literal — English, at a French deployment's own screen addresses"
+        );
+        for locale in ["en", "fr"] {
+            let expected = rust_i18n::t!("error.store_unreachable", locale = locale).to_string();
+            assert_ne!(
+                expected, "error.store_unreachable",
+                "the key resolves in {locale}"
+            );
+        }
+        assert_eq!(body, rust_i18n::t!("error.store_unreachable").to_string());
+        // 🔑 The fourth microcopy rule is *cause + next step, never blame the user*, and the
+        // fifth is *empty ≠ failure — calm, never alarming*. A store that did not answer has
+        // destroyed nothing, and the body must say so rather than leaving the operator to guess.
+        for locale in ["en", "fr"] {
+            let sentence = rust_i18n::t!("error.store_unreachable", locale = locale).to_string();
+            assert!(
+                sentence.len() > 60,
+                "{locale}: a cause and a next step do not fit in a noun phrase — {sentence:?}"
+            );
+        }
+    }
+
+    /// AC1 / arbitration 2(a′) — and so does a template failure, with a DIFFERENT sentence.
+    ///
+    /// ⚠️ Two failures, two causes, two next steps. Collapsing them into one *"internal error"*
+    /// is what made the old body useless to the person reading it.
+    #[test]
+    fn a_render_failure_answers_in_the_operators_language_and_says_something_else() {
+        let rendered = render_error_body();
+        assert_ne!(rendered, "template error", "the pre-6b.10 literal");
+        assert_eq!(rendered, rust_i18n::t!("error.render_failed").to_string());
+        assert_ne!(
+            rendered,
+            store_unreachable_body(),
+            "a store that did not answer and a template that did not render are different \
+             failures with different next steps"
+        );
+    }
+
+    /// AC1 — **no response body pairs a status with an untranslated literal.**
+    ///
+    /// 🔑 **A source scan, and deliberately so**: this asserts the ABSENCE of a code path, and
+    /// *you cannot measure the absence of code by running code* (story 5.12's sentence, sixth
+    /// application). The two tests above measure what IS served; this one measures that no other
+    /// site was left behind — six existed before story 6b.10 and the sweep found them by reading.
+    ///
+    /// ⚠️ Its limit: a status paired with a literal assembled at run time is invisible here, as
+    /// is any file outside the two it reads — and `document.rs` is one of those, on purpose. See
+    /// the comment on the file list for what that costs and who owns it.
+    ///
+    /// 🔴 **It reddened on its own source the first time it ran**, because a file's test module
+    /// contains the guard's own needle as a string literal. *A matcher without a boundary finds
+    /// the language it is written in* — story 6b.6's sentence, met again — so it reads the CODE
+    /// half only, which is D56b's own line and the same cut the `file-size` gate makes.
+    #[test]
+    fn no_handler_pairs_a_status_with_an_untranslated_literal() {
+        /// Everything before the file's trailing `#[cfg(test)]` module (D56b: one per file).
+        fn code_half(source: &str) -> &str {
+            source
+                .find("\n#[cfg(test)]\n")
+                .map_or(source, |at| &source[..at])
+        }
+        // 🔴 **Every status a human reads, not `INTERNAL_SERVER_ERROR` alone.** Until story
+        // 6b.10's code review this matched one status while its own name promised *"a status"* —
+        // so a hand-written `(StatusCode::NOT_FOUND, "unknown device")` sat outside a guard
+        // titled as though it covered it, and that is the ordinary gesture.
+        const READ_BY_A_HUMAN: [&str; 6] = [
+            "StatusCode::INTERNAL_SERVER_ERROR,",
+            "StatusCode::NOT_FOUND,",
+            "StatusCode::FORBIDDEN,",
+            "StatusCode::BAD_REQUEST,",
+            "StatusCode::CONFLICT,",
+            "StatusCode::UNAUTHORIZED,",
+        ];
+        let mut checked = 0_usize;
+        // 🔴 `document.rs` is DELIBERATELY absent, and the exclusion is written here rather than
+        // implied by the list. Adding it reds on
+        // `"documenting failed — the store did not accept the write"` — a real, English,
+        // operator-readable 500 body, which this guard found on its first run and which Guy's
+        // arbitration 2(a′) of 2026-08-21 places OUTSIDE story 6b.10: no template calls
+        // `POST /document-all` today, so translating its bodies now is copy nobody can reach,
+        // written against a gesture story 6.4 may reshape. **Owner: story 6.4**, which is the
+        // story that gives the route a caller. Widen this list there, not before.
+        // ⚠️ `metrics.rs` is DELIBERATELY absent too, and the sentence is here rather than
+        // implied by the list — the guard found it on the first run of this widening, answering
+        // 500 with the English literal `"metrics encode error"`. Guy's arbitration 3 of
+        // 2026-08-22 settles it by its own criterion: the 401 came inside the perimeter because
+        // it is *served at the ten screens' own addresses*, and `/metrics` is not one of them.
+        // It is a scrape endpoint read by Prometheus, and a French sentence there would be copy
+        // written for no reader. **Owner: Epic 16**, which is where alerting gives `/metrics` an
+        // operator-facing surface, if it ever does.
+        //
+        // 🔴 **`example_screens.rs` and `auth.rs` join the list**, and why the first was missing
+        // is the sharpest part: it exists BECAUSE story 6b.6 split `page.rs`
+        // under file-size pressure, so the next such split would silently move an error body out
+        // of this guard's reach. A perimeter keyed to file NAMES rots every time a file is born.
+        for (file, source) in [
+            ("page.rs", code_half(include_str!("page.rs"))),
+            ("diagnostic.rs", code_half(include_str!("diagnostic.rs"))),
+            (
+                "example_screens.rs",
+                code_half(include_str!("example_screens.rs")),
+            ),
+            ("auth.rs", code_half(include_str!("auth.rs"))),
+        ] {
+            for status in READ_BY_A_HUMAN {
+                for (at, _) in source.match_indices(status) {
+                    let tail = source[at..].split_once(',').map_or("", |(_, rest)| rest);
+                    let argument = tail.trim_start();
+                    checked += 1;
+                    assert!(
+                        !argument.starts_with('"'),
+                        "{file} answers {status} with the literal {}, which reaches an operator \
+                         whose interface is in another language — route it through a key",
+                        argument.split('"').nth(1).unwrap_or(argument).trim()
+                    );
+                }
+            }
+        }
+        // 🔑 An EQUALITY. `>= 5` stood over six visible sites, so it tolerated the silent loss of
+        // one — and the test's own doc said *"six existed before story 6b.10"* while asserting
+        // five. Raise this deliberately when you add an error body.
+        assert_eq!(
+            checked, 8,
+            "the premise: eight operator-readable status sites exist across the four files — a \
+             scan that matched fewer has stopped seeing part of the surface it names"
+        );
+    }
+
     fn templates() -> Vec<(String, String)> {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
         fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<(String, String)>) {
@@ -3884,21 +4361,42 @@ mod tests {
             .expect("the selected row has a pane")
         };
 
-        let drift = pane_for("ecart:drift:hostname");
+        let gap_row = pane_for("ecart:drift:hostname");
         assert_eq!(
-            drift.gestures.len(),
+            gap_row.gestures.len(),
             5,
             "the mock's bar carries five controls"
         );
         assert!(
-            drift.gestures.iter().all(|g| g.not_built.is_some()),
+            gap_row.gestures.iter().all(|g| g.not_built.is_some()),
             "not one of the five exists today — every control is planned"
         );
-        assert_eq!(drift.gestures[0].label, "Merge", "a drift offers Merge");
+
+        // 🔴 **This assertion was the ONE test standing between the product and story 6b.10's
+        // arbitration 1, and it carried BOTH retired terms in one line**: it read
+        // `assert_eq!(…, "Merge", "a drift offers Merge")` — `Merge`, which the binding glossary
+        // retires in English by name, asserted under a message saying `drift`, the synonym story
+        // 6b.6 retired for `gap`. *A test that pins the ugly thing is a test that requires it*
+        // (story 6b.4), and this one required the defect for two stories running.
+        //
+        // 🔑 It now compares against the RESOLVED KEY, because what this test is about is **which
+        // gesture is primary**, never how that gesture is worded. The premise below is what keeps
+        // that from being vacuous.
+        let documenting = rust_i18n::t!("gesture.document").to_string();
+        let resolving = rust_i18n::t!("gesture.resolve").to_string();
+        assert_ne!(
+            documenting, resolving,
+            "the premise: the two gestures are worded differently, or the pair below would pass \
+             whichever one the code selected"
+        );
+        assert_eq!(
+            gap_row.gestures[0].label, documenting,
+            "a GAP row's primary control is the DOCUMENTING gesture"
+        );
 
         let conflict = pane_for("conflit:clash");
         assert_eq!(
-            conflict.gestures[0].label, "Resolve",
+            conflict.gestures[0].label, resolving,
             "a CONFLICT offers Resolve — and the choice comes from the cause, not from the \
              translated kind string"
         );

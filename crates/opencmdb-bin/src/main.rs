@@ -136,6 +136,54 @@ pub(crate) struct AppConfig {
     /// therefore `!is_empty()` and **not** `carries_a_visible_glyph`: the rule is
     /// `scrape_authorized`'s, moved, not rewritten.
     pub(crate) metrics_token: Option<String>,
+    /// `OPENCMDB_LOCALE`: the interface language, `en` when unset or blank.
+    ///
+    /// 🔴 **It moved HERE at story 6b.10, and — like `metrics_token` at 6b.9 — that REMOVED a
+    /// reader rather than adding one.** It was read raw in [`run`] with
+    /// `unwrap_or_else(|_| "en")`, which is story 6b.2's shipped M12 shape: a second reader of a
+    /// second variable, with its own idea of what a blank value means. `AppConfig::from_env`
+    /// discards a blank; the raw read did not, so `OPENCMDB_LOCALE=""` called `set_locale("")`.
+    ///
+    /// 🔴 **And an unrecognised value used to be accepted in SILENCE.** An operator who wrote
+    /// `FR` got an English interface with no diagnostic anywhere — the same class of trap as the
+    /// non-ASCII credential that authenticates nobody. It is now refused at boot, by name.
+    ///
+    /// ⚠️ **What counts as recognised is MEASURED, never enumerated** — see
+    /// [`primary_subtag_is_available`], and story 6b.10's validation, which caught a draft that
+    /// would have refused `fr-CH`, one of the forms that works.
+    pub(crate) locale: String,
+}
+
+/// The interface language when `OPENCMDB_LOCALE` is unset or blank. `rust_i18n::i18n!` names the
+/// same string as its `fallback`, and the two must stay equal: this is what an operator gets when
+/// they configure nothing, and that is a decision, not an accident.
+const DEFAULT_LOCALE: &str = "en";
+
+/// Whether `rust-i18n` will actually render `candidate` in the language the operator asked for.
+///
+/// 🔴 **This mirrors the resolver rather than describing it, and the difference is not academic.**
+/// Story 6b.10's first draft asserted that `OPENCMDB_LOCALE=fr-CH` *"is accepted in silence and
+/// the operator gets English"*. Measured against `rust_i18n::t!` on the committed corpus, that is
+/// **false**: `fr-CH`, `fr-ch`, `fr-FR` and even `fr-` all render French, because the resolver
+/// takes the primary subtag before `-` and matches it **case-sensitively** against
+/// `available_locales!()`. What really falls back, silently, is `FR`, `Fr`, `fr_CH` (an
+/// underscore, not a hyphen), `fr `, `fr.UTF-8`, `-fr`, `français` and `zz`.
+///
+/// 🔑 So the rule is the resolver's own: **split on `-`, take the first segment, exact match.** A
+/// refusal written against an enumerated list of "good" spellings would have rejected `fr-CH` —
+/// *an arbitration argued from an unmeasured example list decides the wrong thing precisely where
+/// the example was wrong.*
+///
+/// ⚠️ `fr-` is accepted, and deliberately: it looks malformed and it renders French, so refusing
+/// it would refuse a working configuration. This function's contract is *"does the operator get
+/// the language they asked for"*, not *"is this a well-formed BCP 47 tag"*.
+fn primary_subtag_is_available(candidate: &str, available: &[String]) -> bool {
+    // `Split::next()` yields `Some` for every input, `""` included, so the fallback arm is
+    // unreachable — story 6b.10's code review found this fact spelled two ways in one commit,
+    // `.unwrap_or(candidate)` here and `.expect("split yields one segment")` in a test. One
+    // spelling, and it is the one with no fallback to justify.
+    let primary = candidate.split('-').next().unwrap_or_default();
+    available.iter().any(|known| known == primary)
 }
 
 /// Whether a configured value carries at least one character an operator could SEE.
@@ -217,6 +265,15 @@ pub(crate) enum AppConfigError {
     /// on the FIRST colon, so such a user could never match and the deployment would refuse
     /// everyone with no diagnostic.
     ColonInUser,
+    /// `OPENCMDB_LOCALE` names a language this build cannot render. Refused by name rather than
+    /// falling back in silence: an operator who wrote `FR` and got an English interface had no
+    /// way to learn why, and nothing anywhere said so.
+    UnrecognisedLocale {
+        /// The value found in `OPENCMDB_LOCALE`.
+        value: String,
+        /// The locales this build carries, for the message — so the refusal says what to do.
+        available: Vec<String>,
+    },
 }
 
 impl std::fmt::Display for AppConfigError {
@@ -246,6 +303,34 @@ impl std::fmt::Display for AppConfigError {
                 "OPENCMDB_BASIC_USER contains a colon, which RFC 7617 forbids in the user-id — \
                  such a user could never authenticate"
             ),
+            // 🔴 **It named ONE cause for at least six, and the region example came from the
+            // wrong end** (story 6b.10's code review). *"the case must match"* explains `FR` and
+            // `Fr` and is FALSE for `fr_CH`, `fr `, `fr.UTF-8`, `-fr`, `français` and `zz` — and
+            // `fr_CH` is the one this file's own probe table calls *"the one most likely to be
+            // typed here"*, carried over from `LANG=fr_CH.UTF-8`. Meanwhile the suffix example
+            // was built from `available.first()`, so an operator asking for `FR` was offered
+            // `en-CH`. Both are the same mistake: a message written from the code's point of
+            // view rather than from the value the operator actually typed.
+            //
+            // 🔑 The rule the resolver really applies is pinned by `LOCALE_PROBES`: the part
+            // BEFORE the first `-` must match an available tag exactly, case included. Saying
+            // that says every refusal at once, and the example is now built from what was typed.
+            Self::UnrecognisedLocale { value, available } => write!(
+                f,
+                "OPENCMDB_LOCALE={value:?} is not a language this build carries — available: \
+                 {}. The part before the first hyphen must be one of those, spelled exactly: \
+                 lower case, no underscore, no encoding suffix. A region after a hyphen is fine \
+                 ({}-CH).",
+                available.join(", "),
+                value
+                    .split(['-', '_', '.'])
+                    .next()
+                    .filter(|head| !head.is_empty())
+                    .map_or_else(
+                        || available.first().map_or("fr", String::as_str).to_string(),
+                        str::to_lowercase
+                    )
+            ),
         }
     }
 }
@@ -264,6 +349,7 @@ impl AppConfig {
     /// Every refusal is a boot error with the variable named — see [`AppConfigError`].
     pub(crate) fn from_env(
         lookup: impl Fn(&str) -> Option<String>,
+        available_locales: &[String],
     ) -> Result<Self, AppConfigError> {
         let document_enabled = match lookup("OPENCMDB_DOCUMENT_ENABLED") {
             None => false,
@@ -280,6 +366,21 @@ impl AppConfig {
         // ⚠️ `!is_empty()`, deliberately — see the field's doc. Widening this to
         // `carries_a_visible_glyph` would change `/metrics`' behaviour, which this story does not.
         let metrics_token = lookup("OPENCMDB_METRICS_TOKEN").filter(|value| !value.is_empty());
+        // Blank counts as unset — `scan_cidr`'s precedent, and `carries_a_visible_glyph` rather
+        // than `trim()` because `"\u{200B}".trim().is_empty()` is FALSE in Rust (story 6b.2's
+        // code review measured it). A blank value yields the DEFAULT, which is not a surprise; a
+        // non-blank value we cannot render is, and is refused below.
+        let locale = match lookup("OPENCMDB_LOCALE").filter(|value| carries_a_visible_glyph(value))
+        {
+            None => DEFAULT_LOCALE.to_string(),
+            Some(value) if primary_subtag_is_available(&value, available_locales) => value,
+            Some(value) => {
+                return Err(AppConfigError::UnrecognisedLocale {
+                    value,
+                    available: available_locales.to_vec(),
+                });
+            }
+        };
         let user = lookup("OPENCMDB_BASIC_USER").filter(|value| !value.is_empty());
         let password = lookup("OPENCMDB_BASIC_PASSWORD").filter(|value| !value.is_empty());
         let basic = match (user, password) {
@@ -326,6 +427,7 @@ impl AppConfig {
             basic,
             scan_cidr,
             metrics_token,
+            locale,
         })
     }
 }
@@ -369,9 +471,6 @@ async fn main() -> std::process::ExitCode {
 /// Everything that can fail on the way up. Split out of `main` so a failure is logged through
 /// `tracing` — reaching the log files — instead of being printed past the subscriber.
 async fn run(log: diagnostic::LogDescriptor) -> anyhow::Result<()> {
-    // Select the UI locale (default `en`); user-facing strings resolve through `t!()`.
-    let locale = std::env::var("OPENCMDB_LOCALE").unwrap_or_else(|_| "en".to_string());
-    rust_i18n::set_locale(&locale);
     // Register the metrics so `/metrics` is non-empty on the first scrape.
     metrics::init();
     // The one place the wall clock is read; the domain receives Timestamps, never a clock.
@@ -380,8 +479,21 @@ async fn run(log: diagnostic::LogDescriptor) -> anyhow::Result<()> {
     let bind = load_bind_address().context("loading configuration")?;
     // The write-route switch and the Basic pair, validated at boot (story 6.1, arbitration 5).
     // A bad value refuses to start WITH the variable named, never at request time silently.
-    let config = AppConfig::from_env(|key| std::env::var(key).ok())
+    // 🔑 The available list comes from the RESOLVER, never from a literal: it is
+    // `rust_i18n::i18n!`'s own view of what this build carries, so a locale file gaining a third
+    // language widens the refusal automatically instead of needing someone to remember.
+    let available_locales: Vec<String> = rust_i18n::available_locales!()
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    let config = AppConfig::from_env(|key| std::env::var(key).ok(), &available_locales)
         .context("loading the auth configuration")?;
+    // 🔴 The UI locale is selected HERE, after the configuration has been validated, and not from
+    // a second raw `std::env::var` above (story 6b.10). Nothing between the top of `run` and this
+    // line resolves a `t!()` key: the tracing messages are English literals and
+    // `load_bind_address` reports through `anyhow`. `set_locale` is process-wide, which is why it
+    // is called once, here, and never in a test.
+    rust_i18n::set_locale(&config.locale);
     // Discrete DATABASE_* variables are the documented path; DATABASE_URL is the deprecated
     // fallback that keeps CI and existing deployments working (issue #6).
     let (database_url, source) = dburl::from_env(|key| std::env::var(key).ok())
@@ -782,6 +894,7 @@ mod tests {
 
     fn config(document_enabled: bool, basic: Option<BasicCredentials>) -> AppConfig {
         AppConfig {
+            locale: DEFAULT_LOCALE.to_string(),
             document_enabled,
             basic,
             // Story 6b.2: the shell's perimeter. `None` here so every pre-existing test keeps
@@ -1772,6 +1885,237 @@ mod tests {
 
     // ── AppConfig::from_env (arbitration 5; M7b, M8) ───────────────────────────────────────
 
+    /// The locales this build really carries, from the RESOLVER — never a literal, so a third
+    /// language added to `app.yml` reaches these tests without anybody editing them.
+    fn locales() -> Vec<String> {
+        rust_i18n::available_locales!()
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    /// [`AppConfig::from_env`] with the real available-locale list supplied — the shape every
+    /// pre-6b.10 test used, kept so those tests read as they did.
+    fn config_from_env(
+        lookup: impl Fn(&str) -> Option<String>,
+    ) -> Result<AppConfig, AppConfigError> {
+        AppConfig::from_env(lookup, &locales())
+    }
+
+    /// What `rust-i18n` really does with a locale string, MEASURED, and what `from_env` must
+    /// therefore decide about it.
+    ///
+    /// `(candidate, from_env accepts it, what `nav.dashboard` renders)`.
+    ///
+    /// 🔴 **A TEST ORACLE transcribed from a measurement, not derived from the code it checks** —
+    /// the `fixtures.rs` `expected()` idiom `CLAUDE.md` protects by name. Deriving the third
+    /// column from [`primary_subtag_is_available`] would make the check compare the refusal to
+    /// itself, and the whole point is that the refusal must agree with a resolver **nobody here
+    /// wrote**. If `rust-i18n` ever changes how it resolves, this table reds and the refusal is
+    /// re-decided deliberately instead of drifting.
+    ///
+    /// ⚠️ Story 6b.10's first draft named `fr-CH` as a value *"accepted in silence"* that yields
+    /// English. Row 3 is that claim, refuted: it renders French, and a refusal written against
+    /// the draft's list would have rejected a working configuration.
+    const LOCALE_PROBES: [(&str, bool, &str); 16] = [
+        ("en", true, "Dashboard"),
+        ("fr", true, "Tableau de bord"),
+        ("fr-CH", true, "Tableau de bord"),
+        ("fr-ch", true, "Tableau de bord"),
+        ("fr-FR", true, "Tableau de bord"),
+        // Malformed-looking and accepted on purpose: it renders French, and refusing a value
+        // that works is the defect this table exists to prevent.
+        ("fr-", true, "Tableau de bord"),
+        ("en-US", true, "Dashboard"),
+        ("en-GB", true, "Dashboard"),
+        // Every row below renders English while its text asks for something else — the silent
+        // failure the refusal exists to turn into a boot error.
+        ("FR", false, "Dashboard"),
+        ("Fr", false, "Dashboard"),
+        // An UNDERSCORE, not a hyphen — the POSIX spelling an operator carries over from
+        // `LANG=fr_CH.UTF-8`, and the one most likely to be typed here.
+        ("fr_CH", false, "Dashboard"),
+        ("fr ", false, "Dashboard"),
+        ("fr.UTF-8", false, "Dashboard"),
+        ("-fr", false, "Dashboard"),
+        ("français", false, "Dashboard"),
+        ("zz", false, "Dashboard"),
+    ];
+
+    /// The resolver still behaves as [`LOCALE_PROBES`] records — the measurement, re-taken.
+    ///
+    /// 🔑 This is the half that cannot be reasoned about: `rust-i18n`'s resolution rule is not
+    /// documented in this repository and was established by running it. The refusal is written
+    /// against this behaviour, so the behaviour is pinned.
+    #[test]
+    fn the_resolver_resolves_a_locale_the_way_this_story_measured() {
+        for (candidate, _, expected) in LOCALE_PROBES {
+            assert_eq!(
+                rust_i18n::t!("nav.dashboard", locale = candidate),
+                expected,
+                "`rust-i18n` renders {candidate:?} differently from what story 6b.10 measured — \
+                 the boot refusal is written against this behaviour, so re-decide it rather than \
+                 editing this row"
+            );
+        }
+    }
+
+    /// AC1 / arbitration 4 — `OPENCMDB_LOCALE` is refused by name when this build cannot render
+    /// it, and accepted whenever the resolver really honours it.
+    #[test]
+    fn an_unrenderable_locale_is_refused_by_name_and_a_working_one_is_not() {
+        let mut accepted = 0_usize;
+        let mut refused = 0_usize;
+        for (candidate, should_accept, _) in LOCALE_PROBES {
+            let outcome = config_from_env(lookup_of(&[("OPENCMDB_LOCALE", candidate)]));
+            match (should_accept, outcome) {
+                (true, Ok(config)) => {
+                    assert_eq!(config.locale, candidate, "the value is carried unchanged");
+                    accepted += 1;
+                }
+                (false, Err(AppConfigError::UnrecognisedLocale { value, available })) => {
+                    assert_eq!(value, candidate);
+                    assert_eq!(available, locales(), "the message says what IS available");
+                    refused += 1;
+                }
+                (true, Err(error)) => panic!(
+                    "{candidate:?} renders the language it names, and the product refused to \
+                     boot on it: {error}"
+                ),
+                (false, Ok(_)) => panic!(
+                    "{candidate:?} was accepted, and the operator would then get English with \
+                     no diagnostic anywhere — the silent fallback this refusal exists to end"
+                ),
+                // A locale value may not be refused for a reason belonging to another variable.
+                (false, Err(other)) => panic!(
+                    "{candidate:?} was refused as {other:?} — the locale must be refused as a \
+                     locale, or the message sends the operator to the wrong variable"
+                ),
+            }
+        }
+        // Both halves must be non-empty, or the loop asserts nothing about one of them.
+        assert_eq!((accepted, refused), (8, 8), "both poles are exercised");
+    }
+
+    /// 🔑 **The property behind the table, so the table is a record rather than the rule.**
+    ///
+    /// A candidate is accepted exactly when the resolver gives it the language its own primary
+    /// subtag names. Nothing may be accepted that renders something else — that is the whole
+    /// definition of a silent fallback.
+    #[test]
+    fn nothing_accepted_renders_a_language_other_than_the_one_it_names() {
+        for (candidate, should_accept, rendered) in LOCALE_PROBES {
+            if !should_accept {
+                continue;
+            }
+            let primary = candidate
+                .split('-')
+                .next()
+                .expect("split yields one segment");
+            assert_eq!(
+                rendered,
+                rust_i18n::t!("nav.dashboard", locale = primary),
+                "{candidate:?} is accepted, so it must render exactly what {primary:?} renders"
+            );
+        }
+    }
+
+    /// An unset or blank `OPENCMDB_LOCALE` is the DEFAULT, never a refusal.
+    ///
+    /// ⚠️ Blank is not a silent failure: the operator asked for nothing and gets the documented
+    /// default. `carries_a_visible_glyph` rather than `trim()`, because
+    /// `"\u{200B}".trim().is_empty()` is **false** in Rust — story 6b.2's code review measured
+    /// that, and a zero-width space would otherwise be refused as an unrenderable language.
+    #[test]
+    fn an_unset_or_blank_locale_is_the_default_rather_than_a_refusal() {
+        let unset = config_from_env(lookup_of(&[])).expect("unset is not a misconfiguration");
+        assert_eq!(unset.locale, DEFAULT_LOCALE);
+        for blank in ["", " ", "\t", "\u{200B}", "\u{FEFF}"] {
+            let config = config_from_env(lookup_of(&[("OPENCMDB_LOCALE", blank)]))
+                .unwrap_or_else(|error| panic!("{blank:?} must read as unset, not as {error}"));
+            assert_eq!(
+                config.locale, DEFAULT_LOCALE,
+                "{blank:?} carries nothing an operator could see"
+            );
+        }
+    }
+
+    /// The refusal names the variable, the value and the way out.
+    #[test]
+    fn the_locale_refusal_says_what_to_do_about_it() {
+        // 🔴 **Over EVERY refused probe, not `FR` alone.** Until story 6b.10's code review this
+        // built the error with one value — and the message it checked said *"the case must
+        // match"*, which is true of `FR` and `Fr` and FALSE of the six others. *A test that
+        // supplies the one input its subject happens to describe is placed where the defect
+        // cannot occur.*
+        for (value, accepted, _) in LOCALE_PROBES {
+            if accepted {
+                continue;
+            }
+            let message = AppConfigError::UnrecognisedLocale {
+                value: value.to_string(),
+                available: locales(),
+            }
+            .to_string();
+            assert!(
+                message.contains("OPENCMDB_LOCALE"),
+                "{value}: the variable is named — {message}"
+            );
+            assert!(
+                message.contains(&format!("{value:?}")),
+                "{value}: the value is quoted back — {message}"
+            );
+            for known in locales() {
+                assert!(
+                    message.contains(&known),
+                    "{value}: {known} is offered — {message}"
+                );
+            }
+            // 🔑 The region example is built from what the OPERATOR typed, never from
+            // `available.first()`: an operator asking for `FR` was being offered `en-CH`.
+            let head = value
+                .split(['-', '_', '.'])
+                .next()
+                .filter(|head| !head.is_empty())
+                .map_or_else(
+                    || locales().first().cloned().unwrap_or_default(),
+                    str::to_lowercase,
+                );
+            assert!(
+                message.contains(&format!("({head}-CH)")),
+                "{value}: the example is derived from the value typed, not from the first \
+                 available tag — {message}"
+            );
+            // The single-cause sentence is gone: nothing here may claim case is the only fault.
+            assert!(
+                !message.contains("the case must match"),
+                "{value}: one cause is named for at least six refusals — {message}"
+            );
+        }
+    }
+
+    /// `DEFAULT_LOCALE` and `rust_i18n::i18n!`'s declared fallback are the same string.
+    ///
+    /// 🔴 They are written in two places — the macro call at the crate root takes a literal — and
+    /// a divergence would be silent: the product would refuse nothing, boot, and render the
+    /// fallback while `AppConfig` reported a different language. Measured, not assumed: the
+    /// fallback is read back out of the crate's own source.
+    #[test]
+    fn the_default_locale_is_the_declared_fallback() {
+        let source = include_str!("main.rs");
+        let declared = source
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("rust_i18n::i18n!("))
+            .and_then(|call| call.split("fallback = \"").nth(1))
+            .and_then(|tail| tail.split('"').next())
+            .expect("the crate root declares `rust_i18n::i18n!` with a fallback");
+        assert_eq!(
+            declared, DEFAULT_LOCALE,
+            "an operator who configures nothing gets `DEFAULT_LOCALE`, and every key that is \
+             missing falls back to the macro's locale — the two must name one language"
+        );
+    }
+
     /// The lookup over a literal table — no env mutation anywhere in these tests.
     fn lookup_of<'a>(
         table: &'a [(&'static str, &'static str)],
@@ -1786,7 +2130,7 @@ mod tests {
 
     #[test]
     fn an_empty_environment_is_a_valid_minimal_config() {
-        let config = AppConfig::from_env(lookup_of(&[])).expect("valid");
+        let config = config_from_env(lookup_of(&[])).expect("valid");
         assert!(!config.document_enabled);
         assert_eq!(config.basic, None);
     }
@@ -1795,18 +2139,18 @@ mod tests {
     fn the_switch_accepts_its_documented_values_and_refuses_the_rest() {
         for on in ["1", "true", "TRUE", " 1 "] {
             let config =
-                AppConfig::from_env(lookup_of(&[("OPENCMDB_DOCUMENT_ENABLED", on)])).expect(on);
+                config_from_env(lookup_of(&[("OPENCMDB_DOCUMENT_ENABLED", on)])).expect(on);
             assert!(config.document_enabled, "{on:?} enables");
         }
         for off in ["0", "false", ""] {
             let config =
-                AppConfig::from_env(lookup_of(&[("OPENCMDB_DOCUMENT_ENABLED", off)])).expect(off);
+                config_from_env(lookup_of(&[("OPENCMDB_DOCUMENT_ENABLED", off)])).expect(off);
             assert!(!config.document_enabled, "{off:?} disables");
         }
         // "The rest" measured on several specimens, not one (code review): the near-misses a
         // hand reaching for a boolean actually types.
         for wrong in ["yes", "on", "enabled", "2", "vrai"] {
-            let refused = AppConfig::from_env(lookup_of(&[("OPENCMDB_DOCUMENT_ENABLED", wrong)]));
+            let refused = config_from_env(lookup_of(&[("OPENCMDB_DOCUMENT_ENABLED", wrong)]));
             assert_eq!(
                 refused,
                 Err(AppConfigError::UnrecognisedSwitch {
@@ -1819,7 +2163,7 @@ mod tests {
 
     #[test]
     fn a_full_pair_is_accepted() {
-        let config = AppConfig::from_env(lookup_of(&[
+        let config = config_from_env(lookup_of(&[
             ("OPENCMDB_BASIC_USER", "op"),
             ("OPENCMDB_BASIC_PASSWORD", "s3cret"),
         ]))
@@ -1837,7 +2181,7 @@ mod tests {
     /// credential of two empty strings that `base64(":")` would satisfy).
     #[test]
     fn an_empty_pair_is_unset_not_a_credential() {
-        let config = AppConfig::from_env(lookup_of(&[
+        let config = config_from_env(lookup_of(&[
             ("OPENCMDB_BASIC_USER", ""),
             ("OPENCMDB_BASIC_PASSWORD", ""),
         ]))
@@ -1857,7 +2201,7 @@ mod tests {
     #[test]
     fn a_perimeter_with_no_visible_glyph_counts_as_unset() {
         for blank in ["", " ", "\t", "\u{200B}", " \u{FEFF}\u{2060} ", "\u{00AD}"] {
-            let config = AppConfig::from_env(lookup_of(&[("OPENCMDB_SCAN_CIDR", blank)]))
+            let config = config_from_env(lookup_of(&[("OPENCMDB_SCAN_CIDR", blank)]))
                 .expect("a blank perimeter is not a boot error, only an unset one");
             assert_eq!(
                 config.scan_cidr, None,
@@ -1865,8 +2209,8 @@ mod tests {
                  rather than render a label with nothing after it"
             );
         }
-        let configured = AppConfig::from_env(lookup_of(&[("OPENCMDB_SCAN_CIDR", "192.0.2.0/24")]))
-            .expect("valid");
+        let configured =
+            config_from_env(lookup_of(&[("OPENCMDB_SCAN_CIDR", "192.0.2.0/24")])).expect("valid");
         assert_eq!(
             configured.scan_cidr.as_deref(),
             Some("192.0.2.0/24"),
@@ -1877,14 +2221,14 @@ mod tests {
 
     #[test]
     fn a_half_configured_pair_is_a_boot_error_in_both_directions() {
-        let missing_password = AppConfig::from_env(lookup_of(&[("OPENCMDB_BASIC_USER", "op")]));
+        let missing_password = config_from_env(lookup_of(&[("OPENCMDB_BASIC_USER", "op")]));
         assert_eq!(
             missing_password,
             Err(AppConfigError::HalfConfiguredPair {
                 missing: "OPENCMDB_BASIC_PASSWORD"
             })
         );
-        let missing_user = AppConfig::from_env(lookup_of(&[("OPENCMDB_BASIC_PASSWORD", "s3cret")]));
+        let missing_user = config_from_env(lookup_of(&[("OPENCMDB_BASIC_PASSWORD", "s3cret")]));
         assert_eq!(
             missing_user,
             Err(AppConfigError::HalfConfiguredPair {
@@ -1897,7 +2241,7 @@ mod tests {
     /// trap (`sécret`) would otherwise refuse everyone, permanently, with no diagnostic.
     #[test]
     fn a_non_ascii_credential_is_refused_at_boot() {
-        let bad_password = AppConfig::from_env(lookup_of(&[
+        let bad_password = config_from_env(lookup_of(&[
             ("OPENCMDB_BASIC_USER", "op"),
             ("OPENCMDB_BASIC_PASSWORD", "sécret"),
         ]));
@@ -1907,7 +2251,7 @@ mod tests {
                 var: "OPENCMDB_BASIC_PASSWORD"
             })
         );
-        let bad_user = AppConfig::from_env(lookup_of(&[
+        let bad_user = config_from_env(lookup_of(&[
             ("OPENCMDB_BASIC_USER", "opérateur"),
             ("OPENCMDB_BASIC_PASSWORD", "s3cret"),
         ]));
@@ -1924,7 +2268,7 @@ mod tests {
     /// it, so it would refuse everyone permanently with no diagnostic.
     #[test]
     fn a_control_character_in_a_credential_is_refused_at_boot() {
-        let newline_password = AppConfig::from_env(lookup_of(&[
+        let newline_password = config_from_env(lookup_of(&[
             ("OPENCMDB_BASIC_USER", "op"),
             ("OPENCMDB_BASIC_PASSWORD", "s3cret\n"),
         ]));
@@ -1934,7 +2278,7 @@ mod tests {
                 var: "OPENCMDB_BASIC_PASSWORD"
             })
         );
-        let tab_user = AppConfig::from_env(lookup_of(&[
+        let tab_user = config_from_env(lookup_of(&[
             ("OPENCMDB_BASIC_USER", "op\t"),
             ("OPENCMDB_BASIC_PASSWORD", "s3cret"),
         ]));
@@ -1950,7 +2294,7 @@ mod tests {
     /// colon), so it is refused at boot rather than silently refusing everyone forever.
     #[test]
     fn a_colon_in_the_user_half_is_refused_at_boot() {
-        let refused = AppConfig::from_env(lookup_of(&[
+        let refused = config_from_env(lookup_of(&[
             ("OPENCMDB_BASIC_USER", "op:eration"),
             ("OPENCMDB_BASIC_PASSWORD", "s3cret"),
         ]));

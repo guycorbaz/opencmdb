@@ -20,6 +20,18 @@ page.observed:
 page.no_observation:
   en: "No in-perimeter observation yet."
   fr: "Aucune observation dans le périmètre pour l'instant."
+error.store_unreachable:
+  en: "The store did not answer. Nothing was lost — the observations and the documented records are intact; only this page could not be built. Try again, and see the self-diagnostic if it persists."
+  fr: "La base n'a pas répondu. Rien n'est perdu — les observations et les enregistrements documentés sont intacts ; seule cette page n'a pas pu être construite. Réessayez, et consultez l'auto-diagnostic si cela persiste."
+auth.required:
+  en: "Authentication required. This instance is closed by default: supply the operator credentials it was configured with. If none were configured, no one can sign in yet — set OPENCMDB_BASIC_USER and OPENCMDB_BASIC_PASSWORD and restart."
+  fr: "Authentification requise. Cette instance est fermée par défaut : fournissez les identifiants d'exploitant configurés. Si aucun ne l'a été, personne ne peut encore se connecter — définissez OPENCMDB_BASIC_USER et OPENCMDB_BASIC_PASSWORD, puis redémarrez."
+error.render_failed:
+  en: "This page could not be rendered. The data behind it is intact; the fault is in the display. Try again, and see the self-diagnostic if it persists."
+  fr: "Cette page n'a pas pu être affichée. Les données derrière elle sont intactes ; la panne est dans l'affichage. Réessayez, et consultez l'auto-diagnostic si cela persiste."
+page.gap_card_label:
+  en: "Reconciliation result"
+  fr: "Résultat de la réconciliation"
 page.the_gap:
   en: "The gap"
   fr: "L'écart"
@@ -247,9 +259,12 @@ triage.kind.nouveau:
   en: "New"
   fr: "Nouveau"
 # 🔑 FR16b: each cause is ONE line carrying its count, never N failures.
-triage.cause.declared_side:
-  en: "%{n} declared field(s)"
-  fr: "%{n} champ(s) déclaré(s)"
+triage.cause.declared_side_one:
+  en: "%{n} declared field"
+  fr: "%{n} champ déclaré"
+triage.cause.declared_side_other:
+  en: "%{n} declared fields"
+  fr: "%{n} champs déclarés"
 triage.cause.nothing_observed:
   en: "No source reported a value"
   fr: "Aucune source n'a rapporté de valeur"
@@ -281,9 +296,12 @@ origin.unknown:
 meta.source_id:
   en: "Source %{id}"
   fr: "Source %{id}"
-triage.n_fields:
-  en: "%{n} field(s)"
-  fr: "%{n} champ(s)"
+triage.n_fields_one:
+  en: "%{n} field"
+  fr: "%{n} champ"
+triage.n_fields_other:
+  en: "%{n} fields"
+  fr: "%{n} champs"
 meta.no_source:
   en: "No source"
   fr: "Aucune source"
@@ -322,8 +340,14 @@ gesture.badge:
 gesture.not_built:
   en: "This gesture is not built yet."
   fr: "Ce geste n'est pas encore construit."
-gesture.merge:
-  en: "Merge"
+# 🔴 `gesture.document`, NOT `gesture.merge`, and the English value is `Document` — Guy's
+# arbitration 1 of 2026-08-21, story 6b.10. The binding glossary retires `merge` IN ENGLISH by
+# name (`prd.md:1037`, `ux-design-specification.md:1386`): *"it names the forbidden operation —
+# the founding pillar is linked, never merged"*. The FRENCH « Merger » is the FIXED translation
+# of `document` and carries no such claim, so it is unchanged. The key name is in scope too: the
+# glossary's first column is "EN (docs, API, code)".
+gesture.document:
+  en: "Document"
   fr: "Merger"
 gesture.resolve:
   en: "Resolve"
@@ -417,27 +441,33 @@ devices.seen:
 devices.none:
   en: "No device of this kind."
   fr: "Aucun appareil de ce type."
+# 🔴 SINGULAR, all seven. These labels are used in TWO positions — the inventory's filter chips
+# and a single device's *Kind* cell — and only one reading can be right in both. The plural made
+# the cell say *"nas-01 · Servers"*, which is wrong about one machine, while a filter chip in the
+# singular is merely a style choice. ⚠️ The set was also inconsistent with ITSELF: six plurals and
+# one singular (`network`), which is what made the mismatch visible when the English screen was
+# read at story 6b.10. Found by looking; no test could see it.
 example.kind.server:
-  en: "Servers"
-  fr: "Serveurs"
+  en: "Server"
+  fr: "Serveur"
 example.kind.vm:
-  en: "Virtual machines"
-  fr: "Machines virtuelles"
+  en: "Virtual machine"
+  fr: "Machine virtuelle"
 example.kind.container:
-  en: "Containers"
-  fr: "Conteneurs"
+  en: "Container"
+  fr: "Conteneur"
 example.kind.appliance:
-  en: "Appliances"
-  fr: "Appliances"
+  en: "Appliance"
+  fr: "Appliance"
 example.kind.network:
   en: "Network"
   fr: "Réseau"
 example.kind.printer:
-  en: "Printers"
-  fr: "Imprimantes"
+  en: "Printer"
+  fr: "Imprimante"
 example.kind.workstation:
-  en: "Workstations"
-  fr: "Postes"
+  en: "Workstation"
+  fr: "Poste"
 example.role.application:
   en: "Application"
   fr: "Application"
@@ -619,8 +649,10 @@ ipam.conflict_observed:
 ipam.conflict_lease:
   en: "DHCP lease seen %{at}"
   fr: "bail DHCP vu %{at}"
+# ⚠️ *"in the triage"* is « dans le triage » carried across; English takes no article here. The
+# glossary's `triage`/« triage » pair survives the fix — the term is kept, the article is dropped.
 ipam.conflict_link:
-  en: "Settle it in the triage"
+  en: "Settle it in triage"
   fr: "Trancher dans le triage"
 
 # ── Sources (story 6b.8) — the REAL capability boundary ──────────────────────
@@ -877,8 +909,11 @@ diagnostic.log_rotation_daily:
 diagnostic.log_no_rotation:
   en: "none — nothing is written to a file"
   fr: "aucune — rien n'est écrit dans un fichier"
+# ⚠️ « niveau en vigueur » is right in French and *"level in force"* is a Gallicism in English —
+# found by READING the English screen at story 6b.10, by nothing else. A test can check that a key
+# resolves; it cannot hear that a sentence was turned rather than written.
 diagnostic.log_level:
-  en: "level in force"
+  en: "current level"
   fr: "niveau en vigueur"
 diagnostic.log_retention:
   en: "files kept"

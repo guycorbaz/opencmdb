@@ -73,3 +73,10 @@ zeroize = "1.9.0"
 opencmdb-core = { workspace = true, features = ["test-support"] }
 # `ServiceExt::oneshot` to drive the axum router in tests without binding a socket.
 tower = { version = "0.5.2", features = ["util"] }
+# TEST-ONLY. `every_key_carries_both_locales` reads `locales/app.yml`, and Guy's arbitration 3(d)
+# of 2026-08-21 requires it to do so with a REAL parse rather than by line shape — because YAML
+# nesting resolves identically through `t!` and a line-shape scan cannot see it: story 6b.10's
+# validation measured a nested key with its `fr` half removed leaving the whole suite and every
+# gate GREEN while the French UI rendered English. ⚠️ Already in `Cargo.lock` via `config`, and a
+# DEV-dependency, so it adds nothing to the shipped binary and no crate to the supply chain.
+yaml-rust2 = "0.11.0"

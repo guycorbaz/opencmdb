@@ -491,6 +491,58 @@ fn demonstration_screen(
     Html(render_shell(Shell::new(screen, perimeter), body)).into_response()
 }
 
+/// Reading `locales/app.yml` the way the RESOLVER does — shared by every test that needs to
+/// enumerate the copy.
+///
+/// 🔴 **It exists because two modules were discovering keys by LINE SHAPE**
+/// (`line.strip_suffix(':')` plus an indentation test) inside the very story that abolished that
+/// parse for being blind to 7 of 12 legal YAML shapes. A nested key is invisible to a line scan,
+/// so `state_vocabulary`'s resolved-value carrier was silently skipping any key the file might
+/// nest — the same hole, one file over, in the guard written to close it.
+///
+/// ⚠️ It is `#[cfg(test)]` and deliberately NOT a production reader: `rust_i18n` owns the
+/// resolution at runtime, and a second production parse of the same file would be two
+/// representations of one fact.
+#[cfg(test)]
+pub(crate) mod locale_keys {
+    use yaml_rust2::{Yaml, YamlLoader};
+
+    /// Every dotted key path the locale file carries, at any nesting depth, in document order.
+    ///
+    /// The root's own bookkeeping pair (`_version`) is not a key of the copy and is excluded, so
+    /// the result is exactly the set `t!` can resolve.
+    pub(crate) fn key_paths() -> Vec<String> {
+        let yaml = include_str!("../locales/app.yml");
+        let documents = YamlLoader::load_from_str(yaml).expect("the locale file is valid YAML");
+        let root = documents.first().expect("one document");
+        let mut out = Vec::new();
+        walk(root, "", &mut out);
+        out
+    }
+
+    fn walk(node: &Yaml, path: &str, out: &mut Vec<String>) {
+        let Some(map) = node.as_hash() else { return };
+        let bears_value = map
+            .iter()
+            .any(|(_, value)| value.as_str().is_some_and(|v| !v.trim().is_empty()));
+        if bears_value && !path.is_empty() {
+            out.push(path.to_string());
+        }
+        for (key, value) in map {
+            if value.as_hash().is_some()
+                && let Some(key) = key.as_str()
+            {
+                let child = if path.is_empty() {
+                    key.to_string()
+                } else {
+                    format!("{path}.{key}")
+                };
+                walk(value, &child, out);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -642,51 +694,199 @@ mod tests {
     /// AC6 — no key ever regresses to a single locale.
     ///
     /// 🔴 **This is the direction that is silent.** `rust-i18n` falls back to `en`, so deleting a
-    /// FRENCH value renders English inside the French interface and no render-time guard can
-    /// see it — measured: with `nav.alerts`' `fr` half removed, the whole suite stayed green.
-    /// The English direction is loud by comparison. So the assertion is over the FILE, in both
+    /// FRENCH value renders English inside the French interface and no render-time guard can see
+    /// it — measured: with `nav.alerts`' `fr` half removed, the whole suite stayed green. The
+    /// English direction is loud by comparison. So the assertion is over the FILE, in both
     /// directions, rather than over a rendering.
     ///
-    /// Baseline measured on `master`: 32 top-level entries, not one missing a locale. The guard
-    /// is therefore *"no key regresses"*, never *"add the missing ones"*.
+    /// # Why a real YAML parse, and why the old floor had to go — Guy's arbitration 3(d)
+    ///
+    /// 🔴 **The line-shape version of this guard was defeated by ORDINARY VALID YAML**, and story
+    /// 6b.10's validation measured it rather than suspecting it. Nesting resolves identically
+    /// through `t!`:
+    ///
+    /// ```yaml
+    /// gesture:
+    ///   badge:
+    ///     en: "Not yet"
+    /// ```
+    ///
+    /// `t!("gesture.badge")` returns the same value either way. Nest a key, remove its `fr` half,
+    /// and the result was **the whole suite and every gate GREEN** while
+    /// `t!("gesture.badge", locale = "fr")` rendered English — *literally the defect this test
+    /// exists to prevent*. A line-shape scan sees no key there at all, and a key that is not in
+    /// the population is not missing a locale.
+    ///
+    /// ⚠️ **And the guard did red on the nested shape — for the WRONG reason** (`gesture carries
+    /// []`, an unrelated false positive), whose message invited the repair that opens the hole.
+    /// *A guard that fails for the wrong reason is worth nothing*, and here it was worse than
+    /// nothing: it taught the developer to widen the gap.
+    ///
+    /// # The floor, and what a floor is FOR
+    ///
+    /// 🔴 It read `checked >= 47` under a message saying *"48 entries"* while the file held
+    /// **284** — six times below what was there, in a message stating a figure that had been
+    /// false since story 6b.3. `deferred-work.md` assigned the fix here and named the decision
+    /// rather than taking it: *a premise check that the file was read at all, or a count that must
+    /// track the file?*
+    ///
+    /// 🔑 **Guy took neither: the count is DERIVED.** `checked` must equal a second, independent
+    /// pass over the same document, so there is no number to maintain and no message to go stale —
+    /// `fixtures.rs`'s `expected()` idiom, which `CLAUDE.md` protects by name. The bare constant
+    /// that remains asserts only that the scan matched *something*, which is all a premise check
+    /// can honestly claim.
+    ///
+    /// ⚠️ **One class this still cannot catch, stated rather than implied**: a key block deleted
+    /// outright. Both passes then agree the key is gone, because it is. Nothing here can see that,
+    /// and it is registered rather than papered over.
+    /// 🔴 **No rendered value fobs the reader off with a parenthetical plural.**
+    ///
+    /// `/triage` shipped `1 field(s)` in English and `1 champ(s) déclaré(s)` in French — on the
+    /// product's primary screen, while `/devices` showed the same fact as `1 field` / `2 fields`
+    /// one click away. Found by LOOKING at the English column during story 6b.10's code review,
+    /// and no test could have seen it: a parenthetical plural is a perfectly resolvable key, in
+    /// both languages, under every existing guard.
+    ///
+    /// 🔑 A PROPERTY over the whole file rather than a fix to two keys — the class is what
+    /// matters, and it is the shape a developer reaches for the moment a count meets a noun.
+    /// ⚠️ It is about the LAZY form specifically, not about parentheses: a value may carry them
+    /// for anything else.
     #[test]
-    fn every_key_carries_both_locales() {
+    fn no_value_fobs_the_reader_off_with_a_parenthetical_plural() {
         let yaml = include_str!("../locales/app.yml");
-        let mut key = String::new();
-        let mut locales: Vec<&str> = Vec::new();
-        let mut checked = 0usize;
-        let flush = |key: &str, locales: &mut Vec<&str>, checked: &mut usize| {
-            if key.is_empty() || key == "_version" {
-                locales.clear();
-                return;
+        let mut checked = 0_usize;
+        for (number, line) in yaml.lines().enumerate() {
+            let Some((locale, value)) = line.trim().split_once(": ") else {
+                continue;
+            };
+            if !matches!(locale, "en" | "fr") {
+                continue;
             }
-            *checked += 1;
-            assert!(
-                locales.contains(&"en") && locales.contains(&"fr"),
-                "{key} carries {locales:?} — a key with only `en` renders English inside the \
-                 French UI, silently, because rust-i18n falls back"
-            );
-            locales.clear();
-        };
-        for line in yaml.lines() {
-            let trimmed = line.trim_end();
-            if trimmed.starts_with("  en:") {
-                locales.push("en");
-            } else if trimmed.starts_with("  fr:") {
-                locales.push("fr");
-            } else if let Some(name) = trimmed.strip_suffix(':')
-                && !name.starts_with(' ')
-                && !name.starts_with('#')
-            {
-                flush(&key, &mut locales, &mut checked);
-                key = name.to_string();
+            checked += 1;
+            for lazy in ["(s)", "(e)s", "(es)"] {
+                assert!(
+                    !value.contains(lazy),
+                    "app.yml:{}: {value} carries the lazy plural {lazy:?} — inflect it instead, \
+                     the way `counted_fields` does, and let the count choose the form",
+                    number + 1
+                );
             }
         }
-        flush(&key, &mut locales, &mut checked);
         assert!(
-            checked >= 47,
-            "the premise: 48 entries minus `_version` ({checked} scanned) — a scan that found \
-             nothing would assert nothing"
+            checked > 400,
+            "the premise: both locale halves of the file were read ({checked} values)"
+        );
+    }
+
+    #[test]
+    fn every_key_carries_both_locales() {
+        use yaml_rust2::{Yaml, YamlLoader};
+
+        let yaml = include_str!("../locales/app.yml");
+        let documents = YamlLoader::load_from_str(yaml).expect("the locale file is valid YAML");
+        // ⚠️ The root hash is NOT bound here any more. It was, while the second pass counted
+        // top-level entries; that pass now walks the whole tree from `documents.first()`, and a
+        // binding nothing reads is a claim that something does.
+        assert!(
+            documents.first().and_then(Yaml::as_hash).is_some(),
+            "the locale file is a mapping — the premise both passes below rest on"
+        );
+
+        /// Every `(dotted key path, locales)` the document really carries, at any nesting depth.
+        ///
+        /// 🔴 **A BLANK value is not a present locale.** `fr: ""` is a `Yaml::String`, so
+        /// `as_str().is_some()` accepted it until story 6b.10's code review — measured leaving
+        /// 720/720 tests and nine gates green while the French page served
+        /// `<button class="refresh"></button>`, a control with no label at all. Rendering
+        /// NOTHING is strictly worse than rendering English, which is the case this guard's own
+        /// message names, and it is the ordinary outcome of a translator leaving a value blank.
+        fn walk(node: &Yaml, path: &str, out: &mut Vec<(String, Vec<String>)>) {
+            let Some(map) = node.as_hash() else { return };
+            let locales: Vec<String> = map
+                .iter()
+                .filter(|(_, value)| value.as_str().is_some_and(|v| !v.trim().is_empty()))
+                .filter_map(|(key, _)| key.as_str().map(str::to_string))
+                .collect();
+            if !locales.is_empty() {
+                out.push((path.to_string(), locales));
+            }
+            for (key, value) in map {
+                if value.as_hash().is_some()
+                    && let Some(key) = key.as_str()
+                {
+                    let child = if path.is_empty() {
+                        key.to_string()
+                    } else {
+                        format!("{path}.{key}")
+                    };
+                    walk(value, &child, out);
+                }
+            }
+        }
+
+        let mut entries: Vec<(String, Vec<String>)> = Vec::new();
+        walk(documents.first().expect("one document"), "", &mut entries);
+
+        let mut checked = 0_usize;
+        for (key, locales) in &entries {
+            // The document root also carries `_version: 2`, a scalar with no locale beneath it.
+            if key.is_empty() {
+                continue;
+            }
+            checked += 1;
+            assert!(
+                locales.iter().any(|l| l == "en") && locales.iter().any(|l| l == "fr"),
+                "{key} carries {locales:?} — a key missing `fr` renders English inside the \
+                 French UI, silently, because rust-i18n falls back; a key whose value is BLANK \
+                 renders nothing at all, which is worse and is why an empty string does not \
+                 count as a locale here"
+            );
+        }
+
+        // 🔑 **The count is DERIVED, not believed**: a second pass over the same document,
+        // written as an explicit-stack traversal rather than a recursion, so a defect in one
+        // walker does not reproduce itself in the other. Nothing to maintain, nothing to rot.
+        //
+        // 🔴 **It counted a DIFFERENT population until story 6b.10's code review**: top-level
+        // entries whose value is a hash, against `checked`'s value-bearing nodes at ANY depth.
+        // The two coincide only while every nested block holds exactly one child, and ordinary
+        // valid YAML of arity two — two keys under one `nav:` — made this assertion FAIL over a
+        // file where both halves of every key were present. ⚠️ That is the failure mode this
+        // guard's predecessor is on record for: *it reds for the WRONG reason, and its message
+        // invites the repair that opens the hole* — here, relaxing or deleting the count, which
+        // is the whole of arbitration 3(d).
+        //
+        // ⚠️ What it can NOT see, stated rather than implied: both passes read ONE parse, so a
+        // key block deleted outright satisfies both. That is registered, not guarded.
+        let mut translated = 0_usize;
+        // `(node, is_root)` — the first pass skips the root by its empty path, so the second
+        // skips it by this flag rather than by subtracting one afterwards. ⚠️ Subtracting was
+        // measured WRONG while writing this: `_version: 2` is a `Yaml::Integer`, so the root
+        // carries no string scalar and was never counted in the first place.
+        let mut stack: Vec<(&Yaml, bool)> = vec![(documents.first().expect("one document"), true)];
+        while let Some((node, is_root)) = stack.pop() {
+            let Some(map) = node.as_hash() else { continue };
+            if !is_root
+                && map
+                    .iter()
+                    .any(|(_, value)| value.as_str().is_some_and(|v| !v.trim().is_empty()))
+            {
+                translated += 1;
+            }
+            for (_, value) in map {
+                if value.as_hash().is_some() {
+                    stack.push((value, false));
+                }
+            }
+        }
+        assert_eq!(
+            checked, translated,
+            "the two passes disagree about how many value-bearing keys this file has — one of \
+             them has gone blind, and a floor that is a constant would notice neither"
+        );
+        assert!(
+            checked > 0,
+            "the premise, and all a premise check can honestly claim: the scan matched something"
         );
     }
 

@@ -3622,7 +3622,7 @@ headless browser and a live `mariadb:10.11.11`._
   every story that adds an asset**, starting with 6b.1's own T2.
 
 - ⚠️ **`epics.md:2108` states Epic 6b's Definition of Done as *"`cargo xtask ci` green — seven
-  gates"***; `run_ci` runs **eight** since story 6.3, and 6b.2's chain would make it nine. A story
+  gates"***; `run_ci` runs **NINE** since story 6b.10, which added `copy-vocabulary` (this row said *"eight … and 6b.2's chain would make it nine"*; that chain never landed — there is no Tailwind chain — and the ninth gate came from somewhere else entirely. Corrected at 6b.10's code review, which found the row left stale by the very story that made it stale). A story
   does not edit `epics.md`. **Owner: Epic 6b's retrospective.**
 
 - 🔑 **A finding about the READING, not about any row: story 6b.1's first draft missed register row
@@ -3929,7 +3929,7 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   gesture nature it needs. The reason is DEPENDENCY, not size: AC2's mechanism is specified by no
   document this project has and it governs every screen after this one. A story may not edit an
   acceptance criterion or an epic; **only a retrospective may**. **Owner: Epic 6b's retrospective**,
-  which must also correct `epics.md:2108`'s *"seven gates"* (there are eight since story 6.3) — a
+  which must also correct `epics.md:2108`'s *"seven gates"* (there are **NINE** since story 6b.10 — corrected at that story's code review; the row had been left stale by the story that changed the count) — a
   drift this story measured to be registered **nowhere** before now.
 
 - 🔑 **The gesture nature's form and words are arbitrated IN ADVANCE, in story 6b.4's §0b**, so 6b.4b
@@ -4573,3 +4573,134 @@ what you did not write (story 5.14b's sentence, met again).
   standing because widening the treatment to three more screens is a change to what they promise,
   not a repair. **Owner: Epic 6b's retrospective**, which owes the question *should every screen
   survive a dead store, or only the one about the store?*
+
+## Deferred from: story 6b.10 (2026-08-21)
+
+⚠️ **Derived from the story's own §0 and its five arbitrations, then diffed against this file
+before the commit** — story 6b.9's review found that file untouched under a section headed
+*REGISTERED RATHER THAN FIXED*, and named the cheap defence. This is that defence, applied.
+
+- 🔴 **`epics.md:2296`'s AC3 is STALE and a story may not edit an AC.** It reads *"32 keys today
+  against roughly a hundred in the mock"*; the file went **31 → 287** keys across Epic 6b (per-commit
+  table in the story's §0a), so the ten story files added **253** against an estimate whose
+  comparable figure is ~68 — an overshoot of ≈3.7×. The criterion's *"a string added later in one
+  language only is exactly the defect this story exists to prevent"* describes a defect that **never
+  happened**: every story added its keys in pairs. **Owner: Epic 6b's retrospective**, which owes the
+  epic's AC a correction.
+- 🔴 **The two binding tables DISAGREE about the gesture axis and both call themselves binding.**
+  `ux-design-specification.md:1341-1351` carries **eleven** gesture rows; `prd.md:993-1002` carries
+  **ten** — `attach`/« rattacher » is missing from the PRD's. `state_vocabulary::BINDING_GESTURE_AXIS`
+  transcribes the UX spec's superset **and names its source**, because reconciling two planning
+  documents is a planning act and not a story's. **Owner: Guy**, at Epic 6b's retrospective.
+- ⚠️ **THREE gestures in `app.yml` have no glossary row**, not one: `gesture.resolve` (« Résoudre »,
+  Epic 6's FR16 ranked candidates), and story 6b.9's `gesture.check_now` and `gesture.export_log`.
+  `baseline` is a fourth of the same class, already owned by Epic 9. Story 6b.7's precedent governs
+  all of them — extending a binding table was refused there as *premature, not wrong*. They are now
+  ENUMERATED in `gesture_axis_tests::NOT_A_GLOSSARY_GESTURE` with a reason each, so a new gesture
+  cannot ship without the question being asked. **Owner: Guy / Epic 6b's retrospective.**
+- ⚠️ **The triage queue's `kindLabel` axis is a FOURTH list outside every binding table**
+  (`triage.kind.absence`, `.nouveau`), which `CLAUDE.md`'s 6b.6 row already registers. AC2's *"the
+  glossary uniqueness test cover them"* does not say whether *them* reaches that axis, and this story
+  did not decide it: reconciling `Nouveau` with `undeclared` rewrites shipped copy on a story that
+  does not own it, which is `prd.md:1031-1033`'s own sentence. **Owner: Epic 6b's retrospective.**
+- 🔴 **`document.rs` answers 500 with an English literal and it is OUTSIDE this story by arbitration.**
+  `no_handler_pairs_a_status_with_an_untranslated_literal` found it on its first run —
+  *"documenting failed — the store did not accept the write"* — and Guy's arbitration 2(a′) leaves
+  the write route's bodies to the story that gives the route a caller: no template calls
+  `POST /document-all` today, so translating them now is copy nobody can reach, written against a
+  gesture 6.4 may reshape. The exclusion is written **at the file list in the guard**, with the
+  owner. **Owner: story 6.4** — widen the list there.
+- ⚠️ **A key block deleted OUTRIGHT is caught by nothing**, and arbitration 3(d) does not claim it.
+  Both passes of `every_key_carries_both_locales` then agree the key is gone, because it is. The
+  render-side guards catch only what they happen to reference. **Owner: Epic 6b's retrospective**,
+  which owes the question *what would notice a key that simply vanished?*
+- ⚠️ **Pluralisation beyond `%{n}` does not exist**, and the browser look is where it shows: the
+  triage queue renders **`1 field(s)`** three times on the screen the product's own `/` redirects to,
+  in both languages. `rust-i18n` supports a plural form; adopting it is a change to every counted
+  string. **Owner: Epic 22** (*first-light soigné & bilingue complet*), which owns copy completeness.
+- ⚠️ **The security pinning pins the SENTENCES, not their truth.** *"none stored"* is true because no
+  credential table exists; the day one does, the test passes and the row lies. The mechanism that
+  would catch that is the derived-from-the-code shape story 6b.9 built for the public-paths row.
+  **Owner: Epic 19**, with the rest of the auth hardening.
+- ⚠️ **`copy-vocabulary` is scoped to `app.yml` and cannot stop a future story naming a route
+  `/merge` or a handler `merge_entity`.** Measured refusal, not a preference: `merge` has ~310
+  legitimate whole-word occurrences under `crates/`, 87 of them `must-merge` inside **fourteen
+  sha256-locked fixture files** which cannot be renamed without reddening the `fixtures` gate — and
+  `must-merge` is a trap-corpus pole the corpus needs precisely because the product does not merge.
+  The closure is `gate_vocabulary`'s volet-A denylist, and taking it means deciding about
+  `Expectation::MustMerge` first. **Owner: Epic 11**, which owns the identity-engine vocabulary.
+- 🔴 **BREAKING, and it owes story 6b.12 a release-note line**: `OPENCMDB_LOCALE` is now validated at
+  boot, so a deployment carrying `OPENCMDB_LOCALE=FR`, `fr_CH` or any unrecognised value **stops
+  starting**. `README.md` and `docker/README.dockerhub.md` are updated in this push; the release
+  notes are not this story's. It joins 6b.1's colour change and 6b.2's address change on 6b.12's
+  list. **Owner: story 6b.12.**
+- ⚠️ **A SISTER FLOOR is far below what is there, and it is deliberately NOT treated as the same
+  defect.** `example_screens::every_literal_key_in_the_view_code_resolves` asserts `checked >= 60`
+  and **172** literal `t!("…")` keys are actually inspected — 2.8× below. 🔑 **The distinction that
+  keeps this honest**: the floor this story fixed stated a FIGURE (*"48 entries"*) that had been
+  false since story 6b.3, whereas this one's message claims only *"a scan that matched nothing would
+  assert nothing"*, which is true and is all a premise check can claim. Raising it to 172 would
+  create the *"update this number"* trap story 6b.6's review measured a developer FOLLOWING, and
+  deriving it has no second source here — the guard is the only thing that counts those keys. **The
+  measurement is registered so the next reader has it; the fix is not obvious and is not this
+  story's.** ⚠️ Do not let this inherit the credit of the measured defect beside it (story 6b.6's
+  rule about keeping a suspicion separate from a measurement). **Owner: Epic 6b's retrospective.**
+- ⚠️ **`views-hash` is still `ℹ STALE`**, as it has been since issue #50. Untouched here by the
+  standing rule that it must not be regenerated inside a story. **Owner: the next milestone.**
+
+## Deferred from: code review of story 6b.10 (2026-08-22)
+
+- **The `file-size` gate stops counting at the FIRST `#[cfg(test)]`, and a file can hide unbounded
+  code behind an early one.** MEASURED during story 6b.10's review: a probe file
+  `crates/opencmdb-bin/src/zz_probe.rs` carrying `#[cfg(test)]` on line 2 followed by 2 500
+  `pub fn` lines reports `✅ file-size  40 file(s) under 2000 code lines (largest: 1922)`.
+  Pre-existing — the convention is one TRAILING test module (D56b), and the gate reads that
+  convention as a rule it can trust. It becomes load-bearing with this story: `state_vocabulary.rs`
+  is 463 lines with its first `#[cfg(test)]` at line 59, so the gate sees 58; and
+  `crates/opencmdb-bin/src/main.rs` — which 6b.10 grows by 320 lines — is 3 529 lines with its
+  first at line 31, so the gate sees 30. Neither is a violation today; both are files where the
+  gate's number and the file's size have stopped being the same kind of fact.
+  🔑 The honest closure is to count code lines OUTSIDE every `#[cfg(test)]` module rather than
+  before the first one, which also makes the gate's own doc true again.
+  **Owner: Epic 6b's retrospective**, with the other apparatus items it already carries.
+
+- **No test in this crate can render a screen in a CHOSEN locale, and the French half is therefore
+  read by no assertion.** Story 6b.10's T5 raised this and its either/or was discharged in NEITHER
+  branch: no locale-parameterised render helper was built, and no register row named the gap — the
+  code review found `grep -c 'render helper' deferred-work.md` returning **0** under a task ticked
+  `[x]`. This row is the missing branch.
+  🔑 What EXISTS is key-level: `t!(key, locale = "fr")` is used freely, so the glossary axis, the
+  security sentences and `LOCALE_PROBES` do assert French. What does NOT exist is a way to render a
+  SCREEN in French inside a test: `render_shell` and every screen builder read the ambient locale,
+  and `set_locale` is process-wide, which would make the suite order-dependent (`page.rs` records
+  that hazard twice).
+  ⚠️ **The cost is measured, not supposed** (story 6b.10's code review): the English column carries
+  ~470 render assertions and, until that review, no human look; the French column carries the human
+  looks and no render assertion. The `en`/`fr` byte-difference check over the ten screens, run at
+  that review, is the cheapest thing that stands in for it today and it lives in a shell command,
+  not in the suite.
+  🔑 The closure is a `Strings::for_locale(locale)` and screen builders that take one — after which
+  a render test can assert BOTH columns and the anti-sum idiom applies. **Owner: Epic 6b's
+  retrospective**, to be sequenced against 6b.11 and 6b.12.
+
+- **`security_rows` proves its closed set in ENGLISH only.** Story 6b.10 pinned the diagnostic's
+  six security sentences in both languages and proved the set closed over eight sampled postures —
+  but the closure half calls `security_rows` at the ambient locale, which no test sets. So *"no
+  seventh sentence can appear"* is established for `en` and asserted for neither language's French
+  rendering. Same precondition as the row above; same owner.
+
+- **The lint the repository prescribes is blind to test code, and this project is mostly test code.**
+  `CLAUDE.md` names `cargo clippy --workspace -- -D warnings` as THE lint. Cargo checks lib and bin
+  targets by default, never test targets — while `ci.yml` sets `RUSTFLAGS: -D warnings` for the
+  test compile. MEASURED at story 6b.10's code review: a dead `let root = …` in a `#[cfg(test)]`
+  module passed every local check, all nine gates and 727 tests, and turned the first CI run of
+  PR #115 RED in 1m12s.
+  🔑 The two commands that actually reproduce CI locally are
+  **`cargo clippy --workspace --locked --all-targets -- -D warnings`** and
+  **`RUSTFLAGS="-D warnings" cargo test --workspace --locked`**. The first is a one-word change to
+  a line `CLAUDE.md` already carries.
+  ⚠️ It is not merely a convenience: the house convention is one trailing `#[cfg(test)]` module per
+  file (D56b), so the majority of this repository's lines live exactly where the prescribed lint
+  does not look. Every story that has ever "run clippy clean" ran it over a fraction of the tree.
+  **Owner: Epic 6b's retrospective** — it is a change to the documented working commands, which a
+  story may not make.
