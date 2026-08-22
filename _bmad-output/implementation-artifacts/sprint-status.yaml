@@ -75,7 +75,8 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-22  # 6b.10 DONE — PR #115 merged as `d40a613`. Epic 6b: 11 done of 13.
+last_updated: 2026-08-22  # 6b.11 CONTEXTED, VALIDATED (2 layers, 38 findings) + 4 ARBITRATIONS
+                          # -> ready-for-dev. 6b.10 DONE — PR #115 merged as `d40a613`. Epic 6b: 11 done of 13.
                           # Next: 6b.11 (keyboard layer and focus contract), then 6b.12 (release
                           # v0.2.0 + its THREE breaking changes), then the epic retrospective.
                           # Was: 6b.10 CODE-REVIEWED and REPAIRED (see its entry). Was 2026-08-21
@@ -4395,7 +4396,36 @@ development_status:
                                 # ⚠️ One commit went in over a RED suite: `cargo test | grep`
                                 # takes the PIPELINE's status. Story 6b.1's defect, on cargo test
                                 # this time; amended, and every status since read from a file.
-  6b-11-keyboard-layer-and-focus-contract: backlog
+  6b-11-keyboard-layer-and-focus-contract: ready-for-dev  # created + contexted + VALIDATED
+    # 2026-08-22 (two fresh-context layers: 38 findings, 12 HIGH). FOUR ARBITRATIONS by Guy.
+    # (1) ARROWS ONLY -- epics.md:2306 prescribes `j`/`k` and ⏎ while :2312 says *no letters
+    # are assigned*, which constraint 6 (epics.md:2106) states in the epic's own voice.
+    # (2) SHIP THE REACHABLE FOCUS CONTRACT -- zero hx-get/hx-post across all ten served
+    # screens, re-measured by both layers, so *focus is never lost across a swap* names an
+    # event that cannot occur. Swap half -> story 6.4. (3) axe-core IN THIS STORY.
+    # (4) 🔴 SHAPE (E) for the arrow: the gap-hunt PROTOTYPED all three readings of *move the
+    # selection* and they differ by 20x -- under (A) a HELD arrow loses HALF its presses
+    # (10 rows of 20) and costs 161 requests; under (E) 20 of 20 at every cadence, 8 requests.
+    # The story had left that choice to the developer.
+    # 🔴 THE VALIDATION CORRECTED CONTEXTING ON EIGHT POINTS, THREE OF THEM ITS OWN
+    # MEASUREMENTS: the axe figures were taken on an EMPTY store, so /triage was BLANK and the
+    # queue + detail pane + five planned controls -- the exact surface T4-T6 target -- were in
+    # no measurement (seeded: 237 nodes, a FOURTH colour pair); the refusals of option (B) and
+    # of ⏎ both rested on FALSE premises (constraint 4 NAMES HTMX; :2308's ⏎ is self-limiting);
+    # and Screen::Device IS in Screen::ALL -- 6b.6 moved its route REGISTRATION, not the variant.
+    # ✅ And it proved what contexting had only assumed: the two-token fix takes 237 -> 0 on a
+    # POPULATED store, in both locales, at three queue sizes.
+    # 🔴 FOUR MORE HIGH the story now carries: the INPUT/TEXTAREA exclusion guards a case that
+    # CANNOT occur (zero text inputs in the whole product) while the one that DOES bite has no
+    # guard (an arrow with focus in the nav navigates); an unconditional preventDefault kills
+    # page scrolling on the nine screens with no queue; --color-accent is PINNED BY 6b.1's AC2
+    # hex-literal guard, so *the mock's palette* and *axe-green* cannot both hold literally;
+    # and removing aria-pressed reds main.rs:3545, whose oracle is
+    # contains("aria-pressed=\"false\"") under a message about the age-sort UX ban -- the a11y
+    # defect is the SUPPORT of an assertion that is not about a11y (6b.4's finding, same screen).
+    # ⚠️ axe closes NFR25's FLOOR, not NFR25 (prd.md:1429: two manual gates also blocking).
+    # ⚠️ deferred-work.md:3740 names THIS story as owner of NFR24's touch targets -> AC7.
+    # ⚠️ epics.md:2108's DoD says *seven gates*; there are NINE. Six divergences registered.
   6b-12-release-0-2-0-and-its-documents: backlog
   epic-6b-retrospective: required
 

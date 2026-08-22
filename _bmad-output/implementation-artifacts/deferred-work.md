@@ -4691,8 +4691,12 @@ before the commit** — story 6b.9's review found that file untouched under a se
 
 - **The lint the repository prescribes is blind to test code, and this project is mostly test code.**
   `CLAUDE.md` names `cargo clippy --workspace -- -D warnings` as THE lint. Cargo checks lib and bin
-  targets by default, never test targets — while `ci.yml` sets `RUSTFLAGS: -D warnings` for the
-  test compile. MEASURED at story 6b.10's code review: a dead `let root = …` in a `#[cfg(test)]`
+  targets by default, never test targets — while CI compiles the tests under
+  `RUSTFLAGS=-D warnings`. ⚠️ **The mechanism was recorded wrong here and is corrected** (story
+  6b.11's validation): `RUSTFLAGS` appears **nowhere in `.github/`**; the flag is injected by
+  `actions-rust-lang/setup-rust-toolchain@v1` (`ci.yml:48`). The effect and the prescribed
+  commands were right; the cause was a plausible story, which is the one thing this project's own
+  rule forbids — and it was written the same day that rule was quoted. MEASURED at story 6b.10's code review: a dead `let root = …` in a `#[cfg(test)]`
   module passed every local check, all nine gates and 727 tests, and turned the first CI run of
   PR #115 RED in 1m12s.
   🔑 The two commands that actually reproduce CI locally are
