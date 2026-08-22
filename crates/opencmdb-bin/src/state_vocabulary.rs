@@ -309,11 +309,14 @@ mod gesture_axis_tests {
 
     /// The `gesture.*` key names the locale file carries, read from the FILE.
     fn gesture_keys() -> Vec<String> {
-        include_str!("../locales/app.yml")
-            .lines()
-            .filter_map(|line| line.strip_suffix(':'))
+        // 🔴 Through a real parse, never a line scan. Until story 6b.10's code review this read
+        // `line.strip_suffix(':')`, the exact parse arbitration 3(d) abolished for missing 7 of
+        // 12 legal YAML shapes — inside this story, one file over from where it was abolished.
+        // A nested `gesture:\n  document:` yields no key to a line scan, so its rendered value
+        // was never linted by this carrier at all.
+        crate::screens::locale_keys::key_paths()
+            .into_iter()
             .filter(|name| name.starts_with("gesture."))
-            .map(str::to_string)
             .collect()
     }
 
@@ -336,9 +339,14 @@ mod gesture_axis_tests {
                 .unwrap_or_else(|| panic!("{gesture:?} is transcribed from the binding table"));
             let rendered_en = rust_i18n::t!(key, locale = "en").to_lowercase();
             let rendered_fr = rust_i18n::t!(key, locale = "fr").to_lowercase();
+            // 🔴 A `trim_end_matches(" the gap")` stood on BOTH operands until story 6b.10's
+            // code review. It was measured a NO-OP — `gesture.accept_gap` renders "Accept the
+            // gap", the glossary phrase exactly — so it weakened nothing today and would have
+            // let a future `"Accept"` compare equal to `"accept the gap"`, which is the one
+            // divergence this test exists to catch on the one multi-word row.
             assert_eq!(
-                rendered_en.trim_end_matches(" the gap"),
-                en.trim_end_matches(" the gap"),
+                rendered_en.as_str(),
+                *en,
                 "{key} renders {rendered_en:?} in English and the binding glossary carries \
                  {en:?} — one term, one translation"
             );
@@ -385,12 +393,11 @@ mod gesture_axis_tests {
     /// story 6b.4b's sentence, arrived at here from the locale axis.
     #[test]
     fn no_resolved_value_carries_a_retired_term() {
-        let keys: Vec<String> = include_str!("../locales/app.yml")
-            .lines()
-            .filter_map(|line| line.strip_suffix(':'))
-            .filter(|name| !name.starts_with('_') && !name.starts_with(' '))
-            .map(str::to_string)
-            .collect();
+        // 🔴 Through a real parse — see `gesture_keys` above for why a line scan was wrong here.
+        let keys = crate::screens::locale_keys::key_paths();
+        // 🔑 The premise is DERIVED, not a floor: this carrier must read EVERY key the resolver
+        // can resolve, and `every_key_carries_both_locales` counts the same population from the
+        // same walker. A number here would tolerate the silent loss of everything above it.
         assert!(
             keys.len() > 200,
             "the premise: the whole locale file is walked ({} keys) — a scan that matched \
@@ -413,6 +420,42 @@ mod gesture_axis_tests {
                     );
                 }
             }
+        }
+    }
+
+    /// 🔴 **AC2's glossary-uniqueness half, on the GESTURE axis — one word, one key.**
+    ///
+    /// The state axis has had this since story 6b.6 (`one_word_is_rendered_by_one_key` over
+    /// `ObjectState::ALL`); the gesture axis had **none**, and story 6b.10's code review measured
+    /// what that cost: setting `gesture.resolve`'s French half to « Merger » left 720/720 tests
+    /// green and the `copy-vocabulary` gate green, with **two keys rendering one binding French
+    /// word** — exactly what UX-DR64's *"glossary uniqueness"* forbids and what `prd.md:988`
+    /// calls one word carrying two meanings.
+    ///
+    /// 🔑 Over EVERY `gesture.*` key and not merely the glossary-backed five: the defect's own
+    /// specimen, `gesture.resolve`, has no binding row, so a check restricted to the glossary
+    /// would have been placed exactly where that defect cannot occur.
+    #[test]
+    fn one_gesture_word_is_rendered_by_one_key() {
+        for locale in ["en", "fr"] {
+            let mut seen: std::collections::BTreeMap<String, String> =
+                std::collections::BTreeMap::new();
+            for key in gesture_keys() {
+                let rendered = rust_i18n::t!(key.as_str(), locale = locale).to_lowercase();
+                if let Some(first) = seen.get(&rendered) {
+                    panic!(
+                        "{locale}: `{first}` and `{key}` both render {rendered:?} — one term, \
+                         one translation (UX-DR64). Two keys sharing a word make the interface \
+                         say one thing about two different gestures."
+                    );
+                }
+                seen.insert(rendered, key);
+            }
+            assert!(
+                seen.len() > 5,
+                "{locale}: the premise — the gesture axis was enumerated ({} keys)",
+                seen.len()
+            );
         }
     }
 

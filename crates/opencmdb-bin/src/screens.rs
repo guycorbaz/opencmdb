@@ -491,6 +491,58 @@ fn demonstration_screen(
     Html(render_shell(Shell::new(screen, perimeter), body)).into_response()
 }
 
+/// Reading `locales/app.yml` the way the RESOLVER does — shared by every test that needs to
+/// enumerate the copy.
+///
+/// 🔴 **It exists because two modules were discovering keys by LINE SHAPE**
+/// (`line.strip_suffix(':')` plus an indentation test) inside the very story that abolished that
+/// parse for being blind to 7 of 12 legal YAML shapes. A nested key is invisible to a line scan,
+/// so `state_vocabulary`'s resolved-value carrier was silently skipping any key the file might
+/// nest — the same hole, one file over, in the guard written to close it.
+///
+/// ⚠️ It is `#[cfg(test)]` and deliberately NOT a production reader: `rust_i18n` owns the
+/// resolution at runtime, and a second production parse of the same file would be two
+/// representations of one fact.
+#[cfg(test)]
+pub(crate) mod locale_keys {
+    use yaml_rust2::{Yaml, YamlLoader};
+
+    /// Every dotted key path the locale file carries, at any nesting depth, in document order.
+    ///
+    /// The root's own bookkeeping pair (`_version`) is not a key of the copy and is excluded, so
+    /// the result is exactly the set `t!` can resolve.
+    pub(crate) fn key_paths() -> Vec<String> {
+        let yaml = include_str!("../locales/app.yml");
+        let documents = YamlLoader::load_from_str(yaml).expect("the locale file is valid YAML");
+        let root = documents.first().expect("one document");
+        let mut out = Vec::new();
+        walk(root, "", &mut out);
+        out
+    }
+
+    fn walk(node: &Yaml, path: &str, out: &mut Vec<String>) {
+        let Some(map) = node.as_hash() else { return };
+        let bears_value = map
+            .iter()
+            .any(|(_, value)| value.as_str().is_some_and(|v| !v.trim().is_empty()));
+        if bears_value && !path.is_empty() {
+            out.push(path.to_string());
+        }
+        for (key, value) in map {
+            if value.as_hash().is_some()
+                && let Some(key) = key.as_str()
+            {
+                let child = if path.is_empty() {
+                    key.to_string()
+                } else {
+                    format!("{path}.{key}")
+                };
+                walk(value, &child, out);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
