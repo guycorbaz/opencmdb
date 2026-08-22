@@ -699,11 +699,18 @@ mod tests {
             .expect("the locale file is a mapping");
 
         /// Every `(dotted key path, locales)` the document really carries, at any nesting depth.
+        ///
+        /// 🔴 **A BLANK value is not a present locale.** `fr: ""` is a `Yaml::String`, so
+        /// `as_str().is_some()` accepted it until story 6b.10's code review — measured leaving
+        /// 720/720 tests and nine gates green while the French page served
+        /// `<button class="refresh"></button>`, a control with no label at all. Rendering
+        /// NOTHING is strictly worse than rendering English, which is the case this guard's own
+        /// message names, and it is the ordinary outcome of a translator leaving a value blank.
         fn walk(node: &Yaml, path: &str, out: &mut Vec<(String, Vec<String>)>) {
             let Some(map) = node.as_hash() else { return };
             let locales: Vec<String> = map
                 .iter()
-                .filter(|(_, value)| value.as_str().is_some())
+                .filter(|(_, value)| value.as_str().is_some_and(|v| !v.trim().is_empty()))
                 .filter_map(|(key, _)| key.as_str().map(str::to_string))
                 .collect();
             if !locales.is_empty() {
@@ -735,22 +742,53 @@ mod tests {
             checked += 1;
             assert!(
                 locales.iter().any(|l| l == "en") && locales.iter().any(|l| l == "fr"),
-                "{key} carries {locales:?} — a key with only `en` renders English inside the \
-                 French UI, silently, because rust-i18n falls back"
+                "{key} carries {locales:?} — a key missing `fr` renders English inside the \
+                 French UI, silently, because rust-i18n falls back; a key whose value is BLANK \
+                 renders nothing at all, which is worse and is why an empty string does not \
+                 count as a locale here"
             );
         }
 
-        // 🔑 **The count is DERIVED, not believed**: a second, independent pass over the same
-        // document. Nothing to maintain, nothing to go stale — and a parse that silently stopped
-        // seeing two thirds of the file cannot satisfy both passes at once.
-        let translated = root
-            .iter()
-            .filter(|(_, value)| value.as_hash().is_some())
-            .count();
+        // 🔑 **The count is DERIVED, not believed**: a second pass over the same document,
+        // written as an explicit-stack traversal rather than a recursion, so a defect in one
+        // walker does not reproduce itself in the other. Nothing to maintain, nothing to rot.
+        //
+        // 🔴 **It counted a DIFFERENT population until story 6b.10's code review**: top-level
+        // entries whose value is a hash, against `checked`'s value-bearing nodes at ANY depth.
+        // The two coincide only while every nested block holds exactly one child, and ordinary
+        // valid YAML of arity two — two keys under one `nav:` — made this assertion FAIL over a
+        // file where both halves of every key were present. ⚠️ That is the failure mode this
+        // guard's predecessor is on record for: *it reds for the WRONG reason, and its message
+        // invites the repair that opens the hole* — here, relaxing or deleting the count, which
+        // is the whole of arbitration 3(d).
+        //
+        // ⚠️ What it can NOT see, stated rather than implied: both passes read ONE parse, so a
+        // key block deleted outright satisfies both. That is registered, not guarded.
+        let mut translated = 0_usize;
+        // `(node, is_root)` — the first pass skips the root by its empty path, so the second
+        // skips it by this flag rather than by subtracting one afterwards. ⚠️ Subtracting was
+        // measured WRONG while writing this: `_version: 2` is a `Yaml::Integer`, so the root
+        // carries no string scalar and was never counted in the first place.
+        let mut stack: Vec<(&Yaml, bool)> = vec![(documents.first().expect("one document"), true)];
+        while let Some((node, is_root)) = stack.pop() {
+            let Some(map) = node.as_hash() else { continue };
+            if !is_root
+                && map
+                    .iter()
+                    .any(|(_, value)| value.as_str().is_some_and(|v| !v.trim().is_empty()))
+            {
+                translated += 1;
+            }
+            for (_, value) in map {
+                if value.as_hash().is_some() {
+                    stack.push((value, false));
+                }
+            }
+        }
         assert_eq!(
             checked, translated,
-            "the two passes disagree about how many keys this file has — one of them has gone \
-             blind, and a floor that is a constant would notice neither"
+            "the two passes disagree about how many value-bearing keys this file has — one of \
+             them has gone blind, and a floor that is a constant would notice neither"
         );
         assert!(
             checked > 0,
