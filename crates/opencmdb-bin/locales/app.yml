@@ -24,8 +24,8 @@ error.store_unreachable:
   en: "The store did not answer. Nothing was lost — the observations and the documented records are intact; only this page could not be built. Try again, and see the self-diagnostic if it persists."
   fr: "La base n'a pas répondu. Rien n'est perdu — les observations et les enregistrements documentés sont intacts ; seule cette page n'a pas pu être construite. Réessayez, et consultez l'auto-diagnostic si cela persiste."
 auth.required:
-  en: "Authentication required. This instance is closed by default: supply the operator credentials it was configured with. If none were configured, no one can sign in yet — see the administrator documentation."
-  fr: "Authentification requise. Cette instance est fermée par défaut : fournissez les identifiants d'exploitant configurés. Si aucun ne l'a été, personne ne peut encore se connecter — voyez la documentation d'administration."
+  en: "Authentication required. This instance is closed by default: supply the operator credentials it was configured with. If none were configured, no one can sign in yet — set OPENCMDB_BASIC_USER and OPENCMDB_BASIC_PASSWORD and restart."
+  fr: "Authentification requise. Cette instance est fermée par défaut : fournissez les identifiants d'exploitant configurés. Si aucun ne l'a été, personne ne peut encore se connecter — définissez OPENCMDB_BASIC_USER et OPENCMDB_BASIC_PASSWORD, puis redémarrez."
 error.render_failed:
   en: "This page could not be rendered. The data behind it is intact; the fault is in the display. Try again, and see the self-diagnostic if it persists."
   fr: "Cette page n'a pas pu être affichée. Les données derrière elle sont intactes ; la panne est dans l'affichage. Réessayez, et consultez l'auto-diagnostic si cela persiste."
