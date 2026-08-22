@@ -1,6 +1,6 @@
 # Story 6b.10: The copy — FR and EN, every string a key
 
-Status: review
+Status: done
 
 Epic: 6b — *L'interface de la maquette*. **Tenth numbered slot, eleventh story file.** It is the
 first story whose subject IS `crates/opencmdb-bin/locales/app.yml`, and — measured below — the first
