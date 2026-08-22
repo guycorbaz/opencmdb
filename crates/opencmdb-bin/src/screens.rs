@@ -739,6 +739,45 @@ mod tests {
     /// ⚠️ **One class this still cannot catch, stated rather than implied**: a key block deleted
     /// outright. Both passes then agree the key is gone, because it is. Nothing here can see that,
     /// and it is registered rather than papered over.
+    /// 🔴 **No rendered value fobs the reader off with a parenthetical plural.**
+    ///
+    /// `/triage` shipped `1 field(s)` in English and `1 champ(s) déclaré(s)` in French — on the
+    /// product's primary screen, while `/devices` showed the same fact as `1 field` / `2 fields`
+    /// one click away. Found by LOOKING at the English column during story 6b.10's code review,
+    /// and no test could have seen it: a parenthetical plural is a perfectly resolvable key, in
+    /// both languages, under every existing guard.
+    ///
+    /// 🔑 A PROPERTY over the whole file rather than a fix to two keys — the class is what
+    /// matters, and it is the shape a developer reaches for the moment a count meets a noun.
+    /// ⚠️ It is about the LAZY form specifically, not about parentheses: a value may carry them
+    /// for anything else.
+    #[test]
+    fn no_value_fobs_the_reader_off_with_a_parenthetical_plural() {
+        let yaml = include_str!("../locales/app.yml");
+        let mut checked = 0_usize;
+        for (number, line) in yaml.lines().enumerate() {
+            let Some((locale, value)) = line.trim().split_once(": ") else {
+                continue;
+            };
+            if !matches!(locale, "en" | "fr") {
+                continue;
+            }
+            checked += 1;
+            for lazy in ["(s)", "(e)s", "(es)"] {
+                assert!(
+                    !value.contains(lazy),
+                    "app.yml:{}: {value} carries the lazy plural {lazy:?} — inflect it instead, \
+                     the way `counted_fields` does, and let the count choose the form",
+                    number + 1
+                );
+            }
+        }
+        assert!(
+            checked > 400,
+            "the premise: both locale halves of the file were read ({checked} values)"
+        );
+    }
+
     #[test]
     fn every_key_carries_both_locales() {
         use yaml_rust2::{Yaml, YamlLoader};

@@ -3622,7 +3622,7 @@ headless browser and a live `mariadb:10.11.11`._
   every story that adds an asset**, starting with 6b.1's own T2.
 
 - ⚠️ **`epics.md:2108` states Epic 6b's Definition of Done as *"`cargo xtask ci` green — seven
-  gates"***; `run_ci` runs **eight** since story 6.3, and 6b.2's chain would make it nine. A story
+  gates"***; `run_ci` runs **NINE** since story 6b.10, which added `copy-vocabulary` (this row said *"eight … and 6b.2's chain would make it nine"*; that chain never landed — there is no Tailwind chain — and the ninth gate came from somewhere else entirely. Corrected at 6b.10's code review, which found the row left stale by the very story that made it stale). A story
   does not edit `epics.md`. **Owner: Epic 6b's retrospective.**
 
 - 🔑 **A finding about the READING, not about any row: story 6b.1's first draft missed register row
@@ -3929,7 +3929,7 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   gesture nature it needs. The reason is DEPENDENCY, not size: AC2's mechanism is specified by no
   document this project has and it governs every screen after this one. A story may not edit an
   acceptance criterion or an epic; **only a retrospective may**. **Owner: Epic 6b's retrospective**,
-  which must also correct `epics.md:2108`'s *"seven gates"* (there are eight since story 6.3) — a
+  which must also correct `epics.md:2108`'s *"seven gates"* (there are **NINE** since story 6b.10 — corrected at that story's code review; the row had been left stale by the story that changed the count) — a
   drift this story measured to be registered **nowhere** before now.
 
 - 🔑 **The gesture nature's form and words are arbitrated IN ADVANCE, in story 6b.4's §0b**, so 6b.4b
@@ -4663,3 +4663,28 @@ before the commit** — story 6b.9's review found that file untouched under a se
   🔑 The honest closure is to count code lines OUTSIDE every `#[cfg(test)]` module rather than
   before the first one, which also makes the gate's own doc true again.
   **Owner: Epic 6b's retrospective**, with the other apparatus items it already carries.
+
+- **No test in this crate can render a screen in a CHOSEN locale, and the French half is therefore
+  read by no assertion.** Story 6b.10's T5 raised this and its either/or was discharged in NEITHER
+  branch: no locale-parameterised render helper was built, and no register row named the gap — the
+  code review found `grep -c 'render helper' deferred-work.md` returning **0** under a task ticked
+  `[x]`. This row is the missing branch.
+  🔑 What EXISTS is key-level: `t!(key, locale = "fr")` is used freely, so the glossary axis, the
+  security sentences and `LOCALE_PROBES` do assert French. What does NOT exist is a way to render a
+  SCREEN in French inside a test: `render_shell` and every screen builder read the ambient locale,
+  and `set_locale` is process-wide, which would make the suite order-dependent (`page.rs` records
+  that hazard twice).
+  ⚠️ **The cost is measured, not supposed** (story 6b.10's code review): the English column carries
+  ~470 render assertions and, until that review, no human look; the French column carries the human
+  looks and no render assertion. The `en`/`fr` byte-difference check over the ten screens, run at
+  that review, is the cheapest thing that stands in for it today and it lives in a shell command,
+  not in the suite.
+  🔑 The closure is a `Strings::for_locale(locale)` and screen builders that take one — after which
+  a render test can assert BOTH columns and the anti-sum idiom applies. **Owner: Epic 6b's
+  retrospective**, to be sequenced against 6b.11 and 6b.12.
+
+- **`security_rows` proves its closed set in ENGLISH only.** Story 6b.10 pinned the diagnostic's
+  six security sentences in both languages and proved the set closed over eight sampled postures —
+  but the closure half calls `security_rows` at the ambient locale, which no test sets. So *"no
+  seventh sentence can appear"* is established for `en` and asserted for neither language's French
+  rendering. Same precondition as the row above; same owner.

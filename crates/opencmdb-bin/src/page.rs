@@ -297,6 +297,28 @@ struct Strings {
     identity_settled: String,
 }
 
+/// A count and its noun, INFLECTED — `1 field`, `2 fields`, `1 champ`, `2 champs`.
+///
+/// 🔴 **`/triage` rendered `1 field(s)` and `1 champ(s) déclaré(s)` until story 6b.10's code
+/// review**, on the product's primary screen, while `/devices` showed the same fact as `1 field`
+/// and `2 fields` one click away. Found by LOOKING at the English column, which is what
+/// arbitration 5(b)'s browser pass is for; no test could see it, because a parenthetical plural
+/// is a perfectly resolvable key.
+///
+/// ⚠️ **Two forms are enough HERE and the reason is a measurement, not a convenience**: both call
+/// sites read a count out of `result.abstentions`, a map whose entries exist only when the cause
+/// occurred, so `n >= 1` and the zero case — where the two languages disagree, `0 fields` against
+/// `0 champ` — never arises. A third form would be copy nothing can reach. The day a caller can
+/// pass zero, this function is where that decision has to be taken.
+fn counted_fields(base: &str, count: usize) -> String {
+    let key = if count == 1 {
+        format!("{base}_one")
+    } else {
+        format!("{base}_other")
+    };
+    rust_i18n::t!(key.as_str(), n = count).to_string()
+}
+
 fn strings() -> Strings {
     use rust_i18n::t;
     Strings {
@@ -945,7 +967,7 @@ fn build_triage(
                 field: String::new(),
                 declared: String::new(),
                 observed: String::new(),
-                count: t!("triage.n_fields", n = *count).to_string(),
+                count: counted_fields("triage.n_fields", *count),
                 counted: true,
                 seen: observed_seen.clone(),
                 age_seconds,
@@ -964,7 +986,7 @@ fn build_triage(
                     kind: label.to_string(),
                     entity: ipv4.clone(),
                     field: String::new(),
-                    declared: t!("triage.cause.declared_side", n = *count).to_string(),
+                    declared: counted_fields("triage.cause.declared_side", *count),
                     declared_meta: declared_meta_line(entity_provenance, now),
                     observed: match cause {
                         AbstentionCause::NoObservedValue => t!("triage.cause.nothing_observed"),

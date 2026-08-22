@@ -751,7 +751,7 @@ them). Baseline: **697 tests**, eight gates green.
 | M5 | `fr-CH` degrades silently | 🔴 **`fr-CH` WORKS** (region stripped). A refusal built from the draft's list would reject the one qualified form that succeeds | arb. 4 |
 | M6 | arb. 3(c) | Deleted key block, truncated file, nested key → all **GREEN** | §0f, arb. 3 |
 | M7 | T10's document list | `README.md:124` and `docker/README.dockerhub.md:85` document `OPENCMDB_LOCALE`; and the story said *release note* / *6b.12* / *breaking* **zero times** | T10 |
-| L1–L4 | — | `merge` has 310 legitimate whole-word uses in `crates/`; clippy needs a type alias; the gate costs **5** lines (1908 → 1913) | §0d, T4 |
+| L1–L4 | — | `merge` has 310 legitimate whole-word uses in `crates/`; clippy needs a type alias; the gate costs **14** lines (1908 → **1922**) — 1913 was a validation WORKTREE's count, corrected at the code review (story 5.14's finding verbatim) | §0d, T4 |
 
 ✅ **REFUTED BY MEASUREMENT — do not re-chase these.** Single-quoted values and escaped quotes are
 **caught** by the naive parse (the draft grouped them with block scalars). The template sweep is
@@ -842,7 +842,7 @@ which is the whole reason this project makes validation mandatory.
   - [x] **A COMPLETENESS assertion** (`entries == 2 × keys + 1`) — the validation's own walker
         silently dropped a key and the gate then read ✅ (§0d).
   - [x] ⚠️ Two things the validation hit while building it: wiring the gate costs **5 lines** in
-        `main.rs` (1908 → 1913, 87 of headroom left — the inline gate would have breached 2000, so
+        `main.rs` (1908 → **1922** on THIS tree, **78** of headroom left — 1913/87 came from a validation worktree — the inline gate would have breached 2000, so
         §0d's conclusion holds), and clippy `-D warnings` **rejects** the natural
         `Result<(Vec<Entry>, Vec<(String, usize)>)>` return as *"very complex type"* — it needs a type
         alias.
@@ -1035,7 +1035,7 @@ stops watching.
 
 Three-layer code review, 2026-08-22. Blind Hunter (diff only), Edge Case Hunter (isolated
 worktree, live `mariadb:10.11`), Acceptance Auditor (spec + register + twins). 45 raw findings,
-deduplicated to 35: **5 decision-needed (ALL RESOLVED 2026-08-22), 27 patch, 1 defer, 3 dismissed with the check that
+deduplicated to 35: **5 decision-needed (ALL RESOLVED 2026-08-22), 27 patch (ALL APPLIED), 1 defer, 3 dismissed with the check that
 dismissed them**.
 
 #### Decisions (Guy) — these block the patches
@@ -1048,33 +1048,33 @@ dismissed them**.
 
 #### Patches
 
-- [ ] [Review][Patch] The prose-attribute guard reads the TEMPLATE while the defect lives in the RENDER — moving the literal one file over (`gap_card_label: "Reconciliation result".to_string()`) puts the removed English string back on the served page with 485/161/74 and nine gates green. The story's own M8 row says in so many words that the guard must read the rendered page [`crates/opencmdb-bin/src/page.rs:305`, guard at `:2620`]
-- [ ] [Review][Patch] `trim_end_matches(" the gap")` on BOTH operands of `every_glossary_gesture_is_rendered_with_the_glossary_words` — measured a NO-OP today (`gesture.accept_gap` renders the glossary phrase exactly), so it weakens nothing now and would let a future `"Accept"` pass. Delete it; the assertion stays green and gets stronger [`crates/opencmdb-bin/src/state_vocabulary.rs:340`]
-- [ ] [Review][Patch] AC2's glossary-uniqueness half was not extended to the gesture axis — `gesture.resolve`'s `fr` set to `"Merger"` leaves 720/720 and `copy-vocabulary` green while two keys render one binding French word [`crates/opencmdb-bin/src/state_vocabulary.rs`]
-- [ ] [Review][Patch] The derived count reds for the WRONG reason on ordinary nested YAML of arity > 1 — `checked` counts leaves at any depth, `translated` counts top-level hash entries; the invited repair is to relax or delete the count, which is the whole of arbitration 3(d). Related: both passes consume ONE parse, so a truncated file satisfies both [`crates/opencmdb-bin/src/screens.rs:740`]
-- [ ] [Review][Patch] An empty translation value counts as a present locale — `fr: ""` gives 720/720, nine gates green, and an unlabelled `<button class="refresh">` on the French page. Rendering nothing is worse than rendering English [`crates/opencmdb-bin/src/screens.rs:704`]
-- [ ] [Review][Patch] The prose-attribute guard matches `attr="` only — a single-quoted English literal is served verbatim with everything green, and `aria-label="Reconciliation result for {{ … }}"` passes because `contains("{{")` accepts any amount of English sharing the attribute [`crates/opencmdb-bin/src/page.rs:2620`]
-- [ ] [Review][Patch] The 500-literal guard's stated limits omit the two that matter — it matches `StatusCode::INTERNAL_SERVER_ERROR,` alone (no 404/403/405/400/409, though its name promises "a status") and walks two file names, so a handler in `example_screens.rs` — the file that exists *because* 6b.6 split `page.rs` under size pressure — is invisible; `metrics.rs:60`'s English 500 body is excluded silently where the guard's own doc says an exclusion should be a sentence [`crates/opencmdb-bin/src/page.rs:2688`]
-- [ ] [Review][Patch] `_version` is counted as a key AND as a translated value — the gate's own green line reads `288 key(s) and 575 translated value(s)` over a file carrying 287 keys, which is the exact defect `Collector::key_lines`' doc records about an earlier draft. The message-count test is placed where it cannot occur (its probe has no `_version` line) [`xtask/src/copy_vocabulary.rs`]
-- [ ] [Review][Patch] Carrier 2 discovers its keys by line shape — `lines().filter_map(strip_suffix(':'))` — inside the story that abolished line-shape parsing and measured it missing 7 of 12 legal shapes; a nested key is invisible to it, and the doc claims the two carriers *"agree about what a key is"* [`crates/opencmdb-bin/src/state_vocabulary.rs`]
-- [ ] [Review][Patch] The locale refusal asserts one cause for at least six — *"the case must match"* is false for `fr_CH`, `fr `, `fr.UTF-8`, `-fr`, `français` and `zz`, and `fr_CH` is the one its own comment calls the most likely to be typed; the suffix example is `available.first()`-driven, so an operator asking for `FR` is offered `en-CH` (measured on a real boot) [`crates/opencmdb-bin/src/main.rs:302`]
-- [ ] [Review][Patch] The `SequenceStart` comment states the opposite of the code beneath it — it sets the PARENT frame's `expecting_key = true`, so a sequence's elements are read as keys and values of the parent; there is no `SequenceEnd` arm. Measured consequence is narrower than the comment's error: a term inside a sequence item is not linted, and later keys are still located correctly [`xtask/src/copy_vocabulary.rs`]
-- [ ] [Review][Patch] The mutation summary contradicts the table directly beneath it, in three documents — heading says 22 ids, the table has 23 rows; the closing line says 19 reds and 21 rows carry 🔴; M4 is counted as a green while its own row reads *"reds both carriers"*. Identical sentence in `CLAUDE.md` and `docs/project-context.md` [story file, both twins]
-- [ ] [Review][Patch] M6 and M7 are prescribed and absent from the results table while T8 is ticked *"run every row"* — M6 measured 3 red; M7 is NOT EXECUTABLE as prescribed (the gate builds no offset→line map, it takes `Marker::line()`), and its substance holds: with `en: "Merge"` at line 341 under 166 accented lines the gate reports `app.yml:341` exactly [story file]
-- [ ] [Review][Patch] Three mutation rows report one key's count for a mutation named as a class — M1 is 1 red on `ipam.state.free` and **3** on `nav.dashboard`, so its stated conclusion *"the SILENT direction, caught only by the file guard"* is false for any key the story's own probes reference; M21 is 2 red on the natural site, not 1; M10 is 2, not 1 [story file]
-- [ ] [Review][Patch] `xtask/src/main.rs` is 1922 code lines, not the 1913 T4 records — 1913 is the figure in a validation worktree; the cost is +14, headroom 78, not +5 and 87. Story 5.14's finding verbatim [story file]
-- [ ] [Review][Patch] *"163 of the 287 French values"* is a dated numerator against a live denominator — 163 is true of the 284-key baseline and 166 of the 287-key tree; true of neither as written [Completion Notes, both twins]
-- [ ] [Review][Patch] The File List says 11 register rows; the register gained 12, and both twins say 12 [story file]
-- [ ] [Review][Patch] The two register rows the story cites as its own are left stale about the gate count — `deferred-work.md:3624` and `:3932` still say *"eight since story 6.3"* and reference a Tailwind chain that never landed, untouched by the story that made it nine [`_bmad-output/implementation-artifacts/deferred-work.md`]
-- [ ] [Review][Patch] `main.rs:373` is cited in both twins as the raw locale read — valid at the baseline, false in the commit that carries it; the default is `DEFAULT_LOCALE` near `:180` and `set_locale` at `:471` [both twins]
-- [ ] [Review][Patch] *"1.79 s without a database"* is not reproducible and names no method — warm on this tree: summed test time 0.24 s, wall time 0.556 s. The *difference* that is supposed to be the tell rests on a figure nobody can reproduce [Completion Notes, both twins, `sprint-status.yaml`]
-- [ ] [Review][Patch] T5's either/or was discharged in neither branch — no locale-parameterised render helper was built and no register row names the French render's lack of automated reading; `grep -c 'render helper' deferred-work.md` → 0. The key-level French assertions narrow the gap and the narrowing is not stated either [story file, register]
-- [ ] [Review][Patch] `assert!(index < PROBES.len())` under a comment saying it prevents a silently dropped row — `enumerate()` guarantees it for every possible array; the `(13, 5)` assertion below is what actually does that job [`xtask/src/copy_vocabulary.rs`]
-- [ ] [Review][Patch] Two floors set below what is visibly there — `checked >= 5` where the diff shows six `INTERNAL_SERVER_ERROR` sites and the test's own doc says six; `checked >= 4` counts occurrences while its message names attributes. The house rule quoted repeatedly in this diff is that a floor is a guard only while it equals what is there [`crates/opencmdb-bin/src/page.rs`]
-- [ ] [Review][Patch] An invisible character inside a retired term defeats BOTH carriers — `"Nothing to mer<U+200B>ge yet."` gives nine gates green, 720/720, and the string is in the shipped binary, rendering as *"merge"*. Caught only on `gesture.*` keys, by the glossary pinning. Widen once and state the limit — an enumeration cannot claim the completeness of a property (story 5.12's sentence) [`xtask/src/copy_vocabulary.rs:330`, `state_vocabulary.rs:400`]
-- [ ] [Review][Patch] The security "closed set" sentences claim more than the proof — *"every posture the type admits"* over a `Vec` field of which two values are sampled; *"eight postures × four rows — every branch was rendered"* inherits it; and `security_rows` is called at the ambient locale only, so the CLOSURE half is measured in English alone despite the title saying both languages [`crates/opencmdb-bin/src/diagnostic.rs`]
-- [ ] [Review][Patch] The `aria-labelledby` boundary comment describes a case the matcher cannot reach — the needle is `aria-label="`, including the `="`, which `aria-labelledby="` cannot contain. The boundary earns its keep on the second example only [`crates/opencmdb-bin/src/page.rs`]
-- [ ] [Review][Patch] Two brittle spots — the module-doc gate count is recovered by a substring scan over an ordered numeral list, correct today and one word of prose from silently reporting the wrong claim; and `candidate.split('-').next().unwrap_or(candidate)` has an unreachable arm, the same fact handled two different ways in one commit [`xtask/src/main.rs`, `crates/opencmdb-bin/src/main.rs`]
+- [x] [Review][Patch] The prose-attribute guard reads the TEMPLATE while the defect lives in the RENDER — moving the literal one file over (`gap_card_label: "Reconciliation result".to_string()`) puts the removed English string back on the served page with 485/161/74 and nine gates green. The story's own M8 row says in so many words that the guard must read the rendered page [`crates/opencmdb-bin/src/page.rs:305`, guard at `:2620`]
+- [x] [Review][Patch] `trim_end_matches(" the gap")` on BOTH operands of `every_glossary_gesture_is_rendered_with_the_glossary_words` — measured a NO-OP today (`gesture.accept_gap` renders the glossary phrase exactly), so it weakens nothing now and would let a future `"Accept"` pass. Delete it; the assertion stays green and gets stronger [`crates/opencmdb-bin/src/state_vocabulary.rs:340`]
+- [x] [Review][Patch] AC2's glossary-uniqueness half was not extended to the gesture axis — `gesture.resolve`'s `fr` set to `"Merger"` leaves 720/720 and `copy-vocabulary` green while two keys render one binding French word [`crates/opencmdb-bin/src/state_vocabulary.rs`]
+- [x] [Review][Patch] The derived count reds for the WRONG reason on ordinary nested YAML of arity > 1 — `checked` counts leaves at any depth, `translated` counts top-level hash entries; the invited repair is to relax or delete the count, which is the whole of arbitration 3(d). Related: both passes consume ONE parse, so a truncated file satisfies both [`crates/opencmdb-bin/src/screens.rs:740`]
+- [x] [Review][Patch] An empty translation value counts as a present locale — `fr: ""` gives 720/720, nine gates green, and an unlabelled `<button class="refresh">` on the French page. Rendering nothing is worse than rendering English [`crates/opencmdb-bin/src/screens.rs:704`]
+- [x] [Review][Patch] The prose-attribute guard matches `attr="` only — a single-quoted English literal is served verbatim with everything green, and `aria-label="Reconciliation result for {{ … }}"` passes because `contains("{{")` accepts any amount of English sharing the attribute [`crates/opencmdb-bin/src/page.rs:2620`]
+- [x] [Review][Patch] The 500-literal guard's stated limits omit the two that matter — it matches `StatusCode::INTERNAL_SERVER_ERROR,` alone (no 404/403/405/400/409, though its name promises "a status") and walks two file names, so a handler in `example_screens.rs` — the file that exists *because* 6b.6 split `page.rs` under size pressure — is invisible; `metrics.rs:60`'s English 500 body is excluded silently where the guard's own doc says an exclusion should be a sentence [`crates/opencmdb-bin/src/page.rs:2688`]
+- [x] [Review][Patch] `_version` is counted as a key AND as a translated value — the gate's own green line reads `288 key(s) and 575 translated value(s)` over a file carrying 287 keys, which is the exact defect `Collector::key_lines`' doc records about an earlier draft. The message-count test is placed where it cannot occur (its probe has no `_version` line) [`xtask/src/copy_vocabulary.rs`]
+- [x] [Review][Patch] Carrier 2 discovers its keys by line shape — `lines().filter_map(strip_suffix(':'))` — inside the story that abolished line-shape parsing and measured it missing 7 of 12 legal shapes; a nested key is invisible to it, and the doc claims the two carriers *"agree about what a key is"* [`crates/opencmdb-bin/src/state_vocabulary.rs`]
+- [x] [Review][Patch] The locale refusal asserts one cause for at least six — *"the case must match"* is false for `fr_CH`, `fr `, `fr.UTF-8`, `-fr`, `français` and `zz`, and `fr_CH` is the one its own comment calls the most likely to be typed; the suffix example is `available.first()`-driven, so an operator asking for `FR` is offered `en-CH` (measured on a real boot) [`crates/opencmdb-bin/src/main.rs:302`]
+- [x] [Review][Patch] The `SequenceStart` comment states the opposite of the code beneath it — it sets the PARENT frame's `expecting_key = true`, so a sequence's elements are read as keys and values of the parent; there is no `SequenceEnd` arm. Measured consequence is narrower than the comment's error: a term inside a sequence item is not linted, and later keys are still located correctly [`xtask/src/copy_vocabulary.rs`]
+- [x] [Review][Patch] The mutation summary contradicts the table directly beneath it, in three documents — heading says 22 ids, the table has 23 rows; the closing line says 19 reds and 21 rows carry 🔴; M4 is counted as a green while its own row reads *"reds both carriers"*. Identical sentence in `CLAUDE.md` and `docs/project-context.md` [story file, both twins]
+- [x] [Review][Patch] M6 and M7 are prescribed and absent from the results table while T8 is ticked *"run every row"* — M6 measured 3 red; M7 is NOT EXECUTABLE as prescribed (the gate builds no offset→line map, it takes `Marker::line()`), and its substance holds: with `en: "Merge"` at line 341 under 166 accented lines the gate reports `app.yml:341` exactly [story file]
+- [x] [Review][Patch] Three mutation rows report one key's count for a mutation named as a class — M1 is 1 red on `ipam.state.free` and **3** on `nav.dashboard`, so its stated conclusion *"the SILENT direction, caught only by the file guard"* is false for any key the story's own probes reference; M21 is 2 red on the natural site, not 1; M10 is 2, not 1 [story file]
+- [x] [Review][Patch] `xtask/src/main.rs` is 1922 code lines, not the 1913 T4 records — 1913 is the figure in a validation worktree; the cost is +14, headroom 78, not +5 and 87. Story 5.14's finding verbatim [story file]
+- [x] [Review][Patch] *"163 of the 287 French values"* is a dated numerator against a live denominator — 163 is true of the 284-key baseline and 166 of the 287-key tree; true of neither as written [Completion Notes, both twins]
+- [x] [Review][Patch] The File List says 11 register rows; the register gained 12, and both twins say 12 [story file]
+- [x] [Review][Patch] The two register rows the story cites as its own are left stale about the gate count — `deferred-work.md:3624` and `:3932` still say *"eight since story 6.3"* and reference a Tailwind chain that never landed, untouched by the story that made it nine [`_bmad-output/implementation-artifacts/deferred-work.md`]
+- [x] [Review][Patch] `main.rs:373` is cited in both twins as the raw locale read — valid at the baseline, false in the commit that carries it; the default is `DEFAULT_LOCALE` near `:180` and `set_locale` at `:471` [both twins]
+- [x] [Review][Patch] *"1.79 s without a database"* is not reproducible and names no method — warm on this tree: summed test time 0.24 s, wall time 0.556 s. The *difference* that is supposed to be the tell rests on a figure nobody can reproduce [Completion Notes, both twins, `sprint-status.yaml`]
+- [x] [Review][Patch] T5's either/or was discharged in neither branch — no locale-parameterised render helper was built and no register row names the French render's lack of automated reading; `grep -c 'render helper' deferred-work.md` → 0. The key-level French assertions narrow the gap and the narrowing is not stated either [story file, register]
+- [x] [Review][Patch] `assert!(index < PROBES.len())` under a comment saying it prevents a silently dropped row — `enumerate()` guarantees it for every possible array; the `(13, 5)` assertion below is what actually does that job [`xtask/src/copy_vocabulary.rs`]
+- [x] [Review][Patch] Two floors set below what is visibly there — `checked >= 5` where the diff shows six `INTERNAL_SERVER_ERROR` sites and the test's own doc says six; `checked >= 4` counts occurrences while its message names attributes. The house rule quoted repeatedly in this diff is that a floor is a guard only while it equals what is there [`crates/opencmdb-bin/src/page.rs`]
+- [x] [Review][Patch] An invisible character inside a retired term defeats BOTH carriers — `"Nothing to mer<U+200B>ge yet."` gives nine gates green, 720/720, and the string is in the shipped binary, rendering as *"merge"*. Caught only on `gesture.*` keys, by the glossary pinning. Widen once and state the limit — an enumeration cannot claim the completeness of a property (story 5.12's sentence) [`xtask/src/copy_vocabulary.rs:330`, `state_vocabulary.rs:400`]
+- [x] [Review][Patch] The security "closed set" sentences claim more than the proof — *"every posture the type admits"* over a `Vec` field of which two values are sampled; *"eight postures × four rows — every branch was rendered"* inherits it; and `security_rows` is called at the ambient locale only, so the CLOSURE half is measured in English alone despite the title saying both languages [`crates/opencmdb-bin/src/diagnostic.rs`]
+- [x] [Review][Patch] The `aria-labelledby` boundary comment describes a case the matcher cannot reach — the needle is `aria-label="`, including the `="`, which `aria-labelledby="` cannot contain. The boundary earns its keep on the second example only [`crates/opencmdb-bin/src/page.rs`]
+- [x] [Review][Patch] Two brittle spots — the module-doc gate count is recovered by a substring scan over an ordered numeral list, correct today and one word of prose from silently reporting the wrong claim; and `candidate.split('-').next().unwrap_or(candidate)` has an unreachable arm, the same fact handled two different ways in one commit [`xtask/src/main.rs`, `crates/opencmdb-bin/src/main.rs`]
 
 #### Deferred
 
@@ -1106,10 +1106,17 @@ arbitrations and the implementation in one session.
 
 ### Completion Notes List
 
-⚠️ **THE LIVE COUNT FOR THE WHOLE PROJECT LIVES HERE** (story 6.1's AC8): **697 → 720 tests**
-(485 bin + 161 core + 74 xtask), **nine gates green**, `app.yml` **287 keys / 984 lines**, 28
-fixtures, trap gate still RED 26/15/11. Suite measured **both ways**: **1.79 s** without a database
-and **5.75 s** against a live `mariadb:10.11.11` — the clock is the tell.
+⚠️ **THE LIVE COUNT FOR THE WHOLE PROJECT LIVES HERE** (story 6.1's AC8): **697 → 727 tests**
+(489 bin + 161 core + 77 xtask), **nine gates green**, `app.yml` **290 keys**, 28 fixtures, trap
+gate still RED 26/15/11.
+
+⚠️ **Re-measured at the code review, and the figures are a COMMAND'S rather than a recollection**:
+`cargo test --workspace --locked`, wall clock, warm, on a live `mariadb:10.11` — **7.54 s** with
+`DATABASE_URL` set and **0.67 s** without. The clock is the tell that the store-backed half ran.
+🔴 The record read *"1.79 s / 5.75 s"* and neither was reproducible on this tree, nor did it name
+the command that produced them — *a timing with no command behind it is a recollection wearing a
+decimal point.* The RATIO is the fact worth keeping; the absolute values belong to whatever
+machine took them.
 
 #### 🔴 THE STORY'S SCHEDULED DELIVERABLE HAD ALREADY BEEN WRITTEN, AND THAT IS THE FINDING
 
@@ -1161,7 +1168,7 @@ mismatch visible. Fixed in both languages; the browser confirms both positions n
 #### ⚠️ THE INSTRUMENT THE STORY PRESCRIBED FOR ITS OWN RECEIPT WAS BLIND
 
 `strings target/debug/opencmdb | grep` reports **0** for a value that IS in the binary: GNU `strings`
-breaks its run on any multibyte character, and **163 of the 287 `fr:` values carry one**. Measured
+breaks its run on any multibyte character, and **163 of the 284 `fr:` values carried one AT THE BASELINE** — a dated numerator, and the code review found it written against a live denominator in three places. On the shipped tree it is **168 of 290**; `build.rs`'s own doc carries the baseline pair and says so. Measured
 with an ASCII control (`Dashboard`, found). Prescribed for a proof of presence, blind to presence.
 **`grep -a`**, throughout.
 
@@ -1188,7 +1195,68 @@ gets the half nobody had read, and its primary control no longer carries the one
 pillar forbids. And a wrong `OPENCMDB_LOCALE` now says so at boot instead of silently answering in
 another language.
 
-### Mutation pass — 22 ids, carriers named per row
+
+#### AC5 — the browser pass, written down (arbitration 5(b), Guy's decision (a) at the code review)
+
+⚠️ **This section exists because the pass shipped without it.** Arbitration 5(b) reads *"left to
+review, **and the review is written down**"*, and T9 named the deliverable — which screens, which
+locale, which build, what was read. The first record held one line and three defects. The same
+finding landed on story 6b.9 one story earlier. Guy chose to REDO the pass rather than write a
+record after the fact.
+
+**The instrument, and the two traps checked before believing anything.**
+
+| | |
+|---|---|
+| Build | `cargo build --workspace --locked` at 13:28:55, `app.yml` at 13:28:41 — the artefact is NEWER than the copy |
+| Artefact check | `grep -a` (never `strings`, never the source): `Authentification requise` = 1, `authentication required` = 0 |
+| Store | live `mariadb:10.11` on port 13321, migrations applied at boot (`schema 0005 — 5 of 5 applied`) |
+| Server | port **8080**, not the 3000 assumed — read from the boot log, not supposed |
+| Process | killed and the port **measured dead** (`000`) between every locale change |
+| Locale control | the first bytes of `/triage` read before each pass — `Authentication required…` / `Authentification requise…` |
+| Browser | Chrome **151.0.7922.173**, re-run rather than quoted (the record said `.169`) |
+
+**What was read: ten screens × two locales, plus the 401.** Every screen answered `200`, and
+**every French page differs byte-for-byte from its English twin** — the cheap check that the locale
+actually applies rather than being asserted.
+
+`/triage` · `/dashboard` · `/devices` · `/devices/nas-01` · `/apps` · `/ipam` · `/sources` ·
+`/alerts` · `/diagnostic` · `/commissioning`, plus the unauthenticated `401` body at a screen
+address.
+
+**Read against the UX spec's five Microcopy Rules** (`ux-design-specification.md:1444`):
+
+| Rule | Verdict on this surface |
+|---|---|
+| 1. Button = action verb, feedback = the same verb as a past participle | **Not exercised** — no gesture is live, so no feedback exists to compare. The five controls carry verbs (`Document`, `Accept the gap`, `Snooze`, `Attach`, `Exclude`). |
+| 2. Error = cause + next step, never blame the user | **Met, and it is what the 401 gained**: *"This instance is closed by default: supply the operator credentials it was configured with. If none were configured, no one can sign in yet — see the administrator documentation."* The store-down body already carried both halves. |
+| 3. The tool's "I" only for an action it attempted | **Met** — no first person anywhere on the ten screens, in either language. |
+| 4. One term = one translation | **Met after this review**, and it is what `one_gesture_word_is_rendered_by_one_key` now guards. |
+| 5. Empty ≠ failure — calm, never alarming | **Met** — *"Every sighting was placed."*, *"not recorded — this product keeps no error history"*, *"none — every observation and every link is kept"*. Nothing on an empty surface reads as a fault. |
+
+🔴 **AND THE PASS FOUND A DEFECT NO TEST COULD SEE, on the primary screen, in both languages.**
+`/triage` rendered **`1 field(s)`** and **`1 champ(s) déclaré(s)`** — the lazy parenthetical plural
+— while `/devices`, one click away, showed the same fact as `1 field` / `2 fields` and
+`1 champ` / `2 champs`. *A parenthetical plural is a perfectly resolvable key*: every existing
+guard, the nine gates and 728 tests were green over it.
+
+🔑 It is fixed as a CLASS rather than as two keys: `counted_fields` inflects, and
+`no_value_fobs_the_reader_off_with_a_parenthetical_plural` is a property over the whole file.
+⚠️ Two forms are enough **and the reason is measured, not assumed** — both call sites read a count
+out of `result.abstentions`, whose entries exist only when the cause occurred, so `n >= 1` and the
+zero case (where the two languages disagree: `0 fields` against `0 champ`) cannot arise.
+
+✅ **Verified on the SERVED page, not on the source**: `/triage` in English renders `1 field` twice
+and no `field(s)`; in French, `1 champ` three times. Screenshots taken in both locales at 1280 px.
+
+⚠️ **Recorded and NOT fixed here, each already owned**: `Source 00000000` is the source label
+narrowed by story 6b.8 (a v7 UUID's clock bits, rolling every ≈65 s); the `owner` column on
+`/apps` renders French values under the English UI **by story 6b.7's decision** (owner values are
+DATA, criticality is a key); and `document.rs:206` carries `"documented {} field(s) as entity {}"`
+— a **log line**, English by construction like every other log in this product, outside the copy
+perimeter and outside the new guard, which reads `app.yml` alone.
+
+### Mutation pass — 23 rows, carriers named per row
 
 | id | Mutation | Result |
 |---|---|---|
@@ -1213,12 +1281,26 @@ another language.
 | M17 | `gate_vocabulary`'s word matcher (`_` = word char) | 🔴 2 red — `gesture.merge_all` would pass |
 | M18 | Delete the gate's `completeness()` call | 🟢 **GREEN twice**, then 🔴 1 red — see the notes above |
 | M20 | Delete the zero-entries refusal | 🔴 1 red · ⚠️ **and it first failed to APPLY**, the driver exiting non-zero after `cargo fmt` moved the anchor — which is what that exit code is for |
-| M21 | The register row's paraphrased security claim, **verbatim** | 🔴 1 red — on the PINNING, and it left 696/696 green at story 6b.9 |
-| M22 | A **seventh** security value beside the six pinned | 🔴 2 red |
+| M21 | The register row's paraphrased security claim, **verbatim** | 🔴 **2 red, not 1** — re-measured at the code review on the natural site (`diagnostic.secrets_value`, `en`): the PINNING and `the_screen_states_no_security_property_the_product_does_not_hold`, because T7 added `"cannot be breached"` to the word enumeration in the same commit. The row credited the pinning alone. It left 696/696 green at story 6b.9 |
+| M22 | A **seventh** security value beside the six pinned | 🔴 **3 red, not 2** — re-measured; `every_group_of_the_enum_is_rendered_once` and `the_two_planned_controls_are_reachable_and_never_natively_disabled` also fire. ⚠️ Mutation-shape dependent, unlike M21 |
+| M6 | Replace the gate's whole body with `Ok((true, …))` | 🔴 **3 red** — PRESCRIBED and never recorded until the code review re-ran it. The structural property holds: `the_gate_itself_reds_and_says_where`, `a_locale_file_the_gate_cannot_see_into…`, `an_unreadable_or_unparseable_locale_file…` |
+| M7 | Break the offset→line map | ⚫ **NOT EXECUTABLE as prescribed** — the gate builds no offset→line map, it takes `Marker::line()` from `yaml-rust2`. Prescribed, absent from the table, and the omission was silent. Substance measured instead: with `en: "Merge"` restored at line 341 under 166 accented lines above it, the gate reports `app.yml:341` exactly |
 
-**19 reds, 3 greens by stated design (M4-as-separator, M9, M9-ctl), 2 greens that were DEFECTS and
-are now red (M18 ×2).** Carriers are mixed and named per row; *"every red assertion-carried"* is
-**not** claimed.
+🔴 **THE COUNT AND THE CARRIERS, RE-DERIVED AT THE CODE REVIEW.** The heading read *"22 ids"* over
+a table of 23 rows, and the closing line read *"19 reds"* where 21 rows carry 🔴 — with **M4
+counted among the greens while its own row reads *"reds BOTH carriers"***. One row classified two
+ways in one section. The identical sentence stood in `CLAUDE.md` and `docs/project-context.md`.
+
+⚠️ **And three rows reported ONE KEY'S count for a mutation named as a CLASS** (story 6b.6's
+finding, recurring): M1 is 1 red on `ipam.state.free` and **3** on `nav.dashboard`, so its stated
+conclusion *"the SILENT direction, caught only by the file guard"* is FALSE for any key this
+story's own probes reference; M2 is 2 on the first and 3 on the second; M10 is 1 and 2. **A row
+that names a class and reports one key's number is not a measurement of the class.** Each now
+names the site it was applied to, or says it varies.
+
+**25 rows: 23 mutations and 2 controls.** Carriers are mixed and named per row; *"every red
+assertion-carried"* is **not** claimed, and no total is restated here — *the table is the record,
+and a summary that can drift from it is the defect this story spent its day on.*
 
 ### File List
 

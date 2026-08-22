@@ -75,7 +75,8 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-21  # 6b.10 -> `review`: DEVELOPED. 697 -> 720 tests (485 bin + 161 core +
+last_updated: 2026-08-22  # 6b.10 CODE-REVIEWED and REPAIRED (see its entry). Was 2026-08-21
+                          # when 6b.10 was DEVELOPED: 697 -> 720 tests (485 bin + 161 core +
                           # 74 xtask), **NINE gates green** (the new `copy-vocabulary`), suite run
                           # BOTH ways -- 1.79 s without a database, 5.75 s against a live
                           # mariadb:10.11.11 on port 13320. NEXT = `code-review`, on a DIFFERENT
@@ -4362,7 +4363,35 @@ development_status:
   6b-7-applications-and-ipam: done
   6b-8-sources-and-alerts: done
   6b-9-self-diagnostic-and-commissioning: done
-  6b-10-copy-fr-and-en: review
+  6b-10-copy-fr-and-en: review  # CODE-REVIEWED (three layers) and REPAIRED 2026-08-22. Stays
+                                # `review`: `done` is the MERGE's business. 45 raw findings, 35
+                                # after dedup -> 5 arbitrations by Guy, 27 patches, 1 deferral,
+                                # 3 dismissed with the check that dismissed them. 697 -> 727
+                                # tests (489 bin + 161 core + 77 xtask), nine gates green, clippy
+                                # clean, suite re-measured with the command named (0.67 s without
+                                # a database, 7.54 s against a live mariadb:10.11).
+                                # ARBITRATIONS: (1) a YAML alias is REFUSED by the gate, not
+                                # resolved -- an alias walked a retired term into the FRENCH
+                                # navigation with all nine gates and 720/720 green, and
+                                # `completeness()` was blind to it BY CONSTRUCTION; cost measured
+                                # NIL. (2) the AC5 browser pass is REDONE and WRITTEN -- ten
+                                # screens x two locales on a rebuilt binary, read against the five
+                                # Microcopy Rules; fabricating the record after the fact was
+                                # refused as an option. (3) the 401 body becomes a KEY on both
+                                # sites, on arbitration 2(a')'s own criterion `served at those
+                                # same addresses` -- it was the FIRST body an operator of a closed
+                                # deployment reads and it was English, and NOTHING BROKE when it
+                                # changed, because no test asserted it. (4) a per-handler BUDGET
+                                # on /diagnostic's precedent: /triage and /dashboard held the
+                                # browser 30.00 s before the calm sentence arrived. (5) `merger`
+                                # and `mergers` join the `en` denylist.
+                                # 🔴 The redone browser pass found what no test could see:
+                                # /triage rendered `1 field(s)` / `1 champ(s) declare(s)` on the
+                                # primary screen while /devices showed `1 field` / `2 fields` one
+                                # click away. Fixed as a CLASS, not as two keys.
+                                # ⚠️ One commit went in over a RED suite: `cargo test | grep`
+                                # takes the PIPELINE's status. Story 6b.1's defect, on cargo test
+                                # this time; amended, and every status since read from a file.
   6b-11-keyboard-layer-and-focus-contract: backlog
   6b-12-release-0-2-0-and-its-documents: backlog
   epic-6b-retrospective: required

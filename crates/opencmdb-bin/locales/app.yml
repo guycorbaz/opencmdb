@@ -259,9 +259,12 @@ triage.kind.nouveau:
   en: "New"
   fr: "Nouveau"
 # 🔑 FR16b: each cause is ONE line carrying its count, never N failures.
-triage.cause.declared_side:
-  en: "%{n} declared field(s)"
-  fr: "%{n} champ(s) déclaré(s)"
+triage.cause.declared_side_one:
+  en: "%{n} declared field"
+  fr: "%{n} champ déclaré"
+triage.cause.declared_side_other:
+  en: "%{n} declared fields"
+  fr: "%{n} champs déclarés"
 triage.cause.nothing_observed:
   en: "No source reported a value"
   fr: "Aucune source n'a rapporté de valeur"
@@ -293,9 +296,12 @@ origin.unknown:
 meta.source_id:
   en: "Source %{id}"
   fr: "Source %{id}"
-triage.n_fields:
-  en: "%{n} field(s)"
-  fr: "%{n} champ(s)"
+triage.n_fields_one:
+  en: "%{n} field"
+  fr: "%{n} champ"
+triage.n_fields_other:
+  en: "%{n} fields"
+  fr: "%{n} champs"
 meta.no_source:
   en: "No source"
   fr: "Aucune source"
