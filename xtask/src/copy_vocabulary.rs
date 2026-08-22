@@ -98,6 +98,14 @@ const RETIRED: &[(&str, &[&str])] = &[
             "merges",
             "merged",
             "merging",
+            // 🔑 The NOUN, added at story 6b.10's code review (Guy, 2026-08-22). The verb forms
+            // alone left `Merger` legal in English — and that is the spelling a translator
+            // copying the FRENCH value produces, the French « Merger » being binding. It does
+            // not touch `the_separators_of_this_file_are_word_boundaries`, which tests the
+            // MATCHER (`contains_word("merger", "merge") == false`, still true) and never this
+            // list.
+            "merger",
+            "mergers",
             "drift",
             "drifts",
             "ignore",
@@ -139,6 +147,8 @@ pub(crate) struct Entries {
     keys: usize,
     /// How many value scalars it read.
     values: usize,
+    /// How many YAML aliases the parser met. Any at all is a refusal — see [`Self::completeness`].
+    aliases: usize,
 }
 
 impl Entries {
@@ -151,7 +161,24 @@ impl Entries {
     ///
     /// Every scalar is either a mapping key or a mapping value, and this parse records one entry
     /// per key plus one per value, so the two counts must add up exactly.
+    ///
+    /// ⚠️ **What this counter can and cannot see, stated rather than implied** (story 6b.10's
+    /// code review). It catches a scalar the walker MISCLASSIFIED or dropped on the floor. It is
+    /// blind by construction to anything that is not a scalar — which is why the alias refusal
+    /// below is a SEPARATE check and not a consequence of the arithmetic: an alias increments
+    /// none of the three counters, so the equality holds over a document whose value the gate
+    /// never read.
     pub(crate) fn completeness(&self) -> std::result::Result<(), String> {
+        // 🔴 Checked FIRST: an alias means a value lives where it is not read, and no amount of
+        // scalar arithmetic can compensate for that. Guy's arbitration, 2026-08-22.
+        if self.aliases > 0 {
+            return Err(format!(
+                "the locale file carries {} YAML alias(es): an alias writes a value where it is \
+                 not read, so a retired term reaches the rendered page with this gate green. Write \
+                 the value out in full — a translation file has no use for an anchor",
+                self.aliases
+            ));
+        }
         let values = self.values;
         if self.keys + values == self.scalars {
             Ok(())
@@ -243,12 +270,39 @@ impl MarkedEventReceiver for Collector {
                 self.stack.pop();
                 self.path.pop();
             }
-            // A sequence cannot appear in this file's shape, but it must not corrupt the stack if
-            // one is ever added: its scalars are values, and it opens no key context.
+            // A sequence cannot appear in this file's shape. ⚠️ **This arm does NOT lint its
+            // items** — a scalar inside a sequence never reaches the `Event::Scalar` arm's
+            // key/value classification, so a retired term written inside one is not seen here.
+            // It is caught one layer over, by `every_key_carries_both_locales`, because a
+            // sequence is not a scalar and the locale halves stop being strings.
+            //
+            // 🔴 The comment that stood here until story 6b.10's code review said *"its scalars
+            // are values, and it opens no key context"* — **the opposite of what the line below
+            // does**. It sets the PARENT frame back to expecting a key, which is what keeps the
+            // parent mapping in step once the sequence closes; the items themselves are simply
+            // not classified. Measured: with a sequence planted near the top of the file, a
+            // later `en: "Merge"` is still located exactly.
             Event::SequenceStart(..) => {
                 if let Some(frame) = self.stack.last_mut() {
                     frame.expecting_key = true;
                 }
+            }
+            // 🔴 **A YAML alias is REFUSED, not linted** — Guy's arbitration at story 6b.10's
+            // code review (2026-08-22), option (b) over resolving anchors.
+            //
+            // An alias writes a value where it is not read: `tmpl: &shared "Merge alerts"`
+            // aliased into `nav.alerts` was MEASURED serving `Merge alerts` in the French
+            // navigation with all nine gates green, 720/720 tests green, and the retired term
+            // never linted. `completeness()` cannot see it — an alias increments none of
+            // `scalars`/`keys`/`values`, so `keys + values == scalars` holds exactly as before.
+            //
+            // 🔑 Refusing is a PROPERTY; resolving anchors would be an enumeration — `&` on a
+            // `MappingStart`, a whole-block anchor and a multi-document anchor would each have to
+            // be handled in turn, and *an enumeration cannot claim the completeness of a
+            // property* (story 5.12). The cost of refusing was measured NIL: `app.yml` carries
+            // zero anchors and zero aliases, and a translation file has no use for either.
+            Event::Alias(..) => {
+                self.out.aliases += 1;
             }
             Event::Scalar(value, ..) => {
                 self.out.scalars += 1;
@@ -402,17 +456,32 @@ pub(crate) fn gate_copy_vocabulary(root: &Path) -> Result<(bool, String)> {
     }
     let found = findings(&entries);
     if found.is_empty() {
+        // 🔴 **The no-locale pair is neither a key of the copy nor a translated value, and
+        // counting it as both was a defect** (story 6b.10's code review). `_version: 2` produced
+        // an entry with an empty locale AND a `<key>` entry of its own, so the green line read
+        // *"288 key(s) and 575 translated value(s)"* over a file carrying 287 keys and 574
+        // values. `Collector::key_lines`' own doc records the same class about an earlier draft:
+        // *a gate that reports a false count in the sentence announcing its own success is the
+        // defect this story exists to remove.*
+        let bookkeeping: std::collections::BTreeSet<&str> = entries
+            .entries
+            .iter()
+            .filter(|e| e.locale.is_empty())
+            .map(|e| e.key.as_str())
+            .collect();
         let keys = entries
             .entries
             .iter()
-            .filter(|e| e.locale == KEY_NAMES)
+            .filter(|e| e.locale == KEY_NAMES && !bookkeeping.contains(e.key.as_str()))
+            .count();
+        let values = entries
+            .entries
+            .iter()
+            .filter(|e| e.locale != KEY_NAMES && !e.locale.is_empty())
             .count();
         return Ok((
             true,
-            format!(
-                "no retired term in {keys} key(s) and {} translated value(s)",
-                entries.entries.len() - keys
-            ),
+            format!("no retired term in {keys} key(s) and {values} translated value(s)"),
         ));
     }
     let lines: Vec<String> = found
@@ -533,6 +602,12 @@ mod tests {
             "triage.kind.ecart:\n  en: \"Drift\"\n  fr: \"Écart\"\n",
             Some(2),
         ),
+        (
+            "e14 « Merger » in the ENGLISH column — the same word `g01` pins GREEN in French, and \
+             the pair IS the statement that this denylist is PER LOCALE",
+            "gesture.document:\n  en: \"Merger\"\n  fr: \"Merger\"\n",
+            Some(2),
+        ),
         // ── must stay GREEN, and each row says what it protects ───────────────────────────
         (
             "g01 « Merger » is the BINDING French translation of `document` — never a finding",
@@ -561,6 +636,94 @@ mod tests {
         ),
     ];
 
+    /// 🔴 **The green line counts the COPY, and the bookkeeping pair is neither half of it.**
+    ///
+    /// Story 6b.10's code review measured the gate announcing *"288 key(s) and 575 translated
+    /// value(s)"* over a file carrying 287 keys and 574 values: `_version: 2` was counted once as
+    /// a key and once as a translated value, being neither.
+    ///
+    /// 🔑 The message test that existed could not see it — its probe carries no `_version` line,
+    /// so it asserted the count where the defect cannot occur. This one carries the pair.
+    #[test]
+    fn the_green_line_does_not_count_the_bookkeeping_pair() {
+        let (ok, message) = gate_over(
+            "counts",
+            "_version: 2\ngesture.document:\n  en: \"Document\"\n  fr: \"Merger\"\n",
+        );
+        assert!(ok, "the document is clean: {message}");
+        assert!(
+            message.contains("1 key(s)"),
+            "`_version` is not a key of the copy: {message}"
+        );
+        assert!(
+            message.contains("2 translated value(s)"),
+            "and `2` is not a translated value either: {message}"
+        );
+    }
+
+    /// 🔴 **A YAML alias is REFUSED — THROUGH THE GATE, and with the CONTROL that gives the
+    /// refusal its meaning.**
+    ///
+    /// The input is the one story 6b.10's code review measured walking past this gate into the
+    /// French navigation with all nine gates green, 720/720 tests green, and the retired term
+    /// never linted. `completeness()` could not see it: an alias increments none of
+    /// `scalars`/`keys`/`values`, so the equality held exactly as before — measured here as
+    /// `scalars: 5, keys: 4, values: 1`.
+    ///
+    /// 🔑 Written through [`gate_over`] and not through `completeness()`, because story 6b.10's
+    /// own M18 deleted the `completeness()` call from the gate and reddened NOTHING — every test
+    /// attacked the helper. A refusal that the gate does not consult is not a refusal.
+    #[test]
+    fn a_yaml_alias_reds_the_gate_and_the_written_out_value_is_linted() {
+        let (ok, message) = gate_over(
+            "alias",
+            "_anchors:\n  tmpl: &shared \"Merge alerts\"\nnav.alerts:\n  en: *shared\n",
+        );
+        assert!(
+            !ok,
+            "an alias must RED the gate, never be skipped: {message}"
+        );
+        assert!(
+            message.contains("alias"),
+            "the refusal NAMES the alias, so the operator knows what to write out: {message}"
+        );
+
+        // 🔑 THE CONTROL. The same shape with the value written out is accepted AND linted — so
+        // the red above is about the ALIAS, not about the document. Without this half the test
+        // would pass over a gate that refuses everything.
+        let (ok, message) = gate_over(
+            "written-out",
+            "nav.alerts:\n  en: \"Merge alerts\"\n  fr: \"Alertes\"\n",
+        );
+        assert!(!ok, "the written-out value carries the term: {message}");
+        assert!(
+            message.contains(":2:") && message.contains("merge"),
+            "and it is located and named, not merely refused: {message}"
+        );
+    }
+
+    /// An ANCHOR nobody aliases is NOT refused — it is linted where it stands.
+    ///
+    /// 🔑 The hole is the alias, never the anchor: an anchor's value IS a scalar in place, so the
+    /// walker reads it and the denylist sees it. Refusing anchors too would be a wider promise
+    /// than the measurement supports, and this test is what stops the refusal drifting into one.
+    #[test]
+    fn an_anchor_that_nothing_aliases_is_linted_where_it_stands() {
+        let (ok, message) = gate_over(
+            "anchor",
+            "nav.alerts:\n  en: &shared \"Merge alerts\"\n  fr: \"Alertes\"\n",
+        );
+        assert!(!ok, "the anchored value carries the term: {message}");
+        assert!(
+            message.contains(":2:"),
+            "and it is caught at its DECLARATION line, not refused as an alias: {message}"
+        );
+        assert!(
+            !message.contains("alias"),
+            "an anchor alone is not an alias and must not be refused as one: {message}"
+        );
+    }
+
     /// Every probe gets the verdict it names, and a red one names its LINE.
     #[test]
     fn every_probe_gets_its_located_verdict() {
@@ -587,14 +750,18 @@ mod tests {
                     );
                 }
             }
-            // The index is read so a row cannot be silently dropped from the middle.
-            assert!(index < PROBES.len());
+            // 🔴 An `assert!(index < PROBES.len())` stood here until story 6b.10's code review,
+            // under a comment claiming it stopped a row being silently dropped from the middle.
+            // `enumerate()` guarantees that for EVERY possible array: it could not fail, and it
+            // could not detect a dropped row. The `(red, green)` assertion below is what actually
+            // does that job. What the index IS good for is naming the row in a failure.
+            let _ = index;
         }
         let red = PROBES.iter().filter(|p| p.2.is_some()).count();
         let green = PROBES.iter().filter(|p| p.2.is_none()).count();
         assert_eq!(
             (red, green),
-            (13, 5),
+            (14, 5),
             "both poles are exercised, and the count is here so a deleted row is loud"
         );
     }

@@ -454,10 +454,23 @@ mod gesture_axis_tests {
                 );
             }
         }
+        // 🔴 **Bounded to the FRENCH column, and the unbounded form was measured wrong.**
+        // Until story 6b.10's code review this searched the whole constant, so it forbade
+        // `merger` in EVERY locale — and it reddened the moment Guy's arbitration 5 added the
+        // noun to the ENGLISH column, where the French binding says nothing. It is the defect
+        // this test's own doc narrates, met on a second axis: *an unbounded needle cannot tell
+        // one locale's column from another's* any more than it can tell an entry from a mention.
+        let fr_column = gate
+            .find("(\"fr\",")
+            .map(|at| &gate[at..])
+            .expect("the gate declares a French column");
+        let fr_column = &fr_column[..fr_column.find(']').expect("the column is an array")];
         assert!(
-            !gate.contains("\"merger\""),
-            "« Merger » is the BINDING French translation of `document` and must never reach a \
-             denylist — this is the row someone tidying the two lists together would add"
+            !fr_column.contains("\"merger\""),
+            "« Merger » is the BINDING French translation of `document` and must never reach the \
+             FRENCH denylist — this is the row someone tidying the two lists together would add. \
+             (English `merger` IS retired, by Guy's arbitration of 2026-08-22, and that is a \
+             different column.) Column read: {fr_column}"
         );
     }
 }

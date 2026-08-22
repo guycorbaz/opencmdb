@@ -4647,3 +4647,19 @@ before the commit** — story 6b.9's review found that file untouched under a se
   rule about keeping a suspicion separate from a measurement). **Owner: Epic 6b's retrospective.**
 - ⚠️ **`views-hash` is still `ℹ STALE`**, as it has been since issue #50. Untouched here by the
   standing rule that it must not be regenerated inside a story. **Owner: the next milestone.**
+
+## Deferred from: code review of story 6b.10 (2026-08-22)
+
+- **The `file-size` gate stops counting at the FIRST `#[cfg(test)]`, and a file can hide unbounded
+  code behind an early one.** MEASURED during story 6b.10's review: a probe file
+  `crates/opencmdb-bin/src/zz_probe.rs` carrying `#[cfg(test)]` on line 2 followed by 2 500
+  `pub fn` lines reports `✅ file-size  40 file(s) under 2000 code lines (largest: 1922)`.
+  Pre-existing — the convention is one TRAILING test module (D56b), and the gate reads that
+  convention as a rule it can trust. It becomes load-bearing with this story: `state_vocabulary.rs`
+  is 463 lines with its first `#[cfg(test)]` at line 59, so the gate sees 58; and
+  `crates/opencmdb-bin/src/main.rs` — which 6b.10 grows by 320 lines — is 3 529 lines with its
+  first at line 31, so the gate sees 30. Neither is a violation today; both are files where the
+  gate's number and the file's size have stopped being the same kind of fact.
+  🔑 The honest closure is to count code lines OUTSIDE every `#[cfg(test)]` module rather than
+  before the first one, which also makes the gate's own doc true again.
+  **Owner: Epic 6b's retrospective**, with the other apparatus items it already carries.
