@@ -58,7 +58,7 @@
   --color-bg: #f2f2f3;
   --color-surface: #e9e9ea;
   --color-text: #1d1f20;
-  --color-accent: #5980a6;
+  --color-accent: #4b6b8b;
   --color-accent-2: #728fab;
   --color-divider: color-mix(in srgb, #1d1f20 16%, transparent);
 
@@ -68,7 +68,7 @@
   --color-neutral-300: #d4d4d7;
   --color-neutral-400: #b7b7ba;
   --color-neutral-500: #98989b;
-  --color-neutral-600: #7a7a7d;
+  --color-neutral-600: #68686b;
   --color-neutral-700: #5d5d60;
   --color-neutral-800: #424244;
   --color-neutral-900: #2b2b2d;
@@ -147,7 +147,7 @@
   /* 🔴 The amber, named for what it MEANS. Reserved for the documenting gesture (FR13) and
      used by NOTHING else — the mock's blue carries structure. Story 6.4 adds the first
      legitimate use; a test pins the count at zero until then. */
-  --accent-document: #b5793a;
+  --accent-document: #8d5e2d;
 }
 
 /* 🔴 The dark set — PRESENT AND SELECTED BY NOTHING. No template emits `data-theme`, and no
@@ -201,7 +201,20 @@ body {
   border-radius: 3px;
   padding: 24px;
 }
-.card:focus { outline: 2px solid var(--color-accent); outline-offset: 2px; } /* visible focus on HTMX swap */
+/* 🔴 **THE FOCUS CONTRACT, and until story 6b.11 it was one rule for an element nothing
+   renders.** `.card:focus` was written for `#gap-card`, which story 6b.11 measured absent
+   from all ten served screens; it is kept, because story 6.4's swap brings that card back,
+   and it is no longer the only rule.
+
+   ⚠️ **Three of the four focusable kinds were relying on Chrome's default outline** —
+   measured `auto 1px rgb(16,16,16)` on the queue rows, the sort link and the five planned
+   controls, against `--bg #f2f2f3`. axe-core has no focus-appearance rule, so the gate
+   goes green over that: this is the half no gate can carry, which is why it is written
+   down rather than assumed. `:focus-visible`, so a mouse click does not draw a ring. */
+.card:focus,
+.queue-row > a:focus-visible,
+.btn-sort:focus-visible,
+.btn-gesture:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
 .entity {
   display: flex;
