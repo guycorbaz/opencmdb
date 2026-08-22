@@ -75,7 +75,10 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-22  # 6b.10 CODE-REVIEWED and REPAIRED (see its entry). Was 2026-08-21
+last_updated: 2026-08-22  # 6b.10 DONE — PR #115 merged as `d40a613`. Epic 6b: 11 done of 13.
+                          # Next: 6b.11 (keyboard layer and focus contract), then 6b.12 (release
+                          # v0.2.0 + its THREE breaking changes), then the epic retrospective.
+                          # Was: 6b.10 CODE-REVIEWED and REPAIRED (see its entry). Was 2026-08-21
                           # when 6b.10 was DEVELOPED: 697 -> 720 tests (485 bin + 161 core +
                           # 74 xtask), **NINE gates green** (the new `copy-vocabulary`), suite run
                           # BOTH ways -- 1.79 s without a database, 5.75 s against a live
@@ -4363,8 +4366,8 @@ development_status:
   6b-7-applications-and-ipam: done
   6b-8-sources-and-alerts: done
   6b-9-self-diagnostic-and-commissioning: done
-  6b-10-copy-fr-and-en: review  # CODE-REVIEWED (three layers) and REPAIRED 2026-08-22. Stays
-                                # `review`: `done` is the MERGE's business. 45 raw findings, 35
+  6b-10-copy-fr-and-en: done  # PR #115 squash-merged 2026-08-22 as `d40a613` after a green CI
+                              # run (1m09). CODE-REVIEWED (three layers) and REPAIRED first. 45 raw findings, 35
                                 # after dedup -> 5 arbitrations by Guy, 27 patches, 1 deferral,
                                 # 3 dismissed with the check that dismissed them. 697 -> 727
                                 # tests (489 bin + 161 core + 77 xtask), nine gates green, clippy
