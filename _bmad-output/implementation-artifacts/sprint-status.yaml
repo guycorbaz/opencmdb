@@ -75,7 +75,10 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-22  # 6b.11 DEVELOPED -> review. Was: CONTEXTED, VALIDATED (2 layers, 38 findings) + 4 ARBITRATIONS
+last_updated: 2026-08-22  # 6b.11 CODE-REVIEWED by three isolated layers -- reports POURED IN
+                          # VERBATIM and UNTRIAGED (`2222da5`, pushed). Story STAYS at `review`:
+                          # the triage and the four arbitrations are NOT done. Was: 6b.11 DEVELOPED
+                          # -> review. Was: CONTEXTED, VALIDATED (2 layers, 38 findings) + 4 ARBITRATIONS
                           # -> ready-for-dev. 6b.10 DONE — PR #115 merged as `d40a613`. Epic 6b: 11 done of 13.
                           # Next: 6b.11 (keyboard layer and focus contract), then 6b.12 (release
                           # v0.2.0 + its THREE breaking changes), then the epic retrospective.
@@ -4428,6 +4431,35 @@ development_status:
     # ⚠️ axe closes NFR25's FLOOR, not NFR25 (prd.md:1429: two manual gates also blocking).
     # ⚠️ deferred-work.md:3740 names THIS story as owner of NFR24's touch targets -> AC7.
     # ⚠️ epics.md:2108's DoD says *seven gates*; there are NINE. Six divergences registered.
+    # ── CODE REVIEW 2026-08-22 (three isolated layers) — POURED IN, NOT TRIAGED ──────
+    # The three reports are in the story file VERBATIM, commit `2222da5`, pushed. 60 raw
+    # findings. NOTHING merged, ranked or arbitrated. ⚠️ THE COUNT IS NOT A TOTAL: several
+    # defects were reached by two or three layers independently, and at least three claims of
+    # one layer are REFUTED with a measurement by another (the Chrome leak, the missing
+    # lockfile, the scroll control). Establishing that IS the triage, and it has not been run.
+    # 🔴 AC5 NOT MET (acceptance layer): no mutation table, and three central guards measured
+    # GREEN -- emptying `app.js` leaves 490 tests passing in 6.08 s against a live database;
+    # removing the two focus selectors leaves 490 green; stripping `aria-current` from the sort
+    # link leaves 490 green, because a queue row on the SAME PAGE supplies the string the
+    # assertion searches for. AC3/AC4/AC7 partly met; AC1, AC2, AC3b, AC6 met.
+    # 🔴 FOUR ARBITRATIONS PENDING, none taken: (1) the axe gate's 0/1/2 contract -- repair it
+    # or narrow the promise in writing on 5.12's precedent (measured twice: `mv node_modules`
+    # -> exit 1, a broken axe payload -> exit 1, where ci.yml:80-82 promises exit 2); (2) does
+    # CI seed a queue before measuring, or is it written that it measures the EMPTY state only
+    # (measured: the story's own defect replanted reds at 8 rows and is GREEN with the store
+    # emptied); (3) `token_hex` reads a CSS COMMENT -- `css.find("{token}: #")` takes the first
+    # textual occurrence, so reverting a colour and leaving the old value in a comment turns the
+    # contrast property off in silence (guard green, axe 210 nodes); (4) the 250 ms settle timer
+    # is cancelled by NOTHING but another arrow, so on a slow document a click loses (measured
+    # at 1200 ms: clicked row 6, landed row 2; control on a warm store -- the click wins).
+    # ⚠️ THE REVIEW SESSION CRASHED mid-flight. Blind + acceptance had finished and were
+    # recovered INTACT from their transcripts; the edge-case layer had not and was RE-RUN from
+    # its original mandate in a fresh worktree -- its report is a first run, not a resumption.
+    # The interrupted run left 569 bytes of narration and no conclusions, measured; nothing was
+    # lost that could have been recovered. The branch is now PUSHED (it was local-only).
+    # ⚠️ Tree verified after the crash: clean, nine gates green, 728 tests BOTH ways (0.21 s
+    # without a database, 8.49 s against a live mariadb:10.11 -- the clock is the tell), clippy
+    # over --all-targets clean, Cargo.lock untouched, 28 fixtures at their sha256.
   6b-12-release-0-2-0-and-its-documents: backlog
   epic-6b-retrospective: required
 
