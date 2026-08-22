@@ -1,6 +1,6 @@
 # Story 6b.11: The keyboard layer and the focus contract
 
-Status: ready-for-dev
+Status: review
 
 ✅ **Contexted, ARBITRATED (4 decisions by Guy) and VALIDATED by two fresh-context layers,
 2026-08-22.** The validation produced **38 findings, 12 of them HIGH**, and **corrected the
@@ -273,80 +273,80 @@ while this is true** — the guard must read `getComputedStyle(document.activeEl
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — The axe harness, first, so every later task is measured against it (AC3b)**
-  - [ ] `a11y/` at the repo root: committed `package.json` + `package-lock.json`
+- [x] **T1 — The axe harness, first, so every later task is measured against it (AC3b)**
+  - [x] `a11y/` at the repo root: committed `package.json` + `package-lock.json`
         (`npm ci` in CI), `axe-core` and `puppeteer-core` only.
-  - [ ] Routes **derived by scraping the rendered navigation** (§0f), with the limit
+  - [x] Routes **derived by scraping the rendered navigation** (§0f), with the limit
         written at the site. A count floor: fewer than ten derived is a failure.
-  - [ ] 🔴 **The exit code distinguishes *the product has violations* from *the gate could
+  - [x] 🔴 **The exit code distinguishes *the product has violations* from *the gate could
         not run***. Measured trap: with the database paused and `/apps` as the seed route,
         the derivation succeeds, `/triage` blocks on sqlx's 30 s acquire timeout, the
         navigation times out and the harness dies with **rc=1 — the same code as
         violations found**. Wrap every per-route navigation, not only the seed fetch.
-  - [ ] A CI step that builds, boots, waits, runs and tears down (§0c: no step has ever
+  - [x] A CI step that builds, boots, waits, runs and tears down (§0c: no step has ever
         booted the binary). State the `ci.yml` exception and register it.
-- [ ] **T2 — Green: the two tokens (AC3b)**
-  - [ ] `--color-accent` → `#4b6b8b`, `--color-neutral-600` → `#68686b` (§0f).
-  - [ ] 🔴 **`--color-accent` is PINNED BY A TEST.** Story 6b.1's AC2 guard
+- [x] **T2 — Green: the two tokens (AC3b)**
+  - [x] `--color-accent` → `#4b6b8b`, `--color-neutral-600` → `#68686b` (§0f).
+  - [x] 🔴 **`--color-accent` is PINNED BY A TEST.** Story 6b.1's AC2 guard
         (`page.rs:3194`) asserts six token **hex literals**: darkening reds
         `ac2_the_sheet_carries_the_mocks_light_base_and_ramps`. **6b.1's *"carries the
         mock's palette"* and this story's *axe-green* cannot both hold literally.** Turn
         that guard into a CONTRAST property, or narrow 6b.1's claim to *the mock's hues at
         AA-conformant lightness* — and **register the divergence**.
-  - [ ] ⚠️ `--color-accent-600` is `#597ea3`, visually the same colour, untouched by that
+  - [x] ⚠️ `--color-accent-600` is `#597ea3`, visually the same colour, untouched by that
         edit. Say whether the ramp follows.
-  - [ ] 🔴 **The amber is already answered, and the answer is FIX IT.** `--accent-document
+  - [x] 🔴 **The amber is already answered, and the answer is FIX IT.** `--accent-document
         #b5793a` fails AA on **every** light ground (3.26 / 3.01 / 2.95, and 3.65 for
         white text on it). `#8d5e2d` clears all four. It is read by no live rule today, so
         axe cannot see it — **story 6.4 inherits the defect unless it is fixed here.**
-  - [ ] Re-run the harness against a **populated** store: zero.
-- [ ] **T3 — Green: the `aria-pressed` lie (AC3b)**
-  - [ ] Express the sort state without claiming a role the element does not have.
-  - [ ] 🔴 **Naming the test that will red: `main.rs:3545`**, whose oracle is
+  - [x] Re-run the harness against a **populated** store: zero.
+- [x] **T3 — Green: the `aria-pressed` lie (AC3b)**
+  - [x] Express the sort state without claiming a role the element does not have.
+  - [x] 🔴 **Naming the test that will red: `main.rs:3545`**, whose oracle is
         `html.contains("aria-pressed=\"false\"")` under a message about the age-sort UX
         ban. **The accessibility defect is the support of an assertion that is not about
         accessibility** — story 6b.4's *"a test that pins the ugly thing requires it"*, on
         the same screen. Give it a new oracle; do not "update the number".
-  - [ ] A guard on the **served** page (AC5).
-- [ ] **T4 — The keyboard layer, shape (E) (AC1, AC2)**
-  - [ ] Focus and highlight move on the keypress; the URL follows after **250 ms of
+  - [x] A guard on the **served** page (AC5).
+- [x] **T4 — The keyboard layer, shape (E) (AC1, AC2)**
+  - [x] Focus and highlight move on the keypress; the URL follows after **250 ms of
         quiet**. Replace `app.js`'s dead handler.
-  - [ ] 🔴 **Scope the layer to the queue** — the listener is on `document` and an arrow
+  - [x] 🔴 **Scope the layer to the queue** — the listener is on `document` and an arrow
         pressed with focus in the navigation currently navigates (§0e).
-  - [ ] 🔴 **Inert where there is no queue** — an unconditional `preventDefault` kills page
+  - [x] 🔴 **Inert where there is no queue** — an unconditional `preventDefault` kills page
         scrolling on the other nine screens (§0e).
-  - [ ] ⚠️ **Read the row's own `href`**, never rebuild the URL: the hrefs already carry
+  - [x] ⚠️ **Read the row's own `href`**, never rebuild the URL: the hrefs already carry
         `?sort=age`, so the sort survives arrow navigation **for free** — and breaks the
         moment someone constructs the URL from the selector.
-  - [ ] An idempotence guard (`if (window.__kbd) return;`): a double-registered listener
+  - [x] An idempotence guard (`if (window.__kbd) return;`): a double-registered listener
         moves two rows per press, which bites the day story 6.4 adds a swap.
-  - [ ] ⚠️ No letter, no `⏎`, no `⌫`. The letter-free assertion is a **property** over
+  - [x] ⚠️ No letter, no `⏎`, no `⌫`. The letter-free assertion is a **property** over
         dispatched keys, run at a MIDDLE index (§0f).
-  - [ ] ⚠️ The `INPUT`/`TEXTAREA` clause: drop it, or ship it as a forward tripwire **with
+  - [x] ⚠️ The `INPUT`/`TEXTAREA` clause: drop it, or ship it as a forward tripwire **with
         its emptiness stated** (story 5.12's narrowing precedent).
-- [ ] **T5 — The focus contract that is reachable (AC3)**
-  - [ ] 🔴 **Write the focus styles.** Three of four focusable kinds use Chrome's default
+- [x] **T5 — The focus contract that is reachable (AC3)**
+  - [x] 🔴 **Write the focus styles.** Three of four focusable kinds use Chrome's default
         (§0e); a future `outline: none` would retire AC3 with the gate green.
-  - [ ] Preserve story 6b.4b's convention: `aria-disabled="true"` **and** `tabindex="0"`.
+  - [x] Preserve story 6b.4b's convention: `aria-disabled="true"` **and** `tabindex="0"`.
         ✅ Measured intact — all five controls report `tabIndex 0` and 40 dispatched Tabs
         reach every one; no screen traps focus (11–35 Tabs to escape). Do not disturb it.
-  - [ ] Decide all **three** dead-contract artefacts (§0b), not just `app.js`.
-  - [ ] Register the swap half with story 6.4.
-- [ ] **T6 — Measured in a real browser, because none of this is visible to a text test**
-  - [ ] Real key events; assert on `document.activeElement` and on `window.scrollY`.
-  - [ ] Focus visibility read from `getComputedStyle`, never from a stylesheet grep.
-  - [ ] The nav-focus case: `↓` with focus on a nav entry leaves the URL unchanged.
-  - [ ] Bounds (✅ measured correct today), the **empty queue** (the reachable case), and
+  - [x] Decide all **three** dead-contract artefacts (§0b), not just `app.js`.
+  - [x] Register the swap half with story 6.4.
+- [x] **T6 — Measured in a real browser, because none of this is visible to a text test**
+  - [x] Real key events; assert on `document.activeElement` and on `window.scrollY`.
+  - [x] Focus visibility read from `getComputedStyle`, never from a stylesheet grep.
+  - [x] The nav-focus case: `↓` with focus on a nav entry leaves the URL unchanged.
+  - [x] Bounds (✅ measured correct today), the **empty queue** (the reachable case), and
         ⚠️ **not** "no row selected" — measured unreachable: `/triage` always selects row 1,
         and an unknown `?sel=` answers 200 and selects row 1 silently.
-- [ ] **T7 — NFR24's touch targets, or a named re-registration (AC7)**
-- [ ] **T8 — Mutations, the documents, the register**
-  - [ ] Every guard proven RED first; the greens recorded.
-  - [ ] **Six divergences registered**: `j`/`k`+`⏎`; the *seven gates* DoD; the swap half
+- [x] **T7 — NFR24's touch targets, or a named re-registration (AC7)**
+- [x] **T8 — Mutations, the documents, the register**
+  - [x] Every guard proven RED first; the greens recorded.
+  - [x] **Six divergences registered**: `j`/`k`+`⏎`; the *seven gates* DoD; the swap half
         → 6.4; `puppeteer-core` where the UX spec names `@axe-core/playwright` (and the
         spec's *"per theme"* ask, against a dark set selected by nothing); the `ci.yml`
         exception; and 6b.1's AC2 token-literal conflict.
-  - [ ] Twins and `sprint-status.yaml` in the same push, verified identical.
+  - [x] Twins and `sprint-status.yaml` in the same push, verified identical.
 
 ## Dev Notes
 
@@ -388,7 +388,98 @@ while this is true** — the guard must read `getComputedStyle(document.activeEl
 
 ## Dev Agent Record
 
-*(Empty until `dev-story` runs.)*
+### What was built, and what the building found
+
+**728 tests** (490 bin + 161 core + 77 xtask), **nine gates green**, clippy clean over
+`--all-targets`, `fmt` clean — every status read from a file with `$?`, never from a
+pipeline. ⚠️ **The live count for the project lives here** (AC4), and every figure below
+names the store state it was taken against.
+
+**The axe gate is green on all ten routes, twice**: at 2 queue rows and at **5**, the
+second run being the one that matters — the fourth colour pair the validation found
+appears only when a row is selected, so a run against a short queue would have missed it.
+
+#### 🔴 THE FIX IS THREE VALUES, AND THE GUARD THAT PINNED THEM HAD TO BECOME A PROPERTY
+
+`--color-accent` `#5980a6 → #4b6b8b`, `--color-neutral-600` `#7a7a7d → #68686b`,
+`--accent-document` `#b5793a → #8d5e2d` — each the original colour with HSL lightness
+scaled down at constant hue and saturation. **237 violation nodes → 0.**
+
+Story 6b.1's AC2 guard pinned six token **hex literals**, so it reddened on the repair —
+which is the finding, not the obstacle: *"it carries the mock's palette"* and *"axe-green"*
+could not both hold at the letter. It is now **two properties instead of one literal**: the
+HUE is the mock's (±6°, so a contrast repair is legal and a repalette is not), and a new
+sibling asserts that **every text token clears 4.5:1 on every ground it can sit on** —
+sixteen pairings, derived from two tables rather than enumerated.
+
+🔑 **The Rust guard and axe agree to two decimals, independently**: restoring `#7a7a7d`
+reds it at **3.82:1**, the exact ratio axe reported for that pair. ⚠️ And they do not
+subsume each other — axe measures the ten routes a browser paints; this walks the token
+table, so a pairing no screen renders today is still checked.
+
+#### 🔴 THE ACCESSIBILITY DEFECT WAS THE SUPPORT OF AN ASSERTION ABOUT SOMETHING ELSE
+
+Removing `aria-pressed` reddened `main.rs:3545` exactly as the validation predicted —
+whose message is about the backlog ban on brandishing age, and whose oracle was
+`contains("aria-pressed=\"false\"")`. ⚠️ **And there was a SECOND one the spec had not
+named**, found by running the change rather than reading it: `contains("aria-pressed=
+\"true\"")` for the ON state. Both now read the two facts the ban is made of — the toggle
+is offered, and it is off until asked.
+
+#### 🔴 FOUR TIMES, MY OWN INSTRUMENT WAS THE THING AT FAULT — AND A CONTROL SETTLED IT EACH TIME
+
+- The `↓`-on-`/diagnostic` check reported the layer killing page scrolling. **Control: the
+  same page with `app.js` BLOCKED does not scroll either** — arrows do not scroll under
+  headless CDP at all. The check was replaced by the property that measures MY code: the
+  layer does not INTERCEPT the key where there is no queue (`defaultPrevented === false`).
+- Two assertions were absolute where the behaviour is relative (`index === 0`, then
+  `index === 1`) and reddened when the queue grew from 2 rows to 5. The code was right both
+  times.
+- A `grep -oE` measuring the prove-to-red pass required letters before `on`, so
+  `--color-neutral-600` — which carries digits — reported an empty message and looked like a
+  guard that had not fired. It had.
+
+*Four instruments, four wrong readings, and not one of them a defect in the product.*
+
+#### ✅ THE LETTER-FREE PROPERTY, WITH THE CONTROL THAT MAKES IT MEAN ANYTHING
+
+`{"a":false,"j":false,"k":false,"x":false,"Enter":false,"Backspace":false,"Home":false,
+"PageDown":false," ":false}` — and the positive control, **at a MIDDLE index**:
+`ArrowUp:true, ArrowDown:true`. ⚠️ At index 0 the `↑` bounds check returns before
+`preventDefault`, so the same test would have passed **with the arrows entirely broken** —
+which is why the queue was seeded to five rows before it could run at all.
+
+#### ⚠️ AND `clippy --all-targets` CAUGHT THREE THINGS THE PRESCRIBED LINT WOULD NOT HAVE
+
+Three `needless_borrow` in the new test code — invisible to
+`cargo clippy --workspace -- -D warnings`, which does not walk test targets. The lesson
+story 6b.10's review registered, biting my own code the day after it was written down.
+
+#### What was decided rather than built
+
+- **NFR24's touch targets: RE-REGISTERED with the measurement** (AC7). Measured at 1280 px:
+  `.nav-entry` 34 px, `.btn-sort` 27 px, `.btn-gesture` 29 px, `.queue-row > a` 95 px. The
+  product **already clears WCAG 2.2 AA's 24×24**; what it misses is the stricter 44 px
+  NFR24 set itself. Raising three control kinds changes the DENSITY of the whole interface,
+  against epic 6b's premise (3) — *the mock's typography is adopted*. That is an arbitration
+  between NFR24 and the reference, not a keyboard task, and axe cannot decide it either
+  (no target-size rule at WCAG 2.0/2.1 AA). **Owner: Epic 6b's retrospective.**
+- **The dead contract's other two artefacts are LEFT STANDING, deliberately and in writing**:
+  `_gap_card.html:5`'s `hx-get` and `app.css`'s `.card:focus`, which now sits in the focus
+  block beside the three rules this story added. Story 6.4 picks all three up with the first
+  swap.
+
+### File List
+
+- `a11y/package.json`, `a11y/package-lock.json`, `a11y/axe-gate.mjs`, `a11y/kbd-probe.mjs` — **new**
+- `crates/opencmdb-bin/assets/app.js` — the keyboard layer replaces the dead handler
+- `crates/opencmdb-bin/assets/app.css` — three tokens, four focus rules
+- `crates/opencmdb-bin/templates/_triage.html` — `aria-pressed` → `aria-current`
+- `crates/opencmdb-bin/src/page.rs` — the hue property, the contrast property, the amber needle
+- `crates/opencmdb-bin/src/main.rs` — the two sort-state oracles
+- `.github/workflows/ci.yml` — the accessibility step, with its exception written
+- `_bmad-output/implementation-artifacts/deferred-work.md` — three rows
+- `_bmad-output/implementation-artifacts/6b-11-keyboard-layer-and-focus-contract.md`, `sprint-status.yaml`
 
 ## Change Log
 
@@ -398,4 +489,5 @@ while this is true** — the guard must read `getComputedStyle(document.activeEl
 | 2026-08-22 | **Arbitrations 1–3 by Guy** — arrows only · ship the reachable focus contract · axe-core in this story. |
 | 2026-08-22 | 🔴 **axe-core RUN**: all ten routes FAIL. |
 | 2026-08-22 | **VALIDATED by two fresh-context layers: 38 findings, 12 HIGH.** Contexting corrected on eight points, three of them its own measurements — the axe figures were taken on an EMPTY store (the surface T4–T6 target was blank); the constraint-4 and `⏎` refusals rested on false premises; `Screen::Device` IS in `Screen::ALL`. The validation also proved what contexting had only assumed: the two-token fix takes **237 → 0** on a populated store. |
+| 2026-08-22 | **DEVELOPED.** 727 → 728 tests, nine gates, axe green on all ten routes at two queue sizes. Three tokens, `aria-pressed` → `aria-current`, the keyboard layer in shape (E), four focus rules, the CI step. 🔴 Story 6b.1's hex-literal guard became TWO properties (hue + contrast); a SECOND `aria-pressed` oracle the spec had not named was found by running the change; and **four times the faulty instrument was mine, each settled by a control**. |
 | 2026-08-22 | 🔴 **ARBITRATION 4 by Guy: shape (E)** — the three readings of *"move the selection"* were prototyped and differ by **20×**; under (A) a held arrow loses half its presses. |

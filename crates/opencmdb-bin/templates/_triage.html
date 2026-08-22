@@ -12,9 +12,15 @@
          '47' is not information, it is a reproach disguised as a number"*. It reads as a fact in a
          sentence, in the same tone at 3 rows and at 3000, and nothing recolours with it. -#}
     <p class="muted">{{ s.triage_pending }} <span class="count">{{ triage.total }}</span></p>
+    {#- 🔴 `aria-pressed` stood here until story 6b.11 and axe-core rated it CRITICAL: the
+        attribute is permitted only on `role=button`, and an `<a href>` resolves to `link`,
+        so a screen reader was told about a toggle state on an element that has none.
+        ⚠️ The fix is NOT `role="button"` — this is a real link, and that would cost
+        middle-click, copy-link and the back button. `aria-current` is what a link uses to
+        say *this is the view you are in*, which is exactly what the sort state IS here. -#}
     <a class="btn-sort{% if triage.sort_by_age %} on{% endif %}"
        href="{{ triage.sort_href }}"
-       {% if triage.sort_by_age %}aria-pressed="true"{% else %}aria-pressed="false"{% endif %}>{{ s.triage_sort_age }}</a>
+       {% if triage.sort_by_age %}aria-current="true"{% endif %}>{{ s.triage_sort_age }}</a>
   </div>
 
   <p class="muted lede">{{ s.triage_lede }}</p>

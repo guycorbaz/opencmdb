@@ -4708,3 +4708,44 @@ before the commit** — story 6b.9's review found that file untouched under a se
   does not look. Every story that has ever "run clippy clean" ran it over a fraction of the tree.
   **Owner: Epic 6b's retrospective** — it is a change to the documented working commands, which a
   story may not make.
+
+## Deferred from: story 6b.11 (2026-08-22)
+
+- **NFR24's 44 px touch targets — RE-REGISTERED BY NAME, with the measurement `deferred-work.md:3740`
+  asked this story for.** That row named story 6b.11 as owner. Measured in Chrome 151 at 1280 px,
+  on the served `/triage`:
+
+  | control | rendered | NFR24 | WCAG 2.2 AA (2.5.8, 24×24) |
+  |---|---|---|---|
+  | `.nav-entry` | 183 × **34** px | fail | pass |
+  | `.btn-sort` | 129 × **27** px | fail | pass |
+  | `.btn-gesture` | 114 × **29** px | fail | pass |
+  | `.queue-row > a` | 168 × **95** px | pass | pass |
+
+  🔑 **Two facts decide it, and neither was in the row that named this story.** The product already
+  clears the WCAG 2.2 AA minimum; what it misses is the stricter 44 px figure NFR24 set itself (the
+  WCAG 2.5.5 AAA / mobile-guideline number). And raising three control kinds to 44 px changes the
+  DENSITY of the whole interface — against **epic 6b's premise (3), *the mock's palette and
+  typography are adopted***, which is a decision Guy took on 2026-08-13.
+  ⚠️ So this is a design arbitration between NFR24 and the reference mock, not a keyboard task, and
+  the axe gate cannot decide it either: it runs the WCAG 2.0/2.1 tags, where no target-size rule
+  exists at AA. **Owner: Epic 6b's retrospective**, where the mock-versus-NFR question can be put
+  once for the whole interface rather than three times by three stories.
+
+- **The focus-after-swap contract, owned by story 6.4.** Story 6b.11 measured that no HTMX swap
+  exists on any of the ten screens — zero `hx-get`/`hx-post` — so *"focus is never lost across a
+  swap"* had no event to attach to, and `app.js`'s handler for it was carried by nothing and is
+  removed. ⚠️ **Two artefacts of that contract are deliberately LEFT STANDING** and must be picked
+  up together with it: `_gap_card.html:5`'s `hx-get="/gap"` (the only `hx-*` attribute in the
+  template tree) and `app.css`'s `.card:focus` rule, which now sits in the focus block beside the
+  three rules story 6b.11 added. **Story 6.4 introduces the first swap; the rule is: whatever
+  swaps, focus lands inside the swapped region, and the guard reads `document.activeElement` after
+  the swap — never the template.**
+
+- **`puppeteer-core` where the UX spec names `@axe-core/playwright`** (`ux-design-specification.md:671`),
+  and the spec's *"per theme (light/dark)"* ask. The substitution is deliberate and measured:
+  `puppeteer-core` drives the system Chrome and downloads no browser (26 packages, 3.4 s), which is
+  what makes the gate cheap enough for every CI run. ⚠️ The per-theme half is **not** deferred by
+  choice — it is unreachable: the dark token set is selected by nothing (no template emits
+  `data-theme`, a test pins that), so there is no second theme to measure. **Owner: whichever story
+  makes the dark set selectable.**

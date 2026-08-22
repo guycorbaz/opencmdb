@@ -3182,20 +3182,151 @@ mod tests {
     /// AC2 — the palette is the mock's, not the walking skeleton's.
     #[test]
     fn ac2_the_sheet_carries_the_mocks_light_base_and_ramps() {
-        let css = sheet();
-        for (token, value) in [
-            ("--color-bg", "#f2f2f3"),
-            ("--color-surface", "#e9e9ea"),
-            ("--color-text", "#1d1f20"),
-            ("--color-accent", "#5980a6"),
-            ("--color-neutral-500", "#98989b"),
-            ("--color-accent-700", "#416180"),
+        let css = &sheet();
+        // 🔴 **The HUE is the mock's; the LIGHTNESS is WCAG's, and this guard was rewritten
+        // at story 6b.11 to say so.** It pinned six hex LITERALS until then — which made
+        // story 6b.1's *"it carries the mock's palette"* and story 6b.11's *axe-green*
+        // mutually exclusive at the letter: `--color-accent: #5980a6` fails AA on the
+        // selected nav entry's ground at 3.36:1, so the palette could not be both verbatim
+        // and conformant. **Two tokens were darkened at constant hue and saturation**, and
+        // pinning the literal would have meant choosing the mock over NFR25.
+        //
+        // 🔑 What is pinned instead is the pair of properties that actually matter — the
+        // HUE (so the mock is still recognisably the mock) and the RATIO (so a future
+        // palette edit that breaks AA reds here rather than in a browser nobody ran).
+        for (token, hue_degrees) in [
+            ("--color-bg", 240_u32),
+            ("--color-surface", 240),
+            ("--color-text", 200),
+            ("--color-accent", 210),
+            ("--color-neutral-500", 240),
+            ("--color-accent-700", 210),
         ] {
+            let value = token_hex(css, token)
+                .unwrap_or_else(|| panic!("{token} is declared as a hex literal"));
+            let measured = hue(value);
+            let delta = measured
+                .abs_diff(hue_degrees)
+                .min(360 - measured.abs_diff(hue_degrees));
             assert!(
-                css.contains(&format!("{token}: {value}")),
-                "the mock's token {token} must carry {value}"
+                delta <= 6,
+                "the mock's token {token} carries hue {measured}°, the mock's is \
+                 {hue_degrees}° — a contrast repair moves LIGHTNESS, never hue"
             );
         }
+    }
+
+    /// 🔴 **Every text token clears WCAG AA on every ground it can sit on — in Rust, with
+    /// no browser.**
+    ///
+    /// Story 6b.11 measured axe-core failing on ALL TEN routes: **202 `color-contrast`
+    /// nodes on an empty store, 237 with a populated one**, and the whole of it was
+    /// **three colour pairs, i.e. two token values**. A guard that pinned hex literals
+    /// could not have caught that and in fact prevented the repair.
+    ///
+    /// 🔑 This is the SECOND carrier, and it is not the axe gate's echo: axe measures what
+    /// a browser paints on the ten routes, and misses a pairing no screen happens to
+    /// render today; this walks the token TABLE, so a combination nobody has used yet is
+    /// still checked. ⚠️ Neither subsumes the other, which is why both exist.
+    #[test]
+    fn every_text_token_clears_aa_on_every_ground_it_can_sit_on() {
+        let css = &sheet();
+        // The grounds a screen actually paints text on, and the tokens it paints with.
+        const GROUNDS: [&str; 4] = [
+            "--color-bg",
+            "--color-surface",
+            "--color-neutral-100",
+            "--color-neutral-200",
+        ];
+        const TEXTS: [&str; 4] = [
+            "--color-text",
+            "--color-neutral-600",
+            "--color-accent",
+            "--accent-document",
+        ];
+        // WCAG 2.1 §1.4.3, normal text.
+        const AA: f64 = 4.5;
+
+        let mut checked = 0_usize;
+        for text in TEXTS {
+            let fg = token_hex(css, text)
+                .unwrap_or_else(|| panic!("{text} is declared as a hex literal"));
+            for ground in GROUNDS {
+                let bg = token_hex(css, ground)
+                    .unwrap_or_else(|| panic!("{ground} is declared as a hex literal"));
+                let ratio = contrast(fg, bg);
+                checked += 1;
+                assert!(
+                    ratio >= AA,
+                    "{text} on {ground} is {ratio:.2}:1, below AA's {AA}:1 — a palette edit \
+                     that breaks contrast must red HERE, not in a browser nobody ran"
+                );
+            }
+        }
+        // 🔑 The premise, derived rather than pinned: every pairing of the two tables was
+        // read. A scan that matched nothing would assert nothing.
+        assert_eq!(
+            checked,
+            TEXTS.len() * GROUNDS.len(),
+            "every text token was measured against every ground"
+        );
+    }
+
+    /// The WCAG contrast ratio between two colours.
+    ///
+    /// ⚠️ Floating point, deliberately: the sRGB transfer function is a power of 2.4 and an
+    /// integer approximation would be a second, wrong definition of the thing WCAG defines.
+    /// The `float-free` gate walks `identity/` only, where a float would be a decision the
+    /// engine must not make; here it is arithmetic on a published formula.
+    fn contrast(a: [u8; 3], b: [u8; 3]) -> f64 {
+        let luminance = |c: [u8; 3]| {
+            let channel = |v: u8| {
+                let v = f64::from(v) / 255.0;
+                if v <= 0.03928 {
+                    v / 12.92
+                } else {
+                    ((v + 0.055) / 1.055).powf(2.4)
+                }
+            };
+            0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2])
+        };
+        let (l1, l2) = (luminance(a), luminance(b));
+        let (hi, lo) = if l1 > l2 { (l1, l2) } else { (l2, l1) };
+        (hi + 0.05) / (lo + 0.05)
+    }
+
+    /// The hex literal a token is declared with, if it is declared with one.
+    fn token_hex(css: &str, token: &str) -> Option<[u8; 3]> {
+        let at = css.find(&format!("{token}: #"))? + token.len() + 3;
+        let digits = &css.get(at..at + 6)?;
+        Some([
+            u8::from_str_radix(&digits[0..2], 16).ok()?,
+            u8::from_str_radix(&digits[2..4], 16).ok()?,
+            u8::from_str_radix(&digits[4..6], 16).ok()?,
+        ])
+    }
+
+    /// The colour's hue in degrees, which a lightness change leaves alone.
+    fn hue(rgb: [u8; 3]) -> u32 {
+        let (r, g, b) = (u32::from(rgb[0]), u32::from(rgb[1]), u32::from(rgb[2]));
+        let max = r.max(g).max(b);
+        let min = r.min(g).min(b);
+        if max == min {
+            // Grey has no hue. The neutral ramp is grey by construction, and calling its
+            // hue 240° (as the mock's near-neutrals are) keeps one table for both.
+            return 240;
+        }
+        let span = max - min;
+        // Integer arithmetic on purpose: `float-free` does not reach this file, but a
+        // ratio comparison that depends on binary rounding is a guard nobody can re-derive.
+        let sixth = if max == r {
+            ((360 + (g as i64 - b as i64) as i32 * 60 / span as i32) % 360) as u32
+        } else if max == g {
+            (120 + (b as i64 - r as i64) as i32 * 60 / span as i32).rem_euclid(360) as u32
+        } else {
+            (240 + (r as i64 - g as i64) as i32 * 60 / span as i32).rem_euclid(360) as u32
+        };
+        sixth % 360
     }
 
     /// AC2 — the typefaces are embedded, and nothing is fetched from the network.
@@ -3402,7 +3533,11 @@ mod tests {
         // check above green while the button renders in the wrong hue. Measured as a gap by
         // the review's diff-only layer, which could not see the rest of the file.
         for rule in [
-            ".card:focus { outline: 2px solid var(--color-accent);",
+            // ⚠️ Story 6b.11 gave this rule three siblings — the queue row, the sort link
+            // and the planned controls, which were relying on Chrome's default outline. The
+            // needle is the DECLARATION they now share, not the single selector that carried
+            // it while `.card` was the only focusable thing anybody had styled.
+            ".btn-gesture:focus-visible { outline: 2px solid var(--color-accent);",
             "  color: var(--color-accent);",
             "  border: 1px solid var(--color-accent);",
             ".refresh:hover { background: color-mix(in srgb, var(--color-accent) 12%",
