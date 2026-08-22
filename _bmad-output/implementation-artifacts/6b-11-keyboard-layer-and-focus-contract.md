@@ -481,6 +481,684 @@ story 6b.10's review registered, biting my own code the day after it was written
 - `_bmad-output/implementation-artifacts/deferred-work.md` — three rows
 - `_bmad-output/implementation-artifacts/6b-11-keyboard-layer-and-focus-contract.md`, `sprint-status.yaml`
 
+## Code Review — the three layers, VERBATIM and UNTRIAGED
+
+**2026-08-22.** The three adversarial layers ran against `6649e65`, each isolated from the others
+and none of them shown another's findings. They are reproduced here **exactly as each layer wrote
+them**, with their own heading levels — nothing merged, nothing deduplicated, nothing ranked,
+no arbitration taken. **60 raw findings.**
+
+⚠️ **Read as a set, not as a total.** Several defects were reached by two or three layers
+independently, so a count over these three reports counts some defects more than once; and at
+least three claims of one layer are **refuted with a measurement by another** (the Chrome leak,
+the missing lockfile, the scroll control). The convergences and the refutations are exactly what
+the triage pass has to establish, and it has not been run.
+
+⚠️ **The session that launched these layers crashed mid-review.** The blind and acceptance layers
+had finished and their reports survived in their transcripts; the edge-case layer had not, and was
+**re-run from its original mandate in a fresh worktree** on 2026-08-22 — so its report is a first
+run, not a resumption. The interrupted run left no conclusions of its own (569 bytes of narration,
+measured), only its probe scripts.
+
+Conditions, as each layer states them:
+
+| Layer | What it was given | What it could do |
+|---|---|---|
+| **Blind Hunter** | `d11-code.patch` and nothing else | no repository, no build, no run — findings needing the tree are labelled *suspicion* |
+| **Acceptance Auditor** | the story spec, the tree, a live `mariadb:10.11` (port 13351) | replay every AC, Chrome 151; cleaned up after itself |
+| **Edge Case Hunter** | the patch, the spec, an isolated worktree, a live `mariadb:10.11` (port 13350) | plant mutations, build, boot, Chrome 151, 8-row queue; every mutation reverted from a scratchpad copy, never `git checkout --` |
+
+---
+
+# Blind Hunter — findings on `d11-code.patch`
+
+Input: the patch only. I have not read the repository, run anything, or resolved any file the patch does not contain. Where a finding needs the tree to settle, it is labelled a suspicion.
+
+---
+
+## HIGH
+
+### 1. The axe gate exits `1` — "the product has violations" — on almost every way it can fail to run
+**Severity** HIGH · **Location** `a11y/axe-gate.mjs`, `.github/workflows/ci.yml` · **Confidence** high (settleable from the diff)
+
+**Evidence.** The file's headline promises a three-way contract:
+
+```
+//   0 — every route clean
+//   1 — the product has accessibility violations   (a real regression: fix the product)
+//   2 — the gate could not run                     (fix the harness or the environment)
+```
+
+and `ci.yml` restates it: *"If that stops being true, this step fails with exit 2 — the gate could not run — and not with exit 1, which is reserved for a real regression."*
+
+Only two call sites are actually guarded: `puppeteer.launch` (try/catch) and `page.goto`/status (`goOrGiveUp`). Everything else is unguarded top-level `await` in an ES module, where a throw is an unhandled rejection and **Node exits 1**:
+
+- `import puppeteer from "puppeteer-core";` — package missing → exit 1.
+- `readFileSync(new URL("./node_modules/axe-core/axe.min.js", …))` — axe-core missing or renamed → exit 1. This runs *before* the launch try/catch, and it is exactly the "the environment changed" case ci.yml says is exit 2.
+- `await openPage()` / `page.authenticate` → exit 1.
+- `await seedPage.$$eval("nav.nav a.nav-entry", …)` → exit 1.
+- `await page.evaluate(axeSource)` and `await page.evaluate(async (tags) => window.axe.run(…))` → exit 1. An axe injection failure, a page that navigates during evaluate, a CSP that blocks it: all report as *the product has accessibility violations*.
+
+**Why it matters.** The whole design rationale of this file is that a CI cannot otherwise tell "the harness broke" from "the product regressed" — and the code delivers that distinction for two of roughly eight failure modes. The most likely real-world break (a dependency that did not install, an axe bundle that moved) lands on the code reserved for a product regression, and someone will spend the morning looking for a contrast defect that is not there. Secondary: those paths also leak the Chrome process, since only `goOrGiveUp` closes the browser before exiting.
+
+---
+
+### 2. The new ARIA assertion is satisfied by a different element on the same page
+**Severity** HIGH · **Location** `crates/opencmdb-bin/src/main.rs`, AC3 test · **Confidence** high — established from two files *inside this diff*
+
+**Evidence.** The diff adds:
+
+```rust
+assert!(
+    sorted.contains("aria-current=\"true\""),
+    "and the link says WHICH view the operator is in — the accessible half of the \
+     state, which `aria-pressed` on a link could not carry"
+);
+```
+
+The needle is unanchored — it is a substring search over the whole page body. And `a11y/kbd-probe.mjs`, added in the same diff, establishes that a queue row already carries that exact attribute on a plain `/triage` with no query string:
+
+```js
+await p.evaluate(()=>document.body.focus());
+await p.keyboard.press('ArrowDown');
+// Depuis la ligne DÉJÀ sélectionnée (aria-current), ↓ va à la suivante : index 1
+check(idx===1, …);
+```
+
+For `currentIndex` to have returned `0` from `document.body`, its fallback `all[i].getAttribute("aria-current") === "true"` must have matched row 0 — on the default render. The AC3 fixture has two rows ("*With two rows the ORDER is observable*").
+
+**Why it matters.** Delete `aria-current` from the sort link entirely and this assertion still passes, because the queue row supplies the string. The one assertion written to prove the *replacement* for an axe-critical attribute is in place measures the presence of that attribute *somewhere on the page*. This is the shape the comment three lines above congratulates itself for escaping: *"a test that pins the ugly thing is a test that requires it"* — the oracle changed, the weakness moved rather than left.
+
+---
+
+### 3. Nothing cancels the settle timer except another arrow — a click or `Enter` inside 250 ms is overridden
+**Severity** HIGH · **Location** `crates/opencmdb-bin/assets/app.js`, `select()` · **Confidence** high
+
+**Evidence.**
+```js
+if (pending !== null) window.clearTimeout(pending);
+pending = window.setTimeout(function () {
+  window.location.assign(row.getAttribute("href"));
+}, SETTLE_MS);
+```
+The only `clearTimeout` in the file is this one, reached only from `select()`, reached only from a `keydown` on `ArrowUp`/`ArrowDown`. There is no `click`, `pointerdown`, `keydown Enter`, `pagehide`, `beforeunload` or `blur` handler.
+
+**Why it matters.** Press `↓`, then within 250 ms click a navigation entry (or press `Enter` on a different link, or activate anything that navigates). The old document stays alive until the new response commits; at t=250 ms the timer fires and `location.assign` replaces the navigation the operator actually asked for with the arrow-highlighted row. The slower the server, the wider the window. The module comment enumerates the shape's cost as *"for 250 ms the highlighted row and the URL disagree"* — the real cost is that for 250 ms the layer holds a queued navigation that outranks anything the operator does next, and that sentence does not appear.
+
+---
+
+### 4. `checked == TEXTS.len() * GROUNDS.len()` cannot fail, and is sold as the guard's premise
+**Severity** HIGH · **Location** `crates/opencmdb-bin/src/page.rs`, `every_text_token_clears_aa_on_every_ground_it_can_sit_on` · **Confidence** certain
+
+**Evidence.**
+```rust
+for text in TEXTS {
+    …
+    for ground in GROUNDS {
+        …
+        checked += 1;
+        assert!(ratio >= AA, …);
+    }
+}
+// 🔑 The premise, derived rather than pinned: every pairing of the two tables was
+// read. A scan that matched nothing would assert nothing.
+assert_eq!(checked, TEXTS.len() * GROUNDS.len(), "every text token was measured against every ground");
+```
+
+`TEXTS` and `GROUNDS` are `const [&str; 4]`. The increment is unconditional, there is no `continue`, no filter, no `if let`. `checked` is `16` on every possible execution that reaches the assertion. A token missing from the stylesheet does not skip an iteration — `token_hex(...).unwrap_or_else(|| panic!(...))` aborts the test instead.
+
+**Why it matters.** This is a counter written to defend against an empty scan, placed over a loop that structurally cannot scan nothing. The comment beside it asserts the opposite ("*A scan that matched nothing would assert nothing*"), which is a claim about a `css.contains`-style scan that this code is not. It reads as coverage of the guard's premise and is arithmetic on two array lengths.
+
+---
+
+### 5. `--accent-document` is darkened as part of a contrast repair, and is a token nothing paints text with
+**Severity** HIGH · **Location** `crates/opencmdb-bin/assets/app.css` + `page.rs` · **Confidence** high (both sentences are in this diff)
+
+**Evidence.** `app.css`, in unchanged context immediately above the changed line:
+```
+/* 🔴 The amber, named for what it MEANS. Reserved for the documenting gesture (FR13) and
+   used by NOTHING else — the mock's blue carries structure. Story 6.4 adds the first
+   legitimate use; a test pins the count at zero until then. */
+-  --accent-document: #b5793a;
++  --accent-document: #8d5e2d;
+```
+`page.rs`, the new test:
+```rust
+// The grounds a screen actually paints text on, and the tokens it paints with.
+const TEXTS: [&str; 4] = [ …, "--accent-document" ];
+```
+And the doc above it justifies the whole change by rendered measurement: *"axe-core failing on ALL TEN routes: 202 `color-contrast` nodes on an empty store, 237 with a populated one, and the whole of it was three colour pairs, i.e. two token values."*
+
+**Why it matters.** Two sentences in the same change are mutually exclusive: a token used by nothing cannot have contributed a `color-contrast` node, and it is not one of "the tokens it paints with". So either the amber's value was changed for a reason that is not the one recorded (and a reserved brand token moved with no stated justification), or the "used by NOTHING else" comment — which another test reportedly enforces at count zero — is stale. Whichever it is, the record and the code disagree about a token that is under a pinned-usage guard.
+
+---
+
+### 6. The ARIA attribute this change introduces is never put in front of axe
+**Severity** HIGH · **Location** `a11y/axe-gate.mjs` route derivation vs `templates/_triage.html` · **Confidence** high
+
+**Evidence.** The gate walks exactly the hrefs the navigation offers:
+```js
+const routes = await seedPage.$$eval("nav.nav a.nav-entry", (entries) =>
+  entries.map((entry) => entry.getAttribute("href")));
+```
+The template renders the new attribute only in one state:
+```html
+{% if triage.sort_by_age %}aria-current="true"{% endif %}
+```
+Nothing in the harness appends `?sort=age`, `?sel=`, or any query string, and axe runs immediately after `networkidle0` with no keyboard interaction.
+
+**Why it matters.** The stated justification for the whole ARIA change is that a browser rated the old attribute critical. The removal is therefore browser-verified; **the replacement is verified by no browser at all** — only by the substring assertion of finding 2, which does not even bind to the right element. The same blind spot covers everything else this change adds: the `.selected` class app.js writes, the `:focus-visible` rings, and the `aria-current`/`.selected` divergence of finding 11 are all states axe never reaches, because they exist only after a keypress or a query parameter.
+
+---
+
+### 7. `npm ci` with no lockfile visible in the change
+**Severity** HIGH if true · **Location** `.github/workflows/ci.yml`, `.gitignore`, `a11y/package.json` · **Confidence** SUSPICION — I cannot list the tree
+
+**Evidence.** `.gitignore` asserts: *"The lockfile IS committed — same doctrine as `Cargo.lock` and the hand-authored CSS, nothing resolves on the fly — and `npm ci` installs exactly it."* CI runs `npm --prefix a11y ci`. The patch adds `a11y/axe-gate.mjs`, `a11y/kbd-probe.mjs` and `a11y/package.json`; **no `a11y/package-lock.json` appears anywhere in it.**
+
+**Why it matters.** `npm ci` aborts with a non-zero status when there is no lockfile — the gate would be red on its first run, with an exit code that is neither 1 nor 2 (finding 9). If the lockfile was simply filtered out of the review diff, this is nothing; if it was not committed, the comment asserting it is committed is false in the file whose job is to say what is committed. Settle it with `git ls-files a11y/`.
+
+---
+
+## MEDIUM
+
+### 8. The route floor cannot detect either growth or duplication, and the comment claims it can
+**Severity** MEDIUM · **Location** `a11y/axe-gate.mjs` · **Confidence** high
+
+**Evidence.**
+```js
+// 🔑 A FLOOR, not a nicety … Ten is what `Screen::ALL` carries today; if a
+// screen is added, this number moves deliberately.
+const EXPECTED_ROUTES = 10;
+…
+if (routes.length < EXPECTED_ROUTES) { … }
+```
+`<` means eleven routes pass silently; nothing forces the constant to move when a screen is added, so "moves deliberately" is a hope, not a mechanism. And `routes` is a raw `map` of `getAttribute("href")` — not deduplicated, not filtered for `null`, not filtered for absolute or fragment hrefs. Ten anchors all pointing at `/triage` clear the floor and the gate then measures one screen ten times, reporting `10 route(s) derived`.
+
+**Why it matters.** The stated purpose is *"a harness that derives nothing and reports success is the failure mode this file exists to avoid"*. A harness that derives one screen ten times has the same character and is not caught. A `Set`, a `null` filter and `!==` would cost three lines.
+
+---
+
+### 9. The exit-code contract is invisible to CI, and the shell has its own codes
+**Severity** MEDIUM · **Location** `.github/workflows/ci.yml` · **Confidence** high
+
+**Evidence.** The step is a plain `run:` under `set -euo pipefail`. GitHub Actions fails a step on any non-zero status and nothing branches on the value. Meanwhile the shell's own failures produce neither 1 nor 2: `cargo build` failing exits with cargo's code, the post-loop `curl -fsS` failing exits 22, `npm ci` failing exits npm's code — all before `node` runs.
+
+**Why it matters.** The comment presents the 1/2 split as something the CI acts on ("*this step fails with exit 2 … and not with exit 1, which is reserved for a real regression*"). Nothing acts on it. Its only consumer is a human reading the log, where the `axe gate: …` stderr line already says the same thing in words — and finding 16 says even that line can be lost.
+
+---
+
+### 10. The focus-rule needle was narrowed to one selector while its comment says it was widened to the declaration
+**Severity** MEDIUM · **Location** `crates/opencmdb-bin/src/page.rs`, the CSS-rules loop · **Confidence** certain
+
+**Evidence.**
+```rust
+-            ".card:focus { outline: 2px solid var(--color-accent);",
++            // ⚠️ … The needle is the DECLARATION they now share, not the single selector
++            // that carried it while `.card` was the only focusable thing anybody had styled.
++            ".btn-gesture:focus-visible { outline: 2px solid var(--color-accent);",
+```
+The needle is a selector *plus* the declaration, and it is the **last** of four selectors in the group. Delete `.queue-row > a:focus-visible` from `app.css` — the change the story exists to make — and the needle still matches. Delete `.card:focus` (which the CSS comment says is deliberately kept for story 6.4's swap) and the needle still matches; that selector was previously pinned and is now pinned by nothing.
+
+**Why it matters.** The comment claims the guard was generalised; it was moved. Three of the four selectors it is said to cover, including the one it used to cover, can be removed with the test green — and the two most likely to be removed are the ones added yesterday. It is also formatting-coupled: reordering the four selectors reds the test for no behavioural reason, inviting the fix "update the needle".
+
+---
+
+### 11. `select()` never moves `aria-current`, which the same file reads back as its own state
+**Severity** MEDIUM · **Location** `crates/opencmdb-bin/assets/app.js` · **Confidence** high
+
+**Evidence.** `currentIndex` falls back to it:
+```js
+for (var i = 0; i < all.length; i++) {
+  if (all[i].getAttribute("aria-current") === "true") return i;
+}
+```
+`select()` writes only a class and focus:
+```js
+all[i].parentNode.classList.toggle("selected", all[i] === row);
+row.focus();
+```
+
+**Why it matters.** Two consequences. (a) For the settle window the DOM says two different rows are current: `.selected` on the new one, `aria-current="true"` on the old — and `aria-current` is the one assistive technology reads. The module's stated cost names only the URL. (b) If focus leaves the queue without a navigation (a click on inert page chrome, an `Escape` in some contexts, a programmatic blur), `document.activeElement` is no longer a row, `indexOf` returns `-1`, and the next arrow resumes from the **stale** `aria-current` — the highlight jumps backwards to wherever the server last said the selection was. One line (`setAttribute`/`removeAttribute`) in the same loop closes both.
+
+---
+
+### 12. The layer takes keyboard page-scrolling on `/triage`, and the probe that checks scrolling only visits screens with no queue
+**Severity** MEDIUM · **Location** `app.js` scope check + `a11y/kbd-probe.mjs` check D · **Confidence** high
+
+**Evidence.** `app.js` argues the point at length for the screens it does not affect:
+```js
+// 🔴 **Inert where there is no queue.** … an unconditional `preventDefault` on the arrow
+// KILLS PAGE SCROLLING — measured: `/diagnostic` scrolls 0 → 26 px with this return, 0 → 0 without it.
+var all = rows(); if (all.length === 0) return;
+```
+and then, on the screen that *does* have a queue, treats `body` as inside:
+```js
+var inQueue = focused === document.body || focused === null || (… .closest(".queue") !== null);
+```
+On a fresh `/triage`, focus is on `body`, so the operator's very first `↓` is taken; from then on focus is inside `.queue`, so every `↓`/`↑` is taken except at the two ends. The probe written to prove inertness visits `/diagnostic`, `/apps`, `/sources` — the three screens where `rows().length === 0` returns before the scope check is ever reached:
+```js
+for (const r of ['/diagnostic','/apps','/sources']) { … check(res.prevented===false && res.rows===0, …) }
+```
+
+**Why it matters.** A guard placed where the defect cannot occur. `res.rows===0` in the probe's own assertion is the proof: it is asserting that the early return fired, on pages selected because the early return fires there. Nothing measures the trade the change actually makes — on `/triage`, keyboard scrolling is gone for a keyboard operator with a queue longer than the viewport, and the file's own reasoning ("*an operator at the last row still expects the page to scroll*") is inconsistent with taking the press from `body` at the top.
+
+---
+
+### 13. The entire keyboard layer is covered by a script nothing runs, which reports success when it measures nothing
+**Severity** MEDIUM · **Location** `a11y/kbd-probe.mjs`, `a11y/package.json`, `ci.yml` · **Confidence** high
+
+**Evidence.** `package.json` declares one script:
+```json
+"scripts": { "gate": "node axe-gate.mjs" }
+```
+and CI runs `node a11y/axe-gate.mjs` only. `kbd-probe.mjs` is referenced by neither. It also gates almost everything behind fixture size:
+```js
+if (n >= 2) { …checks A, B, C… }
+…
+if (n>=3) { …checks F… }
+…
+console.log(fail===0 ? '\nTOUT VERT' : …); process.exit(fail===0?0:1);
+```
+With an empty or one-row queue it runs checks D and E only and prints `TOUT VERT` with exit 0.
+
+**Why it matters.** ~100 lines of new production JavaScript ship with no automated coverage, and the artefact that looks like its coverage is a hand-run probe with hardcoded credentials (`op`/`pw`) and a hardcoded base URL. Worse, it is the exact failure mode `axe-gate.mjs` builds `EXPECTED_ROUTES` to prevent — *a harness that derives nothing and reports success* — reproduced one file over, without the floor. If it is meant as a record rather than a check, it should say so; as committed it reads as a check.
+
+---
+
+### 14. Two of the six "hue-pinned" tokens are now constrained on one property only
+**Severity** MEDIUM · **Location** `page.rs`, `ac2_the_sheet_carries_the_mocks_light_base_and_ramps` · **Confidence** high
+
+**Evidence.** The guard was rewritten from six pinned hex literals to six pinned hues (±6°), justified as: *"What is pinned instead is the pair of properties that actually matter — the HUE … and the RATIO."* The ratio comes from the *other* test, whose tables are:
+```rust
+const GROUNDS: [&str; 4] = ["--color-bg","--color-surface","--color-neutral-100","--color-neutral-200"];
+const TEXTS:   [&str; 4] = ["--color-text","--color-neutral-600","--color-accent","--accent-document"];
+```
+`--color-neutral-500` and `--color-accent-700` appear in neither. Their only remaining constraint is hue. I checked the arithmetic by hand: `hue()` returns a hardcoded `240` for any achromatic colour (`max == min`), and `#0000ff` also computes to exactly `240`. So `--color-neutral-500: #0000ff`, `#000000` or `#ffffff` all pass the "mock's palette" guard, as does any 210°-family value of any lightness for `--color-accent-700`.
+
+**Why it matters.** The rewrite was necessary — pinning literals did block the contrast repair — but the replacement's promise ("*so the mock is still recognisably the mock*") holds only for the four tokens that also appear in the contrast tables. For the other two, "recognisably the mock" now means "somewhere on a hue wheel". Cheap fix: add a lightness band, or put every token in one of the two tables.
+
+---
+
+### 15. `token_hex` takes the first match in a file that contains a second, complete palette
+**Severity** MEDIUM · **Location** `page.rs`, `token_hex` · **Confidence** high on the mechanism, suspicion on the ordering
+
+**Evidence.**
+```rust
+let at = css.find(&format!("{token}: #"))? + token.len() + 3;
+```
+`str::find` returns the first occurrence. The same stylesheet carries a full second palette, per unchanged context in the diff: *"🔴 The dark set — PRESENT AND SELECTED BY NOTHING. No template emits `data-theme`, and no …"*. From the hunk line numbers the light `:root` (≈ line 58) precedes the dark set (≈ line 154), so today the light values win.
+
+**Why it matters.** (a) The test whose doc says *"Every text token clears WCAG AA on every ground it can sit on"* measures one of the two palettes in the file, silently, by source order — the other set's contrast is asserted by nothing while the sentence reads as universal. (b) The selection is positional and undocumented: moving the dark block above the light one, a pure reordering, silently repoints every guard in both new tests at the other palette with no test failing to say so.
+
+---
+
+### 16. `process.exit` after `console.error` can truncate the diagnostic in CI
+**Severity** MEDIUM · **Location** `a11y/axe-gate.mjs`, `cannotRun` and the final block · **Confidence** high (documented Node behaviour)
+
+**Evidence.**
+```js
+function cannotRun(message) { console.error(`axe gate: ${message}`); process.exit(2); }
+…
+console.error(`axe gate RED: ${failing.length} route(s) …`); process.exit(1);
+```
+When stdout/stderr are pipes — which they are under a CI runner — Node's writes are asynchronous, and `process.exit()` does not flush pending writes.
+
+**Why it matters.** These are precisely the two paths where the message is the only thing distinguishing a harness failure from a product failure (finding 9 having established that the exit code itself reaches nobody). A red step with no reason printed is the worst of both. `process.exitCode = 2; return;` at the top level, or an explicit flush, avoids it.
+
+---
+
+### 17. "Two tokens were darkened" — the diff darkens three
+**Severity** MEDIUM · **Location** `page.rs` ac2 comment vs `app.css` · **Confidence** certain
+
+**Evidence.** The comment: *"**Two tokens were darkened at constant hue and saturation**, and pinning the literal would have meant choosing the mock over NFR25."* The stylesheet hunks change three token values: `--color-accent` `#5980a6 → #4b6b8b`, `--color-neutral-600` `#7a7a7d → #68686b`, `--accent-document` `#b5793a → #8d5e2d`. The neighbouring doc repeats the count from the other side: *"the whole of it was three colour pairs, i.e. two token values."* Under the narrower reading — tokens in ac2's own list — the count is **one**, not two.
+
+**Why it matters.** No reading of the diff yields two. I verified the "constant hue and saturation" half by hand and it does hold for all three (210°/210°, 240°/240°, 30°/30°; saturation 0.51→0.52 for the amber) — so the property is true and only the count is wrong, which is the harder kind to notice later.
+
+---
+
+## LOW
+
+### 18. Two adjacent helpers give opposite justifications for the same concern
+**Severity** LOW · **Location** `page.rs`, `contrast()` and `hue()` · **Confidence** certain
+
+`contrast()`: *"Floating point, deliberately: the sRGB transfer function is a power of 2.4 and an integer approximation would be a second, wrong definition."* `hue()`, twenty lines later: *"Integer arithmetic on purpose … a ratio comparison that depends on binary rounding is a guard nobody can re-derive."* The second sentence, as a general principle, indicts the first function — whose comparison is literally `ratio >= 4.5` on `f64`. Both choices are defensible; the pair of rationales is not. (No live flakiness: I computed the three new values and the tightest pair sits at ≈4.58:1, well clear of any rounding.)
+
+### 19. A route can print red and the gate exit 0
+**Severity** LOW · **Location** `a11y/axe-gate.mjs` · **Confidence** medium
+
+`failing.push(route)` and the `🔴` print are gated on `violations.length > 0`; the exit is gated on `nodes > 0`, where `nodes` sums `v.nodes.length`. A violation carrying zero nodes prints a red line, appears in no summary, and the process exits 0. Unlikely in practice, but it is one of the two shapes the file exists to prevent — a failure indistinguishable from success. Key the exit on `failing.length`.
+
+### 20. `token_hex` is silently wrong on two legal CSS colour spellings
+**Severity** LOW · **Location** `page.rs` · **Confidence** certain
+
+`css.get(at..at + 6)` takes six characters unconditionally. `#f2f2f3aa` (8-digit, alpha) parses as opaque `#f2f2f3` and the contrast is computed against a colour the browser does not paint. `#fff` (3-digit) grabs `fff;\n ` → `from_str_radix` fails → `None` → a panic whose message reads *"`{token}` is declared as a hex literal"*, which is false: it is, just shorter.
+
+### 21. Committed probe hygiene
+**Severity** LOW · **Location** `a11y/kbd-probe.mjs` · **Confidence** certain
+
+Hardcoded credentials `{username:'op',password:'pw'}` and base URL; typo in a user-facing label (`'le surlignage suit le focix immédiatement'`); and the label of that check promises a *highlight* while the code reads `classList.contains('selected')` — a class name, not a painted state. Nothing in this diff adds a `.queue-row.selected` rule, so whether that class paints anything is unverified here (suspicion — it may pre-exist for the server-rendered selection).
+
+### 22. `routes` entries are used unvalidated
+**Severity** LOW · **Location** `a11y/axe-gate.mjs` · **Confidence** certain
+
+`getAttribute("href")` can return `null`, `#…`, or an absolute URL. `BASE + route` then builds `http://127.0.0.1:8080null` or a doubled scheme; `goOrGiveUp` reports it as *"did not answer"* and exits 2 with a message that names the wrong cause.
+
+### 23. axe injected as an evaluated string rather than a script tag
+**Severity** LOW · **Location** `a11y/axe-gate.mjs` · **Confidence** low (suspicion)
+
+`await page.evaluate(axeSource)` evaluates the UMD bundle as an expression and asks CDP to serialise its completion value. `page.addScriptTag({ content: axeSource })` is the form with no serialisation step. This works in most puppeteer/axe pairings; if it ever throws it lands on finding 1's exit-1 path.
+
+---
+
+## Nothing found at HIGH in these areas
+- **The WCAG arithmetic itself.** `contrast()` matches WCAG 2.x exactly: the `<= 0.03928` branch, `/12.92`, `((v+0.055)/1.055).powf(2.4)`, coefficients `0.2126/0.7152/0.0722`, `(L1+0.05)/(L2+0.05)`, and `>=` against 4.5 for normal text (§1.4.3) — all correct, including the comparison direction.
+- **The `hue()` branch structure.** I checked all three branches against the HSL definition (`60·((g−b)/span mod 6)`, `120+60(b−r)/span`, `240+60(r−g)/span`) and the wrap handling; they are right, truncation error is under 1° against a 6° tolerance, and the `360 − abs_diff` in the delta cannot underflow given `sixth % 360`. I also verified by hand that all six pinned hues are met by the current values, old and new — `#5980a6` and `#4b6b8b` both compute to 210°, so the "constant hue" claim holds.
+- **The CI shell mechanics.** `set -euo pipefail` with the `if curl` guard, the `trap … EXIT`, and `$server` under `set -u` are all correct; the trap window before it is armed is negligible.
+- **The JS null-safety ordering.** `focused === null` is tested before `focused.closest`, and the modifier-key bail-out (`altKey||ctrlKey||metaKey||shiftKey`) is complete for the arrows.
+
+---
+
+Cleanup done — no tracked file modified, worktrees and the audit container removed, tree clean.
+
+# Acceptance audit — story 6b.11
+
+## Findings
+
+### 🔴 HIGH
+
+**1 · The keyboard layer — the story's central deliverable — is carried by no automated guard** · Violates AC5 and the house rule *"a guard shipping without a test that reds when it is removed"* · **Evidence I established**: in a detached worktree at `6649e65`, with `DATABASE_URL` pointing at a live `mariadb:10.11` (audit container, port 13351), I emptied `crates/opencmdb-bin/assets/app.js` (`: > app.js`) and ran `cargo test -p opencmdb-bin --locked` → **`490 passed; 0 failed` in 6.08 s** (the clock is the tell that the DB-backed tests ran). `cargo xtask ci` is blind to `.js`. The only carrier is `a11y/kbd-probe.mjs`, and **nothing runs it**: `ci.yml:99-102` runs `node a11y/axe-gate.mjs` only, and `a11y/package.json` declares one script, `gate`. The one Rust test that reads `app.js` (`screens.rs:648`, 6b.2's `no_screen_is_chosen_by_javascript`) passes on an empty file.
+
+**2 · The focus ring on the queue rows and the sort link — AC3's shipped half — is carried by nothing, and the fourth selector's only carrier is a guard about the amber** · Violates AC5's second clause verbatim (*"a guard that reads the SOURCE where the defect lives in the DOM is not counted"*) · **Evidence**: deleting `.queue-row > a:focus-visible,` and `.btn-sort:focus-visible,` from `app.css` leaves **490/490 green** and nine gates green; axe has no focus-appearance rule (the story says so itself). Deleting `.btn-gesture:focus-visible` too *does* red — but the red is `page::tests::ac4_the_amber_is_reserved_for_the_documenting_gesture` at `page.rs:3545`, whose subject is the amber count and whose needle this story moved from `.card:focus` to `.btn-gesture:focus-visible`. So the one Rust carrier of the focus contract is a source-reading needle inside an assertion about something else — **the exact shape T3 exists to undo, reproduced in T5**.
+
+**3 · The "second `aria-pressed` oracle" the Dev Agent Record presents as its discovery is vacuous** · Violates T3 (*"Give it a new oracle; do not 'update the number'"*) and AC5 · **Evidence**: `main.rs:3576` asserts `sorted.contains("aria-current=\"true\"")`. `_triage.html:39` emits `aria-current="true"` on the **selected queue row** of the same page. Measured against a live database: stripping `aria-current` from the sort link (`_triage.html:23`) leaves **490 passed; 0 failed** in 5.63 s. The ON/OFF pair *is* carried — dropping the `on` class reds `the_triage_route_renders_the_queue_and_both_photos` at `main.rs:3571` — but the accessible-state half is measured by nothing.
+
+**4 · Focus is LOST at the settle-navigation, and it is neither measured nor stated** · Bears on AC3 (*"focus follows the selection… focus is visible"*) and on the user story · **Evidence** (Chrome 151 headless, 7-row queue, my probe): after two `ArrowDown`s, `activeElement` is the row at index 2 with `outline: rgb(75,107,139) solid 2px`; after the 250 ms settle fires `window.location.assign`, `activeElement` is **`BODY`**, `outline: none`, and **12 Tab presses** are needed to re-enter the queue. The committed `kbd-probe.mjs` checks focus only *before* the settle (it reads `p.url()` after the wait, never `activeElement`). The arrows keep working via the `aria-current` fallback, so the arrow workflow survives — but every 250 ms of quiet resets the tab position to the top of the document. This is the reachable analogue of the very contract §0b declared unreachable and handed to 6.4.
+
+**5 · "Instrument at fault #1" is itself refuted — the scroll check discriminated, and the cause recorded for dropping it is false** · Violates the project rule *"a cause needs a check, not a plausible story"* · **Evidence**: the record says *"Control: the same page with `app.js` BLOCKED does not scroll either — **arrows do not scroll under headless CDP at all**."* Measured, headless Chrome 151, `/diagnostic`, `scrollHeight 728`, viewport 600: shipped code + `page.keyboard.press('ArrowDown')` → **`scrollY = 40`**; the same page after installing an unconditional `preventDefault` on ArrowDown → **`scrollY = 0`**. The check separates the two states exactly. (§0e's own figure, *"0 → 26 px with an early return, 0 → 0 without one"*, agrees with me; the Dev Agent Record contradicts §0e four sections later, and the false one is the one that changed the test.) The likely real fault is a **dispatched** `KeyboardEvent` (untrusted, never scrolls) rather than a pressed key — a mutation named for one thing applied to another, not a limit of CDP.
+
+**6 · Neither twin carries any record of this story, and both still point the live count at 6b.10's file** · Violates T8 (*"Twins and `sprint-status.yaml` in the same push"*, ticked) and AC4 · **Evidence**: `git diff master...HEAD -- CLAUDE.md docs/project-context.md` is **one line changed in each** — the `RUSTFLAGS` correction — and `grep -c "6b\.11"` returns 1 in each, that same line. `sprint-status.yaml` got a 30-line entry. The convention is not "twins at merge only": 6b.10's **dev** commit `d40a613` touched `CLAUDE.md` (8 lines) and `docs/project-context.md` (6 lines); `d678fd1` then flipped review→done with 1 line each. Consequence measured: the last `THE LIVE COUNT lives in…` pointer in both twins names `6b-10-copy-fr-and-en.md`, whose figure is **727**, while this story's figure is 728.
+
+**7 · "Six divergences registered" is false in three documents** · Violates T8, and T2's explicit *"and **register the divergence**"* · **Evidence**: `deferred-work.md` gained **three** rows (NFR24, the swap half, `puppeteer-core`/per-theme). Of the six named: the *seven gates* DoD was already registered by earlier stories (`:3932`, `:4548`) — not this story's row; the **`ci.yml` exception** exists only as a code comment ending *"Story 6b.11, registered"*; **6b.1's AC2 token-literal conflict** exists only as a comment in `page.rs`; and the **`j`/`k` + `⏎` divergence — the largest, since `epics.md:2306`/`:2308` prescribe them and Epic 7 must know they were skipped — appears nowhere outside the story file** (`grep` over `deferred-work.md` finds nothing). Story 6b.9's finding, verbatim: *a comment that says "registered" is not a registration.* The sentence is repeated in `sprint-status.yaml` and in the story file, so three documents carry it.
+
+**8 · AC5's record does not exist: there is no mutation table** · Violates AC5 and T8 (*"Every guard proven RED first; the greens recorded"*, ticked) · **Evidence**: the Dev Agent Record carries four anecdotes and no table — no mutation ids, no carriers, no greens. Every story in this epic ships one (6b.7 *"ten mutations, ten reds, carriers named per row"*; 6b.9 *"eighteen mutations"*). Three of this story's guards are measured green above (findings 1, 2, 3); a table would have had to say so.
+
+### ⚠️ MEDIUM
+
+**9 · The AC2 rewrite unpins three of the six tokens 6b.1 pinned** · Bears on AC5 and on the narrowing the story claims (*"two properties instead of one literal"*) · **Evidence**, three mutations each leaving **490/490 green**: `--color-neutral-500: #98989b → #ffffff`; `--color-bg: #f2f2f3 → #ffffff`; `--color-accent-700: #416180 → #b5d9fd` (the `.ipam-cell-used` fill, `app.css:775`). The cause is structural and documented in the code without its consequence: `hue()` returns a constant `240` for any grey, so for the three near-grey tokens the hue property is satisfied by *every* grey; and `--color-accent-700` is in neither the `GROUNDS` nor the `TEXTS` table, so only its hue is constrained. ✅ The guard is **not** vacuous for chromatic tokens — control: `--color-accent → #4b8b6b` reds with *"carries hue 150°, the mock's is 210°"*.
+
+**10 · The contrast guard's "premise" assertion cannot fail, and its completeness sentence is false** · Same class the story quotes (*"an enumeration cannot claim the completeness of a property"*) · **Evidence**: `assert_eq!(checked, TEXTS.len() * GROUNDS.len())` counts loop iterations over two fixed-size arrays — shrinking `TEXTS` from 4 to 3 (dropping `--accent-document`) leaves **490/490 green**, because the right-hand side shrinks with the left. Its doc calls the tables *"the grounds a screen actually paints text on"*: `app.css` paints on **six** distinct background tokens (`--color-neutral-100/200/300/400`, `--color-accent-100`, `--color-accent-700`, plus the `--bg`/`--surface` aliases); four are listed. ✅ **Refuted the stronger form**: I computed every painted pairing outside the table — `.badge` 9.55, `.filter.is-active` 9.10, the five `.statepill-*` 6.03–11.45, white on `.ipam-cell-used` 6.47 — **no live AA failure**, which is why axe agrees.
+
+**11 · `--color-accent-600` fails AA on all four grounds and T2's question about the ramp is answered nowhere** · Ticked task delivering nothing (story 6b.7's family) · **Evidence**: `#597ea3` measures **3.80 / 3.51 / 3.91 / 3.45** against bg / surface / n100 / n200 — below 4.5 on every one, i.e. exactly the defect `--color-accent` was darkened for. T2's bullet *"⚠️ `--color-accent-600` is `#597ea3`… Say whether the ramp follows"* is `[x]`, and the string `accent-600` appears nowhere in the Dev Agent Record. Latent rather than live: `grep` shows the token is referenced by no rule in `app.css` today.
+
+**12 · The dead contract has FOUR artefacts, not three** · Violates T5 (*"Decide all **three** dead-contract artefacts, not just `app.js`"*) · **Evidence**: `_gap_card.html:1` still carries `tabindex="-1"` on `#gap-card`, and the removed handler's own doc said why it was there — *"The card carries `tabindex="-1"` so it is programmatically focusable"*. Its only purpose was the focus the deleted handler performed. §0b's enumeration lists three; the register row names two left standing; this one is decided and registered nowhere.
+
+**13 · `.gitignore` closes the incident on one path, not on the pattern** · Same enumeration rule, applied to the fix for the incident the entry narrates · **Evidence**: `.gitignore:110` is `a11y/node_modules/`; `git check-ignore -v node_modules/foo` → **rc=1, not ignored**. The entry's own comment says *"a directory this size entering the tree is invisible to every check the project has"* — which is exactly as true one directory up. ✅ The removal itself is clean: `git ls-files a11y/` lists four files, `git log --all -- a11y/node_modules` is empty, `git check-ignore -v` maps the path to `.gitignore:110`.
+
+**14 · The CI accessibility gate runs against an uncontrolled, essentially empty store — the state §0c identifies as blind** · Bears on AC3b · **Evidence**: `ci.yml:83-102` boots the binary against `opencmdb_test` with no seed, immediately after the `Tests` step, so the queue holds whatever residue the test step left. §0c is explicit that on an empty store `/triage` renders *"You are up to date"* and *"the queue, the detail pane and the five `Gesture::Planned` controls — the exact surface T4/T5/T6 target — were in no measurement at all"*, and that the fourth colour pair appears only when a row is selected. §0c then presents *"no seeding is needed"* as a saving. The Rust contrast property compensates on the colour axis only.
+
+**15 · §0g's second inherited item is neither taken nor re-registered** · §0g: *"Take both or re-register by name"* · **Evidence**: `deferred-work.md:3748-3757` hands this story 6b.2's honesty guard missing `display:none` and `pointer-events:none`, noting *"closing those needs computed styles, which is exactly what axe-core/Playwright provides"* — the instrument T1 just built. The Dev Agent Record's *"What was decided rather than built"* covers NFR24 and the dead contract only; no register row mentions it.
+
+**16 · The register row this story discharges is left standing as pending** · Bookkeeping, against the file's own convention · **Evidence**: `deferred-work.md:4376` — *"the repository has NO accessibility check at all: no axe-core, no headless browser… **Owner: story 6b.11**"* — is satisfied by this story and untouched. The file carries `## Discharged by story 6b.2 (2026-08-18)` sections, so the convention exists.
+
+### ℹ LOW
+
+**17** · `ci.yml:80-82`'s *"If that stops being true, this step fails with exit 2"* is half true: a missing Chrome does exit 2 (measured), a missing Node makes the shell fail with 127. **18** · `a11y/kbd-probe.mjs` is written in French, comments and output, against the repo's English-artefact convention, and contains the typo *"le focix"*. **19** · The headline **237** is not reproducible from the store state it names: my own 7-gap-row store gives **221** on the same reverted tokens. **20** · On `/triage` with focus on `body`, `ArrowDown` no longer scrolls the page (measured `defaultPrevented: true` at the first row); the code states that cost only for the end-of-list case. **21** · `EXPECTED_ROUTES` is a floor with no distinctness check, and 6b.2's `no_screen_is_chosen_by_javascript` needle list (`pushState`, `location.hash`, `history.`) now sits beside a deliberate `window.location.assign` with no note added. **22** · The File List omits `.gitignore`.
+
+---
+
+## AC verdict table
+
+| AC | Verdict | Evidence I established |
+|---|---|---|
+| **AC1** arrows, scoped, shape (E) | **MET** | Ran the committed `kbd-probe.mjs` (repointed to my port/credentials) against a booted binary with a 7-row queue, Chrome 151: focus steps `1 → 2` on the keypress, highlight index equals focus index immediately, URL becomes `/triage?sel=ecart:…a3:hostname` after the quiet, `↓` with focus on a nav entry leaves the URL unchanged, `/diagnostic` `/apps` `/sources` report `intercepted=false rows=0`. |
+| **AC2** no letters | **MET** | Same run, at a middle index: `{"a":false,"j":false,"k":false,"x":false,"Enter":false,"Backspace":false,"Home":false,"PageDown":false," ":false}` with the positive control `ArrowUp:true, ArrowDown:true`. |
+| **AC3** reachable focus contract | **PARTLY MET** | Visibility ships and is real (`getComputedStyle` on a queue row: `2px solid rgb(75,107,139)`, the product's rule, not the UA's); five `.btn-gesture` all `aria-disabled="true"` / `tabIndex 0`. **But** focus is lost to `<body>` at every settle-navigation (finding 4), and the visibility itself is guarded by nothing (finding 2). |
+| **AC3b** axe green on ten routes | **MET** | Ran the committed `a11y/axe-gate.mjs` twice against a booted binary: empty store → 10 routes derived, **0 violation nodes, rc=0**; store with 7 gap rows → 10 routes, **0 nodes, rc=0**. Prove-to-red: reverting the three tokens on the running server → **rc=1, 221 nodes, all ten routes red**. Exit-code discipline verified: dead port → **rc=2**, `AXE_CHROME=/nonexistent` → **rc=2**. `npm --prefix a11y ci` from the committed lockfile → 26 packages, 354 ms. |
+| **AC4** live count here, every figure names its store state | **PARTLY MET** | Both terms of the delta verified: `master` in a clean worktree → 489 + 161 + 77 = **727**; HEAD → 490 + 161 + 77 = **728**. Nine gates green (`cargo xtask ci`, rc=0), clippy `--all-targets` rc=0, `fmt --check` rc=0. **But** the headline test figure names no store state, and the state changes what it means: the same 490 runs in **0.21 s** without a database and **5.69 s** against one. |
+| **AC5** every guard measured red first; a source guard for a DOM defect does not count | **NOT MET** | No mutation table exists. Two central guards measured green (app.js emptied → 490 green; the two focus selectors removed → 490 green), one new oracle vacuous (`aria-current` stripped from the sort link → 490 green with a live DB), and the one Rust carrier of the focus contract reads `app.css` while the defect is in the DOM. |
+| **AC6** nothing promises an absent gesture | **MET** | On the served `/triage`: 5 `.btn-gesture`, all `aria-disabled="true"` with `tabIndex 0`, `document.querySelectorAll('form,input,textarea,select,button').length === 0`, zero `hx-*`. No control became live; the arrows do something real. |
+| **AC7** NFR24 taken or re-registered by name | **PARTLY MET** | The register row exists and its measurement replays: at 1280 px on the served `/triage`, `.nav-entry` **34 px**, `.btn-sort` **27 px**, `.btn-gesture` **29 px**, `.queue-row > a` 72–95 px — heights identical to the row's table. **But** §0g's second inherited obligation (`:3748`) is neither taken nor re-registered (finding 15). |
+
+## Claims I REFUTED, each with the check that refuted it
+
+- **"Arrows do not scroll under headless CDP at all"** (Dev Agent Record, instrument #1) — refuted by `page.keyboard.press('ArrowDown')` on `/diagnostic`: shipped code **scrollY 40**, an unconditional `preventDefault` **scrollY 0**. The check discriminated; the control that dismissed it did not.
+- **"Six divergences registered"** (story file, `sprint-status.yaml`, T8) — refuted by `git diff` on `deferred-work.md`: three rows, and `grep` finds no `j`/`k`/`⏎` divergence anywhere in the register.
+- **"Twins … verified identical" as a discharge of the twin obligation** — refuted by `git diff master...HEAD -- CLAUDE.md docs/project-context.md`: one line each, no story record, against 6b.10's dev commit which wrote 8 and 6.
+- **"The grounds a screen actually paints text on"** (the new guard's doc) — refuted by `grep -oE 'background(-color)?: var\(--…'` over `app.css`: six painted background tokens, four listed.
+- **"Story 6b.1's guard became two properties"** as a like-for-like replacement — refuted by three green mutations (`neutral-500`, `bg`, `accent-700` all freely movable now, each reddening under the old literal guard).
+
+## Claims I CONFIRMED by replay
+
+`237 → 0`'s zero half (0 nodes at 7 gap rows, and rc=1/221 nodes on revert) · the Rust guard reds at **3.82:1** when `#7a7a7d` is restored, with a named assertion at `page.rs:3259` · the hue guard reds on a repalette (`150° vs 210°`) · the exit-code triage (0/1/2) · zero `hx-*` and zero `id="gap-card"` on all ten served routes, `/gap` a bare fragment with **0** `<script>` · `RUSTFLAGS` absent from `.github/`, `actions-rust-lang/setup-rust-toolchain@v1` at **`ci.yml:48`** exactly · `a11y/node_modules/` absent from tree, index and history and correctly ignored · nine gates, clippy `--all-targets`, `fmt` all green · 727 → 728 with **both** terms measured.
+
+## The question no conformance check asks
+
+**What can the operator DO that they could not before?** Move down and up the triage queue with the arrows, see where they are (the product's own focus ring, for the first time on the queue), and have the detail pane follow. That is the product's first real keyboard reach, and it is genuine. **What they still cannot do is act on the row they landed on** — five controls, all `Gesture::Planned`, no form, no button, no POST anywhere on the screen. The story makes a well-lit dead end faster to traverse; *"as fast as clearing a mailbox"* is met on the traversal and empty on the clearing, and story 6.4 is still what ends it. **Nothing shipped promises a gesture that does not exist** — the arrows do what they appear to do, and the five controls still say *À venir*. The one place the surface now over-promises slightly is the new focus ring on `.btn-gesture`: an `aria-disabled` control that draws the same 2 px accent outline as a live link. That is 6b.4b's deliberate reachability decision carried forward, not a new promise, but it is the one pixel where *"looks actionable"* and *"is not"* moved closer together.
+
+---
+
+All mutations reverted, tree clean, container removed, port 8080 measured dead.
+
+---
+
+# Edge Case Hunter — story 6b.11
+
+Everything below was executed in an isolated worktree at `6649e65` against a live `mariadb:10.11` (port 13350), Chrome 151, `puppeteer-core` 25.8, an 8-row queue. Every mutation was reverted by restoring a scratchpad copy, never `git checkout --`; the closing state is `git status` empty, 728 tests green (490 bin + 161 core + 77 xtask), nine gates green, axe gate exit 0.
+
+## HIGH
+
+### 1. The axe gate cannot see the screen this story changed — CI's store is empty
+**Severity: HIGH** · `.github/workflows/ci.yml:83-102`, `a11y/axe-gate.mjs`
+
+**Input applied.** The CI step sets only `DATABASE_URL`, `OPENCMDB_BASIC_USER`, `OPENCMDB_BASIC_PASSWORD` — no seed, no `OPENCMDB_SCAN_CIDR`. I reproduced that shape (`DELETE FROM declared_attribute`) and counted what `/triage` serves, then ran the same planted defect against both stores. The plant is the story's own defect put back: `<a href="{{ row.href }}" aria-pressed="false"` on the queue link in `_triage.html`.
+
+**Measured.**
+- Empty store, `/triage` 200: `queue-row` **0**, `btn-gesture` **0**, `triage-panes` **0**, `btn-sort` 1 (off, so no `aria-current`).
+- With 8 rows: `🔴 /triage aria-allowed-attr(8, critical)` → **exit 1**.
+- With the store emptied, same binary, same plant: ten ✅, `0 violation node(s)` → **exit 0**.
+
+**Why it matters.** The gate is green over a `/triage` that carries none of the elements 6b.11 touched — no queue rows, no focus rule to compute, no action bar, no selected row. The commit's own headline says *"measured twice: at 2 queue rows and at 5. The second run is the one that counts — the fourth colour pair appears only when a row is selected, so a short queue would have missed it."* CI's queue is not short, it is **empty**, on every run, forever.
+
+### 2. The route floor counts nav ENTRIES, not distinct screens
+**Severity: HIGH** · `a11y/axe-gate.mjs:38` (`EXPECTED_ROUTES`), `:96-103`
+
+**Mutation applied, verbatim.** `_nav.html:10`, `href="{{ entry.href }}"` → `href="/triage"`, plus a live violation planted elsewhere (`app.css`, `.example-marker-badge { color: var(--muted) }` — 3.76:1 on its `--color-neutral-300` ground, rendered twice on `/dashboard`).
+
+**Measured.** Rebuilt, served (`nav-entry" href="/triage"` the only distinct href), gate output:
+```
+✅ /triage  ×10
+axe gate: 10 route(s) derived from the navigation, 0 violation node(s)      EXIT=0
+```
+Nine screens were never visited; the planted violation was live on at least five of them (measured separately: `color-contrast(2, serious)` on `/dashboard`, 1 each on `/devices`, `/devices/nas-01`, `/apps`).
+
+**Why it matters.** `routes.length < EXPECTED_ROUTES` is a length check on an array of hrefs — it cannot tell ten screens from one screen ten times, which is exactly the shape its own comment names: *"a harness that derives nothing and reports success is the failure mode this file exists to avoid."* Story 6b.5's review converted a hardcoded floor to one derived from `Screen::ALL` for this reason; `EXPECTED_ROUTES = 10` restores the hardcoded form in a file no Rust test can read.
+
+### 3. A pending arrow timer overrides a click and lands the operator on a row they did not choose
+**Severity: HIGH** · `crates/opencmdb-bin/assets/app.js:56-66`
+
+**Input applied.** Document responses delayed 1200 ms via CDP request interception (inside the 2 s per-handler budget 6b.10 installed on `/triage`); `document.body.focus()`, `ArrowDown`, wait 40 ms, then `a[5].click()`.
+
+**Measured.**
+```
+operator CLICKED : /triage?sel=absence:11111111-...-000000000006
+browser LANDED on: /triage?sel=absence:11111111-...-000000000002
+```
+Control: the same sequence against a warm local store (sub-100 ms responses) → the click wins. The defect needs only a document slower than the remaining settle.
+
+**Why it matters.** `select()` arms `pending` and **nothing cancels it** — not `click`, not `blur`, not `pagehide`, not `beforeunload`. Only another arrow press clears it. A store answering in 1–2 s is the state 6b.10's own budget was written for, so this is not an exotic path.
+
+### 4. The keyboard layer is covered by nothing that runs
+**Severity: HIGH** · `crates/opencmdb-bin/assets/app.js`, `a11y/kbd-probe.mjs`, `a11y/package.json`, `ci.yml`
+
+**Mutation applied, verbatim.** `printf '// (the keyboard layer, removed)\n' > crates/opencmdb-bin/assets/app.js` — the whole file.
+
+**Measured.** `RUSTFLAGS="-D warnings" cargo test --workspace --locked` → **490 / 161 / 77, 0 failed**. `cargo xtask ci` → **all gates green**. Rebuilt, served (`/assets/app.js` returns the one comment line), axe gate → **exit 0**.
+
+**Why it matters.** `kbd-probe.mjs` is the only thing that measures the layer, and it is referenced by no `package.json` script and by no CI step — `npm run gate` runs `axe-gate.mjs` alone. The one Rust test that reads the file, `screens.rs:646 no_screen_is_chosen_by_javascript`, asserts the **absence** of four strings, which an empty file satisfies. 117 lines of behaviour with no automated carrier of any kind.
+
+### 5. `token_hex` reads a CSS COMMENT, and one comment silences the contrast property over the exact defect this story fixed
+**Severity: HIGH** · `crates/opencmdb-bin/src/page.rs:3288-3297` (`token_hex`)
+
+**Mutations applied, verbatim.** In `app.css`, with the story's repaired value reverted (`--color-neutral-600: #7a7a7d;`):
+```css
+  /* AA repair: --color-neutral-600: #68686b; reverted 2026-08-22 pending design review */
+  --color-neutral-600: #7a7a7d;
+```
+
+**Measured.**
+- Control (bad value, no comment): `every_text_token_clears_aa_on_every_ground_it_can_sit_on` **FAILS** — `--color-neutral-600 on --color-bg is 3.82:1` (the exact figure the commit message quotes).
+- With the comment one line above: **`test result: ok. 1 passed`.**
+- The same tree served: axe reports **210 violation nodes on all ten routes**.
+
+The opposite direction is equally reachable: a comment reading `/* before the rebrand this read --color-text: #ffffff; */` above the correct `--color-text: #1d1f20` makes the guard red at **1.12:1** over a correct sheet.
+
+**Why it matters.** `css.find(&format!("{token}: #"))` takes the first textual occurrence anywhere in the file, comments included. Writing the old value in a comment when you revert a colour is the ordinary gesture. For pairings axe cannot see (finding 8), this guard is the *only* carrier, and a comment turns it off silently — the `checked == 16` premise assertion counts pairings, not sources, so it stays green too.
+
+### 6. Exit **1** — the violation code — for "the gate could not run", measured twice
+**Severity: HIGH** · `a11y/axe-gate.mjs:44-49, 100-102, 111-118`; `ci.yml:80-82`
+
+**Mutations applied, verbatim.**
+- (a) `mv a11y/node_modules <elsewhere>` (i.e. `npm ci` did not produce the tree the gate needs).
+- (b) `printf '\nthrow new Error("axe payload broken");\n' >> node_modules/axe-core/axe.min.js`.
+
+**Measured.** (a) `Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'puppeteer-core'` → **EXIT=1**. (b) `Error: axe payload broken … at axe-gate.mjs:111` → **EXIT=1**.
+
+**Why it matters.** The module header states `1 — the product has accessibility violations (a real regression: fix the product)` and `2 — the gate could not run`, and `ci.yml:80-82` promises in so many words that if Node/Chrome stop shipping *"this step fails with exit 2 … and not with exit 1"*. Only `puppeteer.launch` is inside a try. The top-level `import`, the `readFileSync` of `axe.min.js`, `page.evaluate(axeSource)` and `axe.run` are all outside every catch, and an uncaught rejection in an ESM module exits **1**. A developer would be sent to hunt an accessibility regression that does not exist.
+
+## MEDIUM
+
+### 7. `token_hex` silently discards an alpha channel
+**Severity: MEDIUM** · `crates/opencmdb-bin/src/page.rs:3288-3297`
+
+**Mutation applied, verbatim.** `--color-neutral-600: #68686b;` → `--color-neutral-600: #68686b1a;` (10 % alpha — near-invisible muted text).
+
+**Measured.** Rust property: **`test result: ok. 1 passed`** (it reads the first six digits and reports 4.96:1). Served: axe → **exit 1, 210 violation nodes on all ten routes**.
+
+**Why it matters.** `css.get(at..at + 6)` takes six characters and never checks what follows, so an 8-digit hex is read as its opaque prefix and the guard measures a colour the browser does not paint. *Refuted for the neighbouring forms:* a 3-digit hex (`#686`), a `var()` declaration and a missing token all **panic loudly** with `--color-neutral-600 is declared as a hex literal` — the 8-digit form is the one that mis-parses in silence.
+
+### 8. `GROUNDS` omits two grounds the sheet actually paints text on
+**Severity: MEDIUM** · `crates/opencmdb-bin/src/page.rs:3212-3223`
+
+**Mutation applied, verbatim.** `app.css`, `.example-marker-badge { color: var(--color-neutral-900) }` → `color: var(--muted)`.
+
+**Measured.** Rust property `every_text_token_clears_aa_on_every_ground_it_can_sit_on`: **passes**. Served: axe → **exit 1**, `color-contrast(2, serious)` on `/dashboard`, `(1, serious)` on `/devices`, `/devices/nas-01`, `/apps`. Computed ratio 3.76:1.
+
+The sheet paints text on `--color-neutral-300` (`.example-marker-badge`) and on `--color-accent-100` (`.filter.is-active`, `.statepill-gap`); neither is in `GROUNDS`, whose comment calls it *"the grounds a screen actually paints text on"*. Against `--color-neutral-300`, **three of the four `TEXTS` fail AA** (`--color-neutral-600`, `--color-accent`, `--accent-document` = 3.76:1 each).
+
+**Why it matters.** The doc claims *"this walks the token TABLE, so a combination nobody has used yet is still checked"*. For the two omitted grounds it is not checked at all, and the only remaining carrier is axe over ten rendered routes — which finding 1 shows is itself partial in CI.
+
+### 9. The ±6° hue tolerance is unattainable for the near-neutral tokens it guards
+**Severity: MEDIUM** · `crates/opencmdb-bin/src/page.rs:3186-3208`, `hue()` at `:3300-3323`
+
+**Mutation applied, verbatim.** `--color-text: #1d1f20;` → `--color-text: #141616;` — the same colour with HSL lightness × 0.7 at **constant hue and saturation** (verified in float: `colorsys` reports hue 200.0 for the source).
+
+**Measured.**
+```
+the mock's token --color-text carries hue 180°, the mock's is 200° —
+a contrast repair moves LIGHTNESS, never hue
+```
+Control: `every_text_token_clears…` **passes** on the same value (contrast rises 14.79 → 16.7), so the darkening is legal by the other property and illegal by this one.
+
+**Why it matters.** `--color-text` is `#1d1f20`: max−min = **3**, so the smallest representable hue step is 60/3 = 20° — larger than the tolerance. `--color-bg` and `--color-surface` have span 1 (step 60°), `--color-neutral-500` span 3. Four of the six tokens the guard checks live where a lightness-only move cannot hold hue to ±6°, and the failure message states as fact the thing that just proved false. `hue()` itself is faithful — `colorsys` agrees the darkened colour *is* 180° at 8 bits; the defect is the tolerance's claim about what it permits.
+
+### 10. `select()` moves the highlight and the focus but never `aria-current`
+**Severity: MEDIUM** · `crates/opencmdb-bin/assets/app.js:53-66`
+
+**Input applied.** `ArrowDown` from `document.body`, then poll `.selected` and `[aria-current="true"]` every 50 ms until they agree; repeated at document delays of 0 / 1200 / 1900 ms.
+
+**Measured.** 80 ms after ↓: `{focused: 1, selectedClass: 1, ariaCurrent: 0}` — the eye and the screen reader name different rows. Time to agreement:
+
+| document delay | disagreement window |
+|---|---|
+| 0 ms (warm local) | **360 ms** |
+| 1200 ms | **1551 ms** |
+| 1900 ms | **2240 ms** |
+
+**Why it matters.** The story records the cost as *"for 250 ms the highlighted row and the URL disagree"*. 250 ms is the timer, not the observed window; it is **360 ms** even warm, it scales with the store up to 6b.10's 2 s budget, and the third disagreeing party — the accessible `current` state — is not named at all, in the story whose subject is accessibility.
+
+### 11. Every settle navigation destroys the operator's focus position
+**Severity: MEDIUM** · `crates/opencmdb-bin/assets/app.js:56-66`
+
+**Input applied.** Three `ArrowDown` presses, 600 ms apart, then one `Tab`.
+
+**Measured.**
+```
+after settle 1: {"active":"BODY","focusedRow":-1,"ariaRow":1}
+after settle 2: {"active":"BODY","focusedRow":-1,"ariaRow":2}
+after settle 3: {"active":"BODY","focusedRow":-1,"ariaRow":3}
+one Tab after the settle lands on: nav-entry | Triage
+```
+Second witness: arrow, then `Tab` inside the window — focus moves to the next row's link, then 1.2 s later the pending timer navigates and focus is `BODY`. Third: a held arrow (12 presses at 40 ms) lands on row 7 with `activeElement = BODY`.
+
+**Why it matters.** Arrowing keeps working because `currentIndex` falls back to `aria-current`, but every other keyboard gesture restarts at the top of the document: an operator who arrows to row 3 and presses Tab is thrown back to the first navigation entry. `kbd-probe.mjs` reads the focus index immediately after the keypress and never after the settle, so it is blind to this by construction.
+
+### 12. Arrow navigation fills the history stack; Back can no longer leave `/triage`
+**Severity: MEDIUM** · `crates/opencmdb-bin/assets/app.js:64` (`location.assign`)
+
+**Input applied.** Three `ArrowDown` presses 500 ms apart from a fresh `/triage`, reading `history.length` and then pressing Back once.
+
+**Measured.** `history.length` **2 → 5** (one entry per settled press). `1× Back → /triage?sel=…000000000003` — the previous *selection*, not the previous page. A held arrow is bounded (12 presses → 1 document request, `history.length` 2 → 3), so the cost is per deliberate row-by-row step.
+
+**Why it matters.** `_triage.html:18-20` justifies choosing `aria-current` over `role="button"` precisely because the latter *"would cost middle-click, copy-link and **the back button**"* — and the keyboard layer added in the same commit degrades the back button on the same screen. `location.replace` would keep one entry per visit.
+
+## LOW
+
+### 13. ↓ then ↑ back to the row already selected issues a full reload to the identical URL
+**Severity: LOW** · `crates/opencmdb-bin/assets/app.js:64`
+
+**Input applied.** From `/triage?sel=<row0>` (row 0 already current), set `window.__mark`, press ↓, wait 50 ms, press ↑.
+
+**Measured.** `url before` and `url after` **identical**; **1 document request**; `window.__mark` → `DOCUMENT WAS REPLACED`; `activeElement` → `BODY`.
+
+**Why it matters.** Nothing compares `row.getAttribute("href")` with `location.href` before assigning, so an operator who overshoots by one and corrects pays a full page load and loses their place — a net movement of zero costing a round trip.
+
+### 14. The readiness loop is bounded at ~15.5 minutes, not the 30 seconds it reads as
+**Severity: LOW** · `.github/workflows/ci.yml:94-98`
+
+**Input applied.** `docker pause` on the database container, then the step's own probe: `curl -fsS -o /dev/null http://127.0.0.1:8080/healthz`.
+
+**Measured.** `http=503 time=30.002716`. `curl` carries no `--max-time` or `--connect-timeout`, the loop adds `sleep 1`, and neither the job nor the step has `timeout-minutes`.
+
+**Why it matters.** `for _ in $(seq 1 30)` reads as a 30-second wait; against a database that accepts TCP but does not answer it is 30 × ~31 s plus a final 30 s. The normal failure (port not yet bound) is instant, so this only bites on the degraded path — which is the path a readiness loop exists for.
+
+### 15. Three different `aria-current` semantics on one page
+**Severity: LOW** · `_triage.html:23`, `:39`, `_nav.html:11`
+
+**Measured** on a rendered `/triage?sort=age`:
+```
+A.nav-entry    = page
+A.btn-sort on  = true
+A.<queue row>  = true
+```
+No axe violation (measured: exit 0) and no code collision (`currentIndex` scopes its search to `.queue .queue-row > a`). Recorded as a stated fact rather than a defect: the sort toggle and the selected row announce the same generic `current` for two different meanings, one click apart.
+
+---
+
+## Suspicions I RAN and REFUTED, each with the check
+
+| Suspicion | Check | Result |
+|---|---|---|
+| A click during the settle window is overridden | click at t+60 ms on a warm store | **Refuted** on a fast store — the click wins; it takes a slow document (finding 3) |
+| A failure path leaks Chrome into CI | `pgrep -af "/usr/bin/google-chrome"` after a launch failure, a 500-route abort and an uncaught throw | **Refuted** — 0 in every case; puppeteer's exit handler reaps the child |
+| The CI trap masks the gate's exit code / orphans the server | ran the step's shell shape with a stub exiting 1 then 2 | **Refuted** — step exits 1 and 2 respectively; `pgrep` finds no orphan |
+| The readiness probe can pass over an unusable server | `docker pause` the store, then `GET /healthz` | **Refuted** — 503, so `curl -fsS` fails and the loop cannot break early |
+| A route that 500s is reported as a violation | store paused, gate run | **Refuted** — `axe gate: /triage answered 500, so nothing there can be measured`, **exit 2** |
+| A violation on a late route is lost | plant reddened `/dashboard`…`/apps` after a clean `/triage` | **Refuted** — the walk accumulates and exits 1 naming every failing route |
+| `?sort=age` is dropped by an arrow | `/triage?sort=age`, one ↓ | **Refuted** — landed `…&sort=age`; reading the row's own href holds |
+| The layer is not inert on the other screens | dispatched ↓/↑ on all **nine** non-triage routes (the story measured three) | **Refuted** — `rows=0`, `defaultPrevented=false` on every one |
+| Modified arrows are captured | `shiftKey`/`ctrlKey`/`metaKey`/`altKey` + ArrowDown | **Refuted** — all four `prevented: false` |
+| An arrow with focus on a gesture control navigates | focused `.btn-gesture`, ↓, 900 ms | **Refuted** — `inQueue=false`, URL unchanged; the action bar sits outside `.queue` |
+| A one-row or empty queue misbehaves | pruned the `<ol>` to one `<li>`, then removed `.queue` entirely | **Refuted** — both arrows inert, no exception, focus untouched |
+| The focus ring is invisible on the row an arrow lands on | `getComputedStyle` on the selected row after ↓ | **Refuted** — `2px solid rgb(75,107,139)` on `rgb(245,245,248)` = **5.11:1**, against WCAG 1.4.11's 3:1; present on all four focusable kinds |
+| Disabling JS breaks the queue | `setJavaScriptEnabled(false)`, load `/triage` | **Refuted** — 8 rows still rendered; the selection is a URL |
+| `hue()` is wrong at the boundaries | pure red, mid-grey, both sides of the 0°/360° wrap | **Refuted** — `(255,0,0)→0`, `(128,128,128)→240` (stated convention), `(255,0,4)→0`, `(255,4,0)→0` |
+| A 3-digit hex / a `var()` declaration / a missing token mis-parses | planted `#686` and `var(--color-neutral-700)` | **Refuted** — both panic loudly (`… is declared as a hex literal`); only the 8-digit form is silent (finding 7) |
+
+**Two probe artefacts, recorded so they are not read as findings:** `page.goBack({waitUntil:"networkidle0"})` times out at 30 s against this app (bfcache) — re-run with `waitUntil:"load"` it returns instantly; and one `page.evaluate` sampling at t+400 ms died with *"Execution context was destroyed"* because the settle navigation had started — the measurement it was meant to take is carried by finding 10's polling loop instead.
+
+---
+
 ## Change Log
 
 | Date | Change |
@@ -491,3 +1169,4 @@ story 6b.10's review registered, biting my own code the day after it was written
 | 2026-08-22 | **VALIDATED by two fresh-context layers: 38 findings, 12 HIGH.** Contexting corrected on eight points, three of them its own measurements — the axe figures were taken on an EMPTY store (the surface T4–T6 target was blank); the constraint-4 and `⏎` refusals rested on false premises; `Screen::Device` IS in `Screen::ALL`. The validation also proved what contexting had only assumed: the two-token fix takes **237 → 0** on a populated store. |
 | 2026-08-22 | **DEVELOPED.** 727 → 728 tests, nine gates, axe green on all ten routes at two queue sizes. Three tokens, `aria-pressed` → `aria-current`, the keyboard layer in shape (E), four focus rules, the CI step. 🔴 Story 6b.1's hex-literal guard became TWO properties (hue + contrast); a SECOND `aria-pressed` oracle the spec had not named was found by running the change; and **four times the faulty instrument was mine, each settled by a control**. |
 | 2026-08-22 | 🔴 **ARBITRATION 4 by Guy: shape (E)** — the three readings of *"move the selection"* were prototyped and differ by **20×**; under (A) a held arrow loses half its presses. |
+| 2026-08-22 | **CODE-REVIEWED by three isolated layers — the three reports are poured in VERBATIM and UNTRIAGED.** 60 raw findings, no dedup, no ranking, no arbitration. The acceptance layer returns **AC5 NOT MET** (no mutation table; the keyboard layer, the focus ring and the new `aria-current` oracle each measured green) and AC3/AC4/AC7 partly met. 🔴 The review session crashed mid-flight: the edge-case layer was re-run from its original mandate in a fresh worktree, the other two recovered intact from their transcripts. |
