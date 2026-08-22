@@ -2617,6 +2617,32 @@ mod tests {
         // Every attribute whose VALUE is prose rather than a token. `class`, `id`, `role`,
         // `type`, `hx-*` and the `aria-*` attributes taking an idref or an enum are excluded on
         // purpose: their values are not read aloud and not translated.
+        /// Whether an attribute value carries prose OUTSIDE its Askama interpolations.
+        ///
+        /// 🔑 The question is never *"is an interpolation present"* — a value may hold one and
+        /// still ship English words beside it, which story 6b.10's code review measured. Strip
+        /// every `{{ … }}` and `{% … %}`, then ask whether any letter survives. Punctuation and
+        /// separators do not: `"{{ a }} — {{ b }}"` is composed, not written.
+        fn carries_prose(value: &str) -> bool {
+            let mut rest = value;
+            let mut bare = String::new();
+            while let Some(open) = rest.find("{{").or_else(|| rest.find("{%")) {
+                bare.push_str(&rest[..open]);
+                let close = if rest[open..].starts_with("{{") {
+                    "}}"
+                } else {
+                    "%}"
+                };
+                match rest[open..].find(close) {
+                    Some(at) => rest = &rest[open + at + close.len()..],
+                    // An unterminated interpolation is not something to reason past.
+                    None => return true,
+                }
+            }
+            bare.push_str(rest);
+            bare.chars().any(char::is_alphabetic)
+        }
+
         const PROSE_ATTRIBUTES: [&str; 8] = [
             "aria-label",
             "aria-description",
@@ -2630,31 +2656,111 @@ mod tests {
         let mut checked = 0_usize;
         for (name, body) in templates() {
             for attribute in PROSE_ATTRIBUTES {
-                let needle = format!("{attribute}=\"");
-                for (at, _) in body.match_indices(&needle) {
-                    // A boundary, not a substring: `aria-labelledby="…"` must not match
-                    // `aria-label`, and `data-title="…"` is not `title`.
-                    let before = body[..at].chars().next_back();
-                    if before.is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_') {
-                        continue;
+                // 🔴 **BOTH quoting styles.** Until story 6b.10's code review this matched
+                // `attr="` alone, and a single-quoted English literal was measured served
+                // verbatim on the French page with 720/720 tests and nine gates green. HTML
+                // permits either quote and a developer reaching for one inside an Askama
+                // expression reaches for the other.
+                for quote in ['"', '\''] {
+                    let needle = format!("{attribute}={quote}");
+                    for (at, _) in body.match_indices(&needle) {
+                        // A boundary, not a substring: `data-title='…'` is not `title`.
+                        //
+                        // ⚠️ It does NOT earn its keep on `aria-labelledby`, which the needle
+                        // already excludes by carrying the `=` — a claim this comment made until
+                        // the same review measured it.
+                        let before = body[..at].chars().next_back();
+                        if before.is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+                            continue;
+                        }
+                        let Some((value, _)) = body[at + needle.len()..].split_once(quote) else {
+                            continue;
+                        };
+                        checked += 1;
+                        // 🔴 **What remains once the interpolations are removed**, not merely
+                        // whether one is present. `aria-label="Reconciliation result for {{ x }}"`
+                        // satisfied `contains("{{")` and shipped four English words to a French
+                        // screen reader. An empty value stays legal — `alt=""` is the correct
+                        // markup for a decorative image, and it reads nothing aloud.
+                        assert!(
+                            !carries_prose(value),
+                            "{name} carries {attribute}={quote}{value}{quote} with LITERAL prose \
+                             outside its interpolations — it is read aloud to an operator whose \
+                             interface is in another language, and no browser look can see it. \
+                             Route every word through a key."
+                        );
                     }
-                    let Some((value, _)) = body[at + needle.len()..].split_once('"') else {
-                        continue;
-                    };
-                    checked += 1;
-                    assert!(
-                        value.contains("{{") || value.contains("{%"),
-                        "{name} carries {attribute}=\"{value}\" as a LITERAL — it is read aloud \
-                         to an operator whose interface is in another language, and no browser \
-                         look can see it. Route it through a key."
-                    );
                 }
             }
         }
-        assert!(
-            checked >= 4,
-            "the premise: at least four prose attributes exist to inspect ({checked} seen) — a \
-             scan that matched nothing would assert nothing"
+        // 🔑 An EQUALITY, not a floor. *A floor is only a guard while it equals what is there*
+        // (this file's own rule, quoted in three places): `>= 4` tolerated the silent loss of
+        // every prose attribute but four. Raise this deliberately when you add one.
+        assert_eq!(
+            checked, 6,
+            "the premise: six prose-attribute occurrences exist to inspect — a scan that \
+             matched fewer has stopped seeing part of the surface it names"
+        );
+    }
+
+    /// 🔴 **AC1 on the PRODUCER side — and this guard exists because its sibling reads the
+    /// TEMPLATE while the defect lives one file over.**
+    ///
+    /// Story 6b.10's code review measured the ordinary gesture: replace
+    /// `gap_card_label: t!("page.gap_card_label").to_string()` with a bare
+    /// `"Reconciliation result".to_string()`, leave the template untouched, and the removed
+    /// English string is back on the served page — in English, on a French deployment — with
+    /// 485/161/74 tests and all nine gates green. `no_template_hard_codes_text_a_human_reads…`
+    /// cannot see it: it is entirely CORRECT about what it tests, and the value it inspects is
+    /// `{{ s.gap_card_label }}`, an interpolation, whatever the interpolation resolves to.
+    ///
+    /// ⚠️ **A TRIPWIRE, not a barrier** (story 5.12's precedent, stated rather than implied). It
+    /// bounds ONE function — the constructor every template's `s.*` field comes from. A literal
+    /// reaching a template by any other route is outside it, and the day a second such
+    /// constructor exists this guard must name it too.
+    #[test]
+    fn every_field_of_the_shared_strings_comes_from_a_key() {
+        let source = include_str!("page.rs");
+        let at = source
+            .find("fn strings() -> Strings {")
+            .expect("the shared strings have one constructor");
+        let body = &source[at..];
+        let body = &body[..body.find("\n}\n").expect("the constructor is a function")];
+
+        let mut checked = 0_usize;
+        for line in body.lines() {
+            let line = line.trim();
+            // A field initialiser is `name: <expr>,` — never the signature, a `use`, or a brace.
+            let Some((name, value)) = line.split_once(':') else {
+                continue;
+            };
+            if !value.trim_end().ends_with(',') || name.contains(' ') || name.is_empty() {
+                continue;
+            }
+            checked += 1;
+            assert!(
+                value.contains("t!("),
+                "`strings().{name}` is fed by `{}` rather than by a key — every field here is \
+                 read by a template and shown to an operator, and a literal is invisible to the \
+                 template-side guard, which sees only `{{{{ s.{name} }}}}`",
+                value.trim().trim_end_matches(',')
+            );
+        }
+        // 🔑 The premise is DERIVED from the struct, never pinned as a number: a second pass
+        // over the declaration, so the two cannot drift apart and neither can rot.
+        let at = source
+            .find("struct Strings {")
+            .expect("the shared strings are one struct");
+        let declaration = &source[at..];
+        let declaration = &declaration[..declaration.find("\n}\n").expect("the struct closes")];
+        let fields = declaration
+            .lines()
+            .filter(|line| line.trim().ends_with(": String,"))
+            .count();
+        assert_eq!(
+            checked, fields,
+            "every field of `Strings` was inspected — a scan that reads fewer initialisers than \
+             the struct has fields has stopped seeing part of what it names"
         );
     }
 
