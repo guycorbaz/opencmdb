@@ -4688,3 +4688,19 @@ before the commit** — story 6b.9's review found that file untouched under a se
   but the closure half calls `security_rows` at the ambient locale, which no test sets. So *"no
   seventh sentence can appear"* is established for `en` and asserted for neither language's French
   rendering. Same precondition as the row above; same owner.
+
+- **The lint the repository prescribes is blind to test code, and this project is mostly test code.**
+  `CLAUDE.md` names `cargo clippy --workspace -- -D warnings` as THE lint. Cargo checks lib and bin
+  targets by default, never test targets — while `ci.yml` sets `RUSTFLAGS: -D warnings` for the
+  test compile. MEASURED at story 6b.10's code review: a dead `let root = …` in a `#[cfg(test)]`
+  module passed every local check, all nine gates and 727 tests, and turned the first CI run of
+  PR #115 RED in 1m12s.
+  🔑 The two commands that actually reproduce CI locally are
+  **`cargo clippy --workspace --locked --all-targets -- -D warnings`** and
+  **`RUSTFLAGS="-D warnings" cargo test --workspace --locked`**. The first is a one-word change to
+  a line `CLAUDE.md` already carries.
+  ⚠️ It is not merely a convenience: the house convention is one trailing `#[cfg(test)]` module per
+  file (D56b), so the majority of this repository's lines live exactly where the prescribed lint
+  does not look. Every story that has ever "run clippy clean" ran it over a fraction of the tree.
+  **Owner: Epic 6b's retrospective** — it is a change to the documented working commands, which a
+  story may not make.

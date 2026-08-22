@@ -784,10 +784,13 @@ mod tests {
 
         let yaml = include_str!("../locales/app.yml");
         let documents = YamlLoader::load_from_str(yaml).expect("the locale file is valid YAML");
-        let root = documents
-            .first()
-            .and_then(Yaml::as_hash)
-            .expect("the locale file is a mapping");
+        // ⚠️ The root hash is NOT bound here any more. It was, while the second pass counted
+        // top-level entries; that pass now walks the whole tree from `documents.first()`, and a
+        // binding nothing reads is a claim that something does.
+        assert!(
+            documents.first().and_then(Yaml::as_hash).is_some(),
+            "the locale file is a mapping — the premise both passes below rest on"
+        );
 
         /// Every `(dotted key path, locales)` the document really carries, at any nesting depth.
         ///
