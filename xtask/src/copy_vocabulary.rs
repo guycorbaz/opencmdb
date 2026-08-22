@@ -374,6 +374,37 @@ pub(crate) fn entries_of(yaml: &str) -> Result<Entries> {
     Ok(collector.out)
 }
 
+/// Text with the default-ignorable characters removed, so a word broken by an invisible
+/// character is still the word.
+///
+/// 🔴 **`"Nothing to mer<U+200B>ge yet."` walked past this gate and past the resolver-side
+/// carrier**, with all nine gates and 720/720 tests green, and it is in the shipped binary — a
+/// browser renders it as *"merge"*. Measured by story 6b.10's code review; the class is on record
+/// twice already (story 5.12's `is_invisible`, story 6b.2's `carries_a_visible_glyph`).
+///
+/// ⚠️ **This is an ENUMERATION, and an enumeration cannot claim the completeness of a property**
+/// (story 5.12's sentence, fourth application). It covers the ranges a copy-paste and an editor
+/// actually carry — the zero-width set, the bidi controls, the variation selectors, the word
+/// joiner and the soft hyphen. It is a TRIPWIRE against the character that arrives by accident,
+/// never a barrier against one placed on purpose. Widening it further is not the closure; the
+/// closure would be refusing non-printing characters in the file at all, which is a decision
+/// nobody has taken.
+fn strip_invisible(text: &str) -> String {
+    text.chars()
+        .filter(|c| {
+            !matches!(u32::from(*c),
+                0x00AD                    // soft hyphen
+                | 0x200B..=0x200F         // zero-width space .. right-to-left mark
+                | 0x2028..=0x202E         // line/paragraph separators, bidi embedding
+                | 0x2060..=0x206F         // word joiner .. deprecated format characters
+                | 0xFE00..=0xFE0F         // variation selectors
+                | 0xFEFF                  // zero-width no-break space (BOM)
+                | 0xE0000..=0xE01EF       // tags and variation selectors supplement
+            )
+        })
+        .collect()
+}
+
 /// Whether `haystack` contains `needle` as a WORD.
 ///
 /// 🔴 **The boundary set is not `gate_vocabulary`'s and the difference was measured.**
@@ -382,7 +413,8 @@ pub(crate) fn entries_of(yaml: &str) -> Result<Entries> {
 /// `gesture.merge` reds and **`gesture.merge_all` passes**, on a file where 107 of 284 keys carry
 /// an underscore. A retired term is a word wherever it is not glued to a letter or a digit.
 fn contains_word(haystack: &str, needle: &str) -> bool {
-    let haystack = haystack.to_lowercase();
+    let haystack = strip_invisible(&haystack.to_lowercase());
+    let haystack = haystack.as_str();
     let needle = needle.to_lowercase();
     let boundary = |c: Option<char>| c.is_none_or(|c| !c.is_alphanumeric());
     haystack.match_indices(&needle).any(|(at, _)| {
@@ -608,6 +640,17 @@ mod tests {
             "gesture.document:\n  en: \"Merger\"\n  fr: \"Merger\"\n",
             Some(2),
         ),
+        (
+            "e15 a ZERO-WIDTH SPACE inside the term — invisible in an editor, invisible in a \
+             browser, and the shipped binary carries the word",
+            "triage.empty:\n  en: \"Nothing to mer\u{200b}ge yet\"\n  fr: \"Rien\"\n",
+            Some(2),
+        ),
+        (
+            "e16 a SOFT HYPHEN inside the term — the spelling a word processor inserts",
+            "triage.empty:\n  en: \"Nothing to mer\u{ad}ge yet\"\n  fr: \"Rien\"\n",
+            Some(2),
+        ),
         // ── must stay GREEN, and each row says what it protects ───────────────────────────
         (
             "g01 « Merger » is the BINDING French translation of `document` — never a finding",
@@ -761,7 +804,7 @@ mod tests {
         let green = PROBES.iter().filter(|p| p.2.is_none()).count();
         assert_eq!(
             (red, green),
-            (14, 5),
+            (16, 5),
             "both poles are exercised, and the count is here so a deleted row is loud"
         );
     }

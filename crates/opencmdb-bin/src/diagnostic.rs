@@ -1118,10 +1118,22 @@ mod tests {
             assert_eq!(rust_i18n::t!(key, locale = "fr"), fr, "{key}, in French");
         }
 
-        // 🔴 **The set is CLOSED, and this is the half that makes the pinning worth anything.**
-        // Pinning six sentences proves nothing if a seventh can appear beside them. Every posture
-        // the type admits is rendered, and every value must be a pinned sentence or the
-        // public-path DATA — which is `auth::is_public`'s own list, not copy.
+        // 🔴 **The set is CLOSED over the postures SAMPLED, and the difference matters.**
+        // Pinning six sentences proves nothing if a seventh can appear beside them, so every
+        // value must be a pinned sentence or the public-path DATA — which is `auth::is_public`'s
+        // own list, not copy.
+        //
+        // ⚠️ *"Every posture the type admits"* stood here until story 6b.10's code review and was
+        // FALSE: `public_paths` is a `Vec`, so the type admits unboundedly many and this samples
+        // TWO — the empty one and the shipped one. The two booleans ARE exhaustive. What is
+        // proven is therefore: over eight sampled postures, no unpinned sentence appears. That
+        // is worth having and it is not what the sentence claimed.
+        //
+        // ⚠️ And the CLOSURE half is measured in English only: `security_rows` renders at the
+        // ambient locale, which no test sets (`set_locale` is process-wide and would make the
+        // suite order-dependent). The six sentences ARE pinned in both languages above; what is
+        // English-only is the proof that no SEVENTH can appear. Closing that needs a
+        // locale-parameterised renderer, registered rather than implied.
         let mut seen = 0_usize;
         for basic in [false, true] {
             for metrics in [false, true] {
@@ -1133,9 +1145,16 @@ mod tests {
                     };
                     for row in security_rows(&posture) {
                         seen += 1;
-                        let pinned = PINNED
-                            .iter()
-                            .any(|(_, en, _)| row.value == *en || row.value == paths.join(" · "));
+                        // 🔴 The public-path disjunct is loop-invariant, and for the four
+                        // postures where `paths` is empty it read `row.value == ""` — so a row
+                        // rendering the EMPTY STRING was accepted as "pinned" in half the matrix.
+                        // *A guard covered only by a disjunction is a guard nothing covers*, this
+                        // story's own sentence, met inside the guard that quotes it. The data
+                        // disjunct now only applies where there IS data.
+                        let is_public_path_data =
+                            !paths.is_empty() && row.value == paths.join(" · ");
+                        let pinned =
+                            is_public_path_data || PINNED.iter().any(|(_, en, _)| row.value == *en);
                         assert!(
                             pinned,
                             "the security group rendered {:?}, which is neither a pinned sentence \
@@ -1149,7 +1168,8 @@ mod tests {
         }
         assert_eq!(
             seen, 32,
-            "eight postures × four rows — every branch was rendered"
+            "eight SAMPLED postures × four rows — both booleans exhaustively, `public_paths` in \
+             its empty and its shipped shape"
         );
     }
 

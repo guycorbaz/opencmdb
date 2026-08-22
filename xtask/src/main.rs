@@ -2186,11 +2186,34 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
             "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN",
             "ELEVEN", "TWELVE",
         ];
+        // 🔴 **The numeral is the WORD before `gates`, not the first one found anywhere.**
+        // Until story 6b.10's code review this scanned the ordered list for any substring of the
+        // sentence — so `"NONE".contains("ONE")` alone would have made the doc claim ONE gate,
+        // and any numeral appearing earlier in the prose won over the one that counts. Correct
+        // today by luck and one word of editing away from silently reporting a different claim.
+        let head = summary
+            .to_uppercase()
+            .split_once("GATES")
+            .map(|(before, _)| before.to_string())
+            .expect("the summary counts gates");
+        let word = head
+            .split_whitespace()
+            .next_back()
+            .map(|w| {
+                w.trim_matches(|c: char| !c.is_ascii_alphabetic())
+                    .to_string()
+            })
+            .expect("the count is a word before `gates`");
         let claimed = spelled
             .iter()
-            .position(|word| summary.to_uppercase().contains(word))
+            .position(|spelling| *spelling == word)
             .map(|at| at + 1)
-            .expect("the summary spells the gate count");
+            .unwrap_or_else(|| {
+                panic!(
+                    "the summary spells the gate count, and {word:?} is not a \
+                                       spelled numeral — {summary:?}"
+                )
+            });
         assert_eq!(
             claimed,
             reported.len(),

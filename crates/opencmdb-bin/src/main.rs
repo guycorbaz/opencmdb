@@ -178,7 +178,11 @@ const DEFAULT_LOCALE: &str = "en";
 /// it would refuse a working configuration. This function's contract is *"does the operator get
 /// the language they asked for"*, not *"is this a well-formed BCP 47 tag"*.
 fn primary_subtag_is_available(candidate: &str, available: &[String]) -> bool {
-    let primary = candidate.split('-').next().unwrap_or(candidate);
+    // `Split::next()` yields `Some` for every input, `""` included, so the fallback arm is
+    // unreachable — story 6b.10's code review found this fact spelled two ways in one commit,
+    // `.unwrap_or(candidate)` here and `.expect("split yields one segment")` in a test. One
+    // spelling, and it is the one with no fallback to justify.
+    let primary = candidate.split('-').next().unwrap_or_default();
     available.iter().any(|known| known == primary)
 }
 

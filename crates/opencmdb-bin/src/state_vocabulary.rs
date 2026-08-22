@@ -404,10 +404,33 @@ mod gesture_axis_tests {
              nothing would assert nothing",
             keys.len()
         );
+        // 🔴 **Default-ignorable characters are removed before matching.** Story 6b.10's code
+        // review measured `"Nothing to mer<U+200B>ge yet."` walking past BOTH carriers with nine
+        // gates and 720/720 green, the word intact in the shipped binary and intact on screen.
+        // ⚠️ The set is an ENUMERATION and cannot claim the completeness of a property (story
+        // 5.12) — a tripwire against the character a copy-paste carries, never a barrier. It
+        // mirrors `xtask::copy_vocabulary::strip_invisible`; the frontier forbids sharing it,
+        // and `the_two_carriers_agree_on_what_is_retired` is what keeps the pair honest.
+        let visible = |text: &str| -> String {
+            text.chars()
+                .filter(|c| {
+                    !matches!(u32::from(*c),
+                        0x00AD
+                        | 0x200B..=0x200F
+                        | 0x2028..=0x202E
+                        | 0x2060..=0x206F
+                        | 0xFE00..=0xFE0F
+                        | 0xFEFF
+                        | 0xE0000..=0xE01EF
+                    )
+                })
+                .collect()
+        };
         let boundary = |c: Option<char>| c.is_none_or(|c| !c.is_alphanumeric());
         for key in &keys {
             for (locale, retired) in RETIRED_IN_COPY {
-                let rendered = rust_i18n::t!(key.as_str(), locale = locale).to_lowercase();
+                let rendered =
+                    visible(&rust_i18n::t!(key.as_str(), locale = locale).to_lowercase());
                 for term in retired {
                     let hit = rendered.match_indices(term).any(|(at, _)| {
                         boundary(rendered[..at].chars().next_back())
