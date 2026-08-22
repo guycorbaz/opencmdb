@@ -299,12 +299,33 @@ impl std::fmt::Display for AppConfigError {
                 "OPENCMDB_BASIC_USER contains a colon, which RFC 7617 forbids in the user-id — \
                  such a user could never authenticate"
             ),
+            // 🔴 **It named ONE cause for at least six, and the region example came from the
+            // wrong end** (story 6b.10's code review). *"the case must match"* explains `FR` and
+            // `Fr` and is FALSE for `fr_CH`, `fr `, `fr.UTF-8`, `-fr`, `français` and `zz` — and
+            // `fr_CH` is the one this file's own probe table calls *"the one most likely to be
+            // typed here"*, carried over from `LANG=fr_CH.UTF-8`. Meanwhile the suffix example
+            // was built from `available.first()`, so an operator asking for `FR` was offered
+            // `en-CH`. Both are the same mistake: a message written from the code's point of
+            // view rather than from the value the operator actually typed.
+            //
+            // 🔑 The rule the resolver really applies is pinned by `LOCALE_PROBES`: the part
+            // BEFORE the first `-` must match an available tag exactly, case included. Saying
+            // that says every refusal at once, and the example is now built from what was typed.
             Self::UnrecognisedLocale { value, available } => write!(
                 f,
                 "OPENCMDB_LOCALE={value:?} is not a language this build carries — available: \
-                 {}. A region suffix is fine ({}-CH), but the case must match.",
+                 {}. The part before the first hyphen must be one of those, spelled exactly: \
+                 lower case, no underscore, no encoding suffix. A region after a hyphen is fine \
+                 ({}-CH).",
                 available.join(", "),
-                available.first().map_or("fr", String::as_str)
+                value
+                    .split(['-', '_', '.'])
+                    .next()
+                    .filter(|head| !head.is_empty())
+                    .map_or_else(
+                        || available.first().map_or("fr", String::as_str).to_string(),
+                        str::to_lowercase
+                    )
             ),
         }
     }
@@ -2018,15 +2039,54 @@ mod tests {
     /// The refusal names the variable, the value and the way out.
     #[test]
     fn the_locale_refusal_says_what_to_do_about_it() {
-        let message = AppConfigError::UnrecognisedLocale {
-            value: "FR".to_string(),
-            available: locales(),
-        }
-        .to_string();
-        assert!(message.contains("OPENCMDB_LOCALE"), "the variable is named");
-        assert!(message.contains("\"FR\""), "the value is quoted");
-        for known in locales() {
-            assert!(message.contains(&known), "{known} is offered");
+        // 🔴 **Over EVERY refused probe, not `FR` alone.** Until story 6b.10's code review this
+        // built the error with one value — and the message it checked said *"the case must
+        // match"*, which is true of `FR` and `Fr` and FALSE of the six others. *A test that
+        // supplies the one input its subject happens to describe is placed where the defect
+        // cannot occur.*
+        for (value, accepted, _) in LOCALE_PROBES {
+            if accepted {
+                continue;
+            }
+            let message = AppConfigError::UnrecognisedLocale {
+                value: value.to_string(),
+                available: locales(),
+            }
+            .to_string();
+            assert!(
+                message.contains("OPENCMDB_LOCALE"),
+                "{value}: the variable is named — {message}"
+            );
+            assert!(
+                message.contains(&format!("{value:?}")),
+                "{value}: the value is quoted back — {message}"
+            );
+            for known in locales() {
+                assert!(
+                    message.contains(&known),
+                    "{value}: {known} is offered — {message}"
+                );
+            }
+            // 🔑 The region example is built from what the OPERATOR typed, never from
+            // `available.first()`: an operator asking for `FR` was being offered `en-CH`.
+            let head = value
+                .split(['-', '_', '.'])
+                .next()
+                .filter(|head| !head.is_empty())
+                .map_or_else(
+                    || locales().first().cloned().unwrap_or_default(),
+                    str::to_lowercase,
+                );
+            assert!(
+                message.contains(&format!("({head}-CH)")),
+                "{value}: the example is derived from the value typed, not from the first \
+                 available tag — {message}"
+            );
+            // The single-cause sentence is gone: nothing here may claim case is the only fault.
+            assert!(
+                !message.contains("the case must match"),
+                "{value}: one cause is named for at least six refusals — {message}"
+            );
         }
     }
 

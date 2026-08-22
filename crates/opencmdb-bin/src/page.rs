@@ -1434,15 +1434,67 @@ fn build_dashboard(
 /// store, so it cannot live on `screens::router`'s `Router<()>`; the compile-time refusal of
 /// `State<MySqlPool>` therefore does not hold for this one screen, and holds for the eight that
 /// remain. See [`crate::screens::Nature::Mixed`] for the cost and the alternative that was refused.
+/// How long a screen that CANNOT render without the store waits for it.
+///
+/// 🔴 **Story 6b.10 gave the store-down page a calm French sentence and nothing measured WHEN it
+/// arrives.** Its code review did: with a real MariaDB paused mid-session, `/triage` answered
+/// **500 in 30.002731 s** and `/dashboard` in **30.002711 s** — sqlx's default acquire timeout —
+/// while `/diagnostic` answered 200 in 2.003674 s on its own budget. *A calm sentence that takes
+/// half a minute to arrive is read as a fault of the product, not of the database.*
+///
+/// ⚠️ **Five seconds, not the diagnostic's two, and the difference is the point.** `/diagnostic`
+/// DEGRADES — it renders without the store, so it can afford to be impatient. These two cannot:
+/// the budget decides only how fast the honest refusal arrives, so it leaves a genuinely slow
+/// first connection room to succeed. Both are far under thirty.
+///
+/// 🔑 Guy's arbitration 4 of 2026-08-22, option (B), taken over setting `acquire_timeout` on the
+/// production pool: that governs the wait for a FREE connection, so under load it turns a
+/// legitimate wait into an error, and it would reach the scan pass as well.
+const PAGE_STORE_BUDGET: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// A store read bounded by `budget`, or the response the operator gets instead.
+///
+/// 🔴 **`budget` is a PARAMETER so a test can reach the elapsed arm** — story 6b.9 shipped a
+/// guard whose test pool refused faster than the budget, leaving the timeout branch dead code
+/// under test while its own comment described why. *A guard placed where the defect cannot occur
+/// reads as coverage and is none.*
+async fn store_within<T>(
+    budget: std::time::Duration,
+    read: impl Future<Output = Result<T, Response>>,
+) -> Result<T, Response> {
+    match tokio::time::timeout(budget, read).await {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(response)) => Err(response),
+        Err(_elapsed) => {
+            tracing::error!(
+                budget_ms = budget.as_millis(),
+                "the store did not answer within this screen's budget — refusing rather than \
+                 holding the browser"
+            );
+            Err(server_error(sqlx::Error::PoolTimedOut))
+        }
+    }
+}
+
 pub async fn dashboard(State(state): State<TriageState>) -> Response {
     let perimeter = state.perimeter.clone();
-    let reach = match count_engine_reach(&state.pool).await {
+    let reach = match store_within(PAGE_STORE_BUDGET, async {
+        count_engine_reach(&state.pool).await.map_err(server_error)
+    })
+    .await
+    {
         Ok(rows) => rows,
-        Err(error) => return server_error(error),
+        Err(response) => return response,
     };
-    let last = match crate::repo::last_observed_at(&state.pool).await {
+    let last = match store_within(PAGE_STORE_BUDGET, async {
+        crate::repo::last_observed_at(&state.pool)
+            .await
+            .map_err(server_error)
+    })
+    .await
+    {
         Ok(instant) => instant,
-        Err(error) => return server_error(error),
+        Err(response) => return response,
     };
     let view = build_dashboard(build_identity_view(reach), last, now_utc());
     let body = DashboardBody { view, s: strings() };
@@ -1676,7 +1728,12 @@ pub async fn triage(
     // ⚠️ AC3: age sorting is OFF unless the operator asked for it, by name. Any other value of
     // `sort` is off — a typo must not silently brandish age.
     let sort_by_age = query.sort.as_deref() == Some("age");
-    match triage_view(&state.pool, query.sel.as_deref(), sort_by_age).await {
+    match store_within(
+        PAGE_STORE_BUDGET,
+        triage_view(&state.pool, query.sel.as_deref(), sort_by_age),
+    )
+    .await
+    {
         Ok((triage, identity)) => {
             let body = TriageBody {
                 triage,
@@ -2764,6 +2821,47 @@ mod tests {
         );
     }
 
+    /// 🔴 **A screen that cannot render without the store REFUSES within its budget, and the
+    /// test pool is deliberately SLOWER than the budget so the elapsed arm actually runs.**
+    ///
+    /// Story 6b.9 shipped the mirror of this guard with its pool set to refuse in 150 ms against
+    /// a 2 s budget: the timeout branch was dead code under test, and its own comment described
+    /// why while reading as a justification. The blind review layer found it from the diff alone.
+    /// Here the pool points at an address nothing answers, with an acquire timeout of thirty
+    /// seconds — the sqlx default this budget exists to escape — so the ONLY way the assertion
+    /// below can pass is through `store_within`'s elapsed arm.
+    ///
+    /// ⚠️ It asserts on the CLOCK, which no source-reading guard can do: story 6b.10's code
+    /// review measured `/triage` answering 500 in 30.002731 s with a body nothing found fault
+    /// with. *The sentence was right and the wait was the defect.*
+    #[tokio::test]
+    async fn a_screen_that_needs_the_store_refuses_within_its_budget() {
+        let pool = sqlx::mysql::MySqlPoolOptions::new()
+            .acquire_timeout(std::time::Duration::from_secs(30))
+            .connect_lazy("mysql://nobody:nothing@127.0.0.1:1/none")
+            .expect("a lazy pool needs no server");
+        let budget = std::time::Duration::from_millis(200);
+
+        let started = std::time::Instant::now();
+        let outcome = store_within(budget, async {
+            crate::repo::last_observed_at(&pool).await.map_err(|e| {
+                // Reached only if the pool refuses rather than hanging; either way the
+                // assertion below is about the CLOCK, not about which arm produced it.
+                server_error(e)
+            })
+        })
+        .await;
+        let waited = started.elapsed();
+
+        assert!(outcome.is_err(), "an unreachable store cannot be rendered");
+        assert!(
+            waited < budget * 4,
+            "the screen waited {waited:?} against a {budget:?} budget — the whole point is that \
+             the operator is not held for sqlx's thirty-second default while a calm sentence \
+             waits behind it"
+        );
+    }
+
     /// AC1 / arbitration 2(a′) — **a dead store answers in the operator's language.**
     ///
     /// 🔴 The body was the bare English literal `"internal error"`, served at `/triage`,
@@ -2847,6 +2945,18 @@ mod tests {
                 .find("\n#[cfg(test)]\n")
                 .map_or(source, |at| &source[..at])
         }
+        // 🔴 **Every status a human reads, not `INTERNAL_SERVER_ERROR` alone.** Until story
+        // 6b.10's code review this matched one status while its own name promised *"a status"* —
+        // so a hand-written `(StatusCode::NOT_FOUND, "unknown device")` sat outside a guard
+        // titled as though it covered it, and that is the ordinary gesture.
+        const READ_BY_A_HUMAN: [&str; 6] = [
+            "StatusCode::INTERNAL_SERVER_ERROR,",
+            "StatusCode::NOT_FOUND,",
+            "StatusCode::FORBIDDEN,",
+            "StatusCode::BAD_REQUEST,",
+            "StatusCode::CONFLICT,",
+            "StatusCode::UNAUTHORIZED,",
+        ];
         let mut checked = 0_usize;
         // 🔴 `document.rs` is DELIBERATELY absent, and the exclusion is written here rather than
         // implied by the list. Adding it reds on
@@ -2856,26 +2966,49 @@ mod tests {
         // `POST /document-all` today, so translating its bodies now is copy nobody can reach,
         // written against a gesture story 6.4 may reshape. **Owner: story 6.4**, which is the
         // story that gives the route a caller. Widen this list there, not before.
+        // ⚠️ `metrics.rs` is DELIBERATELY absent too, and the sentence is here rather than
+        // implied by the list — the guard found it on the first run of this widening, answering
+        // 500 with the English literal `"metrics encode error"`. Guy's arbitration 3 of
+        // 2026-08-22 settles it by its own criterion: the 401 came inside the perimeter because
+        // it is *served at the ten screens' own addresses*, and `/metrics` is not one of them.
+        // It is a scrape endpoint read by Prometheus, and a French sentence there would be copy
+        // written for no reader. **Owner: Epic 16**, which is where alerting gives `/metrics` an
+        // operator-facing surface, if it ever does.
+        //
+        // 🔴 **`example_screens.rs` and `auth.rs` join the list**, and why the first was missing
+        // is the sharpest part: it exists BECAUSE story 6b.6 split `page.rs`
+        // under file-size pressure, so the next such split would silently move an error body out
+        // of this guard's reach. A perimeter keyed to file NAMES rots every time a file is born.
         for (file, source) in [
             ("page.rs", code_half(include_str!("page.rs"))),
             ("diagnostic.rs", code_half(include_str!("diagnostic.rs"))),
+            (
+                "example_screens.rs",
+                code_half(include_str!("example_screens.rs")),
+            ),
+            ("auth.rs", code_half(include_str!("auth.rs"))),
         ] {
-            for (at, _) in source.match_indices("StatusCode::INTERNAL_SERVER_ERROR,") {
-                let tail = source[at..].split_once(',').map_or("", |(_, rest)| rest);
-                let argument = tail.trim_start();
-                checked += 1;
-                assert!(
-                    !argument.starts_with('"'),
-                    "{file} answers 500 with the literal {}, which reaches an operator whose \
-                     interface is in another language — route it through a key",
-                    argument.split('"').nth(1).unwrap_or(argument).trim()
-                );
+            for status in READ_BY_A_HUMAN {
+                for (at, _) in source.match_indices(status) {
+                    let tail = source[at..].split_once(',').map_or("", |(_, rest)| rest);
+                    let argument = tail.trim_start();
+                    checked += 1;
+                    assert!(
+                        !argument.starts_with('"'),
+                        "{file} answers {status} with the literal {}, which reaches an operator \
+                         whose interface is in another language — route it through a key",
+                        argument.split('"').nth(1).unwrap_or(argument).trim()
+                    );
+                }
             }
         }
-        assert!(
-            checked >= 5,
-            "the premise: the 500 sites are found ({checked} seen) — a scan that matched nothing \
-             would assert nothing"
+        // 🔑 An EQUALITY. `>= 5` stood over six visible sites, so it tolerated the silent loss of
+        // one — and the test's own doc said *"six existed before story 6b.10"* while asserting
+        // five. Raise this deliberately when you add an error body.
+        assert_eq!(
+            checked, 8,
+            "the premise: eight operator-readable status sites exist across the four files — a \
+             scan that matched fewer has stopped seeing part of the surface it names"
         );
     }
 
