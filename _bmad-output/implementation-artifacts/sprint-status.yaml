@@ -75,7 +75,18 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-23  # 6b.11: a SECOND REVIEW ROUND ran on the REPAIR itself (three
+last_updated: 2026-08-23  # 6b.11 is DONE -- PR #117 squash-merged as `3ad8ef6` after a green
+                          # CI run ON THE HEAD COMMIT (2f95440, checked rather than assumed:
+                          # a green on an earlier commit is this project's own stale-green
+                          # class). Branch deleted. **Epic 6b: 12 done of 13.**
+                          # NEXT: 6b.12 -- the v0.2.0 release and its THREE breaking changes
+                          # (every deployment changes colour; `/` becomes a 303 to /triage;
+                          # OPENCMDB_LOCALE=FR stops the boot) -- then the epic RETROSPECTIVE,
+                          # then the PROJECT REVIEW, which is what actually closes the epic.
+                          # ⚠️ 6b.12 also inherits the visual sweep three stories have deferred
+                          # to it, and the salience finding from 6b.5 (the example half is
+                          # visually dominant over the honest one).
+                          # (Earlier the same day) 6b.11: a SECOND REVIEW ROUND ran on the REPAIR itself (three
                           # isolated layers, a different model, one worktree and one live store
                           # each). 19 raw findings, 17 distinct, and NOT ONE reached by two
                           # layers -- where round one found six by three roads each.
