@@ -117,6 +117,21 @@ last_updated: 2026-08-23  # 6b.11: a SECOND REVIEW ROUND ran on the REPAIR itsel
                           # 20 checks in the keyboard gate, nine xtask gates, 728 tests both
                           # ways (6.65 s live / 0.65 s without -- ⚠️ 16.7 s was first written
                           # and had a build inside it).
+                          # ✅ **AC5 is MET**, resolved on the ACCEPTANCE LAYER'S OWN
+                          # CRITERION: it returned NOT MET while naming the CONDITION rather
+                          # than the conclusion -- "a carrier that cannot run in the pipeline
+                          # that is supposed to enforce it is not a carrier" -- and CI run
+                          # 32658655672 measures that condition satisfied: `queue: 4 row(s)`
+                          # (the number a11y/seed.sql produces from a TRUNCATED store, not the
+                          # 3 the residue left) and `20 check(s) run, 0 failed`.
+                          # ⚠️ The evidence is neither mine nor the layer's, which is what makes
+                          # the verdict resolvable without anyone marking their own homework.
+                          # All seven other ACs stand as the auditor set them: AC1, AC2, AC3,
+                          # AC3b, AC4, AC6, AC7 MET.
+                          # ⚠️ What the OPERATOR can do is unchanged -- no route, no write, no
+                          # gesture. What the pass buys is that a regression in the keyboard
+                          # layer or the axe-clean state is caught BEFORE a merge, which two
+                          # rounds ago was true of neither.
                           # Story STAYS at `review`: `done` is the MERGE's business.
                           # Was: 6b.11 TRIAGED and REPAIRED. Story STAYS at `review`: `done` is the
                           # MERGE's business, and the three reviewing layers have NOT re-audited

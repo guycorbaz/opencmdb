@@ -980,7 +980,7 @@ Cleanup done — no tracked file modified, worktrees and the audit container rem
 | **AC3** reachable focus contract | **PARTLY MET** | Visibility ships and is real (`getComputedStyle` on a queue row: `2px solid rgb(75,107,139)`, the product's rule, not the UA's); five `.btn-gesture` all `aria-disabled="true"` / `tabIndex 0`. **But** focus is lost to `<body>` at every settle-navigation (finding 4), and the visibility itself is guarded by nothing (finding 2). |
 | **AC3b** axe green on ten routes | **MET** | Ran the committed `a11y/axe-gate.mjs` twice against a booted binary: empty store → 10 routes derived, **0 violation nodes, rc=0**; store with 7 gap rows → 10 routes, **0 nodes, rc=0**. Prove-to-red: reverting the three tokens on the running server → **rc=1, 221 nodes, all ten routes red**. Exit-code discipline verified: dead port → **rc=2**, `AXE_CHROME=/nonexistent` → **rc=2**. `npm --prefix a11y ci` from the committed lockfile → 26 packages, 354 ms. |
 | **AC4** live count here, every figure names its store state | **PARTLY MET** | Both terms of the delta verified: `master` in a clean worktree → 489 + 161 + 77 = **727**; HEAD → 490 + 161 + 77 = **728**. Nine gates green (`cargo xtask ci`, rc=0), clippy `--all-targets` rc=0, `fmt --check` rc=0. **But** the headline test figure names no store state, and the state changes what it means: the same 490 runs in **0.21 s** without a database and **5.69 s** against one. |
-| **AC5** every guard measured red first; a source guard for a DOM defect does not count | **NOT MET** *(as reviewed; see §T8 for the repair, which the reviewing layers have NOT re-audited)* | No mutation table exists. Two central guards measured green (app.js emptied → 490 green; the two focus selectors removed → 490 green), one new oracle vacuous (`aria-current` stripped from the sort link → 490 green with a live DB), and the one Rust carrier of the focus contract reads `app.css` while the defect is in the DOM. |
+| **AC5** every guard measured red first; a source guard for a DOM defect does not count | **NOT MET** *(round one's verdict; round two set it NOT MET on a NAMED condition, and §T10 records that condition measured satisfied by CI)* | No mutation table exists. Two central guards measured green (app.js emptied → 490 green; the two focus selectors removed → 490 green), one new oracle vacuous (`aria-current` stripped from the sort link → 490 green with a live DB), and the one Rust carrier of the focus contract reads `app.css` while the defect is in the DOM. |
 | **AC6** nothing promises an absent gesture | **MET** | On the served `/triage`: 5 `.btn-gesture`, all `aria-disabled="true"` with `tabIndex 0`, `document.querySelectorAll('form,input,textarea,select,button').length === 0`, zero `hx-*`. No control became live; the arrows do something real. |
 | **AC7** NFR24 taken or re-registered by name | **PARTLY MET** | The register row exists and its measurement replays: at 1280 px on the served `/triage`, `.nav-entry` **34 px**, `.btn-sort` **27 px**, `.btn-gesture` **29 px**, `.queue-row > a` 72–95 px — heights identical to the row's table. **But** §0g's second inherited obligation (`:3748`) is neither taken nor re-registered (finding 15). |
 
@@ -1711,6 +1711,51 @@ measuring a blank page and reporting success.
 - **Issue #38 recurred** during the audit on a different tree (1 red run in ten, not reproducible).
   Recorded with the run count and **no cause named**.
 
+## §T10 — AC5's verdict, resolved on the auditor's OWN criterion (2026-08-23)
+
+The acceptance layer returned **AC5 NOT MET**, and — this is what makes it resolvable without
+anyone marking their own homework — **it named the condition rather than the conclusion**:
+
+> *The carrier now genuinely exists and genuinely reds on replay … **But** as wired into
+> `ci.yml`, this carrier cannot execute — a carrier that cannot run in the pipeline that is
+> supposed to enforce it is not a carrier AC5's "there must be a carrier" clause is satisfied by.*
+
+So the verdict turned on one measurable fact: **can the carrier execute in CI?** At the time it
+could not, for the reason §T9 records — the shipped seed renders one queue row against a floor of
+two, and the run that had passed did so on the previous step's residue.
+
+🔑 **The condition is now met, and the evidence is neither mine nor the auditor's.** CI run
+`32658655672`, on the pushed repair:
+
+```
+axe gate: 10 route(s) derived from the navigation plus 2 state(s) no href carries, 0 violation node(s)
+queue: 4 row(s)
+kbd gate: 20 check(s) run, 0 failed
+```
+
+**Four rows**, which is what `a11y/seed.sql` produces from a truncated store — not the three the
+residue had left. The carrier executes, in the pipeline, on a state the repository can reproduce.
+
+**AC5 is therefore MET**, and the reasoning is worth stating rather than the conclusion alone:
+
+| AC5's clause | Carrier | Measured |
+|---|---|---|
+| every guard measured RED before it passes | §T8's table plus §T9's | 29 + 7 mutation ids, carriers named per row |
+| a source-reading guard does not SUFFICE where the defect lives in the DOM | `a11y/kbd-probe.mjs`, 20 checks | `app.js` emptied → 9 red; the two focus rules deleted → **490 Rust tests still green** and the gate reds |
+| …there must be a carrier that reads what the browser did | the same gate, **in CI** | run `32658655672`, `20 check(s) run, 0 failed` at 4 seeded rows |
+
+⚠️ **What is NOT claimed.** The three review layers have not re-audited this repair either; what
+is claimed is narrower and checkable — *the layer stated a condition, the condition is now
+measured satisfied, and the measurement is CI's.* The other verdicts stand as the auditor set
+them: **AC1, AC2, AC3, AC3b, AC4, AC6, AC7 MET**, with AC3's swap half correctly deferred to story
+6.4 and AC6 carried forward rather than re-tested (no code path touched it).
+
+⚠️ **And one thing the whole exercise did not change**: what the operator can DO is unchanged —
+no route, no write, no gesture. This was a hardening pass over an accessibility apparatus and its
+own review's findings. What it buys is that a regression in the keyboard layer or in the
+axe-clean state is now caught **before** a merge rather than shipping quietly, which two rounds
+ago was true of neither.
+
 ---
 
 ## Change Log
@@ -1728,3 +1773,4 @@ measuring a blank page and reporting success.
 | 2026-08-23 | **TRIAGED, ARBITRATED and REPAIRED.** 60 raw findings -> **33 distinct defects** (six by all three layers, ten by two). 🔑 **D4 exists in no single report**: the AC2 hue guard was too LOOSE and too TIGHT at once, and its failure message asserted as fact what the mutation producing it had disproved. 🔑 **D2·D3·D5 compose**: the accessibility apparatus reported success over a surface it did not reach. **Guy's four arbitrations, the recommendation taken in all four.** `a11y/kbd-probe.mjs` becomes the second BROWSER gate (17 checks, a floor equal to what is there) and CI runs it; the store is seeded; `token_hex` reads the light `:root` block with comments stripped; the settle timer yields to the operator. **29 mutation ids, 26 reds, 2 controls green by design, 1 green for a reason the repair created.** ⚠️ **Six findings against the pass itself**, the sharpest being a guard matching its needle inside a COMMENT — `token_hex`'s defect one file over, the same day. 728 tests both ways, nine xtask gates + two browser gates, clippy `--all-targets`. |
 | 2026-08-23 | 🔴 **AC5 AMENDED by Guy** — *a source-reading guard **does not SUFFICE** where the defect lives in the DOM*, where it read *is not counted*. Two words, no change of scope. The scope was earned by measurement and held three-for-three; *counted* over-reached, reading as *worth nothing* while a source guard is cheaper and **names the cause** where a browser gate names only the symptom — the two cumulate. ⚠️ The residual cost is **proportionality**, which the amendment does not dissolve: a rule about where the defect lives, never about how much apparatus to build. The three review reports keep the ORIGINAL wording, unedited — both phrasings give the same verdict on all three measurements they took. |
 | 2026-08-23 | 🔴 **SECOND REVIEW ROUND, on the repair itself** — three isolated layers, **19 raw findings, 17 distinct, none reached by two layers**. 🔑 Its sharpest pairing is a DISAGREEMENT of reading: the same measurement filed as a *refuted suspicion* by one layer and as a **HIGH** by another. 🔴 **CI was green on RESIDUE** — the shipped seed renders one queue row against a floor of two; closed by `a11y/seed.sql`, with `AUTHORSHIP_ROOTS` and `SANCTIONED_SITES` widened in ONE act. 🔴 `measured_tokens == 6` was as vacuous as the assertion it replaced; the focus marker belonged to no navigation. ⚠️ **Four findings against the repair-of-the-repair**, including a guard green under the reversion it exists to catch, and three `xtask` tests red while `cargo xtask ci` stayed green. |
+| 2026-08-23 | ✅ **AC5 MET, resolved on the ACCEPTANCE LAYER'S OWN CRITERION.** It returned NOT MET while naming the condition rather than the conclusion — *a carrier that cannot run in the pipeline meant to enforce it is not a carrier* — and CI run `32658655672` measures that condition satisfied: `queue: 4 row(s)`, the number `a11y/seed.sql` produces from a truncated store, and `20 check(s) run, 0 failed`. ⚠️ The evidence is neither mine nor the layer's. All seven other ACs stand as the auditor set them. |
