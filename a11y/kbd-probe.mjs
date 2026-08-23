@@ -32,13 +32,13 @@ const CHROME = process.env.AXE_CHROME ?? "/usr/bin/google-chrome";
 const QUEUE = ".queue .queue-row > a";
 // The settle in `app.js` is 250 ms; everything here waits past it with room for a document.
 const SETTLE_WAIT_MS = 900;
-// 🔑 The floor, and it EQUALS what is there rather than sitting under it: seventeen checks
+// 🔑 The floor, and it EQUALS what is there rather than sitting under it: twenty checks
 // run on a queue of two, which is the shortest queue this gate accepts. A floor below what
 // is there tolerates the loss of a check while still reading as a pass — this project has
 // caught that twice, once in a privacy floor and once in a word count. If a check is added
 // this number moves deliberately; if one is skipped, the gate says so instead of printing
 // a green.
-const MIN_CHECKS = 17;
+const MIN_CHECKS = 20;
 const MIN_ROWS = 2;
 
 /** The gate could not run. Never conflated with "a check failed". */
@@ -60,10 +60,19 @@ let browser;
 
 async function main() {
   const { default: puppeteer } = await import("puppeteer-core");
-  // Read so that a missing build is "could not run" rather than a mystery: the served file
-  // and the source must be the same thing, and a stale binary is this project's own
-  // recurring incident.
-  readFileSync(
+  // 🔴 **The SOURCE on disk, read so it can be COMPARED with what the server serves.**
+  // ⚠️ **And this comparison is UNREDDENABLE in the configuration CI runs, which is stated
+  // rather than left to be discovered**: `rust-embed` reads assets from disk in a debug build,
+  // measured, so served and source are the same bytes by construction and no mutation of the
+  // source can separate them. It is a tripwire for a RELEASE build, where the assets are
+  // embedded and the two genuinely can diverge — the shape this project's stale-binary
+  // incidents took. Kept because it costs one fetch; recorded as green-by-construction because
+  // a check nobody can red must say so. This
+  // read the file and threw the contents away, under a comment claiming *"the served file and
+  // the source must be the same thing"* and invoking this project's own stale-binary incident
+  // by name — a guarantee the code could not deliver, since it never touched the binary or an
+  // HTTP response. The comparison happens below, once a page exists.
+  const sourceJs = readFileSync(
     new URL("../crates/opencmdb-bin/assets/app.js", import.meta.url),
     "utf8",
   );
@@ -101,6 +110,21 @@ async function main() {
     );
 
   let page = await open("/triage");
+  // The stale-binary check, and it is not decoration: `cargo test` builds the test target, not
+  // `target/debug/opencmdb`, so a probe can measure a server carrying yesterday's asset. Assets
+  // are read from disk in a debug build, which is exactly why this must be MEASURED rather than
+  // assumed — a release build embeds them and the two can then diverge.
+  const servedJs = await page.evaluate(async () => {
+    const response = await fetch("/assets/app.js");
+    return response.ok ? await response.text() : null;
+  });
+  check(
+    servedJs === sourceJs,
+    "the server serves the keyboard layer this checkout contains",
+    servedJs === null
+      ? "/assets/app.js did not answer"
+      : `served ${servedJs.length} bytes, source ${sourceJs.length}`,
+  );
   const rows = await page.$$eval(QUEUE, (all) => all.length);
   console.log(`queue: ${rows} row(s)\n`);
   if (rows < MIN_ROWS) {
@@ -194,6 +218,39 @@ async function main() {
     const url0 = p.url();
     await wait(SETTLE_WAIT_MS);
     check(p.url() !== url0, "CONTROL: with nothing to cancel it, the arrow does navigate", p.url().replace(BASE, ""));
+    await p.close();
+  }
+
+  // ── A stale marker does not steal focus on a load nobody drove with the keyboard ──
+  // 🔴 The marker carried a bare "1" and outlived the navigation that wrote it, so a settle
+  // whose document never committed left it sitting there and the NEXT plain load of /triage
+  // pulled focus into the queue — the autofocus the design refuses. Planted verbatim here.
+  // ⚠️ **TWO plants, and the first draft of this check had only the second — measured GREEN
+  // under the very reversion it exists to catch.** Planting the marker's CURRENT
+  // representation for a different address is refused by the OLD bare-sentinel code too, for
+  // its own reason, so that plant proves nothing about the reversion. The property is
+  // representation-free and both plants state it: *no pre-existing marker value whatsoever may
+  // restore focus on a load the keyboard did not drive.* `"1"` is the value the old code
+  // accepted unconditionally, which is what makes it the plant that reds.
+  for (const [label, planted] of [
+    ["the old bare sentinel", "1"],
+    ["another address", "/triage?sel=not-this-address"],
+  ]) {
+    const p = await open("/triage");
+    await p.evaluate(
+      (value) => window.sessionStorage.setItem("opencmdb.kbd.restore", value),
+      planted,
+    );
+    await p.goto(`${BASE}/triage`, { waitUntil: "networkidle0" });
+    const stolen = await p.evaluate((sel) => ({
+      inQueue: [...document.querySelectorAll(sel)].includes(document.activeElement),
+      markerLeft: window.sessionStorage.getItem("opencmdb.kbd.restore"),
+    }), QUEUE);
+    check(
+      stolen.inQueue === false && stolen.markerLeft === null,
+      `a marker left over from ${label} is consumed WITHOUT stealing the focus`,
+      `focus in queue=${stolen.inQueue} marker left=${stolen.markerLeft}`,
+    );
     await p.close();
   }
 

@@ -14,10 +14,20 @@
 // hidden from the navigation is invisible to this gate.** `/gap` is such an address today
 // — a bare fragment with no doctype, deliberately out of scope.
 //
-// 🔴 **The exit codes distinguish two failures a CI cannot otherwise tell apart**, and the
-// distinction was measured rather than assumed: with the database paused, the derivation
-// succeeds, `/triage` blocks on sqlx's acquire timeout, the navigation times out — and a
-// naive harness dies with the same code it uses for *"the product has violations"*.
+// 🔴 **The exit codes distinguish two failures a CI cannot otherwise tell apart.**
+//
+// ⚠️ **The mechanism this paragraph used to describe is PRE-6b.10 and was refuted by
+// measurement at story 6b.11's second review round.** It said: *"with the database paused, the
+// derivation succeeds, `/triage` blocks on sqlx's acquire timeout, the navigation times out"* —
+// and called that measured. Re-measured with the store paused: `/triage` answers **500 in
+// 5.00 s**, because story 6b.10's review installed `PAGE_STORE_BUDGET` (`page.rs:1475`) for
+// exactly that reason, and `/triage` is also this gate's own `SEED` route, so the FIRST fetch
+// fails and the derivation is never reached at all. *A sentence describing behaviour two
+// stories old, in a comment whose rhetorical point is "measured rather than assumed".*
+//
+// 🔑 **The distinction still holds, by a different branch**: the run ends `2` on *"answered
+// 500, so nothing there can be measured"* rather than on a navigation timeout — and a naive
+// harness would still have died with the code it uses for *"the product has violations"*.
 //
 //   0 — every route clean
 //   1 — the product has accessibility violations   (a real regression: fix the product)

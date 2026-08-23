@@ -1469,9 +1469,12 @@ there; and dropping the timer for `⏎`, which would reopen arbitration 4's shap
 Every mutation was reverted from a scratchpad copy, **never `git checkout --`** — the gesture
 that destroyed uncommitted work four times in this project.
 
-**Closing state.** `490 + 161 + 77 = 728` tests, run **both ways**: **16.7 s** against the live
-store and **0.60 s** without `DATABASE_URL`, the clock being the tell that the store-backed tests
-genuinely executed. Nine gates green, `cargo fmt --all --check` clean, and clippy over
+**Closing state.** `490 + 161 + 77 = 728` tests, run **both ways**: ⚠️ **the figure first written
+here was 16.7 s and it is NOT reproducible** — the second review round measured 5.1–7.1 s and
+re-measurement gives **6.65 s** with `cargo test --workspace --locked`, warm, against the live
+store, and **0.65 s** without `DATABASE_URL`. Mine had a build inside it and named no command,
+which is precisely what this project's own rule forbids. The 0.6 s half reproduced exactly. The
+clock remains the tell that the store-backed tests genuinely executed. Nine gates green, `cargo fmt --all --check` clean, and clippy over
 `--all-targets` — the form that sees the test targets CI compiles — clean. `RUSTFLAGS="-D
 warnings" cargo test --workspace --locked` green, which is the other half of what CI does.
 
@@ -1506,7 +1509,7 @@ counted"*, and the two give the same verdict here).
 | **M-D4e** | `--color-neutral-500` → `#0000ff` | **GREEN** | **RED**, family, *"spans 255 channel units"* | named assertion |
 | **M-D8** | `aria-current` stripped from the sort link | **490 passed** | **RED**, message printing the tag it actually read | named assertion |
 | **M-D9** | `.queue-row > a:focus-visible` and `.btn-sort:focus-visible` deleted | 490 green, nothing else | **490 STILL green** and the **kbd gate reds**, `1px auto rgb(16,16,16)` | kbd gate |
-| **M-D2** | `app.js` emptied entirely | 490 + nine gates + axe **all green** | **kbd gate exit 1**, four checks red | kbd gate |
+| **M-D2** | `app.js` emptied entirely | 490 + nine gates + axe **all green** | **kbd gate exit 1**, ⚠️ **EIGHT** checks red — this row said *four*, a figure my driver produced by piping the gate's output through `head -4`; corrected at the second review round | kbd gate |
 | **M-D10** | `select()` no longer moves `aria-current` | — | **RED**, `focus=1 aria-current=0` | kbd gate |
 | **M-D11** | the restore marker removed | — | **RED**, `activeElement=BODY row=-1` | kbd gate |
 | **M-D14** | `location.replace` → `location.assign` | — | **RED**, `history 2 → 3` | kbd gate |
@@ -1576,6 +1579,138 @@ times, and here it would be false by inspection of the table's own last column.
   band. What it refuses is a jump to another part of the ramp, which is what the three green
   mutations were.
 
+## §T9 — The SECOND review round, on the repair itself (2026-08-23)
+
+The repair of §T7/§T8 was itself put in front of three isolated layers, on a different model,
+each in its own worktree with its own live `mariadb:10.11.11`. **19 raw findings → 17 distinct
+defects — and this time NOT ONE defect was reached by two layers.** Where the first round found
+six defects by three roads each, this one found seventeen by one road each: the repair moved the
+weaknesses into places the three viewpoints do not reach the same way. *A convergence rate is a
+property of the round, not a constant.*
+
+### 🔑 The most instructive pairing is a DISAGREEMENT of reading, not an agreement
+
+The edge layer measured *"`kbd-probe.mjs` on exactly 1 row → exit 2, `MIN_ROWS=2` enforced"* and
+filed it under **suspicions RUN and REFUTED — the contract holds**. The acceptance layer measured
+**the same fact** and filed it as **HIGH — the gate cannot run in CI**. Both measurements are
+correct. The difference is the question: *is the contract respected?* against *can the gate
+execute where it is supposed to protect?* **The same number, read as a confirmation by one layer
+and as the defect by the other.**
+
+### The four that blocked, each re-measured by me before being believed
+
+🔴 **1 · CI WAS GREEN ON RESIDUE.** From a virgin store the shipped demo seed renders **one**
+queue row — `0` before it, `1` after, measured — and the keyboard gate's floor is two, so it
+exits **2**. The run that passed reported `queue: 3 row(s)` because the `Tests` step uses the
+same database immediately before and what it left behind carried the queue over the floor.
+**Nothing guaranteed that.** ⚠️ And §T8 says the repair was measured *"against a seeded two-row
+queue"* — a state that existed only in my own session's accumulated database and **nowhere in the
+repository**. The acceptance layer found it by doing the one thing I had not: reproducing CI's
+sequence from a TRUNCATED store rather than from the store its session had to hand.
+
+🔴 **2 · I REPLACED A VACUOUS PREMISE WITH A VACUOUS PREMISE.** `assert_eq!(measured_tokens, 6)`
+counts increments in a loop over a six-element array whose only escape is a `panic!` one line
+above — it is 6 on every execution that reaches it, exactly as `checked == TEXTS.len() *
+GROUNDS.len()` was 16, which is the defect it was written to close. ⚠️ **And its comment claimed
+it *CAN fail*** — a false sentence inside the repair whose subject is false sentences. Found by
+the layer with the diff and nothing else.
+
+🔴 **3 · THE FOCUS MARKER BELONGED TO NO NAVIGATION.** It carried a bare `"1"`, and
+`sessionStorage` outlives the navigation that wrote it, so a settle whose document never
+committed left it standing until the next plain load of `/triage` pulled focus into the queue —
+**the autofocus the design refuses in its own comment**. There was no way to tell *my own marker*
+from *a stale one*. The marker is now the address it was written for, and is cleared whether it
+matches or not.
+
+🔴 **4 · `sessionStorage` THROWING SILENTLY RESTORES THE ORIGINAL DEFECT.** Blocked storage:
+the URL still catches up and `activeElement` is `<body>` after the settle — the twelve-Tab defect
+back, invisibly. The `catch` prevents the crash and there is no fallback, because without storage
+there is nowhere to leave a note. **Stated as a limit at the site**, not covered: a restore keyed
+on the URL alone would be the autofocus this mechanism exists to avoid.
+
+⚠️ **And my own M-D2 row said *"four checks red"* where there are EIGHT** — my driver piped the
+gate's output through `head -4`. *A measurement read through a truncation is not a measurement*,
+committed in the table whose whole job is to carry measurements.
+
+### What the repair of the repair changed
+
+| id | mutation | result | carrier |
+|---|---|---|---|
+| **M-P1** | `a11y/seed.sql` removed from `SANCTIONED_SITES` | **RED**, `a11y/seed.sql:37: insert into declared_attribute outside the sanctioned write sites — NFR5` | gate message |
+| **M-P2** | `a11y` removed from `AUTHORSHIP_ROOTS` | **GREEN over the same file**, 42 files walked where 43 are | — |
+| **M-B2** | `light_root` returns the whole file | **RED** on the replaced premise | named assertion |
+| **M-E3** | `--color-accent` declared TWICE, the second value out of band | **RED** at the luminance band | named assertion |
+| **M-E4** | a SECOND unqualified `:root` overriding the accent | **RED**, same | named assertion |
+| **M-E1** | the marker reverted to a bare `"1"` | **RED**, `focus in queue=true` | kbd gate |
+| **M-B1** | `app.js` emptied (re-run against the widened gate) | **RED**, 9 of 20 checks | kbd gate |
+| **M-P3** | the third root's file removed from the gate test's synthetic tree | **RED**, `all three roots are read: … across 2 file(s)` | named assertion |
+| **M-P4** | `a11y` added to the roots with the synthetic trees left untouched | **RED ×3**, *"a11y/ is missing — the guarded subtree must exist"* — while `cargo xtask ci` stayed **GREEN** over the real tree | named assertion |
+
+🔑 **M-P1 and M-P2 are one proof in two halves.** Naming the site without opening the roots
+sanctions a file nobody walks; opening the roots without naming the site turns the gate red. Each
+mutation shows the other half is load-bearing — which is why story 5.12's instruction (*reopen the
+perimeter the day a new file carries SQL*) is one act and not two.
+
+### 🔴 Three findings the repair-of-the-repair produced against ITSELF
+
+1. **The stale-marker guard came back GREEN under the reversion it exists to catch.** It planted
+   the marker's CURRENT representation for a different address — which the OLD bare-sentinel code
+   also refuses, for its own reason. *A guard written against the new representation cannot see
+   the old defect.* It now plants both, and the property is stated representation-free: **no
+   pre-existing marker value whatsoever may restore focus on a load the keyboard did not drive.**
+2. **The floor said 18 for 19 checks**, then 19 for 20 — caught by running it, twice. *A floor is
+   only a guard while it equals what is there*, in the file where that sentence is written.
+3. 🔴 **WIDENING THE PERIMETER REDDENED THREE `xtask` TESTS WHILE `cargo xtask ci` STAYED
+   GREEN.** The gate FAILS CLOSED on a missing root — deliberately — and every synthetic tree the
+   tests build carries one directory per root, so a third root made twenty probe verdicts and the
+   walk test fail closed on scratch trees that had only two. The real tree has `a11y/`, so the
+   gate run passed throughout. ***A gate green over the real tree says nothing about its own
+   tests***, and only `cargo test --workspace` said so — the other half of what CI does, run
+   locally before the push. ⚠️ Adding the directory alone left the new root covered by **nothing
+   but the real tree** (the count assertion stayed at `2 file(s)`); it now holds a file and M-P3
+   reds when that file goes.
+4. **The served-versus-source check is UNREDDENABLE in the configuration CI runs.** `rust-embed`
+   reads assets from disk in a debug build, so served and source are the same bytes by
+   construction and no mutation of the source separates them; my first attempt to red it simply
+   re-ran *"`app.js` emptied"*. It is kept as a tripwire for a RELEASE build, where the assets are
+   embedded — and **recorded as green-by-construction, because a check nobody can red must say
+   so.**
+
+⚠️ **And one incident worth keeping**: my first `a11y/seed.sql` encoded the observation facts
+wrongly and `/triage` answered **500**. Both gates said `answered 500, so nothing there can be
+measured` and exited **2** — the contract held under a fault I introduced myself, rather than
+measuring a blank page and reporting success.
+
+### Refuted, each with the check
+
+- **The keyboard gate's CI step lacks its credentials and will 401** (blind layer, HIGH) —
+  refuted twice: the step's `env:` block sets both at STEP level, so they are in the environment
+  of every command in the `run:`; and the CI run reported `queue: 3 row(s)` and `17 check(s) run,
+  0 failed`, i.e. it authenticated. The layer named this check itself and could not run it.
+- **A `//` inside a string literal defeats `strip_js_comments`** — refuted by grep over the whole
+  file, independently by two layers. Recorded as the disclosed limit it already was.
+- **`class="btn-sort` could match a longer class name earlier in the page** — one element in the
+  whole template tree carries it. Latent, not live.
+- The edge layer additionally **ran and refuted fourteen** of its own suspicions, among them held
+  arrows, arrow-then-click, arrow-then-Back, the neutral/chromatic dead zone at span 17–31, the
+  8-digit hex, compound `:root, .foo` selectors, multibyte characters at brace boundaries, and
+  the four harness-failure shapes of the 0/1/2 contract. ⚠️ One of its own probes produced
+  spurious timeouts it traced to **its own proxy** forwarding a stale `Content-Length` — a
+  reviewer's harness lying, recorded so the next one recognises it.
+
+### Registered rather than fixed
+
+- The `sessionStorage`-blocked context has no fallback (finding 4 above), stated at the site.
+- `light_root`'s two enumerated limits: a `}` inside a quoted value truncates the block; an
+  unterminated `/*` panics. Neither shape exists in `app.css`; *an enumeration cannot claim the
+  completeness of a property.*
+- **§T8's `16.7 s` was not reproducible and is CORRECTED in place** to **6.65 s** with its
+  command named — the acceptance layer measured 5.1–7.1 s on its machine. Mine had a build inside
+  it and named no command, which is precisely what this project's own rule forbids. The `0.60 s`
+  half reproduced exactly.
+- **Issue #38 recurred** during the audit on a different tree (1 red run in ten, not reproducible).
+  Recorded with the run count and **no cause named**.
+
 ---
 
 ## Change Log
@@ -1592,3 +1727,4 @@ times, and here it would be false by inspection of the table's own last column.
 | 2026-08-22 | **CODE-REVIEWED by three isolated layers — the three reports are poured in VERBATIM and UNTRIAGED.** 60 raw findings, no dedup, no ranking, no arbitration. The acceptance layer returns **AC5 NOT MET** (no mutation table; the keyboard layer, the focus ring and the new `aria-current` oracle each measured green) and AC3/AC4/AC7 partly met. 🔴 The review session crashed mid-flight: the edge-case layer was re-run from its original mandate in a fresh worktree, the other two recovered intact from their transcripts. |
 | 2026-08-23 | **TRIAGED, ARBITRATED and REPAIRED.** 60 raw findings -> **33 distinct defects** (six by all three layers, ten by two). 🔑 **D4 exists in no single report**: the AC2 hue guard was too LOOSE and too TIGHT at once, and its failure message asserted as fact what the mutation producing it had disproved. 🔑 **D2·D3·D5 compose**: the accessibility apparatus reported success over a surface it did not reach. **Guy's four arbitrations, the recommendation taken in all four.** `a11y/kbd-probe.mjs` becomes the second BROWSER gate (17 checks, a floor equal to what is there) and CI runs it; the store is seeded; `token_hex` reads the light `:root` block with comments stripped; the settle timer yields to the operator. **29 mutation ids, 26 reds, 2 controls green by design, 1 green for a reason the repair created.** ⚠️ **Six findings against the pass itself**, the sharpest being a guard matching its needle inside a COMMENT — `token_hex`'s defect one file over, the same day. 728 tests both ways, nine xtask gates + two browser gates, clippy `--all-targets`. |
 | 2026-08-23 | 🔴 **AC5 AMENDED by Guy** — *a source-reading guard **does not SUFFICE** where the defect lives in the DOM*, where it read *is not counted*. Two words, no change of scope. The scope was earned by measurement and held three-for-three; *counted* over-reached, reading as *worth nothing* while a source guard is cheaper and **names the cause** where a browser gate names only the symptom — the two cumulate. ⚠️ The residual cost is **proportionality**, which the amendment does not dissolve: a rule about where the defect lives, never about how much apparatus to build. The three review reports keep the ORIGINAL wording, unedited — both phrasings give the same verdict on all three measurements they took. |
+| 2026-08-23 | 🔴 **SECOND REVIEW ROUND, on the repair itself** — three isolated layers, **19 raw findings, 17 distinct, none reached by two layers**. 🔑 Its sharpest pairing is a DISAGREEMENT of reading: the same measurement filed as a *refuted suspicion* by one layer and as a **HIGH** by another. 🔴 **CI was green on RESIDUE** — the shipped seed renders one queue row against a floor of two; closed by `a11y/seed.sql`, with `AUTHORSHIP_ROOTS` and `SANCTIONED_SITES` widened in ONE act. 🔴 `measured_tokens == 6` was as vacuous as the assertion it replaced; the focus marker belonged to no navigation. ⚠️ **Four findings against the repair-of-the-repair**, including a guard green under the reversion it exists to catch, and three `xtask` tests red while `cargo xtask ci` stayed green. |

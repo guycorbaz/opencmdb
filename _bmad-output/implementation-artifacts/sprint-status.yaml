@@ -75,7 +75,50 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-23  # 6b.11 TRIAGED and REPAIRED. Story STAYS at `review`: `done` is the
+last_updated: 2026-08-23  # 6b.11: a SECOND REVIEW ROUND ran on the REPAIR itself (three
+                          # isolated layers, a different model, one worktree and one live store
+                          # each). 19 raw findings, 17 distinct, and NOT ONE reached by two
+                          # layers -- where round one found six by three roads each.
+                          # 🔑 Its most instructive pairing is a DISAGREEMENT OF READING: the
+                          # edge layer measured "kbd-probe on exactly 1 row -> exit 2, MIN_ROWS
+                          # enforced" and filed it as a REFUTED SUSPICION (the contract holds);
+                          # the acceptance layer measured the same fact and filed it HIGH (the
+                          # gate cannot run in CI). Same number, opposite verdicts; the
+                          # difference is the question asked.
+                          # 🔴 HEADLINE: **CI WAS GREEN ON RESIDUE.** From a virgin store the
+                          # shipped demo seed renders ONE queue row (0 before, 1 after,
+                          # re-measured) against a floor of two -> the keyboard gate exits 2.
+                          # The passing run reported `queue: 3 row(s)` only because the `Tests`
+                          # step uses the same database immediately before. ⚠️ And §T8's "a
+                          # seeded two-row queue" existed in my session's database and NOWHERE
+                          # in the repository. Closed by `a11y/seed.sql` (truncate + four
+                          # entities); AUTHORSHIP_ROOTS gains `a11y` and SANCTIONED_SITES names
+                          # the file, IN ONE ACT -- M-P1/M-P2 prove each half load-bearing.
+                          # 🔴 Three more, each mine: `measured_tokens == 6` was as VACUOUS as
+                          # the `checked == 16` it replaced (found by the layer holding the diff
+                          # and nothing else, and its comment claimed it CAN fail); the focus
+                          # marker carried a bare "1" and belonged to NO navigation, so a stale
+                          # one stole focus on a plain load -- the autofocus the design refuses;
+                          # and `sessionStorage` throwing silently restores the original defect,
+                          # now a STATED limit.
+                          # ⚠️ My M-D2 row said FOUR checks red where there are EIGHT -- my
+                          # driver piped the gate through `head -4`.
+                          # 🔑 The repair of the repair produced FOUR findings against itself:
+                          # the stale-marker guard came back GREEN under the reversion it exists
+                          # to catch; the floor said 18 for 19 then 19 for 20; the
+                          # served-versus-source check is UNREDDENABLE in a debug build and is
+                          # recorded green-by-construction; and widening the perimeter reddened
+                          # THREE xtask tests while `cargo xtask ci` stayed GREEN -- *a gate
+                          # green over the real tree says nothing about its own tests*.
+                          # ✅ Refuted with their checks: the "CI step lacks its credentials"
+                          # HIGH (step-level `env:`, and CI authenticated), a `//` inside a
+                          # string literal (two layers independently), plus fourteen the edge
+                          # layer ran itself.
+                          # 20 checks in the keyboard gate, nine xtask gates, 728 tests both
+                          # ways (6.65 s live / 0.65 s without -- ⚠️ 16.7 s was first written
+                          # and had a build inside it).
+                          # Story STAYS at `review`: `done` is the MERGE's business.
+                          # Was: 6b.11 TRIAGED and REPAIRED. Story STAYS at `review`: `done` is the
                           # MERGE's business, and the three reviewing layers have NOT re-audited
                           # the repair.
                           # 🔑 **60 raw findings -> 33 DISTINCT defects** -- six reached by all

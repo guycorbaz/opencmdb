@@ -1150,7 +1150,7 @@ const DECLARED_TABLE: &str = "declared_attribute";
 /// MariaDB, by decision), no `command:` SQL and no init volume — its one volume is a log directory.
 /// 🔑 **The day that compose gains a database container and an init script, this gate's perimeter
 /// must be reopened**, and the story that adds it owns that debt.
-const AUTHORSHIP_ROOTS: [&str; 2] = ["crates", "docker"];
+const AUTHORSHIP_ROOTS: [&str; 3] = ["crates", "docker", "a11y"];
 
 /// The three sanctioned write sites, and nothing else may write a declared field.
 ///
@@ -1177,7 +1177,7 @@ const AUTHORSHIP_ROOTS: [&str; 2] = ["crates", "docker"];
 ///
 /// ⚠️ The path compared here is the gate's own displayed path, with separators normalised to `/`.
 /// Comparing a raw `Path` would drop the sanction on Windows and red the two real adapters.
-const SANCTIONED_SITES: [(&str, Option<&str>); 4] = [
+const SANCTIONED_SITES: [(&str, Option<&str>); 5] = [
     (
         "crates/opencmdb-bin/src/repo.rs",
         Some("insert_declared_attribute"),
@@ -1187,6 +1187,15 @@ const SANCTIONED_SITES: [(&str, Option<&str>); 4] = [
         Some("raw_declared_write_for_ddl_test"),
     ),
     ("docker/seed-example.sql", None),
+    // 🔴 Story 6b.11's code review (2026-08-23), and it is the perimeter reopening story 5.12's
+    // own doc prescribes rather than a fifth exception granted quietly. The accessibility
+    // harness needs a queue of its own — the shipped demo seed renders ONE row, one short of
+    // `kbd-probe.mjs`'s floor, measured from a virgin store — and a seed writing `'manual'` /
+    // `'operator'` is a machine writing as a human, which is exactly NFR5's subject. So `a11y`
+    // joined `AUTHORSHIP_ROOTS` in the same commit: opening the roots WITHOUT naming the site
+    // would simply turn the gate red, and naming the site WITHOUT opening the roots would leave
+    // the file outside every walk. The two are one act.
+    ("a11y/seed.sql", None),
     // Story 6.2: the documenting gesture's write — the ONLY place an `'adopted'` row is written.
     (
         "crates/opencmdb-bin/src/repo.rs",
@@ -3002,19 +3011,29 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
     /// see [`float_gate_walks_recursively_strips_comments_and_fails_closed`] — and this gate,
     /// written on its precedent, did not copy the part that mattered.
     #[test]
-    fn the_authorship_gate_walks_both_roots_and_fails_closed() {
+    fn the_authorship_gate_walks_every_root_and_fails_closed() {
         let root = scratch("authorship-gate");
         let crates = root.join("crates/opencmdb-bin/src");
         let docker = root.join("docker");
         std::fs::create_dir_all(&crates).expect("crates dir");
         std::fs::create_dir_all(&docker).expect("docker dir");
+        // ⚠️ The THIRD root, since story 6b.11's second review round widened the perimeter to
+        // `a11y/`. The gate FAILS CLOSED on a missing root — deliberately — so every synthetic
+        // tree owes one directory per root, and forgetting this one reddened three tests while
+        // `cargo xtask ci` stayed green over the real tree, which has it. *A gate green over the
+        // real tree says nothing about its own tests.*
+        std::fs::create_dir_all(root.join("a11y")).expect("a11y dir");
 
         // A clean tree first: nested, and holding a file of each extension.
         std::fs::write(crates.join("repo.rs"), "pub fn f() {}\n").expect("write");
         std::fs::write(docker.join("compose.sql"), "SELECT 1;\n").expect("write");
+        // 🔑 A file in the THIRD root, so the count below proves it is WALKED rather than
+        // merely present. Adding the directory alone kept this assertion at `2 file(s)` and the
+        // new root would have been covered by nothing but the real tree.
+        std::fs::write(root.join("a11y/seed.sql"), "SELECT 1;\n").expect("write");
         let (green, msg) = gate_declared_authorship(&root).expect("the gate runs");
         assert!(green, "a clean tree must pass: {msg}");
-        assert!(msg.contains("2 file(s)"), "both roots are read: {msg}");
+        assert!(msg.contains("3 file(s)"), "all three roots are read: {msg}");
 
         // A violation NESTED under crates/ — proves the walk recurses rather than reading one level.
         std::fs::write(
@@ -3074,6 +3093,9 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         // over nothing.
         std::fs::remove_file(crates.join("repo.rs")).expect("rm");
         std::fs::remove_file(docker.join("compose.sql")).expect("rm");
+        // ⚠️ The third root's file too — "no readable file" means across EVERY root, and
+        // leaving this one behind left the arm satisfied by a single survivor.
+        std::fs::remove_file(root.join("a11y/seed.sql")).expect("rm");
         let (green, msg) = gate_declared_authorship(&root).expect("the gate runs");
         assert!(!green, "a pass over nothing is not a pass: {msg}");
         assert!(msg.contains("reporting a pass over nothing"), "{msg}");
@@ -3455,6 +3477,8 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         let crates = root.join("crates");
         std::fs::create_dir_all(&crates).expect("crates dir");
         std::fs::create_dir_all(root.join("docker")).expect("docker dir");
+        // The third root — the gate fails closed on a missing one (story 6b.11).
+        std::fs::create_dir_all(root.join("a11y")).expect("a11y dir");
         // The gate fails closed on a subtree holding no file at all, so the planted probe is never
         // the only thing under the roots.
         std::fs::write(crates.join("innocent.rs"), "pub fn f() {}\n").expect("write");
@@ -3575,6 +3599,8 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         let crates = root.join("crates");
         std::fs::create_dir_all(&crates).expect("crates dir");
         std::fs::create_dir_all(root.join("docker")).expect("docker dir");
+        // The third root — the gate fails closed on a missing one (story 6b.11).
+        std::fs::create_dir_all(root.join("a11y")).expect("a11y dir");
         // The gate fails closed on a walk that reads nothing, so the planted probe is never the
         // only file under the roots.
         std::fs::write(crates.join("innocent.rs"), "pub fn f() {}\n").expect("write");
@@ -3651,6 +3677,8 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         // Both roots present but holding no .rs/.sql at all.
         std::fs::create_dir_all(root.join("crates")).expect("crates");
         std::fs::create_dir_all(root.join("docker")).expect("docker");
+        // The third root — the gate fails closed on a missing one (story 6b.11).
+        std::fs::create_dir_all(root.join("a11y")).expect("a11y dir");
         let (green, msg) =
             observed_immutable::gate_observed_immutable(&root).expect("the gate runs");
         assert!(!green, "an empty walk must not green: {msg}");

@@ -658,8 +658,13 @@ mod tests {
     /// chosen by the route. The keyboard layer uses it on purpose, and it replaces rather than
     /// pushes so the back button still leaves the screen.
     ///
-    /// ⚠️ The stripper is naive — `//` inside a string literal would take the rest of the line
-    /// with it. There is none in this file, measured; a tripwire, not a parser.
+    /// ⚠️ The stripper is naive, and its limits are enumerated rather than closed. A `//`
+    /// inside a string literal takes the rest of that line with it — there is none in this file
+    /// (measured twice at story 6b.11's second review round, by two layers independently). An
+    /// unterminated `/*` silently discards everything after it rather than panicking, which is
+    /// the opposite of `page.rs`'s `light_root` for the same shape; the premise assertion below
+    /// catches total truncation, not partial. **A tripwire, not a parser** — and *an enumeration
+    /// cannot claim the completeness of a property.*
     #[test]
     fn no_screen_is_chosen_by_javascript() {
         let js = strip_js_comments(include_str!("../assets/app.js"));

@@ -97,7 +97,7 @@
     if (absolute(href) === window.location.href) return;
     pending = window.setTimeout(function () {
       pending = null;
-      remember();
+      remember(href);
       // 🔑 `replace`, not `assign`. Every settled press pushed a history entry, so Back
       // walked the operator's own selections one by one and could no longer leave `/triage`
       // (measured: `history.length` 2 → 5 for three presses) — while `_triage.html`'s own
@@ -122,26 +122,44 @@
    * back to the first navigation entry — twelve Tab presses to re-enter the queue, measured.
    * ⚠️ The marker is what keeps this from being an autofocus: an ordinary click or a pasted
    * URL loads with focus where the browser put it, and only a keyboard-driven settle
-   * restores the row. `sessionStorage` throws in some privacy modes, so it is guarded.
+   * restores the row. ⚠️ **`sessionStorage` throwing is a STATED limit, not a covered case** —
+   * the code review's edge layer blocked storage access and measured the operator back on
+   * `<body>` after the settle, i.e. the original defect returning silently. The `try`/`catch`
+   * prevents the crash and there is no fallback: without storage there is nowhere to leave a
+   * note for the next document, and a restore keyed on the URL alone would be the autofocus
+   * this whole mechanism exists to avoid.
    */
-  function remember() {
+  function remember(href) {
     try {
-      window.sessionStorage.setItem(RESTORE_KEY, "1");
+      window.sessionStorage.setItem(RESTORE_KEY, absolute(href));
     } catch (error) {
       // No marker, no restore. The layer still works; only the Tab position is lost.
     }
   }
 
-  /** Take the note back, once. */
+  /**
+   * Take the note back, once, and only if it was written for THIS address.
+   *
+   * 🔴 **The marker carried a bare `"1"` until story 6b.11's code review, and its edge layer
+   * measured what that costs.** `sessionStorage` outlives the navigation that set it, so a
+   * marker written for a settle whose document never committed — the operator presses Stop, a
+   * response stalls, a session is restored — sat there until the NEXT load of `/triage` by ANY
+   * means and silently pulled focus into the queue: exactly the autofocus the comment above
+   * refuses. There was **no way to tell "my own marker" from "a stale one"**. Now the marker
+   * IS the address it was written for.
+   *
+   * ⚠️ **Cleared in EVERY case, matched or not**, so a stale marker cannot survive one load to
+   * ambush the next.
+   */
   function restore() {
     var wanted;
     try {
-      wanted = window.sessionStorage.getItem(RESTORE_KEY) === "1";
+      wanted = window.sessionStorage.getItem(RESTORE_KEY);
       window.sessionStorage.removeItem(RESTORE_KEY);
     } catch (error) {
       return;
     }
-    if (!wanted) return;
+    if (wanted !== window.location.href) return;
     var current = document.querySelector('.queue .queue-row > a[aria-current="true"]');
     if (current !== null) current.focus();
   }

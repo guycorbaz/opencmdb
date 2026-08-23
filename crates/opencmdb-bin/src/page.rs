@@ -3232,7 +3232,6 @@ mod tests {
         // Wider than the largest repair the sheet has taken (0.099).
         const LUMINANCE_BAND: f64 = 0.12;
 
-        let mut measured_tokens = 0_usize;
         for (token, family, pinned_luminance) in [
             ("--color-bg", Family::Neutral, 0.8885),
             ("--color-surface", Family::Neutral, 0.8154),
@@ -3248,7 +3247,6 @@ mod tests {
                      and a 3-digit one is not what it parses"
                 )
             });
-            measured_tokens += 1;
             let span = chroma_span(value);
             match family {
                 Family::Neutral => assert!(
@@ -3287,11 +3285,33 @@ mod tests {
                  the band; a jump outside it is a different colour, not a repair"
             );
         }
-        // 🔑 A premise that CAN fail: it counts what the SCAN resolved, so a `light_root`
-        // that returned the wrong region — or nothing — resolves fewer and reds here.
-        assert_eq!(
-            measured_tokens, 6,
-            "six tokens were read out of the light `:root` block"
+        // 🔴 **THE PREMISE, AND THE FIRST TWO ATTEMPTS AT IT WERE BOTH VACUOUS.** This read
+        // `assert_eq!(measured_tokens, 6)` over a loop across a SIX-element array whose
+        // increment is unconditional — so it was 6 on every execution that reached it, exactly
+        // as `checked == TEXTS.len() * GROUNDS.len()` was 16 on every execution, which is the
+        // defect this guard was rewritten to close. ⚠️ **And its comment claimed it *CAN
+        // fail*** — a false sentence in the repair written to remove false sentences; found by
+        // the review layer that had the diff and nothing else. The only way to skip an
+        // increment is `token_hex` returning `None`, which panics one line above and never
+        // reaches the count.
+        //
+        // 🔑 What follows can fail, because it is about the SOURCE the values came from rather
+        // than about the arithmetic of reading them.
+        assert!(
+            !block.contains("/*") && !block.contains("*/"),
+            "the block these tokens are read from still carries a comment, so a value written \
+             in a comment can be read as a declaration"
+        );
+        assert!(
+            !block.contains("data-theme"),
+            "the block these tokens are read from is the dark palette's, not the light one's"
+        );
+        assert!(
+            block.len() < css.len() / 2,
+            "the `:root` extraction returned {} of the sheet's {} bytes — it did not narrow, so \
+             these tokens were read out of the whole file",
+            block.len(),
+            css.len()
         );
     }
 
@@ -3372,8 +3392,10 @@ mod tests {
         let declared = block.matches(": #").count();
         assert!(
             declared >= GROUNDS.len() + TEXTS.len(),
-            "the light `:root` block yields only {declared} hex declarations, fewer than \
-             the {} this table needs — the block extraction found the wrong region",
+            "the light `:root` block yields only {declared} hex declarations, fewer than the \
+             {} this table needs. ⚠️ A COUNT, so it cannot say WHICH token is missing — the \
+             per-token reads below do that; this one catches an extraction that came back \
+             far too small",
             GROUNDS.len() + TEXTS.len()
         );
 
@@ -3446,6 +3468,11 @@ mod tests {
     /// # Panics
     ///
     /// If the sheet declares no unqualified `:root` block, or leaves it unclosed.
+    /// ⚠️ Two limits, enumerated rather than closed, both measured at the second review round:
+    /// a `}` inside a QUOTED custom-property value truncates the block (the brace counter is not
+    /// CSS-token-aware), and an unterminated `/*` before the first `:root` makes the extraction
+    /// find nothing and panic — a loud failure, which is the right one of the two. Neither shape
+    /// exists in `app.css` today. A tripwire, not a parser.
     fn light_root(css: &str) -> String {
         let mut stripped = String::with_capacity(css.len());
         let mut rest = css;
@@ -3461,32 +3488,51 @@ mod tests {
         }
         stripped.push_str(rest);
 
-        // The first `:root` NOT qualified by an attribute selector — `:root[data-theme="dark"]`
-        // is the palette this reader must never return.
+        // EVERY `:root` NOT qualified by a selector — `:root[data-theme="dark"]` and
+        // `:root, .foo` are both skipped. ⚠️ **All of them, concatenated, and not just the
+        // first**: CSS lets a file redeclare `:root` as often as it likes, a property declared
+        // only in a later block still applies, and this reader returned at the first closing
+        // brace — so a second bare `:root` was invisible to a function whose whole stated
+        // purpose is *what the browser actually applies*. Latent on today's sheet (one
+        // unqualified block, measured) and closed anyway, because the ambiguity it defends
+        // against is the one it had.
+        let mut blocks = String::new();
         let mut from = 0;
         while let Some(offset) = stripped[from..].find(":root") {
             let at = from + offset;
             let tail = stripped[at + ":root".len()..].trim_start();
-            if tail.starts_with('{') {
-                let brace = at + stripped[at..].find('{').expect("the `{` just matched");
-                let mut depth = 0_usize;
-                for (index, ch) in stripped[brace..].char_indices() {
-                    match ch {
-                        '{' => depth += 1,
-                        '}' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                return stripped[brace..brace + index].to_string();
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                panic!("the light `:root` block is not closed");
+            if !tail.starts_with('{') {
+                from = at + ":root".len();
+                continue;
             }
-            from = at + ":root".len();
+            let brace = at + stripped[at..].find('{').expect("the `{` just matched");
+            let mut depth = 0_usize;
+            let mut closed = None;
+            for (index, ch) in stripped[brace..].char_indices() {
+                match ch {
+                    '{' => depth += 1,
+                    '}' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            closed = Some(index);
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let Some(index) = closed else {
+                panic!("a light `:root` block is not closed");
+            };
+            blocks.push_str(&stripped[brace..brace + index]);
+            blocks.push('\n');
+            from = brace + index;
         }
-        panic!("the sheet declares no unqualified `:root` block");
+        assert!(
+            !blocks.is_empty(),
+            "the sheet declares no unqualified `:root` block"
+        );
+        blocks
     }
 
     /// The hex literal a token is declared with in the light `:root`, if it is declared with
@@ -3499,7 +3545,13 @@ mod tests {
     /// `None`, and the call site says which.
     fn token_hex(block: &str, token: &str) -> Option<[u8; 3]> {
         let needle = format!("{token}: #");
-        let at = block.find(&needle)? + needle.len();
+        // ⚠️ **`rfind`, because the LAST declaration is the one a browser paints.** This read
+        // the first, so a property left declared twice — an incomplete find-replace, or a merge
+        // resolved by keeping both lines, both legal CSS and both ordinary accidents — let the
+        // guard validate a stale value while the browser rendered a different one. Latent on
+        // today's sheet (each token declared once, measured) and closed anyway: a guard whose
+        // stated job is *read what the browser applies* may not read what it stopped applying.
+        let at = block.rfind(&needle)? + needle.len();
         let digits = block.get(at..at + 6)?;
         if !digits.chars().all(|c| c.is_ascii_hexdigit()) {
             return None;

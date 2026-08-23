@@ -112,10 +112,19 @@ jobs:
             sleep 1
           done
           curl -fsS --max-time 5 -o /dev/null http://127.0.0.1:8080/healthz
-          # AFTER the boot, because the tables are the binary's own migrations. This is the
-          # shipped example seed — one documented entity whose observed hostname disagrees —
-          # so the gate measures the queue, the selected pane and the five gesture controls.
-          mysql -h 127.0.0.1 -P 3306 -u root -popencmdb opencmdb_test < docker/seed-example.sql
+          # AFTER the boot, because the tables are the binary's own migrations.
+          #
+          # 🔴 **`a11y/seed.sql`, NOT `docker/seed-example.sql`, and the difference is one row
+          # that decides whether the keyboard gate can run at all.** The shipped demo seed
+          # renders exactly ONE queue row — measured on a virgin database, 0 before it and 1
+          # after — while `kbd-probe.mjs` needs at least two: a single row cannot witness an
+          # arrow STEP and gives the two end-of-list controls nothing to be at either end of.
+          # ⚠️ **The run that first passed here was green on RESIDUE**: the `Tests` step above
+          # uses the same database, and what it happened to leave behind carried the queue over
+          # the floor. Nothing guaranteed that. The harness's own seed TRUNCATES first, so the
+          # gates measure a state this repository can reproduce rather than one the pipeline
+          # accumulated.
+          mysql -h 127.0.0.1 -P 3306 -u root -popencmdb opencmdb_test < a11y/seed.sql
           npm --prefix a11y ci
           OPENCMDB_BASIC_USER="$OPENCMDB_BASIC_USER" \
             OPENCMDB_BASIC_PASSWORD="$OPENCMDB_BASIC_PASSWORD" \
