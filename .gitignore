@@ -107,4 +107,10 @@ docker/log/
 # ⚠️ No gate here can see this: `cargo xtask ci` walks Rust and SQL, and the
 # `file-size` gate counts code lines in `.rs`. A directory this size entering the
 # tree is invisible to every check the project has.
-a11y/node_modules/
+#
+# ⚠️ **THE PATTERN, NOT THE ONE PATH.** This entry read `a11y/node_modules/` until story
+# 6b.11's code review measured `git check-ignore -v node_modules/foo` coming back **not
+# ignored** — while the sentence just above says a directory that size is invisible to every
+# check this project has, which is exactly as true one directory up. An enumeration of the
+# places a dependency tree may appear is not a rule about dependency trees.
+node_modules/

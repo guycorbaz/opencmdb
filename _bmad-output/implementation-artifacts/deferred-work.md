@@ -4375,6 +4375,14 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   attribute**, while `epics.md:2108` makes axe-core on the ten routes this epic's Definition of Done
   and `epics.md:316` names the occupancy grid a WCAG 2.1 AA key view. **Owner: story 6b.11**, with
   6b.12's sweep.
+  ✅ **DISCHARGED by story 6b.11 (2026-08-23, at its code review's repair pass).** The repository
+  now has two browser gates, both in CI: `a11y/axe-gate.mjs` over the ten routes the navigation
+  offers **plus two query-string states no href carries**, and `a11y/kbd-probe.mjs`, seventeen
+  checks over the keyboard layer and the focus contract. ⚠️ **The discharge is dated from the
+  repair, not from the merge of the story's own dev commit** — as shipped, the axe gate walked an
+  EMPTY store (0 queue rows, 0 gesture controls, 0 panes) and the keyboard gate ran nowhere at
+  all, so between the two commits the check existed and reached almost nothing. 6b.12's sweep is
+  unaffected and still owed.
 
 - ⚠️ **A /24 has 254 hosts and the mock draws 256 free ones.** `CellState::Structural` and a
   254-denominator are this story's answer for an example screen; the day Epic 14 reads a real subnet,
@@ -4749,3 +4757,64 @@ before the commit** — story 6b.9's review found that file untouched under a se
   choice — it is unreachable: the dark token set is selected by nothing (no template emits
   `data-theme`, a test pins that), so there is no second theme to measure. **Owner: whichever story
   makes the dark set selectable.**
+
+### Added by the CODE REVIEW's triage and repair pass (2026-08-23)
+
+⚠️ **The four rows above were the whole register when the story said *"six divergences
+registered"* in three documents.** The acceptance layer measured it: three rows written, and of
+the six named, two existed only as code comments ending *"registered"* — story 6b.9's sentence
+met again, *a comment that says "registered" is not a registration* — while the largest of the
+six was in the register nowhere at all. It is the first row below.
+
+- 🔴 **`j`/`k` and `⏎` were PRESCRIBED and are NOT built, and Epic 7 must know it.**
+  `epics.md:2306` and `:2308` name them; story 6b.11's arbitration 1 (2026-08-22) took *arrows
+  only*, and the reason holds — a letter key bound on a page with nothing to type into is a
+  vi-ism, and `⏎` needs a gesture to activate, which is story 6.4's. **What was missing is this
+  row**: the divergence was argued in the story file and registered in no register, so the
+  epic's own criterion would have read as met. **Owner: Epic 7**, which owns the four gestures;
+  ⚠️ `⏎` is worthless until one of them is live, so it cannot land before story 6.4.
+
+- **NFR5's remaining unmeasured half on the a11y perimeter.** `AUTHORSHIP_ROOTS` is
+  `["crates", "docker"]`, and the accessibility harness now runs SQL against the store — CI
+  seeds `docker/seed-example.sql`, which is inside the perimeter and already a sanctioned site,
+  so nothing is open today. ⚠️ **The day the gate needs a seed of its own** (this repair pass
+  wanted one, and avoided it by measuring both queue ends instead of a middle index) **that file
+  lands under `a11y/`, outside every root the gate walks** — the ordinary gesture that walks
+  around a tripwire, which is what story 5.12's own doc says to reopen the perimeter for.
+  **Owner: whichever story adds an a11y-owned seed.** Reopen `AUTHORSHIP_ROOTS`, do not sanction
+  a fifth site by name.
+
+- **`--color-accent-600` fails AA on all four grounds** — `#597ea3` measures 3.80 / 3.51 / 3.91
+  / 3.45 against bg / surface / neutral-100 / neutral-200, i.e. exactly the defect
+  `--color-accent` was darkened for. ⚠️ **Latent, not live**: no rule in `app.css` references
+  the token, so nothing paints it and axe cannot see it; the contrast table does not carry it
+  either. The first rule that uses it inherits a violation. **Owner: whichever story paints with
+  the accent ramp's 600** — most likely story 6.4.
+
+- **Two painted grounds are outside the contrast table, by decision.** `--color-neutral-300`
+  and `--color-accent-100` are painted on and are not in `GROUNDS`; adding them was measured to
+  red on pairings **no screen renders** (`--color-neutral-600` on `--color-neutral-300` is
+  3.75:1, while what is actually painted there is `--color-neutral-900`). The limit is now
+  written at the guard: *a ground outside the table is carried by axe alone, and axe only sees
+  what a rendered route paints.* **Owner: whichever story makes the table derive the pairings
+  the sheet actually pairs** rather than a cartesian product over two hand-written lists.
+
+- **Story 6b.2's honesty guard still misses `display:none` and `pointer-events:none`**
+  (`deferred-work.md:3748`). §0g handed story 6b.11 *"take both or re-register by name"* and the
+  story did neither — found by the acceptance layer. The instrument now exists twice over: the
+  axe gate computes styles on ten routes plus two states, and the keyboard gate presses keys and
+  reads the DOM back. **Owner: the first story that touches the honesty guard**, which should
+  move its assertion from the template to the computed style.
+
+- **The register row this story DISCHARGES was left standing as pending.** `deferred-work.md`
+  carried *"the repository has NO accessibility check at all: no axe-core, no headless browser…
+  **Owner: story 6b.11**"* — satisfied by this story and untouched by it, in a file that already
+  carries `## Discharged by story 6b.2` sections. Discharged here; see the axe gate and the
+  keyboard gate, both in CI.
+
+- **The axe gate's exit contract stops at the shell.** Story 6b.11's arbitration 1 closed every
+  path inside `axe-gate.mjs` — measured, `mv node_modules` went from **1** to **2** — but `npm
+  ci` failing exits npm's code, the readiness `curl` exits 22 and a missing Node exits 127, none
+  of which any repair inside the file can reach. Written as a stated limit in both the gate's
+  header and `ci.yml`. **Owner: whichever story is willing to wrap the step in a trap that maps
+  the shell's codes**, if that is ever worth its cost.

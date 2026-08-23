@@ -78,8 +78,20 @@ jobs:
       # tests; this one runs the binary and talks to it over HTTP.
       #
       # `ubuntu-latest` ships Node and Chrome; `puppeteer-core` uses the system browser and
-      # downloads none. ⚠️ If that stops being true, this step fails with exit 2 — *the gate
-      # could not run* — and not with exit 1, which is reserved for a real regression.
+      # downloads none. ⚠️ If that stops being true, **once `node` is running the gate** the
+      # step fails with exit 2 — *the gate could not run* — and not with exit 1, which is
+      # reserved for a real regression. 🔑 **That promise is narrower than it read until story
+      # 6b.11's arbitration 1**, and the narrowing is measured: a missing `puppeteer-core`
+      # answered **1** (a static `import` resolves before any `try` of the gate's own exists —
+      # it is a dynamic import now), and everything the SHELL does before `node` keeps its own
+      # codes: `npm ci` exits npm's, the readiness `curl` exits 22, a missing Node exits 127.
+      #
+      # 🔴 **THE STORE IS SEEDED, and until story 6b.11 it was not.** The gate walked a
+      # `/triage` carrying 0 queue rows, 0 gesture controls and 0 panes — measured — so the
+      # whole surface 6b.11 touched was outside every CI run, forever, and the story's own
+      # defect replanted exited **0**. `AXE_REQUIRE_QUEUE=1` turns an empty queue into *the
+      # gate could not run* rather than a pass, so a seed that silently stops working cannot
+      # look like coverage.
       - name: Accessibility gate (axe-core over every screen the navigation offers)
         env:
           DATABASE_URL: mysql://root:opencmdb@127.0.0.1:3306/opencmdb_test
@@ -91,12 +103,27 @@ jobs:
           ./target/debug/opencmdb &
           server=$!
           trap 'kill $server 2>/dev/null || true' EXIT
+          # ⚠️ `--max-time` is not decoration. Without it this loop reads as a 30-second wait
+          # and is bounded at ~15.5 MINUTES against a store that accepts TCP and does not
+          # answer (measured: `http=503 time=30.002716`) — which is the one path a readiness
+          # loop exists for. The normal failure, a port not yet bound, is instant either way.
           for _ in $(seq 1 30); do
-            if curl -fsS -o /dev/null http://127.0.0.1:8080/healthz; then break; fi
+            if curl -fsS --max-time 5 -o /dev/null http://127.0.0.1:8080/healthz; then break; fi
             sleep 1
           done
-          curl -fsS -o /dev/null http://127.0.0.1:8080/healthz
+          curl -fsS --max-time 5 -o /dev/null http://127.0.0.1:8080/healthz
+          # AFTER the boot, because the tables are the binary's own migrations. This is the
+          # shipped example seed — one documented entity whose observed hostname disagrees —
+          # so the gate measures the queue, the selected pane and the five gesture controls.
+          mysql -h 127.0.0.1 -P 3306 -u root -popencmdb opencmdb_test < docker/seed-example.sql
           npm --prefix a11y ci
           OPENCMDB_BASIC_USER="$OPENCMDB_BASIC_USER" \
             OPENCMDB_BASIC_PASSWORD="$OPENCMDB_BASIC_PASSWORD" \
+            AXE_REQUIRE_QUEUE=1 \
             node a11y/axe-gate.mjs
+          # 🔴 **THE KEYBOARD LAYER'S ONLY CARRIER, and until story 6b.11's repair pass it
+          # ran nowhere.** `crates/opencmdb-bin/assets/app.js` could be EMPTIED with 490
+          # tests, nine gates and the axe gate all green — measured by two review layers
+          # independently. axe has no rule for any of what that file does, so this is not the
+          # gate above with more routes: it presses keys and reads the DOM back.
+          node a11y/kbd-probe.mjs

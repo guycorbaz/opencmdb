@@ -3572,10 +3572,25 @@ mod tests {
             sorted.contains("btn-sort on"),
             "asking for the sort turns it on"
         );
+        // 🔴 **ANCHORED TO THE SORT LINK, and until story 6b.11's repair pass it was not.**
+        // The needle was the bare substring `aria-current="true"` over the whole body — and a
+        // SELECTED QUEUE ROW carries that exact attribute on the same page, so the one
+        // assertion written to prove the replacement for an axe-critical attribute was in
+        // place measured its presence *somewhere*. Two review layers reached it independently,
+        // one from the diff alone; stripping the attribute from the sort link left **490
+        // passed** against a live store. ⚠️ The oracle had changed and the weakness had moved
+        // rather than left — which is the shape the comment three lines up congratulates
+        // itself for escaping.
+        let sort_link = sorted
+            .split("class=\"btn-sort")
+            .nth(1)
+            .and_then(|rest| rest.split('>').next())
+            .unwrap_or_default();
         assert!(
-            sorted.contains("aria-current=\"true\""),
-            "and the link says WHICH view the operator is in — the accessible half of the \
-             state, which `aria-pressed` on a link could not carry"
+            sort_link.contains("aria-current=\"true\""),
+            "and the SORT LINK says WHICH view the operator is in — the accessible half of \
+             the state, which `aria-pressed` on a link could not carry. The tag read: \
+             `{sort_link}`"
         );
 
         // 🔑 With two rows the ORDER is observable, which a one-row fixture could never witness:

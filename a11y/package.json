@@ -5,7 +5,8 @@
   "description": "The accessibility gate. Not in `cargo xtask ci` because it needs a browser, and a browser is not Rust — see the module comment in axe-gate.mjs.",
   "type": "module",
   "scripts": {
-    "gate": "node axe-gate.mjs"
+    "gate": "node axe-gate.mjs",
+    "kbd": "node kbd-probe.mjs"
   },
   "dependencies": {
     "axe-core": "4.13.0",

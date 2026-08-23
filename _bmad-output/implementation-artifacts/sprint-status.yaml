@@ -75,7 +75,71 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-22  # 6b.11 CODE-REVIEWED by three isolated layers -- reports POURED IN
+last_updated: 2026-08-23  # 6b.11 TRIAGED and REPAIRED. Story STAYS at `review`: `done` is the
+                          # MERGE's business, and the three reviewing layers have NOT re-audited
+                          # the repair.
+                          # 🔑 **60 raw findings -> 33 DISTINCT defects** -- six reached by all
+                          # three layers, ten more by two, so nearly half of what was written is a
+                          # second road to the same thing. *A count over three isolated reports
+                          # measures the isolation, not the product.*
+                          # 🔴 ONE DEFECT EXISTS IN NO SINGLE REPORT: the AC2 hue guard was too
+                          # LOOSE and too TIGHT at once -- two layers measured any grey passing it,
+                          # the third measured it REFUSING a legal lightness-only repair
+                          # (`--color-text` spans 3 channel units, so its smallest hue step is 20°
+                          # against a ±6° tolerance), and its failure message asserted as fact what
+                          # that mutation had just disproved. Now: family + luminance band; all
+                          # five green mutations red, the legal repair green as the control.
+                          # 🔴 AND THREE FINDINGS COMPOSE: the accessibility apparatus REPORTED
+                          # SUCCESS OVER A SURFACE IT DID NOT REACH -- CI seeded nothing (0 queue
+                          # rows, 0 gesture controls, 0 panes; the story's own defect replanted
+                          # there exits 0), the route floor could not tell ten screens from one
+                          # screen ten times, and `app.js` emptied left 490 tests, nine gates and
+                          # the axe gate GREEN.
+                          # ✅ GUY'S FOUR ARBITRATIONS (2026-08-23), recommendation taken in all
+                          # four, each recorded with the option refused:
+                          #   (1) repair the exit contract AND state the residual -- every "could
+                          #       not run" is 2 now (`mv node_modules` went 1 -> 2), ⚠️ but the
+                          #       SHELL keeps its own codes (npm, curl 22, Node 127), written not
+                          #       promised.
+                          #   (2) seed the store AND put the query-string states in front of axe,
+                          #       over seeding alone: the replacement for an axe-CRITICAL attribute
+                          #       was verified by no browser at all. Measured: the defect replanted
+                          #       reds `/triage?sort=age` and NONE of the ten derived routes.
+                          #   (3) `token_hex` reads the light `:root` BLOCK, comments stripped --
+                          #       a comment carrying the old value turned the contrast property off
+                          #       in SILENCE (guard green, axe 210 nodes).
+                          #   (4) the operator's gesture outranks the pending timer: at 1200 ms
+                          #       (inside 6b.10's own 2 s budget) the click on row 6 landed on row
+                          #       2; warm-store control, the click wins.
+                          # 🔑 `a11y/kbd-probe.mjs` is now the SECOND BROWSER GATE (⚠️ NOT a tenth
+                          # xtask gate -- that count stays NINE): 17 checks, the 0/1/2 contract, a
+                          # floor EQUAL to what is there. Emptying `app.js` reds it; so does
+                          # removing the two focus selectors, which leaves the Rust suite at 490
+                          # green exactly as the review measured -- the DOM-level carrier AC5
+                          # demands.
+                          # 🔴 AC5's mutation table EXISTS now: 29 ids, 26 reds, 2 controls green
+                          # by design and 1 green for a reason the repair created; carriers MIXED
+                          # and named per row, no "every red assertion-carried" headline claimed.
+                          # ⚠️ THE PASS PRODUCED SIX FINDINGS AGAINST ITSELF, all tabled: my own
+                          # driver carried the two-filter defect (caught because the control
+                          # printed NOTHING where it owed a result); the first fix for arbitration
+                          # 1 still exited 1 (a static `import` resolves before any `try`); the
+                          # review's own broken-payload mutation stopped measuring the exit
+                          # contract because the injection form changed under it; a check written
+                          # from a finding's SUMMARY instead of its INPUT reddened a correct
+                          # product; a red was nearly credited to a mutation that did not cause it;
+                          # and the test that reddened was matching its needle inside a COMMENT.
+                          # 🔴 The story's own recorded CAUSE for dropping a scroll check is FALSE
+                          # and is corrected IN PLACE with its refutation attached -- and §0e of
+                          # the same document carried the refuting figure four sections above.
+                          # 🔴 "Six divergences registered" was false in three documents; the
+                          # `j`/`k` + `⏎` divergence, which `epics.md:2306`/`:2308` prescribe, was
+                          # in NO register. Seven rows written, one row DISCHARGED.
+                          # ⚠️ Both twins now carry the story (they carried one line each -- the
+                          # RUSTFLAGS correction -- while pointing the live count at 6b.10's file).
+                          # 728 tests both ways (16.7 s live / 0.60 s without a store), nine xtask
+                          # gates, clippy --all-targets, RUSTFLAGS="-D warnings", fmt: all green.
+                          # Was: 6b.11 CODE-REVIEWED by three isolated layers -- reports POURED IN
                           # VERBATIM and UNTRIAGED (`2222da5`, pushed). Story STAYS at `review`:
                           # the triage and the four arbitrations are NOT done. Was: 6b.11 DEVELOPED
                           # -> review. Was: CONTEXTED, VALIDATED (2 layers, 38 findings) + 4 ARBITRATIONS

@@ -3183,55 +3183,156 @@ mod tests {
     #[test]
     fn ac2_the_sheet_carries_the_mocks_light_base_and_ramps() {
         let css = &sheet();
+        let block = &light_root(css);
         // 🔴 **The HUE is the mock's; the LIGHTNESS is WCAG's, and this guard was rewritten
         // at story 6b.11 to say so.** It pinned six hex LITERALS until then — which made
         // story 6b.1's *"it carries the mock's palette"* and story 6b.11's *axe-green*
         // mutually exclusive at the letter: `--color-accent: #5980a6` fails AA on the
         // selected nav entry's ground at 3.36:1, so the palette could not be both verbatim
-        // and conformant. **Two tokens were darkened at constant hue and saturation**, and
-        // pinning the literal would have meant choosing the mock over NFR25.
+        // and conformant. **Three tokens were darkened at constant hue and saturation** —
+        // the accent, the neutral ramp's 600 and the amber; the story said *two* in five
+        // places, and the third is the amber, darkened PRE-EMPTIVELY rather than to clear a
+        // measured node, since nothing paints with it yet.
         //
-        // 🔑 What is pinned instead is the pair of properties that actually matter — the
-        // HUE (so the mock is still recognisably the mock) and the RATIO (so a future
-        // palette edit that breaks AA reds here rather than in a browser nobody ran).
-        for (token, hue_degrees) in [
-            ("--color-bg", 240_u32),
-            ("--color-surface", 240),
-            ("--color-text", 200),
-            ("--color-accent", 210),
-            ("--color-neutral-500", 240),
-            ("--color-accent-700", 210),
+        // 🔴 **AND THE FIRST REWRITE WAS WRONG IN BOTH DIRECTIONS AT ONCE — the code review
+        // measured each half separately and only the pair is an account of it.** It pinned
+        // a hue within ±6° and nothing else:
+        //
+        // - **TOO LOOSE.** `hue()` returns a constant 240° for any achromatic colour, so for
+        //   a near-neutral token *every* grey satisfied it — and one 210°-family colour of
+        //   any lightness satisfied it for the accent ramp. Three mutations were measured
+        //   GREEN: `--color-neutral-500` and `--color-bg` to `#ffffff`, `--color-accent-700`
+        //   to `#b5d9fd` (a pale blue that computes to 210° exactly).
+        // - **TOO TIGHT.** `--color-text` is `#1d1f20`: `max - min` is **3**, so its smallest
+        //   representable hue step is 60/3 = **20°**, larger than the whole tolerance. A
+        //   legal lightness-only darkening RED it — and the failure message asserted as fact
+        //   the very thing that mutation had just disproved.
+        //
+        // 🔑 **So each token is now pinned by the property that is constrainable FOR IT**: a
+        // near-neutral one by staying near-neutral, a chromatic one by its hue; both by a
+        // luminance BAND rather than a literal. The two span thresholds sit in a measured gap
+        // — the sheet's neutrals span 1 to 3, its chromatics 63 to 96 — and the band is wider
+        // than the largest repair in the sheet (the amber moved luminance by 0.099), so a
+        // contrast repair fits and a jump to another part of the ramp does not.
+        //
+        // ⚠️ A tripwire against a palette edit that leaves the mock, never a proof of
+        // fidelity: a token could still be moved anywhere inside its own band.
+
+        /// A token stays near-neutral, or keeps its hue. Nothing else is constrainable.
+        #[derive(Debug)]
+        enum Family {
+            /// Grey by construction; its hue is quantisation noise, not a property.
+            Neutral,
+            /// Chromatic; the mock's hue in degrees.
+            Hue(u32),
+        }
+        // Measured: no token in the light block spans between 3 and 63.
+        const NEUTRAL_SPAN_MAX: u32 = 16;
+        const CHROMATIC_SPAN_MIN: u32 = 32;
+        // Wider than the largest repair the sheet has taken (0.099).
+        const LUMINANCE_BAND: f64 = 0.12;
+
+        let mut measured_tokens = 0_usize;
+        for (token, family, pinned_luminance) in [
+            ("--color-bg", Family::Neutral, 0.8885),
+            ("--color-surface", Family::Neutral, 0.8154),
+            ("--color-text", Family::Neutral, 0.0135),
+            ("--color-accent", Family::Hue(210), 0.1388),
+            ("--color-neutral-500", Family::Neutral, 0.3150),
+            ("--color-accent-700", Family::Hue(210), 0.1123),
         ] {
-            let value = token_hex(css, token)
-                .unwrap_or_else(|| panic!("{token} is declared as a hex literal"));
-            let measured = hue(value);
-            let delta = measured
-                .abs_diff(hue_degrees)
-                .min(360 - measured.abs_diff(hue_degrees));
+            let value = token_hex(block, token).unwrap_or_else(|| {
+                panic!(
+                    "{token} must be declared in the light `:root` as a SIX-digit hex \
+                     literal — an 8-digit one carries an alpha this reader would discard, \
+                     and a 3-digit one is not what it parses"
+                )
+            });
+            measured_tokens += 1;
+            let span = chroma_span(value);
+            match family {
+                Family::Neutral => assert!(
+                    span <= NEUTRAL_SPAN_MAX,
+                    "the mock's {token} is a NEUTRAL and this value spans {span} channel \
+                     units — a neutral that acquires a colour has left the mock's ramp"
+                ),
+                Family::Hue(degrees) => {
+                    assert!(
+                        span >= CHROMATIC_SPAN_MIN,
+                        "the mock's {token} is CHROMATIC and this value spans only {span} \
+                         channel units, so its hue is quantisation noise rather than a hue"
+                    );
+                    let hue_now = hue(value);
+                    let delta = hue_now
+                        .abs_diff(degrees)
+                        .min(360 - hue_now.abs_diff(degrees));
+                    assert!(
+                        delta <= 6,
+                        "the mock's token {token} carries hue {hue_now}°, the mock's is \
+                         {degrees}° — a contrast repair moves LIGHTNESS, and for a token \
+                         with this much chroma it can leave the hue alone"
+                    );
+                }
+            }
             assert!(
-                delta <= 6,
-                "the mock's token {token} carries hue {measured}°, the mock's is \
-                 {hue_degrees}° — a contrast repair moves LIGHTNESS, never hue"
+                value != [0xff, 0xff, 0xff] && value != [0x00, 0x00, 0x00],
+                "{token} is pure white or pure black — whatever its band says, a token \
+                 collapsed to an extreme has left the palette"
+            );
+            let now = luminance(value);
+            assert!(
+                (now - pinned_luminance).abs() <= LUMINANCE_BAND,
+                "{token} sits at luminance {now:.4}, the mock's band is \
+                 {pinned_luminance:.4} ± {LUMINANCE_BAND} — a contrast repair moves within \
+                 the band; a jump outside it is a different colour, not a repair"
             );
         }
+        // 🔑 A premise that CAN fail: it counts what the SCAN resolved, so a `light_root`
+        // that returned the wrong region — or nothing — resolves fewer and reds here.
+        assert_eq!(
+            measured_tokens, 6,
+            "six tokens were read out of the light `:root` block"
+        );
     }
 
     /// 🔴 **Every text token clears WCAG AA on every ground it can sit on — in Rust, with
     /// no browser.**
     ///
     /// Story 6b.11 measured axe-core failing on ALL TEN routes: **202 `color-contrast`
-    /// nodes on an empty store, 237 with a populated one**, and the whole of it was
-    /// **three colour pairs, i.e. two token values**. A guard that pinned hex literals
-    /// could not have caught that and in fact prevented the repair.
+    /// nodes on an empty store, 237 with a populated one** (⚠️ neither figure is
+    /// reproducible from a store state alone — a 7-row store measured **221** at the code
+    /// review; what is stable is the *zero* after the repair), and the whole of it was
+    /// **three colour pairs**. A guard that pinned hex literals could not have caught that
+    /// and in fact prevented the repair.
     ///
     /// 🔑 This is the SECOND carrier, and it is not the axe gate's echo: axe measures what
-    /// a browser paints on the ten routes, and misses a pairing no screen happens to
-    /// render today; this walks the token TABLE, so a combination nobody has used yet is
-    /// still checked. ⚠️ Neither subsumes the other, which is why both exist.
+    /// a browser paints on the ten routes and the two query-string states, and misses a
+    /// pairing no screen happens to render today; this walks the token TABLE, so a
+    /// combination nobody has used yet is still checked. ⚠️ Neither subsumes the other,
+    /// which is why both exist.
+    ///
+    /// ⚠️ **WHAT THIS TABLE IS, since its own comment used to say something false about
+    /// it.** It read *"the grounds a screen actually paints text on, and the tokens it
+    /// paints with"*, and neither half is true:
+    ///
+    /// - The sheet paints text on **six** distinct background tokens; four are listed.
+    ///   `--color-neutral-300` and `--color-accent-100` are not, and the code review
+    ///   measured the consequence — a badge moved to `--muted` on a `--color-neutral-300`
+    ///   ground passes here and reds axe at 3.76:1. **They are deliberately still out**:
+    ///   adding them would demand that every token below clear AA on them, which fails for
+    ///   pairings *no screen renders* (`--color-neutral-600` on `--color-neutral-300` is
+    ///   3.75:1, and what is actually painted there is `--color-neutral-900`). The honest
+    ///   statement is the limit: **a ground outside this table is carried by axe alone, and
+    ///   axe only sees what a rendered route paints.**
+    /// - `--accent-document` paints NOTHING — `var(--accent-document)` appears nowhere in
+    ///   the sheet and a test pins that count at zero until story 6.4. It is in the table
+    ///   precisely *because* nothing uses it yet: it is the clean specimen of the
+    ///   forward-looking half, and the reason it was darkened with the other two.
     #[test]
     fn every_text_token_clears_aa_on_every_ground_it_can_sit_on() {
         let css = &sheet();
-        // The grounds a screen actually paints text on, and the tokens it paints with.
+        let block = &light_root(css);
+        // The surface tokens body copy sits on, and the tokens body copy is painted with.
         const GROUNDS: [&str; 4] = [
             "--color-bg",
             "--color-surface",
@@ -3247,15 +3348,42 @@ mod tests {
         // WCAG 2.1 §1.4.3, normal text.
         const AA: f64 = 4.5;
 
-        let mut checked = 0_usize;
+        // 🔴 **THE PREMISE, AND THIS ONE CAN FAIL — the one it replaces could not.** It was
+        // `checked == TEXTS.len() * GROUNDS.len()` over two fixed-size arrays with an
+        // unconditional increment: `16` on every execution that reached it, and the comment
+        // beside it claimed to be defending against a scan that matched nothing. Shrinking
+        // `TEXTS` from four entries to three left it green, because the right-hand side
+        // shrank with the left. What follows is about the SOURCE the values come from,
+        // which is where the two measured defects actually lived.
+        assert!(
+            !block.contains("/*") && !block.contains("*/"),
+            "the block these tokens are read from still carries a comment, so a value \
+             written in a comment can be read as a declaration"
+        );
+        assert!(
+            !block.contains("data-theme"),
+            "the block these tokens are read from is the dark palette's, not the light one's"
+        );
+        assert!(
+            css.contains("[data-theme=\"dark\"]"),
+            "the sheet no longer carries a second palette — if the dark set has gone, this \
+             guard's narrowing to the light `:root` is pinning nothing and should say so"
+        );
+        let declared = block.matches(": #").count();
+        assert!(
+            declared >= GROUNDS.len() + TEXTS.len(),
+            "the light `:root` block yields only {declared} hex declarations, fewer than \
+             the {} this table needs — the block extraction found the wrong region",
+            GROUNDS.len() + TEXTS.len()
+        );
+
         for text in TEXTS {
-            let fg = token_hex(css, text)
-                .unwrap_or_else(|| panic!("{text} is declared as a hex literal"));
+            let fg = token_hex(block, text)
+                .unwrap_or_else(|| panic!("{text} is declared as a six-digit hex literal"));
             for ground in GROUNDS {
-                let bg = token_hex(css, ground)
-                    .unwrap_or_else(|| panic!("{ground} is declared as a hex literal"));
+                let bg = token_hex(block, ground)
+                    .unwrap_or_else(|| panic!("{ground} is declared as a six-digit hex literal"));
                 let ratio = contrast(fg, bg);
-                checked += 1;
                 assert!(
                     ratio >= AA,
                     "{text} on {ground} is {ratio:.2}:1, below AA's {AA}:1 — a palette edit \
@@ -3263,13 +3391,6 @@ mod tests {
                 );
             }
         }
-        // 🔑 The premise, derived rather than pinned: every pairing of the two tables was
-        // read. A scan that matched nothing would assert nothing.
-        assert_eq!(
-            checked,
-            TEXTS.len() * GROUNDS.len(),
-            "every text token was measured against every ground"
-        );
     }
 
     /// The WCAG contrast ratio between two colours.
@@ -3278,6 +3399,17 @@ mod tests {
     /// integer approximation would be a second, wrong definition of the thing WCAG defines.
     /// The `float-free` gate walks `identity/` only, where a float would be a decision the
     /// engine must not make; here it is arithmetic on a published formula.
+    ///
+    /// 🔑 **And [`hue`] just below says the opposite for its own arithmetic, which is not a
+    /// contradiction once both say what they are about.** This function IMPLEMENTS a
+    /// specification whose definition is real-valued — reproducing it in integers would be
+    /// reproducing something else. `hue` CLASSIFIES, against a tolerance, and there the risk
+    /// runs the other way: a boundary case that lands differently depending on binary
+    /// rounding is a verdict nobody can re-derive by hand. Implementing a formula and
+    /// classifying against a threshold are different jobs and take different arithmetic.
+    /// ⚠️ The code review flagged the pair as two rationales that indict each other; the
+    /// defect was the missing sentence, not either choice — and no live rounding risk was
+    /// found, the tightest pairing here sitting at ≈4.58:1 against a 4.5 threshold.
     fn contrast(a: [u8; 3], b: [u8; 3]) -> f64 {
         let luminance = |c: [u8; 3]| {
             let channel = |v: u8| {
@@ -3295,15 +3427,114 @@ mod tests {
         (hi + 0.05) / (lo + 0.05)
     }
 
-    /// The hex literal a token is declared with, if it is declared with one.
-    fn token_hex(css: &str, token: &str) -> Option<[u8; 3]> {
-        let at = css.find(&format!("{token}: #"))? + token.len() + 3;
-        let digits = &css.get(at..at + 6)?;
+    /// The light `:root` declarations, comments stripped — what a browser applies today.
+    ///
+    /// 🔴 **Story 6b.11's arbitration 3, and both halves were MEASURED before it was taken.**
+    /// The reader was `css.find("{token}: #")` over the whole file, i.e. the first textual
+    /// occurrence anywhere:
+    ///
+    /// - **A COMMENT IS AN OCCURRENCE.** Writing the old value in a comment when you revert a
+    ///   colour is the ordinary gesture, and the code review measured it turning the contrast
+    ///   property off in SILENCE — the guard green over a sheet axe scored at **210 violation
+    ///   nodes**. The opposite direction is as reachable: a comment recalling a pre-rebrand
+    ///   value above a correct declaration reds a correct sheet at 1.12:1.
+    /// - **THE SHEET CARRIES TWO COMPLETE PALETTES.** The dark set is present and selected by
+    ///   nothing, and it redeclares tokens this guard reads. The light one won by SOURCE
+    ///   ORDER — undocumented, so moving one block above the other, a pure reordering, would
+    ///   have silently repointed every colour guard at the other palette with nothing failing.
+    ///
+    /// # Panics
+    ///
+    /// If the sheet declares no unqualified `:root` block, or leaves it unclosed.
+    fn light_root(css: &str) -> String {
+        let mut stripped = String::with_capacity(css.len());
+        let mut rest = css;
+        while let Some(open) = rest.find("/*") {
+            stripped.push_str(&rest[..open]);
+            match rest[open + 2..].find("*/") {
+                Some(close) => rest = &rest[open + 2 + close + 2..],
+                None => {
+                    rest = "";
+                    break;
+                }
+            }
+        }
+        stripped.push_str(rest);
+
+        // The first `:root` NOT qualified by an attribute selector — `:root[data-theme="dark"]`
+        // is the palette this reader must never return.
+        let mut from = 0;
+        while let Some(offset) = stripped[from..].find(":root") {
+            let at = from + offset;
+            let tail = stripped[at + ":root".len()..].trim_start();
+            if tail.starts_with('{') {
+                let brace = at + stripped[at..].find('{').expect("the `{` just matched");
+                let mut depth = 0_usize;
+                for (index, ch) in stripped[brace..].char_indices() {
+                    match ch {
+                        '{' => depth += 1,
+                        '}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                return stripped[brace..brace + index].to_string();
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                panic!("the light `:root` block is not closed");
+            }
+            from = at + ":root".len();
+        }
+        panic!("the sheet declares no unqualified `:root` block");
+    }
+
+    /// The hex literal a token is declared with in the light `:root`, if it is declared with
+    /// one — and with EXACTLY six digits.
+    ///
+    /// ⚠️ The six-digit bound is a refusal, not a truncation. `#f2f2f3aa` is legal CSS whose
+    /// alpha channel the browser paints; read as its opaque prefix it measured **4.96:1** in
+    /// Rust while axe scored the same sheet at 210 violation nodes, so the guard was reporting
+    /// a colour nobody was looking at. `#fff` is legal too and is three. Both now come back
+    /// `None`, and the call site says which.
+    fn token_hex(block: &str, token: &str) -> Option<[u8; 3]> {
+        let needle = format!("{token}: #");
+        let at = block.find(&needle)? + needle.len();
+        let digits = block.get(at..at + 6)?;
+        if !digits.chars().all(|c| c.is_ascii_hexdigit()) {
+            return None;
+        }
+        if block[at + 6..]
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_hexdigit())
+        {
+            return None;
+        }
         Some([
             u8::from_str_radix(&digits[0..2], 16).ok()?,
             u8::from_str_radix(&digits[2..4], 16).ok()?,
             u8::from_str_radix(&digits[4..6], 16).ok()?,
         ])
+    }
+
+    /// The relative luminance of a colour, per WCAG 2.1 §1.4.3's own definition.
+    fn luminance(c: [u8; 3]) -> f64 {
+        let channel = |v: u8| {
+            let v = f64::from(v) / 255.0;
+            if v <= 0.03928 {
+                v / 12.92
+            } else {
+                ((v + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2])
+    }
+
+    /// How far a colour is from grey, in raw channel units: `max - min`.
+    fn chroma_span(rgb: [u8; 3]) -> u32 {
+        let (r, g, b) = (u32::from(rgb[0]), u32::from(rgb[1]), u32::from(rgb[2]));
+        r.max(g).max(b) - r.min(g).min(b)
     }
 
     /// The colour's hue in degrees, which a lightness change leaves alone.
@@ -3317,8 +3548,10 @@ mod tests {
             return 240;
         }
         let span = max - min;
-        // Integer arithmetic on purpose: `float-free` does not reach this file, but a
-        // ratio comparison that depends on binary rounding is a guard nobody can re-derive.
+        // Integer arithmetic on purpose — and see [`contrast`], which says the opposite for
+        // itself and is right to: that one IMPLEMENTS a real-valued specification, this one
+        // CLASSIFIES against a ±6° tolerance, where a boundary that lands differently
+        // depending on binary rounding is a verdict nobody can re-derive by hand.
         let sixth = if max == r {
             ((360 + (g as i64 - b as i64) as i32 * 60 / span as i32) % 360) as u32
         } else if max == g {

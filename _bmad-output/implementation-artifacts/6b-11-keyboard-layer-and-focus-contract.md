@@ -432,6 +432,23 @@ is offered, and it is off until asked.
   same page with `app.js` BLOCKED does not scroll either** — arrows do not scroll under
   headless CDP at all. The check was replaced by the property that measures MY code: the
   layer does not INTERCEPT the key where there is no queue (`defaultPrevented === false`).
+  🔴 **THIS CAUSE IS FALSE AND WAS REFUTED BY THE CODE REVIEW'S ACCEPTANCE LAYER (finding 5),
+  which is the correction and not a nuance.** Measured in headless Chrome 151 on
+  `/diagnostic` (`scrollHeight` 728, viewport 600): the shipped code with
+  `page.keyboard.press('ArrowDown')` gives **`scrollY = 40`**, and the same page carrying an
+  unconditional `preventDefault` gives **`scrollY = 0`**. *The check discriminated exactly;
+  what did not discriminate was the control that dismissed it.* ⚠️ And **§0e of this same
+  document already carried the refuting figure** — *"0 → 26 px with an early return, 0 → 0
+  without one"* — four sections above, so the story contradicted itself and **the false half
+  is the one that changed a test**. The real fault is almost certainly a *dispatched*
+  `KeyboardEvent`, which is untrusted and never scrolls, rather than a pressed key: a
+  mutation named for one thing applied to another, not a limit of CDP. Against this
+  project's own rule — **a cause needs a check, not a plausible story** — the sentence above
+  is exactly the kind it forbids, and it is left standing with its refutation attached
+  rather than quietly deleted. ✅ The *replacement* check is unaffected and stays: the
+  property that matters is still that the layer does not intercept the key, and the keyboard
+  gate now measures it on **all nine** screens with no queue rather than on a sample of
+  three.
 - Two assertions were absolute where the behaviour is relative (`index === 0`, then
   `index === 1`) and reddened when the queue grew from 2 rows to 5. The code was right both
   times.
@@ -440,6 +457,9 @@ is offered, and it is off until asked.
   guard that had not fired. It had.
 
 *Four instruments, four wrong readings, and not one of them a defect in the product.*
+⚠️ **Three of the four hold; the first does not — its READING was right and its stated
+CAUSE was invented, which is worse than the defect it was excusing.** The repair pass
+then produced six more of the same family against itself, tabled in §T8.
 
 #### ✅ THE LETTER-FREE PROPERTY, WITH THE CONTROL THAT MAKES IT MEAN ANYTHING
 
@@ -480,6 +500,19 @@ story 6b.10's review registered, biting my own code the day after it was written
 - `.github/workflows/ci.yml` — the accessibility step, with its exception written
 - `_bmad-output/implementation-artifacts/deferred-work.md` — three rows
 - `_bmad-output/implementation-artifacts/6b-11-keyboard-layer-and-focus-contract.md`, `sprint-status.yaml`
+
+#### Added by the CODE REVIEW's repair pass (2026-08-23)
+
+- `.gitignore` — ⚠️ **omitted from the list above** while the story edited it; caught by the
+  acceptance layer. The entry is now the PATTERN rather than one path (D20).
+- `crates/opencmdb-bin/templates/_gap_card.html` — the FOURTH dead-contract artefact, decided
+  in writing rather than left standing (D19)
+- `crates/opencmdb-bin/src/screens.rs` — `no_screen_is_chosen_by_javascript` reads the code
+  rather than the comments, with a premise that can fail (D33)
+- `a11y/kbd-probe.mjs` — rewritten as a GATE: English, env-driven, the 0/1/2 contract, a floor
+  equal to what is there, and seven checks the layer had none for
+- `a11y/package.json`, `.github/workflows/ci.yml` — the keyboard gate runs, the store is
+  seeded, `AXE_REQUIRE_QUEUE=1`, `curl --max-time`
 
 ## Code Review — the three layers, VERBATIM and UNTRIAGED
 
@@ -916,7 +949,7 @@ Cleanup done — no tracked file modified, worktrees and the audit container rem
 | **AC3** reachable focus contract | **PARTLY MET** | Visibility ships and is real (`getComputedStyle` on a queue row: `2px solid rgb(75,107,139)`, the product's rule, not the UA's); five `.btn-gesture` all `aria-disabled="true"` / `tabIndex 0`. **But** focus is lost to `<body>` at every settle-navigation (finding 4), and the visibility itself is guarded by nothing (finding 2). |
 | **AC3b** axe green on ten routes | **MET** | Ran the committed `a11y/axe-gate.mjs` twice against a booted binary: empty store → 10 routes derived, **0 violation nodes, rc=0**; store with 7 gap rows → 10 routes, **0 nodes, rc=0**. Prove-to-red: reverting the three tokens on the running server → **rc=1, 221 nodes, all ten routes red**. Exit-code discipline verified: dead port → **rc=2**, `AXE_CHROME=/nonexistent` → **rc=2**. `npm --prefix a11y ci` from the committed lockfile → 26 packages, 354 ms. |
 | **AC4** live count here, every figure names its store state | **PARTLY MET** | Both terms of the delta verified: `master` in a clean worktree → 489 + 161 + 77 = **727**; HEAD → 490 + 161 + 77 = **728**. Nine gates green (`cargo xtask ci`, rc=0), clippy `--all-targets` rc=0, `fmt --check` rc=0. **But** the headline test figure names no store state, and the state changes what it means: the same 490 runs in **0.21 s** without a database and **5.69 s** against one. |
-| **AC5** every guard measured red first; a source guard for a DOM defect does not count | **NOT MET** | No mutation table exists. Two central guards measured green (app.js emptied → 490 green; the two focus selectors removed → 490 green), one new oracle vacuous (`aria-current` stripped from the sort link → 490 green with a live DB), and the one Rust carrier of the focus contract reads `app.css` while the defect is in the DOM. |
+| **AC5** every guard measured red first; a source guard for a DOM defect does not count | **NOT MET** *(as reviewed; see §T8 for the repair, which the reviewing layers have NOT re-audited)* | No mutation table exists. Two central guards measured green (app.js emptied → 490 green; the two focus selectors removed → 490 green), one new oracle vacuous (`aria-current` stripped from the sort link → 490 green with a live DB), and the one Rust carrier of the focus contract reads `app.css` while the defect is in the DOM. |
 | **AC6** nothing promises an absent gesture | **MET** | On the served `/triage`: 5 `.btn-gesture`, all `aria-disabled="true"` with `tabIndex 0`, `document.querySelectorAll('form,input,textarea,select,button').length === 0`, zero `hx-*`. No control became live; the arrows do something real. |
 | **AC7** NFR24 taken or re-registered by name | **PARTLY MET** | The register row exists and its measurement replays: at 1280 px on the served `/triage`, `.nav-entry` **34 px**, `.btn-sort` **27 px**, `.btn-gesture` **29 px**, `.queue-row > a` 72–95 px — heights identical to the row's table. **But** §0g's second inherited obligation (`:3748`) is neither taken nor re-registered (finding 15). |
 
@@ -1159,7 +1192,7 @@ No axe violation (measured: exit 0) and no code collision (`currentIndex` scopes
 
 ---
 
-# The TRIAGE pass — 2026-08-22
+# The TRIAGE pass — 2026-08-23
 
 **60 raw findings → 33 distinct defects.** The three reports above stay verbatim and untouched; this
 section is what reading them *together* establishes, and nothing here is a fourth layer's opinion —
@@ -1363,6 +1396,153 @@ AC1, AC2, AC3b and AC6 MET.** Nothing in the triage moves one of them, and D18 i
 first.
 
 
+## §T7 — The four arbitrations (Guy, 2026-08-23)
+
+Each was raised by a measurement, none was decidable from the criteria, and in all four Guy took the
+option that closes the property rather than the one that corrects the sentence. Recorded here with
+the option refused, per the house convention.
+
+**Arbitration 1 · D1 — repair AND state the residual.** A top-level `try/catch` closes the ~8
+unguarded Node paths at once: every *could not run* answers **2**, and **1** is left to the
+violation path alone. ⚠️ **But the shell's own codes escape any Node-level repair** — `npm ci`
+failing exits npm's code, the readiness `curl` exits 22, a missing Node makes the shell exit **127**
+(A17, measured) — so that part ships as a **stated limit** and `ci.yml:80-82`'s sentence is
+corrected to match. *Refused:* repairing in silence (the CI sentence would stay false for the shell
+half), and narrowing alone on story 5.12's precedent (~8 paths closable by one wrapper is not a
+limit, it is an omission).
+
+**Arbitration 2 · D5 — seed a queue AND put the unreached states in front of axe.** CI seeds a few
+rows before the gate runs, and the route list gains the states axe never reaches (`?sort=age`,
+`?sel=…`). 🔑 *Refused:* seeding alone, which closes E1/A14 and leaves **B6** standing — the
+replacement for an attribute a browser rated critical would still be verified by no browser at all —
+and leaving CI blind by decision, which the measurement makes untenable: **the story's own defect,
+replanted, exits 0 on CI's store.**
+
+**Arbitration 3 · D6 — read the BLOCK, not the file.** Comments stripped, the token bound to a
+declaration inside the light `:root`, and anything that is not a 6-digit hex refused loudly. Closes
+all three witnesses in one change: the comment (E5), the dark palette's positional selection (B15),
+the silent 8-digit alpha (E7). *Refused:* stripping comments only, which leaves the palette chosen
+by source order and undocumented; and narrowing the promise, which would leave the guard's own
+`checked == 16` premise vouching for a scan that reads the wrong source.
+
+**Arbitration 4 · D7 — the operator's gesture always outranks the timer.** `click`, `pointerdown`,
+a non-arrow `keydown` and `pagehide` all clear `pending`. *Refused:* stating the cost and
+registering it, since the defect is reachable **inside 6b.10's own 2 s budget** and was measured
+there; and dropping the timer for `⏎`, which would reopen arbitration 4's shape (E) — taken on a
+20× prototype measurement — and the deliberate `⏎` refusal handed to Epic 7.
+
+## §T8 — The repair pass, and AC5's record
+
+**2026-08-23.** Everything below ran against a live `mariadb:10.11.11` (container
+`opencmdb-6b11-fix`, port **13360**), a booted binary, Chrome 151 and a seeded two-row queue.
+Every mutation was reverted from a scratchpad copy, **never `git checkout --`** — the gesture
+that destroyed uncommitted work four times in this project.
+
+**Closing state.** `490 + 161 + 77 = 728` tests, run **both ways**: **16.7 s** against the live
+store and **0.60 s** without `DATABASE_URL`, the clock being the tell that the store-backed tests
+genuinely executed. Nine gates green, `cargo fmt --all --check` clean, and clippy over
+`--all-targets` — the form that sees the test targets CI compiles — clean. `RUSTFLAGS="-D
+warnings" cargo test --workspace --locked` green, which is the other half of what CI does.
+
+⚠️ **The test COUNT does not move, and that is the honest reading of this pass**: no `#[test]`
+was added. What changed is that three guards that measured nothing now measure something, one
+read the wrong source, and the story's central deliverable acquired a carrier that is not a Rust
+test at all — it is a browser gate, because the property lives in the DOM and AC5 says in so many
+words that a source-reading guard does not count for a DOM defect.
+
+### The table
+
+| id | mutation | before the repair | after the repair | carrier |
+|---|---|---|---|---|
+| **M-A1a** | `mv a11y/node_modules` away | exit **1** | exit **2**, `Cannot find package 'puppeteer-core'` | gate message |
+| **M-A1b** | `throw` appended to `axe.min.js` (the review's own) | exit **1** | exit **0 — GREEN**, see finding 3 | — |
+| **M-A1b-bis** | `axe.min.js` truncated, `window.axe` undefined | — | exit **2**, `TypeError … reading 'run'` | gate message |
+| **M-A2a** | store emptied, `AXE_REQUIRE_QUEUE=1` | exit **0** | exit **2**, *"carries no queue row"* | gate message |
+| **M-A2a′** | same, variable unset (a developer's tree) | exit 0, silent | exit **0 with the gap PRINTED** | stdout |
+| **M-A2b** | the story's own `aria-pressed` defect replanted on the **sort link** | invisible — on no href | exit **1**, `/triage?sort=age  aria-allowed-attr(1, critical)`, and the ten derived routes all ✅ | axe |
+| **M-D3** | every nav href → `/triage` | exit **0**, `✅ /triage ×10` | exit **2**, *"1 DISTINCT route(s) … expected exactly 10"* | gate message |
+| **M-D25b** | every nav href → `#…` | *"did not answer"* — the wrong cause | exit **2**, naming the ten unresolvable hrefs | gate message |
+| **M-A3a** | E5 verbatim: bad value, good value in a **comment** above it | **GREEN** (axe: 210 nodes) | **RED at 3.82:1** — the figure the commit quotes | named assertion |
+| **M-A3b** | *control*: stale value in a comment over a **correct** declaration | **RED at 1.12:1** | **GREEN** | — |
+| **M-A3c** | `#68686b1a` (8-digit, alpha) | **GREEN at 4.96:1** (axe: 210 nodes) | **RED**, *"declared as a six-digit hex literal"* | named panic |
+| **M-A3d** | `light_root` returns the whole file | — | **RED**, *"still carries a comment"* | named assertion |
+| **M-D4a** | `--color-neutral-500` → `#ffffff` | **GREEN** | **RED**, pure-extreme refusal | named assertion |
+| **M-D4b** | `--color-bg` → `#ffffff` | **GREEN** | **RED**, same | named assertion |
+| **M-D4c** | `--color-accent-700` → `#b5d9fd` | **GREEN** | **RED on the luminance band** — ⚠️ its hue passed at 210° exactly, which is why the band exists | named assertion |
+| **M-D4d** | *control*: `--color-text` → `#141616`, a legal lightness-only repair | **RED** | **GREEN** | — |
+| **M-D4e** | `--color-neutral-500` → `#0000ff` | **GREEN** | **RED**, family, *"spans 255 channel units"* | named assertion |
+| **M-D8** | `aria-current` stripped from the sort link | **490 passed** | **RED**, message printing the tag it actually read | named assertion |
+| **M-D9** | `.queue-row > a:focus-visible` and `.btn-sort:focus-visible` deleted | 490 green, nothing else | **490 STILL green** and the **kbd gate reds**, `1px auto rgb(16,16,16)` | kbd gate |
+| **M-D2** | `app.js` emptied entirely | 490 + nine gates + axe **all green** | **kbd gate exit 1**, four checks red | kbd gate |
+| **M-D10** | `select()` no longer moves `aria-current` | — | **RED**, `focus=1 aria-current=0` | kbd gate |
+| **M-D11** | the restore marker removed | — | **RED**, `activeElement=BODY row=-1` | kbd gate |
+| **M-D14** | `location.replace` → `location.assign` | — | **RED**, `history 2 → 3` | kbd gate |
+| **M-D28** | the identical-URL guard removed | — | **RED**, the mark lost | kbd gate |
+| **M-arb4a** | the `pointerdown`/`click` cancel removed | — | **RED**, the pending navigation wins | kbd gate |
+| **M-arb4b** | the non-arrow `keydown` cancel removed | — | **RED**, same | kbd gate |
+| **M-floor** | one check skipped inside the kbd gate | — | **exit 2**, *"16 check(s) ran where 17 are declared"* | gate message |
+| **M-D33a** | `pushState` planted in `app.js` **code** | RED | **RED** — detection survives the comment stripping | named assertion |
+| **M-D33b** | the comment stripper returns `""` | — | **RED**, *"matched against nothing"* | named assertion |
+
+**29 ids: 26 reds, 2 controls GREEN by design (M-A3b, M-D4d), and 1 green for a reason the
+repair created (M-A1b).** Carriers are mixed and named per row — twelve on a named Rust
+assertion, twelve on a gate's own message or check, two on a named panic. No headline of the
+*"every red assertion-carried"* shape is claimed: this project has had that sentence refuted five
+times, and here it would be false by inspection of the table's own last column.
+
+### Six findings the pass itself produced
+
+1. 🔴 **MY OWN DRIVER CARRIED THE DEFECT THIS PROJECT HAS RECORDED FOUR TIMES.** The first
+   control ran `cargo test -p opencmdb-bin --locked page::tests::ac2 page::tests::every_text` —
+   **two filters where cargo accepts one**, so nothing ran. Caught because the control printed
+   **nothing** where it owed a result; had it printed a green, it would have been filed as a
+   confirmation. The form that works is `cargo test … -- filter1 filter2`.
+2. 🔴 **THE FIRST REPAIR FOR ARBITRATION 1 DID NOT WORK, and the mutation said so.** A top-level
+   `try` was written around the gate's whole body and `mv node_modules` **still exited 1**: a
+   static `import` is resolved before any statement of the module runs, so there is no `catch` of
+   ours in existence yet. `puppeteer-core` is a **dynamic** import now, inside the `try`. *A
+   repair believed is a repair unmeasured.*
+3. 🔴 **THE REVIEW'S OWN M-A1b NO LONGER MEASURES WHAT IT IS NAMED FOR, and the reason is a
+   different repair.** Appending `throw new Error(…)` to `axe.min.js` exited 1 under
+   `page.evaluate(axeSource)`, which propagates any throw; under `page.addScriptTag` — adopted
+   here for an unrelated reason — the same input is **harmless**, because the throw comes *after*
+   axe has defined itself, so axe genuinely ran and genuinely found nothing. **M-A1b-bis** is
+   what measures the contract. *A mutation named for one thing applied to another*, met again —
+   and this time the change of meaning was caused by the repair rather than by the driver.
+4. ⚠️ **A CHECK WRITTEN FROM A FINDING'S SUMMARY INSTEAD OF ITS INPUT REDDENED A CORRECT
+   PRODUCT.** The *net movement of zero* check started from a bare `/triage`, where no row is
+   current, so ↓ then ↑ genuinely moves the operator from *no row* to *row 0*. E13 names its
+   input precisely — *"from `/triage?sel=<row0>`, row 0 already current"* — and the check now
+   starts there. *The summary of a finding is not its input.*
+5. 🔴 **A RED WAS NEARLY MISATTRIBUTED TO THE MUTATION THAT DID NOT CAUSE IT.** M-D9 (a CSS
+   change) appeared to red the Rust suite at 489/1. The failing test was
+   `screens::tests::no_screen_is_chosen_by_javascript`, which reads **`app.js`** — the red came
+   from this pass's own keyboard-layer edit, not from the stylesheet. Re-measured on a clean
+   base: M-D9 leaves **490 green**, exactly as the review reported, and reds the kbd gate alone.
+   *A mutation's red belongs to the mutation only if the baseline was clean.*
+6. 🔴 **AND THE TEST THAT REDDENED WAS READING A COMMENT** — `no_screen_is_chosen_by_javascript`
+   matched its `history.` needle inside a *sentence describing* the defect being repaired. Same
+   family as `token_hex` reading a CSS comment, one file over and the same day. ⚠️ The tempting
+   fix was to rewrite the prose; that would have been the guard editing the record instead of the
+   record editing the guard. The guard strips comments now, its detection is re-measured intact
+   (M-D33a) and its stripper has a premise that can fail (M-D33b).
+
+### What the repair did NOT close, stated rather than implied
+
+- **The exit contract stops at the shell** (arbitration 1's stated residual): `npm ci`, `curl`
+  and a missing Node keep their own codes, none of them 1 or 2. Written in the gate's header and
+  in `ci.yml`, registered.
+- **The contrast table is still an enumeration.** Two painted grounds stay out, with the
+  measurement that adding them reds pairings no screen renders; a `TEXTS` entry removed still
+  reduces coverage with nothing red. *An enumeration cannot claim the completeness of a
+  property* — the sixth application of that sentence in this project, and it is written at the
+  guard rather than contradicted by it.
+- **`--color-accent-600` still fails AA on all four grounds**, latent because no rule paints it.
+  Registered with its owner.
+- **The luminance band is a tripwire, not a proof**: a token can be moved anywhere inside its own
+  band. What it refuses is a jump to another part of the ramp, which is what the three green
+  mutations were.
+
 ---
 
 ## Change Log
@@ -1375,5 +1555,6 @@ first.
 | 2026-08-22 | **VALIDATED by two fresh-context layers: 38 findings, 12 HIGH.** Contexting corrected on eight points, three of them its own measurements — the axe figures were taken on an EMPTY store (the surface T4–T6 target was blank); the constraint-4 and `⏎` refusals rested on false premises; `Screen::Device` IS in `Screen::ALL`. The validation also proved what contexting had only assumed: the two-token fix takes **237 → 0** on a populated store. |
 | 2026-08-22 | **DEVELOPED.** 727 → 728 tests, nine gates, axe green on all ten routes at two queue sizes. Three tokens, `aria-pressed` → `aria-current`, the keyboard layer in shape (E), four focus rules, the CI step. 🔴 Story 6b.1's hex-literal guard became TWO properties (hue + contrast); a SECOND `aria-pressed` oracle the spec had not named was found by running the change; and **four times the faulty instrument was mine, each settled by a control**. |
 | 2026-08-22 | 🔴 **ARBITRATION 4 by Guy: shape (E)** — the three readings of *"move the selection"* were prototyped and differ by **20×**; under (A) a held arrow loses half its presses. |
-| 2026-08-22 | **TRIAGED.** 60 raw findings -> **33 distinct defects**: six reached by all three layers, ten more by two, so nearly half of what was written is a second road to the same thing. 🔑 **D4 exists only in the triage** — the hue guard is too LOOSE for greys (any grey passes, B14/A9) and too TIGHT for the repair it exists to permit (a legal lightness-only darkening reds it, E9), and its failure message states as fact what the mutation producing it had just disproved. 🔑 D2·D3·D5 compose: the accessibility apparatus **reports success over a surface it does not reach**. ⚠️ The preamble's *"three refuted claims"* is imprecise — two are layer-versus-layer (the Chrome leak, the lockfile, both dismissed with their check), the third refutes **the story itself** (the scroll control) and is a defect. Four arbitrations stand open. |
+| 2026-08-23 | **TRIAGED.** 60 raw findings -> **33 distinct defects**: six reached by all three layers, ten more by two, so nearly half of what was written is a second road to the same thing. 🔑 **D4 exists only in the triage** — the hue guard is too LOOSE for greys (any grey passes, B14/A9) and too TIGHT for the repair it exists to permit (a legal lightness-only darkening reds it, E9), and its failure message states as fact what the mutation producing it had just disproved. 🔑 D2·D3·D5 compose: the accessibility apparatus **reports success over a surface it does not reach**. ⚠️ The preamble's *"three refuted claims"* is imprecise — two are layer-versus-layer (the Chrome leak, the lockfile, both dismissed with their check), the third refutes **the story itself** (the scroll control) and is a defect. Four arbitrations stand open. |
 | 2026-08-22 | **CODE-REVIEWED by three isolated layers — the three reports are poured in VERBATIM and UNTRIAGED.** 60 raw findings, no dedup, no ranking, no arbitration. The acceptance layer returns **AC5 NOT MET** (no mutation table; the keyboard layer, the focus ring and the new `aria-current` oracle each measured green) and AC3/AC4/AC7 partly met. 🔴 The review session crashed mid-flight: the edge-case layer was re-run from its original mandate in a fresh worktree, the other two recovered intact from their transcripts. |
+| 2026-08-23 | **TRIAGED, ARBITRATED and REPAIRED.** 60 raw findings -> **33 distinct defects** (six by all three layers, ten by two). 🔑 **D4 exists in no single report**: the AC2 hue guard was too LOOSE and too TIGHT at once, and its failure message asserted as fact what the mutation producing it had disproved. 🔑 **D2·D3·D5 compose**: the accessibility apparatus reported success over a surface it did not reach. **Guy's four arbitrations, the recommendation taken in all four.** `a11y/kbd-probe.mjs` becomes the second BROWSER gate (17 checks, a floor equal to what is there) and CI runs it; the store is seeded; `token_hex` reads the light `:root` block with comments stripped; the settle timer yields to the operator. **29 mutation ids, 26 reds, 2 controls green by design, 1 green for a reason the repair created.** ⚠️ **Six findings against the pass itself**, the sharpest being a guard matching its needle inside a COMMENT — `token_hex`'s defect one file over, the same day. 728 tests both ways, nine xtask gates + two browser gates, clippy `--all-targets`. |
