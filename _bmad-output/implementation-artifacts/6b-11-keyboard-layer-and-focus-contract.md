@@ -1159,6 +1159,212 @@ No axe violation (measured: exit 0) and no code collision (`currentIndex` scopes
 
 ---
 
+# The TRIAGE pass — 2026-08-22
+
+**60 raw findings → 33 distinct defects.** The three reports above stay verbatim and untouched; this
+section is what reading them *together* establishes, and nothing here is a fourth layer's opinion —
+every row cites the layer that measured it. Layer keys: **B** = Blind Hunter (the patch alone),
+**A** = Acceptance Auditor (spec + tree + live store), **E** = Edge Case Hunter (mutations, browser,
+8-row queue).
+
+⚠️ **The raw count was never a total, and the ratio is the interesting number**: 60 findings cover
+33 defects, so **nearly half of what the layers wrote is a second or third layer reaching the same
+thing by a different road**. Sixteen defects were reached by two layers, six by all three. A count
+over three isolated reports measures the isolation, not the product.
+
+## §T1 — What all THREE layers reached independently
+
+These six are the review's spine. Each was found blind from the diff, replayed against the spec,
+*and* reproduced by a planted mutation in a browser — three roads, one defect.
+
+| # | The defect | B | A | E | Where it goes |
+|---|---|---|---|---|---|
+| **D1** | The axe gate answers **1** — *the product has violations* — for *the gate could not run*, which it promises as **2** | 1 (≈8 unguarded paths enumerated from the diff) | 17 (a missing Node exits **127**, neither code) | 6 (**measured twice**: `mv node_modules` → 1; a broken axe payload → 1) | **Arbitration 1** |
+| **D2** | The keyboard layer — the story's central deliverable — is carried by **nothing that runs** | 13 (`kbd-probe.mjs` is in no script and no CI step; it prints `TOUT VERT` when it measures nothing) | 1 (`: > app.js` → **490 passed**) | 4 (whole file replaced → 490/161/77, nine gates, axe exit 0) | Patch — AC5 |
+| **D3** | The route floor cannot tell ten screens from **one screen ten times** | 8 (`<`, no `Set`, no `null` filter) | 21 | 2 (**measured verbatim**: every nav href → `/triage`; gate printed `✅ /triage ×10 … 0 violation node(s) EXIT=0` while a planted violation was live on five screens) | Patch |
+| **D4** | The AC2 hue guard is **too loose and too tight at once** | 14 (`hue()` returns a constant `240` for any achromatic — so `#0000ff` and `#ffffff` are one hue) | 9 (**three green mutations**: `neutral-500`→`#ffffff`, `bg`→`#ffffff`, `accent-700`→`#b5d9fd`; with the ✅ control that it is *not* vacuous for chromatic tokens) | 9 (**the mirror**: `--color-text` has span 3, so its smallest representable hue step is **20°** against a ±6° tolerance — a legal lightness-only darkening **REDS** it) | Patch — see §T3 |
+| **D5** | The gate is green over a surface it never reaches | 6 (the new attribute renders only under `?sort=age`; nothing appends a query string and axe runs before any keypress) | 14 (CI seeds nothing, so §0c's blind state is CI's permanent state) | 1 (**measured**: empty store → `queue-row` 0, `btn-gesture` 0, `triage-panes` 0; the story's own defect replanted **reds at 8 rows and exits 0 with the store emptied**) | **Arbitration 2** |
+| **D6** | `token_hex` takes the **first textual match** in the file | 15 (the dark palette is a second complete set; the light one wins **by source order**, undocumented) · 20 (8- and 3-digit spellings) | — | 5 (**a CSS COMMENT carrying the old value turns the property off in silence** — guard green, axe **210 nodes**; and the opposite direction reds a correct sheet at 1.12:1) · 7 (an 8-digit alpha reads as its opaque prefix: Rust passes at 4.96:1, axe exits 1) | **Arbitration 3** |
+
+🔑 **D4 is the finding no single layer has, and the triage is the only place it exists.** B and A
+measured the guard letting *anything grey* through; E measured the same guard *refusing a correct
+repair*. Read together: the property is unattainable exactly where it is unconstrained, and
+E's failure message — *"a contrast repair moves LIGHTNESS, never hue"* — **states as fact the thing
+the mutation that produced it had just disproved.** Neither half is a full account; the pair is.
+
+🔑 **And D2 · D3 · D5 compose into one sentence the individual findings do not carry**: the
+accessibility apparatus this story shipped **reports success over a surface it does not reach** —
+an empty store (D5), walked by a floor that cannot detect duplication (D3), beside a keyboard layer
+nothing exercises (D2). Three independent holes, one shape, and `axe-gate.mjs`'s own comment names
+it: *"a harness that derives nothing and reports success is the failure mode this file exists to
+avoid."*
+
+## §T2 — What TWO layers reached independently
+
+| # | The defect | Layers | Note |
+|---|---|---|---|
+| **D7** | Nothing cancels the settle timer — not `click`, not `blur`, not `pagehide` | B3 (deduced) · E3 (**measured**: at a 1200 ms document delay the operator clicked row 6 and landed on row 2; **control** on a warm store — the click wins) | **Arbitration 4** |
+| **D8** | The new `aria-current` oracle is satisfied by a **queue row on the same page** | B2 (deduced **from the diff alone**, via `kbd-probe.mjs`) · A3 (**measured**: stripping it from the sort link → 490 passed) | Patch |
+| **D9** | The focus ring is carried by nothing; its one Rust carrier is a needle **inside the amber test** | A2 (**measured**: two selectors deleted → 490 green; the third reds `ac4_the_amber_is_reserved…`) · B10 (the needle was *moved*, not widened, and is formatting-coupled) | Patch — this is T3's own shape reproduced in T5 |
+| **D10** | `select()` moves the class and the focus, never `aria-current` | B11 (two consequences, incl. the stale fallback after a blur) · E10 (**measured**: the disagreement window is **360 ms warm**, 1551 ms at 1200 ms, 2240 ms at 1900 ms) | Patch — one `setAttribute` |
+| **D11** | Every settle navigation destroys the operator's focus position | A4 (**measured**: `activeElement` → `BODY`, **12 Tab presses** to re-enter the queue) · E11 (three witnesses; one Tab after the settle lands on *nav-entry ǀ Triage*) | Patch or register |
+| **D12** | `checked == TEXTS.len() * GROUNDS.len()` cannot fail | B4 (certain, from the diff) · A10 (**measured**: shrinking `TEXTS` 4 → 3 leaves 490 green, because the right-hand side shrinks with the left) | Patch |
+| **D13** | `GROUNDS` omits two grounds the sheet paints text on | E8 (**measured**: `.example-marker-badge` → `--muted` passes Rust, axe exits 1 at 3.76:1) · A10b (six painted background tokens, four listed) | Patch — ⚠️ see the non-contradiction below |
+| **D30** | Probe hygiene: hardcoded credentials `op`/`pw`, a hardcoded base URL, French against the English-artefact convention, the typo *"le focix"*, and a label promising a *highlight* while the code reads a class name | B21 · A18 | Patch |
+
+⚠️ **D13 is where two layers look like they disagree and do not.** A measured the *tree* and refuted
+the stronger form — every painted pairing outside the table clears AA today (`.badge` 9.55,
+`.filter.is-active` 9.10, the `.statepill-*` 6.03–11.45), which is why axe agrees. E measured the
+*guard* and showed it blind to a planted defect on the same grounds. **The sheet is clean and the
+guard would not notice if it stopped being** — both true, and only the pair says so.
+
+## §T3 — Single-layer defects that survive triage
+
+**Behaviour.** **D14** arrow navigation fills the history stack (E12, measured `history.length`
+2 → 5; **and `_triage.html:18-20` justifies choosing `aria-current` over `role="button"` precisely
+to keep the back button** — the layer added in the same commit degrades it). **D28** ↓ then ↑ back
+to the row already selected issues a full reload to the identical URL (E13). **D27** the inertness
+probe visits only the three screens where the early return fires — *a guard placed where the defect
+cannot occur* (B12); ⚠️ E extended it to **all nine** non-triage routes and inertness **held**, so
+the behaviour is confirmed and the guard is still misplaced.
+
+**The apparatus.** **D25** gate robustness, four cheap ones in one file: `process.exit` after
+`console.error` can truncate the only diagnostic that distinguishes the two failures (B16); a
+violation carrying zero nodes prints red and exits **0** (B19); `routes` entries are used
+unvalidated, so a `null` href is reported as *"did not answer"* — the wrong cause (B22); axe is
+injected as an evaluated string rather than a script tag (B23, suspicion). **D26** the CI readiness
+loop is bounded at **~15.5 minutes**, not the 30 seconds it reads as (E14, measured
+`http=503 time=30.002716` — `curl` carries no `--max-time`, and neither job nor step has
+`timeout-minutes`).
+
+**The record — and this is where the acceptance layer did its work.**
+
+- 🔴 **D15 · The story contradicts itself, and the false half is the one that changed a test.** The
+  Dev Agent Record's instrument #1 says *"arrows do not scroll under headless CDP at all"*; A5
+  measured `/diagnostic`: shipped code → **`scrollY 40`**, an unconditional `preventDefault` →
+  **`scrollY 0`**. The check discriminated. §0e's own figure (*0 → 26 px with an early return, 0 → 0
+  without one*) agrees with A and contradicts the record four sections later. Against this project's
+  own rule — **a cause needs a check, not a plausible story** — the recorded cause is refuted and
+  A's reading (a *dispatched* untrusted `KeyboardEvent` rather than a pressed key, i.e. a mutation
+  named for one thing applied to another) is the one with a measurement behind it.
+- 🔴 **D16 · *"Six divergences registered"* is false in three documents.** `deferred-work.md` gained
+  **three** rows (A7; **re-measured here**: `47 insertions`, one `## Deferred from: story 6b.11`
+  section, three owner rows). The `ci.yml` exception and 6b.1's token-literal conflict exist only as
+  **code comments ending "registered"**; and the **`j`/`k` + `⏎` divergence — the largest, since
+  `epics.md:2306`/`:2308` prescribe them and Epic 7 must know they were skipped — is in the register
+  nowhere** (`grep`, empty, re-run here). Story 6b.9's sentence, verbatim: *a comment that says
+  "registered" is not a registration*.
+- 🔴 **D17 · Neither twin carries this story.** `git diff master...HEAD -- CLAUDE.md
+  docs/project-context.md` is **one line changed in each** — the `RUSTFLAGS` correction — and
+  `grep -c "6b\.11"` returns **1** in each, that same line (A6; **re-measured here, identical**).
+  Consequence: both twins' last *"THE LIVE COUNT lives in…"* pointer still names
+  `6b-10-copy-fr-and-en.md`, whose figure is **727**, while this story's is **728**.
+- 🔴 **D18 · There is no mutation table.** Four anecdotes, no ids, no carriers, no greens (A8) — in
+  the story whose **AC5 is the mutation record**, and whose T8 is ticked. Three of its guards are
+  measured green in the reports above; a table would have had to say so.
+- **D19 · The dead contract has FOUR artefacts, not three** — `_gap_card.html:1` still carries
+  `tabindex="-1"` (A12; **confirmed here**), whose only purpose was the focus the deleted handler
+  performed. T5 says *"all three"*; §0b enumerates three.
+- **D20 · `.gitignore` closes the incident on one path, not the pattern** — `git check-ignore -v
+  node_modules/foo` → **rc=1, not ignored** (A13; **confirmed here**, while `a11y/node_modules/foo`
+  maps to `.gitignore:110`). The entry's own comment says a directory that size entering the tree is
+  invisible to every check the project has — as true one directory up.
+- **D21 · Counts and a token that contradicts its own comment.** *"Two tokens were darkened"* — the
+  diff darkens **three** (B17, which also verified by hand that the *constant hue and saturation*
+  half **holds** for all three, so only the count is wrong). And `--accent-document` sits in `TEXTS`
+  — *the tokens a screen paints text with* — beside an unchanged comment saying it is *"used by
+  NOTHING else"* with a test pinning that at zero (B5): **the record and the code disagree about a
+  token under a pinned-usage guard**, and one of the two sentences is false.
+- **D22 · `--color-accent-600` fails AA on all four grounds** (A11: 3.80 / 3.51 / 3.91 / 3.45) —
+  latent, since no rule references it today, and T2's ticked bullet asking whether the ramp follows
+  is answered nowhere. **D23 · The headline `237` is reproducible from no store state** (A19: A's own
+  7-row store gives **221**) — which is AC4's own rule, *every figure names its store state*, unmet by
+  the story's loudest figure. **D24 · §0g's second inherited obligation is neither taken nor
+  re-registered** (A15), and **the register row this story discharges is left standing as pending**
+  (A16, `deferred-work.md:4376`, while the file already carries `## Discharged by story 6b.2`
+  sections). **D31** two adjacent helpers give opposite justifications for float versus integer
+  arithmetic (B18 — both defensible, the pair is not). **D32** the File List omits `.gitignore`
+  (A22). **D33** 6b.2's `no_screen_is_chosen_by_javascript` needle list now sits beside a deliberate
+  `window.location.assign` with no note (A21b).
+
+**Stated, not a defect: D29** — three different `aria-current` semantics live on one rendered
+`/triage` (E15: `nav-entry = page`, `btn-sort on = true`, queue row `= true`), with no axe violation
+and no code collision measured. Recorded so it is not rediscovered as a bug.
+
+## §T4 — The refutations, each with the check that settled it
+
+⚠️ **The untriaged preamble named three refutations and it is imprecise: two are a layer refuting a
+layer, the third is a layer refuting THE STORY.** They must not be filed together — one kind
+corrects a reviewer, the other corrects the product record.
+
+| Claim | Who claimed it | The check | Verdict |
+|---|---|---|---|
+| *"Those paths also leak the Chrome process"* | B1, secondary clause | E ran `pgrep -af "/usr/bin/google-chrome"` after a launch failure, a 500-route abort **and** an uncaught throw | **REFUTED** — 0 in every case; puppeteer's exit handler reaps the child. B1's *primary* claim (exit 1) is confirmed by E6. |
+| *"`npm ci` with no lockfile visible in the change"* | B7, HIGH **if true**, self-labelled SUSPICION, and it **named the check itself** — *"settle it with `git ls-files a11y/`"* | A ran `npm --prefix a11y ci` → 26 packages, 354 ms; **re-run here**: `git ls-files a11y/` lists `package-lock.json` | **REFUTED** — and this is the honest shape of a blind finding: a claim carrying the instrument that kills it. |
+| *"Arrows do not scroll under headless CDP at all"* | ⚠️ **the story's own Dev Agent Record**, not a layer | A5's scroll measurement, above | **REFUTED — against the story.** Filed as **D15**, a defect, not as a reviewer's error. |
+
+**E also ran and refuted fourteen suspicions of its own** — among them that a click during the
+settle window is always overridden (**refuted warm**, which is exactly the control that makes D7's
+slow-document measurement mean something), that the CI trap masks the exit code, that a route
+answering 500 is reported as a violation (it exits **2**, correctly), that a violation on a late
+route is lost, that `?sort=age` is dropped by an arrow, that modified arrows are captured, that the
+focus ring is invisible (**`2px solid rgb(75,107,139)` on `rgb(245,245,248)` = 5.11:1** against
+WCAG 1.4.11's 3:1), and that disabling JavaScript breaks the queue (8 rows still render — the
+selection is a URL). **A likewise refuted the stronger form of its own D13** and confirmed the hue
+guard is not vacuous for chromatic tokens. None of that is a finding, and all of it is work: it is
+the difference between a suspicion and a measurement.
+
+## §T5 — What the triage says about the METHOD
+
+🔑 **The blind layer found HIGHs from the diff alone for a FIFTH consecutive story**, and this time
+the sharpest of them is a deduction no sighted layer made: **B2 established that the new
+`aria-current` assertion is satisfied by a different element — using only `kbd-probe.mjs`, a file
+added in the same patch, as evidence that a queue row already carries the attribute on a default
+render.** It could not open the tree, so it read the diff *against itself*. A then measured exactly
+that (D8). The argument for keeping that layer blind is now five stories old and has not lost once.
+
+⚠️ **The crash is visible in the shape of the reports and it cost nothing measurable**: the
+edge-case layer was re-run from its original mandate rather than resumed, and it is the layer that
+contributed the most *executed* mutations (fifteen findings, every one with a planted input). A
+resumed layer would have inherited 569 bytes of narration; a re-run one inherited a mandate.
+
+⚠️ **The dominant defect class of Epic 5 is present here in four separate places and was named by
+three different layers**: D2 (a layer covered by a script nothing runs), D12 (a counter that cannot
+fail placed over a loop that cannot scan nothing), D13 (a guard blind on the grounds it omits), D27
+(an inertness probe run only where the early return fires). ⚠️ And **D9 is the story's own T3
+reproduced in its T5** — T3 exists to undo a source-reading needle standing in for a DOM property,
+and the focus contract's only Rust carrier is a source-reading needle inside a test about the amber.
+
+## §T6 — Ranked disposition
+
+**Four ARBITRATIONS for Guy** — each raised by a measurement, none decidable from the criteria:
+**D1** the exit-code contract (repair, or narrow the promise in writing on story 5.12's precedent) ·
+**D5** does CI seed a queue before measuring · **D6** `token_hex` reading a comment · **D7** the
+uncancelled settle timer.
+
+**PATCH — the guards, in the order the measurements rank them.** D2 (AC5's central hole) · D4 (the
+hue guard, both directions) · D3 (the route floor, a `Set` and `!==`) · D8 (a real oracle for
+`aria-current`) · D9 (a DOM-level carrier for the focus ring) · D12 (a premise that can fail) ·
+D13 (the two omitted grounds) · D10 (one `setAttribute`) · D25 (four cheap gate repairs) · D26
+(`--max-time`) · D28 · D30.
+
+**PATCH — the record, and AC5 is not met until D18 exists.** D18 (the mutation table) · D15 (a
+refuted cause, per this project's own rule) · D16 (three documents saying *registered*) · D17 (the
+twins and the live-count pointer) · D19 · D20 · D21 · D23 · D32 · D33 · D31.
+
+**REGISTER by name, with an owner**: D11 (focus lost at the settle — decide, or Epic 7 with the
+`⏎` gesture) · D14 (`location.replace`) · D22 (`--color-accent-600`) · D24 (both inherited rows) ·
+D27's residual · the `j`/`k` + `⏎` divergence that D16 shows was never registered at all.
+
+**DISMISSED with the check**: the Chrome leak, the missing lockfile (§T4).
+
+**AC verdicts stand as the acceptance layer set them: AC5 NOT MET; AC3, AC4 and AC7 PARTLY MET;
+AC1, AC2, AC3b and AC6 MET.** Nothing in the triage moves one of them, and D18 is what AC5 needs
+first.
+
+
+---
+
 ## Change Log
 
 | Date | Change |
@@ -1169,4 +1375,5 @@ No axe violation (measured: exit 0) and no code collision (`currentIndex` scopes
 | 2026-08-22 | **VALIDATED by two fresh-context layers: 38 findings, 12 HIGH.** Contexting corrected on eight points, three of them its own measurements — the axe figures were taken on an EMPTY store (the surface T4–T6 target was blank); the constraint-4 and `⏎` refusals rested on false premises; `Screen::Device` IS in `Screen::ALL`. The validation also proved what contexting had only assumed: the two-token fix takes **237 → 0** on a populated store. |
 | 2026-08-22 | **DEVELOPED.** 727 → 728 tests, nine gates, axe green on all ten routes at two queue sizes. Three tokens, `aria-pressed` → `aria-current`, the keyboard layer in shape (E), four focus rules, the CI step. 🔴 Story 6b.1's hex-literal guard became TWO properties (hue + contrast); a SECOND `aria-pressed` oracle the spec had not named was found by running the change; and **four times the faulty instrument was mine, each settled by a control**. |
 | 2026-08-22 | 🔴 **ARBITRATION 4 by Guy: shape (E)** — the three readings of *"move the selection"* were prototyped and differ by **20×**; under (A) a held arrow loses half its presses. |
+| 2026-08-22 | **TRIAGED.** 60 raw findings -> **33 distinct defects**: six reached by all three layers, ten more by two, so nearly half of what was written is a second road to the same thing. 🔑 **D4 exists only in the triage** — the hue guard is too LOOSE for greys (any grey passes, B14/A9) and too TIGHT for the repair it exists to permit (a legal lightness-only darkening reds it, E9), and its failure message states as fact what the mutation producing it had just disproved. 🔑 D2·D3·D5 compose: the accessibility apparatus **reports success over a surface it does not reach**. ⚠️ The preamble's *"three refuted claims"* is imprecise — two are layer-versus-layer (the Chrome leak, the lockfile, both dismissed with their check), the third refutes **the story itself** (the scroll control) and is a defect. Four arbitrations stand open. |
 | 2026-08-22 | **CODE-REVIEWED by three isolated layers — the three reports are poured in VERBATIM and UNTRIAGED.** 60 raw findings, no dedup, no ranking, no arbitration. The acceptance layer returns **AC5 NOT MET** (no mutation table; the keyboard layer, the focus ring and the new `aria-current` oracle each measured green) and AC3/AC4/AC7 partly met. 🔴 The review session crashed mid-flight: the edge-case layer was re-run from its original mandate in a fresh worktree, the other two recovered intact from their transcripts. |
