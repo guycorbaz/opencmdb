@@ -75,7 +75,150 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-22  # 6b.10 DONE — PR #115 merged as `d40a613`. Epic 6b: 11 done of 13.
+last_updated: 2026-08-23  # 6b.11: a SECOND REVIEW ROUND ran on the REPAIR itself (three
+                          # isolated layers, a different model, one worktree and one live store
+                          # each). 19 raw findings, 17 distinct, and NOT ONE reached by two
+                          # layers -- where round one found six by three roads each.
+                          # 🔑 Its most instructive pairing is a DISAGREEMENT OF READING: the
+                          # edge layer measured "kbd-probe on exactly 1 row -> exit 2, MIN_ROWS
+                          # enforced" and filed it as a REFUTED SUSPICION (the contract holds);
+                          # the acceptance layer measured the same fact and filed it HIGH (the
+                          # gate cannot run in CI). Same number, opposite verdicts; the
+                          # difference is the question asked.
+                          # 🔴 HEADLINE: **CI WAS GREEN ON RESIDUE.** From a virgin store the
+                          # shipped demo seed renders ONE queue row (0 before, 1 after,
+                          # re-measured) against a floor of two -> the keyboard gate exits 2.
+                          # The passing run reported `queue: 3 row(s)` only because the `Tests`
+                          # step uses the same database immediately before. ⚠️ And §T8's "a
+                          # seeded two-row queue" existed in my session's database and NOWHERE
+                          # in the repository. Closed by `a11y/seed.sql` (truncate + four
+                          # entities); AUTHORSHIP_ROOTS gains `a11y` and SANCTIONED_SITES names
+                          # the file, IN ONE ACT -- M-P1/M-P2 prove each half load-bearing.
+                          # 🔴 Three more, each mine: `measured_tokens == 6` was as VACUOUS as
+                          # the `checked == 16` it replaced (found by the layer holding the diff
+                          # and nothing else, and its comment claimed it CAN fail); the focus
+                          # marker carried a bare "1" and belonged to NO navigation, so a stale
+                          # one stole focus on a plain load -- the autofocus the design refuses;
+                          # and `sessionStorage` throwing silently restores the original defect,
+                          # now a STATED limit.
+                          # ⚠️ My M-D2 row said FOUR checks red where there are EIGHT -- my
+                          # driver piped the gate through `head -4`.
+                          # 🔑 The repair of the repair produced FOUR findings against itself:
+                          # the stale-marker guard came back GREEN under the reversion it exists
+                          # to catch; the floor said 18 for 19 then 19 for 20; the
+                          # served-versus-source check is UNREDDENABLE in a debug build and is
+                          # recorded green-by-construction; and widening the perimeter reddened
+                          # THREE xtask tests while `cargo xtask ci` stayed GREEN -- *a gate
+                          # green over the real tree says nothing about its own tests*.
+                          # ✅ Refuted with their checks: the "CI step lacks its credentials"
+                          # HIGH (step-level `env:`, and CI authenticated), a `//` inside a
+                          # string literal (two layers independently), plus fourteen the edge
+                          # layer ran itself.
+                          # 20 checks in the keyboard gate, nine xtask gates, 728 tests both
+                          # ways (6.65 s live / 0.65 s without -- ⚠️ 16.7 s was first written
+                          # and had a build inside it).
+                          # ✅ **AC5 is MET**, resolved on the ACCEPTANCE LAYER'S OWN
+                          # CRITERION: it returned NOT MET while naming the CONDITION rather
+                          # than the conclusion -- "a carrier that cannot run in the pipeline
+                          # that is supposed to enforce it is not a carrier" -- and CI run
+                          # 32658655672 measures that condition satisfied: `queue: 4 row(s)`
+                          # (the number a11y/seed.sql produces from a TRUNCATED store, not the
+                          # 3 the residue left) and `20 check(s) run, 0 failed`.
+                          # ⚠️ The evidence is neither mine nor the layer's, which is what makes
+                          # the verdict resolvable without anyone marking their own homework.
+                          # All seven other ACs stand as the auditor set them: AC1, AC2, AC3,
+                          # AC3b, AC4, AC6, AC7 MET.
+                          # ⚠️ What the OPERATOR can do is unchanged -- no route, no write, no
+                          # gesture. What the pass buys is that a regression in the keyboard
+                          # layer or the axe-clean state is caught BEFORE a merge, which two
+                          # rounds ago was true of neither.
+                          # Story STAYS at `review`: `done` is the MERGE's business.
+                          # Was: 6b.11 TRIAGED and REPAIRED. Story STAYS at `review`: `done` is the
+                          # MERGE's business, and the three reviewing layers have NOT re-audited
+                          # the repair.
+                          # 🔑 **60 raw findings -> 33 DISTINCT defects** -- six reached by all
+                          # three layers, ten more by two, so nearly half of what was written is a
+                          # second road to the same thing. *A count over three isolated reports
+                          # measures the isolation, not the product.*
+                          # 🔴 ONE DEFECT EXISTS IN NO SINGLE REPORT: the AC2 hue guard was too
+                          # LOOSE and too TIGHT at once -- two layers measured any grey passing it,
+                          # the third measured it REFUSING a legal lightness-only repair
+                          # (`--color-text` spans 3 channel units, so its smallest hue step is 20°
+                          # against a ±6° tolerance), and its failure message asserted as fact what
+                          # that mutation had just disproved. Now: family + luminance band; all
+                          # five green mutations red, the legal repair green as the control.
+                          # 🔴 AND THREE FINDINGS COMPOSE: the accessibility apparatus REPORTED
+                          # SUCCESS OVER A SURFACE IT DID NOT REACH -- CI seeded nothing (0 queue
+                          # rows, 0 gesture controls, 0 panes; the story's own defect replanted
+                          # there exits 0), the route floor could not tell ten screens from one
+                          # screen ten times, and `app.js` emptied left 490 tests, nine gates and
+                          # the axe gate GREEN.
+                          # ✅ GUY'S FOUR ARBITRATIONS (2026-08-23), recommendation taken in all
+                          # four, each recorded with the option refused:
+                          #   (1) repair the exit contract AND state the residual -- every "could
+                          #       not run" is 2 now (`mv node_modules` went 1 -> 2), ⚠️ but the
+                          #       SHELL keeps its own codes (npm, curl 22, Node 127), written not
+                          #       promised.
+                          #   (2) seed the store AND put the query-string states in front of axe,
+                          #       over seeding alone: the replacement for an axe-CRITICAL attribute
+                          #       was verified by no browser at all. Measured: the defect replanted
+                          #       reds `/triage?sort=age` and NONE of the ten derived routes.
+                          #   (3) `token_hex` reads the light `:root` BLOCK, comments stripped --
+                          #       a comment carrying the old value turned the contrast property off
+                          #       in SILENCE (guard green, axe 210 nodes).
+                          #   (4) the operator's gesture outranks the pending timer: at 1200 ms
+                          #       (inside 6b.10's own 2 s budget) the click on row 6 landed on row
+                          #       2; warm-store control, the click wins.
+                          # 🔑 `a11y/kbd-probe.mjs` is now the SECOND BROWSER GATE (⚠️ NOT a tenth
+                          # xtask gate -- that count stays NINE): 17 checks, the 0/1/2 contract, a
+                          # floor EQUAL to what is there. Emptying `app.js` reds it; so does
+                          # removing the two focus selectors, which leaves the Rust suite at 490
+                          # green exactly as the review measured -- the DOM-level carrier AC5
+                          # demands.
+                          # 🔴 AC5 ITSELF WAS AMENDED by Guy (2026-08-23), two words and no
+                          # change of scope: a source-reading guard "does NOT SUFFICE" where the
+                          # defect lives in the DOM, where it read "is not counted". The scope
+                          # was earned by measurement (three-for-three: app.js emptied, the two
+                          # focus rules deleted, aria-current stripped -- 490 green each time);
+                          # what over-reached was "counted", which reads as "worth nothing",
+                          # while a source guard is cheaper and NAMES THE CAUSE where a browser
+                          # gate names only the symptom. The two cumulate.
+                          # ⚠️ The cost the amendment does NOT dissolve is proportionality: the
+                          # criterion produced a browser gate (~25 s of CI), which is the minimum
+                          # for a story whose subject IS the rendered page and would be zeal for
+                          # a `font-family` declaration. A rule about where the defect lives,
+                          # never about how much apparatus to build.
+                          # ⚠️ The three review reports quote the ORIGINAL wording and are NOT
+                          # edited -- verbatim, written against the criterion as it stood, and
+                          # their verdict is unaffected: both phrasings give the same answer on
+                          # all three measurements they took.
+                          # 🔴 AC5's mutation table EXISTS now: 29 ids, 26 reds, 2 controls green
+                          # by design and 1 green for a reason the repair created; carriers MIXED
+                          # and named per row, no "every red assertion-carried" headline claimed.
+                          # ⚠️ THE PASS PRODUCED SIX FINDINGS AGAINST ITSELF, all tabled: my own
+                          # driver carried the two-filter defect (caught because the control
+                          # printed NOTHING where it owed a result); the first fix for arbitration
+                          # 1 still exited 1 (a static `import` resolves before any `try`); the
+                          # review's own broken-payload mutation stopped measuring the exit
+                          # contract because the injection form changed under it; a check written
+                          # from a finding's SUMMARY instead of its INPUT reddened a correct
+                          # product; a red was nearly credited to a mutation that did not cause it;
+                          # and the test that reddened was matching its needle inside a COMMENT.
+                          # 🔴 The story's own recorded CAUSE for dropping a scroll check is FALSE
+                          # and is corrected IN PLACE with its refutation attached -- and §0e of
+                          # the same document carried the refuting figure four sections above.
+                          # 🔴 "Six divergences registered" was false in three documents; the
+                          # `j`/`k` + `⏎` divergence, which `epics.md:2306`/`:2308` prescribe, was
+                          # in NO register. Seven rows written, one row DISCHARGED.
+                          # ⚠️ Both twins now carry the story (they carried one line each -- the
+                          # RUSTFLAGS correction -- while pointing the live count at 6b.10's file).
+                          # 728 tests both ways (16.7 s live / 0.60 s without a store), nine xtask
+                          # gates, clippy --all-targets, RUSTFLAGS="-D warnings", fmt: all green.
+                          # Was: 6b.11 CODE-REVIEWED by three isolated layers -- reports POURED IN
+                          # VERBATIM and UNTRIAGED (`2222da5`, pushed). Story STAYS at `review`:
+                          # the triage and the four arbitrations are NOT done. Was: 6b.11 DEVELOPED
+                          # -> review. Was: CONTEXTED, VALIDATED (2 layers, 38 findings) + 4 ARBITRATIONS
+                          # -> ready-for-dev. 6b.10 DONE — PR #115 merged as `d40a613`. Epic 6b: 11 done of 13.
                           # Next: 6b.11 (keyboard layer and focus contract), then 6b.12 (release
                           # v0.2.0 + its THREE breaking changes), then the epic retrospective.
                           # Was: 6b.10 CODE-REVIEWED and REPAIRED (see its entry). Was 2026-08-21
@@ -4395,7 +4538,67 @@ development_status:
                                 # ⚠️ One commit went in over a RED suite: `cargo test | grep`
                                 # takes the PIPELINE's status. Story 6b.1's defect, on cargo test
                                 # this time; amended, and every status since read from a file.
-  6b-11-keyboard-layer-and-focus-contract: backlog
+  6b-11-keyboard-layer-and-focus-contract: review  # DEVELOPED 2026-08-22: 728 tests, nine
+    # gates, axe-core GREEN on all ten routes (237 violation nodes -> 0, three token values).
+    # created + contexted + VALIDATED
+    # 2026-08-22 (two fresh-context layers: 38 findings, 12 HIGH). FOUR ARBITRATIONS by Guy.
+    # (1) ARROWS ONLY -- epics.md:2306 prescribes `j`/`k` and ⏎ while :2312 says *no letters
+    # are assigned*, which constraint 6 (epics.md:2106) states in the epic's own voice.
+    # (2) SHIP THE REACHABLE FOCUS CONTRACT -- zero hx-get/hx-post across all ten served
+    # screens, re-measured by both layers, so *focus is never lost across a swap* names an
+    # event that cannot occur. Swap half -> story 6.4. (3) axe-core IN THIS STORY.
+    # (4) 🔴 SHAPE (E) for the arrow: the gap-hunt PROTOTYPED all three readings of *move the
+    # selection* and they differ by 20x -- under (A) a HELD arrow loses HALF its presses
+    # (10 rows of 20) and costs 161 requests; under (E) 20 of 20 at every cadence, 8 requests.
+    # The story had left that choice to the developer.
+    # 🔴 THE VALIDATION CORRECTED CONTEXTING ON EIGHT POINTS, THREE OF THEM ITS OWN
+    # MEASUREMENTS: the axe figures were taken on an EMPTY store, so /triage was BLANK and the
+    # queue + detail pane + five planned controls -- the exact surface T4-T6 target -- were in
+    # no measurement (seeded: 237 nodes, a FOURTH colour pair); the refusals of option (B) and
+    # of ⏎ both rested on FALSE premises (constraint 4 NAMES HTMX; :2308's ⏎ is self-limiting);
+    # and Screen::Device IS in Screen::ALL -- 6b.6 moved its route REGISTRATION, not the variant.
+    # ✅ And it proved what contexting had only assumed: the two-token fix takes 237 -> 0 on a
+    # POPULATED store, in both locales, at three queue sizes.
+    # 🔴 FOUR MORE HIGH the story now carries: the INPUT/TEXTAREA exclusion guards a case that
+    # CANNOT occur (zero text inputs in the whole product) while the one that DOES bite has no
+    # guard (an arrow with focus in the nav navigates); an unconditional preventDefault kills
+    # page scrolling on the nine screens with no queue; --color-accent is PINNED BY 6b.1's AC2
+    # hex-literal guard, so *the mock's palette* and *axe-green* cannot both hold literally;
+    # and removing aria-pressed reds main.rs:3545, whose oracle is
+    # contains("aria-pressed=\"false\"") under a message about the age-sort UX ban -- the a11y
+    # defect is the SUPPORT of an assertion that is not about a11y (6b.4's finding, same screen).
+    # ⚠️ axe closes NFR25's FLOOR, not NFR25 (prd.md:1429: two manual gates also blocking).
+    # ⚠️ deferred-work.md:3740 names THIS story as owner of NFR24's touch targets -> AC7.
+    # ⚠️ epics.md:2108's DoD says *seven gates*; there are NINE. Six divergences registered.
+    # ── CODE REVIEW 2026-08-22 (three isolated layers) — POURED IN, NOT TRIAGED ──────
+    # The three reports are in the story file VERBATIM, commit `2222da5`, pushed. 60 raw
+    # findings. NOTHING merged, ranked or arbitrated. ⚠️ THE COUNT IS NOT A TOTAL: several
+    # defects were reached by two or three layers independently, and at least three claims of
+    # one layer are REFUTED with a measurement by another (the Chrome leak, the missing
+    # lockfile, the scroll control). Establishing that IS the triage, and it has not been run.
+    # 🔴 AC5 NOT MET (acceptance layer): no mutation table, and three central guards measured
+    # GREEN -- emptying `app.js` leaves 490 tests passing in 6.08 s against a live database;
+    # removing the two focus selectors leaves 490 green; stripping `aria-current` from the sort
+    # link leaves 490 green, because a queue row on the SAME PAGE supplies the string the
+    # assertion searches for. AC3/AC4/AC7 partly met; AC1, AC2, AC3b, AC6 met.
+    # 🔴 FOUR ARBITRATIONS PENDING, none taken: (1) the axe gate's 0/1/2 contract -- repair it
+    # or narrow the promise in writing on 5.12's precedent (measured twice: `mv node_modules`
+    # -> exit 1, a broken axe payload -> exit 1, where ci.yml:80-82 promises exit 2); (2) does
+    # CI seed a queue before measuring, or is it written that it measures the EMPTY state only
+    # (measured: the story's own defect replanted reds at 8 rows and is GREEN with the store
+    # emptied); (3) `token_hex` reads a CSS COMMENT -- `css.find("{token}: #")` takes the first
+    # textual occurrence, so reverting a colour and leaving the old value in a comment turns the
+    # contrast property off in silence (guard green, axe 210 nodes); (4) the 250 ms settle timer
+    # is cancelled by NOTHING but another arrow, so on a slow document a click loses (measured
+    # at 1200 ms: clicked row 6, landed row 2; control on a warm store -- the click wins).
+    # ⚠️ THE REVIEW SESSION CRASHED mid-flight. Blind + acceptance had finished and were
+    # recovered INTACT from their transcripts; the edge-case layer had not and was RE-RUN from
+    # its original mandate in a fresh worktree -- its report is a first run, not a resumption.
+    # The interrupted run left 569 bytes of narration and no conclusions, measured; nothing was
+    # lost that could have been recovered. The branch is now PUSHED (it was local-only).
+    # ⚠️ Tree verified after the crash: clean, nine gates green, 728 tests BOTH ways (0.21 s
+    # without a database, 8.49 s against a live mariadb:10.11 -- the clock is the tell), clippy
+    # over --all-targets clean, Cargo.lock untouched, 28 fixtures at their sha256.
   6b-12-release-0-2-0-and-its-documents: backlog
   epic-6b-retrospective: required
 

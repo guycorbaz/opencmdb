@@ -3542,10 +3542,22 @@ mod tests {
         );
 
         // AC3: the sort is OFF unless asked, and the toggle is offered.
+        //
+        // 🔴 **This asserted `aria-pressed="false"` until story 6b.11, and that made the UX
+        // ban depend on an accessibility DEFECT**: `aria-pressed` on an `<a href>` is
+        // axe-critical, and removing it reddened THIS test — whose message is about the
+        // backlog ban and not about ARIA at all. Story 6b.4's finding, on its own screen:
+        // *a test that pins the ugly thing is a test that requires it.* The oracle now
+        // reads the two facts the ban is actually made of.
         assert!(
-            html.contains("aria-pressed=\"false\""),
-            "the age sort is offered and OFF by default — the ban is not that age is hidden, it \
-             is that it is never brandished"
+            html.contains("class=\"btn-sort\""),
+            "the toggle is OFFERED — the ban is not that age is hidden, it is that it is \
+             never brandished"
+        );
+        assert!(
+            !html.contains("btn-sort on"),
+            "and it is OFF until the operator asks: sorting by age is their action, never a \
+             pushed default"
         );
         let sorted = body(
             app(pool.clone(), config(false, Some(pair())), facts())
@@ -3554,9 +3566,31 @@ mod tests {
                 .unwrap(),
         )
         .await;
+        // ⚠️ The ON half of the same pair, which story 6b.11's spec did not name — found by
+        // running the change rather than by reading it. Same substitution, same reason.
         assert!(
-            sorted.contains("aria-pressed=\"true\""),
+            sorted.contains("btn-sort on"),
             "asking for the sort turns it on"
+        );
+        // 🔴 **ANCHORED TO THE SORT LINK, and until story 6b.11's repair pass it was not.**
+        // The needle was the bare substring `aria-current="true"` over the whole body — and a
+        // SELECTED QUEUE ROW carries that exact attribute on the same page, so the one
+        // assertion written to prove the replacement for an axe-critical attribute was in
+        // place measured its presence *somewhere*. Two review layers reached it independently,
+        // one from the diff alone; stripping the attribute from the sort link left **490
+        // passed** against a live store. ⚠️ The oracle had changed and the weakness had moved
+        // rather than left — which is the shape the comment three lines up congratulates
+        // itself for escaping.
+        let sort_link = sorted
+            .split("class=\"btn-sort")
+            .nth(1)
+            .and_then(|rest| rest.split('>').next())
+            .unwrap_or_default();
+        assert!(
+            sort_link.contains("aria-current=\"true\""),
+            "and the SORT LINK says WHICH view the operator is in — the accessible half of \
+             the state, which `aria-pressed` on a link could not carry. The tag read: \
+             `{sort_link}`"
         );
 
         // 🔑 With two rows the ORDER is observable, which a one-row fixture could never witness:

@@ -97,3 +97,20 @@ _bmad/
 # Daily-rotating file logs from the container (docker-compose mounts docker/log).
 # They carry observed IPs/hostnames — runtime artifacts, never committed.
 docker/log/
+
+# ── THE ACCESSIBILITY GATE'S NODE PACKAGES (story 6b.11) ────────────────────
+# 🔴 `a11y/node_modules/` was committed once, for one commit: **2 253 files and
+# 552 000 lines**, caught by reading a `--stat` rather than by any gate. The
+# lockfile IS committed — same doctrine as `Cargo.lock` and the hand-authored CSS,
+# *nothing resolves on the fly* — and `npm ci` installs exactly it.
+#
+# ⚠️ No gate here can see this: `cargo xtask ci` walks Rust and SQL, and the
+# `file-size` gate counts code lines in `.rs`. A directory this size entering the
+# tree is invisible to every check the project has.
+#
+# ⚠️ **THE PATTERN, NOT THE ONE PATH.** This entry read `a11y/node_modules/` until story
+# 6b.11's code review measured `git check-ignore -v node_modules/foo` coming back **not
+# ignored** — while the sentence just above says a directory that size is invisible to every
+# check this project has, which is exactly as true one directory up. An enumeration of the
+# places a dependency tree may appear is not a rule about dependency trees.
+node_modules/

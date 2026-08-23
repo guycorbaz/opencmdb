@@ -643,14 +643,80 @@ mod tests {
     }
 
     /// AC2 — the screen is chosen by the ROUTE, not by JavaScript.
+    ///
+    /// ⚠️ **It reads the CODE, and until story 6b.11's repair pass it read the comments too**
+    /// — so a sentence *describing* client-side routing reddened it. That is not a hypothetical:
+    /// the repair's own note recording that a settled arrow used to grow `history.length` tripped
+    /// the `history.` needle from inside a comment, and the tempting fix — rewrite the prose —
+    /// would have been a guard editing the record instead of the record editing the guard. The
+    /// same defect as `page.rs`'s colour reader, one file over and found the same day.
+    ///
+    /// 🔑 **`window.location.replace` is DELIBERATELY not on the list, and the distinction is the
+    /// point rather than an oversight.** `pushState` and `location.hash` swap a screen with no
+    /// request at all, which is the mock's shape and what this guard exists to refuse; a
+    /// `location.replace` issues a real request for a real address, so the screen is still
+    /// chosen by the route. The keyboard layer uses it on purpose, and it replaces rather than
+    /// pushes so the back button still leaves the screen.
+    ///
+    /// ⚠️ The stripper is naive, and its limits are enumerated rather than closed. A `//`
+    /// inside a string literal takes the rest of that line with it — there is none in this file
+    /// (measured twice at story 6b.11's second review round, by two layers independently). An
+    /// unterminated `/*` silently discards everything after it rather than panicking, which is
+    /// the opposite of `page.rs`'s `light_root` for the same shape; the premise assertion below
+    /// catches total truncation, not partial. **A tripwire, not a parser** — and *an enumeration
+    /// cannot claim the completeness of a property.*
     #[test]
     fn no_screen_is_chosen_by_javascript() {
-        let js = include_str!("../assets/app.js");
+        let js = strip_js_comments(include_str!("../assets/app.js"));
         for forbidden in ["data-screen", "pushState", "location.hash", "history."] {
             assert!(
                 !js.contains(forbidden),
                 "the mock switches screens client-side; this product does not: found {forbidden:?}"
             );
+        }
+        // A premise that can fail: a stripper that ate everything would satisfy the loop above
+        // whatever the file said.
+        assert!(
+            js.contains("addEventListener") && js.contains("preventDefault"),
+            "the stripped source no longer contains the layer's own code, so the needles above \
+             were matched against nothing"
+        );
+    }
+
+    /// `source` with `//` line comments and `/* … */` block comments removed.
+    fn strip_js_comments(source: &str) -> String {
+        let mut out = String::with_capacity(source.len());
+        let mut rest = source;
+        loop {
+            let line = rest.find("//");
+            let block = rest.find("/*");
+            match (line, block) {
+                (None, None) => {
+                    out.push_str(rest);
+                    return out;
+                }
+                (Some(at), None) => {
+                    out.push_str(&rest[..at]);
+                    rest = rest[at..].find('\n').map_or("", |end| &rest[at + end..]);
+                }
+                (None, Some(at)) => {
+                    out.push_str(&rest[..at]);
+                    rest = rest[at + 2..]
+                        .find("*/")
+                        .map_or("", |end| &rest[at + 2 + end + 2..]);
+                }
+                (Some(l), Some(b)) => {
+                    if l < b {
+                        out.push_str(&rest[..l]);
+                        rest = rest[l..].find('\n').map_or("", |end| &rest[l + end..]);
+                    } else {
+                        out.push_str(&rest[..b]);
+                        rest = rest[b + 2..]
+                            .find("*/")
+                            .map_or("", |end| &rest[b + 2 + end + 2..]);
+                    }
+                }
+            }
         }
     }
 

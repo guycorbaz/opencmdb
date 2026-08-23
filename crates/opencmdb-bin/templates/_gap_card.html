@@ -1,3 +1,14 @@
+{#- 🔴 **THE FOURTH ARTEFACT OF THE DEAD CONTRACT, decided rather than left standing.** Story
+    6b.11 enumerated three — the `htmx:afterSwap` handler, its `#gap-card` selector and the CSS
+    `.card:focus` rule — and its own T5 says *"decide all three"*. The code review found a
+    fourth: this `tabindex="-1"`, whose only purpose was to make the section programmatically
+    focusable for the focus the deleted handler performed.
+    🔑 **It is KEPT, and the reason is that it is not alone**: the button below carries a real
+    `hx-get="/gap" hx-target="#gap-card" hx-swap="outerHTML"`, so swap, target and focus target
+    are one coherent trio — dormant only because **no page embeds this fragment**, which is what
+    made the story measure zero `hx-*` on the ten served screens. Removing one leg of a trio
+    leaves a shape that reads as complete and is not. The whole fragment is registered to story
+    6.4, which introduces the first live swap. -#}
 <section id="gap-card" class="card" tabindex="-1" aria-label="{{ s.gap_card_label }}">
 {% if view.has_entity %}
   <div class="entity">

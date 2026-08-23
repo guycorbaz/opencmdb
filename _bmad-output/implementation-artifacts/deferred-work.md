@@ -4375,6 +4375,14 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   attribute**, while `epics.md:2108` makes axe-core on the ten routes this epic's Definition of Done
   and `epics.md:316` names the occupancy grid a WCAG 2.1 AA key view. **Owner: story 6b.11**, with
   6b.12's sweep.
+  ✅ **DISCHARGED by story 6b.11 (2026-08-23, at its code review's repair pass).** The repository
+  now has two browser gates, both in CI: `a11y/axe-gate.mjs` over the ten routes the navigation
+  offers **plus two query-string states no href carries**, and `a11y/kbd-probe.mjs`, seventeen
+  checks over the keyboard layer and the focus contract. ⚠️ **The discharge is dated from the
+  repair, not from the merge of the story's own dev commit** — as shipped, the axe gate walked an
+  EMPTY store (0 queue rows, 0 gesture controls, 0 panes) and the keyboard gate ran nowhere at
+  all, so between the two commits the check existed and reached almost nothing. 6b.12's sweep is
+  unaffected and still owed.
 
 - ⚠️ **A /24 has 254 hosts and the mock draws 256 free ones.** `CellState::Structural` and a
   254-denominator are this story's answer for an example screen; the day Epic 14 reads a real subnet,
@@ -4691,8 +4699,12 @@ before the commit** — story 6b.9's review found that file untouched under a se
 
 - **The lint the repository prescribes is blind to test code, and this project is mostly test code.**
   `CLAUDE.md` names `cargo clippy --workspace -- -D warnings` as THE lint. Cargo checks lib and bin
-  targets by default, never test targets — while `ci.yml` sets `RUSTFLAGS: -D warnings` for the
-  test compile. MEASURED at story 6b.10's code review: a dead `let root = …` in a `#[cfg(test)]`
+  targets by default, never test targets — while CI compiles the tests under
+  `RUSTFLAGS=-D warnings`. ⚠️ **The mechanism was recorded wrong here and is corrected** (story
+  6b.11's validation): `RUSTFLAGS` appears **nowhere in `.github/`**; the flag is injected by
+  `actions-rust-lang/setup-rust-toolchain@v1` (`ci.yml:48`). The effect and the prescribed
+  commands were right; the cause was a plausible story, which is the one thing this project's own
+  rule forbids — and it was written the same day that rule was quoted. MEASURED at story 6b.10's code review: a dead `let root = …` in a `#[cfg(test)]`
   module passed every local check, all nine gates and 727 tests, and turned the first CI run of
   PR #115 RED in 1m12s.
   🔑 The two commands that actually reproduce CI locally are
@@ -4704,3 +4716,105 @@ before the commit** — story 6b.9's review found that file untouched under a se
   does not look. Every story that has ever "run clippy clean" ran it over a fraction of the tree.
   **Owner: Epic 6b's retrospective** — it is a change to the documented working commands, which a
   story may not make.
+
+## Deferred from: story 6b.11 (2026-08-22)
+
+- **NFR24's 44 px touch targets — RE-REGISTERED BY NAME, with the measurement `deferred-work.md:3740`
+  asked this story for.** That row named story 6b.11 as owner. Measured in Chrome 151 at 1280 px,
+  on the served `/triage`:
+
+  | control | rendered | NFR24 | WCAG 2.2 AA (2.5.8, 24×24) |
+  |---|---|---|---|
+  | `.nav-entry` | 183 × **34** px | fail | pass |
+  | `.btn-sort` | 129 × **27** px | fail | pass |
+  | `.btn-gesture` | 114 × **29** px | fail | pass |
+  | `.queue-row > a` | 168 × **95** px | pass | pass |
+
+  🔑 **Two facts decide it, and neither was in the row that named this story.** The product already
+  clears the WCAG 2.2 AA minimum; what it misses is the stricter 44 px figure NFR24 set itself (the
+  WCAG 2.5.5 AAA / mobile-guideline number). And raising three control kinds to 44 px changes the
+  DENSITY of the whole interface — against **epic 6b's premise (3), *the mock's palette and
+  typography are adopted***, which is a decision Guy took on 2026-08-13.
+  ⚠️ So this is a design arbitration between NFR24 and the reference mock, not a keyboard task, and
+  the axe gate cannot decide it either: it runs the WCAG 2.0/2.1 tags, where no target-size rule
+  exists at AA. **Owner: Epic 6b's retrospective**, where the mock-versus-NFR question can be put
+  once for the whole interface rather than three times by three stories.
+
+- **The focus-after-swap contract, owned by story 6.4.** Story 6b.11 measured that no HTMX swap
+  exists on any of the ten screens — zero `hx-get`/`hx-post` — so *"focus is never lost across a
+  swap"* had no event to attach to, and `app.js`'s handler for it was carried by nothing and is
+  removed. ⚠️ **Two artefacts of that contract are deliberately LEFT STANDING** and must be picked
+  up together with it: `_gap_card.html:5`'s `hx-get="/gap"` (the only `hx-*` attribute in the
+  template tree) and `app.css`'s `.card:focus` rule, which now sits in the focus block beside the
+  three rules story 6b.11 added. **Story 6.4 introduces the first swap; the rule is: whatever
+  swaps, focus lands inside the swapped region, and the guard reads `document.activeElement` after
+  the swap — never the template.**
+
+- **`puppeteer-core` where the UX spec names `@axe-core/playwright`** (`ux-design-specification.md:671`),
+  and the spec's *"per theme (light/dark)"* ask. The substitution is deliberate and measured:
+  `puppeteer-core` drives the system Chrome and downloads no browser (26 packages, 3.4 s), which is
+  what makes the gate cheap enough for every CI run. ⚠️ The per-theme half is **not** deferred by
+  choice — it is unreachable: the dark token set is selected by nothing (no template emits
+  `data-theme`, a test pins that), so there is no second theme to measure. **Owner: whichever story
+  makes the dark set selectable.**
+
+### Added by the CODE REVIEW's triage and repair pass (2026-08-23)
+
+⚠️ **The four rows above were the whole register when the story said *"six divergences
+registered"* in three documents.** The acceptance layer measured it: three rows written, and of
+the six named, two existed only as code comments ending *"registered"* — story 6b.9's sentence
+met again, *a comment that says "registered" is not a registration* — while the largest of the
+six was in the register nowhere at all. It is the first row below.
+
+- 🔴 **`j`/`k` and `⏎` were PRESCRIBED and are NOT built, and Epic 7 must know it.**
+  `epics.md:2306` and `:2308` name them; story 6b.11's arbitration 1 (2026-08-22) took *arrows
+  only*, and the reason holds — a letter key bound on a page with nothing to type into is a
+  vi-ism, and `⏎` needs a gesture to activate, which is story 6.4's. **What was missing is this
+  row**: the divergence was argued in the story file and registered in no register, so the
+  epic's own criterion would have read as met. **Owner: Epic 7**, which owns the four gestures;
+  ⚠️ `⏎` is worthless until one of them is live, so it cannot land before story 6.4.
+
+- **NFR5's remaining unmeasured half on the a11y perimeter.** `AUTHORSHIP_ROOTS` is
+  `["crates", "docker"]`, and the accessibility harness now runs SQL against the store — CI
+  seeds `docker/seed-example.sql`, which is inside the perimeter and already a sanctioned site,
+  so nothing is open today. ⚠️ **The day the gate needs a seed of its own** (this repair pass
+  wanted one, and avoided it by measuring both queue ends instead of a middle index) **that file
+  lands under `a11y/`, outside every root the gate walks** — the ordinary gesture that walks
+  around a tripwire, which is what story 5.12's own doc says to reopen the perimeter for.
+  **Owner: whichever story adds an a11y-owned seed.** Reopen `AUTHORSHIP_ROOTS`, do not sanction
+  a fifth site by name.
+
+- **`--color-accent-600` fails AA on all four grounds** — `#597ea3` measures 3.80 / 3.51 / 3.91
+  / 3.45 against bg / surface / neutral-100 / neutral-200, i.e. exactly the defect
+  `--color-accent` was darkened for. ⚠️ **Latent, not live**: no rule in `app.css` references
+  the token, so nothing paints it and axe cannot see it; the contrast table does not carry it
+  either. The first rule that uses it inherits a violation. **Owner: whichever story paints with
+  the accent ramp's 600** — most likely story 6.4.
+
+- **Two painted grounds are outside the contrast table, by decision.** `--color-neutral-300`
+  and `--color-accent-100` are painted on and are not in `GROUNDS`; adding them was measured to
+  red on pairings **no screen renders** (`--color-neutral-600` on `--color-neutral-300` is
+  3.75:1, while what is actually painted there is `--color-neutral-900`). The limit is now
+  written at the guard: *a ground outside the table is carried by axe alone, and axe only sees
+  what a rendered route paints.* **Owner: whichever story makes the table derive the pairings
+  the sheet actually pairs** rather than a cartesian product over two hand-written lists.
+
+- **Story 6b.2's honesty guard still misses `display:none` and `pointer-events:none`**
+  (`deferred-work.md:3748`). §0g handed story 6b.11 *"take both or re-register by name"* and the
+  story did neither — found by the acceptance layer. The instrument now exists twice over: the
+  axe gate computes styles on ten routes plus two states, and the keyboard gate presses keys and
+  reads the DOM back. **Owner: the first story that touches the honesty guard**, which should
+  move its assertion from the template to the computed style.
+
+- **The register row this story DISCHARGES was left standing as pending.** `deferred-work.md`
+  carried *"the repository has NO accessibility check at all: no axe-core, no headless browser…
+  **Owner: story 6b.11**"* — satisfied by this story and untouched by it, in a file that already
+  carries `## Discharged by story 6b.2` sections. Discharged here; see the axe gate and the
+  keyboard gate, both in CI.
+
+- **The axe gate's exit contract stops at the shell.** Story 6b.11's arbitration 1 closed every
+  path inside `axe-gate.mjs` — measured, `mv node_modules` went from **1** to **2** — but `npm
+  ci` failing exits npm's code, the readiness `curl` exits 22 and a missing Node exits 127, none
+  of which any repair inside the file can reach. Written as a stated limit in both the gate's
+  header and `ci.yml`. **Owner: whichever story is willing to wrap the step in a trap that maps
+  the shell's codes**, if that is ever worth its cost.

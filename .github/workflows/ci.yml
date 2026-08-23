@@ -66,3 +66,73 @@ jobs:
 
       - name: Tests
         run: cargo test --workspace --locked
+
+      # 🔴 THE ONE STEP IN THIS FILE THAT IS NOT A CALL INTO RUST, AND THE EXCEPTION IS
+      # DELIBERATE. This runner's own header says all gate logic lives in `cargo xtask ci`,
+      # in Rust, never here — and the accessibility gate cannot obey it: axe-core measures
+      # the RENDERED, COMPUTED page (contrast against the ground that actually paints, ARIA
+      # against the role a browser actually resolves), and `cargo xtask ci` has no browser.
+      # A Rust re-implementation would be a second, weaker axe. Story 6b.11, registered.
+      #
+      # ⚠️ It is also the first step that BOOTS THE PRODUCT. Everything above compiles and
+      # tests; this one runs the binary and talks to it over HTTP.
+      #
+      # `ubuntu-latest` ships Node and Chrome; `puppeteer-core` uses the system browser and
+      # downloads none. ⚠️ If that stops being true, **once `node` is running the gate** the
+      # step fails with exit 2 — *the gate could not run* — and not with exit 1, which is
+      # reserved for a real regression. 🔑 **That promise is narrower than it read until story
+      # 6b.11's arbitration 1**, and the narrowing is measured: a missing `puppeteer-core`
+      # answered **1** (a static `import` resolves before any `try` of the gate's own exists —
+      # it is a dynamic import now), and everything the SHELL does before `node` keeps its own
+      # codes: `npm ci` exits npm's, the readiness `curl` exits 22, a missing Node exits 127.
+      #
+      # 🔴 **THE STORE IS SEEDED, and until story 6b.11 it was not.** The gate walked a
+      # `/triage` carrying 0 queue rows, 0 gesture controls and 0 panes — measured — so the
+      # whole surface 6b.11 touched was outside every CI run, forever, and the story's own
+      # defect replanted exited **0**. `AXE_REQUIRE_QUEUE=1` turns an empty queue into *the
+      # gate could not run* rather than a pass, so a seed that silently stops working cannot
+      # look like coverage.
+      - name: Accessibility gate (axe-core over every screen the navigation offers)
+        env:
+          DATABASE_URL: mysql://root:opencmdb@127.0.0.1:3306/opencmdb_test
+          OPENCMDB_BASIC_USER: ci
+          OPENCMDB_BASIC_PASSWORD: ci-not-a-secret
+        run: |
+          set -euo pipefail
+          cargo build --workspace --locked
+          ./target/debug/opencmdb &
+          server=$!
+          trap 'kill $server 2>/dev/null || true' EXIT
+          # ⚠️ `--max-time` is not decoration. Without it this loop reads as a 30-second wait
+          # and is bounded at ~15.5 MINUTES against a store that accepts TCP and does not
+          # answer (measured: `http=503 time=30.002716`) — which is the one path a readiness
+          # loop exists for. The normal failure, a port not yet bound, is instant either way.
+          for _ in $(seq 1 30); do
+            if curl -fsS --max-time 5 -o /dev/null http://127.0.0.1:8080/healthz; then break; fi
+            sleep 1
+          done
+          curl -fsS --max-time 5 -o /dev/null http://127.0.0.1:8080/healthz
+          # AFTER the boot, because the tables are the binary's own migrations.
+          #
+          # 🔴 **`a11y/seed.sql`, NOT `docker/seed-example.sql`, and the difference is one row
+          # that decides whether the keyboard gate can run at all.** The shipped demo seed
+          # renders exactly ONE queue row — measured on a virgin database, 0 before it and 1
+          # after — while `kbd-probe.mjs` needs at least two: a single row cannot witness an
+          # arrow STEP and gives the two end-of-list controls nothing to be at either end of.
+          # ⚠️ **The run that first passed here was green on RESIDUE**: the `Tests` step above
+          # uses the same database, and what it happened to leave behind carried the queue over
+          # the floor. Nothing guaranteed that. The harness's own seed TRUNCATES first, so the
+          # gates measure a state this repository can reproduce rather than one the pipeline
+          # accumulated.
+          mysql -h 127.0.0.1 -P 3306 -u root -popencmdb opencmdb_test < a11y/seed.sql
+          npm --prefix a11y ci
+          OPENCMDB_BASIC_USER="$OPENCMDB_BASIC_USER" \
+            OPENCMDB_BASIC_PASSWORD="$OPENCMDB_BASIC_PASSWORD" \
+            AXE_REQUIRE_QUEUE=1 \
+            node a11y/axe-gate.mjs
+          # 🔴 **THE KEYBOARD LAYER'S ONLY CARRIER, and until story 6b.11's repair pass it
+          # ran nowhere.** `crates/opencmdb-bin/assets/app.js` could be EMPTIED with 490
+          # tests, nine gates and the axe gate all green — measured by two review layers
+          # independently. axe has no rule for any of what that file does, so this is not the
+          # gate above with more routes: it presses keys and reads the DOM back.
+          node a11y/kbd-probe.mjs
