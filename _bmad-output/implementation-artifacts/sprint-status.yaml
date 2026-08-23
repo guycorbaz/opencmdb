@@ -117,6 +117,23 @@ last_updated: 2026-08-23  # 6b.11 TRIAGED and REPAIRED. Story STAYS at `review`:
                           # removing the two focus selectors, which leaves the Rust suite at 490
                           # green exactly as the review measured -- the DOM-level carrier AC5
                           # demands.
+                          # 🔴 AC5 ITSELF WAS AMENDED by Guy (2026-08-23), two words and no
+                          # change of scope: a source-reading guard "does NOT SUFFICE" where the
+                          # defect lives in the DOM, where it read "is not counted". The scope
+                          # was earned by measurement (three-for-three: app.js emptied, the two
+                          # focus rules deleted, aria-current stripped -- 490 green each time);
+                          # what over-reached was "counted", which reads as "worth nothing",
+                          # while a source guard is cheaper and NAMES THE CAUSE where a browser
+                          # gate names only the symptom. The two cumulate.
+                          # ⚠️ The cost the amendment does NOT dissolve is proportionality: the
+                          # criterion produced a browser gate (~25 s of CI), which is the minimum
+                          # for a story whose subject IS the rendered page and would be zeal for
+                          # a `font-family` declaration. A rule about where the defect lives,
+                          # never about how much apparatus to build.
+                          # ⚠️ The three review reports quote the ORIGINAL wording and are NOT
+                          # edited -- verbatim, written against the criterion as it stood, and
+                          # their verdict is unaffected: both phrasings give the same answer on
+                          # all three measurements they took.
                           # 🔴 AC5's mutation table EXISTS now: 29 ids, 26 reds, 2 controls green
                           # by design and 1 green for a reason the repair created; carriers MIXED
                           # and named per row, no "every red assertion-carried" headline claimed.

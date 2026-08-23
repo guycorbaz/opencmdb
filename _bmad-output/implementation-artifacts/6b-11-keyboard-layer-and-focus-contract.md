@@ -52,9 +52,40 @@ keyboard checklist, and a screen-reader pass per release. Those are registered.
 is written in flight, and **every figure names the store state it was taken against**
 (§0c's correction).
 
-**AC5 — Every guard is measured RED before it passes, and a guard that reads the SOURCE
-where the defect lives in the DOM is not counted.** Three of this story's subjects —
-focus visibility, key handling, scroll — are invisible to any text-level test.
+**AC5 — Every guard is measured RED before it passes. Where the defect lives in the DOM, a
+guard that reads the SOURCE does NOT SUFFICE: there must be a carrier that reads what the
+browser did. The two cumulate — the source guard names the CAUSE, the browser gate names the
+REALITY.** Three of this story's subjects — focus visibility, key handling, scroll — are
+invisible to any text-level test.
+
+🔴 **AMENDED by Guy on 2026-08-23, after the repair pass, and the amendment is TWO WORDS and
+no change of scope.** It read *"a guard that reads the SOURCE where the defect lives in the DOM
+is **not counted**"*, and that phrasing over-reached in one direction while being right in the
+other:
+
+- ✅ **The SCOPE held and was earned by measurement, not postulated.** The clause was already
+  conditional — it bites only where the defect lives somewhere other than where the guard
+  looks — and on this story it was three-for-three: `app.js` emptied, the two focus rules
+  deleted and `aria-current` stripped from the sort link each left **490 tests green**. Story
+  6b.4b had met the same family a template over, where an attribute assembled in Rust and
+  emitted with `|safe` put a real native `disabled` in the served page with both guards green.
+- 🔴 **But *"not counted"* reads as *"worth nothing"*, and that is false.** A source-reading
+  guard is cheaper, runs with no browser, and **names the cause** where a browser gate names
+  only the symptom: `every_class_a_template_names_is_defined_in_the_stylesheet` catches an
+  undefined class in 0.2 s and says which one, which no rendered-page check states as
+  clearly. The pair beats the gate alone; what the pair must not become is the source guard
+  alone.
+- ⚠️ **The cost the amendment does NOT dissolve is proportionality.** Taken literally this
+  criterion produced a browser gate — `a11y/kbd-probe.mjs`, seventeen checks and ~25 s of CI
+  per run. Here that is the minimum rather than zeal, because the story's subject *is* the
+  rendered page; the same clause applied to a `font-family` declaration would demand a browser
+  to check a string. **It is a rule about where the defect lives, never a rule about how much
+  apparatus to build.**
+
+⚠️ **The three review reports below quote the ORIGINAL wording and are NOT edited** — they are
+verbatim, they were written against the criterion as it then stood, and their verdict is
+unaffected: *does not suffice* and *is not counted* give the same answer on all three
+measurements they took.
 
 **AC6 — Nothing shipped promises a gesture that does not exist.** The five controls stay
 `Gesture::Planned`.
@@ -1448,7 +1479,9 @@ warnings" cargo test --workspace --locked` green, which is the other half of wha
 was added. What changed is that three guards that measured nothing now measure something, one
 read the wrong source, and the story's central deliverable acquired a carrier that is not a Rust
 test at all — it is a browser gate, because the property lives in the DOM and AC5 says in so many
-words that a source-reading guard does not count for a DOM defect.
+words that a source-reading guard does not suffice for a defect that lives in the DOM (the
+criterion's wording as amended on 2026-08-23; the reports above quote the earlier *"is not
+counted"*, and the two give the same verdict here).
 
 ### The table
 
@@ -1558,3 +1591,4 @@ times, and here it would be false by inspection of the table's own last column.
 | 2026-08-23 | **TRIAGED.** 60 raw findings -> **33 distinct defects**: six reached by all three layers, ten more by two, so nearly half of what was written is a second road to the same thing. 🔑 **D4 exists only in the triage** — the hue guard is too LOOSE for greys (any grey passes, B14/A9) and too TIGHT for the repair it exists to permit (a legal lightness-only darkening reds it, E9), and its failure message states as fact what the mutation producing it had just disproved. 🔑 D2·D3·D5 compose: the accessibility apparatus **reports success over a surface it does not reach**. ⚠️ The preamble's *"three refuted claims"* is imprecise — two are layer-versus-layer (the Chrome leak, the lockfile, both dismissed with their check), the third refutes **the story itself** (the scroll control) and is a defect. Four arbitrations stand open. |
 | 2026-08-22 | **CODE-REVIEWED by three isolated layers — the three reports are poured in VERBATIM and UNTRIAGED.** 60 raw findings, no dedup, no ranking, no arbitration. The acceptance layer returns **AC5 NOT MET** (no mutation table; the keyboard layer, the focus ring and the new `aria-current` oracle each measured green) and AC3/AC4/AC7 partly met. 🔴 The review session crashed mid-flight: the edge-case layer was re-run from its original mandate in a fresh worktree, the other two recovered intact from their transcripts. |
 | 2026-08-23 | **TRIAGED, ARBITRATED and REPAIRED.** 60 raw findings -> **33 distinct defects** (six by all three layers, ten by two). 🔑 **D4 exists in no single report**: the AC2 hue guard was too LOOSE and too TIGHT at once, and its failure message asserted as fact what the mutation producing it had disproved. 🔑 **D2·D3·D5 compose**: the accessibility apparatus reported success over a surface it did not reach. **Guy's four arbitrations, the recommendation taken in all four.** `a11y/kbd-probe.mjs` becomes the second BROWSER gate (17 checks, a floor equal to what is there) and CI runs it; the store is seeded; `token_hex` reads the light `:root` block with comments stripped; the settle timer yields to the operator. **29 mutation ids, 26 reds, 2 controls green by design, 1 green for a reason the repair created.** ⚠️ **Six findings against the pass itself**, the sharpest being a guard matching its needle inside a COMMENT — `token_hex`'s defect one file over, the same day. 728 tests both ways, nine xtask gates + two browser gates, clippy `--all-targets`. |
+| 2026-08-23 | 🔴 **AC5 AMENDED by Guy** — *a source-reading guard **does not SUFFICE** where the defect lives in the DOM*, where it read *is not counted*. Two words, no change of scope. The scope was earned by measurement and held three-for-three; *counted* over-reached, reading as *worth nothing* while a source guard is cheaper and **names the cause** where a browser gate names only the symptom — the two cumulate. ⚠️ The residual cost is **proportionality**, which the amendment does not dissolve: a rule about where the defect lives, never about how much apparatus to build. The three review reports keep the ORIGINAL wording, unedited — both phrasings give the same verdict on all three measurements they took. |
