@@ -4549,7 +4549,15 @@ development_status:
                                 # ⚠️ One commit went in over a RED suite: `cargo test | grep`
                                 # takes the PIPELINE's status. Story 6b.1's defect, on cargo test
                                 # this time; amended, and every status since read from a file.
-  6b-11-keyboard-layer-and-focus-contract: review  # DEVELOPED 2026-08-22: 728 tests, nine
+  6b-11-keyboard-layer-and-focus-contract: done  # PR #117 squash-merged 2026-08-23 as
+    # `3ad8ef6` after a green CI run ON THE HEAD COMMIT; docs flip PR #118 as `477163b`.
+    # ⚠️ This key read `review` for one commit after the merge, while the header, both twins
+    # and the story file all said `done` — a status in one place and not the other, which is
+    # the class this project keeps catching. Corrected while creating 6b.12.
+    # TWO full review rounds: 60 raw -> 33 distinct -> 4 arbitrations; then 19 raw -> 17
+    # distinct -> 2 arbitrations, ON THE REPAIR ITSELF. 48 mutation ids across §T8 and §T9.
+    # AC5 MET, resolved on the acceptance layer's OWN named condition, measured by CI.
+    # (Earlier) DEVELOPED 2026-08-22: 728 tests, nine
     # gates, axe-core GREEN on all ten routes (237 violation nodes -> 0, three token values).
     # created + contexted + VALIDATED
     # 2026-08-22 (two fresh-context layers: 38 findings, 12 HIGH). FOUR ARBITRATIONS by Guy.
@@ -4610,7 +4618,29 @@ development_status:
     # ⚠️ Tree verified after the crash: clean, nine gates green, 728 tests BOTH ways (0.21 s
     # without a database, 8.49 s against a live mariadb:10.11 -- the clock is the tell), clippy
     # over --all-targets clean, Cargo.lock untouched, 28 fixtures at their sha256.
-  6b-12-release-0-2-0-and-its-documents: backlog
+  6b-12-release-0-2-0-and-its-documents: ready-for-dev  # CONTEXTED 2026-08-24. 🔴 FOUR
+    # divergences from `epics.md:2316`, each MEASURED rather than read: **twelve** preceding
+    # stories not eleven (the 6b.4b insertion); **five** example screens not eight (Fed =
+    # Triage/Sources/Diagnostic, Mixed = Dashboard, and `Screen::Device` is a sixth off the
+    # nav); the manuals carry **NO screenshots at all** (`grep includegraphics` → nothing), so
+    # the criterion's stated risk is false and the REAL one is a SENTENCE —
+    # `user-manual.tex:151`, *"A dark theme is the default"*, falsified by 6b.1. ⚠️ A story
+    # hunting images would have found none, concluded the manuals were fine, and shipped it.
+    # 🔴 AND THERE ARE **FOUR** BREAKING CHANGES, NOT THE THREE EVERY DOCUMENT REPEATS: the
+    # colour (6b.1), the address (6b.2), `OPENCMDB_LOCALE` (6b.10) — and **the product stops
+    # being publicly readable** (story 6.1's price, registered at `deferred-work.md:3323` row
+    # (f) and counted nowhere). Measured: v0.1.1 was tagged 2026-07-21 and 6.1 merged
+    # 2026-08-14, so it is NOT in the shipped release. 🔑 It is the one an operator meets
+    # FIRST — an upgrade with no OPENCMDB_BASIC_USER answers 401 on every screen, which reads
+    # exactly like a broken deployment.
+    # ⚠️ `docker/README.dockerhub.md` is ALREADY dated *"Since v0.2.0"* twice, so the release
+    # is a dependency of a document rather than the other way round; AC7 decides it.
+    # The story adds four criteria to itself: find falsified claims by a CHECK and say what the
+    # check could not see; do the visual sweep SIXTEEN register lines name (incl. 6b.5's
+    # salience finding, which no text guard can measure) or re-register BY NAME; the live count
+    # lives in the story file; no document left dated forward.
+    # NEXT: `create-story validate` — MANDATORY here (Guy, Epic 4 retrospective), two
+    # fresh-context agents before `dev-story`.
   epic-6b-retrospective: required
 
   # ── Epic 7: La boucle se ferme (v0.5) ────────────────────────────────────
