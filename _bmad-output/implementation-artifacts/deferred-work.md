@@ -4889,3 +4889,29 @@ manual chapter to a product capability and demands `\begin{planned}` when the ca
 absent** — ⚠️ which means first deciding what links them, and then a tenth gate over LaTeX.
 **Owner: Epic 6b's retrospective**, to weigh that cost. Until it exists, the manuals are kept
 current by reading, and this row is what says so.
+
+## Deferred from: story 6.4 (2026-08-24)
+
+- 🔴 **`epics.md:2118`'s story 6.4 diverges from what is built, in its TITLE, its *so that* clause
+  and its AC1 — and a story may not edit the plan.** The criterion attaches FR13's documenting
+  gesture to the **`AbsenceOfProof`** cause line. Measured: `AbsenceOfProof` is an identity verdict
+  about whether two sightings could be **joined** (`cascade.rs`, *"only `Neutral` / nothing"*),
+  while FR13's population is `undeclared` — *observed, and no declared record claims it*
+  (`prd.md:1018`, a binding glossary row). ⚠️ **A sighting can be `AbsenceOfProof` and already fully
+  declared**, a state `a11y/seed.sql` produces today, so the criterion's letter offers to create a
+  second entity for a machine the operator has already documented. **Guy's arbitration of
+  2026-08-24: the gesture lands on the triage queue's `Nouveau` row**, which is `undeclared`
+  already computed and already displayed since story 6b.4. **Owner: Epic 6's retrospective** — the
+  title, the *so that* clause (*"the reach section stops being a number and becomes a door"*, not
+  met) and AC1's population all need correcting together.
+- 🔑 **The reach section may have NO door, and that should be written into the plan rather than
+  left as an unmet aspiration.** An identity abstention says *the engine could not place this
+  sighting*; its answer is **a better source**, not an operator gesture. The shipped scanner reads
+  no hardware address — `/sources` states it — and **Epic 11** is what opens that. Until then the
+  section is a true number with no action behind it, which is the product's own honesty rather than
+  a gap. **Owner: Epic 6's retrospective**, with the row above.
+- ⚠️ **`Nouveau` is still outside the binding glossary table.** Story 6b.6 registered that the
+  queue's `kindLabel` axis (`Absence`, `Nouveau`) is not in the table and that reconciling it
+  rewrites story 6b.4's shipped copy. This story now attaches a **gesture** to one of those
+  labels, which raises the cost of leaving it unreconciled: a control named after a word the
+  glossary does not carry. **Owner: Epic 15**, which the earlier row already names.
