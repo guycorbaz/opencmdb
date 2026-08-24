@@ -24,9 +24,25 @@ docker pull gcorbaz/opencmdb:0.1.1
 
 | Tag | Meaning |
 |-----|---------|
+| `0.2.0` | **the interface** — ten screens, the triage inbox on the real gap, a keyboard layer. 🔴 **Four breaking changes; read the release notes before upgrading.** |
 | `0.1.1` | deployment fixes: overlapping ping probes, `DATABASE_*` variables, fatal errors logged, `cap_net_raw` on the binary |
 | `0.1.0` | first published pre-release (walking skeleton) |
 | `latest` | most recent published tag |
+
+🔴 **`0.2.0` is not a drop-in upgrade from `0.1.1`.** In order of what you meet first:
+
+1. **The product is no longer publicly readable.** Every screen answers `401` until you set
+   **both** `OPENCMDB_BASIC_USER` and `OPENCMDB_BASIC_PASSWORD` (half a pair refuses to start).
+   With neither set, nobody can sign in — the deliberate posture of a fresh instance, and
+   indistinguishable from a broken deployment if you were not told.
+2. **`/` now answers `303` to `/triage`.**
+3. **The interface is light**, not dark. Every existing deployment changes colour.
+4. **`OPENCMDB_LOCALE` refuses an unrecognised value by name** instead of falling back to English
+   — `OPENCMDB_LOCALE=FR` stops the boot.
+
+The full notes, including what this release deliberately does **not** do, are on the
+[GitHub release](https://github.com/guycorbaz/opencmdb/releases) and in
+[`CHANGELOG.md`](https://github.com/guycorbaz/opencmdb/blob/master/CHANGELOG.md).
 
 ## One database, on purpose
 

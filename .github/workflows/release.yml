@@ -19,7 +19,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # `write` because this job now CREATES a GitHub Release (see the last step). It was
+      # `read` while the job only pushed an image.
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -65,3 +67,38 @@ jobs:
           repository: gcorbaz/opencmdb
           readme-filepath: ./docker/README.dockerhub.md
           short-description: "Self-hosted single-binary network reconciliation engine — IPAM + light CMDB + topology."
+
+      # 🔴 **THE RELEASE NOTES HAD NO VENUE, and story 6b.12's validation measured it**:
+      # `gh release list` was EMPTY — neither `v0.1.0` nor `v0.1.1` had a Release object — there
+      # was no changelog in the tree, and this workflow created neither. Story 3.10 recorded the
+      # v0.1.0 cut in its own story file's Change Log, which no operator will ever read. So a
+      # release could satisfy *"the notes name what this release does not do"* to the letter while
+      # leaving **zero operators informed before they upgrade** — which for v0.2.0 means meeting a
+      # product that answers 401 on every screen with no idea why.
+      #
+      # 🔑 The notes come from `CHANGELOG.md`, committed, so the tag and the text are one artefact
+      # and the section cannot drift from the version it describes.
+      - name: Extract this version's changelog section
+        id: notes
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          # From `## <version>` to the line before the next `## `, exclusive.
+          awk -v v="$version" '
+            $0 ~ "^## " v " " || $0 == "## " v { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          # ⚠️ A missing or empty section fails the release rather than publishing silence: an
+          # empty body is indistinguishable from "this release changed nothing".
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md carries no section for ${version} — add one before tagging." >&2
+            exit 1
+          fi
+          wc -l release-notes.md
+
+      - name: Create the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-notes.md
+          name: ${{ github.ref_name }}
