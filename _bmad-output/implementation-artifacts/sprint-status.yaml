@@ -4618,7 +4618,34 @@ development_status:
     # ⚠️ Tree verified after the crash: clean, nine gates green, 728 tests BOTH ways (0.21 s
     # without a database, 8.49 s against a live mariadb:10.11 -- the clock is the tell), clippy
     # over --all-targets clean, Cargo.lock untouched, 28 fixtures at their sha256.
-  6b-12-release-0-2-0-and-its-documents: ready-for-dev  # CONTEXTED 2026-08-24. 🔴 FOUR
+  6b-12-release-0-2-0-and-its-documents: review  # DEVELOPED 2026-08-24, EXCEPT THE TAG.
+    # ⚠️ T0-T5 and T7 are done; **T6 is deliberately not cut** -- it needs Guy's approval, and
+    # the order is REVIEW then TAG, because a tag is not revertible in the ordinary sense and
+    # nothing unreviewed should be made permanent by one.
+    # 🔴 The contexting's own device was measured INSUFFICIENT and its HEDGE is what survived:
+    # three documents asserted credentials are "encrypted at rest", a string
+    # `diagnostic.rs:1038` FORBIDS the product from rendering; the status narrative was stale
+    # by ~15 epics; Tailwind was named as the stack against a decision taken twice the other
+    # way. And §0 itself was wrong four ways -- `Screen::Device` IS in the navigation, a
+    # correction `sprint-status.yaml:4578` had made one story earlier and which did not carry.
+    # ✅ TWO ARBITRATIONS (Guy), recommendation in both: the release notes get a VENUE (a
+    # GitHub Release from a committed CHANGELOG.md; `gh release list` was EMPTY, so AC2 was
+    # satisfiable in letter while informing nobody) -- ⚠️ a missing section FAILS the release
+    # rather than publishing silence, proven both ways; and issue #38's reproduced cause is
+    # fixed as a CLASS, ⚠️ the validation having named TWO claimants where there are SIX.
+    # ⚠️ The guard's first form turned one defect into EIGHTEEN failures (its own panic
+    # poisoning its mutex). **Issue #38 stays OPEN**: one occurrence is *a* cause, not *the*.
+    # 🔑 AC4's prescribed check found SIX unmarked manual chapters where the validation read
+    # four -- a check sees what a reading misses, including a reading by a layer paid to look.
+    # 🔴 And the visual sweep found what no report had: **story 6b.5's repair is PARTIAL** --
+    # its true sentence stands BESIDE the false one, and on /triage the false line renders
+    # below four rows dated one minute ago. The salience finding is confirmed by eye. Both
+    # registered with owners; neither is copy-and-CSS.
+    # 728 tests both ways (7.9 s live / 0.57 s without), nine gates, clippy --all-targets,
+    # RUSTFLAGS, fmt, both manuals build. ⚠️ `gh-pages` committed and NOT pushed: publishing
+    # it would announce v0.2.0 before the tag exists. Five register rows.
+    # NEXT: `code-review`, then T6 (the tag) on Guy's approval, then the gh-pages push.
+    # (Earlier the same day) CONTEXTED 2026-08-24. 🔴 FOUR
     # divergences from `epics.md:2316`, each MEASURED rather than read: **twelve** preceding
     # stories not eleven (the 6b.4b insertion); **five** example screens not eight (Fed =
     # Triage/Sources/Diagnostic, Mixed = Dashboard, and `Screen::Device` is a sixth off the

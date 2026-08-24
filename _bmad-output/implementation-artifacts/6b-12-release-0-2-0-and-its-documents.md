@@ -1,6 +1,22 @@
 # Story 6b.12: The release v0.2.0, and the documents that describe it
 
-Status: ready-for-dev
+Status: review — ⚠️ **every task but T6 is done; the TAG is deliberately not cut.** It needs
+Guy's approval, and the natural order is *review, then tag*: a tag is not revertible in the
+ordinary sense, so nothing unreviewed should be made permanent by one.
+
+### ⚠️ THE LIVE COUNT FOR THE PROJECT (AC6)
+
+**728 tests** — 490 `opencmdb-bin` + 161 `opencmdb-core` + 77 `xtask` — run **both ways** with
+`cargo test --workspace --locked`, warm: **7.9 s** against a live `mariadb:10.11.11` (container
+`verif6b11`, port 13363, seeded by `a11y/seed.sql`) and **0.57 s** with `DATABASE_URL` unset. The
+clock is the tell that the store-backed tests genuinely executed. ⚠️ **The count did not move**:
+this story added no `#[test]` — T0 replaced a helper's signature and added a runtime registry
+inside an existing one, which is a guard rather than a test.
+
+Nine `cargo xtask ci` gates green, `clippy --workspace --all-targets -- -D warnings` clean,
+`cargo fmt --all --check` clean, `RUSTFLAGS="-D warnings" cargo test --workspace --locked` green,
+both LaTeX manuals build. The two browser gates were last run at story 6b.11's close; ⚠️ **they
+are not re-run here**, and CI runs them on the PR.
 
 ## Story
 
@@ -518,5 +534,6 @@ reshaping a screen.
 
 | Date | Change |
 |---|---|
+| 2026-08-24 | **DEVELOPED, except the tag.** T0–T5 and T7 done; **T6 deliberately not cut** — a tag is not revertible and the order is review-then-tag. 🔴 The validation named two claimants of the scratch namespace and there are **six**, so issue #38 is closed as a CLASS (an ownership registry) rather than as an instance; ⚠️ the guard's first form turned one defect into eighteen failures, the panic poisoning its own mutex. 🔴 The prescribed check found **six** unmarked manual chapters where the validation read four — *a check sees what a reading misses, including a reading by a layer whose job was to look*. 🔴 And the sweep found what no report had: **story 6b.5's repair is PARTIAL**, its true sentence standing beside the false one it was meant to replace — visible on `/triage` below four rows dated one minute ago. ⚠️ The lifted screenshots exposed my own check as insufficient: it did not cover the version the shell renders. **728 tests both ways (7.9 s / 0.57 s), nine gates, both manuals build.** Five register rows. |
 | 2026-08-24 | **VALIDATED by two fresh-context layers — 20 raw findings, 18 distinct, two reached by both.** 🔴 §0b's six needles are measured insufficient THREE ways, and AC4's own hedge is what survives: three documents claim credentials are *encrypted at rest*, a string `diagnostic.rs:1038` **forbids the product from rendering** because it is false; the status narrative is stale by ~15 epics; Tailwind is claimed as the stack where `CLAUDE.md` records the opposite decision, taken twice. 🔴 And §0 was wrong four ways — `Screen::Device` IS in the navigation (⚠️ *a correction `sprint-status.yaml:4578` had already made one story earlier*), AC3's Administrator Manual was named by no task, §0f claimed 3 of 5 rows that belong to others, and `cargo build --locked` cannot update `Cargo.lock`. 🔑 **Both arbitrations taken (Guy)**: the release notes get a VENUE (a GitHub Release from a committed `CHANGELOG.md`) because there is none today; and issue #38's REPRODUCED candidate cause is fixed here with the control the original refutation never ran — ⚠️ it had compared only `write_traps` tags with each other, measuring one half of the population. The issue stays OPEN: one occurrence is *a* cause, not *the* cause. |
 | 2026-08-24 | Story created and CONTEXTED. 🔴 Four divergences from `epics.md:2316`, each measured: **twelve** preceding stories not eleven; **five** example screens not eight; the manuals carry **no screenshots** at all — their staleness is a SENTENCE (`user-manual.tex:151`, *"A dark theme is the default"*), so a story hunting images would have shipped it; and 🔴 **FOUR breaking changes, not three** — the product stopping being publicly readable is registered at `deferred-work.md:3323` and counted nowhere, **and it is the one an operator meets first**, before any colour or address. ⚠️ Also found: `docker/README.dockerhub.md` is already dated *"Since v0.2.0"* twice, so the release is a dependency of a document rather than the other way round. |
