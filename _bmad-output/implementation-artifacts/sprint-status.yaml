@@ -75,7 +75,40 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-23  # 6b.11 is DONE -- PR #117 squash-merged as `3ad8ef6` after a green
+last_updated: 2026-08-24  # 🔴 **EPIC 6b IS CLOSED**, on the PROJECT REVIEW of 2026-08-24 held in
+                          # `~/travail/Projets actuels/opencmdb/` -- the step that closes an epic
+                          # AFTER its retrospective, never the story count. Order honoured:
+                          # 13/13 done -> `v0.2.0` cut and published -> retrospective HELD
+                          # (`epic-6b-retro-2026-08-24.md`) -> project review -> `epic-6b: done`.
+                          # 🔑 WHAT THE REVIEW MEASURED, and it is the reason R3's parade existed:
+                          # Epic 6b is the FIRST WHOLE EPIC conducted after the project's Gantt was
+                          # laid down, so its cadence is the first honest one. **Both of the Gantt's
+                          # hypotheses are WRONG, IN OPPOSITE DIRECTIONS** -- cadence 0.54 d/story
+                          # here and 0.80 on ENGINE work (Epic 5) against 1.5 assumed; volume +43%
+                          # of in-epic insertions (Epic 5 announced 14 stories and delivered 20)
+                          # PLUS one whole 13-story epic outside the plan's 23. Milestone J4 is no
+                          # longer indeterminable: **3 to 20 September, the 8th most likely**, using
+                          # Epic 5's ENGINE cadence -- never 6b's, which measured screens.
+                          # ⚠️ Epic 6 has not advanced a single story since 2026-08-18 and gains TWO
+                          # at this retrospective (the mutation-driver story, the mobile story):
+                          # **18 stories now stand between the product and J4.**
+                          # 🔴 THE REVIEW'S OWN FINDING, which lived in this repository and in no
+                          # project record: `docs/project-context.md` says **the NAS is still on the
+                          # `0.1.0` image**. The engine does run on the real network -- in a version
+                          # older than the identity engine, older than the write route, older than
+                          # the ten screens. And `v0.2.0` answers `401` on every surface without
+                          # credentials, so the upgrade is now an act of CONFIGURATION on an instance
+                          # that never asked for a password. Risk R1 raised to HIGH probability on
+                          # that measurement.
+                          # ⚠️ Epic 6b's milestone is **delivered, NOT discharged**: issue #88 is
+                          # still open, and under Guy's 2026-08-15 rule one open issue holds a
+                          # milestone. ⚠️ But #85 and #88 record DECISIONS, not defects -- an epic
+                          # can never be discharged while the minutes of its own reorganisation stay
+                          # open. Arbitration referred to Guy; nothing closed unilaterally.
+                          # NEXT: Epic 6 resumes at 6.4 -- the gesture that acts. The operator can
+                          # still write NOTHING through the ten screens.
+                          #
+                          # (2026-08-23) 6b.11 is DONE -- PR #117 squash-merged as `3ad8ef6` after a green
                           # CI run ON THE HEAD COMMIT (2f95440, checked rather than assumed:
                           # a green on an earlier commit is this project's own stale-green
                           # class). Branch deleted. **Epic 6b: 12 done of 13.**
@@ -4502,7 +4535,7 @@ development_status:
   # story 5.12 had to sanction it; a seeded demo row is indistinguishable from a real one at the
   # storage layer), and the release CHANGES THE PRODUCT'S COLOUR (`gap.html` hardcodes
   # `data-theme="dark"`, the mock is light-only) — named in the release notes, never discovered.
-  epic-6b: in-progress
+  epic-6b: done  # CLOSED 2026-08-24 by the project review, after the retrospective
   6b-1-design-system-tokens-and-accent: done
   6b-2-shell-navigation-and-ten-routes: done
   6b-3-example-data-marker-and-its-gate: done
