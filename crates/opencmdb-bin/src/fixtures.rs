@@ -1468,7 +1468,7 @@ mod tests {
     /// not understand cannot be an oracle.
     #[test]
     fn a_malformed_line_names_its_line_number() {
-        let dir = scratch_dir("malformed", "a_malformed_line_is_refused");
+        let dir = scratch_dir("malformed");
         let path = dir.join("broken.jsonl");
         let good = serde_json::to_string(&expected()[0]).unwrap();
         std::fs::write(&path, format!("{good}\n\n{{ not json\n")).unwrap();
@@ -1490,7 +1490,7 @@ mod tests {
     /// A whitespace-only line carries content, so it must be named rather than skipped.
     #[test]
     fn a_whitespace_only_line_is_not_silently_skipped() {
-        let dir = scratch_dir("whitespace", "a_whitespace_only_line_is_refused");
+        let dir = scratch_dir("whitespace");
         let path = dir.join("spaces.jsonl");
         let good = serde_json::to_string(&expected()[0]).unwrap();
         std::fs::write(&path, format!("{good}\n   \n")).unwrap();
@@ -1506,7 +1506,7 @@ mod tests {
     /// acceptance criterion promised and nothing exercised.
     #[test]
     fn a_missing_file_is_an_io_error_naming_the_path() {
-        let path = scratch_dir("missing", "a_missing_file_is_refused").join("absent.jsonl");
+        let path = scratch_dir("missing").join("absent.jsonl");
         let err = read_jsonl(&path).expect_err("a missing file must fail the read");
         assert!(matches!(err, FixtureError::Io { .. }), "{err:?}");
         assert!(err.to_string().contains("absent.jsonl"), "{err}");
@@ -1536,7 +1536,7 @@ mod tests {
     /// 🔴 **A REPRODUCED CANDIDATE CAUSE FOR ISSUE #38, and the guard the original refutation
     /// never ran.** `read_scratch` and `write_traps` both key their directory on
     /// `(pid, tag)` — so the same tag from the two of them is the SAME directory — and
-    /// `read_scratch`'s callers finish with `remove_dir_all`. Run in parallel test threads, that
+    /// a test that cleans up finish with `remove_dir_all`. Run in parallel test threads, that
     /// cleanup can land between `write_traps`' `create_dir_all` and its `fs::write`, giving
     /// `Os { code: 2, kind: NotFound }` at the write. Story 6b.12's validation reproduced it once
     /// in ten full-suite runs — the rate issue #38 itself records — with the tag `"both"` claimed
@@ -1552,15 +1552,25 @@ mod tests {
     /// ⚠️ **This does not close issue #38.** One reproduced occurrence establishes *a* cause,
     /// never *the* cause — this project forbids naming a cause without the check that would
     /// refute it, and the issue stays open with the measurement attached.
-    fn scratch_owners()
-    -> &'static std::sync::Mutex<std::collections::BTreeMap<String, &'static str>> {
+    fn scratch_owners() -> &'static std::sync::Mutex<std::collections::BTreeMap<String, String>> {
         static OWNERS: std::sync::OnceLock<
-            std::sync::Mutex<std::collections::BTreeMap<String, &'static str>>,
+            std::sync::Mutex<std::collections::BTreeMap<String, String>>,
         > = std::sync::OnceLock::new();
         OWNERS.get_or_init(|| std::sync::Mutex::new(std::collections::BTreeMap::new()))
     }
 
-    fn scratch_dir(tag: &str, owner: &'static str) -> PathBuf {
+    #[track_caller]
+    fn scratch_dir(tag: &str) -> PathBuf {
+        // 🔴 **The owner is the CALL SITE, and the first form used the HELPER'S NAME — which the
+        // code review's edge layer measured insufficient by REPRODUCING the race through it.**
+        // With `"read_scratch"` as the owner, two different tests reusing one tag through that
+        // one helper claimed the same directory, the first one's cleanup deleted it, and the bare
+        // `Os { code: 2, kind: NotFound }` came back **with the registry silent** — the very
+        // failure it exists to name. Its doc promised *"a tag may be claimed by exactly ONE"*,
+        // which was true only ACROSS helpers. `#[track_caller]` here and on both helpers makes
+        // the owner a file and a line, so two tests cannot share a tag by any route.
+        let caller = std::panic::Location::caller();
+        let owner = format!("{}:{}", caller.file(), caller.line());
         {
             // ⚠️ Poison is RECOVERED rather than propagated: the panic below is itself a
             // poisoning event, and an `expect` here turned one real defect into EIGHTEEN failing
@@ -1570,12 +1580,12 @@ mod tests {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             match owners.get(tag) {
                 Some(first) if *first != owner => panic!(
-                    "the scratch tag {tag:?} is claimed by BOTH `{first}` and `{owner}` — they \
-                     resolve to one directory keyed on (pid, tag), and `read_scratch`'s callers \
-                     delete it. Give one of them a tag of its own."
+                    "the scratch tag {tag:?} is claimed by BOTH {first} and {owner} — they \
+                     resolve to one directory keyed on (pid, tag), and a test that cleans up \
+                     deletes it under the other. Give one of them a tag of its own."
                 ),
                 _ => {
-                    owners.insert(tag.to_string(), owner);
+                    owners.insert(tag.to_string(), owner.clone());
                 }
             }
         }
@@ -1588,8 +1598,9 @@ mod tests {
     // ── Record dispatch and the failure record (story 4.5a) ──────────────────
 
     /// Write a scratch stream and read it back as records.
+    #[track_caller]
     fn read_scratch(tag: &str, body: &str) -> (PathBuf, Result<Vec<Record>, FixtureError>) {
-        let dir = scratch_dir(tag, "read_scratch");
+        let dir = scratch_dir(tag);
         let path = dir.join("stream.jsonl");
         std::fs::write(&path, body).unwrap();
         let result = read_records(&path);
@@ -1944,7 +1955,7 @@ mod tests {
     /// whichever the reader happened to keep.
     #[test]
     fn a_stream_repeating_an_obs_id_is_refused() {
-        let dir = scratch_dir("dup-obs", "a_duplicate_observation_is_refused");
+        let dir = scratch_dir("dup-obs");
         let path = dir.join("dup.jsonl");
         let line = serde_json::to_string(&expected()[0]).unwrap();
         std::fs::write(&path, format!("{line}\n{line}\n")).unwrap();
@@ -2074,8 +2085,27 @@ mod tests {
         );
     }
 
+    /// The scratch registry refuses a tag two call sites claim — issue #38's shape.
+    ///
+    /// 🔴 **The registry shipped with NO test, and the code review's blind layer found it from
+    /// the diff alone.** A prove-to-red run during development is not a guard in the suite, and
+    /// this project's own rule says so: *"it does not excuse a new guard shipping without a test
+    /// that reds when it is removed."* ⚠️ **And the first registry would have PASSED this test
+    /// while still being wrong** — it keyed on the helper's name, so two calls from one test body
+    /// were one owner. It reds here only because the owner is the call site.
+    ///
+    /// The tag is deliberately unused elsewhere: the registry is process-global, so a tag this
+    /// test poisons would be unavailable to any other.
+    #[test]
+    #[should_panic(expected = "is claimed by BOTH")]
+    fn a_scratch_tag_two_call_sites_claim_is_refused() {
+        let _first = scratch_dir("registry-guard");
+        let _second = scratch_dir("registry-guard");
+    }
+
+    #[track_caller]
     fn write_traps(tag: &str, body: &str) -> PathBuf {
-        let path = scratch_dir(tag, "write_traps").join("traps.toml");
+        let path = scratch_dir(tag).join("traps.toml");
         std::fs::write(&path, body).unwrap();
         path
     }

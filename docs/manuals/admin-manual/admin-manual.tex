@@ -47,7 +47,7 @@ not attempt to point opencmdb at SQLite, MySQL, or PostgreSQL.
 
 \chapter{Installation}
 \begin{planned}
-⚠️ This block said installation would be documented \emph{``once the first release image is
+This block said installation would be documented \emph{``once the first release image is
 published to Docker Hub''}. That image has been published since \texttt{v0.1.0}, and the
 sentence stood unchanged through \texttt{v0.1.1}. What is still owed here is the
 \textbf{Synology Container Manager walkthrough} and the \textbf{native-binary path}; the
@@ -144,7 +144,7 @@ it, is exactly why the connection is no longer configured as a single string.
   \item[\texttt{OPENCMDB\_LOG\_DIR}] Enables daily-rotating file logs beside stdout.
   \item[\texttt{OPENCMDB\_METRICS\_TOKEN}] The bearer token the Prometheus endpoint requires.
   \item[\texttt{OPENCMDB\_DOCUMENT\_ENABLED}] Whether the documenting write route exists at
-    all. ⚠️ It is reached from no screen today, so setting it changes nothing an operator can
+    all. It is reached from no screen today, so setting it changes nothing an operator can
     see; it is listed because this chapter otherwise names every variable, and its absence was
     found by story 6b.12's validation.
 \end{description}
@@ -281,14 +281,14 @@ opencmdb is designed to protect against a \emph{stolen database or backup} and a
 \emph{unauthenticated network access} — not against a local root attacker on the host.
 
 \section{Access to the interface}
-\textbf{The product is closed by default and has been since \texttt{v0.2.0}.} Every screen
+\textbf{The product is closed by default, from \texttt{v0.2.0} onward.} Every screen
 answers \texttt{401} unless HTTP Basic credentials are configured; only \texttt{/healthz} and
 the static assets are public. Set \textbf{both} \texttt{OPENCMDB\_BASIC\_USER} and
 \texttt{OPENCMDB\_BASIC\_PASSWORD} --- half a pair refuses to start, by name. The user half
 may not contain a colon (RFC~7617), and neither half may carry a non-ASCII or control
 character, since no browser dialog can type one.
 
-⚠️ With neither set, every screen answers \texttt{401} and nobody can sign in. That is the
+With neither set, every screen answers \texttt{401} and nobody can sign in. That is the
 deliberate posture of a fresh instance, not a fault --- and it is what an upgrade from
 \texttt{v0.1.1}, which was publicly readable, will look like until the two variables are
 supplied. A cross-site \texttt{POST} is refused by an Origin check; behind a reverse proxy,
@@ -306,9 +306,12 @@ which needs none; there is no credential table and no encryption call site, and 
 own diagnostic screen reports \emph{none stored}. What follows is the design for when
 credentials arrive with the UniFi source.
 \end{planned}
-Source API keys and other secrets will be encrypted at rest. The encryption key is kept
-\textbf{separate from the database volume}, so a stolen database file alone does not reveal
-your source credentials. API-key rotation and an encrypted secret backup are planned with it.
+\begin{planned}
+The design, for when credentials arrive: source API keys and other secrets encrypted at rest,
+with the encryption key kept \textbf{separate from the database volume}, so a stolen database
+file alone would not reveal your source credentials. API-key rotation and an encrypted secret
+backup belong to the same work. None of it exists today.
+\end{planned}
 
 \section{Transport security}
 Terminate TLS at a reverse proxy in front of opencmdb; TLS termination is a deployment

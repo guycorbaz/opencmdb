@@ -6,12 +6,16 @@ ordinary sense, so nothing unreviewed should be made permanent by one.
 
 ### ⚠️ THE LIVE COUNT FOR THE PROJECT (AC6)
 
-**728 tests** — 490 `opencmdb-bin` + 161 `opencmdb-core` + 77 `xtask` — run **both ways** with
-`cargo test --workspace --locked`, warm: **7.9 s** against a live `mariadb:10.11.11` (container
-`verif6b11`, port 13363, seeded by `a11y/seed.sql`) and **0.57 s** with `DATABASE_URL` unset. The
-clock is the tell that the store-backed tests genuinely executed. ⚠️ **The count did not move**:
-this story added no `#[test]` — T0 replaced a helper's signature and added a runtime registry
-inside an existing one, which is a guard rather than a test.
+**729 tests** — 491 `opencmdb-bin` + 161 `opencmdb-core` + 77 `xtask` — run **both ways** with
+`cargo test --workspace --locked`, warm: **7.6 s** against a live `mariadb:10.11.11` (container
+`verif6b11`, port 13363, seeded by `a11y/seed.sql`) and **0.65 s** with `DATABASE_URL` unset. The
+clock is the tell that the store-backed tests genuinely executed. 🔴 **The count read 728 until
+the code review, on the sentence *"this story added no `#[test]`"* — which was true and was the
+defect.** The blind layer found from the diff alone that the scratch registry shipped with no test
+at all, against this project's own rule that a new guard needs one that reds when it is removed.
+`a_scratch_tag_two_call_sites_claim_is_refused` is that test; ⚠️ **and the FIRST registry would
+have passed it** while still being wrong, because it keyed on the helper's name — it reds only
+because the owner is now the call site.
 
 Nine `cargo xtask ci` gates green, `clippy --workspace --all-targets -- -D warnings` clean,
 `cargo fmt --all --check` clean, `RUSTFLAGS="-D warnings" cargo test --workspace --locked` green,
@@ -342,9 +346,15 @@ check that would refute it. The issue stays open, with the measurement and the c
   - [ ] 🔴 **The six needles of §0b were measured insufficient THREE ways** — start from what the
         validation found, then go wider: `README.md`, `docker/README.dockerhub.md`, both LaTeX
         manuals, `origin/gh-pages`, `app.yml`, `.env.example`, `docker/docker-compose.yml`, `docs/`.
-  - [ ] 🔑 **One check is prescribed rather than invented**: for every `Screen::ALL` entry whose
-        `nature()` is `Example`, the matching manual chapter must carry `\begin{planned}`. **Four
-        chapters fail it today** (*Sources and liveness*, *Triage gestures*, *IP address
+  - [x] 🔴 **THIS CHECK WAS NOT WHAT RAN, and the code review measured it.** As written — *for
+        every `Screen::ALL` entry whose `nature()` is `Example`, the matching manual chapter must
+        carry `\begin{planned}`* — it finds almost nothing: three of the six `Example` screens
+        have no chapter at all, and two of the three that do already carried the marker. What ran
+        was a **structural scan of every chapter, judged by reading**, and the six it corrected
+        describe connectors and gestures on screens that are `Fed`. *The work is right and its
+        description was a check that was a reading* — the exact pattern AC4 exists to catch,
+        inside AC4's own delivery. Registered with its owner; the record is corrected rather than
+        the criterion rewritten to fit. Originally: **four chapters fail it today** (*Sources and liveness*, *Triage gestures*, *IP address
         management*, *Alerts and notifications*).
   - [ ] Write what the sweep could NOT reach. *An enumeration cannot claim the completeness of a
         property* — and §0b is this project's newest proof of it.
@@ -502,7 +512,7 @@ lift did not cover everything the lift shows.* Everything else in them is curren
   and sparklines. The invented `37 / 4 / 2` is the loudest thing on the page.
 - 🔴 **And a finding no report named: story 6b.5's repair is PARTIAL.** In the state
   `a11y/seed.sql` creates — observations present, none placed, which is **CI's own state on every
-  gate run** — the page says *"Nothing observed yet — run a scan"* immediately above *"A scan has
+  gate run** — the page says *"Nothing observed yet — run a scan and this fills in."* immediately above *"A scan has
   landed; the identity pass has not placed any of it yet."* The second sentence is 6b.5's fix and
   **it explains the first without removing it**. ⚠️ On `/triage` the false line renders *below
   four queue rows dated one minute ago*: the claim and its refutation in one viewport.
@@ -530,10 +540,104 @@ reshaping a screen.
 - `_bmad-output/implementation-artifacts/deferred-work.md` — five rows (T5)
 - `gh-pages` branch, `index.html` — committed, unpushed
 
+## §T11 — The three-layer code review, and its repair (2026-08-24)
+
+Three isolated layers, a different model, one worktree and one live store each. **24 raw findings
+→ 19 distinct, three of them reached by more than one layer.**
+
+### 🔴 The two that would have hurt an operator
+
+**1 · `docker/.env.example` — the file the documents tell an operator to COPY — never got the
+variables this release makes mandatory.** Only the README's *inline copy* of it did. `README.md`
+says, literally, `cp docker/.env.example docker/.env    # set DATABASE_PASSWORD,
+OPENCMDB_SCAN_CIDR, …` — an instruction that enumerates what to fill in and **does not name the
+auth pair**, over a file that carries neither. 🔑 *So an operator doing exactly what the document
+says boots `v0.2.0`, meets `401` on every screen, and the two variables that would rescue them are
+absent from both the file and the instruction.* That is this release's headline breaking change,
+and the file that protects against it is the one the story did not touch. Found by the edge layer,
+by following the instructions rather than reading them.
+
+**2 · The image was published BEFORE the changelog check ran.** `Build and push` — which also
+overwrites `latest` — sat several steps above `Extract this version's changelog section`, the only
+step that can `exit 1`. So *"a missing section FAILS the release"* meant *"fails to create the
+Release OBJECT"*: the artefact was already on Docker Hub with no notes, which is the precise
+outcome arbitration 1 built that step to prevent. The extraction now runs **immediately after
+checkout**, before anything is published. *Validating an input before doing irreversible work is
+not a preference.*
+
+### 🔴 What the review found about the story's own claims
+
+**3 · The "prescribed check" was a reading.** T2 defines it as *every `Screen::ALL` entry whose
+`nature()` is `Example` must have its manual chapter marked*. Taken literally it finds almost
+nothing — three of the six `Example` screens have no chapter, and two of the three that do already
+carried the marker. The six chapters actually corrected describe **connectors and gestures**, on
+screens that are `Fed`. ⚠️ **The work is right and its description was not**, and *a check that is
+a reading* is the exact pattern AC4 exists to catch, found inside AC4's own delivery. **Guy's
+arbitration: correct the record and register the real check** — over rewriting T2 to describe what
+happened, which is the quietest form of the false sentence.
+
+**4 · The scratch registry shipped with NO test, and the blind layer found it from the diff
+alone.** A prove-to-red run during development is not a guard in the suite. ⚠️ **And the edge layer
+then REPRODUCED a race the registry could not see**: its owner was the *helper's name*, so two
+tests reusing one tag through one helper shared the directory and the bare `NotFound` came back
+**with the registry silent** — while its doc promised *"a tag may be claimed by exactly ONE"*.
+**Guy's arbitration: close it at the CALL SITE** (`#[track_caller]`), so the written promise
+becomes true rather than narrowed. 🔑 **The two findings compose**: the missing test now exists,
+and **the first registry would have passed it** — it reds only because the owner is a file and a
+line. *A test written against the old mechanism would have vouched for the hole.*
+
+**5 · Four documents quoted one on-screen sentence and not one quoted it correctly.** The blind
+layer found the inconsistency from the diff and mis-assigned which was which; measured, the served
+string is *"Nothing observed yet — run a scan and this fills in."* and every document truncated it,
+each differently. All six occurrences normalised.
+
+**6 · AC5 required *fixed or re-registered BY NAME*, and six of nine items got neither** — no CSS
+file is touched anywhere in the diff, and none of the five register rows named them. ⚠️ **Including
+the OFL font attribution, which the register and this story's own T3 assigned to it by name**:
+`grep` for *OFL*, *Barlow*, *SIL* over the tree returned **zero**. A ticked task that delivered
+nothing. The attribution is written now; the other five are registered with owners.
+
+### ⚠️ Measured, and not visible any other way
+
+- **Three raw ⚠️ glyphs added to the admin manual by this story rendered as nothing.** The edge
+  layer built the PDF and read it back: `Missing character: There is no ⚠ (U+26A0) in font "Noto
+  Sans"`, twelve warnings, `make` exiting **0**, and `pdftotext` showing the glyph dropped. Two of
+  the three were plain body text with no admonition box to fall back on. Removed; the build now
+  reports **zero** missing characters.
+- **The extracted release notes ended with a dangling `---`** — the separator between two
+  changelog sections. Trimmed by a visible loop rather than a `sed` incantation, *because a release
+  step nobody can re-derive is a release step nobody checks*.
+- **The version was interpolated into an awk regex.** `0.2.[0]` matched the `0.2.0` section; a tag
+  containing `[` killed the step. It compares strings now. Re-proven across the edge layer's whole
+  battery: `0.2.0` → 76 lines, and `0.9.9`, `0.2`, `0.2.0-rc1`, `0.2.[0]` all → 0.
+- **`docker pull gcorbaz/opencmdb:0.1.1`** stood at the top of the Docker Hub page — the first
+  command a visitor copies — and again in its embedded compose sketch. **All three layers found
+  it**; two found the second site. It was diff CONTEXT, never a changed line.
+- **The README and the admin manual asserted the tag was already published**, in the commit whose
+  own status says it is deliberately not cut. Both now read true before the tag and after it.
+- **The admin manual's security fix was the weakest of the three**: the `planned` box covered the
+  correction while the paragraph below slid into the present tense describing a mechanism that
+  does not exist. The whole passage is inside the box now.
+
+### Refuted, each with the check
+
+- **"`release.yml` will fail on every push to `master`"** (blind, HIGH-if-true, self-labelled a
+  suspicion and naming its own check) — refuted: the workflow triggers on `push: tags: v*.*.*`
+  and nothing else; `latest` is set by `metadata-action` on each tag, not by a master publish.
+- The edge layer additionally ran and refuted **fourteen** suspicions, among them that the six
+  `\begin{planned}` blocks attach to the wrong section (they do not — verified in source order and
+  in the rendered PDF), that an upgrade from a `v0.1.1`-shaped database breaks (migrations 1–5
+  apply cleanly), that the documented refusals are not real (`OPENCMDB_LOCALE=FR`, a half pair and
+  a colon in the username all refuse to boot, by name), and that the registry made the suite
+  order-dependent (25 runs at 64 threads, clean).
+
+---
+
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-08-24 | 🔴 **CODE-REVIEWED (three layers) and REPAIRED.** 24 raw findings → 19 distinct. **The two that would have hurt an operator**: `docker/.env.example` — the file the documents say to COPY — never got the variables this release makes mandatory, so following the instructions literally lands on 401 everywhere with the rescue absent from both file and instruction; and the image was published **before** the changelog check, so *fails the release* meant *fails to create the Release object*. **Two arbitrations (Guy)**: correct the record on the check that was a reading, and close the scratch registry at the CALL SITE. 🔑 The registry's missing test and the edge layer's reproduced race COMPOSE — **the first registry would have passed the new test**. 728 → **729**. |
 | 2026-08-24 | **DEVELOPED, except the tag.** T0–T5 and T7 done; **T6 deliberately not cut** — a tag is not revertible and the order is review-then-tag. 🔴 The validation named two claimants of the scratch namespace and there are **six**, so issue #38 is closed as a CLASS (an ownership registry) rather than as an instance; ⚠️ the guard's first form turned one defect into eighteen failures, the panic poisoning its own mutex. 🔴 The prescribed check found **six** unmarked manual chapters where the validation read four — *a check sees what a reading misses, including a reading by a layer whose job was to look*. 🔴 And the sweep found what no report had: **story 6b.5's repair is PARTIAL**, its true sentence standing beside the false one it was meant to replace — visible on `/triage` below four rows dated one minute ago. ⚠️ The lifted screenshots exposed my own check as insufficient: it did not cover the version the shell renders. **728 tests both ways (7.9 s / 0.57 s), nine gates, both manuals build.** Five register rows. |
 | 2026-08-24 | **VALIDATED by two fresh-context layers — 20 raw findings, 18 distinct, two reached by both.** 🔴 §0b's six needles are measured insufficient THREE ways, and AC4's own hedge is what survives: three documents claim credentials are *encrypted at rest*, a string `diagnostic.rs:1038` **forbids the product from rendering** because it is false; the status narrative is stale by ~15 epics; Tailwind is claimed as the stack where `CLAUDE.md` records the opposite decision, taken twice. 🔴 And §0 was wrong four ways — `Screen::Device` IS in the navigation (⚠️ *a correction `sprint-status.yaml:4578` had already made one story earlier*), AC3's Administrator Manual was named by no task, §0f claimed 3 of 5 rows that belong to others, and `cargo build --locked` cannot update `Cargo.lock`. 🔑 **Both arbitrations taken (Guy)**: the release notes get a VENUE (a GitHub Release from a committed `CHANGELOG.md`) because there is none today; and issue #38's REPRODUCED candidate cause is fixed here with the control the original refutation never ran — ⚠️ it had compared only `write_traps` tags with each other, measuring one half of the population. The issue stays OPEN: one occurrence is *a* cause, not *the* cause. |
 | 2026-08-24 | Story created and CONTEXTED. 🔴 Four divergences from `epics.md:2316`, each measured: **twelve** preceding stories not eleven; **five** example screens not eight; the manuals carry **no screenshots** at all — their staleness is a SENTENCE (`user-manual.tex:151`, *"A dark theme is the default"*), so a story hunting images would have shipped it; and 🔴 **FOUR breaking changes, not three** — the product stopping being publicly readable is registered at `deferred-work.md:3323` and counted nowhere, **and it is the one an operator meets first**, before any colour or address. ⚠️ Also found: `docker/README.dockerhub.md` is already dated *"Since v0.2.0"* twice, so the release is a dependency of a document rather than the other way round. |

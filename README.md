@@ -13,7 +13,7 @@ A self-hosted, single-binary reconciliation engine for home labs and small busin
 opencmdb is a product whose entire thesis is that documentation must not lie about reality. This README holds itself to the same rule.
 
 - **Planning is complete.** A full product brief, PRD, UX specification, and a ~5,000-line architecture with a decision register (D1–D66) live in [`_bmad-output/planning-artifacts/`](_bmad-output/planning-artifacts/). If you want to understand *why* every decision is the way it is, that is where the reasoning — including the dead ends and the recorded dissents — is written down.
-- **There is a running binary.** `v0.2.0` is tagged and published to Docker Hub as `gcorbaz/opencmdb`. It starts, connects to MariaDB, runs an ARP/ping scan over a CIDR you give it, and serves **ten screens** — three of them fed by the real store, one mixed, six carrying labelled example content — the first of which shows a real observed-vs-declared gap — reconciled from genuinely ingested observations, abstaining visibly where it cannot conclude. It has been deployed to a real Synology NAS, and everything that broke on the way is in the issue tracker and fixed in `0.1.1`.
+- **There is a running binary.** `v0.2.0` is the release this tree cuts, published to Docker Hub as `gcorbaz/opencmdb` (⚠️ *until the tag lands, `0.1.1` is the newest image on the registry — this repository is ahead of it*). It starts, connects to MariaDB, runs an ARP/ping scan over a CIDR you give it, and serves **ten screens** — three of them fed by the real store, one mixed, six carrying labelled example content — the first of which shows a real observed-vs-declared gap — reconciled from genuinely ingested observations, abstaining visibly where it cannot conclude. It has been deployed to a real Synology NAS, and everything that broke on the way is in the issue tracker and fixed in `0.1.1`.
 - **That is not the product yet.** ⚠️ **This line said *"one page, one connector, no triage inbox, no IPAM, no alerts, no admin UI"* until `v0.2.0`, and four of those six had stopped being true.** What holds: **one connector**, which sees an IPv4 address and a round-trip time and **no hardware address at all**, so the identity engine abstains on everything it scans; **no gesture** — the triage screen shows five controls and every one of them is labelled *not yet*; **no UniFi source**; and a scan perimeter still set by an environment variable. What now exists: a triage inbox on the real gap, a dashboard, an inventory, an IPAM occupancy map, an applications table, a sources screen, an alerts screen, a self-diagnostic and a commissioning screen — six of them showing **labelled example content** rather than your data, which the page says on the page. Epics 1–5 are done, 6 is under way, and 6b — the interface — is at 12 of 13 stories.
 - **Nothing here is production-ready.** No upgrade path is promised between `0.x` tags, and the schema will move.
 - **What changed, and what breaks:** [`CHANGELOG.md`](CHANGELOG.md) and the [GitHub releases](https://github.com/guycorbaz/opencmdb/releases). 🔴 **`0.2.0` is not a drop-in upgrade from `0.1.1`** — four breaking changes, the first of which is that the product is no longer publicly readable.
@@ -131,7 +131,7 @@ opencmdb deploys as **two services**: the binary and a MariaDB instance. It is d
 A reference [`docker/docker-compose.yml`](docker/docker-compose.yml) and [`docker/.env.example`](docker/.env.example) ship in the repo:
 
 ```bash
-cp docker/.env.example docker/.env    # set DATABASE_PASSWORD, OPENCMDB_SCAN_CIDR, …
+cp docker/.env.example docker/.env    # set OPENCMDB_BASIC_USER + OPENCMDB_BASIC_PASSWORD (required), DATABASE_PASSWORD, OPENCMDB_SCAN_CIDR, …
 docker compose -f docker/docker-compose.yml up -d
 ```
 
@@ -164,6 +164,16 @@ Early-stage **User** and **Administrator** manuals (LaTeX, built with LuaLaTeX) 
 Early days — the reconciliation core is being built one vertical slice at a time. If the idea resonates, opening an issue to discuss a connector, a design decision, or a use case is the most useful thing right now. Please keep application code out of `_bmad*` and honour the `opencmdb-core` dependency frontier (no `anyhow`/`axum`/`sqlx`/`askama` in the domain crate); `cargo xtask ci` is meant to catch violations.
 
 ## License
+
+### Third-party assets
+
+The interface is set in **Barlow** by Jeremy Tribby, embedded under the
+[SIL Open Font License 1.1](https://openfontlicense.org/) — five faces, self-hosted, with no
+external request at any point. `OFL.txt` ships beside them and is served with them. ⚠️ *The
+licence obligation was discharged when story 6b.1 shipped that notice; this attribution is the
+courtesy the register asked story 6b.12 for by name, and the code review found it had been ticked
+and not written.*
+
 
 Copyright © 2026 Guy Corbaz.
 

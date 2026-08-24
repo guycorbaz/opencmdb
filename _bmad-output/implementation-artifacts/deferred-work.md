@@ -3213,7 +3213,7 @@ carried in by name rather than rediscovered.
   **Owner: unassigned.**
 - ⚠️ **`has_any` and `causes` can disagree on a zero-count group.**
   `build_identity_view(vec![reach("abstained", Some("absence_of_proof"), 0)])` gives
-  `has_any = false` with one cause row: the page prints *"Nothing observed yet"* and silently drops
+  `has_any = false` with one cause row: the page prints *"Nothing observed yet — run a scan and this fills in."* and silently drops
   the line it is holding. **Unreachable from `COUNT(*)`**, which never returns a zero group — a
   totality wart recorded as such rather than patched, so that a future caller feeding this function
   from something other than the grouped read meets it. **Owner: unassigned.**
@@ -4821,11 +4821,10 @@ six was in the register nowhere at all. It is the first row below.
 
 ## Deferred from: story 6b.12 (2026-08-24)
 
-- 🔴 **`identity.has_any` says *"Nothing observed yet — run a scan"* over a page showing observed
+- 🔴 **`identity.has_any` says *"Nothing observed yet — run a scan and this fills in."* over a page showing observed
   values, and story 6b.5's repair is PARTIAL rather than done.** Measured on a seeded store (3
   `observation_record` rows, 0 `identity_link` rows — the state `a11y/seed.sql` creates and
-  therefore the state CI's own gates render): `/dashboard` shows *"Nothing observed yet — run a
-  scan and this fills in."* immediately above *"A scan has landed; the identity pass has not
+  therefore the state CI's own gates render): `/dashboard` shows *"Nothing observed yet — run a scan and this fills in."* immediately above *"A scan has landed; the identity pass has not
   placed any of it yet."* — the second sentence is 6b.5's fix, and **it explains the first without
   removing it**. ⚠️ On `/triage` it is worse: the same line renders **below four queue rows dated
   *il y a 1 min***, so the contradiction and its refutation sit in one viewport. The section's
@@ -4854,3 +4853,39 @@ six was in the register nowhere at all. It is the first row below.
 - ⚠️ **`gh-pages` is committed on its branch and NOT pushed.** Pushing publishes the site, which
   would announce `v0.2.0` before the tag exists. **Owner: story 6b.12's own T6**, immediately
   after the tag.
+
+### Added by story 6b.12's CODE REVIEW (2026-08-24)
+
+🔴 **AC5 required *fixed or re-registered BY NAME* and six of nine items got neither** — the
+acceptance layer measured it: no CSS file is touched anywhere in the story's diff, and none of its
+five register rows names any of these. They are written now rather than argued.
+
+- **Zero `@media` rules in `app.css`, against the UX spec's mobile-first mandate**, with `/triage`
+  measured unusable at 390×844. **Owner: Epic 6b's retrospective**, which must decide whether the
+  reference mock being desktop-only overrides the spec's mandate or the other way round — it is
+  the same mock-versus-spec arbitration NFR24's touch targets are waiting on, and the two should
+  be taken together rather than twice.
+- **An orphan `.wrap` rule in `app.css`** — defined, used by no template. **Owner: whichever story
+  next edits the stylesheet.**
+- **No locale-parameterised render test.** Every render test runs in the default locale, so a
+  screen that renders correctly in English and breaks in French is caught by nothing but a human
+  look. **Owner: whichever story next adds a screen.**
+- **The IPAM legend at 10 px**: *libre* and *réseau ou diffusion* are hard to tell apart. Both mean
+  *not assignable to you*, so the harm is low. **Owner: Epic 14**, which draws a real subnet.
+- **The `/gap` fragment has been seen by no eye.** It is embedded by no page and is served as a
+  bare fragment with no doctype. **Owner: story 6.4**, which introduces the first swap and is the
+  first thing that will render it.
+- **The applications table shows a divergence and does not name it** — ⚠️ *listed here for
+  traceability only*: the register already owns it under **Epic 15**, and story 6b.12's §0f
+  wrongly claimed it. It is NOT this story's, and it is not re-assigned by being mentioned.
+
+🔴 **And the mechanical check AC4 describes does not exist — what ran was a reading.** T2 defines
+it as *"for every `Screen::ALL` entry whose `nature()` is `Example`, the matching manual chapter
+must carry `\begin{planned}`"*. Taken literally it finds almost nothing: `Devices`, `Device` and
+`Commissioning` have no matching chapter at all, and of the three that do, two already carried the
+marker. The six chapters actually corrected describe **connectors and gestures** on screens that
+are `Fed`. The work is right and its description was not. **What is owed is a check that links a
+manual chapter to a product capability and demands `\begin{planned}` when the capability is
+absent** — ⚠️ which means first deciding what links them, and then a tenth gate over LaTeX.
+**Owner: Epic 6b's retrospective**, to weigh that cost. Until it exists, the manuals are kept
+current by reading, and this row is what says so.

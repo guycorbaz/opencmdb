@@ -14,7 +14,7 @@ opencmdb is being built in the open. This image is published starting at **`0.1.
 ## Image
 
 ```
-docker pull gcorbaz/opencmdb:0.1.1
+docker pull gcorbaz/opencmdb:0.2.0
 ```
 
 - Distroless, static, runs as a **non-root** user.
@@ -70,7 +70,7 @@ opencmdb runs as a single service pointing at your MariaDB. A reference `docker-
 ```yaml
 services:
   opencmdb:
-    image: gcorbaz/opencmdb:0.1.1
+    image: gcorbaz/opencmdb:0.2.0
     container_name: opencmdb
     env_file: .env
     ports:
