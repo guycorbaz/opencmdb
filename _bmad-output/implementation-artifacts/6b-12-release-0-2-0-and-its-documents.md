@@ -16,8 +16,10 @@ count every other document repeats.)*
 **AC1 — Given** the epic's preceding stories **When** the release is cut **Then** `v0.2.0` is
 tagged and published to Docker Hub as `v0.1.1` was, from a green CI run.
 
-**AC2 — Given** the release notes **When** they are written **Then** they name **what this
-release does NOT do**: the example screens, the gestures Epic 7 owns, and 🔴 **every breaking
+**AC2 — Given** the release notes **When** they are written **Then** they exist somewhere an
+operator will SEE them — 🔴 a **GitHub Release object** created by the workflow from a committed
+`CHANGELOG.md` (arbitration 1: there is no such venue today, and neither `v0.1.0` nor `v0.1.1` has
+one) — and they name **what this release does NOT do**: the example screens, the gestures Epic 7 owns, and 🔴 **every breaking
 change — of which there are FOUR, not the three this epic has been repeating** (§0c).
 *Announcing an absent gesture is a promise; letting a change be discovered is a surprise. Neither
 is acceptable and the notes are where both are settled.*
@@ -53,7 +55,7 @@ v0.2.0"* twice, about a release that does not exist yet (§0d).
 | The criterion says | Measured | How |
 |---|---|---|
 | *"the epic's **eleven** preceding stories"* | **twelve** | 6b.1–6b.11 plus the **6b.4b** insertion (`sprint-status.yaml`, twelve `done` keys) |
-| *"the **eight** example screens"* | **five** of the ten in `Screen::ALL` | `screens.rs::nature()`: `Fed` = Triage, Sources, Diagnostic; `Mixed` = Dashboard; `Example` = Devices, Apps, Ipam, Alerts, Commissioning. (`Screen::Device` is a sixth, off the navigation.) |
+| *"the **eight** example screens"* | **six** of the ten in `Screen::ALL` | `screens.rs::nature()`: `Fed` = Triage, Sources, Diagnostic; `Mixed` = Dashboard; `Example` = Devices, **Device**, Apps, Ipam, Alerts, Commissioning. 🔴 **This row first said *five … plus `Screen::Device`, off the navigation*, and the validation refuted it**: `Screen::Device` carries `NavGroup::Inventory` and the nav is built by filtering `Screen::ALL`, so it renders with its label. What is off the generic dispatch is its ROUTE, in `router()`. ⚠️ `sprint-status.yaml:4578` had recorded that correction one story earlier and it did not carry. |
 | *"the manuals, **whose screenshots** show a product that no longer looks like that"* | **there are no screenshots** | `grep -rn includegraphics docs/manuals/` → nothing |
 
 ⚠️ **The third correction is the useful one, and it is the *right in substance, wrong in its
@@ -120,11 +122,21 @@ renders as the product's front page. AC7 exists so that outcome is decided rathe
 `docker/metadata-action` → `docker/build-push-action`, then `peter-evans/dockerhub-description`
 syncs `docker/README.dockerhub.md` to the Docker Hub page (best-effort, `continue-on-error`).
 
-**So AC1 is a TAG on a green master plus a verification, not a workflow to write.** Story 3.10's
-own shape is the precedent: tag, watch the run, then `docker pull` the published image and start
-it against a MariaDB. ⚠️ **Do not tag before the version literals move**: `version = "0.1.1"` sits
-in `crates/opencmdb-bin/Cargo.toml:6` and `crates/opencmdb-core/Cargo.toml:6`, and `Cargo.lock`
-follows.
+**So AC1 is a TAG on a green master plus a verification, and a WORKFLOW EDIT** — see arbitration
+1 (§0i): `release.yml` builds and pushes an image and creates **no GitHub Release object**, which
+is why `v0.1.0` and `v0.1.1` have none. Story 3.10's shape is otherwise the precedent: tag, watch
+the run, then `docker pull` the published image and start it against a MariaDB.
+
+⚠️ **Three version literals, not two**, and the validation found the third: `crates/opencmdb-bin/
+Cargo.toml:6`, `crates/opencmdb-core/Cargo.toml:6` **and `xtask/Cargo.toml:9`** — which the glob
+`crates/*/Cargo.toml` structurally cannot match. `xtask` never surfaces to an operator (the binary
+reads its own `CARGO_PKG_VERSION`), so this is consistency rather than behaviour. **And
+`docker-compose.yml:14` pins `gcorbaz/opencmdb:0.1.1`** — the deployment path both READMEs point
+to, in AC3's list nowhere until now.
+
+🔴 **`cargo build --locked` CANNOT update `Cargo.lock`, measured**: `error: cannot update the lock
+file … because --locked was passed to prevent this`. A plain `cargo build` first, so the lock
+follows; `--locked` afterwards.
 
 ### §0f. THE VISUAL SWEEP IS SIXTEEN REGISTER LINES, AND ONE OF THEM IS NOT A DEFECT BUT A DESIGN QUESTION
 
@@ -141,9 +153,137 @@ carry the most weight:
   spacing and layout to a browser check, on a sentence nobody had run `command -v` against until
   6b.4b found Chrome 151 installed all along.
 
-The rest: the IPAM legend at 10 px (`libre` vs `réseau ou diffusion` hard to tell apart), the
-`/gap` fragment seen by no eye, the applications table showing a divergence without naming it,
-NFR24's touch targets, and the axe gate's own residual scope.
+🔴 **The list of "the rest" this section first gave was wrong in 3 of its 5 items, and the
+validation measured it**: the applications table (**Epic 15**), NFR24's touch targets (**Epic 6b's
+retrospective**) and the axe gate's exit residual (**an unnamed future story**) carry no reference
+to this story at all. *Naming someone else's row as your own is how a sweep grows a scope nobody
+decided.* What genuinely belongs here, beyond the two above: the **OFL font attribution owed in
+`README.md`**, the measured **zero `@media` rules** against the UX spec's mobile-first mandate
+(with `/triage` unusable at 390×844), an orphan `.wrap` CSS rule, the dashboard's reach section
+never seen populated in a browser, the missing locale-parameterised render test, the IPAM legend
+at 10 px, and the `/gap` fragment no eye has seen.
+
+### §0h. THE VALIDATION PASS — two fresh-context layers, 2026-08-24
+
+**20 raw findings → 18 distinct defects, two of them reached by BOTH layers.** The fact-check
+layer worked read-only over the tree; the gap-hunt layer had its own worktree, its own
+`mariadb:10.11.11` (port 13370) and Chrome 151, and **built the release image and booted the
+product three ways** rather than reading about it.
+
+🔴 **THE CONTEXTING'S OWN CENTRAL DEVICE — §0b's six needles — IS MEASURED INSUFFICIENT THREE
+WAYS, and AC4's hedge is what survives.** §0b listed the claims a grep for `dark`, `one page`,
+`single page`, `screenshot`, `includegraphics` and `0.1.1` could find, and hedged: *"a claim
+phrased differently is not in this list and is not thereby absent"*. The gap-hunt then found
+three whole classes of falsified claim that no needle could reach:
+
+1. 🔴 **THREE DOCUMENTS MAKE A SECURITY CLAIM THE PRODUCT'S OWN TEST FORBIDS AS FALSE.**
+   `README.md:146`, `docker/README.dockerhub.md:144` and `admin-manual.tex:264` all assert, as
+   current fact, that stored credentials are **encrypted at rest** with a master key outside the
+   data volume. Measured: `diagnostic.rs:1038,1040` lists the strings `"encrypted at rest"` and
+   `"encryption key"` in the set a test **forbids from ever rendering**, because the product has
+   no credential store and no crypto call site — and `/diagnostic` says so on screen: *"stored
+   credentials — none stored — Epics 10 and 19 build credential storage."* 🔑 **The exact
+   sentence the codebase guards against is standing on the page Docker Hub renders as the
+   product's storefront.** The admin manual goes further and claims API-key rotation for a
+   connector that does not exist.
+2. 🔴 **The project-status narrative is stale by roughly fifteen epics.** `README.md` says
+   *"epics 1–4 of 23 are complete and epic 5 … is under way (10 of its 16 stories)"*; `gh-pages`
+   says *"epics 1–3 … epic 4 is under way"*. Both then say *"no triage inbox, no IPAM, no
+   alerts, no admin UI"* — **all four now exist**, three of them as screens this epic built.
+3. 🔴 **Tailwind is claimed as the current stack in three places**, with `cargo xtask css` among
+   the commands. Measured: the subcommand does not exist, and `CLAUDE.md` records the opposite
+   decision taken **twice** (6b.1, re-confirmed at 6b.2) — *"there is NO Tailwind chain"*.
+
+🔴 **AND THE STORY'S OWN §0 IS WRONG FOUR WAYS**, each measured by the fact-check layer:
+
+- **`Screen::Device` IS in the navigation.** It carries `NavGroup::Inventory` and the nav is built
+  by filtering `Screen::ALL`, so it renders with its label. What is true is that it is off
+  `router()`'s generic dispatch loop. ⚠️ **And the correction already existed in this project's
+  own record** — `sprint-status.yaml:4578`, written at story 6b.11's validation: *"`Screen::Device`
+  IS in `Screen::ALL` — 6b.6 moved its route REGISTRATION, not the variant."* ***A correction
+  established one story earlier did not carry into the next***, which is the defect rather than
+  the confusion.
+- **AC3 names the Administrator Manual and no task does** — the only document of the seven in that
+  position. And it needs real work: a `\begin{planned}` block still says installation *"will be
+  documented here once the first release image is published"* (published since **v0.1.0**), and
+  the whole Security chapter is **silent** on `OPENCMDB_BASIC_USER`, on the closed-by-default
+  posture, and on the 401 — the very two lines AC2 says the release notes owe the operator.
+- **§0f's worked example is wrong in 3 of its 5 items.** The applications table (Epic 15), NFR24
+  (Epic 6b's retrospective) and the axe gate's exit residual (an unnamed story) contain no
+  reference to this story at all; meanwhile at least six genuine 6b.12 rows go unnamed, among
+  them the **OFL font attribution owed in `README.md`** and the measured fact that the sheet
+  carries **zero `@media` rules** against the UX spec's mobile-first mandate.
+- ⚠️ **`cargo build --locked` cannot do what T1 asks of it** — measured: `error: cannot update the
+  lock file … because --locked was passed to prevent this`. A plain build first, then `--locked`.
+
+**Reached by BOTH layers, independently:**
+
+- **The manuals present unbuilt features as CURRENT, unmarked** — the fact-check found the
+  *Triage gestures* chapter (six gestures described as working, while all five controls ship
+  labelled *À venir*); the gap-hunt found **four** such sections (*Sources and liveness*, *Triage
+  gestures*, *IP address management*, *Alerts and notifications*), each sitting a paragraph away
+  from another section that IS wrapped in `\begin{planned}`. 🔑 The gap-hunt also supplies the
+  CHECK AC4 demands: for every `Screen::ALL` entry whose `nature()` is `Example`, grep the
+  matching manual chapter for `\begin{planned}` — **four chapters fail it**.
+- **A third version literal**, `xtask/Cargo.toml:9`, outside T1's `crates/*` glob. Never
+  user-visible (the binary reads its own `CARGO_PKG_VERSION`), and a real inconsistency left
+  behind.
+
+🔴 **AND ONE FINDING REACHES PAST THIS STORY: a reproduced candidate cause for ISSUE #38.**
+`read_scratch("both", …)` at `fixtures.rs:1749` and `write_traps("both", …)` at `:2138` resolve to
+the **same** `scratch_dir("both")` — same pid, same tag, two different helpers — and the first
+one's cleanup does `remove_dir_all` on it. The gap-hunt reproduced the failure once in ten
+full-suite runs (`NotFound` at `fixtures.rs:2032`), which matches issue #38's own recorded rate.
+⚠️ **`CLAUDE.md` records that hypothesis as *"raised and refuted"*, and the refutation checked
+only that *the six `write_traps` tags are distinct from each other*** — it never compared a
+`write_traps` tag with a `read_scratch` tag. ***The refutation measured one half of the
+population.*** The fix is a one-line rename. Open since Epic 4.
+
+**Registered by the validation, not fixed:** `docker-compose.yml:14` pins
+`gcorbaz/opencmdb:0.1.1` and is the deployment path both READMEs point to, absent from AC3 and
+T3; the Docker Hub *Tags* table has no `0.2.0` row and its one-clause-per-tag shape was never
+built to carry four breaking changes; `OPENCMDB_DOCUMENT_ENABLED` is documented **nowhere**,
+including the admin manual's Configuration chapter which lists every other variable; `favicon.ico`
+404s on every route.
+
+**Refuted by the gap-hunt, each with its check** — recorded so nobody re-chases them: the missing
+`WWW-Authenticate` on the unconfigured 401 is **arbitration 6**, deliberate and tested; no test
+pins the crate version literal, so the bump breaks nothing; **the release Dockerfile still
+builds** (`docker build` succeeded, the image booted against a live MariaDB, `/healthz` 200, `/`
+401); the manuals still compile with `make`; and §0b's own counts (`v0.1.1` ×2, `dark` ×4, `one
+page` ×2 on `gh-pages`) are **numerically exact** — ⚠️ though the four `dark` hits are the landing
+page's own theme toggle, not prose about the product, so that row of §0b names a design question
+rather than a false claim.
+
+### §0i. THE TWO ARBITRATIONS (Guy, 2026-08-24)
+
+Both were raised by a measurement the validation took, and in both Guy took the option that closes
+the property rather than the one that keeps the story narrow. Recorded with the option refused.
+
+🔴 **Arbitration 1 · The release notes get a VENUE: a GitHub Release object, created by the
+workflow, fed by a committed `CHANGELOG.md`.** The gap-hunt measured that there is none —
+`gh release list` is **empty**, neither `v0.1.0` nor `v0.1.1` has a Release object, there is no
+changelog anywhere, and `release.yml` creates neither. Story 3.10 recorded the v0.1.0 cut **in its
+own story file's Change Log**, which no operator will ever read. 🔑 *So AC2 was satisfiable in
+letter while leaving zero operators informed — which is exactly the outcome §0c calls the
+worst-shaped surprise this release can ship.* The Docker Hub *Tags* table gains its `0.2.0` row
+and points at the Release. **Refused:** the Tags table alone (one clause per version, never built
+to carry four breaking changes) and a `CHANGELOG.md` alone (invisible to anyone pulling the image).
+⚠️ This touches `release.yml`, which no story has edited since 3.10 — and it must be exercised
+before the tag, since a tag is not revertible in the ordinary sense.
+
+🔴 **Arbitration 2 · Issue #38's reproduced candidate cause is FIXED HERE, with the control the
+original refutation never ran.** `read_scratch("both")` and `write_traps("both")` resolve to one
+`scratch_dir`, and the first one's cleanup deletes it; reproduced once in ten full-suite runs, the
+rate the issue itself records. ⚠️ **`CLAUDE.md` files that hypothesis as *"raised and refuted"* on
+a check that compared only `write_traps` tags with each other** — *the refutation measured one half
+of the population.* The fix is a rename plus a guard that reds when any tag is shared **between**
+the two helpers. 🔑 The reason it lands in a release story rather than waiting: **a suite known to
+be unstable on the very commit about to be tagged is a release risk**, and §0g already forbids
+tagging on anything but a green measured on the head commit. **Refused:** registering it (leaves
+the tag on a tree we know is flaky) and *closing issue #38* — ⚠️ **one reproduced occurrence
+establishes *a* cause, never *the* cause**, and this project forbids naming a cause without the
+check that would refute it. The issue stays open, with the measurement and the control attached.
 
 ### §0g. WHAT THIS STORY MUST NOT DO
 
@@ -163,39 +303,91 @@ NFR24's touch targets, and the axe gate's own residual scope.
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — The version literals and the lockfile** (AC1)
-  - [ ] `0.1.1` → `0.2.0` in both `crates/*/Cargo.toml`; `cargo build --locked` so `Cargo.lock`
-        follows; verify `/diagnostic` renders the new version (it reads the build's own).
-- [ ] **T2 — Find every falsified claim by a CHECK** (AC4)
-  - [ ] Run the §0b needles plus any others the developer chooses, over `README.md`,
-        `docker/README.dockerhub.md`, `docs/manuals/`, the `gh-pages` worktree and `app.yml`.
-  - [ ] **Write what the check could NOT see.** An enumeration cannot claim the completeness of
-        a property — the sixth application of that rule in this project.
+*(Rewritten on what the validation measured, 2026-08-24. Every task that changed carries why.)*
+
+- [ ] **T0 — Issue #38's reproduced cause** (arbitration 2)
+  - [ ] Rename one of the two colliding `"both"` tags in `fixtures.rs` (`:1749` `read_scratch`
+        against `:2138` `write_traps`).
+  - [ ] 🔑 **The guard the original refutation never ran**: a test that reds when ANY tag is
+        shared *between* the two helpers, not merely when `write_traps`' own tags collide. Prove
+        it red by restoring the collision.
+  - [ ] Attach the measurement and the control to **issue #38**; ⚠️ do NOT close it — one
+        reproduced occurrence is *a* cause, not *the* cause.
+
+- [ ] **T1 — The version, in FOUR places, and the lockfile** (AC1)
+  - [ ] `0.1.1` → `0.2.0` in `crates/opencmdb-bin/Cargo.toml:6`, `crates/opencmdb-core/
+        Cargo.toml:6` and ⚠️ **`xtask/Cargo.toml:9`** (outside the `crates/*` glob), plus
+        `docker/docker-compose.yml:14`'s pinned image.
+  - [ ] ⚠️ A plain `cargo build` FIRST so `Cargo.lock` follows — `--locked` refuses to update it,
+        measured. Then `--locked` for everything else.
+  - [ ] `/diagnostic` renders the new version (it reads the build's own).
+
+- [ ] **T2 — Find falsified claims by a CHECK, and say what the check cannot see** (AC4)
+  - [ ] 🔴 **The six needles of §0b were measured insufficient THREE ways** — start from what the
+        validation found, then go wider: `README.md`, `docker/README.dockerhub.md`, both LaTeX
+        manuals, `origin/gh-pages`, `app.yml`, `.env.example`, `docker/docker-compose.yml`, `docs/`.
+  - [ ] 🔑 **One check is prescribed rather than invented**: for every `Screen::ALL` entry whose
+        `nature()` is `Example`, the matching manual chapter must carry `\begin{planned}`. **Four
+        chapters fail it today** (*Sources and liveness*, *Triage gestures*, *IP address
+        management*, *Alerts and notifications*).
+  - [ ] Write what the sweep could NOT reach. *An enumeration cannot claim the completeness of a
+        property* — and §0b is this project's newest proof of it.
+
 - [ ] **T3 — The documents** (AC3, AC7)
-  - [ ] `user-manual.tex:151`, `README.md:16` and `:124`, `gh-pages/index.html`,
-        `docker/README.dockerhub.md`, the twins.
-  - [ ] ⚠️ Decide `docker/README.dockerhub.md`'s two forward-dated sentences: correct if the
-        release ships, and say so if it does not.
-- [ ] **T4 — The release notes** (AC2)
-  - [ ] What it DOES: ten addresses, the mock's light design, the triage screen on the real gap,
-        the keyboard layer, two browser gates, the copy in FR and EN.
-  - [ ] What it does NOT: five example screens (six with `/device`), the four gestures Epic 7
-        owns, no write surface beyond `POST /document-all`, which no template calls.
-  - [ ] 🔴 **The FOUR breaking changes**, the closed-by-default one FIRST, with the two lines an
-        operator needs to get back in (`OPENCMDB_BASIC_USER` / `OPENCMDB_BASIC_PASSWORD`).
+  - [ ] 🔴 **The security claim first**: `README.md:146`, `docker/README.dockerhub.md:144`,
+        `admin-manual.tex:264` — *"encrypted at rest"*, which `diagnostic.rs:1038` forbids the
+        product from rendering because it is false. Delete or mark planned; the admin manual's
+        API-key rotation claim goes with it (no connector exists).
+  - [ ] 🔴 **The status narrative**: `README.md` (*"epics 1–4 of 23"*) and `gh-pages`
+        (*"epics 1–3"*), and the *"no triage inbox, no IPAM, no alerts, no admin UI"* line in both
+        — all four exist now.
+  - [ ] 🔴 **Tailwind**, claimed as the stack in `README.md` ×2 and `gh-pages` ×1, with a
+        `cargo xtask css` that does not exist. `CLAUDE.md` carries the opposite decision, twice.
+  - [ ] **The Administrator Manual** — ⚠️ *named by AC3 and by no task until now*: the stale
+        `\begin{planned}` installation block (the image has been published since **v0.1.0**), and
+        a Security chapter **silent** on `OPENCMDB_BASIC_USER`, the closed-by-default posture and
+        the 401. Add `OPENCMDB_DOCUMENT_ENABLED` to its Configuration chapter, documented nowhere.
+  - [ ] The User Manual's *"A dark theme is the default"* (`:151`), and the four unmarked chapters
+        from T2's check.
+  - [ ] `README.md:16`/`:124`, `gh-pages/index.html`, the twins, and the OFL font attribution the
+        register says `README.md` owes.
+  - [ ] ⚠️ Decide `docker/README.dockerhub.md`'s two *"Since v0.2.0"* sentences — correct once the
+        release ships, false if it slips (AC7).
+  - [ ] ⚠️ The `gh-pages` *"dark"* ×4 are the landing page's OWN theme toggle, not claims about the
+        product: a design question (should the site's default follow the product's light-first
+        identity?), not a correction. Decide it, do not silently edit it.
+
+- [ ] **T4 — The release notes, and the VENUE they did not have** (AC2, arbitration 1)
+  - [ ] `CHANGELOG.md`, committed, with a `0.2.0` section.
+  - [ ] `release.yml` gains a step creating a **GitHub Release** from it. ⚠️ Exercise it before
+        the tag — a tag is not revertible in the ordinary sense, and no story has touched that
+        workflow since 3.10.
+  - [ ] The Docker Hub *Tags* table gains its `0.2.0` row, pointing at the Release.
+  - [ ] Content — what it DOES: ten addresses, the mock's light design, `/triage` on the real gap,
+        the keyboard layer, two browser gates, the copy in FR and EN. What it does NOT: **six**
+        example screens, the four gestures Epic 7 owns, no write surface a template calls.
+  - [ ] 🔴 **The FOUR breaking changes, the closed-by-default one FIRST**, with the two variables
+        that let an operator back in.
+
 - [ ] **T5 — The visual sweep** (AC5)
-  - [ ] A real browser, both locales, the ten addresses plus `/devices/{id}`. Name the browser
-        and the width.
-  - [ ] Work the sixteen register lines: fix what is copy or CSS, re-register the rest BY NAME
-        with an owner.
-  - [ ] 🔴 Look at `/dashboard`'s salience specifically — it is the one finding a criterion
-        cannot express.
-- [ ] **T6 — Cut it** (AC1) — Guy's approval required before the tag
-  - [ ] Green CI **on the head commit**, checked. Tag `v0.2.0`, push, watch the release run.
-  - [ ] `docker pull gcorbaz/opencmdb:0.2.0`, start it against a MariaDB, `/healthz` → 200,
-        `/` → 303 `/triage`, a screen renders.
+  - [ ] A real browser, both locales, the ten addresses plus `/devices/{id}`. Name browser and
+        width. ⚠️ **The gap-hunt has already produced this sweep's screenshots**; lift them rather
+        than re-taking them, and say which are lifted.
+  - [ ] Work the rows §0f now lists correctly. ⚠️ **Three items the first draft named belong to
+        Epic 15, the retrospective and an unnamed story — do not work them here.**
+  - [ ] 🔴 `/dashboard`'s salience: the fabricated cards against the honest counts. Say whether
+        copy-and-CSS reaches it or whether it needs a design decision, and register accordingly.
+
+- [ ] **T6 — Cut it** (AC1) — **Guy's approval required before the tag**
+  - [ ] Green CI **on the head commit**, checked rather than assumed.
+  - [ ] Tag `v0.2.0`, push, watch the release run, confirm the Release object appeared.
+  - [ ] `docker pull gcorbaz/opencmdb:0.2.0`, start against a MariaDB, `/healthz` → 200,
+        `/` → 303 `/triage`, a screen renders. ✅ The gap-hunt has already proven the Dockerfile
+        still builds and boots from this tree.
+
 - [ ] **T7 — The record** (AC6) — live count here; every figure names its state; twins and
-      `sprint-status.yaml` in the same push.
+      `sprint-status.yaml` in the same push; the register rows this story does not take,
+      re-registered BY NAME with an owner.
 
 ---
 
@@ -239,4 +431,5 @@ step's residue.
 
 | Date | Change |
 |---|---|
+| 2026-08-24 | **VALIDATED by two fresh-context layers — 20 raw findings, 18 distinct, two reached by both.** 🔴 §0b's six needles are measured insufficient THREE ways, and AC4's own hedge is what survives: three documents claim credentials are *encrypted at rest*, a string `diagnostic.rs:1038` **forbids the product from rendering** because it is false; the status narrative is stale by ~15 epics; Tailwind is claimed as the stack where `CLAUDE.md` records the opposite decision, taken twice. 🔴 And §0 was wrong four ways — `Screen::Device` IS in the navigation (⚠️ *a correction `sprint-status.yaml:4578` had already made one story earlier*), AC3's Administrator Manual was named by no task, §0f claimed 3 of 5 rows that belong to others, and `cargo build --locked` cannot update `Cargo.lock`. 🔑 **Both arbitrations taken (Guy)**: the release notes get a VENUE (a GitHub Release from a committed `CHANGELOG.md`) because there is none today; and issue #38's REPRODUCED candidate cause is fixed here with the control the original refutation never ran — ⚠️ it had compared only `write_traps` tags with each other, measuring one half of the population. The issue stays OPEN: one occurrence is *a* cause, not *the* cause. |
 | 2026-08-24 | Story created and CONTEXTED. 🔴 Four divergences from `epics.md:2316`, each measured: **twelve** preceding stories not eleven; **five** example screens not eight; the manuals carry **no screenshots** at all — their staleness is a SENTENCE (`user-manual.tex:151`, *"A dark theme is the default"*), so a story hunting images would have shipped it; and 🔴 **FOUR breaking changes, not three** — the product stopping being publicly readable is registered at `deferred-work.md:3323` and counted nowhere, **and it is the one an operator meets first**, before any colour or address. ⚠️ Also found: `docker/README.dockerhub.md` is already dated *"Since v0.2.0"* twice, so the release is a dependency of a document rather than the other way round. |

@@ -4639,8 +4639,35 @@ development_status:
     # check could not see; do the visual sweep SIXTEEN register lines name (incl. 6b.5's
     # salience finding, which no text guard can measure) or re-register BY NAME; the live count
     # lives in the story file; no document left dated forward.
-    # NEXT: `create-story validate` — MANDATORY here (Guy, Epic 4 retrospective), two
-    # fresh-context agents before `dev-story`.
+    # VALIDATED 2026-08-24 by two fresh-context layers: 20 raw findings, 18 distinct, TWO
+    # reached by both. 🔴 §0b's six needles measured INSUFFICIENT three ways -- and AC4's own
+    # hedge is what survives: (a) three documents claim credentials are "encrypted at rest",
+    # a string `diagnostic.rs:1038` FORBIDS the product from rendering because it is false,
+    # standing on the page Docker Hub renders as the storefront; (b) the status narrative is
+    # stale by ~15 epics ("no triage inbox, no IPAM, no alerts, no admin UI" -- all four
+    # exist); (c) Tailwind is claimed as the stack in three places where CLAUDE.md records the
+    # opposite decision, taken TWICE.
+    # 🔴 And §0 itself was wrong four ways: `Screen::Device` IS in the navigation (⚠️ a
+    # correction `sprint-status.yaml:4578` had ALREADY made one story earlier and which did
+    # not carry); AC3 names the Administrator Manual and no task did, while the manual's
+    # Security chapter is SILENT on the closed-by-default posture; §0f claimed 3 of 5 rows
+    # owned by Epic 15 / the retrospective / an unnamed story; and `cargo build --locked`
+    # cannot update `Cargo.lock`, measured with the error.
+    # ✅ BOTH ARBITRATIONS TAKEN (Guy, 2026-08-24), recommendation in both:
+    #   (1) The release notes get a VENUE -- a GitHub Release object created by `release.yml`
+    #       from a committed CHANGELOG.md. Measured: `gh release list` is EMPTY, neither
+    #       v0.1.0 nor v0.1.1 has one, and story 3.10 recorded its cut in its own story file.
+    #       So AC2 was satisfiable in letter while leaving ZERO operators informed.
+    #   (2) Issue #38's REPRODUCED candidate cause is fixed here: `read_scratch("both")` and
+    #       `write_traps("both")` share one scratch dir and the first deletes it (1 red in 10
+    #       runs, the rate the issue records). ⚠️ CLAUDE.md files that hypothesis as
+    #       "refuted" on a check that compared only `write_traps` tags WITH EACH OTHER --
+    #       the refutation measured one half of the population. The issue stays OPEN: one
+    #       reproduced occurrence is *a* cause, never *the* cause.
+    # Task list REWRITTEN on what the validation measured: T0 (issue #38), four version
+    # literals not two plus the compose pin, the prescribed `\begin{planned}` check over the
+    # Example screens (four manual chapters fail it today), and the security claim FIRST.
+    # NEXT: `dev-story`.
   epic-6b-retrospective: required
 
   # ── Epic 7: La boucle se ferme (v0.5) ────────────────────────────────────
