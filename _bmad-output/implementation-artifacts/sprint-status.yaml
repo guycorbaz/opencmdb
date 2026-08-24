@@ -4511,6 +4511,22 @@ development_status:
   # FR13(a), *the day-one case*; the gesture belongs to the CAUSE, not the count
   6-4-abstention-line-carries-the-gesture: backlog
   # story 5.9's three deferrals, as ONE schema story, with NO producer
+  # ── INSERTED 2026-08-24 at Epic 6b's retrospective, sequenced by Guy the same day ──
+  # 🔴 The retrospective CONTRADICTED ITSELF on this and the tension was surfaced rather than
+  # settled in silence: its decision 1 put the mutation-driver story "at the head of Epic 6",
+  # its decision 4 said "Epic 6 resumes at 6.4". Both cannot be first.
+  # ✅ GUY, 2026-08-24: **6.4 first.** Two epics without a gesture that acts is the heaviest cost
+  # this project carries, and 6.4 settles it. ⚠️ Its own mutation pass therefore runs on the
+  # UNREPAIRED driver — accepted, because the known defect is caught by writing the prediction
+  # first, which Epic 6b measured seven times. The driver lands immediately after.
+  6-4b-mutation-driver-cannot-lie: backlog
+  # ✅ Then the mobile story, BEFORE the engine work. Guy's retrospective arbitration gave the UX
+  # spec priority over the reference mock: breakpoints, targets >= 44 px, density revisited,
+  # taking NFR24 and the ZERO `@media` rules together rather than twice. ⚠️ It sits here because
+  # 6.4 is the LAST story that touches the interface before 6.5-6.19 go into schema and the L2
+  # cascade — fifteen engine stories would separate the decision from its application, and an
+  # interface story written that late re-contexts entirely.
+  6-4c-the-interface-on-a-telephone: backlog
   6-5-entity-device-and-state-schema: backlog
   # 5.6's rule: a blocker that consults a rule is that rule's echo; recall in milli-units
   6-6-l2-candidates-and-no-rule: backlog
