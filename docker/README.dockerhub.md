@@ -141,7 +141,7 @@ A fatal startup error is logged in full — cause chain included — to both std
 ## Security
 
 - All HTTP surfaces sit behind authentication; TLS is terminated at a reverse proxy in front of opencmdb.
-- Stored source credentials are encrypted at rest; the **encryption key is required to live outside the database volume**, so a stolen database file alone does not reveal your secrets.
+- ⚠️ **No source credential is stored today** — there is one connector (ARP/ping) and it needs none; there is no credential table and no encryption call site, which `/diagnostic` reports on screen. The design for when credentials arrive (Epics 10 and 19): encrypted at rest, with the **encryption key outside the database volume**. This line read as a current guarantee until `v0.2.0`.
 - opencmdb protects against a stolen database/backup and unauthenticated network access — not a local root attacker with both the database and the key. The full threat model is in the architecture document.
 
 ## Links

@@ -61,6 +61,13 @@ currently see). When a source goes blind, opencmdb freezes its last-known state 
 suppresses observation-derived alerts for that scope — it never fabricates a divergence from
 a source that cannot see.
 
+\begin{planned}
+The \emph{sources} screen reports which fact kinds a source can and cannot see, measured at
+runtime. The \emph{liveness} axis carries no colour yet: the product can establish that an
+observation arrived, and cannot establish that a source has gone blind --- deriving that from
+silence would invent an incident. The incident axis arrives with Epic~13.
+\end{planned}
+
 \section{Triage gestures}
 When you review a discovery, you choose one canonical gesture:
 \begin{itemize}
@@ -79,6 +86,12 @@ opencmdb remembers your triage decisions (including exclusions), so a resolved i
 reappear on the next scan.
 \end{note}
 
+\begin{planned}
+The triage screen shows these five controls today, each labelled \emph{Not yet}:
+none of them acts. They are visible so that the shape of the work is legible before the
+gestures are built. Epic~7 makes them live.
+\end{planned}
+
 \chapter{Getting started}
 \begin{planned}
 A guided first-run walkthrough will appear here once the application is runnable. For now,
@@ -95,6 +108,12 @@ wait for you in the triage inbox.
 \section{The UniFi source}
 If you run a UniFi controller, opencmdb can discover devices, IP addresses, switch ports,
 SSIDs, VLANs, and DHCP leases from it using only an API key — no elevated network access.
+
+\begin{planned}
+There is no UniFi connector yet. The only source that ships is the ARP/ping scanner below,
+which sees an IPv4 address and a round-trip time and nothing else --- not even a hardware
+address. The \emph{sources} screen names the five fact kinds it cannot see.
+\end{planned}
 
 \section{The ARP/ping scanner}
 For everything else, declare the subnets to scan and opencmdb will find active devices on
@@ -117,6 +136,11 @@ first, routine churn last.
         since you last documented it. The observed record itself is never modified.
 \end{itemize}
 
+\begin{planned}
+\emph{Document-all} exists as a route and is reached from no screen; \emph{document-field} is
+not built. Epic~7 gives both a control the operator can press.
+\end{planned}
+
 \section{Working in bulk}
 You can triage many discoveries at once when they share a decision, keeping steady-state
 review fast.
@@ -133,6 +157,12 @@ conflicts (the same IP on two MACs, or a statically declared IP inside a DHCP ra
 identifying the devices involved. IPv6 addresses can be documented (observation-only at
 this stage).
 
+\begin{planned}
+The occupancy map ships as an \emph{example} screen: the subnets, the addresses and the
+conflict it draws are fabricated documentation data, labelled as such on the page. Epic~14
+reads a real subnet.
+\end{planned}
+
 \chapter{Applications and hosted software}
 Beyond the network layer, you can record software instances (name, version, listening ports)
 hosted on a device, and group them into applications with an owner and a criticality. This
@@ -147,9 +177,19 @@ opencmdb can notify you of the things that matter — new conflicts, a source go
 capability downgrade — without drowning you in routine change. Alerts derived from
 observation are suppressed for any source that is currently blind.
 
+\begin{planned}
+The alerts screen ships as an \emph{example}: the three alert kinds it lists are the ones the
+product will raise, and no alert is raised or delivered today. Epic~13 builds them.
+\end{planned}
+
 \chapter{A bilingual interface}
-The user interface is available in English and French; documentation is English-only. A dark
-theme is the default, and key views target WCAG~2.1~AA accessibility.
+The user interface is available in English and French; documentation is English-only. Set
+\texttt{OPENCMDB\_LOCALE} to \texttt{en} or \texttt{fr} (a region suffix such as
+\texttt{fr-CH} is accepted); an unrecognised value refuses to start, naming the variable,
+rather than falling back to English in silence. The interface is \textbf{light}, on the
+reference design's palette --- \emph{this manual said a dark theme was the default until
+\texttt{v0.2.0}}. Key views target WCAG~2.1~AA: every screen is measured by axe-core on each
+CI run, and the triage queue is reachable by keyboard.
 
 \appendix
 \chapter{Glossary}

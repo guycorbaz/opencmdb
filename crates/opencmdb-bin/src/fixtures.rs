@@ -1468,7 +1468,7 @@ mod tests {
     /// not understand cannot be an oracle.
     #[test]
     fn a_malformed_line_names_its_line_number() {
-        let dir = scratch_dir("malformed");
+        let dir = scratch_dir("malformed", "a_malformed_line_is_refused");
         let path = dir.join("broken.jsonl");
         let good = serde_json::to_string(&expected()[0]).unwrap();
         std::fs::write(&path, format!("{good}\n\n{{ not json\n")).unwrap();
@@ -1490,7 +1490,7 @@ mod tests {
     /// A whitespace-only line carries content, so it must be named rather than skipped.
     #[test]
     fn a_whitespace_only_line_is_not_silently_skipped() {
-        let dir = scratch_dir("whitespace");
+        let dir = scratch_dir("whitespace", "a_whitespace_only_line_is_refused");
         let path = dir.join("spaces.jsonl");
         let good = serde_json::to_string(&expected()[0]).unwrap();
         std::fs::write(&path, format!("{good}\n   \n")).unwrap();
@@ -1506,7 +1506,7 @@ mod tests {
     /// acceptance criterion promised and nothing exercised.
     #[test]
     fn a_missing_file_is_an_io_error_naming_the_path() {
-        let path = scratch_dir("missing").join("absent.jsonl");
+        let path = scratch_dir("missing", "a_missing_file_is_refused").join("absent.jsonl");
         let err = read_jsonl(&path).expect_err("a missing file must fail the read");
         assert!(matches!(err, FixtureError::Io { .. }), "{err:?}");
         assert!(err.to_string().contains("absent.jsonl"), "{err}");
@@ -1531,7 +1531,54 @@ mod tests {
 
     /// A private scratch directory per test. A shared constant path races between concurrent
     /// `cargo test` runs and panics as a parser failure when it is owned by another user.
-    fn scratch_dir(tag: &str) -> PathBuf {
+    /// Who claimed a scratch tag. Two helpers share one namespace and one of them deletes.
+    ///
+    /// 🔴 **A REPRODUCED CANDIDATE CAUSE FOR ISSUE #38, and the guard the original refutation
+    /// never ran.** `read_scratch` and `write_traps` both key their directory on
+    /// `(pid, tag)` — so the same tag from the two of them is the SAME directory — and
+    /// `read_scratch`'s callers finish with `remove_dir_all`. Run in parallel test threads, that
+    /// cleanup can land between `write_traps`' `create_dir_all` and its `fs::write`, giving
+    /// `Os { code: 2, kind: NotFound }` at the write. Story 6b.12's validation reproduced it once
+    /// in ten full-suite runs — the rate issue #38 itself records — with the tag `"both"` claimed
+    /// by both helpers.
+    ///
+    /// ⚠️ **`CLAUDE.md` files that hypothesis as *"raised and refuted"*, and the refutation
+    /// checked that *the six `write_traps` tags are distinct from each other*** — it never
+    /// compared a `write_traps` tag with a `read_scratch` one. ***It measured one half of the
+    /// population.*** This map is the other half: a tag may be claimed by exactly ONE helper, and
+    /// a second claimant panics naming both. Together with the distinctness the original
+    /// refutation did establish, the pair covers the namespace.
+    ///
+    /// ⚠️ **This does not close issue #38.** One reproduced occurrence establishes *a* cause,
+    /// never *the* cause — this project forbids naming a cause without the check that would
+    /// refute it, and the issue stays open with the measurement attached.
+    fn scratch_owners()
+    -> &'static std::sync::Mutex<std::collections::BTreeMap<String, &'static str>> {
+        static OWNERS: std::sync::OnceLock<
+            std::sync::Mutex<std::collections::BTreeMap<String, &'static str>>,
+        > = std::sync::OnceLock::new();
+        OWNERS.get_or_init(|| std::sync::Mutex::new(std::collections::BTreeMap::new()))
+    }
+
+    fn scratch_dir(tag: &str, owner: &'static str) -> PathBuf {
+        {
+            // ⚠️ Poison is RECOVERED rather than propagated: the panic below is itself a
+            // poisoning event, and an `expect` here turned one real defect into EIGHTEEN failing
+            // tests — measured. A guard that multiplies one finding by ten is noise around it.
+            let mut owners = scratch_owners()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            match owners.get(tag) {
+                Some(first) if *first != owner => panic!(
+                    "the scratch tag {tag:?} is claimed by BOTH `{first}` and `{owner}` — they \
+                     resolve to one directory keyed on (pid, tag), and `read_scratch`'s callers \
+                     delete it. Give one of them a tag of its own."
+                ),
+                _ => {
+                    owners.insert(tag.to_string(), owner);
+                }
+            }
+        }
         let dir =
             std::env::temp_dir().join(format!("opencmdb-fixtures-{}-{tag}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("scratch directory");
@@ -1542,7 +1589,7 @@ mod tests {
 
     /// Write a scratch stream and read it back as records.
     fn read_scratch(tag: &str, body: &str) -> (PathBuf, Result<Vec<Record>, FixtureError>) {
-        let dir = scratch_dir(tag);
+        let dir = scratch_dir(tag, "read_scratch");
         let path = dir.join("stream.jsonl");
         std::fs::write(&path, body).unwrap();
         let result = read_records(&path);
@@ -1897,7 +1944,7 @@ mod tests {
     /// whichever the reader happened to keep.
     #[test]
     fn a_stream_repeating_an_obs_id_is_refused() {
-        let dir = scratch_dir("dup-obs");
+        let dir = scratch_dir("dup-obs", "a_duplicate_observation_is_refused");
         let path = dir.join("dup.jsonl");
         let line = serde_json::to_string(&expected()[0]).unwrap();
         std::fs::write(&path, format!("{line}\n{line}\n")).unwrap();
@@ -2028,7 +2075,7 @@ mod tests {
     }
 
     fn write_traps(tag: &str, body: &str) -> PathBuf {
-        let path = scratch_dir(tag).join("traps.toml");
+        let path = scratch_dir(tag, "write_traps").join("traps.toml");
         std::fs::write(&path, body).unwrap();
         path
     }
@@ -2134,8 +2181,10 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     /// so the parse fails rather than a validator catching it later.
     #[test]
     fn a_decision_carrying_an_abstention_cause_is_refused() {
+        // ⚠️ `both-cause`, not `both`: `read_scratch` claims `"both"` at :1792, and the two
+        // resolve to one directory that the other one deletes. Issue #38's reproduced cause.
         let path = write_traps(
-            "both",
+            "both-cause",
             r#"
 [[trap]]
 id = "confused"
