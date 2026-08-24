@@ -14,7 +14,7 @@ opencmdb is being built in the open. This image is published starting at **`0.1.
 ## Image
 
 ```
-docker pull gcorbaz/opencmdb:0.1.1
+docker pull gcorbaz/opencmdb:0.2.0
 ```
 
 - Distroless, static, runs as a **non-root** user.
@@ -24,9 +24,25 @@ docker pull gcorbaz/opencmdb:0.1.1
 
 | Tag | Meaning |
 |-----|---------|
+| `0.2.0` | **the interface** — ten screens, the triage inbox on the real gap, a keyboard layer. 🔴 **Four breaking changes; read the release notes before upgrading.** |
 | `0.1.1` | deployment fixes: overlapping ping probes, `DATABASE_*` variables, fatal errors logged, `cap_net_raw` on the binary |
 | `0.1.0` | first published pre-release (walking skeleton) |
 | `latest` | most recent published tag |
+
+🔴 **`0.2.0` is not a drop-in upgrade from `0.1.1`.** In order of what you meet first:
+
+1. **The product is no longer publicly readable.** Every screen answers `401` until you set
+   **both** `OPENCMDB_BASIC_USER` and `OPENCMDB_BASIC_PASSWORD` (half a pair refuses to start).
+   With neither set, nobody can sign in — the deliberate posture of a fresh instance, and
+   indistinguishable from a broken deployment if you were not told.
+2. **`/` now answers `303` to `/triage`.**
+3. **The interface is light**, not dark. Every existing deployment changes colour.
+4. **`OPENCMDB_LOCALE` refuses an unrecognised value by name** instead of falling back to English
+   — `OPENCMDB_LOCALE=FR` stops the boot.
+
+The full notes, including what this release deliberately does **not** do, are on the
+[GitHub release](https://github.com/guycorbaz/opencmdb/releases) and in
+[`CHANGELOG.md`](https://github.com/guycorbaz/opencmdb/blob/master/CHANGELOG.md).
 
 ## One database, on purpose
 
@@ -54,7 +70,7 @@ opencmdb runs as a single service pointing at your MariaDB. A reference `docker-
 ```yaml
 services:
   opencmdb:
-    image: gcorbaz/opencmdb:0.1.1
+    image: gcorbaz/opencmdb:0.2.0
     container_name: opencmdb
     env_file: .env
     ports:
@@ -141,7 +157,7 @@ A fatal startup error is logged in full — cause chain included — to both std
 ## Security
 
 - All HTTP surfaces sit behind authentication; TLS is terminated at a reverse proxy in front of opencmdb.
-- Stored source credentials are encrypted at rest; the **encryption key is required to live outside the database volume**, so a stolen database file alone does not reveal your secrets.
+- ⚠️ **No source credential is stored today** — there is one connector (ARP/ping) and it needs none; there is no credential table and no encryption call site, which `/diagnostic` reports on screen. The design for when credentials arrive (Epics 10 and 19): encrypted at rest, with the **encryption key outside the database volume**. This line read as a current guarantee until `v0.2.0`.
 - opencmdb protects against a stolen database/backup and unauthenticated network access — not a local root attacker with both the database and the key. The full threat model is in the architecture document.
 
 ## Links

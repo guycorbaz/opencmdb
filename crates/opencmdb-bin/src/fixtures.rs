@@ -1531,7 +1531,64 @@ mod tests {
 
     /// A private scratch directory per test. A shared constant path races between concurrent
     /// `cargo test` runs and panics as a parser failure when it is owned by another user.
+    /// Who claimed a scratch tag. Two helpers share one namespace and one of them deletes.
+    ///
+    /// 🔴 **A REPRODUCED CANDIDATE CAUSE FOR ISSUE #38, and the guard the original refutation
+    /// never ran.** `read_scratch` and `write_traps` both key their directory on
+    /// `(pid, tag)` — so the same tag from the two of them is the SAME directory — and
+    /// a test that cleans up finish with `remove_dir_all`. Run in parallel test threads, that
+    /// cleanup can land between `write_traps`' `create_dir_all` and its `fs::write`, giving
+    /// `Os { code: 2, kind: NotFound }` at the write. Story 6b.12's validation reproduced it once
+    /// in ten full-suite runs — the rate issue #38 itself records — with the tag `"both"` claimed
+    /// by both helpers.
+    ///
+    /// ⚠️ **`CLAUDE.md` files that hypothesis as *"raised and refuted"*, and the refutation
+    /// checked that *the six `write_traps` tags are distinct from each other*** — it never
+    /// compared a `write_traps` tag with a `read_scratch` one. ***It measured one half of the
+    /// population.*** This map is the other half: a tag may be claimed by exactly ONE helper, and
+    /// a second claimant panics naming both. Together with the distinctness the original
+    /// refutation did establish, the pair covers the namespace.
+    ///
+    /// ⚠️ **This does not close issue #38.** One reproduced occurrence establishes *a* cause,
+    /// never *the* cause — this project forbids naming a cause without the check that would
+    /// refute it, and the issue stays open with the measurement attached.
+    fn scratch_owners() -> &'static std::sync::Mutex<std::collections::BTreeMap<String, String>> {
+        static OWNERS: std::sync::OnceLock<
+            std::sync::Mutex<std::collections::BTreeMap<String, String>>,
+        > = std::sync::OnceLock::new();
+        OWNERS.get_or_init(|| std::sync::Mutex::new(std::collections::BTreeMap::new()))
+    }
+
+    #[track_caller]
     fn scratch_dir(tag: &str) -> PathBuf {
+        // 🔴 **The owner is the CALL SITE, and the first form used the HELPER'S NAME — which the
+        // code review's edge layer measured insufficient by REPRODUCING the race through it.**
+        // With `"read_scratch"` as the owner, two different tests reusing one tag through that
+        // one helper claimed the same directory, the first one's cleanup deleted it, and the bare
+        // `Os { code: 2, kind: NotFound }` came back **with the registry silent** — the very
+        // failure it exists to name. Its doc promised *"a tag may be claimed by exactly ONE"*,
+        // which was true only ACROSS helpers. `#[track_caller]` here and on both helpers makes
+        // the owner a file and a line, so two tests cannot share a tag by any route.
+        let caller = std::panic::Location::caller();
+        let owner = format!("{}:{}", caller.file(), caller.line());
+        {
+            // ⚠️ Poison is RECOVERED rather than propagated: the panic below is itself a
+            // poisoning event, and an `expect` here turned one real defect into EIGHTEEN failing
+            // tests — measured. A guard that multiplies one finding by ten is noise around it.
+            let mut owners = scratch_owners()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            match owners.get(tag) {
+                Some(first) if *first != owner => panic!(
+                    "the scratch tag {tag:?} is claimed by BOTH {first} and {owner} — they \
+                     resolve to one directory keyed on (pid, tag), and a test that cleans up \
+                     deletes it under the other. Give one of them a tag of its own."
+                ),
+                _ => {
+                    owners.insert(tag.to_string(), owner.clone());
+                }
+            }
+        }
         let dir =
             std::env::temp_dir().join(format!("opencmdb-fixtures-{}-{tag}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("scratch directory");
@@ -1541,6 +1598,7 @@ mod tests {
     // ── Record dispatch and the failure record (story 4.5a) ──────────────────
 
     /// Write a scratch stream and read it back as records.
+    #[track_caller]
     fn read_scratch(tag: &str, body: &str) -> (PathBuf, Result<Vec<Record>, FixtureError>) {
         let dir = scratch_dir(tag);
         let path = dir.join("stream.jsonl");
@@ -2027,6 +2085,25 @@ mod tests {
         );
     }
 
+    /// The scratch registry refuses a tag two call sites claim — issue #38's shape.
+    ///
+    /// 🔴 **The registry shipped with NO test, and the code review's blind layer found it from
+    /// the diff alone.** A prove-to-red run during development is not a guard in the suite, and
+    /// this project's own rule says so: *"it does not excuse a new guard shipping without a test
+    /// that reds when it is removed."* ⚠️ **And the first registry would have PASSED this test
+    /// while still being wrong** — it keyed on the helper's name, so two calls from one test body
+    /// were one owner. It reds here only because the owner is the call site.
+    ///
+    /// The tag is deliberately unused elsewhere: the registry is process-global, so a tag this
+    /// test poisons would be unavailable to any other.
+    #[test]
+    #[should_panic(expected = "is claimed by BOTH")]
+    fn a_scratch_tag_two_call_sites_claim_is_refused() {
+        let _first = scratch_dir("registry-guard");
+        let _second = scratch_dir("registry-guard");
+    }
+
+    #[track_caller]
     fn write_traps(tag: &str, body: &str) -> PathBuf {
         let path = scratch_dir(tag).join("traps.toml");
         std::fs::write(&path, body).unwrap();
@@ -2134,8 +2211,10 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     /// so the parse fails rather than a validator catching it later.
     #[test]
     fn a_decision_carrying_an_abstention_cause_is_refused() {
+        // ⚠️ `both-cause`, not `both`: `read_scratch` claims `"both"` at :1792, and the two
+        // resolve to one directory that the other one deletes. Issue #38's reproduced cause.
         let path = write_traps(
-            "both",
+            "both-cause",
             r#"
 [[trap]]
 id = "confused"

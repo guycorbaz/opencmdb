@@ -19,10 +19,61 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # `write` because this job now CREATES a GitHub Release (see the last step). It was
+      # `read` while the job only pushed an image.
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      # 🔴 **FIRST, BEFORE ANYTHING IS PUBLISHED — and the first form of this step ran LAST.**
+      # The code review's edge layer measured what that cost: `Build and push` publishes the
+      # image AND overwrites `latest` several steps earlier, so a tag whose changelog section is
+      # missing (a typo, a version bump landing without its entry, a prerelease like
+      # `v0.2.0-rc1` that matches the trigger glob) **still shipped the artefact** and only then
+      # went red. *"Fails the release" meant "fails to create the Release OBJECT"* — the image
+      # was already on Docker Hub with no notes, which is the exact outcome this step exists to
+      # prevent. Validating an input before doing irreversible work is not a preference.
+      #
+      # 🔴 **THE RELEASE NOTES HAD NO VENUE, and story 6b.12's validation measured it**:
+      # `gh release list` was EMPTY — neither `v0.1.0` nor `v0.1.1` had a Release object — there
+      # was no changelog in the tree, and this workflow created neither. Story 3.10 recorded the
+      # v0.1.0 cut in its own story file's Change Log, which no operator will ever read. So a
+      # release could satisfy *"the notes name what this release does not do"* to the letter while
+      # leaving **zero operators informed before they upgrade** — which for v0.2.0 means meeting a
+      # product that answers 401 on every screen with no idea why.
+      #
+      # 🔑 The notes come from `CHANGELOG.md`, committed, so the tag and the text are one artefact
+      # and the section cannot drift from the version it describes.
+      - name: Extract this version's changelog section
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          # From `## <version>` to the line before the next `## `, exclusive.
+          # ⚠️ `index()`, not a regex: the version was interpolated into an ERE, so a tag
+          # carrying `[` made awk exit fatally and a bracket expression could match a DIFFERENT
+          # section. A tag is maintainer-authored, so the exposure was small — but the extraction
+          # compares strings now, which is what it always meant to do.
+          awk -v v="$version" '
+            index($0, "## " v) == 1 && (length($0) == length(v) + 3 || substr($0, length(v) + 4, 1) == " ") { found=1; next }
+            found && index($0, "## ") == 1 { exit }
+            found { print }
+          ' CHANGELOG.md |
+          # ⚠️ The `---` separating two release sections was being emitted, so every Release body
+          # ended with a dangling horizontal rule. Trailing blanks and rules are trimmed here —
+          # written as a visible loop rather than a `sed` incantation, because a release step
+          # nobody can re-derive is a release step nobody checks.
+          awk '{ line[NR] = $0 }
+               END { last = NR
+                     while (last > 0 && (line[last] == "" || line[last] == "---")) last--
+                     for (i = 1; i <= last; i++) print line[i] }' > release-notes.md
+          # ⚠️ A missing or empty section fails the release rather than publishing silence: an
+          # empty body is indistinguishable from "this release changed nothing".
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md carries no section for ${version} — add one before tagging." >&2
+            exit 1
+          fi
+          wc -l release-notes.md
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -65,3 +116,10 @@ jobs:
           repository: gcorbaz/opencmdb
           readme-filepath: ./docker/README.dockerhub.md
           short-description: "Self-hosted single-binary network reconciliation engine — IPAM + light CMDB + topology."
+      # ⚠️ The step above carries `id: notes` and nothing reads its outputs; the body travels
+      # as a FILE, which is what `body_path` wants.
+      - name: Create the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-notes.md
+          name: ${{ github.ref_name }}
