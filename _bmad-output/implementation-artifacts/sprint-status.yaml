@@ -4712,7 +4712,34 @@ development_status:
     # literals not two plus the compose pin, the prescribed `\begin{planned}` check over the
     # Example screens (four manual chapters fail it today), and the security claim FIRST.
     # NEXT: `dev-story`.
-  epic-6b-retrospective: required
+  epic-6b-retrospective: done  # HELD 2026-08-24, `epic-6b-retro-2026-08-24.md`.
+    # 🔑 EPIC 5's SIX ACTIONS: 2 done, 1 partial, 3 NOT ADDRESSED -- and the three unaddressed are
+    # exactly the three whose owner was "Guy" or "unassigned". The two that were done had
+    # "whoever writes a story" as owner: THE WORK CARRIED THEM. An action needing a separate
+    # decision is carried by nothing. That is a defect of the FORMAT, and decision 1 answers it.
+    # ⚠️ Action 2's nuance is the epic's most useful sentence: **naming a defect class makes it
+    # FINDABLE, not avoidable** -- every review cited it by name and the defect was committed
+    # anyway, including in the story written to close it.
+    # 🔴 The epic's own dominant class: **a guard that reads the SOURCE where the defect lives in
+    # the RENDER** -- five stories. Resolved by story 6b.11's AMENDED AC5.
+    # Second class: a measurement landing on the wrong artefact (7 driver defects + stale binary,
+    # stale screenshot, stale process, stale screenshot-check) -- every one caught because a
+    # result CONTRADICTED A PREDICTION written in advance.
+    # Third: the BLIND review layer found HIGHs the sighted ones missed for SIX consecutive
+    # stories. No longer an impression.
+    # ✅ FOUR DECISIONS (Guy): the mutation driver becomes a STORY at the head of Epic 6, not an
+    # action; the SPECIFICATION wins over the mock (NFR24 + the zero `@media` taken TOGETHER, as
+    # a story -- ⚠️ this revises Guy's own premise (3) of 2026-08-13, which only a retrospective
+    # may do); `epics.md` corrected in THREE places; and the ten well-lit dead ends are WRITTEN as
+    # a finding with the plan unchanged (Epic 6 resumes at 6.4).
+    # 🔴 `epics.md` EDITED, five lines, each with its measurement -- including one falsified by
+    # the code it describes since 2026-08-04, which story 5.9b could not edit and which waited
+    # TWENTY DAYS in a register. That row is the argument for the decision.
+    # ⚠️ Actions 5 (views-hash, issue #50) and 6 (five residual worktrees) are named a SECOND
+    # time with the prediction that they will not be done unless something carries them.
+    # 🔴 EPIC 6b IS NOT CLOSED. The PROJECT REVIEW comes next, on
+    # ~/travail/Projets actuels/opencmdb/ under that tree's own CLAUDE.md, and it corrects what
+    # this retrospective surfaced. Do not flip the epic on a story count.
 
   # ── Epic 7: La boucle se ferme (v0.5) ────────────────────────────────────
   epic-7: backlog

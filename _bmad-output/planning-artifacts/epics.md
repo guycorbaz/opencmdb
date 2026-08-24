@@ -1605,7 +1605,7 @@ So that what the engine decides is written down rather than recomputed, and stor
 
 **Given** a set of observations and the tables story 5.9 created
 **When** the resolver runs
-**Then** each observation carrying a MAC lands on exactly ONE `interface` — the one its `(l2_domain, mac)` key names — and each such placement is written as an `identity_link` with the rule that settled it, its evidence and `ruleset_version`.
+**Then** each observation carrying a MAC lands on exactly one `interface` **PER L1 KEY** 🔴 *(corrected at Epic 6b's retrospective, 2026-08-24 — the criterion said ONE interface and the code it describes falsifies it: `join` loops `for key in keys_of(observation)`, so a two-MAC observation lands on two, and `multi-nic` is a committed trap family. Guy widened it at story 5.9b's contexting on 2026-08-04; the story could not edit this file and the correction waited twenty days in a register)* — the one its `(l2_domain, mac)` key names — and each such placement is written as an `identity_link` with the rule that settled it, its evidence and `ruleset_version`.
 
 **Given** `identity::blocking::candidates`, which until this story had no production caller, and `identity::l1::join`, which had no cross-crate caller at all
 **When** the resolver runs
@@ -2305,7 +2305,7 @@ So that triage is as fast as clearing a mailbox.
 
 **Given** the triage queue
 **When** the operator navigates
-**Then** the arrows and `j`/`k` move the selection, `⏎` performs **the gesture that exists on the focused row**, and the handler **ignores `INPUT` and `TEXTAREA` targets**.
+**Then** the arrows move the selection, and the handler **ignores `INPUT` and `TEXTAREA` targets**. 🔴 **`j`/`k` and `⏎` were NOT built — Guy's arbitration at story 6b.11 (2026-08-22), corrected into this criterion at Epic 6b's retrospective rather than left as a silent divergence.** A letter key bound on a page with nothing to type into is a vi-ism, and `⏎` needs a gesture to activate — which no control has until story 6.4. ⚠️ **Owner: Epic 7**, with the four gestures; `⏎` cannot land before 6.4.
 
 **Given** the gestures that do not exist yet
 **When** bindings are written
@@ -2321,12 +2321,12 @@ So that the work that has been invisible for two epics becomes a thing I can run
 
 **Acceptance Criteria:**
 
-**Given** the epic's eleven preceding stories
+**Given** the epic's **twelve** preceding stories *(corrected at Epic 6b's retrospective, 2026-08-24: eleven was written before the 6b.4b insertion, and story 6b.12's contexting had to rediscover it)*
 **When** the release is cut
 **Then** `v0.2.0` is tagged and published to Docker Hub as `v0.1.1` was, from a green CI run.
 
 **Given** the release notes
 **When** they are written
-**Then** they name **what this release does NOT do**: the eight example screens, the gestures Epic 7 owns, and 🔴 **the change from a dark interface to a light one** (constraint 2). *Announcing an absent gesture is a promise; letting a colour change be discovered is a surprise. Neither is acceptable and the notes are where both are settled.*
+**Then** they name **what this release does NOT do**: the **six** example screens *(corrected at the retrospective: eight was written before 6b.8 and 6b.9 made two screens real)*, the gestures Epic 7 owns, and 🔴 **the change from a dark interface to a light one** (constraint 2). *Announcing an absent gesture is a promise; letting a colour change be discovered is a surprise. Neither is acceptable and the notes are where both are settled.*
 
-**And** the docs-current-before-push rule is discharged in the same push: the **User Manual** and **Administrator Manual** (whose screenshots show a product that no longer looks like that), `README.md`, the `gh-pages` landing site, `docker/README.dockerhub.md`, `docs/project-context.md` and `CLAUDE.md`. ⚠️ **A release whose manual describes the previous interface is not ready**, and this is the first release where that risk is real: `v0.1.1` shipped one page.
+**And** the docs-current-before-push rule is discharged in the same push: the **User Manual** and **Administrator Manual** (⚠️ *which carry NO screenshots at all — corrected at the retrospective. Their staleness is a SENTENCE: `user-manual.tex:151` said "A dark theme is the default". A story hunting images would have found none, concluded the manuals were fine, and shipped it*), `README.md`, the `gh-pages` landing site, `docker/README.dockerhub.md`, `docs/project-context.md` and `CLAUDE.md`. ⚠️ **A release whose manual describes the previous interface is not ready**, and this is the first release where that risk is real: `v0.1.1` shipped one page.
