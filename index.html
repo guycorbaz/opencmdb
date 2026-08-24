@@ -176,7 +176,7 @@
 
 <section class="hero">
   <div class="wrap">
-    <span class="pill"><span class="live"></span> v0.1.1 on Docker Hub · one page, one connector · ~1/5 of the plan built</span>
+    <span class="pill"><span class="live"></span> v0.2.0 on Docker Hub · ten screens, one connector · closed by default</span>
     <h1>Documentation that <span class="grad">corrects itself.</span></h1>
     <p class="lede">A self-hosted, single-binary reconciliation engine that continuously compares your network's <b>observed</b> state against the <b>declared</b> state you documented — and turns the gap between them into something you can act on.</p>
     <div class="cta">
@@ -284,7 +284,7 @@
 ├── <b>xtask/</b>               <span class="c"># the dev-tool runner; a dependency of nobody.</span>
 └── <b>_bmad-output/</b>        <span class="c"># the complete planning record (D1–D66).</span></pre>
     <div class="grid cols-2" style="margin-top:22px">
-      <div class="card"><h3>Stack</h3><p>Rust (edition 2024) · axum · askama templates · HTMX (committed, never a CDN) · Tailwind (standalone CLI, no Node) · sqlx · tokio. Server-rendered, polling not SSE at MVP — no SPA framework.</p></div>
+      <div class="card"><h3>Stack</h3><p>Rust (edition 2024) · axum · askama templates · HTMX (committed, never a CDN) · hand-authored CSS on the reference design’s tokens · sqlx · tokio. Polling, not SSE.</p></div>
       <div class="card"><h3>One database, on purpose</h3><p><b>MariaDB 10.11+ only</b> — Synology ships it natively and backs it up. SQLite and MySQL are not supported; PostgreSQL is out at MVP. A single engine keeps the budget of unknowns spent on reconciliation, not portability.</p></div>
     </div>
   </div>
@@ -297,11 +297,11 @@
     <p class="intro">opencmdb's thesis is that documentation must not lie about reality. This page holds itself to the same rule.</p>
     <div class="status-banner">
       <span class="ic">◔</span>
-      <p><b>There is a running binary, and it is a walking skeleton.</b> <b>v0.1.1</b> is tagged and published to Docker Hub. It starts, connects to MariaDB, scans a subnet you give it, and serves <b>one page</b> showing a real observed-vs-declared gap — reconciled from genuinely ingested observations, abstaining visibly where it cannot conclude. It has been deployed to a real Synology NAS, and everything that broke on the way is in the issue tracker and fixed.</p>
+      <p><b>There is a running binary.</b> <b>v0.2.0</b> is tagged and published to Docker Hub. It starts, connects to MariaDB, scans a subnet you give it, and serves <b>ten screens</b> — the first of them a triage inbox showing a real observed-vs-declared gap — reconciled from genuinely ingested observations, abstaining visibly where it cannot conclude. It has been deployed to a real Synology NAS, and everything that broke on the way is in the issue tracker and fixed.</p>
     </div>
     <div class="status-banner" style="margin-top:14px">
       <span class="ic">⊘</span>
-      <p><b>What it is not, yet.</b> No triage inbox, no IPAM, no UniFi connector, no alerts, no admin UI — the scan perimeter is still an environment variable. Roughly <b>a fifth</b> of the planned work is done: epics 1–3 of 23 are complete and epic 4 is under way. No upgrade path is promised between <code>0.x</code> tags, and the schema will move. If you deploy this tonight you will see the idea working end to end on a small perimeter, not a tool you can run your network on.</p>
+      <p><b>What it is not, yet.</b> <b>No gesture acts</b> — the triage screen shows five controls and every one is labelled <i>not yet</i>. <b>Six of the ten screens carry labelled example content</b> rather than your data. <b>One connector</b>, and it sees an IPv4 address and a round-trip time — no hardware address at all — so the identity engine abstains on almost everything it observes. No UniFi source; the scan perimeter is still an environment variable. Epics 1–5 of 23 are done, 6 is under way. <b>v0.2.0 is not a drop-in upgrade</b>: the product is no longer publicly readable, <code>/</code> redirects, the interface is light rather than dark, and an unrecognised <code>OPENCMDB_LOCALE</code> stops the boot — see the release notes. No upgrade path is promised between <code>0.x</code> tags, and the schema will move.</p>
     </div>
     <div style="margin-top:26px">
       <p class="eyebrow" style="margin-bottom:14px">Run it</p>
