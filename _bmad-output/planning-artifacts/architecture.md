@@ -971,7 +971,32 @@ enum Verdict { Decisive, Supports, Neutral, Opposes, Disqualifying }
 | **a `Decisive`, >=1 `Opposes`** | **`Ambiguous`** <- *the cloned-MAC case* |
 | no `Decisive`, >=1 `Supports`, no `Opposes` | `Ambiguous` (weak evidence) |
 | `Supports` AND `Opposes` | `Ambiguous` (conflict) |
-| only `Neutral` / nothing | `NoMatch` (absence of proof) |
+| **`>=1 Opposes` ALONE** — no `Decisive`, no `Supports`, no `Disqualifying` | **abstains on ABSENCE OF PROOF** <- *the row this table lacked* |
+| only `Neutral` / nothing | **abstains on absence of proof** *(this row read `NoMatch`)* |
+
+🔴 **The last two rows were corrected at Epic 6b's milestone, 2026-08-24 (GitHub issue #54), and
+neither correction is cosmetic.**
+
+**The seventh row did not exist.** Enumerated over the eight combinations of
+`(Decisive, Supports, Opposes)` that survive `Disqualifying = absent`, one class fell through every
+row: `>=1 Opposes` with nothing else. It is not *"only `Neutral` / nothing"* — there IS an
+`Opposes` — and it is not *"`Supports` AND `Opposes`"* — there is no `Supports`. **Guy's
+arbitration, 2026-07-29, taken while story 5.4b built `decide` as a TOTAL function** and unable to
+edit this file: a verdict set carrying only refusals has proved nothing, so it abstains on absence
+of proof rather than pronouncing a `NoMatch` it cannot justify. `cascade.rs`'s
+`(None, None, false, true)` arm carries the same sentence and cites this arbitration by date.
+
+⚠️ **And the LAST row said `NoMatch` where the engine abstains.** `Conclusion::NoMatch` carries the
+**rule** that excluded the pair, and this class has no rule to name — so answering `NoMatch` here
+would mean minting a conclusion with an empty justification, which D13's own *"explanation is
+free"* property forbids. The engine has always answered `Abstained { AbsenceOfProof }`;
+`cascade.rs`'s `(None, None, false, false)` arm says so and points at this line. **The table was
+the thing that was wrong.**
+
+🔑 *A table that leaves one input class uncovered is not a specification of a total function, and
+the code that had to be total found the gap first.* The correction waited from 2026-07-29 to this
+milestone because a story may not edit this file — the same twenty-day shape as `epics.md:1608`,
+recorded at Epic 6b's retrospective.
 
 **Properties:** zero arbitrary threshold · **abstention EMERGES from conflict** (we did not add
 it — that is exactly its semantics) · **explanation is free** (the list of `(rule, verdict,

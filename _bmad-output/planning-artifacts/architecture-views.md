@@ -1,10 +1,23 @@
 ---
 viewsOf: architecture.md
-sourceSha256: 'e2ae176d3f49ae5a96a83d040dda4d6cfb1a69ba491a1edd326962b3e21ccd47'
-sourceLines: 4887
-generatedAt: '2026-07-17'
+sourceSha256: 'a0365c82d69a6293f8e461aca74f6e04c7150f2646f8f19f73ae8b93efb2dddf'
+sourceLines: 5148
+generatedAt: '2026-08-24'
+firstGeneratedAt: '2026-07-17'
+regeneratedAt: >-
+  2026-08-24, at Epic 6b's milestone (GitHub issue #50). A CHECK, not a hash bump: the two commits
+  that drifted the source were read — a directory-diagram freshness pass, and the D65 gates'
+  post-completion entry. That entry's named renunciation (`ignore` excluded from volet A) was found
+  ALREADY carried in section 6; its measured numbers — six unit tests exercising both sides, and the
+  live proof that made `cargo xtask ci` exit 1 — were MISSING and are now in section 8. D13's
+  correction (issue #54) landed in the same milestone and is recorded at section 11.
+staleLineCountNote: >-
+  sourceLines read 4887, and the body said "4 886 lines", from birth until this regeneration. NO
+  committed version of architecture.md has ever had 4887 lines — the initial commit carries 5075.
+  The figure came from a pre-commit draft, which is the same shape as this file's own recorded
+  warning that it went stale three minutes after birth. Corrected here to a measured count.
 status: 'DERIVED — never edit by hand. Regenerate from the source.'
-whatThisIs: 'CROSS-CUTTING VIEWS, not a summary. Each section gathers something the source scatters across 4886 lines and that NOBODY can reconstruct by scanning: every named renunciation, every measured number, every recorded dissent, every author amendment, every piece of named theatre, everything still open. It POINTS at the source; it does not restate it.'
+whatThisIs: 'CROSS-CUTTING VIEWS, not a summary. Each section gathers something the source scatters across 5148 lines and that NOBODY can reconstruct by scanning: every named renunciation, every measured number, every recorded dissent, every author amendment, every piece of named theatre, everything still open. It POINTS at the source; it does not restate it.'
 whatThisIsNot: 'A short version of the architecture. It carries NO decision bodies. It cannot be applied from — every entry cites a line number, and the argument at that line is the part that makes the decision hold. For the state of any REQUIREMENT, read prd.md editHistory. Never here.'
 warning: 'A view is a SNAPSHOT. This project has been burned three times reading a snapshot as a state (F56). If sourceSha256 no longer matches architecture.md, THIS FILE IS STALE — regenerate it. cargo xtask ci is specified to verify this hash (D65, same mechanism as D56 fixture MANIFEST). It already caught itself once: this file went stale 3 minutes after birth.'
 history: 'Born 2026-07-17 as a 3004-line DISTILLATE (ratio 1.63:1 — a short copy, not a compression). Guy cut the ~2100 lines that paraphrased the decisions: they restated the source, they were the only real duplication produced by a pass whose purpose was removing duplication, and they went stale on every edit. What survives is the part that exists nowhere else.'
@@ -15,7 +28,7 @@ history: 'Born 2026-07-17 as a 3004-line DISTILLATE (ratio 1.63:1 — a short co
 ## 0. What this file is, what it deliberately LOST, and why that was the right trade
 
 **This is not a summary of the architecture. It carries no decision bodies.** Each section below gathers
-one thing the source **scatters across 4 886 lines and that nobody can reconstruct by scanning**: every
+one thing the source **scatters across 5 148 lines and that nobody can reconstruct by scanning**: every
 named renunciation (§6), every measured number (§8), every recorded dissent with its author (§7), every
 decision amended by its own author (§9), every piece of named theatre (§10), everything still open (§11).
 **It POINTS. It does not restate.** That is the whole design: a file that restates cannot help diverging
@@ -641,6 +654,14 @@ points.**
   not theoretical.**
 - **Uninstrumented bets, NAMED AS BETS (l. 3626):** **NFR2 (p95 ≤ 1.5 s on-read)** · **Argon2id AND age's
   scrypt on the real Celeron — TWO measurements, not one.**
+- **The D65 gates, PROVEN TO RED rather than to pass** *(post-completion entry of 2026-07-17, carried in at
+  this regeneration)*: **six unit tests exercising BOTH sides** — a stale body reds, a body that narrates its
+  own rename is green, a word boundary rejects `ignored` ≠ `ignore`, frontmatter stripped while body `---`
+  rules survive, a bare text column reds and a collated one passes — **plus a live proof against the real
+  harness**: a throwaway `.rs` carrying `pending_accept` made `cargo xtask ci` exit **1**, and removing it
+  returned it to green. *A gate that cannot be shown to fail is decoration.* ⚠️ **`views-hash` was declared
+  INFORMATIONAL and not a hard gate in that same entry** — views lag between milestones **by design**, so
+  this file being stale is the cadence working, not the cadence failing.
 
 ## 9. 🔴 DECISIONS AMENDED BY THEIR OWN AUTHORS — the amendment IS the evidence the decision was tested
 
@@ -759,6 +780,13 @@ whoever proposed them."*
 > red. If nothing would, you are writing decoration.** (l. 4091)
 
 ## 11. OPEN — and open is a state. Nothing here is resolved by this file.
+
+> 🔴 **CLOSED at this regeneration (2026-08-24, milestone), and recorded here because a view that only
+> ever grows is a view nobody trusts: D13's verdict table was SHORT ONE INPUT CLASS** — `>=1 Opposes`
+> with nothing else fell through all six rows — **and its last row said `NoMatch` where the engine
+> abstains.** Both corrected in the source (issue #54). The gap was found by `cascade.rs`, which had to
+> be TOTAL and could not be; the correction waited from **2026-07-29 to this milestone** because a story
+> may not edit the architecture. *The code that had to be total found the specification's hole.*
 
 **Status: NOT READY** (frontmatter, l. 7). **Confidence: HIGH.** **Checklist: 11/16.** *"Five items
 unchecked, two under Architectural Decisions… **you cannot write `Cargo.toml` today.**"*
