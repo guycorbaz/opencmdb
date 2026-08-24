@@ -1,8 +1,12 @@
 # Story 6b.12: The release v0.2.0, and the documents that describe it
 
-Status: review — ⚠️ **every task but T6 is done; the TAG is deliberately not cut.** It needs
-Guy's approval, and the natural order is *review, then tag*: a tag is not revertible in the
-ordinary sense, so nothing unreviewed should be made permanent by one.
+Status: done — **`v0.2.0` is cut and published.** PR #119 squash-merged as `9079b45`; the tag
+sits on that commit, whose CI was green **on the commit itself** rather than inherited from the
+branch. Release run `32719830377`. Verified after the fact, not assumed: the image pulls from
+Docker Hub (4.96 MB), boots against a MariaDB, answers `/healthz` 200, `/` **401 without
+credentials** and **303 to `/triage`** with them, and `/diagnostic` reports **v0.2.0**. The GitHub
+Release object carries the changelog section — 76 lines, ending on real content. `gh-pages` was
+pushed **after** the tag and is live.
 
 ### ⚠️ THE LIVE COUNT FOR THE PROJECT (AC6)
 
@@ -637,6 +641,7 @@ nothing. The attribution is written now; the other five are registered with owne
 
 | Date | Change |
 |---|---|
+| 2026-08-24 | ✅ **`v0.2.0` CUT AND PUBLISHED.** PR #119 merged as `9079b45`; the tag sits on that commit, whose CI was green **on the commit itself** rather than inherited from the branch. Release run `32719830377`. Verified after the fact: the image pulls and boots, `/` answers 401 without credentials and 303 with them, `/diagnostic` reports v0.2.0, the Release object carries the changelog's 76 lines, `gh-pages` pushed after the tag and live. **Epic 6b is complete on its stories, 13 of 13** — ⚠️ and NOT closed: the retrospective, then the project review. |
 | 2026-08-24 | 🔴 **CODE-REVIEWED (three layers) and REPAIRED.** 24 raw findings → 19 distinct. **The two that would have hurt an operator**: `docker/.env.example` — the file the documents say to COPY — never got the variables this release makes mandatory, so following the instructions literally lands on 401 everywhere with the rescue absent from both file and instruction; and the image was published **before** the changelog check, so *fails the release* meant *fails to create the Release object*. **Two arbitrations (Guy)**: correct the record on the check that was a reading, and close the scratch registry at the CALL SITE. 🔑 The registry's missing test and the edge layer's reproduced race COMPOSE — **the first registry would have passed the new test**. 728 → **729**. |
 | 2026-08-24 | **DEVELOPED, except the tag.** T0–T5 and T7 done; **T6 deliberately not cut** — a tag is not revertible and the order is review-then-tag. 🔴 The validation named two claimants of the scratch namespace and there are **six**, so issue #38 is closed as a CLASS (an ownership registry) rather than as an instance; ⚠️ the guard's first form turned one defect into eighteen failures, the panic poisoning its own mutex. 🔴 The prescribed check found **six** unmarked manual chapters where the validation read four — *a check sees what a reading misses, including a reading by a layer whose job was to look*. 🔴 And the sweep found what no report had: **story 6b.5's repair is PARTIAL**, its true sentence standing beside the false one it was meant to replace — visible on `/triage` below four rows dated one minute ago. ⚠️ The lifted screenshots exposed my own check as insufficient: it did not cover the version the shell renders. **728 tests both ways (7.9 s / 0.57 s), nine gates, both manuals build.** Five register rows. |
 | 2026-08-24 | **VALIDATED by two fresh-context layers — 20 raw findings, 18 distinct, two reached by both.** 🔴 §0b's six needles are measured insufficient THREE ways, and AC4's own hedge is what survives: three documents claim credentials are *encrypted at rest*, a string `diagnostic.rs:1038` **forbids the product from rendering** because it is false; the status narrative is stale by ~15 epics; Tailwind is claimed as the stack where `CLAUDE.md` records the opposite decision, taken twice. 🔴 And §0 was wrong four ways — `Screen::Device` IS in the navigation (⚠️ *a correction `sprint-status.yaml:4578` had already made one story earlier*), AC3's Administrator Manual was named by no task, §0f claimed 3 of 5 rows that belong to others, and `cargo build --locked` cannot update `Cargo.lock`. 🔑 **Both arbitrations taken (Guy)**: the release notes get a VENUE (a GitHub Release from a committed `CHANGELOG.md`) because there is none today; and issue #38's REPRODUCED candidate cause is fixed here with the control the original refutation never ran — ⚠️ it had compared only `write_traps` tags with each other, measuring one half of the population. The issue stays OPEN: one occurrence is *a* cause, not *the* cause. |

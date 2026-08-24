@@ -4618,7 +4618,24 @@ development_status:
     # ⚠️ Tree verified after the crash: clean, nine gates green, 728 tests BOTH ways (0.21 s
     # without a database, 8.49 s against a live mariadb:10.11 -- the clock is the tell), clippy
     # over --all-targets clean, Cargo.lock untouched, 28 fixtures at their sha256.
-  6b-12-release-0-2-0-and-its-documents: review  # DEVELOPED 2026-08-24, EXCEPT THE TAG.
+  6b-12-release-0-2-0-and-its-documents: done  # **v0.2.0 IS CUT AND PUBLISHED**, 2026-08-24.
+    # PR #119 squash-merged as `9079b45`; the tag sits on THAT commit, whose CI was green on the
+    # commit itself rather than inherited from the branch. Release run 32719830377.
+    # ✅ Verified after the fact, not assumed: `docker pull gcorbaz/opencmdb:0.2.0` (4.96 MB),
+    # boots against a MariaDB, /healthz 200, / -> 401 without credentials and 303 to /triage
+    # with them, /diagnostic reports v0.2.0. The GitHub Release object carries the changelog's
+    # 76 lines, ending on real content. `gh-pages` pushed AFTER the tag, live and showing v0.2.0.
+    # 🔑 EPIC 6b IS COMPLETE ON ITS STORIES: 13 of 13.
+    # ⚠️ THE EPIC IS NOT CLOSED. Two steps remain and the order matters: the RETROSPECTIVE
+    # first, then the PROJECT REVIEW (conducted on ~/travail/Projets actuels/opencmdb/ under
+    # that tree's own CLAUDE.md), which corrects what the retrospective surfaces. At Epic 5's
+    # close the retrospective looked finished and the review then found milestone J3 unreachable
+    # by construction. Do not flip the epic on the story count.
+    # ⚠️ The retrospective inherits by name: the mock-versus-spec arbitration (NFR24's touch
+    # targets AND the zero `@media` rules, to be taken TOGETHER rather than twice), the
+    # dashboard's salience finding, whether the manual-chapter check is worth a tenth gate over
+    # LaTeX, and story 6b.11's `epics.md` corrections that a story may not make.
+    # (Earlier the same day) DEVELOPED 2026-08-24, EXCEPT THE TAG.
     # ⚠️ T0-T5 and T7 are done; **T6 is deliberately not cut** -- it needs Guy's approval, and
     # the order is REVIEW then TAG, because a tag is not revertible in the ordinary sense and
     # nothing unreviewed should be made permanent by one.
