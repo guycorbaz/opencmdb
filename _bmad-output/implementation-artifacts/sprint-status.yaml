@@ -100,11 +100,32 @@ last_updated: 2026-08-24  # 🔴 **EPIC 6b IS CLOSED**, on the PROJECT REVIEW of
                           # credentials, so the upgrade is now an act of CONFIGURATION on an instance
                           # that never asked for a password. Risk R1 raised to HIGH probability on
                           # that measurement.
-                          # ⚠️ Epic 6b's milestone is **delivered, NOT discharged**: issue #88 is
-                          # still open, and under Guy's 2026-08-15 rule one open issue holds a
-                          # milestone. ⚠️ But #85 and #88 record DECISIONS, not defects -- an epic
-                          # can never be discharged while the minutes of its own reorganisation stay
-                          # open. Arbitration referred to Guy; nothing closed unilaterally.
+                          # ✅ Epic 6b's milestone is **DISCHARGED**, 2026-08-24. The review left
+                          # it *delivered, not discharged* and referred the arbitration: #85 and #88
+                          # were open, and one open issue holds a milestone (Guy, 2026-08-15).
+                          # 🔑 GUY'S ARBITRATION: **close both.** Their subjects had landed --
+                          # `epics.md:419` carries the reordering and 6.1/6.2 shipped the write
+                          # route (#85); Epic 6b is inserted, executed and closed at 13 stories
+                          # (#88). ⚠️ And the RULE IS NOT AMENDED, deliberately: it is right for a
+                          # DEFECT, which has a repaired state, and creates a permanent hold only
+                          # when applied to a DECISION RECORD, which has none -- a category error,
+                          # not a bad rule. **The discipline adopted instead: an issue recording a
+                          # decision is closed when the decision LANDS.** Closed promptly, the hold
+                          # never arises, and the rule keeps its force where it was written for.
+                          # ⚠️ Closing #85 claims NOTHING about FR13: the gesture is not live,
+                          # `POST /document-all` is reached from no template, and story 6.4 is what
+                          # makes a control act. That is tracked as a STORY, which is where it
+                          # belongs. ⚠️ And #88 announced *"Twelve stories"* where thirteen shipped
+                          # -- 6b.4b, inserted at 6b.4's validation. Corrected on closing rather
+                          # than left standing.
+                          # 🔴 AND CLOSING THEM SURFACED WHAT THE RULE WAS ALWAYS FOR: two issues
+                          # are gated on a MILESTONE and this close IS one -- **#50**
+                          # (`architecture-views.md` STALE, drift measured: 2 commits, 59
+                          # insertions) and **#54** (D13's decision table short one input class).
+                          # ⚠️ #50 is Epic 5's action item 5, unaddressed through a whole epic, and
+                          # Epic 6b's retrospective named it a second time WITH THE PREDICTION that
+                          # it would not be done unless something carried it. This is the moment
+                          # the prediction comes due. Owner: Guy.
                           # NEXT: Epic 6 resumes at 6.4 -- the gesture that acts. The operator can
                           # still write NOTHING through the ten screens.
                           #
