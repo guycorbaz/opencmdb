@@ -102,7 +102,14 @@ instructions rather than reading them**, which is the sharpest instrument this e
 
 ## 5. Decisions taken (Guy, 2026-08-24)
 
-1. 🔑 **The mutation driver becomes a STORY at the head of Epic 6**, not an action item. It must
+1. 🔑 **The mutation driver becomes a STORY**, not an action item. ⚠️ **This decision read *"at
+   the head of Epic 6"* and decision 4 said *"Epic 6 resumes at 6.4"* — a contradiction inside one
+   retrospective, surfaced on 2026-08-24 rather than settled in silence.** Guy's sequencing the
+   same day: **6.4 first** (two epics without a gesture is the heaviest cost this project carries),
+   then the driver as `6-4b`, then the mobile story as `6-4c` — before the engine work, because 6.4
+   is the last story that touches the interface. ⚠️ 6.4's own mutation pass therefore runs on the
+   unrepaired driver, accepted on the measurement that the known defect is caught by writing the
+   prediction first. It must
    refuse two filters, refuse a truncated read, fail when a mutation does not apply, and anchor
    compiler-error detection. *Carrying it as a story is the whole point* — §2's structural finding
    is that actions needing a decision are carried by nothing.
