@@ -425,7 +425,94 @@ step's residue.
 
 ## Dev Agent Record
 
-*(to be filled by the dev agent)*
+### What was built, and what the building found
+
+**Everything below was measured against a live `mariadb:10.11.11` (container `verif6b11`, port
+13363), a booted binary and Chrome 151. T6 — the tag — is NOT done: it needs Guy's approval, and
+a tag is not revertible in the ordinary sense.**
+
+#### 🔴 T0 — issue #38: the validation named two claimants and there are SIX
+
+The scratch namespace is keyed on `(pid, tag)` and `read_scratch`'s callers finish with
+`remove_dir_all`. The validation found `read_scratch("both")` against `write_traps("both")`. ⚠️
+**Four more tests call `scratch_dir` DIRECTLY**, outside both helpers — a population neither the
+original refutation nor the validation had in its perimeter. So the fix is not the rename: it is
+that **`scratch_dir` now takes its caller and refuses a tag a different one has claimed**.
+
+- Restoring the collision reds **exactly one test**, naming both claimants.
+- ⚠️ **The guard's first form turned one defect into EIGHTEEN failures** — the panic poisons the
+  registry's mutex and every later lock inherits it. Poison is recovered rather than propagated:
+  *a guard that multiplies one finding by ten is noise around it.*
+- **Issue #38 stays OPEN**, with the measurement and the control attached. One reproduced
+  occurrence establishes *a* cause, never *the* cause.
+
+#### T1 — four version literals, and `--locked` cannot do what the plan asked
+
+`crates/opencmdb-bin`, `crates/opencmdb-core`, **`xtask/Cargo.toml`** (outside the `crates/*`
+glob) and **`docker/docker-compose.yml`**'s pinned image. A plain `cargo build` first so
+`Cargo.lock` follows — `--locked` refuses to update it, by design and measured.
+
+#### 🔴 T2/T3 — the check found more than the reading did
+
+The prescribed check (every `Example` screen's manual chapter must carry `\begin{planned}`) found
+**six** unmarked sections where the validation had read four: it added ***The UniFi source*** —
+there is no UniFi connector at all — and ***Documenting a discovery***. 🔑 *That is what AC4
+bought: a check sees what a reading misses, including a reading by a layer whose job was to look.*
+
+The false security claim was corrected in all three documents. The README's status narrative said
+*"one page, one connector, no triage inbox, no IPAM, no alerts, no admin UI"* — **four of those six
+had stopped being true**. Tailwind was named as the stack in three places against a decision taken
+twice the other way. The admin manual — named by AC3 and by no task until the validation caught it
+— gained the closed-by-default posture its Security chapter was silent on, and every variable its
+Configuration chapter did not list.
+
+#### T4 — the notes get a venue, and the venue has a guard
+
+`CHANGELOG.md` committed; `release.yml` extracts the section by version and creates a GitHub
+Release. ⚠️ **A missing or empty section FAILS the release** rather than publishing silence —
+proven both ways locally: `0.2.0` extracts 79 lines, `0.9.9` is refused. The Docker Hub *Tags*
+table carries the four breaking changes in the order an operator meets them.
+
+#### 🔴 T5 — the sweep, and what only a look could give
+
+The screenshots are **lifted from the validation's gap-hunt layer** rather than re-taken, on a
+check that the templates, assets and locales had not moved since. ⚠️ **That check was
+insufficient and the screenshots say so**: the version pill reads `v0.1.1`, because T1 moved a
+literal the shell renders and my check did not cover it. *The verification that authorised the
+lift did not cover everything the lift shows.* Everything else in them is current.
+
+- 🔴 **The salience finding is confirmed by eye and is sharper than its description.** The honest
+  section is three lines of small grey prose; the fabricated one is three cards with 22 px figures
+  and sparklines. The invented `37 / 4 / 2` is the loudest thing on the page.
+- 🔴 **And a finding no report named: story 6b.5's repair is PARTIAL.** In the state
+  `a11y/seed.sql` creates — observations present, none placed, which is **CI's own state on every
+  gate run** — the page says *"Nothing observed yet — run a scan"* immediately above *"A scan has
+  landed; the identity pass has not placed any of it yet."* The second sentence is 6b.5's fix and
+  **it explains the first without removing it**. ⚠️ On `/triage` the false line renders *below
+  four queue rows dated one minute ago*: the claim and its refutation in one viewport.
+
+Both are registered with owners; neither is copy-and-CSS, and §0g forbids this story from
+reshaping a screen.
+
+### What was decided rather than built
+
+- **The landing page's dark default is left alone**, with its reason written: it is the site's own
+  toggle, not a claim about the product, and the story said decide it rather than silently edit it.
+- **`gh-pages` is committed on its branch and deliberately NOT pushed** — publishing it would
+  announce `v0.2.0` before the tag exists. It follows T6.
+- **The `\begin{planned}` check is a one-off, not a tenth gate.** Registered for the retrospective
+  to decide, since a gate over LaTeX is a real cost for a documentation property.
+
+### File List
+
+- `crates/opencmdb-bin/src/fixtures.rs` — the scratch-tag ownership registry (T0)
+- `crates/opencmdb-bin/Cargo.toml`, `crates/opencmdb-core/Cargo.toml`, `xtask/Cargo.toml`,
+  `Cargo.lock`, `docker/docker-compose.yml` — the version (T1)
+- `README.md`, `docker/README.dockerhub.md`, `docs/manuals/user-manual/user-manual.tex`,
+  `docs/manuals/admin-manual/admin-manual.tex` — the documents (T3)
+- `CHANGELOG.md` (new), `.github/workflows/release.yml` — the notes and their venue (T4)
+- `_bmad-output/implementation-artifacts/deferred-work.md` — five rows (T5)
+- `gh-pages` branch, `index.html` — committed, unpushed
 
 ## Change Log
 
