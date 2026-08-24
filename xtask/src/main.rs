@@ -2233,7 +2233,54 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
 
     /// A private directory per test: a shared constant path races between concurrent runs and
     /// leaves a stale corpus behind when an assertion fails.
+    /// Who claimed a scratch tag — the CALL SITE, so two tests cannot share a directory.
+    ///
+    /// 🔴 **Story 6b.12 closed this class in `fixtures.rs` after a race there was REPRODUCED** (a
+    /// bare `Os { code: 2, kind: NotFound }`, and the candidate cause of the month-old issue #38).
+    /// The hunt at that issue's close found **FOUR MORE scratch namespaces without the guard** —
+    /// this is one. ⚠️ **No collision was live here**: every tag in this file is distinct, measured.
+    /// So this closes a DORMANT class rather than fixing a defect — ⚠️ **and the race here is SHARPER than the one that was reproduced**: this helper
+    /// `remove_dir_all`s on entry, so a second claimant would delete the first's directory at once.
+    ///
+    /// ⚠️ **Four near-identical copies of this registry exist, one per namespace, and the
+    /// duplication is DELIBERATE — pinned here so nobody collapses it.** The namespaces differ by
+    /// prefix, they sit on both sides of the `opencmdb-bin` / `xtask` crate boundary, and one
+    /// registry keyed on the tag alone would refuse a tag two DIFFERENT namespaces legitimately
+    /// share. This is the *deliberate redundancy* `CLAUDE.md` names, not accidental duplication.
+    fn scratch_owners() -> &'static std::sync::Mutex<std::collections::BTreeMap<String, String>> {
+        static OWNERS: std::sync::OnceLock<
+            std::sync::Mutex<std::collections::BTreeMap<String, String>>,
+        > = std::sync::OnceLock::new();
+        OWNERS.get_or_init(|| std::sync::Mutex::new(std::collections::BTreeMap::new()))
+    }
+
+    /// Refuse a tag a different call site has already claimed.
+    ///
+    /// ⚠️ Poison is RECOVERED, not propagated: the panic below poisons this mutex, and an
+    /// `expect` here turns one real defect into a cascade of unrelated failures — measured at
+    /// story 6b.12, eighteen of them.
+    #[track_caller]
+    fn claim_scratch_tag(tag: &str) {
+        let caller = std::panic::Location::caller();
+        let owner = format!("{}:{}", caller.file(), caller.line());
+        let mut owners = scratch_owners()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match owners.get(tag) {
+            Some(first) if *first != owner => panic!(
+                "the scratch tag {tag:?} is claimed by BOTH {first} and {owner} — they resolve \
+                 to one directory, and a test that cleans up deletes it under the other. Give one \
+                 of them a tag of its own."
+            ),
+            _ => {
+                owners.insert(tag.to_string(), owner);
+            }
+        }
+    }
+
+    #[track_caller]
     fn scratch(tag: &str) -> PathBuf {
+        claim_scratch_tag(tag);
         let dir = std::env::temp_dir().join(format!("opencmdb-xtask-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("scratch dir");
