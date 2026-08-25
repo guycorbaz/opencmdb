@@ -20,6 +20,7 @@ mod example_screens;
 mod fault_injection;
 mod fixture_connector;
 mod fixtures;
+mod identity_view;
 mod l1_runner;
 mod metrics;
 mod page;

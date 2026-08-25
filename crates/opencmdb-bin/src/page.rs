@@ -18,9 +18,8 @@ use opencmdb_core::{AbstentionCause, reconcile};
 use sqlx::MySqlPool;
 use uuid::Uuid;
 
-use crate::repo::{
-    EngineReachRow, classify, count_engine_reach, load_declared_attributes, load_observation_facts,
-};
+use crate::identity_view::{IdentityView, build_identity_view};
+use crate::repo::{classify, count_engine_reach, load_declared_attributes, load_observation_facts};
 
 /// Committed front-end assets, embedded into the binary (no CDN, self-hosted single binary).
 #[derive(rust_embed::Embed)]
@@ -136,78 +135,6 @@ struct GapRow {
 struct AbstentionRow {
     cause: String,
     count: usize,
-}
-
-/// One cause line of the identity engine's reach — *"N sightings, because …"*.
-#[derive(Clone)]
-struct IdentityCauseRow {
-    cause: String,
-    count: i64,
-}
-
-/// The identity engine's reach, shaped for rendering.
-///
-/// # The unit is SIGHTINGS, and that is a decision rather than a caption
-///
-/// Every scan mints fresh `obs_id`s and the identity pass supersedes no engine link across passes,
-/// so one machine seen ten times is ten rows. The number therefore counts SIGHTINGS, not devices,
-/// and the surface says so on both sides of the pair.
-///
-/// 🔑 Naming the unit truthfully is what keeps the number from reading as a backlog: a figure that
-/// rises because the product looked many times is the radar's range, not the operator's debt. ⚠️ It
-/// does not make the UX bans MET — *"no growing counter"* and *"after six months of inaction it
-/// reads the same number"* are still open, owned by Epic 6, and registered. A true unit does not
-/// stop a number growing.
-///
-/// ⚠️ **The unit is TEMPORARY.** Epic 6 gives the population an identity, at which point *sighting*
-/// stops being the honest word and the locale keys change with it. That rename is a scheduled
-/// consequence, not a correction of a mistake.
-///
-/// # 🔴 Three cases, and they are the OPERATOR's three, not the engine's
-///
-/// Guy's taxonomy (2026-08-12), which is what decides where each outcome goes:
-///
-/// | case | what the engine wrote | who acts | the gesture |
-/// |---|---|---|---|
-/// | **no ambiguity** | `Match`, and also `NoMatch` | the software | none — it decided |
-/// | **ambiguity** | `Abstained { Ambiguous }` | the operator lifts the doubt | choose among the candidates and their evidence (FR16) |
-/// | **unknown** | `Abstained { AbsenceOfProof }` | the operator creates the entity | **declare** — the documenting gesture |
-///
-/// 🔑 **`NoMatch` is case ONE**, which is why it is neither placed nor listed among what awaits the
-/// operator: *a rule FORBADE the pair* is a decision, not an absence. An earlier draft folded it
-/// into `placed` through a bare `else`, so a refused placement was reported as a placement and the
-/// page rendered *"every sighting was placed"* over it — found independently by all three review
-/// layers.
-///
-/// ⚠️ **Neither gesture EXISTS in the product yet**, and this view deliberately announces neither:
-/// the ambiguity gesture needs candidates nothing produces (Epic 6), and the documenting gesture
-/// needs a write surface the product does not have. **Announcing an absent gesture is a promise;
-/// this section stays descriptive until the gesture is there** (Guy, 2026-08-12). The taxonomy is
-/// registered as the criterion for both.
-#[derive(Clone)]
-struct IdentityView {
-    /// Sightings the engine placed on an interface — case one, `Match`.
-    placed: i64,
-    /// Sightings it could not place — case two and case three together.
-    not_placed: i64,
-    /// Why, one line per cause — never one line per failure (FR16b).
-    ///
-    /// ⚠️ **The one-line-per-cause property belongs to the CALLER**, not to this type: it holds
-    /// because `count_engine_reach` groups by cause in SQL. Feed this view two rows carrying the
-    /// same cause and it renders two identical lines. Stated rather than enforced, because the only
-    /// producer is the grouped read.
-    causes: Vec<IdentityCauseRow>,
-    /// Outcomes the engine SETTLED without placing — `NoMatch`, and any token no variant names.
-    ///
-    /// Rendered only when non-empty, and today it always is empty: `resolve` cannot produce a
-    /// `NoMatch` (`placement_decision` only judges pairs inside one `join` group, which share their
-    /// key by construction), and `repo::cause_token`'s exhaustive `match` is what writes the rest.
-    /// It is counted and labelled rather than folded anywhere, on `identity_cause_label`'s
-    /// precedent: the tolerant reader for the CAUSE token had a silent twin on the OUTCOME token,
-    /// and this is that twin, made explicit.
-    settled: Vec<IdentityCauseRow>,
-    /// Has the engine seen anything at all? Distinguishes *"nothing yet"* from *"nothing unplaced"*.
-    has_any: bool,
 }
 
 /// Everything the card template needs — shaped for rendering, honest about the empty state.
@@ -391,96 +318,6 @@ fn cause_label(cause: AbstentionCause) -> String {
         AbstentionCause::ConflictingObservations => t!("cause.conflicting_observations"),
     }
     .to_string()
-}
-
-/// A human label for an IDENTITY abstention cause, from the token as it is persisted.
-///
-/// # 🔴 This function is TOTAL, and refusing to fail is the whole point
-///
-/// `identity_link.abstention_cause` is a plain `VARCHAR(32)` with no `CHECK`, so the database can
-/// hold a token no variant of [`opencmdb_core::identity::cascade::IdentityAbstentionCause`] names —
-/// measured, an invented token inserts cleanly. And `page.rs`'s handlers turn any error into a `500`
-/// for the WHOLE page, so a reader that failed here would take the gap display down with it, for one
-/// unfamiliar row.
-///
-/// So an unrecognised token is **labelled and carried**, never dropped and never fatal. It is still
-/// COUNTED by [`build_identity_view`]: a total that silently shrank would be the counter lying by
-/// omission, which is worse than an unfamiliar word on the page.
-///
-/// ⚠️ **A `match` on tokens cannot be exhaustive over the enum**, and that is exactly why this is a
-/// tripwire rather than a barrier: adding a variant breaks the WRITER ([`crate::repo::cause_token`],
-/// an exhaustive `match` with no `_` arm) and breaks nothing here. A variant added with the minimal
-/// repair therefore persists a token this function does not know — and the page renders it as
-/// unrecognised instead of dying. That is the designed behaviour, not a gap in it.
-///
-/// The stronger closure — a DDL `CHECK` on the token domain — was weighed and refused for story
-/// 5.14b: it moves the failure from the display to the WRITE, so a future variant would break the
-/// identity pass rather than show an unfamiliar label. It is registered as the real closure.
-fn identity_cause_label(token: &str) -> String {
-    use rust_i18n::t;
-    match token {
-        "absence_of_proof" => t!("identity.cause.absence_of_proof").to_string(),
-        "ambiguous" => t!("identity.cause.ambiguous").to_string(),
-        other => t!("identity.cause.unrecognised", token = other).to_string(),
-    }
-}
-
-/// PURE: shape the database's grouped reach rows into a renderable view.
-///
-/// Abstained rows are the not-placed population and each contributes one cause line; everything else
-/// is placed. **One line per cause, never one line per failure** — FR16b's *"96 multi-interface
-/// devices is not 96 failures, it is ONE question"*.
-///
-/// ⚠️ **An abstained row whose cause is NULL cannot exist**: `identity_link_rule_xor_cause` makes the
-/// cause non-NULL exactly when `outcome = 'abstained'`. This function is nonetheless total over the
-/// type, and the empty token then falls to the unrecognised label. That is totality, **not a guard** —
-/// no test can red it, and it is not claimed as covering anything.
-fn build_identity_view(rows: Vec<EngineReachRow>) -> IdentityView {
-    use rust_i18n::t;
-
-    let mut placed = 0i64;
-    let mut not_placed = 0i64;
-    let mut causes: Vec<IdentityCauseRow> = Vec::new();
-    let mut settled: Vec<IdentityCauseRow> = Vec::new();
-    let mut settled_count = 0i64;
-    for row in rows {
-        // 🔴 An explicit arm per outcome, and NO bare `else`. The `else` an earlier draft used sent
-        // `no_match` — *a rule FORBADE this pair* — into `placed`, i.e. reported a refusal as a
-        // success. `identity_link_outcome` admits exactly these three tokens; anything else can only
-        // arrive from a store written by something other than `repo::outcome_token`, and it is
-        // carried rather than folded, exactly as an unknown CAUSE token is.
-        match row.outcome.as_str() {
-            "match" => placed += row.count,
-            "abstained" => {
-                not_placed += row.count;
-                causes.push(IdentityCauseRow {
-                    cause: identity_cause_label(row.cause.as_deref().unwrap_or_default()),
-                    count: row.count,
-                });
-            }
-            "no_match" => {
-                settled_count += row.count;
-                settled.push(IdentityCauseRow {
-                    cause: t!("identity.outcome.no_match").to_string(),
-                    count: row.count,
-                });
-            }
-            other => {
-                settled_count += row.count;
-                settled.push(IdentityCauseRow {
-                    cause: t!("identity.outcome.unrecognised", token = other).to_string(),
-                    count: row.count,
-                });
-            }
-        }
-    }
-    IdentityView {
-        placed,
-        not_placed,
-        causes,
-        settled,
-        has_any: placed + not_placed + settled_count > 0,
-    }
 }
 
 /// Project a fact into a displayable `(label, value)` pair (a superset of the engine's projection —
@@ -1998,6 +1835,7 @@ mod tests {
     const DASHBOARD_EXAMPLE_ANCHOR: &str = "dashboard-example";
 
     use super::*;
+    use crate::repo::EngineReachRow;
 
     fn declared_row(entity: &str, key: &str, value: &str) -> (String, String, String) {
         (entity.into(), key.into(), value.into())
@@ -2017,6 +1855,9 @@ mod tests {
     }
 
     /// A grouped-reach row as [`count_engine_reach`] returns it.
+    ///
+    /// ⚠️ Imported HERE rather than at the top of the file: story 6.4 moved the identity view into
+    /// [`crate::identity_view`], and the row type is now used by the tests alone on this side.
     fn reach(outcome: &str, cause: Option<&str>, count: i64) -> EngineReachRow {
         EngineReachRow {
             outcome: outcome.into(),
@@ -2273,7 +2114,13 @@ mod tests {
     #[test]
     fn both_locales_carry_every_identity_key() {
         use rust_i18n::t;
-        const KEYS: [&str; 12] = [
+        const KEYS: [&str; 15] = [
+            // Story 6.4: the sentence each cause line carries in place of a gesture. ⚠️ THREE, not
+            // the two the story budgeted — the tolerant arm renders a line like any other, and the
+            // pair return type is what forced the third rather than a preference.
+            "identity.no_gesture.absence_of_proof",
+            "identity.no_gesture.ambiguous",
+            "identity.no_gesture.unrecognised",
             "identity.settled",
             "identity.outcome.no_match",
             "identity.all_placed",
@@ -5237,6 +5084,121 @@ mod tests {
         );
     }
 
+    /// The identity section as it reaches the wire — sliced from its own `<div>` by balanced tag
+    /// counting, never by taking everything to the end of the body.
+    ///
+    /// 🔑 The precision keeps the guard honest in BOTH directions: a slice running to the end of
+    /// the document would swallow whatever a later story renders after the section and then red
+    /// for something that is not the section's, and *a check that fails for the wrong reason is
+    /// worth nothing* (story 6b.6).
+    fn identity_section_of(html: &str) -> String {
+        let start = html
+            .find("<div class=\"identity\">")
+            .expect("the identity section is on the page");
+        let rest = &html[start..];
+        let mut depth = 0_usize;
+        let mut cursor = 0_usize;
+        while let Some(found) = rest[cursor..].find('<') {
+            let at = cursor + found;
+            if rest[at..].starts_with("</div>") {
+                depth -= 1;
+                if depth == 0 {
+                    return rest[..at + "</div>".len()].to_string();
+                }
+                cursor = at + "</div>".len();
+            } else if rest[at..].starts_with("<div") {
+                depth += 1;
+                cursor = at + "<div".len();
+            } else {
+                cursor = at + 1;
+            }
+        }
+        panic!("the identity section's `<div>` is never closed");
+    }
+
+    /// 🔴 **Every identity cause line SAYS why it carries no documenting gesture** — read off the
+    /// rendered page, with the live control sitting on that same page.
+    ///
+    /// AC2 widened the criterion and the principle is what widened it: *the gesture belongs to the
+    /// CAUSE*, and applied correctly that cause is `undeclared`. Every other cause carries none —
+    /// ⚠️ **and saying nothing is not the same as saying no.** A count with no control beside it
+    /// reads as a feature someone forgot; the section answers the question instead of leaving it.
+    ///
+    /// # The control is what makes the negative half mean anything
+    ///
+    /// The page built here has the documenting gesture LIVE on its `Nouveau` pane, so `hx-post`
+    /// and `btn-document` are both present in the body. Without that, *"the identity section
+    /// carries no gesture"* would hold over a page carrying none anywhere — green on a product
+    /// where the gesture had never shipped at all, which is Epic 5's dominant defect class: *a
+    /// guard placed where the defect cannot occur reads as coverage and is none.*
+    ///
+    /// ⚠️ **Its limit, written rather than implied**: it reads the served STRING. It cannot see a
+    /// control a script adds later, and it says nothing about what the section LOOKS like — only
+    /// about what it carries and what it says.
+    #[test]
+    fn every_identity_cause_line_says_why_it_carries_no_gesture() {
+        let triage = build_triage_offering(
+            Vec::new(),
+            Vec::new(),
+            vec![batch_with_id("arp", 10, vec![ipv4("192.0.2.77")], 0xA1)],
+            at(600),
+            Some("nouveau:192.0.2.77"),
+            false,
+            true,
+        );
+        let identity = build_identity_view(vec![
+            reach("abstained", Some("absence_of_proof"), 7),
+            reach("abstained", Some("ambiguous"), 2),
+            reach("abstained", Some("a_cause_no_variant_names"), 1),
+        ]);
+        let html = TriageBody {
+            triage,
+            identity,
+            s: strings(),
+        }
+        .render()
+        .expect("the triage body renders");
+
+        for needle in ["hx-post", "btn-document"] {
+            assert!(
+                html.contains(needle),
+                "the premise: the documenting gesture is LIVE on this page (`{needle}` not found) \
+                 — without it every negative assertion below holds over a page that carries no \
+                 gesture anywhere, and measures nothing"
+            );
+        }
+
+        let section = identity_section_of(&html);
+        assert!(
+            section.contains("No proof of identity")
+                && section.contains("Several possible identities")
+                && section.contains("a_cause_no_variant_names"),
+            "the premise: all three cause lines are inside the slice — a slice that missed them \
+             would satisfy everything below by being empty:\n{section}"
+        );
+
+        for (cause, why) in [
+            ("absence_of_proof", "a source that can prove identity"),
+            ("ambiguous", "a doubt to lift"),
+            ("a_cause_no_variant_names", "does not recognise this cause"),
+        ] {
+            assert!(
+                section.contains(why),
+                "the `{cause}` line must SAY why it offers no gesture rather than merely omitting \
+                 one — looked for {why:?} in:\n{section}"
+            );
+        }
+
+        for forbidden in ["hx-post", "btn-document", "<button", "role=\"button\""] {
+            assert!(
+                !section.contains(forbidden),
+                "the identity section carries `{forbidden}`. The documenting gesture belongs to \
+                 `undeclared`; an identity abstention's answer is a better SOURCE, not a record \
+                 the operator writes — offering it here would create a second entity for a machine \
+                 that may already be declared"
+            );
+        }
+    }
     /// 🔴 **The amber cannot reach `Résoudre`, and it is the TYPE that says so** — not a comment
     /// about which primary happens to be live today.
     ///

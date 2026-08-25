@@ -18,9 +18,20 @@
       <p class="muted">{{ s.identity_all_placed }}</p>
     {% else %}
     <p class="muted">{{ s.identity_because }}</p>
-    <ul class="abstentions">
+    {#- 🔴 Every cause line SAYS why it carries no documenting gesture (story 6.4, AC2). The
+         gesture belongs to `undeclared` — *observed, and no declared record claims it* — which is
+         the triage queue's `Nouveau` row, not this section. ⚠️ Saying nothing is not the same as
+         saying no: a count with no control beside it reads as a feature someone forgot.
+
+         ⚠️ The `causes` class is what lets the row stack rather than sit in one flex line; the
+         SETTLED list below keeps the plain shape, because those lines are Guy's case one — the
+         software decided — and raise no question about a missing gesture. -#}
+    <ul class="abstentions causes">
     {% for c in identity.causes %}
-      <li><span class="cause">{{ c.cause }}</span> <span class="count">{{ c.count }}</span></li>
+      <li>
+        <p class="line"><span class="cause">{{ c.cause }}</span> <span class="count">{{ c.count }}</span></p>
+        <p class="why">{{ c.why }}</p>
+      </li>
     {% endfor %}
     </ul>
     {% endif %}

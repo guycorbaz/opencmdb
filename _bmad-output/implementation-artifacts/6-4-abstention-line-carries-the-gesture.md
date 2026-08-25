@@ -276,7 +276,7 @@ the swap — never the template.
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — The subject the row does NOT know** (AC1). 🔴 **The open question is SETTLED and the
+- [x] **T1 — The subject the row does NOT know** (AC1). 🔴 **The open question is SETTLED and the
       answer is the harder one: a new read is needed.** Measured by both validation layers —
       `ObservedBatch` has three fields (`connector_id`, `observed_at`, `facts`) and **no id**, and
       `load_observation_facts`'s `SELECT` does not name the `id` column at all. Confirmed on the
@@ -284,23 +284,23 @@ the swap — never the template.
       said *"no new read"* and contradicted itself one sentence later** — the read is: add `id` to
       the query and to `ObservedBatch`, then plumb it to the row. **The blast radius is every
       `ObservedBatch` test constructor**, `page.rs`'s `fn batch(...)` helper first.
-- [ ] **T1b — WHICH sighting supplies the subject** (arbitration 1, §0i). 🔴 The row keeps the
+- [x] **T1b — WHICH sighting supplies the subject** (arbitration 1, §0i). 🔴 The row keeps the
       **OLDEST** sighting of a repeated address today (`ORDER BY observed_at` ascending, then
       first-wins in `seen_new`). **Guy: take the most recent.** A gesture that writes *the whole
       record at once* may not write the one the network has already moved past.
-- [ ] **T2 — The gesture, LIVE** (AC1, AC4) — `Gesture::Live`, as `hx-post` with a target and a
+- [x] **T2 — The gesture, LIVE** (AC1, AC4) — `Gesture::Live`, as `hx-post` with a target and a
       swap (arbitration 2, §0i). ⚠️ **The `E0004` is ONE site, not *"every match"*, and satisfying
       it naively ships an inert control** — measured: the variant added and rebuilt gives exactly
       one error, at `page.rs:751`; and `GestureView` carries only `label` and `not_built`, so the
       template's live arm renders a bare `<span class="btn-gesture live">` with **no route, no
       method, no subject**. *A compile error that can be silenced by a span is not the guard 6b.4b
       sold — its own doc said so, and this is the measurement.*
-- [ ] **T2b — The page must know whether the route EXISTS** (§0i). 🔴 `page.rs` has **zero**
+- [x] **T2b — The page must know whether the route EXISTS** (§0i). 🔴 `page.rs` has **zero**
       references to `document_enabled`; the flag is read only in `main.rs` at router-merge time. So
       a naive wiring renders, **on the default configuration**, a pressable control pointing at a
       **404** — measured. The page builder reads the flag and renders `Planned` when the route is
       not mounted, which is what the rest of the action bar already does.
-- [ ] **T3 — Every other cause carries none, and SAYS so** (AC2) — `Ambiguous` and `AbsenceOfProof`
+- [x] **T3 — Every other cause carries none, and SAYS so** (AC2) — `Ambiguous` and `AbsenceOfProof`
       alike. ⚠️ The guard measures the **absence on the rendered page**, not in the template
       (AC5 as amended). ⚠️ **And *"says why" is NEW COPY, not a rewire**: `_identity_section.html`
       renders cause and count and nothing else, and no `identity_no_gesture`-shaped key exists.

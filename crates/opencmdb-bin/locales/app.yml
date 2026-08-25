@@ -111,10 +111,33 @@ identity.cause.absence_of_proof:
 identity.cause.ambiguous:
   en: "Several possible identities"
   fr: "Plusieurs identités possibles"
-# Reached when the store holds a token no enum variant names — see `page::identity_cause_label`.
+# Reached when the store holds a token no enum variant names — see `page::identity_cause_line`.
 identity.cause.unrecognised:
   en: "Unrecognised cause (%{token})"
   fr: "Cause non reconnue (%{token})"
+# ── Why an identity cause carries no documenting gesture (story 6.4, AC2) ────
+# 🔴 SAYING NOTHING IS NOT THE SAME AS SAYING NO. A count with no control beside it reads as a
+# feature someone forgot; these three sentences are the section answering the operator's question
+# instead of leaving it. The documenting gesture belongs to `undeclared` — *observed, and no
+# declared record claims it* — and it lives on the triage queue's `Nouveau` row, where that
+# population already is.
+#
+# ⚠️ THREE keys where the story budgeted two, and the THIRD is forced by the type rather than
+# chosen: `identity_cause_line` is total over the store's tokens, and its tolerant arm renders a
+# line like any other. A cause the product cannot name is still a cause the operator is looking at.
+#
+# ⚠️ The SETTLED lines get none of these, and that is a decision: they are Guy's case ONE — the
+# software decided — and nothing about them awaits the operator, which `identity.settled` already
+# says. AC2 speaks of a CAUSE, and the code distinguishes a cause from an outcome.
+identity.no_gesture.absence_of_proof:
+  en: "Nothing to document here: what is missing is a source that can prove identity, not a record to write. The Sources screen says what this one cannot read."
+  fr: "Rien à documenter ici : ce qui manque est une source capable de prouver l'identité, pas une fiche à écrire. L'écran Sources dit ce que celle-ci ne peut pas lire."
+identity.no_gesture.ambiguous:
+  en: "Nothing to document here: this is a doubt to lift, not an entity to create — and choosing among the candidates is still to come."
+  fr: "Rien à documenter ici : c'est un doute à lever, pas une entité à créer — et le choix parmi les candidats reste à venir."
+identity.no_gesture.unrecognised:
+  en: "Nothing to document here: the product does not recognise this cause, so it offers nothing for it."
+  fr: "Rien à documenter ici : le produit ne reconnaît pas cette cause et n'offre donc rien pour elle."
 
 cause.out_of_perimeter:
   en: "Out of perimeter"

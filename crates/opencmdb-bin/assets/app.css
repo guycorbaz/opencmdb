@@ -304,6 +304,11 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 .identity .sep { color: var(--muted); }
 .identity .note { font-size: 12px; margin: 6px 0 0; }
 .identity .abstentions .cause { color: var(--muted); }
+/* Story 6.4: a cause line stacks — the count row, then the sentence saying why that line offers no
+   documenting gesture. The SETTLED list keeps the single flex row above; only `.causes` stacks. */
+.abstentions.causes li { display: block; }
+.abstentions.causes .line { display: flex; justify-content: space-between; align-items: baseline; margin: 0; }
+.abstentions .why { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }

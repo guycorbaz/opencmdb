@@ -3378,7 +3378,7 @@ mod tests {
 
     /// **AC7** — the store can hold a token no enum variant names, and the read carries it through.
     ///
-    /// 🔴 This is the premise of the whole tolerant-reader design (`page::identity_cause_label`):
+    /// 🔴 This is the premise of the whole tolerant-reader design (`page::identity_cause_line`):
     /// `abstention_cause` is a plain `VARCHAR(32)` with **no `CHECK`**, so the value below inserts
     /// cleanly. Measured, not assumed.
     #[tokio::test]
