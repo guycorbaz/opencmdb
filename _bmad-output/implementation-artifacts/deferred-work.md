@@ -4915,3 +4915,39 @@ current by reading, and this row is what says so.
   rewrites story 6b.4's shipped copy. This story now attaches a **gesture** to one of those
   labels, which raises the cost of leaving it unreconciled: a control named after a word the
   glossary does not carry. **Owner: Epic 15**, which the earlier row already names.
+
+### Found while BUILDING story 6.4 (2026-08-25)
+
+- 🔴 **« Merger » is the binding French label of the `document` gesture, and on a `Nouveau` row
+  there is nothing to merge with.** Seen in a browser: the pane reads *« Rien de déclaré à cette
+  adresse »* and the primary control under it reads *« Merger »*. The word is not wrong by the
+  table — story 6b.10's arbitration kept « Merger » as the binding translation of `document`,
+  against EN *"Document"* — but the table was written for the gesture that RECONCILES two sides,
+  and story 6.4 is the first to offer it where only one side exists. ⚠️ A story may not edit a
+  binding glossary. **Owner: Epic 15**, with the `Nouveau` row above — the two are one decision.
+- 🔴 **`--accent-document` clears AA as a FILL and fails it as TEXT, and that is a property of the
+  token rather than of this screen.** Measured: `#8d5e2d` on the 10% tint is **4.05**, on
+  `--surface` **4.59**, and `--surface` on a full `#8d5e2d` fill is **5.57**; AA needs 4.5 at 12 px.
+  Guy chose the fill (2026-08-25) precisely because the other two pass by 0.06 and 0.09. **The next
+  use of this token must not assume it can carry text.** Owner: whoever next paints with it —
+  registered here because the sheet cannot say it and the guard that counts its uses cannot either.
+- ⚠️ **The contrast guard is an enumeration and the amber ground is not in it.**
+  `every_text_token_clears_aa_on_every_ground_it_can_sit_on` walks the grounds story 6b.11 listed,
+  and `--accent-document` is now a painted ground carrying `--surface` as text. axe measures that
+  pair live on every run, so it is covered — by the browser, not by `cargo test`. Story 6b.11's own
+  row already says two painted grounds stay out; this is a third. **Owner: Epic 6b's retrospective**,
+  with that row.
+- ⚠️ **`a11y/kbd-probe.mjs` now WRITES to the store** — its last block presses the documenting
+  gesture for real, which adopts the sighting `a11y/seed.sql` plants. It must stay last in the CI
+  step or be preceded by a re-seed; a second run answers 409 and htmx swaps nothing. The probe
+  reads the status off the wire and calls that *the gate could not run*, so the failure is loud —
+  but the ordering constraint is real and is stated in `ci.yml` beside the step. **Owner: nobody
+  today**; it becomes a decision the day a third browser gate wants to run after it.
+- 🔴 **Story 6b.5's reach contradiction RECURS on `/triage`, and this story is where it is most
+  visible.** In the state `a11y/seed.sql` creates — observations present, none placed — the reach
+  section rendered *« Rien d'observé pour l'instant »* under a queue of five rows dated a minute
+  ago. Story 6.4 works around it by seeding identity abstentions so the section has something true
+  to say, ⚠️ **which fixes the harness and not the product**: a real deployment whose scan has
+  landed but whose identity pass has not run still shows the contradiction. Story 6b.12 registered
+  it as PARTIAL; this is the second sighting. **Owner: the existing row**, which it does not
+  displace.

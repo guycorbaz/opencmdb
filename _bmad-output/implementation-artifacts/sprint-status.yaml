@@ -4509,7 +4509,8 @@ development_status:
   # `epics.md` is NOT edited; the divergence is registered with Epic 6's retrospective.
   6-3-nfr5-remaining-assertions: done
   # FR13(a), *the day-one case*; the gesture belongs to the CAUSE, not the count
-  6-4-abstention-line-carries-the-gesture: ready-for-dev  # CONTEXTED 2026-08-24, ONE
+  6-4-abstention-line-carries-the-gesture: review  # IMPLEMENTED 2026-08-25 -- the product
+  #   WRITES from /triage and the browser is what found three of the defects. CONTEXTED 2026-08-24, ONE
     # ARBITRATION taken the same day.
     # 🔴 AC1 CANNOT BE IMPLEMENTED AS WRITTEN: it attaches FR13's documenting gesture to the
     # `AbsenceOfProof` cause line, which is an IDENTITY verdict about whether two sightings could

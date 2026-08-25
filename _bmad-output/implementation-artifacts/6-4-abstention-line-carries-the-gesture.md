@@ -1,6 +1,6 @@
 # Story 6.4: The abstention line carries the gesture
 
-Status: **ready-for-dev** — the arbitration is taken (§0h, Guy, 2026-08-24).
+Status: **review** — every task is done and measured; `done` is the MERGE's business.
 
 ⚠️ **The story's title and its *so that* clause are left as the plan wrote them and are now
 INACCURATE**: the gesture lands on the triage queue's `Nouveau` row, not on the abstention line,
@@ -312,20 +312,20 @@ the swap — never the template.
       absence and conflict row **before** the `Nouveau` loop. Seed the population **and** give the
       gate a state that names it, or the story's only DOM-level carrier in CI never sees the
       gesture.
-- [ ] **T4 — One act, one answer** (FR16b) — ⚠️ **and within this story's arbitrated scope there is
+- [x] **T4 — One act, one answer** (FR16b) — ⚠️ **and within this story's arbitrated scope there is
       no N>1 case to exercise**, measured: a `Nouveau` row is one address and one subject, and its
       `counted` is `false` with an empty `count`. FR16b's *"96 devices is ONE question"* bites on
       the `Absence`/`Conflict` cause rows, which this story does not touch. **Say so rather than
       leaving a task that reads as needing bulk-failure handling nothing in scope produces.**
-- [ ] **T5 — The bans, and the honest sentence** (AC3, §0e) — the count is of SIGHTINGS and the
+- [x] **T5 — The bans, and the honest sentence** (AC3, §0e) — the count is of SIGHTINGS and the
       observations are never modified, so **it will not fall when the operator acts**. The surface
       must not imply it will.
-- [ ] **T6 — Prove-to-red in the DOM** (AC5) — ⚠️ on the **unrepaired** mutation driver, by Guy's
+- [x] **T6 — Prove-to-red in the DOM** (AC5) — ⚠️ on the **unrepaired** mutation driver, by Guy's
       sequencing of 2026-08-24: write the prediction BEFORE the mutation, which is what caught all
       seven driver defects in Epic 6b.
-- [ ] **T7 — Register the divergence** — the title, the *so that* clause, and AC1's population.
+- [x] **T7 — Register the divergence** — the title, the *so that* clause, and AC1's population.
       `epics.md` is NOT edited; Epic 6's retrospective may.
-- [ ] **T8 — The record** (AC6, AC7) — the live count here; what the operator can DO, plainly. ⚠️
+- [x] **T8 — The record** (AC6, AC7) — the live count here; what the operator can DO, plainly. ⚠️
       **This is the first story in three epics whose honest answer is not *nothing*** — and it must
       say precisely which population gained a door and which did not.
 
@@ -367,12 +367,91 @@ ten. This story is what ends that, and it is the first in three epics whose hone
 
 ## Dev Agent Record
 
-*(to be filled by the dev agent)*
+### The live count (AC6), and every figure names the state it was taken against
+
+**735 → 738 tests** — 500 `opencmdb-bin` + 161 `opencmdb-core` + 77 `xtask`, `cargo test
+--workspace --locked` against a live `mariadb:10.11.11` on port 13405, **4.66 s** wall clock
+(**0.21 s** with `DATABASE_URL` unset — the clock is the tell that the store-backed tests ran).
+Nine `cargo xtask ci` gates green; clippy `--all-targets`, `cargo fmt --check`, each status read
+from `$?` rather than through a pipe.
+
+🔴 **The baseline is 735 and not the 737 three commits carried.** Measured on a git worktree at
+`c4c187d`: 497 + 161 + 77 = **735**, so the parts were right and their sum was not, and the delta
+that commit recorded (+3) was +1. *Verifying a delta means verifying both of its terms* — story
+6b.4's lesson, and the cheapest check there is: a total that does not equal its own parts.
+
+**The browser gates**, which are where this story's centre of gravity is: `a11y/axe-gate.mjs` walks
+10 routes plus **3** states (the third is the selected `Nouveau` pane, which did not exist before)
+for **0 violation nodes**; `a11y/kbd-probe.mjs` runs **27** checks, 0 failed, three of them new.
+
+### What the operator can DO (AC7), stated plainly
+
+**On `/triage`, select a `Nouveau` row and press one amber control that WRITES.** The address and
+its hostname become a declared record in one transaction, the queue's question disappears, and the
+answer is swapped in and focused where a keyboard operator lands on it. That is the first gesture
+in three epics whose honest answer is not *nothing*, and it is measured end to end by a browser
+that presses it.
+
+⚠️ **And three limits, because AC7 exists so the route is not counted as the gesture:**
+
+1. **On the DEFAULT configuration there is still no gesture.** `POST /document-all` is registered
+   only under `OPENCMDB_DOCUMENT_ENABLED`, off by default since story 6.1, and the page renders the
+   control only where the route is mounted. A stock deployment sees five labelled controls, none
+   live. *The gesture exists; it is not yet what a fresh install meets.*
+2. **The four other controls remain planned**, and the sentence under them now names the badge it
+   scopes itself to rather than claiming the whole bar is unbuilt.
+3. **The identity reach section offers no gesture at all**, and now says why on every line. The
+   answer there is a better SOURCE — Epic 11 — not a record the operator writes.
+
+### The mutation pass (T6) — predictions written BEFORE any mutation was applied
+
+⚠️ On the **unrepaired** driver, by Guy's sequencing of 2026-08-24. Every mutation was reverted from
+a scratchpad copy taken beforehand, **never with `git checkout --`** — the gesture that destroyed
+uncommitted work four times in this project. Carriers are MIXED and named per row; no *"every red
+assertion-carried"* headline is claimed.
+
+| id | mutation | predicted | measured | carrier |
+|---|---|---|---|---|
+| M-A1 | server booted without `OPENCMDB_DOCUMENT_ENABLED` | axe exit 2 | ✅ exit 2 | the gate's named refusal |
+| M-A2 | the seeded undeclared sighting removed, flag kept | axe exit 2 | ✅ exit 2, same refusal | idem — **both halves are load-bearing** |
+| M1 | `<p class="why">` deleted from the partial | RED 1 | ✅ RED 1 | its own assertion, the `why` needle |
+| M2 | the tolerant arm returns the `ambiguous` sentence | RED 1 | ✅ RED 1 | idem, third needle only |
+| M3 | **CONTROL** — the same guard's page with the route unmounted | RED 1, on the PREMISE | ✅ RED 1, on the premise's own message | assertion |
+| M4 | `document_all` also deletes the subject's identity links | RED 1 | ⚠️ **RED 3** | mine on the reach equality, **plus story 6.3's two NFR5 guards** |
+| M5 | the `Nouveau` loop stops filtering against `claimed` | RED ≥2 | ✅ RED 2 | assertions |
+| M6 | `hx-on::after-swap` back on the button | RED 1 rust **and** RED 1 browser | ✅ both | a Rust assertion naming the CAUSE, a probe check naming the SYMPTOM |
+| M7 | `.btn-gesture.btn-document` → `.btn-document` | rust GREEN + kbd RED 1 | ✅ 738 green, kbd RED 1 | the probe alone |
+| M8 | the seed's `identity_link` block removed | axe GREEN | 🔴 ✅ axe exit **0**, and **zero** sentences served | *nothing* — the finding |
+| M8-bis | the same, against the check M8 earned | kbd RED 1 | ✅ RED 1 | the new probe check |
+| M9 | the axe gate loses its `REQUIRE_GESTURE` refusal, no flag | exit 0 | ✅ exit 0, **2 states where 3 are due** | *nothing* — which is why the refusal exists |
+
+🔴 **M-K0 is not in the table because it was not planted.** The keyboard probe's first run found the
+focus-after-swap contract BROKEN — `⏎ → status=201`, the answer swapped in, `activeElement.id`
+**empty** — while the previous commit's record claimed focus moves and every Rust assertion about
+that bar was green. `htmx:afterSwap` fires on the TARGET of the swap, a sibling of the button, so
+the handler on the control never ran. *The render assertion pinned the attribute; the attribute
+named a behaviour the product did not have.*
+
+🔴 **M7 is the story's clean specimen of story 6b.11's amended AC5.** The whole Rust suite, the nine
+gates and the sheet's own amber guard — which counts `var(--accent-document)` reads and found all
+four, correct — stayed green over a control that computed to plain grey. *A declaration that loses
+is still a declaration, and no source guard can see a cascade.*
+
+🔴 **M8 is the pass's own finding and it cost a check.** The seed was widened so the reach section
+would render its new sentences where the gates run; measured, the axe gate walks that page and
+**asserts nothing about it**, so the copy was carried by no browser at all. *A gate that walks a
+page is not a gate that reads it.* Closed by the probe check M8-bis reds.
+
+⚠️ **M4 diverged from its prediction and the divergence is the useful part**: 3 red, not 1, because
+story 6.3's NFR5 guards already pin the link itself. What this story's guard adds is the DISPLAYED
+aggregate — the number the operator reads — and that is a different claim from *the row is intact*.
+
 
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-08-25 | **IMPLEMENTED — T1 through T8, and the three sharpest findings came from a BROWSER rather than from a test.** 🔴 The focus-after-swap contract was BROKEN: `hx-on::after-swap` sat on the button, `htmx:afterSwap` fires on the swap TARGET, and the handler never ran — `⏎ → 201`, the answer swapped in, `activeElement.id` **empty**, with every Rust assertion about that bar green. 🔴 The amber **painted nothing**: `.btn-gesture.live` (0-2-0) beat `.btn-document` (0-1-0) on all four declarations while the guard that counts `var(--accent-document)` reads found all four and passed — *a declaration that loses is still a declaration*. 🔴 And this story made a shipped sentence FALSE — *"This gesture is not built yet."* under a bar whose loudest control now IS — caught by looking, fixed by interpolating the badge. ✅ **Guy's arbitration (2026-08-25): FILL the control with the amber** (contrast **5.57**) over darkening the token (**4.56**) or dropping the tint (**4.59**) — the other two pass by 0.06 and 0.09, a margin the next palette adjustment erases. 🔑 `page.rs` hit the `file-size` ceiling at 2033 and the answer was the SPLIT (`identity_view.rs`), never shorter prose. ⚠️ **M8 is the mutation pass's own finding**: the axe gate walks the reach section and asserts nothing about it, so T3's new copy was carried by no browser — closed by a 27th probe check. **735 → 738 tests** (the 737 three commits carried was wrong: 497+161+77 = 735), nine gates, axe 13 routes/states 0 nodes, kbd 27 checks 0 failed. |
 | 2026-08-25 | **VALIDATED by two layers — nine findings, two reached by both, and the second layer BUILT the gesture and pressed it.** 🔴 Four holes the story did not know it had: `OPENCMDB_DOCUMENT_ENABLED` is invisible to the page builder, so a naive wiring shows a pressable control pointing at a **404** on the default configuration; the axe gate cannot reach a selected `Nouveau` row; `a11y/seed.sql` produces **zero** of them; and a plain `<form>` navigates to the raw text body. ⚠️ **`Gesture::Live` forces ONE site, not *every match*, and satisfying it naively ships an inert `<span>`** — 6b.4b's own warning, measured. 🔴 And two false citations of mine, one already propagated to the register: `epics.md:2118` is **`:1794`**, and §0h's *"produced by `gap::reconcile`"* is false — that enum has no `undeclared` variant. **✅ Two arbitrations (Guy):** the subject is the **most recent** sighting, not the oldest; and the gesture is **`hx-post`** with a target and a swap — ⚠️ which makes it the product's first live swap, inheriting 6b.11's focus-after-swap contract by name. |
 | 2026-08-24 | ✅ **ARBITRATION TAKEN (Guy): the gesture goes on the triage queue's `Nouveau` row, and the abstention line carries none.** 🔑 The measurement that decided it: `undeclared` is NOT typeless — `page.rs:1005` already labels a queue row *"an observed address no declared entity claims"*, the glossary's own words, computed by `gap::reconcile` and on screen since 6b.4. **The glossary left it typeless because it was looking at the identity engine; it lives on the reconciliation side.** *Refused:* AC1's letter (offers to create an entity for a machine already declared) and the intersection (safe, two reads and a join, and most of the population anyway on the shipped connector). 🔴 **The cost, stated:** the story's *so that* clause — *"the reach section becomes a door"* — is not met, and **the premise is what is wrong**: an identity abstention's answer is a better SOURCE, not a documented entity. *The reach section may have no door, and that is not this story's failure.* |
 | 2026-08-24 | Story created and CONTEXTED. 🔴 **AC1 cannot be implemented as written**: it attaches FR13's gesture to `AbsenceOfProof`, an identity verdict about whether two sightings could be JOINED, while FR13's own population is `undeclared` — *observed, and no declared record claims it* — which the PRD's binding glossary gives a row and **no type**. ⚠️ A sighting can be `AbsenceOfProof` **and already declared**, a state `a11y/seed.sql` produces today. **This is story 5.14b's defect one layer down**, and that story's own record names the shape: *same word, different type, different population*. 🔴 Second measurement: `IdentityCauseRow { cause, count }` carries **no subject** and the route takes exactly **one** — so AC1 is not a wiring job but a read the page does not have. ⚠️ And on the shipped connector *"one line"* is the WHOLE unplaced population, since the scanner emits no hardware address ever. **One arbitration open (§0f).** |

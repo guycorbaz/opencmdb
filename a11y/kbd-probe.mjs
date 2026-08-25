@@ -38,7 +38,7 @@ const SETTLE_WAIT_MS = 900;
 // caught that twice, once in a privacy floor and once in a word count. If a check is added
 // this number moves deliberately; if one is skipped, the gate says so instead of printing
 // a green.
-const MIN_CHECKS = 26;
+const MIN_CHECKS = 27;
 const MIN_ROWS = 2;
 // The product's one live control — a CLASS the stylesheet guard already pins, never a label
 // and never a selector vocabulary. Story 6.4; see the block that presses it.
@@ -371,6 +371,33 @@ async function main() {
   }
 
   await page.close();
+
+  // ── The reach section is POPULATED where the gates run, and every line answers ──
+  //
+  // 🔴 **MEASURED, and it is why this check exists: axe walks this section and asserts nothing
+  // about it.** Story 6.4 seeded identity abstentions so the section would render its cause
+  // lines — each carrying the sentence that says why it offers no documenting gesture — and
+  // with that seed block removed the page served ZERO of those sentences while the axe gate
+  // exited 0 over the same URL. *A gate that walks a page is not a gate that reads it.*
+  //
+  // ⚠️ Its limit: it says the lines are THERE and carry a sentence, never which sentence. The
+  // wording is pinned in Rust, where the render assertion can name a phrase of the
+  // translation; here the property is that the section is not silently empty.
+  {
+    const p = await open("/triage");
+    const reach = await p.$$eval(".identity .abstentions.causes li", (rows) =>
+      rows.map((row) => ({
+        cause: (row.querySelector(".cause")?.textContent ?? "").trim(),
+        why: (row.querySelector(".why")?.textContent ?? "").trim(),
+      })),
+    );
+    await p.close();
+    check(
+      reach.length > 0 && reach.every((row) => row.cause !== "" && row.why !== ""),
+      "every identity cause line on the served page carries the sentence that says why it offers no gesture",
+      `${reach.length} line(s): ${JSON.stringify(reach.map((r) => r.why.slice(0, 24)))}`,
+    );
+  }
 
   // ── The gesture that ACTS: pressed by keyboard, and the focus follows the swap ──
   //

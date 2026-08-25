@@ -5203,6 +5203,231 @@ mod tests {
             );
         }
     }
+    /// **FR16b, and what it does NOT ask of this story** — *"each cause is one line and one
+    /// gesture, not N failures; 96 multi-interface devices is not 96 failures, it is ONE
+    /// question."*
+    ///
+    /// 🔑 **Within the arbitrated scope there is no N>1 case to exercise, and that is measured
+    /// here rather than asserted in a task list.** A `Nouveau` row is one address, one sighting
+    /// and one subject: its `counted` is false and its `count` is empty, so the row cannot even
+    /// display a plurality. FR16b's *"96 devices is ONE question"* bites on the `Absence` and
+    /// `Conflit` cause rows, which carry a count and which this story does not touch.
+    ///
+    /// ⚠️ **So *"one act, one answer"* holds by CONSTRUCTION on this gesture, not by handling.**
+    /// One press names one `ObsId`, and `POST /document-all` answers once — a 201 naming the
+    /// entity and the field count, or one refusal. The field count is the interesting number:
+    /// the sighting below carries TWO facts and the gesture writes both in one transaction, so
+    /// *N fields* is exactly the case FR16b says must not become *N failures*.
+    #[test]
+    fn a_new_row_asks_one_question_however_many_facts_the_sighting_carries() {
+        let view = build_triage_offering(
+            Vec::new(),
+            Vec::new(),
+            vec![batch_with_id(
+                "arp",
+                10,
+                vec![
+                    ipv4("192.0.2.77"),
+                    hostname("many-facts"),
+                    Fact::Rtt { millis: 4 },
+                ],
+                0xA1,
+            )],
+            at(600),
+            Some("nouveau:192.0.2.77"),
+            false,
+            true,
+        );
+
+        let rows: Vec<_> = view
+            .rows
+            .iter()
+            .filter(|r| r.id.starts_with("nouveau:"))
+            .collect();
+        assert_eq!(
+            rows.len(),
+            1,
+            "the premise: three facts at one address are ONE row — a sighting is the unit, not a \
+             fact"
+        );
+        assert!(
+            !rows[0].counted && rows[0].count.is_empty(),
+            "and the row displays no plurality at all: `counted={}` `count={:?}`",
+            rows[0].counted,
+            rows[0].count
+        );
+
+        let pane = view.selected.expect("the row has a pane");
+        assert!(
+            !pane.subject.is_empty(),
+            "the pane names a subject, which is what the control posts"
+        );
+        assert_eq!(
+            pane.gestures
+                .iter()
+                .filter(|g| matches!(g.nature, GestureRender::Live(_)))
+                .count(),
+            1,
+            "ONE live control for the whole record — never one per fact, which is what FR16b's \
+             *not N failures* forbids at the other end of the same gesture"
+        );
+    }
+
+    /// 🔴 **The gesture LOWERS THE BACKLOG AND LEAVES THE REACH EXACTLY WHERE IT WAS** — AC3, and
+    /// the sentence story 5.14b left stated rather than met.
+    ///
+    /// # Two numbers on one screen, and only one of them answers to the operator
+    ///
+    /// The triage count is the reconciliation backlog: document the sighting and the question is
+    /// gone, so it falls, correctly. The reach count is SIGHTINGS the identity engine could not
+    /// place, read off `identity_link` — and documenting writes only `declared_attribute`, so it
+    /// does not move. ⚠️ **That is not a defect and this test is not a complaint**: FR13's
+    /// invariant is that the observation is never modified and the link is preserved, so a reach
+    /// that fell would mean the gesture had rewritten history. *The number will not go down when
+    /// the operator acts, and the surface must not imply it will.*
+    ///
+    /// 🔑 It measures the DIVERGENCE rather than the agreement, on story 5.14b's own precedent:
+    /// a test asserting that two reads agree is worth little once they are known to count
+    /// different populations, and worth nothing the day someone fuses them.
+    ///
+    /// ⚠️ Its premise is asserted first and separately — a backlog that was already empty, or a
+    /// reach that was already zero, would satisfy both conclusions by having nothing to move.
+    #[tokio::test]
+    async fn documenting_lowers_the_backlog_and_leaves_the_reach_where_it_was() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping the backlog/reach divergence test: DATABASE_URL unset");
+            return;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        for statement in [
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+            "DELETE FROM declared_attribute",
+        ] {
+            sqlx::query(statement).execute(&pool).await.expect("clean");
+        }
+
+        // ONE sighting, at an address no declared entity claims — the `undeclared` population,
+        // which is the only one this gesture is offered on.
+        let subject = ObsId::from_uuid(Uuid::from_u128(0x6401));
+        let observation = Observation {
+            obs_id: subject,
+            connector_id: ConnectorId::from_uuid(Uuid::from_u128(0x6400)),
+            observed_at: chrono::DateTime::from_timestamp(1_700_002_000, 0).expect("in range"),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(Uuid::from_u128(0x6402)),
+                vantage: VantageId::from_uuid(Uuid::nil()),
+            },
+            facts: vec![
+                Fact::IpV4 {
+                    addr: "192.0.2.50".parse().expect("a documentation address"),
+                },
+                Fact::Hostname {
+                    name: "unknown-50".into(),
+                    source: opencmdb_core::observation::HostnameSource::Dns,
+                },
+            ],
+            raw: None,
+        };
+        crate::repo::insert_observation(&pool, &observation)
+            .await
+            .expect("the sighting is stored");
+        // And the identity engine's own verdict on it: it could not place it.
+        crate::repo::insert_identity_link(
+            &pool,
+            opencmdb_core::observation::LinkId::from_uuid(Uuid::from_u128(0x6403)),
+            subject,
+            None,
+            &opencmdb_core::identity::cascade::Decision {
+                conclusion: opencmdb_core::identity::cascade::Conclusion::Abstained {
+                    cause:
+                        opencmdb_core::identity::cascade::IdentityAbstentionCause::AbsenceOfProof,
+                },
+                verdict_vector: Vec::new(),
+                ruleset_version: opencmdb_core::identity::cascade::RulesetVersion(1),
+            },
+            &[],
+            crate::repo::DecidedBy::Engine,
+            observation.observed_at,
+            crate::repo::open_end(),
+        )
+        .await
+        .expect("the abstention is stored");
+
+        let backlog = |declared, observations| {
+            build_triage_offering(
+                declared,
+                Vec::new(),
+                observations,
+                at(9_000),
+                None,
+                false,
+                true,
+            )
+            .total
+        };
+        let read = async |pool: &MySqlPool| {
+            (
+                crate::repo::load_declared_attributes(pool)
+                    .await
+                    .expect("declared"),
+                crate::repo::load_observation_facts(pool)
+                    .await
+                    .expect("observed"),
+                crate::repo::count_engine_reach(pool).await.expect("reach"),
+            )
+        };
+
+        let (declared_before, observed_before, reach_before) = read(&pool).await;
+        let total_before = backlog(declared_before, observed_before);
+        assert_eq!(
+            total_before, 1,
+            "the premise: exactly one question is queued — a backlog that was already empty \
+             would satisfy the fall below by having nothing to lose"
+        );
+        assert_eq!(
+            reach_before.len(),
+            1,
+            "the premise: the engine has reported on this sighting — a reach that was already \
+             empty would satisfy the equality below by holding nothing"
+        );
+
+        use crate::document::DocumentPort as _;
+        // ⚠️ `is_ok()` rather than `.expect()`: `DocumentFailure` carries a backend error and
+        // deliberately implements no `Debug` (story 6.2 — a 500 must not leak it), so an
+        // `.expect()` here would not compile. Deriving `Debug` for a test's convenience would
+        // widen what the type permits at every OTHER call site.
+        let documented = crate::document::StoreDocument::new(pool.clone())
+            .document_all(subject)
+            .await;
+        assert!(
+            documented.is_ok(),
+            "the premise: the gesture succeeds on the undeclared sighting, or neither number              below moved for the reason this test names"
+        );
+
+        let (declared_after, observed_after, reach_after) = read(&pool).await;
+        let total_after = backlog(declared_after, observed_after);
+        assert_eq!(
+            total_after, 0,
+            "the BACKLOG falls: the address is documented, the values agree, and the question the \
+             queue was asking is answered"
+        );
+        assert_eq!(
+            reach_after, reach_before,
+            "and the REACH does not move, cause for cause and count for count. It counts \
+             sightings the identity engine could not place; documenting writes a declared record \
+             and touches neither the observation nor the link (FR13's invariant). A reach that \
+             fell here would mean the gesture had rewritten what was seen"
+        );
+    }
+
     /// 🔴 **The amber cannot reach `Résoudre`, and it is the TYPE that says so** — not a comment
     /// about which primary happens to be live today.
     ///
