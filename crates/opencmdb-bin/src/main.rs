@@ -97,6 +97,15 @@ impl std::fmt::Debug for BasicCredentials {
     }
 }
 
+/// The switch that registers the documenting route: ONE constant, read by the boot and named on
+/// the screen.
+///
+/// 🔑 The screen tells the operator which variable to set, and the binary reads the same string, so
+/// the two cannot drift — `document::DOCUMENT_ALL_PATH`'s idiom, applied to the switch rather than
+/// to the path. Story 6.4's code review (Guy, 2026-08-26): with the route unmounted the control
+/// says *built and switched off*, and a sentence that names a variable must name the real one.
+pub(crate) const DOCUMENT_ENABLED_ENV: &str = "OPENCMDB_DOCUMENT_ENABLED";
+
 /// The HTTP surface's configuration — a PARAMETER of [`app`], never an env read inside it
 /// (story 6.1, arbitration 5). Tests construct it directly and mutate no env var; only
 /// [`run`] calls [`AppConfig::from_env`].
@@ -352,7 +361,7 @@ impl AppConfig {
         lookup: impl Fn(&str) -> Option<String>,
         available_locales: &[String],
     ) -> Result<Self, AppConfigError> {
-        let document_enabled = match lookup("OPENCMDB_DOCUMENT_ENABLED") {
+        let document_enabled = match lookup(DOCUMENT_ENABLED_ENV) {
             None => false,
             Some(value) => match value.trim().to_ascii_lowercase().as_str() {
                 "" | "0" | "false" => false,
@@ -1034,10 +1043,13 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        assert_eq!(
-            body_text(response).await,
-            "unknown subject: nothing can be documented"
-        );
+        // 🔴 Through the KEY, never a copy of its output — story 6.4's code review made every
+        // body a key. What story 6.1's pinning bought is asserted rather than implied: the body is
+        // NON-EMPTY, which is the only thing distinguishing this 404 from axum's
+        // unregistered-route 404 in any locale.
+        let body = body_text(response).await;
+        assert_eq!(body, rust_i18n::t!("document.unknown_subject").to_string());
+        assert!(!body.is_empty(), "the discriminator against the empty 404");
     }
 
     // ── AC3: Basic stands where the allowlist stood ────────────────────────────────────────
@@ -2539,13 +2551,14 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let created = body_text(response).await;
-        // Parse the minted entity id out of the 201 body ("… as entity <uuid>").
-        let entity_id = created
-            .rsplit(' ')
-            .next()
-            .expect("entity id in body")
-            .to_string();
+        // 🔴 The id comes from the STORE, never from the operator's sentence. This parsed
+        // `"… as entity <uuid>"` out of the 201 body until story 6.4's code review took the raw
+        // UUID off the screen — *a test that pins the ugly thing is a test that requires it*
+        // (story 6b.4), and this one required it for two stories.
+        let entity_id = repo::entity_documented_from(&pool, &subject.as_uuid().to_string())
+            .await
+            .expect("read the minted entity")
+            .expect("the gesture minted an entity from this sighting");
 
         // Provenance: two adopted rows, origin_obs_id = the subject, human author.
         let provenance = repo::read_declared_provenance_for_test(&pool, &entity_id)
@@ -2961,12 +2974,11 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let entity_id = body_text(response)
+        // From the STORE, not from the 201's sentence — see the note at the other call site.
+        let entity_id = repo::entity_documented_from(pool, &subject.as_uuid().to_string())
             .await
-            .rsplit(' ')
-            .next()
-            .expect("entity id in body")
-            .to_string();
+            .expect("read the minted entity")
+            .expect("the gesture minted an entity from this sighting");
         (subject, entity_id)
     }
 
@@ -3253,7 +3265,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(
             body_text(response).await,
-            "nothing to document: the observation carries no declarable field"
+            rust_i18n::t!("document.nothing_to_document").to_string()
         );
         assert_eq!(
             repo::count_declared_attributes(&pool).await.expect("count"),

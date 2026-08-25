@@ -4951,3 +4951,32 @@ current by reading, and this row is what says so.
   landed but whose identity pass has not run still shows the contradiction. Story 6b.12 registered
   it as PARTIAL; this is the second sighting. **Owner: the existing row**, which it does not
   displace.
+
+## Deferred from: code review of story 6.4 (2026-08-25)
+
+- 🔴 **A multi-homed sighting documents the address the operator was NOT looking at, and that row
+  then becomes permanently un-documentable.** MEASURED by the review's mutating layer: one
+  observation carrying `192.0.2.201` and `192.0.2.202` produces TWO `Nouveau` rows; selecting
+  `.202` shows `.202` in the pane and posts the observation id, and `gap::project` takes the first
+  occurrence per key — so `.201` is written. Afterwards the `.202` row is still offered and a
+  second press answers 409 **silently**. ⚠️ Not reachable on the shipped ARP/ping connector (one
+  `IpV4` per observation), so it is a stated limit and not a live defect — but `multi-nic` is a
+  committed trap family and it goes live on the first connector that reports a second address.
+  AC1's *"the whole record is documented at once"* reads as covering this and does not.
+  **Owner: the connector story that emits a second address** — the same story that must carry the
+  interface-mint race story 5.14 registered, for the same reason: it removes the shield.
+- ⚠️ **`hx-vals='{"subject": "{{ pane.subject }}"}'` builds JSON by string interpolation**, and
+  Askama's escaper is an HTML escaper, not a JSON one. Latent today: `pane.subject` is
+  `ObsId::to_string()` at every call site, so it is always a UUID — *a property of the call sites,
+  not of the type*, which is exactly what story 6b.4's review recorded for the missing URL escape
+  ("latent not live"). The guard pins the happy shape byte for byte and therefore cannot see the
+  class. **Owner: the first story that puts anything but a UUID in a pane's `subject`.**
+- ⚠️ **Focus is moved INTO an `aria-live` region.** `_action_bar.html` argues that `aria-live` and
+  the focus move are both needed and neither substitutes; several screen readers announce a focused
+  live region twice, or suppress the live announcement in favour of the focus one. Neither browser
+  gate can see it — the probe asserts `activeElement.id` and axe has no rule for it. The argument
+  is defensible and is now a STATED limit rather than a settled fact. **Owner: the first story with
+  access to a real screen reader.**
+- ⚠️ **`CLAUDE.md` and `docs/project-context.md` carry no story 6.4 paragraph.** That is the
+  merge-time convention here and every prior story did the same — but the branch is pushed, and the
+  repository's own *docs-current-before-push* rule names both files. **Owner: the merge.**

@@ -88,10 +88,13 @@ INSERT INTO observation_record (id, connector_id, observed_at, l2_domain, vantag
 -- is the queue's `Nouveau` row and not this section — and with no abstention seeded, those
 -- sentences were rendered nowhere the gates could see them.
 --
--- ⚠️ Both named causes appear, deliberately: they carry DIFFERENT sentences (a better source
--- against a doubt to lift), so a seed with only one would let a gate pass over a section where
--- the two had been fused. Every row is an ABSTENTION — a `match` would need an `interface`
--- row, and inventing an identity for a harness is more fixture than this needs.
+-- ⚠️ Both named causes appear so the screen shows the two DIFFERENT sentences (a better source
+-- against a doubt to lift) to anyone who looks. ⚠️ **Not because a gate would catch their fusion**:
+-- the probe check reads that each line HAS a sentence, never which one — its own doc says so — and
+-- the fusion case is caught in Rust, by `every_identity_cause_line_says_why_it_carries_no_gesture`.
+-- That justification stood here until story 6.4's code review refuted it against the check's own
+-- stated limit. Every row is an ABSTENTION — a `match` would need an `interface` row, and inventing
+-- an identity for a harness is more fixture than this needs.
 INSERT INTO identity_link
   (id, observation_id, interface_id, current_subject, outcome, rule_id, abstention_cause,
    evidence, ruleset_version, decided_by, valid_from, valid_to) VALUES

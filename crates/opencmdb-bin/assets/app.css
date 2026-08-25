@@ -605,8 +605,34 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
    to the documenting gesture, and the only live control today IS that gesture — but `action_bar`
    also builds a primary keyed `gesture.resolve`, so painting `.live` amber would mean the
    reservation holds by a SENTENCE about which primary happens to be live rather than by anything
-   the stylesheet can see. ⚠️ Whether the product's primary action should be emphasised is a design
-   arbitration, registered rather than taken here. */
+   the stylesheet can see. ⚠️ Whether the product's primary action should be emphasised WAS a design
+   arbitration and it has been TAKEN — Guy, 2026-08-26, at story 6.4's code review: the
+   documenting control is FILLED with the amber (see `.btn-gesture.btn-document` below). This
+   paragraph said *"registered rather than taken here"* while the decision sat twenty lines down
+   and appeared in no register row. ⚠️ `.live` itself stays grey, and that is still the point: the
+   amber belongs to the DOCUMENTING gesture, not to whichever primary happens to act. */
+/* Story 6.4's code review: BUILT AND SWITCHED OFF. Shaped like a planned control — it does not
+   act either — and told apart by its badge and its own sentence, never by colour alone. ⚠️ The
+   class is `off` and not `disabled`: a guard scans the rendered page for that word and requires
+   every occurrence to be `aria-`/`hx-` prefixed, so the obvious spelling would red it for a reason
+   that is not a defect. */
+/* The confirmation a documenting gesture leaves in the URL, rendered by the screen itself. Quiet
+   on purpose: it states a fact that already happened, and the operator's proof is the row that is
+   no longer in the queue beneath it. */
+.documented {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent-document);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.btn-gesture.off {
+  color: var(--muted);
+  border-style: dashed;
+}
+
 .btn-gesture.live {
   color: var(--text);
   border-color: var(--color-neutral-500);

@@ -214,6 +214,35 @@ pub(crate) struct DeclaredRowSnapshot {
 /// alternative — a second `SANCTIONED_READS` entry — was refused on a MEASUREMENT taken at this
 /// story's validation: `the_allowlist_sanctions_a_place_and_not_a_name` walks `SANCTIONED_SITES`
 /// **only**, so a stale read entry is caught by nothing. Widening adds no entry to guard.
+/// The entity a documenting gesture minted FROM a given sighting — test-only.
+///
+/// 🔴 **It exists because story 6.4's code review took the entity id off the operator's screen.**
+/// The 201 body was the only channel by which anything could learn that id, and the end-to-end
+/// tests parsed it out of the operator-facing sentence — *a test that pins the ugly thing is a
+/// test that requires it* (story 6b.4), and this one required a raw UUID in the copy for two
+/// stories. The store keys the adopted rows by the sighting they came from, which is what the
+/// caller actually knows.
+///
+/// ⚠️ **It READS a provenance column, so the `authorship` gate must name it** — a second entry in
+/// `SANCTIONED_READS`, added in the same act. Story 5.12's own instruction: reopen the perimeter
+/// rather than let a new reader sit outside it.
+///
+/// # Errors
+///
+/// Any store error while reading.
+#[cfg(test)]
+pub(crate) async fn entity_documented_from(
+    pool: &MySqlPool,
+    subject: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT entity_id FROM declared_attribute WHERE origin_obs_id = ? LIMIT 1")
+            .bind(subject)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(entity_id,)| entity_id))
+}
+
 #[cfg(test)]
 pub(crate) async fn read_declared_provenance_for_test(
     pool: &MySqlPool,
@@ -588,13 +617,19 @@ pub struct ObservedBatch {
 ///
 /// A `sqlx::Error` on a backend failure, on a facts payload that is not valid JSON, or on an
 /// `observed_at` that does not parse as RFC 3339.
+/// ⚠️ **`id` is the TIEBREAKER, and story 6.4's code review is what asked for it.** Arbitration 1
+/// — *the most recent sighting of an address wins* — rests entirely on this ascending order plus a
+/// last-wins overwrite in `page::build_triage_offering`, and SQL gives no order among rows sharing
+/// an instant. It was stable in practice (the storage engine's habit, measured five times by the
+/// review's mutating layer) and stable by nothing anyone had written; a replay stream with
+/// hand-authored instants can tie at microsecond precision.
 pub async fn load_observation_facts<'e, E>(executor: E) -> Result<Vec<ObservedBatch>, sqlx::Error>
 where
     E: Executor<'e, Database = MySql>,
 {
     let rows: Vec<(String, String, String, String)> = sqlx::query_as(
         "SELECT id, connector_id, DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%s.%fZ'), facts \
-         FROM observation_record ORDER BY observed_at",
+         FROM observation_record ORDER BY observed_at, id",
     )
     .fetch_all(executor)
     .await?;

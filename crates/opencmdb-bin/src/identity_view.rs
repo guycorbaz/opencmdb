@@ -79,7 +79,7 @@ pub(crate) struct IdentitySettledRow {
 /// |---|---|---|---|
 /// | **no ambiguity** | `Match`, and also `NoMatch` | the software | none — it decided |
 /// | **ambiguity** | `Abstained { Ambiguous }` | the operator lifts the doubt | choose among the candidates and their evidence (FR16) |
-/// | **unknown** | `Abstained { AbsenceOfProof }` | the operator creates the entity | **declare** — the documenting gesture |
+/// | **unknown** | `Abstained { AbsenceOfProof }` | *see below* | none here |
 ///
 /// 🔑 **`NoMatch` is case ONE**, which is why it is neither placed nor listed among what awaits the
 /// operator: *a rule FORBADE the pair* is a decision, not an absence. An earlier draft folded it
@@ -87,11 +87,23 @@ pub(crate) struct IdentitySettledRow {
 /// page rendered *"every sighting was placed"* over it — found independently by all three review
 /// layers.
 ///
-/// ⚠️ **Neither gesture EXISTS in the product yet**, and this view deliberately announces neither:
-/// the ambiguity gesture needs candidates nothing produces (Epic 6), and the documenting gesture
-/// needs a write surface the product does not have. **Announcing an absent gesture is a promise;
-/// this section stays descriptive until the gesture is there** (Guy, 2026-08-12). The taxonomy is
-/// registered as the criterion for both.
+/// 🔴 **THE THIRD ROW USED TO SAY *"the operator creates the entity — the documenting gesture"*,
+/// AND STORY 6.4 IS WHAT REFUTED IT.** `AbsenceOfProof` is an identity verdict about whether two
+/// sightings could be JOINED; FR13's population is `undeclared` — *observed, and no declared record
+/// claims it* — which the PRD's binding glossary gives a row of its own. ⚠️ A sighting can be
+/// `AbsenceOfProof` **and already fully declared**, so offering to create an entity here is the one
+/// thing FR13's invariant exists to prevent. The gesture lives on the triage queue's `Nouveau` row,
+/// where that population already is (Guy, 2026-08-24), and every line of this section now SAYS why
+/// it carries none. **The answer to an identity abstention is a better SOURCE — Epic 11 — not a
+/// record the operator writes.**
+///
+/// _(This table travelled unchanged out of `page.rs` when story 6.4 split this module out, three
+/// hunks below its own refutation. A pure move is where a false sentence is least likely to be
+/// re-read; the blind review layer found it from the diff alone.)_
+///
+/// ⚠️ **The ambiguity gesture does not exist** — it needs candidates nothing produces (Epic 6) —
+/// and this view announces it no more than it announces the other: **announcing an absent gesture
+/// is a promise; this section stays descriptive until the gesture is there** (Guy, 2026-08-12).
 #[derive(Clone)]
 pub(crate) struct IdentityView {
     /// Sightings the engine placed on an interface — case one, `Match`.

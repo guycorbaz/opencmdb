@@ -79,6 +79,12 @@ const EXPECTED_ROUTES = 10;
 // These are derived from the rendered page too — never spelled out here — so they cannot
 // drift from what the product serves.
 const STATE_SORT = "?sort=age";
+// The confirmation a documenting gesture leaves behind (story 6.4's code review). It is reachable
+// only after a POST redirects here, so no href carries it and the crawl above cannot find it —
+// the same reason `?sort=age` is written out. ⚠️ A literal like `?sort=age` is, and for the same
+// reason: the alternative is pressing the gesture inside this gate, which would make an
+// accessibility pass WRITE to the store.
+const STATE_DOCUMENTED = "?documented=1";
 // ⚠️ **An empty queue is CI's permanent state unless something seeds it, and the gate is
 // green over it** — measured: with the store emptied, `/triage` carries 0 queue rows, 0
 // gesture controls and 0 panes, and the story's own defect replanted exits 0. Set
@@ -203,7 +209,7 @@ async function main() {
     );
   }
 
-  const states = [SEED + STATE_SORT];
+  const states = [SEED + STATE_SORT, SEED + STATE_DOCUMENTED];
   if (firstRow !== null) {
     states.push(firstRow);
   } else if (REQUIRE_QUEUE) {

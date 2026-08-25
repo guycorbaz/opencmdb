@@ -237,7 +237,11 @@ have sent the implementer to the wrong file.*
 documenting does **not** make the reach count fall (that section reads `identity_link`, which the
 scan pass writes; the queue's own total falls, correctly, being the reconciliation backlog);
 a repeated address already collapses to **one** row, confirmed on a live render; `Gesture::Live`
-touches **no** site in `diagnostic.rs`; and a 401 seen during prototyping was a **leftover server
+forces **no `E0004`** in `diagnostic.rs` — ⚠️ **corrected at the code review, where the SENTENCE
+over-reached and the measurement did not**: the story edits that file and its template anyway,
+because renaming `not_built` to `nature` reopens the template's own match, and both now carry a
+`Live` arm and a class named after it. *Touching no site* and *forcing no compile error* are
+different claims, and the ✅ was on the wrong one; and a 401 seen during prototyping was a **leftover server
 process** booted without credentials, not a defect.
 
 ### §0j. THE TWO ARBITRATIONS (Guy, 2026-08-25)
@@ -329,6 +333,238 @@ the swap — never the template.
       **This is the first story in three epics whose honest answer is not *nothing*** — and it must
       say precisely which population gained a door and which did not.
 
+### Review Findings — three-layer code review, 2026-08-25
+
+⚠️ **All three layers ran at this session's capability, in isolation but NOT on a different
+model.** The house rule's "different model" half is not met by this pass and is not claimed.
+Isolation was real: the Blind Hunter was forbidden the repository, the Edge Case Hunter had its
+own worktree and its own `mariadb:10.11.11` on port 13411, the Acceptance Auditor read only.
+
+**Convergence, which is what the count measures:** 6 findings were reached by two layers
+independently, 1 by all three. 🔑 **The Blind Hunter — the diff and nothing else — found the
+headline again, for the sixth story running**, and it found it by arithmetic the two sighted
+layers had every means to do and did not.
+
+🔑 **And the Edge Case Hunter replayed all twelve mutation rows and every one conformed** — the
+first table in this project to survive re-execution unchanged, the M4 divergence included. That is
+recorded as a result, not as an absence of findings.
+
+#### Decisions (the fix is not unambiguous)
+
+- [x] **[Review][Decision] The answer to the act is stale, silent on refusal, and in English** —
+      `blind+edge+auditor`, all three, MEASURED in Chrome. `hx-swap="innerHTML"` on
+      `#gesture-result` replaces one paragraph, so after a 201 the queue row is still there, the
+      declared pane still reads *« Rien de déclaré à cette adresse »* over a success message, and
+      the amber button is still live. A **second press answers 409 and swaps nothing** — the first
+      press's success sentence stays on screen asserting the opposite, focus does not move, and
+      `aria-live` announces nothing. Measured the same on a 500: total silence. And the body itself
+      is `format!("documented {} field(s) as entity {}")` — an English literal under a French UI,
+      carrying `field(s)` (the parenthetical plural story 6b.10 fixed **as a class on this screen**)
+      and a raw UUID (the defect 6b.4's review removed from this pane). 🔴 **AC7 says *"the queue's
+      question disappears"*; it does not.**
+- [x] **[Review][Decision] With the route unmounted, the product says the gesture is NOT BUILT** —
+      `blind`, extended by reading `action_bar`. `document_enabled = false` renders
+      `Gesture::Planned { owner: "6.4" }`, so the control carries the *À venir* badge and *"les
+      gestes marqués À venir ne sont pas encore construits"*. It IS built; it is disabled. On the
+      default configuration — which the story itself calls what almost every deployment runs — the
+      product's own copy is false about its only live gesture.
+
+#### Patches
+
+- [x] [Review][Patch] The live count is the SESSION's delta, not the story's: `master` is **729**,
+      HEAD is 738, so **+9 and not +3** — and `c4c187d`, the baseline it names, is story-commit 4
+      of 8. `blind+auditor`, three independent routes, and it is story 6b.1's recorded defect
+      verbatim: *an intermediate state read as a baseline*. [story file §Dev Agent Record]
+- [x] [Review][Patch] The `Live` doc block was inserted INSIDE `Planned`'s, so `Live` opens *"The
+      product does not have this gesture yet"* and documents an `owner` it has no field for, while
+      `Planned` — which has one — is left undocumented. `blind+auditor` [page.rs:526]
+- [x] [Review][Patch] `enum Gesture`'s header still reads *"# One variant today"* and *"the day
+      story 6.4 adds `Live`"*. [page.rs:507]
+- [x] [Review][Patch] `GestureView::nature`'s doc still says *"what makes story 6.4's `Live` a
+      compile error here"*. `blind+auditor` [page.rs:557]
+- [x] [Review][Patch] Three shipped sentences saying **none of the controls is live**, in the three
+      files this story edited to make one live — including *"`POST /document-all` is not one of them
+      either"* in the very file whose `Live` arm this story wrote. `auditor`
+      [_action_bar.html:3, page.rs:561, app.yml:356]
+- [x] [Review][Patch] `identity_view.rs` — the file this story created — carries a taxonomy table
+      mapping **`AbsenceOfProof` → the documenting gesture**, the exact attachment §0a/§0f/§0h/AC2
+      and three locale keys exist to refute, plus *"the documenting gesture needs a write surface
+      the product does not have"* in the commit whose subject is that surface. `blind` — prose
+      carried unchanged by a pure move, *and the move is what made nobody re-read it*.
+- [x] [Review][Patch] The pane's `observed_meta.source` is NOT updated by the last-wins overwrite,
+      so a repeated address shows the FIRST sighting's provenance beside the LATEST one's freshness
+      while the button posts the latest — and `_action_bar.html` states in writing that the two
+      *"cannot name two different observations"*. `blind+edge+auditor`, **measured on the wire**
+      (`Source aaaaaaaa · just now` beside `subject: …bbbb`). Reachable: `connector_id` is minted
+      fresh at every boot, so scan → restart → scan produces it. [page.rs:951]
+- [x] [Review][Patch] `a11y/kbd-probe.mjs` inverts the 0/1/2 contract in BOTH directions —
+      `edge`, measured. A real **500** on the gesture is reported as *"the gate could not run"* with
+      a message asserting 409 as the cause (a cause with no check behind it for four of five
+      reachable statuses); and an unseeded reach section — a HARNESS shortfall — is reported as
+      *"the keyboard layer has regressed"*. Split: 409 → `cannotRun`, every other non-2xx →
+      `check(false, …)`; empty reach → `cannotRun`.
+- [x] [Review][Patch] The gesture block waits a fixed 900 ms and then reads `posted`; a slow-but-
+      correct POST leaves `posted === null`, skips the guard, and reds as *the product broke* —
+      the confusion the block's own comment says cannot happen. `blind`. Wait for the response.
+- [x] [Review][Patch] Seven new probe checks, recorded as **three** (`MIN_CHECKS` 20 → 27, seven
+      `check(` sites). `blind+auditor` — in the file whose own comment says *"if a check is added
+      this number moves deliberately"*. [story file]
+- [x] [Review][Patch] The amber count's decomposition is **2 + 2**, not the *"three declarations
+      plus its hover"* written in the comment AND in the assertion's failure message — the message
+      a future developer reads when the guard reds. `blind+auditor` [page.rs:3794]
+- [x] [Review][Patch] `ORDER BY observed_at` has no tiebreaker, so arbitration 1's *"most recent
+      sighting"* is undefined on equal instants — stable today by the storage engine's habit, not
+      by the query. `edge`, reported deflated with its own measurement. `ORDER BY observed_at, id`.
+- [x] [Review][Patch] `.btn-gesture.live`'s comment says the emphasis question is *"registered
+      rather than taken here"* — it was taken twenty lines below, by Guy, and it is in no register
+      row. `auditor` [app.css:600]
+- [x] [Review][Patch] `identity.no_gesture.ambiguous` says *"choosing among the candidates is still
+      to come"* — an announcement of a future gesture, against `identity_view.rs`'s own doctrine
+      sentence in the same commit: *"announcing an absent gesture is a promise; this section stays
+      descriptive until the gesture is there"*. `auditor`
+- [x] [Review][Patch] `a11y/seed.sql`'s justification for seeding both causes (*"a seed with only
+      one would let a gate pass over a section where the two had been fused"*) is refuted by the
+      probe check's own stated limit — it reads that the lines are there, never which sentence.
+      The seeding is right; the reason given is false. `blind`
+- [x] [Review][Patch] The identity guard's doc claims a section-level premise it does not carry:
+      `_identity_section.html` has no branch that can emit a control, so no change to this story's
+      code can red those four negative assertions. It is a tripwire for a future story and reads as
+      a measurement of this one. `blind`
+- [x] [Review][Patch] The ✅ *"`Gesture::Live` touches no site in `diagnostic.rs`"*, recorded as
+      refuted-with-its-check, sits in a commit that edits `diagnostic.rs`, adds a `Live` arm to its
+      template and a CSS class named after that arm. The E0004 claim was true; the sentence as
+      written is not. `blind` [story §0i, sprint-status.yaml]
+- [x] [Review][Patch] `sprint-status.yaml` and the 2026-08-24 Change Log entry still carry
+      *"computed by `gap::reconcile`"* — the sentence §0i certifies FALSE nine lines below, warning
+      that a developer who reads it *"would look in the wrong file"*. Only §0h was corrected.
+      `blind+auditor`. `sprint-status.yaml` also still ends `# NEXT: dev-story.` under a `review`
+      status.
+- [x] [Review][Patch] EN renders *"The gestures marked Not yet are not built yet"*; the badge is
+      interpolated unquoted, so the reader has no cue that *Not yet* is a mark. FR reads correctly.
+      `blind`
+- [x] [Review][Patch] `both_locales_carry_every_identity_key`'s `KEYS` is 15 while `app.yml` holds
+      **17** `identity.*` keys — the two `unrecognised` ones are absent. Pre-existing, and this
+      story is what re-sized that list. `auditor`
+- [x] [Review][Patch] Record hygiene: two wall-clock figures for one measurement (4.66 s / 4.85 s);
+      *"twelve mutations"* in the commit over a table whose M3 is a CONTROL and M8 a green — the
+      story file wisely states no total and the commit reintroduces one; and *"the ceiling at
+      2033"* appears in no commit (max committed is 1981) — plausible as an uncommitted
+      intermediate, stated as a measurement. A fourteen-space gap in an assertion message.
+      `blind+auditor`
+- [x] [Review][Patch] AC5's *"every guard is measured RED"* covers **4 of the 9** new Rust guards.
+      The uncovered set includes the carrier for **Guy's arbitration 1** and the carrier for
+      **T2b** — the hole that would put a pressable 404 on the default configuration. `blind+auditor`
+- [x] [Review][Patch] AC7's three stated limits are incomplete — they do not name what the act
+      leaves on screen (see the first decision). `auditor`
+
+#### Deferred
+
+- [x] [Review][Defer] **A multi-homed sighting documents the address the operator was not looking
+      at, and that row then becomes permanently un-documentable** — `edge`, MEASURED: two `Nouveau`
+      rows from one observation, selecting `.202` writes `.201`, and a second press answers 409
+      silently. Not reachable on the shipped ARP/ping connector (one `IpV4` per observation); it
+      goes live on the first connector reporting a second address, and `multi-nic` is a committed
+      trap family. AC1's *"the whole record at once"* reads as covering it and does not.
+- [x] [Review][Defer] `hx-vals='{"subject": "{{ pane.subject }}"}'` builds JSON by interpolation
+      and Askama's escaper is not a JSON escaper. Latent: the value is `ObsId::to_string()` at every
+      call site — a property of the call sites, not of the type, exactly as 6b.4's review recorded
+      for the missing URL escape. `blind`
+- [x] [Review][Defer] Focus is moved INTO an `aria-live` region; several screen readers then
+      announce twice or suppress the live announcement. Neither browser gate can see it. The
+      template argues both are needed and neither substitutes — that argument is defensible and is
+      now a stated limit rather than a settled fact. `blind`
+- [x] [Review][Defer] `CLAUDE.md` and `docs/project-context.md` carry no story 6.4 paragraph. The
+      merge-time convention here, but the branch is pushed and the repo's own
+      *docs-current-before-push* rule names both files. `auditor`
+
+#### Dismissed with the check that dismissed them
+
+- **`identity_view.rs`'s `#[cfg(test)]` mention truncating the `file-size` gate** — the gate matches
+  `trim_start().starts_with(...)` and the mention is prefixed `//!`. Refuted by `edge` and by me
+  independently, on the same reading. My own first count had used a whole-string search: *the
+  sloppy measurement was mine, not the gate's.*
+- **`identity_section_of`'s `depth -= 1` underflow** — unreachable, the slice starts at the opening
+  `<div>`. Refuted by `blind` and `edge` independently.
+- **XSS through the new cause/why lines, and hostile subjects at the route** — `edge` ran the whole
+  battery: nine malformed subjects all answer 422/404, uppercase and braced UUIDs are canonicalised
+  before the write, and an `onerror` payload in `abstention_cause` renders entity-escaped.
+- **`MIN_CHECKS = 27` sitting under what is there** — the clean run reports exactly 27.
+- **Both gates over an empty store** — kbd exits 2, axe exits 2; neither passes over a surface it
+  could not reach.
+- **Whitespace-sensitive needles** (`"  border-color: …"`, the exact class order) — real, but
+  `cargo fmt` does not touch CSS and the class order is pinned deliberately.
+
+### The repair pass (2026-08-26) — what the review changed, and what it measured
+
+**Guy's two arbitrations**, each with the option refused:
+
+🔑 **(2) `Gesture::Disabled` — a THIRD state.** With the route unmounted the documenting control
+rendered `Planned`, so the product said *"not built yet"* about the gesture it had just built, on
+the configuration nearly every deployment runs. **Refused:** hiding the control (contradicts Guy's
+premise (2) of 2026-08-13 — *show and label rather than hide* — and a fresh install would never
+learn the product can document at all), and leaving it with a note in AC7. The variant carries the
+SWITCH, interpolated from `main::DOCUMENT_ENABLED_ENV`, the constant the boot reads, so the screen
+cannot send an operator to a variable the binary does not consult.
+
+🔴 **And the boolean it replaced was conflating two facts.** `action_bar(key, primary_is_live)`
+meant *the route is mounted* at one call site and *this kind of row is eligible* at two others —
+harmless while every `false` rendered the same control, and false the moment the switched-off state
+got its own words: an `Écart` pane would have told the operator to set `OPENCMDB_DOCUMENT_ENABLED`
+for a gesture that is enabled and simply does not apply there. `PrimaryState { Acts, SwitchedOff,
+NotBuilt }`, and the decision stays inside `action_bar` so no caller can hand `Live` to `Résoudre`.
+
+🔑 **(1) Arbitration 2′ — the answer.** `HX-Redirect` on success, keyed bodies for all five
+statuses, and `hx-on::before-swap` so a refusal is swapped at all. **Refused: re-rendering the
+screen from the route**, and the type is what refuses it — the document sub-router's state holds no
+pool (story 6.1's M4: adding one fails to compile), so a handler that rebuilt the triage body would
+demolish that guarantee for a display convenience. ⚠️ **Story 6.2's 201-with-a-body contract is
+untouched**: same status, same kind of body; only a browser running htmx reads the header.
+
+🔴 **The entity id left the operator's screen and landed in the LOG**, where an administrator
+correlating a write actually needs it. Two end-to-end tests were parsing it out of the sentence —
+*a test that pins the ugly thing is a test that requires it* — and now read it from the store,
+through a second `SANCTIONED_READS` entry added in the same act rather than left outside the
+perimeter.
+
+#### The repair's own mutations — predictions written BEFORE any was applied
+
+| id | mutation | predicted | measured |
+|---|---|---|---|
+| M-R1 | `Disabled` reverted to `Planned` | RED 2 rust | ✅ RED 2 |
+| M-R2 | `observed_meta` not updated on the overwrite | RED 1 rust | ✅ RED 1 |
+| M-R3 | the confirmation answers for a count of 0 | RED 1 rust | ✅ RED 1 |
+| M-R4 | the `HX-Redirect` header dropped | rust GREEN + kbd RED 2 | ✅ 503 green, kbd RED 2 — *"5 row(s) left, 1 live control(s)"*, the defect verbatim |
+| M-R5 | `hx-on::before-swap` back on the button | rust RED 1 + kbd RED 2 | ✅ both |
+| M-R6a | the first sighting wins again | RED ≥1 | ✅ RED 2 |
+| M-R6b | the route flag ignored | RED ≥1 | ✅ RED 3 |
+| M-R6c | the test wrapper offers the gesture | RED 1 | ✅ RED 1 |
+| M-R6d | a `Nouveau` row carries a count | RED 1 | ✅ RED 1 |
+| M-R6e | any primary may go `Live` | RED ≥1 | ✅ RED 1 |
+
+**Ten mutations, ten conforming to prediction.** M-R6a–e are the five guards AC5 claimed and had no
+recorded red for — including the carrier for Guy's arbitration 1 and the one for T2b.
+
+🔴 **AND THE HANDLER WAS ON THE WRONG ELEMENT A SECOND TIME.** `hx-on::before-swap` was written on
+the button, exactly as the focus handler had been, and the probe reported `status=409` with an
+empty answer region: **`htmx:beforeSwap` is dispatched on the SWAP TARGET**, like `htmx:afterSwap`.
+Two handlers, the same mistake, the same afternoon — and nothing but a browser could see either.
+
+🔴 **My own attribute slicer then broke on the fix.** `split_once('>')` cut inside
+`hx-on::before-swap="… status >= 400 …"`, so the guard reported the focus handler missing — story
+5.12's `statement_after` defect, where a quote inside a SQL literal truncated the statement. *A
+check that fails for the wrong reason is worth nothing.* The slicer now tracks quotes.
+
+⚠️ **Three insertions landed before the wrong item in one session**, and each was named by a
+compiler rather than by reading: a `#[cfg(test)]` that slipped off its function (**`cargo test`
+stayed green — only `cargo build` reds, because in the test build the cfg is active**), a doc block
+that merged into `AppConfig`'s and left it undocumented, and a `let` that landed inside a function
+signature. The rule stands: *a repetitive edit must let the compiler name each site.*
+
+⚠️ **And my mutation driver lied once, in the way this project has recorded five times**: M-R4's
+anchor missed after rustfmt reflowed it, the script printed the traceback and CARRIED ON, and I
+read a green from the unmutated tree. Re-run under `set -e` with the corrected anchor: RED 2. *A
+driver that cannot stop on a failed apply is a driver that reports on the wrong tree.*
+
 ---
 
 ## Dev Notes
@@ -369,20 +605,27 @@ ten. This story is what ends that, and it is the first in three epics whose hone
 
 ### The live count (AC6), and every figure names the state it was taken against
 
-**735 → 738 tests** — 500 `opencmdb-bin` + 161 `opencmdb-core` + 77 `xtask`, `cargo test
---workspace --locked` against a live `mariadb:10.11.11` on port 13405, **4.66 s** wall clock
-(**0.21 s** with `DATABASE_URL` unset — the clock is the tell that the store-backed tests ran).
+**729 → 741 tests** — 503 `opencmdb-bin` + 161 `opencmdb-core` + 77 `xtask`, `cargo test
+--workspace --locked` against a live `mariadb:10.11.11` on port 13405, **6.19 s** wall clock
+(**~0.2 s** with `DATABASE_URL` unset — the clock is the tell that the store-backed tests ran).
 Nine `cargo xtask ci` gates green; clippy `--all-targets`, `cargo fmt --check`, each status read
 from `$?` rather than through a pipe.
 
-🔴 **The baseline is 735 and not the 737 three commits carried.** Measured on a git worktree at
-`c4c187d`: 497 + 161 + 77 = **735**, so the parts were right and their sum was not, and the delta
-that commit recorded (+3) was +1. *Verifying a delta means verifying both of its terms* — story
-6b.4's lesson, and the cheapest check there is: a total that does not equal its own parts.
+🔴 **THE BASELINE WAS WRONG TWICE, AND THE SECOND TIME IS THIS STORY'S OWN.** Three commits
+carried *"737"* over parts summing to 735; the correction written here then read **735 → 738**,
+which is the delta of ONE SESSION measured against `c4c187d` — story-commit **4 of 8**. The
+story's baseline is `master`: **729** (491 + 161 + 77), measured in a worktree, so the story is
+**+12**. ⚠️ *An intermediate state read as a baseline* is story 6b.1's recorded defect, verbatim,
+and it was committed inside a paragraph invoking *verify both of its terms*. Found by the code
+review's blind layer — from the diff alone, by counting the added `#[test]` attributes — and
+independently by its acceptance layer.
 
-**The browser gates**, which are where this story's centre of gravity is: `a11y/axe-gate.mjs` walks
-10 routes plus **3** states (the third is the selected `Nouveau` pane, which did not exist before)
-for **0 violation nodes**; `a11y/kbd-probe.mjs` runs **27** checks, 0 failed, three of them new.
+**The browser gates**, which are where this story's centre of gravity is: `a11y/axe-gate.mjs`
+walks 10 routes plus **4** states (the selected `Nouveau` pane and the post-gesture confirmation,
+neither of which any href carries) for **0 violation nodes**; `a11y/kbd-probe.mjs` runs **30**
+checks, 0 failed, **ten** of them new. ⚠️ *"27 checks, three of them new"* stood here and was
+wrong on the decomposition: `MIN_CHECKS` had moved 20 → 27, and 20 + 7 = 27 is arithmetic inside
+the diff.
 
 ### What the operator can DO (AC7), stated plainly
 
@@ -392,16 +635,33 @@ answer is swapped in and focused where a keyboard operator lands on it. That is 
 in three epics whose honest answer is not *nothing*, and it is measured end to end by a browser
 that presses it.
 
+🔴 **AND THE FIRST VERSION OF THIS PARAGRAPH OVERSTATED THE ACT, which is what AC7 exists to
+prevent.** It said *"the queue's question disappears"*; measured in Chrome by two review layers,
+nothing on the screen moved at all. `hx-swap="innerHTML"` replaced one paragraph, so the row, the
+amber button and the pane reading *« Rien de déclaré à cette adresse »* all stayed exactly as they
+were — over a message saying the record had just been written — and a second press answered 409
+and swapped **nothing**, leaving the first press's success sentence on screen asserting the
+opposite. The paragraph above describes the product after Guy's arbitration 2′ of 2026-08-26; what
+shipped before it did not do that.
+
 ⚠️ **And three limits, because AC7 exists so the route is not counted as the gesture:**
 
 1. **On the DEFAULT configuration there is still no gesture.** `POST /document-all` is registered
    only under `OPENCMDB_DOCUMENT_ENABLED`, off by default since story 6.1, and the page renders the
    control only where the route is mounted. A stock deployment sees five labelled controls, none
-   live. *The gesture exists; it is not yet what a fresh install meets.*
-2. **The four other controls remain planned**, and the sentence under them now names the badge it
+   live — and, since the code review, the documenting one now says it is **built and switched
+   off**, naming the variable, rather than *"not built yet"*. *The gesture exists; it is not yet
+   what a fresh install meets.*
+2. **The four other controls remain planned**, and the sentence under them names the badge it
    scopes itself to rather than claiming the whole bar is unbuilt.
 3. **The identity reach section offers no gesture at all**, and now says why on every line. The
    answer there is a better SOURCE — Epic 11 — not a record the operator writes.
+
+⚠️ **Two more, found by the review and stated rather than fixed:** the queue behind the
+confirmation is correct because the whole screen is re-rendered, but **another tab is not** — it
+learns of the write only by pressing and reading the refusal; and **a multi-homed sighting
+documents the address the operator was not looking at** and then cannot be documented at all
+(registered, unreachable on the shipped connector).
 
 ### The mutation pass (T6) — predictions written BEFORE any mutation was applied
 
@@ -451,7 +711,8 @@ aggregate — the number the operator reads — and that is a different claim fr
 
 | Date | Change |
 |---|---|
+| 2026-08-26 | **CODE-REVIEWED (three isolated layers) and REPAIRED — 2 arbitrations by Guy, 23 patches, 4 deferrals, 6 dismissed with their check.** 🔴 **All three layers measured the same thing in a browser: the act left the screen unchanged.** The narrow swap replaced one paragraph, so the queue row, the amber button and the pane reading *« Rien de déclaré à cette adresse »* stayed put over a success message — and a second press answered 409 and swapped **nothing**, leaving the first press's sentence asserting the opposite. The body was a Rust `format!`: English under a French UI, `field(s)`, a raw UUID. **AC7's *"the queue's question disappears"* was FALSE.** ✅ **Guy 2′:** `HX-Redirect` + keyed bodies + `hx-on::before-swap`; re-rendering from the route was REFUSED by the type (story 6.1's pool-free state). ✅ **Guy (2):** `Gesture::Disabled` — with the route unmounted the product said *"not built yet"* about the gesture it had just built; hiding the control was refused as contradicting *show and label rather than hide*. 🔴 The boolean it replaced conflated *the route is mounted* with *this row is eligible*. 🔴 **The blind layer found the headline from the diff alone**, sixth story running: the live count was a SESSION delta — `master` is **729**, so the story is **+12**, not +3 — *an intermediate state read as a baseline*, story 6b.1's defect verbatim, committed inside a paragraph invoking *verify both terms*. 🔴 `htmx:beforeSwap` fires on the TARGET too: the second handler was on the button, the same mistake the same afternoon. ⚠️ **Ten repair mutations, ten conforming**, five of them the guards AC5 claimed and had never proved red. **729 → 741 tests**, nine gates, axe 10 routes + 4 states 0 nodes, kbd **30** checks. |
 | 2026-08-25 | **IMPLEMENTED — T1 through T8, and the three sharpest findings came from a BROWSER rather than from a test.** 🔴 The focus-after-swap contract was BROKEN: `hx-on::after-swap` sat on the button, `htmx:afterSwap` fires on the swap TARGET, and the handler never ran — `⏎ → 201`, the answer swapped in, `activeElement.id` **empty**, with every Rust assertion about that bar green. 🔴 The amber **painted nothing**: `.btn-gesture.live` (0-2-0) beat `.btn-document` (0-1-0) on all four declarations while the guard that counts `var(--accent-document)` reads found all four and passed — *a declaration that loses is still a declaration*. 🔴 And this story made a shipped sentence FALSE — *"This gesture is not built yet."* under a bar whose loudest control now IS — caught by looking, fixed by interpolating the badge. ✅ **Guy's arbitration (2026-08-25): FILL the control with the amber** (contrast **5.57**) over darkening the token (**4.56**) or dropping the tint (**4.59**) — the other two pass by 0.06 and 0.09, a margin the next palette adjustment erases. 🔑 `page.rs` hit the `file-size` ceiling at 2033 and the answer was the SPLIT (`identity_view.rs`), never shorter prose. ⚠️ **M8 is the mutation pass's own finding**: the axe gate walks the reach section and asserts nothing about it, so T3's new copy was carried by no browser — closed by a 27th probe check. **735 → 738 tests** (the 737 three commits carried was wrong: 497+161+77 = 735), nine gates, axe 13 routes/states 0 nodes, kbd 27 checks 0 failed. |
 | 2026-08-25 | **VALIDATED by two layers — nine findings, two reached by both, and the second layer BUILT the gesture and pressed it.** 🔴 Four holes the story did not know it had: `OPENCMDB_DOCUMENT_ENABLED` is invisible to the page builder, so a naive wiring shows a pressable control pointing at a **404** on the default configuration; the axe gate cannot reach a selected `Nouveau` row; `a11y/seed.sql` produces **zero** of them; and a plain `<form>` navigates to the raw text body. ⚠️ **`Gesture::Live` forces ONE site, not *every match*, and satisfying it naively ships an inert `<span>`** — 6b.4b's own warning, measured. 🔴 And two false citations of mine, one already propagated to the register: `epics.md:2118` is **`:1794`**, and §0h's *"produced by `gap::reconcile`"* is false — that enum has no `undeclared` variant. **✅ Two arbitrations (Guy):** the subject is the **most recent** sighting, not the oldest; and the gesture is **`hx-post`** with a target and a swap — ⚠️ which makes it the product's first live swap, inheriting 6b.11's focus-after-swap contract by name. |
-| 2026-08-24 | ✅ **ARBITRATION TAKEN (Guy): the gesture goes on the triage queue's `Nouveau` row, and the abstention line carries none.** 🔑 The measurement that decided it: `undeclared` is NOT typeless — `page.rs:1005` already labels a queue row *"an observed address no declared entity claims"*, the glossary's own words, computed by `gap::reconcile` and on screen since 6b.4. **The glossary left it typeless because it was looking at the identity engine; it lives on the reconciliation side.** *Refused:* AC1's letter (offers to create an entity for a machine already declared) and the intersection (safe, two reads and a join, and most of the population anyway on the shipped connector). 🔴 **The cost, stated:** the story's *so that* clause — *"the reach section becomes a door"* — is not met, and **the premise is what is wrong**: an identity abstention's answer is a better SOURCE, not a documented entity. *The reach section may have no door, and that is not this story's failure.* |
+| 2026-08-24 | ✅ **ARBITRATION TAKEN (Guy): the gesture goes on the triage queue's `Nouveau` row, and the abstention line carries none.** 🔑 The measurement that decided it: `undeclared` is NOT typeless — `page.rs:1005` already labels a queue row *"an observed address no declared entity claims"*, the glossary's own words, on screen since 6b.4 — ⚠️ **NOT** *"computed by `gap::reconcile`"*, which this entry asserted until story 6.4's code review and which §0i had certified false in the same commit: that enum has no `undeclared` variant. **The glossary left it typeless because it was looking at the identity engine; it lives on the reconciliation side.** *Refused:* AC1's letter (offers to create an entity for a machine already declared) and the intersection (safe, two reads and a join, and most of the population anyway on the shipped connector). 🔴 **The cost, stated:** the story's *so that* clause — *"the reach section becomes a door"* — is not met, and **the premise is what is wrong**: an identity abstention's answer is a better SOURCE, not a documented entity. *The reach section may have no door, and that is not this story's failure.* |
 | 2026-08-24 | Story created and CONTEXTED. 🔴 **AC1 cannot be implemented as written**: it attaches FR13's gesture to `AbsenceOfProof`, an identity verdict about whether two sightings could be JOINED, while FR13's own population is `undeclared` — *observed, and no declared record claims it* — which the PRD's binding glossary gives a row and **no type**. ⚠️ A sighting can be `AbsenceOfProof` **and already declared**, a state `a11y/seed.sql` produces today. **This is story 5.14b's defect one layer down**, and that story's own record names the shape: *same word, different type, different population*. 🔴 Second measurement: `IdentityCauseRow { cause, count }` carries **no subject** and the route takes exactly **one** — so AC1 is not a wiring job but a read the page does not have. ⚠️ And on the shipped connector *"one line"* is the WHOLE unplaced population, since the scanner emits no hardware address ever. **One arbitration open (§0f).** |

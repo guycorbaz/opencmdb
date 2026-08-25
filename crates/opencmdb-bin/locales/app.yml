@@ -132,9 +132,13 @@ identity.cause.unrecognised:
 identity.no_gesture.absence_of_proof:
   en: "Nothing to document here: what is missing is a source that can prove identity, not a record to write. The Sources screen says what this one cannot read."
   fr: "Rien à documenter ici : ce qui manque est une source capable de prouver l'identité, pas une fiche à écrire. L'écran Sources dit ce que celle-ci ne peut pas lire."
+# ⚠️ The clause *"and choosing among the candidates is still to come"* stood here until story
+# 6.4's code review and was refuted by the doctrine sentence in `identity_view.rs`, in the same
+# commit: *announcing an absent gesture is a promise; this section stays descriptive until the
+# gesture is there* (Guy, 2026-08-12). What is left is what is TRUE of the state itself.
 identity.no_gesture.ambiguous:
-  en: "Nothing to document here: this is a doubt to lift, not an entity to create — and choosing among the candidates is still to come."
-  fr: "Rien à documenter ici : c'est un doute à lever, pas une entité à créer — et le choix parmi les candidats reste à venir."
+  en: "Nothing to document here: this is a doubt to lift, not an entity to create."
+  fr: "Rien à documenter ici : c'est un doute à lever, pas une entité à créer."
 identity.no_gesture.unrecognised:
   en: "Nothing to document here: the product does not recognise this cause, so it offers nothing for it."
   fr: "Rien à documenter ici : le produit ne reconnaît pas cette cause et n'offre donc rien pour elle."
@@ -353,7 +357,7 @@ time.ahead:
   en: "dated ahead"
   fr: "daté dans le futur"
 
-# ── The action bar: five controls, none of them live yet (story 6b.4b) ────
+# ── The action bar: five controls, ONE of them live (story 6b.4b, then 6.4) ────
 # 🔴 NO STORY NUMBER in any of these values. *"Arrives in 6.4"* would turn the label into a calendar,
 # therefore a promise — what story 5.14b refused. The owner lives in the type, never on the screen,
 # and a guard asserts that these values carry no digit.
@@ -368,8 +372,60 @@ gesture.badge:
 #
 # 🔑 The badge is INTERPOLATED rather than quoted, so the sentence and the mark it names cannot
 # drift apart: change `gesture.badge` and this follows it in both languages.
+# 🔴 BUILT AND SWITCHED OFF — a THIRD state, and story 6.4's code review is what forced it.
+# With `POST /document-all` unmounted the documenting control rendered as *planned*, so the product
+# said "not built yet" about the gesture it had just built, on the default configuration. Hiding the
+# control was refused (Guy's premise (2) of 2026-08-13: show and label rather than hide) — a fresh
+# install would never learn the product can document at all.
+#
+# 🔑 The switch is INTERPOLATED from `main::DOCUMENT_ENABLED_ENV`, the same constant the boot reads,
+# so the sentence on screen cannot name a variable the binary does not.
+# ── The documenting gesture's ANSWER (story 6.4's code review, 2026-08-26) ──────────────────
+# 🔴 Until this pass the operator read `format!("documented {} field(s) as entity {}")` — a Rust
+# literal, so: ENGLISH under a French UI, the parenthetical plural story 6b.10 fixed AS A CLASS on
+# this very screen, and a raw UUID story 6b.4's review had already removed from this pane. Three
+# defects this project had each paid for once, returning through a body no locale guard walks:
+# `no_value_fobs_the_reader_off_with_a_parenthetical_plural` reads `app.yml` and cannot see a
+# `format!` in `document.rs`. Epic 5's dominant class, one file over.
+#
+# 🔑 The entity id is GONE from what the operator reads. It named nothing they can act on; the
+# effect they can check is that the question left the queue, and that is what the sentence says.
+document.done_one:
+  en: "Documented: %{n} field."
+  fr: "Documenté : %{n} champ."
+document.done_other:
+  en: "Documented: %{n} fields."
+  fr: "Documenté : %{n} champs."
+document.unknown_subject:
+  en: "Unknown subject: there is nothing here to document."
+  fr: "Sujet inconnu : il n'y a rien à documenter ici."
+document.already_documented:
+  en: "Already documented: this sighting's fields are declared."
+  fr: "Déjà documenté : les champs de ce constat sont déclarés."
+document.nothing_to_document:
+  en: "Nothing to document: this sighting carries no field the product can declare."
+  fr: "Rien à documenter : ce constat ne porte aucun champ que le produit sache déclarer."
+document.malformed:
+  en: "Malformed request: the form must carry a subject naming an observation."
+  fr: "Requête mal formée : le formulaire doit porter un sujet nommant une observation."
+document.backend:
+  en: "The write did not go through. Nothing was changed; see the self-diagnostic if it persists."
+  fr: "L'écriture n'est pas passée. Rien n'a été modifié ; consultez l'auto-diagnostic si cela persiste."
+# The confirmation carried across the redirect, rendered by `/triage` itself — see `TriageQuery`.
+triage.documented_one:
+  en: "%{n} field documented. The question has left the queue."
+  fr: "%{n} champ documenté. La question a quitté la file."
+triage.documented_other:
+  en: "%{n} fields documented. The question has left the queue."
+  fr: "%{n} champs documentés. La question a quitté la file."
+gesture.badge_off:
+  en: "Not enabled"
+  fr: "Non activé"
+gesture.not_enabled:
+  en: "This gesture is built and switched off on this instance: set %{switch} to enable it."
+  fr: "Ce geste est construit et non activé sur cette instance : définissez %{switch} pour l'activer."
 gesture.not_built:
-  en: "The gestures marked %{badge} are not built yet."
+  en: "The gestures marked %{badge} are still to come."
   fr: "Les gestes marqués %{badge} ne sont pas encore construits."
 # 🔴 `gesture.document`, NOT `gesture.merge`, and the English value is `Document` — Guy's
 # arbitration 1 of 2026-08-21, story 6b.10. The binding glossary retires `merge` IN ENGLISH by

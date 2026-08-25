@@ -1,9 +1,11 @@
 {#- The action bar: the mock's five controls, and what each of them is (story 6b.4b).
 
-     🔴 NOT ONE of them is live today. `Merger` is field-level documenting, FR13(b) and Epic 7's;
-     `Résoudre` needs FR16's ranked candidates, Epic 6's; and accept / snooze / attach / exclude have
-     no column in any migration. `POST /document-all` is not one of them either — it adopts a whole
-     entity, is off by default, and is a different gesture at a different granularity.
+     🔴 **ONE of them is live, since story 6.4: the primary on a `Nouveau` row posts to
+     `POST /document-all`.** ⚠️ This paragraph said the opposite until that story's code review —
+     *"NOT ONE of them is live today … `POST /document-all` is not one of them either"* — in the
+     file whose `Live` arm the same story wrote. The four that remain: `Merger` on any other kind is
+     FIELD-level documenting, FR13(b) and Epic 7's; `Résoudre` needs FR16's ranked candidates, Epic
+     6's; and accept / snooze / attach / exclude have no column in any migration.
 
      🔑 They are SHOWN AND LABELLED rather than hidden, which is Guy's premise (2) of 2026-08-13:
      *the four gestures Epic 7 owns are visible and labelled*. A screen with nothing to click should
@@ -36,6 +38,19 @@
     {{ gesture.label }}
     <span class="gesture-badge">{{ s.gesture_badge }}</span>
   </span>
+  {#- 🔴 BUILT AND SWITCHED OFF — story 6.4's code review (Guy, 2026-08-26). Same shape as a
+       planned control, because the operator's reach is the same (it does not act), and a DIFFERENT
+       badge and a different sentence, because the answer is different: this one waits for a line of
+       configuration the operator already controls, not for a story. ⚠️ The class is `off` and not
+       `disabled`: `a_planned_control_is_reachable_and_never_natively_disabled` scans the rendered
+       page for that word and requires every occurrence to be `aria-`/`hx-` prefixed, so a class
+       spelled `disabled` would red a guard for a reason that is not a defect. -#}
+  {%- when GestureRender::Disabled with (_note) %}
+  <span class="btn-gesture off" role="button" aria-disabled="true" tabindex="0"
+        aria-describedby="gesture-not-enabled">
+    {{ gesture.label }}
+    <span class="gesture-badge">{{ s.gesture_badge_off }}</span>
+  </span>
   {%- when GestureRender::Live with (route) %}
   {#- 🔴 A REAL `<button>`, never a `<span role="button">`. Story 6b.4b shipped the span for the
        PLANNED controls and the code review measured what it cost: `tabIndex -1`, `.focus()`
@@ -55,6 +70,22 @@
   </button>
   {%- endmatch %}
 {% endfor %}
+{#- 🔴 **A REFUSAL MUST BE SEEN.** htmx swaps nothing on a non-2xx by default, so before this
+     line a second press answered 409 and the operator got NOTHING — over the first press's success
+     sentence, still on screen, still saying the opposite. Measured by two review layers
+     independently, and the same on a 500: total silence. `shouldSwap` on any 4xx/5xx puts the
+     route's own sentence in the answer region, where `aria-live` announces it.
+
+     🔴 **AND THE HANDLER BELONGS ON THE TARGET, measured a SECOND time.** It was written on the
+     button first — the element that makes the request — and the probe reported `status=409` with
+     an empty answer region: `htmx:beforeSwap` is dispatched on the SWAP TARGET, exactly as
+     `htmx:afterSwap` is, and the button is that target's sibling. The same mistake as the focus
+     handler, caught the same way and by nothing else. -#}
+{#-
+
+     ⚠️ A SUCCESS does not swap at all any more: it redirects (`HX-Redirect`), so the screen is
+     re-rendered from the store rather than patched in one paragraph. This region is now the
+     REFUSAL channel, and the empty case is the ordinary one. -#}
 {#- 🔴 The swap lands HERE and the focus follows it — story 6b.11 registered the *focus-after-swap*
      contract to this story because no swap existed to attach it to, and this is the first one.
      `tabindex="-1"` makes the region programmatically focusable without adding a Tab stop, and
@@ -75,6 +106,7 @@
      DOM, a source-reading guard does not suffice — and the contract now has a carrier that
      PRESSES the control instead of reading about it. -#}
 <p id="gesture-result" class="gesture-result" tabindex="-1" role="status" aria-live="polite"
+   hx-on::before-swap="if (event.detail.xhr.status >= 400) event.detail.shouldSwap = true"
    hx-on::after-swap="this.focus()"></p>
 {#- 🔴 ONE visible sentence for the group, and every control POINTS at it with `aria-describedby`.
      Seen in a browser: rendered inside each control it appeared FIVE TIMES, turning a compact row
@@ -82,4 +114,10 @@
      worse still — invisible to a keyboard and to a touch screen. This shape keeps both properties
      that matter: the sentence is VISIBLE once, and a screen reader announces it on EACH control. -#}
 <p id="gesture-not-built" class="gesture-note">{{ s.gesture_not_built }}</p>
+{#- 🔑 Rendered ONLY when a control is actually in that state. A note about a state nothing on the
+     screen is in is a false line, and this project counts a false line as a defect — which is
+     precisely how the sentence above came to be wrong the day one control went live. -#}
+{% if pane.has_a_switched_off_gesture() %}
+<p id="gesture-not-enabled" class="gesture-note">{{ s.gesture_not_enabled }}</p>
+{% endif %}
 </div>

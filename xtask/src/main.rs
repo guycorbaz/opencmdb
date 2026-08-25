@@ -1224,10 +1224,18 @@ const SANCTIONED_SITES: [(&str, Option<&str>); 5] = [
 ///
 /// ⚠️ TRIPWIRE, not a barrier (story 5.12's precedent): it protects against a future story
 /// reading provenance into a divergence path BY ACCIDENT, never against a determined one.
-const SANCTIONED_READS: [(&str, Option<&str>); 2] = [
+const SANCTIONED_READS: [(&str, Option<&str>); 3] = [
     (
         "crates/opencmdb-bin/src/repo.rs",
         Some("read_declared_provenance_for_test"),
+    ),
+    // Story 6.4's code review: the end-to-end tests parsed the minted entity id out of the 201's
+    // operator-facing sentence, so taking the raw UUID off the screen left them nothing to read.
+    // The store keys the adopted rows by their sighting, and this names that lookup — a test-only
+    // reader, sanctioned by NAME rather than left outside the perimeter.
+    (
+        "crates/opencmdb-bin/src/repo.rs",
+        Some("entity_documented_from"),
     ),
     (
         "crates/opencmdb-bin/src/repo.rs",

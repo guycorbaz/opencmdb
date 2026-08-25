@@ -284,7 +284,7 @@ mod gesture_axis_tests {
     /// extending a binding table is a planning act and Guy's (story 6b.7's precedent, where it was
     /// refused as *premature, not wrong*). `baseline` is a fourth of the same class, already owned
     /// by Epic 9.
-    const NOT_A_GLOSSARY_GESTURE: [(&str, &str); 5] = [
+    const NOT_A_GLOSSARY_GESTURE: [(&str, &str); 7] = [
         (
             "gesture.badge",
             "the *not yet* marker, not a gesture (story 6b.4b)",
@@ -292,6 +292,14 @@ mod gesture_axis_tests {
         (
             "gesture.not_built",
             "the sentence under the bar (story 6b.4b)",
+        ),
+        (
+            "gesture.badge_off",
+            "the *built and switched off* marker, not a gesture (story 6.4's code review)",
+        ),
+        (
+            "gesture.not_enabled",
+            "its sentence, which names the switch rather than a term (story 6.4's code review)",
         ),
         (
             "gesture.resolve",
