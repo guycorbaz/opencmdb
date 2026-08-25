@@ -611,6 +611,26 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
   font-size: 12px;
 }
 
+/* 🔑 **THE FIRST THING THE AMBER HAS EVER PAINTED.** `--accent-document` has been defined since
+   story 6b.1 and read by NOTHING — zero `var()` reads in the whole sheet — because the gesture it
+   is reserved for had no live control until story 6.4. The UX spec settles both halves: the token
+   is *"reserved solely for the documenting gesture"* (`:587`) and the screen carries *"one primary
+   action (amber Document) + secondary ghosts"* (`:1174`).
+
+   🔴 It cannot leak onto `Résoudre`: `action_bar` builds `Gesture::Live` only for the documenting
+   key, so this class and that gesture are the same thing by construction rather than by a sentence
+   about which primary happens to be live today. */
+.btn-document {
+  border-color: var(--accent-document);
+  color: var(--accent-document);
+  background: color-mix(in srgb, var(--accent-document) 10%, var(--surface));
+  font-weight: 600;
+}
+
+.btn-document:hover {
+  background: color-mix(in srgb, var(--accent-document) 18%, var(--surface));
+}
+
 /* A control on a screen that has no subject to act on — `/diagnostic`'s unreachable `Live` arm.
    Plain text, deliberately shaped like NOTHING pressable, so it can never be mistaken for the
    inert `live` span the gesture type's own doc warns about. */

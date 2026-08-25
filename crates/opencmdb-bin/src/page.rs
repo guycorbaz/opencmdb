@@ -745,17 +745,24 @@ fn action_bar(primary_key: &'static str, primary_is_live: bool) -> Vec<GestureVi
     // 🔑 The primary is built SEPARATELY because it is the only one that can act, and it is
     // INSERTED at the front rather than pushed — the mock's order is primary first, and story
     // 6b.11's roving-tabindex contract makes that order the keyboard's order too.
+    // 🔴 **Only the DOCUMENTING gesture can be live, and that is closed here rather than
+    // asserted.** The UX spec reserves the amber `--accent-document` *solely for the documenting
+    // gesture* (`:587`) and prescribes *one primary action (amber Document)* (`:1174`). If a
+    // `Live` control could be either gesture, the reservation would hold by a SENTENCE about
+    // which primary happens to be live — and `Résoudre` is the one Epic 6 will make live. Here
+    // `GestureRender::Live` IMPLIES *documenting*, so the template can carry `btn-document` as a
+    // static class literal and the amber cannot leak. ⚠️ The day `Résoudre` acts, this `match`
+    // is what makes someone decide what colour it wears.
     bar.insert(
         0,
         GestureView::of(
-            if primary_is_live {
-                Gesture::Live {
+            match (primary_is_live, primary_key) {
+                (true, "gesture.document") => Gesture::Live {
                     route: crate::document::DOCUMENT_ALL_PATH,
-                }
-            } else {
-                Gesture::Planned {
+                },
+                _ => Gesture::Planned {
                     owner: primary_owner,
-                }
+                },
             },
             rust_i18n::t!(primary_key).to_string(),
         ),
@@ -3934,11 +3941,27 @@ mod tests {
                     .filter(|token| token == "--accent-document"),
             );
         }
+        // 🔑 **Story 6.4 is the arrival this number was waiting for, and the tripwire worked**:
+        // it read zero from story 6b.1 until the documenting gesture got a live control, then
+        // reddened on the first commit that painted with it. The count is now FOUR — three
+        // declarations on `.btn-document` and one on its `:hover` — and it stays a tripwire: a
+        // fifth read means some other rule reached for the amber and must justify itself here.
         assert_eq!(
             amber_reads.len(),
-            0,
-            "story 6.4 adds the first legitimate use; until then the honest count is zero, and \
-             this number is what tells you when one arrives — found {amber_reads:?}"
+            4,
+            "the amber paints the documenting control and NOTHING else — three declarations on \
+             `.btn-document` plus its hover. A different count means a rule borrowed it; the \
+             UX spec reserves it *solely for the documenting gesture* — found {amber_reads:?}"
+        );
+
+        // 🔴 Absence was the whole claim while the count was zero; now that it paints something,
+        // the POSITIVE half has to say WHAT. Without this, migrating `.btn-document` to the blue
+        // ramp leaves the count at four — read by some other rule — and the product's one live
+        // control renders as structure. The spec's word is *"one primary action (amber
+        // Document)"*, and this is the declaration that makes it true.
+        assert!(
+            css.contains("  border-color: var(--accent-document);"),
+            "the documenting control must read the amber, not merely leave it defined"
         );
 
         // 🔴 Absence is half the claim. Without the positive half, migrating `.refresh:hover`
@@ -5214,6 +5237,36 @@ mod tests {
         );
     }
 
+    /// 🔴 **The amber cannot reach `Résoudre`, and it is the TYPE that says so** — not a comment
+    /// about which primary happens to be live today.
+    ///
+    /// The UX spec reserves `--accent-document` *"solely for the documenting gesture"* (`:587`).
+    /// `action_bar` builds `Gesture::Live` only for the documenting key, so `GestureRender::Live`
+    /// IMPLIES *documenting* and the template can carry `btn-document` as a static class literal.
+    /// ⚠️ Without this, Epic 6 makes `Résoudre` live — FR16's ranked candidates — and the amber
+    /// follows it silently, because the stylesheet cannot tell two gestures apart under one
+    /// `.live` class.
+    #[test]
+    fn the_resolve_gesture_cannot_go_live_and_take_the_amber_with_it() {
+        // The premise: the flag is the one this test is about, and it DOES light the other key.
+        assert!(
+            matches!(
+                action_bar("gesture.document", true)[0].nature,
+                GestureRender::Live(_)
+            ),
+            "the premise: `true` lights the documenting gesture, or the refusal below would pass \
+             on a flag that lights nothing at all"
+        );
+        assert!(
+            matches!(
+                action_bar("gesture.resolve", true)[0].nature,
+                GestureRender::Planned(_)
+            ),
+            "`Résoudre` stays planned even with the flag on — it has no route, and a live control \
+             would take the amber the spec reserves for documenting"
+        );
+    }
+
     /// 🔴 **The rendered control is a real `<button>` carrying the pane's subject** — the DOM, not
     /// the builder.
     ///
@@ -5279,7 +5332,7 @@ mod tests {
             "and it posts to the route the router registers"
         );
         assert!(
-            on.contains(r#"<button type="button" class="btn-gesture live""#),
+            on.contains(r#"<button type="button" class="btn-gesture live btn-document""#),
             "a REAL button, never the `<span role=\"button\">` story 6b.4b measured out of the \
              tab order — a control that acts must be focusable by nature"
         );

@@ -47,7 +47,7 @@
        group's own semantics. The subject comes from the PANE, which is where story 6.4's
        arbitration 1 keeps it (the most recent sighting, overwritten in place), so the control and
        the meta-line above it cannot name two different observations. -#}
-  <button type="button" class="btn-gesture live"
+  <button type="button" class="btn-gesture live btn-document"
           hx-post="{{ route }}"
           hx-vals='{"subject": "{{ pane.subject }}"}'
           hx-target="#gesture-result" hx-swap="innerHTML"
