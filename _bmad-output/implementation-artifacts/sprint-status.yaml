@@ -4537,7 +4537,37 @@ development_status:
     # retrospective for the title, the *so that* clause and AC1's population TOGETHER.
     # AC4 is story 6b.4b's debt: `Gesture::Live` must make `E0004` fire on every `match`, or the
     # compiler was never the guard that story sold.
-    # NEXT: `create-story validate` — MANDATORY here, two fresh-context agents.
+    # VALIDATED 2026-08-25 by two layers -- nine findings, TWO reached by both, and the
+    # gap-hunt layer BUILT the gesture and pressed it rather than reading about it.
+    # 🔴 FOUR HOLES the story did not know it had, each measured by building:
+    #   (1) `OPENCMDB_DOCUMENT_ENABLED` is INVISIBLE to the page builder (zero references in
+    #       page.rs; read in main.rs at router-merge time), so a naive wiring renders a
+    #       PRESSABLE control pointing at a 404 on the DEFAULT configuration;
+    #   (2) the axe gate structurally cannot reach a selected `Nouveau` row -- it derives its
+    #       state from the FIRST queue row, and build_triage emits gap/absence/conflict first;
+    #   (3) `a11y/seed.sql` produces ZERO `Nouveau` rows: the target population is absent from
+    #       the corpus the gates run against;
+    #   (4) a plain `<form>` full-navigates to the raw text body.
+    # ⚠️ And `Gesture::Live` forces ONE site, not "every match" -- and satisfying it naively
+    # ships an INERT `<span class="btn-gesture live">`, which is exactly what 6b.4b's own doc
+    # said the compiler could not prevent. Now measured rather than argued.
+    # 🔴 TWO FALSE CITATIONS OF MINE, one already propagated to deferred-work.md in the same
+    # commit: `epics.md:2118` is `:1794` (2118 is story 6b.1's amber), and §0h's "produced by
+    # `gap::reconcile`" is FALSE -- that enum has no `undeclared` variant and reconcile() runs
+    # per already-declared entity. The conclusion held; the sentence pointing at it did not.
+    # ✅ TWO ARBITRATIONS (Guy, 2026-08-25):
+    #   (1) the subject is the MOST RECENT sighting, not the oldest the row keeps today. A
+    #       gesture writing *the whole record at once* may not write the one the network has
+    #       moved past. *Refused:* keeping the oldest and stating it; merging the N sightings'
+    #       facts, which would invent an observation that never happened (D19).
+    #   (2) `hx-post` with a target and a swap. *Refused:* a plain form plus a response page,
+    #       and a 303 -- which would break story 6.2's 201-with-a-body contract.
+    #       ⚠️ THIS IS THE PRODUCT'S FIRST LIVE SWAP, so it inherits by name the
+    #       focus-after-swap contract story 6b.11 registered TO story 6.4 because no swap
+    #       existed to attach it to. It exists now.
+    # ✅ Refuted with their checks: documenting does NOT make the reach count fall; a repeated
+    # address already collapses to one row; `Gesture::Live` touches no site in diagnostic.rs.
+    # NEXT: `dev-story`.
   # story 5.9's three deferrals, as ONE schema story, with NO producer
   # ── INSERTED 2026-08-24 at Epic 6b's retrospective, sequenced by Guy the same day ──
   # 🔴 The retrospective CONTRADICTED ITSELF on this and the tension was surfaced rather than

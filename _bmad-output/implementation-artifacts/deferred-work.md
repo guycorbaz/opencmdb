@@ -4892,7 +4892,7 @@ current by reading, and this row is what says so.
 
 ## Deferred from: story 6.4 (2026-08-24)
 
-- 🔴 **`epics.md:2118`'s story 6.4 diverges from what is built, in its TITLE, its *so that* clause
+- 🔴 **`epics.md:1794`'s story 6.4 diverges from what is built, in its TITLE, its *so that* clause
   and its AC1 — and a story may not edit the plan.** The criterion attaches FR13's documenting
   gesture to the **`AbsenceOfProof`** cause line. Measured: `AbsenceOfProof` is an identity verdict
   about whether two sightings could be **joined** (`cascade.rs`, *"only `Neutral` / nothing"*),

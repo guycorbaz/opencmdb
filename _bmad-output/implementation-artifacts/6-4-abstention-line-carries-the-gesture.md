@@ -15,7 +15,7 @@ So that the reach section stops being a number and becomes a door.
 
 ## Acceptance Criteria
 
-*(`epics.md:2118`. §0 explains every divergence. ⚠️ **AC1 cannot be implemented as written** — §0a.)*
+*(`epics.md:1794`. §0 explains every divergence. ⚠️ **AC1 cannot be implemented as written** — §0a.)*
 
 **AC1 — REWRITTEN on the arbitration (§0h). Given** a triage queue row whose kind is `Nouveau`
 — *an observed address no declared entity claims*, which is the glossary's `undeclared` and FR13's
@@ -158,9 +158,18 @@ is registered, and Epic 6's retrospective may correct the criterion.
 
 🔑 **The measurement that decided it: `undeclared` is NOT typeless — it is already computed and
 already on screen.** `page.rs:1005` labels a triage queue row `Nouveau`, *"an observed address no
-declared entity claims"*, which is the glossary's `undeclared` word for word, produced by
-`gap::reconcile` and rendered since story 6b.4. **The glossary left it without a type because it
-was looking at the identity engine; it lives on the reconciliation side.**
+declared entity claims"*, which is the glossary's `undeclared` word for word, rendered since story
+6b.4.
+
+🔴 **⚠️ AND THE MECHANISM THIS PARAGRAPH FIRST NAMED WAS FALSE — the validation refuted it and the
+correction matters for whoever implements.** It said *"produced by `gap::reconcile`"*. Measured:
+`gap::AbstentionCause` has **no `undeclared` variant at all** (`OutOfPerimeter`,
+`NoObservedValue`, `ConflictingObservations`), and `reconcile()` is called **once per
+already-declared entity** inside `build_triage`'s entity loop — it structurally cannot report on an
+address no entity claims. `Nouveau` is a **second, independent loop** over the observations,
+filtering against the `claimed` set the entity loop collected. *The conclusion holds and the
+sentence pointing at it did not* — and a developer told *"`gap::reconcile` already produces the
+row"* would look in the wrong file.
 
 **So the gesture lands on the `Nouveau` row**, and the abstention line carries none:
 
@@ -184,6 +193,75 @@ reads no hardware address, which `/sources` already tells the operator, and Epic
 it. ***The reach section may have no door, and that is not this story's failure*** — it is the
 honesty the product claims everywhere else.
 
+### §0i. THE VALIDATION — two layers, 2026-08-25, and the second one BUILT the gesture
+
+The fact-check layer worked read-only; the gap-hunt layer had its own worktree and store, **wired
+a real control to `/document-all`, pressed it, and reported what broke**. Nine findings, **two
+reached by both**.
+
+🔴 **THE TWO CONVERGENCES.** *(a)* **The `Nouveau` row carries no `ObsId`** — the fact-check by
+reading `ObservedBatch` and its `SELECT`, the gap-hunt **on the wire**, finding only declared
+entity UUIDs anywhere in the rendered page. *(b)* **`Gesture::Live` forces exactly ONE `E0004`
+site** — the fact-check by counting match sites, the gap-hunt by **adding the variant and
+rebuilding**. ⚠️ And the gap-hunt went one step further, which is the finding: **satisfying that
+error naively ships an inert `<span class="btn-gesture live">`** — no route, no method, no subject
+— *a control that looks live and does nothing*, which is precisely what story 6b.4b's own doc said
+the compiler could not prevent.
+
+🔴 **AND FOUR HOLES THIS STORY DID NOT KNOW IT HAD, each measured by building:**
+
+1. **`OPENCMDB_DOCUMENT_ENABLED` is invisible to the page builder** — zero references in
+   `page.rs`; the flag is read in `main.rs` at router-merge time only. A naive wiring therefore
+   renders, **on the default configuration**, a pressable control pointing at a **404**. → T2b.
+2. **The axe gate cannot reach a selected `Nouveau` row.** It derives its state route from the
+   **first** queue row, and `build_triage` emits every gap, absence and conflict row before the
+   `Nouveau` loop. AC5's DOM-level carrier has a hole in CI's only DOM-level gate. → T3b.
+3. **`a11y/seed.sql` produces ZERO `Nouveau` rows** — the target population does not exist in the
+   corpus the gates run against. The layer had to hand-insert an observation to make one. → T3b.
+4. **A plain `<form>` full-navigates to the raw text body** — `documented 1 field(s) as entity …`,
+   `text/plain`. → arbitration 2.
+
+⚠️ **Three more worth carrying:** the row keeps the **oldest** sighting of a repeated address
+(→ arbitration 1); AC2's *"says why"* is **new copy**, not a rewire, and no such key exists; and
+FR16b's *"never N failures"* has **no N>1 case** in the arbitrated scope, a `Nouveau` row being one
+address and one subject with `counted: false`.
+
+🔴 **And two false citations of mine, one of which had already propagated.** `epics.md:2118` is a
+line inside story **6b.1** about the amber; the criterion is at **`:1794`** — and the wrong number
+was already carried into `deferred-work.md` in the same commit. ⚠️ **And §0h's *"produced by
+`gap::reconcile`"* is false**: that enum has no `undeclared` variant and `reconcile()` runs per
+already-declared entity. *The conclusion held; the sentence pointing at it did not, and it would
+have sent the implementer to the wrong file.*
+
+✅ **Refuted by the gap-hunt, each with its check** — recorded so nobody re-chases them:
+documenting does **not** make the reach count fall (that section reads `identity_link`, which the
+scan pass writes; the queue's own total falls, correctly, being the reconciliation backlog);
+a repeated address already collapses to **one** row, confirmed on a live render; `Gesture::Live`
+touches **no** site in `diagnostic.rs`; and a 401 seen during prototyping was a **leftover server
+process** booted without credentials, not a defect.
+
+### §0j. THE TWO ARBITRATIONS (Guy, 2026-08-25)
+
+🔑 **Arbitration 1 — the subject is the MOST RECENT sighting.** The row keeps the oldest today
+(`ORDER BY observed_at` ascending, then first-wins), measured on two observations ten minutes
+apart. **A gesture that writes *the whole record at once* may not write the one the network has
+already moved past** — if a later scan saw a `hostname` the first did not, the letter of AC1 would
+document the less complete record. ⚠️ The defect is pre-existing and becomes **visible** only when
+a gesture writes from it: *a story that lays a gesture on a choice it knows to be wrong inherits
+the choice.* **Refused:** keeping the oldest and stating it (the operator would document a stale
+record with nothing on screen saying so), and merging the facts of the N sightings — which would
+invent an observation that never happened, and **D19 forbids fabricating an observed**.
+
+🔑 **Arbitration 2 — `hx-post` with a target and a swap.** Measured: a plain `<form>` takes the
+browser to `documented 1 field(s) as entity …` in `text/plain`. htmx is already vendored and
+served (D37), and `_gap_card.html` already uses it. **Refused:** a plain form plus a real response
+page (work this story does not budget), and a 303 redirect — which would mean changing the route's
+201-with-a-body contract, breaking story 6.2's tests and its record.
+⚠️ **This is the product's FIRST live swap, so it inherits a debt by name**: story 6b.11 registered
+the *focus-after-swap* contract to story 6.4 because **no swap existed to attach it to**. It exists
+now. Focus must land inside the swapped region, and the guard reads `document.activeElement` after
+the swap — never the template.
+
 ### §0g. WHAT THIS STORY MUST NOT DO
 
 - **Not touch the observed record.** FR13's invariant, both cases: the observation is never
@@ -198,18 +276,47 @@ honesty the product claims everywhere else.
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — The subject a `Nouveau` row already knows** (AC1). ⚠️ **No new read**: `gap::reconcile`
-      already produces the row and `page.rs:1005` already labels it. What must be established is
-      whether the row carries the **`ObsId`** `document_all` needs, or only an entity/address — and
-      if only the latter, that is the one thing to add.
-- [ ] **T2 — The gesture, LIVE** (AC1, AC4) — `Gesture::Live`. The `error[E0004]` it forces on every
-      `match` is the revisit story 6b.4b bought with its single variant; if the enum is untouched,
-      the compiler was never the guard it was sold as.
+- [ ] **T1 — The subject the row does NOT know** (AC1). 🔴 **The open question is SETTLED and the
+      answer is the harder one: a new read is needed.** Measured by both validation layers —
+      `ObservedBatch` has three fields (`connector_id`, `observed_at`, `facts`) and **no id**, and
+      `load_observation_facts`'s `SELECT` does not name the `id` column at all. Confirmed on the
+      wire: the observation's UUID appears **nowhere** on the rendered page. ⚠️ **T1's first draft
+      said *"no new read"* and contradicted itself one sentence later** — the read is: add `id` to
+      the query and to `ObservedBatch`, then plumb it to the row. **The blast radius is every
+      `ObservedBatch` test constructor**, `page.rs`'s `fn batch(...)` helper first.
+- [ ] **T1b — WHICH sighting supplies the subject** (arbitration 1, §0i). 🔴 The row keeps the
+      **OLDEST** sighting of a repeated address today (`ORDER BY observed_at` ascending, then
+      first-wins in `seen_new`). **Guy: take the most recent.** A gesture that writes *the whole
+      record at once* may not write the one the network has already moved past.
+- [ ] **T2 — The gesture, LIVE** (AC1, AC4) — `Gesture::Live`, as `hx-post` with a target and a
+      swap (arbitration 2, §0i). ⚠️ **The `E0004` is ONE site, not *"every match"*, and satisfying
+      it naively ships an inert control** — measured: the variant added and rebuilt gives exactly
+      one error, at `page.rs:751`; and `GestureView` carries only `label` and `not_built`, so the
+      template's live arm renders a bare `<span class="btn-gesture live">` with **no route, no
+      method, no subject**. *A compile error that can be silenced by a span is not the guard 6b.4b
+      sold — its own doc said so, and this is the measurement.*
+- [ ] **T2b — The page must know whether the route EXISTS** (§0i). 🔴 `page.rs` has **zero**
+      references to `document_enabled`; the flag is read only in `main.rs` at router-merge time. So
+      a naive wiring renders, **on the default configuration**, a pressable control pointing at a
+      **404** — measured. The page builder reads the flag and renders `Planned` when the route is
+      not mounted, which is what the rest of the action bar already does.
 - [ ] **T3 — Every other cause carries none, and SAYS so** (AC2) — `Ambiguous` and `AbsenceOfProof`
       alike. ⚠️ The guard measures the **absence on the rendered page**, not in the template
-      (AC5 as amended).
-- [ ] **T4 — One act, one answer** (FR16b) — whatever the count, one result line and never N error
-      messages to work through.
+      (AC5 as amended). ⚠️ **And *"says why" is NEW COPY, not a rewire**: `_identity_section.html`
+      renders cause and count and nothing else, and no `identity_no_gesture`-shaped key exists.
+      Two new keys, both languages, under the `copy-vocabulary` gate.
+- [ ] **T3b — The population must EXIST where the gates run** (AC5). 🔴 `a11y/seed.sql` produces
+      **zero** `Nouveau` rows — measured — because all three seeded observations land on declared
+      addresses. And 🔴 **the axe gate structurally cannot reach a selected `Nouveau` row**: it
+      derives its state route from the **first** queue row, and `build_triage` pushes every gap,
+      absence and conflict row **before** the `Nouveau` loop. Seed the population **and** give the
+      gate a state that names it, or the story's only DOM-level carrier in CI never sees the
+      gesture.
+- [ ] **T4 — One act, one answer** (FR16b) — ⚠️ **and within this story's arbitrated scope there is
+      no N>1 case to exercise**, measured: a `Nouveau` row is one address and one subject, and its
+      `counted` is `false` with an empty `count`. FR16b's *"96 devices is ONE question"* bites on
+      the `Absence`/`Conflict` cause rows, which this story does not touch. **Say so rather than
+      leaving a task that reads as needing bulk-failure handling nothing in scope produces.**
 - [ ] **T5 — The bans, and the honest sentence** (AC3, §0e) — the count is of SIGHTINGS and the
       observations are never modified, so **it will not fall when the operator acts**. The surface
       must not imply it will.
@@ -250,7 +357,7 @@ ten. This story is what ends that, and it is the first in three epics whose hone
 
 ## References
 
-- `epics.md:2118` — the criterion, and §0a's divergence.
+- `epics.md:1794` — the criterion, and §0a's divergence.
 - `prd.md:884` (FR13), `:897` (FR16b), `:1018` (the binding glossary row for `undeclared`).
 - `cascade.rs` — `AbsenceOfProof`'s definition, which is about the PAIR.
 - `page.rs:143` — `IdentityCauseRow`, which carries no subject.
@@ -266,5 +373,6 @@ ten. This story is what ends that, and it is the first in three epics whose hone
 
 | Date | Change |
 |---|---|
+| 2026-08-25 | **VALIDATED by two layers — nine findings, two reached by both, and the second layer BUILT the gesture and pressed it.** 🔴 Four holes the story did not know it had: `OPENCMDB_DOCUMENT_ENABLED` is invisible to the page builder, so a naive wiring shows a pressable control pointing at a **404** on the default configuration; the axe gate cannot reach a selected `Nouveau` row; `a11y/seed.sql` produces **zero** of them; and a plain `<form>` navigates to the raw text body. ⚠️ **`Gesture::Live` forces ONE site, not *every match*, and satisfying it naively ships an inert `<span>`** — 6b.4b's own warning, measured. 🔴 And two false citations of mine, one already propagated to the register: `epics.md:2118` is **`:1794`**, and §0h's *"produced by `gap::reconcile`"* is false — that enum has no `undeclared` variant. **✅ Two arbitrations (Guy):** the subject is the **most recent** sighting, not the oldest; and the gesture is **`hx-post`** with a target and a swap — ⚠️ which makes it the product's first live swap, inheriting 6b.11's focus-after-swap contract by name. |
 | 2026-08-24 | ✅ **ARBITRATION TAKEN (Guy): the gesture goes on the triage queue's `Nouveau` row, and the abstention line carries none.** 🔑 The measurement that decided it: `undeclared` is NOT typeless — `page.rs:1005` already labels a queue row *"an observed address no declared entity claims"*, the glossary's own words, computed by `gap::reconcile` and on screen since 6b.4. **The glossary left it typeless because it was looking at the identity engine; it lives on the reconciliation side.** *Refused:* AC1's letter (offers to create an entity for a machine already declared) and the intersection (safe, two reads and a join, and most of the population anyway on the shipped connector). 🔴 **The cost, stated:** the story's *so that* clause — *"the reach section becomes a door"* — is not met, and **the premise is what is wrong**: an identity abstention's answer is a better SOURCE, not a documented entity. *The reach section may have no door, and that is not this story's failure.* |
 | 2026-08-24 | Story created and CONTEXTED. 🔴 **AC1 cannot be implemented as written**: it attaches FR13's gesture to `AbsenceOfProof`, an identity verdict about whether two sightings could be JOINED, while FR13's own population is `undeclared` — *observed, and no declared record claims it* — which the PRD's binding glossary gives a row and **no type**. ⚠️ A sighting can be `AbsenceOfProof` **and already declared**, a state `a11y/seed.sql` produces today. **This is story 5.14b's defect one layer down**, and that story's own record names the shape: *same word, different type, different population*. 🔴 Second measurement: `IdentityCauseRow { cause, count }` carries **no subject** and the route takes exactly **one** — so AC1 is not a wiring job but a read the page does not have. ⚠️ And on the shipped connector *"one line"* is the WHOLE unplaced population, since the scanner emits no hardware address ever. **One arbitration open (§0f).** |
