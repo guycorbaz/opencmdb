@@ -47,15 +47,21 @@
        story 6b.4's stylesheet guard skips any `class` attribute containing a brace. -#}
   <div class="action-bar" role="group">
   {%- for gesture in gestures %}
-    {%- match gesture.not_built %}
-    {%- when Some with (_note) %}
+    {%- match gesture.nature %}
+    {%- when GestureRender::Planned with (_note) %}
     <span class="btn-gesture planned" role="button" aria-disabled="true" tabindex="0"
           aria-describedby="diag-gesture-not-built">
       {{ gesture.label }}
       <span class="gesture-badge">{{ s.gesture_badge }}</span>
     </span>
-    {%- when None %}
-    <span class="btn-gesture live">{{ gesture.label }}</span>
+    {%- when GestureRender::Live with (_route) %}
+    {#- 🔴 UNREACHABLE today, and rendered as plain text rather than as a control that looks
+         pressable. `/diagnostic` has no SUBJECT: its two gestures are about the product, not
+         about an observation, so nothing here can carry `hx-vals` and a control shaped like a
+         button would be the inert `live` span story 6.4's own type doc warns about. ⚠️ The day
+         this screen gains a gesture that acts, this arm owes a real `<button>` — the `match` is
+         what will make someone read this. -#}
+    <span class="btn-gesture-inert">{{ gesture.label }}</span>
     {%- endmatch %}
   {%- endfor %}
   <p id="diag-gesture-not-built" class="gesture-note">{{ s.gesture_not_built }}</p>

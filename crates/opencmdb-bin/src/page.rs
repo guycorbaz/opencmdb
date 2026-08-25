@@ -690,6 +690,19 @@ pub(crate) enum Gesture {
     /// ⚠️ `owner` lives HERE and never on the screen: *"arrives in 6.4"* would turn the label into a
     /// calendar, therefore a promise, which story 5.14b refused. Nothing reads it, and `dead_code`
     /// does not red on it — measured, with the `#[derive(Debug)]` hypothesis tested and refuted.
+    /// It acts. The variant CARRIES its route, so a live gesture that posts nowhere is
+    /// unrepresentable.
+    ///
+    /// 🔴 **Adding this is what story 6b.4b bought with its single-variant enum** — `E0004` fires
+    /// the moment a second arm exists. ⚠️ The validation measured that it fires at exactly **one**
+    /// site, not on *"every match"* as that story's record reads, and — more usefully — that
+    /// satisfying it naively ships an inert `<span class="btn-gesture live">` with no route and no
+    /// method. *A compile error a span can silence is not the guard that story sold*, which is why
+    /// the route lives in the type rather than in whoever writes the template.
+    Live {
+        /// Where the control posts. A constant of the product, never operator input.
+        route: &'static str,
+    },
     Planned {
         /// The story that will build it.
         owner: &'static str,
@@ -705,7 +718,7 @@ pub(crate) struct GestureView {
     /// 🔑 **ONE field, and the template branches on it**, so the rendered state cannot disagree with
     /// the nature: there is no second *"is it live"* flag to drift out of step. It is produced by a
     /// `match` on [`Gesture`], which is what makes story 6.4's `Live` a compile error here.
-    pub(crate) not_built: Option<String>,
+    pub(crate) nature: GestureRender,
 }
 
 /// The mock's action bar: five controls, in its order, none of them live today.
@@ -714,7 +727,7 @@ pub(crate) struct GestureView {
 /// *Résoudre* on a conflict and *Merger* elsewhere; branching on `DetailPane::kind` — which is
 /// already translated — would reproduce story 6b.3's `role_key: "example.badge"` defect, a real,
 /// resolving, wrong value that every shape and resolvability check passes.
-fn action_bar(primary_key: &'static str) -> Vec<GestureView> {
+fn action_bar(primary_key: &'static str, primary_is_live: bool) -> Vec<GestureView> {
     // ⚠️ The primary's owner FOLLOWS the primary: *Merger* is story 6.4's (FR13(a) on the
     // abstention line), *Résoudre* needs FR16's ranked candidates and is Epic 6's. This read "6.4"
     // for both until the code review — invisible, because nothing renders `owner`, which is exactly
@@ -723,13 +736,31 @@ fn action_bar(primary_key: &'static str) -> Vec<GestureView> {
         "gesture.resolve" => "6",
         _ => "6.4",
     };
-    planned_gestures(&[
-        (primary_key, primary_owner),
+    let mut bar = planned_gestures(&[
         ("gesture.accept_gap", "7"),
         ("gesture.snooze", "7"),
         ("gesture.attach", "7"),
         ("gesture.exclude", "7"),
-    ])
+    ]);
+    // 🔑 The primary is built SEPARATELY because it is the only one that can act, and it is
+    // INSERTED at the front rather than pushed — the mock's order is primary first, and story
+    // 6b.11's roving-tabindex contract makes that order the keyboard's order too.
+    bar.insert(
+        0,
+        GestureView::of(
+            if primary_is_live {
+                Gesture::Live {
+                    route: crate::document::DOCUMENT_ALL_PATH,
+                }
+            } else {
+                Gesture::Planned {
+                    owner: primary_owner,
+                }
+            },
+            rust_i18n::t!(primary_key).to_string(),
+        ),
+    );
+    bar
 }
 
 /// Resolve a list of `(label key, owner)` pairs into controls that are not built yet.
@@ -743,15 +774,40 @@ pub(crate) fn planned_gestures(entries: &[(&'static str, &'static str)]) -> Vec<
     entries
         .iter()
         .map(|(label_key, owner)| {
-            let gesture = Gesture::Planned { owner };
-            GestureView {
-                label: rust_i18n::t!(*label_key).to_string(),
-                not_built: match gesture {
-                    Gesture::Planned { .. } => Some(rust_i18n::t!("gesture.not_built").to_string()),
-                },
-            }
+            GestureView::of(
+                Gesture::Planned { owner },
+                rust_i18n::t!(*label_key).to_string(),
+            )
         })
         .collect()
+}
+
+/// What the template must render for one control, with the impossible pairs unrepresentable.
+///
+/// 🔑 **One field rather than two `Option`s** (story 5.6's idiom, closed in the TYPE). The pair
+/// `not_built: Option<String>` + `post_to: Option<&str>` admits four states of which two are
+/// nonsense — *planned yet posting somewhere*, and *live with a note and no route* — and the
+/// second forces an `unwrap()` in the template, i.e. a **500 carried by a sentence**. Here the
+/// template matches ONCE and every arm has exactly what it needs.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum GestureRender {
+    /// Not built: the sentence saying so, shown once for the group and announced on each control.
+    Planned(String),
+    /// Live: where it posts. A constant of the product, never operator input.
+    Live(&'static str),
+}
+
+impl GestureView {
+    /// One control, its nature, and everything the template needs to render it.
+    fn of(gesture: Gesture, label: String) -> Self {
+        let nature = match gesture {
+            Gesture::Planned { .. } => {
+                GestureRender::Planned(rust_i18n::t!("gesture.not_built").to_string())
+            }
+            Gesture::Live { route } => GestureRender::Live(route),
+        };
+        Self { label, nature }
+    }
 }
 
 /// The detail pane: the two photos, side by side, each with its own meta-line.
@@ -849,14 +905,21 @@ pub(crate) fn relative_time(
 /// ⚠️ `OutOfPerimeter` is NOT a row. `reconcile` is written for ONE perimeter, so every pass counts
 /// every other entity's observations as out of perimeter — noise of the loop, not a fact about the
 /// entity. Surfacing it would put one row per entity per other entity on the operator's screen.
+/// The view, told whether `POST /document-all` is mounted.
+///
+/// 🔴 **The page could not know this before story 6.4**, and the validation measured what that
+/// cost: a wiring that rendered the gesture regardless put a control the operator can see, focus
+/// and press in front of a **404**, on the DEFAULT configuration. `false` keeps every control
+/// planned, which is what an un-mounted route and every non-`Nouveau` kind both mean.
 #[allow(clippy::too_many_arguments)]
-fn build_triage(
+fn build_triage_offering(
     declared: Vec<(String, String, String)>,
     provenance: Vec<crate::repo::DeclaredProvenance>,
     observations: Vec<crate::repo::ObservedBatch>,
     now: chrono::DateTime<chrono::Utc>,
     selected: Option<&str>,
     sort_by_age: bool,
+    document_enabled: bool,
 ) -> TriageView {
     use rust_i18n::t;
 
@@ -946,7 +1009,7 @@ fn build_triage(
                 DetailPane {
                     // No documenting gesture on this kind, so no subject to act on.
                     subject: String::new(),
-                    gestures: action_bar("gesture.document"),
+                    gestures: action_bar("gesture.document", false),
                     kind: t!("triage.kind.ecart").to_string(),
                     entity: ipv4.clone(),
                     field: gap.field.clone(),
@@ -991,10 +1054,13 @@ fn build_triage(
                     // 🔴 From the CAUSE, never from the translated label: the mock shows *Résoudre*
                     // on a conflict and *Merger* elsewhere, and branching on the rendered string is
                     // story 6b.3's wrong-namespace defect waiting.
-                    gestures: action_bar(match cause {
-                        AbstentionCause::ConflictingObservations => "gesture.resolve",
-                        _ => "gesture.document",
-                    }),
+                    gestures: action_bar(
+                        match cause {
+                            AbstentionCause::ConflictingObservations => "gesture.resolve",
+                            _ => "gesture.document",
+                        },
+                        false,
+                    ),
                     kind: label.to_string(),
                     entity: ipv4.clone(),
                     field: String::new(),
@@ -1073,7 +1139,7 @@ fn build_triage(
                     // The MOST RECENT sighting of this address, overwritten in place
                     // above when a later one arrives (Guy's arbitration, story 6.4).
                     subject: batch.id.to_string(),
-                    gestures: action_bar("gesture.document"),
+                    gestures: action_bar("gesture.document", document_enabled),
                     kind: t!("triage.kind.nouveau").to_string(),
                     entity: value.clone(),
                     field: "ipv4".to_string(),
@@ -1244,6 +1310,7 @@ async fn triage_view(
     pool: &MySqlPool,
     selected: Option<&str>,
     sort_by_age: bool,
+    document_enabled: bool,
 ) -> Result<(TriageView, IdentityView), Response> {
     let declared = load_declared_attributes(pool).await.map_err(server_error)?;
     let provenance = crate::repo::load_declared_provenance_for_display(pool)
@@ -1252,13 +1319,14 @@ async fn triage_view(
     let observations = load_observation_facts(pool).await.map_err(server_error)?;
     let reach = count_engine_reach(pool).await.map_err(server_error)?;
     Ok((
-        build_triage(
+        build_triage_offering(
             declared,
             provenance,
             observations,
             now_utc(),
             selected,
             sort_by_age,
+            document_enabled,
         ),
         build_identity_view(reach),
     ))
@@ -1369,6 +1437,15 @@ pub(crate) struct TriageState {
     /// security posture is derived by probing `auth::is_public` — neither is re-read at the point
     /// of use, which is story 6b.2's M12 applied rather than merely cited.
     pub(crate) diagnostic: crate::diagnostic::DiagnosticFacts,
+    /// Whether `POST /document-all` is mounted (story 6.4).
+    ///
+    /// 🔴 **Read from [`crate::AppConfig`] and never from the environment at the point of use.**
+    /// Story 6b.2's M12 is what that rule costs when it is broken: a second reader of one fact
+    /// disagreed with the first and nine screens went wrong. The route's own mounting reads the
+    /// same field, so the control and the endpoint cannot disagree about whether the gesture is
+    /// there — a screen that OFFERS what the router did not mount is a 404 the operator meets by
+    /// pressing the primary control of the product's main screen.
+    pub(crate) document_enabled: bool,
 }
 
 /// `/triage` on its own state, so the perimeter arrives as a parameter rather than being read.
@@ -1381,6 +1458,7 @@ pub(crate) fn triage_router(
     pool: MySqlPool,
     perimeter: Option<String>,
     diagnostic: crate::diagnostic::DiagnosticFacts,
+    document_enabled: bool,
 ) -> Router {
     Router::new()
         .route("/triage", get(triage))
@@ -1403,6 +1481,7 @@ pub(crate) fn triage_router(
             pool,
             perimeter,
             diagnostic,
+            document_enabled,
         })
 }
 
@@ -1796,7 +1875,12 @@ pub async fn triage(
     let sort_by_age = query.sort.as_deref() == Some("age");
     match store_within(
         PAGE_STORE_BUDGET,
-        triage_view(&state.pool, query.sel.as_deref(), sort_by_age),
+        triage_view(
+            &state.pool,
+            query.sel.as_deref(),
+            sort_by_age,
+            state.document_enabled,
+        ),
     )
     .await
     {
@@ -3913,6 +3997,37 @@ mod tests {
     /// *"the same sighting"* without threading a UUID through every call site. Story 6.4 added the
     /// field; the validation predicted a wide blast radius across test constructors and the
     /// measured answer was **one site, this one**.
+    /// The view with no documenting gesture — **the test-facing default**, production having none.
+    ///
+    /// 🔑 **A thin default rather than a seventh argument at fourteen call sites** (story 6.4). Every
+    /// one of those callers means *"no gesture"*, and threading `false` through all of them would be
+    /// fourteen edits that say nothing.
+    ///
+    /// ⚠️ **A test helper standing between the guards and production is a LIABILITY, and this project
+    /// has the measurement**: story 6b.4's `triage_html` rendered `GapFragment` directly and never
+    /// touched the route, so the entire body of `/triage` was replaced with all 387 tests green. What
+    /// makes this one safe is that it has no body of its own — it supplies one argument and delegates —
+    /// and `the_default_view_is_the_offering_view_with_the_gesture_off` MEASURES that rather than
+    /// asserting it, so the day someone gives this wrapper logic the equivalence reds.
+    fn build_triage(
+        declared: Vec<(String, String, String)>,
+        provenance: Vec<crate::repo::DeclaredProvenance>,
+        observations: Vec<crate::repo::ObservedBatch>,
+        now: chrono::DateTime<chrono::Utc>,
+        selected: Option<&str>,
+        sort_by_age: bool,
+    ) -> TriageView {
+        build_triage_offering(
+            declared,
+            provenance,
+            observations,
+            now,
+            selected,
+            sort_by_age,
+            false,
+        )
+    }
+
     fn batch(source: &str, seconds: i64, facts: Vec<Fact>) -> crate::repo::ObservedBatch {
         batch_with_id(source, seconds, facts, seconds as u128)
     }
@@ -4909,7 +5024,10 @@ mod tests {
             "the mock's bar carries five controls"
         );
         assert!(
-            gap_row.gestures.iter().all(|g| g.not_built.is_some()),
+            gap_row
+                .gestures
+                .iter()
+                .all(|g| matches!(g.nature, GestureRender::Planned(_))),
             "not one of the five exists today — every control is planned"
         );
 
@@ -4940,6 +5058,235 @@ mod tests {
             conflict.gestures[0].label, resolving,
             "a CONFLICT offers Resolve — and the choice comes from the cause, not from the \
              translated kind string"
+        );
+    }
+
+    /// The wrapper above is the offering view with the gesture off, and nothing else.
+    ///
+    /// 🔑 Fourteen guards call `build_triage`; production calls `build_triage_offering`. This is
+    /// the one line that keeps that from being a claim — story 6b.4's `triage_html` is what it
+    /// costs when a test helper is allowed to drift from the path the operator gets.
+    #[test]
+    fn the_default_view_is_the_offering_view_with_the_gesture_off() {
+        let declared = vec![declared_row("e1", "ipv4", "192.0.2.10")];
+        let observations = vec![
+            batch("arp", 10, vec![ipv4("192.0.2.10"), hostname("nas")]),
+            batch_with_id("arp", 20, vec![ipv4("192.0.2.88")], 0xC3),
+        ];
+        let render = |view: TriageView| {
+            TriageBody {
+                triage: view,
+                identity: no_reach(),
+                s: strings(),
+            }
+            .render()
+            .expect("the triage body renders")
+        };
+        let wrapped = render(build_triage(
+            declared.clone(),
+            Vec::new(),
+            observations.clone(),
+            at(600),
+            Some("nouveau:192.0.2.88"),
+            false,
+        ));
+        let direct = render(build_triage_offering(
+            declared,
+            Vec::new(),
+            observations,
+            at(600),
+            Some("nouveau:192.0.2.88"),
+            false,
+            false,
+        ));
+        assert_eq!(
+            wrapped, direct,
+            "the wrapper supplies one argument and delegates — it may never grow a body the \
+             guards exercise and the operator never gets"
+        );
+    }
+
+    /// 🔴 **The control is offered only where the route is MOUNTED** — story 6.4's T2b, and the
+    /// hole the validation's second layer found by BUILDING the gesture and pressing it.
+    ///
+    /// `POST /document-all` exists only under `OPENCMDB_DOCUMENT_ENABLED` (story 6.1), which is
+    /// **off by default**. A bar that renders the live control regardless puts a button the
+    /// operator can see, focus and press in front of a **404**, on the configuration almost every
+    /// deployment runs. The flag reaching the view is what this guard is about; that it reaches it
+    /// from `AppConfig` rather than from a second `std::env::var` is story 6b.2's M12.
+    #[test]
+    fn the_documenting_gesture_is_offered_only_where_the_route_is_mounted() {
+        let observations = vec![batch_with_id("arp", 10, vec![ipv4("192.0.2.77")], 0xA1)];
+        let pane = |enabled: bool| {
+            build_triage_offering(
+                Vec::new(),
+                Vec::new(),
+                observations.clone(),
+                at(600),
+                Some("nouveau:192.0.2.77"),
+                false,
+                enabled,
+            )
+            .selected
+            .expect("the nouveau row has a pane")
+        };
+
+        assert_eq!(
+            pane(false).gestures[0].nature,
+            GestureRender::Planned(rust_i18n::t!("gesture.not_built").to_string()),
+            "the route is not mounted, so the gesture is PLANNED — a live control here is a 404 \
+             the operator meets by pressing the primary control of the product's main screen"
+        );
+        assert_eq!(
+            pane(true).gestures[0].nature,
+            GestureRender::Live(crate::document::DOCUMENT_ALL_PATH),
+            "the route IS mounted, so the gesture acts — and it posts to the SAME constant the \
+             router registers, so the screen and the endpoint cannot disagree about the address"
+        );
+    }
+
+    /// 🔴 **Only the `Nouveau` kind carries it, even with the route mounted** — FR13(a)'s scope.
+    ///
+    /// A gap, an absence and a conflict are all about an entity the operator has ALREADY declared;
+    /// `POST /document-all` adopts a whole *observation* as a new entity, which is Guy's third case
+    /// (*unknown → the operator CREATES the entity*) and no other. ⚠️ Without this guard the flag
+    /// would light every primary on the screen, and three of the four would post a subject whose
+    /// entity already exists — a 409 the operator cannot act on.
+    #[test]
+    fn no_other_kind_carries_a_live_gesture_even_when_the_route_is_mounted() {
+        let declared = vec![
+            declared_row("drift", "ipv4", "192.0.2.10"),
+            declared_row("drift", "hostname", "nas"),
+            declared_row("absent", "ipv4", "192.0.2.20"),
+            declared_row("absent", "hostname", "printer"),
+            declared_row("clash", "ipv4", "192.0.2.30"),
+            declared_row("clash", "hostname", "one"),
+        ];
+        let observations = vec![
+            batch("arp", 10, vec![ipv4("192.0.2.10"), hostname("other")]),
+            batch("arp", 20, vec![ipv4("192.0.2.30"), hostname("one")]),
+            batch("arp", 40, vec![ipv4("192.0.2.30"), hostname("two")]),
+            batch_with_id("arp", 50, vec![ipv4("192.0.2.99")], 0xB2),
+        ];
+        let view = build_triage_offering(
+            declared.clone(),
+            Vec::new(),
+            observations.clone(),
+            at(1_000),
+            None,
+            false,
+            true,
+        );
+
+        let ids: Vec<String> = view.rows.iter().map(|r| r.id.clone()).collect();
+        let live: Vec<String> = ids
+            .iter()
+            .filter(|id| {
+                build_triage_offering(
+                    declared.clone(),
+                    Vec::new(),
+                    observations.clone(),
+                    at(1_000),
+                    Some(id),
+                    false,
+                    true,
+                )
+                .selected
+                .expect("every queued row has a pane")
+                .gestures
+                .iter()
+                .any(|g| matches!(g.nature, GestureRender::Live(_)))
+            })
+            .cloned()
+            .collect();
+
+        // The premise: the other kinds are on screen at all, or the shortness below means nothing.
+        assert!(
+            ids.len() > live.len(),
+            "the premise: this fixture produces kinds other than `nouveau`, {} rows in all: {ids:?}",
+            ids.len()
+        );
+        assert_eq!(
+            live,
+            vec!["nouveau:192.0.2.99".to_string()],
+            "the documenting gesture belongs to the UNKNOWN case alone — every other kind names \
+             an entity that already exists, where `POST /document-all` can only answer 409"
+        );
+    }
+
+    /// 🔴 **The rendered control is a real `<button>` carrying the pane's subject** — the DOM, not
+    /// the builder.
+    ///
+    /// Story 6b.4b shipped `<span role="button" aria-disabled="true">` for the planned controls and
+    /// its code review measured the cost in Chrome: `tabIndex -1`, `.focus()` refused, forty
+    /// dispatched Tab presses reaching none of them. ⚠️ A control that ACTS may not inherit that,
+    /// and **the guards this project keeps writing on the source cannot see it** — story 6b.4b's
+    /// four HIGH findings were one mistake made four times, every guard reading the template while
+    /// every defect lived in the render. So this reads the rendered HTML.
+    #[test]
+    fn the_live_control_renders_as_a_button_posting_the_panes_subject() {
+        let observations = vec![batch_with_id("arp", 10, vec![ipv4("192.0.2.77")], 0xA1)];
+        let html = |enabled: bool| {
+            let view = build_triage_offering(
+                Vec::new(),
+                Vec::new(),
+                observations.clone(),
+                at(600),
+                Some("nouveau:192.0.2.77"),
+                false,
+                enabled,
+            );
+            let subject = view
+                .selected
+                .as_ref()
+                .expect("the nouveau row has a pane")
+                .subject
+                .clone();
+            (
+                TriageBody {
+                    triage: view,
+                    identity: no_reach(),
+                    s: strings(),
+                }
+                .render()
+                .expect("the triage body renders"),
+                subject,
+            )
+        };
+
+        let (off, _) = html(false);
+        assert!(
+            !off.contains("hx-post"),
+            "with the route unmounted the page posts nowhere at all"
+        );
+
+        let (on, subject) = html(true);
+        assert!(
+            !subject.is_empty(),
+            "the premise: the pane names a subject, or the needle below would match a bare \
+             attribute and pass on nothing"
+        );
+        let needle = format!(r#"hx-vals='{{"subject": "{subject}"}}'"#);
+        assert!(
+            on.contains(&needle),
+            "the live control posts the pane's OWN subject.\nlooked for: {needle}"
+        );
+        assert!(
+            on.contains(&format!(
+                r#"hx-post="{}""#,
+                crate::document::DOCUMENT_ALL_PATH
+            )),
+            "and it posts to the route the router registers"
+        );
+        assert!(
+            on.contains(r#"<button type="button" class="btn-gesture live""#),
+            "a REAL button, never the `<span role=\"button\">` story 6b.4b measured out of the \
+             tab order — a control that acts must be focusable by nature"
+        );
+        assert!(
+            on.contains(r#"id="gesture-result" class="gesture-result" tabindex="-1""#),
+            "the swap lands in a region focus can reach — story 6b.11's focus-after-swap contract, \
+             registered to this story because no swap existed to attach it to"
         );
     }
 

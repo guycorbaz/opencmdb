@@ -577,6 +577,7 @@ fn app(pool: MySqlPool, config: AppConfig, diagnostic: diagnostic::DiagnosticFac
             pool.clone(),
             config.scan_cidr.clone(),
             diagnostic,
+            config.document_enabled,
         ));
     if config.document_enabled {
         // The switch governs EXISTENCE only (arbitration 4): merged above the layer, the route

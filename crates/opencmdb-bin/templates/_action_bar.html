@@ -29,17 +29,40 @@
      the ordinary way of writing this markup. -#}
 <div class="action-bar" role="group">
 {% for gesture in gestures %}
-  {% match gesture.not_built %}
-  {%- when Some with (_note) %}
+  {% match gesture.nature %}
+  {%- when GestureRender::Planned with (_note) %}
   <span class="btn-gesture planned" role="button" aria-disabled="true" tabindex="0"
         aria-describedby="gesture-not-built">
     {{ gesture.label }}
     <span class="gesture-badge">{{ s.gesture_badge }}</span>
   </span>
-  {%- when None %}
-  <span class="btn-gesture live">{{ gesture.label }}</span>
+  {%- when GestureRender::Live with (route) %}
+  {#- 🔴 A REAL `<button>`, never a `<span role="button">`. Story 6b.4b shipped the span for the
+       PLANNED controls and the code review measured what it cost: `tabIndex -1`, `.focus()`
+       refused, forty dispatched Tab presses reaching none of them. A control that ACTS may not
+       inherit that; `<button>` is focusable by nature and carries Enter and Space for free.
+
+       ⚠️ `hx-vals` rather than a hidden `<input>`, because there is no `<form>` here — the bar is
+       a `role="group"` of controls and wrapping the live one in a form would nest it inside the
+       group's own semantics. The subject comes from the PANE, which is where story 6.4's
+       arbitration 1 keeps it (the most recent sighting, overwritten in place), so the control and
+       the meta-line above it cannot name two different observations. -#}
+  <button type="button" class="btn-gesture live"
+          hx-post="{{ route }}"
+          hx-vals='{"subject": "{{ pane.subject }}"}'
+          hx-target="#gesture-result" hx-swap="innerHTML"
+          hx-on::after-swap="document.getElementById('gesture-result').focus()">
+    {{ gesture.label }}
+  </button>
   {%- endmatch %}
 {% endfor %}
+{#- 🔴 The swap lands HERE and the focus follows it — story 6b.11 registered the *focus-after-swap*
+     contract to this story because no swap existed to attach it to, and this is the first one.
+     `tabindex="-1"` makes the region programmatically focusable without adding a Tab stop, and
+     `aria-live` announces the outcome to a reader who is not looking. ⚠️ Both are needed and
+     neither substitutes for the other: `aria-live` announces, focus MOVES — a keyboard operator
+     who presses the button and is left where they were has no way to reach what just appeared. -#}
+<p id="gesture-result" class="gesture-result" tabindex="-1" role="status" aria-live="polite"></p>
 {#- 🔴 ONE visible sentence for the group, and every control POINTS at it with `aria-describedby`.
      Seen in a browser: rendered inside each control it appeared FIVE TIMES, turning a compact row
      into a stack that dominated the pane and saying the same thing over and over. A `title=` was

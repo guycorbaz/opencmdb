@@ -595,11 +595,47 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
   cursor: default;
 }
 
-/* Reserved for the day a gesture is live (story 6.4). Deliberately quiet: the amber belongs to the
-   documenting gesture alone, and this rule must not borrow it. */
+/* 🔑 **That day is story 6.4** — this rule was written empty-handed and now dresses a real
+   `<button>`. It stays QUIET on purpose. The amber (`--accent-document`) is reserved by story 6b.1
+   to the documenting gesture, and the only live control today IS that gesture — but `action_bar`
+   also builds a primary keyed `gesture.resolve`, so painting `.live` amber would mean the
+   reservation holds by a SENTENCE about which primary happens to be live rather than by anything
+   the stylesheet can see. ⚠️ Whether the product's primary action should be emphasised is a design
+   arbitration, registered rather than taken here. */
 .btn-gesture.live {
   color: var(--text);
   border-color: var(--color-neutral-500);
+  background: var(--surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+/* A control on a screen that has no subject to act on — `/diagnostic`'s unreachable `Live` arm.
+   Plain text, deliberately shaped like NOTHING pressable, so it can never be mistaken for the
+   inert `live` span the gesture type's own doc warns about. */
+.btn-gesture-inert {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Where the documenting gesture's answer lands, and where focus goes with it (story 6b.11's
+   focus-after-swap contract, inherited by story 6.4 as the first swap to attach it to). Empty
+   until a swap fills it, so it must take no room and draw no box when it holds nothing. */
+.gesture-result {
+  flex-basis: 100%;
+  margin: 8px 0 0;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.gesture-result:empty {
+  margin: 0;
+}
+
+.gesture-result:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 /* The sentence, VISIBLE. It lived in a `title=` until the code review — invisible to a keyboard and
