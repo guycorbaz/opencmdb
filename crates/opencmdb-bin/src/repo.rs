@@ -560,6 +560,14 @@ where
 /// One observation as the page reads it: its facts, and **where and when they came from**.
 #[derive(Clone)]
 pub struct ObservedBatch {
+    /// The observation's own id — the SUBJECT a documenting gesture acts on.
+    ///
+    /// 🔴 **Added at story 6.4, and its absence was the story's one open question.** Both
+    /// validation layers established it: this struct had three fields and no id, the `SELECT`
+    /// below did not name the column, and the gap-hunt layer confirmed **on the wire** that an
+    /// observation's UUID appeared nowhere in the rendered page. A queue row could therefore name
+    /// an address and never the thing `document_all` takes.
+    pub id: opencmdb_core::observation::ObsId,
     /// The connector that reported it — the observed side's provenance.
     pub connector_id: String,
     /// When the source dated it — the observed side's freshness.
@@ -584,15 +592,19 @@ pub async fn load_observation_facts<'e, E>(executor: E) -> Result<Vec<ObservedBa
 where
     E: Executor<'e, Database = MySql>,
 {
-    let rows: Vec<(String, String, String)> = sqlx::query_as(
-        "SELECT connector_id, DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%s.%fZ'), facts \
+    let rows: Vec<(String, String, String, String)> = sqlx::query_as(
+        "SELECT id, connector_id, DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%s.%fZ'), facts \
          FROM observation_record ORDER BY observed_at",
     )
     .fetch_all(executor)
     .await?;
     let mut out = Vec::with_capacity(rows.len());
-    for (connector_id, observed_at, facts) in rows {
+    for (id, connector_id, observed_at, facts) in rows {
         out.push(ObservedBatch {
+            id: opencmdb_core::observation::ObsId::from_uuid(
+                id.parse::<uuid::Uuid>()
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+            ),
             connector_id,
             observed_at: chrono::DateTime::parse_from_rfc3339(&observed_at)
                 .map_err(|e| sqlx::Error::Decode(Box::new(e)))?

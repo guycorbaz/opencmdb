@@ -772,6 +772,14 @@ struct DetailPane {
     observed: String,
     /// Which connector reported it and when.
     observed_meta: MetaLine,
+    /// The observation a documenting gesture would act on — empty when the pane carries none.
+    ///
+    /// 🔴 **Story 6.4 added it, and its absence was the story's one open question.** The queue
+    /// named an ADDRESS and the route takes an `ObsId`; nothing on the page carried one, which
+    /// the validation confirmed on the wire. ⚠️ It is the MOST RECENT sighting of that address —
+    /// Guy's arbitration — so the gesture writes what the network shows now, not the first thing
+    /// it ever showed.
+    subject: String,
 }
 
 /// Everything `/triage` renders: the queue, the selection, and the sort's state.
@@ -936,6 +944,8 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
+                    // No documenting gesture on this kind, so no subject to act on.
+                    subject: String::new(),
                     gestures: action_bar("gesture.document"),
                     kind: t!("triage.kind.ecart").to_string(),
                     entity: ipv4.clone(),
@@ -976,6 +986,8 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
+                    // No documenting gesture on this kind, so no subject to act on.
+                    subject: String::new(),
                     // 🔴 From the CAUSE, never from the translated label: the mock shows *Résoudre*
                     // on a conflict and *Merger* elsewhere, and branching on the rendered string is
                     // story 6b.3's wrong-namespace defect waiting.
@@ -1003,13 +1015,42 @@ fn build_triage(
     }
 
     // `Nouveau`: an observed address no declared entity claims.
-    let mut seen_new: Vec<String> = Vec::new();
+    //
+    // 🔴 **The MOST RECENT sighting of an address supplies the row, and it used to be the
+    // oldest** — Guy's arbitration 1 at story 6.4 (2026-08-25). `load_observation_facts` orders
+    // `observed_at` ASCENDING and this loop skipped an address it had already seen, so the FIRST
+    // batch won. The validation measured it on two observations ten minutes apart: the older one
+    // supplied the row.
+    //
+    // ⚠️ It was invisible while the row was a label, and it stops being invisible the moment a
+    // GESTURE writes from it: story 6.4 documents *the whole record at once* from this batch, so
+    // an older sighting would document the record the network has already moved past — one that
+    // may lack a `hostname` a later scan saw. *A story that lays a gesture on a choice it knows
+    // to be wrong inherits the choice.*
+    //
+    // 🔑 Kept as a LAST-WINS overwrite rather than a re-sort: the surrounding order is the queue's
+    // and is not this loop's to change, and `rows` is already built by the time an address
+    // repeats. `newest` remembers where the row went.
+    let mut newest: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
     for batch in &observations {
         for (field, value) in batch.facts.iter().filter_map(display_fact) {
-            if field != "ipv4" || claimed.contains(&value) || seen_new.contains(&value) {
+            if field != "ipv4" || claimed.contains(&value) {
                 continue;
             }
-            seen_new.push(value.clone());
+            if let Some(&at) = newest.get(&value) {
+                // A later sighting of an address already queued: replace what the row shows and
+                // what the pane would act on, in place, keeping the queue's order.
+                let seen = relative_time(now, batch.observed_at);
+                rows[at].seen = seen.clone();
+                rows[at].age_seconds = (now - batch.observed_at).num_seconds().max(0);
+                let key = rows[at].id.clone();
+                if let Some((_, pane)) = panes.iter_mut().find(|(id, _)| *id == key) {
+                    pane.observed_meta.freshness = seen;
+                    pane.subject = batch.id.to_string();
+                }
+                continue;
+            }
+            newest.insert(value.clone(), rows.len());
             let id = format!("nouveau:{value}");
             let seen = relative_time(now, batch.observed_at);
             rows.push(QueueRow {
@@ -1029,6 +1070,9 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
+                    // The MOST RECENT sighting of this address, overwritten in place
+                    // above when a later one arrives (Guy's arbitration, story 6.4).
+                    subject: batch.id.to_string(),
                     gestures: action_bar("gesture.document"),
                     kind: t!("triage.kind.nouveau").to_string(),
                     entity: value.clone(),
@@ -3863,8 +3907,25 @@ mod tests {
     }
 
     /// One observed batch: its source, its instant, its facts.
+    ///
+    /// ⚠️ The id is DERIVED from the instant so two batches at different instants can never share
+    /// one, and two calls at the same instant deliberately do — which is what lets a test say
+    /// *"the same sighting"* without threading a UUID through every call site. Story 6.4 added the
+    /// field; the validation predicted a wide blast radius across test constructors and the
+    /// measured answer was **one site, this one**.
     fn batch(source: &str, seconds: i64, facts: Vec<Fact>) -> crate::repo::ObservedBatch {
+        batch_with_id(source, seconds, facts, seconds as u128)
+    }
+
+    /// The same, with the observation's id stated rather than derived.
+    fn batch_with_id(
+        source: &str,
+        seconds: i64,
+        facts: Vec<Fact>,
+        id: u128,
+    ) -> crate::repo::ObservedBatch {
         crate::repo::ObservedBatch {
+            id: opencmdb_core::observation::ObsId::from_uuid(uuid::Uuid::from_u128(id)),
             connector_id: source.into(),
             observed_at: at(seconds),
             facts,
@@ -4123,6 +4184,66 @@ mod tests {
         assert_eq!(
             a.expect("a source").last_observed,
             b.expect("a source").last_observed
+        );
+    }
+
+    /// The subject a `Nouveau` row acts on is the MOST RECENT sighting of that address.
+    ///
+    /// 🔴 **It used to be the oldest, and that was invisible until a gesture wrote from it.**
+    /// `load_observation_facts` orders `observed_at` ASCENDING, and the `Nouveau` loop skipped an
+    /// address it had already queued — so the FIRST batch supplied both the row's freshness and
+    /// the subject. Story 6.4 documents *the whole record at once* from that subject, so an older
+    /// sighting would write the record the network has already moved past: here the earlier
+    /// sighting carries no hostname and the later one does.
+    ///
+    /// ⚠️ The two sightings are pinned by explicit ids rather than derived ones, because *which*
+    /// observation wins is exactly what this test is about — a derived id would make the
+    /// assertion depend on the helper's arithmetic instead of on the loop's choice.
+    #[test]
+    fn a_new_address_is_documented_from_its_most_recent_sighting() {
+        let observations = vec![
+            batch_with_id("arp", 10, vec![ipv4("192.0.2.77")], 0xA1),
+            batch_with_id(
+                "arp",
+                600,
+                vec![ipv4("192.0.2.77"), hostname("late-arrival")],
+                0xB2,
+            ),
+        ];
+        let view = build_triage(
+            Vec::new(),
+            Vec::new(),
+            observations,
+            at(1_000),
+            Some("nouveau:192.0.2.77"),
+            false,
+        );
+
+        // One row, whichever sighting supplied it — the address dedup is not what is at stake.
+        let nouveau: Vec<&QueueRow> = view
+            .rows
+            .iter()
+            .filter(|r| r.id == "nouveau:192.0.2.77")
+            .collect();
+        assert_eq!(
+            nouveau.len(),
+            1,
+            "one address is one row: {:?}",
+            view.rows.iter().map(|r| &r.id).collect::<Vec<_>>()
+        );
+
+        let pane = view.selected.expect("the row is selected");
+        let expected = opencmdb_core::observation::ObsId::from_uuid(uuid::Uuid::from_u128(0xB2));
+        assert_eq!(
+            pane.subject,
+            expected.to_string(),
+            "the gesture must act on the LATER sighting (0xB2), not the first one seen (0xA1) — \
+             the later one is what the network shows now, and here it is the only one carrying a \
+             hostname"
+        );
+        assert_eq!(
+            nouveau[0].age_seconds, 400,
+            "the row's age is the LATER sighting's (1000 - 600), not the earlier one's (990)"
         );
     }
 
