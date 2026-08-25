@@ -50,8 +50,7 @@
   <button type="button" class="btn-gesture live btn-document"
           hx-post="{{ route }}"
           hx-vals='{"subject": "{{ pane.subject }}"}'
-          hx-target="#gesture-result" hx-swap="innerHTML"
-          hx-on::after-swap="document.getElementById('gesture-result').focus()">
+          hx-target="#gesture-result" hx-swap="innerHTML">
     {{ gesture.label }}
   </button>
   {%- endmatch %}
@@ -61,8 +60,22 @@
      `tabindex="-1"` makes the region programmatically focusable without adding a Tab stop, and
      `aria-live` announces the outcome to a reader who is not looking. ⚠️ Both are needed and
      neither substitutes for the other: `aria-live` announces, focus MOVES — a keyboard operator
-     who presses the button and is left where they were has no way to reach what just appeared. -#}
-<p id="gesture-result" class="gesture-result" tabindex="-1" role="status" aria-live="polite"></p>
+     who presses the button and is left where they were has no way to reach what just appeared.
+
+     🔴 **THE HANDLER SAT ON THE BUTTON AND DID NOTHING, AND ONLY A BROWSER COULD SAY SO.** It
+     was written `hx-on::after-swap="document.getElementById('gesture-result').focus()"` on the
+     control itself, and every Rust assertion about this bar stayed green: `htmx:afterSwap` is
+     fired on the TARGET of the swap, and the target is this paragraph — a SIBLING of the button
+     inside the group, never an ancestor — so the event bubbled past it and the handler never
+     ran. Measured in Chrome by `a11y/kbd-probe.mjs`: `⏎ → status=201`, the answer swapped in,
+     and `document.activeElement.id` **empty**.
+
+     🔑 *The render assertion pinned the attribute; the attribute named a behaviour the product
+     did not have.* Story 6b.11's amended AC5 in one specimen — where the defect lives in the
+     DOM, a source-reading guard does not suffice — and the contract now has a carrier that
+     PRESSES the control instead of reading about it. -#}
+<p id="gesture-result" class="gesture-result" tabindex="-1" role="status" aria-live="polite"
+   hx-on::after-swap="this.focus()"></p>
 {#- 🔴 ONE visible sentence for the group, and every control POINTS at it with `aria-describedby`.
      Seen in a browser: rendered inside each control it appeared FIVE TIMES, turning a compact row
      into a stack that dominated the pane and saying the same thing over and over. A `title=` was

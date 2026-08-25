@@ -38,8 +38,11 @@ const SETTLE_WAIT_MS = 900;
 // caught that twice, once in a privacy floor and once in a word count. If a check is added
 // this number moves deliberately; if one is skipped, the gate says so instead of printing
 // a green.
-const MIN_CHECKS = 20;
+const MIN_CHECKS = 26;
 const MIN_ROWS = 2;
+// The product's one live control — a CLASS the stylesheet guard already pins, never a label
+// and never a selector vocabulary. Story 6.4; see the block that presses it.
+const GESTURE = "button.btn-document";
 
 /** The gate could not run. Never conflated with "a check failed". */
 class CannotRun extends Error {}
@@ -368,6 +371,149 @@ async function main() {
   }
 
   await page.close();
+
+  // ── The gesture that ACTS: pressed by keyboard, and the focus follows the swap ──
+  //
+  // 🔴 **STORY 6b.11 REGISTERED THE FOCUS-AFTER-SWAP CONTRACT TO STORY 6.4 BECAUSE NO SWAP
+  // EXISTED TO ATTACH IT TO.** It exists now, and it is the one behaviour in this product that
+  // no Rust test can reach: `hx-on::after-swap` is a string in the served HTML until a browser
+  // runs it, so a render assertion measures that the ATTRIBUTE is there and nothing about what
+  // happens when the operator presses ⏎. A keyboard operator who presses a control and is left
+  // where they were has no way to reach what just appeared — announcing is not reaching, which
+  // is why `aria-live` and the focus move are both required and neither substitutes.
+  //
+  // ⚠️ **THIS BLOCK WRITES TO THE STORE**, and it is the only check here that does: it adopts
+  // the undeclared sighting `a11y/seed.sql` plants. So it must stay LAST, or be preceded by a
+  // re-seed — a second run against the same store answers 409, htmx swaps nothing on a non-2xx,
+  // and the focus checks below would then red over a product that is working. That is a HARNESS
+  // failure and it is reported as one: the response status is read off the wire so the two
+  // cannot be confused.
+  //
+  // 🔑 **The row is FOUND, never named** — each pane is opened and asked whether it carries the
+  // control, the same idiom `axe-gate.mjs` uses. Matching the `nouveau:` selector would couple
+  // this gate to a Rust identifier and matching *New* / *Nouveau* would be story 6b.3's
+  // `role_key` defect: a real, resolving, wrong value that every shape check passes.
+  {
+    const hrefs = await (async () => {
+      const p = await open("/triage");
+      const all = await p.$$eval(QUEUE, (rows) => rows.map((r) => r.getAttribute("href")));
+      await p.close();
+      return all;
+    })();
+    let gesturePage = null;
+    for (const href of hrefs) {
+      const p = await open(href);
+      if ((await p.$$eval(GESTURE, (found) => found.length)) > 0) {
+        gesturePage = p;
+        break;
+      }
+      await p.close();
+    }
+    if (gesturePage === null) {
+      cannotRun(
+        `no queue row carries \`${GESTURE}\`, so the product's only live gesture is on no page ` +
+          `this gate can press. Either the store holds no undeclared sighting, or the server ` +
+          `was started without OPENCMDB_DOCUMENT_ENABLED.`,
+      );
+    }
+
+    // 🔴 **THE AMBER, MEASURED WHERE IT PAINTS RATHER THAN WHERE IT IS DECLARED.** Story 6.4's
+    // own guard counts `var(--accent-document)` reads in the SHEET and a browser says whether
+    // any of them reaches a pixel: measured before this check existed, `.btn-gesture.live`
+    // (specificity 0-2-0) beat `.btn-document` (0-1-0) on all four declarations, so the
+    // product's primary control computed to `rgb(233,233,234)` on `rgb(29,31,32)` at weight
+    // 400 — plain grey — while the sheet, the count and every Rust assertion stayed green.
+    //
+    // 🔑 **The token is READ, never spelled here.** Hard-coding `#8d5e2d` would make this an
+    // enumeration that goes stale the day the palette moves; comparing the control against the
+    // value `:root` actually carries is a property of the reservation itself.
+    const amber = await gesturePage.evaluate((sel) => {
+      const hex = getComputedStyle(document.documentElement)
+        .getPropertyValue("--accent-document")
+        .trim();
+      const rgb = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+      const token = rgb
+        ? `rgb(${parseInt(rgb[1], 16)}, ${parseInt(rgb[2], 16)}, ${parseInt(rgb[3], 16)})`
+        : null;
+      const live = getComputedStyle(document.querySelector(sel));
+      const planned = document.querySelector(".btn-gesture.planned");
+      return {
+        token,
+        background: live.backgroundColor,
+        border: live.borderColor,
+        color: live.color,
+        plannedBackground:
+          planned === null ? null : getComputedStyle(planned).backgroundColor,
+      };
+    }, GESTURE);
+    check(
+      amber.token !== null &&
+        amber.background === amber.token &&
+        amber.border === amber.token &&
+        amber.color !== amber.token,
+      "the documenting gesture PAINTS with the amber the sheet reserves for it — FILLED, with its label on top",
+      `--accent-document=${amber.token} background=${amber.background} border=${amber.border} label=${amber.color}`,
+    );
+    check(
+      amber.plannedBackground !== null && amber.plannedBackground !== amber.token,
+      "CONTROL: a PLANNED control does not carry it — the reservation is a difference, not a wish",
+      `planned background=${amber.plannedBackground}`,
+    );
+
+    const focused = await gesturePage.evaluate((sel) => {
+      const control = document.querySelector(sel);
+      control.focus();
+      return {
+        reached: document.activeElement === control,
+        tabIndex: control.tabIndex,
+        tag: control.tagName,
+        emptyBefore: document.getElementById("gesture-result")?.textContent.trim() === "",
+      };
+    }, GESTURE);
+    check(
+      focused.reached && focused.tabIndex === 0 && focused.tag === "BUTTON",
+      "the live gesture is focusable by nature, not by an attribute someone remembered",
+      `<${focused.tag.toLowerCase()}> tabIndex=${focused.tabIndex} reached=${focused.reached}`,
+    );
+    check(
+      focused.emptyBefore,
+      "the premise: the answer region is EMPTY before the press, or the two checks below pass on what was already there",
+      `emptyBefore=${focused.emptyBefore}`,
+    );
+
+    // The status comes off the wire, so *the harness re-ran* and *the product broke* stay apart.
+    let posted = null;
+    gesturePage.on("response", (response) => {
+      if (response.request().method() === "POST") posted = response.status();
+    });
+    await gesturePage.keyboard.press("Enter");
+    await wait(SETTLE_WAIT_MS);
+    if (posted !== null && posted !== 201 && posted !== 200) {
+      cannotRun(
+        `the documenting gesture answered ${posted}. A 409 means this store was already ` +
+          `documented — re-run a11y/seed.sql before this gate rather than reading the ` +
+          `absence of a swap as a product defect.`,
+      );
+    }
+    const after = await gesturePage.evaluate(() => {
+      const region = document.getElementById("gesture-result");
+      return {
+        answered: (region?.textContent ?? "").trim(),
+        focusedId: document.activeElement?.id ?? "",
+      };
+    });
+    check(
+      after.answered !== "",
+      "⏎ on the live gesture reaches the route and the answer is swapped in",
+      `status=${posted} answer=${JSON.stringify(after.answered.slice(0, 60))}`,
+    );
+    check(
+      after.focusedId === "gesture-result",
+      "and FOCUS FOLLOWS THE SWAP — story 6b.11's contract, which no render assertion can see",
+      `activeElement id=${JSON.stringify(after.focusedId)}`,
+    );
+    await gesturePage.close();
+  }
 
   // 🔑 The floor: a run that measured less than the full set reports "could not run", not a
   // pass. This is the assertion the file's predecessor did not have.

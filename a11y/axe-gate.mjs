@@ -86,6 +86,26 @@ const STATE_SORT = "?sort=age";
 // pass. Left unset — a developer's empty store — the missing coverage is PRINTED, because
 // a silent skip is exactly the "derives nothing and reports success" shape.
 const REQUIRE_QUEUE = process.env.AXE_REQUIRE_QUEUE === "1";
+// 🔴 **THE STATE THE FIRST QUEUE ROW CANNOT REACH** — story 6.4. The documenting gesture is
+// offered on the `undeclared` row alone, and `build_triage` emits every gap, absence and
+// conflict row BEFORE that loop: measured on a seeded store, the `New` row is fifth of five,
+// so `STATE_SELECTED` above — the FIRST row's own href — can never be a pane carrying the
+// gesture. The product's only live control would then be walked by no browser at all.
+//
+// 🔑 **The row is FOUND, never named.** This gate could have matched the `nouveau:` selector
+// prefix, or the row's translated `New` / `Nouveau` label — the second is story 6b.3's
+// `role_key` defect (a real, resolving, wrong value), and the first couples a browser gate to
+// a Rust identifier. Instead each row's pane is opened and asked whether it carries the
+// documenting control: the gate looks for the gesture BY THE GESTURE, so it follows the
+// product wherever that population moves.
+//
+// ⚠️ It needs `OPENCMDB_DOCUMENT_ENABLED` on the server, because `POST /document-all` is not
+// mounted without it and the page then renders the control nowhere — by design (story 6.1).
+// With `AXE_REQUIRE_GESTURE=1` (CI sets it) a run that finds no such row is *the gate could
+// not run*, never a pass: an unmounted route and a clean page are indistinguishable to axe.
+const REQUIRE_GESTURE = process.env.AXE_REQUIRE_GESTURE === "1";
+// The control the gate looks for. A CLASS the stylesheet guard already pins, not a label.
+const GESTURE = "button.btn-document";
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 const NAV_TIMEOUT_MS = 20_000;
 
@@ -163,9 +183,10 @@ async function main() {
 
   // The states no href carries. The selected-row address is the first queue row's own
   // href, so it is whatever the product would navigate to — not a URL invented here.
-  const firstRow = await seedPage.$$eval(".queue .queue-row > a", (rows) =>
-    rows.length > 0 ? rows[0].getAttribute("href") : null,
+  const queueRows = await seedPage.$$eval(".queue .queue-row > a", (rows) =>
+    rows.map((row) => row.getAttribute("href")),
   );
+  const firstRow = queueRows.length > 0 ? queueRows[0] : null;
   await seedPage.close();
 
   if (rejected.length > 0) {
@@ -195,6 +216,38 @@ async function main() {
     console.log(
       `⚠️  ${SEED} carries no queue row: the selected-pane state was NOT measured. ` +
         `Set AXE_REQUIRE_QUEUE=1 to make that a refusal rather than a gap.`,
+    );
+  }
+
+  // The pane that carries the documenting gesture, found by opening each row and asking for
+  // the control — never by recognising a selector or a translated word (see `REQUIRE_GESTURE`).
+  let gestureRow = null;
+  for (const route of queueRows) {
+    const page = await openPage();
+    await goOrGiveUp(page, route);
+    const controls = await page.$$eval(GESTURE, (found) => found.length);
+    await page.close();
+    if (controls > 0) {
+      gestureRow = route;
+      break;
+    }
+  }
+  if (gestureRow !== null) {
+    // The first-row state is already in `states` and may BE this row; a duplicate would be
+    // walked twice and reported as two states, which overstates the coverage.
+    if (!states.includes(gestureRow)) {
+      states.push(gestureRow);
+    }
+  } else if (REQUIRE_GESTURE) {
+    cannotRun(
+      `no queue row at ${SEED} carries \`${GESTURE}\`, so the product's only live gesture is ` +
+        `on no page this gate walks. Either the store holds no undeclared sighting, or the ` +
+        `server was started without OPENCMDB_DOCUMENT_ENABLED — neither is a clean product.`,
+    );
+  } else {
+    console.log(
+      `⚠️  no queue row carries ${GESTURE}: the documenting gesture was NOT measured. ` +
+        `Set AXE_REQUIRE_GESTURE=1 to make that a refusal rather than a gap.`,
     );
   }
 

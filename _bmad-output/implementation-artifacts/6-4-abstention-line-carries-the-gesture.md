@@ -305,7 +305,7 @@ the swap — never the template.
       (AC5 as amended). ⚠️ **And *"says why" is NEW COPY, not a rewire**: `_identity_section.html`
       renders cause and count and nothing else, and no `identity_no_gesture`-shaped key exists.
       Two new keys, both languages, under the `copy-vocabulary` gate.
-- [ ] **T3b — The population must EXIST where the gates run** (AC5). 🔴 `a11y/seed.sql` produces
+- [x] **T3b — The population must EXIST where the gates run** (AC5). 🔴 `a11y/seed.sql` produces
       **zero** `Nouveau` rows — measured — because all three seeded observations land on declared
       addresses. And 🔴 **the axe gate structurally cannot reach a selected `Nouveau` row**: it
       derives its state route from the **first** queue row, and `build_triage` pushes every gap,

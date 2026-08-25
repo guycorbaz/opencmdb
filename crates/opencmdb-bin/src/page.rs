@@ -267,7 +267,7 @@ fn strings() -> Strings {
         triage_lede: t!("triage.lede").to_string(),
         triage_empty: t!("triage.empty").to_string(),
         gesture_badge: t!("gesture.badge").to_string(),
-        gesture_not_built: t!("gesture.not_built").to_string(),
+        gesture_not_built: t!("gesture.not_built", badge = t!("gesture.badge")).to_string(),
         nav_perimeter: t!("nav.perimeter").to_string(),
         entity: t!("page.entity").to_string(),
         refresh: t!("page.refresh").to_string(),
@@ -645,9 +645,10 @@ impl GestureView {
     /// One control, its nature, and everything the template needs to render it.
     fn of(gesture: Gesture, label: String) -> Self {
         let nature = match gesture {
-            Gesture::Planned { .. } => {
-                GestureRender::Planned(rust_i18n::t!("gesture.not_built").to_string())
-            }
+            Gesture::Planned { .. } => GestureRender::Planned(
+                rust_i18n::t!("gesture.not_built", badge = rust_i18n::t!("gesture.badge"))
+                    .to_string(),
+            ),
             Gesture::Live { route } => GestureRender::Live(route),
         };
         Self { label, nature }
@@ -5003,7 +5004,10 @@ mod tests {
 
         assert_eq!(
             pane(false).gestures[0].nature,
-            GestureRender::Planned(rust_i18n::t!("gesture.not_built").to_string()),
+            GestureRender::Planned(
+                rust_i18n::t!("gesture.not_built", badge = rust_i18n::t!("gesture.badge"))
+                    .to_string(),
+            ),
             "the route is not mounted, so the gesture is PLANNED — a live control here is a 404 \
              the operator meets by pressing the primary control of the product's main screen"
         );
@@ -5303,6 +5307,39 @@ mod tests {
             "the swap lands in a region focus can reach — story 6b.11's focus-after-swap contract, \
              registered to this story because no swap existed to attach it to"
         );
+        // 🔴 **The focus handler belongs on the TARGET of the swap, and it sat on the button.**
+        // `htmx:afterSwap` is fired on the swapped element, which is this paragraph — a SIBLING
+        // of the control inside the group, never an ancestor — so the event bubbled past the
+        // button and the handler never ran. Measured in Chrome by `a11y/kbd-probe.mjs`: the
+        // press answered 201, the answer swapped in, and `document.activeElement.id` was EMPTY
+        // while every assertion in this file stayed green.
+        //
+        // ⚠️ **This does NOT replace the browser check and is not offered as one** — it names
+        // the CAUSE where the probe names the symptom, which is what story 6b.11's amended AC5
+        // asks for: a source guard does not suffice, and it is not thereby worthless. The
+        // NEGATIVE half is the load-bearing one, because *put the handler on the control that
+        // acts* is the ordinary gesture that wrote the defect in the first place.
+        let region = on
+            .split_once(r#"id="gesture-result""#)
+            .expect("the answer region is on the page")
+            .1;
+        assert!(
+            region
+                .split_once('>')
+                .is_some_and(|(attrs, _)| attrs.contains("hx-on::after-swap")),
+            "the focus handler must sit on the SWAP TARGET, where htmx fires the event"
+        );
+        let control = on
+            .split_once("<button type=\"button\"")
+            .expect("the live control is on the page")
+            .1;
+        assert!(
+            control
+                .split_once('>')
+                .is_some_and(|(attrs, _)| !attrs.contains("hx-on::after-swap")),
+            "and NOT on the button, where htmx never fires it — an attribute naming a behaviour \
+             the product does not have is worse than no attribute at all"
+        );
     }
 
     /// The rendered bar says the gesture is not built, and says it in the operator's language.
@@ -5354,13 +5391,19 @@ mod tests {
              without five visible copies — seen in a browser, repeating it inside each control \
              turned a compact row into a stack that said the same thing five times"
         );
+        // ⚠️ **The sentence names the BADGE, and story 6.4 is why.** It read *"This gesture is
+        // not built yet"* while every control in the bar was planned; the moment the documenting
+        // gesture went live, a group-level line sat under a bar whose loudest control WAS built.
+        // It is announced per control through `aria-describedby`, so it was right in the ear and
+        // wrong on the page — no assertion moved, and only a look caught it.
         assert!(
             html.contains(
-                "id=\"gesture-not-built\" class=\"gesture-note\">This gesture is not built yet"
+                "id=\"gesture-not-built\" class=\"gesture-note\">The gestures marked Not yet are not built yet"
             ),
             "the sentence is VISIBLE TEXT, not a `title=` — it sat in a tooltip until the code \
              review, invisible to a keyboard and to a touch screen, while the whole argument for \
-             showing a dead control is that it TELLS the operator why"
+             showing a dead control is that it TELLS the operator why — and it names the badge it \
+             scopes itself to, INTERPOLATED, so the two cannot drift apart"
         );
         assert!(
             html.contains("Accept the gap") && html.contains("Exclude"),

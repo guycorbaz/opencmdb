@@ -624,16 +624,37 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 
    🔴 It cannot leak onto `Résoudre`: `action_bar` builds `Gesture::Live` only for the documenting
    key, so this class and that gesture are the same thing by construction rather than by a sentence
-   about which primary happens to be live today. */
-.btn-document {
+   about which primary happens to be live today.
+
+   🔴 **AND IT PAINTED NOTHING FOR A DAY, BECAUSE OF THIS SELECTOR.** Written as a bare
+   `.btn-document` it is specificity 0-1-0 and `.btn-gesture.live` above is 0-2-0, so ALL FOUR
+   declarations lost and the product's primary control computed to plain grey at weight 400 —
+   measured in Chrome: `color rgb(29,31,32)`, `border rgb(152,152,155)`, `background
+   rgb(233,233,234)`, against a token of `rgb(141,94,45)`. ⚠️ The guard that was supposed to
+   carry this counts `var(--accent-document)` READS IN THE SHEET, and all four were there and
+   correct; *a declaration that loses is still a declaration*. The selector now matches
+   `.btn-gesture.live`'s weight and sits after it, and `a11y/kbd-probe.mjs` compares the
+   COMPUTED colour against the token `:root` actually carries — story 6b.11's amended AC5, met
+   here by a browser because no source guard can see a cascade.
+
+   🔴 **FILLED, NOT TINTED, AND THE REASON IS A MEASUREMENT (Guy, 2026-08-25).** The moment the
+   amber genuinely painted, axe-core turned RED: `#8d5e2d` as TEXT on the 10% tint is **4.05**
+   where AA needs 4.5 at 12 px. Three ways out were measured — darken the token to `#855625`
+   (**4.56**), drop the tint and paint text on `--surface` (**4.59**), or fill the control and
+   put the label on it (**5.57**). ⚠️ The first two pass by 0.06 and 0.09, a margin the next
+   palette adjustment erases in silence, and the first touches a token taken from the mock in
+   story 6b.1 and pinned by 6b.11's hue and luminance bands. The third is also what *"one
+   primary action (amber Document) + secondary ghosts"* (`ux:1174`) plainly means. */
+.btn-gesture.btn-document {
   border-color: var(--accent-document);
-  color: var(--accent-document);
-  background: color-mix(in srgb, var(--accent-document) 10%, var(--surface));
+  color: var(--surface);
+  background: var(--accent-document);
   font-weight: 600;
 }
 
-.btn-document:hover {
-  background: color-mix(in srgb, var(--accent-document) 18%, var(--surface));
+.btn-gesture.btn-document:hover {
+  background: color-mix(in srgb, var(--accent-document) 86%, var(--text));
+  border-color: color-mix(in srgb, var(--accent-document) 86%, var(--text));
 }
 
 /* A control on a screen that has no subject to act on — `/diagnostic`'s unreachable `Live` arm.

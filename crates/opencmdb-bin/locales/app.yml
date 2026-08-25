@@ -360,9 +360,17 @@ time.ahead:
 gesture.badge:
   en: "Not yet"
   fr: "À venir"
+# 🔴 **STORY 6.4 MADE THE OLD SENTENCE FALSE AND ONLY A LOOK COULD SAY SO.** It read *"This
+# gesture is not built yet."* under a bar in which every control was planned — true until the
+# documenting gesture went live, and from that moment a group-level line contradicting the
+# loudest control on the screen. ⚠️ It is announced per control through `aria-describedby`, so
+# it was right in the ear and wrong on the page, which is why no assertion moved.
+#
+# 🔑 The badge is INTERPOLATED rather than quoted, so the sentence and the mark it names cannot
+# drift apart: change `gesture.badge` and this follows it in both languages.
 gesture.not_built:
-  en: "This gesture is not built yet."
-  fr: "Ce geste n'est pas encore construit."
+  en: "The gestures marked %{badge} are not built yet."
+  fr: "Les gestes marqués %{badge} ne sont pas encore construits."
 # 🔴 `gesture.document`, NOT `gesture.merge`, and the English value is `Document` — Guy's
 # arbitration 1 of 2026-08-21, story 6b.10. The binding glossary retires `merge` IN ENGLISH by
 # name (`prd.md:1037`, `ux-design-specification.md:1386`): *"it names the forbidden operation —
