@@ -46,6 +46,11 @@
 //! `AXE_REQUIRE_QUEUE`/`AXE_REQUIRE_GESTURE` — without the last two an empty queue reads as a
 //! PASS, which is the *green on residue* defect story 6b.11 closed.
 //!
+//! 🔑 **An interrupted run leaves its snapshot on DISK**, at `target/xtask-mutate/`, and the next
+//! run refuses until it is dealt with. ⚠️ The residual this replaces said the file was
+//! *"recoverable from git"* — false on exactly the dirty tree AC7 declares normal, where
+//! `git checkout --` is recorded defect row 7.
+//!
 //! ⚠️ **It is a TRIPWIRE against the ordinary mistake, never a barrier against a determined one**
 //! (story 5.12's narrowing). Nothing stops an author writing a shell line instead.
 
@@ -485,6 +490,35 @@ pub(crate) fn run_mutation(
     let snapshot = std::fs::read_to_string(&path)
         .with_context(|| format!("reading {} to snapshot it", path.display()))?;
 
+    // 🔴 **THE SNAPSHOT GOES TO DISK BEFORE THE MUTATION, at a path anyone can find.** T9 required
+    // this and was ticked without it; the review measured the cost. The restore runs after the
+    // carriers return, so a Ctrl-C during a multi-minute cargo run — or a panic — leaves the tree
+    // mutated with the snapshot in a dead process's memory. ⚠️ And the residual written in its
+    // place said the file was *"recoverable from git"*, which is FALSE on exactly the tree AC7
+    // declares normal: this driver deliberately runs on dirty trees, and `git checkout --` on one
+    // is recorded defect row 7 — nine uncommitted keys lost. The review's own layer re-enacted it
+    // in one command while cleaning up.
+    let vault = root.join("target/xtask-mutate");
+    let stash = vault.join(format!(
+        "{}.snapshot",
+        m.file.to_string_lossy().replace('/', "%")
+    ));
+    if stash.exists() {
+        println!(
+            "🔴 A SNAPSHOT FROM AN EARLIER RUN IS STILL HERE: {}",
+            stash.display()
+        );
+        println!(
+            "   That run did not finish, so {} may still be MUTATED.",
+            m.file.display()
+        );
+        println!("   Compare them, restore by hand, and delete the snapshot — do NOT use");
+        println!("   `git checkout`: on a dirty tree it destroys uncommitted work (defect row 7).");
+        return Ok(CANNOT_MEASURE);
+    }
+    std::fs::create_dir_all(&vault).with_context(|| format!("creating {}", vault.display()))?;
+    std::fs::write(&stash, &snapshot).with_context(|| format!("writing {}", stash.display()))?;
+
     // 🔑 THE BASELINE FIRST, on the UNMUTATED tree, so a pre-existing red is caught before the
     // mutation can be credited with it. A baseline that is not clean is a REFUSAL: measuring a
     // mutation against a tree that was already broken tells you nothing about either.
@@ -562,6 +596,8 @@ pub(crate) fn run_mutation(
 
     let result = measure(root, m, &gates);
     restore(&path, &snapshot)?;
+    // Only once the file is provably back does the stash go: while it exists, it is the recovery.
+    std::fs::remove_file(&stash).with_context(|| format!("clearing {}", stash.display()))?;
     let outcome = result?;
 
     if !m.baseline {

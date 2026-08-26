@@ -392,7 +392,14 @@ one thing this module's doc says it will never give.
 
 #### Deferred
 
-- [x] [Review][Defer] **The interrupt residual is accurate and its recovery advice is false.**
+- [x] [Review][Patch] **CLOSED rather than deferred (2026-08-26): the snapshot goes to DISK before
+      the mutation**, at `target/xtask-mutate/`, and the next run REFUSES until a leftover is dealt
+      with — measured: a planted stale snapshot gives exit **2** with a recovery instruction that
+      names `git checkout` as the thing NOT to do. T9 required this and had been ticked without it.
+      ⚠️ The residual it replaces said the file was *"recoverable from git"*, which is false on
+      exactly the dirty tree AC7 declares normal.
+      _(Originally deferred; closed while CI was unavailable, which is the honest use of the wait.)_
+- [x] [Review][Defer] ~~**The interrupt residual is accurate and its recovery advice is false.**~~
       Measured: killed mid-cargo, the tree stays mutated. On the dirty tree AC7 calls normal the
       file is NOT *"recoverable from git"* — and the mutating layer re-enacted defect #7 in one
       command while cleaning up. T9 required a discoverable snapshot PATH and it was ticked without
