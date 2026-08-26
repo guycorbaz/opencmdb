@@ -4980,3 +4980,30 @@ current by reading, and this row is what says so.
 - ⚠️ **`CLAUDE.md` and `docs/project-context.md` carry no story 6.4 paragraph.** That is the
   merge-time convention here and every prior story did the same — but the branch is pushed, and the
   repository's own *docs-current-before-push* rule names both files. **Owner: the merge.**
+
+## Deferred from: story 6.4b's push (2026-08-26)
+
+- 🔴 **`gh pr checks --watch` EXITS 0 WHEN THERE IS NOTHING TO WATCH, and this project has now met
+  that shape twice.** Measured on PR #129: GitHub created **no workflow run at all** for the head
+  commit — `gh api repos/…/commits/<sha>/check-runs` returned `total_count: 0`, ten polls over five
+  minutes, before and after a `reopened` and a `synchronize` event — and the watcher armed to
+  report the result **returned success**. ⚠️ *A watcher that emits nothing looks exactly like a
+  watcher reporting success*: `CLAUDE.md` records the same sentence from story 6b.10's push, where
+  a monitor timed out in silence. **The rule that follows: a `--watch` may never stand in for
+  reading the result — the conclusion is read from `gh pr checks` or from the run itself,
+  afterwards, every time.** It was caught here only because that reading was done anyway.
+  **Owner: whoever pushes next.** Effective immediately; it costs one command.
+- ⚠️ **And no cause is named for the missing run**, which is the point of this row rather than an
+  omission from it. Nine checks came back negative: `.github/` is byte-identical to `master` on
+  that branch, `ci.yml` parses, the trigger is a bare `pull_request:` with no paths filter, the
+  repository's Actions are `enabled` with `allowed_actions: all`, the `CI` workflow is `active`,
+  the branch pushed, the PR is OPEN, and **two PRs an hour earlier ran on exactly that trigger**
+  (`c02a2b0`, `4c707c7`). *A cause needs a check, not a plausible story* — and the remaining
+  candidates (an account-level minutes quota, an organisation restriction) are visible on the
+  Actions page and not through the API with these credentials. **Owner: Guy**, who is looking;
+  this row exists so the next session does not adopt a theory in the meantime.
+- ⚠️ **Story 6.4b is therefore `review` with its PR open and BLOCKED**, green on all six local
+  commands (761 tests against a live store, nine gates, clippy `--all-targets`, fmt,
+  `RUSTFLAGS="-D warnings"`, each read from `$?`) and **unconfirmed by CI**. *Reproducing CI is not
+  CI* — story 6b.10's red run was on something no local command sees. It must not be merged on the
+  local green alone.
