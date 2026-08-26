@@ -1,6 +1,6 @@
 # Story 6.4: The abstention line carries the gesture
 
-Status: **review** — every task is done and measured; `done` is the MERGE's business.
+Status: **done** — PR #127 squash-merged 2026-08-26 as `b6dfd69`, after a CI run green on the head commit itself (2m57s: nine gates, 741 tests, axe 10 routes + 4 states 0 nodes, kbd 30 checks).
 
 ⚠️ **The story's title and its *so that* clause are left as the plan wrote them and are now
 INACCURATE**: the gesture lands on the triage queue's `Nouveau` row, not on the abstention line,
