@@ -200,38 +200,91 @@ async fn document_all(
         return malformed();
     }
     match state.port.document_all(ObsId::from_uuid(subject)).await {
-        Ok(documented) => (
-            StatusCode::CREATED,
-            format!(
-                "documented {} field(s) as entity {}",
-                documented.fields, documented.entity_id
-            ),
-        )
-            .into_response(),
+        // 🔴 **The status and the body's ROLE are unchanged; what changed is that the body is now
+        // something an operator can read** (story 6.4's code review, Guy's arbitration 2′ of
+        // 2026-08-26). It was a Rust `format!` — English under a French UI, `field(s)`, and a raw
+        // entity id — and story 6.4 is what put it in front of an operator for the first time, the
+        // route having been reached from no template until then.
+        //
+        // 🔑 **`HX-Redirect` is what stops the screen from lying.** The narrow swap replaces one
+        // paragraph, so after a success the queue row, the amber control and the *"nothing
+        // declared at this address"* pane all stayed exactly as they were — a claim and its
+        // refutation in one viewport. The browser is sent back to `/triage`, which re-renders from
+        // the store with the row gone, and carries the confirmation in the URL: *one URL per
+        // state* is epic constraint 4, and post-redirect-get is its idiom rather than an exception
+        // to it.
+        //
+        // ⚠️ **The 201-with-a-body contract of story 6.2 is NOT touched**: the status is the same,
+        // the body is the same kind of thing, and a machine caller — `curl`, the tests — sees
+        // exactly what it saw. Only a browser running htmx reads the header. And re-rendering the
+        // page HERE was refused for a reason the type enforces: this router's state holds no pool
+        // (story 6.1's M4 — adding one fails to compile), so a handler that rebuilt the triage
+        // body would demolish that guarantee for a display convenience.
+        Ok(documented) => {
+            // 🔑 The entity id leaves the SCREEN and lands in the LOG, which is where it was
+            // always useful: it names nothing the operator can act on, and it is exactly what an
+            // administrator correlating a write needs. ⚠️ It also keeps the field READ — dropping
+            // it from the body made `entity_id` dead, and the honest answer to that warning is a
+            // real reader, not a deleted field.
+            tracing::info!(
+                entity = %documented.entity_id,
+                fields = documented.fields,
+                "documented an observed record"
+            );
+            (
+                StatusCode::CREATED,
+                [(
+                    axum::http::HeaderName::from_static("hx-redirect"),
+                    format!("/triage?documented={}", documented.fields),
+                )],
+                crate::page::counted_fields("document.done", documented.fields),
+            )
+                .into_response()
+        }
         Err(DocumentFailure::Refused(refusal)) => match refusal {
             // 404, ⚠️ colliding with axum's unregistered-route 404 — the BODY is the
             // discriminator (§4): the fallback's body is empty, this is the domain's sentence.
             DocumentRefusal::UnknownSubject => {
-                (StatusCode::NOT_FOUND, refusal.to_string()).into_response()
+                (StatusCode::NOT_FOUND, refusal_body(refusal)).into_response()
             }
             // 409 — documenting twice counts one box twice.
             DocumentRefusal::AlreadyDocumented => {
-                (StatusCode::CONFLICT, refusal.to_string()).into_response()
+                (StatusCode::CONFLICT, refusal_body(refusal)).into_response()
             }
             // 422 (domain) — distinct body from the shape 422's.
             DocumentRefusal::NothingToDocument => {
-                (StatusCode::UNPROCESSABLE_ENTITY, refusal.to_string()).into_response()
+                (StatusCode::UNPROCESSABLE_ENTITY, refusal_body(refusal)).into_response()
             }
         },
         Err(DocumentFailure::Backend(error)) => {
             tracing::error!(%error, "documenting failed at the backend");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "documenting failed — the store did not accept the write",
+                rust_i18n::t!("document.backend").to_string(),
             )
                 .into_response()
         }
     }
+}
+
+/// A refusal in the operator's language.
+///
+/// 🔑 **The mapping lives HERE and not on `DocumentRefusal`**, which is `opencmdb-core`'s: the
+/// domain crate must not depend on `rust-i18n` (D47), and a refusal is domain data, not a
+/// sentence. Its `Display` stays what it was — the technical description, for logs and for tests
+/// that name the case rather than the wording.
+///
+/// ⚠️ **Story 6.1 pinned the 404's body as a literal sentence** and this changes it to a key. The
+/// property that arbitration bought is preserved and is what the pinning was FOR: the body is
+/// non-empty, so it still discriminates this 404 from axum's unregistered-route 404, whose body
+/// is empty — in every locale.
+fn refusal_body(refusal: DocumentRefusal) -> String {
+    match refusal {
+        DocumentRefusal::UnknownSubject => rust_i18n::t!("document.unknown_subject"),
+        DocumentRefusal::AlreadyDocumented => rust_i18n::t!("document.already_documented"),
+        DocumentRefusal::NothingToDocument => rust_i18n::t!("document.nothing_to_document"),
+    }
+    .to_string()
 }
 
 /// The CSRF Origin check (story 6.2 §5), pure over the request headers. It is a TRIPWIRE against
@@ -281,7 +334,7 @@ fn same_origin(headers: &HeaderMap) -> bool {
 fn malformed() -> Response {
     (
         StatusCode::UNPROCESSABLE_ENTITY,
-        "malformed request: expected form field `subject` carrying an observation id",
+        rust_i18n::t!("document.malformed").to_string(),
     )
         .into_response()
 }
@@ -294,9 +347,24 @@ mod tests {
 
     use super::*;
 
-    const UNKNOWN_SUBJECT_BODY: &str = "unknown subject: nothing can be documented";
-    const ALREADY_BODY: &str = "already documented: this observation's fields are already declared";
-    const NOTHING_BODY: &str = "nothing to document: the observation carries no declarable field";
+    // 🔴 **The bodies are KEYS now, so these read the resolver rather than a copy of its output.**
+    // Story 6.1 pinned the 404's body as a literal sentence; story 6.4's code review made every
+    // body a key, because story 6.4 is what first put one in front of an operator — in English,
+    // under a French UI. Pinning the literal here would have recreated the drift the keys exist to
+    // remove: two spellings of one sentence, one of which nobody updates.
+    //
+    // ⚠️ What the pinning was FOR is preserved and asserted below: the body is NON-EMPTY, so this
+    // 404 still discriminates itself from axum's unregistered-route 404, whose body is empty — in
+    // every locale.
+    fn unknown_subject_body() -> String {
+        rust_i18n::t!("document.unknown_subject").to_string()
+    }
+    fn already_body() -> String {
+        rust_i18n::t!("document.already_documented").to_string()
+    }
+    fn nothing_body() -> String {
+        rust_i18n::t!("document.nothing_to_document").to_string()
+    }
 
     /// A same-origin urlencoded POST carrying `body`. `Origin`/`Host` agree so the CSRF check
     /// passes; tests that probe the CSRF check set the headers themselves.
@@ -360,7 +428,13 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::CREATED);
         assert!(body.contains('2'), "names the field count: {body}");
-        assert!(body.contains("0000000000ee"), "names the entity: {body}");
+        // 🔴 The entity id is NOT in what the operator reads — story 6.4's code review. It named
+        // nothing they could act on; it is in the log, where an administrator correlating a write
+        // needs it, and in the store, where the tests now read it from.
+        assert!(
+            !body.contains("0000000000ee"),
+            "a raw UUID is not an answer to a person: {body}"
+        );
     }
 
     #[tokio::test]
@@ -371,7 +445,12 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::NOT_FOUND);
-        assert_eq!(body, UNKNOWN_SUBJECT_BODY);
+        assert_eq!(body, unknown_subject_body());
+        assert!(
+            !body.is_empty(),
+            "NON-EMPTY is what story 6.1's pinning was for: axum's unregistered-route 404 carries \
+             an empty body, and this body is the only thing telling the two apart"
+        );
     }
 
     #[tokio::test]
@@ -382,7 +461,7 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::CONFLICT);
-        assert_eq!(body, ALREADY_BODY);
+        assert_eq!(body, already_body());
     }
 
     #[tokio::test]
@@ -393,9 +472,10 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(body, NOTHING_BODY);
+        assert_eq!(body, nothing_body());
         assert_ne!(
-            body, "malformed request: expected form field `subject` carrying an observation id",
+            body,
+            rust_i18n::t!("document.malformed").to_string(),
             "the domain 422 must not collide with the shape 422"
         );
     }

@@ -4889,3 +4889,94 @@ manual chapter to a product capability and demands `\begin{planned}` when the ca
 absent** — ⚠️ which means first deciding what links them, and then a tenth gate over LaTeX.
 **Owner: Epic 6b's retrospective**, to weigh that cost. Until it exists, the manuals are kept
 current by reading, and this row is what says so.
+
+## Deferred from: story 6.4 (2026-08-24)
+
+- 🔴 **`epics.md:1794`'s story 6.4 diverges from what is built, in its TITLE, its *so that* clause
+  and its AC1 — and a story may not edit the plan.** The criterion attaches FR13's documenting
+  gesture to the **`AbsenceOfProof`** cause line. Measured: `AbsenceOfProof` is an identity verdict
+  about whether two sightings could be **joined** (`cascade.rs`, *"only `Neutral` / nothing"*),
+  while FR13's population is `undeclared` — *observed, and no declared record claims it*
+  (`prd.md:1018`, a binding glossary row). ⚠️ **A sighting can be `AbsenceOfProof` and already fully
+  declared**, a state `a11y/seed.sql` produces today, so the criterion's letter offers to create a
+  second entity for a machine the operator has already documented. **Guy's arbitration of
+  2026-08-24: the gesture lands on the triage queue's `Nouveau` row**, which is `undeclared`
+  already computed and already displayed since story 6b.4. **Owner: Epic 6's retrospective** — the
+  title, the *so that* clause (*"the reach section stops being a number and becomes a door"*, not
+  met) and AC1's population all need correcting together.
+- 🔑 **The reach section may have NO door, and that should be written into the plan rather than
+  left as an unmet aspiration.** An identity abstention says *the engine could not place this
+  sighting*; its answer is **a better source**, not an operator gesture. The shipped scanner reads
+  no hardware address — `/sources` states it — and **Epic 11** is what opens that. Until then the
+  section is a true number with no action behind it, which is the product's own honesty rather than
+  a gap. **Owner: Epic 6's retrospective**, with the row above.
+- ⚠️ **`Nouveau` is still outside the binding glossary table.** Story 6b.6 registered that the
+  queue's `kindLabel` axis (`Absence`, `Nouveau`) is not in the table and that reconciling it
+  rewrites story 6b.4's shipped copy. This story now attaches a **gesture** to one of those
+  labels, which raises the cost of leaving it unreconciled: a control named after a word the
+  glossary does not carry. **Owner: Epic 15**, which the earlier row already names.
+
+### Found while BUILDING story 6.4 (2026-08-25)
+
+- 🔴 **« Merger » is the binding French label of the `document` gesture, and on a `Nouveau` row
+  there is nothing to merge with.** Seen in a browser: the pane reads *« Rien de déclaré à cette
+  adresse »* and the primary control under it reads *« Merger »*. The word is not wrong by the
+  table — story 6b.10's arbitration kept « Merger » as the binding translation of `document`,
+  against EN *"Document"* — but the table was written for the gesture that RECONCILES two sides,
+  and story 6.4 is the first to offer it where only one side exists. ⚠️ A story may not edit a
+  binding glossary. **Owner: Epic 15**, with the `Nouveau` row above — the two are one decision.
+- 🔴 **`--accent-document` clears AA as a FILL and fails it as TEXT, and that is a property of the
+  token rather than of this screen.** Measured: `#8d5e2d` on the 10% tint is **4.05**, on
+  `--surface` **4.59**, and `--surface` on a full `#8d5e2d` fill is **5.57**; AA needs 4.5 at 12 px.
+  Guy chose the fill (2026-08-25) precisely because the other two pass by 0.06 and 0.09. **The next
+  use of this token must not assume it can carry text.** Owner: whoever next paints with it —
+  registered here because the sheet cannot say it and the guard that counts its uses cannot either.
+- ⚠️ **The contrast guard is an enumeration and the amber ground is not in it.**
+  `every_text_token_clears_aa_on_every_ground_it_can_sit_on` walks the grounds story 6b.11 listed,
+  and `--accent-document` is now a painted ground carrying `--surface` as text. axe measures that
+  pair live on every run, so it is covered — by the browser, not by `cargo test`. Story 6b.11's own
+  row already says two painted grounds stay out; this is a third. **Owner: Epic 6b's retrospective**,
+  with that row.
+- ⚠️ **`a11y/kbd-probe.mjs` now WRITES to the store** — its last block presses the documenting
+  gesture for real, which adopts the sighting `a11y/seed.sql` plants. It must stay last in the CI
+  step or be preceded by a re-seed; a second run answers 409 and htmx swaps nothing. The probe
+  reads the status off the wire and calls that *the gate could not run*, so the failure is loud —
+  but the ordering constraint is real and is stated in `ci.yml` beside the step. **Owner: nobody
+  today**; it becomes a decision the day a third browser gate wants to run after it.
+- 🔴 **Story 6b.5's reach contradiction RECURS on `/triage`, and this story is where it is most
+  visible.** In the state `a11y/seed.sql` creates — observations present, none placed — the reach
+  section rendered *« Rien d'observé pour l'instant »* under a queue of five rows dated a minute
+  ago. Story 6.4 works around it by seeding identity abstentions so the section has something true
+  to say, ⚠️ **which fixes the harness and not the product**: a real deployment whose scan has
+  landed but whose identity pass has not run still shows the contradiction. Story 6b.12 registered
+  it as PARTIAL; this is the second sighting. **Owner: the existing row**, which it does not
+  displace.
+
+## Deferred from: code review of story 6.4 (2026-08-25)
+
+- 🔴 **A multi-homed sighting documents the address the operator was NOT looking at, and that row
+  then becomes permanently un-documentable.** MEASURED by the review's mutating layer: one
+  observation carrying `192.0.2.201` and `192.0.2.202` produces TWO `Nouveau` rows; selecting
+  `.202` shows `.202` in the pane and posts the observation id, and `gap::project` takes the first
+  occurrence per key — so `.201` is written. Afterwards the `.202` row is still offered and a
+  second press answers 409 **silently**. ⚠️ Not reachable on the shipped ARP/ping connector (one
+  `IpV4` per observation), so it is a stated limit and not a live defect — but `multi-nic` is a
+  committed trap family and it goes live on the first connector that reports a second address.
+  AC1's *"the whole record is documented at once"* reads as covering this and does not.
+  **Owner: the connector story that emits a second address** — the same story that must carry the
+  interface-mint race story 5.14 registered, for the same reason: it removes the shield.
+- ⚠️ **`hx-vals='{"subject": "{{ pane.subject }}"}'` builds JSON by string interpolation**, and
+  Askama's escaper is an HTML escaper, not a JSON one. Latent today: `pane.subject` is
+  `ObsId::to_string()` at every call site, so it is always a UUID — *a property of the call sites,
+  not of the type*, which is exactly what story 6b.4's review recorded for the missing URL escape
+  ("latent not live"). The guard pins the happy shape byte for byte and therefore cannot see the
+  class. **Owner: the first story that puts anything but a UUID in a pane's `subject`.**
+- ⚠️ **Focus is moved INTO an `aria-live` region.** `_action_bar.html` argues that `aria-live` and
+  the focus move are both needed and neither substitutes; several screen readers announce a focused
+  live region twice, or suppress the live announcement in favour of the focus one. Neither browser
+  gate can see it — the probe asserts `activeElement.id` and axe has no rule for it. The argument
+  is defensible and is now a STATED limit rather than a settled fact. **Owner: the first story with
+  access to a real screen reader.**
+- ⚠️ **`CLAUDE.md` and `docs/project-context.md` carry no story 6.4 paragraph.** That is the
+  merge-time convention here and every prior story did the same — but the branch is pushed, and the
+  repository's own *docs-current-before-push* rule names both files. **Owner: the merge.**

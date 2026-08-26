@@ -304,6 +304,11 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 .identity .sep { color: var(--muted); }
 .identity .note { font-size: 12px; margin: 6px 0 0; }
 .identity .abstentions .cause { color: var(--muted); }
+/* Story 6.4: a cause line stacks — the count row, then the sentence saying why that line offers no
+   documenting gesture. The SETTLED list keeps the single flex row above; only `.causes` stacks. */
+.abstentions.causes li { display: block; }
+.abstentions.causes .line { display: flex; justify-content: space-between; align-items: baseline; margin: 0; }
+.abstentions .why { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
@@ -595,11 +600,114 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
   cursor: default;
 }
 
-/* Reserved for the day a gesture is live (story 6.4). Deliberately quiet: the amber belongs to the
-   documenting gesture alone, and this rule must not borrow it. */
+/* 🔑 **That day is story 6.4** — this rule was written empty-handed and now dresses a real
+   `<button>`. It stays QUIET on purpose. The amber (`--accent-document`) is reserved by story 6b.1
+   to the documenting gesture, and the only live control today IS that gesture — but `action_bar`
+   also builds a primary keyed `gesture.resolve`, so painting `.live` amber would mean the
+   reservation holds by a SENTENCE about which primary happens to be live rather than by anything
+   the stylesheet can see. ⚠️ Whether the product's primary action should be emphasised WAS a design
+   arbitration and it has been TAKEN — Guy, 2026-08-26, at story 6.4's code review: the
+   documenting control is FILLED with the amber (see `.btn-gesture.btn-document` below). This
+   paragraph said *"registered rather than taken here"* while the decision sat twenty lines down
+   and appeared in no register row. ⚠️ `.live` itself stays grey, and that is still the point: the
+   amber belongs to the DOCUMENTING gesture, not to whichever primary happens to act. */
+/* Story 6.4's code review: BUILT AND SWITCHED OFF. Shaped like a planned control — it does not
+   act either — and told apart by its badge and its own sentence, never by colour alone. ⚠️ The
+   class is `off` and not `disabled`: a guard scans the rendered page for that word and requires
+   every occurrence to be `aria-`/`hx-` prefixed, so the obvious spelling would red it for a reason
+   that is not a defect. */
+/* The confirmation a documenting gesture leaves in the URL, rendered by the screen itself. Quiet
+   on purpose: it states a fact that already happened, and the operator's proof is the row that is
+   no longer in the queue beneath it. */
+.documented {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent-document);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.btn-gesture.off {
+  color: var(--muted);
+  border-style: dashed;
+}
+
 .btn-gesture.live {
   color: var(--text);
   border-color: var(--color-neutral-500);
+  background: var(--surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+/* 🔑 **THE FIRST THING THE AMBER HAS EVER PAINTED.** `--accent-document` has been defined since
+   story 6b.1 and read by NOTHING — zero `var()` reads in the whole sheet — because the gesture it
+   is reserved for had no live control until story 6.4. The UX spec settles both halves: the token
+   is *"reserved solely for the documenting gesture"* (`:587`) and the screen carries *"one primary
+   action (amber Document) + secondary ghosts"* (`:1174`).
+
+   🔴 It cannot leak onto `Résoudre`: `action_bar` builds `Gesture::Live` only for the documenting
+   key, so this class and that gesture are the same thing by construction rather than by a sentence
+   about which primary happens to be live today.
+
+   🔴 **AND IT PAINTED NOTHING FOR A DAY, BECAUSE OF THIS SELECTOR.** Written as a bare
+   `.btn-document` it is specificity 0-1-0 and `.btn-gesture.live` above is 0-2-0, so ALL FOUR
+   declarations lost and the product's primary control computed to plain grey at weight 400 —
+   measured in Chrome: `color rgb(29,31,32)`, `border rgb(152,152,155)`, `background
+   rgb(233,233,234)`, against a token of `rgb(141,94,45)`. ⚠️ The guard that was supposed to
+   carry this counts `var(--accent-document)` READS IN THE SHEET, and all four were there and
+   correct; *a declaration that loses is still a declaration*. The selector now matches
+   `.btn-gesture.live`'s weight and sits after it, and `a11y/kbd-probe.mjs` compares the
+   COMPUTED colour against the token `:root` actually carries — story 6b.11's amended AC5, met
+   here by a browser because no source guard can see a cascade.
+
+   🔴 **FILLED, NOT TINTED, AND THE REASON IS A MEASUREMENT (Guy, 2026-08-25).** The moment the
+   amber genuinely painted, axe-core turned RED: `#8d5e2d` as TEXT on the 10% tint is **4.05**
+   where AA needs 4.5 at 12 px. Three ways out were measured — darken the token to `#855625`
+   (**4.56**), drop the tint and paint text on `--surface` (**4.59**), or fill the control and
+   put the label on it (**5.57**). ⚠️ The first two pass by 0.06 and 0.09, a margin the next
+   palette adjustment erases in silence, and the first touches a token taken from the mock in
+   story 6b.1 and pinned by 6b.11's hue and luminance bands. The third is also what *"one
+   primary action (amber Document) + secondary ghosts"* (`ux:1174`) plainly means. */
+.btn-gesture.btn-document {
+  border-color: var(--accent-document);
+  color: var(--surface);
+  background: var(--accent-document);
+  font-weight: 600;
+}
+
+.btn-gesture.btn-document:hover {
+  background: color-mix(in srgb, var(--accent-document) 86%, var(--text));
+  border-color: color-mix(in srgb, var(--accent-document) 86%, var(--text));
+}
+
+/* A control on a screen that has no subject to act on — `/diagnostic`'s unreachable `Live` arm.
+   Plain text, deliberately shaped like NOTHING pressable, so it can never be mistaken for the
+   inert `live` span the gesture type's own doc warns about. */
+.btn-gesture-inert {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Where the documenting gesture's answer lands, and where focus goes with it (story 6b.11's
+   focus-after-swap contract, inherited by story 6.4 as the first swap to attach it to). Empty
+   until a swap fills it, so it must take no room and draw no box when it holds nothing. */
+.gesture-result {
+  flex-basis: 100%;
+  margin: 8px 0 0;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.gesture-result:empty {
+  margin: 0;
+}
+
+.gesture-result:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 /* The sentence, VISIBLE. It lived in a `title=` until the code review — invisible to a keyboard and

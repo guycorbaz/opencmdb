@@ -45,6 +45,7 @@
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use crate::page::GestureRender;
 use askama::Template;
 use axum::response::{Html, IntoResponse, Response};
 use opencmdb_core::observation::Timestamp;
@@ -1390,6 +1391,8 @@ mod tests {
             pool,
             Some("192.0.2.0/24".to_string()),
             facts(security_posture(true, false)),
+            // This test is about `/diagnostic`, not about the documenting gesture.
+            false,
         );
         let response = router
             .oneshot(

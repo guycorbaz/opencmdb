@@ -214,6 +214,35 @@ pub(crate) struct DeclaredRowSnapshot {
 /// alternative — a second `SANCTIONED_READS` entry — was refused on a MEASUREMENT taken at this
 /// story's validation: `the_allowlist_sanctions_a_place_and_not_a_name` walks `SANCTIONED_SITES`
 /// **only**, so a stale read entry is caught by nothing. Widening adds no entry to guard.
+/// The entity a documenting gesture minted FROM a given sighting — test-only.
+///
+/// 🔴 **It exists because story 6.4's code review took the entity id off the operator's screen.**
+/// The 201 body was the only channel by which anything could learn that id, and the end-to-end
+/// tests parsed it out of the operator-facing sentence — *a test that pins the ugly thing is a
+/// test that requires it* (story 6b.4), and this one required a raw UUID in the copy for two
+/// stories. The store keys the adopted rows by the sighting they came from, which is what the
+/// caller actually knows.
+///
+/// ⚠️ **It READS a provenance column, so the `authorship` gate must name it** — a second entry in
+/// `SANCTIONED_READS`, added in the same act. Story 5.12's own instruction: reopen the perimeter
+/// rather than let a new reader sit outside it.
+///
+/// # Errors
+///
+/// Any store error while reading.
+#[cfg(test)]
+pub(crate) async fn entity_documented_from(
+    pool: &MySqlPool,
+    subject: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT entity_id FROM declared_attribute WHERE origin_obs_id = ? LIMIT 1")
+            .bind(subject)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(entity_id,)| entity_id))
+}
+
 #[cfg(test)]
 pub(crate) async fn read_declared_provenance_for_test(
     pool: &MySqlPool,
@@ -560,6 +589,14 @@ where
 /// One observation as the page reads it: its facts, and **where and when they came from**.
 #[derive(Clone)]
 pub struct ObservedBatch {
+    /// The observation's own id — the SUBJECT a documenting gesture acts on.
+    ///
+    /// 🔴 **Added at story 6.4, and its absence was the story's one open question.** Both
+    /// validation layers established it: this struct had three fields and no id, the `SELECT`
+    /// below did not name the column, and the gap-hunt layer confirmed **on the wire** that an
+    /// observation's UUID appeared nowhere in the rendered page. A queue row could therefore name
+    /// an address and never the thing `document_all` takes.
+    pub id: opencmdb_core::observation::ObsId,
     /// The connector that reported it — the observed side's provenance.
     pub connector_id: String,
     /// When the source dated it — the observed side's freshness.
@@ -580,19 +617,29 @@ pub struct ObservedBatch {
 ///
 /// A `sqlx::Error` on a backend failure, on a facts payload that is not valid JSON, or on an
 /// `observed_at` that does not parse as RFC 3339.
+/// ⚠️ **`id` is the TIEBREAKER, and story 6.4's code review is what asked for it.** Arbitration 1
+/// — *the most recent sighting of an address wins* — rests entirely on this ascending order plus a
+/// last-wins overwrite in `page::build_triage_offering`, and SQL gives no order among rows sharing
+/// an instant. It was stable in practice (the storage engine's habit, measured five times by the
+/// review's mutating layer) and stable by nothing anyone had written; a replay stream with
+/// hand-authored instants can tie at microsecond precision.
 pub async fn load_observation_facts<'e, E>(executor: E) -> Result<Vec<ObservedBatch>, sqlx::Error>
 where
     E: Executor<'e, Database = MySql>,
 {
-    let rows: Vec<(String, String, String)> = sqlx::query_as(
-        "SELECT connector_id, DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%s.%fZ'), facts \
-         FROM observation_record ORDER BY observed_at",
+    let rows: Vec<(String, String, String, String)> = sqlx::query_as(
+        "SELECT id, connector_id, DATE_FORMAT(observed_at, '%Y-%m-%dT%H:%i:%s.%fZ'), facts \
+         FROM observation_record ORDER BY observed_at, id",
     )
     .fetch_all(executor)
     .await?;
     let mut out = Vec::with_capacity(rows.len());
-    for (connector_id, observed_at, facts) in rows {
+    for (id, connector_id, observed_at, facts) in rows {
         out.push(ObservedBatch {
+            id: opencmdb_core::observation::ObsId::from_uuid(
+                id.parse::<uuid::Uuid>()
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
+            ),
             connector_id,
             observed_at: chrono::DateTime::parse_from_rfc3339(&observed_at)
                 .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
@@ -3366,7 +3413,7 @@ mod tests {
 
     /// **AC7** — the store can hold a token no enum variant names, and the read carries it through.
     ///
-    /// 🔴 This is the premise of the whole tolerant-reader design (`page::identity_cause_label`):
+    /// 🔴 This is the premise of the whole tolerant-reader design (`page::identity_cause_line`):
     /// `abstention_cause` is a plain `VARCHAR(32)` with **no `CHECK`**, so the value below inserts
     /// cleanly. Measured, not assumed.
     #[tokio::test]

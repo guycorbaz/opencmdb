@@ -18,9 +18,8 @@ use opencmdb_core::{AbstentionCause, reconcile};
 use sqlx::MySqlPool;
 use uuid::Uuid;
 
-use crate::repo::{
-    EngineReachRow, classify, count_engine_reach, load_declared_attributes, load_observation_facts,
-};
+use crate::identity_view::{IdentityView, build_identity_view};
+use crate::repo::{classify, count_engine_reach, load_declared_attributes, load_observation_facts};
 
 /// Committed front-end assets, embedded into the binary (no CDN, self-hosted single binary).
 #[derive(rust_embed::Embed)]
@@ -138,78 +137,6 @@ struct AbstentionRow {
     count: usize,
 }
 
-/// One cause line of the identity engine's reach — *"N sightings, because …"*.
-#[derive(Clone)]
-struct IdentityCauseRow {
-    cause: String,
-    count: i64,
-}
-
-/// The identity engine's reach, shaped for rendering.
-///
-/// # The unit is SIGHTINGS, and that is a decision rather than a caption
-///
-/// Every scan mints fresh `obs_id`s and the identity pass supersedes no engine link across passes,
-/// so one machine seen ten times is ten rows. The number therefore counts SIGHTINGS, not devices,
-/// and the surface says so on both sides of the pair.
-///
-/// 🔑 Naming the unit truthfully is what keeps the number from reading as a backlog: a figure that
-/// rises because the product looked many times is the radar's range, not the operator's debt. ⚠️ It
-/// does not make the UX bans MET — *"no growing counter"* and *"after six months of inaction it
-/// reads the same number"* are still open, owned by Epic 6, and registered. A true unit does not
-/// stop a number growing.
-///
-/// ⚠️ **The unit is TEMPORARY.** Epic 6 gives the population an identity, at which point *sighting*
-/// stops being the honest word and the locale keys change with it. That rename is a scheduled
-/// consequence, not a correction of a mistake.
-///
-/// # 🔴 Three cases, and they are the OPERATOR's three, not the engine's
-///
-/// Guy's taxonomy (2026-08-12), which is what decides where each outcome goes:
-///
-/// | case | what the engine wrote | who acts | the gesture |
-/// |---|---|---|---|
-/// | **no ambiguity** | `Match`, and also `NoMatch` | the software | none — it decided |
-/// | **ambiguity** | `Abstained { Ambiguous }` | the operator lifts the doubt | choose among the candidates and their evidence (FR16) |
-/// | **unknown** | `Abstained { AbsenceOfProof }` | the operator creates the entity | **declare** — the documenting gesture |
-///
-/// 🔑 **`NoMatch` is case ONE**, which is why it is neither placed nor listed among what awaits the
-/// operator: *a rule FORBADE the pair* is a decision, not an absence. An earlier draft folded it
-/// into `placed` through a bare `else`, so a refused placement was reported as a placement and the
-/// page rendered *"every sighting was placed"* over it — found independently by all three review
-/// layers.
-///
-/// ⚠️ **Neither gesture EXISTS in the product yet**, and this view deliberately announces neither:
-/// the ambiguity gesture needs candidates nothing produces (Epic 6), and the documenting gesture
-/// needs a write surface the product does not have. **Announcing an absent gesture is a promise;
-/// this section stays descriptive until the gesture is there** (Guy, 2026-08-12). The taxonomy is
-/// registered as the criterion for both.
-#[derive(Clone)]
-struct IdentityView {
-    /// Sightings the engine placed on an interface — case one, `Match`.
-    placed: i64,
-    /// Sightings it could not place — case two and case three together.
-    not_placed: i64,
-    /// Why, one line per cause — never one line per failure (FR16b).
-    ///
-    /// ⚠️ **The one-line-per-cause property belongs to the CALLER**, not to this type: it holds
-    /// because `count_engine_reach` groups by cause in SQL. Feed this view two rows carrying the
-    /// same cause and it renders two identical lines. Stated rather than enforced, because the only
-    /// producer is the grouped read.
-    causes: Vec<IdentityCauseRow>,
-    /// Outcomes the engine SETTLED without placing — `NoMatch`, and any token no variant names.
-    ///
-    /// Rendered only when non-empty, and today it always is empty: `resolve` cannot produce a
-    /// `NoMatch` (`placement_decision` only judges pairs inside one `join` group, which share their
-    /// key by construction), and `repo::cause_token`'s exhaustive `match` is what writes the rest.
-    /// It is counted and labelled rather than folded anywhere, on `identity_cause_label`'s
-    /// precedent: the tolerant reader for the CAUSE token had a silent twin on the OUTCOME token,
-    /// and this is that twin, made explicit.
-    settled: Vec<IdentityCauseRow>,
-    /// Has the engine seen anything at all? Distinguishes *"nothing yet"* from *"nothing unplaced"*.
-    has_any: bool,
-}
-
 /// Everything the card template needs — shaped for rendering, honest about the empty state.
 struct ReconciledView {
     has_entity: bool,
@@ -271,6 +198,10 @@ struct Strings {
     gesture_badge: String,
     /// The one sentence the action bar shows, pointed at by every planned control (story 6b.4b).
     gesture_not_built: String,
+    /// The badge on a control that is BUILT and switched off — never the same word as `gesture_badge`.
+    gesture_badge_off: String,
+    /// The sentence for that state, naming the switch that turns it on.
+    gesture_not_enabled: String,
     /// The perimeter label in the navigation footer, as the mock shows it (story 6b.2).
     nav_perimeter: String,
     entity: String,
@@ -310,7 +241,7 @@ struct Strings {
 /// occurred, so `n >= 1` and the zero case — where the two languages disagree, `0 fields` against
 /// `0 champ` — never arises. A third form would be copy nothing can reach. The day a caller can
 /// pass zero, this function is where that decision has to be taken.
-fn counted_fields(base: &str, count: usize) -> String {
+pub(crate) fn counted_fields(base: &str, count: usize) -> String {
     let key = if count == 1 {
         format!("{base}_one")
     } else {
@@ -321,6 +252,10 @@ fn counted_fields(base: &str, count: usize) -> String {
 
 fn strings() -> Strings {
     use rust_i18n::t;
+    // One constant for the switch, bound here so the initialiser fits the one-line shape the field
+    // scan below reads. ⚠️ That scan skips any initialiser rustfmt WRAPS. It is not blind to the
+    // skip — the derived field count reds — but its message names the count and not the cause.
+    let switch = crate::DOCUMENT_ENABLED_ENV;
     Strings {
         tagline: t!("page.tagline").to_string(),
         nav_label: t!("nav.label").to_string(),
@@ -340,7 +275,9 @@ fn strings() -> Strings {
         triage_lede: t!("triage.lede").to_string(),
         triage_empty: t!("triage.empty").to_string(),
         gesture_badge: t!("gesture.badge").to_string(),
-        gesture_not_built: t!("gesture.not_built").to_string(),
+        gesture_not_built: t!("gesture.not_built", badge = t!("gesture.badge")).to_string(),
+        gesture_badge_off: t!("gesture.badge_off").to_string(),
+        gesture_not_enabled: t!("gesture.not_enabled", switch = switch).to_string(),
         nav_perimeter: t!("nav.perimeter").to_string(),
         entity: t!("page.entity").to_string(),
         refresh: t!("page.refresh").to_string(),
@@ -391,96 +328,6 @@ fn cause_label(cause: AbstentionCause) -> String {
         AbstentionCause::ConflictingObservations => t!("cause.conflicting_observations"),
     }
     .to_string()
-}
-
-/// A human label for an IDENTITY abstention cause, from the token as it is persisted.
-///
-/// # 🔴 This function is TOTAL, and refusing to fail is the whole point
-///
-/// `identity_link.abstention_cause` is a plain `VARCHAR(32)` with no `CHECK`, so the database can
-/// hold a token no variant of [`opencmdb_core::identity::cascade::IdentityAbstentionCause`] names —
-/// measured, an invented token inserts cleanly. And `page.rs`'s handlers turn any error into a `500`
-/// for the WHOLE page, so a reader that failed here would take the gap display down with it, for one
-/// unfamiliar row.
-///
-/// So an unrecognised token is **labelled and carried**, never dropped and never fatal. It is still
-/// COUNTED by [`build_identity_view`]: a total that silently shrank would be the counter lying by
-/// omission, which is worse than an unfamiliar word on the page.
-///
-/// ⚠️ **A `match` on tokens cannot be exhaustive over the enum**, and that is exactly why this is a
-/// tripwire rather than a barrier: adding a variant breaks the WRITER ([`crate::repo::cause_token`],
-/// an exhaustive `match` with no `_` arm) and breaks nothing here. A variant added with the minimal
-/// repair therefore persists a token this function does not know — and the page renders it as
-/// unrecognised instead of dying. That is the designed behaviour, not a gap in it.
-///
-/// The stronger closure — a DDL `CHECK` on the token domain — was weighed and refused for story
-/// 5.14b: it moves the failure from the display to the WRITE, so a future variant would break the
-/// identity pass rather than show an unfamiliar label. It is registered as the real closure.
-fn identity_cause_label(token: &str) -> String {
-    use rust_i18n::t;
-    match token {
-        "absence_of_proof" => t!("identity.cause.absence_of_proof").to_string(),
-        "ambiguous" => t!("identity.cause.ambiguous").to_string(),
-        other => t!("identity.cause.unrecognised", token = other).to_string(),
-    }
-}
-
-/// PURE: shape the database's grouped reach rows into a renderable view.
-///
-/// Abstained rows are the not-placed population and each contributes one cause line; everything else
-/// is placed. **One line per cause, never one line per failure** — FR16b's *"96 multi-interface
-/// devices is not 96 failures, it is ONE question"*.
-///
-/// ⚠️ **An abstained row whose cause is NULL cannot exist**: `identity_link_rule_xor_cause` makes the
-/// cause non-NULL exactly when `outcome = 'abstained'`. This function is nonetheless total over the
-/// type, and the empty token then falls to the unrecognised label. That is totality, **not a guard** —
-/// no test can red it, and it is not claimed as covering anything.
-fn build_identity_view(rows: Vec<EngineReachRow>) -> IdentityView {
-    use rust_i18n::t;
-
-    let mut placed = 0i64;
-    let mut not_placed = 0i64;
-    let mut causes: Vec<IdentityCauseRow> = Vec::new();
-    let mut settled: Vec<IdentityCauseRow> = Vec::new();
-    let mut settled_count = 0i64;
-    for row in rows {
-        // 🔴 An explicit arm per outcome, and NO bare `else`. The `else` an earlier draft used sent
-        // `no_match` — *a rule FORBADE this pair* — into `placed`, i.e. reported a refusal as a
-        // success. `identity_link_outcome` admits exactly these three tokens; anything else can only
-        // arrive from a store written by something other than `repo::outcome_token`, and it is
-        // carried rather than folded, exactly as an unknown CAUSE token is.
-        match row.outcome.as_str() {
-            "match" => placed += row.count,
-            "abstained" => {
-                not_placed += row.count;
-                causes.push(IdentityCauseRow {
-                    cause: identity_cause_label(row.cause.as_deref().unwrap_or_default()),
-                    count: row.count,
-                });
-            }
-            "no_match" => {
-                settled_count += row.count;
-                settled.push(IdentityCauseRow {
-                    cause: t!("identity.outcome.no_match").to_string(),
-                    count: row.count,
-                });
-            }
-            other => {
-                settled_count += row.count;
-                settled.push(IdentityCauseRow {
-                    cause: t!("identity.outcome.unrecognised", token = other).to_string(),
-                    count: row.count,
-                });
-            }
-        }
-    }
-    IdentityView {
-        placed,
-        not_placed,
-        causes,
-        settled,
-        has_any: placed + not_placed + settled_count > 0,
-    }
 }
 
 /// Project a fact into a displayable `(label, value)` pair (a superset of the engine's projection —
@@ -667,13 +514,14 @@ struct QueueRow {
 
 /// What a control on the action bar IS.
 ///
-/// # One variant today, and that is the decision rather than a limitation
+/// # Three variants, and the second and third arrived by the mechanism the first bought
 ///
 /// 🔑 **Guy's arbitration (2026-08-19), taken over a struct carrying an `Option` route**, and taken
 /// for a reason the validation established by BUILDING both: with `Planned` alone there is no
-/// unconstructed variant, so `clippy -D warnings` is clean today — and **the day story 6.4 adds
-/// `Live`, `E0004` forces every `match` on this type to be revisited.** That is a compiler-forced
+/// unconstructed variant, so `clippy -D warnings` was clean — and **the day story 6.4 added
+/// `Live`, `E0004` forced every `match` on this type to be revisited.** That is a compiler-forced
 /// moment of attention at exactly the moment it is worth having, and the struct shape has none.
+/// It paid a second time the same day: `Disabled` reopened every arm again.
 ///
 /// ⚠️ **What this type does NOT do, stated because the first draft claimed it did.** It does not make
 /// *"a button that looks live and calls nothing"* unrepresentable. The validation measured that
@@ -685,6 +533,24 @@ struct QueueRow {
 /// where that set stops being empty.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Gesture {
+    /// It acts. The variant CARRIES its route, so a live gesture that posts nowhere is
+    /// unrepresentable.
+    ///
+    /// 🔴 **Adding this is what story 6b.4b bought with its single-variant enum** — `E0004` fires
+    /// the moment a second arm exists. ⚠️ The validation measured that it fires at exactly **one**
+    /// site, not on *"every match"* as that story's record reads, and — more usefully — that
+    /// satisfying it naively ships an inert `<span class="btn-gesture live">` with no route and no
+    /// method. *A compile error a span can silence is not the guard that story sold*, which is why
+    /// the route lives in the type rather than in whoever writes the template.
+    ///
+    /// _(This doc block was inserted INSIDE `Planned`'s at story 6.4's implementation, so `Live`
+    /// opened on a sentence about a field it does not have and `Planned` was left undocumented.
+    /// Found by two review layers independently — the mechanical tell of an insertion landing
+    /// before the wrong item, which silently disabled a test in story 6b.2.)_
+    Live {
+        /// Where the control posts. A constant of the product, never operator input.
+        route: &'static str,
+    },
     /// The product does not have this gesture yet.
     ///
     /// ⚠️ `owner` lives HERE and never on the screen: *"arrives in 6.4"* would turn the label into a
@@ -693,6 +559,23 @@ pub(crate) enum Gesture {
     Planned {
         /// The story that will build it.
         owner: &'static str,
+    },
+    /// 🔴 **BUILT, and switched off on this instance** — Guy's arbitration of 2026-08-26, taken at
+    /// the code review over hiding the control and over leaving it as it was.
+    ///
+    /// The state exists because story 6.4 created a falsehood: with the route unmounted the
+    /// documenting control rendered `Planned`, so the product said *"not built yet"* about a
+    /// gesture it had just built — **on the default configuration, which is what nearly every
+    /// deployment runs.** Hiding it was refused as contradicting Guy's premise (2) of 2026-08-13
+    /// (*show and label rather than hide*): a fresh install would never learn the product can
+    /// document at all.
+    ///
+    /// 🔑 It carries the SWITCH, so the sentence on screen and the variable the binary reads are
+    /// one constant — the [`crate::DOCUMENT_ENABLED_ENV`] idiom that already keeps the route's
+    /// path from drifting from the router's.
+    Disabled {
+        /// The environment variable that turns it on. A constant of the product.
+        switch: &'static str,
     },
 }
 
@@ -704,32 +587,90 @@ pub(crate) struct GestureView {
     ///
     /// 🔑 **ONE field, and the template branches on it**, so the rendered state cannot disagree with
     /// the nature: there is no second *"is it live"* flag to drift out of step. It is produced by a
-    /// `match` on [`Gesture`], which is what makes story 6.4's `Live` a compile error here.
-    pub(crate) not_built: Option<String>,
+    /// `match` on [`Gesture`], so every variant added there reopens this one — which is what
+    /// happened twice on 2026-08-25/26, for `Live` and then for `Disabled`.
+    pub(crate) nature: GestureRender,
 }
 
-/// The mock's action bar: five controls, in its order, none of them live today.
+/// The mock's action bar: five controls, in its order — ONE of which acts, since story 6.4.
 ///
 /// 🔴 **`primary` is chosen from the row's CAUSE, never from its translated label.** The mock shows
 /// *Résoudre* on a conflict and *Merger* elsewhere; branching on `DetailPane::kind` — which is
 /// already translated — would reproduce story 6b.3's `role_key: "example.badge"` defect, a real,
 /// resolving, wrong value that every shape and resolvability check passes.
-fn action_bar(primary_key: &'static str) -> Vec<GestureView> {
+/// What the bar's PRIMARY control is, at the one place that knows.
+///
+/// 🔴 **It replaces a `bool`, and the bool was conflating two different facts.** `primary_is_live`
+/// meant *"the route is mounted"* at one call site and *"this kind of row is eligible"* at two
+/// others — harmless while every `false` rendered the same *not built* control, and false the
+/// moment story 6.4's code review gave the switched-off state its own words: an `Écart` pane would
+/// have told the operator to set `OPENCMDB_DOCUMENT_ENABLED` for a gesture that is enabled and
+/// simply does not apply to that row.
+///
+/// 🔑 The decision still lives INSIDE [`action_bar`], never at the call sites: a caller that could
+/// hand in a `Gesture` could hand `Live` to `gesture.resolve`, and the amber's reservation would go
+/// back to holding by a sentence about which primary happens to be live.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PrimaryState {
+    /// The documenting gesture, on a row it applies to, with the route mounted.
+    Acts,
+    /// The documenting gesture, on a row it applies to, with the route NOT mounted.
+    SwitchedOff,
+    /// A gesture the product has not built — whatever the configuration says.
+    NotBuilt,
+}
+
+fn action_bar(primary_key: &'static str, primary: PrimaryState) -> Vec<GestureView> {
     // ⚠️ The primary's owner FOLLOWS the primary: *Merger* is story 6.4's (FR13(a) on the
     // abstention line), *Résoudre* needs FR16's ranked candidates and is Epic 6's. This read "6.4"
     // for both until the code review — invisible, because nothing renders `owner`, which is exactly
     // why it would still have been wrong the day something did.
+    // ⚠️ *Merger* on a row that is not `Nouveau` is FIELD-level documenting — FR13(b), Epic 7's —
+    // and not the whole-record gesture story 6.4 shipped. This read `"6.4"` until that story's
+    // code review, i.e. it named as owner a story that had already shipped.
     let primary_owner = match primary_key {
         "gesture.resolve" => "6",
-        _ => "6.4",
+        _ => "7",
     };
-    planned_gestures(&[
-        (primary_key, primary_owner),
+    let mut bar = planned_gestures(&[
         ("gesture.accept_gap", "7"),
         ("gesture.snooze", "7"),
         ("gesture.attach", "7"),
         ("gesture.exclude", "7"),
-    ])
+    ]);
+    // 🔑 The primary is built SEPARATELY because it is the only one that can act, and it is
+    // INSERTED at the front rather than pushed — the mock's order is primary first, and story
+    // 6b.11's roving-tabindex contract makes that order the keyboard's order too.
+    // 🔴 **Only the DOCUMENTING gesture can be live, and that is closed here rather than
+    // asserted.** The UX spec reserves the amber `--accent-document` *solely for the documenting
+    // gesture* (`:587`) and prescribes *one primary action (amber Document)* (`:1174`). If a
+    // `Live` control could be either gesture, the reservation would hold by a SENTENCE about
+    // which primary happens to be live — and `Résoudre` is the one Epic 6 will make live. Here
+    // `GestureRender::Live` IMPLIES *documenting*, so the template can carry `btn-document` as a
+    // static class literal and the amber cannot leak. ⚠️ The day `Résoudre` acts, this `match`
+    // is what makes someone decide what colour it wears.
+    bar.insert(
+        0,
+        GestureView::of(
+            match (primary, primary_key) {
+                (PrimaryState::Acts, "gesture.document") => Gesture::Live {
+                    route: crate::document::DOCUMENT_ALL_PATH,
+                },
+                // 🔴 BUILT AND SWITCHED OFF, never *"not built yet"*. Story 6.4 shipped this arm
+                // as `Planned`, so on the default configuration the product said the documenting
+                // gesture did not exist — about the gesture it had just built. Guy's arbitration,
+                // 2026-08-26, at the code review.
+                (PrimaryState::SwitchedOff, "gesture.document") => Gesture::Disabled {
+                    switch: crate::DOCUMENT_ENABLED_ENV,
+                },
+                _ => Gesture::Planned {
+                    owner: primary_owner,
+                },
+            },
+            rust_i18n::t!(primary_key).to_string(),
+        ),
+    );
+    bar
 }
 
 /// Resolve a list of `(label key, owner)` pairs into controls that are not built yet.
@@ -743,15 +684,72 @@ pub(crate) fn planned_gestures(entries: &[(&'static str, &'static str)]) -> Vec<
     entries
         .iter()
         .map(|(label_key, owner)| {
-            let gesture = Gesture::Planned { owner };
-            GestureView {
-                label: rust_i18n::t!(*label_key).to_string(),
-                not_built: match gesture {
-                    Gesture::Planned { .. } => Some(rust_i18n::t!("gesture.not_built").to_string()),
-                },
-            }
+            GestureView::of(
+                Gesture::Planned { owner },
+                rust_i18n::t!(*label_key).to_string(),
+            )
         })
         .collect()
+}
+
+/// What the template must render for one control, with the impossible pairs unrepresentable.
+///
+/// 🔑 **One field rather than two `Option`s** (story 5.6's idiom, closed in the TYPE). The pair
+/// `not_built: Option<String>` + `post_to: Option<&str>` admits four states of which two are
+/// nonsense — *planned yet posting somewhere*, and *live with a note and no route* — and the
+/// second forces an `unwrap()` in the template, i.e. a **500 carried by a sentence**. Here the
+/// template matches ONCE and every arm has exactly what it needs.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum GestureRender {
+    /// Not built: the sentence saying so, shown once for the group and announced on each control.
+    Planned(String),
+    /// Live: where it posts. A constant of the product, never operator input.
+    Live(&'static str),
+    /// Built and switched off: the sentence saying so, which NAMES the switch that turns it on.
+    ///
+    /// ⚠️ A separate arm rather than a second `Planned` with different words, because the two
+    /// states are answered by different acts: one waits for a story, the other for one line of
+    /// configuration the operator already controls.
+    Disabled(String),
+}
+
+impl GestureView {
+    /// One control, its nature, and everything the template needs to render it.
+    fn of(gesture: Gesture, label: String) -> Self {
+        let nature = match gesture {
+            Gesture::Planned { .. } => GestureRender::Planned(
+                rust_i18n::t!("gesture.not_built", badge = rust_i18n::t!("gesture.badge"))
+                    .to_string(),
+            ),
+            Gesture::Live { route } => GestureRender::Live(route),
+            Gesture::Disabled { switch } => GestureRender::Disabled(
+                rust_i18n::t!("gesture.not_enabled", switch = switch).to_string(),
+            ),
+        };
+        Self { label, nature }
+    }
+
+    /// Is this control built but switched off? The template needs it to decide whether the
+    /// group's *"not enabled"* sentence is rendered at all — a note about a state no control is
+    /// in would be a false line, and this project counts a false line as a defect.
+    pub(crate) fn is_disabled(&self) -> bool {
+        matches!(self.nature, GestureRender::Disabled(_))
+    }
+}
+
+impl DetailPane {
+    /// Is any control on this pane's bar BUILT and switched off?
+    ///
+    /// 🔑 It lives here rather than as a closure in the template because **askama's expression
+    /// grammar has no closures** — measured: `gestures.iter().any(|g| …)` fails to parse with
+    /// *"matching closing `)` is missing"*. The template asks a question; Rust answers it.
+    ///
+    /// ⚠️ The group's *"not enabled"* sentence is rendered only when this is true. A note about a
+    /// state nothing on screen is in is a false line — which is exactly how the neighbouring
+    /// *"not built yet"* sentence came to be wrong the day one control went live.
+    fn has_a_switched_off_gesture(&self) -> bool {
+        self.gestures.iter().any(GestureView::is_disabled)
+    }
 }
 
 /// The detail pane: the two photos, side by side, each with its own meta-line.
@@ -772,6 +770,14 @@ struct DetailPane {
     observed: String,
     /// Which connector reported it and when.
     observed_meta: MetaLine,
+    /// The observation a documenting gesture would act on — empty when the pane carries none.
+    ///
+    /// 🔴 **Story 6.4 added it, and its absence was the story's one open question.** The queue
+    /// named an ADDRESS and the route takes an `ObsId`; nothing on the page carried one, which
+    /// the validation confirmed on the wire. ⚠️ It is the MOST RECENT sighting of that address —
+    /// Guy's arbitration — so the gesture writes what the network shows now, not the first thing
+    /// it ever showed.
+    subject: String,
 }
 
 /// Everything `/triage` renders: the queue, the selection, and the sort's state.
@@ -841,14 +847,21 @@ pub(crate) fn relative_time(
 /// ⚠️ `OutOfPerimeter` is NOT a row. `reconcile` is written for ONE perimeter, so every pass counts
 /// every other entity's observations as out of perimeter — noise of the loop, not a fact about the
 /// entity. Surfacing it would put one row per entity per other entity on the operator's screen.
+/// The view, told whether `POST /document-all` is mounted.
+///
+/// 🔴 **The page could not know this before story 6.4**, and the validation measured what that
+/// cost: a wiring that rendered the gesture regardless put a control the operator can see, focus
+/// and press in front of a **404**, on the DEFAULT configuration. `false` keeps every control
+/// planned, which is what an un-mounted route and every non-`Nouveau` kind both mean.
 #[allow(clippy::too_many_arguments)]
-fn build_triage(
+fn build_triage_offering(
     declared: Vec<(String, String, String)>,
     provenance: Vec<crate::repo::DeclaredProvenance>,
     observations: Vec<crate::repo::ObservedBatch>,
     now: chrono::DateTime<chrono::Utc>,
     selected: Option<&str>,
     sort_by_age: bool,
+    document_enabled: bool,
 ) -> TriageView {
     use rust_i18n::t;
 
@@ -936,7 +949,12 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
-                    gestures: action_bar("gesture.document"),
+                    // No documenting gesture on this kind, so no subject to act on. ⚠️ NOT
+                    // `SwitchedOff`: adopting one field of an existing record is FR13(b), Epic
+                    // 7's, and telling the operator to set a switch would name a remedy that
+                    // changes nothing here.
+                    subject: String::new(),
+                    gestures: action_bar("gesture.document", PrimaryState::NotBuilt),
                     kind: t!("triage.kind.ecart").to_string(),
                     entity: ipv4.clone(),
                     field: gap.field.clone(),
@@ -976,13 +994,18 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
+                    // No documenting gesture on this kind, so no subject to act on.
+                    subject: String::new(),
                     // 🔴 From the CAUSE, never from the translated label: the mock shows *Résoudre*
                     // on a conflict and *Merger* elsewhere, and branching on the rendered string is
                     // story 6b.3's wrong-namespace defect waiting.
-                    gestures: action_bar(match cause {
-                        AbstentionCause::ConflictingObservations => "gesture.resolve",
-                        _ => "gesture.document",
-                    }),
+                    gestures: action_bar(
+                        match cause {
+                            AbstentionCause::ConflictingObservations => "gesture.resolve",
+                            _ => "gesture.document",
+                        },
+                        PrimaryState::NotBuilt,
+                    ),
                     kind: label.to_string(),
                     entity: ipv4.clone(),
                     field: String::new(),
@@ -1003,13 +1026,53 @@ fn build_triage(
     }
 
     // `Nouveau`: an observed address no declared entity claims.
-    let mut seen_new: Vec<String> = Vec::new();
+    //
+    // 🔴 **The MOST RECENT sighting of an address supplies the row, and it used to be the
+    // oldest** — Guy's arbitration 1 at story 6.4 (2026-08-25). `load_observation_facts` orders
+    // `observed_at` ASCENDING and this loop skipped an address it had already seen, so the FIRST
+    // batch won. The validation measured it on two observations ten minutes apart: the older one
+    // supplied the row.
+    //
+    // ⚠️ It was invisible while the row was a label, and it stops being invisible the moment a
+    // GESTURE writes from it: story 6.4 documents *the whole record at once* from this batch, so
+    // an older sighting would document the record the network has already moved past — one that
+    // may lack a `hostname` a later scan saw. *A story that lays a gesture on a choice it knows
+    // to be wrong inherits the choice.*
+    //
+    // 🔑 Kept as a LAST-WINS overwrite rather than a re-sort: the surrounding order is the queue's
+    // and is not this loop's to change, and `rows` is already built by the time an address
+    // repeats. `newest` remembers where the row went.
+    let mut newest: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
     for batch in &observations {
         for (field, value) in batch.facts.iter().filter_map(display_fact) {
-            if field != "ipv4" || claimed.contains(&value) || seen_new.contains(&value) {
+            if field != "ipv4" || claimed.contains(&value) {
                 continue;
             }
-            seen_new.push(value.clone());
+            if let Some(&at) = newest.get(&value) {
+                // A later sighting of an address already queued: replace what the row shows and
+                // what the pane would act on, in place, keeping the queue's order.
+                let seen = relative_time(now, batch.observed_at);
+                rows[at].seen = seen.clone();
+                rows[at].age_seconds = (now - batch.observed_at).num_seconds().max(0);
+                let key = rows[at].id.clone();
+                if let Some((_, pane)) = panes.iter_mut().find(|(id, _)| *id == key) {
+                    // 🔴 The SOURCE moves with the freshness and the subject. It did not until
+                    // story 6.4's code review, and all three layers found the consequence: the
+                    // pane showed the FIRST sighting's provenance beside the LATEST one's
+                    // freshness while the control posted the latest — measured on the wire
+                    // (`Source aaaaaaaa · just now` over `subject: …bbbb`), against a template
+                    // comment stating that the two *"cannot name two different observations"*.
+                    // ⚠️ Reachable on the shipped product: `connector_id` is minted fresh at every
+                    // boot, so scan → restart → scan over one undeclared address produces it.
+                    pane.observed_meta = MetaLine {
+                        source: source_label(&batch.connector_id),
+                        freshness: seen,
+                    };
+                    pane.subject = batch.id.to_string();
+                }
+                continue;
+            }
+            newest.insert(value.clone(), rows.len());
             let id = format!("nouveau:{value}");
             let seen = relative_time(now, batch.observed_at);
             rows.push(QueueRow {
@@ -1029,7 +1092,17 @@ fn build_triage(
             panes.push((
                 id,
                 DetailPane {
-                    gestures: action_bar("gesture.document"),
+                    // The MOST RECENT sighting of this address, overwritten in place
+                    // above when a later one arrives (Guy's arbitration, story 6.4).
+                    subject: batch.id.to_string(),
+                    gestures: action_bar(
+                        "gesture.document",
+                        if document_enabled {
+                            PrimaryState::Acts
+                        } else {
+                            PrimaryState::SwitchedOff
+                        },
+                    ),
                     kind: t!("triage.kind.nouveau").to_string(),
                     entity: value.clone(),
                     field: "ipv4".to_string(),
@@ -1200,6 +1273,7 @@ async fn triage_view(
     pool: &MySqlPool,
     selected: Option<&str>,
     sort_by_age: bool,
+    document_enabled: bool,
 ) -> Result<(TriageView, IdentityView), Response> {
     let declared = load_declared_attributes(pool).await.map_err(server_error)?;
     let provenance = crate::repo::load_declared_provenance_for_display(pool)
@@ -1208,13 +1282,14 @@ async fn triage_view(
     let observations = load_observation_facts(pool).await.map_err(server_error)?;
     let reach = count_engine_reach(pool).await.map_err(server_error)?;
     Ok((
-        build_triage(
+        build_triage_offering(
             declared,
             provenance,
             observations,
             now_utc(),
             selected,
             sort_by_age,
+            document_enabled,
         ),
         build_identity_view(reach),
     ))
@@ -1325,6 +1400,15 @@ pub(crate) struct TriageState {
     /// security posture is derived by probing `auth::is_public` — neither is re-read at the point
     /// of use, which is story 6b.2's M12 applied rather than merely cited.
     pub(crate) diagnostic: crate::diagnostic::DiagnosticFacts,
+    /// Whether `POST /document-all` is mounted (story 6.4).
+    ///
+    /// 🔴 **Read from [`crate::AppConfig`] and never from the environment at the point of use.**
+    /// Story 6b.2's M12 is what that rule costs when it is broken: a second reader of one fact
+    /// disagreed with the first and nine screens went wrong. The route's own mounting reads the
+    /// same field, so the control and the endpoint cannot disagree about whether the gesture is
+    /// there — a screen that OFFERS what the router did not mount is a 404 the operator meets by
+    /// pressing the primary control of the product's main screen.
+    pub(crate) document_enabled: bool,
 }
 
 /// `/triage` on its own state, so the perimeter arrives as a parameter rather than being read.
@@ -1337,6 +1421,7 @@ pub(crate) fn triage_router(
     pool: MySqlPool,
     perimeter: Option<String>,
     diagnostic: crate::diagnostic::DiagnosticFacts,
+    document_enabled: bool,
 ) -> Router {
     Router::new()
         .route("/triage", get(triage))
@@ -1359,6 +1444,7 @@ pub(crate) fn triage_router(
             pool,
             perimeter,
             diagnostic,
+            document_enabled,
         })
 }
 
@@ -1752,7 +1838,12 @@ pub async fn triage(
     let sort_by_age = query.sort.as_deref() == Some("age");
     match store_within(
         PAGE_STORE_BUDGET,
-        triage_view(&state.pool, query.sel.as_deref(), sort_by_age),
+        triage_view(
+            &state.pool,
+            query.sel.as_deref(),
+            sort_by_age,
+            state.document_enabled,
+        ),
     )
     .await
     {
@@ -1760,6 +1851,7 @@ pub async fn triage(
             let body = TriageBody {
                 triage,
                 identity,
+                documented: documented_confirmation(query.documented.as_deref()),
                 s: strings(),
             };
             match body.render() {
@@ -1778,6 +1870,32 @@ pub async fn triage(
     }
 }
 
+/// The confirmation a documenting gesture leaves in the URL, or nothing.
+///
+/// 🔴 **PURE, and total over anything a URL can carry.** `?documented=` is operator-reachable —
+/// anyone can type it — so every branch here answers with a sentence or with silence, never with
+/// an error: this is the product's main screen and a mistyped query must not turn it into a 500.
+///
+/// - absent, empty, not a number, or zero → **nothing rendered**. *A confirmation of nothing is a
+///   false line*, and zero fields is not a documenting gesture that happened.
+/// - a number → the inflected sentence, **capped at [`MAX_DOCUMENTED`]**. The cap is not paranoia
+///   about overflow (the parse already refuses what does not fit): it stops a forged URL printing
+///   a figure the product could never have produced, which would read as a fact about the store.
+fn documented_confirmation(raw: Option<&str>) -> String {
+    let Some(count) = raw.and_then(|value| value.parse::<usize>().ok()) else {
+        return String::new();
+    };
+    if count == 0 {
+        return String::new();
+    }
+    counted_fields("triage.documented", count.min(MAX_DOCUMENTED))
+}
+
+/// The largest field count the confirmation will print — a bound on what a forged URL can claim,
+/// not on what the gesture can write. `gap::project` yields one entry per attribute key, and the
+/// declared vocabulary is a handful of them.
+const MAX_DOCUMENTED: usize = 99;
+
 /// What the operator's URL says about the triage screen: which row, and whether age sorts it.
 ///
 /// 🔑 Both are OPTIONAL and both default to the quiet answer — no selection means the first row,
@@ -1789,6 +1907,18 @@ pub struct TriageQuery {
     pub sel: Option<String>,
     /// `age` turns the age sort on. Anything else, including a typo, leaves it off.
     pub sort: Option<String>,
+    /// How many fields the documenting gesture just wrote — the confirmation `POST /document-all`
+    /// carries across its `HX-Redirect` (story 6.4's code review).
+    ///
+    /// 🔑 **A count and nothing else**, so the worst a forged URL can produce is a sentence about
+    /// a number: it names no entity, asserts no identity, and reads nothing from the store. It is
+    /// CAPPED when rendered, because *"18446744073709551615 fields documented"* is not a sentence
+    /// this product should be able to print.
+    ///
+    /// ⚠️ It is a `String` and parsed by hand rather than a `usize`: a typed field makes
+    /// `?documented=x` a **400 from axum's extractor**, which would turn a mistyped URL into an
+    /// error page on the product's main screen.
+    pub documented: Option<String>,
 }
 
 /// The triage screen's body: the mock's two panes, above story 5.14b's reach section.
@@ -1797,6 +1927,8 @@ pub struct TriageQuery {
 struct TriageBody {
     triage: TriageView,
     identity: IdentityView,
+    /// The confirmation of a documenting gesture that just landed, or empty.
+    documented: String,
     s: Strings,
 }
 
@@ -1863,6 +1995,7 @@ mod tests {
     const DASHBOARD_EXAMPLE_ANCHOR: &str = "dashboard-example";
 
     use super::*;
+    use crate::repo::EngineReachRow;
 
     fn declared_row(entity: &str, key: &str, value: &str) -> (String, String, String) {
         (entity.into(), key.into(), value.into())
@@ -1882,6 +2015,9 @@ mod tests {
     }
 
     /// A grouped-reach row as [`count_engine_reach`] returns it.
+    ///
+    /// ⚠️ Imported HERE rather than at the top of the file: story 6.4 moved the identity view into
+    /// [`crate::identity_view`], and the row type is now used by the tests alone on this side.
     fn reach(outcome: &str, cause: Option<&str>, count: i64) -> EngineReachRow {
         EngineReachRow {
             outcome: outcome.into(),
@@ -2138,7 +2274,19 @@ mod tests {
     #[test]
     fn both_locales_carry_every_identity_key() {
         use rust_i18n::t;
-        const KEYS: [&str; 12] = [
+        // ⚠️ SEVENTEEN, not the fifteen this list carried: `identity.cause.unrecognised` and
+        // `identity.outcome.unrecognised` were absent — the two the tolerant readers resolve, i.e.
+        // exactly the ones no ordinary render exercises. Found by the code review's acceptance
+        // layer; pre-existing, and this story is what re-sized the list.
+        const KEYS: [&str; 17] = [
+            "identity.cause.unrecognised",
+            "identity.outcome.unrecognised",
+            // Story 6.4: the sentence each cause line carries in place of a gesture. ⚠️ THREE, not
+            // the two the story budgeted — the tolerant arm renders a line like any other, and the
+            // pair return type is what forced the third rather than a preference.
+            "identity.no_gesture.absence_of_proof",
+            "identity.no_gesture.ambiguous",
+            "identity.no_gesture.unrecognised",
             "identity.settled",
             "identity.outcome.no_match",
             "identity.all_placed",
@@ -3806,11 +3954,35 @@ mod tests {
                     .filter(|token| token == "--accent-document"),
             );
         }
+        // 🔑 **Story 6.4 is the arrival this number was waiting for, and the tripwire worked**:
+        // it read zero from story 6b.1 until the documenting gesture got a live control, then
+        // reddened on the first commit that painted with it.
+        //
+        // 🔴 **FIVE, and the decomposition is written because the last one was WRONG in this very
+        // message.** It read *"three declarations on `.btn-document` and one on its `:hover`"*,
+        // and both review layers counted 2 + 2 — the instruction a developer follows when the
+        // guard reds sent them hunting in the wrong rule. Today: `.btn-gesture.btn-document`
+        // declares two (`border-color`, `background`), its `:hover` two more, and `.documented`
+        // one — the confirmation line the gesture leaves behind, which is the documenting gesture
+        // and nothing else. ⚠️ A SIXTH read means some other rule reached for the amber and must
+        // justify itself here.
         assert_eq!(
             amber_reads.len(),
-            0,
-            "story 6.4 adds the first legitimate use; until then the honest count is zero, and \
-             this number is what tells you when one arrives — found {amber_reads:?}"
+            5,
+            "the amber paints the documenting control and its confirmation, and NOTHING else — \
+             two declarations on `.btn-gesture.btn-document`, two on its `:hover`, one on \
+             `.documented`. A different count means a rule borrowed it; the UX spec reserves it \
+             *solely for the documenting gesture* — found {amber_reads:?}"
+        );
+
+        // 🔴 Absence was the whole claim while the count was zero; now that it paints something,
+        // the POSITIVE half has to say WHAT. Without this, migrating `.btn-document` to the blue
+        // ramp leaves the count at four — read by some other rule — and the product's one live
+        // control renders as structure. The spec's word is *"one primary action (amber
+        // Document)"*, and this is the declaration that makes it true.
+        assert!(
+            css.contains("  border-color: var(--accent-document);"),
+            "the documenting control must read the amber, not merely leave it defined"
         );
 
         // 🔴 Absence is half the claim. Without the positive half, migrating `.refresh:hover`
@@ -3863,8 +4035,56 @@ mod tests {
     }
 
     /// One observed batch: its source, its instant, its facts.
+    ///
+    /// ⚠️ The id is DERIVED from the instant so two batches at different instants can never share
+    /// one, and two calls at the same instant deliberately do — which is what lets a test say
+    /// *"the same sighting"* without threading a UUID through every call site. Story 6.4 added the
+    /// field; the validation predicted a wide blast radius across test constructors and the
+    /// measured answer was **one site, this one**.
+    /// The view with no documenting gesture — **the test-facing default**, production having none.
+    ///
+    /// 🔑 **A thin default rather than a seventh argument at fourteen call sites** (story 6.4). Every
+    /// one of those callers means *"no gesture"*, and threading `false` through all of them would be
+    /// fourteen edits that say nothing.
+    ///
+    /// ⚠️ **A test helper standing between the guards and production is a LIABILITY, and this project
+    /// has the measurement**: story 6b.4's `triage_html` rendered `GapFragment` directly and never
+    /// touched the route, so the entire body of `/triage` was replaced with all 387 tests green. What
+    /// makes this one safe is that it has no body of its own — it supplies one argument and delegates —
+    /// and `the_default_view_is_the_offering_view_with_the_gesture_off` MEASURES that rather than
+    /// asserting it, so the day someone gives this wrapper logic the equivalence reds.
+    fn build_triage(
+        declared: Vec<(String, String, String)>,
+        provenance: Vec<crate::repo::DeclaredProvenance>,
+        observations: Vec<crate::repo::ObservedBatch>,
+        now: chrono::DateTime<chrono::Utc>,
+        selected: Option<&str>,
+        sort_by_age: bool,
+    ) -> TriageView {
+        build_triage_offering(
+            declared,
+            provenance,
+            observations,
+            now,
+            selected,
+            sort_by_age,
+            false,
+        )
+    }
+
     fn batch(source: &str, seconds: i64, facts: Vec<Fact>) -> crate::repo::ObservedBatch {
+        batch_with_id(source, seconds, facts, seconds as u128)
+    }
+
+    /// The same, with the observation's id stated rather than derived.
+    fn batch_with_id(
+        source: &str,
+        seconds: i64,
+        facts: Vec<Fact>,
+        id: u128,
+    ) -> crate::repo::ObservedBatch {
         crate::repo::ObservedBatch {
+            id: opencmdb_core::observation::ObsId::from_uuid(uuid::Uuid::from_u128(id)),
             connector_id: source.into(),
             observed_at: at(seconds),
             facts,
@@ -4123,6 +4343,66 @@ mod tests {
         assert_eq!(
             a.expect("a source").last_observed,
             b.expect("a source").last_observed
+        );
+    }
+
+    /// The subject a `Nouveau` row acts on is the MOST RECENT sighting of that address.
+    ///
+    /// 🔴 **It used to be the oldest, and that was invisible until a gesture wrote from it.**
+    /// `load_observation_facts` orders `observed_at` ASCENDING, and the `Nouveau` loop skipped an
+    /// address it had already queued — so the FIRST batch supplied both the row's freshness and
+    /// the subject. Story 6.4 documents *the whole record at once* from that subject, so an older
+    /// sighting would write the record the network has already moved past: here the earlier
+    /// sighting carries no hostname and the later one does.
+    ///
+    /// ⚠️ The two sightings are pinned by explicit ids rather than derived ones, because *which*
+    /// observation wins is exactly what this test is about — a derived id would make the
+    /// assertion depend on the helper's arithmetic instead of on the loop's choice.
+    #[test]
+    fn a_new_address_is_documented_from_its_most_recent_sighting() {
+        let observations = vec![
+            batch_with_id("arp", 10, vec![ipv4("192.0.2.77")], 0xA1),
+            batch_with_id(
+                "arp",
+                600,
+                vec![ipv4("192.0.2.77"), hostname("late-arrival")],
+                0xB2,
+            ),
+        ];
+        let view = build_triage(
+            Vec::new(),
+            Vec::new(),
+            observations,
+            at(1_000),
+            Some("nouveau:192.0.2.77"),
+            false,
+        );
+
+        // One row, whichever sighting supplied it — the address dedup is not what is at stake.
+        let nouveau: Vec<&QueueRow> = view
+            .rows
+            .iter()
+            .filter(|r| r.id == "nouveau:192.0.2.77")
+            .collect();
+        assert_eq!(
+            nouveau.len(),
+            1,
+            "one address is one row: {:?}",
+            view.rows.iter().map(|r| &r.id).collect::<Vec<_>>()
+        );
+
+        let pane = view.selected.expect("the row is selected");
+        let expected = opencmdb_core::observation::ObsId::from_uuid(uuid::Uuid::from_u128(0xB2));
+        assert_eq!(
+            pane.subject,
+            expected.to_string(),
+            "the gesture must act on the LATER sighting (0xB2), not the first one seen (0xA1) — \
+             the later one is what the network shows now, and here it is the only one carrying a \
+             hostname"
+        );
+        assert_eq!(
+            nouveau[0].age_seconds, 400,
+            "the row's age is the LATER sighting's (1000 - 600), not the earlier one's (990)"
         );
     }
 
@@ -4449,6 +4729,7 @@ mod tests {
         let html = TriageBody {
             triage: view,
             identity: no_reach(),
+            documented: String::new(),
             s: strings(),
         }
         .render()
@@ -4481,6 +4762,7 @@ mod tests {
         let html = TriageBody {
             triage: view,
             identity: no_reach(),
+            documented: String::new(),
             s: strings(),
         }
         .render()
@@ -4624,6 +4906,7 @@ mod tests {
         TriageBody {
             triage: view,
             identity: no_reach(),
+            documented: String::new(),
             s: strings(),
         }
         .render()
@@ -4788,8 +5071,11 @@ mod tests {
             "the mock's bar carries five controls"
         );
         assert!(
-            gap_row.gestures.iter().all(|g| g.not_built.is_some()),
-            "not one of the five exists today — every control is planned"
+            gap_row
+                .gestures
+                .iter()
+                .all(|g| matches!(g.nature, GestureRender::Planned(_))),
+            "not one of the five exists on a GAP row — its primary is `Résoudre`, which needs              FR16's ranked candidates. ⚠️ Read this for what it is: the documenting gesture is              live, and it is on the `Nouveau` row, which this fixture does not select"
         );
 
         // 🔴 **This assertion was the ONE test standing between the product and story 6b.10's
@@ -4822,6 +5108,835 @@ mod tests {
         );
     }
 
+    /// The wrapper above is the offering view with the gesture off, and nothing else.
+    ///
+    /// 🔑 Fourteen guards call `build_triage`; production calls `build_triage_offering`. This is
+    /// the one line that keeps that from being a claim — story 6b.4's `triage_html` is what it
+    /// costs when a test helper is allowed to drift from the path the operator gets.
+    #[test]
+    fn the_default_view_is_the_offering_view_with_the_gesture_off() {
+        let declared = vec![declared_row("e1", "ipv4", "192.0.2.10")];
+        let observations = vec![
+            batch("arp", 10, vec![ipv4("192.0.2.10"), hostname("nas")]),
+            batch_with_id("arp", 20, vec![ipv4("192.0.2.88")], 0xC3),
+        ];
+        let render = |view: TriageView| {
+            TriageBody {
+                triage: view,
+                identity: no_reach(),
+                documented: String::new(),
+                s: strings(),
+            }
+            .render()
+            .expect("the triage body renders")
+        };
+        let wrapped = render(build_triage(
+            declared.clone(),
+            Vec::new(),
+            observations.clone(),
+            at(600),
+            Some("nouveau:192.0.2.88"),
+            false,
+        ));
+        let direct = render(build_triage_offering(
+            declared,
+            Vec::new(),
+            observations,
+            at(600),
+            Some("nouveau:192.0.2.88"),
+            false,
+            false,
+        ));
+        assert_eq!(
+            wrapped, direct,
+            "the wrapper supplies one argument and delegates — it may never grow a body the \
+             guards exercise and the operator never gets"
+        );
+    }
+
+    /// 🔴 **The control is offered only where the route is MOUNTED** — story 6.4's T2b, and the
+    /// hole the validation's second layer found by BUILDING the gesture and pressing it.
+    ///
+    /// `POST /document-all` exists only under `OPENCMDB_DOCUMENT_ENABLED` (story 6.1), which is
+    /// **off by default**. A bar that renders the live control regardless puts a button the
+    /// operator can see, focus and press in front of a **404**, on the configuration almost every
+    /// deployment runs. The flag reaching the view is what this guard is about; that it reaches it
+    /// from `AppConfig` rather than from a second `std::env::var` is story 6b.2's M12.
+    #[test]
+    fn the_documenting_gesture_is_offered_only_where_the_route_is_mounted() {
+        let observations = vec![batch_with_id("arp", 10, vec![ipv4("192.0.2.77")], 0xA1)];
+        let pane = |enabled: bool| {
+            build_triage_offering(
+                Vec::new(),
+                Vec::new(),
+                observations.clone(),
+                at(600),
+                Some("nouveau:192.0.2.77"),
+                false,
+                enabled,
+            )
+            .selected
+            .expect("the nouveau row has a pane")
+        };
+
+        // 🔴 **SWITCHED OFF, and never *not built*** — Guy's arbitration of 2026-08-26, taken at
+        // the code review. This assertion read `GestureRender::Planned(…)` until then, and the
+        // product said *"not built yet"* about a gesture it had just built, on the default
+        // configuration. The control is still not pressable and still not a 404; what changed is
+        // that the sentence under it is true.
+        let switched_off = pane(false);
+        assert_eq!(
+            switched_off.gestures[0].nature,
+            GestureRender::Disabled(
+                rust_i18n::t!("gesture.not_enabled", switch = crate::DOCUMENT_ENABLED_ENV)
+                    .to_string(),
+            ),
+            "the route is not mounted, so the gesture is BUILT AND SWITCHED OFF — a live control \
+             here is a 404 the operator meets by pressing the primary control of the product's \
+             main screen, and a *planned* one is a lie about a gesture that exists"
+        );
+        assert!(
+            switched_off.has_a_switched_off_gesture(),
+            "and the pane says so, which is what renders the sentence naming the switch"
+        );
+        assert!(
+            !pane(true).has_a_switched_off_gesture(),
+            "CONTROL: with the route mounted nothing is switched off, so that sentence is NOT \
+             rendered — a note about a state nothing on screen is in would be a false line"
+        );
+        assert_eq!(
+            pane(true).gestures[0].nature,
+            GestureRender::Live(crate::document::DOCUMENT_ALL_PATH),
+            "the route IS mounted, so the gesture acts — and it posts to the SAME constant the \
+             router registers, so the screen and the endpoint cannot disagree about the address"
+        );
+    }
+
+    /// 🔴 **Only the `Nouveau` kind carries it, even with the route mounted** — FR13(a)'s scope.
+    ///
+    /// A gap, an absence and a conflict are all about an entity the operator has ALREADY declared;
+    /// `POST /document-all` adopts a whole *observation* as a new entity, which is Guy's third case
+    /// (*unknown → the operator CREATES the entity*) and no other. ⚠️ Without this guard the flag
+    /// would light every primary on the screen, and three of the four would post a subject whose
+    /// entity already exists — a 409 the operator cannot act on.
+    #[test]
+    fn no_other_kind_carries_a_live_gesture_even_when_the_route_is_mounted() {
+        let declared = vec![
+            declared_row("drift", "ipv4", "192.0.2.10"),
+            declared_row("drift", "hostname", "nas"),
+            declared_row("absent", "ipv4", "192.0.2.20"),
+            declared_row("absent", "hostname", "printer"),
+            declared_row("clash", "ipv4", "192.0.2.30"),
+            declared_row("clash", "hostname", "one"),
+        ];
+        let observations = vec![
+            batch("arp", 10, vec![ipv4("192.0.2.10"), hostname("other")]),
+            batch("arp", 20, vec![ipv4("192.0.2.30"), hostname("one")]),
+            batch("arp", 40, vec![ipv4("192.0.2.30"), hostname("two")]),
+            batch_with_id("arp", 50, vec![ipv4("192.0.2.99")], 0xB2),
+        ];
+        let view = build_triage_offering(
+            declared.clone(),
+            Vec::new(),
+            observations.clone(),
+            at(1_000),
+            None,
+            false,
+            true,
+        );
+
+        let ids: Vec<String> = view.rows.iter().map(|r| r.id.clone()).collect();
+        let live: Vec<String> = ids
+            .iter()
+            .filter(|id| {
+                build_triage_offering(
+                    declared.clone(),
+                    Vec::new(),
+                    observations.clone(),
+                    at(1_000),
+                    Some(id),
+                    false,
+                    true,
+                )
+                .selected
+                .expect("every queued row has a pane")
+                .gestures
+                .iter()
+                .any(|g| matches!(g.nature, GestureRender::Live(_)))
+            })
+            .cloned()
+            .collect();
+
+        // The premise: the other kinds are on screen at all, or the shortness below means nothing.
+        assert!(
+            ids.len() > live.len(),
+            "the premise: this fixture produces kinds other than `nouveau`, {} rows in all: {ids:?}",
+            ids.len()
+        );
+        assert_eq!(
+            live,
+            vec!["nouveau:192.0.2.99".to_string()],
+            "the documenting gesture belongs to the UNKNOWN case alone — every other kind names \
+             an entity that already exists, where `POST /document-all` can only answer 409"
+        );
+    }
+
+    /// The identity section as it reaches the wire — sliced from its own `<div>` by balanced tag
+    /// counting, never by taking everything to the end of the body.
+    ///
+    /// 🔑 The precision keeps the guard honest in BOTH directions: a slice running to the end of
+    /// the document would swallow whatever a later story renders after the section and then red
+    /// for something that is not the section's, and *a check that fails for the wrong reason is
+    /// worth nothing* (story 6b.6).
+    fn identity_section_of(html: &str) -> String {
+        let start = html
+            .find("<div class=\"identity\">")
+            .expect("the identity section is on the page");
+        let rest = &html[start..];
+        let mut depth = 0_usize;
+        let mut cursor = 0_usize;
+        while let Some(found) = rest[cursor..].find('<') {
+            let at = cursor + found;
+            if rest[at..].starts_with("</div>") {
+                depth -= 1;
+                if depth == 0 {
+                    return rest[..at + "</div>".len()].to_string();
+                }
+                cursor = at + "</div>".len();
+            } else if rest[at..].starts_with("<div") {
+                depth += 1;
+                cursor = at + "<div".len();
+            } else {
+                cursor = at + 1;
+            }
+        }
+        panic!("the identity section's `<div>` is never closed");
+    }
+
+    /// 🔴 **The pane's SOURCE moves with its subject, or the two photos name two observations** —
+    /// found by all three review layers of story 6.4, and measured on the wire by one of them.
+    ///
+    /// The last-wins overwrite that keeps arbitration 1's *most recent sighting* rewrote the
+    /// freshness and the subject and left `observed_meta.source` on the FIRST sighting, so the
+    /// pane read *"Source A · just now"* while the control posted B's id — against
+    /// `_action_bar.html`'s written claim that the two *"cannot name two different observations"*.
+    ///
+    /// ⚠️ **Reachable on the shipped product**, which is why this is a guard and not a note:
+    /// `connector_id` is minted fresh at every boot, so scan → restart → scan over one undeclared
+    /// address produces exactly this fixture.
+    #[test]
+    fn a_repeated_address_carries_the_latest_sightings_source_and_subject_together() {
+        let view = build_triage_offering(
+            Vec::new(),
+            Vec::new(),
+            vec![
+                batch_with_id("older-source", 10, vec![ipv4("192.0.2.77")], 0xA1),
+                batch_with_id("newer-source", 700, vec![ipv4("192.0.2.77")], 0xB2),
+            ],
+            at(1_000),
+            Some("nouveau:192.0.2.77"),
+            false,
+            true,
+        );
+        let pane = view.selected.expect("the nouveau row has a pane");
+
+        assert_eq!(
+            pane.subject,
+            opencmdb_core::observation::ObsId::from_uuid(Uuid::from_u128(0xB2)).to_string(),
+            "the premise: the LATER sighting is the subject (arbitration 1)"
+        );
+        assert_eq!(
+            pane.observed_meta.source,
+            source_label("newer-source"),
+            "and the source line names that same sighting's connector — a pane that shows one \
+             observation's provenance beside another's instant invites the operator to trust a \
+             photo neither side took"
+        );
+    }
+
+    /// The confirmation carried in the URL is total over anything a URL can hold, and silent
+    /// wherever it would say something that is not a fact.
+    ///
+    /// 🔑 `?documented=` is operator-reachable — anyone can type it — so this is the one place a
+    /// forged URL meets the product's main screen. Every branch answers with a sentence or with
+    /// silence; none can 500, and none can print a figure the gesture could not have produced.
+    #[test]
+    fn the_documented_confirmation_is_total_and_says_nothing_it_cannot_stand_behind() {
+        for quiet in [
+            None,
+            Some(""),
+            Some("x"),
+            Some("0"),
+            Some("-1"),
+            Some("2.5"),
+            Some("١٢"),
+        ] {
+            assert_eq!(
+                documented_confirmation(quiet),
+                "",
+                "nothing to say for {quiet:?} — a confirmation of nothing is a false line"
+            );
+        }
+        let one = documented_confirmation(Some("1"));
+        let two = documented_confirmation(Some("2"));
+        assert!(
+            !one.is_empty() && one != two,
+            "one field and two are DIFFERENT sentences — the parenthetical plural story 6b.10 \
+             removed from this screen must not come back through the confirmation: {one:?} / {two:?}"
+        );
+        assert_eq!(
+            documented_confirmation(Some("100000")),
+            counted_fields("triage.documented", MAX_DOCUMENTED),
+            "and a forged count is CAPPED — a figure the product could never have produced would \
+             read as a fact about the store"
+        );
+    }
+
+    /// 🔴 **Every identity cause line SAYS why it carries no documenting gesture** — read off the
+    /// rendered page, with the live control sitting on that same page.
+    ///
+    /// AC2 widened the criterion and the principle is what widened it: *the gesture belongs to the
+    /// CAUSE*, and applied correctly that cause is `undeclared`. Every other cause carries none —
+    /// ⚠️ **and saying nothing is not the same as saying no.** A count with no control beside it
+    /// reads as a feature someone forgot; the section answers the question instead of leaving it.
+    ///
+    /// # The control is what makes the negative half mean anything
+    ///
+    /// The page built here has the documenting gesture LIVE on its `Nouveau` pane, so `hx-post`
+    /// and `btn-document` are both present in the body. Without that, *"the identity section
+    /// carries no gesture"* would hold over a page carrying none anywhere — green on a product
+    /// where the gesture had never shipped at all, which is Epic 5's dominant defect class: *a
+    /// guard placed where the defect cannot occur reads as coverage and is none.*
+    ///
+    /// ⚠️ **Be exact about what that buys, because the first draft of this paragraph was not.**
+    /// It defends the PAGE-level premise and not the SECTION-level one: `_identity_section.html`
+    /// has no branch that can emit a control, so no change to story 6.4's own code can red the
+    /// four negative assertions. They are a TRIPWIRE for the story that adds one — which is worth
+    /// having, and is not a measurement of this one.
+    ///
+    /// ⚠️ **Its limit, written rather than implied**: it reads the served STRING. It cannot see a
+    /// control a script adds later, and it says nothing about what the section LOOKS like — only
+    /// about what it carries and what it says.
+    #[test]
+    fn every_identity_cause_line_says_why_it_carries_no_gesture() {
+        let triage = build_triage_offering(
+            Vec::new(),
+            Vec::new(),
+            vec![batch_with_id("arp", 10, vec![ipv4("192.0.2.77")], 0xA1)],
+            at(600),
+            Some("nouveau:192.0.2.77"),
+            false,
+            true,
+        );
+        let identity = build_identity_view(vec![
+            reach("abstained", Some("absence_of_proof"), 7),
+            reach("abstained", Some("ambiguous"), 2),
+            reach("abstained", Some("a_cause_no_variant_names"), 1),
+        ]);
+        let html = TriageBody {
+            triage,
+            identity,
+            documented: String::new(),
+            s: strings(),
+        }
+        .render()
+        .expect("the triage body renders");
+
+        for needle in ["hx-post", "btn-document"] {
+            assert!(
+                html.contains(needle),
+                "the premise: the documenting gesture is LIVE on this page (`{needle}` not found) \
+                 — without it every negative assertion below holds over a page that carries no \
+                 gesture anywhere, and measures nothing"
+            );
+        }
+
+        let section = identity_section_of(&html);
+        assert!(
+            section.contains("No proof of identity")
+                && section.contains("Several possible identities")
+                && section.contains("a_cause_no_variant_names"),
+            "the premise: all three cause lines are inside the slice — a slice that missed them \
+             would satisfy everything below by being empty:\n{section}"
+        );
+
+        for (cause, why) in [
+            ("absence_of_proof", "a source that can prove identity"),
+            ("ambiguous", "a doubt to lift"),
+            ("a_cause_no_variant_names", "does not recognise this cause"),
+        ] {
+            assert!(
+                section.contains(why),
+                "the `{cause}` line must SAY why it offers no gesture rather than merely omitting \
+                 one — looked for {why:?} in:\n{section}"
+            );
+        }
+
+        for forbidden in ["hx-post", "btn-document", "<button", "role=\"button\""] {
+            assert!(
+                !section.contains(forbidden),
+                "the identity section carries `{forbidden}`. The documenting gesture belongs to \
+                 `undeclared`; an identity abstention's answer is a better SOURCE, not a record \
+                 the operator writes — offering it here would create a second entity for a machine \
+                 that may already be declared"
+            );
+        }
+    }
+    /// **FR16b, and what it does NOT ask of this story** — *"each cause is one line and one
+    /// gesture, not N failures; 96 multi-interface devices is not 96 failures, it is ONE
+    /// question."*
+    ///
+    /// 🔑 **Within the arbitrated scope there is no N>1 case to exercise, and that is measured
+    /// here rather than asserted in a task list.** A `Nouveau` row is one address, one sighting
+    /// and one subject: its `counted` is false and its `count` is empty, so the row cannot even
+    /// display a plurality. FR16b's *"96 devices is ONE question"* bites on the `Absence` and
+    /// `Conflit` cause rows, which carry a count and which this story does not touch.
+    ///
+    /// ⚠️ **So *"one act, one answer"* holds by CONSTRUCTION on this gesture, not by handling.**
+    /// One press names one `ObsId`, and `POST /document-all` answers once — a 201 naming the
+    /// entity and the field count, or one refusal. The field count is the interesting number:
+    /// the sighting below carries TWO facts and the gesture writes both in one transaction, so
+    /// *N fields* is exactly the case FR16b says must not become *N failures*.
+    #[test]
+    fn a_new_row_asks_one_question_however_many_facts_the_sighting_carries() {
+        let view = build_triage_offering(
+            Vec::new(),
+            Vec::new(),
+            vec![batch_with_id(
+                "arp",
+                10,
+                vec![
+                    ipv4("192.0.2.77"),
+                    hostname("many-facts"),
+                    Fact::Rtt { millis: 4 },
+                ],
+                0xA1,
+            )],
+            at(600),
+            Some("nouveau:192.0.2.77"),
+            false,
+            true,
+        );
+
+        let rows: Vec<_> = view
+            .rows
+            .iter()
+            .filter(|r| r.id.starts_with("nouveau:"))
+            .collect();
+        assert_eq!(
+            rows.len(),
+            1,
+            "the premise: three facts at one address are ONE row — a sighting is the unit, not a \
+             fact"
+        );
+        assert!(
+            !rows[0].counted && rows[0].count.is_empty(),
+            "and the row displays no plurality at all: `counted={}` `count={:?}`",
+            rows[0].counted,
+            rows[0].count
+        );
+
+        let pane = view.selected.expect("the row has a pane");
+        assert!(
+            !pane.subject.is_empty(),
+            "the pane names a subject, which is what the control posts"
+        );
+        assert_eq!(
+            pane.gestures
+                .iter()
+                .filter(|g| matches!(g.nature, GestureRender::Live(_)))
+                .count(),
+            1,
+            "ONE live control for the whole record — never one per fact, which is what FR16b's \
+             *not N failures* forbids at the other end of the same gesture"
+        );
+    }
+
+    /// 🔴 **The gesture LOWERS THE BACKLOG AND LEAVES THE REACH EXACTLY WHERE IT WAS** — AC3, and
+    /// the sentence story 5.14b left stated rather than met.
+    ///
+    /// # Two numbers on one screen, and only one of them answers to the operator
+    ///
+    /// The triage count is the reconciliation backlog: document the sighting and the question is
+    /// gone, so it falls, correctly. The reach count is SIGHTINGS the identity engine could not
+    /// place, read off `identity_link` — and documenting writes only `declared_attribute`, so it
+    /// does not move. ⚠️ **That is not a defect and this test is not a complaint**: FR13's
+    /// invariant is that the observation is never modified and the link is preserved, so a reach
+    /// that fell would mean the gesture had rewritten history. *The number will not go down when
+    /// the operator acts, and the surface must not imply it will.*
+    ///
+    /// 🔑 It measures the DIVERGENCE rather than the agreement, on story 5.14b's own precedent:
+    /// a test asserting that two reads agree is worth little once they are known to count
+    /// different populations, and worth nothing the day someone fuses them.
+    ///
+    /// ⚠️ Its premise is asserted first and separately — a backlog that was already empty, or a
+    /// reach that was already zero, would satisfy both conclusions by having nothing to move.
+    #[tokio::test]
+    async fn documenting_lowers_the_backlog_and_leaves_the_reach_where_it_was() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping the backlog/reach divergence test: DATABASE_URL unset");
+            return;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        for statement in [
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+            "DELETE FROM declared_attribute",
+        ] {
+            sqlx::query(statement).execute(&pool).await.expect("clean");
+        }
+
+        // ONE sighting, at an address no declared entity claims — the `undeclared` population,
+        // which is the only one this gesture is offered on.
+        let subject = ObsId::from_uuid(Uuid::from_u128(0x6401));
+        let observation = Observation {
+            obs_id: subject,
+            connector_id: ConnectorId::from_uuid(Uuid::from_u128(0x6400)),
+            observed_at: chrono::DateTime::from_timestamp(1_700_002_000, 0).expect("in range"),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(Uuid::from_u128(0x6402)),
+                vantage: VantageId::from_uuid(Uuid::nil()),
+            },
+            facts: vec![
+                Fact::IpV4 {
+                    addr: "192.0.2.50".parse().expect("a documentation address"),
+                },
+                Fact::Hostname {
+                    name: "unknown-50".into(),
+                    source: opencmdb_core::observation::HostnameSource::Dns,
+                },
+            ],
+            raw: None,
+        };
+        crate::repo::insert_observation(&pool, &observation)
+            .await
+            .expect("the sighting is stored");
+        // And the identity engine's own verdict on it: it could not place it.
+        crate::repo::insert_identity_link(
+            &pool,
+            opencmdb_core::observation::LinkId::from_uuid(Uuid::from_u128(0x6403)),
+            subject,
+            None,
+            &opencmdb_core::identity::cascade::Decision {
+                conclusion: opencmdb_core::identity::cascade::Conclusion::Abstained {
+                    cause:
+                        opencmdb_core::identity::cascade::IdentityAbstentionCause::AbsenceOfProof,
+                },
+                verdict_vector: Vec::new(),
+                ruleset_version: opencmdb_core::identity::cascade::RulesetVersion(1),
+            },
+            &[],
+            crate::repo::DecidedBy::Engine,
+            observation.observed_at,
+            crate::repo::open_end(),
+        )
+        .await
+        .expect("the abstention is stored");
+
+        let backlog = |declared, observations| {
+            build_triage_offering(
+                declared,
+                Vec::new(),
+                observations,
+                at(9_000),
+                None,
+                false,
+                true,
+            )
+            .total
+        };
+        let read = async |pool: &MySqlPool| {
+            (
+                crate::repo::load_declared_attributes(pool)
+                    .await
+                    .expect("declared"),
+                crate::repo::load_observation_facts(pool)
+                    .await
+                    .expect("observed"),
+                crate::repo::count_engine_reach(pool).await.expect("reach"),
+            )
+        };
+
+        let (declared_before, observed_before, reach_before) = read(&pool).await;
+        let total_before = backlog(declared_before, observed_before);
+        assert_eq!(
+            total_before, 1,
+            "the premise: exactly one question is queued — a backlog that was already empty \
+             would satisfy the fall below by having nothing to lose"
+        );
+        assert_eq!(
+            reach_before.len(),
+            1,
+            "the premise: the engine has reported on this sighting — a reach that was already \
+             empty would satisfy the equality below by holding nothing"
+        );
+
+        use crate::document::DocumentPort as _;
+        // ⚠️ `is_ok()` rather than `.expect()`: `DocumentFailure` carries a backend error and
+        // deliberately implements no `Debug` (story 6.2 — a 500 must not leak it), so an
+        // `.expect()` here would not compile. Deriving `Debug` for a test's convenience would
+        // widen what the type permits at every OTHER call site.
+        let documented = crate::document::StoreDocument::new(pool.clone())
+            .document_all(subject)
+            .await;
+        assert!(
+            documented.is_ok(),
+            "the premise: the gesture succeeds on the undeclared sighting, or neither \
+             number below moved for the reason this test names"
+        );
+
+        let (declared_after, observed_after, reach_after) = read(&pool).await;
+        let total_after = backlog(declared_after, observed_after);
+        assert_eq!(
+            total_after, 0,
+            "the BACKLOG falls: the address is documented, the values agree, and the question the \
+             queue was asking is answered"
+        );
+        assert_eq!(
+            reach_after, reach_before,
+            "and the REACH does not move, cause for cause and count for count. It counts \
+             sightings the identity engine could not place; documenting writes a declared record \
+             and touches neither the observation nor the link (FR13's invariant). A reach that \
+             fell here would mean the gesture had rewritten what was seen"
+        );
+    }
+
+    /// 🔴 **The amber cannot reach `Résoudre`, and it is the TYPE that says so** — not a comment
+    /// about which primary happens to be live today.
+    ///
+    /// The UX spec reserves `--accent-document` *"solely for the documenting gesture"* (`:587`).
+    /// `action_bar` builds `Gesture::Live` only for the documenting key, so `GestureRender::Live`
+    /// IMPLIES *documenting* and the template can carry `btn-document` as a static class literal.
+    /// ⚠️ Without this, Epic 6 makes `Résoudre` live — FR16's ranked candidates — and the amber
+    /// follows it silently, because the stylesheet cannot tell two gestures apart under one
+    /// `.live` class.
+    #[test]
+    fn the_resolve_gesture_cannot_go_live_and_take_the_amber_with_it() {
+        // The premise: the flag is the one this test is about, and it DOES light the other key.
+        assert!(
+            matches!(
+                action_bar("gesture.document", PrimaryState::Acts)[0].nature,
+                GestureRender::Live(_)
+            ),
+            "the premise: `true` lights the documenting gesture, or the refusal below would pass \
+             on a flag that lights nothing at all"
+        );
+        assert!(
+            matches!(
+                action_bar("gesture.resolve", PrimaryState::Acts)[0].nature,
+                GestureRender::Planned(_)
+            ),
+            "`Résoudre` stays planned even with the flag on — it has no route, and a live control \
+             would take the amber the spec reserves for documenting"
+        );
+    }
+
+    /// 🔴 **The rendered control is a real `<button>` carrying the pane's subject** — the DOM, not
+    /// the builder.
+    ///
+    /// Story 6b.4b shipped `<span role="button" aria-disabled="true">` for the planned controls and
+    /// its code review measured the cost in Chrome: `tabIndex -1`, `.focus()` refused, forty
+    /// dispatched Tab presses reaching none of them. ⚠️ A control that ACTS may not inherit that,
+    /// and **the guards this project keeps writing on the source cannot see it** — story 6b.4b's
+    /// four HIGH findings were one mistake made four times, every guard reading the template while
+    /// every defect lived in the render. So this reads the rendered HTML.
+    #[test]
+    fn the_live_control_renders_as_a_button_posting_the_panes_subject() {
+        let observations = vec![batch_with_id("arp", 10, vec![ipv4("192.0.2.77")], 0xA1)];
+        let html = |enabled: bool| {
+            let view = build_triage_offering(
+                Vec::new(),
+                Vec::new(),
+                observations.clone(),
+                at(600),
+                Some("nouveau:192.0.2.77"),
+                false,
+                enabled,
+            );
+            let subject = view
+                .selected
+                .as_ref()
+                .expect("the nouveau row has a pane")
+                .subject
+                .clone();
+            (
+                TriageBody {
+                    triage: view,
+                    identity: no_reach(),
+                    documented: String::new(),
+                    s: strings(),
+                }
+                .render()
+                .expect("the triage body renders"),
+                subject,
+            )
+        };
+
+        let (off, _) = html(false);
+        assert!(
+            !off.contains("hx-post"),
+            "with the route unmounted the page posts nowhere at all"
+        );
+
+        let (on, subject) = html(true);
+        assert!(
+            !subject.is_empty(),
+            "the premise: the pane names a subject, or the needle below would match a bare \
+             attribute and pass on nothing"
+        );
+        let needle = format!(r#"hx-vals='{{"subject": "{subject}"}}'"#);
+        assert!(
+            on.contains(&needle),
+            "the live control posts the pane's OWN subject.\nlooked for: {needle}"
+        );
+        assert!(
+            on.contains(&format!(
+                r#"hx-post="{}""#,
+                crate::document::DOCUMENT_ALL_PATH
+            )),
+            "and it posts to the route the router registers"
+        );
+        assert!(
+            on.contains(r#"<button type="button" class="btn-gesture live btn-document""#),
+            "a REAL button, never the `<span role=\"button\">` story 6b.4b measured out of the \
+             tab order — a control that acts must be focusable by nature"
+        );
+        assert!(
+            on.contains(r#"id="gesture-result" class="gesture-result" tabindex="-1""#),
+            "the swap lands in a region focus can reach — story 6b.11's focus-after-swap contract, \
+             registered to this story because no swap existed to attach it to"
+        );
+        // 🔴 **The focus handler belongs on the TARGET of the swap, and it sat on the button.**
+        // `htmx:afterSwap` is fired on the swapped element, which is this paragraph — a SIBLING
+        // of the control inside the group, never an ancestor — so the event bubbled past the
+        // button and the handler never ran. Measured in Chrome by `a11y/kbd-probe.mjs`: the
+        // press answered 201, the answer swapped in, and `document.activeElement.id` was EMPTY
+        // while every assertion in this file stayed green.
+        //
+        // ⚠️ **This does NOT replace the browser check and is not offered as one** — it names
+        // the CAUSE where the probe names the symptom, which is what story 6b.11's amended AC5
+        // asks for: a source guard does not suffice, and it is not thereby worthless. The
+        // NEGATIVE half is the load-bearing one, because *put the handler on the control that
+        // acts* is the ordinary gesture that wrote the defect in the first place.
+        // 🔴 **The element's attributes end at its own `>`, and a `>` INSIDE an attribute value
+        // is not it.** This read `split_once('>')` until the very commit that added
+        // `hx-on::before-swap="if (event.detail.xhr.status >= 400) …"`, which cut the slice inside
+        // the value and reported the focus handler missing — story 5.12's `statement_after`
+        // defect, where a quote inside a SQL literal truncated the statement. A guard that fails
+        // for the wrong reason is worth nothing.
+        let attributes_of = |html: &str, anchor: &str| -> String {
+            let rest = html
+                .split_once(anchor)
+                .unwrap_or_else(|| panic!("{anchor} is on the page"))
+                .1;
+            let mut quoted = false;
+            for (at, c) in rest.char_indices() {
+                match c {
+                    '"' => quoted = !quoted,
+                    '>' if !quoted => return rest[..at].to_string(),
+                    _ => {}
+                }
+            }
+            panic!("the element opened by {anchor} never closes its tag");
+        };
+
+        let region = attributes_of(&on, r#"id="gesture-result""#);
+        assert!(
+            region.contains("hx-on::after-swap") && region.contains("hx-on::before-swap"),
+            "BOTH handlers sit on the SWAP TARGET, where htmx fires those events — the focus move \
+             and the permission to swap a refusal at all. Each was written on the BUTTON first, \
+             and each did nothing: measured in Chrome, `activeElement` empty on a 201 and an empty \
+             answer region on a 409.\nattributes: {region}"
+        );
+        let control = attributes_of(&on, "<button type=\"button\"");
+        assert!(
+            !control.contains("hx-on::"),
+            "and NEITHER is on the button, where htmx never fires them — an attribute naming a \
+             behaviour the product does not have is worse than no attribute at all\nattributes: \
+             {control}"
+        );
+    }
+
+    /// 🔴 **With the route unmounted the RENDERED bar says the gesture is built and switched off,
+    /// and names the switch** — Guy's arbitration of 2026-08-26, taken at story 6.4's code review.
+    ///
+    /// # What was wrong, and why no test could see it
+    ///
+    /// Story 6.4 shipped that state as `Planned`, so the served page told the operator the
+    /// documenting gesture was *not built yet* — about the gesture that story had just built, on
+    /// the configuration nearly every deployment runs. Every assertion stayed green because they
+    /// all asked whether the control was announced unavailable, which it correctly was. ⚠️ *A
+    /// control can be right about its reach and wrong about its reason.*
+    ///
+    /// 🔑 The sentence NAMES the variable, interpolated from [`crate::DOCUMENT_ENABLED_ENV`] — the
+    /// same constant the boot reads — so the screen cannot send an operator to a variable the
+    /// binary does not consult.
+    ///
+    /// ⚠️ **This reads the RENDER and not the view**, because the two states differ by a badge and
+    /// a note rather than by behaviour; and it stops at the served string. It says nothing about
+    /// what the control LOOKS like, which is `a11y/kbd-probe.mjs`'s business — and that gate runs
+    /// with the route MOUNTED, so this state has no browser-level carrier. Stated, not implied.
+    #[test]
+    fn a_switched_off_gesture_says_so_and_names_the_switch() {
+        let observations = vec![batch_with_id("arp", 10, vec![ipv4("192.0.2.77")], 0xA1)];
+        let html = |enabled: bool| {
+            TriageBody {
+                triage: build_triage_offering(
+                    Vec::new(),
+                    Vec::new(),
+                    observations.clone(),
+                    at(600),
+                    Some("nouveau:192.0.2.77"),
+                    false,
+                    enabled,
+                ),
+                identity: no_reach(),
+                documented: String::new(),
+                s: strings(),
+            }
+            .render()
+            .expect("the triage body renders")
+        };
+
+        let off = html(false);
+        assert!(
+            off.contains(crate::DOCUMENT_ENABLED_ENV),
+            "the sentence must NAME the switch that turns the gesture on — an operator told only \
+             that something is unavailable has nowhere to go:\n{off}"
+        );
+        assert!(
+            off.contains(r#"id="gesture-not-enabled""#)
+                && off.contains(r#"class="btn-gesture off""#),
+            "and the control carries its own badge and points at its own sentence, rather than \
+             borrowing the *not built* one"
+        );
+        // 🔴 The defect itself: the switched-off control must NOT be described by the *not built*
+        // sentence. Four controls point there — the four Epic 7 owns — and this one does not.
+        assert_eq!(
+            off.matches(r#"aria-describedby="gesture-not-built""#)
+                .count(),
+            4,
+            "the four gestures Epic 7 owns are announced as unbuilt; the documenting one is BUILT \
+             and switched off, and announcing it with them is the falsehood this test exists for"
+        );
+
+        let on = html(true);
+        assert!(
+            !on.contains(r#"id="gesture-not-enabled""#)
+                && !on.contains(crate::DOCUMENT_ENABLED_ENV),
+            "CONTROL: with the route mounted nothing is switched off, so neither the sentence nor \
+             the variable's name is rendered at all — a note about a state nothing on screen is in \
+             is a false line, which is how the *not built* sentence became wrong in the first place"
+        );
+    }
+
     /// The rendered bar says the gesture is not built, and says it in the operator's language.
     #[test]
     fn the_rendered_bar_says_the_gesture_is_not_built() {
@@ -4844,6 +5959,7 @@ mod tests {
         let html = TriageBody {
             triage: view,
             identity: no_reach(),
+            documented: String::new(),
             s: strings(),
         }
         .render()
@@ -4871,13 +5987,19 @@ mod tests {
              without five visible copies — seen in a browser, repeating it inside each control \
              turned a compact row into a stack that said the same thing five times"
         );
+        // ⚠️ **The sentence names the BADGE, and story 6.4 is why.** It read *"This gesture is
+        // not built yet"* while every control in the bar was planned; the moment the documenting
+        // gesture went live, a group-level line sat under a bar whose loudest control WAS built.
+        // It is announced per control through `aria-describedby`, so it was right in the ear and
+        // wrong on the page — no assertion moved, and only a look caught it.
         assert!(
             html.contains(
-                "id=\"gesture-not-built\" class=\"gesture-note\">This gesture is not built yet"
+                "id=\"gesture-not-built\" class=\"gesture-note\">The gestures marked Not yet are still to come"
             ),
             "the sentence is VISIBLE TEXT, not a `title=` — it sat in a tooltip until the code \
              review, invisible to a keyboard and to a touch screen, while the whole argument for \
-             showing a dead control is that it TELLS the operator why"
+             showing a dead control is that it TELLS the operator why — and it names the badge it \
+             scopes itself to, INTERPOLATED, so the two cannot drift apart"
         );
         assert!(
             html.contains("Accept the gap") && html.contains("Exclude"),

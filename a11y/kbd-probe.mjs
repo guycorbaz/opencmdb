@@ -38,8 +38,13 @@ const SETTLE_WAIT_MS = 900;
 // caught that twice, once in a privacy floor and once in a word count. If a check is added
 // this number moves deliberately; if one is skipped, the gate says so instead of printing
 // a green.
-const MIN_CHECKS = 20;
+const MIN_CHECKS = 30;
 const MIN_ROWS = 2;
+/// How long a navigation or a response may take before the gate calls it *could not run*.
+const NAV_TIMEOUT_MS = 20_000;
+// The product's one live control — a CLASS the stylesheet guard already pins, never a label
+// and never a selector vocabulary. Story 6.4; see the block that presses it.
+const GESTURE = "button.btn-document";
 
 /** The gate could not run. Never conflated with "a check failed". */
 class CannotRun extends Error {}
@@ -368,6 +373,263 @@ async function main() {
   }
 
   await page.close();
+
+  // ── The reach section is POPULATED where the gates run, and every line answers ──
+  //
+  // 🔴 **MEASURED, and it is why this check exists: axe walks this section and asserts nothing
+  // about it.** Story 6.4 seeded identity abstentions so the section would render its cause
+  // lines — each carrying the sentence that says why it offers no documenting gesture — and
+  // with that seed block removed the page served ZERO of those sentences while the axe gate
+  // exited 0 over the same URL. *A gate that walks a page is not a gate that reads it.*
+  //
+  // ⚠️ Its limit: it says the lines are THERE and carry a sentence, never which sentence. The
+  // wording is pinned in Rust, where the render assertion can name a phrase of the
+  // translation; here the property is that the section is not silently empty.
+  {
+    const p = await open("/triage");
+    const reach = await p.$$eval(".identity .abstentions.causes li", (rows) =>
+      rows.map((row) => ({
+        cause: (row.querySelector(".cause")?.textContent ?? "").trim(),
+        why: (row.querySelector(".why")?.textContent ?? "").trim(),
+      })),
+    );
+    await p.close();
+    // 🔴 **AN EMPTY SECTION IS *THE GATE COULD NOT RUN*, NEVER *THE PRODUCT REGRESSED*.** This
+    // read `check(reach.length > 0 && …)` until story 6.4's code review measured what that costs:
+    // with the seed's `identity_link` block removed — a HARNESS shortfall — the gate printed *"the
+    // keyboard layer has regressed"* over a correct product. The 0/1/2 contract is this project's
+    // own invention and its whole point is that those two never wear each other's clothes.
+    if (reach.length === 0) {
+      cannotRun(
+        `/triage renders no identity cause line, so the sentences this checks are on no ` +
+          `page. Seed the store (a11y/seed.sql writes the abstentions) before the gate runs.`,
+      );
+    }
+    check(
+      reach.every((row) => row.cause !== "" && row.why !== ""),
+      "every identity cause line on the served page carries the sentence that says why it offers no gesture",
+      `${reach.length} line(s): ${JSON.stringify(reach.map((r) => r.why.slice(0, 24)))}`,
+    );
+  }
+
+  // ── The gesture that ACTS: pressed by keyboard, and the focus follows the swap ──
+  //
+  // 🔴 **STORY 6b.11 REGISTERED THE FOCUS-AFTER-SWAP CONTRACT TO STORY 6.4 BECAUSE NO SWAP
+  // EXISTED TO ATTACH IT TO.** It exists now, and it is the one behaviour in this product that
+  // no Rust test can reach: `hx-on::after-swap` is a string in the served HTML until a browser
+  // runs it, so a render assertion measures that the ATTRIBUTE is there and nothing about what
+  // happens when the operator presses ⏎. A keyboard operator who presses a control and is left
+  // where they were has no way to reach what just appeared — announcing is not reaching, which
+  // is why `aria-live` and the focus move are both required and neither substitutes.
+  //
+  // ⚠️ **THIS BLOCK WRITES TO THE STORE**, and it is the only check here that does: it adopts
+  // the undeclared sighting `a11y/seed.sql` plants. So it must stay LAST, or be preceded by a
+  // re-seed — a second run against the same store answers 409, htmx swaps nothing on a non-2xx,
+  // and the focus checks below would then red over a product that is working. That is a HARNESS
+  // failure and it is reported as one: the response status is read off the wire so the two
+  // cannot be confused.
+  //
+  // 🔑 **The row is FOUND, never named** — each pane is opened and asked whether it carries the
+  // control, the same idiom `axe-gate.mjs` uses. Matching the `nouveau:` selector would couple
+  // this gate to a Rust identifier and matching *New* / *Nouveau* would be story 6b.3's
+  // `role_key` defect: a real, resolving, wrong value that every shape check passes.
+  {
+    const hrefs = await (async () => {
+      const p = await open("/triage");
+      const all = await p.$$eval(QUEUE, (rows) => rows.map((r) => r.getAttribute("href")));
+      await p.close();
+      return all;
+    })();
+    let gesturePage = null;
+    for (const href of hrefs) {
+      const p = await open(href);
+      if ((await p.$$eval(GESTURE, (found) => found.length)) > 0) {
+        gesturePage = p;
+        break;
+      }
+      await p.close();
+    }
+    if (gesturePage === null) {
+      cannotRun(
+        `no queue row carries \`${GESTURE}\`, so the product's only live gesture is on no page ` +
+          `this gate can press. Either the store holds no undeclared sighting, or the server ` +
+          `was started without OPENCMDB_DOCUMENT_ENABLED.`,
+      );
+    }
+
+    // 🔴 **THE AMBER, MEASURED WHERE IT PAINTS RATHER THAN WHERE IT IS DECLARED.** Story 6.4's
+    // own guard counts `var(--accent-document)` reads in the SHEET and a browser says whether
+    // any of them reaches a pixel: measured before this check existed, `.btn-gesture.live`
+    // (specificity 0-2-0) beat `.btn-document` (0-1-0) on all four declarations, so the
+    // product's primary control computed to `rgb(233,233,234)` on `rgb(29,31,32)` at weight
+    // 400 — plain grey — while the sheet, the count and every Rust assertion stayed green.
+    //
+    // 🔑 **The token is READ, never spelled here.** Hard-coding `#8d5e2d` would make this an
+    // enumeration that goes stale the day the palette moves; comparing the control against the
+    // value `:root` actually carries is a property of the reservation itself.
+    const amber = await gesturePage.evaluate((sel) => {
+      const hex = getComputedStyle(document.documentElement)
+        .getPropertyValue("--accent-document")
+        .trim();
+      const rgb = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+      const token = rgb
+        ? `rgb(${parseInt(rgb[1], 16)}, ${parseInt(rgb[2], 16)}, ${parseInt(rgb[3], 16)})`
+        : null;
+      const live = getComputedStyle(document.querySelector(sel));
+      const planned = document.querySelector(".btn-gesture.planned");
+      return {
+        token,
+        background: live.backgroundColor,
+        border: live.borderColor,
+        color: live.color,
+        plannedBackground:
+          planned === null ? null : getComputedStyle(planned).backgroundColor,
+      };
+    }, GESTURE);
+    check(
+      amber.token !== null &&
+        amber.background === amber.token &&
+        amber.border === amber.token &&
+        amber.color !== amber.token,
+      "the documenting gesture PAINTS with the amber the sheet reserves for it — FILLED, with its label on top",
+      `--accent-document=${amber.token} background=${amber.background} border=${amber.border} label=${amber.color}`,
+    );
+    check(
+      amber.plannedBackground !== null && amber.plannedBackground !== amber.token,
+      "CONTROL: a PLANNED control does not carry it — the reservation is a difference, not a wish",
+      `planned background=${amber.plannedBackground}`,
+    );
+
+    const focused = await gesturePage.evaluate((sel) => {
+      const control = document.querySelector(sel);
+      control.focus();
+      return {
+        reached: document.activeElement === control,
+        tabIndex: control.tabIndex,
+        tag: control.tagName,
+      };
+    }, GESTURE);
+    check(
+      focused.reached && focused.tabIndex === 0 && focused.tag === "BUTTON",
+      "the live gesture is focusable by nature, not by an attribute someone remembered",
+      `<${focused.tag.toLowerCase()}> tabIndex=${focused.tabIndex} reached=${focused.reached}`,
+    );
+
+    // 🔴 **A SECOND TAB, opened on the same row BEFORE the first press** — this is what makes the
+    // refusal half measurable, and it is the ordinary case rather than a contrivance: an operator
+    // with the screen open in two tabs, or one who came back to a page the store has moved past.
+    const stalePage = await open(gesturePage.url().replace(BASE, ""));
+
+    // The status comes off the wire, so *the harness re-ran* and *the product broke* stay apart.
+    // 🔴 **409 IS THE HARNESS; EVERYTHING ELSE IS THE PRODUCT** — and this block routed BOTH to
+    // *the gate could not run* until story 6.4's code review measured it: a real 500 inside
+    // `document_all` exited 2 under a message asserting 409 as the cause, i.e. a cause with no
+    // check behind it for four of the five reachable statuses. A developer following that message
+    // re-seeds and re-runs forever.
+    //
+    // 🔑 And the response is AWAITED rather than slept on. A fixed 900 ms then reading a variable
+    // leaves `posted` null on a slow-but-correct POST — the same page carries a 2 s store budget —
+    // and the checks below would then red as *the product broke*, which is the confusion this
+    // paragraph exists to prevent.
+    const pressed = gesturePage.waitForResponse(
+      (response) => response.request().method() === "POST",
+      { timeout: NAV_TIMEOUT_MS },
+    );
+    await gesturePage.keyboard.press("Enter");
+    let posted = null;
+    try {
+      posted = (await pressed).status();
+    } catch (error) {
+      cannotRun(`the documenting gesture never answered — ${error.message}`);
+    }
+    if (posted === 409) {
+      cannotRun(
+        `the documenting gesture answered 409: this store was already documented. Re-run ` +
+          `a11y/seed.sql before this gate rather than reading the absence of an answer as a ` +
+          `product defect.`,
+      );
+    }
+    check(
+      posted === 201,
+      "the documenting gesture reaches the route and the route accepts the write",
+      `status=${posted}`,
+    );
+    await gesturePage
+      .waitForNavigation({ waitUntil: "networkidle0", timeout: NAV_TIMEOUT_MS })
+      .catch(() => {});
+    const landed = await gesturePage.evaluate(() => ({
+      url: window.location.pathname + window.location.search,
+      confirmation: (
+        document.querySelector(".documented")?.textContent ?? ""
+      ).trim(),
+      rows: document.querySelectorAll(".queue .queue-row").length,
+      live: document.querySelectorAll("button.btn-document").length,
+    }));
+    // 🔴 **A SUCCESS REDIRECTS; it does not patch one paragraph.** Until story 6.4's code review
+    // the answer was swapped into `#gesture-result` and everything else stayed put: the queue row
+    // was still there, the amber button was still live, and the declared pane still read *nothing
+    // declared at this address* over a message saying it had just been declared. Two review layers
+    // measured it in this browser. The screen is now re-rendered from the store, and the
+    // confirmation rides in the URL.
+    check(
+      landed.url.includes("documented=") && landed.confirmation !== "",
+      "a successful gesture RE-RENDERS the screen and the confirmation rides in the URL",
+      `url=${landed.url} confirmation=${JSON.stringify(landed.confirmation)}`,
+    );
+    check(
+      landed.live === 0,
+      "and the question has left the queue — the row it was asked about is gone, with its control",
+      `${landed.rows} row(s) left, ${landed.live} live control(s)`,
+    );
+
+    // ── The refusal, in the tab that did not act ──
+    //
+    // 🔴 **htmx swaps NOTHING on a non-2xx by default, so before this story's code review a
+    // second press produced total silence** — over the first press's success sentence, still on
+    // screen, still saying the opposite. `hx-on::before-swap` now lets any 4xx/5xx through, and
+    // `aria-live` announces it. Measured here rather than reasoned about.
+    check(
+      await stalePage.evaluate(
+        () => (document.getElementById("gesture-result")?.textContent ?? "").trim() === "",
+      ),
+      "the premise: the answer region is EMPTY before the refusal, or the checks below pass on what was already there",
+    );
+    await stalePage.evaluate((sel) => document.querySelector(sel).focus(), GESTURE);
+    const refusal = stalePage.waitForResponse(
+      (response) => response.request().method() === "POST",
+      { timeout: NAV_TIMEOUT_MS },
+    );
+    await stalePage.keyboard.press("Enter");
+    let refused = null;
+    try {
+      refused = (await refusal).status();
+    } catch (error) {
+      cannotRun(`the stale tab's press never answered — ${error.message}`);
+    }
+    await wait(SETTLE_WAIT_MS);
+    const answer = await stalePage.evaluate(() => ({
+      text: (document.getElementById("gesture-result")?.textContent ?? "").trim(),
+      focusedId: document.activeElement?.id ?? "",
+    }));
+    if (refused !== 409) {
+      cannotRun(
+        `the stale tab's press answered ${refused} where 409 was due — the two tabs did not ` +
+          `name the same subject, so the refusal path was not exercised at all.`,
+      );
+    }
+    check(
+      answer.text !== "",
+      "a REFUSED gesture says so on the page rather than failing in silence",
+      `status=${refused} answer=${JSON.stringify(answer.text.slice(0, 60))}`,
+    );
+    check(
+      answer.focusedId === "gesture-result",
+      "and FOCUS FOLLOWS THE SWAP — story 6b.11's contract, which no render assertion can see",
+      `activeElement id=${JSON.stringify(answer.focusedId)}`,
+    );
+    await stalePage.close();
+    await gesturePage.close();
+  }
 
   // 🔑 The floor: a run that measured less than the full set reports "could not run", not a
   // pass. This is the assertion the file's predecessor did not have.

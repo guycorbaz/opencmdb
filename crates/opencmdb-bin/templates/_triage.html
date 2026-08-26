@@ -3,8 +3,9 @@
      🔑 Server-rendered, one URL per state — epic constraint 4. The selection is `?sel=`, the sort is
      `?sort=age`, and there is no client router: the mock's runtime is not this product's.
 
-     ⚠️ The action bar arrived with story 6b.4b, and NOT ONE of its five controls is live — see
-     `_action_bar.html` for why that is a decision and not an omission. -#}
+     ⚠️ The action bar arrived with story 6b.4b with none of its five controls live; since story
+     6.4 the primary on a `Nouveau` row acts, and the other four say why they do not — see
+     `_action_bar.html`. -#}
 <section class="triage">
   <div class="triage-head">
     <h1>{{ s.triage_title }}</h1>
@@ -24,6 +25,19 @@
   </div>
 
   <p class="muted lede">{{ s.triage_lede }}</p>
+
+  {#- 🔴 The confirmation of a documenting gesture that just landed, carried in the URL by
+       `POST /document-all`'s `HX-Redirect` (story 6.4's code review). It is rendered by the SCREEN
+       rather than swapped in by the route, so what the operator reads and what the queue shows are
+       one render of one state — before this, the answer was swapped into a paragraph while the row,
+       the pane and the button all stayed as they were, and the page said *"nothing declared at this
+       address"* over a message saying it had just been declared.
+
+       ⚠️ `role="status"` and not `aria-live`: this arrives with a fresh document, so there is no
+       live change to announce; a screen reader meets it as part of the page. -#}
+  {% if !documented.is_empty() %}
+  <p class="documented" role="status">{{ documented }}</p>
+  {% endif %}
 
   {% if triage.rows.is_empty() %}
     <p class="clear">{{ s.triage_empty }}</p>

@@ -97,6 +97,14 @@ jobs:
           DATABASE_URL: mysql://root:opencmdb@127.0.0.1:3306/opencmdb_test
           OPENCMDB_BASIC_USER: ci
           OPENCMDB_BASIC_PASSWORD: ci-not-a-secret
+          # 🔴 **STORY 6.4: WITHOUT THIS THE PRODUCT'S ONLY LIVE GESTURE IS ON NO PAGE EITHER
+          # BROWSER GATE WALKS.** `POST /document-all` is registered only under this switch
+          # (story 6.1, off by default and deliberately so), and the page renders the control
+          # only where the route is mounted — so a server booted without it serves a triage
+          # screen with nothing to press, and both gates would report a clean product over a
+          # gesture they never saw. ⚠️ It is set HERE and not in the image: this is the gate's
+          # server, not a deployment.
+          OPENCMDB_DOCUMENT_ENABLED: "1"
         run: |
           set -euo pipefail
           cargo build --workspace --locked
@@ -129,10 +137,19 @@ jobs:
           OPENCMDB_BASIC_USER="$OPENCMDB_BASIC_USER" \
             OPENCMDB_BASIC_PASSWORD="$OPENCMDB_BASIC_PASSWORD" \
             AXE_REQUIRE_QUEUE=1 \
+            AXE_REQUIRE_GESTURE=1 \
             node a11y/axe-gate.mjs
           # 🔴 **THE KEYBOARD LAYER'S ONLY CARRIER, and until story 6b.11's repair pass it
           # ran nowhere.** `crates/opencmdb-bin/assets/app.js` could be EMPTIED with 490
           # tests, nine gates and the axe gate all green — measured by two review layers
           # independently. axe has no rule for any of what that file does, so this is not the
           # gate above with more routes: it presses keys and reads the DOM back.
+          #
+          # 🔴 **IT WRITES, SINCE STORY 6.4, AND THAT IS WHY IT STAYS LAST.** Its final block
+          # presses the documenting gesture for real: the route answers 201 and the undeclared
+          # sighting the seed plants becomes a documented entity. A second run against the same
+          # store answers 409, htmx swaps nothing on a non-2xx, and the focus checks would then
+          # red over a working product — so the probe reads the status off the wire and reports
+          # that as *the gate could not run*, never as a regression. Re-seed before it if this
+          # step is ever reordered.
           node a11y/kbd-probe.mjs

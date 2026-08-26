@@ -57,4 +57,53 @@ INSERT INTO observation_record (id, connector_id, observed_at, l2_domain, vantag
   ('dddddddd-0000-0000-0000-0000000000b3',
    '00000000-0000-0000-0000-000000000000', NOW(6),
    '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
-   '[{"IpV4":{"addr":"192.0.2.13"}},{"Hostname":{"name":"hp-laserjet","source":"Dns"}}]', NULL);
+   '[{"IpV4":{"addr":"192.0.2.13"}},{"Hostname":{"name":"hp-laserjet","source":"Dns"}}]', NULL),
+  -- ── The UNDECLARED sighting: an address no declared entity claims ────────────────────────
+  --
+  -- 🔴 **STORY 6.4 ADDED THIS ROW, and without it neither browser gate can see the product's
+  -- only live gesture.** Measured before it existed: this seed produced ZERO `Nouveau` rows,
+  -- because every observation above answers at an address one of the four entities declares.
+  -- The documenting gesture belongs to `undeclared` — *observed, and no declared record claims
+  -- it* — so a store with none of that population offers the gesture nowhere, and a DOM-level
+  -- guard walking it measures the absence of a control that had no reason to be there.
+  --
+  -- ⚠️ It carries a HOSTNAME as well as an address, deliberately: `POST /document-all` adopts
+  -- the WHOLE record, so a single-fact sighting would let a gate pass over a gesture that
+  -- documents one field — which is FR13(b), Epic 7's, and a different gesture.
+  ('dddddddd-0000-0000-0000-0000000000b9',
+   '00000000-0000-0000-0000-000000000000', NOW(6),
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"192.0.2.99"}},{"Hostname":{"name":"unknown-99","source":"Dns"}}]', NULL);
+
+-- ── The identity engine's reach, so the section that reports it is not empty ────────────────
+--
+-- 🔴 **STORY 6.4 ADDED THIS TOO, and without it the reach section renders "Nothing observed
+-- yet" over a queue of five rows dated a minute ago** — a claim and its refutation in one
+-- viewport, which is story 6b.5's registered contradiction reappearing on this very screen.
+-- The rows above are written straight into the store, so the identity pass never ran over them
+-- and `identity_link` was empty; `has_any` is then false and the section says nothing was seen.
+--
+-- 🔑 **And it is what puts story 6.4's OWN copy on a page a browser gate walks.** Each cause
+-- line says why it carries no documenting gesture — the gesture belongs to `undeclared`, which
+-- is the queue's `Nouveau` row and not this section — and with no abstention seeded, those
+-- sentences were rendered nowhere the gates could see them.
+--
+-- ⚠️ Both named causes appear so the screen shows the two DIFFERENT sentences (a better source
+-- against a doubt to lift) to anyone who looks. ⚠️ **Not because a gate would catch their fusion**:
+-- the probe check reads that each line HAS a sentence, never which one — its own doc says so — and
+-- the fusion case is caught in Rust, by `every_identity_cause_line_says_why_it_carries_no_gesture`.
+-- That justification stood here until story 6.4's code review refuted it against the check's own
+-- stated limit. Every row is an ABSTENTION — a `match` would need an `interface` row, and inventing
+-- an identity for a harness is more fixture than this needs.
+INSERT INTO identity_link
+  (id, observation_id, interface_id, current_subject, outcome, rule_id, abstention_cause,
+   evidence, ruleset_version, decided_by, valid_from, valid_to) VALUES
+  ('11111111-0000-0000-0000-0000000000b1', 'dddddddd-0000-0000-0000-0000000000b1',
+   NULL, '00000000-0000-0000-0000-000000000000', 'abstained', NULL, 'absence_of_proof',
+   '[]', 1, 'ENGINE', NOW(6), '9999-12-31 23:59:59.999999'),
+  ('11111111-0000-0000-0000-0000000000b2', 'dddddddd-0000-0000-0000-0000000000b2',
+   NULL, '00000000-0000-0000-0000-000000000000', 'abstained', NULL, 'absence_of_proof',
+   '[]', 1, 'ENGINE', NOW(6), '9999-12-31 23:59:59.999999'),
+  ('11111111-0000-0000-0000-0000000000b3', 'dddddddd-0000-0000-0000-0000000000b3',
+   NULL, '00000000-0000-0000-0000-000000000000', 'abstained', NULL, 'ambiguous',
+   '[]', 1, 'ENGINE', NOW(6), '9999-12-31 23:59:59.999999');
