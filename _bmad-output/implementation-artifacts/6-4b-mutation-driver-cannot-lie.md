@@ -1,8 +1,7 @@
 # Story 6.4b: The mutation driver cannot lie
 
-Status: **ready-for-dev** — contexted 2026-08-26, **VALIDATED the same day by two fresh-context
-layers, and the validation replaced most of the story**. ⚠️ **ONE ARBITRATION IS OPEN (§0h)** and
-the validation changed what it is about.
+Status: **review** — implemented 2026-08-26; contexted 2026-08-26, VALIDATED the same day by two fresh-context layers
+(which replaced most of the story), **arbitration taken (§0h, Guy, 2026-08-26): OPTION 2**.
 
 ⚠️ **This story is in NO epic file.** It was created by Epic 6b's retrospective (decision 1,
 2026-08-24) and sequenced by Guy the same day; `epics.md` defines stories 6.1–6.19 and not this
@@ -46,11 +45,11 @@ compile probe is over `--all-targets`: a break in the test target alone leaves `
 and makes `cargo test` print **zero** `test result:` lines, which a naive driver sums to *"0 passed,
 0 failed"* (§0g.3).
 
-**AC6 — The carriers are FOUR, and the story states which of them each run used.**
-`cargo clippy --workspace --all-targets --locked -- -D warnings`;
-`cargo test --workspace --locked --no-fail-fast`;
-`cargo xtask ci`;
-and the two browser gates — subject to AC10.
+**AC6 — The carriers are FOUR, the driver drives THREE, and the fourth is AC10's — stated, never
+silent.** `cargo clippy --workspace --all-targets --locked -- -D warnings`;
+`cargo test --workspace --locked --no-fail-fast`; `cargo xtask ci` — all three driven, each named
+in the output beside its result. **The two browser gates are the fourth and are NOT driven**, by
+the scope decision recorded in §0h; AC10 carries the limit and the manual recipe.
 
 **AC7 — Restore from a snapshot the driver took, never `git checkout`, and ADVANCE THE MTIME.** 🔴
 A byte-identical restore that preserves the mtime leaves cargo serving a **stale artefact**: `git
@@ -243,33 +242,57 @@ case of three** — a cross-crate slip reds both commands, and a slip on `auth::
 question rather than its shape.** Guy's call is therefore really *how much driver*, and the honest
 statement of the cost belongs before T1 rather than at T7.
 
+### ✅ TAKEN (Guy, 2026-08-26): **OPTION 2** — `xtask mutate` over one mutation on the command line
+
+**Refused with the reason recorded**: option 1, because a corpus format decided now would be
+decided on a model of the world that §0g's findings 4, 7 and 8 refute — it would have to carry the
+store, the browser environment, the seed and the three-way outcome per row before it could be
+written down; and option 3, because a script can still choose not to call a helper, which is how
+fifteen defects happened.
+
+⚠️ **AND THE SCOPE, WHICH IS MY CALL AND NOT GUY'S** — recorded as such so it can be reversed
+cheaply. The driver takes the **three cargo-side carriers** (`clippy --all-targets -D warnings`,
+`cargo test --no-fail-fast`, `cargo xtask ci`), the store probe, the three-way exit contract and
+the machine-comparable prediction. **The two BROWSER gates are NOT driven**, and AC10 states it in
+writing with the recipe a human must run instead.
+
+🔑 **The reason is the gap-hunt's own measurement rather than a preference**: the browser gates need
+a rebuild-boot-seed cycle, are **not idempotent** (the last block writes to the store), and answer
+0/1/2 rather than pass/fail — that is a second story's worth of apparatus, and half-building it is
+worse than not building it, because a driver that *sometimes* covers the front half is a driver
+whose green means two different things. ⚠️ **What makes this defensible is only that it is SAID**:
+the validation's sentence is *"silence here is what produces the green"*, and the answer to silence
+is a stated limit, not a bigger build.
+
 ---
 
 ## Tasks / Subtasks
 
-- [ ] **T0 — Take the arbitration (§0h)**, which is now about SCOPE as much as shape.
-- [ ] **T1 — The module and the subcommand** (AC1). Its own file: `main.rs` has 61 lines.
-- [ ] **T2 — Apply as a THREE-WAY outcome** (AC1): did not match / matched N>1 / applied at N sites,
+- [x] **T0 — Take the arbitration (§0h)**, which is now about SCOPE as much as shape.
+- [x] **T1 — The module and the subcommand** (AC1). Its own file: `main.rs` has 61 lines.
+- [x] **T2 — Apply as a THREE-WAY outcome** (AC1): did not match / matched N>1 / applied at N sites,
       proven by comparing the file before and after, with the applied diff printed.
-- [ ] **T3 — The four carriers** (AC6), each named in the output beside its result, with
+- [x] **T3 — The THREE cargo-side carriers** (AC6; the fourth is AC10's, by the scope decision in
+      §0h — ⚠️ *this task read "the four carriers" and ticking it as written would have been the
+      completion lie the flow warns about*), each named in the output beside its result, with
       `--no-fail-fast` and the expected `test result:` line count (AC3), the `filtered out`
       denominator (AC2), and every status from a process (AC4).
-- [ ] **T4 — The compile probe** (AC5): `--all-targets`, anchored on `error\[E[0-9]+\]`, and **zero
+- [x] **T4 — The compile probe** (AC5): `--all-targets`, anchored on `error\[E[0-9]+\]`, and **zero
       `test result:` lines is a hard failure, never a count of zero**.
-- [ ] **T5 — Snapshot, restore, and ADVANCE THE MTIME** (AC7), verified byte-for-byte. No
+- [x] **T5 — Snapshot, restore, and ADVANCE THE MTIME** (AC7), verified byte-for-byte. No
       dirty-tree refusal; one file only.
-- [ ] **T6 — The store probe** (AC8) and the wall clock beside every count.
-- [ ] **T7 — The prediction and the exit contract** (AC9), 0/1/2 on `a11y/*.mjs`'s precedent.
-- [ ] **T8 — Plant the driver's OWN defects** (AC11), on synthetic trees with their own
+- [x] **T6 — The store probe** (AC8) and the wall clock beside every count.
+- [x] **T7 — The prediction and the exit contract** (AC9), 0/1/2 on `a11y/*.mjs`'s precedent.
+- [x] **T8 — Plant the driver's OWN defects** (AC11), on synthetic trees with their own
       `CARGO_TARGET_DIR`: an anchor that cannot match, one that matches twice, a no-op, a filtered
       run, a truncated read, a test-target-only compile break, a bare `^error`, a pipeline status,
       an mtime-preserving restore, an absent store. Each must FAIL and name which.
-- [ ] **T9 — State the residual** (AC10). ⚠️ **At minimum: the browser gates**, unless T3 takes them
+- [x] **T9 — State the residual** (AC10). ⚠️ **At minimum: the browser gates**, unless T3 takes them
       — and if it does not, the story says in writing that a mutation to `assets/`, `templates/` or
       anything whose carrier is a computed page is **outside** what the driver measures. *Silence
       here is what produces the green.* Also: an interrupted run leaves the tree mutated, so the
       snapshot path must be deterministic and discoverable rather than pid-keyed.
-- [ ] **T10 — The record** (AC12): the live count here; correct `CLAUDE.md`'s false *"some other
+- [x] **T10 — The record** (AC12): the live count here; correct `CLAUDE.md`'s false *"some other
       xtask subcommands are still stubs"* (**one** twin, not two).
 
 ---
@@ -308,7 +331,105 @@ it mechanical.
 
 ## Dev Agent Record
 
-*(to be filled by the dev agent)*
+### The live count (AC12), every figure naming its state
+
+**741 → 756 tests** — 503 `opencmdb-bin` + 161 `opencmdb-core` + **92** `xtask` (77 → 92, the
+driver's fifteen), `cargo test --workspace --locked` against a live `mariadb:10.11.11` on port
+13405, **6.39 s** (~0.2 s with `DATABASE_URL` unset — the clock is the tell, which is AC8's
+subject). Nine `cargo xtask ci` gates green; `clippy --workspace --all-targets -- -D warnings`,
+`cargo fmt --check`, and **`RUSTFLAGS="-D warnings" cargo test`** — the CI half local clippy cannot
+see — each read from `$?`.
+
+`xtask/src/mutate.rs` is **592** code lines; `xtask/src/main.rs` is unchanged but for the module
+line and the dispatch arm, and the `file-size` gate now walks **41** files.
+
+### What was built, and the one measurement that decided its shape
+
+`cargo xtask mutate --file <path> --anchor <text> --replacement <text> --expect <what>` — option 2,
+Guy's arbitration. Everything it refuses was a recorded defect first, and the refusals are the
+product: **the anchor missed, the anchor matched more than once, the replacement was a no-op, the
+tree did not compile, the run was filtered, a test target produced no line at all, the store was
+absent, the restore did not land.**
+
+🔑 **THE THREE CARRIERS ARE FOLDED, NEVER COLLAPSED**, because the validation measured that they do
+not subsume one another: a dead binding in a test module reds `clippy --all-targets` alone; a
+migration losing its binary collation reds `cargo xtask ci` alone with 741 tests green. `Outcome`
+therefore names WHICH reddened rather than printing one number.
+
+🔑 **The gates run IN-PROCESS.** This binary *is* xtask, so `run_ci` reads the mutated tree
+directly — no nested cargo fighting the outer run for `target/`, which the validation measured
+(5.98 s, and it recompiles).
+
+### The driver's own prove-to-red — predictions written BEFORE any plant
+
+| id | plant | predicted | measured |
+|---|---|---|---|
+| P1 | `compiler_error` matches a bare `^error` | RED 1 | ⚠️ **RED 2** — it also stops recognising real `error[EDDDD]`, so the plant breaks BOTH directions |
+| P2 | `apply()` replaces ALL occurrences | RED 1 | ✅ RED 1 |
+| P3 | the early `anchor == replacement` return removed | RED 1 | 🔴 **GREEN** |
+| P3b | BOTH no-op checks removed | RED 1 | ✅ RED 1 |
+| P4 | the expected-target-count check disabled | RED 1 | ✅ RED 1 |
+| P5 | `filtered out` ignored | RED 1 | ✅ RED 1 |
+| P6 | `restore()` does not advance the mtime | RED 1 | ✅ RED 1 |
+| P7 | `Expect::matches` always true | RED ≥2 | ✅ RED 2 |
+
+🔴 **P3 CAME BACK GREEN AND THAT IS THE PASS'S OWN FINDING**: the no-op property has **two**
+carriers — the early return and the `mutated == text` comparison after `replacen` — so neither is
+load-bearing alone. Recorded rather than tidied away: *a property with two carriers is stronger
+than one, and a mutation of either measures nothing.* P3b is what measures it.
+
+⚠️ **And P1's divergence is worth its row**: the plant was meant to show the trailer being
+miscounted and it ALSO destroys real compile detection, so the single red the prediction expected
+was two. A plant that breaks a property in both directions proves less about each.
+
+### The end-to-end, and what writing it taught
+
+`the_driver_drives_a_real_cargo_run_end_to_end` builds a synthetic one-crate tree with its own
+`CARGO_TARGET_DIR`, mutates it, and asserts the driver measured `red:1` and RESTORED the tree.
+⚠️ It is gated on `XTASK_MUTATE_E2E=1` because it invokes cargo; **the suite reports 92 either way,
+so the gate is the clock, exactly as it is for the store.**
+
+🔴 **Its first run REFUSED with the wrong cause named** — *"0 `test result:` lines … did the tree
+fail to compile?"* — when the truth was a missing `Cargo.lock` under `--locked`. The refusal was
+CORRECT and its message could not name the cause, so the driver now prints the **tail of what it
+read** whenever it refuses. ⚠️ That is diagnosis and not a count: AC3 forbids reading a NUMBER
+through a bounded window, never showing a human where to look.
+
+🔑 **And the driver was driven on the REAL workspace**, prediction written first:
+
+```
+$ ./target/debug/xtask mutate --file crates/opencmdb-bin/src/page.rs \
+    --anchor "const MAX_DOCUMENTED: usize = 99;" \
+    --replacement "const MAX_DOCUMENTED: usize = 1;" --expect red:1
+store: reachable at 127.0.0.1:13405
+$ cargo clippy --workspace --all-targets --locked -- -D warnings
+$ cargo test --workspace --locked --no-fail-fast
+$ cargo xtask ci  (in-process)          ✅ all gates green
+PREDICTED: Red(Some(1))
+MEASURED:  Red { tests: 1, clippy: false, gates: false }
+✅ the outcome matches the prediction      exit 0, and `git status` clean afterwards
+```
+
+### What it cannot measure (AC10), stated in the module doc, in `--help`, and here
+
+🔴 **The two BROWSER gates are NOT driven.** A mutation to `assets/`, to `templates/`, or to
+anything whose carrier is a computed page is **invisible** to this driver — the validation measured
+it: inverting an arrow in `app.js` leaves 741 tests and nine gates green while `kbd-probe.mjs`
+reports nine failures. They need a rebuild-boot-seed cycle, they are **not idempotent** (the last
+block writes to the store), and they answer 0/1/2 rather than pass/fail. **Run them by hand,
+re-seeding between runs**; `--help` carries the recipe.
+
+⚠️ **Half-building that would be worse than not building it**, because a driver that *sometimes*
+covers the front half is a driver whose green means two different things. What makes the omission
+defensible is only that it is SAID — the validation's own sentence is *"silence here is what
+produces the green"*.
+
+⚠️ **Two more residuals.** An interrupted run leaves the tree mutated and the snapshot in memory:
+the restore runs after the carriers return, so a SIGINT during the several-minute cargo run loses
+it — the file is recoverable from git, which is why this is stated rather than engineered. And it
+is a **tripwire, never a barrier** (story 5.12's narrowing): nothing stops an author writing a
+shell line instead, and fifteen defects say they will.
+
 
 ## Change Log
 

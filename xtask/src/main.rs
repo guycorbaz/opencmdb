@@ -54,6 +54,8 @@
 #![deny(missing_docs)]
 
 mod copy_vocabulary;
+/// The mutation driver — `cargo xtask mutate` (story 6.4b).
+mod mutate;
 mod observed_immutable;
 
 use std::collections::HashSet;
@@ -73,12 +75,24 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        // 🔴 The mutation driver (story 6.4b). Its exit codes are NOT `ci`'s: `0` the outcome
+        // matches the prediction, `1` it contradicts it — the finding — and `2` the driver could
+        // not honestly measure. `a11y/*.mjs`'s contract, for the same reason (story 6b.11).
+        Some("mutate") => match mutate::from_args(&args[1..], &workspace_root()) {
+            Ok(code) => ExitCode::from(code),
+            Err(e) => {
+                eprintln!("xtask mutate: {e:#}");
+                ExitCode::from(mutate::CANNOT_MEASURE)
+            }
+        },
         Some(other) => {
-            eprintln!("xtask: unknown command {other:?}\nusage: cargo xtask ci");
+            eprintln!(
+                "xtask: unknown command {other:?}\nusage: cargo xtask ci | cargo xtask mutate"
+            );
             ExitCode::FAILURE
         }
         None => {
-            eprintln!("usage: cargo xtask ci");
+            eprintln!("usage: cargo xtask ci | cargo xtask mutate --help");
             ExitCode::FAILURE
         }
     }

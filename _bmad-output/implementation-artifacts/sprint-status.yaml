@@ -4592,7 +4592,21 @@ development_status:
   # this project carries, and 6.4 settles it. ⚠️ Its own mutation pass therefore runs on the
   # UNREPAIRED driver — accepted, because the known defect is caught by writing the prediction
   # first, which Epic 6b measured seven times. The driver lands immediately after.
-  6-4b-mutation-driver-cannot-lie: ready-for-dev  # CONTEXTED 2026-08-26. 🔴 THERE IS NO DRIVER
+  6-4b-mutation-driver-cannot-lie: review  # IMPLEMENTED 2026-08-26: `cargo xtask mutate`, the
+  #   project's SECOND subcommand. 741 -> 756 tests (xtask 77 -> 92). Eight plants, predictions
+  #   written first: seven red as predicted, and 🔴 **P3 came back GREEN** -- the no-op property
+  #   has TWO carriers, so neither is load-bearing alone (P3b measures it).
+  #   ⚠️ The BROWSER gates are NOT driven and AC10 says so with the manual recipe: a mutation to
+  #   assets/ or templates/ is invisible here (measured: an arrow inverted in app.js leaves 741
+  #   tests and nine gates green while kbd-probe reports nine failures).
+  #   ✅ ARBITRATION (Guy, 2026-08-26): OPTION 2 --
+  #   `xtask mutate` over ONE mutation on the command line. Refused: a committed spec corpus (its
+  #   format would be decided on a world model three measurements refute) and a helper library (a
+  #   script can decline to call it -- which is how fifteen defects happened).
+  #   ⚠️ SCOPE IS MINE, NOT GUY'S, and reversible: THREE cargo-side carriers, and the two BROWSER
+  #   gates NOT driven -- they need a rebuild-boot-seed cycle, are not idempotent, and answer
+  #   0/1/2. AC10 states that limit in writing with the manual recipe.
+  #   CONTEXTED 2026-08-26. 🔴 THERE IS NO DRIVER
   #   TO FIX -- measured: `git ls-files | grep mutat` is EMPTY, and the only `mutate.sh` in the
   #   tree sits in an abandoned agent worktree. Every pass this project ran was driven by a
   #   throw-away scratchpad script, which is WHY the same defect recurs: there is no artefact for
