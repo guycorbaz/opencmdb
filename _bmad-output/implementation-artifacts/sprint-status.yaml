@@ -1,5 +1,5 @@
 # generated: 2026-07-21
-# last_updated: 2026-08-11   (this commented twin had read 2026-08-01 while the live
+# last_updated: 2026-08-26   (this commented twin had read 2026-08-01 while the live
 #                             `last_updated:` field below said 2026-08-07 — two representations of
 #                             one date, one of them stale. Synced 2026-08-10; keep them in step.)
 # project: opencmdb
@@ -4592,7 +4592,18 @@ development_status:
   # this project carries, and 6.4 settles it. ⚠️ Its own mutation pass therefore runs on the
   # UNREPAIRED driver — accepted, because the known defect is caught by writing the prediction
   # first, which Epic 6b measured seven times. The driver lands immediately after.
-  6-4b-mutation-driver-cannot-lie: backlog
+  6-4b-mutation-driver-cannot-lie: ready-for-dev  # CONTEXTED 2026-08-26. 🔴 THERE IS NO DRIVER
+  #   TO FIX -- measured: `git ls-files | grep mutat` is EMPTY, and the only `mutate.sh` in the
+  #   tree sits in an abandoned agent worktree. Every pass this project ran was driven by a
+  #   throw-away scratchpad script, which is WHY the same defect recurs: there is no artefact for
+  #   a fix to land in. The action item's verb is wrong; this story BUILDS.
+  #   🔑 Twelve recorded defects tabled with the criterion each demands (5.13, 5.13b x2, 6b.1,
+  #   6b.5, 6b.6 x2, 6b.7, 6b.9, 6b.11 x2, 6.4 x2). ALL twelve were caught the same way: a result
+  #   contradicted a prediction written in advance.
+  #   ⚠️ `xtask/src/main.rs` is at 1939 of 2000 -- 61 lines of headroom, so the driver goes in its
+  #   OWN module; and `CLAUDE.md`'s "some other xtask subcommands are still stubs" is FALSE.
+  #   ⚠️ ONE ARBITRATION OPEN (§0f): spec-file corpus / one-mutation command / library of helpers.
+  #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
   # ✅ Then the mobile story, BEFORE the engine work. Guy's retrospective arbitration gave the UX
   # spec priority over the reference mock: breakpoints, targets >= 44 px, density revisited,
   # taking NFR24 and the ZERO `@media` rules together rather than twice. ⚠️ It sits here because
