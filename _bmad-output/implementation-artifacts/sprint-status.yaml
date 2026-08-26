@@ -4597,9 +4597,19 @@ development_status:
   #   tree sits in an abandoned agent worktree. Every pass this project ran was driven by a
   #   throw-away scratchpad script, which is WHY the same defect recurs: there is no artefact for
   #   a fix to land in. The action item's verb is wrong; this story BUILDS.
-  #   🔑 Twelve recorded defects tabled with the criterion each demands (5.13, 5.13b x2, 6b.1,
-  #   6b.5, 6b.6 x2, 6b.7, 6b.9, 6b.11 x2, 6.4 x2). ALL twelve were caught the same way: a result
-  #   contradicted a prediction written in advance.
+  #   🔑 FIFTEEN recorded defects tabled with the criterion each demands (the contexting table had
+  #   twelve and two were misdescribed). ⚠️ "All caught by a contradicted prediction" is the
+  #   RETROSPECTIVE's sentence about Epic 6b's seven -- one was named by the compiler and three by
+  #   their damage, after the fact.
+  #   ✅ VALIDATED 2026-08-26 by two fresh-context layers, and the validation REPLACED most of the
+  #   story. 🔴 §0c was INVERTED: the compiler-error clause has an incident (`5-14b:665`), the
+  #   mandate carries its remedy literally (`^error\[E[0-9]+\]`), and the defect was LIVE in story
+  #   6.4's own driver. 🔴 The gap-hunt BUILT it and found EIGHT holes, the sharpest being that
+  #   `cargo test --workspace` STOPS at the first failing crate: 8 red by default, 17 with
+  #   `--no-fail-fast` -- so every recorded "N red" in this project where opencmdb-bin reddened is
+  #   a LOWER BOUND. 🔴 AC7's dirty-tree refusal REMOVED: all four destructions happened on dirty
+  #   trees because that is when a pass runs, and the snapshot is what makes it safe.
+  #   TWELVE criteria where there were ten.
   #   ⚠️ `xtask/src/main.rs` is at 1939 of 2000 -- 61 lines of headroom, so the driver goes in its
   #   OWN module; and `CLAUDE.md`'s "some other xtask subcommands are still stubs" is FALSE.
   #   ⚠️ ONE ARBITRATION OPEN (§0f): spec-file corpus / one-mutation command / library of helpers.
