@@ -3776,7 +3776,7 @@ below is a consequence of that sentence, recorded rather than absorbed — a sto
   `docs/project-context.md:279` now say that `app.css` is hand-authored and that the chain is
   deferred, pointing here for the four spellings. ⚠️ `xtask/Cargo.toml` also announced a
   `cargo xtask recapture` that does not exist; that sentence is corrected in the same pass and
-  verified against `main.rs`, which dispatches `ci` alone.
+  verified against `main.rs`, which dispatched `ci` alone until story 6.4b added `mutate` (2026-08-26).
 
 - ✅ **`assets/` as a public unauthenticated namespace** (row `:3616`, owner story 6b.2) — **DECIDED
   rather than inherited, and the decision is: it stays as it is.** The row asked the question

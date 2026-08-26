@@ -4592,7 +4592,15 @@ development_status:
   # this project carries, and 6.4 settles it. ⚠️ Its own mutation pass therefore runs on the
   # UNREPAIRED driver — accepted, because the known defect is caught by writing the prediction
   # first, which Epic 6b measured seven times. The driver lands immediately after.
-  6-4b-mutation-driver-cannot-lie: review  # IMPLEMENTED 2026-08-26: `cargo xtask mutate`, the
+  6-4b-mutation-driver-cannot-lie: review  # CODE-REVIEWED (three layers) + REPAIRED 2026-08-26:
+  #   2 arbitrations by Guy -- the gates SHELL OUT (they read this process's pre-mutation text) and
+  #   `--baseline` is opt-in. 🔴 The mutating layer MADE THE DRIVER LIE four times: a test printing
+  #   `error[E0308]` read as a compile failure (✅ exit 0 under --expect compile-fail); a dead port
+  #   reported "reachable"; a verdict on a file in /tmp; and nothing printed about what was applied.
+  #   🔴 Six plants destroyed a named criterion with the suite GREEN -- `restore()` deleted among
+  #   them -- because `from_args` had no test and the end-to-end was gated behind an env var set
+  #   nowhere in .github/. 🔴 P6 REFUTED: `fs::write` already advances the mtime.
+  #   741 -> 761 tests (xtask 77 -> 97). IMPLEMENTED 2026-08-26: `cargo xtask mutate`, the
   #   project's SECOND subcommand. 741 -> 756 tests (xtask 77 -> 92). Eight plants, predictions
   #   written first: seven red as predicted, and 🔴 **P3 came back GREEN** -- the no-op property
   #   has TWO carriers, so neither is load-bearing alone (P3b measures it).

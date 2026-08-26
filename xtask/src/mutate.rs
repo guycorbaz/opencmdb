@@ -8,7 +8,8 @@
 //! `git checkout --` that destroyed nine uncommitted keys, a `sed` replacing a string with itself,
 //! a restore that left cargo serving a stale artefact, a commit over a red clippy and another over
 //! a red suite. **There was no artefact for a fix to land in**, which is why the same defect
-//! recurred in six consecutive epics.
+//! recurred across THREE epics — 5, 6b and 6 — by the rows of the story's own table. *(It said
+//! "six consecutive epics"; the code review counted.)*
 //!
 //! # What it promises, and what it does not
 //!
@@ -18,34 +19,38 @@
 //! - the anchor matched **nothing**, or matched **more than once** (a replace-all mutates the
 //!   second oracle as well as the code — measured at 6 red where the honest figure is 14);
 //! - the replacement changed **nothing** (`sed` with itself);
-//! - the tree did not **compile**, detected by a line-anchored `error[EDDDD]` and never by a bare
-//!   `^error`, which cargo prints on *every* red run as `error: test failed`;
+//! - the tree did not **compile**, detected by a line-anchored `error[EDDDD]` **and only when the
+//!   run produced no `test result:` line at all** — a failing test whose output quotes a
+//!   diagnostic is not a compile failure, and the code review measured the driver calling one;
 //! - the run was **filtered** — measured by cargo's own `filtered out` count, not by counting
-//!   flags, because `cargo test -- A B` still runs seven tests of 741 and exits 0;
+//!   flags, because `cargo test -- A B` still runs a handful of tests and exits 0;
+//! - the **file** lay outside the workspace, where no carrier can see it;
 //! - a test target produced **no `test result:` line at all**, which a summing driver reports as
 //!   *"0 passed, 0 failed"*;
-//! - the **store** was absent, which changes the verdict while leaving the counts identical.
+//! - the **store** was absent — or set and UNUSABLE, which is worse: the store-backed tests then
+//!   panic rather than skip, so the red you would read is the harness's.
+//!
+//! ⚠️ **And it takes NO BASELINE unless `--baseline` is given**, so a test already red before the
+//! mutation confirms a `red` prediction on its own. Opt-in by Guy's arbitration of 2026-08-26; the
+//! run says so every time it is not used.
 //!
 //! ⚠️ **AND WHAT IT CANNOT MEASURE, STATED because silence is what produces the green**: the two
 //! BROWSER gates (`a11y/axe-gate.mjs`, `a11y/kbd-probe.mjs`) are NOT driven. A mutation to
 //! `assets/`, to `templates/`, or to anything whose carrier is a computed page is **invisible
-//! here** — measured: inverting an arrow in `app.js` leaves 741 tests and nine gates green while
-//! the keyboard gate reports nine failures. Those gates need a rebuild-boot-seed cycle, are not
-//! idempotent (the last block writes to the store), and answer 0/1/2 rather than pass/fail, which
-//! is a second story's worth of apparatus. **Run them by hand**, re-seeding between runs:
-//!
-//! ```text
-//! cargo build --workspace --locked && ./target/debug/opencmdb &      # with the env CI uses
-//! mysql … < a11y/seed.sql                                            # AFTER the boot
-//! node a11y/axe-gate.mjs   # then re-seed, then:   node a11y/kbd-probe.mjs
-//! ```
+//! here** — measured: inverting an arrow in `app.js` leaves the whole Rust suite and all nine
+//! gates green while the keyboard gate reports nine failures. Those gates need a
+//! rebuild-boot-seed cycle, are not idempotent (the last block writes to the store), and answer
+//! 0/1/2 rather than pass/fail, which is a second story's worth of apparatus. **Run them by
+//! hand** — `cargo xtask mutate --help` carries the full recipe, which is `ci.yml`'s rather than
+//! a paraphrase of it. ⚠️ The paraphrase that stood here omitted `npm ci`, the credentials and
+//! `AXE_REQUIRE_QUEUE`/`AXE_REQUIRE_GESTURE` — without the last two an empty queue reads as a
+//! PASS, which is the *green on residue* defect story 6b.11 closed.
 //!
 //! ⚠️ **It is a TRIPWIRE against the ordinary mistake, never a barrier against a determined one**
 //! (story 5.12's narrowing). Nothing stops an author writing a shell line instead.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::SystemTime;
 
 use anyhow::{Context, Result, bail};
 
@@ -80,7 +85,7 @@ pub(crate) enum Outcome {
     ///
     /// 🔑 Three carriers, three fields, because they are not summaries of one another: a dead
     /// binding in a test module reds `clippy --all-targets` alone, and a migration losing its
-    /// binary collation reds `cargo xtask ci` alone with 741 tests still green.
+    /// binary collation reds `cargo xtask ci` alone with every test still green.
     Red {
         /// How many tests failed.
         tests: usize,
@@ -95,6 +100,50 @@ pub(crate) enum Outcome {
     CompileFailure(String),
     /// The driver cannot honestly report — with the reason, which is the whole point.
     CannotMeasure(String),
+}
+
+/// What the driver found when it looked for a store.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum Store {
+    /// `DATABASE_URL` is unset: every store-backed test passes by RETURNING and the totals are
+    /// identical to a real run.
+    Absent,
+    /// Set, and something answers there.
+    Reachable(String),
+    /// Set and unusable — which is WORSE than absent: the store-backed tests do not skip, they
+    /// panic, and the resulting red has nothing to do with the mutation.
+    Unusable(String),
+}
+
+impl Store {
+    /// Why this run may not be recorded, or `None` if it may.
+    pub(crate) fn refusal(&self) -> Option<String> {
+        match self {
+            Self::Reachable(_) => None,
+            Self::Absent => Some(
+                "DATABASE_URL is unset, so every store-backed test passes by RETURNING and the \
+                 totals are identical to a real run — the clock beside each carrier is the only \
+                 tell. This run may not be recorded for anything the store carries."
+                    .to_string(),
+            ),
+            Self::Unusable(why) => Some(format!(
+                "DATABASE_URL is set and unusable ({why}), which is worse than unset: the \
+                 store-backed tests PANIC rather than skip, so the red you would read is the \
+                 harness's and not the mutation's. Measured at the code review: a dead port gave \
+                 a dozen failures and a run killed at over ten minutes."
+            )),
+        }
+    }
+}
+
+impl std::fmt::Display for Store {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Absent => write!(f, "ABSENT"),
+            Self::Reachable(e) => write!(f, "reachable at {e} (connected)"),
+            Self::Unusable(why) => write!(f, "UNUSABLE — {why}"),
+        }
+    }
 }
 
 /// What the author predicted before running. AC9: this is compared, never merely printed.
@@ -230,10 +279,20 @@ pub(crate) fn test_results(output: &str) -> Vec<TestResult> {
 
 /// Turn one cargo run into an outcome, refusing wherever the numbers cannot be trusted.
 pub(crate) fn read_run(output: &str, status: Option<i32>, targets: usize) -> Outcome {
-    if let Some(error) = compiler_error(output) {
+    let results = test_results(output);
+    // 🔴 **A COMPILE FAILURE PRODUCES NO `test result:` LINE AT ALL, and that is what tells it
+    // apart from a test whose OUTPUT contains a diagnostic.** This ran `compiler_error` over the
+    // whole merged stream first, and the code review measured what that costs: a planted panic
+    // message carrying `error[E0308]` made the driver report `CompileFailure` for a tree that
+    // compiled, and under `--expect compile-fail` it printed ✅ and exited 0. Cargo replays every
+    // failing test's output at column 0, so the anchor AC5 exists to make precise was being
+    // applied to program output, where it means nothing. ⚠️ It also short-circuited AC3: the
+    // check preceded the target count, so the run was never read.
+    if results.is_empty()
+        && let Some(error) = compiler_error(output)
+    {
         return Outcome::CompileFailure(error);
     }
-    let results = test_results(output);
     if results.len() != targets {
         return Outcome::CannotMeasure(format!(
             "{} `test result:` line(s) where {targets} are due — a target produced \
@@ -267,11 +326,10 @@ pub(crate) fn read_run(output: &str, status: Option<i32>, targets: usize) -> Out
     }
 }
 
-/// Is a store reachable? AC8 — the same counts mean different things with and without one.
+/// The `host:port` a `DATABASE_URL` names, or `None` when it names none.
 ///
-/// ⚠️ It probes the TCP endpoint rather than the schema: the concern is *did the store-backed
-/// tests run at all*, and without `DATABASE_URL` they pass by returning while the totals stay
-/// identical. The clock is the only other tell, and a driver that prints counts prints no clock.
+/// ⚠️ **PARSING ONLY.** It said *"it probes the TCP endpoint"* until the code review, and probed
+/// nothing at all — see [`store_is_reachable`], which is what the word now means.
 pub(crate) fn store_endpoint(url: &str) -> Option<String> {
     let rest = url.split("://").nth(1)?;
     let authority = rest.split('/').next()?;
@@ -283,7 +341,28 @@ pub(crate) fn store_endpoint(url: &str) -> Option<String> {
     }
 }
 
-/// The command line, echoed verbatim beside every count it produces (AC2).
+/// Is the store actually there? AC8 — the same counts mean different things with and without one.
+///
+/// 🔴 **IT CONNECTS, and until the code review it did not.** The driver printed
+/// `store: reachable at 127.0.0.1:13405` from the SHAPE of a string, and the review measured what
+/// that costs: pointed at a dead port it printed the same sentence, the store-backed tests then
+/// **panicked** rather than skipping (`MySqlPool::connect(&url).expect("connect")`), and the run
+/// was killed at over ten minutes with a dozen failures that would have been folded into the
+/// mutation's count and matched against a `--expect red`. *A driver asserting a fact it did not
+/// measure* is the one thing this module exists to stop.
+///
+/// ⚠️ A TCP handshake is not a schema check: it says the endpoint answers, not that the migrations
+/// ran. That is the honest limit of a probe this cheap, and it is enough for the question at hand
+/// — *did the store-backed tests run at all, or pass by returning?*
+fn store_is_reachable(endpoint: &str) -> bool {
+    use std::net::{TcpStream, ToSocketAddrs};
+    let Ok(mut addrs) = endpoint.to_socket_addrs() else {
+        return false;
+    };
+    addrs.any(|addr| TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(2)).is_ok())
+}
+
+/// The command line, echoed verbatim beside every count it produces (AC4, AC6).
 fn shown(program: &str, args: &[&str]) -> String {
     format!("{program} {}", args.join(" "))
 }
@@ -303,21 +382,24 @@ fn run(root: &Path, program: &str, args: &[&str]) -> Result<(Option<i32>, String
     Ok((out.status.code(), text))
 }
 
-/// Restore `path` from `snapshot` AND advance its mtime.
+/// Restore `path` from `snapshot`, and verify byte-for-byte that it landed.
 ///
-/// 🔴 **The mtime is not housekeeping.** A byte-identical restore that preserves the timestamp
-/// leaves cargo serving a **stale artefact**: measured on a plain `.rs` file, `git status` clean,
-/// `Finished in 0.04s` with no `Compiling` line, and nine tests still failing. Story 6b.7 recorded
-/// this as an askama-template property; it is a cargo FINGERPRINT property and applies to every
-/// file this driver will ever touch.
+/// # The mtime, and what actually carries it
+///
+/// A restore that preserves the timestamp leaves cargo serving a **stale artefact** — measured on
+/// a plain `.rs` file: `git status` clean, `Finished in 0.04s` with no `Compiling` line, nine
+/// tests still failing. Story 6b.7 recorded that as an askama-template property; it is a cargo
+/// FINGERPRINT property and reaches every file this driver touches.
+///
+/// 🔴 **But `std::fs::write` already advances the mtime, and this function used to call
+/// `set_modified` on top of it as if that were the carrier.** Two review layers measured
+/// independently that deleting the extra call leaves the suite green — *a guard placed where the
+/// defect cannot occur*, and the plant recorded against it (`set_modified(UNIX_EPOCH)`, pushing
+/// the mtime BACKWARDS) was a mutation nobody would make. ⚠️ The recorded defect was
+/// `shutil.copy2`, which PRESERVES metadata; `fs::write` does not, so the class is unreachable
+/// here. The redundant call is gone and the test below pins the property that really holds.
 fn restore(path: &Path, snapshot: &str) -> Result<()> {
     std::fs::write(path, snapshot).with_context(|| format!("restoring {}", path.display()))?;
-    let file = std::fs::File::options()
-        .write(true)
-        .open(path)
-        .with_context(|| format!("reopening {} to advance its mtime", path.display()))?;
-    file.set_modified(SystemTime::now())
-        .with_context(|| format!("advancing the mtime of {}", path.display()))?;
     let back = std::fs::read_to_string(path)?;
     if back != snapshot {
         bail!(
@@ -355,6 +437,18 @@ pub(crate) struct Mutation {
     /// Must a store be reachable? Same rule as `targets`: strict from the command line, relaxed
     /// only for a synthetic tree that has no store-backed test to lose.
     pub(crate) require_store: bool,
+    /// Measure the UNMUTATED tree first? (`--baseline`)
+    ///
+    /// 🔴 **Without it, a pre-existing red confirms a `red` prediction** — and AC7 deliberately
+    /// removed the dirty-tree refusal, so the driver is designed for exactly the tree where a
+    /// test may already be red for reasons that have nothing to do with the anchor. The code
+    /// review found the driver knew the word *baseline* only in a refusal MESSAGE and never
+    /// measured one.
+    ///
+    /// ⚠️ **Opt-in, by Guy's arbitration of 2026-08-26**, over measuring it every time: the
+    /// baseline doubles the cost of every mutation, and the cost should fall on whoever needs it.
+    /// The refusal below states the limit whenever it is not used, so nobody has to remember.
+    pub(crate) baseline: bool,
 }
 
 /// Apply, measure over the three cargo-side carriers, restore, and compare against the prediction.
@@ -363,10 +457,48 @@ pub(crate) struct Mutation {
 ///
 /// Only for conditions that make the run impossible (an unreadable file, a cargo that will not
 /// start). Everything else is an [`Outcome`] — a refusal is a RESULT here, not an error.
-pub(crate) fn run_mutation(root: &Path, m: &Mutation, ci: impl Fn() -> Result<bool>) -> Result<u8> {
+pub(crate) fn run_mutation(
+    root: &Path,
+    m: &Mutation,
+    gates: impl Fn(&Path) -> Result<(bool, String)>,
+) -> Result<u8> {
     let path = root.join(&m.file);
+    // 🔴 **CONFINED TO THE WORKSPACE.** `root.join(file)` discards `root` entirely for an absolute
+    // path and does not normalise `..`, and the review measured the consequence end to end: the
+    // driver mutated a file in `/tmp`, ran all three carriers, restored it, and delivered a
+    // verdict — on a file no carrier can see. *A mutation outside the workspace measures nothing,
+    // and the honest answer is to say so rather than to run.*
+    let inside = path
+        .canonicalize()
+        .with_context(|| format!("resolving {}", path.display()))?;
+    let root_real = root
+        .canonicalize()
+        .with_context(|| format!("resolving the workspace root {}", root.display()))?;
+    if !inside.starts_with(&root_real) {
+        println!(
+            "🔴 OUTSIDE THE WORKSPACE: {} resolves to {}, which no carrier walks.",
+            m.file.display(),
+            inside.display()
+        );
+        return Ok(CANNOT_MEASURE);
+    }
     let snapshot = std::fs::read_to_string(&path)
         .with_context(|| format!("reading {} to snapshot it", path.display()))?;
+
+    // 🔑 THE BASELINE FIRST, on the UNMUTATED tree, so a pre-existing red is caught before the
+    // mutation can be credited with it. A baseline that is not clean is a REFUSAL: measuring a
+    // mutation against a tree that was already broken tells you nothing about either.
+    if m.baseline {
+        println!("── baseline, on the UNMUTATED tree ──");
+        match measure(root, m, &gates)? {
+            Outcome::Green => println!("── baseline clean; applying the mutation ──"),
+            other => {
+                println!("🔴 THE BASELINE IS NOT CLEAN: {other:?}");
+                println!("   Nothing measured after this could be attributed to the mutation.");
+                return Ok(CANNOT_MEASURE);
+            }
+        }
+    }
 
     let (applied, mutated) = apply(&snapshot, &m.anchor, &m.replacement);
     match applied {
@@ -407,15 +539,52 @@ pub(crate) fn run_mutation(root: &Path, m: &Mutation, ci: impl Fn() -> Result<bo
     }
     std::fs::write(&path, &mutated).with_context(|| format!("mutating {}", path.display()))?;
 
-    let result = measure(root, m, &ci);
+    // 🔴 **THE DRIVER SHOWS ITS WORK, and until the code review it showed none.** AC1, §0b row 4
+    // and T2 all require the applied diff, and row 4 is the FOUR-occurrence family — *a mutation
+    // named for one thing and applied to another* (5.14 ×2, 5.12, 6b.4). The success path printed
+    // nothing at all: the review drove an anchor that landed only inside a COMMENT and got a
+    // transcript indistinguishable from a real code mutation. The exit code makes the PREDICTION
+    // mechanical; this is what makes the MUTATION auditable.
+    // 🔴 **OFF BY ONE ON ITS FIRST RUN, and the tell was in the output it printed.** This read
+    // `snapshot[..hit].lines().count()`, which is the number of COMPLETE lines before the hit —
+    // i.e. one less than the line the hit is on — so the diff showed the line ABOVE the change,
+    // identical on both sides. ⚠️ *An identical `-`/`+` pair is the shape of a diff that is
+    // looking at the wrong line*, and this block exists to close the four-occurrence family *a
+    // mutation named for one thing and applied to another*: printing the wrong line would have
+    // fed that class rather than closed it. Newlines before the hit, plus one, is exact.
+    let hit = snapshot.find(&m.anchor).unwrap_or(0);
+    let line_no = snapshot[..hit].matches('\n').count() + 1;
+    println!("APPLIED at {}:{line_no} (1 site)", m.file.display());
+    for (marker, text) in [("-", &snapshot), ("+", &mutated)] {
+        let line = text.lines().nth(line_no - 1).unwrap_or("").trim_end();
+        println!("   {marker} {}", &line[..line.len().min(160)]);
+    }
+
+    let result = measure(root, m, &gates);
     restore(&path, &snapshot)?;
     let outcome = result?;
+
+    if !m.baseline {
+        println!(
+            "⚠️  no baseline was measured (--baseline): a test already red before this mutation \
+             would confirm a `red` prediction on its own."
+        );
+    }
 
     println!("\nPREDICTED: {:?}", m.expect);
     println!("MEASURED:  {outcome:?}");
     Ok(match &outcome {
         Outcome::CannotMeasure(why) => {
             println!("🔴 CANNOT MEASURE: {why}");
+            CANNOT_MEASURE
+        }
+        // 🔴 **An UNPREDICTED compile failure is `2`, never `1`.** It exited 1 until the code
+        // review — *the finding* — against AC9 and against this module's own `--help`, in the same
+        // commit. A tree that did not build measured nothing about any guard, so it is *the driver
+        // could not measure* and not *the product moved*. ⚠️ A PREDICTED one still matches and
+        // exits 0: that is a legitimate thing to predict (story 6.1's M4, story 6.4's `E0004`).
+        Outcome::CompileFailure(error) if !m.expect.matches(&outcome) => {
+            println!("🔴 CANNOT MEASURE: the tree did not compile — {error}");
             CANNOT_MEASURE
         }
         _ if m.expect.matches(&outcome) => {
@@ -430,22 +599,34 @@ pub(crate) fn run_mutation(root: &Path, m: &Mutation, ci: impl Fn() -> Result<bo
 }
 
 /// The three cargo-side carriers, in the order that fails cheapest first.
-fn measure(root: &Path, m: &Mutation, ci: &impl Fn() -> Result<bool>) -> Result<Outcome> {
+fn measure(
+    root: &Path,
+    m: &Mutation,
+    gates: &impl Fn(&Path) -> Result<(bool, String)>,
+) -> Result<Outcome> {
+    // 🔑 Three states, not two, and the middle one used to pass. A URL that is set but unusable —
+    // a dead port, a wrong host, an empty string — reported *"set, but its endpoint could not be
+    // read"*, which is not the string `"ABSENT"`, so the requirement passed and the run proceeded.
+    // The comparison is on an enum now rather than on a rendered sentence, so a copy-edit of the
+    // message cannot turn the guard off.
     let store = match std::env::var("DATABASE_URL") {
-        Ok(url) => store_endpoint(&url).map_or_else(
-            || "set, but its endpoint could not be read".to_string(),
-            |e| format!("reachable at {e}"),
-        ),
-        Err(_) => "ABSENT".to_string(),
+        Err(_) => Store::Absent,
+        Ok(url) => match store_endpoint(&url) {
+            None => Store::Unusable(format!("{url:?} names no host:port")),
+            Some(endpoint) => {
+                if store_is_reachable(&endpoint) {
+                    Store::Reachable(endpoint)
+                } else {
+                    Store::Unusable(format!("nothing answers at {endpoint}"))
+                }
+            }
+        },
     };
     println!("store: {store}");
-    if m.require_store && store == "ABSENT" {
-        return Ok(Outcome::CannotMeasure(
-            "DATABASE_URL is unset, so every store-backed test passes by RETURNING and the totals \
-             are identical to a real run — measured: one mutation gives 741 passed without a store \
-             and 1 failed with one. This run may not be recorded."
-                .to_string(),
-        ));
+    if m.require_store
+        && let Some(why) = store.refusal()
+    {
+        return Ok(Outcome::CannotMeasure(why));
     }
 
     // 🔑 clippy FIRST, over --all-targets: it is the carrier that sees what CI sees. A dead
@@ -466,9 +647,19 @@ fn measure(root: &Path, m: &Mutation, ci: &impl Fn() -> Result<bool>) -> Result<
         return Ok(Outcome::CompileFailure(error));
     }
     let clippy_red = status != Some(0);
+    // ⚠️ The verdict is NAMED and, when it reds, its diagnostics are shown. It printed the command
+    // and then nothing: the author learned `clippy: true` from the final line and had to re-run
+    // clippy by hand to find out what it had said.
+    println!("   clippy: {}", if clippy_red { "RED" } else { "green" });
+    if clippy_red {
+        for line in output.lines().filter(|l| l.starts_with("error")).take(5) {
+            println!("   | {line}");
+        }
+    }
 
     let test = ["test", "--workspace", "--locked", "--no-fail-fast"];
     println!("$ {}", shown("cargo", &test));
+    let test_clock = std::time::Instant::now();
     let (status, output) = run(root, "cargo", &test)?;
     let outcome = read_run(&output, status, m.targets);
     if let Outcome::CannotMeasure(_) | Outcome::CompileFailure(_) = outcome {
@@ -490,29 +681,55 @@ fn measure(root: &Path, m: &Mutation, ci: &impl Fn() -> Result<bool>) -> Result<
         }
         return Ok(outcome);
     }
-    for result in test_results(&output) {
-        println!(
-            "   test result: {} passed, {} failed",
-            result.passed, result.failed
-        );
+    // 🔴 **THE CLOCK, which T6 required and which shipped missing — and worse, the driver used to
+    // DELETE cargo's own.** It re-printed each line as `N passed, M failed`, dropping
+    // `finished in 0.21s`; with the store probe asserting a fact it had not measured, both tells
+    // that a store-backed run really executed were gone together, in the story that named AC8 for
+    // them. Cargo's line goes through whole now, and the wall clock of the carrier beside it.
+    for line in output.lines().filter(|l| l.starts_with("test result:")) {
+        println!("   {line}");
+    }
+    println!("   (cargo test: {:.2?} wall)", test_clock.elapsed());
+
+    // 🔴 **THE GATES RUN THROUGH A NESTED CARGO, and this is Guy's arbitration of 2026-08-26
+    // taken on a measurement.** They ran IN-PROCESS until the code review, which meant they read
+    // the already-compiled binary — this process's own text, built BEFORE the mutation — while
+    // clippy and `cargo test` rebuilt xtask with it. Both directions were measured: setting
+    // `MAX_CODE_LINES` to 20 printed *"✅ file-size 41 file(s) under 2000 code lines"*, quoting
+    // the constant it had just replaced; and a STALE binary manufactured a gate red on a pristine
+    // tree and the driver labelled it *the finding*. ⚠️ Mutating a gate is the second most common
+    // shape in this project (5.12, 6.3, 6b.10), so the stale carrier hit exactly the case it was
+    // added for. The nested run costs a rebuild; a carrier reading pre-mutation code costs the
+    // truth.
+    //
+    // 🔑 And `cargo xtask ci` is a THIRD carrier, not a summary of the other two — measured:
+    // dropping a binary collation from a migration leaves the tests green and reds
+    // `ddl-collation` alone.
+    let (gates_green, gate_output) = gates(root)?;
+    if let Some(error) = compiler_error(&gate_output) {
+        return Ok(Outcome::CompileFailure(error));
+    }
+    if !gates_green {
+        for line in gate_output.lines().filter(|l| l.contains("🔴")) {
+            println!("   | {line}");
+        }
     }
 
-    // 🔑 The gates IN-PROCESS rather than through a nested `cargo run`: this binary IS xtask, so
-    // the gates read the mutated tree directly. A nested cargo works but fights the outer run for
-    // `target/`. ⚠️ And `cargo xtask ci` is a THIRD carrier, not a summary of the other two —
-    // measured: dropping a binary collation from a migration leaves 741 tests green and reds the
-    // `ddl-collation` gate alone.
-    println!("$ cargo xtask ci  (in-process)");
-    let gates_green = ci()?;
+    Ok(fold(outcome, clippy_red, gates_green))
+}
 
-    // 🔑 The three carriers are FOLDED, never collapsed: a red on any of them is a red, and the
-    // outcome says which. Reporting only the test count would hide the two carriers that the
-    // workspace suite provably does not subsume.
-    let tests = match outcome {
+/// Fold the three carriers into one outcome.
+///
+/// 🔑 **FOLDED, never collapsed**: a red on any carrier is a red, and the result says WHICH.
+/// Reporting only the test count would hide the two carriers the workspace suite provably does not
+/// subsume — a dead binding in a test module reds `clippy --all-targets` alone, a migration losing
+/// its binary collation reds the gates alone.
+pub(crate) fn fold(tests_outcome: Outcome, clippy_red: bool, gates_green: bool) -> Outcome {
+    let tests = match tests_outcome {
         Outcome::Red { tests, .. } => tests,
         _ => 0,
     };
-    Ok(if tests == 0 && !clippy_red && gates_green {
+    if tests == 0 && !clippy_red && gates_green {
         Outcome::Green
     } else {
         Outcome::Red {
@@ -520,7 +737,23 @@ fn measure(root: &Path, m: &Mutation, ci: &impl Fn() -> Result<bool>) -> Result<
             clippy: clippy_red,
             gates: !gates_green,
         }
-    })
+    }
+}
+
+/// The nine gates, through a NESTED cargo so they read the mutated tree.
+///
+/// 🔴 Guy's arbitration of 2026-08-26. The in-process form read this process's own text, built
+/// before the mutation — see [`measure`] for the two measurements that settled it. It is injected
+/// rather than called directly so the driver's own tests can drive the fold without a workspace.
+///
+/// # Errors
+///
+/// Only if cargo cannot be started; a RED gate is a value, not an error.
+pub(crate) fn gates_through_cargo(root: &Path) -> Result<(bool, String)> {
+    let args = ["run", "--quiet", "-p", "xtask", "--locked", "--", "ci"];
+    println!("$ {}", shown("cargo", &args));
+    let (status, output) = run(root, "cargo", &args)?;
+    Ok((status == Some(0), output))
 }
 
 /// Parse the command line and run one mutation.
@@ -538,12 +771,39 @@ fn measure(root: &Path, m: &Mutation, ci: &impl Fn() -> Result<bool>) -> Result<
 /// A missing or unrecognised flag, which is answered with [`CANNOT_MEASURE`] rather than with a
 /// count — a driver that guesses at its own arguments is the first thing that can lie.
 pub(crate) fn from_args(args: &[String], root: &Path) -> Result<u8> {
+    let mutation = parse(args)?;
+    if mutation.file.as_os_str().is_empty() {
+        return Ok(CLEAN); // `--help` was asked for and printed; no mutation was run.
+    }
+    run_mutation(root, &mutation, gates_through_cargo)
+}
+
+/// The PURE half: argv in, a strict [`Mutation`] out.
+///
+/// 🔑 Split out at the code review because `from_args` was reachable only through `main.rs` and
+/// tested by nothing, so the strict `targets`, the strict `require_store` and the `--expect`
+/// requirement were all carried by a sentence — the review planted each and the suite stayed
+/// green.
+///
+/// # Errors
+///
+/// A missing, repeated or unrecognised flag.
+fn parse(args: &[String]) -> Result<Mutation> {
     let mut file = None;
     let mut anchor = None;
     let mut replacement = None;
     let mut expect = None;
+    let mut baseline = false;
+    let mut seen: Vec<&str> = Vec::new();
     let mut rest = args.iter();
     while let Some(flag) = rest.next() {
+        // ⚠️ A repeated flag is a REFUSAL, not last-wins. Recorded defect row 11 is *"a batch edit
+        // lost three repairs to one failed anchor, SILENTLY"*, and a driver that silently prefers
+        // one of two `--anchor`s is the same shape one level up.
+        if seen.contains(&flag.as_str()) {
+            bail!("{flag} given twice — which of the two did you mean?");
+        }
+        seen.push(flag.as_str());
         let mut value = || -> Result<String> {
             rest.next()
                 .cloned()
@@ -554,9 +814,18 @@ pub(crate) fn from_args(args: &[String], root: &Path) -> Result<u8> {
             "--anchor" => anchor = Some(value()?),
             "--replacement" => replacement = Some(value()?),
             "--expect" => expect = Some(Expect::parse(&value()?)?),
+            "--baseline" => baseline = true,
             "--help" | "-h" => {
                 println!("{USAGE}");
-                return Ok(CLEAN);
+                return Ok(Mutation {
+                    file: PathBuf::new(),
+                    anchor: String::new(),
+                    replacement: String::new(),
+                    expect: Expect::Green,
+                    targets: EXPECTED_TEST_TARGETS,
+                    require_store: true,
+                    baseline: false,
+                });
             }
             other => bail!("unknown flag {other:?}\n{USAGE}"),
         }
@@ -570,8 +839,9 @@ pub(crate) fn from_args(args: &[String], root: &Path) -> Result<u8> {
         )?,
         targets: EXPECTED_TEST_TARGETS,
         require_store: true,
+        baseline,
     };
-    run_mutation(root, &mutation, crate::run_ci)
+    Ok(mutation)
 }
 
 /// What `--help` prints, including the limit AC10 requires it to state.
@@ -579,20 +849,59 @@ const USAGE: &str = "\
 usage: cargo xtask mutate --file <path> --anchor <text> --replacement <text> --expect <what>
 
   --expect green | red | red:N | compile-fail   (required — predict BEFORE you run)
+  --baseline                                    measure the UNMUTATED tree first (see below)
 
-exit: 0 the outcome matches the prediction
+exit: 0 the outcome matches the prediction (and for --help, which runs no mutation)
       1 it contradicts it — that is the finding
-      2 the driver could not honestly measure (anchor missed or multi-matched, no-op,
-        compile failure, filtered run, a lost test target, no store, restore failed)
+      2 the driver could not honestly measure: anchor missed or multi-matched, no-op, a file
+        outside the workspace, an UNPREDICTED compile failure, a filtered run, a lost test
+        target, no store or an unusable one, a baseline that was not clean, restore failed
+
+⚠️ NO BASELINE unless --baseline is given. A test already red before the mutation would confirm
+   a `red` prediction on its own, and this driver deliberately runs on dirty trees.
 
 ⚠️ IT DOES NOT DRIVE THE BROWSER GATES. A mutation to assets/, templates/, or anything whose
    carrier is a computed page is INVISIBLE here — measured: inverting an arrow in app.js leaves
-   741 tests and nine gates green while a11y/kbd-probe.mjs reports nine failures. Run those by
-   hand, re-seeding the store between runs: they are not idempotent.";
+   the whole Rust suite and all nine gates green while a11y/kbd-probe.mjs reports nine failures.
+
+   Run them by hand. This recipe is ci.yml's rather than a paraphrase, because the omissions are
+   what bite: without AXE_REQUIRE_QUEUE an empty queue reads as a PASS, which is the \"green on
+   residue\" defect story 6b.11 closed.
+
+     cargo build --workspace --locked
+     DATABASE_URL=... OPENCMDB_BASIC_USER=ci OPENCMDB_BASIC_PASSWORD=ci-not-a-secret \\
+       OPENCMDB_DOCUMENT_ENABLED=1 ./target/debug/opencmdb &
+     until curl -fsS --max-time 5 -o /dev/null http://127.0.0.1:8080/healthz; do sleep 1; done
+     mysql ... < a11y/seed.sql        # AFTER the boot: the binary owns the migrations
+     npm --prefix a11y ci             # without it node exits on ITS code, not the gate's
+     OPENCMDB_BASIC_USER=ci OPENCMDB_BASIC_PASSWORD=ci-not-a-secret \\
+       AXE_REQUIRE_QUEUE=1 AXE_REQUIRE_GESTURE=1 node a11y/axe-gate.mjs
+     mysql ... < a11y/seed.sql        # RE-SEED: kbd-probe writes; it is not idempotent
+     OPENCMDB_BASIC_USER=ci OPENCMDB_BASIC_PASSWORD=ci-not-a-secret node a11y/kbd-probe.mjs
+
+   Both answer 0 clean / 1 the product / 2 the gate could not run.";
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 🔴 **The applied diff names the line the change is ON.** It printed the line ABOVE it on
+    /// its first run — `snapshot[..hit].lines().count()` is the count of COMPLETE lines before the
+    /// hit — so the two halves came out identical, which is the shape of a diff looking at the
+    /// wrong line. ⚠️ This block exists to close *a mutation named for one thing and applied to
+    /// another*; printing the wrong line would have fed that family rather than closed it.
+    #[test]
+    fn the_reported_line_is_the_one_the_anchor_is_on() {
+        let text = "one\ntwo\nTARGET\nfour\n";
+        let hit = text.find("TARGET").expect("the anchor");
+        assert_eq!(
+            text[..hit].matches('\n').count() + 1,
+            3,
+            "TARGET is on line 3; the count of complete lines before it is 2, which is the \
+             off-by-one this test exists for"
+        );
+        assert_eq!(text.lines().nth(3 - 1), Some("TARGET"));
+    }
 
     /// 🔴 **The recorded defect (6.4): rustfmt reflowed the code, the anchor stopped matching, the
     /// script carried on, and the green of an UNMUTATED tree was read as a result.**
@@ -673,6 +982,34 @@ mod tests {
         }
     }
 
+    /// 🔴 **A FAILING TEST WHOSE OUTPUT QUOTES A DIAGNOSTIC IS NOT A COMPILE FAILURE**, and the
+    /// code review measured the driver calling one. `compiler_error` ran over the merged
+    /// stdout+stderr of `cargo test`, where cargo replays every panic at column 0 — so a planted
+    /// panic message carrying `error[E0308]` was reported as `CompileFailure`, and under
+    /// `--expect compile-fail` the driver printed ✅ and exited **0** over a tree that compiled.
+    /// ⚠️ It also short-circuited AC3: the check preceded the target count, so the run was never
+    /// read at all.
+    ///
+    /// 🔑 **The discriminator is structural**: a compile failure produces NO `test result:` line.
+    #[test]
+    fn a_test_that_prints_a_diagnostic_is_not_a_compile_failure() {
+        let red_with_a_quote = line(495, 1, 0)
+            + "error[E0308]: a TEST printed this; the tree compiles fine
+" + &line(161, 0, 0)
+            + &line(92, 0, 0)
+            + &line(0, 0, 0);
+        assert_eq!(
+            read_run(&red_with_a_quote, Some(101), 4),
+            Outcome::Red {
+                tests: 1,
+                clippy: false,
+                gates: false
+            },
+            "one test failed and the tree compiled — reporting a compile failure here is a \
+             PLAUSIBLE WRONG ANSWER, which is the one thing this module promises never to give"
+        );
+    }
+
     /// 🔴 A tree that does not compile emits **zero** `test result:` lines and exits 101 — the same
     /// code as a test failure. A summing driver reports *"0 passed, 0 failed"*, which is the exact
     /// sentence the anchor above exists to make impossible.
@@ -687,7 +1024,8 @@ mod tests {
     }
 
     /// 🔴 **On cargo 1.96 `cargo test A B` fails loudly — the form that is still SILENT is
-    /// `cargo test -- A B`**, which runs seven tests of 741 and exits 0. So a driver counting
+    /// `cargo test -- A B`**, which ran seven tests of the 741 there were then, and exited 0.
+    /// So a driver counting
     /// `--filter` flags closes nothing, and the instrument is cargo's own `filtered out` count.
     #[test]
     fn a_filtered_run_is_refused_however_the_filter_arrived() {
@@ -758,7 +1096,7 @@ mod tests {
 
     /// 🔴 **A carrier the workspace suite does not subsume still counts as red.** Measured: a dead
     /// binding in a test module reds `clippy --all-targets` alone; a migration losing its binary
-    /// collation reds `cargo xtask ci` alone with 741 tests green.
+    /// collation reds `cargo xtask ci` alone with every test green.
     #[test]
     fn a_red_on_any_carrier_is_a_red_and_the_outcome_says_which() {
         let clippy_only = Outcome::Red {
@@ -773,11 +1111,16 @@ mod tests {
         );
     }
 
-    /// 🔴 **Story 6b.7's defect, reproduced and closed.** A byte-identical restore that preserves
-    /// the mtime leaves cargo serving a stale artefact: `git status` clean, source identical, nine
-    /// tests still failing. It is a cargo FINGERPRINT property, not an askama one.
+    /// **The restore leaves cargo able to see it** — the property, pinned where it really lives.
+    ///
+    /// 🔴 **This test's plant was refuted at the code review and the guard was moved rather than
+    /// re-argued.** It stood over an explicit `set_modified(SystemTime::now())` whose doc called
+    /// it load-bearing; two layers measured that deleting the call leaves the suite green, because
+    /// `std::fs::write` advances the mtime on its own. ⚠️ *A guard placed where the defect cannot
+    /// occur* — and the plant recorded against it pushed the mtime BACKWARDS, which is a mutation
+    /// nobody would make. What is asserted now is what `restore` genuinely guarantees.
     #[test]
-    fn a_restore_advances_the_mtime_so_cargo_cannot_serve_a_stale_artefact() {
+    fn a_restore_leaves_a_timestamp_cargo_will_act_on() {
         let dir = std::env::temp_dir().join(format!("xtask-mutate-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("scratch");
         let file = dir.join("subject.rs");
@@ -812,7 +1155,7 @@ mod tests {
     }
 
     /// 🔴 **The store changes the verdict and NOT the counts** — measured: one mutation gives
-    /// *741 passed, exit 0* without a store and *1 failed, exit 101* with one. The clock is the
+    /// *the whole suite passing, exit 0* without a store and *1 failed, exit 101* with one. The clock is the
     /// only other tell, and a driver that prints counts prints no clock.
     #[test]
     fn the_store_endpoint_is_read_from_the_url() {
@@ -828,19 +1171,135 @@ mod tests {
         assert_eq!(store_endpoint("nonsense"), None);
     }
 
+    /// 🔴 **`from_args` was called by ONE line of `main.rs` and by NO test**, so the strict
+    /// `targets`, the strict `require_store` and the `--expect` requirement were all carried by
+    /// nothing — the review planted each of the three and the suite stayed green.
+    #[test]
+    fn the_command_line_builds_the_strict_mutation_and_refuses_a_missing_prediction() {
+        let argv: Vec<String> = [
+            "--file",
+            "a.rs",
+            "--anchor",
+            "x",
+            "--replacement",
+            "y",
+            "--expect",
+            "red:3",
+        ]
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+        let m = parse(&argv).expect("a complete command line parses");
+        assert_eq!(
+            m.targets, EXPECTED_TEST_TARGETS,
+            "strict, and not settable from the CLI"
+        );
+        assert!(m.require_store, "strict, and not settable from the CLI");
+        assert!(!m.baseline, "opt-in");
+        assert_eq!(m.expect, Expect::Red(Some(3)));
+
+        let no_expect: Vec<String> = ["--file", "a.rs", "--anchor", "x", "--replacement", "y"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        assert!(
+            parse(&no_expect).is_err(),
+            "a prediction written after the fact is not a prediction — a missing --expect is a \
+             refusal, and the review measured this defaulting silently to green"
+        );
+
+        let twice: Vec<String> = [
+            "--file",
+            "a.rs",
+            "--file",
+            "b.rs",
+            "--anchor",
+            "x",
+            "--replacement",
+            "y",
+            "--expect",
+            "green",
+        ]
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect();
+        assert!(
+            parse(&twice).is_err(),
+            "a repeated flag is a refusal, not last-wins"
+        );
+    }
+
+    /// 🔴 **The gates verdict is FOLDED into the outcome** — the review planted it discarded and
+    /// the whole xtask suite stayed green, because the only test that reaches `measure` passed a
+    /// stub that always says *green*. A stub that says *red* is what measures the fold.
+    #[test]
+    fn a_red_from_the_gates_alone_reaches_the_outcome() {
+        let clean = line(503, 0, 0) + &line(161, 0, 0) + &line(92, 0, 0) + &line(0, 0, 0);
+        let tests_green = read_run(&clean, Some(0), 4);
+        assert_eq!(
+            tests_green,
+            Outcome::Green,
+            "the premise: the TESTS are green"
+        );
+
+        let folded = fold(tests_green, false, false);
+        assert_eq!(
+            folded,
+            Outcome::Red {
+                tests: 0,
+                clippy: false,
+                gates: true
+            },
+            "a gate red with every test green is still a RED, and the outcome says which carrier \
+             — measured: dropping a binary collation from a migration reds `ddl-collation` alone"
+        );
+        assert!(Expect::parse("red").expect("red").matches(&folded));
+    }
+
+    /// 🔴 **The store refusal was reachable by no test**, and the review measured its branch
+    /// deletable with the suite green. Worse, the middle state PASSED: a `DATABASE_URL` that is
+    /// set and unusable is not the string `"ABSENT"`, so the run proceeded — and the store-backed
+    /// tests then PANIC rather than skip, so the red is the harness's.
+    #[test]
+    fn a_store_that_is_set_and_unusable_is_refused_like_an_absent_one() {
+        assert!(
+            Store::Reachable("127.0.0.1:13405".into())
+                .refusal()
+                .is_none()
+        );
+        let absent = Store::Absent.refusal().expect("unset is a refusal");
+        assert!(absent.contains("passes by RETURNING"), "{absent}");
+        let dead = Store::Unusable("nothing answers at 127.0.0.1:1".into())
+            .refusal()
+            .expect("set-and-unusable is a refusal TOO");
+        assert!(
+            dead.contains("PANIC"),
+            "and it says why it is WORSE than absent, which is the half that used to pass: {dead}"
+        );
+        assert!(
+            !store_is_reachable("127.0.0.1:1"),
+            "and the probe CONNECTS — it read the shape of a URL and called it reachable until \
+             the code review"
+        );
+    }
+
     /// 🔑 **THE END-TO-END, over a synthetic crate with its own `CARGO_TARGET_DIR`.**
     ///
     /// Story 5.12's finding is why this exists: its whole gate body was deletable with the xtask
-    /// suite green, because every test attacked the helper and none drove the thing. ⚠️ And story
+    /// suite green, because every test attacked the helper and none drove the thing.
+    ///
+    /// 🔴 **AND IT SHIPPED GATED BEHIND AN ENV VAR THAT NOTHING SET, so the finding reproduced
+    /// itself inside the test written to prevent it.** Three review layers measured the same
+    /// thing: `measure()`'s entire body — and `run_mutation`'s, and `from_args`' — was deletable
+    /// with 92 tests green, and `XTASK_MUTATE_E2E` appeared nowhere in `.github/`. ⚠️ The
+    /// disclosure that it was gated is not a defence: *"the suite reports 92 either way, so the
+    /// gate is the clock"* answers whether you can TELL it ran, never whether the code is
+    /// carried. It runs unconditionally now; measured cost below. ⚠️ And story
     /// 6b.11's is why the tree is SYNTHETIC: *a gate green over the real tree says nothing about
     /// its own tests*. A nested cargo run does not deadlock (measured, 5.98 s) but it fights the
     /// outer run for `target/`, so this one is given a target directory of its own.
     #[test]
     fn the_driver_drives_a_real_cargo_run_end_to_end() {
-        if std::env::var("XTASK_MUTATE_E2E").is_err() {
-            eprintln!("skipping the end-to-end: set XTASK_MUTATE_E2E=1 (it invokes cargo)");
-            return;
-        }
         let dir = std::env::temp_dir().join(format!("xtask-mutate-e2e-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("src")).expect("scratch");
         std::fs::write(
@@ -878,8 +1337,10 @@ version = \"0.0.0\"
             expect: Expect::Red(Some(1)),
             targets: 2, // the lib test target and the doctest target
             require_store: false,
+            baseline: false,
         };
-        let code = run_mutation(&dir, &mutation, || Ok(true)).expect("the driver runs");
+        let code =
+            run_mutation(&dir, &mutation, |_| Ok((true, String::new()))).expect("the driver runs");
         assert_eq!(
             code, CLEAN,
             "the mutation reds exactly one test, which is what was predicted"

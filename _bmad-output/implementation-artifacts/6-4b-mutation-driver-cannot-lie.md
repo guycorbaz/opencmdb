@@ -1,6 +1,6 @@
 # Story 6.4b: The mutation driver cannot lie
 
-Status: **review** — implemented 2026-08-26; contexted 2026-08-26, VALIDATED the same day by two fresh-context layers
+Status: **review** — implemented 2026-08-26, CODE-REVIEWED by three isolated layers and REPAIRED the same day; contexted 2026-08-26, VALIDATED the same day by two fresh-context layers
 (which replaced most of the story), **arbitration taken (§0h, Guy, 2026-08-26): OPTION 2**.
 
 ⚠️ **This story is in NO epic file.** It was created by Epic 6b's retrospective (decision 1,
@@ -295,6 +295,230 @@ is a stated limit, not a bigger build.
 - [x] **T10 — The record** (AC12): the live count here; correct `CLAUDE.md`'s false *"some other
       xtask subcommands are still stubs"* (**one** twin, not two).
 
+### Review Findings — three isolated layers, 2026-08-26
+
+⚠️ All three ran at this session's capability, isolated by context and worktree but **not on a
+different model**; the house rule's other half is not met by this pass and is not claimed.
+
+🔑 **The mutating layer did what it was asked: it MADE THE DRIVER LIE, four times, with commands
+and output.** Every HIGH below is a *plausible wrong answer* rather than a refusal — which is the
+one thing this module's doc says it will never give.
+
+#### Decisions (the fix is not unambiguous)
+
+- [x] **[Review][Decision] The gates carrier reads the ALREADY-COMPILED binary, and both
+      directions are measured.** `ci()` is `crate::run_ci`, built before the mutation; clippy and
+      `cargo test` rebuild xtask, the gates do not. Measured: `MAX_CODE_LINES` 2000 → 20 printed
+      **"✅ file-size 41 file(s) under 2000 code lines"** — quoting the constant it had just
+      replaced — while a real `cargo run -p xtask -- ci` on the same tree reds 40 files; and a
+      STALE binary manufactured `gates: true` on a pristine tree and labelled it *the finding*.
+      ⚠️ Mutating a gate is the second most common shape in this project (5.12, 6.3, 6b.10).
+- [x] **[Review][Decision] There is no BASELINE run**, so on the dirty tree AC7 is designed for, a
+      pre-existing red confirms `--expect red` with ✅ and exit 0. `grep -i baseline` finds one
+      hit: a *message*, in the anchor-missed branch. The driver knows the concept and never
+      measures it.
+
+#### Patches — the driver lies
+
+- [x] [Review][Patch] 🔴 **A failing test whose output contains `error[E0308]` is classified a
+      COMPILE FAILURE**, and with `--expect compile-fail` the driver prints ✅ and exits **0** over
+      a tree that compiles — measured with a planted panic message. `compiler_error` is run over
+      the merged stdout+stderr of `cargo test`, where cargo replays every panic at column 0. It
+      also short-circuits AC3: the check precedes the target count, so the run is never read.
+- [x] [Review][Patch] 🔴 **The store is never probed.** `store_endpoint` is string-splitting;
+      `grep TcpStream|connect` finds nothing, while the doc says *"It probes the TCP endpoint"*.
+      Measured: `DATABASE_URL=…:1` printed `store: reachable at 127.0.0.1:1`, the store-backed
+      tests then PANIC rather than skip, and the run was killed at **>10 minutes** with a dozen
+      failures that would have been folded into the mutation's count. An empty or port-less URL
+      also passes the requirement.
+- [x] [Review][Patch] 🔴 **`--file` accepts an absolute path or `..` and writes outside the
+      workspace** — measured end to end: the driver mutated `/tmp/…/victim.txt`, ran all three
+      carriers, restored it, and delivered a verdict on a file no carrier can see.
+- [x] [Review][Patch] 🔴 **An unpredicted compile failure exits 1, not 2** — against AC9 and
+      against the shipped `--help`, in the same commit. It is filed as *the finding* when it is
+      *the driver could not measure*.
+- [x] [Review][Patch] 🔴 **The applied diff is printed NOWHERE**, though AC1, §0b row 4 and T2 all
+      require it — and row 4 is the four-occurrence family (*a mutation named for one thing and
+      applied to another*). Measured: an anchor landing only inside a COMMENT produces a
+      transcript indistinguishable from a real code mutation.
+
+#### Patches — guards that are carried by nothing
+
+- [x] [Review][Patch] 🔴 **Six plants, each destroying a named criterion, leave the whole xtask
+      suite GREEN**: the gates verdict discarded (AC6), the store refusal disabled (AC8),
+      `targets: 1` and `require_store: false` in `from_args` (AC3, AC8), `--expect` silently
+      defaulting to green (AC9), and **`restore()` deleted** (AC7). `from_args` is called by one
+      line of `main.rs` and by **no test at all**.
+- [x] [Review][Patch] 🔴 **`measure()`'s entire body is deletable with the suite green**, and the
+      only test that drives it is off by default and set nowhere in `.github/`. Story 5.12's
+      finding, reproduced inside the test whose own doc quotes it. ⚠️ My *"the clock is the tell"*
+      answers a different question: for the store the tests run; here the test does not run at all.
+- [x] [Review][Patch] 🔴 **P6 IS REFUTED, by two layers independently.** Removing the
+      `set_modified` block leaves the suite GREEN: `fs::write` already advances the mtime, so the
+      line is redundant and the guard sits where the defect cannot occur. My plant set the mtime
+      to the EPOCH — a mutation nobody would make — which is *a plant named for one thing and
+      applied to another*, the class in my own table, committed in the pass meant to avoid it.
+      ⚠️ And `shutil.copy2` PRESERVES metadata while `fs::write` does not, so the recorded defect
+      class is unreachable in this implementation.
+
+#### Patches — false sentences in the record
+
+- [x] [Review][Patch] **`--help` does not carry the recipe**, though the story and the commit both
+      say it does. And the recipe in the module doc omits `npm ci`, the Basic credentials, and
+      **`AXE_REQUIRE_QUEUE=1` / `AXE_REQUIRE_GESTURE=1`** — without which an empty queue reads as a
+      PASS, which is story 6b.11's *green on residue* defect re-opened by my own instructions.
+- [x] [Review][Patch] **The "REAL workspace" transcript is a paraphrase presented as verbatim** —
+      the code cannot print `✅ all gates green` on the same line as `$ cargo xtask ci`. The anchor
+      and the result are real; the block is edited and unmarked.
+- [x] [Review][Patch] **T6 is ticked and the wall clock does not exist** — and the driver DELETES
+      cargo's own `finished in Xs` by re-printing the result lines. Both tells that a store-backed
+      run really executed are gone together.
+- [x] [Review][Patch] **A LIVE runtime message says "741 passed" over a 756-test tree**
+      (`mutate.rs:445`), inside the refusal whose subject is figures that do not mean what they say.
+- [x] [Review][Patch] **"Seven red as predicted" contradicts the table's own two divergences.**
+      Of eight: six conforming, one refuted (P3), one diverged (P1) — five conforming after P6.
+- [x] [Review][Patch] **`§0f` is a dangling reference** (the sections run §0a–§0e, §0g, §0h), and
+      **"six consecutive epics"** is three by the table's own rows.
+- [x] [Review][Patch] **My *"ONE twin, not two"* was an enumeration and missed two sites**:
+      `README.md:123` carries the same false stubs sentence, and `xtask/Cargo.toml:5` says
+      *"`main.rs` dispatches `ci` alone"*, which this commit falsifies. *An enumeration cannot
+      establish absence* — story 5.13b, quoted by this very story.
+- [x] [Review][Patch] **AC1's *"proves the apply by comparing the file before and after"* describes
+      `restore()`, not the mutation**: `apply()` compares two in-memory strings and the write is
+      trusted on its `Ok`. The asymmetry is fine; the sentence is not.
+- [x] [Review][Patch] `--help` exits **0**, which this contract defines as *the outcome matches the
+      prediction*; `shown`'s doc cites AC2 where it means AC4/AC6; clippy's result is never named
+      and its output is discarded; duplicate flags silently last-wins.
+
+#### Deferred
+
+- [x] [Review][Defer] **The interrupt residual is accurate and its recovery advice is false.**
+      Measured: killed mid-cargo, the tree stays mutated. On the dirty tree AC7 calls normal the
+      file is NOT *"recoverable from git"* — and the mutating layer re-enacted defect #7 in one
+      command while cleaning up. T9 required a discoverable snapshot PATH and it was ticked without
+      one. **Owner: this story's repair if the decisions allow, else the next driver story.**
+- [x] [Review][Defer] `EXPECTED_TEST_TARGETS = 4` is correct today (measured, both ways) and pinned
+      by no test — the *derived, not constant* shape 6b.10 and 6b.11 both fixed elsewhere.
+- [x] [Review][Defer] Two scratch namespaces bypass `main.rs`'s own `claim_scratch_tag` registry —
+      the ownership class story 6b.12 installed after issue #38 — because it is private to that
+      test module. No collision is live; two leftover `/tmp` trees from writing this story are.
+- [x] [Review][Defer] Compile failures with **no error code** (parse errors, link failures) are
+      invisible to `compiler_error`, so `--expect compile-fail` can never be satisfied for that
+      class. The anchor is right for the recorded trap and is *an enumeration presented as a
+      property*.
+
+#### Dismissed with the check that dismissed them
+
+- **A substring anchor, a multi-line anchor, a non-UTF-8 file, a directory, a symlink, an empty
+  anchor, a `test result:` line printed by a test** — all measured by the mutating layer: each is
+  either handled correctly or refused honestly.
+- **`EXPECTED_TEST_TARGETS` wrong today** — 4 with and without a store.
+- **The tree left mutated after a NORMAL run** — five completed runs, byte-for-byte restored.
+- **741 → 756 and 77 → 92** — both terms verified independently by the auditor, and the fifteen
+  new tests counted.
+
+### The repair pass (2026-08-26) — three layers, and the driver was lying in four measured ways
+
+**Guy's two arbitrations**, each with the option refused:
+
+🔑 **(1a) The gates SHELL OUT** (`cargo run -q -p xtask --locked -- ci`), over refusing xtask-source
+mutations and over keeping the in-process form with a stated limit. They ran in-process, reading
+**this process's own text, built before the mutation**, while clippy and `cargo test` rebuilt xtask
+with it. Both directions were measured by the review: `MAX_CODE_LINES` 2000 → 20 printed *"✅
+file-size 41 file(s) under 2000 code lines"* — quoting the constant it had just replaced — and a
+STALE binary manufactured a gate red on a pristine tree, which the driver labelled *the finding*.
+⚠️ Mutating a gate is the second most common shape in this project (5.12, 6.3, 6b.10), so the
+stale carrier hit exactly the case it was added for. **Now measured: the same mutation reds
+`file-size` with `40 file(s) over the ceiling`.**
+
+🔑 **(2b) `--baseline` is OPT-IN**, over measuring it every time and over stating the limit only.
+Without it a test already red confirms a `red` prediction on its own — and AC7 deliberately removes
+the dirty-tree refusal, so this driver is *designed* for the tree where that happens. The run now
+says so every time the flag is absent; a baseline that is not clean is a refusal.
+
+#### The four lies, each measured before and after
+
+| what it said | what was true | now |
+|---|---|---|
+| `CompileFailure` for a failing test whose output quotes `error[E0308]` — and ✅ exit **0** under `--expect compile-fail` | the tree compiled and one test failed | a compile failure produces **no `test result:` line**; that is the discriminator (guard + plant P15, RED 1) |
+| `store: reachable at 127.0.0.1:1` | nothing listens there; the store-backed tests then **panic** and the run was killed at >10 minutes | it **connects** (2 s timeout); *set and unusable* is its own refusal — measured **exit 2** |
+| a verdict on `/tmp/…/victim.txt`, all three carriers run | no carrier walks it | confined to the workspace — measured **exit 2** |
+| nothing printed about what was applied | an anchor landing in a COMMENT was indistinguishable from a code mutation | the file, the line and the changed line before/after |
+
+🔴 **And the applied diff was OFF BY ONE on its first run**, printing the line ABOVE the change —
+**identical on both sides**, which is the shape of a diff looking at the wrong line. It was added
+to close the four-occurrence family *a mutation named for one thing and applied to another*, and
+printing the wrong line would have fed that family rather than closed it. Caught by reading the
+output it produced.
+
+#### Guards that were carried by nothing
+
+Six plants each destroyed a named criterion and left the whole suite green: the gates verdict
+discarded, the store refusal disabled, `targets: 1`, `require_store: false`, `--expect` silently
+defaulting to green, and **`restore()` deleted**. `from_args` was reached by one line of `main.rs`
+and by no test. It is now split into a pure `parse` with its own guard; `fold` is extracted and
+tested with a gates-only red; the store refusal is tested through `Store::refusal`; and 🔴 **the
+end-to-end runs UNCONDITIONALLY** — it was gated behind `XTASK_MUTATE_E2E`, which appears nowhere
+in `.github/`, so `measure`, `run_mutation` and `from_args` were all deletable with 92 tests green.
+⚠️ *That is story 5.12's finding reproduced inside the test whose own doc quotes it*, and my
+disclosure — *"the suite reports 92 either way, so the gate is the clock"* — answered whether you
+can tell it ran, never whether the code is carried. Measured cost of running it always: **0.2 s**.
+
+#### 🔴 P6 was REFUTED by two layers independently, and the guard moved rather than being re-argued
+
+`std::fs::write` already advances the mtime, so the `set_modified` call it sat over was redundant
+and the guard was **placed where the defect cannot occur**. My plant pushed the mtime BACKWARDS —
+a mutation nobody would make — which is *a plant named for one thing and applied to another*, the
+class in my own table, committed in the pass meant to avoid it. ⚠️ And `shutil.copy2` PRESERVES
+metadata while `fs::write` does not, so the recorded defect class is unreachable here. The
+redundant call is gone; the test pins what `restore` really guarantees.
+
+#### The record, corrected
+
+- **The "REAL workspace" transcript was a paraphrase presented as verbatim.** Replaced with the
+  captured output below.
+- **T6's wall clock did not exist, and the driver DELETED cargo's own** by re-printing the result
+  lines without `finished in Xs`. Both tells that a store-backed run really executed were gone
+  together. Cargo's line now passes through whole, with the carrier's wall clock beside it.
+- **`--help` did not carry the recipe** the story and the commit both said it did — and the
+  paraphrase that existed omitted `npm ci`, the credentials and `AXE_REQUIRE_QUEUE` /
+  `AXE_REQUIRE_GESTURE`, without which an empty queue reads as a PASS: story 6b.11's *green on
+  residue*, re-opened by my own instructions. `--help` now carries `ci.yml`'s recipe.
+- **"Seven red as predicted"** was six conforming, one refuted, one diverged — five conforming
+  after P6. No total is restated: the table is the record.
+- ⚠️ **My *"ONE twin, not two"* was an enumeration and there were THREE more sites**: `README.md`,
+  `xtask/Cargo.toml` (*"`main.rs` dispatches `ci` alone"*, falsified by this commit) and
+  `deferred-work.md`. Swept with `rg` over the tree, which is what the rule asks for.
+- `§0f` was a dangling reference; *"six consecutive epics"* is three by the table's own rows;
+  clippy's verdict is now named and its diagnostics shown; a repeated flag is a refusal.
+
+⚠️ **And I committed the pipeline-status trap while VERIFYING the driver built to stop it**: the
+first two repair checks read `$?` through a `tail`, so two exit-2 refusals printed `exit=0`. Re-run
+with the status read from the process: **R1 = 2, R2 = 2, R3 = 1.** AC4 exists for exactly that.
+
+#### The captured run, verbatim
+
+```text
+APPLIED at crates/opencmdb-bin/src/page.rs:1897 (1 site)
+   - const MAX_DOCUMENTED: usize = 99;
+   + const MAX_DOCUMENTED: usize = 1;
+store: reachable at 127.0.0.1:13405 (connected)
+$ cargo clippy --workspace --all-targets --locked -- -D warnings
+   clippy: green
+$ cargo test --workspace --locked --no-fail-fast
+   test result: FAILED. 502 passed; 1 failed; … finished in 18.16s
+   test result: ok. 161 passed; … 0.01s
+   test result: ok. 96 passed; … 0.27s
+   test result: ok. 0 passed; 0 failed; 1 ignored; … 0.00s
+   (cargo test: 27.18s wall)
+$ cargo run --quiet -p xtask --locked -- ci
+⚠️  no baseline was measured (--baseline): a test already red before this mutation would confirm
+    a `red` prediction on its own.
+PREDICTED: Red(Some(1))
+MEASURED:  Red { tests: 1, clippy: false, gates: false }
+✅ the outcome matches the prediction
+```
+
 ---
 
 ## Dev Notes
@@ -333,14 +557,14 @@ it mechanical.
 
 ### The live count (AC12), every figure naming its state
 
-**741 → 756 tests** — 503 `opencmdb-bin` + 161 `opencmdb-core` + **92** `xtask` (77 → 92, the
-driver's fifteen), `cargo test --workspace --locked` against a live `mariadb:10.11.11` on port
+**741 → 761 tests** — 503 `opencmdb-bin` + 161 `opencmdb-core` + **97** `xtask` (77 → 97, the
+driver's twenty: fifteen at implementation and five more the code review earned), `cargo test --workspace --locked` against a live `mariadb:10.11.11` on port
 13405, **6.39 s** (~0.2 s with `DATABASE_URL` unset — the clock is the tell, which is AC8's
 subject). Nine `cargo xtask ci` gates green; `clippy --workspace --all-targets -- -D warnings`,
 `cargo fmt --check`, and **`RUSTFLAGS="-D warnings" cargo test`** — the CI half local clippy cannot
 see — each read from `$?`.
 
-`xtask/src/mutate.rs` is **592** code lines; `xtask/src/main.rs` is unchanged but for the module
+`xtask/src/mutate.rs` is **883** code lines after the repair (592 at implementation); `xtask/src/main.rs` is unchanged but for the module
 line and the dispatch arm, and the `file-size` gate now walks **41** files.
 
 ### What was built, and the one measurement that decided its shape
@@ -435,5 +659,6 @@ shell line instead, and fifteen defects say they will.
 
 | Date | Change |
 |---|---|
+| 2026-08-26 | **CODE-REVIEWED (three isolated layers) and REPAIRED — 2 arbitrations by Guy, 17 patches, 4 deferrals.** 🔴 **The mutating layer did what it was asked and MADE THE DRIVER LIE, four times, with commands and output**: a failing test whose panic quotes `error[E0308]` was reported as a COMPILE FAILURE — and under `--expect compile-fail` it printed ✅ and exited **0** over a tree that compiled; `store: reachable at 127.0.0.1:1` was printed for a port where nothing listens, after which the store-backed tests PANIC and the run was killed at over ten minutes; a verdict was delivered on a file in `/tmp` that no carrier walks; and an anchor landing inside a COMMENT produced a transcript indistinguishable from a real code mutation. ✅ **Guy: (1a) the gates SHELL OUT** — they read this process's own pre-mutation text, and `MAX_CODE_LINES` 2000 → 20 printed *"✅ 41 file(s) under 2000 code lines"* while quoting the constant it had just replaced; **(2b) `--baseline` opt-in**, the run saying so whenever it is absent. 🔴 **Six plants each destroyed a named criterion with the suite GREEN** — including `restore()` deleted — because `from_args` was reached by no test and **the end-to-end was gated behind an env var set nowhere**: story 5.12's finding reproduced inside the test whose doc quotes it. It runs unconditionally now (0.2 s). 🔴 **P6 REFUTED by two layers**: `fs::write` already advances the mtime, so the guard sat where the defect cannot occur and my plant pushed the mtime BACKWARDS — *a plant named for one thing and applied to another*, in the pass meant to avoid it. ⚠️ The applied diff was **off by one on its first run**, printing identical halves; *"seven red as predicted"* was six-one-one; *"`--help` carries the recipe"* was false and the paraphrase that existed re-opened 6b.11's *green on residue*; and *"ONE twin, not two"* was an enumeration that missed **three** sites. ⚠️ And I committed the pipeline-status trap while verifying the driver built to stop it: two exit-2 refusals read `exit=0` through a `tail`. **741 → 761 tests** (503 + 161 + **97**), nine gates, clippy `--all-targets`, fmt, `RUSTFLAGS="-D warnings"`. |
 | 2026-08-26 | **VALIDATED by two fresh-context layers, and the validation replaced most of the story.** 🔴 **§0c was inverted**: contexting wrote *"the one requirement WITHOUT a recorded defect"* over an incident recorded at `5-14b:665`, whose remedy the mandate carries **literally** (`^error\[E[0-9]+\]`) and whose defect was **live in story 6.4's own driver** — seven of eight runs printed `COMPILE ERROR` when none was one. 🔴 **The gap-hunt BUILT the driver and found eight holes the criteria did not close**, the sharpest being that **`cargo test --workspace` stops at the first failing crate**: 8 red by default, **17 with `--no-fail-fast`**, re-measured independently — *so every recorded "N red" in this project where `opencmdb-bin` reddened is a lower bound*. Also: both original targets blind to what CI reds; a test-target-only compile break printing *"0 passed, 0 failed"* and exiting 0; the store changing the verdict while the counts stay identical; **replace-all mutating the second ORACLE and repairing the guard** (6 red vs 14); the stale-artefact defect being a **cargo fingerprint** property rather than an askama one; a cargo-only driver unable to see `app.js` at all (741 green, kbd gate 9 failed); and `cargo xtask ci` as an uncovered third carrier. 🔴 **AC7's dirty-tree refusal was REMOVED**: all four recorded destructions happened on dirty trees *because that is when a mutation pass runs*, and the snapshot is what makes it safe — proven by sha256 before and after with the uncommitted work intact. **Twelve criteria where there were ten; fifteen defects where the table had twelve, two of them misdescribed** — row 1's two-filter mechanism is **stale on cargo 1.96** (loud now; the silent form is `-- A B`). ⚠️ **The arbitration is restated and is now about SCOPE**: contexting had suppressed option 1's strongest argument (the spec file holds the prediction) and §0e argued against it for something it does not do. |
 | 2026-08-26 | Story created and CONTEXTED. 🔴 **The action item's own verb is wrong: there is NO driver to fix** — nothing tracked, nothing deleted from history. Every pass this project ran was driven by a throw-away scratchpad script, which is exactly why the same defect recurs: there is no artefact for a fix to land in. **So this story BUILDS.** ⚠️ Two surviving specimens are prior art on four criteria and contexting dismissed them as *"abandoned"*. 🔴 Measured: `xtask/src/main.rs` at **1939 of 2000**, so the driver goes in its own module; `xtask` has exactly one subcommand and `CLAUDE.md`'s *"some other subcommands are still stubs"* is FALSE; `page.rs` at **1978**. |
