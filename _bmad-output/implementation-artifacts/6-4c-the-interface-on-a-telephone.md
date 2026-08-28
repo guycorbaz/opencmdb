@@ -1,8 +1,24 @@
 # Story 6.4c: The interface on a telephone
 
-Status: **ready-for-dev** — contexted 2026-08-28 against a booted binary and a real Chrome.
-⚠️ **`create-story validate` (two fresh-context agents) is MANDATORY before `dev-story`** — Guy's
-decision of Epic 4's retrospective, which overrides the template's *"validation is optional"* banner.
+Status: **DEFERRED to GitHub issue #131** — Guy, 2026-08-28: *the mobile interface is not needed at
+the start*. Contexted 2026-08-28 against a booted binary and Chrome **152**, then VALIDATED the same
+day by two fresh-context layers, and deferred **after** that validation rather than instead of it.
+
+🔑 **The story file is kept, and `sprint-status.yaml` reads `backlog`, which is a STRETCH of that
+word and is said here rather than glossed**: the definition is *"story only exists in epic file"*,
+and this one exists in no epic file and carries several hundred lines of measured context. What
+`backlog` means for 6.4c is *not scheduled; the work is issue #131; the measurements are in §0 and
+§0g*.
+
+⚠️ **The criteria below are the DRAFT the validation refuted in part.** §0g says which, and it is
+deliberately NOT merged into them: a criterion and the measurement that broke it are worth more side
+by side than a corrected criterion nobody can see was corrected. **Anyone re-opening this work starts
+from §0g, not from the AC list.**
+
+⚠️ **What deferring costs**: Epic 6b's retrospective sequenced this story *before* the engine work
+because *"6.4 is the LAST story that touches the interface before 6.5-6.19 go into schema and the L2
+cascade — fifteen engine stories would separate the decision from its application, and an interface
+story written that late re-contexts entirely."* Taking it after Epic 6 accepts exactly that.
 
 ⚠️ **This story is in NO epic file.** It was created by Epic 6b's retrospective (decision 2,
 2026-08-24) and sequenced by Guy the same day; `epics.md` defines stories 6.1–6.19 and not this one,
@@ -216,6 +232,121 @@ an ARIA fault"* with *"this page is 587 px too wide"* under one exit code. ⚠�
 - **Not a screenshot suite.** `epics.md:165`'s *"snapshot-verified"* would be a new apparatus with its
   own flakiness; the property NFR24 names is measurable directly and AC1/AC3 measure it. ⚠️ If the
   validation disagrees, that is a fourth arbitration and not a silent scope change.
+
+---
+
+## §0g — WHAT THE VALIDATION MEASURED, 2026-08-28 (two fresh-context layers, own worktree and own store each)
+
+🔑 **This section exists because the story was deferred, not despite it.** The validation ran before
+Guy's decision, and its yield is why issue #131 is a change request carrying numbers rather than a
+line saying *"make it responsive"*. **Read this before the ACs above.**
+
+### 🔴 Two criteria were NOT satisfiable as written, and two CONTRADICTED each other
+
+| AC | verdict | the measurement |
+|---|---|---|
+| **AC2** | **NOT satisfiable** | *"Reachable by keyboard"* has no property, and axe is **measured** not to carry it: `scrollable-region-focusable` is in the gate's tags and **cannot fire on a region with focusable descendants** — i.e. on every table whose rows are links. On `/devices` the last column header sits at **x = 709 in a 360 px viewport**, unreachable by keyboard, while AC1's property reads **0**. |
+| **AC3 vs AC4** | **CONTRADICT** | The action bar clears 44 px only because the rail squeezes its column to 74.4 px and the text wraps. Remove the rail as AC4 requires and the same controls fall to **28.8 px**. 🔴 **§0c's single ✅ was an artefact of the layout AC4 deletes.** |
+| **AC6** | **not executable** | *"Relative units throughout"* over **297 `px` occurrences against 6 `rem`**. Naming what stays fixed *is* the sweep the AC says it is not. |
+| **AC8** | satisfiable, **carries nothing** | measured — see the next block. |
+
+### 🔴 NOTHING IN THE APPARATUS CAN SEE A RESPONSIVE CHANGE, and the Dev Notes said the opposite
+
+A complete prototype pass — four `@media` blocks, a bottom bar, `min-height: 44px`, a table wrapper,
+**plus a deliberately orphaned CSS class** — left **761 tests, all nine `cargo xtask ci` gates,
+`axe-gate.mjs` and `kbd-probe.mjs` GREEN**. The guards are alive (an undefined class reds exactly one
+test, `page.rs:4826`); they are **orthogonal to layout**.
+
+⚠️ **The Dev Notes table below is therefore FRAMED BACKWARDS, and is kept with this correction rather
+than quietly rewritten.** It is headed *"what ALREADY reds when you touch `app.css`"* and says *"these
+are the ones that will red on a responsive edit"* — **not one of them does**. A developer would read
+the absence of red as confirmation. ***The true sentence is the inverse: nothing cargo-side can see a
+responsive change, and that is the whole argument for AC5.***
+
+🔑 **And a SIXTH guard the table omits is hit FIRST**: AC2's keyboard-reachable wrapper needs an
+accessible name, an accessible name needs an `app.yml` key in both locales, and `page.rs:2912` refuses
+literal prose in a template. **No AC and no task budgets that key.**
+
+### 🔴 §0's measurements reproduce EXACTLY — in English, and in no other locale
+
+Every §0b figure and every worst-offender element name reproduces to the pixel in the **default
+(English) locale**. **None of the six data-dependent ones reproduces in French** — `/devices` is
+**+616 / +208** there against +587 / +179, `/triage` +83 against +68. ⚠️ French is what Guy reads and
+what every browser look in Epic 6b used, and **§0 names no locale**. A gate floor pinned to these
+numbers is pinned to one language.
+
+Likewise **§0c's dedup rule is unstated**, and three rules give three answers on one tree: 21 of 34
+(English, keyed on tag + class + width + height), 20 of 33 (French, same key), 9 of 18 (keyed on tag +
+class + height). ⚠️ *"21 of 33"* is **one number from each of two runs**. What reproduces under every
+rule is the finding that matters: **`a.nav-entry`, 183 x 34, x100, on ten screens**.
+
+### 🔴 Corrections to §0 itself, each with what refuted it
+
+- **§0c's *"the 1280 px half of that register row is now STALE"* is FALSE.** `deferred-work.md:4722`
+  lists `.btn-gesture` at 114 x 29 as a **1280 px** measurement, and at 1280 px today one of the five
+  is **exactly 114 x 29**. 🔑 A 1280 px figure was declared stale on the strength of a 360 px one —
+  ***a measurement taken at one viewport and applied to another***, the very class §0a names,
+  committed in the section that names it.
+- **§0c's control paragraph is wrong on both numbers**: the action bar's five measure **47-64 px** at
+  360, not 47-114 (the 114 px control is on `/commissioning`; eight elements across three screens were
+  read as five on one), and the queue rows are **76-210 px**, not 95 — 95 being the register's
+  **1280 px** figure, itself no longer current.
+- **The dates**: both false-premise documents were written **2026-08-24**, so both were false by
+  **thirty-five days**, not *"thirty-three and thirty-five"*. ⚠️ The false 33 is already propagated
+  into `sprint-status.yaml`.
+- **Chrome is 152.0.7977.64**, not 151 — a version copied from an earlier story's record instead of
+  read from `--version`, in a story whose §0a subject is a claim copied instead of measured.
+- **§0d UNDERSTATES**: the gates run at **800 x 600**, where `(max-width: 900px)` already matches — so
+  `/ipam` has only ever been axe-tested **collapsed**, and **the 1280 px layout has been measured by
+  no instrument either**. And `target-size` (WCAG 2.5.8) is run by **neither** gate: the tag list
+  omits `wcag22aa`.
+- **§0a's *"scoped correctly, and TRUE"* about the mock rests on no check that can be run here** — the
+  reference mock is in no path under this repository. The defensible form is *"scoped correctly, and
+  outside this repository's reach to verify."* ⚠️ *Under this project's own rule that is an assertion.*
+- **The References omit the two decision records that actually govern AC2, AC4, AC6 and AC9** —
+  **UX-DR55** (`epics.md:312`: breakpoints, relative units, *wide content scrolls in its own
+  container*, no horizontal overflow) and **UX-DR54** (`epics.md:311`), which enumerates AC9's
+  register list verbatim. ⚠️ AC4 cites `:841` for the search magnifier and `:841` does not carry it.
+
+### ✅ THE NUMBER §0d ASKED FOR, and it settles arbitration 3
+
+**axe-core at 360 x 640 over the ten derived routes + four states: `0 violation nodes, 0 failing
+routes`.** The stated fear — *"axe at 360 px may surface violations that are real and were simply
+never looked for"* — is **REFUTED at those tags**. The gate question is a cost question.
+
+### ⚠️ Holes the ten ACs do not cover at all
+
+- **A page with no `<meta name="viewport">` lays out at Chrome's 980 px default**, so AC1's property
+  is **0 and meaningless** there. `/gap` (a real 200 route) and the **401 body** are both such pages.
+- **`getBoundingClientRect().height` is not what WCAG 2.5.5/2.5.8 mean.** A drawer spelled
+  `visibility: hidden` measures 63 px and **passes AC3 over an invisible control**; hit-testability
+  (`elementFromPoint` at the target's centre) is the property.
+- **AC5's floor counts CHECKS and is blind to an empty population**: point an assertion's selector at
+  a class that does not exist and the count stays intact while nothing is sized — *Epic 5's dominant
+  class written into a criterion.*
+- **AC1 cannot tell a scroll from a CLIP**, and neither can a `scrollLeft` oracle: with
+  `overflow-x: hidden` on the wrapper, 373 px are unreachable, AC1 reads 0, and `scrollLeft` is still
+  settable. The oracle is computed `overflow-x` **plus** `scrollWidth > clientWidth`.
+- **320 px, not 360, is the WCAG AA figure** (1.4.10 Reflow). Four screens still overflow at 320 with
+  the prototype in place. NFR24 says 360; nothing names the gap.
+- **Landscape and the 401 body are named by no criterion**, and no browser gate can reach the 401 at
+  all — Chrome yields no document for a challenge.
+
+### ⚠️ The bottom bar, measured — and it changes arbitration 1 rather than answering it
+
+Ten entries are **797 px of content in a 360 px bar, four of ten visible**. All ten stay
+keyboard-reachable and the bar is correctly announced (`<nav aria-label="Screens">`), so the objection
+is **not** accessibility: six destinations sit behind a horizontal scroll with no touch affordance.
+🔑 **The mock's bottom bar assumes four or five entries; this product has ten.**
+
+### ⚠️ Two process findings, from the validation's own conduct
+
+- **`cargo test` and the browser sweep must not share a store.** One layer's two passes diverged; the
+  cause is established, not guessed — a `cargo test --workspace` ran against the same `DATABASE_URL`
+  between them, and **`kbd-probe.mjs` WRITES** (it presses the documenting gesture for real). *Story
+  6b.11's "green on residue", live inside a validation session.*
+- **A broad `pkill -f 'target/debug/opencmdb'` killed the sibling layer's server.** Two isolated
+  layers are isolated by worktree and by store, **not by process table**. Kill by port.
 
 ---
 

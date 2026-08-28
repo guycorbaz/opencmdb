@@ -4662,7 +4662,34 @@ development_status:
   # 6.4 is the LAST story that touches the interface before 6.5-6.19 go into schema and the L2
   # cascade — fifteen engine stories would separate the decision from its application, and an
   # interface story written that late re-contexts entirely.
-  6-4c-the-interface-on-a-telephone: ready-for-dev
+  6-4c-the-interface-on-a-telephone: backlog
+  #   🔴 DEFERRED TO A CHANGE REQUEST -- GitHub issue #131 (Guy, 2026-08-28: *the mobile interface
+  #   is not needed at the start*). It was CONTEXTED and then VALIDATED by two fresh-context layers
+  #   BEFORE the decision, so the deferral carries measurements rather than an intention.
+  #   ⚠️ `backlog` is a STRETCH here and the story file says so: the definition above is "story only
+  #   exists in epic file", and this one exists in NO epic file and carries ~500 lines of measured
+  #   context. What it means for 6.4c is: not scheduled, the work is issue #131, the measurements
+  #   are in the story file's §0 and §0g.
+  #   ⚠️ WHAT DEFERRING COSTS, recorded rather than glossed: Epic 6b's retrospective sequenced this
+  #   BEFORE the engine work because "6.4 is the LAST story that touches the interface before
+  #   6.5-6.19 go into schema and the L2 cascade -- fifteen engine stories would separate the
+  #   decision from its application, and an interface story written that late re-contexts
+  #   entirely." Taking it after Epic 6 accepts exactly that.
+  #   🔴 THE VALIDATION'S YIELD, which is why the CR is actionable: TWO ACs were NOT satisfiable as
+  #   written (AC2's "keyboard-reachable" has no property and axe is MEASURED not to carry it --
+  #   `scrollable-region-focusable` cannot fire on a region with focusable descendants, i.e. on
+  #   every table whose rows are links; AC6's "relative units" over 297 px against 6 rem), and TWO
+  #   CONTRADICTED each other (removing the rail per AC4 drops the action bar from 47 px to 28.8 px,
+  #   so §0c's only ✅ was an artefact of the layout AC4 deletes).
+  #   🔴 AND NOTHING IN THE APPARATUS CAN SEE A RESPONSIVE CHANGE: a complete prototype pass plus a
+  #   deliberately orphaned CSS class left 761 tests, nine gates and BOTH browser gates GREEN.
+  #   ✅ axe-core at 360 px over 10 routes + 4 states: 0 violation nodes -- the fear that a viewport
+  #   would surface unknown violations is REFUTED, so the gate question is a cost question.
+  #   ⚠️ Also measured: the gates run at 800x600, where (max-width:900px) already matches, so the
+  #   1280 px layout has been seen by no instrument either; and `target-size` (WCAG 2.5.8) is run by
+  #   NEITHER gate, their tags omitting wcag22aa.
+  #   ⚠️ The "false by thirty-three days" below is itself WRONG: both documents were written
+  #   2026-08-24, so both were false by THIRTY-FIVE. Corrected in the story file, left visible here.
   #   CONTEXTED 2026-08-28 against a BOOTED BINARY and Chrome 151, not against the documents.
   #   🔴 THE PREMISE THIS STORY WAS HANDED IS FALSE IN THREE DOCUMENTS: "the zero `@media` rules"
   #   -- `app.css` carries FOUR, three of them layout, the oldest shipped by story 3.7 on
