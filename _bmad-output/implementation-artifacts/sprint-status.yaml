@@ -4592,7 +4592,22 @@ development_status:
   # this project carries, and 6.4 settles it. ⚠️ Its own mutation pass therefore runs on the
   # UNREPAIRED driver — accepted, because the known defect is caught by writing the prediction
   # first, which Epic 6b measured seven times. The driver lands immediately after.
-  6-4b-mutation-driver-cannot-lie: review  # CODE-REVIEWED (three layers) + REPAIRED 2026-08-26:
+  6-4b-mutation-driver-cannot-lie: done
+  #   DONE: PR #129 squash-merged 2026-08-28 as `8c5ecb3`, CI green ON THE HEAD COMMIT
+  #   (run 33153979100), read from `gh run view` and not from the watcher alone.
+  #   ⚠️ The PR sat FIVE DAYS: from 2026-08-26 GitHub created NO workflow run at all across five
+  #   pushes, a `reopened` and a `synchronize`; nine checks came back negative and NO CAUSE WAS
+  #   EVER NAMED. Two runs then appeared on their own the same evening, both green. Recorded as a
+  #   symptom without a cause, per this project's own rule.
+  #   ⚠️ THE RECORD PR corrected FIVE false sentences in the story file, four of them falsified by
+  #   the story's own repair, one section away: the "gates run IN-PROCESS" paragraph (Guy's
+  #   arbitration 1a made them shell out the same day); a PARAPHRASE presented as verbatim that the
+  #   review said had been "replaced" -- the replacement was written and the original never
+  #   deleted, so both stood; the interrupt residual still saying the file is "recoverable from
+  #   git", which the deferral CLOSED in the same commit calls false; and `mutate.rs` at 883 code
+  #   lines where the `file-size` gate's own rule gives 919. 🔑 *A correction that adds the true
+  #   text without removing the false one leaves the record carrying both.*
+  #   CODE-REVIEWED (three layers) + REPAIRED 2026-08-26:
   #   2 arbitrations by Guy -- the gates SHELL OUT (they read this process's pre-mutation text) and
   #   `--baseline` is opt-in. 🔴 The mutating layer MADE THE DRIVER LIE four times: a test printing
   #   `error[E0308]` read as a compile failure (✅ exit 0 under --expect compile-fail); a dead port
