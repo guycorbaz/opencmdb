@@ -11,7 +11,9 @@
 #![allow(dead_code)]
 
 use opencmdb_core::identity::cascade::{Conclusion, Decision, IdentityAbstentionCause};
-use opencmdb_core::observation::{InterfaceId, L2DomainId, LinkId, MacAddr, ObsId, Timestamp};
+use opencmdb_core::observation::{
+    DeviceId, EntityKind, EntityState, InterfaceId, L2DomainId, LinkId, MacAddr, ObsId, Timestamp,
+};
 use opencmdb_core::repo::{BoxFuture, ReadRepository, RepositoryError, WriteRepository, WriteUnit};
 use sqlx::{Executor, MySql, MySqlConnection, MySqlPool};
 
@@ -1618,10 +1620,368 @@ pub fn classify(error: sqlx::Error) -> RepositoryError {
     RepositoryError::Backend(error.to_string())
 }
 
+/// Insert one row of the `entity` supertype.
+///
+/// The supertype is what makes D21's interface/device disjunction structural rather than
+/// conventional: one id carries one `kind` for its whole life, and `PRIMARY KEY (id)` is what
+/// enforces that — **not** the composite `UNIQUE (id, kind)`, which exists only to give a
+/// subtype's foreign key a parent index. `0006`'s header carries the measurement.
+///
+/// ⚠️ **There is no production caller.** Story 6.5 ships the schema and its adapter; story 6.12 is
+/// the resolver that fills it. Prefer [`insert_device`] over calling this directly for a device —
+/// it writes the parent and the subtype together, so a device cannot exist without its entity.
+///
+/// # Errors
+///
+/// [`RepositoryError::Constraint`] when the id is already taken (under any kind — that IS the
+/// disjunction firing), when the id is the nil UUID, or when `kind`/`state` fall outside the
+/// domains the schema names. [`RepositoryError::Backend`] otherwise.
+pub async fn insert_entity<'e, E>(
+    executor: E,
+    id: &str,
+    kind: EntityKind,
+    state: EntityState,
+) -> Result<(), RepositoryError>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    sqlx::query("INSERT INTO entity (id, kind, state) VALUES (?, ?, ?)")
+        .bind(id)
+        .bind(kind.as_str())
+        .bind(state.as_str())
+        .execute(executor)
+        .await
+        .map_err(classify)?;
+    Ok(())
+}
+
+/// Create one device: its `entity` parent and its `device` row, together.
+///
+/// The two writes are one call on purpose. A `device` row without its `entity` parent is refused by
+/// `device_entity_fk`, so splitting them would give every caller the chance to write half a device
+/// and discover it at the foreign key — and the callers do not exist yet, which is exactly when the
+/// shape is free to choose.
+///
+/// A new device is [`EntityState::Active`]: the lifecycle this schema admits is a domain and no
+/// behaviour, and nothing in this codebase moves an entity out of `Active`.
+///
+/// ⚠️ **No production caller, by the epic's own criterion** — *"no producer: nothing writes a device
+/// yet"*. Story 6.12 is where that changes.
+///
+/// # Errors
+///
+/// [`RepositoryError::Constraint`] when the id is already used by any entity, or when it is the nil
+/// UUID. [`RepositoryError::Backend`] otherwise. The two statements share the caller's transaction,
+/// so a failure on the second leaves no orphan parent once that transaction rolls back.
+pub async fn insert_device(
+    conn: &mut MySqlConnection,
+    id: DeviceId,
+) -> Result<(), RepositoryError> {
+    let id = id.to_string();
+    insert_entity(&mut *conn, &id, EntityKind::Device, EntityState::Active).await?;
+    // `kind` is bound as a literal rather than passed in: `device_kind_constant` is what stops it
+    // drifting in the schema, and there being no parameter is what stops it drifting here.
+    sqlx::query("INSERT INTO device (id, kind) VALUES (?, 'device')")
+        .bind(&id)
+        .execute(&mut *conn)
+        .await
+        .map_err(classify)?;
+    Ok(())
+}
+
+/// Read one entity's kind and state, or `None` when no such entity exists.
+///
+/// # Errors
+///
+/// [`RepositoryError::Backend`] when the query itself fails. An unknown id is `Ok(None)`, not an
+/// error: asking about an entity that does not exist is a legitimate question.
+///
+/// # Panics
+///
+/// Never. An unfamiliar token in either column is returned as `None` for that field rather than
+/// panicking — the schema's CHECKs are what keep the columns inside their domains, and a reader
+/// that dies on an unfamiliar value would move the failure from the write to the read.
+pub async fn load_entity<'e, E>(
+    executor: E,
+    id: &str,
+) -> Result<Option<(Option<EntityKind>, Option<EntityState>)>, RepositoryError>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let row: Option<(String, String)> =
+        sqlx::query_as("SELECT kind, state FROM entity WHERE id = ?")
+            .bind(id)
+            .fetch_optional(executor)
+            .await
+            .map_err(classify)?;
+    Ok(row.map(|(kind, state)| {
+        let kind = [EntityKind::Interface, EntityKind::Device]
+            .into_iter()
+            .find(|k| k.as_str() == kind);
+        let state = EntityState::ALL.into_iter().find(|s| s.as_str() == state);
+        (kind, state)
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use opencmdb_core::repo::WriteRepository;
+
+    // ── The entity supertype, the device, and the state domain (story 6.5) ──────────────────
+    //
+    // ⚠️ **Four of this schema's six CHECKs are unreachable through the adapter**, because
+    // `EntityKind`/`EntityState` are closed enums and `device.kind` is a literal in the SQL. That is
+    // story 5.9's M3 shape — *a guard the adapter cannot violate is measured by raw SQL or by
+    // nothing* — so the tests below go around the adapter ON PURPOSE where the adapter cannot reach.
+
+    /// Connect and migrate. `None` when `DATABASE_URL` is unset.
+    ///
+    /// 🔴 **It does NOT empty the entity tables, and the first draft did — which failed.** Cargo
+    /// runs these tests concurrently against ONE store, so a `DELETE FROM entity` raced a sibling's
+    /// `INSERT INTO device` and died on `device_entity_fk` (`ERROR 1451`) — twice, in the same run.
+    /// *A fixture that truncates a shared table cannot coexist with a concurrent suite*, which is
+    /// this story's validation finding about `cargo test` and the browser gates, met one level down.
+    /// Each test therefore owns DISTINCT ids and forgets only its own (see [`forget_entity`]).
+    ///
+    /// ⚠️ **The suite reports the same counts with and without a store, and the clock is the only
+    /// tell** (0.4 s dry against ~6 s live), which is why every figure this story records names the
+    /// store it was taken against.
+    async fn entity_fixture() -> Option<MySqlPool> {
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping entity test: DATABASE_URL unset");
+            return None;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        Some(pool)
+    }
+
+    /// Remove one entity and its device subtype, so a test can be re-run against a store that kept
+    /// the last run's rows. Child first — the foreign key points that way.
+    async fn forget_entity(pool: &MySqlPool, id: &str) {
+        sqlx::query("DELETE FROM device WHERE id = ?")
+            .bind(id)
+            .execute(pool)
+            .await
+            .expect("forget the device");
+        sqlx::query("DELETE FROM entity WHERE id = ?")
+            .bind(id)
+            .execute(pool)
+            .await
+            .expect("forget the entity");
+    }
+
+    /// AC2, and the carrier the story chose over a written limit.
+    ///
+    /// 🔑 It reads the **applied schema**, not the migration text, so it catches a column added by
+    /// any route — a later migration, a hand edit, an `ALTER` run in production. A text gate would
+    /// see only what is written in `migrations/`.
+    ///
+    /// ⚠️ **Its limit, stated rather than implied**: it is gated on `DATABASE_URL` and passes by
+    /// RETURNING when unset, so it runs in CI and not on a dry local suite. That is a real gap and
+    /// it is why the sentence *"a device is an identifier and nothing else"* is also written at the
+    /// site it constrains, in `0006`'s header.
+    ///
+    /// Story 5.12's *"you cannot measure the absence of code by running code"* does NOT govern here:
+    /// that rule is about an UNBOUNDED absence, and `device`'s columns are bounded and present in
+    /// one place. Story 6b.3's arbitration (1) is the precedent.
+    #[tokio::test]
+    async fn a_device_is_an_identifier_and_nothing_else() {
+        let Some(pool) = entity_fixture().await else {
+            return;
+        };
+        let columns: Vec<(String,)> = sqlx::query_as(
+            "SELECT COLUMN_NAME FROM information_schema.COLUMNS \
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'device' ORDER BY ORDINAL_POSITION",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("read the applied schema");
+        let names: Vec<String> = columns.into_iter().map(|(c,)| c).collect();
+        assert_eq!(
+            names,
+            vec!["id".to_string(), "kind".to_string()],
+            "a device is an identifier and nothing else (D21) — everything it 'is' is either \
+             observed through its interfaces or declared, and a business column here restores the \
+             OBSERVED/DECLARED merge the architecture forbids by name"
+        );
+    }
+
+    /// 🔴 The disjunction, and it is carried by `PRIMARY KEY (id)` ALONE.
+    ///
+    /// Measured at this story's validation on two parents side by side: with `PRIMARY KEY (id, kind)`
+    /// — the literal reading of *"a composite unique key on the parent"* — the second insert below
+    /// SUCCEEDS and one id lives under both kinds at once. The composite `UNIQUE (id, kind)` exists
+    /// only to give `device_entity_fk` a parent index and enforces none of this.
+    #[tokio::test]
+    async fn an_id_carries_one_kind_for_its_whole_life() {
+        let Some(pool) = entity_fixture().await else {
+            return;
+        };
+        let id = "11111111-0000-0000-0000-00000000e001";
+        forget_entity(&pool, id).await;
+        insert_entity(&pool, id, EntityKind::Interface, EntityState::Active)
+            .await
+            .expect("the first kind is free");
+        let second = insert_entity(&pool, id, EntityKind::Device, EntityState::Active).await;
+        assert_eq!(
+            second,
+            Err(RepositoryError::Constraint("unique")),
+            "one id, one kind, for the life of that id — this is the disjunction D21 makes \
+             structural, and it must fire in the ENGINE rather than by convention"
+        );
+    }
+
+    /// A device cannot exist without its `entity` parent — and the adapter cannot produce that state.
+    ///
+    /// 🔑 So the test writes the child alone in RAW SQL. Through [`insert_device`] the parent is
+    /// written first and this branch is unreachable: *a guard the adapter cannot violate is measured
+    /// by raw SQL or by nothing* (story 5.9's M3).
+    #[tokio::test]
+    async fn a_device_row_without_its_parent_is_refused() {
+        let Some(pool) = entity_fixture().await else {
+            return;
+        };
+        forget_entity(&pool, "22222222-0000-0000-0000-00000000e002").await;
+        let orphan = sqlx::query("INSERT INTO device (id, kind) VALUES (?, 'device')")
+            .bind("22222222-0000-0000-0000-00000000e002")
+            .execute(&pool)
+            .await;
+        assert!(
+            orphan.is_err(),
+            "a device row with no entity parent is an orphan, and D21's whole point is that the \
+             engine refuses it rather than a convention discouraging it"
+        );
+    }
+
+    /// The two domains are refused by the SCHEMA, not only by the types.
+    ///
+    /// 🔑 `EntityKind` and `EntityState` are closed enums, so the adapter **cannot** bind a token
+    /// outside them. Without these two raw inserts both CHECKs would be droppable with the whole
+    /// suite green — which is exactly what story 5.9 measured when its M3 came back GREEN.
+    #[tokio::test]
+    async fn an_unfamiliar_kind_or_state_is_refused_by_the_schema() {
+        let Some(pool) = entity_fixture().await else {
+            return;
+        };
+        forget_entity(&pool, "33333333-0000-0000-0000-00000000e003").await;
+        forget_entity(&pool, "44444444-0000-0000-0000-00000000e004").await;
+        let bad_kind =
+            sqlx::query("INSERT INTO entity (id, kind, state) VALUES (?, 'router', 'active')")
+                .bind("33333333-0000-0000-0000-00000000e003")
+                .execute(&pool)
+                .await;
+        assert!(bad_kind.is_err(), "`router` is not a kind this model has");
+        let bad_state =
+            sqlx::query("INSERT INTO entity (id, kind, state) VALUES (?, 'device', 'retired')")
+                .bind("44444444-0000-0000-0000-00000000e004")
+                .execute(&pool)
+                .await;
+        assert!(
+            bad_state.is_err(),
+            "`retired` is not a state this model has"
+        );
+    }
+
+    /// The nil UUID is a sentinel, never a thing on the network — and the adapter CAN emit it, so
+    /// this one goes through it.
+    #[tokio::test]
+    async fn the_nil_uuid_is_refused_as_an_entity() {
+        let Some(pool) = entity_fixture().await else {
+            return;
+        };
+        let mut conn = pool.acquire().await.expect("acquire");
+        let nil = DeviceId::from_uuid(uuid::Uuid::nil());
+        let refused = insert_device(&mut conn, nil).await;
+        assert_eq!(
+            refused,
+            Err(RepositoryError::Constraint("check")),
+            "the nil UUID is D21's NIL_DEVICE sentinel; a real device carrying it would occupy the \
+             slot that stands for 'placed on no device'"
+        );
+    }
+
+    /// The state domain is written TWICE — in `EntityState` and in the schema's CHECK — and this is
+    /// the equality test that makes the redundancy deliberate rather than accidental.
+    ///
+    /// `CLAUDE.md` names that idiom: a redundancy a test pins and a comment labels is kept, and this
+    /// is its third instance after `score.rs`'s `Column::as_str` / `Expectation::column` pair.
+    #[tokio::test]
+    async fn the_state_domain_agrees_with_the_schema() {
+        let Some(pool) = entity_fixture().await else {
+            return;
+        };
+        let (clause,): (String,) = sqlx::query_as(
+            "SELECT CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS \
+             WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'entity_state_domain'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("the CHECK exists and is readable");
+        for state in EntityState::ALL {
+            assert!(
+                clause.contains(state.as_str()),
+                "`{}` is an EntityState and the schema's CHECK does not admit it — the two \
+                 representations have drifted, and the drift is silent until a write fails in \
+                 production. Clause read: {clause}",
+                state.as_str()
+            );
+        }
+        // 🔴 The other direction, and it took a mutation to get right. The first version counted
+        // the clause's quoted tokens against `EntityState::ALL.len()` — and M8, which points two
+        // variants at ONE token (`Sentinel => "active"`), left it GREEN: six variants, six quoted
+        // tokens, one of them unreachable and one schema value nothing can read back. *A count is
+        // not a set.* Both directions are compared as SETS now.
+        let named: std::collections::BTreeSet<&str> =
+            EntityState::ALL.iter().map(EntityState::as_str).collect();
+        assert_eq!(
+            named.len(),
+            EntityState::ALL.len(),
+            "two `EntityState` variants persist as the same token — one of them can never be read \
+             back, and a count of six would have hidden it"
+        );
+        let quoted: std::collections::BTreeSet<&str> =
+            clause.split('\'').skip(1).step_by(2).collect();
+        assert_eq!(
+            quoted, named,
+            "the schema's CHECK and `EntityState` name different sets — a value the schema accepts \
+             and no variant names is a value nothing can read back, and the reverse is a write that \
+             fails in production. Clause: {clause}"
+        );
+    }
+
+    /// A new device is `Active`, is a `Device`, and reads back as both.
+    #[tokio::test]
+    async fn a_new_device_is_an_active_device() {
+        let Some(pool) = entity_fixture().await else {
+            return;
+        };
+        let mut conn = pool.acquire().await.expect("acquire");
+        let id = DeviceId::from_uuid(uuid::Uuid::now_v7());
+        insert_device(&mut conn, id)
+            .await
+            .expect("a device is writable");
+        let found = load_entity(&pool, &id.to_string())
+            .await
+            .expect("the read succeeds");
+        assert_eq!(
+            found,
+            Some((Some(EntityKind::Device), Some(EntityState::Active))),
+            "a new device is active — the lifecycle this schema admits is a domain and no \
+             behaviour, and nothing in this codebase moves an entity out of Active"
+        );
+        assert!(
+            load_entity(&pool, "00000000-0000-0000-0000-0000000000ff")
+                .await
+                .expect("the read succeeds")
+                .is_none(),
+            "asking about an entity that does not exist is a legitimate question, not an error"
+        );
+    }
 
     /// Connect, migrate and empty `declared_attribute`. `None` when `DATABASE_URL` is unset — and
     /// then the caller returns, which is why §7 of story 5.12 insists a green suite says nothing.

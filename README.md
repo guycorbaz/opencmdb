@@ -89,7 +89,7 @@ opencmdb/
 │   │                    # It must NOT depend on anyhow, axum, sqlx, or askama.
 │   └── opencmdb-bin/    # the composition root: everything that touches the outside
 │                        # world — SQL, HTTP, HTML, files, the clock, secrets.
-├── xtask/               # the dev-tool runner (cargo xtask ci — nine gates);
+├── xtask/               # the dev-tool runner (cargo xtask ci — ten gates);
 │                        # a workspace member and a dependency of nobody.
 └── _bmad-output/        # the complete planning record (brief, PRD, UX, architecture).
 ```

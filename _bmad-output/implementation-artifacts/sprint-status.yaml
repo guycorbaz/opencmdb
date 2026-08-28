@@ -4716,7 +4716,7 @@ development_status:
   #   ⚠️ It is in NO epic file -- created by Epic 6b's retrospective (decision 2) and sequenced by
   #   Guy, exactly as 6.4b; the ten ACs are DERIVED from NFR24, UX-DR56 and the UX spec.
   #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
-  6-5-entity-device-and-state-schema: ready-for-dev
+  6-5-entity-device-and-state-schema: review
   #   CONTEXTED 2026-08-28 against a MIGRATED mariadb:10.11.11, not against the DDL text.
   #   🔴 ONE ARBITRATION IS OPEN AND THE STORY CANNOT BE BUILT WITHOUT IT: the epic's criterion says
   #   "no producer: nothing writes a device yet", and THE PRODUCT HAS BEEN MINTING ENTITY IDS SINCE

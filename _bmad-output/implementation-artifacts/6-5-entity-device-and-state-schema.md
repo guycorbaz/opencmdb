@@ -1,6 +1,6 @@
 # Story 6.5: The entity supertype, the device, and the state column — schema only
 
-Status: **ready-for-dev** — contexted 2026-08-28 against the migrated schema of a live
+Status: **review** — implemented 2026-08-28; contexted 2026-08-28 against the migrated schema of a live
 `mariadb:10.11.11`, then VALIDATED the same day by two fresh-context layers, each in its own
 worktree with its own store. **§0's corrections are applied in place and §0g holds the rest.**
 
@@ -444,33 +444,32 @@ criterion mentions `identity_link` or `link_candidate`.**
 
 - [x] **T1 — BOTH arbitrations taken, 2026-08-28** — §0c option (a) (Guy), §0d `entity.state` with
       six values (mine, delegated). Each recorded with the option refused and the cost accepted.
-- [ ] **T1b — `cargo::rerun-if-changed=migrations` in `build.rs`, as the FIRST act of T3** — or T2
+- [x] **T1b — `cargo::rerun-if-changed=migrations` in `build.rs`, as the FIRST act of T3** — or T2
       greps the artefact instead. §0g's finding: without it the deliverable is invisible to
       `cargo build` and the boot log asserts success anyway.
-- [ ] **T2 — Re-measure §0 on the tree you start from** (AC8), against a migrated store, and say
-      which store and which port.
-- [ ] **T3 — `0006_entity_device_and_state.sql`** (AC1, AC2, AC3, AC4): the supertype, `device`, the
+- [x] **T2 — Re-measured** against `mariadb:10.11.11` on port **13405** (and a second, virgin store on **13420** for the migration and mutation work).
+- [x] **T3 — `0006_entity_device_and_state.sql`** (AC1, AC2, AC3, AC4): the supertype, `device`, the
       `state` domain, binary collations throughout.
-- [ ] **T4 — Whatever T1 decides about existing rows** (AC6), with the migration measured against a
+- [x] **T4 — Whatever T1 decides about existing rows** (AC6), with the migration measured against a
       store that **already holds** interfaces and declared attributes — not against an empty one —
       and with the **recovery path** measured too, not only the happy one: a failed migration sticks
       at `success = 0` and repairing the data does not clear it.
-- [ ] **T5 — The adapter** (AC5), with no production caller, and raw-SQL tests for every CHECK the
+- [x] **T5 — The adapter** (AC5), with no production caller, and raw-SQL tests for every CHECK the
       adapter cannot violate (AC5's 5.9 warning).
-- [ ] **T6 — AC2's absence: the carrier is BUILT and proved to red** (AC7) — a test over
+- [x] **T6 — AC2's absence: the carrier is BUILT and proved to red** (AC7) — a test over
       `information_schema.COLUMNS` asserting `device`'s columns are exactly `[id, kind]`, with its
       `DATABASE_URL` gating WRITTEN. Add a text gate beside it only if you can say what it covers
       that the test does not.
-- [ ] **T6b — D15's rule** (AC9, §0f): `declared_attribute.entity_id` is never UPDATEd, held today by
+- [x] **T6b — D15's rule** (AC9, §0f): `declared_attribute.entity_id` is never UPDATEd, held today by
       no gate. A gate or a written limit — and say which, on story 5.12's narrowing.
-- [ ] **T7 — Mutation pass with predictions written FIRST**, through `cargo xtask mutate`. ⚠️ Its
+- [x] **T7 — Mutation pass with predictions written FIRST**, through `cargo xtask mutate`. ⚠️ Its
       three carriers are cargo-side and this story is entirely cargo-side, so unlike 6.4c the driver
       covers it — say so, and use it.
-- [ ] **T8 — Register every divergence BY NAME** (`deferred-work.md`), diffed before the commit.
+- [x] **T8 — Register every divergence BY NAME** (`deferred-work.md`), diffed before the commit.
       ⚠️ *A section that says "registered" is not a registration* (story 6b.9). **Incoming rows are
       answered too** (§0f), and `deferred-work.md:2226`'s wrong owner and `:2216`'s false
       *"three entries"* self-description are corrected in passing.
-- [ ] **T9 — The two gate holes this story exposed are registered, not fixed here**: the
+- [x] **T9 — The two gate holes this story exposed are registered, not fixed here**: the
       `ddl-collation` matcher (four of five planted violations green) and the `file-size` gate's
       blindness to `repo.rs`. Both are wider than this story.
 
@@ -559,16 +558,112 @@ Both twins are updated in the same push as any behaviour change.
 
 ### Agent Model Used
 
-### Debug Log References
+Claude Opus 5 (1M context).
 
-### Completion Notes List
+### The live count (AC8), every figure naming its state
+
+**761 → 770 tests** — 510 `opencmdb-bin` + 161 `opencmdb-core` + 99 `xtask`, `cargo test --workspace
+--locked --no-fail-fast` against a live `mariadb:10.11.11` on port **13405**, **5.7 s** (≈0.4 s with
+`DATABASE_URL` unset — the counts are IDENTICAL either way and the clock is the only tell, which is
+why every figure here names its store). **TEN `cargo xtask ci` gates green**, up from nine;
+`clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --check` and
+`RUSTFLAGS="-D warnings"` each read from `$?` on a file, never through a pipe.
+
+**Six tables** where there were five, plus `_sqlx_migrations`. `xtask/src/entity_id_immutable.rs` is
+the gate's own module — `main.rs` is past 1900 of the 2000-line ceiling, so a gate goes beside it,
+never inside it (`copy_vocabulary.rs`'s precedent).
+
+### What was built
+
+`0006_entity_device_and_state.sql`: `entity(id, kind, state)` and `device(id, kind)`, with the
+composite FK D21 prescribes. **No `interface` adoption and no producer** — Guy's arbitration (a).
+The adapter is `insert_entity`, `insert_device` (parent and subtype in ONE call, so half a device is
+unrepresentable) and `load_entity`, with **no production caller**. `EntityKind`, `EntityState` and
+`DeviceId` land in `opencmdb-core`.
+
+🔑 **The tenth gate, `entity-id-immutable`**, closes D15 — *"the most dangerous line of SQL in this
+project, and it looks like a routine refactor"* — which the register had recorded as held by NEITHER
+`authorship` (which guards WHO a write claims to be) nor `observed-immutable` (a different table).
+
+### The mutation pass — predictions written BEFORE any plant
+
+| id | plant | predicted | measured |
+|---|---|---|---|
+| M1 | `build.rs` loses `rerun-if-changed=migrations`, then a migration is ADDED | artefact loses it | ✅ **0 `Compiling`, 0 in the binary** — control with the guard restored: 1 `Compiling`, 2 in the binary |
+| M2 | `PRIMARY KEY (id)` → `PRIMARY KEY (id, kind)` | red 1 | ✅ RED 1 — `an_id_carries_one_kind_for_its_whole_life` |
+| M3 | `entity_state_domain` CHECK dropped | red | ✅ RED 2 |
+| M4 | `entity_kind_domain` CHECK dropped | red | ✅ RED 1 |
+| M5 | `device_entity_fk` dropped | red | ✅ RED 1 |
+| M6 | `entity_id_not_nil` dropped ALONE | **GREEN** | ✅ GREEN — `device_id_not_nil` is a second carrier |
+| M6b | BOTH nil guards dropped | red 1 | ✅ RED 1 |
+| M7 | `device` gains `hostname` — the architecture's own named specimen | red 1 | ✅ RED 1 — AC7's carrier |
+| M8 | `Sentinel => "active"` — two variants, one token | **GREEN** | 🔴 **GREEN, and that is the pass's finding** |
+| M8b | the same plant against the STRENGTHENED guard | red 1 | ✅ RED 1 |
+| M9 | the tenth gate's `keyword == "update"` neutered | red | ✅ RED 1 (clippy red too) |
+| M10 | `insert_device` drops its `insert_entity` call | red | ✅ RED 1 |
+
+**Twelve ids, twelve conforming outcomes.** M6 and M8 were predicted GREEN and are not counted as
+reds; the carriers are named per row rather than summarised, and no *"every red assertion-carried"*
+headline is claimed.
+
+🔴 **M8 IS THE PASS'S OWN FINDING.** The agreement test compared a COUNT of the schema's quoted
+tokens against `EntityState::ALL.len()` — and pointing two variants at one token left it **green**:
+six variants, six quoted tokens, one variant unreachable and one schema value nothing can read back.
+***A count is not a set.*** Both directions are compared as sets now, and M8b reds.
+
+🔴 **M6 is the second**: the nil guard has TWO carriers, so a mutation of either measures nothing —
+story 6.4b's P3, met again in a different table.
+
+### 🔴 Two findings against my own instruments
+
+- **A DDL mutation that leaves INVALID SQL measures the parser, not the guard.** Twice: deleting a
+  `CONSTRAINT` line left a trailing comma, the migration failed, and **101 tests reddened** over a
+  guard never exercised — a red indistinguishable from a real one. The driver now REFUSES when the
+  mutated migration does not apply. *The mutation driver lies*, in a form the fifteen recorded ones
+  did not have.
+- **`cargo test --workspace` on a VIRGIN database races itself.** The first DDL driver dropped and
+  recreated the schema, and a dozen tests reddened on `Dirty(2)` — `main.rs:53`'s own warning about
+  concurrent `migrate!` calls. Every red was a driver artefact. Closed by a warm-up that migrates
+  once, alone, before the suite runs. ⚠️ Both were caught because a number contradicted a
+  prediction; had the prediction been *"red"*, both would have been filed as confirmations.
+
+### 🔑 The prove-to-red the TREE produced
+
+`the_module_doc_lists_exactly_the_gates_run_ci_reports` reddened **`left: 10, right: 11`** the moment
+the tenth gate was registered and its doc row was not. It is the rare guard whose red was produced by
+the repository rather than staged by its author — and it is story 5.12's finding (a module doc
+enumerating six gates while the file implemented seven) closed by a test rather than by vigilance.
+
+### AC6, measured end to end rather than argued
+
+A store migrated to **version 5 through `sqlx`** and seeded (8 declared rows, 4 observations, 3
+links), then the current binary booted at it: **migration 6 applied in 19.9 ms, `success = 1`**, the
+8 declared rows intact, `entity` and `device` **empty** — no producer, as the criterion demands.
+
+🔑 **And option (a) makes AC6's hazard structurally unreachable for THIS migration**: `0006` issues
+two `CREATE TABLE`s and alters nothing that exists, so there is no row it can trip on and no
+`success = 0` to recover from. *That is a property of the arbitration, not of the SQL* — option (b)
+or (c) would have had to earn it.
 
 ### File List
+
+- `crates/opencmdb-bin/migrations/0006_entity_device_and_state.sql` (new)
+- `crates/opencmdb-bin/build.rs` (modified — `rerun-if-changed=migrations`)
+- `crates/opencmdb-bin/src/repo.rs` (modified — the adapter and its tests)
+- `crates/opencmdb-core/src/observation/mod.rs` (modified — `DeviceId`, `EntityKind`, `EntityState`)
+- `xtask/src/entity_id_immutable.rs` (new — the tenth gate)
+- `xtask/src/main.rs` (modified — the gate's registration, its module-doc row, its probe tests)
+- `xtask/probes/entity-id/e01…e10` (new — ten located probe verdicts)
+- `xtask/src/mutate.rs` (modified — three stale *"nine gates"* sentences)
+- `README.md`, `CLAUDE.md`, `docs/project-context.md` (modified — nine gates → ten)
+- `_bmad-output/implementation-artifacts/deferred-work.md` (modified — thirteen rows)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (modified — status)
 
 ## Change Log
 
 | Date | Change |
 |---|---|
+| 2026-08-28 | **IMPLEMENTED.** `0006_entity_device_and_state.sql` ships `entity(id, kind, state)` and `device(id, kind)` with D21's composite FK, **no `interface` adoption and no producer** (Guy's option (a)); the adapter is `insert_entity` / `insert_device` / `load_entity` with no production caller; `DeviceId`, `EntityKind` and `EntityState` land in `opencmdb-core`. **761 → 770 tests** (510 + 161 + 99) against a live `mariadb:10.11.11`, **TEN `cargo xtask ci` gates**, clippy `--all-targets`, fmt, `RUSTFLAGS="-D warnings"`. 🔑 **The tenth gate, `entity-id-immutable`, closes D15** — *"the most dangerous line of SQL in this project, and it looks like a routine refactor"* — which the register recorded as held by NEITHER `authorship` nor `observed-immutable`; ten located probes, driven END TO END from the first commit. ⚠️ It is **BROADER than D15 by decision** (any `UPDATE` of the table), because a matcher that must parse a `SET` clause is wrong in both directions; probe `e10` pins that over-breadth as a red so the decision is measured, not merely stated. 🔑 **THE PROVE-TO-RED THE TREE PRODUCED**: `the_module_doc_lists_exactly_the_gates_run_ci_reports` reddened `left: 10, right: 11` the moment the gate was registered and its doc row was not — story 5.12's *"six enumerated while seven implemented"* closed by a test rather than by vigilance. **Twelve mutation ids, twelve conforming outcomes**, two predicted GREEN and named as such. 🔴 **M8 IS THE PASS'S OWN FINDING**: the state-domain agreement test compared a COUNT, so pointing two variants at one token left it green — six variants, six quoted tokens, one variant unreachable and one schema value nothing can read back. ***A count is not a set***; both directions are sets now and M8b reds. 🔴 **M6 is the second**: the nil guard has TWO carriers, so a mutation of either measures nothing (story 6.4b's P3, one table over). 🔴 **AND TWO FINDINGS AGAINST MY OWN INSTRUMENTS**: a DDL mutation that leaves **invalid SQL** measures the parser, not the guard — twice, once reddening **101 tests** over a guard never exercised — and `cargo test` on a **virgin** database races itself on concurrent `migrate!` calls (`Dirty(2)`, `main.rs:53`'s own warning). Both caught only because a number contradicted a prediction. ⚠️ Also: a fixture that truncates a SHARED table cannot coexist with a concurrent suite (`ERROR 1451`, twice in one run) — each test now owns distinct ids. ✅ **AC6 measured END TO END**: a version-5 store with 8 declared rows migrated through the real binary in **19.9 ms**, `success = 1`, the rows intact, `entity` and `device` empty. 🔑 And option (a) makes AC6's sticky-failure hazard **structurally unreachable for this migration** — two `CREATE TABLE`s alter nothing that exists, so there is no row to trip on: *a property of the arbitration, not of the SQL.* ⚠️ **Thirteen register rows**, including three incoming ones answered — D15 DISCHARGED, the invisible entity and the one-value-per-`attr_key` model **RE-OWNED with the reason**, since option (a) leaves `declared_attribute` outside the supertype and *the documented subject is still in no entity model*. ⚠️ Two gate holes recorded and NOT fixed here: `ddl-collation` passes four of five planted violations, and **`file-size` is blind to `repo.rs`** (181 code lines read where ~1700 are). |
 | 2026-08-28 | ✅ **BOTH ARBITRATIONS TAKEN — the story is buildable.** **§0c: OPTION (a)** (Guy) — `entity` and `device` created, **`device` wired as a subtype from its first day**, **`interface` stays outside the supertype** and its adoption is re-owned BY NAME to story 6.12. 🔑 **The argument is not (b)'s cost, it is that (b) SAVES NOTHING**: a device cannot be a placement subject, so story 6.12 must widen `identity_link` whatever is chosen here — and 6.12 *is* the resolver, which is exactly where (b)'s producer would live. Adopting `interface`, widening `identity_link` and adding the producer are **one gesture**; splitting them operates on the resolver twice. ⚠️ **Cost accepted and registered, not glossed: for seven stories the supertype constrains nothing about interfaces** — `deferred-work.md:2222`'s own objection — accepted because `device` is born correct and the asymmetry is honest. **§0d: `entity.state`, the architecture's SIX values, `VARCHAR(20) … ascii_bin` + `CHECK (… IN (…))`** (mine, delegated by Guy — recorded as mine so it can be reversed at the right cost). The table is `entity` because an interface **is** an entity; six because shipping two buys an ALTER at boot on a published product for a widening that costs 168 ms today — ⚠️ **a divergence from `epics.md:1826`, registered**; the spelling because an `ENUM` lands `utf8mb4_general_ci`, accepts `'ACTIVE'`, is invisible to the gate and under `sql_mode=''` stores the empty string. ⚠️ **Consequence accepted: the column is INERT until 6.12**, `entity` holding no interface row — which is what *"the domain and no behaviour"* means. ⚠️ **`mac_kind` re-owned to story 6.18**: the scoping invariant belongs with the transition it scopes. |
 | 2026-08-28 | **VALIDATED by two fresh-context layers, and the corrections are applied in place.** 🔴 **The story's own §0c recommendation is WITHDRAWN, refuted on the point that fed it**: the validation built all three options as real migrations, applied them to a populated store through `sqlx::migrate!` at boot and pressed the live gesture against each — **option (b) needs a producer TOO, and a heavier one than (c)'s** (65 tests red; a backfill repairs what exists and nothing repairs what the resolver writes on the next scan; the minimal producer takes it 65 → 1 and lives in the resolver's HOT PATH). **Only option (a) satisfies the epic's *"no producer"*.** 🔴 **(c) breaks the BOOT, unrecoverably** — `ERROR 1452`, `success = 0`, and repairing the data does not clear it; `0003`'s *"production is unaffected: 0002 is unreleased"* is the sentence this story cannot write, `v0.2.0` being published. 🔴 **A NEW MIGRATION FILE IS INVISIBLE TO `cargo build`** — `build.rs` tracks `locales/app.yml` alone, so writing `0006`, building, booting and looking yields a binary without it **and a log saying *"migrations applied"***; modifying an existing migration rebuilds, adding one does not. 🔴 **§0b's premise was wrong three ways**: the demo seed carries ONE entity id not three, it is **not in the published image at all**, and **`interface` is EMPTY on every real deployment** (measured on a boot: 1 observation, **0 interfaces**, 1 abstained link) because the shipped connector emits no MAC. 🔴 **§0d's "contested owner" DISSOLVES** — FR38b is Epic 6's and **story 6.18 owns its behaviour**, while `deferred-work.md:2226`'s *"lifecycle epic (FR40-42)"* names **Epic 21** and is a misattribution — and **a harder question replaces it: AC3 names no table**, three documents name three under two domains, the epic's two values contradict `architecture.md:1502`'s **six**, and `mac_kind`, on which `dormant`'s scope depends, **exists in no table and no `.rs`**. 🔴 **AC4's gate does not hold its property**: four of five planted violations were applied and read back `utf8mb4_general_ci`, `_BIN` anywhere on a line satisfying the matcher — narrowed to a TRIPWIRE on story 5.12's precedent. 🔴 **AC1's composite key does NOT carry the disjunction**: under `PRIMARY KEY (id, kind)` one id lives under both kinds at once; the PK on `id` alone refuses it. 🔴 **Three register rows name THIS STORY as owner and the first draft carried none** — D15's *"`entity_id` is NEVER updated"*, which the architecture calls *"the most dangerous line of SQL in this project"* and which **no gate holds**; the invisible entity; the one-value-per-`attr_key` model. New **AC9** answers them. ✅ **AC7's premise was corrected in the story's favour**: `device`'s absence is BOUNDED, so story 5.12's rule does not govern it and a working carrier was built and proved to red on `hostname`. ⚠️ Also corrected: the last migration is story **6.2**'s, not 6.3's; `OPEN_END` is the MariaDB spelling and a CHECK written from the architecture's literal never matches; **the `file-size` gate is BLIND to `repo.rs`** (181 code lines read where ~1620 are), which is where AC5's adapter goes; `identity_link` has two FKs; `SHOW TABLES` returns six. ⚠️ **BOTH ARBITRATIONS REMAIN OPEN AND ARE GUY'S.** |
 | 2026-08-28 | Story created and CONTEXTED against a migrated `mariadb:10.11.11`, not against the DDL text. 🔴 **ONE ARBITRATION IS OPEN AND THE STORY CANNOT BE BUILT WITHOUT IT**: the epic says *"no producer: nothing writes a device yet"*, and **the product has been minting entity ids since story 6.2** — `document.rs:124` mints a v7 UUID per documented subject and writes it into `declared_attribute`, which has **no foreign key**, because **there is no `entity` table**. So the supertype meets rows that already exist, in the demo image, in CI, and in any deployment where the amber control has been pressed. Three options are costed in §0c; the recommendation is create the supertype **and** make `interface` its first real subtype with a backfill, leaving `declared_attribute` alone with the divergence registered — ⚠️ **which means the migration WRITES, and *"schema only"* does not describe that.** Option (c), an FK on `declared_attribute`, is refused for now as *a producer wearing a constraint's clothes*, and it raises a question no document answers: **what `kind` is a documented subject?** ⚠️ **The `state` column's owner is contested** — `epics.md` puts it here, `deferred-work.md:2226` assigns it to the lifecycle epic; both are honoured by shipping the DOMAIN and no behaviour, and **FR38b's startup refusal** (`prd.md:957`, *"a startup failure naming both settings"*) must be neither implemented nor silently dropped. ⚠️ Measured: five tables, none of them `entity`; three distinct entity ids in `docker/seed-example.sql` alone; `sqlx::migrate!` runs on **every boot** of a published `v0.2.0`. 🔑 Story 5.9's warning is carried forward: **its M3 came back GREEN** because the adapter could not emit an incoherent pair, so every CHECK the adapter cannot violate is measured by raw SQL or by nothing. ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before `dev-story`. |

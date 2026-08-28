@@ -39,21 +39,38 @@
 //!     Its denylist is **per locale**: `merge` is retired in English while the French « Merger »
 //!     is the BINDING translation of `document`, and a flat list cannot say that. ⚠️ Scoped to
 //!     that one file on a MEASURED refusal, not a preference — see [`copy_vocabulary`].
+//!   - **entity-id-immutable** (D15, story 6.5): no code path UPDATEs `declared_attribute`.
+//!     A declared attribute is *"a human's testimony about a referent"*, so rewriting its
+//!     `entity_id` is *"not moving data, it is falsification"* — and `architecture.md:1094`
+//!     calls that statement **the most dangerous line of SQL in this project, and it looks
+//!     like a routine refactor**. ⚠️ It was held by NEITHER `authorship` (which guards WHO a
+//!     write claims to be) nor `observed-immutable` (a different table), and the register said
+//!     so before this story was written. ⚠️ **BROADER than D15 by decision** — it refuses any
+//!     `UPDATE` of the table, not only one that names `entity_id`, because a matcher that must
+//!     parse a `SET` clause is a matcher that will be wrong in both directions; the widening
+//!     costs nothing on the committed tree, measured. A TRIPWIRE, not a barrier — see
+//!     [`entity_id_immutable`].
 //!   - **views-hash** (informational): whether `architecture-views.md`'s `sourceSha256`
 //!     still matches `architecture.md`. A mismatch means the views file is stale and
 //!     should be regenerated at the next milestone — reported, never a hard failure.
 //!
-//! ⚠️ **NINE gates plus views-hash.** This list is the file's account of itself, and story
+//! ⚠️ **TEN gates plus views-hash.** This list is the file's account of itself, and story
 //! 5.12's code review caught it enumerating SIX while the file implemented seven. Adding a
 //! gate below without adding it here is the same defect again — which is why the row above and
 //! the call in [`run_ci`] were written in one edit, and why `xtask` carries a test that counts
 //! the two against each other rather than trusting whoever comes next to remember.
+//!
+//! 🔑 **And that test EARNED itself at story 6.5**: the tenth gate was registered, the doc was
+//! not, and `the_module_doc_lists_exactly_the_gates_run_ci_reports` reddened `left: 10, right:
+//! 11` before a human noticed. It is the rare guard whose prove-to-red was produced by the tree
+//! rather than staged by its author.
 
 // Documentation is a project rule (CLAUDE.md): every public item carries a doc comment.
 // `warn` for now, graduating to `-D missing_docs` once the tree is clean.
 #![deny(missing_docs)]
 
 mod copy_vocabulary;
+mod entity_id_immutable;
 /// The mutation driver — `cargo xtask mutate` (story 6.4b).
 mod mutate;
 mod observed_immutable;
@@ -229,6 +246,10 @@ fn run_ci() -> Result<bool> {
     let (g8, m8) = copy_vocabulary::gate_copy_vocabulary(&root)?;
     report("copy-vocabulary", g8, &m8);
     ok &= g8;
+
+    let (g9, m9) = entity_id_immutable::gate_entity_id_immutable(&root)?;
+    report("entity-id-immutable", g9, &m9);
+    ok &= g9;
 
     let m3 = check_views_hash(&root)?;
     println!("  ℹ  {:<18} {m3}", "views-hash");
@@ -3651,6 +3672,114 @@ opencmdb-core v0.1.0 (/w/crates/opencmdb-core)
         assert_eq!(
             on_disk, pinned,
             "the corpus and the verdict table have drifted"
+        );
+    }
+
+    /// The pinned verdicts of the `entity-id-immutable` corpus — **located**, never boolean.
+    ///
+    /// `Some(line)` is *"this must red, and it must name THAT line"*; `None` is *"this must stay
+    /// green"*. Story 5.12 paid for the distinction: its authorship corpus pinned a BOOLEAN, so a
+    /// broken offset→line map sent every reader to the wrong place while all 29 probes still
+    /// passed. **A pinned boolean proves THAT a gate fires and never WHERE.**
+    const ENTITY_ID_PROBES: [(&str, Option<usize>); 10] = [
+        ("e01_plain_update.rs", Some(2)),
+        ("e02_plain_update.sql", Some(2)),
+        ("e03_split_lines.sql", Some(2)),
+        ("e04_backtick_qualified.sql", Some(1)),
+        // Green by decision, each for its own reason — and the reason is what the row is for.
+        ("e05_line_comment.rs", None), // a note about the rule is not a breach of it
+        ("e06_legitimate_insert.rs", None), // the sanctioned write; `authorship` owns it
+        ("e07_legitimate_select.rs", None), // reading is not falsifying
+        ("e08_create_table.sql", None), // the DDL that creates the column is not an update of it
+        ("e09_update_another_table.rs", None), // another table is another gate's business
+        // 🔴 RED although it sets `attr_value`, not `entity_id` — this gate is BROADER than D15 by
+        // decision, and this row is where that decision is measured rather than merely stated. A
+        // matcher that had to parse the SET clause to tell the two apart is a matcher that would be
+        // wrong in both directions; the widening costs nothing today, measured (no `UPDATE
+        // declared_attribute` exists anywhere), and the day one is legitimate, that story reopens
+        // this gate deliberately.
+        ("e10_update_after_insert.rs", Some(2)),
+    ];
+
+    /// 🔴 Every entity-id probe, driven through `gate_entity_id_immutable` **END TO END**.
+    ///
+    /// Not through the helper. Story 5.12 measured the whole BODY of its own gate — the walk, the
+    /// roots, the extensions, the fail-closed arms — deletable with the entire xtask suite green,
+    /// because every test attacked the helper directly. This gate has its end-to-end carrier from
+    /// its first commit rather than from its code review.
+    #[test]
+    fn every_entity_id_probe_gets_the_verdict_it_is_pinned_to() {
+        let corpus = workspace_root().join("xtask/probes/entity-id");
+        let root = scratch("entity-id-probes");
+        let crates = root.join("crates");
+        std::fs::create_dir_all(&crates).expect("crates dir");
+        std::fs::create_dir_all(root.join("docker")).expect("docker dir");
+        std::fs::create_dir_all(root.join("a11y")).expect("a11y dir");
+        std::fs::write(crates.join("innocent.rs"), "pub fn f() {}\n").expect("write");
+
+        let mut wrong = Vec::new();
+
+        for (name, must_red) in ENTITY_ID_PROBES {
+            let ext = if name.ends_with(".sql") { "sql" } else { "rs" };
+            let planted = crates.join(format!("planted.{ext}"));
+            let body = std::fs::read_to_string(corpus.join(name))
+                .unwrap_or_else(|e| panic!("reading probe {name}: {e}"));
+            std::fs::write(&planted, &body).expect("plant");
+
+            let (green, msg) =
+                entity_id_immutable::gate_entity_id_immutable(&root).expect("the gate runs");
+            match must_red {
+                Some(line) => {
+                    if green {
+                        wrong.push(format!("{name}: PASSES the gate and must not"));
+                    } else if !msg.contains(&format!("planted.{ext}:{line}:")) {
+                        wrong.push(format!(
+                            "{name}: reds, but not at the line it must name \
+                             (`planted.{ext}:{line}:`) — a gate that sends the reader to the wrong \
+                             line spends the trust it just earned — {msg}"
+                        ));
+                    }
+                }
+                None => {
+                    if !green {
+                        wrong.push(format!("{name}: REDS and must not — {msg}"));
+                    }
+                }
+            }
+            std::fs::remove_file(&planted).expect("unplant");
+        }
+
+        assert!(
+            wrong.is_empty(),
+            "{} probe(s) disagree with their pinned verdict:\n  {}",
+            wrong.len(),
+            wrong.join("\n  ")
+        );
+    }
+
+    /// The corpus and the verdict table cannot drift apart.
+    ///
+    /// A probe added to the directory and forgotten in the table would be a file nothing runs, and
+    /// a row naming a file that no longer exists would panic in the loop above — this asserts the
+    /// first, which is the silent half.
+    #[test]
+    fn every_entity_id_probe_on_disk_is_pinned() {
+        let corpus = workspace_root().join("xtask/probes/entity-id");
+        let mut on_disk: Vec<String> = std::fs::read_dir(&corpus)
+            .expect("the corpus directory exists")
+            .filter_map(std::result::Result::ok)
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        on_disk.sort();
+        let mut pinned: Vec<String> = ENTITY_ID_PROBES
+            .iter()
+            .map(|(n, _)| (*n).to_string())
+            .collect();
+        pinned.sort();
+        assert_eq!(
+            on_disk, pinned,
+            "the entity-id corpus and its verdict table have drifted — a probe nobody pins is a \
+             probe nobody runs"
         );
     }
 
