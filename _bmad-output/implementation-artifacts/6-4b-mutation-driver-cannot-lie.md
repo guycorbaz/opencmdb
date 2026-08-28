@@ -1,6 +1,6 @@
 # Story 6.4b: The mutation driver cannot lie
 
-Status: **review** — implemented 2026-08-26, CODE-REVIEWED by three isolated layers and REPAIRED the same day; contexted 2026-08-26, VALIDATED the same day by two fresh-context layers
+Status: **done** — PR #129 squash-merged 2026-08-28 as `8c5ecb3`, after a CI run green **on the head commit itself** (`33153979100`, read from `gh run view` and not from the watcher alone). ⚠️ The PR sat five days: from 2026-08-26 GitHub created **no workflow run at all** across five pushes, a `reopened` and a `synchronize`, with nine checks negative and **no cause ever named** — two runs then appeared on their own the same evening, both green. Implemented 2026-08-26, CODE-REVIEWED by three isolated layers and REPAIRED the same day; contexted 2026-08-26, VALIDATED the same day by two fresh-context layers
 (which replaced most of the story), **arbitration taken (§0h, Guy, 2026-08-26): OPTION 2**.
 
 ⚠️ **This story is in NO epic file.** It was created by Epic 6b's retrospective (decision 1,
@@ -571,7 +571,9 @@ subject). Nine `cargo xtask ci` gates green; `clippy --workspace --all-targets -
 `cargo fmt --check`, and **`RUSTFLAGS="-D warnings" cargo test`** — the CI half local clippy cannot
 see — each read from `$?`.
 
-`xtask/src/mutate.rs` is **883** code lines after the repair (592 at implementation); `xtask/src/main.rs` is unchanged but for the module
+`xtask/src/mutate.rs` is **919** code lines after the repair (592 at implementation) — ⚠️ *883 was
+written here in flight and corrected at the record PR of 2026-08-28, recounted by the `file-size`
+gate's own rule: everything before the first top-level `#[cfg(test)]`, which sits at line 920;* `xtask/src/main.rs` is unchanged but for the module
 line and the dispatch arm, and the `file-size` gate now walks **41** files.
 
 ### What was built, and the one measurement that decided its shape
@@ -587,9 +589,14 @@ not subsume one another: a dead binding in a test module reds `clippy --all-targ
 migration losing its binary collation reds `cargo xtask ci` alone with 741 tests green. `Outcome`
 therefore names WHICH reddened rather than printing one number.
 
-🔑 **The gates run IN-PROCESS.** This binary *is* xtask, so `run_ci` reads the mutated tree
-directly — no nested cargo fighting the outer run for `target/`, which the validation measured
-(5.98 s, and it recompiles).
+🔴 **The gates SHELL OUT, and this paragraph said the opposite until the record PR of 2026-08-28.**
+They ran in-process on the reasoning below — this binary *is* xtask, so `run_ci` would read the
+mutated tree with no nested cargo fighting the outer run for `target/` (measured by the validation
+at 5.98 s, and it recompiles). **The reasoning was wrong**: in-process, `run_ci` is *this process's
+own text, built BEFORE the mutation*, while clippy and `cargo test` rebuild xtask with it. The
+review measured both directions and Guy arbitrated (1a) that they shell out —
+`cargo run -q -p xtask --locked -- ci`. ⚠️ *A sentence stating the design it replaced, left standing
+in the section that describes what was built.*
 
 ### The driver's own prove-to-red — predictions written BEFORE any plant
 
@@ -626,20 +633,16 @@ CORRECT and its message could not name the cause, so the driver now prints the *
 read** whenever it refuses. ⚠️ That is diagnosis and not a count: AC3 forbids reading a NUMBER
 through a bounded window, never showing a human where to look.
 
-🔑 **And the driver was driven on the REAL workspace**, prediction written first:
+🔑 **And the driver was driven on the REAL workspace**, prediction written first — the captured
+output is under *The captured run, verbatim*, above.
 
-```
-$ ./target/debug/xtask mutate --file crates/opencmdb-bin/src/page.rs \
-    --anchor "const MAX_DOCUMENTED: usize = 99;" \
-    --replacement "const MAX_DOCUMENTED: usize = 1;" --expect red:1
-store: reachable at 127.0.0.1:13405
-$ cargo clippy --workspace --all-targets --locked -- -D warnings
-$ cargo test --workspace --locked --no-fail-fast
-$ cargo xtask ci  (in-process)          ✅ all gates green
-PREDICTED: Red(Some(1))
-MEASURED:  Red { tests: 1, clippy: false, gates: false }
-✅ the outcome matches the prediction      exit 0, and `git status` clean afterwards
-```
+⚠️ **A PARAPHRASE PRESENTED AS VERBATIM STOOD HERE UNTIL THE RECORD PR of 2026-08-28.** The review
+found it and said it had been *"replaced with the captured output below"*; the replacement was
+written and **the original was never deleted**, so both stood, one of them printing
+`$ cargo xtask ci  (in-process)` and `✅ all gates green` on a single line — which the review had
+measured the code cannot print, and which the same day's arbitration (1a) made false twice over.
+*A correction that adds the true text without removing the false one leaves the record carrying
+both.*
 
 ### What it cannot measure (AC10), stated in the module doc, in `--help`, and here
 
@@ -655,10 +658,15 @@ covers the front half is a driver whose green means two different things. What m
 defensible is only that it is SAID — the validation's own sentence is *"silence here is what
 produces the green"*.
 
-⚠️ **Two more residuals.** An interrupted run leaves the tree mutated and the snapshot in memory:
-the restore runs after the carriers return, so a SIGINT during the several-minute cargo run loses
-it — the file is recoverable from git, which is why this is stated rather than engineered. And it
-is a **tripwire, never a barrier** (story 5.12's narrowing): nothing stops an author writing a
+⚠️ **One more residual, and this paragraph was falsified by its own file until the record PR of
+2026-08-28.** An interrupted run still leaves the tree mutated — the restore runs after the carriers
+return, so a SIGINT during the several-minute cargo run does not reach it — but **the snapshot is
+NOT in memory and the file is NOT *"recoverable from git"***: that deferral was CLOSED in this same
+commit (see *Deferred*), the snapshot goes to DISK at `target/xtask-mutate/` before the mutation,
+and the next run REFUSES with exit **2** until a leftover is dealt with, naming `git checkout` as
+the thing NOT to do. 🔑 *"Recoverable from git" is exactly the sentence the closed deferral calls
+false on the dirty tree AC7 declares normal* — and it survived two sections below the closure. And
+the driver is a **tripwire, never a barrier** (story 5.12's narrowing): nothing stops an author writing a
 shell line instead, and fifteen defects say they will.
 
 
