@@ -4766,7 +4766,24 @@ development_status:
   #   ⚠️ FR38b's startup refusal (prd.md:957) must be NEITHER implemented NOR silently dropped, and
   #   its asymmetry is why `dormant` is not a general lifecycle: only LOCALLY-ADMINISTERED addresses
   #   go dormant; a server off for six months is ABSENT, not dormant.
-  #   🔴 BOTH ARBITRATIONS REMAIN OPEN AND ARE GUY'S.
+  #   ✅ BOTH ARBITRATIONS TAKEN 2026-08-28 -- the story is BUILDABLE.
+  #   §0c: OPTION (a) (Guy). `entity` + `device` created, `device` wired as a subtype from day one,
+  #   `interface` STAYS OUTSIDE the supertype and its adoption is re-owned BY NAME to story 6.12.
+  #   🔑 The argument is not (b)'s cost, it is that (b) SAVES NOTHING: a device cannot be a
+  #   placement subject, so 6.12 must widen identity_link whatever is chosen here -- and 6.12 IS
+  #   the resolver, exactly where (b)'s producer would live. Adopting `interface`, widening
+  #   identity_link and adding the producer are ONE GESTURE; splitting them operates twice.
+  #   ⚠️ COST ACCEPTED AND REGISTERED, NOT GLOSSED: for seven stories the supertype constrains
+  #   nothing about interfaces -- deferred-work.md:2222's own objection -- accepted because
+  #   `device` is born correct and the asymmetry is honest (new table created under the supertype,
+  #   older table ADOPTED when something needs it).
+  #   §0d: `entity.state`, the ARCHITECTURE'S SIX VALUES, VARCHAR(20) ascii_bin + CHECK (mine,
+  #   delegated by Guy -- recorded as MINE so it can be reversed at the right cost). The table is
+  #   `entity` because an interface IS an entity; six because shipping two buys an ALTER at boot on
+  #   a published product for a widening that costs 168 ms today -- ⚠️ A DIVERGENCE FROM
+  #   epics.md:1826, REGISTERED. ⚠️ The column is INERT until 6.12, `entity` holding no interface
+  #   row -- which is what "the domain and no behaviour" means. ⚠️ `mac_kind` re-owned to story
+  #   6.18: the scoping invariant belongs with the transition it scopes.
   #   🔑 Story 5.9's warning carried forward: ITS M3 CAME BACK GREEN because the adapter could not
   #   emit an incoherent pair -- every CHECK the adapter cannot violate is measured by raw SQL or
   #   by nothing. ⚠️ And the whole story is invisible without a store: DATABASE_URL unset locally,
