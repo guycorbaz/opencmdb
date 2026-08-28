@@ -1,5 +1,5 @@
 # generated: 2026-07-21
-# last_updated: 2026-08-11   (this commented twin had read 2026-08-01 while the live
+# last_updated: 2026-08-26   (this commented twin had read 2026-08-01 while the live
 #                             `last_updated:` field below said 2026-08-07 — two representations of
 #                             one date, one of them stale. Synced 2026-08-10; keep them in step.)
 # project: opencmdb
@@ -4592,7 +4592,50 @@ development_status:
   # this project carries, and 6.4 settles it. ⚠️ Its own mutation pass therefore runs on the
   # UNREPAIRED driver — accepted, because the known defect is caught by writing the prediction
   # first, which Epic 6b measured seven times. The driver lands immediately after.
-  6-4b-mutation-driver-cannot-lie: backlog
+  6-4b-mutation-driver-cannot-lie: review  # CODE-REVIEWED (three layers) + REPAIRED 2026-08-26:
+  #   2 arbitrations by Guy -- the gates SHELL OUT (they read this process's pre-mutation text) and
+  #   `--baseline` is opt-in. 🔴 The mutating layer MADE THE DRIVER LIE four times: a test printing
+  #   `error[E0308]` read as a compile failure (✅ exit 0 under --expect compile-fail); a dead port
+  #   reported "reachable"; a verdict on a file in /tmp; and nothing printed about what was applied.
+  #   🔴 Six plants destroyed a named criterion with the suite GREEN -- `restore()` deleted among
+  #   them -- because `from_args` had no test and the end-to-end was gated behind an env var set
+  #   nowhere in .github/. 🔴 P6 REFUTED: `fs::write` already advances the mtime.
+  #   741 -> 761 tests (xtask 77 -> 97). IMPLEMENTED 2026-08-26: `cargo xtask mutate`, the
+  #   project's SECOND subcommand. 741 -> 756 tests (xtask 77 -> 92). Eight plants, predictions
+  #   written first: seven red as predicted, and 🔴 **P3 came back GREEN** -- the no-op property
+  #   has TWO carriers, so neither is load-bearing alone (P3b measures it).
+  #   ⚠️ The BROWSER gates are NOT driven and AC10 says so with the manual recipe: a mutation to
+  #   assets/ or templates/ is invisible here (measured: an arrow inverted in app.js leaves 741
+  #   tests and nine gates green while kbd-probe reports nine failures).
+  #   ✅ ARBITRATION (Guy, 2026-08-26): OPTION 2 --
+  #   `xtask mutate` over ONE mutation on the command line. Refused: a committed spec corpus (its
+  #   format would be decided on a world model three measurements refute) and a helper library (a
+  #   script can decline to call it -- which is how fifteen defects happened).
+  #   ⚠️ SCOPE IS MINE, NOT GUY'S, and reversible: THREE cargo-side carriers, and the two BROWSER
+  #   gates NOT driven -- they need a rebuild-boot-seed cycle, are not idempotent, and answer
+  #   0/1/2. AC10 states that limit in writing with the manual recipe.
+  #   CONTEXTED 2026-08-26. 🔴 THERE IS NO DRIVER
+  #   TO FIX -- measured: `git ls-files | grep mutat` is EMPTY, and the only `mutate.sh` in the
+  #   tree sits in an abandoned agent worktree. Every pass this project ran was driven by a
+  #   throw-away scratchpad script, which is WHY the same defect recurs: there is no artefact for
+  #   a fix to land in. The action item's verb is wrong; this story BUILDS.
+  #   🔑 FIFTEEN recorded defects tabled with the criterion each demands (the contexting table had
+  #   twelve and two were misdescribed). ⚠️ "All caught by a contradicted prediction" is the
+  #   RETROSPECTIVE's sentence about Epic 6b's seven -- one was named by the compiler and three by
+  #   their damage, after the fact.
+  #   ✅ VALIDATED 2026-08-26 by two fresh-context layers, and the validation REPLACED most of the
+  #   story. 🔴 §0c was INVERTED: the compiler-error clause has an incident (`5-14b:665`), the
+  #   mandate carries its remedy literally (`^error\[E[0-9]+\]`), and the defect was LIVE in story
+  #   6.4's own driver. 🔴 The gap-hunt BUILT it and found EIGHT holes, the sharpest being that
+  #   `cargo test --workspace` STOPS at the first failing crate: 8 red by default, 17 with
+  #   `--no-fail-fast` -- so every recorded "N red" in this project where opencmdb-bin reddened is
+  #   a LOWER BOUND. 🔴 AC7's dirty-tree refusal REMOVED: all four destructions happened on dirty
+  #   trees because that is when a pass runs, and the snapshot is what makes it safe.
+  #   TWELVE criteria where there were ten.
+  #   ⚠️ `xtask/src/main.rs` is at 1939 of 2000 -- 61 lines of headroom, so the driver goes in its
+  #   OWN module; and `CLAUDE.md`'s "some other xtask subcommands are still stubs" is FALSE.
+  #   ⚠️ ONE ARBITRATION OPEN (§0f): spec-file corpus / one-mutation command / library of helpers.
+  #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
   # ✅ Then the mobile story, BEFORE the engine work. Guy's retrospective arbitration gave the UX
   # spec priority over the reference mock: breakpoints, targets >= 44 px, density revisited,
   # taking NFR24 and the ZERO `@media` rules together rather than twice. ⚠️ It sits here because
