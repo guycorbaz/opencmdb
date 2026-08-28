@@ -4726,20 +4726,47 @@ development_status:
   #   in the demo image (3 distinct ids in docker/seed-example.sql), in CI, and in any deployment
   #   where the amber control has been pressed -- and `sqlx::migrate!` runs on EVERY boot of a
   #   published v0.2.0 (`main.rs:530`).
-  #   Three options costed in the story's §0c. RECOMMENDATION: create the supertype AND make
-  #   `interface` its first real subtype with a backfill, leaving `declared_attribute` alone with
-  #   the divergence registered by name. ⚠️ That means THE MIGRATION WRITES, and "schema only" does
-  #   not describe that. Option (c) -- an FK on `declared_attribute` -- is refused for now as a
-  #   PRODUCER WEARING A CONSTRAINT'S CLOTHES, and it raises a question no document answers: what
-  #   `kind` is a documented subject? (Guy's taxonomy of 2026-08-12 says case three is "unknown ->
-  #   the operator CREATES THE ENTITY", but that entity is not yet a device, and device creation is
-  #   story 6.12's.)
-  #   ⚠️ THE `state` COLUMN'S OWNER IS CONTESTED: epics.md:1824 puts it here, deferred-work.md:2226
-  #   assigns it to the lifecycle epic (FR40-42). Both are honoured by shipping the DOMAIN and no
-  #   behaviour -- and FR38b's startup refusal (prd.md:957, "a startup failure naming both
-  #   settings") must be NEITHER implemented NOR silently dropped. FR38b's asymmetry is why
-  #   `dormant` is not a general lifecycle: only LOCALLY-ADMINISTERED addresses go dormant; a
-  #   server off for six months is ABSENT, not dormant.
+  #   ✅ VALIDATED 2026-08-28 by two fresh-context layers, each with its own worktree and store, and
+  #   the corrections are APPLIED IN PLACE. 🔴 THE STORY'S OWN RECOMMENDATION IS WITHDRAWN, refuted
+  #   on the point that fed it. All three options were BUILT as real migrations, applied to a
+  #   populated store through sqlx::migrate! at boot, and pressed with the live gesture:
+  #     (a) 761 pass · 201 · +37 ms at 200 003 interfaces · no producer
+  #     (b) 65 FAIL · 201 · +2.045 s · NEEDS A PRODUCER
+  #     (c) 16 FAIL · 500 · breaks the BOOT, unrecoverably
+  #   🔑 A backfill repairs the rows that exist and NOTHING repairs the rows the resolver writes on
+  #   the NEXT SCAN. The minimal producer takes 65 -> 1 and lives in the resolver's HOT PATH, on
+  #   every scan, where (c)'s would live in a handler pressed by hand. SO ONLY OPTION (a) SATISFIES
+  #   THE EPIC'S "no producer". 🔴 And (c) does not merely break the gesture: ERROR 1452, then
+  #   `success = 0` in _sqlx_migrations, and REPAIRING THE DATA DOES NOT CLEAR IT -- the deployment
+  #   stays down. 0003's "production is unaffected: 0002 is unreleased" is the sentence 6.5 cannot
+  #   write, v0.2.0 being published. The `kind` of a documented subject still has NO answer.
+  #   🔴 A NEW MIGRATION FILE IS INVISIBLE TO `cargo build`: build.rs tracks locales/app.yml alone,
+  #   so writing 0006, building, booting and looking yields a binary WITHOUT it and a log saying
+  #   "migrations applied". Modifying an existing migration rebuilds; ADDING one does not.
+  #   🔴 §0b's premise was wrong three ways: the demo seed carries ONE entity id not three, it is
+  #   NOT IN THE PUBLISHED IMAGE at all, and INTERFACE IS EMPTY ON EVERY REAL DEPLOYMENT (measured:
+  #   1 observation, 0 interfaces, 1 abstained link) because the shipped connector emits no MAC.
+  #   🔴 THE `state` OWNER QUESTION DISSOLVES and a harder one replaces it: FR38b is Epic 6's and
+  #   STORY 6.18 owns its behaviour, while deferred-work.md:2226's "lifecycle epic (FR40-42)" names
+  #   EPIC 21 and is a misattribution. What is open is WHICH TABLE -- three documents name three,
+  #   under two domains -- and TWO VALUES OR SIX (architecture.md:1502 lists six; the epic's two
+  #   refuse a value the architecture names, measured ERROR 4025). And `mac_kind`, on which
+  #   `dormant`'s scope depends, EXISTS IN NO TABLE AND NO .rs FILE.
+  #   🔴 AC4's gate does not hold its property: 4 of 5 planted violations were applied and read back
+  #   utf8mb4_general_ci -- `_BIN` anywhere on a line satisfies the matcher. Narrowed to a TRIPWIRE.
+  #   🔴 AC1's composite key does NOT carry the disjunction: under PRIMARY KEY (id, kind) one id
+  #   lives under BOTH kinds at once; the PK on `id` alone refuses it.
+  #   🔴 THREE REGISTER ROWS NAME THIS STORY AS OWNER and the first draft carried none -- D15's
+  #   "declared_attribute.entity_id is NEVER updated", which the architecture calls "the most
+  #   dangerous line of SQL in this project" and which NO GATE HOLDS; the invisible entity; the
+  #   one-value-per-attr_key model. New AC9 answers them.
+  #   ⚠️ Registered, wider than this story: the ddl-collation matcher, and THE `file-size` GATE IS
+  #   BLIND TO repo.rs (it stops at the first #[cfg(test)] at ANY nesting -- line 182 there -- so it
+  #   reads 181 code lines where ~1620 are, and that is where AC5's adapter goes).
+  #   ⚠️ FR38b's startup refusal (prd.md:957) must be NEITHER implemented NOR silently dropped, and
+  #   its asymmetry is why `dormant` is not a general lifecycle: only LOCALLY-ADMINISTERED addresses
+  #   go dormant; a server off for six months is ABSENT, not dormant.
+  #   🔴 BOTH ARBITRATIONS REMAIN OPEN AND ARE GUY'S.
   #   🔑 Story 5.9's warning carried forward: ITS M3 CAME BACK GREEN because the adapter could not
   #   emit an incoherent pair -- every CHECK the adapter cannot violate is measured by raw SQL or
   #   by nothing. ⚠️ And the whole story is invisible without a store: DATABASE_URL unset locally,
