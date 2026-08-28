@@ -115,11 +115,12 @@ monotonicity is re-owned rather than discharged. **5.12 is `done`** — PR #75 s
 
 Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`, not this file.
 
-**What exists today:** a three-crate workspace that builds and ships. `cargo xtask ci` runs **nine**
+**What exists today:** a three-crate workspace that builds and ships. `cargo xtask ci` runs **ten**
 real gates — dependency frontier (D47), DDL binary collation (D64), retired vocabulary (D65), the
 fixture corpus lock (both directions: edited AND orphan), the file-size ceiling (D56b),
-`float-free` (D13, story 5.4b), `declared-authorship` (NFR5/FR13, story 5.12) and
-`observed-immutable` (NFR5/FR11, story 6.3) and `copy-vocabulary` (story 6b.10) — plus the
+`float-free` (D13, story 5.4b), `declared-authorship` (NFR5/FR13, story 5.12),
+`observed-immutable` (NFR5/FR11, story 6.3), `copy-vocabulary` (story 6b.10) and
+`entity-id-immutable` (D15, story 6.5) — plus the
 informational `views-hash` staleness check, which reports `ℹ STALE` and exits 0 by design.
 **Two BROWSER gates run in CI as well** — axe (ten routes + **four** query-string states), and
 `a11y/kbd-probe.mjs` (story 6b.11, **thirty** checks since story 6.4, which made the last of them

@@ -5073,3 +5073,105 @@ carries the actionable half, the story file's §0g carries the record.
 - ⚠️ **Two agent layers isolated by worktree and by store are NOT isolated by process table.** A broad
   `pkill -f 'target/debug/opencmdb'` in one killed the other's server. **Kill by port. Owner:
   whoever runs the next parallel validation** — effective immediately.
+
+## Deferred from: story 6.5 (2026-08-28)
+
+**Incoming rows answered.** Three rows named this story as owner. One is DISCHARGED, two are
+RE-OWNED with the reason — ⚠️ *and re-owning is a decision, not a deferral: the reason is what makes
+it re-derivable.*
+
+- ✅ **DISCHARGED — D15's rule, held by no gate** (`:3478`). `declared_attribute.entity_id` is never
+  UPDATEd, and the tenth `cargo xtask ci` gate — **`entity-id-immutable`** — now refuses it, driven
+  end to end over a ten-probe located corpus. ⚠️ **It is BROADER than D15 by decision**: it refuses
+  any `UPDATE` of the table, not only one naming `entity_id`, because a matcher that must parse a
+  `SET` clause is a matcher that will be wrong in both directions — and the widening costs nothing
+  on the committed tree, measured. Probe `e10` pins that over-breadth as a RED so the decision is
+  measured rather than merely stated. A **TRIPWIRE, not a barrier** (story 5.12's narrowing).
+- 🔴 **RE-OWNED to the story that gives an operator-created entity a KIND — the invisible entity**
+  (`:3395`). `build_view` selects an entity by its declared `ipv4`, so a hostname-only subject mints
+  one the view can never select. **This story does NOT close it and could not**: option (a) leaves
+  `declared_attribute` outside the supertype entirely, so the entity a documented subject names
+  still has no row and no kind. The register row said *"the entity model is 6.5's"*; the entity model
+  now exists and **the documented subject is not in it**. ⚠️ That is the same open question as
+  §0c's option (c): *what `kind` is a documented subject?* — which no document answers.
+- 🔴 **RE-OWNED, same reason — one value per `attr_key`** (`:3426`), routed to *"the entity model of
+  6.5"*. It is a question about what a declared attribute may hold, and `declared_attribute` is
+  untouched by this story.
+
+**Raised by this story.**
+
+- ⚠️ **`interface` is NOT a subtype of `entity`, and the supertype therefore constrains nothing
+  about interfaces.** Guy's arbitration of 2026-08-28 (option (a)), with the cost accepted in
+  writing. **Owner: story 6.12**, together with the migration widening `identity_link` to admit a
+  device as a placement subject and the resolver change that mints the parent row. 🔑 The three are
+  ONE gesture: measured at this story's validation, adopting `interface` without a producer leaves
+  **65 tests red**, because a backfill repairs the rows that exist and nothing repairs the rows the
+  next scan writes.
+- ⚠️ **`entity.state` ships the architecture's SIX values where `epics.md:1826` names two** — a
+  divergence taken deliberately, because shipping the subset buys an `ALTER` running at boot on a
+  published product the day a lifecycle story needs `superseded`. **Owner: Epic 6's retrospective**,
+  which is where the epic file may be corrected; a story may not.
+- ⚠️ **`mac_kind` exists in no table and in no `.rs`**, and `architecture.md:1503` scopes `dormant`
+  to *"`kind='interface'` AND `mac_kind='local'`"*. The scoping invariant belongs with the
+  transition it scopes. **Owner: story 6.18** (FR38b's lifecycle).
+- 🔴 **The `ddl-collation` gate does not hold the property it names.** Of twelve planted violations
+  it caught seven; of the five it passed, one is correct and **four were applied and read back as
+  `utf8mb4_general_ci`**. The matcher is line-oriented with no comment stripping and no per-column
+  split, so `_BIN` **anywhere on the line** — in a trailing comment, in a constraint name, on a
+  neighbouring column — satisfies it, and a bare `ENUM` is outside its `is_text` set by its own
+  pinned test. ⚠️ Consequence measured: `state='ACTIVE'` accepted and stored as `'active'`.
+  **Owner: whichever story next needs the gate to be a barrier** — this one wrote its DDL to the
+  form the gate CAN see (`VARCHAR … ascii_bin` + `CHECK`) rather than repairing the matcher.
+- 🔴 **The `file-size` gate is BLIND to `repo.rs`.** `code_line_count` stops at the first
+  `#[cfg(test)]` **at any nesting**, and in `repo.rs` that is line 182 — an attribute on a test-only
+  struct — while the trailing test module starts past 1600. The gate reads the file as ~181 code
+  lines while it carries roughly 1700, so the 2000-line ceiling does not protect the file this
+  story's adapter grows. **Owner: whichever story next approaches the ceiling**, or a maintenance
+  slice. ⚠️ Not fixed here: raising it would re-measure every file at once, which is a change of
+  scope inside a schema story.
+- ⚠️ **`cargo xtask mutate` cannot drive a DDL mutation**, and nothing said so. A changed migration
+  cannot re-apply to a store that already ran it — `sqlx` checksums it — so every DDL mutation needs
+  a virgin schema AND a warm-up that migrates once before the concurrent suite starts. This story
+  drove its seven DDL mutations with a purpose-built script instead. **Owner: whichever story next
+  writes a migration**, or the driver's next revision.
+- 🔴 **A DDL mutation that leaves INVALID SQL measures the parser, not the guard** — and it reports
+  a red indistinguishable from a real one. Measured twice in this story's own pass: deleting a
+  `CONSTRAINT` line left a trailing comma, the migration failed, and **101 tests reddened** on a
+  guard that was never exercised. Closed inside the driver, which now REFUSES when the mutated
+  migration does not apply. *The mutation driver lies*, in a form the fifteen recorded ones did not
+  have. **Owner: effective immediately, whoever mutates DDL.**
+- ⚠️ **A test fixture that truncates a SHARED table cannot coexist with a concurrent suite.** The
+  first draft's `entity_fixture` emptied `entity` and `device`; cargo runs the tests in parallel
+  against one store, and a `DELETE FROM entity` raced a sibling's insert and died on
+  `device_entity_fk` (`ERROR 1451`), twice in one run. Each test now owns distinct ids and forgets
+  only its own. Same family as the validation's *"`cargo test` and the browser sweep must not share
+  a store"*, one level down. **Owner: effective immediately.**
+- ⚠️ **`cargo doc` reports TWELVE unresolved intra-doc link sites** (9 distinct targets), where story
+  6.3 recorded four — and no gate can see any of them. None is this story's; the count is recorded so
+  the next reader does not attribute them. ⚠️ *The first draft of this row said EIGHT, and a count
+  recorded for the next reader that is wrong defeats the row's own purpose.* **Owner: a maintenance
+  slice.**
+
+- 🔴 **`UPDATE entity SET kind` succeeds on a childless row**, so `0006`'s *"one id, one kind, for the
+  life of that id"* holds against a second INSERT and against the foreign key where a child exists,
+  and **not** against an update. No gate covers it and none was added: the rule wanted is *this
+  COLUMN is immutable*, which is the matcher class `entity_id_immutable`'s own doc declines twice —
+  and D15's migration mechanism (`state = 'pending_migration'`) is the thing that will legitimately
+  write to this table. **Owner: story 6.12.**
+
+- ⚠️ **An UPDATABLE VIEW over `declared_attribute` re-points a testimony and `entity-id-immutable`
+  cannot see it** — the gate names a table, not the aliases of it. Caught today only by `authorship`,
+  through the view's unsanctioned `SELECT`, and that carrier disappears at a whole-file-sanctioned
+  site. **A stated limit rather than a hole**, on the gate's tripwire narrowing; the barrier is the
+  database privilege story 5.12 registered and nobody has built. **Owner: Epic 19.**
+
+- ✅ **CLOSED by story 6.5's code review, and recorded because it stood for three gates**: a `/*`
+  inside a double-quoted string opened a block comment nothing closed, and **every line after it in
+  that file was invisible to `authorship`, `observed-immutable` and `entity-id-immutable`**. The live
+  specimen was `diagnostic.rs`'s `"/assets/*"`. Measured by a whole-tree sweep — one violation
+  appended to every walked file — **45 planted, 44 named, one blind**; after the fix, 45 named and
+  none blind. `strip_comments` now tracks the double quote, and `#` is stripped for `.sql`.
+- ⚠️ **Corrected in passing, and recorded because a register that misdirects is worse than a silent
+  one**: `:2226` named *"the lifecycle epic (FR40-42)"* as the `state` column's owner — FR40-42 is
+  **Epic 21** (edit, decommission, backup), while FR38b is Epic 6's and its behaviour is **story
+  6.18**'s. And `:2216`'s header announces *"three distinct entries"* above **two**.

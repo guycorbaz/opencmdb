@@ -84,6 +84,131 @@ uuid_newtype!(
     /// That is why it needs an id of its own. **Minted client-side** (D48).
     LinkId
 );
+uuid_newtype!(
+    /// Identifies one device — the thing L2 grouping forms out of interfaces.
+    ///
+    /// A device has **no business columns** and this type has no fields beyond its id, for the same
+    /// reason (D21): *"everything a device is is either observed (via its interfaces) or declared. A
+    /// device is an identifier and nothing else. If anyone proposes adding `hostname` to it, they
+    /// have just restored the OBSERVED/DECLARED merge we forbade."* **Minted client-side** (D48).
+    ///
+    /// ⚠️ Nothing in this codebase produces one outside its own tests. Story 6.5 ships the schema;
+    /// story 6.12 is the resolver that fills it.
+    DeviceId
+);
+
+/// Which subtype an `entity` row is — the disjunction D21 makes structural.
+///
+/// It is a closed set on purpose: the supertype exists so that *"the disjunction is enforced by the
+/// engine, not by convention"*, and a `kind` a future story adds here must also be added to the
+/// `entity_kind_domain` CHECK in the schema.
+///
+/// 🔴 **That sentence used to end *"which is what makes the two representations testable against
+/// each other"*, and it was FALSE when written.** The code review planted a third variant the CHECK
+/// forbids and a CHECK token no variant names — **770 tests and ten gates green, both directions**.
+/// The lesson this very story shipped for [`EntityState`] (*a count is not a set*) had been applied
+/// to one column of a table and not to the one beside it in the same DDL. [`EntityKind::ALL`] and
+/// the agreement guard in the adapter are what make the sentence true now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum EntityKind {
+    /// An interface — the thing the L1 join forms.
+    ///
+    /// ⚠️ **No `interface` row is an entity yet.** Guy's arbitration of 2026-08-28 (option (a))
+    /// leaves the existing table outside the supertype; its adoption is story 6.12's, with the
+    /// migration that lets a device be a placement subject and the resolver change that mints the
+    /// parent row. The variant exists now so the domain is posed once rather than widened by an
+    /// `ALTER` running at boot on a published product.
+    Interface,
+    /// A device — the thing L2 grouping forms.
+    Device,
+}
+
+impl EntityKind {
+    /// Every kind, in the order the schema's CHECK lists them.
+    ///
+    /// It exists for the same reason [`EntityState::ALL`] does — so a test can compare the two
+    /// representations as SETS rather than trusting them to stay parallel.
+    pub const ALL: [EntityKind; 2] = [EntityKind::Interface, EntityKind::Device];
+
+    /// The token this kind is persisted as.
+    ///
+    /// ⚠️ The schema's CHECK holds the same set, and a test asserts it — but `ascii_bin` is a PAD
+    /// SPACE collation, so a RAW write of `'device '` satisfies the CHECK and comes back here as an
+    /// unfamiliar token. The adapter cannot produce that; a backfill can. `0006`'s header states it.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EntityKind::Interface => "interface",
+            EntityKind::Device => "device",
+        }
+    }
+}
+
+/// Where an entity sits in its lifecycle (D21, `architecture.md:1502`).
+///
+/// 🔴 **Six values, where `epics.md:1826` names two.** The epic's `active`/`dormant` are the subset
+/// FR38b needs; this is the domain the architecture enumerates. Shipping the subset would buy an
+/// `ALTER` running at boot on a published product the day a lifecycle story needs `Superseded` —
+/// the hazard `0003_resolver_guards.sql`'s header documents — so the domain is posed once. The
+/// divergence is registered rather than taken in silence.
+///
+/// ⚠️ **This is a domain and no behaviour.** Nothing in this codebase sets any value but
+/// [`EntityState::Active`]. `Dormant` in particular is valid only for an interface whose address is
+/// locally administered, a scope that needs a `mac_kind` column no table carries; the invariant is
+/// story 6.18's, which owns FR38b's transition, because a scoping rule belongs with the transition
+/// it scopes rather than with the column it constrains.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum EntityState {
+    /// Live, counted, and eligible for candidate generation. The default for a new entity.
+    Active,
+    /// Unobserved past the dormancy window. FR38b says such an entity **will be** excluded from
+    /// divergence metrics and from automatic candidate generation while staying queryable, and
+    /// **will return** to `Active` if the address is observed again — the same entity, not a new
+    /// one.
+    ///
+    /// ⚠️ **Written in the future tense because none of it exists.** Nothing in this codebase sets
+    /// this value, sweeps for it or reads it; story 6.18 carries FR38b's transition. *A doc comment
+    /// must be true, so prefer the weaker true sentence* — the first draft asserted the mechanism
+    /// in the present tense and the code review caught it.
+    Dormant,
+    /// Replaced by another entity through an identity migration; kept because a bad grouping is
+    /// UNLINKED, never erased (D14).
+    Superseded,
+    /// Held out of automatic processing pending a human decision.
+    Quarantined,
+    /// Mid-migration: an identity move has begun and is not yet complete.
+    PendingMigration,
+    /// A reserved row that stands for "no entity" rather than for a thing on the network — D21's
+    /// sentinel idiom, whose interface half `identity_link.current_subject` already uses.
+    Sentinel,
+}
+
+impl EntityState {
+    /// The token this state is persisted as. The schema's CHECK holds the same set.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            EntityState::Active => "active",
+            EntityState::Dormant => "dormant",
+            EntityState::Superseded => "superseded",
+            EntityState::Quarantined => "quarantined",
+            EntityState::PendingMigration => "pending_migration",
+            EntityState::Sentinel => "sentinel",
+        }
+    }
+
+    /// Every state, in the order the schema's CHECK lists them.
+    ///
+    /// It exists so a test can assert the two representations agree — the `CLAUDE.md` idiom of a
+    /// *deliberate* redundancy pinned by an equality test, as `score.rs`'s `Column::as_str` and
+    /// `Expectation::column` already are.
+    pub const ALL: [EntityState; 6] = [
+        EntityState::Active,
+        EntityState::Dormant,
+        EntityState::Superseded,
+        EntityState::Quarantined,
+        EntityState::PendingMigration,
+        EntityState::Sentinel,
+    ];
+}
 
 /// A 48-bit hardware address held as its exact 6 bytes.
 ///

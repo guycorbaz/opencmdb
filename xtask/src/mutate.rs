@@ -96,7 +96,7 @@ pub(crate) enum Outcome {
         tests: usize,
         /// Did `clippy --all-targets -D warnings` red?
         clippy: bool,
-        /// Did the nine gates red?
+        /// Did the gates red?
         gates: bool,
     },
     /// Everything passed, on all three carriers.
@@ -776,7 +776,10 @@ pub(crate) fn fold(tests_outcome: Outcome, clippy_red: bool, gates_green: bool) 
     }
 }
 
-/// The nine gates, through a NESTED cargo so they read the mutated tree.
+/// The `cargo xtask ci` gates, through a NESTED cargo so they read the mutated tree.
+///
+/// ⚠️ The count is deliberately not written here: it was `nine` until story 6.5 added a tenth, and
+/// a number in a doc comment is a number nobody re-measures.
 ///
 /// 🔴 Guy's arbitration of 2026-08-26. The in-process form read this process's own text, built
 /// before the mutation — see [`measure`] for the two measurements that settled it. It is injected
@@ -898,7 +901,8 @@ exit: 0 the outcome matches the prediction (and for --help, which runs no mutati
 
 ⚠️ IT DOES NOT DRIVE THE BROWSER GATES. A mutation to assets/, templates/, or anything whose
    carrier is a computed page is INVISIBLE here — measured: inverting an arrow in app.js leaves
-   the whole Rust suite and all nine gates green while a11y/kbd-probe.mjs reports nine failures.
+   the whole Rust suite and every `cargo xtask ci` gate green while a11y/kbd-probe.mjs reports
+   nine failures.
 
    Run them by hand. This recipe is ci.yml's rather than a paraphrase, because the omissions are
    what bite: without AXE_REQUIRE_QUEUE an empty queue reads as a PASS, which is the \"green on
