@@ -80,7 +80,8 @@
 generated: 2026-07-21
 last_updated: 2026-08-28  # Story 6.4b `done` (PR #129 `8c5ecb3`, record PR #130 `3d8476f`);
                           # story 6.4c contexted, VALIDATED and DEFERRED to GitHub issue #131
-                          # (PR #132 `4ef546f`); story 6.5 contexted to `ready-for-dev`.
+                          # (PR #132 `4ef546f`); story 6.5 `done` (PR #133 `de6bbc2`) -- the
+                          # entity supertype, the device, the state domain, and a TENTH gate.
                           # 🔴 **EPIC 6b IS CLOSED**, on the PROJECT REVIEW of 2026-08-24 held in
                           # `~/travail/Projets actuels/opencmdb/` -- the step that closes an epic
                           # AFTER its retrospective, never the story count. Order honoured:
@@ -4716,7 +4717,40 @@ development_status:
   #   ⚠️ It is in NO epic file -- created by Epic 6b's retrospective (decision 2) and sequenced by
   #   Guy, exactly as 6.4b; the ten ACs are DERIVED from NFR24, UX-DR56 and the UX spec.
   #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
-  6-5-entity-device-and-state-schema: review
+  6-5-entity-device-and-state-schema: done
+  #   DONE: PR #133 squash-merged 2026-08-28 as `de6bbc2`, CI green ON THE HEAD COMMIT
+  #   (run 33198427755, 2m33) -- read from `gh pr view --json statusCheckRollup`, not inherited.
+  #   CODE-REVIEWED by three isolated layers and REPAIRED first. 761 -> 772 tests (512+161+99),
+  #   TEN gates, and 6/6 GREEN on a virgin store where the review measured 6/6 RED.
+  #   🔴 FOUR DEFECTS INSIDE THE GATE'S PROMISE, each measured and closed: a `/*` inside a
+  #   double-quoted string blinded a WHOLE FILE to THREE gates (`diagnostic.rs`'s "/assets/*", an
+  #   ordinary route pattern -- whole-tree sweep 45 planted / 44 named / ONE BLIND, and 45/45 after
+  #   the fix); the suite was 6/6 red on a virgin store where the parent is 6/6 green, which is the
+  #   shape CI's own Tests step runs, 🔑 BECAUSE SEVEN NEW TESTS DID NOT TAKE `DB_TEST_LOCK`, which
+  #   exists for exactly that (the per-test ids were a remedy for a symptom of a rule not followed);
+  #   a derived-table `UPDATE … JOIN declared_attribute` and an `ON DUPLICATE KEY UPDATE entity_id`
+  #   AT THE SANCTIONED SITE both passed all ten gates while really re-pointing a testimony.
+  #   🔴 AND FOUR OF MINE: AC6's substitute claim was FALSE and DISPLACED A REMEDY ALREADY
+  #   SPECIFIED (`IF NOT EXISTS` -- the narrow argument was sound, its generalisation was not);
+  #   "a count is not a set" was applied to `state` and NOT to `kind` while a doc claimed otherwise
+  #   (770 green in both directions); two of six tests had vacuous `is_err()` oracles, passing over
+  #   a table that does not exist and a kind that IS in the domain; and `insert_device` was not
+  #   atomic on a plain connection -- two layers left a COMMITTED entity with no device.
+  #   🔴 THE BLIND LAYER SCORED AGAIN, SEVENTH STORY RUNNING: from the diff alone it caught the
+  #   seven-tables arithmetic and deduced that `insert_device`'s transaction promise was exercised
+  #   by nothing. ⚠️ All three layers ran at this session's capability -- isolated by context and
+  #   worktree, NOT on a different model, and that half is not claimed.
+  #   🔴 `xtask/src/main.rs` REACHED EXACTLY 2000 CODE LINES, one from red, and the answer was the
+  #   SPLIT CLAUDE.md prescribes: `xtask/src/sql_text.rs`, the reader the three SQL gates share --
+  #   and the file whose defect the review had just found.
+  #   ✅ Refuted with their checks: story 5.12's multibyte line-map defect does NOT recur; the
+  #   `PRIMARY KEY (id)` header claim is right, built in both shapes; `UNIQUE KEY entity_id_kind` is
+  #   NOT redundant (ERROR 1005 errno 150 without it); build.rs watches all four change kinds.
+  #   ⚠️ Registered rather than guarded: `UPDATE entity SET kind` succeeds on a childless row
+  #   (-> 6.12); an updatable VIEW bypasses the gate (a stated limit; the barrier is 5.12's GRANT);
+  #   and `ascii_bin` PAD SPACE lets a RAW `'device '` satisfy every CHECK and read back unfamiliar.
+  #   ⚠️ AND THE FILE-SIZE GATE IS BLIND TO repo.rs -- it stops at the first #[cfg(test)] at ANY
+  #   nesting, reading ~183 code lines where ~3800 are, 1.9x the ceiling. Registered, not fixed.
   #   CONTEXTED 2026-08-28 against a MIGRATED mariadb:10.11.11, not against the DDL text.
   #   🔴 ONE ARBITRATION IS OPEN AND THE STORY CANNOT BE BUILT WITHOUT IT: the epic's criterion says
   #   "no producer: nothing writes a device yet", and THE PRODUCT HAS BEEN MINTING ENTITY IDS SINCE

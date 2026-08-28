@@ -1,6 +1,6 @@
 # Story 6.5: The entity supertype, the device, and the state column — schema only
 
-Status: **review** — implemented 2026-08-28; contexted 2026-08-28 against the migrated schema of a live
+Status: **done** — PR #133 squash-merged 2026-08-28 as `de6bbc2`, CI green on the head commit (run 33198427755); code-reviewed by three isolated layers and REPAIRED first. Implemented 2026-08-28; contexted 2026-08-28 against the migrated schema of a live
 `mariadb:10.11.11`, then VALIDATED the same day by two fresh-context layers, each in its own
 worktree with its own store. **§0's corrections are applied in place and §0g holds the rest.**
 
