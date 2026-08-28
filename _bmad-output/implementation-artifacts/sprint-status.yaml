@@ -78,8 +78,9 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-28  # Story 6.4b `done` (PR #129 `8c5ecb3`, record PR #130 `3d8476f`) and
-                          # story 6.4c contexted to `ready-for-dev`.
+last_updated: 2026-08-28  # Story 6.4b `done` (PR #129 `8c5ecb3`, record PR #130 `3d8476f`);
+                          # story 6.4c contexted, VALIDATED and DEFERRED to GitHub issue #131
+                          # (PR #132 `4ef546f`); story 6.5 contexted to `ready-for-dev`.
                           # 🔴 **EPIC 6b IS CLOSED**, on the PROJECT REVIEW of 2026-08-24 held in
                           # `~/travail/Projets actuels/opencmdb/` -- the step that closes an epic
                           # AFTER its retrospective, never the story count. Order honoured:
@@ -4715,7 +4716,35 @@ development_status:
   #   ⚠️ It is in NO epic file -- created by Epic 6b's retrospective (decision 2) and sequenced by
   #   Guy, exactly as 6.4b; the ten ACs are DERIVED from NFR24, UX-DR56 and the UX spec.
   #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
-  6-5-entity-device-and-state-schema: backlog
+  6-5-entity-device-and-state-schema: ready-for-dev
+  #   CONTEXTED 2026-08-28 against a MIGRATED mariadb:10.11.11, not against the DDL text.
+  #   🔴 ONE ARBITRATION IS OPEN AND THE STORY CANNOT BE BUILT WITHOUT IT: the epic's criterion says
+  #   "no producer: nothing writes a device yet", and THE PRODUCT HAS BEEN MINTING ENTITY IDS SINCE
+  #   STORY 6.2 -- `document.rs:124` mints a v7 UUID per documented subject and writes it into
+  #   `declared_attribute`, which has NO foreign key, because THERE IS NO `entity` TABLE. Five
+  #   tables exist and none of them is `entity`. So the supertype meets rows that ALREADY EXIST:
+  #   in the demo image (3 distinct ids in docker/seed-example.sql), in CI, and in any deployment
+  #   where the amber control has been pressed -- and `sqlx::migrate!` runs on EVERY boot of a
+  #   published v0.2.0 (`main.rs:530`).
+  #   Three options costed in the story's §0c. RECOMMENDATION: create the supertype AND make
+  #   `interface` its first real subtype with a backfill, leaving `declared_attribute` alone with
+  #   the divergence registered by name. ⚠️ That means THE MIGRATION WRITES, and "schema only" does
+  #   not describe that. Option (c) -- an FK on `declared_attribute` -- is refused for now as a
+  #   PRODUCER WEARING A CONSTRAINT'S CLOTHES, and it raises a question no document answers: what
+  #   `kind` is a documented subject? (Guy's taxonomy of 2026-08-12 says case three is "unknown ->
+  #   the operator CREATES THE ENTITY", but that entity is not yet a device, and device creation is
+  #   story 6.12's.)
+  #   ⚠️ THE `state` COLUMN'S OWNER IS CONTESTED: epics.md:1824 puts it here, deferred-work.md:2226
+  #   assigns it to the lifecycle epic (FR40-42). Both are honoured by shipping the DOMAIN and no
+  #   behaviour -- and FR38b's startup refusal (prd.md:957, "a startup failure naming both
+  #   settings") must be NEITHER implemented NOR silently dropped. FR38b's asymmetry is why
+  #   `dormant` is not a general lifecycle: only LOCALLY-ADMINISTERED addresses go dormant; a
+  #   server off for six months is ABSENT, not dormant.
+  #   🔑 Story 5.9's warning carried forward: ITS M3 CAME BACK GREEN because the adapter could not
+  #   emit an incoherent pair -- every CHECK the adapter cannot violate is measured by raw SQL or
+  #   by nothing. ⚠️ And the whole story is invisible without a store: DATABASE_URL unset locally,
+  #   the DB tests return early, the counts are identical, THE CLOCK IS THE TELL.
+  #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
   # 5.6's rule: a blocker that consults a rule is that rule's echo; recall in milli-units
   6-6-l2-candidates-and-no-rule: backlog
   # the FIRST producer of `Verdict::Opposes` in this codebase; 3 traps
