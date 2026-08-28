@@ -3766,7 +3766,10 @@ below is a consequence of that sentence, recorded rather than absorbed — a sto
   not raise. ✅ **ARBITRATED by Guy on 2026-08-18: not now, we will see later.** The shell ships
   desktop-only, as the mock has it — so this is **deferred by decision**, not pending an owner. It is
   scoped when someone opens the product on a telephone, or when story 6b.12 has to describe the
-  release's limits. ⚠️ **NFR24's ≥44px touch targets are NOT covered by this deferral** — a touch
+  release's limits. ✅ **DISCHARGED 2026-08-28**: the product WAS opened on a telephone-width
+  viewport (story 6.4c's contexting), the scoping is **GitHub issue #131**, and ⚠️ **this row's own
+  *"zero `@media` rules"* is about the MOCK and is true — it is `:4863`'s restatement of it about
+  `app.css` that is false.** ⚠️ **NFR24's ≥44px touch targets are NOT covered by this deferral** — a touch
   target is not a breakpoint, and that obligation stays with story 6b.11.
 
 ## Discharged by story 6b.2 (2026-08-18)
@@ -5007,3 +5010,66 @@ current by reading, and this row is what says so.
   `RUSTFLAGS="-D warnings"`, each read from `$?`) and **unconfirmed by CI**. *Reproducing CI is not
   CI* — story 6b.10's red run was on something no local command sees. It must not be merged on the
   local green alone.
+
+## Deferred from: story 6.4c's contexting and validation (2026-08-28)
+
+🔴 **The story itself is DEFERRED to GitHub issue #131** (Guy, 2026-08-28: *the mobile interface is
+not needed at the start*), **after** its two-layer validation rather than instead of it. The rows
+below are what that validation produced and are NOT carried by the issue's summary alone — the issue
+carries the actionable half, the story file's §0g carries the record.
+
+- ✅ **DISCHARGED — the deferral of 2026-08-18** (`:3759`, *"not now, we will see later"*, scoped
+  *"when someone opens the product on a telephone"*). That has now happened, and the scoping is issue
+  **#131**. ✅ **DISCHARGED likewise: Epic 6b's retrospective action 2** (*"the mobile story — owner:
+  Epic 6's breakdown, sequenced by Guy"*).
+
+- 🔴 **The premise three documents carry is FALSE, and only ONE of the three names the artefact.**
+  `deferred-work.md:4863` says *"Zero `@media` rules **in `app.css`**"* → false: there are **four**,
+  three of them layout, the oldest from story 3.7 on **2026-07-20**, so it was false by **thirty-five
+  days** when it was written on 2026-08-24. The retrospective's decision 2 and `sprint-status.yaml`
+  say *"the zero `@media` rules"* with **no subject named** and are false only by inheritance. 🔑 The
+  correctly-scoped original is in this file, twice (`:3741`, `:3759-3760`, both 2026-08-19): *"the
+  **MOCK** has zero `@media` rules"*. **A measurement taken on one artefact and applied to another.**
+  ⚠️ The false *"thirty-three"* is propagated into `sprint-status.yaml` and is corrected there.
+  **Owner: whoever next edits those lines** — the substance is issue #131's.
+
+- 🔴 **`target-size` (WCAG 2.5.8) is run by NEITHER browser gate**: `axe-gate.mjs`'s tag list omits
+  `wcag22aa`. So the one automated rule that would speak to NFR24's subject is switched off, and no
+  document says so. **Owner: issue #131**, or whoever next edits the gate's tags.
+
+- 🔴 **Both browser gates run at Puppeteer's default 800 × 600**, where `(max-width: 900px)` already
+  matches. So `/ipam` has only ever been axe-tested **collapsed**, and **the 1280 px layout has been
+  measured by no instrument either** — not only the phone. ✅ Measured and recorded so nobody
+  re-chases it: axe at **360 px** over the ten routes + four states gives **0 violation nodes**.
+  **Owner: issue #131.**
+
+- ⚠️ **`/gap` and the 401 body lay out at Chrome's 980 px default**, having no `<meta name="viewport">`
+  — so any horizontal-overflow property reads **0 and meaningless** on them. And **no browser gate can
+  reach the 401 at all**: Chrome yields no document for a challenge, so the first page an operator of
+  a closed deployment meets is measurable by nothing this project owns. **Owner: issue #131** for the
+  layout half; **Epic 19** for the 401's own treatment.
+
+- ⚠️ **320 px, not 360, is the WCAG AA figure** (1.4.10 Reflow). NFR24 sets 360 and no document names
+  the gap; four screens still overflow at 320 with a prototype responsive pass in place. **Owner:
+  issue #131**, as a decision to take rather than a defect to fix — the requirement is the thing that
+  needs amending or a written divergence.
+
+- ⚠️ **The IPAM *"jump to next free IP"* action does not exist.** The UX spec pairs its synthetic
+  summary with an accessible action so that *"find a free IP"* works without sight; the summary ships
+  (*Next free address 192.0.2.21*) and the action is a `<p>`, not a link. Independent of the phone.
+  **Owner: Epic 14**, which draws a real subnet.
+
+- ⚠️ **Landscape is named by no requirement.** NFR24's three breakpoints are widths; at 640 × 360 a
+  fixed bottom bar of 64 px is **17.8 % of the viewport height** and nothing forbids it. **Owner:
+  issue #131.**
+
+- 🔴 **`cargo test` and a browser sweep must not share a store, and `kbd-probe.mjs` WRITES** (it
+  presses the documenting gesture for real). Measured inside the validation itself: one layer's two
+  passes diverged and the cause was its own `cargo test --workspace` against the same `DATABASE_URL`.
+  *Story 6b.11's "green on residue", live in a session whose subject was measurement.* ⚠️ It also
+  fixes where a third browser gate could be placed in `ci.yml`: after `kbd-probe.mjs` it meets a
+  consumed queue. **Owner: whoever writes the next browser gate, and issue #131.**
+
+- ⚠️ **Two agent layers isolated by worktree and by store are NOT isolated by process table.** A broad
+  `pkill -f 'target/debug/opencmdb'` in one killed the other's server. **Kill by port. Owner:
+  whoever runs the next parallel validation** — effective immediately.
