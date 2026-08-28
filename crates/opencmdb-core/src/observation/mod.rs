@@ -101,8 +101,14 @@ uuid_newtype!(
 ///
 /// It is a closed set on purpose: the supertype exists so that *"the disjunction is enforced by the
 /// engine, not by convention"*, and a `kind` a future story adds here must also be added to the
-/// `entity_kind_domain` CHECK in the schema, which is what makes the two representations testable
-/// against each other rather than merely parallel.
+/// `entity_kind_domain` CHECK in the schema.
+///
+/// 🔴 **That sentence used to end *"which is what makes the two representations testable against
+/// each other"*, and it was FALSE when written.** The code review planted a third variant the CHECK
+/// forbids and a CHECK token no variant names — **770 tests and ten gates green, both directions**.
+/// The lesson this very story shipped for [`EntityState`] (*a count is not a set*) had been applied
+/// to one column of a table and not to the one beside it in the same DDL. [`EntityKind::ALL`] and
+/// the agreement guard in the adapter are what make the sentence true now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum EntityKind {
     /// An interface — the thing the L1 join forms.
@@ -118,7 +124,17 @@ pub enum EntityKind {
 }
 
 impl EntityKind {
-    /// The token this kind is persisted as. The schema's CHECK holds the same set.
+    /// Every kind, in the order the schema's CHECK lists them.
+    ///
+    /// It exists for the same reason [`EntityState::ALL`] does — so a test can compare the two
+    /// representations as SETS rather than trusting them to stay parallel.
+    pub const ALL: [EntityKind; 2] = [EntityKind::Interface, EntityKind::Device];
+
+    /// The token this kind is persisted as.
+    ///
+    /// ⚠️ The schema's CHECK holds the same set, and a test asserts it — but `ascii_bin` is a PAD
+    /// SPACE collation, so a RAW write of `'device '` satisfies the CHECK and comes back here as an
+    /// unfamiliar token. The adapter cannot produce that; a backfill can. `0006`'s header states it.
     pub fn as_str(&self) -> &'static str {
         match self {
             EntityKind::Interface => "interface",
@@ -144,9 +160,15 @@ impl EntityKind {
 pub enum EntityState {
     /// Live, counted, and eligible for candidate generation. The default for a new entity.
     Active,
-    /// Unobserved past the dormancy window, and excluded from divergence metrics and from
-    /// automatic candidate generation — **still queryable, and it returns to `Active` if the
-    /// address is observed again: the same entity, not a new one** (FR38b).
+    /// Unobserved past the dormancy window. FR38b says such an entity **will be** excluded from
+    /// divergence metrics and from automatic candidate generation while staying queryable, and
+    /// **will return** to `Active` if the address is observed again — the same entity, not a new
+    /// one.
+    ///
+    /// ⚠️ **Written in the future tense because none of it exists.** Nothing in this codebase sets
+    /// this value, sweeps for it or reads it; story 6.18 carries FR38b's transition. *A doc comment
+    /// must be true, so prefer the weaker true sentence* — the first draft asserted the mechanism
+    /// in the present tense and the code review caught it.
     Dormant,
     /// Replaced by another entity through an identity migration; kept because a bad grouping is
     /// UNLINKED, never erased (D14).

@@ -26,8 +26,37 @@
 -- ⚠️ AND THERE IS NO PRODUCER. Nothing in this codebase writes an entity or a device outside its
 -- own tests. `epics.md`'s criterion says so and it is met literally.
 
--- The supertype. One id, one kind, for the life of that id.
-CREATE TABLE entity (
+-- 🔴 `IF NOT EXISTS` IS AC6'S REMEDY, AND IT WAS SPECIFIED BEFORE IT WAS SKIPPED. The first draft
+-- argued that this migration cannot fail — it creates two tables and alters nothing, so there is no
+-- row to trip on. The narrow claim is true; its generalisation was not, and the code review
+-- reproduced the counterexample: MySQL DDL is not transactional, so a process killed BETWEEN the two
+-- statements leaves `entity` committed, `_sqlx_migrations` at version 6 with `success = 0`, and the
+-- next boot refusing — *"migration 6 is partially applied; fix and remove row from
+-- `_sqlx_migrations`"* — where repairing the DATA does not clear it. On a published v0.2.0 that is
+-- a deployment down until someone has SQL access.
+--
+-- ⚠️ RECOVERY, if this migration is ever found half-applied anyway (0003's header idiom): drop the
+-- tables it created, in child-then-parent order, then delete the version row —
+--   DROP TABLE IF EXISTS device; DROP TABLE IF EXISTS entity;
+--   DELETE FROM _sqlx_migrations WHERE version = 6;
+-- and restart. With `IF NOT EXISTS` a re-run heals itself and this recipe is a residual, not a
+-- procedure.
+
+-- The supertype. One id, one kind, for the life of that id — ⚠️ against a second INSERT, which is
+-- what `PRIMARY KEY (id)` refuses, and (where a child exists) against the foreign key. A plain
+-- `UPDATE entity SET kind = …` on a CHILDLESS row succeeds, measured at the code review. No gate
+-- covers it and none is added here: the rule wanted is *this COLUMN is immutable*, which is the
+-- matcher class `entity_id_immutable`'s own doc declines twice, and D15's migration mechanism is
+-- the story that will legitimately write here. Registered to story 6.12.
+--
+-- ⚠️ For a row the ADAPTER wrote. `ascii_bin` is a PAD SPACE collation, so `'device '` satisfies
+-- `kind IN (…)`, `kind = 'device'` and the composite foreign key while `VARCHAR` keeps the padding
+-- — and `load_entity` then reads that row back as an unfamiliar token. Unreachable through the
+-- adapter, which binds `EntityKind::as_str()`; reachable by a raw write, a backfill or `LOAD DATA`.
+-- Stated rather than guarded: a `CHECK` cannot express "no trailing space" without restating the
+-- domain a second time, and a second representation is what this story spent a mutation learning
+-- to distrust.
+CREATE TABLE IF NOT EXISTS entity (
   id    CHAR(36)    CHARACTER SET ascii   COLLATE ascii_bin    NOT NULL,
   kind  VARCHAR(16) CHARACTER SET ascii   COLLATE ascii_bin    NOT NULL,
   state VARCHAR(20) CHARACTER SET ascii   COLLATE ascii_bin    NOT NULL DEFAULT 'active',
@@ -64,7 +93,7 @@ CREATE TABLE entity (
 --
 -- `kind` is here only to give the composite foreign key its second column; it is constant, it is
 -- written by the adapter as a literal, and the CHECK below is what stops it drifting.
-CREATE TABLE device (
+CREATE TABLE IF NOT EXISTS device (
   id   CHAR(36)    CHARACTER SET ascii   COLLATE ascii_bin    NOT NULL,
   kind VARCHAR(16) CHARACTER SET ascii   COLLATE ascii_bin    NOT NULL DEFAULT 'device',
   PRIMARY KEY (id),

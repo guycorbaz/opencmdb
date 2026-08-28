@@ -1668,24 +1668,35 @@ where
 /// ⚠️ **No production caller, by the epic's own criterion** — *"no producer: nothing writes a device
 /// yet"*. Story 6.12 is where that changes.
 ///
+/// 🔴 **It opens its OWN transaction, and the first draft did not.** The doc used to say the two
+/// statements *"share the caller's transaction, so a failure on the second leaves no orphan parent
+/// once that transaction rolls back"* — true only if the caller had opened one, which
+/// `&mut MySqlConnection` does not require and which this module's own test did not do. Two review
+/// layers measured the consequence independently: with the second statement made to fail, the plain
+/// connection left a **committed `entity` row with no `device`** — exactly the *"half a device"*
+/// this function exists to make unrepresentable, on the other side of the foreign key. Nested inside
+/// a caller's transaction sqlx uses a SAVEPOINT, so the guarantee now holds either way.
+///
 /// # Errors
 ///
 /// [`RepositoryError::Constraint`] when the id is already used by any entity, or when it is the nil
-/// UUID. [`RepositoryError::Backend`] otherwise. The two statements share the caller's transaction,
-/// so a failure on the second leaves no orphan parent once that transaction rolls back.
+/// UUID. [`RepositoryError::Backend`] otherwise. Either both rows land or neither does.
 pub async fn insert_device(
     conn: &mut MySqlConnection,
     id: DeviceId,
 ) -> Result<(), RepositoryError> {
+    use sqlx::Connection;
     let id = id.to_string();
-    insert_entity(&mut *conn, &id, EntityKind::Device, EntityState::Active).await?;
+    let mut tx = conn.begin().await.map_err(classify)?;
+    insert_entity(&mut *tx, &id, EntityKind::Device, EntityState::Active).await?;
     // `kind` is bound as a literal rather than passed in: `device_kind_constant` is what stops it
     // drifting in the schema, and there being no parameter is what stops it drifting here.
     sqlx::query("INSERT INTO device (id, kind) VALUES (?, 'device')")
         .bind(&id)
-        .execute(&mut *conn)
+        .execute(&mut *tx)
         .await
         .map_err(classify)?;
+    tx.commit().await.map_err(classify)?;
     Ok(())
 }
 
@@ -1737,12 +1748,19 @@ mod tests {
 
     /// Connect and migrate. `None` when `DATABASE_URL` is unset.
     ///
-    /// 🔴 **It does NOT empty the entity tables, and the first draft did — which failed.** Cargo
-    /// runs these tests concurrently against ONE store, so a `DELETE FROM entity` raced a sibling's
-    /// `INSERT INTO device` and died on `device_entity_fk` (`ERROR 1451`) — twice, in the same run.
-    /// *A fixture that truncates a shared table cannot coexist with a concurrent suite*, which is
-    /// this story's validation finding about `cargo test` and the browser gates, met one level down.
-    /// Each test therefore owns DISTINCT ids and forgets only its own (see [`forget_entity`]).
+    /// 🔴 **Every caller takes [`crate::DB_TEST_LOCK`] first, and the first draft did not — which
+    /// is the whole story of this fixture's two failures.** The lock exists precisely for this
+    /// (`main.rs:52`: *"they share one MariaDB and would otherwise race on `migrate!`"*), and six
+    /// new tests were written without it. The visible symptoms were a `DELETE FROM entity` racing
+    /// a sibling's insert on `device_entity_fk` (`ERROR 1451`, twice in one run) and, on a VIRGIN
+    /// store, `Dirty(2)` from concurrent `migrate!` calls — **6/6 red where the parent commit was
+    /// 6/6 green, which is the shape CI's own `Tests` step runs.** Story 6.5's code review measured
+    /// both. *The per-test ids below were a remedy for a symptom of a rule that was simply not
+    /// followed.*
+    ///
+    /// They are kept anyway: each test owns DISTINCT ids and forgets only its own (see
+    /// [`forget_entity`]), which is what makes a test re-runnable against a store that kept the
+    /// last run's rows — the lock serialises, it does not clean.
     ///
     /// ⚠️ **The suite reports the same counts with and without a store, and the clock is the only
     /// tell** (0.4 s dry against ~6 s live), which is why every figure this story records names the
@@ -1791,6 +1809,7 @@ mod tests {
     /// one place. Story 6b.3's arbitration (1) is the precedent.
     #[tokio::test]
     async fn a_device_is_an_identifier_and_nothing_else() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
         let Some(pool) = entity_fixture().await else {
             return;
         };
@@ -1819,6 +1838,7 @@ mod tests {
     /// only to give `device_entity_fk` a parent index and enforces none of this.
     #[tokio::test]
     async fn an_id_carries_one_kind_for_its_whole_life() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
         let Some(pool) = entity_fixture().await else {
             return;
         };
@@ -1843,6 +1863,7 @@ mod tests {
     /// by raw SQL or by nothing* (story 5.9's M3).
     #[tokio::test]
     async fn a_device_row_without_its_parent_is_refused() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
         let Some(pool) = entity_fixture().await else {
             return;
         };
@@ -1865,25 +1886,38 @@ mod tests {
     /// suite green — which is exactly what story 5.9 measured when its M3 came back GREEN.
     #[tokio::test]
     async fn an_unfamiliar_kind_or_state_is_refused_by_the_schema() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
         let Some(pool) = entity_fixture().await else {
             return;
         };
         forget_entity(&pool, "33333333-0000-0000-0000-00000000e003").await;
         forget_entity(&pool, "44444444-0000-0000-0000-00000000e004").await;
+        // 🔴 NOT `is_err()`. The code review replaced the bad kind with a LEGAL one and a wrong
+        // column count, and this test still passed — it asserted that SOMETHING went wrong, never
+        // that the CHECK was what refused it. The classification does distinguish the cases.
         let bad_kind =
             sqlx::query("INSERT INTO entity (id, kind, state) VALUES (?, 'router', 'active')")
                 .bind("33333333-0000-0000-0000-00000000e003")
                 .execute(&pool)
-                .await;
-        assert!(bad_kind.is_err(), "`router` is not a kind this model has");
+                .await
+                .map_err(classify)
+                .map(|_| ());
+        assert_eq!(
+            bad_kind,
+            Err(RepositoryError::Constraint("check")),
+            "`router` is not a kind this model has, and the CHECK is what must say so"
+        );
         let bad_state =
             sqlx::query("INSERT INTO entity (id, kind, state) VALUES (?, 'device', 'retired')")
                 .bind("44444444-0000-0000-0000-00000000e004")
                 .execute(&pool)
-                .await;
-        assert!(
-            bad_state.is_err(),
-            "`retired` is not a state this model has"
+                .await
+                .map_err(classify)
+                .map(|_| ());
+        assert_eq!(
+            bad_state,
+            Err(RepositoryError::Constraint("check")),
+            "`retired` is not a state this model has, and the CHECK is what must say so"
         );
     }
 
@@ -1891,6 +1925,7 @@ mod tests {
     /// this one goes through it.
     #[tokio::test]
     async fn the_nil_uuid_is_refused_as_an_entity() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
         let Some(pool) = entity_fixture().await else {
             return;
         };
@@ -1912,6 +1947,7 @@ mod tests {
     /// is its third instance after `score.rs`'s `Column::as_str` / `Expectation::column` pair.
     #[tokio::test]
     async fn the_state_domain_agrees_with_the_schema() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
         let Some(pool) = entity_fixture().await else {
             return;
         };
@@ -1957,6 +1993,7 @@ mod tests {
     /// A new device is `Active`, is a `Device`, and reads back as both.
     #[tokio::test]
     async fn a_new_device_is_an_active_device() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
         let Some(pool) = entity_fixture().await else {
             return;
         };
@@ -1965,6 +2002,10 @@ mod tests {
         insert_device(&mut conn, id)
             .await
             .expect("a device is writable");
+        // ⚠️ This id is minted, so it collides with nothing — but a test that leaves a row behind
+        // grows the store by one entity and one device per suite run, measured over five runs at
+        // the code review. `entity` and `device` are emptied by no other fixture and by no seed.
+        let planted = id.to_string();
         let found = load_entity(&pool, &id.to_string())
             .await
             .expect("the read succeeds");
@@ -1980,6 +2021,75 @@ mod tests {
                 .expect("the read succeeds")
                 .is_none(),
             "asking about an entity that does not exist is a legitimate question, not an error"
+        );
+        drop(conn);
+        forget_entity(&pool, &planted).await;
+    }
+
+    /// 🔴 The case the COMPOSITE key exists for — and the first draft tested the other one.
+    ///
+    /// `a_device_row_without_its_parent_is_refused` covers *no parent at all*, which a plain `id`
+    /// foreign key would catch too. What `(id, kind)` buys is the refusal of a parent of the WRONG
+    /// KIND, and nothing pinned it until the code review said so.
+    #[tokio::test]
+    async fn a_device_over_an_interface_kinded_parent_is_refused() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = entity_fixture().await else {
+            return;
+        };
+        let id = "55555555-0000-0000-0000-00000000e005";
+        forget_entity(&pool, id).await;
+        insert_entity(&pool, id, EntityKind::Interface, EntityState::Active)
+            .await
+            .expect("an interface-kinded entity is legal");
+        let wrong_kind = sqlx::query("INSERT INTO device (id, kind) VALUES (?, 'device')")
+            .bind(id)
+            .execute(&pool)
+            .await
+            .map_err(classify)
+            .map(|_| ());
+        assert_eq!(
+            wrong_kind,
+            Err(RepositoryError::Constraint("foreign_key")),
+            "the composite key refuses a device whose parent is an interface — that is the \
+             disjunction a plain id key cannot express, and it is the whole reason for (id, kind)"
+        );
+        forget_entity(&pool, id).await;
+    }
+
+    /// The `kind` domain is written TWICE, exactly as the state domain is — and until the code
+    /// review only ONE of the two had a guard.
+    ///
+    /// Planting a third variant the CHECK forbids, and a CHECK token no variant names, both left
+    /// **770 tests and ten gates green**. *A count is not a set*, applied to the column beside the
+    /// one that learned it.
+    #[tokio::test]
+    async fn the_kind_domain_agrees_with_the_schema() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = entity_fixture().await else {
+            return;
+        };
+        let (clause,): (String,) = sqlx::query_as(
+            "SELECT CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS \
+             WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'entity_kind_domain'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("the CHECK exists and is readable");
+        let named: std::collections::BTreeSet<&str> =
+            EntityKind::ALL.iter().map(EntityKind::as_str).collect();
+        assert_eq!(
+            named.len(),
+            EntityKind::ALL.len(),
+            "two `EntityKind` variants persist as the same token — one can never be read back"
+        );
+        let quoted: std::collections::BTreeSet<&str> =
+            clause.split('\'').skip(1).step_by(2).collect();
+        assert_eq!(
+            quoted, named,
+            "the schema's CHECK and `EntityKind` name different sets — a kind the schema accepts \
+             and no variant names is a row `load_entity` reads back as unfamiliar, and the reverse \
+             is a write that fails in production. Clause: {clause}"
         );
     }
 

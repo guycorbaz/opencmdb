@@ -5146,9 +5146,31 @@ it re-derivable.*
   `device_entity_fk` (`ERROR 1451`), twice in one run. Each test now owns distinct ids and forgets
   only its own. Same family as the validation's *"`cargo test` and the browser sweep must not share
   a store"*, one level down. **Owner: effective immediately.**
-- ⚠️ **`cargo doc` reports EIGHT unresolved intra-doc link sites**, where story 6.3 recorded four —
-  and no gate can see any of them. None is this story's; the count is recorded so the next reader
-  does not attribute them. **Owner: a maintenance slice.**
+- ⚠️ **`cargo doc` reports TWELVE unresolved intra-doc link sites** (9 distinct targets), where story
+  6.3 recorded four — and no gate can see any of them. None is this story's; the count is recorded so
+  the next reader does not attribute them. ⚠️ *The first draft of this row said EIGHT, and a count
+  recorded for the next reader that is wrong defeats the row's own purpose.* **Owner: a maintenance
+  slice.**
+
+- 🔴 **`UPDATE entity SET kind` succeeds on a childless row**, so `0006`'s *"one id, one kind, for the
+  life of that id"* holds against a second INSERT and against the foreign key where a child exists,
+  and **not** against an update. No gate covers it and none was added: the rule wanted is *this
+  COLUMN is immutable*, which is the matcher class `entity_id_immutable`'s own doc declines twice —
+  and D15's migration mechanism (`state = 'pending_migration'`) is the thing that will legitimately
+  write to this table. **Owner: story 6.12.**
+
+- ⚠️ **An UPDATABLE VIEW over `declared_attribute` re-points a testimony and `entity-id-immutable`
+  cannot see it** — the gate names a table, not the aliases of it. Caught today only by `authorship`,
+  through the view's unsanctioned `SELECT`, and that carrier disappears at a whole-file-sanctioned
+  site. **A stated limit rather than a hole**, on the gate's tripwire narrowing; the barrier is the
+  database privilege story 5.12 registered and nobody has built. **Owner: Epic 19.**
+
+- ✅ **CLOSED by story 6.5's code review, and recorded because it stood for three gates**: a `/*`
+  inside a double-quoted string opened a block comment nothing closed, and **every line after it in
+  that file was invisible to `authorship`, `observed-immutable` and `entity-id-immutable`**. The live
+  specimen was `diagnostic.rs`'s `"/assets/*"`. Measured by a whole-tree sweep — one violation
+  appended to every walked file — **45 planted, 44 named, one blind**; after the fix, 45 named and
+  none blind. `strip_comments` now tracks the double quote, and `#` is stripped for `.sql`.
 - ⚠️ **Corrected in passing, and recorded because a register that misdirects is worse than a silent
   one**: `:2226` named *"the lifecycle epic (FR40-42)"* as the `state` column's owner — FR40-42 is
   **Epic 21** (edit, decommission, backup), while FR38b is Epic 6's and its behaviour is **story

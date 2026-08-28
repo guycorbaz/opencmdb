@@ -136,7 +136,7 @@ with `_sqlx_migrations`**, which any migration story touches).
 
 **AC9 — The three register rows that name THIS STORY as owner are accepted or re-owned BY NAME.**
 🔴 They were missing from the first draft, and `CLAUDE.md` is explicit: *"items are REGISTERED by
-the stories that raise them — carry them IN rather than rediscovering them."* §0f lists them.
+the stories that raise them — carry them IN rather than rediscovering them."* §0f2 lists them.
 
 ---
 
@@ -365,7 +365,7 @@ SQL inserts are what measure it. ⚠️ Expect the same here for every CHECK the
 every DB-backed test passes by returning, and the suite reports the same counts either way. **The
 clock is the tell** — roughly 0.6 s dry against ~7 s live. Build and mutate against a real store.
 
-### §0f. 🔴 THREE REGISTER ROWS NAME **THIS STORY** AS OWNER, and the first draft carried none
+### §0f2. 🔴 THREE REGISTER ROWS NAME **THIS STORY** AS OWNER, and the first draft carried none
 
 `CLAUDE.md` is explicit — *"items are REGISTERED for a retrospective by the stories that raise them
 — carry them IN rather than rediscovering them"* — and the first draft's T8 registered divergences
@@ -511,11 +511,15 @@ criterion mentions `identity_link` or `link_candidate`.**
   **every boot** — including a deployed `v0.2.0`.
 - The adapter is `crates/opencmdb-bin/src/repo.rs`; ids live in `opencmdb-core`'s `observation/mod.rs`.
 - 🔴 **The `file-size` gate is BLIND to `repo.rs`, which is where AC5's adapter goes.** It stops at
-  the first `#[cfg(test)]` **at any nesting**, and in `repo.rs` that is line **182** — an attribute on
-  a test-only struct — while the trailing test module starts at **1621**. So the gate reads the file
-  as **181** code lines while it carries roughly 1620, and the 2000-line ceiling does not protect it.
-  Registered, not this story's to fix (T9). `page.rs` at **1978** is correct and is the file the gate
-  does see.
+  the first `#[cfg(test)]` **at any nesting**, and in `repo.rs` that is line **184** — an attribute on
+  a test-only struct — while the trailing test module starts past **1700**. So the gate reads the
+  file as ~183 code lines while it carries roughly 3800, **1.9× the ceiling**. Registered, not this
+  story's to fix (T9). ⚠️ *The first draft wrote 182 and 1621: contexting-era figures the
+  implementation itself moved.*
+- 🔴 **And `xtask/src/main.rs` reached EXACTLY 2000** when the tenth gate was registered — the
+  ceiling, one line from red. The answer was the SPLIT `CLAUDE.md` prescribes: the SQL-text reader
+  the three SQL gates share is now `xtask/src/sql_text.rs`, 464 lines, and `main.rs` is back under
+  1550.
 - The `ddl-collation` gate lives in `xtask/src/main.rs` and has **no allowlist — the absence is the
   mechanism**. ⚠️ **It is also line-oriented, with no comment stripping and no per-column split**, so
   `_BIN` anywhere on a line satisfies it; keep every column's type and `COLLATE` on **one** line, as
@@ -562,14 +566,14 @@ Claude Opus 5 (1M context).
 
 ### The live count (AC8), every figure naming its state
 
-**761 → 770 tests** — 510 `opencmdb-bin` + 161 `opencmdb-core` + 99 `xtask`, `cargo test --workspace
+**761 → 772 tests** — 512 `opencmdb-bin` + 161 `opencmdb-core` + 99 `xtask` (after the code review), `cargo test --workspace
 --locked --no-fail-fast` against a live `mariadb:10.11.11` on port **13405**, **5.7 s** (≈0.4 s with
 `DATABASE_URL` unset — the counts are IDENTICAL either way and the clock is the only tell, which is
 why every figure here names its store). **TEN `cargo xtask ci` gates green**, up from nine;
 `clippy --workspace --all-targets --locked -- -D warnings`, `cargo fmt --check` and
 `RUSTFLAGS="-D warnings"` each read from `$?` on a file, never through a pipe.
 
-**Six tables** where there were five, plus `_sqlx_migrations`. `xtask/src/entity_id_immutable.rs` is
+**Seven tables** where there were five — `SHOW TABLES` returns **eight** with `_sqlx_migrations`. ⚠️ *This read "six" until the code review: five plus the two this migration creates is seven, and two layers caught the arithmetic independently, inside the commit that ships the tables it miscounts.* `xtask/src/entity_id_immutable.rs` is
 the gate's own module — `main.rs` is past 1900 of the 2000-line ceiling, so a gate goes beside it,
 never inside it (`copy_vocabulary.rs`'s precedent).
 
@@ -645,6 +649,68 @@ two `CREATE TABLE`s and alters nothing that exists, so there is no row it can tr
 `success = 0` to recover from. *That is a property of the arbitration, not of the SQL* — option (b)
 or (c) would have had to earn it.
 
+### Code review — three isolated layers, 2026-08-28, and what it repaired
+
+⚠️ **All three ran at this session's capability** (one on a lighter model), isolated by context and
+by worktree but **not on a different model**; the house rule's other half is not met by this pass and
+is not claimed.
+
+🔴 **THE BLIND LAYER SCORED AGAIN — seventh story running.** From the diff alone it caught the
+seven-tables arithmetic, and it deduced from a doc sentence that `insert_device`'s
+*"shares the caller's transaction"* promise was exercised by nothing. Both confirmed.
+
+**The four defects inside the promise, each measured and each closed:**
+
+| what was measured | closed by |
+|---|---|
+| 🔴 **A `/*` inside a double-quoted string blinded a whole file to THREE gates** — `diagnostic.rs`'s `"/assets/*"`, an ordinary route pattern. Whole-tree sweep: **45 planted, 44 named, one blind.** | `strip_comments` tracks the double quote. Re-swept: **45 named, none blind.** |
+| 🔴 **The suite was 6/6 RED on a virgin store where the parent commit is 6/6 GREEN** — and CI's `Tests` step runs on a virgin store. `Dirty(2)`, concurrent `migrate!`. | 🔑 **The cause was that seven new tests did not take `DB_TEST_LOCK`, which exists for exactly this** (`main.rs:52`). They take it now: **6/6 cold runs green.** *The per-test ids were a remedy for a symptom of a rule simply not followed.* |
+| 🔴 **`UPDATE (SELECT 1) s JOIN declared_attribute d … SET d.entity_id`** passed all ten gates and really re-points — `governing_keyword` returns the keyword ending LATEST. | The gate stopped asking which keyword governs. Its rule needs no such notion. Probe `e11`. |
+| 🔴 **`INSERT … ON DUPLICATE KEY UPDATE entity_id` at the SANCTIONED site** passed all ten gates and re-points through `declared_one_adoption_per_field`. Story 6.3 added those verbs for the mirror class and this gate had not inherited them. | `statement_after` carries the phrase, as `observed-immutable` does. Probe `e12`. |
+
+**And four defects of my own making:**
+
+- 🔴 **AC6's substitute claim was FALSE and displaced a remedy already specified.** *"No `success = 0`
+  to recover from"* — the auditor reproduced one: MySQL DDL is not transactional, a process killed
+  between the two statements leaves `entity` committed and version 6 dirty, and repairing the DATA
+  does not clear it. `IF NOT EXISTS` — *the idempotent, re-runnable shape AC6 asked for in writing* —
+  now makes a re-run heal itself, and `0006`'s header carries the recovery recipe on `0003`'s idiom.
+  🔑 *The narrow argument was sound; its generalisation was not.*
+- 🔴 **The lesson this story shipped for `state` was not applied to `kind`, and a doc comment claimed
+  it was.** Planted a variant the CHECK forbids and a CHECK token no variant names: **770 green both
+  ways.** `EntityKind::ALL` and `the_kind_domain_agrees_with_the_schema` close it; the false sentence
+  is corrected in place with its refutation attached.
+- 🔴 **Two of six tests had vacuous `is_err()` oracles** — they passed over a table that does not
+  exist and over a kind that IS in the domain. Both assert the exact `RepositoryError` now.
+- ⚠️ **`insert_device` was not atomic on a plain connection**: two layers independently left a
+  **committed `entity` with no `device`** — the *"half a device"* the function exists to prevent. It
+  opens its own transaction now (a SAVEPOINT when nested).
+
+**Also repaired**: the composite key's real case — *a parent of the WRONG KIND* — had no test and now
+has one; `a_new_device_is_an_active_device` leaked one entity and one device per suite run;
+`EntityState::Dormant`'s doc asserted a mechanism in the present tense that this story disclaims three
+times; `#` in a `.sql` file read as CODE, reddening a note ABOUT the rule (probe `e05`'s own subject,
+one comment syntax over); the gate report column was one character too narrow; and the `cargo doc`
+figure was 8 where it is 12.
+
+🔴 **`xtask/src/main.rs` reached EXACTLY 2000 code lines** — the ceiling, one line from red — and the
+answer was the split `CLAUDE.md` prescribes rather than shorter prose: `xtask/src/sql_text.rs`, the
+reader all three SQL gates share, 464 lines. ⚠️ *It is also the file whose defect the review found,
+so it earned its own name.*
+
+✅ **Refuted with the check, so nobody re-chases them**: story 5.12's multibyte line-map defect does
+**not** recur (emoji before a violation, the gate still names the right line); `0006`'s header claim
+about `PRIMARY KEY (id)` is right, built in both shapes; `UNIQUE KEY entity_id_kind` is **not**
+redundant (`ERROR 1005 … errno 150` without it); `build.rs` watches added, renamed, deleted **and**
+modified where I had measured only added; no other test truncates these two tables; and the warm-store
+race is closed (5/5). ⚠️ **Stated rather than guarded**: `ascii_bin` is PAD SPACE, so a RAW write of
+`'device '` satisfies every CHECK and the composite key and reads back as unfamiliar — unreachable
+through the adapter, written in `0006`'s header.
+
+⚠️ **`UPDATE entity SET kind` succeeds on a childless row**, registered to story 6.12 rather than
+guarded: the rule wanted is *this COLUMN is immutable*, the matcher class this gate's own doc declines
+twice, and D15's own migration mechanism is what will legitimately write there.
+
 ### File List
 
 - `crates/opencmdb-bin/migrations/0006_entity_device_and_state.sql` (new)
@@ -652,8 +718,9 @@ or (c) would have had to earn it.
 - `crates/opencmdb-bin/src/repo.rs` (modified — the adapter and its tests)
 - `crates/opencmdb-core/src/observation/mod.rs` (modified — `DeviceId`, `EntityKind`, `EntityState`)
 - `xtask/src/entity_id_immutable.rs` (new — the tenth gate)
-- `xtask/src/main.rs` (modified — the gate's registration, its module-doc row, its probe tests)
-- `xtask/probes/entity-id/e01…e10` (new — ten located probe verdicts)
+- `xtask/src/main.rs` (modified — the gate's registration, its module-doc row, its probe tests; the SQL-text reader lifted out at the ceiling)
+- `xtask/src/sql_text.rs` (new — the reader the three SQL gates share, with the double-quote fix)
+- `xtask/probes/entity-id/e01…e13` (new — thirteen located probe verdicts)
 - `xtask/src/mutate.rs` (modified — three stale *"nine gates"* sentences)
 - `README.md`, `CLAUDE.md`, `docs/project-context.md` (modified — nine gates → ten)
 - `_bmad-output/implementation-artifacts/deferred-work.md` (modified — thirteen rows)

@@ -48,12 +48,17 @@ use std::path::Path;
 use anyhow::{Context, Result};
 
 use crate::{
-    AUTHORSHIP_ROOTS, governing_keyword, is_table_reference_of, normalise_sql_text,
+    AUTHORSHIP_ROOTS, is_table_reference_of, normalise_sql_text, statement_after_of,
     statement_before,
 };
 
 /// The guarded table.
 const DECLARED_TABLE: &str = "declared_attribute";
+
+/// The phrase that turns an `INSERT` into an overwrite. Matched in the statement AFTER the table
+/// reference, which is where MariaDB's grammar puts it — `observed_immutable`'s idiom, and story
+/// 6.3 added it there for exactly this class.
+const ON_DUPLICATE: &str = "on duplicate key update";
 
 /// Every `UPDATE` of `declared_attribute` in one file's text, as `(line, message)`.
 ///
@@ -76,19 +81,37 @@ pub(crate) fn entity_id_immutable_findings(
         }
         let line = lines.get(at).copied().unwrap_or(0);
         let before = statement_before(&text, at).trim_start();
+        let after = statement_after_of(&text, at, DECLARED_TABLE);
 
-        // A `CREATE TABLE`, a `SELECT … FROM`, an `INSERT` and a bare mention all govern something
-        // this gate is not about. `INSERT` is the authorship gate's subject, not D15's.
-        let Some(keyword) = governing_keyword(before) else {
+        // 🔴 NOT `governing_keyword`. It returns the keyword whose match ENDS LATEST before the
+        // reference, and story 6.5's code review measured two forms that really re-point a
+        // testimony slipping past it, both with one literal string and neither needing a
+        // sanctioned site:
+        //
+        //   · `UPDATE (SELECT 1) s JOIN declared_attribute d … SET d.entity_id = ?` — the derived
+        //     table's `select` ends after `update`, so `update` did not govern;
+        //   · `INSERT … ON DUPLICATE KEY UPDATE entity_id = VALUES(entity_id)` — the reference
+        //     sits BEFORE the `UPDATE`, so `insert into` governed. Measured re-pointing through
+        //     `declared_one_adoption_per_field`, at the sanctioned site, with ten gates green.
+        //
+        // This gate's rule needs no notion of which keyword governs: it refuses **any UPDATE of
+        // this table**. So the question is only whether the statement IS an update — anywhere
+        // before the reference — or an insert that overwrites on collision.
+        let is_update = crate::contains_word(before, "update");
+        let verdict = if is_update {
+            Some("update")
+        } else if after.contains(ON_DUPLICATE) {
+            Some(ON_DUPLICATE)
+        } else {
+            None
+        };
+        let Some(named) = verdict else {
             continue;
         };
-        if !matches!(keyword, "update") {
-            continue;
-        }
         findings.push((
             line,
             format!(
-                "`update {DECLARED_TABLE}` — a declared attribute is a human's testimony about a \
+                "`{named} {DECLARED_TABLE}` — a declared attribute is a human's testimony about a \
                  referent, and rewriting it is falsification, not data movement (D15)"
             ),
         ));
