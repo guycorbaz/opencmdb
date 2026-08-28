@@ -1,7 +1,10 @@
 # generated: 2026-07-21
-# last_updated: 2026-08-26   (this commented twin had read 2026-08-01 while the live
+# last_updated: 2026-08-28   (this commented twin had read 2026-08-01 while the live
 #                             `last_updated:` field below said 2026-08-07 — two representations of
-#                             one date, one of them stale. Synced 2026-08-10; keep them in step.)
+#                             one date, one of them stale. Synced 2026-08-10; keep them in step.
+#                             ⚠️ They had DRIFTED AGAIN — 2026-08-26 here against 2026-08-24 below
+#                             — and were re-synced on 2026-08-28. Twice now: the comment asking
+#                             for them to be kept in step is not a mechanism.)
 # project: opencmdb
 # project_key: NOKEY
 # tracking_system: file-system
@@ -75,7 +78,9 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-24  # 🔴 **EPIC 6b IS CLOSED**, on the PROJECT REVIEW of 2026-08-24 held in
+last_updated: 2026-08-28  # Story 6.4b `done` (PR #129 `8c5ecb3`, record PR #130 `3d8476f`) and
+                          # story 6.4c contexted to `ready-for-dev`.
+                          # 🔴 **EPIC 6b IS CLOSED**, on the PROJECT REVIEW of 2026-08-24 held in
                           # `~/travail/Projets actuels/opencmdb/` -- the step that closes an epic
                           # AFTER its retrospective, never the story count. Order honoured:
                           # 13/13 done -> `v0.2.0` cut and published -> retrospective HELD
@@ -4657,7 +4662,32 @@ development_status:
   # 6.4 is the LAST story that touches the interface before 6.5-6.19 go into schema and the L2
   # cascade — fifteen engine stories would separate the decision from its application, and an
   # interface story written that late re-contexts entirely.
-  6-4c-the-interface-on-a-telephone: backlog
+  6-4c-the-interface-on-a-telephone: ready-for-dev
+  #   CONTEXTED 2026-08-28 against a BOOTED BINARY and Chrome 151, not against the documents.
+  #   🔴 THE PREMISE THIS STORY WAS HANDED IS FALSE IN THREE DOCUMENTS: "the zero `@media` rules"
+  #   -- `app.css` carries FOUR, three of them layout, the oldest shipped by story 3.7 on
+  #   2026-07-20, so the claim was false by 33 days when `deferred-work.md:4863` wrote it.
+  #   🔑 The cause is in the file: `app.css:318` says "the MOCK has no `@media` rule", which is
+  #   TRUE, and the subject drifted from the mock to the stylesheet -- a measurement taken on one
+  #   artefact and applied to another (story 6b.4b's class).
+  #   ⚠️ The real gap is sharper: the three breakpoints that exist are at 620 / 720 / 900 px, none
+  #   of them NFR24's 360 / 768 / 1280, each added ad hoc, and NOT ONE touches the shell.
+  #   🔴 MEASURED: nine of ten screens overflow at 360 px (`/devices` by +587 px, more than the
+  #   viewport is wide) and `/devices` still does at 768; 21 of 33 distinct control shapes are
+  #   under 44 px high, of which 100 occurrences are ONE rule -- `a.nav-entry` at 183x34, on every
+  #   screen; the rail is a fixed 208 px at every width, 58% of a 360 px viewport.
+  #   🔴 NEITHER BROWSER GATE SETS A VIEWPORT: no accessibility instrument in this project has
+  #   ever seen a phone, so every axe figure ever recorded is a desktop-width figure.
+  #   ✅ `/sources` is clean at 360 px and is kept as the CONTROL -- the overflow is not the shell
+  #   alone, it is the shell PLUS tables, monospace identifiers and a 256-cell grid.
+  #   ⚠️ THREE ARBITRATIONS OPEN (§0e): what replaces the rail -- the UX spec's bottom bar
+  #   prescribes a SEARCH MAGNIFIER and the product has no search, so the literal reading ships an
+  #   eleventh well-lit dead end; whether 44 px applies at 1280 or only below 768 (the mock's
+  #   density against NFR24's AAA figure, waiting in the register since 2026-08-22); and a THIRD
+  #   browser gate versus a viewport loop inside the existing one.
+  #   ⚠️ It is in NO epic file -- created by Epic 6b's retrospective (decision 2) and sequenced by
+  #   Guy, exactly as 6.4b; the ten ACs are DERIVED from NFR24, UX-DR56 and the UX spec.
+  #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
   6-5-entity-device-and-state-schema: backlog
   # 5.6's rule: a blocker that consults a rule is that rule's echo; recall in milli-units
   6-6-l2-candidates-and-no-rule: backlog
