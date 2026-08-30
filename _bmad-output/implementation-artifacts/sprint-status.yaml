@@ -4869,7 +4869,24 @@ development_status:
   #   the DB tests return early, the counts are identical, THE CLOCK IS THE TELL.
   #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
   # 5.6's rule: a blocker that consults a rule is that rule's echo; recall in milli-units
-  6-6-l2-candidates-and-no-rule: ready-for-dev  # contexted AND validated 2026-08-30
+  6-6-l2-candidates-and-no-rule: review  # IMPLEMENTED 2026-08-30 against a live mariadb:10.11.11.
+                          # 772 -> 783 tests (515+169+99), ten gates, clippy --all-targets; 0.22s
+                          # without a store and 7.04s with one -- THE CLOCK IS THE TELL.
+                          # 🔑 The COVERAGE assertion confirmed §0j on its FIRST run, naming
+                          # `cloned-mac-must-not-merge` in its collapsed bucket -- the arbitration
+                          # reached by an assertion rather than by the argument. The first draft of
+                          # T6 prescribed only the recall half; coverage was added at validation.
+                          # 🔴 Six mutations, TWO DIVERGED AND BOTH REFUTED A SENTENCE OF MINE:
+                          # M1 reds 2 not 1, M3 reds 3 not 1, so three doc comments claiming
+                          # *"the only carrier"* were corrected. A claim of sole carriership is
+                          # worth exactly the mutation that checked it.
+                          # ⚠️ M4 GREEN BY MEASUREMENT: calling `decide` inside the blocker -- the
+                          # act AC1 forbids -- leaves 783 tests, clippy and ten gates green.
+                          # Recorded as AC1's LIMIT and a TRIPWIRE, never as a pass. The
+                          # `join`/`decide_pair` half IS carried, by the type.
+                          # ⚠️ Trap gate STILL RED 26/15/11; no migration, no route, no write, no
+                          # production caller (story 6.12 is the first). `l1.rs`'s citation drift
+                          # is NOT fixed here -- registered, owner 6.7.
   # the FIRST producer of `Verdict::Opposes` in this codebase; 3 traps
   6-7-l2-different-hostname: backlog
   # the FIRST producer of `Verdict::Supports`; 2 traps

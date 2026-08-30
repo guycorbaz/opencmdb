@@ -1,6 +1,8 @@
 # Story 6.6: L2 candidate generation, and no rule
 
-Status: **ready-for-dev** — contexted 2026-08-30 against the committed corpus and the tree at
+Status: **review** — implemented 2026-08-30 against a live `mariadb:10.11.11` (port 13366).
+**783 tests green both ways** (515 bin + 169 core + 99 xtask), ten gates green, clippy over
+`--all-targets`. Contexted 2026-08-30 against the committed corpus and the tree at
 `8a19089`, then VALIDATED the same day by two fresh-context layers, each in its own worktree.
 **§0's corrections are applied in place and §0i holds the record.**
 
@@ -410,19 +412,19 @@ own stories five times.
 - [x] **T1 — Validation.** Run 2026-08-30 by two fresh-context layers, each in its own worktree.
       Sixteen findings, six HIGH, all applied; §0i holds the record. Both arbitrations taken (§0f,
       §0j).
-- [ ] **T2 — Write the synthetic AC5 guard BEFORE the production code** (AC5): two interfaces in
+- [x] **T2 — Write the synthetic AC5 guard BEFORE the production code** (AC5): two interfaces in
       different L2 domains remain a candidate pair. Observe it fail, then pass.
       🔴 **One guard, not two** — the uplink twin is withdrawn as unwritable (§0f); do not restore it.
-- [ ] **T3 — The pair type**: unordered by construction, `new(a, a) -> None`, private fields, full
+- [x] **T3 — The pair type**: unordered by construction, `new(a, a) -> None`, private fields, full
       rustdoc. Test that `new(a, b) == new(b, a)` and that the self-pair is refused. (AC1)
-- [ ] **T4 — The generator**: TOTAL over the supplied population, calls no rule and no `decide`.
+- [x] **T4 — The generator**: TOTAL over the supplied population, calls no rule and no `decide`.
       ⚠️ Duplicates collapse **as a corollary of the pair type**, not as a rule of its own — one
       mutation reds both tests, so do not claim two carriers (§0f). (AC1)
-- [ ] **T5 — The L2 recall**, integer per-mille. Make `blocking_recall_per_mille` **generic over
+- [x] **T5 — The L2 recall**, integer per-mille. Make `blocking_recall_per_mille` **generic over
       `<T: Ord>`** rather than duplicating it, so the floor constant stays shared (§0h). **Add a
       synthetic truncation test**: `float-free` guards the type and cannot see the arithmetic
       reordered — measured. (AC2)
-- [ ] **T6 — The corpus assertions in `opencmdb-bin`** (D47 forbids core to read files), **and there
+- [x] **T6 — The corpus assertions in `opencmdb-bin`** (D47 forbids core to read files), **and there
       are TWO of different natures — the L1 pattern has both and the first draft prescribed only
       one**:
       **(a) RECALL** — build the L2 truth set from the `must-merge` traps whose expected rule starts
@@ -436,7 +438,7 @@ own stories five times.
       the prototype needed three buckets (`interfaceless`, `multi_homed`, `collapsed`) to avoid losing
       a trap in silence, and `collapsed` is what produced §0j. Today no trap-named observation carries
       more than one MAC — a property of the corpus, not of the type.
-- [ ] **T7 — The mutation pass**, predictions written BEFORE any plant, each row naming its carrier.
+- [x] **T7 — The mutation pass**, predictions written BEFORE any plant, each row naming its carrier.
       ⚠️ **Only the narrowings EXPRESSIBLE under `&[L1Key]` may be listed as mutations** — the
       hostname and uplink rows of §0e are corpus measurements, not plantable mutations here, and the
       first draft listed them as if they were:
@@ -449,13 +451,13 @@ own stories five times.
         of AC1 rather than as a pass
       · delete the generator's body → predict red
       Record observed against predicted; **a divergence is a finding, not a correction.**
-- [ ] **T8 — Gates**: `cargo xtask ci` (ten gates), `cargo fmt --all`,
+- [x] **T8 — Gates**: `cargo xtask ci` (ten gates), `cargo fmt --all`,
       `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace --locked
       --no-fail-fast`. Record the count and the wall clock, and say whether a store was present.
-- [ ] **T10 — Repair `blocking.rs`'s module doc** (§0b): four stale figures, in the file this story
+- [x] **T10 — Repair `blocking.rs`'s module doc** (§0b): four stale figures, in the file this story
       extends and which the Dev Notes order the developer to cite. Not optional — a false doc is a
       defect, and citing it propagates four.
-- [ ] **T9 — Update the record**: this file (AC6), `sprint-status.yaml`, `docs/project-context.md`,
+- [x] **T9 — Update the record**: this file (AC6), `sprint-status.yaml`, `docs/project-context.md`,
       `CLAUDE.md`'s status paragraph — and **`identity/mod.rs`**, whose *"the two organs do not
       consult each other"* deserves a re-read now that `blocking` imports `L1Key` in production code
       (the sentence stays literally true; importing a type alias is not calling).
@@ -539,13 +541,90 @@ disagree with a measurement taken on the tree, **the measurement wins and the do
 
 ### Agent Model Used
 
-_(to be filled at implementation)_
+Claude Opus 5 (1M context), 2026-08-30.
 
-### Debug Log References
+### The live count (AC6), every figure naming its state
 
-### Completion Notes List
+**772 → 783 tests** (515 bin + 169 core + 99 xtask), measured with
+`cargo test --workspace --locked --no-fail-fast`, wall clock, warm:
+**0.22 s with no store** and **7.04 s against a live `mariadb:10.11.11` on port 13366** — *the clock
+is the tell that the store-backed tests genuinely ran.* **Ten `cargo xtask ci` gates green**;
+`float-free` walks **4** files under `identity/` (no new file landed — the L2 blocker extends
+`blocking.rs`), `file-size` reports 43 files, largest 1978. 28 fixtures, **trap gate still RED at
+26/15/11**, no migration, no dependency, no route, no screen, no write.
+
+### What was built
+
+`crates/opencmdb-core/src/identity/blocking.rs` gains `L2CandidatePair` (private fields ordered by
+`new`, `new(a, a) -> None`) and `l2_candidates(&[L1Key]) -> BTreeSet<L2CandidatePair>` — TOTAL, no
+narrowing key — and `blocking_recall_per_mille` becomes **generic over `<T: Ord>`** so the floor
+constant is shared rather than the function duplicated. `crates/opencmdb-bin/src/fixtures.rs` gains
+the corpus half: `l2_corpus()`, the recall assertion with its denominator asserted at **3**, the
+per-stream containment assertion, and the COVERAGE assertion.
+
+### T2's red was ASSERTION-carried, and that was arranged rather than hoped for
+
+The guard was written together with a **deliberately narrowed** generator, so the first run reddened
+on `left: 0, right: 1` — its own message — rather than on a compiler error. The narrowing was then
+removed and the test went green. *A guard first seen red by the compiler has not been seen red.*
+
+### The mutation pass — six mutations, predictions written BEFORE any plant
+
+Driven by `cargo xtask mutate` against a live store, never a throw-away script.
+
+| id | mutation | predicted | measured | verdict |
+|---|---|---|---|---|
+| M1 | narrow the L2 universe on `l2_domain` | red:1, corpus green | **red 2**, corpus green | 🔴 divergence — see below |
+| M2 | narrow on MAC equality | red, the corpus falls | red 5 | ✅ |
+| M3 | divide before scaling the per-mille | red:1, ten gates green | **red 3**, gates green | 🔴 divergence — see below |
+| M4 | call `decide` inside the generator | **green** | **green** | ✅ AC1's measured limit |
+| M5 | silently shrink the L2 truth set | red | red 3 | ✅ AC4 is load-bearing |
+| M6 | empty the generator's body | red | red 5, **clippy also red** | ✅ |
+
+🔴 **BOTH DIVERGENCES REFUTED A SENTENCE OF MINE, and the sentences were corrected rather than the
+measurements.** M1 was predicted to red the AC5 guard **alone**; it reds two, because
+`l2_the_universe_is_total_over_distinct_interfaces` happens to pin a cross-domain pair as well. M3
+was predicted to red the new truncation test alone; it reds three, the two L1 truncation tests
+exercising the same arithmetic. In both cases the doc said *"the only carrier"* / *"the only thing
+standing between that narrowing and green"*. **A claim of sole carriership is worth exactly the
+mutation that checked it** — three doc comments now say what was measured, and say what they used to
+say.
+
+⚠️ **M4 is the story's most important GREEN.** Calling `decide` inside the blocker — literally the
+act AC1 forbids — leaves 783 tests, clippy and all ten gates green. It is recorded as **AC1's
+measured limit**, not as a pass: the `join`/`decide_pair` half of the refusal is carried by the TYPE
+(neither is reachable without `Observation`s), the `decide` half is a **TRIPWIRE**.
+
+### 🔑 The coverage assertion confirmed §0j on its own
+
+`every_l2_trap_pair_is_in_the_universe` names `cloned-mac-must-not-merge` in its `collapsed` bucket
+and passed on the first run — an independent confirmation of the arbitration, reached by the
+assertion rather than by the argument. **The first draft of T6 prescribed only the recall half**; the
+coverage half was added at the validation, and it is the half that carries this.
+
+### AC3 is ANSWERED, not ticked
+
+Of the four narrowings §0e measures, exactly one is expressible inside `l2_candidates` (`l2_domain`)
+and the corpus is blind to it; the only narrowing that reds the corpus assertion is MAC equality,
+which is the inverse of what L2 does. **So no plausible AND expressible narrowing can red the L2
+recall assertion**, and the criterion is met by the synthetic guard plus the recorded measurement,
+never by the corpus.
+
+### T10 — `blocking.rs`'s module doc repaired, figures re-measured myself
+
+Four stale figures (ten `must-merge`, 700‰, 400‰, 900‰) → **eleven, 727‰, 363‰ strict / 818‰ loose,
+909‰**, re-derived over the committed corpus rather than taken from the validation report. **Five
+`architecture.md` citations corrected in this file** (`:988-993` → `:1013-1018`, `:1004-1007` →
+`:1029-1032`, `:1009-1011` → `:1034-1036`, `:1009` → `:1034`, `:1246-1253` → `:1272-1279`), each
+re-derived by `grep` on the quoted sentence. ⚠️ **`l1.rs` carries the same drift and is NOT touched
+here** — registered, owner story 6.7.
 
 ### File List
+
+- `crates/opencmdb-core/src/identity/blocking.rs` — MODIFIED
+- `crates/opencmdb-bin/src/fixtures.rs` — MODIFIED
+- `_bmad-output/implementation-artifacts/6-6-l2-candidates-and-no-rule.md` — MODIFIED
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — MODIFIED
 
 ## Change Log
 
@@ -553,3 +632,4 @@ _(to be filled at implementation)_
 |---|---|
 | 2026-08-30 | Story created and contexted. §0 measured against `8a19089`: the L2 truth set is **three** pairs (§0c), two of four narrowing keys are **invisible to the committed corpus** (§0e), and two premises inherited from `sprint-status.yaml` were **refuted** (§0a). One arbitration left open (§0f). |
 | 2026-08-30 | **VALIDATED** by two fresh-context layers (fact-check + gap-hunt, own worktree each; the gap-hunt layer BUILT the prototype and ran eight mutations against a live store). **Sixteen findings, six HIGH, all applied in place.** Both arbitrations TAKEN and recorded as mine, delegated: **§0f** — the input stays `&[L1Key]` and the TYPE replaces the guard, so **AC5's uplink half is WITHDRAWN as unwritable** (`E0425`); **§0j** — the L2 rules judge INTERFACE pairs, so the unanswerable bucket goes **11 → 4, not 11 → 3**. Corrected: three `architecture.md` citations ~25 lines off and **inherited rather than measured**; *"no lifecycle state"*, false since story 6.5; a register line quoted at its oldest occurrence while it is marked ✅ CLOSED; 333‰ needed a second row at **666‰** under the natural reading; 260 → **259** code lines; *"verbatim"* → *rendered*; the `InterfaceId` refusal's stated motive, which did not hold. Added: T6's missing **COVERAGE** half — the assertion that found §0j — a truncation test `float-free` cannot replace, T10 for `blocking.rs`'s four stale figures, and four register rows with named owners. |
+| 2026-08-30 | **IMPLEMENTED.** `L2CandidatePair` + `l2_candidates` (TOTAL, `&[L1Key]`) in `blocking.rs`; `blocking_recall_per_mille` made **generic** rather than duplicated; the corpus half in `fixtures.rs` — recall with its denominator asserted at **3**, per-stream containment, and the **COVERAGE** assertion, which **confirmed §0j on its own first run** by naming `cloned-mac-must-not-merge`. **772 → 783 tests**, ten gates, clippy `--all-targets`. Six mutations, predictions written first: 🔴 **two diverged and both refuted a sentence of mine** — M1 reds 2 not 1, M3 reds 3 not 1, so three doc comments claiming *"the only carrier"* were corrected. ⚠️ **M4 is green by measurement**: calling `decide` inside the blocker changes nothing, recorded as AC1's limit and a TRIPWIRE. T10 repaired four stale figures and five `architecture.md` citations in `blocking.rs`, each re-derived by grep. |
