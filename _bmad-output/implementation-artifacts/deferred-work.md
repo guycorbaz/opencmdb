@@ -5250,3 +5250,82 @@ Three rows. Three isolated layers on a different model; two of the three found r
   reason to open `l1.rs`, and a citation sweep across a file it does not otherwise touch is the
   scope creep the house rules refuse. **Owner: story 6.7**, which implements the first `l2-*` rule
   and will be in `identity/` anyway. Re-derive by `grep` on the quoted sentence, never by adding 25.
+
+## Deferred from: story 6.7's contexting (2026-08-30)
+
+One row, and it is an ARBITRATION's other half rather than a defect.
+
+- 🔑 **A CLONED MAC PRESENTS AS ONE INTERFACE CONTRADICTING ITSELF, and that is a STRUCTURAL FACT
+  rather than a pair rule. Owner: story 6.11.** Measured over all **seventeen** hostname-bearing
+  interfaces in every committed replay stream: **exactly one carries two different hostnames**
+  (`doc-host-echo` and `doc-host-foxtrot`, over three observations) — and it is precisely the
+  interface `cloned-mac`'s two observations collapse onto under `join`'s `(l2_domain, mac)` key.
+  ***The signal is not lost; the SHAPE is.***
+  **Guy arbitrated option (a) on 2026-08-30**: `cloned-mac-must-not-merge` stays unanswerable at L2
+  and the unanswerable bucket goes **11 → 4, not 11 → 3**, because *the trap is not unanswerable
+  because the engine is weak — it interrogates the WRONG LAYER*, asking an L2 rule to separate what
+  the L1 key has already fused. **This row is the other half of that decision**: the case is real and
+  detectable, and story 6.11 is where it belongs — `epics.md` already gives that story the
+  structural-fact shape for the virtual-MAC anchor (*"there is no rule"*), and D21's own words in the
+  trap file, *"a cloned MAC = two real interfaces, same MAC"*, say the **KEY** is what is wrong.
+  ⚠️ **Whoever takes it inherits a corpus bump**: the trap's expected rule (`l2-different-hostname`)
+  becomes wrong under a structural reading, and a bump is an act Epic 4's retrospective names as one
+  not to make in passing — it needs its own decision, not a side effect.
+  ⚠️ **And it inherits a live consequence**: story 6.7's T6 asserts BY NAME that
+  `cloned-mac-must-not-merge` is the trap not answered. Closing this row must update that assertion,
+  which is the point of naming it rather than counting it.
+
+## Deferred from: story 6.7's validation (2026-08-30)
+
+Two rows. Both were produced by BUILDING the rule, not by reading the story.
+
+- 🔴 **`run_trap` CANNOT DETECT A WRONG RULE ID ON AN `Opposes`-ONLY VERDICT, and story 6.7 is where
+  that hole first bites.** D13's ratified arbitration (Guy, 2026-07-29, GitHub issue #54) makes
+  `>= 1 Opposes` with no `Disqualifying` abstain on `AbsenceOfProof`; an `Outcome::Abstained` carries
+  **no rule**, so `run_trap`'s `(Some, Some)` comparison never fires. **Measured end to end**:
+  corrupting the id to `l2-totally-wrong-id` leaves the trap **PASSING**, not `WrongRule`.
+  ⚠️ **The hole has been in the algebra since story 5.4b and was invisible for want of a producer** —
+  6.7 is the first thing in this codebase to emit `Opposes`. Story 6.7 carries AC3 on a
+  **double-literal test** instead, which is L1's own idiom and was proven to be the only carrier that
+  reds on a typo. **This row is what remains**: every `must-not-merge` trap whose expected rule is
+  carried ONLY by an opposing verdict is, at the gate, spelling-blind. **Owner: story 6.15**, which
+  is where the gate's own honesty is the subject — with the question posed, not the answer assumed:
+  the fix may be in `run_trap`, in `Outcome`, or nowhere, and D18's *"a gate that cannot fall is
+  decoration"* cuts both ways here.
+
+- ⚠️ **Nothing says that `decide` must receive verdicts from ONE LEVEL, and combining them silently
+  erases the higher one.** For any valid L2 pair the two `L1Key`s differ by construction, so
+  `l1::verdict_for_pair` on the same observations always returns `Disqualifying` via
+  `l1-distinct-mac`, and `decide` gives `Disqualifying` absolute priority — measured
+  `NoMatch { rule: "l1-distinct-mac" }` on the real `doc-vm-alpha`/`doc-vm-beta` data. `l1.rs`'s doc
+  says the two organs do not consult each other; **nothing says it about `decide`'s ARGUMENT**, and
+  passing both is the obvious gesture. Story 6.7 writes the warning in its T2. **Owner: story 6.12**,
+  the first to wire the pass and therefore the first that could commit it — and it should consider
+  whether the invariant belongs in a TYPE rather than in a sentence, on story 5.6's precedent
+  (*closed in the type*).
+
+## Deferred from: story 6.7's CODE REVIEW (2026-08-30)
+
+Two rows, plus one re-ownership.
+
+- ↺ **RE-OWNED, not closed** — the twinning of `l2_corpus()` and `corpus_pairs()` in `fixtures.rs`
+  named **story 6.7** as owner *"with the question posed rather than the answer assumed"*. Story 6.7
+  touched the file, posed the question again and **did not answer it**, so the row was left naming a
+  finished story. **Owner: story 6.12**, the first to hold a real population and therefore the first
+  for whom a shared walk would be more than tidiness. ⚠️ It is still not obviously a DRY violation to
+  collapse: the two walk different populations and only one of their containment assertions is
+  non-tautological, *a difference a shared helper would hide.*
+
+- ⚠️ **A hostname of only non-ASCII letters reads as ABSENT.** Story 6.7's noise guard requires at
+  least one ASCII alphanumeric — a property rather than a list, which is what closes the
+  invisible-character and pure-punctuation classes together. The cost: a purely Cyrillic or CJK
+  hostname carries none and is treated as no name at all. **It errs on D20's safe side** — a refusal
+  to speak, never a false `Opposes` — and no committed trap exercises it. **Owner: the first story
+  with a connector that can observe a non-ASCII hostname**, which today is none: the shipped ARP/ping
+  connector emits no hostname at all.
+
+- ⚠️ **`verdict_for_hostname`'s evidence is NOT de-duplicated.** A side holding one observation twice,
+  or a multi-homed observation standing on both sides, puts an `ObsId` in the vector twice. Not
+  reachable through the corpus and reachable by a caller building a malformed group. **Owner: story
+  6.12**, which builds that plumbing — and which should decide whether de-duplication belongs in the
+  rule or in the caller's group construction, rather than adding it in both.

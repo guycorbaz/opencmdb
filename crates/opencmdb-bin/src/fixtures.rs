@@ -926,7 +926,9 @@ mod tests {
         BLOCKING_RECALL_FLOOR_PER_MILLE, CandidatePair, L2CandidatePair, blocking_recall_per_mille,
         candidates, l2_candidates,
     };
+    use opencmdb_core::identity::cascade::Verdict;
     use opencmdb_core::identity::l1::{L1Key, join};
+    use opencmdb_core::identity::l2::{L2_DIFFERENT_HOSTNAME, L2Side, verdict_for_hostname};
     use opencmdb_core::observation::{
         ConnectorId, Fact, HostnameSource, L2DomainId, MacAddr, ObsId, Scope, Timestamp, VantageId,
     };
@@ -5056,6 +5058,130 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                  {replay}, so no rule could ever be asked about it"
             );
         }
+    }
+
+    // ---- `l2-different-hostname`, against the committed corpus (story 6.7) ----
+
+    /// AC3's carrier — and the ONLY one, measured.
+    ///
+    /// 🔴 **`run_trap` cannot catch a misspelled id on an `Opposes`-only verdict.** D13's ratified
+    /// arbitration (GitHub issue #54) makes `>= 1 Opposes` with no `Disqualifying` abstain on
+    /// `AbsenceOfProof`; an `Outcome::Abstained` carries **no rule**, so the gate's `(Some, Some)`
+    /// comparison never fires and a corrupted id leaves the trap **PASSING** — measured end to end
+    /// at this story's validation, and again by its mutation pass.
+    ///
+    /// So the id is pinned the way `l1.rs` pins its own: **two independent literals**, the constant
+    /// and the corpus's own spelling, compared here. Story 6.7's T7 runs BOTH halves of that
+    /// measurement — this test reds on a typo, and the trap path does not.
+    #[test]
+    fn the_l2_different_hostname_id_matches_the_corpus_spelling() {
+        let mut found = 0usize;
+        walk_trap_files(&mut |path| {
+            let file = read_traps(path)
+                .unwrap_or_else(|e| panic!("corpus trap file {} is invalid: {e}", path.display()));
+            for trap in &file.trap {
+                if let Some(rule) = trap.expect.rule()
+                    && rule.0 == "l2-different-hostname"
+                {
+                    found += 1;
+                }
+            }
+        });
+
+        assert_eq!(
+            found, 3,
+            "three committed traps name this rule; a count that drifts in silence means the \
+             literal below has stopped being compared against anything"
+        );
+        assert_eq!(
+            L2_DIFFERENT_HOSTNAME, "l2-different-hostname",
+            "the constant and the corpus's spelling are two independent literals, and this is the \
+             only place they meet"
+        );
+    }
+
+    /// The two traps this rule can actually answer, driven end to end over the committed bytes.
+    ///
+    /// 🔴 **Two of three, and the third is named below rather than counted.** Guy's arbitration of
+    /// 2026-08-30: `cloned-mac-must-not-merge` carries the same MAC on both observations, so `join`
+    /// collapses them onto ONE interface and no pair exists to judge. The structural reading it
+    /// would need is registered against story 6.11.
+    #[test]
+    fn the_answerable_hostname_traps_are_opposed_and_the_third_is_named() {
+        let mut opposed: Vec<String> = Vec::new();
+        let mut collapsed: Vec<String> = Vec::new();
+
+        walk_trap_files(&mut |path| {
+            let file = read_traps(path)
+                .unwrap_or_else(|e| panic!("corpus trap file {} is invalid: {e}", path.display()));
+            for trap in &file.trap {
+                let Some(rule) = trap.expect.rule() else {
+                    continue;
+                };
+                if rule.0 != L2_DIFFERENT_HOSTNAME {
+                    continue;
+                }
+                let stream = read_jsonl(&fixture_path(&trap.replay).unwrap())
+                    .unwrap_or_else(|e| panic!("reading {}: {e}", trap.replay));
+                let groups = join(&stream);
+                let [a, b] = trap.observations.as_slice() else {
+                    panic!("{}: this rule's traps name a pair", trap.id.0);
+                };
+                let key_of = |wanted: &ObsId| -> L1Key {
+                    *groups
+                        .iter()
+                        .find(|(_, members)| members.contains(wanted))
+                        .map(|(key, _)| key)
+                        .unwrap_or_else(|| panic!("{}: {wanted} lands on no interface", trap.id.0))
+                };
+                let (ka, kb) = (key_of(a), key_of(b));
+                if ka == kb {
+                    collapsed.push(trap.id.0.clone());
+                    continue;
+                }
+                // Each side is the observations that landed on that interface — the resolution the
+                // domain crate deliberately does not do (`l2.rs`'s doc: it is the CALLER's job).
+                let side_of = |key: L1Key| -> L2Side<'_> {
+                    L2Side::new(
+                        stream
+                            .iter()
+                            .filter(|o| groups[&key].contains(&o.obs_id))
+                            .collect(),
+                    )
+                };
+                let verdict = verdict_for_hostname(&side_of(ka), &side_of(kb));
+                assert_eq!(
+                    verdict.verdict,
+                    Verdict::Opposes,
+                    "{}: the two interfaces report different hostnames, so this rule must argue \
+                     against grouping them",
+                    trap.id.0
+                );
+                assert!(
+                    !verdict.evidence.is_empty(),
+                    "{}: a verdict that ARGUES leaves its observations behind (D19)",
+                    trap.id.0
+                );
+                opposed.push(trap.id.0.clone());
+            }
+        });
+
+        opposed.sort();
+        assert_eq!(
+            opposed,
+            vec![
+                "shared-hardware-vm-must-not-merge".to_string(),
+                "vrrp-virtual-mac-must-not-merge-bearers".to_string()
+            ],
+            "exactly these two are answerable, and they are NAMED so a silent change is a red"
+        );
+        assert_eq!(
+            collapsed,
+            vec!["cloned-mac-must-not-merge".to_string()],
+            "the third is excluded because its two observations collapse onto one interface, and \
+             it is named here so a SECOND trap falling into this case reds a test instead of \
+             vanishing — the whole point of naming rather than counting"
+        );
     }
 
     /// Exactly one committed trap names fewer than two observations, and none names more.

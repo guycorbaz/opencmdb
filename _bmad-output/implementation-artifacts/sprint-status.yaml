@@ -78,7 +78,12 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-30  # 🔴 STORY 6.6 CONTEXTED, VALIDATED and `ready-for-dev`
+last_updated: 2026-08-30  # STORY 6.6 IS `done` (PR #135 `d9135e4`, record PR #136 `db1e3f9`,
+                          # CI green on each head commit). Epic 6: 7 done of 20.
+                          # NEXT: story 6.7, contexted and `ready-for-dev`; its validation is owed
+                          # and it carries an OPEN ARBITRATION that is Guy's -- see its entry below.
+                          #
+                          # (2026-08-30) 🔴 STORY 6.6 CONTEXTED, VALIDATED and `ready-for-dev`
                           # (`6-6-l2-candidates-and-no-rule.md`). Two fresh-context layers, own
                           # worktree each; the gap-hunt layer BUILT the prototype and ran eight
                           # mutations against a live store. **16 findings, 6 HIGH, all applied.**
@@ -4910,7 +4915,88 @@ development_status:
                           # production caller (story 6.12 is the first). `l1.rs`'s citation drift
                           # is NOT fixed here -- registered, owner 6.7.
   # the FIRST producer of `Verdict::Opposes` in this codebase; 3 traps
-  6-7-l2-different-hostname: backlog
+  6-7-l2-different-hostname: review  # IMPLEMENTED **and CODE-REVIEWED** 2026-08-30, three isolated
+                          # layers on a DIFFERENT model, against a VIRGIN mariadb:10.11.11.
+                          # 783 -> 798 tests (517+182+99), ten gates, clippy --all-targets, cargo doc.
+                          # 🔴 THE HEADLINE IS A CLAIM MY OWN MUTATION TABLE REFUTED THREE LINES
+                          # AWAY: three documents called the double-literal test *"the ONLY carrier
+                          # that reds on a typo"* while the table beside them recorded `M5 … red 2`.
+                          # Found INDEPENDENTLY by two layers -- and `fixtures.rs` already carried
+                          # story 6.6's exact guard sentence against that claim.
+                          # 🔴 D20's LOCK ONLY CLOSED LITERAL EMPTINESS: `\u{200B}` OPPOSED
+                          # `\u{2062}`, and `---` opposed `...` -- two non-signals arguing that one
+                          # machine is two devices, the story's own subject reached through a
+                          # channel `trim` does not close. Closed by a PROPERTY (a name must carry
+                          # one ASCII alphanumeric), never a list of code points.
+                          # 🔴 T9's REPAIR OVER-REACHED BY ONE LINE, keeping the three-line width of
+                          # the citation it replaced -- a mechanical +25, not a re-derivation -- and
+                          # the figure had been INHERITED from a register row wrong since 6.6, in
+                          # the task whose own instruction is never to do that.
+                          # 🔴 THE BLIND LAYER, FROM THE DIFF ALONE, found a doc corruption my
+                          # scripted edit introduced and NO GATE COULD SEE. Eighth story running.
+                          # ⚠️ M6's recorded 3 was 4, and is 5 on the repaired tree: A MUTATION
+                          # COUNT IS DATED BY THE TREE THAT PRODUCED IT.
+                          # (implemented earlier the same day; see the story file for the rest.)
+                          # 783 -> 796 tests (517+180+99), ten gates, float-free now over 5 files;
+                          # 0.21s without a store and 5.76s with one -- THE CLOCK IS THE TELL.
+                          # 🔑 THE FIRST PRODUCER OF `Verdict::Opposes` IN THIS CODEBASE.
+                          # 🔴 T3's RED WAS ARRANGED AND D20's BUG APPEARED BY DOING NOTHING:
+                          # `BTreeSet::is_disjoint` says TRUE of two empty sets, so without an
+                          # emptiness check ABSENCE OPPOSES -- four assertion-carried reds, closed
+                          # by ONE line. *The bug D20 calls the real lock is not something you
+                          # write; it is what you get for not writing one line.*
+                          # SIX MUTATIONS, SIX CONFORMING, every one on a virgin store with
+                          # `--baseline` (story 6.6's rule, applied).
+                          # ⚠️ M5's TRAP-PATH HALF IS NOT EXECUTABLE HERE -- there is no path from
+                          # an `l2-*` rule to `run_trap` -- so §0i's finding is PINNED AS AN
+                          # EXECUTABLE TEST instead: an `Opposes`-only verdict abstains and
+                          # `decision.rule()` is None. That is why a misspelled id is invisible to
+                          # the gate, and the test now fails if D13's arbitration ever changes.
+                          # AC1 ships MET on TWO traps of three, with the third NAMED, so a second
+                          # trap falling into that case reds a test instead of vanishing -- the
+                          # cost Guy's arbitration (a) accepted, made operational.
+                          # Two decisions the corpus cannot exercise, both guarded and both LIMITED
+                          # IN WRITING: hostname case (ASCII-folded, mine) and multi-name sets
+                          # (disjoint-only). ⚠️ Trap gate STILL RED 26/15/11; no production caller.
+                          # 🔴 AC1's *"the three committed traps"* IS TWO. `cloned-mac-must-not-merge`
+                          # expects `l2-different-hostname` and has NO L2 pair: both its observations
+                          # carry the SAME MAC in one `l2_domain`, so `join` collapses them onto one
+                          # interface. Story 6.6's §0j, now BITING A CRITERION rather than a count.
+                          # 🔑 AND THE CONTEXTING OPENED A THIRD OPTION NOBODY HAD POSED: the ONE
+                          # interface in the WHOLE corpus carrying two different hostnames is exactly
+                          # the one `cloned-mac` collapses onto (measured over all 17 hostname-bearing
+                          # interfaces). ***The signal is not lost — the SHAPE is.*** A cloned MAC
+                          # does not present as two interfaces disagreeing; it presents as ONE
+                          # INTERFACE CONTRADICTING ITSELF, which is story 6.11's structural-fact
+                          # shape arriving early, and D21's own words ("a cloned MAC = two real
+                          # interfaces, same MAC") say the L1 KEY is what is wrong, not the rule.
+                          # ✅ ARBITRATION TAKEN -- OPTION (a), GUY, 2026-08-30, and it is HIS where
+                          # story 6.6's twin decision was mine by delegation.
+                          # `cloned-mac-must-not-merge` STAYS UNANSWERABLE at L2; the bucket goes
+                          # 11 -> 4, NOT 11 -> 3; and (c), the structural reading, is REGISTERED BY
+                          # NAME to story 6.11, whose subject it already is.
+                          # 🔑 THE REASON IN ONE SENTENCE: the trap is not unanswerable because the
+                          # engine is weak -- it INTERROGATES THE WRONG LAYER, asking an L2 rule to
+                          # separate what the L1 key has already fused, and a rule comparing
+                          # hostnames cannot undo a merge decided on the MAC.
+                          # Refused: (b), which repairs the symptom by breaking the distinction the
+                          # whole level rests on -- and refused KNOWING it will never be cheaper,
+                          # every L2 rule shipped after this one raising the price of reversing.
+                          # Refused HERE and accepted THERE: (c) is right on the substance (D21 says
+                          # the KEY is wrong) but would arrive three stories early AND need a CORPUS
+                          # BUMP in passing, which Epic 4's retrospective names as a thing not to do
+                          # lightly.
+                          # ⚠️ THE ACCEPTED COST, WRITTEN RATHER THAN HIDDEN: a committed trap is
+                          # READ BY NOTHING until 6.11. T6 asserts BY NAME which one, so a second
+                          # trap falling into this case REDS A TEST instead of vanishing.
+                          # 🔑 THE STORY'S CENTRE IS D20's LOCK: *a rule that claims to know what it
+                          # does not know IS the bug*. The failure mode is not a missing `Opposes`,
+                          # it is an `Opposes` that should have been `Neutral` -- and NO trap in the
+                          # `hostname-absence` family names this rule, so AC2 needs a test that reds
+                          # when the rule wrongly opposes, not a trap that turns green.
+                          # ⚠️ 17 hostname-bearing interfaces, exactly ONE multi-named -- the excluded
+                          # one -- so the multi-hostname case is REACHABLE in production and
+                          # UNEXERCISED by the corpus. AC4 makes it a decision, not a default.
   # the FIRST producer of `Verdict::Supports`; 2 traps
   6-8-l2-uplink-agrees: backlog
   # and the measured floor: hostname is unusable on nearly half of known clients
