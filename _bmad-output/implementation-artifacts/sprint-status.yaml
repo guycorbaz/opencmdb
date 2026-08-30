@@ -4869,7 +4869,29 @@ development_status:
   #   the DB tests return early, the counts are identical, THE CLOCK IS THE TELL.
   #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
   # 5.6's rule: a blocker that consults a rule is that rule's echo; recall in milli-units
-  6-6-l2-candidates-and-no-rule: review  # IMPLEMENTED 2026-08-30 against a live mariadb:10.11.11.
+  6-6-l2-candidates-and-no-rule: done  # PR #135 squash-merged 2026-08-30 as `d9135e4` after a CI
+                          # run green ON THE HEAD COMMIT ITSELF (`4a38b0d`, run 33304675214, 2m32),
+                          # read from `gh pr checks` and NOT from the watcher, which was KILLED and
+                          # emitted nothing -- its empty output is indistinguishable from a pass.
+                          # ✅ CODE-REVIEWED by three isolated layers on a DIFFERENT model and
+                          # repaired first: 7 findings.
+                          # 🔴 THE HIGH IS THIS STORY'S OWN LESSON IN THE FILE ITS OWN T9 NAMED:
+                          # `identity/mod.rs` still said *"the blocker still has no production
+                          # caller at all"* -- false since 5.9b (`resolver.rs:211`), the register
+                          # row marked ✅ CLOSED -- two lines from the sentence T9 DID re-read.
+                          # 🔑 *A promise to re-read is not a re-read of what you did not look at.*
+                          # 🔴 THE BLIND LAYER, from the diff alone, found the coverage loop CANNOT
+                          # RED ON ITS OWN: the pair is built from `groups` and the universe from
+                          # that same `groups`'s keys. 🔑 Its L1 twin is NOT a corollary -- there the
+                          # pair comes from `obs_id`s a trap NAMES, which need not be in the stream.
+                          # The shape was inherited without the property. Seventh story running
+                          # where the layer with no repository access finds a HIGH.
+                          # 🔑 M5 reproduced for NEITHER sighted layer; re-measured on a VIRGIN
+                          # store with `--baseline`, my injection gives 3 and theirs 2 -- the row's
+                          # NAME described their mutation and its number described mine. M5b is the
+                          # control. ⚠️ And the six original mutations ran WITHOUT `--baseline`, the
+                          # driver warning every time.
+                          # (implemented 2026-08-30 against a live mariadb:10.11.11.)
                           # 772 -> 783 tests (515+169+99), ten gates, clippy --all-targets; 0.22s
                           # without a store and 7.04s with one -- THE CLOCK IS THE TELL.
                           # 🔑 The COVERAGE assertion confirmed §0j on its FIRST run, naming
