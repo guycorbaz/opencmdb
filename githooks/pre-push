@@ -1,0 +1,55 @@
+#!/bin/sh
+# Refuse to publish a throw-away branch, and refuse a mass push.
+#
+# WHY THIS EXISTS, measured rather than supposed (2026-08-30). The repository's
+# `delete_branch_on_merge` setting is ON and works: GitHub deleted every story branch at its
+# merge. Twenty-three branches were on `origin` anyway, and walking them against
+# `gh pr list --state merged` split them in two — EIGHT were PR heads GitHub had already
+# deleted and something PUT BACK, and FIFTEEN had never been a PR head at all
+# (`edge-*`, `gap-hunt-*`, `audit-*`, `worktree-agent-*`: review-layer and agent worktree
+# branches, throw-away by their own mandate).
+#
+# The cause is not the merge. It is a session pushing every local branch "for safekeeping" at a
+# story's close — which republished what the setting had just cleaned and published branches
+# nobody meant to publish. THIS HOOK GUARDS THAT GESTURE.
+#
+# ⚠️ IT IS A TRIPWIRE, NOT A BARRIER, and the difference is stated rather than implied:
+#   - it lives in `core.hooksPath`, which is per-clone CONFIGURATION — a fresh clone has it off
+#     until `git config core.hooksPath githooks` is run (see CLAUDE.md);
+#   - `git push --no-verify` skips it, as it skips every hook;
+#   - it reads the ref NAMES a push carries and nothing about their content.
+# It stops the good-faith gesture. It stops no determined one, and the barrier for that is a
+# branch-protection ruleset on the remote, which is registered and not implied by this.
+#
+# Escape hatch, for the day the publication is deliberate:
+#   OPENCMDB_ALLOW_THROWAWAY_PUSH=1 git push origin edge-6b10
+
+throwaway='^refs/heads/(worktree-agent-|edge-|gap-hunt-|audit-|hunt-|review-)'
+refs=''
+n=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -z "$local_ref" ] && continue
+    case "$local_ref" in refs/heads/*) ;; *) continue ;; esac
+    n=$((n + 1))
+    if printf '%s' "$local_ref" | grep -Eq "$throwaway"; then
+        refs="$refs ${local_ref#refs/heads/}"
+    fi
+done
+
+if [ -n "$refs" ] && [ "$OPENCMDB_ALLOW_THROWAWAY_PUSH" != "1" ]; then
+    echo "pre-push: REFUSED — throw-away branch(es):$refs" >&2
+    echo "  A review-layer or agent-worktree branch is throw-away by its own mandate." >&2
+    echo "  Publishing it is how 23 branches reached origin (see this hook's header)." >&2
+    echo "  Deliberate? OPENCMDB_ALLOW_THROWAWAY_PUSH=1 git push ..." >&2
+    exit 1
+fi
+
+if [ "$n" -gt 3 ] && [ "$OPENCMDB_ALLOW_THROWAWAY_PUSH" != "1" ]; then
+    echo "pre-push: REFUSED — $n branches in one push." >&2
+    echo "  A mass push is the 'safekeeping' gesture that caused this. Push what you mean to." >&2
+    echo "  Deliberate? OPENCMDB_ALLOW_THROWAWAY_PUSH=1 git push ..." >&2
+    exit 1
+fi
+
+exit 0

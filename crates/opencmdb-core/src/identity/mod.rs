@@ -17,12 +17,24 @@
 //!
 //! **The two organs do not consult each other.** [`blocking::candidates`] calls neither [`l1::join`]
 //! nor [`l1::decide_pair`] — proposing is not judging — and `l1` still answers a pair its caller
-//! supplies rather than generating one. **Nothing calls the two in sequence, and the blocker still
-//! has no production caller at all.** Story 5.7 gave `l1` its first one, `opencmdb_bin`'s
-//! `l1_runner`, and deliberately did NOT make it the blocker's: a trap NAMES the pair it puts under
-//! judgement, so the runner has nothing to generate, and a runner that generated its own pairs
-//! would ignore the corpus's own statement of what is being judged. The first caller holding a set
-//! of observations and no trap is where the two organs meet. L1 emits three of the five
+//! supplies rather than generating one. Story 5.7 gave `l1` its first production caller,
+//! `opencmdb_bin`'s `l1_runner`, and deliberately did NOT make it the blocker's: a trap NAMES the
+//! pair it puts under judgement, so the runner has nothing to generate, and a runner that generated
+//! its own pairs would ignore the corpus's own statement of what is being judged. **The two organs
+//! met in story 5.9b**, whose `resolver.rs` holds a set of observations and no trap: it calls
+//! `candidates` and `decide_pair` in sequence, and `scan_pass.rs` reaches it from the shipped binary
+//! since story 5.14.
+//!
+//! 🔴 _(This paragraph asserted **"nothing calls the two in sequence, and the blocker still has no
+//! production caller at all"** until story 6.6's code review. It was true when written and FALSE
+//! from story 5.9b onward — four stories later — and the register marks the matching debt row
+//! ✅ CLOSED. Story 6.6's own §0g corrects exactly this confusion about exactly this sentence, two
+//! files away, and its T9 named this file: the adjacent sentence was re-read and the false one two
+//! lines above was not. **A promise to re-read is not a re-read of what you did not look at.**)_
+//!
+//! **The L2 blocker has no production caller**, which is a different and still-true statement:
+//! [`blocking::l2_candidates`] is reached from its own tests and from `fixtures.rs`'s test module
+//! only. Story 6.12 is the first that will hand it a population. L1 emits three of the five
 //! verdicts; `Supports` and `Opposes` gain a producer with Epic 6's `l2-*` rules.
 //!
 //! The architecture's source tree names an `IdentityError` on this module [architecture.md:3366].

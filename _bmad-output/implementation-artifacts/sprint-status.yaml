@@ -1,5 +1,5 @@
 # generated: 2026-07-21
-# last_updated: 2026-08-28   (this commented twin had read 2026-08-01 while the live
+# last_updated: 2026-08-30   (this commented twin had read 2026-08-01 while the live
 #                             `last_updated:` field below said 2026-08-07 — two representations of
 #                             one date, one of them stale. Synced 2026-08-10; keep them in step.
 #                             ⚠️ They had DRIFTED AGAIN — 2026-08-26 here against 2026-08-24 below
@@ -78,7 +78,52 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-28  # Story 6.4b `done` (PR #129 `8c5ecb3`, record PR #130 `3d8476f`);
+last_updated: 2026-08-30  # 🔴 STORY 6.6 CONTEXTED, VALIDATED and `ready-for-dev`
+                          # (`6-6-l2-candidates-and-no-rule.md`). Two fresh-context layers, own
+                          # worktree each; the gap-hunt layer BUILT the prototype and ran eight
+                          # mutations against a live store. **16 findings, 6 HIGH, all applied.**
+                          # ✅ TWO ARBITRATIONS TAKEN, mine, delegated by Guy, recorded as mine so
+                          # they can be reversed at the right cost (6.5 §0d's precedent):
+                          # (1) the input stays `&[L1Key]` and the TYPE replaces the guard --
+                          #     **AC5's uplink half is WITHDRAWN, measured UNWRITABLE (`E0425`)**;
+                          #     a guard that cannot red is this epic's dominant defect, and the
+                          #     first draft committed it inside the criterion written to avoid it.
+                          #     ⚠️ The risk MOVES to the call site, where filtering by uplink was
+                          #     measured leaving 783 tests, clippy and ten gates GREEN -> story 6.12.
+                          # (2) the L2 rules judge INTERFACE pairs, so 🔴 **THE UNANSWERABLE BUCKET
+                          #     GOES 11 -> 4, NOT 11 -> 3**: `cloned-mac-must-not-merge` names an
+                          #     `l2-*` rule and has NO L2 pair -- both its observations carry the
+                          #     SAME MAC, so `join` collapses them onto one interface. `epics.md`
+                          #     constraint (2) says three and is NOT edited; registered, owners
+                          #     story 6.15 and Epic 6's retrospective.
+                          # 🔴 AC1's central refusal is carried by NOTHING: calling `decide` inside
+                          # the blocker leaves 783 tests, clippy and ten gates green. Stated as a
+                          # TRIPWIRE. And it REFUTES the reason the draft gave for refusing `l2.rs`
+                          # -- the choice buys documentation, not constraint.
+                          # ⚠️ Three `architecture.md` citations were ~25 lines off and were
+                          # INHERITED from `blocking.rs`'s module doc rather than measured, inside a
+                          # section promising everything in it was run. That doc also carries FOUR
+                          # stale figures; T10 repairs them.
+                          # 🔴 TWO PREMISES OF THIS FILE WERE REFUTED at contexting. (1) The notes
+                          # here sit ABOVE their key, and 6.6 was read as *"the first producer of
+                          # `Verdict::Opposes`"* — that is 6.7. **6.6 produces no verdict at all**;
+                          # it is the L2 BLOCKER. (2) `CLAUDE.md`'s *"10 must-merge"* is story
+                          # 5.6's dated figure; `fixtures.rs:4752` asserts **11** since 5.13b.
+                          # 🔑 MEASURED, and it is the story's centre: the **L2** truth set is
+                          # **THREE** pairs, not eleven — eight of the eleven expect `l1-exact-mac`
+                          # and are two sightings of ONE interface, which is no L2 pair at all.
+                          # 🔴 And TWO of the four candidate narrowing keys score **1000‰ over the
+                          # whole committed corpus**: same `l2_domain`, and *agreeing uplink
+                          # `peer_mac`* — the most tempting L2 narrowing there is, and the very
+                          # signal story 6.8 scores on. The corpus is BLIND to both, so each owes a
+                          # SYNTHETIC guard written FIRST (story 5.6's precedent). The two that DO
+                          # red: hostname **333‰**, uplink `peer_mac`+`peer_port` **666‰**.
+                          # ⚠️ ONE ARBITRATION IS OPEN (§0f): the blocker's home and its input type.
+                          # ⚠️ This story routes no trap: the gate STAYS RED at 26/15/11 (11 -> 3
+                          # with 6.7-6.11, green at 6.15) and the blocker still has NO production
+                          # caller — story 6.12 is the first.
+                          #
+                          # (2026-08-28) Story 6.4b `done` (PR #129 `8c5ecb3`, record PR #130 `3d8476f`);
                           # story 6.4c contexted, VALIDATED and DEFERRED to GitHub issue #131
                           # (PR #132 `4ef546f`); story 6.5 `done` (PR #133 `de6bbc2`) -- the
                           # entity supertype, the device, the state domain, and a TENTH gate.
@@ -4824,7 +4869,24 @@ development_status:
   #   the DB tests return early, the counts are identical, THE CLOCK IS THE TELL.
   #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
   # 5.6's rule: a blocker that consults a rule is that rule's echo; recall in milli-units
-  6-6-l2-candidates-and-no-rule: backlog
+  6-6-l2-candidates-and-no-rule: review  # IMPLEMENTED 2026-08-30 against a live mariadb:10.11.11.
+                          # 772 -> 783 tests (515+169+99), ten gates, clippy --all-targets; 0.22s
+                          # without a store and 7.04s with one -- THE CLOCK IS THE TELL.
+                          # 🔑 The COVERAGE assertion confirmed §0j on its FIRST run, naming
+                          # `cloned-mac-must-not-merge` in its collapsed bucket -- the arbitration
+                          # reached by an assertion rather than by the argument. The first draft of
+                          # T6 prescribed only the recall half; coverage was added at validation.
+                          # 🔴 Six mutations, TWO DIVERGED AND BOTH REFUTED A SENTENCE OF MINE:
+                          # M1 reds 2 not 1, M3 reds 3 not 1, so three doc comments claiming
+                          # *"the only carrier"* were corrected. A claim of sole carriership is
+                          # worth exactly the mutation that checked it.
+                          # ⚠️ M4 GREEN BY MEASUREMENT: calling `decide` inside the blocker -- the
+                          # act AC1 forbids -- leaves 783 tests, clippy and ten gates green.
+                          # Recorded as AC1's LIMIT and a TRIPWIRE, never as a pass. The
+                          # `join`/`decide_pair` half IS carried, by the type.
+                          # ⚠️ Trap gate STILL RED 26/15/11; no migration, no route, no write, no
+                          # production caller (story 6.12 is the first). `l1.rs`'s citation drift
+                          # is NOT fixed here -- registered, owner 6.7.
   # the FIRST producer of `Verdict::Opposes` in this codebase; 3 traps
   6-7-l2-different-hostname: backlog
   # the FIRST producer of `Verdict::Supports`; 2 traps

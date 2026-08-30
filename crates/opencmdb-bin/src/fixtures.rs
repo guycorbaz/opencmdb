@@ -923,8 +923,10 @@ mod tests {
     use super::*;
     use opencmdb_core::gap::AbstentionCause;
     use opencmdb_core::identity::blocking::{
-        BLOCKING_RECALL_FLOOR_PER_MILLE, CandidatePair, blocking_recall_per_mille, candidates,
+        BLOCKING_RECALL_FLOOR_PER_MILLE, CandidatePair, L2CandidatePair, blocking_recall_per_mille,
+        candidates, l2_candidates,
     };
+    use opencmdb_core::identity::l1::{L1Key, join};
     use opencmdb_core::observation::{
         ConnectorId, Fact, HostnameSource, L2DomainId, MacAddr, ObsId, Scope, Timestamp, VantageId,
     };
@@ -4822,6 +4824,236 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                 corpus.universes[replay].contains(pair),
                 "{id}: the pair it judges is outside the candidate universe of {replay}, so no \
                  rule could ever be asked about it"
+            );
+        }
+    }
+
+    // ---- The L2 blocker, measured against the committed corpus (story 6.6) ----
+    //
+    // The L1 walk above keys on `obs_id`. This one keys on the INTERFACE — `join`'s
+    // `(l2_domain, mac)` — because that is what an L2 rule judges. The two truth sets are
+    // DIFFERENT SETS and the difference is the point: eight of the eleven L1 `must-merge` pairs
+    // expect `l1-exact-mac` and are two sightings of ONE interface, which is no L2 pair at all.
+
+    /// What the committed traps say about INTERFACE pairs, for the traps that name an `l2-*` rule.
+    struct L2Corpus {
+        /// The L2 recall truth set — `must-merge` traps whose expected rule is `l2-*`.
+        required: std::collections::BTreeSet<L2CandidatePair>,
+        /// The L2 candidate universe of each replay stream, keyed by the stream.
+        universes: std::collections::BTreeMap<String, std::collections::BTreeSet<L2CandidatePair>>,
+        /// Traps naming an `l2-*` rule that resolve to a real pair, as `(id, replay, pair)`.
+        pairs: Vec<(String, String, L2CandidatePair)>,
+        /// Traps naming an `l2-*` rule whose two observations COLLAPSE onto ONE interface.
+        collapsed: Vec<String>,
+        /// Traps naming an `l2-*` rule where a named observation carries NO L1 key.
+        interfaceless: Vec<String>,
+        /// Traps naming an `l2-*` rule that do not name exactly TWO observations.
+        ///
+        /// 🔴 Separate from `interfaceless` since story 6.6's code review, which found the two
+        /// folded together: a future `l2-*` trap naming three observations would have been reported
+        /// as *"names an observation without an L1 key"*, **a red accusing the wrong cause**. Empty
+        /// today — every one of the eight `l2-*` traps names a pair — so this is a naming hole and
+        /// not a coverage hole, and it is closed before the corpus grows into it.
+        wrong_arity: Vec<String>,
+        /// Traps naming an `l2-*` rule where a named observation carries TWO OR MORE L1 keys.
+        multi_homed: Vec<String>,
+    }
+
+    /// Walk every committed trap file and resolve the `l2-*` traps to INTERFACE pairs.
+    ///
+    /// The three residue buckets are not defensive padding: an observation may carry zero MACs or
+    /// several, so `join` may give a named observation no key or many. Dropping either case silently
+    /// is how a trap leaves the corpus without anyone noticing — and `collapsed` is what found the
+    /// story's §0j.
+    fn l2_corpus() -> L2Corpus {
+        let mut found = L2Corpus {
+            required: std::collections::BTreeSet::new(),
+            universes: std::collections::BTreeMap::new(),
+            pairs: Vec::new(),
+            collapsed: Vec::new(),
+            interfaceless: Vec::new(),
+            wrong_arity: Vec::new(),
+            multi_homed: Vec::new(),
+        };
+        walk_trap_files(&mut |path| {
+            let file = read_traps(path)
+                .unwrap_or_else(|e| panic!("corpus trap file {} is invalid: {e}", path.display()));
+            for trap in &file.trap {
+                let Some(rule) = trap.expect.rule() else {
+                    continue;
+                };
+                if !rule.0.starts_with("l2-") {
+                    continue;
+                }
+                let stream = read_jsonl(&fixture_path(&trap.replay).unwrap())
+                    .unwrap_or_else(|e| panic!("reading {}: {e}", trap.replay));
+                let groups = join(&stream);
+                if !found.universes.contains_key(&trap.replay) {
+                    let interfaces: Vec<L1Key> = groups.keys().copied().collect();
+                    found
+                        .universes
+                        .insert(trap.replay.clone(), l2_candidates(&interfaces));
+                }
+                // Invert the join: which interfaces does each named observation land on?
+                let keys_of = |wanted: &ObsId| -> Vec<L1Key> {
+                    groups
+                        .iter()
+                        .filter(|(_, members)| members.contains(wanted))
+                        .map(|(key, _)| *key)
+                        .collect()
+                };
+                let [a, b] = trap.observations.as_slice() else {
+                    found.wrong_arity.push(trap.id.0.clone());
+                    continue;
+                };
+                let (ka, kb) = (keys_of(a), keys_of(b));
+                if ka.is_empty() || kb.is_empty() {
+                    found.interfaceless.push(trap.id.0.clone());
+                    continue;
+                }
+                if ka.len() > 1 || kb.len() > 1 {
+                    found.multi_homed.push(trap.id.0.clone());
+                    continue;
+                }
+                match L2CandidatePair::new(ka[0], kb[0]) {
+                    None => found.collapsed.push(trap.id.0.clone()),
+                    Some(pair) => {
+                        found
+                            .pairs
+                            .push((trap.id.0.clone(), trap.replay.clone(), pair));
+                        if matches!(trap.expect, Expectation::MustMerge { .. }) {
+                            found.required.insert(pair);
+                        }
+                    }
+                }
+            }
+        });
+        found
+    }
+
+    /// D13's `blocking_recall >= 0.999`, at L2 — in the milli-units its corollary demands.
+    ///
+    /// It computes ONLY the recall; the containment assertion is a separate test on the same
+    /// reasoning `blocking_recall_above_999` states for L1: with both in one function a missing pair
+    /// panics inside the loop and the value a narrowed blocker would score is never observed.
+    ///
+    /// ⚠️ **At a denominator of three, `>= 999` is ZERO-TOLERANCE**: one miss scores 666 and the
+    /// floor reds. It is the binary form NFR4 demands, not a statistical tolerance.
+    #[test]
+    fn l2_blocking_recall_above_999() {
+        let corpus = l2_corpus();
+
+        assert_eq!(
+            corpus.required.len(),
+            3,
+            "the L2 truth set is the `must-merge` traps whose expected rule is `l2-*`; a \
+             denominator that shrinks in silence is a gate that quietly stops testing"
+        );
+
+        let union: std::collections::BTreeSet<L2CandidatePair> =
+            corpus.universes.values().flatten().copied().collect();
+        let recall = blocking_recall_per_mille(&union, &corpus.required)
+            .expect("the truth set is not empty, so the recall is defined");
+
+        assert!(
+            recall >= BLOCKING_RECALL_FLOOR_PER_MILLE,
+            "L2 recall is {recall} per-mille, below the floor of {BLOCKING_RECALL_FLOOR_PER_MILLE}"
+        );
+        assert_eq!(
+            recall, 1000,
+            "the committed corpus is at FULL L2 recall, which is stronger than the floor and is \
+             what the total universe gives by construction"
+        );
+    }
+
+    /// Every required L2 pair is proposed WITHIN ITS OWN STREAM, so the union above can only add
+    /// pairs and can never explain a miss away.
+    #[test]
+    fn the_l2_blocker_proposes_every_required_pair_within_its_own_stream() {
+        let corpus = l2_corpus();
+        let mut checked = 0usize;
+        for (id, replay, pair) in &corpus.pairs {
+            if !corpus.required.contains(pair) {
+                continue;
+            }
+            assert!(
+                corpus.universes[replay].contains(pair),
+                "{id}: the L2 blocker never proposes the interface pair this trap requires, in \
+                 {replay}"
+            );
+            checked += 1;
+        }
+        assert_eq!(
+            checked, 3,
+            "every L2 `must-merge` trap must have been checked, or this test passes by walking \
+             past the traps it exists to cover"
+        );
+    }
+
+    /// COVERAGE, not recall — and this is the assertion that found story 6.6's §0j.
+    ///
+    /// Wider and weaker than the recall metric: every trap naming an `l2-*` rule, `must-not-merge`
+    /// included, is accounted for — either as an interface pair in the universe, or by NAME in one
+    /// of the three residue buckets. A pair outside the universe can never be answered by anything.
+    ///
+    /// ⚠️ **What carries this test is the BUCKETS, not the containment loop at the end.** The loop
+    /// is a COROLLARY of totality and cannot red on its own: `pair` is built from `groups`, and the
+    /// universe is built from the keys of that same `groups`, so a total `l2_candidates` contains it
+    /// by construction. 🔑 **Its L1 twin `every_trap_pair_is_in_the_universe` is NOT a corollary** —
+    /// there the pair comes from the `obs_id`s a trap NAMES, which need not appear in the stream at
+    /// all. This story inherited the shape without inheriting the property, and the loop is kept as
+    /// a deliberate second oracle rather than deleted: it would red the day `l2_candidates` stopped
+    /// being total, which `l2_the_universe_is_total_over_distinct_interfaces` also covers.
+    /// _(Found by story 6.6's blind review layer, from the diff alone.)_
+    ///
+    /// 🔴 **One committed trap is EXCLUDED BY NAME, and the exclusion is the finding.**
+    /// `cloned-mac-must-not-merge` names `l2-different-hostname` and has **no L2 pair**: its two
+    /// observations carry the SAME `MacAddr` in the same `l2_domain`, so `join` collapses them onto
+    /// ONE interface. The trap file says so itself, citing D21 — *"a cloned MAC = two real
+    /// interfaces, same MAC"* — which is exactly what `join`'s key makes unrepresentable. It is
+    /// therefore **unanswerable at L2**, and the unanswerable bucket that stories 6.7–6.11 leave
+    /// behind is **4, not the 3 `epics.md`'s Epic 6 constraint (2) states**. Registered; owner
+    /// story 6.15.
+    #[test]
+    fn every_l2_trap_pair_is_in_the_universe() {
+        let corpus = l2_corpus();
+
+        assert_eq!(
+            corpus.collapsed,
+            vec!["cloned-mac-must-not-merge".to_string()],
+            "exactly one `l2-*` trap collapses onto a single interface, and it is NAMED here so \
+             the residue cannot grow unnoticed — a second one would be a second trap silently \
+             leaving the corpus"
+        );
+        assert!(
+            corpus.interfaceless.is_empty(),
+            "no `l2-*` trap names an observation without an L1 key today: {:?}",
+            corpus.interfaceless
+        );
+        assert!(
+            corpus.wrong_arity.is_empty(),
+            "every `l2-*` trap names exactly two observations today; one that did not would need a \
+             decision about WHICH interface pair it judges, not a silent skip — and it must not be \
+             reported as an observation without an L1 key, which is a different cause: {:?}",
+            corpus.wrong_arity
+        );
+        assert!(
+            corpus.multi_homed.is_empty(),
+            "no `l2-*` trap names an observation carrying two or more MACs today; one that did \
+             would need a decision about WHICH interface pair it judges, not a silent skip: {:?}",
+            corpus.multi_homed
+        );
+        assert_eq!(
+            corpus.pairs.len(),
+            7,
+            "seven of the eight `l2-*` traps resolve to an interface pair; a count that drifts in \
+             silence is a scan that has stopped covering the corpus"
+        );
+        for (id, replay, pair) in &corpus.pairs {
+            assert!(
+                corpus.universes[replay].contains(pair),
+                "{id}: the interface pair it judges is outside the L2 candidate universe of \
+                 {replay}, so no rule could ever be asked about it"
             );
         }
     }

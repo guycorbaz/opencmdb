@@ -5175,3 +5175,78 @@ it re-derivable.*
   one**: `:2226` named *"the lifecycle epic (FR40-42)"* as the `state` column's owner — FR40-42 is
   **Epic 21** (edit, decommission, backup), while FR38b is Epic 6's and its behaviour is **story
   6.18**'s. And `:2216`'s header announces *"three distinct entries"* above **two**.
+
+## Deferred from: story 6.6's contexting and validation (2026-08-30)
+
+Four rows. All four were produced by the two-layer validation, and each names an owner.
+
+- 🔴 **`epics.md`'s Epic 6 constraint (2) is WRONG BY ONE: the unanswerable bucket goes 11 → 4, not
+  11 → 3.** `cloned-mac-must-not-merge` expects `l2-different-hostname` and has **no L2 pair**: its
+  two observations carry the same `MacAddr([2,0,94,0,83,112])` in the same `l2_domain`, so `join`'s
+  `(l2_domain, mac)` key collapses them onto ONE interface and an interface-keyed universe can never
+  propose the pair. ⚠️ The trap file says so itself, citing D21 — *"a cloned MAC = two real
+  interfaces, same MAC"* — which is exactly what the key makes unrepresentable. Story 6.6's §0j takes
+  the arbitration (the L2 rules judge INTERFACE pairs) and accepts the cost; `epics.md` is **not
+  edited**, a story may not. **Owner: story 6.15**, which inherits one trap more than its own
+  criterion states, **and Epic 6's retrospective** for the `epics.md` correction.
+
+- 🔴 **The uplink narrowing is UNWRITABLE inside the L2 blocker and EXPRESSIBLE at its call site,
+  where nothing sees it.** Under `&[L1Key]` the argument carries no `Fact`, so the guard story 6.6's
+  first AC5 demanded cannot compile (`E0425`) — the type carries what the guard claimed to. But
+  filtering by uplink `peer_mac` **at the call site** was measured leaving **783 tests, clippy and all
+  ten gates GREEN**. *Block on the uplink* is the most tempting L2 narrowing there is — it is the
+  signal `l2-uplink-agrees` scores on — and the committed corpus is **blind to it (1000‰)**. **Owner:
+  story 6.12**, the first caller: it must carry the guard, and it may not assume 6.6 carries one.
+
+- ⚠️ **`blocking.rs` and `l1.rs` cite `architecture.md` ~25 lines off, and story 6.6 INHERITED the
+  drift into a section promising it was measured.** `blocking.rs` names `:988-993`, `:1004-1007`,
+  `:1009-1011` and `:1246-1253`; the quoted sentences are at **`:1016`, `:1031`, `:1036` and
+  `:1276`**. `l1.rs` names `:984-986` for a *Level split* at `:1009-1011`. Verified by `grep` on the
+  sentences themselves. ⚠️ **The same doc carries four stale FIGURES** (ten `must-merge` where eleven
+  are; 700‰/400‰/900‰ where 727/363/909 are today) — story 6.6's T10 repairs the figures in
+  `blocking.rs`. **Owner for the citation drift across both files: story 6.7**, the next to touch
+  `identity/`. *A citation copied from a neighbouring file is not a measurement.*
+
+- ⚠️ **`cargo xtask mutate` leaves a snapshot behind on every exit-2 refusal, even when the file is
+  provably intact.** Met twice during story 6.6's validation and **four more times during its code
+  review** — six live occurrences in one day, every one on an anchor that matched twice
+  (anchor matched twice; anchor missed):
+  the run refuses correctly, `diff` shows the file identical, and the next run is then blocked until
+  `target/xtask-mutate/` is cleared by hand. A mutation pass of six plants pays one manual recovery
+  per anchor typo. **Owner: story 6.4b's artefact** — whoever next touches `mutate.rs`.
+
+## Deferred from: story 6.6's CODE REVIEW (2026-08-30)
+
+Three rows. Three isolated layers on a different model; two of the three found row 1 independently.
+
+- 🔴 **The `opencmdb-bin` suite is NON-DETERMINISTIC against a REUSED MariaDB database, and it is
+  not this story's doing — it reproduces on `master` alone.** Two review layers measured it
+  separately and neither could name a cause. The acceptance layer saw 27 / 18 / 34 / 41 failures on
+  successive runs; the edge layer saw 0 / 11 / 22 / 25 / 33 / 44, **including at
+  `--test-threads=1`**, always in `resolver` / `repo` / `page` / `scan_pass` / `fault_injection`,
+  **never** in `blocking.rs` or the L2 tests, and every failing test passes when replayed alone. A
+  `DROP DATABASE` plus re-migration restores determinism every time. **This is the family of issue
+  #38** and it is recorded as a SYMPTOM: the most economical hypothesis is contention on the one
+  MariaDB instance the three review layers shared, and **no cause is written down, because none was
+  checked** — this project's own rule. 🔑 **The operational consequence is immediate and concrete:
+  `cargo xtask mutate --baseline` is what tells you, and running WITHOUT it on a reused database
+  makes every recorded red count a guess.** Story 6.6's own six mutations were first run without
+  `--baseline`, the driver warning every time; re-measured on a virgin store they held.
+  **Owner: whoever next runs a mutation pass** — drop and re-create the database first, and pass
+  `--baseline`. A durable fix (a database per test binary, or a lock) belongs with issue #38.
+
+- ⚠️ **`l2_corpus()` and `corpus_pairs()` in `fixtures.rs` are near-textual twins, and the mutation
+  driver is what revealed it**: three separate anchors inside the L2 walk were REFUSED for matching
+  twice, the L1 walk carrying the identical lines. That refusal is the driver doing its job, and the
+  cost is real — an anchor inside either walk needs surrounding context to be unique, so a future
+  mutation pass over this file pays for the duplication every time. ⚠️ It is **not** obviously a DRY
+  violation to collapse: the two walk different populations (`obs_id` against `L1Key`) and the L1
+  containment assertion is genuinely non-tautological where the L2 one is a corollary, which is a
+  DIFFERENCE a shared helper would hide. **Owner: story 6.7**, the next to touch this file, with the
+  question posed rather than the answer assumed.
+
+- ⚠️ **`l1.rs` cites `architecture.md` ~25 lines off in three places** (`:984-986` and `:984-985`
+  twice), the same drift story 6.6 corrected in `blocking.rs`. Not fixed here: this story had no
+  reason to open `l1.rs`, and a citation sweep across a file it does not otherwise touch is the
+  scope creep the house rules refuse. **Owner: story 6.7**, which implements the first `l2-*` rule
+  and will be in `identity/` anyway. Re-derive by `grep` on the quoted sentence, never by adding 25.

@@ -4,25 +4,29 @@
 //!
 //! D13 states the failure this component prevents: *"if the candidate generator does not propose
 //! the pair, no downstream logic can ever group. That is where false-splits are born silently, and
-//! **nobody tests blockers**"* [architecture.md:1004-1007]. And it names what the component is for:
+//! **nobody tests blockers**"* [architecture.md:1029-1032]. And it names what the component is for:
 //! *"It is there for **SEMANTICS** — it defines the universe of plausible candidates, hence what
 //! 'ambiguous' MEANS. **Without blocking, abstention has no denominator.**"*
-//! [architecture.md:1009-1011].
+//! [architecture.md:1034-1036].
 //!
 //! D13 also disposes of the performance argument with its own arithmetic: at the reference scale of
 //! 300 hosts the universe is **90k pairs**, and *"the blocker is **not** there for performance (90k
-//! pairs is noise on a NAS i5)"* [architecture.md:1009]. So [`candidates`] is TOTAL by decision: it
+//! pairs is noise on a NAS i5)"* [architecture.md:1034]. So [`candidates`] is TOTAL by decision: it
 //! proposes every unordered pair of distinct observations, and the two exclusions it makes — the
 //! self-pair and a repeated `obs_id` — are one rule, named and tested, not a narrowing.
 //!
 //! ⚠️ **A narrowing key is deliberately absent**, and each candidate key builds a false split into
 //! the universe: a device's interfaces are not confined to one L2 domain — a router, a firewall or a
 //! dual-homed server has NICs in several VLANs — and D12 makes the device the level where the
-//! product keeps its promise [architecture.md:919-928].
+//! product keeps its promise [architecture.md:919-923].
 //!
 //! What the committed corpus can and cannot see about that is **measured, not assumed**, over its
-//! ten `must-merge` pairs: a MAC-blocked universe scores **700 per-mille** (the story's own M1), a
-//! hostname-blocked one **400**, and an `l2_domain`-blocked one **1000**. So only the `l2_domain`
+//! **eleven** `must-merge` pairs: a MAC-blocked universe scores **727 per-mille**, a
+//! hostname-blocked one **363** (strict — an interface with no hostname agreeing with nobody) or
+//! **818** under the loose reading a developer writes first, and an `l2_domain`-blocked one
+//! **1000**. _(These read 700 / 400 / 1000 over **ten** pairs until story 6.6 re-measured them:
+//! story 5.13b added a `must-merge` trap in 2026-08-10 and the figures were never re-run. Re-derived
+//! 2026-08-30 over the committed corpus.)_ So only the `l2_domain`
 //! narrowing passes the whole corpus, and it is the one the corpus is BLIND to — which is why the
 //! synthetic `two_l2_domains_are_still_a_candidate_pair` exists and why it was written first. The
 //! other two keys the corpus would catch on its own; they are refused here for the same reason
@@ -33,7 +37,7 @@
 //! D13 gives the assertion as `blocking_recall >= 0.999` and, three paragraphs earlier, refuses the
 //! type it is written in: *"`confidence` is an **INTEGER in milli-units (0..1000)**, never
 //! `REAL`/`DOUBLE` — a threshold at 0.85 compared as a float on two engines = two different identity
-//! decisions for the same input"* [architecture.md:988-993]. So the floor here is
+//! decisions for the same input"* [architecture.md:1013-1018]. So the floor here is
 //! [`BLOCKING_RECALL_FLOOR_PER_MILLE`], an integer, and [`blocking_recall_per_mille`] compares
 //! integers. `cargo xtask ci`'s `float-free` gate holds that mechanically over this whole directory.
 //!
@@ -42,7 +46,7 @@
 //! D18 puts **pairwise recall** in Tier 2, *"published per release with confidence intervals,
 //! trended — blocking nothing"*, and says why: *"false-split is benign — so why would it block a
 //! release? A loose threshold on a benign defect is a gate that can never fall, and a gate that
-//! cannot fall is decoration"* [architecture.md:1246-1253]. Three things separate that from what is
+//! cannot fall is decoration"* [architecture.md:1272-1279]. Three things separate that from what is
 //! asserted here:
 //!
 //! - **Different subject.** D18 measures the ENGINE'S OUTPUT — did it group what should group. This
@@ -51,8 +55,8 @@
 //!   unit test over the frozen corpus, which is where D13 puts it: *"a dedicated assertion:
 //!   `blocking_recall >= 0.999`, measured in unit tests, before the scoring exists."*
 //! - **Different arithmetic, and this is the honest half.** At the committed corpus's denominator
-//!   the floor is **not** a tolerance: with 10 required pairs, one miss gives 900 per-mille and the
-//!   floor reds. `>= 999` per-mille **IS zero-tolerance at this scale**, which is the binary form
+//!   the floor is **not** a tolerance: with **11** required pairs, one miss gives **909** per-mille
+//!   and the floor reds. `>= 999` per-mille **IS zero-tolerance at this scale**, which is the binary form
 //!   NFR4 demands. It becomes a real tolerance the moment the required set REACHES 1000 pairs — at
 //!   exactly 1000, one miss scores 999 and `999 >= 999` passes, so the boundary is `>= 1000` and not
 //!   `> 1000` — and on that day NFR4's *"any fraction is theatre"* bites and the floor must be
@@ -85,6 +89,7 @@
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
+use crate::identity::l1::L1Key;
 use crate::observation::{ObsId, Observation};
 
 /// One unordered candidate pair — two DISTINCT observations the blocker proposes to a rule.
@@ -180,6 +185,115 @@ pub fn candidates(observations: &[Observation]) -> BTreeSet<CandidatePair> {
     universe
 }
 
+/// One unordered candidate pair at L2 — two DISTINCT interfaces the blocker proposes to a rule.
+///
+/// # An interface IS an [`L1Key`], and that is the level's whole vocabulary
+///
+/// [`crate::identity::l1::join`] returns `BTreeMap<L1Key, BTreeSet<ObsId>>` and each entry IS one
+/// interface — `resolver.rs`'s own doc says *"`join` NAMES the interface"*. So L2 blocking is over
+/// `(l2_domain, mac)` keys, not over database ids: `InterfaceId` exists in this crate and could be
+/// taken, but the committed corpus has no store and therefore no `InterfaceId` to supply, and the
+/// recall floor below is measured against that corpus.
+///
+/// # Unordered by construction, exactly as [`CandidatePair`] is
+///
+/// The fields are private and ordered by [`Self::new`], so `new(a, b) == new(b, a)` holds because
+/// the two calls build the same value. ⚠️ **The ordering carries NO meaning**: an [`L1Key`] sorts by
+/// a UUID and then by six bytes, which is a construction device and not precedence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct L2CandidatePair {
+    /// The smaller of the two interface keys, by [`L1Key`]'s own ordering.
+    low: L1Key,
+    /// The larger of the two interface keys, by [`L1Key`]'s own ordering.
+    high: L1Key,
+}
+
+impl L2CandidatePair {
+    /// Build the pair of two interfaces, or `None` when they are the same interface.
+    ///
+    /// # Why `None` rather than a panic
+    ///
+    /// Same reasoning as [`CandidatePair::new`]: refusing the pair is an ordinary outcome of asking
+    /// for it, not a caller's bug.
+    ///
+    /// # The duplicate rule is a COROLLARY of this, not a rule of its own
+    ///
+    /// [`l2_candidates`] takes a slice, which admits a repeated key where `join`'s map cannot. No
+    /// code handles that case: the repeated key meets itself and this constructor returns `None`.
+    /// ⚠️ **So "duplicates collapse" and "the self-pair is refused" have ONE carrier between them** —
+    /// a mutation of this `Equal` arm reds both tests, and neither can red alone. Do not record them
+    /// as two guards.
+    ///
+    /// # Returns
+    ///
+    /// `Some` with the two keys in canonical order, or `None` if `a == b`.
+    pub fn new(a: L1Key, b: L1Key) -> Option<Self> {
+        match a.cmp(&b) {
+            Ordering::Less => Some(Self { low: a, high: b }),
+            Ordering::Greater => Some(Self { low: b, high: a }),
+            Ordering::Equal => None,
+        }
+    }
+
+    /// The smaller of the two interface keys. See the type's doc: the order is a construction device.
+    pub fn low(&self) -> L1Key {
+        self.low
+    }
+
+    /// The larger of the two interface keys. See the type's doc: the order is a construction device.
+    pub fn high(&self) -> L1Key {
+        self.high
+    }
+}
+
+/// The universe of candidate pairs over a population of interfaces — every unordered pair of
+/// DISTINCT [`L1Key`]s.
+///
+/// It reads **nothing** but its argument. It calls no `l2-*` rule and no
+/// [`crate::identity::cascade::decide`], on this module's founding rule: *a blocker that consults a
+/// rule is that rule's echo.*
+///
+/// # ⚠️ How much of that refusal is CARRIED, measured rather than asserted
+///
+/// [`crate::identity::l1::join`] and [`crate::identity::l1::decide_pair`] are **unreachable from
+/// here by the TYPE** — both demand [`Observation`]s and this function has none. That half is
+/// structural. But [`crate::identity::cascade::decide`] takes a `Vec<RuleVerdict>` and could be
+/// called: story 6.6's validation planted exactly that call and measured **the whole suite, clippy
+/// and all ten gates GREEN**. So that half is a **TRIPWIRE, not a barrier** — read it as *a future
+/// story will not add such a call by accident*, never as *such a call cannot exist*.
+///
+/// # Total by decision, and what the corpus cannot see
+///
+/// Every exclusion a blocker makes is a false split it can never be talked out of, so there is no
+/// narrowing key. Measured over the committed corpus's **three** L2 `must-merge` pairs: a
+/// `l2_domain`-narrowed universe scores **1000** per-mille and an uplink-`peer_mac`-narrowed one
+/// **1000** as well — *the corpus is blind to both*, and the second is the most tempting L2
+/// narrowing there is, being the very signal `l2-uplink-agrees` scores on. **TWO synthetic tests
+/// stand between a `l2_domain` narrowing and green** — `l2_two_domains_are_still_a_candidate_pair`,
+/// written for it, and `l2_the_universe_is_total_over_distinct_interfaces`, which happens to pin a
+/// cross-domain pair as well. _(This sentence named ONE until story 6.6's own mutation M1 reddened
+/// two; a claim of sole carriership is worth exactly the mutation that checked it.)_
+///
+/// ⚠️ **The uplink narrowing has no guard here and cannot have one**: [`L1Key`] carries no
+/// [`crate::observation::Fact`], so the narrowing is inexpressible in this function — the TYPE
+/// carries what a guard would have claimed to. It IS expressible at the call site, where it was
+/// measured leaving the whole suite green; that is registered against the first caller (story 6.12).
+///
+/// # The count
+///
+/// `n * (n - 1) / 2` where `n` is the number of DISTINCT keys in the slice — not `interfaces.len()`.
+pub fn l2_candidates(interfaces: &[L1Key]) -> BTreeSet<L2CandidatePair> {
+    let mut universe = BTreeSet::new();
+    for (i, left) in interfaces.iter().enumerate() {
+        for right in &interfaces[i + 1..] {
+            if let Some(pair) = L2CandidatePair::new(*left, *right) {
+                universe.insert(pair);
+            }
+        }
+    }
+    universe
+}
+
 /// The scale per-mille is expressed in — 1000 parts, D13's milli-units.
 const PER_MILLE: usize = 1000;
 
@@ -187,7 +301,7 @@ const PER_MILLE: usize = 1000;
 ///
 /// D13 writes the assertion as `blocking_recall >= 0.999`. The value is the same; the TYPE is not,
 /// and the type is the decision — see this module's doc for the milli-units corollary
-/// [architecture.md:988-993] that forbids the float, and for why at the committed corpus's
+/// [architecture.md:1013-1018] that forbids the float, and for why at the committed corpus's
 /// denominator this floor is zero-tolerance rather than a tolerance.
 pub const BLOCKING_RECALL_FLOOR_PER_MILLE: u32 = 999;
 
@@ -224,9 +338,9 @@ pub const BLOCKING_RECALL_FLOOR_PER_MILLE: u32 = 999;
 /// `required`, so `hits <= required.len()` and the quotient is at most `PER_MILLE`. The `expect`
 /// below is that invariant written down — if it ever fired it would mean the filter counted a pair
 /// outside the set it iterates, which is not a recall to report as `None` but a broken function.
-pub fn blocking_recall_per_mille(
-    proposed: &BTreeSet<CandidatePair>,
-    required: &BTreeSet<CandidatePair>,
+pub fn blocking_recall_per_mille<T: Ord>(
+    proposed: &BTreeSet<T>,
+    required: &BTreeSet<T>,
 ) -> Option<u32> {
     if required.is_empty() {
         return None;
@@ -656,6 +770,137 @@ mod tests {
             blocking_recall_per_mille(&proposed, &required),
             Some(1000),
             "recall counts the required set, so a larger universe cannot exceed the full value"
+        );
+    }
+
+    // ---- L2: the interface-level blocker (story 6.6) ----
+
+    /// One interface key, in domain `d`, with `last` as the MAC's final byte.
+    fn iface(d: u128, last: u8) -> L1Key {
+        (l2(d), mac(last))
+    }
+
+    /// AC5's guard, and **the only one of its kind this story ships**.
+    ///
+    /// The committed corpus is BLIND to an `l2_domain` narrowing: measured over its three L2
+    /// `must-merge` pairs, such a universe scores a full 1000 per-mille, because every one of them
+    /// sits in a single domain. This test is the only thing between that narrowing and green — the
+    /// L1 twin `two_l2_domains_are_still_a_candidate_pair` exists for exactly the same reason and
+    /// was likewise written first.
+    ///
+    /// ⚠️ **It is not the SOLE carrier, measured**: mutation M1 reds this test AND
+    /// [`l2_the_universe_is_total_over_distinct_interfaces`], whose fixture happens to include a
+    /// cross-domain pair. Two carriers, deliberately kept — but neither may be described as the only
+    /// thing standing between the narrowing and green.
+    ///
+    /// ⚠️ **Its uplink counterpart is deliberately absent and must not be added**: [`L1Key`] carries
+    /// no [`crate::observation::Fact`], so an uplink narrowing cannot be written inside
+    /// [`l2_candidates`] at all — the mutation that would red such a guard does not compile. The
+    /// type carries what the guard would have claimed to; see [`l2_candidates`]' doc.
+    #[test]
+    fn l2_two_domains_are_still_a_candidate_pair() {
+        // A router, a firewall or a dual-homed server has NICs in several VLANs, and D12 makes the
+        // DEVICE the level where the product keeps its promise.
+        let universe = l2_candidates(&[iface(1, 0x01), iface(2, 0x02)]);
+
+        assert_eq!(
+            universe.len(),
+            1,
+            "two interfaces in DIFFERENT L2 domains are still one device's NICs; a blocker that \
+             narrows on the domain builds that false split into the universe and no committed trap \
+             can see it"
+        );
+    }
+
+    #[test]
+    fn l2_the_self_pair_is_refused_in_the_type() {
+        assert_eq!(
+            L2CandidatePair::new(iface(1, 0x01), iface(1, 0x01)),
+            None,
+            "an interface is not a candidate against itself"
+        );
+    }
+
+    /// ⚠️ This shares its ONE carrier with the test above — see [`L2CandidatePair::new`]'s doc.
+    /// Both red under a single mutation of the `Equal` arm and neither can red alone, so this is a
+    /// corollary of the type and not a second guard.
+    #[test]
+    fn l2_a_repeated_interface_yields_no_pair() {
+        let universe = l2_candidates(&[iface(1, 0x01), iface(1, 0x01)]);
+
+        assert!(
+            universe.is_empty(),
+            "a slice admits a repeated key where `join`'s map cannot; the pair type absorbs it"
+        );
+    }
+
+    #[test]
+    fn l2_the_pair_is_unordered_by_construction() {
+        let (a, b) = (iface(1, 0x01), iface(1, 0x02));
+
+        assert_eq!(
+            L2CandidatePair::new(a, b),
+            L2CandidatePair::new(b, a),
+            "the two calls build the same value; no caller has to remember to normalise"
+        );
+    }
+
+    #[test]
+    fn l2_an_empty_population_has_an_empty_universe() {
+        assert!(l2_candidates(&[]).is_empty(), "no interface, no pair");
+    }
+
+    #[test]
+    fn l2_a_single_interface_has_an_empty_universe() {
+        assert!(
+            l2_candidates(&[iface(1, 0x01)]).is_empty(),
+            "one interface cannot pair with anything"
+        );
+    }
+
+    /// TOTAL by decision: `n * (n - 1) / 2` over DISTINCT keys, and the count is pinned exactly.
+    ///
+    /// A `>= 1` oracle would pass under a blocker that collapsed the whole population onto one
+    /// pair — the weak-oracle defect story 5.11b's code review measured on the L1 corpus test.
+    #[test]
+    fn l2_the_universe_is_total_over_distinct_interfaces() {
+        let universe = l2_candidates(&[iface(1, 0x01), iface(1, 0x02), iface(2, 0x03)]);
+
+        assert_eq!(
+            universe.len(),
+            3,
+            "three interfaces give three unordered pairs"
+        );
+        assert!(
+            universe.contains(&L2CandidatePair::new(iface(1, 0x01), iface(2, 0x03)).unwrap()),
+            "including the cross-domain one"
+        );
+    }
+
+    /// The truncation guard AC2 needs and `float-free` CANNOT give it.
+    ///
+    /// The gate forbids a float TYPE under `identity/`; it says nothing about the ORDER of an
+    /// integer computation. Story 6.6's validation measured that reordering
+    /// `hits * PER_MILLE / len` into `hits / len * PER_MILLE` leaves all ten gates green — the gate
+    /// forbids the TYPE and says nothing about the ORDER of an integer computation.
+    ///
+    /// ⚠️ **It is not the only carrier, measured**: mutation M3 reds **three** tests — this one and
+    /// the two L1 truncation tests above, which exercise the same arithmetic. _(The draft called it
+    /// the only one. Two of three must be 666, and under the reordering it is 0.)_
+    #[test]
+    fn the_per_mille_scale_is_applied_before_the_division() {
+        let required = BTreeSet::from([
+            L2CandidatePair::new(iface(1, 0x01), iface(1, 0x02)).unwrap(),
+            L2CandidatePair::new(iface(1, 0x01), iface(1, 0x03)).unwrap(),
+            L2CandidatePair::new(iface(1, 0x02), iface(1, 0x03)).unwrap(),
+        ]);
+        let proposed: BTreeSet<_> = required.iter().take(2).copied().collect();
+
+        assert_eq!(
+            blocking_recall_per_mille(&proposed, &required),
+            Some(666),
+            "two of three is 666 per-mille; dividing before scaling would give 0 and no gate can \
+             see the difference"
         );
     }
 }
