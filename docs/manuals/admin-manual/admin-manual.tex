@@ -143,10 +143,19 @@ it, is exactly why the connection is no longer configured as a single string.
   \item[\texttt{OPENCMDB\_BIND}] The address to bind; \texttt{0.0.0.0:8080} by default.
   \item[\texttt{OPENCMDB\_LOG\_DIR}] Enables daily-rotating file logs beside stdout.
   \item[\texttt{OPENCMDB\_METRICS\_TOKEN}] The bearer token the Prometheus endpoint requires.
-  \item[\texttt{OPENCMDB\_DOCUMENT\_ENABLED}] Whether the documenting write route exists at
-    all. It is reached from no screen today, so setting it changes nothing an operator can
-    see; it is listed because this chapter otherwise names every variable, and its absence was
-    found by story 6b.12's validation.
+  \item[\texttt{OPENCMDB\_DOCUMENT\_ENABLED}] \textbf{Set this to \texttt{1}, or opencmdb
+    cannot do anything.} It is the switch that turns the product from a read-only display into a
+    tool: with it enabled, the triage screen's \emph{Nouveau} rows carry a button that writes the
+    observation into the declared side, closing the gap and removing the question from the queue.
+    With it unset, every control on that screen says \emph{not enabled}.
+    \textbf{This entry said the opposite until v0.3.0} --- ``it is reached from no screen today,
+    so setting it changes nothing an operator can see'' --- which stopped being true on
+    2026-08-26, when the gesture reached the screen. An outside review then installed the product,
+    followed this manual, and could not make it do a single thing.
+  \item[\texttt{OPENCMDB\_SCAN\_INTERVAL\_SECS}] How often the subnet is re-scanned, in
+    seconds; \texttt{300} by default. Set it to \texttt{0} to scan once at startup and never
+    again, which is what every release before v0.3.0 did. A value that is not a whole number of
+    seconds refuses to start, by name.
 \end{description}
 
 \begin{warning}

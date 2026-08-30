@@ -8,6 +8,47 @@ schema will move.
 
 ---
 
+## 0.3.0 — the product does something
+
+`v0.2.0` served ten screens and could not act on any of them. `v0.3.0` is the first release an
+operator can install, point at a network, and use.
+
+### 🔑 What changed, in one sentence each
+
+**The documenting gesture is reachable.** It shipped on 2026-08-26 and **was written in no
+document an operator reads** — not the README, not `.env.example`, not the compose file, not the
+Docker Hub page. The one place that named it, the administrator manual, said *"setting it changes
+nothing an operator can see"*, which had been false for four days. An outside review installed the
+product, followed the manual, and could not make it do a single thing. `.env.example` now sets
+`OPENCMDB_DOCUMENT_ENABLED=1` and explains what it turns on.
+
+**The scan repeats.** Until now it ran ONCE, at startup: the only way to see a change on your
+network was to restart the container, and the README's word *"continuously"* was false.
+`OPENCMDB_SCAN_INTERVAL_SECS` now sets the period, **five minutes by default**. Set it to `0` for
+the old behaviour. A value that is not a whole number of seconds refuses to start, by name.
+
+**The identity table stops growing on its own.** The engine no longer writes a link for a sighting
+it can never place. A sighting with no hardware address has no key, so it could not be placed by
+this pass or by any future one — the row said something about the *connector*, and repeated it at
+every sweep. Measured on a real `/24`: **fifty observations, fifty current links**, and once the
+scan became periodic that would have been millions of rows a year. ⚠️ **This mattered more the
+moment the scan became periodic**, which is why the two ship together.
+
+### ⚠️ What this release does NOT change
+
+**The connector still reads no hardware address.** It sees an IPv4 address and a round-trip time,
+so the identity engine can group nothing, and the reach section on the triage screen stays empty.
+`/sources` says which fact kinds this instance cannot observe. Documenting a machine still adds it
+to the declared side without giving you an inventory screen fed by it.
+
+### Upgrading from `0.2.0`
+
+Nothing breaks. Add `OPENCMDB_DOCUMENT_ENABLED=1` to your `.env` — without it the product behaves
+as `0.2.0` did, which is to say it shows you things and does nothing. Optionally set
+`OPENCMDB_SCAN_INTERVAL_SECS`; unset means five minutes.
+
+---
+
 ## 0.2.0 — the interface
 
 `v0.1.1` served one page. `v0.2.0` serves ten screens, in the reference design, with a triage

@@ -153,6 +153,24 @@ pub struct Resolution {
     /// which is the whole point. `superseded + vacated` is therefore the number of versions this
     /// pass closed, and only `superseded` has a matching entry in [`Self::links_written`].
     pub links_vacated: usize,
+    /// Sightings the engine wrote NO link for, because the source cannot identify them at all.
+    ///
+    /// 🔴 **This is the counter that replaced an unbounded write, and the reason matters.** An
+    /// observation carrying no MAC has no L1 key, so it can never be placed — not by this pass and
+    /// not by any future one, because the fact it would need was never observed. Writing an
+    /// `absence_of_proof` link for it says nothing about that sighting: it says something about the
+    /// CONNECTOR, and it says the same thing again at every sweep.
+    ///
+    /// Each sweep mints fresh `ObsId`s, so each row was a NEW current link that nothing superseded.
+    /// Measured by an outside review on a real `/24`: **50 observations → 50 current links**, all
+    /// `absence_of_proof`. Once the scan became periodic (v0.3.0) that is roughly **five million
+    /// rows a year** on fifty hosts at five-minute sweeps — and the displayed count climbed with
+    /// every sweep, which is the growing counter the UX specification bans by name.
+    ///
+    /// ⚠️ **The information is not lost, it moved to where it is true**: `/sources` already names
+    /// the fact kinds the shipped connector cannot see. *A capability the source lacks is one
+    /// sentence about the source, not one row per sighting forever.*
+    pub sightings_without_a_key: usize,
 }
 
 impl Resolution {
@@ -313,12 +331,27 @@ pub async fn resolve_within(
         }
     }
 
-    // Everything that was not placed abstains, and abstains EXACTLY ONCE — an observation carrying
-    // no MAC at all, and an observation whose pairs the blocker withheld on every key it carries.
-    // The link is written and never omitted: *"the ambiguity is DATA, not a hole"* (D14/FR16).
+    // Everything that was not placed abstains, and abstains EXACTLY ONCE. Two shapes reach here
+    // and only ONE of them is an abstention about the network:
+    //
+    //   * an observation whose pairs the blocker withheld on every key it carries — a real
+    //     abstention about a real interface. *"The ambiguity is DATA, not a hole"* (D14/FR16), and
+    //     its link is written, exactly as before.
+    //
+    //   * 🔴 an observation carrying NO L1 key at all — no MAC, so no interface, ever. That is not
+    //     a statement about the sighting; it is a statement about the SOURCE, identical at every
+    //     sweep. See [`Resolution::sightings_without_a_key`] for what writing it cost.
+    //
+    // The set below is the honest test for the second shape: `join` puts an observation in a group
+    // for every key it carries, so one that appears in NO group carries none.
+    let keyed: BTreeSet<ObsId> = groups.values().flatten().copied().collect();
     let mut abstained: BTreeSet<ObsId> = BTreeSet::new();
     for observation in observations {
         if placed.contains(&observation.obs_id) || !abstained.insert(observation.obs_id) {
+            continue;
+        }
+        if !keyed.contains(&observation.obs_id) {
+            summary.sightings_without_a_key += 1;
             continue;
         }
         let outcome = write_link(&mut *conn, observation, None, &nothing_was_evaluated()).await?;
@@ -813,6 +846,33 @@ mod tests {
         try_pass(pool, observations).await.expect("resolve")
     }
 
+    /// A pass over an EMPTY universe — the one shape that still makes the engine write an
+    /// abstention link since v0.3.0.
+    ///
+    /// 🔴 **Why this helper had to exist.** Before v0.3.0 the easy way onto the `NIL_INTERFACE`
+    /// slot was a MAC-less observation: no key, so the tail loop wrote an abstention. That path is
+    /// gone — a sighting the engine can never place now writes nothing — so a test reaching the
+    /// slot that way was testing a situation that can no longer arise. ⚠️ *A guard over a state the
+    /// product cannot reach reads as coverage and is none*, this repository's most-repeated
+    /// finding, so those tests were re-pointed here rather than having their numbers adjusted.
+    ///
+    /// Two observations sharing a key and no candidate pair: `placement_decision` refuses, both
+    /// abstain, and the abstention is about the NETWORK — the engine had a key and still could not
+    /// conclude.
+    async fn pass_over_an_empty_universe(
+        pool: &MySqlPool,
+        observations: Vec<Observation>,
+    ) -> Result<Resolution, RepositoryError> {
+        MariaRepository::new(pool.clone())
+            .transact(move |unit| {
+                let observations = observations.clone();
+                Box::pin(async move {
+                    resolve_within(unit.executor(), &observations, &BTreeSet::new()).await
+                })
+            })
+            .await
+    }
+
     async fn try_pass(
         pool: &MySqlPool,
         observations: Vec<Observation>,
@@ -1153,18 +1213,36 @@ mod tests {
 
         let summary = pass(&pool, observations).await;
 
-        assert_eq!(summary.abstentions, 1);
+        // 🔴 v0.3.0 INVERTED this test, and the inversion is the point.
+        //
+        // It used to assert `abstentions == 1` and one link — *"the ambiguity is DATA, not a
+        // hole"*. That reasoning is right for an abstention ABOUT THE NETWORK and wrong for this
+        // one: an observation with no MAC has no key, can never be placed by any future pass, and
+        // the row said something about the CONNECTOR rather than about the sighting. Each sweep
+        // minted a fresh `ObsId`, so nothing superseded anything — measured on a real /24 at
+        // **50 observations → 50 current links**, and once the scan became periodic that is
+        // millions of rows a year. See `Resolution::sightings_without_a_key`.
+        assert_eq!(
+            summary.abstentions, 0,
+            "a sighting the engine can NEVER place is not an abstention it should record"
+        );
+        assert_eq!(
+            summary.sightings_without_a_key, 1,
+            "it is counted, so the fact is reported rather than silently dropped"
+        );
         let blind = ObsId::from_uuid(uuid::Uuid::from_u128(2));
         let links = current_links(&pool, blind).await;
-        assert_eq!(links.len(), 1, "the ambiguity is DATA, not a hole");
-        assert_eq!(links[0].outcome, "abstained");
-        assert_eq!(links[0].interface_id, None);
-        assert_eq!(
-            links[0].abstention_cause.as_deref(),
-            Some("absence_of_proof"),
-            "the PERSISTED token, lowercase with an underscore — not the Rust variant name"
+        assert!(
+            links.is_empty(),
+            "and no row is written: `/sources` says what this connector cannot see, once, \
+             instead of this table saying it per sighting forever"
         );
-        assert_eq!(links[0].rule_id, None);
+        // _(Four assertions stood here and are DELETED rather than neutered: they read
+        // `links[0]`'s outcome, its NULL interface, its `absence_of_proof` cause and its absent
+        // rule. There is no row to read any more. Asserting on the shape of a row this pass
+        // deliberately does not create would be a guard over a thing that cannot happen — the
+        // defect class this repository has caught more often than any other. What replaced them is
+        // the pair above: nothing written, and the fact counted.)_
 
         let (candidates_rows,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM link_candidate")
             .fetch_one(&pool)
@@ -1563,8 +1641,14 @@ mod tests {
 
         let summary = pass(&pool, vec![twice.clone(), twice.clone()]).await;
 
-        assert_eq!(summary.links_written, 1, "one observation, one link");
-        assert_eq!(count_identity_links(&pool).await.expect("count"), 1);
+        // v0.3.0: this fixture's observation carries no MAC, so the engine writes nothing for it
+        // — the dedup guard below is what this test is really about and it still holds.
+        assert_eq!(summary.links_written, 0, "no key, no link");
+        assert_eq!(
+            summary.sightings_without_a_key, 1,
+            "ONE, not two: the repeated id is still de-duplicated"
+        );
+        assert_eq!(count_identity_links(&pool).await.expect("count"), 0);
     }
 
     /// Sorted, so the comparison across the purge is a SEQUENCE and a divergence names the row.
@@ -1610,14 +1694,17 @@ mod tests {
         };
 
         let first = pass(&pool, observations.clone()).await;
-        assert_eq!(first.links_written, 6, "3 + 2 + 1 abstention");
+        assert_eq!(
+            first.links_written, 5,
+            "3 in the group + 2 — the keyless observation writes NO link since v0.3.0"
+        );
         assert_eq!(first.interfaces_minted, 3);
         let before = crate::repo::snapshot_links(&pool)
             .await
             .map_err(classify)
             .expect("snapshot before");
         let interfaces_before = interface_ids(&pool).await;
-        assert_eq!(before.len(), 6, "six current links to reproduce");
+        assert_eq!(before.len(), 5, "five current links to reproduce");
 
         // 🔴 A ONE-SIDED oracle, and it is not optional. `before` and `after` both go through
         // `snapshot_links`, so the comparison below cannot see a column the QUERY gets wrong —
@@ -1636,20 +1723,17 @@ mod tests {
             "a placement names one of the interfaces this pass minted"
         );
         assert_eq!(placed.valid_to, crate::repo::OPEN_END);
-        let abstained = before
-            .iter()
-            .find(|l| l.outcome == "abstained")
-            .expect("the MAC-less observation abstains");
-        assert_eq!(abstained.interface_id, None);
-        assert_eq!(abstained.rule_id, None);
+        // _(v0.3.0: this fixture's MAC-less observation writes no link at all, so there is no
+        // "abstained" row to find here. The purge-and-replay property this test exists for is
+        // carried by the placed rows above and by the whole-snapshot comparison below; asserting
+        // on a row the pass deliberately does not create would be a guard over an unreachable
+        // state.)_
         assert_eq!(
-            abstained.abstention_cause.as_deref(),
-            Some("absence_of_proof")
-        );
-        assert_eq!(
-            abstained.valid_from,
-            crate::repo::datetime_literal(at(1_700_000_400)),
-            "valid_from is the observation's own observed_at"
+            placed.valid_from,
+            crate::repo::datetime_literal(at(1_700_000_000)),
+            "valid_from is the observation's own observed_at — asserted on a PLACED row now that \
+             the abstention row is gone, because the property is about the column and not about \
+             which outcome carries it"
         );
 
         let purged = MariaRepository::new(pool.clone())
@@ -1662,7 +1746,7 @@ mod tests {
             })
             .await
             .expect("purge");
-        assert_eq!(purged, 6, "every link here is the engine's");
+        assert_eq!(purged, 5, "every link here is the engine's");
         assert_eq!(
             count_identity_links(&pool).await.expect("count"),
             0,
@@ -1842,11 +1926,19 @@ mod tests {
         use opencmdb_core::identity::cascade::RulesetVersion;
 
         let _guard = crate::DB_TEST_LOCK.lock().await;
-        let observations = vec![mac_less(1, l2(1), 1_700_000_000)];
+        // v0.3.0: a MAC-less observation no longer puts the engine on `NIL_INTERFACE` — it writes
+        // nothing at all. Two observations sharing a key, judged over an EMPTY universe, is the
+        // shape that still produces a real abstention, so that is what this test now uses.
+        let observations = vec![
+            observation(1, l2(1), &[mac(0x01)], 1_700_000_000),
+            observation(2, l2(1), &[mac(0x01)], 1_700_000_100),
+        ];
         let Some(pool) = fixture(&observations).await else {
             return;
         };
-        pass(&pool, observations.clone()).await;
+        pass_over_an_empty_universe(&pool, observations.clone())
+            .await
+            .expect("the engine abstains over an empty universe");
 
         let abstention = Decision {
             conclusion: Conclusion::Abstained {
@@ -1893,7 +1985,7 @@ mod tests {
         .map_err(classify)
         .expect("the slot is free now");
         assert_eq!(
-            try_pass(&pool, observations).await.err(),
+            pass_over_an_empty_universe(&pool, observations).await.err(),
             Some(RepositoryError::Constraint("unique")),
             "the replay needs a slot the operator holds, and the whole pass rolls back"
         );
@@ -2032,7 +2124,7 @@ mod tests {
             .await
             .expect("purge");
 
-        assert_eq!(purged, 6, "the engine's six, and not the operator's one");
+        assert_eq!(purged, 5, "the engine's five, and not the operator's one");
         let survivors = crate::repo::snapshot_links(&pool)
             .await
             .map_err(classify)
@@ -2392,7 +2484,10 @@ mod tests {
         };
 
         let first = pass(&pool, observations.clone()).await;
-        assert_eq!(first.links_written, 6, "3 + 2 + 1 abstention");
+        assert_eq!(
+            first.links_written, 5,
+            "3 in the group + 2 — the keyless observation writes NO link since v0.3.0"
+        );
         assert_eq!(first.links_unchanged, 0);
         assert_eq!(first.links_superseded, 0);
         let before = crate::repo::snapshot_links(&pool)
@@ -2400,7 +2495,7 @@ mod tests {
             .map_err(classify)
             .expect("snapshot before");
         let ids_before = all_link_ids(&pool).await;
-        assert_eq!(ids_before.len(), 6);
+        assert_eq!(ids_before.len(), 5);
 
         let second = pass(&pool, observations).await;
 
@@ -2408,7 +2503,7 @@ mod tests {
         assert_eq!(second.links_superseded, 0);
         assert_eq!(second.abstentions, 0, "no abstention LINK was written");
         assert_eq!(
-            second.links_unchanged, 6,
+            second.links_unchanged, 5,
             "every slot already held its decision"
         );
         assert_eq!(
@@ -2425,7 +2520,7 @@ mod tests {
         );
         assert_eq!(
             count_identity_links(&pool).await.expect("count"),
-            6,
+            5,
             "no version was appended"
         );
     }
@@ -2525,8 +2620,11 @@ mod tests {
     #[tokio::test]
     async fn the_engine_never_supersedes_an_operators_link() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
-        let o = mac_less(1, l2(1), 1_700_000_000);
-        let Some(pool) = fixture(std::slice::from_ref(&o)).await else {
+        let o = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        // A second sighting on the same key: two members in the group, so an empty universe leaves
+        // the pair unjudged and both abstain — the abstention the engine still writes.
+        let sibling = observation(2, l2(1), &[mac(0x01)], 1_700_000_100);
+        let Some(pool) = fixture(&[o.clone(), sibling.clone()]).await else {
             return;
         };
 
@@ -2553,7 +2651,10 @@ mod tests {
             .await
             .expect("the operator writes");
 
-        let refused = try_pass(&pool, vec![o.clone()]).await;
+        // v0.3.0: `pass` writes nothing for a MAC-less observation, so it would no longer contend
+        // for this slot at all and the refusal below would be vacuous. The empty universe is what
+        // still makes the engine reach for `NIL_INTERFACE` — see `pass_over_an_empty_universe`.
+        let refused = pass_over_an_empty_universe(&pool, vec![o.clone(), sibling.clone()]).await;
         assert!(
             matches!(refused, Err(RepositoryError::Constraint("unique"))),
             "the engine does not take a slot a human holds; got {refused:?}"
@@ -2730,8 +2831,11 @@ mod tests {
     #[tokio::test]
     async fn the_engine_never_adopts_or_supersedes_a_differing_operator_row() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
-        let o = mac_less(1, l2(1), 1_700_000_000);
-        let Some(pool) = fixture(std::slice::from_ref(&o)).await else {
+        let o = observation(1, l2(1), &[mac(0x01)], 1_700_000_000);
+        // A second sighting on the same key: two members in the group, so an empty universe leaves
+        // the pair unjudged and both abstain — the abstention the engine still writes.
+        let sibling = observation(2, l2(1), &[mac(0x01)], 1_700_000_100);
+        let Some(pool) = fixture(&[o.clone(), sibling.clone()]).await else {
             return;
         };
 
@@ -2763,7 +2867,10 @@ mod tests {
             .await
             .expect("the operator writes");
 
-        let refused = try_pass(&pool, vec![o.clone()]).await;
+        // v0.3.0: `pass` writes nothing for a MAC-less observation, so it would no longer contend
+        // for this slot at all and the refusal below would be vacuous. The empty universe is what
+        // still makes the engine reach for `NIL_INTERFACE` — see `pass_over_an_empty_universe`.
+        let refused = pass_over_an_empty_universe(&pool, vec![o.clone(), sibling.clone()]).await;
         assert!(
             matches!(refused, Err(RepositoryError::Constraint("unique"))),
             "the engine neither adopts nor supersedes it; got {refused:?}"
@@ -2953,16 +3060,23 @@ mod tests {
         let summary = pass(&pool, vec![o.clone(), o.clone(), o.clone()]).await;
 
         assert_eq!(
-            summary.links_written, 1,
-            "one abstention WRITTEN, not three — the dedup guard, not the compare"
+            summary.links_written, 0,
+            "no key, no link — and the dedup guard is measured by the count below, not by this one"
         );
-        assert_eq!(summary.abstentions, 1);
+        assert_eq!(
+            summary.sightings_without_a_key, 1,
+            "ONE, not three — the dedup guard, not the compare"
+        );
+        assert_eq!(
+            summary.abstentions, 0,
+            "the observation carries no key, so there is nothing to abstain ABOUT"
+        );
         assert_eq!(
             summary.links_unchanged, 0,
             "🔴 the load-bearing line: without the dedup the 2nd and 3rd copies would reach the \
              compare and report `unchanged`, so counting ROWS cannot tell the two apart"
         );
-        assert_eq!(count_identity_links(&pool).await.expect("count"), 1);
+        assert_eq!(count_identity_links(&pool).await.expect("count"), 0);
     }
 
     // ------------------------------------------------------------------------------------------
@@ -3110,12 +3224,13 @@ mod tests {
 
         let first = pass(&pool, observations.clone()).await;
         assert_eq!(
-            first.links_written, 7,
-            "3 in the group + 2 for the multi-MAC + 1 abstention + 1 singleton"
+            first.links_written, 6,
+            "3 in the group + 2 for the multi-MAC + 1 singleton — the keyless observation writes \
+             NO link since v0.3.0"
         );
         assert_eq!(first.interfaces_minted, 4);
         let ids_before = all_link_ids(&pool).await;
-        assert_eq!(ids_before.len(), 7);
+        assert_eq!(ids_before.len(), 6);
         // 🔴 The interfaces' own derived instants, which NOTHING else here compares. Measured at
         // the code review: making `seen_window` follow arrival order left all five of this story's
         // order tests GREEN. Shapes A and B are structurally blind to it — A opens no database, and
@@ -3139,7 +3254,7 @@ mod tests {
             );
             assert_eq!(again.links_vacated, 0, "permutation {index} vacated a slot");
             assert_eq!(
-                again.links_unchanged, 7,
+                again.links_unchanged, 6,
                 "permutation {index} failed to recognise a slot it had already filled"
             );
             assert_eq!(
@@ -3184,14 +3299,14 @@ mod tests {
         };
 
         let first = pass(&pool, observations.clone()).await;
-        assert_eq!(first.links_written, 7);
+        assert_eq!(first.links_written, 6);
         assert_eq!(first.interfaces_minted, 4);
         let before = crate::repo::snapshot_links(&pool)
             .await
             .map_err(classify)
             .expect("snapshot before");
         let interfaces_before = interface_ids(&pool).await;
-        assert_eq!(before.len(), 7, "seven current links to reproduce");
+        assert_eq!(before.len(), 6, "six current links to reproduce");
         assert_eq!(interfaces_before.len(), 4);
 
         let mut consumed = 0usize;
@@ -3214,7 +3329,7 @@ mod tests {
                  equal only by accident"
             );
             assert_eq!(
-                replay.links_written, 7,
+                replay.links_written, 6,
                 "permutation {index} rebuilt a different number of links"
             );
             assert_eq!(

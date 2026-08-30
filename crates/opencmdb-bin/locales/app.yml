@@ -83,8 +83,14 @@ identity.all_placed:
   en: "Every sighting was placed."
   fr: "Chaque constat a été rattaché."
 identity.nothing_seen:
-  en: "Nothing observed yet — run a scan and this fills in."
-  fr: "Rien d'observé pour l'instant — lancez un scan et ceci se remplira."
+  # 🔴 This sentence used to read "Nothing observed yet — run a scan and this fills in." It was
+  # true of a virgin install and FALSE the moment a scan landed on a source that cannot identify
+  # anything: the page claimed nothing had been observed while forty-eight machines had answered.
+  # Since v0.3.0 the engine writes no link for a sighting it can never place, so this branch is
+  # reached in BOTH states — and the wording is now true in both, and points at the screen that
+  # explains which one you are in.
+  en: "No sighting has been placed on an interface yet — see Sources for what this instance can and cannot observe."
+  fr: "Aucun constat n'a encore été placé sur une interface — voyez Sources pour ce que cette instance sait et ne sait pas observer."
 # The two facts below are DELIBERATELY two strings and must not be fused. The first is a property of
 # THIS BUILD that Epic 6 removes; the second is a permanent property of the problem. A reader who
 # meets them fused carries the temporary one as permanent.
