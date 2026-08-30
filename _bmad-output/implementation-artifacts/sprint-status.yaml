@@ -4915,7 +4915,28 @@ development_status:
                           # production caller (story 6.12 is the first). `l1.rs`'s citation drift
                           # is NOT fixed here -- registered, owner 6.7.
   # the FIRST producer of `Verdict::Opposes` in this codebase; 3 traps
-  6-7-l2-different-hostname: review  # IMPLEMENTED 2026-08-30 against a VIRGIN mariadb:10.11.11.
+  6-7-l2-different-hostname: review  # IMPLEMENTED **and CODE-REVIEWED** 2026-08-30, three isolated
+                          # layers on a DIFFERENT model, against a VIRGIN mariadb:10.11.11.
+                          # 783 -> 798 tests (517+182+99), ten gates, clippy --all-targets, cargo doc.
+                          # 🔴 THE HEADLINE IS A CLAIM MY OWN MUTATION TABLE REFUTED THREE LINES
+                          # AWAY: three documents called the double-literal test *"the ONLY carrier
+                          # that reds on a typo"* while the table beside them recorded `M5 … red 2`.
+                          # Found INDEPENDENTLY by two layers -- and `fixtures.rs` already carried
+                          # story 6.6's exact guard sentence against that claim.
+                          # 🔴 D20's LOCK ONLY CLOSED LITERAL EMPTINESS: `\u{200B}` OPPOSED
+                          # `\u{2062}`, and `---` opposed `...` -- two non-signals arguing that one
+                          # machine is two devices, the story's own subject reached through a
+                          # channel `trim` does not close. Closed by a PROPERTY (a name must carry
+                          # one ASCII alphanumeric), never a list of code points.
+                          # 🔴 T9's REPAIR OVER-REACHED BY ONE LINE, keeping the three-line width of
+                          # the citation it replaced -- a mechanical +25, not a re-derivation -- and
+                          # the figure had been INHERITED from a register row wrong since 6.6, in
+                          # the task whose own instruction is never to do that.
+                          # 🔴 THE BLIND LAYER, FROM THE DIFF ALONE, found a doc corruption my
+                          # scripted edit introduced and NO GATE COULD SEE. Eighth story running.
+                          # ⚠️ M6's recorded 3 was 4, and is 5 on the repaired tree: A MUTATION
+                          # COUNT IS DATED BY THE TREE THAT PRODUCED IT.
+                          # (implemented earlier the same day; see the story file for the rest.)
                           # 783 -> 796 tests (517+180+99), ten gates, float-free now over 5 files;
                           # 0.21s without a store and 5.76s with one -- THE CLOCK IS THE TELL.
                           # 🔑 THE FIRST PRODUCER OF `Verdict::Opposes` IN THIS CODEBASE.

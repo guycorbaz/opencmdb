@@ -5303,3 +5303,29 @@ Two rows. Both were produced by BUILDING the rule, not by reading the story.
   the first to wire the pass and therefore the first that could commit it — and it should consider
   whether the invariant belongs in a TYPE rather than in a sentence, on story 5.6's precedent
   (*closed in the type*).
+
+## Deferred from: story 6.7's CODE REVIEW (2026-08-30)
+
+Two rows, plus one re-ownership.
+
+- ↺ **RE-OWNED, not closed** — the twinning of `l2_corpus()` and `corpus_pairs()` in `fixtures.rs`
+  named **story 6.7** as owner *"with the question posed rather than the answer assumed"*. Story 6.7
+  touched the file, posed the question again and **did not answer it**, so the row was left naming a
+  finished story. **Owner: story 6.12**, the first to hold a real population and therefore the first
+  for whom a shared walk would be more than tidiness. ⚠️ It is still not obviously a DRY violation to
+  collapse: the two walk different populations and only one of their containment assertions is
+  non-tautological, *a difference a shared helper would hide.*
+
+- ⚠️ **A hostname of only non-ASCII letters reads as ABSENT.** Story 6.7's noise guard requires at
+  least one ASCII alphanumeric — a property rather than a list, which is what closes the
+  invisible-character and pure-punctuation classes together. The cost: a purely Cyrillic or CJK
+  hostname carries none and is treated as no name at all. **It errs on D20's safe side** — a refusal
+  to speak, never a false `Opposes` — and no committed trap exercises it. **Owner: the first story
+  with a connector that can observe a non-ASCII hostname**, which today is none: the shipped ARP/ping
+  connector emits no hostname at all.
+
+- ⚠️ **`verdict_for_hostname`'s evidence is NOT de-duplicated.** A side holding one observation twice,
+  or a multi-homed observation standing on both sides, puts an `ObsId` in the vector twice. Not
+  reachable through the corpus and reachable by a caller building a malformed group. **Owner: story
+  6.12**, which builds that plumbing — and which should decide whether de-duplication belongs in the
+  rule or in the caller's group construction, rather than adding it in both.

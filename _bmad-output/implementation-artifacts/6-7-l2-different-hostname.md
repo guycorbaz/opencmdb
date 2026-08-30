@@ -1,9 +1,12 @@
 # Story 6.7: `l2-different-hostname` — the first producer of `Opposes`
 
-Status: **review** — implemented 2026-08-30 against a live `mariadb:10.11.11` (port 13369, virgin). Contexted 2026-08-30 against the committed corpus and the tree at
-`db1e3f9`; **arbitration TAKEN by Guy the same day**; **VALIDATED the same day** by two
-fresh-context layers, each in its own worktree — ten findings, three HIGH, all applied in place. ⚠️ **`create-story validate` (two fresh-context agents) is MANDATORY before `dev-story`**
-and has NOT been run.
+Status: **review** — implemented AND code-reviewed 2026-08-30 against a live `mariadb:10.11.11`
+(ports 13369 then 13370, virginised before every count). Contexted 2026-08-30 against the committed corpus and the tree at
+`db1e3f9`; **arbitration TAKEN by Guy the same day**; **VALIDATED** by two fresh-context layers and
+then **CODE-REVIEWED by three isolated layers on a different model and REPAIRED**, all on
+2026-08-30. _(That banner read **"`create-story validate` … has NOT been run"** until the code review — a
+template line left standing four sections above §0's ten validation findings, contradicting itself
+on the same screen.)_
 
 ✅ **THE ARBITRATION IS TAKEN: OPTION (a), GUY, 2026-08-30** (§0c) — and it is HIS, where story
 6.6's twin decision was mine by delegation. `cloned-mac-must-not-merge` **stays unanswerable at L2**;
@@ -393,7 +396,7 @@ Claude Opus 5 (1M context), 2026-08-30.
 
 ### The live count (AC5)
 
-**783 → 796 tests** (517 bin + 180 core + 99 xtask), `cargo test --workspace --locked
+**783 → 798 tests** (517 bin + 182 core + 99 xtask, after the code review; it read 796 before the review's two new guards), `cargo test --workspace --locked
 --no-fail-fast`, wall clock, warm: **0.21 s with no store** and **5.76 s against a live
 `mariadb:10.11.11` on port 13369, created virgin for this pass** — the clock is the tell. **Ten
 gates green**; `float-free` now walks **5** files under `identity/` where it walked 4. Clippy over
@@ -433,7 +436,20 @@ below measured a clean baseline first.
 | M3 | oppose on a partial overlap (`!=` for disjoint) | red:1 | red 1 |
 | M4 | drop the evidence on `Opposes` (D19) | red | red 2 |
 | M5 | misspell the rule id | red:2 | red 2 |
-| M6 | return `Neutral` always | red | red 3 |
+| M6 | return `Neutral` always | red | ~~red 3~~ → **red 4** |
+| M7 | revert the noise property to trim-only | red:1 | red 1 |
+| M8 | over-tighten it (`all` instead of `any`) | red:1 | **red 5** |
+
+⚠️ **M6's recorded 3 was WRONG and two review layers caught it: it is 4** — three in
+`opencmdb-core` and **one in `opencmdb-bin`** that I did not count, the same mixed-crate shape M4's
+row does record. 🔑 **And re-measured on the REPAIRED tree it is 5**, because the repair added two
+tests. *A mutation count is dated by the tree that produced it*, and the table now says which tree
+each row was measured on: M1–M6 at implementation, M7–M8 at the review.
+
+⚠️ **M8 diverged from its prediction, 5 against 1**, and the reason is the finding: requiring EVERY
+character to be alphanumeric kills every hyphenated name, and the corpus and the tests are full of
+them. The property is bounded on both sides by more carriers than I credited — better than
+predicted, and still a divergence.
 
 **Six for six.** ⚠️ **M5's SECOND half is not executable on this tree, and that is §0i's finding
 rather than an omission**: the trap-path measurement — a misspelled id leaving the trap PASSING —
@@ -469,6 +485,60 @@ doc paragraph saying so.
 sentence. The file carries a note saying what it used to say and that the drift was **inherited
 rather than measured** — the same defect `blocking.rs` carried and story 6.6 repaired.
 
+### Code review — three isolated layers on a DIFFERENT model, 2026-08-30
+
+Blind (the code diff alone), edge-case (own worktree and store, mutations on a virgin database), and
+acceptance auditor. **Eleven distinct findings; two were reached by two layers independently.**
+
+🔴 **THE HEADLINE IS A CLAIM MY OWN MUTATION TABLE REFUTED THREE LINES AWAY.** Three documents said
+the double-literal test is *"the ONLY carrier that reds on a typo"* — while the table beside them
+recorded `M5 … red 2`. The second carrier is the corpus walk, which filters on the same constant.
+**Found independently by the edge-case and the acceptance layers**, and `fixtures.rs` already carried
+the exact guard sentence from story 6.6 (*"not the sole carrier, and saying otherwise would be a
+claim outrunning its measurement"*) — I wrote that sentence and then committed its opposite.
+
+🔴 **D20's LOCK ONLY CLOSED LITERAL EMPTINESS, and the review reopened the bug through the side**:
+`"\u{200B}"` **OPPOSED** `"\u{2062}"`, and `"---"` opposed `"..."` — *two non-signals arguing
+confidently that one machine is two devices*, which is the bug the story is built around, reached by
+a channel `trim` does not close. Closed by a **PROPERTY, not a list**: a name must carry at least one
+ASCII alphanumeric. M7 reds it, M8 is its control, and its own limit is written (a purely non-ASCII
+name reads as absent — a refusal to speak, never a false `Opposes`).
+
+🔴 **T9's REPAIR OVER-REACHED BY ONE LINE — the same defect one degree smaller.** It wrote
+`:1009-1011`, keeping the THREE-line width of the false `:984-986`: a mechanical `+25` rather than a
+re-derivation. The quoted sentence ends at `:1010`. ⚠️ **And the figure had been inherited from
+`deferred-work.md`, wrong there since story 6.6's review** — in the task whose own instruction is
+*never to add 25*. 🔑 *A grep on the opening phrase gives you where a quotation starts and says
+nothing about where it ends.*
+
+🔴 **THE BLIND LAYER, from the diff alone, found a corruption no gate could see** — my scripted
+insertion had produced `//! holds this mechanically over this whole directory.//!` on one line, so
+`cargo doc` rendered the marker as text. Invisible to `cargo test`, clippy and all ten gates.
+**Eighth story running that this layer finds a HIGH the sighted layers miss**, and it is the class my
+own notes name: *a repetitive edit must let the compiler name each site* — here nothing could, a doc
+comment always compiling. _(The edge layer found it too, at LOW.)_
+
+⚠️ **`§0j`'s "always" was FALSE, and the counterexample is exactly what it was written to prevent**:
+a multi-homed observation carrying two MACs stands on BOTH interfaces, so `verdict_for_pair` returns
+`Decisive` there and the composition gives `Abstained { Ambiguous }`, not `NoMatch`. Unreachable
+today and reachable the day story 6.12 builds the plumbing — which is who the sentence is addressed
+to.
+
+⚠️ **The ASCII folding stated the risk AVOIDED and not the risk INTRODUCED** (blind layer): non-ASCII
+capitalisation never folds, so `NAS-Ö1` and `nas-ö1` can oppose. Accepted with its reason now
+written — *a false merge cannot be undone by looking harder*, so the trade runs this way on purpose.
+
+⚠️ Also applied: the evidence vector is **not de-duplicated** and now says so; the status banner still
+claimed the validation *"has NOT been run"* four sections above its ten findings; and the register row
+naming story 6.7 as owner of the corpus-walk twinning question is re-owned rather than left pointing
+at a finished story.
+
+✅ **Refuted with the check that refuted it**: the corpus test does NOT judge more than the pair it
+names — measured, each of the four sides holds exactly one observation, the multi-observation
+interface in the VRRP stream being a third one; NBSP is handled correctly by `trim`; a shared
+observation across both sides yields `Neutral` rather than a manufactured opposition; and M1–M4
+reproduced at their recorded counts.
+
 ### File List
 
 - `crates/opencmdb-core/src/identity/l2.rs` — NEW
@@ -486,3 +556,4 @@ rather than measured** — the same defect `blocking.rs` carried and story 6.6 r
 | 2026-08-30 | ✅ **ARBITRATION TAKEN — OPTION (a), GUY.** `cloned-mac-must-not-merge` stays unanswerable at L2; the bucket goes **11 → 4**; **(c), the structural reading, is registered by name to story 6.11**, whose subject it already is. 🔑 *The trap is not unanswerable because the engine is weak — it interrogates the wrong layer.* (b) was refused knowing it would never be cheaper. ⚠️ The accepted cost is written: a committed trap is read by nothing until 6.11, and **T6 asserts by NAME which one**, so a second such trap reds a test instead of vanishing. |
 | 2026-08-30 | **VALIDATED** by two fresh-context layers, each in its own worktree; the gap-hunt layer BUILT the rule against a live store and ran four mutations with `--baseline`. **Ten findings, three HIGH, all applied.** 🔴 **AC3's stated mechanism is structurally unreachable**: `>= 1 Opposes` alone abstains on `AbsenceOfProof` (D13, issue #54), an abstention carries no rule, so a misspelled id leaves the trap **PASSING** — measured. The first draft's mutation for it was **GREEN**. AC3 now ships with a double-literal carrier, and **this story is where a hole dormant since 5.4b first bites, for want of a producer until now**. 🔴 **Combining the L1 and L2 verdicts for one pair makes this rule INVISIBLE** — any valid L2 pair has distinct L1 keys, so L1 always says `Disqualifying` and `decide` gives it absolute priority: measured `NoMatch { rule: "l1-distinct-mac" }`. T2 now carries the warning, before 6.12 wires the pass. 🔴 **Hostname CASE was a decision nobody had taken and the default is D20's forbidden shape**: `NAS-01` vs `nas-01` opposes. Taken (mine, delegated): ASCII case-insensitive, with the limit written. Also: AC2 was **not verbatim** — a longer D20 quotation had silently replaced the epic's inside the AC block, under a header promising verbatim and without AC1's divergence note; the corpus half **cannot** go through `l1_runner`, measured; and the **17** interface count is the literal reading, **14** under §0e's own semantics. |
 | 2026-08-30 | **IMPLEMENTED.** `l2.rs` ships `l2-different-hostname`, **the first producer of `Verdict::Opposes`**. **783 → 796 tests**, ten gates, `float-free` now over 5 files. 🔴 **T3's red was arranged and D20's bug appeared by doing nothing**: without the emptiness check, `is_disjoint` says true of two empty sets and absence OPPOSES — four assertion-carried reds, closed by one line. **Six mutations, six conforming, every one on a virgin store with `--baseline`.** ⚠️ M5's trap-path half is **not executable here** (no path from an `l2-*` rule to `run_trap`), so §0i's finding is **pinned as an executable test instead**: an `Opposes`-only verdict abstains and `decision.rule()` is `None` — the reason a misspelled id is invisible, now failing if D13's arbitration changes. AC1 ships MET on two traps of three with the third **named**, so a second such trap reds a test. T9 repaired `l1.rs`'s three drifted citations by grep on the sentences. |
+| 2026-08-30 | **CODE-REVIEWED** by three isolated layers on a different model, and REPAIRED. **Eleven findings, two reached by two layers independently.** 🔴 The headline is a claim **my own mutation table refuted three lines away**: three documents called the double-literal test *"the ONLY carrier"* while the table recorded `M5 … red 2`. 🔴 **D20's lock only closed literal emptiness** — `"\u{200B}"` OPPOSED `"\u{2062}"`, and `"---"` opposed `"..."` — closed by a PROPERTY (one ASCII alphanumeric), M7 red and M8 its control. 🔴 **T9's repair over-reached by one line**, keeping the three-line width of the false citation: a mechanical `+25`, and the figure had been **inherited from a register row wrong since 6.6** — in the task whose instruction is never to do that. 🔴 The blind layer found, **from the diff alone**, a doc corruption my scripted edit had introduced and no gate could see (eighth story running). ⚠️ `§0j`'s *"always"* was false — a multi-homed observation is the counterexample. ⚠️ M6's recorded **3 was 4**, and is **5** on the repaired tree: *a mutation count is dated by the tree that produced it*. **796 → 798 tests.** |

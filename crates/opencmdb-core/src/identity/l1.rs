@@ -2,7 +2,7 @@
 //!
 //! D13 splits the cascade by level: **L1 = pure A** — *"a deterministic join on the scope-qualified
 //! key `(l2_domain, mac) -> interface`. **It is not a probabilistic problem.**"*
-//! [architecture.md:1009-1011]. "Pure A" is the ordered cascade D13 rejects *for L2* because it has no
+//! [architecture.md:1009-1010]. "Pure A" is the ordered cascade D13 rejects *for L2* because it has no
 //! native abstention and no representation for CONFLICT [architecture.md:934-937]; at L1 that
 //! absence is correct, because the key either matches or it does not.
 //!
@@ -60,11 +60,19 @@
 //! # No float
 //!
 //! There is nothing to rank: the key matches or it does not. `cargo xtask ci`'s `float-free` gate
-//! holds this mechanically over this whole directory.//!
+//! holds this mechanically over this whole directory.
+//!
 //! _(⚠️ The three `architecture.md` citations in this file read `:984-986` and `:984-985`
 //! until story 6.7 on 2026-08-30 — **~25 lines off**, and inherited rather than measured, the
-//! same drift its sibling `blocking.rs` carried. Re-derived by `grep` on the quoted sentences
-//! themselves, never by adding 25 to a stale number.)_
+//! same drift its sibling `blocking.rs` carried.
+//!
+//! 🔴 **And the first repair over-reached by one line, which is the same defect one degree
+//! smaller.** It wrote `:1009-1011`, keeping the THREE-line width of the false `:984-986` — a
+//! mechanical `+25`, not a re-derivation. The quoted sentence ends at `:1010`; `:1011` carries a
+//! different one. The figure had also been inherited from `deferred-work.md`, which had it wrong
+//! since story 6.6's review, **despite this file's own instruction never to do that.** Corrected
+//! at story 6.7's code review by grepping each quoted phrase and reading where it ENDS, which is
+//! the half a grep on the opening phrase does not give you.)_
 
 use std::collections::{BTreeMap, BTreeSet};
 

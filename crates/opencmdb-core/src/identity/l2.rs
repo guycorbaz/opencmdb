@@ -28,11 +28,18 @@
 //! # 🔴 A `decide` at this level must receive L2 verdicts ONLY
 //!
 //! Combining L1's verdict for the same pair with an L2 rule's is the obvious gesture and it
-//! **erases this level**. Measured on the committed corpus: for any valid L2 pair the two `L1Key`s
-//! differ by construction — equal keys are ONE interface and no pair — so
-//! `l1::verdict_for_pair` on those observations always returns `Disqualifying` via
-//! `l1-distinct-mac`, and `decide` gives `Disqualifying` absolute priority. The result is
-//! `NoMatch { rule: "l1-distinct-mac" }`, in which no L2 rule can ever be named.
+//! **erases this level**. Measured on the committed corpus: two observations on different
+//! interfaces carry different MACs, so `l1::verdict_for_pair` returns `Disqualifying` via
+//! `l1-distinct-mac`, `decide` gives `Disqualifying` absolute priority, and the result is
+//! `NoMatch { rule: "l1-distinct-mac" }` — in which no L2 rule can ever be named.
+//!
+//! 🔴 _(This said **"always returns `Disqualifying`"** until story 6.7's code review built the
+//! counterexample: a MULTI-HOMED observation carrying two MACs belongs to BOTH interfaces, so the
+//! same observation can stand on both sides — and `verdict_for_pair` then returns `Decisive` via
+//! `l1-exact-mac`, which composed with an L2 `Opposes` gives `Abstained { Ambiguous }`, not
+//! `NoMatch`. The warning holds and its **"always" did not**; an unreachable-today counterexample
+//! in a sentence written to guide story 6.12 is exactly the kind that stops being unreachable when
+//! 6.12 arrives.)_
 //!
 //! `l1.rs` says the two organs do not consult each other; **nothing had ever said it about
 //! `decide`'s ARGUMENT**, and this paragraph is that sentence. The invariant is registered against
@@ -47,7 +54,13 @@
 //! the trap PASSING.
 //!
 //! The id is therefore pinned by a DOUBLE-LITERAL test — the constant against the corpus's own
-//! spelling — which is L1's idiom and the only carrier that reds on a typo.
+//! spelling — which is L1's idiom.
+//!
+//! ⚠️ **It is not the SOLE carrier, measured**: corrupting the constant reds **two** tests, the
+//! double-literal one and the corpus walk, which filters on this id and finds nothing. _(Three
+//! documents called it "the only carrier" until story 6.7's code review, while the story's own
+//! mutation table recorded `M5 … red 2` three lines away. A claim of sole carriership is worth
+//! exactly the mutation that checked it — and this one had been checked and then mis-stated.)_
 
 use std::collections::BTreeSet;
 
@@ -100,16 +113,36 @@ impl<'a> L2Side<'a> {
 /// in SQL (*"comparison never descends into SQL"*), so the rule owns it.
 ///
 /// **ASCII lowercasing, not [`str::to_lowercase`]**: full Unicode case folding has traps of its own
-/// (the Turkish dotless ı, final sigma) and a DNS label is ASCII. ⚠️ **The limit is stated rather
-/// than implied** — this is right for hostnames and would be wrong for arbitrary text. **No
-/// committed trap exercises case in either direction**, so the behaviour ships with a synthetic
-/// guard and this paragraph.
+/// (the Turkish dotless ı, final sigma) and a DNS label is ASCII.
 ///
-/// # ⚠️ Whitespace is trimmed, and that is a decision too
+/// ⚠️ **The risk INTRODUCED is stated too, not only the risk avoided** — the first draft gave one
+/// side of that trade and the code review caught it. `to_ascii_lowercase` leaves every non-ASCII
+/// byte alone, so `NAS-Ö1` and `nas-ö1` stay two names and can **oppose**: D20's bug, in the one
+/// direction this choice does not cover. It is accepted because a hostname whose capitalisation is
+/// non-ASCII is not a case this product has met, and because the alternative trades a rare wrong
+/// split for the Turkish-ı wrong MERGE, which is worse — *a false merge cannot be undone by looking
+/// harder.* **No committed trap exercises case in either direction**, so both halves ship with a
+/// synthetic guard and this paragraph.
 ///
-/// `"  "` counts as absent. Trimming is not obvious and not free: `"\u{200B}".trim().is_empty()` is
-/// **`false`** in Rust — a measured fact this repository has met before — so a trim is a
-/// convenience, never a proof of emptiness.
+/// # 🔴 A name must carry at least one alphanumeric character, and that is a PROPERTY
+///
+/// `"  "` counts as absent — but trimming is not enough, and this repository has the measurement to
+/// prove it: `"\u{200B}".trim().is_empty()` is **`false`** in Rust, so a zero-width space survives
+/// as a "name". Story 6.7's code review measured the consequence — `"\u{200B}"` against
+/// `"\u{2062}"` **OPPOSED**, and so did `"---"` against `"..."`. *Two non-signals arguing
+/// confidently that one machine is two devices* — D20's named bug, reached through a channel a trim
+/// does not close.
+///
+/// The guard is therefore **a property, never a list**: a name must contain at least one ASCII
+/// alphanumeric character. That is principled rather than defensive — RFC 1035 requires a DNS label
+/// to start with a letter — and it closes the invisible-character class and the punctuation class
+/// together, where an enumeration of invisible code points could only ever close the ones someone
+/// thought of. *An enumeration cannot claim the completeness of a property* (story 5.12's sentence,
+/// applied again).
+///
+/// ⚠️ **Its limit, stated**: a name of only non-ASCII letters — a purely Cyrillic or CJK hostname —
+/// carries no ASCII alphanumeric and is therefore read as absent. That is a REFUSAL TO SPEAK, never
+/// a false `Opposes`, so it errs on D20's safe side; and no committed trap exercises it.
 ///
 /// # ⚠️ [`crate::observation::HostnameSource`] is deliberately IGNORED
 ///
@@ -123,10 +156,12 @@ pub fn hostnames_of(side: &L2Side<'_>) -> BTreeSet<String> {
         .filter_map(|fact| match fact {
             Fact::Hostname { name, .. } => {
                 let trimmed = name.trim();
-                if trimmed.is_empty() {
-                    None
-                } else {
+                // A name must SAY something. `trim` alone leaves zero-width spaces and pure
+                // punctuation standing, and two such "names" opposed each other — measured.
+                if trimmed.chars().any(|c| c.is_ascii_alphanumeric()) {
                     Some(trimmed.to_ascii_lowercase())
+                } else {
+                    None
                 }
             }
             _ => None,
@@ -167,6 +202,11 @@ pub fn hostnames_of(side: &L2Side<'_>) -> BTreeSet<String> {
 ///
 /// On `Opposes`, both sides' [`crate::observation::ObsId`]s, **sorted** — so the evidence of a pair
 /// does not depend on which side was the left argument, on `verdict_for_pair`'s measured precedent.
+///
+/// ⚠️ **It is NOT de-duplicated**, and that is stated rather than discovered: a side holding one
+/// observation twice, or a multi-homed observation standing on both sides, puts an `ObsId` in twice.
+/// Unreachable through the corpus today and reachable by a caller building a malformed group —
+/// story 6.12's plumbing is where that becomes possible.
 /// A `Neutral` legitimately carries none: D19's *"a rule that fires without leaving its `rule_id`
 /// in the database is a rule we cannot debug"* is about a verdict that ARGUES.
 pub fn verdict_for_hostname(a: &L2Side<'_>, b: &L2Side<'_>) -> RuleVerdict {
@@ -452,6 +492,44 @@ mod tests {
             None,
             "and an abstention names NO rule — which is exactly why a misspelled id is invisible \
              to the trap gate, and why AC3 ships on a double literal instead"
+        );
+    }
+
+    /// 🔴 **Two non-signals must not argue.** Found by story 6.7's code review, which measured
+    /// `"\u{200B}"` opposing `"\u{2062}"` and `"---"` opposing `"..."` — D20's bug reached through
+    /// a channel `trim` does not close, because `"\u{200B}".trim().is_empty()` is `false`.
+    ///
+    /// The guard is a PROPERTY — a name must carry at least one ASCII alphanumeric — never a list of
+    /// invisible code points, which could only close the ones someone thought of.
+    #[test]
+    fn a_name_carrying_no_alphanumeric_is_not_a_name() {
+        let invisible = [observation(1, 0x01, Some("\u{200B}"))];
+        let other_invisible = [observation(2, 0x02, Some("\u{2062}"))];
+        assert_eq!(
+            verdict_for_hostname(&side(&invisible), &side(&other_invisible)).verdict,
+            Verdict::Neutral,
+            "two invisible characters are two non-signals, and non-signals do not disagree"
+        );
+
+        let dashes = [observation(3, 0x03, Some("---"))];
+        let dots = [observation(4, 0x04, Some("..."))];
+        assert_eq!(
+            verdict_for_hostname(&side(&dashes), &side(&dots)).verdict,
+            Verdict::Neutral,
+            "pure punctuation is a placeholder, not a name — a DNS label must start with a letter"
+        );
+    }
+
+    /// The CONTROL that gives the guard above its meaning: the property must not swallow real names.
+    #[test]
+    fn a_name_with_one_alphanumeric_is_still_a_name() {
+        let left = [observation(1, 0x01, Some("-a-"))];
+        let right = [observation(2, 0x02, Some("-b-"))];
+
+        assert_eq!(
+            verdict_for_hostname(&side(&left), &side(&right)).verdict,
+            Verdict::Opposes,
+            "one alphanumeric is enough to be a name; the guard refuses noise, not punctuation"
         );
     }
 
