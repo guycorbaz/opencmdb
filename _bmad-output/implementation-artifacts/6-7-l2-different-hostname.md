@@ -1,6 +1,6 @@
 # Story 6.7: `l2-different-hostname` — the first producer of `Opposes`
 
-Status: **ready-for-dev** — contexted 2026-08-30 against the committed corpus and the tree at
+Status: **review** — implemented 2026-08-30 against a live `mariadb:10.11.11` (port 13369, virgin). Contexted 2026-08-30 against the committed corpus and the tree at
 `db1e3f9`; **arbitration TAKEN by Guy the same day**; **VALIDATED the same day** by two
 fresh-context layers, each in its own worktree — ten findings, three HIGH, all applied in place. ⚠️ **`create-story validate` (two fresh-context agents) is MANDATORY before `dev-story`**
 and has NOT been run.
@@ -316,38 +316,38 @@ hide**.
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — Validation.** Two fresh-context agents, own worktree each. §0c is SETTLED (Guy, option
+- [x] **T1 — Validation.** Two fresh-context agents, own worktree each. §0c is SETTLED (Guy, option
       (a)); the validation inherits it rather than re-opening it.
-- [ ] **T2 — The rule's input type** (AC1): an interface with its observations. Document why an
+- [x] **T2 — The rule's input type** (AC1): an interface with its observations. Document why an
       `L2CandidatePair` alone cannot serve, **and that the `ObsId → &Observation` resolution is the
       CALLER's** (§0f).
       🔴 **And write the warning §0j earns: the L2 `decide` receives ONLY L2 verdicts.** Combining
       the L1 verdict for the same pair is the obvious gesture and it makes this rule INVISIBLE —
       measured `NoMatch { rule: "l1-distinct-mac" }`, because any valid L2 pair has distinct L1 keys
       by construction and `Disqualifying` wins outright.
-- [ ] **T3 — The absence guard FIRST** (AC2): write the `Neutral`-on-absent and `Neutral`-on-empty
+- [x] **T3 — The absence guard FIRST** (AC2): write the `Neutral`-on-absent and `Neutral`-on-empty
       tests against a deliberately wrong rule that opposes on absence, observe the assertion-carried
       red, then correct. This is D20's lock and it is the story's centre.
-- [ ] **T4 — The rule** (AC1, AC3): `l2-different-hostname`, spelled exactly as the corpus spells it,
+- [x] **T4 — The rule** (AC1, AC3): `l2-different-hostname`, spelled exactly as the corpus spells it,
       yielding `Opposes` on disjoint non-empty name sets and `Neutral` otherwise, **comparing
       case-insensitively by ASCII lowercasing** (§0d2). AC3's carrier is a **double-literal test**,
       never `run_trap` (§0i).
-- [ ] **T5 — The two decisions the corpus cannot exercise** (AC4 and §0d2): the multi-hostname set
+- [x] **T5 — The two decisions the corpus cannot exercise** (AC4 and §0d2): the multi-hostname set
       semantics AND the case-insensitivity, each tested synthetically with its limit written in the
       doc. Also state that `HostnameSource` is ignored.
-- [ ] **T6 — The corpus half**: the two answerable traps answered end to end; **assert by NAME that
+- [x] **T6 — The corpus half**: the two answerable traps answered end to end; **assert by NAME that
       `cloned-mac-must-not-merge` is the one that is not**, so the residue cannot grow in silence.
-- [ ] **T7 — The mutation pass**, predictions written first, virgin store, `--baseline`. At minimum:
+- [x] **T7 — The mutation pass**, predictions written first, virgin store, `--baseline`. At minimum:
       oppose on absence (must red T3), oppose on empty, oppose on partial overlap, **compare
       case-sensitively** (must red §0d2's guard), and **misspell the rule id — predicted RED on the
       double-literal test and GREEN through `run_trap`, and BOTH halves must be run**, because the
       second is §0i's whole finding.
       🔴 **Do NOT restate the first draft's row** *"misspell the id → `rule_mismatch`"*: it was
       **measured GREEN** and is false as written.
-- [ ] **T8 — Gates**: `cargo xtask ci`, fmt, clippy `--all-targets`, `cargo test --workspace
+- [x] **T8 — Gates**: `cargo xtask ci`, fmt, clippy `--all-targets`, `cargo test --workspace
       --locked --no-fail-fast` both with and without a store; record the clock.
-- [ ] **T9 — `l1.rs`'s citation drift**, inherited by name (§0f).
-- [ ] **T10 — The record**: this file, `sprint-status.yaml`, and the twins **byte-for-byte identical**
+- [x] **T9 — `l1.rs`'s citation drift**, inherited by name (§0f).
+- [x] **T10 — The record**: this file, `sprint-status.yaml`, and the twins **byte-for-byte identical**
       — verified by comparison, not by intention.
 
 ## Dev Notes
@@ -389,7 +389,94 @@ is a test that the rule **stays quiet**.
 
 ### Agent Model Used
 
-_(to be filled at implementation)_
+Claude Opus 5 (1M context), 2026-08-30.
+
+### The live count (AC5)
+
+**783 → 796 tests** (517 bin + 180 core + 99 xtask), `cargo test --workspace --locked
+--no-fail-fast`, wall clock, warm: **0.21 s with no store** and **5.76 s against a live
+`mariadb:10.11.11` on port 13369, created virgin for this pass** — the clock is the tell. **Ten
+gates green**; `float-free` now walks **5** files under `identity/` where it walked 4. Clippy over
+`--all-targets`. 28 fixtures, **trap gate still RED at 26/15/11**, no migration, no route, no write,
+no dependency, no production caller.
+
+### What was built
+
+`crates/opencmdb-core/src/identity/l2.rs` — **NEW**: `L2_DIFFERENT_HOSTNAME`, `L2Side<'a>` (the
+observations that landed on one interface), `hostnames_of` (trim, drop empty, ASCII-fold) and
+`verdict_for_hostname` — **the first producer of `Verdict::Opposes` in this codebase**. The corpus
+half is two tests in `fixtures.rs`. `l1.rs`'s three drifted citations are repaired (T9).
+
+### 🔴 T3's red was ARRANGED, and D20's bug appeared by doing nothing in particular
+
+The rule shipped first WITHOUT its emptiness check — `BTreeSet::is_disjoint` says **true** of two
+empty sets, so *absence opposed*. **Four tests reddened on their own assertions**
+(`left: Opposes, right: Neutral`), not on a compiler error. The lock is one line, and it is now the
+only thing between this rule and D20's named bug:
+
+```rust
+let both_sides_offer_a_name = !names_a.is_empty() && !names_b.is_empty();
+```
+
+🔑 *The bug D20 calls the real lock is not something you write — it is what you get for not writing
+one line.* That is why the guard was seen red before it passed.
+
+### The mutation pass — six mutations, predictions written first, **virgin store and `--baseline`**
+
+Story 6.6's rule, applied: this suite is non-deterministic against a reused database, so every run
+below measured a clean baseline first.
+
+| id | mutation | predicted | measured |
+|---|---|---|---|
+| M1 | remove D20's lock (oppose on absence) | red | **red 4** (+ clippy) |
+| M2 | compare case-SENSITIVELY | red:1 | red 1 |
+| M3 | oppose on a partial overlap (`!=` for disjoint) | red:1 | red 1 |
+| M4 | drop the evidence on `Opposes` (D19) | red | red 2 |
+| M5 | misspell the rule id | red:2 | red 2 |
+| M6 | return `Neutral` always | red | red 3 |
+
+**Six for six.** ⚠️ **M5's SECOND half is not executable on this tree, and that is §0i's finding
+rather than an omission**: the trap-path measurement — a misspelled id leaving the trap PASSING —
+needs a path from this rule to `run_trap`, and `l1_runner` has no extension point for `l2-*`
+(measured at validation). What ships instead is stronger than a re-run: **the reason is now an
+executable test.**
+
+### 🔑 §0i's finding is PINNED rather than quoted
+
+`an_opposes_only_verdict_abstains_and_names_no_rule` drives the real algebra and asserts both halves:
+`decide(vec![an Opposes])` gives `Abstained { AbsenceOfProof }`, and `decision.rule()` is **`None`**.
+*That is why a misspelled id is invisible to the gate*, and why AC3 ships on a double literal. The
+sentence is no longer inherited from a validation report — it fails if D13's arbitration ever
+changes.
+
+### AC1 ships MET on two traps of three, and the third is NAMED
+
+`the_answerable_hostname_traps_are_opposed_and_the_third_is_named` asserts the two answerable ids by
+name AND asserts that `cloned-mac-must-not-merge` is the collapsed one. **A second trap falling into
+this case reds a test instead of vanishing** — which is the whole reason for naming rather than
+counting, and the cost Guy's arbitration (a) explicitly accepted.
+
+### The two decisions the corpus cannot exercise, both guarded and both limited in writing
+
+**Case** (§0d2, mine): ASCII-folded, so `NAS-01` and `nas-01` are one name — M2 reds when it is not.
+**Multi-name sets** (AC4): `Opposes` only on DISJOINT non-empty sets, so a partial overlap stays
+quiet — M3 reds when it does not. Neither has a committed trap; both have a synthetic guard and a
+doc paragraph saying so.
+
+### T9 — `l1.rs`'s citations, re-derived rather than shifted
+
+`:984-986` → `:1009-1011` and two `:984-985` → `:1009-1010`, each found by `grep` on the quoted
+sentence. The file carries a note saying what it used to say and that the drift was **inherited
+rather than measured** — the same defect `blocking.rs` carried and story 6.6 repaired.
+
+### File List
+
+- `crates/opencmdb-core/src/identity/l2.rs` — NEW
+- `crates/opencmdb-core/src/identity/mod.rs` — MODIFIED (module declaration)
+- `crates/opencmdb-core/src/identity/l1.rs` — MODIFIED (T9, citations only)
+- `crates/opencmdb-bin/src/fixtures.rs` — MODIFIED (the corpus half)
+- `_bmad-output/implementation-artifacts/6-7-l2-different-hostname.md` — MODIFIED
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — MODIFIED
 
 ## Change Log
 
@@ -398,3 +485,4 @@ _(to be filled at implementation)_
 | 2026-08-30 | Story created and contexted against `db1e3f9`. 🔴 **AC1's "three traps" is TWO** — `cloned-mac-must-not-merge` has no L2 pair under story 6.6's arbitration (§0b). 🔑 **And the measurement opened a third option nobody had posed**: the ONE interface in the whole corpus carrying two different hostnames is exactly the one `cloned-mac` collapses onto, so *the signal is not lost, the SHAPE is* — a cloned MAC presents as one interface contradicting itself, which is story 6.11's structural-fact shape arriving early (§0c). Arbitration left OPEN and referred to Guy. Also measured: 17 hostname-bearing interfaces, exactly one multi-named (§0d); the absence/emptiness equivalence is stated by the corpus itself and **no trap in that family names this rule**, so AC2 needs a test that reds when the rule wrongly opposes (§0e). |
 | 2026-08-30 | ✅ **ARBITRATION TAKEN — OPTION (a), GUY.** `cloned-mac-must-not-merge` stays unanswerable at L2; the bucket goes **11 → 4**; **(c), the structural reading, is registered by name to story 6.11**, whose subject it already is. 🔑 *The trap is not unanswerable because the engine is weak — it interrogates the wrong layer.* (b) was refused knowing it would never be cheaper. ⚠️ The accepted cost is written: a committed trap is read by nothing until 6.11, and **T6 asserts by NAME which one**, so a second such trap reds a test instead of vanishing. |
 | 2026-08-30 | **VALIDATED** by two fresh-context layers, each in its own worktree; the gap-hunt layer BUILT the rule against a live store and ran four mutations with `--baseline`. **Ten findings, three HIGH, all applied.** 🔴 **AC3's stated mechanism is structurally unreachable**: `>= 1 Opposes` alone abstains on `AbsenceOfProof` (D13, issue #54), an abstention carries no rule, so a misspelled id leaves the trap **PASSING** — measured. The first draft's mutation for it was **GREEN**. AC3 now ships with a double-literal carrier, and **this story is where a hole dormant since 5.4b first bites, for want of a producer until now**. 🔴 **Combining the L1 and L2 verdicts for one pair makes this rule INVISIBLE** — any valid L2 pair has distinct L1 keys, so L1 always says `Disqualifying` and `decide` gives it absolute priority: measured `NoMatch { rule: "l1-distinct-mac" }`. T2 now carries the warning, before 6.12 wires the pass. 🔴 **Hostname CASE was a decision nobody had taken and the default is D20's forbidden shape**: `NAS-01` vs `nas-01` opposes. Taken (mine, delegated): ASCII case-insensitive, with the limit written. Also: AC2 was **not verbatim** — a longer D20 quotation had silently replaced the epic's inside the AC block, under a header promising verbatim and without AC1's divergence note; the corpus half **cannot** go through `l1_runner`, measured; and the **17** interface count is the literal reading, **14** under §0e's own semantics. |
+| 2026-08-30 | **IMPLEMENTED.** `l2.rs` ships `l2-different-hostname`, **the first producer of `Verdict::Opposes`**. **783 → 796 tests**, ten gates, `float-free` now over 5 files. 🔴 **T3's red was arranged and D20's bug appeared by doing nothing**: without the emptiness check, `is_disjoint` says true of two empty sets and absence OPPOSES — four assertion-carried reds, closed by one line. **Six mutations, six conforming, every one on a virgin store with `--baseline`.** ⚠️ M5's trap-path half is **not executable here** (no path from an `l2-*` rule to `run_trap`), so §0i's finding is **pinned as an executable test instead**: an `Opposes`-only verdict abstains and `decision.rule()` is `None` — the reason a misspelled id is invisible, now failing if D13's arbitration changes. AC1 ships MET on two traps of three with the third **named**, so a second such trap reds a test. T9 repaired `l1.rs`'s three drifted citations by grep on the sentences. |

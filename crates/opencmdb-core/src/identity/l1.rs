@@ -2,7 +2,7 @@
 //!
 //! D13 splits the cascade by level: **L1 = pure A** — *"a deterministic join on the scope-qualified
 //! key `(l2_domain, mac) -> interface`. **It is not a probabilistic problem.**"*
-//! [architecture.md:984-986]. "Pure A" is the ordered cascade D13 rejects *for L2* because it has no
+//! [architecture.md:1009-1011]. "Pure A" is the ordered cascade D13 rejects *for L2* because it has no
 //! native abstention and no representation for CONFLICT [architecture.md:934-937]; at L1 that
 //! absence is correct, because the key either matches or it does not.
 //!
@@ -60,7 +60,11 @@
 //! # No float
 //!
 //! There is nothing to rank: the key matches or it does not. `cargo xtask ci`'s `float-free` gate
-//! holds this mechanically over this whole directory.
+//! holds this mechanically over this whole directory.//!
+//! _(⚠️ The three `architecture.md` citations in this file read `:984-986` and `:984-985`
+//! until story 6.7 on 2026-08-30 — **~25 lines off**, and inherited rather than measured, the
+//! same drift its sibling `blocking.rs` carried. Re-derived by `grep` on the quoted sentences
+//! themselves, never by adding 25 to a stale number.)_
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -71,7 +75,7 @@ use crate::trap::RuleId;
 /// The scope-qualified key D13 names: the L2 domain a MAC is unique in, and the MAC.
 ///
 /// ⚠️ **`vantage` is deliberately NOT part of it**, although it sits beside `l2_domain` in
-/// [`crate::observation::Scope`]. D13's key has two components [architecture.md:984-985], so two
+/// [`crate::observation::Scope`]. D13's key has two components [architecture.md:1009-1010], so two
 /// vantages seeing the same `(l2_domain, mac)` resolve to the SAME interface.
 ///
 /// **The architecture never writes that sentence — it is DERIVED here**, from D21's refusal of
@@ -311,7 +315,7 @@ pub fn decide_pair(a: &Observation, b: &Observation) -> Decision {
 /// # Why this exists at all
 ///
 /// [`decide_pair`] judges a PAIR, and a group of one has no pair. The placement is still true —
-/// at L1 the interface **is** the key [architecture.md:984-985], so an observation carrying that
+/// at L1 the interface **is** the key [architecture.md:1009-1010], so an observation carrying that
 /// key sits on that interface by [`join`]'s definition, and [`L1_EXACT_MAC`] is the rule that names
 /// it. What is missing is not the fact but the [`Decision`] carrying it, which every persistence
 /// caller needs.
