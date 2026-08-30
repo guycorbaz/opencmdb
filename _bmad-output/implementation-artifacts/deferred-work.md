@@ -5274,3 +5274,32 @@ One row, and it is an ARBITRATION's other half rather than a defect.
   ⚠️ **And it inherits a live consequence**: story 6.7's T6 asserts BY NAME that
   `cloned-mac-must-not-merge` is the trap not answered. Closing this row must update that assertion,
   which is the point of naming it rather than counting it.
+
+## Deferred from: story 6.7's validation (2026-08-30)
+
+Two rows. Both were produced by BUILDING the rule, not by reading the story.
+
+- 🔴 **`run_trap` CANNOT DETECT A WRONG RULE ID ON AN `Opposes`-ONLY VERDICT, and story 6.7 is where
+  that hole first bites.** D13's ratified arbitration (Guy, 2026-07-29, GitHub issue #54) makes
+  `>= 1 Opposes` with no `Disqualifying` abstain on `AbsenceOfProof`; an `Outcome::Abstained` carries
+  **no rule**, so `run_trap`'s `(Some, Some)` comparison never fires. **Measured end to end**:
+  corrupting the id to `l2-totally-wrong-id` leaves the trap **PASSING**, not `WrongRule`.
+  ⚠️ **The hole has been in the algebra since story 5.4b and was invisible for want of a producer** —
+  6.7 is the first thing in this codebase to emit `Opposes`. Story 6.7 carries AC3 on a
+  **double-literal test** instead, which is L1's own idiom and was proven to be the only carrier that
+  reds on a typo. **This row is what remains**: every `must-not-merge` trap whose expected rule is
+  carried ONLY by an opposing verdict is, at the gate, spelling-blind. **Owner: story 6.15**, which
+  is where the gate's own honesty is the subject — with the question posed, not the answer assumed:
+  the fix may be in `run_trap`, in `Outcome`, or nowhere, and D18's *"a gate that cannot fall is
+  decoration"* cuts both ways here.
+
+- ⚠️ **Nothing says that `decide` must receive verdicts from ONE LEVEL, and combining them silently
+  erases the higher one.** For any valid L2 pair the two `L1Key`s differ by construction, so
+  `l1::verdict_for_pair` on the same observations always returns `Disqualifying` via
+  `l1-distinct-mac`, and `decide` gives `Disqualifying` absolute priority — measured
+  `NoMatch { rule: "l1-distinct-mac" }` on the real `doc-vm-alpha`/`doc-vm-beta` data. `l1.rs`'s doc
+  says the two organs do not consult each other; **nothing says it about `decide`'s ARGUMENT**, and
+  passing both is the obvious gesture. Story 6.7 writes the warning in its T2. **Owner: story 6.12**,
+  the first to wire the pass and therefore the first that could commit it — and it should consider
+  whether the invariant belongs in a TYPE rather than in a sentence, on story 5.6's precedent
+  (*closed in the type*).
