@@ -5329,3 +5329,37 @@ Two rows, plus one re-ownership.
   reachable through the corpus and reachable by a caller building a malformed group. **Owner: story
   6.12**, which builds that plumbing — and which should decide whether de-duplication belongs in the
   rule or in the caller's group construction, rather than adding it in both.
+
+## Raised by the operator, using the product (2026-08-30, v0.3.1)
+
+Two rows. Both came from Guy running `v0.3.0` on his own NAS and looking at the one live button —
+the measurement this project had never taken.
+
+- 🔴 **A HUMAN MUST BE ABLE TO CHANGE A VALUE THEY THEMSELVES DECLARED, and there is no gesture for
+  it.** NFR5 forbids the MACHINE to overwrite a declared value — that is what protects an operator's
+  testimony from an automatic process — and it says nothing about the author correcting their own
+  statement. Guy's words: *"une machine ne peut pas écraser une valeur déclarée, mais un humain peut
+  le demander à la machine."*
+  ⚠️ **The product cannot do it at all today, at every layer**: no route, no handler, and the
+  adapter has no path — there is no `ON DUPLICATE KEY UPDATE` anywhere and the primary key
+  `(entity_id, attr_key)` errors 1062 on a second write. So this is not a missing button, it is a
+  missing capability, and whoever takes it must decide what an edit does to `origin`/`origin_obs_id`
+  and whether the superseded value is kept. **Owner: Epic 21** (edit / decommission), which the plan
+  already names — ⚠️ *seventeen epics away, for a gesture an operator needs the first time they make
+  a typo.* Its position is worth re-weighing at Epic 6's retrospective.
+
+- 🔴 **DOCUMENTING A VALUE ALREADY DECLARED ON ANOTHER ENTITY IS UNGUARDED, and the gesture is a way
+  to manufacture the conflict the product elsewhere reports.** `declared_one_adoption_per_field` is
+  keyed on `(origin_obs_id, attr_key)` — one adoption per SIGHTING and field, which is the 409 for
+  documenting the same sighting twice. Two different sightings of one address, documented onto two
+  entities, both pass. Guy: *"si une adresse IP est déjà existante, il faut en faire quelque chose :
+  on ne peut pas seulement bêtement l'ajouter."*
+  ⚠️ The product already knows this is wrong — `/ipam` renders an **« Conflit d'adresse »** panel,
+  and story 6b.4's review registered that *"two entities on one `ipv4` render indistinguishable
+  rows"*. What is new is that **the one live gesture creates them**. Three exits, and it is a product
+  decision rather than a repair: refuse and NAME the entity already holding it; offer to ATTACH the
+  sighting to that entity instead of creating a second one; or accept and surface the conflict on
+  the IPAM screen. ⚠️ The second turns a duplicate into information and is the only one that uses a
+  gesture the glossary already has (`attach`) — but `attach` is not built. **Owner: story 6.13 or
+  Epic 7**, whichever first touches the documenting route; it must not be discovered by an operator
+  a second time.

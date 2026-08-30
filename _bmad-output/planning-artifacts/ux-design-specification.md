@@ -197,8 +197,8 @@ editHistory:
         The metric is not "is the backlog emptied" but "is it treatable the day he decides to treat
         it". The backlog is his decision; the trend is our responsibility.
       F14 (REFACTOR) - the canonical glossary is rebuilt as a binding EN/FR table mirroring the PRD.
-        accept-as-declared -> document (EN) / « Merger » (FR UI); the new accept-gap -> « Accepter
-        l'écart ». A pair needs ONE MEANING, not one root - document/« Merger » is one term with one
+        accept-as-declared -> document (identifier) / UI label "Add" / « Ajouter »; the new accept-gap -> « Accepter
+        l'écart ». A pair needs ONE MEANING, not one root - the label "Add"/« Ajouter » is one term with one
         translation, exactly as the rule requires. Retired: accept-as-declared (it named only the
         new-discovery case and hid the dominant one), `merge` in English (it names the forbidden
         operation; the pillar is "linked, never merged"), `revert` (nothing is ever destroyed here;
@@ -209,7 +209,7 @@ editHistory:
       RENAME (Guy's decisions, applied across ~76 sites):
         `--accent-accept` -> `--accent-document`; `.btn-accept` -> `.btn-document` (the amber accent
         now follows the gesture that actually closes the gap; accept-gap is deliberately NEUTRAL).
-        Microcopy: FR « Merger » -> « Mergé »; EN "Document" -> "Documented".
+        Microcopy: FR « Ajouter » -> « Ajouté »; EN "Add" -> "Added".
         `pending_accept` -> `pending_commit` (EXTENSION, flagged: the optimistic protocol covers
         document, accept-gap and ignore alike - naming it after one gesture was the original error).
         `reverting` -> SPLIT, not renamed. Guy's rename surfaced an overloaded state: `reverting`
@@ -329,7 +329,7 @@ just another scanner.
 
 On each discovery card the eye must catch three things, in order: **(1) which object**
 ("New: Raspberry Pi · 192.0.2.42"), **(2) the nature of the gap** (observed, not yet
-declared), **(3) the document action** (FR UI: « Merger »). Everything else is secondary.
+declared), **(3) the document action** (UI label: "Add" / « Ajouter »). Everything else is secondary.
 - **Document is the only high-contrast element** — a single chromatic accent per card. If every
   chip shouts, none is heard.
 - **The preview *is* the card:** the observed-vs-declared comparison (e.g. "Observed VLAN 20 /
@@ -679,7 +679,7 @@ runtime opencmdb avoids, and their default aesthetics fight the calm signature.
   - **No shadows** — hierarchy via `--border-hairline: 1px solid slate-800/40`, not levitation.
   - **Tinted neutral base**, never pure gray: `slate-900 #0f1420` / `slate-100 #e2e8f0` (cold
     indigo is the signature).
-  - **One locked accent:** `--accent-document: #d99a4e` — reserved solely for the document action (FR UI: « Merger »).
+  - **One locked accent:** `--accent-document: #d99a4e` — reserved solely for the document action (UI label: "Add" / « Ajouter »).
   - **Severity by luminosity + font-weight, never by hue.**
 - **Dark mode is first-class from MVP** (`[data-theme]`, one token source drives both). Dark
   pitfalls handled: amber desaturated (~S 55% / L 58%) so it doesn't vibrate on `#0f1420`; text is
@@ -759,7 +759,7 @@ tells a friend: "it documented my whole network — I just tapped 'yes' down the
    card on mobile, a scannable list on desktop.
 2. **Interaction:** the card shows, in 3-second order, **the object → the gap (observed vs.
    declared, source- and freshness-tagged) → the document affordance** (the single amber accent).
-   Actions: **Document** (E / tap — the amber one; FR UI « Merger »), **Accept the gap** (G — neutral,
+   Actions: **Add** (E / tap — the amber one; FR « Ajouter »), **Accept the gap** (G — neutral,
    *"I've seen it, I haven't decided"*: the gap **stays open and keeps counting**, a **note is
    mandatory**, and it returns only when the observed value **changes**, never on a clock),
    **Snooze** (S — a *timer*, as opposed to accept-gap's *sensor*), **Exclude** (X, remembered), **Attach/Create**
@@ -1283,7 +1283,7 @@ skeleton; details are the varnish._
   accent, always behind an explicit confirm.
   *Detail (V1):* amber discreet-at-rest vs full-on-focused-card; the exact ghost-border vs link
   contrast delta.
-- Buttons name the action; feedback echoes it as a past participle (FR « Merger » → « Mergé » ; EN "Document" → "Documented").
+- Buttons name the action; feedback echoes it as a past participle (FR « Ajouter » → « Ajouté » ; EN "Add" → "Added").
 
 ### Feedback Patterns
 
@@ -1333,7 +1333,7 @@ skeleton; details are the varnish._
 
 _**Vocabulary is architecture: if a gesture is named after an operation we forbid, someone eventually
 implements the operation.** These pairs are binding and mirror the PRD's Canonical Vocabulary. A pair
-needs **one meaning, not one root** — `document`/« Merger » is one term with one translation, exactly as
+needs **one meaning, not one root** — the label "Add"/« Ajouter » is one term with one translation, exactly as
 the rule requires._
 
 | Concept | EN (docs, API, code — **and a UI locale**) | FR (UI) | Meaning |

@@ -593,6 +593,36 @@ architecture risk**.
 **Open, deferred to the UX/docs step:** reconcile the EN docs contradiction — either keep
 "Merger" in FR with a different EN verb, or rename the pillar.
 
+🔴 **SUPERSEDED ON THE WORD, 2026-08-30 — Guy, in front of the running product.** The gesture's
+UI label is now **"Add" / « Ajouter »**. The identifier `document` (`document-all`,
+`document-field`, FR13) is unchanged; this is a label decision, not a rename.
+
+**What changed is not taste, it is a measurement.** Guy installed `v0.3.0` on his NAS, met the
+button, and said the word did not tell him what it does. Two facts settled it:
+
+- « Merger » is an **anglicism**; the French is « Fusionner ».
+- **The action cannot fuse anything.** There is no `ON DUPLICATE KEY UPDATE` in the adapter, the
+  primary key is `(entity_id, attr_key)`, and a second write for one field errors 1062. The engine
+  can only ADD a declared value, never replace one. *So « fusionner » names a forbidden operation
+  in French for exactly the reason `merge` does in English* — which is why retiring one and keeping
+  the other was never coherent.
+
+🔑 **The recorded dissent above was right, and this is the entry that says so.** Winston's sentence
+— *"if the action is called merge in the UI, someone will end up implementing it as a merge"* — did
+not come true in the code, because the mitigation held: NFR5 and the primary key make a destructive
+merge structurally impossible. It came true in the READER. The word taught the operator to expect an
+operation the product forbids, which is the *pedagogy risk* this entry names and then sets aside.
+⚠️ **It took the author using his own product to see it** — five weeks after the decision, and no
+review layer, gate or retrospective had raised it.
+
+✅ **This also closes the "Open, deferred" clause below.** The EN/FR contradiction is gone: both
+languages now name the same act, and neither names a forbidden one.
+
+⚠️ **What is NOT decided here**: a human asking the product to change a value *they themselves*
+declared is legitimate and has no gesture — NFR5 binds the machine, not the author. And documenting
+a value already declared on another entity is unguarded today (`declared_one_adoption_per_field` is
+keyed on `(origin_obs_id, attr_key)`, so two entities may claim one address). Both are registered.
+
 **Also raised, deferred:** `ignore` is the one remaining gesture whose tone disdains;
 `exclude` / "exclure" (out of scope) would be more honest and more dignified.
 
@@ -3840,7 +3870,7 @@ binding Canonical Vocabulary section says:
 
 | Concept | EN (docs, API, code) | FR (UI) | Meaning |
 |---|---|---|---|
-| **Close the gap** — write observed values into the declared record, field by field | **`document`** (`document-field` / `document-all`) | **« Merger »** | The gap **closes**. The observed record is untouched; the link holds |
+| **Close the gap** — write observed values into the declared record, field by field | **`document`** (`document-field` / `document-all`) | **« Ajouter »** _(v0.3.1; identifier `document` unchanged — see D11's supersession)_ | The gap **closes**. The observed record is untouched; the link holds |
 | Link observed to declared | **`reconcile`** | **« réconcilier »** | **A process, NEVER a button** |
 | Seen, not yet decided | **`accept-gap`** | **« Accepter l'écart »** | The gap stays **open** |
 
@@ -4884,7 +4914,8 @@ F59, and it is structural rather than orthographic.**
 F59 named: **the denylist must cover renamed INTERNAL IDENTIFIERS, not just UI vocabulary — `pending_accept`
 and `reverting` have no translator, but a state name is vocabulary too.** Current retired set:
 `accept-as-declared` · `revert` · `reverting` · `pending_accept` · `ignore`/`ignorer` · `merge` **in English
-only** (the FR UI verb « Merger » stands; the pillar *linked, never merged* is intact).
+only** (the pillar *linked, never merged* is intact). _(The FR UI verb « Merger » stood then; D11's
+supersession of 2026-08-30 replaced the label with « Ajouter » / "Add".)_
 
 **Scope: the six documents, and they are finite and enumerable** — `prd.md`, `ux-design-specification.md`,
 `architecture.md`, `product-brief-opencmdb.md`, its distillate, and **`docs/project-context.md`, which is the
