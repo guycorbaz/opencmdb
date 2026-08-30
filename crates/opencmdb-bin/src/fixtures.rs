@@ -4847,6 +4847,14 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
         collapsed: Vec<String>,
         /// Traps naming an `l2-*` rule where a named observation carries NO L1 key.
         interfaceless: Vec<String>,
+        /// Traps naming an `l2-*` rule that do not name exactly TWO observations.
+        ///
+        /// 🔴 Separate from `interfaceless` since story 6.6's code review, which found the two
+        /// folded together: a future `l2-*` trap naming three observations would have been reported
+        /// as *"names an observation without an L1 key"*, **a red accusing the wrong cause**. Empty
+        /// today — every one of the eight `l2-*` traps names a pair — so this is a naming hole and
+        /// not a coverage hole, and it is closed before the corpus grows into it.
+        wrong_arity: Vec<String>,
         /// Traps naming an `l2-*` rule where a named observation carries TWO OR MORE L1 keys.
         multi_homed: Vec<String>,
     }
@@ -4864,6 +4872,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             pairs: Vec::new(),
             collapsed: Vec::new(),
             interfaceless: Vec::new(),
+            wrong_arity: Vec::new(),
             multi_homed: Vec::new(),
         };
         walk_trap_files(&mut |path| {
@@ -4894,7 +4903,7 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
                         .collect()
                 };
                 let [a, b] = trap.observations.as_slice() else {
-                    found.interfaceless.push(trap.id.0.clone());
+                    found.wrong_arity.push(trap.id.0.clone());
                     continue;
                 };
                 let (ka, kb) = (keys_of(a), keys_of(b));
@@ -4984,8 +4993,18 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
     /// COVERAGE, not recall — and this is the assertion that found story 6.6's §0j.
     ///
     /// Wider and weaker than the recall metric: every trap naming an `l2-*` rule, `must-not-merge`
-    /// included, must have its interface pair in the universe. A pair outside the universe can never
-    /// be answered by anything.
+    /// included, is accounted for — either as an interface pair in the universe, or by NAME in one
+    /// of the three residue buckets. A pair outside the universe can never be answered by anything.
+    ///
+    /// ⚠️ **What carries this test is the BUCKETS, not the containment loop at the end.** The loop
+    /// is a COROLLARY of totality and cannot red on its own: `pair` is built from `groups`, and the
+    /// universe is built from the keys of that same `groups`, so a total `l2_candidates` contains it
+    /// by construction. 🔑 **Its L1 twin `every_trap_pair_is_in_the_universe` is NOT a corollary** —
+    /// there the pair comes from the `obs_id`s a trap NAMES, which need not appear in the stream at
+    /// all. This story inherited the shape without inheriting the property, and the loop is kept as
+    /// a deliberate second oracle rather than deleted: it would red the day `l2_candidates` stopped
+    /// being total, which `l2_the_universe_is_total_over_distinct_interfaces` also covers.
+    /// _(Found by story 6.6's blind review layer, from the diff alone.)_
     ///
     /// 🔴 **One committed trap is EXCLUDED BY NAME, and the exclusion is the finding.**
     /// `cloned-mac-must-not-merge` names `l2-different-hostname` and has **no L2 pair**: its two
@@ -5010,6 +5029,13 @@ expect = { must-abstain = { cause = "NoObservedValue" } }
             corpus.interfaceless.is_empty(),
             "no `l2-*` trap names an observation without an L1 key today: {:?}",
             corpus.interfaceless
+        );
+        assert!(
+            corpus.wrong_arity.is_empty(),
+            "every `l2-*` trap names exactly two observations today; one that did not would need a \
+             decision about WHICH interface pair it judges, not a silent skip — and it must not be \
+             reported as an observation without an L1 key, which is a different cause: {:?}",
+            corpus.wrong_arity
         );
         assert!(
             corpus.multi_homed.is_empty(),

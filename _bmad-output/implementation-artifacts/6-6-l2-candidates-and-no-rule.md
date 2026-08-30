@@ -1,6 +1,6 @@
 # Story 6.6: L2 candidate generation, and no rule
 
-Status: **review** — implemented 2026-08-30 against a live `mariadb:10.11.11` (port 13366).
+Status: **review** — implemented AND code-reviewed 2026-08-30 against a live `mariadb:10.11.11` (port 13366).
 **783 tests green both ways** (515 bin + 169 core + 99 xtask), ten gates green, clippy over
 `--all-targets`. Contexted 2026-08-30 against the committed corpus and the tree at
 `8a19089`, then VALIDATED the same day by two fresh-context layers, each in its own worktree.
@@ -578,7 +578,9 @@ Driven by `cargo xtask mutate` against a live store, never a throw-away script.
 | M2 | narrow on MAC equality | red, the corpus falls | red 5 | ✅ |
 | M3 | divide before scaling the per-mille | red:1, ten gates green | **red 3**, gates green | 🔴 divergence — see below |
 | M4 | call `decide` inside the generator | **green** | **green** | ✅ AC1's measured limit |
-| M5 | silently shrink the L2 truth set | red | red 3 | ✅ AC4 is load-bearing |
+| M5 | shrink the WALK's `l2-` filter to `l2-uplink` | red | red 3 | ✅ AC4 is load-bearing |
+| M5b | shrink `required` only, walk intact (the review's shape) | red:2 | red 2 | ✅ the control that sizes M5 |
+| M7 | route every 2-observation trap into `wrong_arity` | red | red 3 | ✅ the review's new bucket is carried |
 | M6 | empty the generator's body | red | red 5, **clippy also red** | ✅ |
 
 🔴 **BOTH DIVERGENCES REFUTED A SENTENCE OF MINE, and the sentences were corrected rather than the
@@ -594,6 +596,59 @@ say.
 act AC1 forbids — leaves 783 tests, clippy and all ten gates green. It is recorded as **AC1's
 measured limit**, not as a pass: the `join`/`decide_pair` half of the refusal is carried by the TYPE
 (neither is reachable without `Observation`s), the `decide` half is a **TRIPWIRE**.
+
+### Code review — three isolated layers on a DIFFERENT model, 2026-08-30
+
+Three layers, each on Sonnet where the implementation was Opus, each isolated: a **blind** layer
+given the code diff and nothing else, an **edge-case** layer with its own worktree and store, and an
+**acceptance auditor**. **Seven distinct findings; the numbers, citations and mutations they
+re-measured all reproduced.**
+
+🔴 **THE HIGH IS THE STORY'S OWN LESSON, COMMITTED IN THE FILE ITS OWN TASK NAMED.**
+`identity/mod.rs:21` still asserted *"the blocker still has no production caller at all"* — true when
+written, **false since story 5.9b** (`resolver.rs:211` calls `candidates` in production), and the
+register marks the matching row ✅ CLOSED. §0g of this very story corrects **exactly that confusion
+about exactly that sentence**, two files away; T9 named `identity/mod.rs` and re-read the sentence
+*beside* it, which is true, while the false one sat two lines above. 🔑 ***A promise to re-read is
+not a re-read of what you did not look at.*** Corrected in place, with what it used to say.
+
+🔴 **THE EPIC'S DOMINANT CLASS, IN MY OWN CODE, FOUND BY THE BLIND LAYER FROM THE DIFF ALONE.**
+`every_l2_trap_pair_is_in_the_universe`'s containment loop **cannot red on its own**: `pair` is built
+from `groups`, the universe from the keys of that same `groups`, so a total `l2_candidates` contains
+it by construction. 🔑 **Its L1 twin is NOT a corollary** — there the pair comes from the `obs_id`s a
+trap NAMES, which need not appear in the stream at all. *I inherited the shape without inheriting the
+property.* What actually carries the test is the BUCKET assertions, which is also what found §0j. The
+loop is kept as a labelled second oracle and its doc now says which half carries what.
+
+🔴 **A BUCKET THAT WOULD HAVE ACCUSED THE WRONG CAUSE** (blind and edge layers, independently): the
+`let [a, b] = … else` arm filed **any** wrong-arity trap under `interfaceless`, whose message reads
+*"names an observation without an L1 key"*. Empty today — all eight `l2-*` traps name a pair — so a
+naming hole and not a coverage hole, and closed before the corpus grows into it: `wrong_arity` is now
+its own bucket with its own message.
+
+🔑 **M5 DID NOT REPRODUCE FOR EITHER SIGHTED LAYER, AND THE RESOLUTION IS A MEASUREMENT WITH A
+CONTROL.** Both measured **2** where the table said 3. Re-run on a **virgin database with
+`--baseline`**: my injection gives **3** and theirs gives **2**, both confirmed. Neither figure was
+wrong — mine shrinks the WALK, so `pairs.len() == 7` falls too; theirs shrinks `required` alone. ⚠️
+**The row's NAME described their mutation while its number described mine**, which is this project's
+four-time class *a mutation named for one thing and applied to another*. The table now carries both,
+M5b as the control that sizes M5.
+
+⚠️ **AND THE SIX ORIGINAL MUTATIONS WERE RUN WITHOUT `--baseline`, the driver warning every time.**
+They held on re-measurement, but that is luck being confirmed rather than rigour: on a reused
+database this suite is non-deterministic (registered), so a red count taken without a baseline is a
+guess. *The tool built to stop exactly this told me, once per run, and I read past it.*
+
+✅ **Reproduced by the layers at the figure**: 727 / 363 / 818 / 909 re-derived independently by
+both sighted layers; the five `architecture.md` citations verified by grep on the quoted sentences,
+not on the numbers; `E0308` for `join` and `E0425` for `uplink_of` reproduced, so AC1's *half carried
+by the type* and AC5's withdrawal are both established rather than argued; M1, M2, M3, M4 and M6
+conform; the four register rows exist with a live owner each; **both terms of `772 → 783`** checked
+against `master` rather than by re-adding the parts.
+
+✅ **Refuted with their checks**: §0b's `259 / line 260 / total 661` are the **baseline** figures and
+§0b says so — the edge layer verified them against `8a19089` rather than the working tree; and
+`cargo doc` shows no new broken intra-doc link.
 
 ### 🔑 The coverage assertion confirmed §0j on its own
 
@@ -633,3 +688,4 @@ here** — registered, owner story 6.7.
 | 2026-08-30 | Story created and contexted. §0 measured against `8a19089`: the L2 truth set is **three** pairs (§0c), two of four narrowing keys are **invisible to the committed corpus** (§0e), and two premises inherited from `sprint-status.yaml` were **refuted** (§0a). One arbitration left open (§0f). |
 | 2026-08-30 | **VALIDATED** by two fresh-context layers (fact-check + gap-hunt, own worktree each; the gap-hunt layer BUILT the prototype and ran eight mutations against a live store). **Sixteen findings, six HIGH, all applied in place.** Both arbitrations TAKEN and recorded as mine, delegated: **§0f** — the input stays `&[L1Key]` and the TYPE replaces the guard, so **AC5's uplink half is WITHDRAWN as unwritable** (`E0425`); **§0j** — the L2 rules judge INTERFACE pairs, so the unanswerable bucket goes **11 → 4, not 11 → 3**. Corrected: three `architecture.md` citations ~25 lines off and **inherited rather than measured**; *"no lifecycle state"*, false since story 6.5; a register line quoted at its oldest occurrence while it is marked ✅ CLOSED; 333‰ needed a second row at **666‰** under the natural reading; 260 → **259** code lines; *"verbatim"* → *rendered*; the `InterfaceId` refusal's stated motive, which did not hold. Added: T6's missing **COVERAGE** half — the assertion that found §0j — a truncation test `float-free` cannot replace, T10 for `blocking.rs`'s four stale figures, and four register rows with named owners. |
 | 2026-08-30 | **IMPLEMENTED.** `L2CandidatePair` + `l2_candidates` (TOTAL, `&[L1Key]`) in `blocking.rs`; `blocking_recall_per_mille` made **generic** rather than duplicated; the corpus half in `fixtures.rs` — recall with its denominator asserted at **3**, per-stream containment, and the **COVERAGE** assertion, which **confirmed §0j on its own first run** by naming `cloned-mac-must-not-merge`. **772 → 783 tests**, ten gates, clippy `--all-targets`. Six mutations, predictions written first: 🔴 **two diverged and both refuted a sentence of mine** — M1 reds 2 not 1, M3 reds 3 not 1, so three doc comments claiming *"the only carrier"* were corrected. ⚠️ **M4 is green by measurement**: calling `decide` inside the blocker changes nothing, recorded as AC1's limit and a TRIPWIRE. T10 repaired four stale figures and five `architecture.md` citations in `blocking.rs`, each re-derived by grep. |
+| 2026-08-30 | **CODE-REVIEWED** by three isolated layers on a different model, and REPAIRED. Seven findings. 🔴 The HIGH is this story's own lesson committed in the file its own T9 named: `identity/mod.rs` still said *"the blocker still has no production caller at all"*, false since 5.9b, two lines from the sentence T9 did re-read. 🔴 The blind layer found, **from the diff alone**, that the coverage loop cannot red on its own — a corollary of totality where its L1 twin is not — and two layers independently found the `interfaceless` bucket filing wrong-arity traps under a message accusing the wrong cause. 🔑 M5 reproduced for neither sighted layer; re-measured on a **virgin database with `--baseline`**, my injection gives 3 and theirs gives 2 — **the row's NAME described their mutation and its number described mine**. M5b added as the control. ⚠️ And the six original mutations were run **without `--baseline`**, the driver warning every time. Three register rows written, including the non-determinism of this suite against a reused database, recorded as a SYMPTOM with no cause. |

@@ -5208,7 +5208,45 @@ Four rows. All four were produced by the two-layer validation, and each names an
   `identity/`. *A citation copied from a neighbouring file is not a measurement.*
 
 - ⚠️ **`cargo xtask mutate` leaves a snapshot behind on every exit-2 refusal, even when the file is
-  provably intact.** Met twice during story 6.6's validation (anchor matched twice; anchor missed):
+  provably intact.** Met twice during story 6.6's validation and **four more times during its code
+  review** — six live occurrences in one day, every one on an anchor that matched twice
+  (anchor matched twice; anchor missed):
   the run refuses correctly, `diff` shows the file identical, and the next run is then blocked until
   `target/xtask-mutate/` is cleared by hand. A mutation pass of six plants pays one manual recovery
   per anchor typo. **Owner: story 6.4b's artefact** — whoever next touches `mutate.rs`.
+
+## Deferred from: story 6.6's CODE REVIEW (2026-08-30)
+
+Three rows. Three isolated layers on a different model; two of the three found row 1 independently.
+
+- 🔴 **The `opencmdb-bin` suite is NON-DETERMINISTIC against a REUSED MariaDB database, and it is
+  not this story's doing — it reproduces on `master` alone.** Two review layers measured it
+  separately and neither could name a cause. The acceptance layer saw 27 / 18 / 34 / 41 failures on
+  successive runs; the edge layer saw 0 / 11 / 22 / 25 / 33 / 44, **including at
+  `--test-threads=1`**, always in `resolver` / `repo` / `page` / `scan_pass` / `fault_injection`,
+  **never** in `blocking.rs` or the L2 tests, and every failing test passes when replayed alone. A
+  `DROP DATABASE` plus re-migration restores determinism every time. **This is the family of issue
+  #38** and it is recorded as a SYMPTOM: the most economical hypothesis is contention on the one
+  MariaDB instance the three review layers shared, and **no cause is written down, because none was
+  checked** — this project's own rule. 🔑 **The operational consequence is immediate and concrete:
+  `cargo xtask mutate --baseline` is what tells you, and running WITHOUT it on a reused database
+  makes every recorded red count a guess.** Story 6.6's own six mutations were first run without
+  `--baseline`, the driver warning every time; re-measured on a virgin store they held.
+  **Owner: whoever next runs a mutation pass** — drop and re-create the database first, and pass
+  `--baseline`. A durable fix (a database per test binary, or a lock) belongs with issue #38.
+
+- ⚠️ **`l2_corpus()` and `corpus_pairs()` in `fixtures.rs` are near-textual twins, and the mutation
+  driver is what revealed it**: three separate anchors inside the L2 walk were REFUSED for matching
+  twice, the L1 walk carrying the identical lines. That refusal is the driver doing its job, and the
+  cost is real — an anchor inside either walk needs surrounding context to be unique, so a future
+  mutation pass over this file pays for the duplication every time. ⚠️ It is **not** obviously a DRY
+  violation to collapse: the two walk different populations (`obs_id` against `L1Key`) and the L1
+  containment assertion is genuinely non-tautological where the L2 one is a corollary, which is a
+  DIFFERENCE a shared helper would hide. **Owner: story 6.7**, the next to touch this file, with the
+  question posed rather than the answer assumed.
+
+- ⚠️ **`l1.rs` cites `architecture.md` ~25 lines off in three places** (`:984-986` and `:984-985`
+  twice), the same drift story 6.6 corrected in `blocking.rs`. Not fixed here: this story had no
+  reason to open `l1.rs`, and a citation sweep across a file it does not otherwise touch is the
+  scope creep the house rules refuse. **Owner: story 6.7**, which implements the first `l2-*` rule
+  and will be in `identity/` anyway. Re-derive by `grep` on the quoted sentence, never by adding 25.
