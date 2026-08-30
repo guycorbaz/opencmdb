@@ -30,17 +30,35 @@ application CMDB + network topology) for advanced home-labs and SMBs without a d
 state (documented by the operator); the *gap* between them is the product. Open-source, self-hosted
 (Docker on Synology priority), distributed via Docker Hub.
 
-## Where the code is (2026-08-24) — READ THIS FIRST
+## State on 2026-08-30 — READ THIS FIRST
 
-**Planning is done and the code is well past the skeleton.** `v0.2.0` is tagged and **released**
-since 2026-08-24 — GitHub Release with its changelog, Docker Hub image, `gh-pages` live; the binary
-runs and scans on Guy's NAS (frontend on macvlan, no Traefik).
-🔴 **The NAS is still on the `0.1.0` image** — five weeks and two releases behind what is being
-built: older than the identity engine (Epic 5), older than the write route (story 6.2), older than
-the ten screens. ⚠️ And `v0.2.0` answers `401` on every surface without operator credentials, so the
-upgrade is now an act of CONFIGURATION on an instance that never asked for a password. This single
-line is what stands between the project and milestones J2 and J3, and it is why risk R1 was raised
-to HIGH probability at the project review of 2026-08-24.
+🔑 **`v0.3.1` is running on Guy's NAS.** Docker Hub, GitHub release, tag on a commit whose own CI run
+was green. **That had been false for five weeks**: the NAS ran `0.1.0` — older than the identity
+engine, the write route and the ten screens — and nobody had checked.
+
+**What an operator can do**: install it, point it at a LAN, watch it re-sweep every five minutes, and
+**Add** a sighting to the declared side — the gap closes and the question leaves the queue. Verified
+on the PUBLISHED image against a real MariaDB, not only in tests.
+
+⚠️ **What it cannot do**: the connector reads **no hardware address**, so the identity engine groups
+nothing; documenting a machine makes it appear in **no inventory**; six screens of ten carry labelled
+example content. The CHANGELOG says so in its own *"what this release does NOT change"* section.
+
+🔴 **WHAT THREE OUTSIDE REVIEWS MEASURED ON 2026-08-30**, after Guy said development was going in
+circles: epics 1-3 = **21 stories and everything that works**; epics 4-5 = **43 stories and nothing
+operator-visible**. The cause is written in `prd.md:766`, which **explicitly rejects effort-based
+de-scoping** — so all 7 journeys, all 54 FRs and all 23 epics are "the MVP". *There is no MVP in this
+plan; there is a v1.0 labelled MVP.* Two of the three reviews INSTALLED the product, which is the
+measurement this project had never taken, and it found in one afternoon what ten gates and three
+review layers had not seen in five weeks.
+
+**EPIC 6 IS FROZEN AT 6.7.** Stories 6.8-6.13 build rules on facts (`Uplink`, `Hostname`, switch
+port) **no connector produces**.
+
+**Next, in order**: reverse DNS for a hostname (~40 lines — it makes the queue readable AND gives
+`gap::project` a second field) · an inventory screen fed by the real store (~80) · rewrite
+`prd.md:766`. ⚠️ **And use it on the NAS before writing more of it** — that is what found everything
+above, including the « Merger » label, wrong since July and raised by no gate.
 
 | Epic | State |
 |---|---|

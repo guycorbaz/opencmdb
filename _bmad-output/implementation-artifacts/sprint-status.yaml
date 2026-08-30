@@ -78,7 +78,36 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-30  # STORY 6.7 IS `done` (PR #137 `7b329d8`) -- `l2-different-hostname`,
+last_updated: 2026-08-30  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
+                          # The first time in five weeks that what was built reached its user: the
+                          # NAS had been on `0.1.0`, older than the identity engine, the write route
+                          # and the ten screens, and nobody had checked.
+                          # 🔴 THREE OUTSIDE REVIEWS ON 2026-08-30, after Guy said development was
+                          # going in circles. He was right, and the record already said so: epics
+                          # 1-3 = 21 stories and everything that works; epics 4-5 = 43 stories and
+                          # nothing operator-visible. **The cause is `prd.md:766`, which explicitly
+                          # REJECTS effort-based de-scoping** -- so all 7 journeys, 54 FRs and 23
+                          # epics are "the MVP". *There is no MVP in this plan; there is a v1.0
+                          # labelled MVP.* Two reviews INSTALLED the product -- the measurement this
+                          # project had never taken -- and found in one afternoon what ten gates and
+                          # three review layers had not seen in five weeks.
+                          # ⚠️ **EPIC 6 IS FROZEN AT 6.7**: stories 6.8-6.13 build rules on facts
+                          # (`Uplink`, `Hostname`, switch port) NO CONNECTOR PRODUCES.
+                          # v0.3.0: the scan repeats (it ran ONCE at boot; FR6 was planned for Epic
+                          # 11/12, seven epics away, and is thirty lines); the identity table stops
+                          # growing (50 observations -> 50 current links, measured on a real /24);
+                          # and `OPENCMDB_DOCUMENT_ENABLED` is finally written in a document an
+                          # operator reads -- it had been in NONE.
+                          # v0.3.1: the button says "Add" / « Ajouter » instead of « Merger ». D11
+                          # is SUPERSEDED, not rewritten, and the dissent it overruled in July came
+                          # true -- not in the code, where the mitigation held, but IN THE READER.
+                          # 🔑 It took the author USING his own product to see it, and no gate,
+                          # review layer or retrospective had raised it in five weeks.
+                          # NEXT: reverse DNS for a hostname (~40 lines) · an inventory screen fed
+                          # by the real store (~80) · rewrite `prd.md:766`. And USE IT before
+                          # writing more of it.
+                          #
+                          # (2026-08-30) STORY 6.7 IS `done` (PR #137 `7b329d8`) -- `l2-different-hostname`,
                           # THE FIRST PRODUCER OF `Verdict::Opposes` IN THIS CODEBASE, after it had
                           # waited since story 5.4b. **Epic 6: 8 done of 20.**
                           # NEXT: story 6.8, `l2-uplink-agrees` -- the first producer of `Supports`.
