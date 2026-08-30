@@ -2212,8 +2212,10 @@ mod tests {
         let html = gap_card_html(build_view(Vec::new(), Vec::new(), None), no_reach());
 
         assert!(
-            html.contains("Nothing observed yet"),
-            "a store the engine has never touched says so, rather than showing a bare 0"
+            html.contains("No sighting has been placed on an interface yet"),
+            "a store with no placement says so, rather than showing a bare 0 — and the sentence \
+             is true in BOTH empty states since v0.3.0: nothing scanned, and scanned by a source \
+             that cannot identify anything"
         );
     }
 
@@ -2545,6 +2547,7 @@ mod tests {
                 as_of: chrono::DateTime::from_timestamp(1_700_000_000, 0).expect("in range"),
                 kinds: std::collections::BTreeSet::from([
                     opencmdb_core::observation::FactKind::IpV4,
+                    opencmdb_core::observation::FactKind::Mac,
                 ]),
             },
             vec![Scope {
@@ -2562,9 +2565,30 @@ mod tests {
                         l2_domain: L2DomainId::from_uuid(Uuid::from_u128(0x514c)),
                         vantage: VantageId::from_uuid(Uuid::nil()),
                     },
-                    facts: vec![Fact::IpV4 {
-                        addr: "192.0.2.99".parse().expect("a documentation address"),
-                    }],
+                    // 🔴 A MAC as well as the address, since v0.3.0. These sightings used to carry
+                    // an address alone, so the engine could never place them and each one wrote an
+                    // `absence_of_proof` link — which is what the identity count below used to
+                    // count. That write is gone (a sighting the engine can never place says
+                    // something about the CONNECTOR, not about the sighting), so a MAC-less fixture
+                    // would leave the identity side at ZERO and the guard below could no longer
+                    // fail. **A distinct MAC each**, so the three are three interfaces and the
+                    // identity side counts three PLACED sightings.
+                    facts: vec![
+                        Fact::IpV4 {
+                            addr: "192.0.2.99".parse().expect("a documentation address"),
+                        },
+                        Fact::Mac {
+                            addr: opencmdb_core::observation::MacAddr([
+                                0x02,
+                                0x00,
+                                0x5e,
+                                0x00,
+                                0x51,
+                                0x50 + i as u8,
+                            ]),
+                            locally_administered: true,
+                        },
+                    ],
                     raw: None,
                 })
                 .collect(),
@@ -2586,12 +2610,18 @@ mod tests {
             "the premise: the reconciliation side counts 4"
         );
         assert_eq!(
-            identity.not_placed, 3,
+            identity.placed, 3,
             "the premise: the identity side counts 3 — and 4, 3 and 7 are three DISTINCT numbers, \
              which is what makes the assertions below able to fail"
         );
+        assert_eq!(
+            identity.not_placed, 0,
+            "and nothing abstains: since v0.3.0 a keyed sighting is placed and a keyless one \
+             writes nothing, so this number is the one the engine could not conclude about — which \
+             here is none"
+        );
         assert_ne!(
-            identity.not_placed, 7,
+            identity.placed, 7,
             "the identity count must not absorb the reconciliation one. This is the direction a \
              zero-reconciliation fixture cannot see, and it is the one a real page build reaches"
         );

@@ -457,9 +457,16 @@ mod tests {
              neither — this is the structural zero the wiring does NOT remove"
         );
         assert_eq!(
-            resolution.abstentions,
+            resolution.abstentions, 0,
+            "🔴 v0.3.0 INVERTED this: a sighting the engine can NEVER place is no longer recorded \
+             as an abstention, because the row said something about the CONNECTOR and repeated it \
+             at every sweep"
+        );
+        assert_eq!(
+            resolution.sightings_without_a_key,
             slice.len(),
-            "every observation abstained, on this FIRST pass over fresh ids"
+            "and the fact is COUNTED rather than dropped — `/sources` says it once, this says how \
+             many sightings it applied to"
         );
     }
 
@@ -499,11 +506,16 @@ mod tests {
 
         assert_eq!(
             counted_current_engine_links(&pool).await.expect("count"),
-            2,
-            "TWO current links for ONE unplaceable address, one per scan. This is a DEFECT the \
-             story PINS rather than fixes — do not repair this number, take it to story 5.14b / \
-             Epic 6, which own the denominator. Fixing it here by over-vacating would erase a host \
-             that missed a single scan"
+            0,
+            "🔴 THE DEFECT THIS TEST PINNED IS FIXED, and this is the assertion that proves it. \
+             It used to read TWO — one current link per scan for one unplaceable address, nothing \
+             superseding anything, because each sweep mints fresh `ObsId`s. Measured by an outside \
+             review on a real /24: fifty observations, fifty current links; and once the scan \
+             became periodic in v0.3.0 that is millions of rows a year on fifty hosts. The engine \
+             now writes NO link for a sighting it can never place, so two scans of one unplaceable \
+             address leave nothing behind. ⚠️ The old message said *do not repair this number, take \
+             it to Epic 6* — Epic 6 is where it was repaired, and NOT by the over-vacating that \
+             message warned against: nothing is erased, because nothing is written."
         );
     }
 

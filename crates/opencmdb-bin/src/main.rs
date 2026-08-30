@@ -106,6 +106,18 @@ impl std::fmt::Debug for BasicCredentials {
 /// says *built and switched off*, and a sentence that names a variable must name the real one.
 pub(crate) const DOCUMENT_ENABLED_ENV: &str = "OPENCMDB_DOCUMENT_ENABLED";
 
+/// The variable that sets how often the subnet is re-swept, in seconds.
+const SCAN_INTERVAL_ENV: &str = "OPENCMDB_SCAN_INTERVAL_SECS";
+
+/// How often the subnet is re-swept when nothing says otherwise: **five minutes**.
+///
+/// Useful without being rude — one ICMP probe per host per five minutes is below what any network
+/// notices, and short enough that an operator who plugs a machine in sees it before losing
+/// interest. ⚠️ A DEFAULT, not a recommendation: a large subnet or a congested link wants a longer
+/// one, and `OPENCMDB_SCAN_INTERVAL_SECS=0` keeps the startup-only behaviour for anyone who wants
+/// it.
+const DEFAULT_SCAN_INTERVAL: std::time::Duration = std::time::Duration::from_secs(300);
+
 /// The HTTP surface's configuration — a PARAMETER of [`app`], never an env read inside it
 /// (story 6.1, arbitration 5). Tests construct it directly and mutate no env var; only
 /// [`run`] calls [`AppConfig::from_env`].
@@ -134,6 +146,18 @@ pub(crate) struct AppConfig {
     /// is **not validated here**: an invalid CIDR is refused by the scan with a named error, and
     /// displaying what the operator configured is more honest than displaying nothing.
     pub(crate) scan_cidr: Option<String>,
+    /// `OPENCMDB_SCAN_INTERVAL_SECS`: how often the subnet is re-swept, in seconds.
+    ///
+    /// **The product's founding claim is that it compares observed against declared
+    /// *continuously*.** Until this field existed it swept once, at boot, and the only way to
+    /// re-scan was to restart the container — so the README's "continuously" was false and the
+    /// operator had no way to make it true.
+    ///
+    /// `None` means **sweep once at startup and never again**, which is what `0` selects
+    /// explicitly. Any other value is refused BY NAME at boot rather than silently ignored, on
+    /// the precedent of every other knob here: a typo must be a boot error, never a scan that
+    /// quietly stops happening.
+    pub(crate) scan_interval: Option<std::time::Duration>,
     /// `OPENCMDB_METRICS_TOKEN`: the Bearer token `/metrics` requires, or `None` when unset or
     /// empty — in which case the scrape is refused (the secure default, unchanged).
     ///
@@ -284,6 +308,12 @@ pub(crate) enum AppConfigError {
         /// The locales this build carries, for the message — so the refusal says what to do.
         available: Vec<String>,
     },
+    /// The scan interval is not a whole number of seconds. Refused by name: a misspelt interval
+    /// that fell back to a default would be a product that scans on a schedule nobody chose.
+    UnrecognisedScanInterval {
+        /// The value found in `OPENCMDB_SCAN_INTERVAL_SECS`.
+        value: String,
+    },
 }
 
 impl std::fmt::Display for AppConfigError {
@@ -292,6 +322,11 @@ impl std::fmt::Display for AppConfigError {
             Self::UnrecognisedSwitch { value } => write!(
                 f,
                 "OPENCMDB_DOCUMENT_ENABLED={value:?} is not recognised — use 1/true or 0/false"
+            ),
+            Self::UnrecognisedScanInterval { value } => write!(
+                f,
+                "OPENCMDB_SCAN_INTERVAL_SECS={value:?} is not a whole number of seconds — use a \
+                 positive number, or 0 to sweep once at startup only"
             ),
             Self::HalfConfiguredPair { missing } => write!(
                 f,
@@ -373,6 +408,16 @@ impl AppConfig {
         // Empty counts as unset here too: an operator who blanks the variable to disable the
         // scan must not then see an empty perimeter rendered as if it were a value.
         let scan_cidr = lookup("OPENCMDB_SCAN_CIDR").filter(|value| carries_a_visible_glyph(value));
+        // How often to re-sweep. Unset → the default; `0` → startup only; anything that is not a
+        // whole number of seconds is refused BY NAME, never defaulted.
+        let scan_interval = match lookup(SCAN_INTERVAL_ENV).filter(|v| carries_a_visible_glyph(v)) {
+            None => Some(DEFAULT_SCAN_INTERVAL),
+            Some(value) => match value.trim().parse::<u64>() {
+                Ok(0) => None,
+                Ok(secs) => Some(std::time::Duration::from_secs(secs)),
+                Err(_) => return Err(AppConfigError::UnrecognisedScanInterval { value }),
+            },
+        };
         // ⚠️ `!is_empty()`, deliberately — see the field's doc. Widening this to
         // `carries_a_visible_glyph` would change `/metrics`' behaviour, which this story does not.
         let metrics_token = lookup("OPENCMDB_METRICS_TOKEN").filter(|value| !value.is_empty());
@@ -438,6 +483,7 @@ impl AppConfig {
             scan_cidr,
             metrics_token,
             locale,
+            scan_interval,
         })
     }
 }
@@ -533,15 +579,25 @@ async fn run(log: diagnostic::LogDescriptor) -> anyhow::Result<()> {
         .context("applying database migrations")?;
     tracing::info!("database connected and migrations applied");
 
-    // Optional one-shot startup scan: the real ARP/ping connector (Story 3.5) pings a declared
-    // subnet and ingests observations, so the page shows genuinely observed state. Unset → the
-    // page renders the declared side only. The periodic scheduler (FR6) is a later story.
+    // The scan loop: the real ARP/ping connector (story 3.5) sweeps a declared subnet and ingests
+    // observations, so the page shows genuinely observed state. Unset perimeter → the page renders
+    // the declared side only.
+    //
+    // 🔴 **It used to sweep ONCE, at boot.** The only way to re-scan was to restart the container,
+    // which made the README's *"continuously"* false and left the operator no way to make it true.
+    // FR6 was planned for Epic 11/12 — seven epics away — and an outside review measured that the
+    // product was unusable without it. It is thirty lines; it is here now.
     // 🔑 Where the scan pass publishes what it did, and where `/diagnostic` reads it. Empty until
     // a pass completes — and *empty* is a rendered state saying **no pass since this boot**, which
     // is the honest answer for a fresh process and for an unconfigured perimeter alike.
     let scan_report = diagnostic::ScanReportSlot::default();
     if let Some(cidr) = config.scan_cidr.clone() {
-        spawn_startup_scan(database_url.clone(), clock.now(), cidr, scan_report.clone());
+        spawn_scan_loop(
+            database_url.clone(),
+            cidr,
+            config.scan_interval,
+            scan_report.clone(),
+        );
     }
     let diagnostic_facts = diagnostic::DiagnosticFacts::new(
         log,
@@ -615,10 +671,10 @@ fn app(pool: MySqlPool, config: AppConfig, diagnostic: diagnostic::DiagnosticFac
 /// scheduler's Send story for later). `block_on` on a single-thread runtime imposes no `Send`
 /// bound, and a fresh pool avoids sharing connections across runtimes. The periodic scheduler
 /// (FR6) will supersede this.
-fn spawn_startup_scan(
+fn spawn_scan_loop(
     database_url: String,
-    now: Timestamp,
     cidr: String,
+    interval: Option<std::time::Duration>,
     report: diagnostic::ScanReportSlot,
 ) {
     use opencmdb_core::observation::{ConnectorId, L2DomainId, Scope, VantageId};
@@ -669,7 +725,9 @@ fn spawn_startup_scan(
                 .with_concurrency(concurrency)
                 .with_timeout(std::time::Duration::from_millis(timeout_ms));
 
-            tracing::info!(%cidr, concurrency, timeout_ms, "startup scan: pinging subnet");
+            tracing::info!(%cidr, concurrency, timeout_ms, "scan: pinging subnet");
+            // Whether a sweep has already happened, so the startup-only mode can stop after one.
+            let mut swept = false;
 
             // 🔴 The poll lives in `scan_pass::poll_ingest_resolve` and NOWHERE ELSE. Story 5.14's
             // code review found — by three layers independently, and measured by one of them at
@@ -682,7 +740,7 @@ fn spawn_startup_scan(
             let pool = match MySqlPool::connect(&database_url).await {
                 Ok(pool) => pool,
                 Err(error) => {
-                    tracing::warn!(%error, "startup scan: could not connect to ingest");
+                    tracing::warn!(%error, "scan: could not connect to ingest");
                     return;
                 }
             };
@@ -701,23 +759,57 @@ fn spawn_startup_scan(
             // MISSES, the pool connect and four early-return branches — and a live defect was
             // sitting in it (a duplicated sweep, above) while the sentence claimed three lines.
             // **A region you have not counted is not a region you have measured.**
-            let outcome = crate::scan_pass::poll_ingest_resolve(&mut connector, now, &pool).await;
-            // 🔑 Publish what the pass did, so `/diagnostic` reports a MEASURED pass rather than a
-            // maximum over observation instants — which story 6b.9 measured not moving at all when
-            // a scan succeeded over an empty subnet. ⚠️ This `Arc` clone and this write are the
-            // uncarried half of that story's arbitration (c′): the measurement itself lives inside
-            // `poll_ingest_resolve`, which a `FixtureConnector` drives end to end, but this line
-            // sits in the detached thread `scan_pass`'s module doc names as unassertable. A
-            // poisoned lock is not worth failing a scan over.
-            if let Ok(mut slot) = report.write() {
-                *slot = outcome.report;
-            }
+            // 🔴 THE LOOP. One sweep, then one every `interval` until the process ends.
+            //
+            // `interval.tick()` yields IMMEDIATELY the first time, so the startup sweep and the
+            // periodic ones are the same code path — there is no first-run branch to get wrong,
+            // and a mistake in the schedule cannot produce a product that scans once and looks
+            // fine. `MissedTickBehavior::Delay` is what keeps a slow sweep from queueing catch-up
+            // ticks: a sweep that overruns its period must push the next one out, never start a
+            // second sweep on top of itself.
+            let mut ticker = match interval {
+                Some(period) => {
+                    let mut ticker = tokio::time::interval(period);
+                    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                    Some(ticker)
+                }
+                None => None,
+            };
             tracing::info!(
-                ingested = outcome.ingested,
-                failed = outcome.failed,
-                resolved = outcome.resolution.is_some(),
-                "startup scan complete"
+                interval_secs = interval.map(|d| d.as_secs()),
+                "scan loop: starting"
             );
+            loop {
+                match ticker.as_mut() {
+                    Some(ticker) => {
+                        ticker.tick().await;
+                    }
+                    // `OPENCMDB_SCAN_INTERVAL_SECS=0`: sweep once and stop — the behaviour every
+                    // release before v0.3.0 had. Kept as a choice, no longer as the only option.
+                    None if swept => break,
+                    None => {}
+                }
+                swept = true;
+                let now = SystemClock.now();
+                let outcome =
+                    crate::scan_pass::poll_ingest_resolve(&mut connector, now, &pool).await;
+                // 🔑 Publish what the pass did, so `/diagnostic` reports a MEASURED pass rather than a
+                // maximum over observation instants — which story 6b.9 measured not moving at all when
+                // a scan succeeded over an empty subnet. ⚠️ This `Arc` clone and this write are the
+                // uncarried half of that story's arbitration (c′): the measurement itself lives inside
+                // `poll_ingest_resolve`, which a `FixtureConnector` drives end to end, but this line
+                // sits in the detached thread `scan_pass`'s module doc names as unassertable. A
+                // poisoned lock is not worth failing a scan over.
+                if let Ok(mut slot) = report.write() {
+                    *slot = outcome.report;
+                }
+                tracing::info!(
+                    ingested = outcome.ingested,
+                    failed = outcome.failed,
+                    resolved = outcome.resolution.is_some(),
+                    "scan complete"
+                );
+            }
         });
     });
 }
@@ -914,6 +1006,9 @@ mod tests {
             // Story 6b.9: `/metrics`' token moved out of the request path into the config, so it
             // is set HERE rather than through `std::env::set_var` — which two tests used to do.
             metrics_token: None,
+            // v0.3.0: the scan schedule. `None` — sweep once — because no HTTP test spawns a scan
+            // loop, and a default period here would be a schedule no test chose.
+            scan_interval: None,
         }
     }
 
@@ -2877,15 +2972,25 @@ mod tests {
             .await
             .expect("load links");
         assert_eq!(before.len(), 1, "the comparison needs a row to compare");
-        // ⚠️ AC1 promises BOTH comparisons across BOTH refusals, and this one was missing until
-        // story 6.3's code review. The reviewing layer excused it as probably vacuous — an
-        // Rtt-only sighting having no link — and that excuse is REFUTED by measurement: the pass
-        // abstains and writes a CURRENT abstention link (`absence_of_proof`), so the comparison
-        // has a row to compare and its absence was a real gap.
-        assert_eq!(
-            links_before.len(),
-            1,
-            "an Rtt-only sighting still carries a current abstention link, or this compares nothing"
+        // ⚠️ AC1 promises BOTH comparisons across BOTH refusals, and the link half was missing
+        // until story 6.3's code review. The reviewing layer excused it as probably vacuous — a
+        // sighting with no declarable field having no link — and measurement REFUTED the excuse at
+        // the time: the pass abstained and wrote a current `absence_of_proof` link.
+        //
+        // 🔑 **v0.3.0 made that excuse TRUE, and it cannot be worked around.** A sighting the
+        // engine can never place now writes no link. Giving this fixture a MAC so that it WOULD be
+        // placed was tried and measured: the route then answered **201**, because `gap::project`
+        // declares `mac` as well as `ipv4`. So *"carries a link"* implies *"has a MAC"* implies
+        // *"has something to document"* — **a nothing-to-document refusal and a link are mutually
+        // exclusive**, and no fixture can hold both.
+        //
+        // The assertion is therefore inverted rather than contrived. What AC1 actually promises —
+        // that a refusal moves no byte of the observed record — is carried by the snapshot
+        // comparison below, which has a row and is not vacuous.
+        assert!(
+            links_before.is_empty(),
+            "a sighting with nothing to document has no MAC, so the engine writes no link for it \
+             — see above: the two are mutually exclusive since v0.3.0"
         );
 
         let refused = app(pool.clone(), config(true, Some(pair())), facts())

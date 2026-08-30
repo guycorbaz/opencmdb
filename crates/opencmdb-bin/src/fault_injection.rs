@@ -1580,19 +1580,20 @@ mod tests {
         );
     }
 
-    /// **AC5** — the blinded pass adds rows the clean pass has not, and **every one is an
-    /// abstention**.
+    /// **AC5** — the blinded pass adds **nothing at all**, which is a STRONGER form of the
+    /// property than the one this test used to assert.
     ///
-    /// 🔑 An abstention is not an invented fact. D35(a) forbids ADDING an assertion; an abstention
-    /// asserts nothing — it is the recorded absence of one, and FR16 makes it a first-class outcome.
-    /// An observation stripped of its MAC has no L1 key, so the engine says so in a row rather than
-    /// staying silent, and that row is the honest answer.
+    /// 🔴 **v0.3.0 removed the exception this criterion used to need.** It formerly read *"the
+    /// blinded pass adds rows the clean pass has not, and every one is an abstention"*, and its doc
+    /// had to argue that an abstention is not an invented fact — true, but an argument, and D35(a)
+    /// is the flat statement that **a fault may only REMOVE knowledge, never ADD an assertion**.
     ///
-    /// ⚠️ (b) is largely IMPLIED by (a): a faulted-only row carrying an interface would already be
-    /// in `pf \ pc`. Its one independent clause is `outcome == "abstained"` — it is what refuses a
-    /// faulted-only row that carries no interface and is not an abstention.
+    /// An observation stripped of its MAC has no L1 key, and since v0.3.0 the engine writes no link
+    /// for a sighting it can never place. So the blinded pass now adds **no row of any kind**: the
+    /// property holds without the clause that had to be defended. *A criterion that no longer needs
+    /// its exception is a criterion that got simpler, not one that got weaker.*
     #[tokio::test]
-    async fn ac5_a_blinded_pass_adds_only_abstentions() {
+    async fn ac5_a_blinded_pass_adds_nothing_at_all() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
         let records = stream(RANDOMIZED);
         let context = context(&records);
@@ -1635,25 +1636,24 @@ mod tests {
              interface_id comparable here too"
         );
 
-        // (b): every row the faulted pass has and the clean pass has not is an ABSTENTION.
+        // (b): the faulted pass has NO row the clean pass has not — not a placement, and since
+        // v0.3.0 not an abstention either.
+        //
+        // ⚠️ The guard this replaces asserted `!extra.is_empty()` — *"at least one faulted-only row
+        // must EXIST, or the claim is vacuously true"* — because the interesting claim was then
+        // about the KIND of the extra rows. There are no extra rows now, so the vacuity guard would
+        // itself be asserting that a thing exists which the product deliberately no longer creates.
+        // The claim below is not vacuous: it can fail, and the strictness assertion above is what
+        // proves the faulted pass really did less.
         let clean_keys: HashSet<_> = clean_rows.iter().map(placement_key).collect();
         let extra: Vec<_> = faulted_rows
             .iter()
             .filter(|row| !clean_keys.contains(&placement_key(row)))
             .collect();
         assert!(
-            !extra.is_empty(),
-            "AC5: at least one faulted-only row must EXIST, or the claim is vacuously true"
+            extra.is_empty(),
+            "AC5: a fault may only REMOVE knowledge — the blinded pass wrote rows the clean pass \
+             did not: {extra:?}"
         );
-        for row in &extra {
-            assert_eq!(
-                row.outcome, "abstained",
-                "AC5(b): a faulted-only row is a PLACEMENT, not an abstention: {row:?}"
-            );
-            assert!(
-                row.interface_id.is_none(),
-                "an abstention names no interface"
-            );
-        }
     }
 }
