@@ -431,8 +431,17 @@ gesture.not_enabled:
   en: "This gesture is built and switched off on this instance: set %{switch} to enable it."
   fr: "Ce geste est construit et non activé sur cette instance : définissez %{switch} pour l'activer."
 gesture.not_built:
-  en: "The gestures marked %{badge} are still to come."
-  fr: "Les gestes marqués %{badge} ne sont pas encore construits."
+  # 🔴 This sentence used to read "The gestures marked %{badge} are still to come." — which answers
+  # the badge with the badge. Guy asked what « À venir » means, and the honest answer was that the
+  # product never said what those gestures WOULD DO. A marker may be short; the sentence beside it
+  # is where the meaning has to live.
+  #
+  # ⚠️ The `%{badge}` interpolation is KEPT, and a test is why. The first rewrite dropped it for a
+  # plain sentence — and `the_rendered_bar_says_the_gesture_is_not_built` reds on exactly that: the
+  # sentence names the badge it scopes itself to, INTERPOLATED, so the two cannot drift apart. The
+  # improvement was to say what the gestures DO; losing the coupling was not part of it.
+  en: "The gestures marked %{badge} are still to come: resolve an ambiguity, accept a gap as permanent, snooze a question, attach a sighting to a device."
+  fr: "Les gestes marqués %{badge} sont à venir : résoudre une ambiguïté, accepter un écart durable, mettre une question en veille, rattacher un constat à un appareil."
 # 🔴 `gesture.document`, NOT `gesture.merge`, and the English value is `Document` — Guy's
 # arbitration 1 of 2026-08-21, story 6b.10. The binding glossary retires `merge` IN ENGLISH by
 # name (`prd.md:1037`, `ux-design-specification.md:1386`): *"it names the forbidden operation —
@@ -440,8 +449,28 @@ gesture.not_built:
 # of `document` and carries no such claim, so it is unchanged. The key name is in scope too: the
 # glossary's first column is "EN (docs, API, code)".
 gesture.document:
-  en: "Document"
-  fr: "Merger"
+  # 🔴 **"Ajouter" / "Add" since v0.3.1, and the reason is what the action DOES.**
+  #
+  # It read "Document" / « Merger » — a pair `prd.md:888` fixed deliberately. Guy looked at his own
+  # product on his own network and the word did not tell him what the button does. Two measurements
+  # settled it:
+  #
+  #   * « Merger » is an anglicism; the French is « Fusionner ». But
+  #   * the action CANNOT fuse anything. There is no `ON DUPLICATE KEY UPDATE` anywhere in the
+  #     adapter, the primary key is `(entity_id, attr_key)`, and a second write for one field errors
+  #     1062. **The engine can only ever ADD a declared value, never replace one** — NFR5, and it is
+  #     what protects an operator's testimony from a machine.
+  #
+  # So "merge" was retired in English for a reason that holds in French too: *the operation the word
+  # names does not exist*. The verb that does name it is the plain one. 🔑 And it is the same verb for
+  # the future per-field gesture (FR13(b)): adding ONE field that has no declared value is still
+  # adding.
+  #
+  # ⚠️ NOT "Adopt" / « Adopter », though the database says `origin='adopted'`: that word is right
+  # about provenance and wrong about what the operator is doing, which is putting a machine's
+  # observation into their own record.
+  en: "Add"
+  fr: "Ajouter"
 gesture.resolve:
   en: "Resolve"
   fr: "Résoudre"

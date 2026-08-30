@@ -8,6 +8,55 @@ schema will move.
 
 ---
 
+## 0.3.1 — the button says what it does
+
+One label, and the reason it changed is worth more than the change.
+
+**The gesture that closes a gap is now "Add" / « Ajouter ».** It read "Document" / « Merger », a
+pair the PRD fixed deliberately in July. Guy installed `v0.3.0` on his own network, met the button,
+and said the word did not tell him what it does. Two facts settled it:
+
+- « Merger » is an anglicism; the French is « Fusionner ».
+- **The action cannot fuse anything.** There is no `ON DUPLICATE KEY UPDATE` in the adapter, the
+  primary key is `(entity_id, attr_key)`, and a second write for one field errors 1062. The engine
+  can only ADD a declared value, never replace one — NFR5, which is what protects an operator's
+  testimony from a machine.
+
+So « fusionner » names a forbidden operation in French for exactly the reason `merge` does in
+English, and retiring one while keeping the other was never coherent.
+
+⚠️ **The identifier is unchanged.** `document-all`, `document-field` and FR13 still say `document`;
+renaming a route buys nothing and breaks a deployment. This is the one concept whose UI label
+differs from its identifier, and all three binding tables now say so in the row rather than leaving
+the two soldered together.
+
+**And the dead controls say what they would do.** The group sentence read *"The gestures marked Not
+yet are still to come"* — answering the badge with the badge. It now names them: resolve an
+ambiguity, accept a gap as permanent, snooze a question, attach a sighting to a device.
+
+### 🔑 What this release records, beyond the words
+
+Decision **D11** — Guy's own, 16 July, naming the gesture "Merger"/"Merge" over the round table's
+`document`/`adopt` — carries a dated supersession rather than a rewrite. It also carries the dissent
+it overruled, and one line of it came true:
+
+> *"Vocabulary is architecture — if the action is called merge in the UI, someone will end up
+> implementing it as a merge."*
+
+It did **not** come true in the code: the mitigation held, and a destructive merge is structurally
+impossible. It came true in the **reader**. That is the *pedagogy risk* D11 names and sets aside —
+and it took the author using his own product to see it, five weeks later, with no review layer, gate
+or retrospective having raised it.
+
+### ⚠️ Registered, not fixed
+
+A human asking the product to change a value **they themselves declared** is legitimate and has no
+gesture — NFR5 binds the machine, not the author. And documenting a value already declared on
+another entity is unguarded: the unique index is keyed on `(origin_obs_id, attr_key)`, so two
+entities may claim one address.
+
+---
+
 ## 0.3.0 — the product does something
 
 `v0.2.0` served ten screens and could not act on any of them. `v0.3.0` is the first release an

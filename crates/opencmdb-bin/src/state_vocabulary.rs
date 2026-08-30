@@ -231,10 +231,21 @@ pub(crate) const BINDING_GESTURE_AXIS: [(&str, &str); 11] = [
     ("declared", "déclaré"),
     ("gap", "écart"),
     ("reconcile", "réconcilier"),
-    // 🔴 The pair that is not a shared root, and the one this story exists for. The glossary's
-    // own note: *"a pair needs ONE MEANING, not one root"*. `merge` is retired IN ENGLISH by
-    // name; « Merger » is the fixed French translation of `document` and carries no such claim.
-    ("document", "merger"),
+    // 🔴 **THE ONE ROW WHERE THE UI LABEL AND THE CODE IDENTIFIER DIFFER, since v0.3.1.**
+    //
+    // It read `("document", "merger")`, and both halves were wrong for the same reason. Guy looked
+    // at his own product on his own network and « Merger » did not tell him what the button does.
+    // Two facts settled it: « Merger » is an anglicism for « Fusionner » — and **the action cannot
+    // fuse anything**. There is no `ON DUPLICATE KEY UPDATE` in the adapter, the primary key is
+    // `(entity_id, attr_key)`, and a second write for one field errors 1062. The engine can only
+    // ADD a declared value, never replace one (NFR5). *`merge` was retired in English because the
+    // operation it names does not exist; the same is true of « fusionner ».*
+    //
+    // ⚠️ **The CODE and API identifier stays `document`** — `document-field`, `document-all`, FR13.
+    // Renaming a route buys nothing and breaks a deployment. So this concept is the one place where
+    // the binding table's EN column, which elsewhere serves as both identifier and UI label, must
+    // carry the LABEL only; both planning artefacts now say so in the row itself.
+    ("add", "ajouter"),
     ("accept the gap", "accepter l'écart"),
     ("snooze", "mettre en veille"),
     ("attach", "rattacher"),
@@ -271,7 +282,10 @@ mod gesture_axis_tests {
     /// which is the moment to ask whether the glossary needs a row — the question story 6b.7
     /// answered by refusing to extend the table *"prematurely, not wrongly"*.
     const GLOSSARY_BACKED: [(&str, &str); 5] = [
-        ("gesture.document", "document"),
+        // ⚠️ The KEY keeps the identifier (`document`, as in `document-all`); the pair it is checked
+        // against is the LABEL. This is the one row where the two differ — D11's supersession of
+        // 2026-08-30 explains why, and both binding tables now carry the distinction in the row.
+        ("gesture.document", "add"),
         ("gesture.accept_gap", "accept the gap"),
         ("gesture.snooze", "snooze"),
         ("gesture.attach", "attach"),
