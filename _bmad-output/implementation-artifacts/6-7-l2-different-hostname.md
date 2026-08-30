@@ -1,13 +1,23 @@
 # Story 6.7: `l2-different-hostname` — the first producer of `Opposes`
 
 Status: **ready-for-dev** — contexted 2026-08-30 against the committed corpus and the tree at
-`db1e3f9`. ⚠️ **`create-story validate` (two fresh-context agents) is MANDATORY before `dev-story`**
+`db1e3f9`; **arbitration TAKEN by Guy the same day**. ⚠️ **`create-story validate` (two fresh-context agents) is MANDATORY before `dev-story`**
 and has NOT been run.
 
-🔴 **ONE ARBITRATION IS OPEN, IT IS GUY'S, AND IT IS THE LAST CHEAP MOMENT TO TAKE IT** (§0c). Story
-6.6 decided — on my delegation, recorded as mine so it could be reversed at the right cost — that the
-L2 rules judge INTERFACE pairs. This story is where that decision meets its first bill, and the
-contexting measurement has produced **a third option nobody had posed**.
+✅ **THE ARBITRATION IS TAKEN: OPTION (a), GUY, 2026-08-30** (§0c) — and it is HIS, where story
+6.6's twin decision was mine by delegation. `cloned-mac-must-not-merge` **stays unanswerable at L2**;
+the unanswerable bucket goes **11 → 4, not 11 → 3**; and **option (c) — the structural reading — is
+REGISTERED BY NAME to story 6.11**, whose subject it already is. `epics.md` is not edited.
+
+🔑 **The reason, in one sentence: the trap is not unanswerable because the engine is weak, it is
+unanswerable because it interrogates the WRONG LAYER** — it asks an L2 rule to separate what the L1
+key has already fused, and a rule comparing hostnames cannot undo a merge decided on the MAC.
+
+⚠️ **The cost accepted, and stated rather than hidden: a committed trap is READ BY NOTHING until
+story 6.11.** That is exactly the kind of silence this project's retrospectives find three epics
+later, so it is covered the only way that works — **T6 asserts by NAME that
+`cloned-mac-must-not-merge` is the one not answered**, so a second trap falling into this case reds a
+test instead of vanishing.
 
 ## Story
 
@@ -26,8 +36,10 @@ So that the cascade gains its first opposing voice.
 **Then** it yields `Verdict::Opposes` — **the first producer of that variant in this codebase** — and
 the three committed traps expecting `l2-different-hostname` are answered by it.
 
-🔴 **AC1's last clause is UNSATISFIABLE under story 6.6's arbitration, measured: only TWO of the
-three can be answered.** See §0b. The clause is what §0c arbitrates; `epics.md` is not edited.
+🔴 **AC1's last clause is UNSATISFIABLE, measured: only TWO of the three can be answered** (§0b),
+and Guy's arbitration (a) accepts that rather than reshaping the level to fit it. **Read the clause
+as *the two committed traps that HAVE an L2 pair*,** with the third named in T6 as the excluded one.
+`epics.md` is not edited; the divergence is registered.
 
 **AC2 — the common bug, named by D20**
 
@@ -122,10 +134,19 @@ real interfaces, same MAC"*, which says the L1 KEY is what is wrong, not the rul
 `l2-different-hostname`, ⚠️ **which means the corpus's expected rule for that trap would be wrong and
 a corpus bump would be needed** — an act Epic 4's retrospective warns about by name.
 
-**My recommendation is (a) for THIS story and (c) registered to story 6.11**, on the ground that (c)
-is 6.11's subject arriving early and that a corpus bump is not a thing to do in passing. ⚠️ **But
-this is Guy's**, not mine: it is the second time the same decision has been delegated, it now has a
-measured third branch, and the cost of reversing rises with every L2 rule that ships.
+### ✅ TAKEN (Guy, 2026-08-30): **OPTION (a)**, with **(c) registered to story 6.11**
+
+**Refused: (b).** It repairs the symptom by breaking the distinction the whole level rests on — L2
+reasons about DEVICES; making it reason about observations to recover one trap pays the structure for
+a case. ⚠️ And it was refused **knowing it would never be cheaper**: every L2 rule that ships after
+this one raises the price of reversing.
+
+**Refused HERE, accepted THERE: (c).** It is right on the substance — D21 says the KEY is what is
+wrong — but it is story 6.11's subject, it would arrive three stories early, and it would require a
+**corpus bump** in passing, which Epic 4's retrospective names as a thing not to do lightly.
+
+⚠️ **The accepted cost, written rather than implied**: a committed trap is read by nothing until
+6.11. T6's naming assertion is what stops that silence from growing.
 
 ### §0d. The multi-hostname interface, and why AC4 exists
 
@@ -200,7 +221,8 @@ hide**.
 
 ## Tasks / Subtasks
 
-- [ ] **T1 — Validation.** Two fresh-context agents, own worktree each. **Settle §0c with Guy.**
+- [ ] **T1 — Validation.** Two fresh-context agents, own worktree each. §0c is SETTLED (Guy, option
+      (a)); the validation inherits it rather than re-opening it.
 - [ ] **T2 — The rule's input type** (AC1): an interface with its observations. Decide it explicitly
       and document why an `L2CandidatePair` alone cannot serve.
 - [ ] **T3 — The absence guard FIRST** (AC2): write the `Neutral`-on-absent and `Neutral`-on-empty
@@ -258,3 +280,4 @@ _(to be filled at implementation)_
 | Date | Change |
 |---|---|
 | 2026-08-30 | Story created and contexted against `db1e3f9`. 🔴 **AC1's "three traps" is TWO** — `cloned-mac-must-not-merge` has no L2 pair under story 6.6's arbitration (§0b). 🔑 **And the measurement opened a third option nobody had posed**: the ONE interface in the whole corpus carrying two different hostnames is exactly the one `cloned-mac` collapses onto, so *the signal is not lost, the SHAPE is* — a cloned MAC presents as one interface contradicting itself, which is story 6.11's structural-fact shape arriving early (§0c). Arbitration left OPEN and referred to Guy. Also measured: 17 hostname-bearing interfaces, exactly one multi-named (§0d); the absence/emptiness equivalence is stated by the corpus itself and **no trap in that family names this rule**, so AC2 needs a test that reds when the rule wrongly opposes (§0e). |
+| 2026-08-30 | ✅ **ARBITRATION TAKEN — OPTION (a), GUY.** `cloned-mac-must-not-merge` stays unanswerable at L2; the bucket goes **11 → 4**; **(c), the structural reading, is registered by name to story 6.11**, whose subject it already is. 🔑 *The trap is not unanswerable because the engine is weak — it interrogates the wrong layer.* (b) was refused knowing it would never be cheaper. ⚠️ The accepted cost is written: a committed trap is read by nothing until 6.11, and **T6 asserts by NAME which one**, so a second such trap reds a test instead of vanishing. |

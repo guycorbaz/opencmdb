@@ -5250,3 +5250,27 @@ Three rows. Three isolated layers on a different model; two of the three found r
   reason to open `l1.rs`, and a citation sweep across a file it does not otherwise touch is the
   scope creep the house rules refuse. **Owner: story 6.7**, which implements the first `l2-*` rule
   and will be in `identity/` anyway. Re-derive by `grep` on the quoted sentence, never by adding 25.
+
+## Deferred from: story 6.7's contexting (2026-08-30)
+
+One row, and it is an ARBITRATION's other half rather than a defect.
+
+- 🔑 **A CLONED MAC PRESENTS AS ONE INTERFACE CONTRADICTING ITSELF, and that is a STRUCTURAL FACT
+  rather than a pair rule. Owner: story 6.11.** Measured over all **seventeen** hostname-bearing
+  interfaces in every committed replay stream: **exactly one carries two different hostnames**
+  (`doc-host-echo` and `doc-host-foxtrot`, over three observations) — and it is precisely the
+  interface `cloned-mac`'s two observations collapse onto under `join`'s `(l2_domain, mac)` key.
+  ***The signal is not lost; the SHAPE is.***
+  **Guy arbitrated option (a) on 2026-08-30**: `cloned-mac-must-not-merge` stays unanswerable at L2
+  and the unanswerable bucket goes **11 → 4, not 11 → 3**, because *the trap is not unanswerable
+  because the engine is weak — it interrogates the WRONG LAYER*, asking an L2 rule to separate what
+  the L1 key has already fused. **This row is the other half of that decision**: the case is real and
+  detectable, and story 6.11 is where it belongs — `epics.md` already gives that story the
+  structural-fact shape for the virtual-MAC anchor (*"there is no rule"*), and D21's own words in the
+  trap file, *"a cloned MAC = two real interfaces, same MAC"*, say the **KEY** is what is wrong.
+  ⚠️ **Whoever takes it inherits a corpus bump**: the trap's expected rule (`l2-different-hostname`)
+  becomes wrong under a structural reading, and a bump is an act Epic 4's retrospective names as one
+  not to make in passing — it needs its own decision, not a side effect.
+  ⚠️ **And it inherits a live consequence**: story 6.7's T6 asserts BY NAME that
+  `cloned-mac-must-not-merge` is the trap not answered. Closing this row must update that assertion,
+  which is the point of naming it rather than counting it.

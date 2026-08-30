@@ -4928,14 +4928,25 @@ development_status:
                           # INTERFACE CONTRADICTING ITSELF, which is story 6.11's structural-fact
                           # shape arriving early, and D21's own words ("a cloned MAC = two real
                           # interfaces, same MAC") say the L1 KEY is what is wrong, not the rule.
-                          # ⚠️ ARBITRATION OPEN AND REFERRED TO GUY (§0c) -- (a) keep 6.6's decision,
-                          # bucket 11->4, AC1's third trap answered by nothing; (b) reverse it to
-                          # observation pairs, bucket really 11->3 but 6.6's blocker then feeds
-                          # nothing; (c) the structural reading, registered to 6.11, which needs a
-                          # CORPUS BUMP -- an act Epic 4's retrospective warns about by name.
-                          # My recommendation: (a) here, (c) registered to 6.11. **It is the second
-                          # delegation of the same decision and the cost of reversing rises with
-                          # every L2 rule that ships.**
+                          # ✅ ARBITRATION TAKEN -- OPTION (a), GUY, 2026-08-30, and it is HIS where
+                          # story 6.6's twin decision was mine by delegation.
+                          # `cloned-mac-must-not-merge` STAYS UNANSWERABLE at L2; the bucket goes
+                          # 11 -> 4, NOT 11 -> 3; and (c), the structural reading, is REGISTERED BY
+                          # NAME to story 6.11, whose subject it already is.
+                          # 🔑 THE REASON IN ONE SENTENCE: the trap is not unanswerable because the
+                          # engine is weak -- it INTERROGATES THE WRONG LAYER, asking an L2 rule to
+                          # separate what the L1 key has already fused, and a rule comparing
+                          # hostnames cannot undo a merge decided on the MAC.
+                          # Refused: (b), which repairs the symptom by breaking the distinction the
+                          # whole level rests on -- and refused KNOWING it will never be cheaper,
+                          # every L2 rule shipped after this one raising the price of reversing.
+                          # Refused HERE and accepted THERE: (c) is right on the substance (D21 says
+                          # the KEY is wrong) but would arrive three stories early AND need a CORPUS
+                          # BUMP in passing, which Epic 4's retrospective names as a thing not to do
+                          # lightly.
+                          # ⚠️ THE ACCEPTED COST, WRITTEN RATHER THAN HIDDEN: a committed trap is
+                          # READ BY NOTHING until 6.11. T6 asserts BY NAME which one, so a second
+                          # trap falling into this case REDS A TEST instead of vanishing.
                           # 🔑 THE STORY'S CENTRE IS D20's LOCK: *a rule that claims to know what it
                           # does not know IS the bug*. The failure mode is not a missing `Opposes`,
                           # it is an `Opposes` that should have been `Neutral` -- and NO trap in the
