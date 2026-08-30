@@ -5175,3 +5175,40 @@ it re-derivable.*
   one**: `:2226` named *"the lifecycle epic (FR40-42)"* as the `state` column's owner — FR40-42 is
   **Epic 21** (edit, decommission, backup), while FR38b is Epic 6's and its behaviour is **story
   6.18**'s. And `:2216`'s header announces *"three distinct entries"* above **two**.
+
+## Deferred from: story 6.6's contexting and validation (2026-08-30)
+
+Four rows. All four were produced by the two-layer validation, and each names an owner.
+
+- 🔴 **`epics.md`'s Epic 6 constraint (2) is WRONG BY ONE: the unanswerable bucket goes 11 → 4, not
+  11 → 3.** `cloned-mac-must-not-merge` expects `l2-different-hostname` and has **no L2 pair**: its
+  two observations carry the same `MacAddr([2,0,94,0,83,112])` in the same `l2_domain`, so `join`'s
+  `(l2_domain, mac)` key collapses them onto ONE interface and an interface-keyed universe can never
+  propose the pair. ⚠️ The trap file says so itself, citing D21 — *"a cloned MAC = two real
+  interfaces, same MAC"* — which is exactly what the key makes unrepresentable. Story 6.6's §0j takes
+  the arbitration (the L2 rules judge INTERFACE pairs) and accepts the cost; `epics.md` is **not
+  edited**, a story may not. **Owner: story 6.15**, which inherits one trap more than its own
+  criterion states, **and Epic 6's retrospective** for the `epics.md` correction.
+
+- 🔴 **The uplink narrowing is UNWRITABLE inside the L2 blocker and EXPRESSIBLE at its call site,
+  where nothing sees it.** Under `&[L1Key]` the argument carries no `Fact`, so the guard story 6.6's
+  first AC5 demanded cannot compile (`E0425`) — the type carries what the guard claimed to. But
+  filtering by uplink `peer_mac` **at the call site** was measured leaving **783 tests, clippy and all
+  ten gates GREEN**. *Block on the uplink* is the most tempting L2 narrowing there is — it is the
+  signal `l2-uplink-agrees` scores on — and the committed corpus is **blind to it (1000‰)**. **Owner:
+  story 6.12**, the first caller: it must carry the guard, and it may not assume 6.6 carries one.
+
+- ⚠️ **`blocking.rs` and `l1.rs` cite `architecture.md` ~25 lines off, and story 6.6 INHERITED the
+  drift into a section promising it was measured.** `blocking.rs` names `:988-993`, `:1004-1007`,
+  `:1009-1011` and `:1246-1253`; the quoted sentences are at **`:1016`, `:1031`, `:1036` and
+  `:1276`**. `l1.rs` names `:984-986` for a *Level split* at `:1009-1011`. Verified by `grep` on the
+  sentences themselves. ⚠️ **The same doc carries four stale FIGURES** (ten `must-merge` where eleven
+  are; 700‰/400‰/900‰ where 727/363/909 are today) — story 6.6's T10 repairs the figures in
+  `blocking.rs`. **Owner for the citation drift across both files: story 6.7**, the next to touch
+  `identity/`. *A citation copied from a neighbouring file is not a measurement.*
+
+- ⚠️ **`cargo xtask mutate` leaves a snapshot behind on every exit-2 refusal, even when the file is
+  provably intact.** Met twice during story 6.6's validation (anchor matched twice; anchor missed):
+  the run refuses correctly, `diff` shows the file identical, and the next run is then blocked until
+  `target/xtask-mutate/` is cleared by hand. A mutation pass of six plants pays one manual recovery
+  per anchor typo. **Owner: story 6.4b's artefact** — whoever next touches `mutate.rs`.

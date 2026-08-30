@@ -78,9 +78,32 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-30  # 🔴 STORY 6.6 CONTEXTED and `ready-for-dev`
-                          # (`6-6-l2-candidates-and-no-rule.md`). ⚠️ `create-story validate` (two
-                          # fresh-context agents) is MANDATORY and has NOT run.
+last_updated: 2026-08-30  # 🔴 STORY 6.6 CONTEXTED, VALIDATED and `ready-for-dev`
+                          # (`6-6-l2-candidates-and-no-rule.md`). Two fresh-context layers, own
+                          # worktree each; the gap-hunt layer BUILT the prototype and ran eight
+                          # mutations against a live store. **16 findings, 6 HIGH, all applied.**
+                          # ✅ TWO ARBITRATIONS TAKEN, mine, delegated by Guy, recorded as mine so
+                          # they can be reversed at the right cost (6.5 §0d's precedent):
+                          # (1) the input stays `&[L1Key]` and the TYPE replaces the guard --
+                          #     **AC5's uplink half is WITHDRAWN, measured UNWRITABLE (`E0425`)**;
+                          #     a guard that cannot red is this epic's dominant defect, and the
+                          #     first draft committed it inside the criterion written to avoid it.
+                          #     ⚠️ The risk MOVES to the call site, where filtering by uplink was
+                          #     measured leaving 783 tests, clippy and ten gates GREEN -> story 6.12.
+                          # (2) the L2 rules judge INTERFACE pairs, so 🔴 **THE UNANSWERABLE BUCKET
+                          #     GOES 11 -> 4, NOT 11 -> 3**: `cloned-mac-must-not-merge` names an
+                          #     `l2-*` rule and has NO L2 pair -- both its observations carry the
+                          #     SAME MAC, so `join` collapses them onto one interface. `epics.md`
+                          #     constraint (2) says three and is NOT edited; registered, owners
+                          #     story 6.15 and Epic 6's retrospective.
+                          # 🔴 AC1's central refusal is carried by NOTHING: calling `decide` inside
+                          # the blocker leaves 783 tests, clippy and ten gates green. Stated as a
+                          # TRIPWIRE. And it REFUTES the reason the draft gave for refusing `l2.rs`
+                          # -- the choice buys documentation, not constraint.
+                          # ⚠️ Three `architecture.md` citations were ~25 lines off and were
+                          # INHERITED from `blocking.rs`'s module doc rather than measured, inside a
+                          # section promising everything in it was run. That doc also carries FOUR
+                          # stale figures; T10 repairs them.
                           # 🔴 TWO PREMISES OF THIS FILE WERE REFUTED at contexting. (1) The notes
                           # here sit ABOVE their key, and 6.6 was read as *"the first producer of
                           # `Verdict::Opposes`"* — that is 6.7. **6.6 produces no verdict at all**;
@@ -4846,7 +4869,7 @@ development_status:
   #   the DB tests return early, the counts are identical, THE CLOCK IS THE TELL.
   #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
   # 5.6's rule: a blocker that consults a rule is that rule's echo; recall in milli-units
-  6-6-l2-candidates-and-no-rule: ready-for-dev  # contexted 2026-08-30; validation still owed
+  6-6-l2-candidates-and-no-rule: ready-for-dev  # contexted AND validated 2026-08-30
   # the FIRST producer of `Verdict::Opposes` in this codebase; 3 traps
   6-7-l2-different-hostname: backlog
   # the FIRST producer of `Verdict::Supports`; 2 traps
