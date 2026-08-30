@@ -78,7 +78,12 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-30  # STORY 6.6 IS `done` (PR #135 `d9135e4`, record PR #136 `db1e3f9`,
+last_updated: 2026-08-30  # STORY 6.7 IS `done` (PR #137 `7b329d8`) -- `l2-different-hostname`,
+                          # THE FIRST PRODUCER OF `Verdict::Opposes` IN THIS CODEBASE, after it had
+                          # waited since story 5.4b. **Epic 6: 8 done of 20.**
+                          # NEXT: story 6.8, `l2-uplink-agrees` -- the first producer of `Supports`.
+                          #
+                          # (2026-08-30) STORY 6.6 IS `done` (PR #135 `d9135e4`, record PR #136 `db1e3f9`,
                           # CI green on each head commit). Epic 6: 7 done of 20.
                           # NEXT: story 6.7, contexted and `ready-for-dev`; its validation is owed
                           # and it carries an OPEN ARBITRATION that is Guy's -- see its entry below.
@@ -4915,7 +4920,12 @@ development_status:
                           # production caller (story 6.12 is the first). `l1.rs`'s citation drift
                           # is NOT fixed here -- registered, owner 6.7.
   # the FIRST producer of `Verdict::Opposes` in this codebase; 3 traps
-  6-7-l2-different-hostname: review  # IMPLEMENTED **and CODE-REVIEWED** 2026-08-30, three isolated
+  6-7-l2-different-hostname: done  # PR #137 squash-merged 2026-08-30 as `7b329d8` after a CI run
+                          # green ON THE HEAD COMMIT ITSELF (`782c5c7`, run 33314266141, 2m30), read
+                          # from `gh pr checks` -- the background watcher was KILLED and emitted
+                          # nothing, TWICE in one session. A different failure from the register's
+                          # (a watcher exiting 0 over zero checks): same symptom, different cause.
+                          # IMPLEMENTED and CODE-REVIEWED 2026-08-30, three isolated
                           # layers on a DIFFERENT model, against a VIRGIN mariadb:10.11.11.
                           # 783 -> 798 tests (517+182+99), ten gates, clippy --all-targets, cargo doc.
                           # 🔴 THE HEADLINE IS A CLAIM MY OWN MUTATION TABLE REFUTED THREE LINES
