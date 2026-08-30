@@ -78,7 +78,12 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-30  # 🔴 STORY 6.6 CONTEXTED, VALIDATED and `ready-for-dev`
+last_updated: 2026-08-30  # STORY 6.6 IS `done` (PR #135 `d9135e4`, record PR #136 `db1e3f9`,
+                          # CI green on each head commit). Epic 6: 7 done of 20.
+                          # NEXT: story 6.7, contexted and `ready-for-dev`; its validation is owed
+                          # and it carries an OPEN ARBITRATION that is Guy's -- see its entry below.
+                          #
+                          # (2026-08-30) 🔴 STORY 6.6 CONTEXTED, VALIDATED and `ready-for-dev`
                           # (`6-6-l2-candidates-and-no-rule.md`). Two fresh-context layers, own
                           # worktree each; the gap-hunt layer BUILT the prototype and ran eight
                           # mutations against a live store. **16 findings, 6 HIGH, all applied.**
@@ -4910,7 +4915,35 @@ development_status:
                           # production caller (story 6.12 is the first). `l1.rs`'s citation drift
                           # is NOT fixed here -- registered, owner 6.7.
   # the FIRST producer of `Verdict::Opposes` in this codebase; 3 traps
-  6-7-l2-different-hostname: backlog
+  6-7-l2-different-hostname: ready-for-dev  # contexted 2026-08-30; validation owed
+                          # 🔴 AC1's *"the three committed traps"* IS TWO. `cloned-mac-must-not-merge`
+                          # expects `l2-different-hostname` and has NO L2 pair: both its observations
+                          # carry the SAME MAC in one `l2_domain`, so `join` collapses them onto one
+                          # interface. Story 6.6's §0j, now BITING A CRITERION rather than a count.
+                          # 🔑 AND THE CONTEXTING OPENED A THIRD OPTION NOBODY HAD POSED: the ONE
+                          # interface in the WHOLE corpus carrying two different hostnames is exactly
+                          # the one `cloned-mac` collapses onto (measured over all 17 hostname-bearing
+                          # interfaces). ***The signal is not lost — the SHAPE is.*** A cloned MAC
+                          # does not present as two interfaces disagreeing; it presents as ONE
+                          # INTERFACE CONTRADICTING ITSELF, which is story 6.11's structural-fact
+                          # shape arriving early, and D21's own words ("a cloned MAC = two real
+                          # interfaces, same MAC") say the L1 KEY is what is wrong, not the rule.
+                          # ⚠️ ARBITRATION OPEN AND REFERRED TO GUY (§0c) -- (a) keep 6.6's decision,
+                          # bucket 11->4, AC1's third trap answered by nothing; (b) reverse it to
+                          # observation pairs, bucket really 11->3 but 6.6's blocker then feeds
+                          # nothing; (c) the structural reading, registered to 6.11, which needs a
+                          # CORPUS BUMP -- an act Epic 4's retrospective warns about by name.
+                          # My recommendation: (a) here, (c) registered to 6.11. **It is the second
+                          # delegation of the same decision and the cost of reversing rises with
+                          # every L2 rule that ships.**
+                          # 🔑 THE STORY'S CENTRE IS D20's LOCK: *a rule that claims to know what it
+                          # does not know IS the bug*. The failure mode is not a missing `Opposes`,
+                          # it is an `Opposes` that should have been `Neutral` -- and NO trap in the
+                          # `hostname-absence` family names this rule, so AC2 needs a test that reds
+                          # when the rule wrongly opposes, not a trap that turns green.
+                          # ⚠️ 17 hostname-bearing interfaces, exactly ONE multi-named -- the excluded
+                          # one -- so the multi-hostname case is REACHABLE in production and
+                          # UNEXERCISED by the corpus. AC4 makes it a decision, not a default.
   # the FIRST producer of `Verdict::Supports`; 2 traps
   6-8-l2-uplink-agrees: backlog
   # and the measured floor: hostname is unusable on nearly half of known clients
