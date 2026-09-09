@@ -156,6 +156,17 @@ it, is exactly why the connection is no longer configured as a single string.
     seconds; \texttt{300} by default. Set it to \texttt{0} to scan once at startup and never
     again, which is what every release before v0.3.0 did. A value that is not a whole number of
     seconds refuses to start, by name.
+  \item[\texttt{OPENCMDB\_DNS\_SERVER}] \textbf{Set this to your DHCP server.} It is the
+    resolver opencmdb asks for the \emph{name} each host answers to, and it decides whether your
+    triage queue reads \texttt{sw03} and \texttt{wifi01-grange} or a column of bare IP
+    addresses. Unset, opencmdb asks the system resolver --- the unsurprising default, and on a
+    real home network nearly useless: measured over the 69 unnamed addresses of the reference
+    deployment, the configured system resolver answered for \textbf{2} and the router that had
+    handed out the leases answered for \textbf{37}. A small network resolves its own hosts at the
+    box that leases the addresses, and that box is usually not the resolver your machines are
+    pointed at. Give a bare IP address, with no port and no scheme; anything else refuses to
+    start, by name, because a mistyped resolver produces a scan that names nothing --- which looks
+    exactly like a network with no \texttt{PTR} records, and no screen would tell you otherwise.
 \end{description}
 
 \begin{warning}

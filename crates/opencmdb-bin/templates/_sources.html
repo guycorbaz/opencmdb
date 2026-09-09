@@ -25,6 +25,10 @@
     {#- 🔑 No `match`: a `SourceView` cannot exist without a perimeter, so the arm that handled its
          absence could never execute. The code review caught the dead branch. -#}
     <p class="source-meta">{{ s.perimeter_label }} <span class="mono">{{ source.perimeter }}</span></p>
+    {#- Which resolver is asked for a host's NAME. It decides whether the triage queue reads
+         `sw03` or a bare address — 2 names against 37 on the reference network — and until
+         2026-09-09 it appeared on no screen at all. -#}
+    <p class="source-meta">{{ s.resolver_label }} <span class="mono">{{ source.resolver }}</span></p>
     {#- 🔴 A perimeter the product REFUSED, said so instead of shown as if it were live. The product
          already knows: `subnet_hosts` rejected it and the scan never ran. Rendering the string with
          nothing beside it presented a refused configuration as an in-force one. -#}

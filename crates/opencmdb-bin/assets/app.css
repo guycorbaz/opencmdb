@@ -521,6 +521,12 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
   font-weight: 400;
 }
 .subject .field { color: var(--muted); }
+/* The name the address answers to. Deliberately NOT `mono` and not `--accent-document`: it is the
+   human half of the row beside the machine half, and the amber is reserved for the one control
+   that writes. It carries the body font at 600 — heavier than the address beside it, which is the
+   whole point of asking a resolver at all. Measured in Chrome on the served page: the name renders
+   Barlow 600 against the address in ui-monospace 400, so the declaration wins its cascade. */
+.entity-name { color: var(--text); font-weight: 600; }
 .seen { font-size: 12px; color: var(--muted); white-space: nowrap; }
 
 .photos {
