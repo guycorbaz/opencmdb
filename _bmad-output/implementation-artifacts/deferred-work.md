@@ -5363,3 +5363,26 @@ the measurement this project had never taken.
   gesture the glossary already has (`attach`) — but `attach` is not built. **Owner: story 6.13 or
   Epic 7**, whichever first touches the documenting route; it must not be discovered by an operator
   a second time.
+
+## Raised by the first unattended run (2026-08-30, after v0.3.0 made the scan periodic)
+
+One row, and v0.3.0 is what made it live.
+
+- 🔴 **EVERY PAGE RENDER LOADS EVERY OBSERVATION EVER RECORDED, AND NOTHING EVER PURGES THEM.**
+  `repo::load_observation_facts` is `SELECT … FROM observation_record ORDER BY observed_at, id` —
+  **no `WHERE`, no `LIMIT`** — and `page.rs` calls it on `/triage` and on the gap fragment. There is
+  no `DELETE FROM observation_record` anywhere outside a test.
+  ⚠️ **This was harmless until v0.3.0 and is not any more, and the cause is mine**: the scan used to
+  run ONCE at boot, so the table grew by one batch per restart. It now runs every five minutes by
+  default. On the 48 hosts an outside review measured on a real `/24`: **48 × 288 × 10 days ≈ 138 000
+  rows**, all loaded into memory on every page view, growing without bound. Nothing breaks; the page
+  degrades, and the operator finds out weeks later on a store nothing cleans.
+  🔑 **The mitigation available today needs no code** — `OPENCMDB_SCAN_INTERVAL_SECS` divides the
+  rate directly — and Guy set it to `3600` before a ten-day absence, which is the first real
+  endurance run this product has had.
+  ⚠️ **Two decisions, and neither should be taken in a hurry**: how long an observation is kept
+  (D19 makes `obs_id` the anchor truth points at, so a purge is not free), and whether a page should
+  read a WINDOW rather than everything. The second is the cheaper half and probably the right first
+  move: *a screen about what is on the network now has no business reading what was on it in July.*
+  **Owner: the first story after the freeze is lifted** — it is a v0.3.x concern, not an Epic 6 one,
+  because it is the periodic scan that created it.
