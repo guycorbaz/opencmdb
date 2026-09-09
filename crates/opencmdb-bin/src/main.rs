@@ -684,6 +684,7 @@ fn app(pool: MySqlPool, config: AppConfig, diagnostic: diagnostic::DiagnosticFac
         .merge(page::triage_router(
             pool.clone(),
             config.scan_cidr.clone(),
+            config.dns_server,
             diagnostic,
             config.document_enabled,
         ));

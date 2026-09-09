@@ -47,6 +47,15 @@ pub(crate) struct SourceView {
     /// the template carried a `when None` arm that could never execute. *A branch placed where the
     /// case cannot occur reads as handling and is none.*
     pub(crate) perimeter: String,
+    /// The resolver the scan asks for a host's NAME, already rendered — the configured address,
+    /// or the words for *the system resolver*.
+    ///
+    /// 🔴 **The boot refusal for `OPENCMDB_DNS_SERVER` is justified in the code by *"no screen
+    /// anywhere would tell you otherwise"*, and the 2026-09-09 review measured that this stayed
+    /// true after the variable shipped: the value reached the connector and no screen at all.**
+    /// It is the difference between 2 names and 37 on the story's own field measurement, so the
+    /// operator has to be able to see which resolver is being asked.
+    pub(crate) resolver: String,
     /// What it is built to observe.
     pub(crate) observes: Vec<KindLine>,
     /// What it is built NOT to observe — the section AC1 requires to be real.
@@ -82,6 +91,8 @@ pub(crate) struct SourceStrings {
     pub(crate) ambiguity: String,
     pub(crate) incident_axis: String,
     pub(crate) perimeter_label: String,
+    /// The label of the resolver line.
+    pub(crate) resolver_label: String,
     pub(crate) no_source: String,
     /// What the screen says when the product REFUSED the configured perimeter.
     pub(crate) refused: String,
@@ -100,6 +111,7 @@ pub(crate) fn source_strings() -> SourceStrings {
         ambiguity: rust_i18n::t!("sources.ambiguity").to_string(),
         incident_axis: rust_i18n::t!("sources.incident_axis").to_string(),
         perimeter_label: rust_i18n::t!("sources.perimeter").to_string(),
+        resolver_label: rust_i18n::t!("sources.resolver").to_string(),
         no_source: rust_i18n::t!("sources.no_source").to_string(),
         refused: rust_i18n::t!("sources.refused").to_string(),
     }
@@ -148,6 +160,7 @@ pub(crate) fn kind_line(kind: FactKind) -> KindLine {
 /// ⚠️ **No clock here** — `now` is a parameter, on the precedent of every view builder in this file.
 pub(crate) fn build_sources(
     perimeter: Option<String>,
+    dns_server: Option<std::net::IpAddr>,
     last: Option<chrono::DateTime<chrono::Utc>>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Option<SourceView> {
@@ -175,6 +188,13 @@ pub(crate) fn build_sources(
         name: rust_i18n::t!(crate::arp_ping::SOURCE_NAME_KEY).to_string(),
         refused,
         perimeter: perimeter?,
+        // Unset is not blank: the product asks the machine's own resolver, and saying so is not
+        // the same as saying nothing. `AppConfig` already refused anything unparseable at boot,
+        // so whatever arrives here is an address the operator chose.
+        resolver: dns_server.map_or_else(
+            || rust_i18n::t!("sources.resolver_system").to_string(),
+            |server| server.to_string(),
+        ),
         observes: observes.into_iter().map(kind_line).collect(),
         cannot_see: cannot_see.into_iter().map(kind_line).collect(),
         last_observed: last.map(|instant| relative_time(now, instant)),

@@ -787,6 +787,12 @@ sources.lede:
 sources.perimeter:
   en: "Perimeter"
   fr: "Périmètre"
+sources.resolver:
+  en: "Name resolver"
+  fr: "Résolveur de noms"
+sources.resolver_system:
+  en: "the system resolver"
+  fr: "le résolveur du système"
 sources.observes:
   en: "What it observes"
   fr: "Ce qu'elle observe"

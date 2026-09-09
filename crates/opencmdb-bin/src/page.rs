@@ -345,10 +345,16 @@ fn display_fact(fact: &Fact) -> Option<(String, String)> {
 
 /// The name a batch's facts carry, if any — the display half of story 6.7's hostname.
 ///
-/// The FIRST hostname fact wins, which is the same rule [`gap::project`] applies when it builds the
-/// comparable pairs, and the same one the documenting gesture then writes. Three readers, one rule:
-/// were they to differ, the row would show one name, the record would store another, and the gap
-/// the operator just closed would still be open.
+/// The first hostname fact wins, which is the fact [`gap::project`] also puts first and the one
+/// the documenting gesture writes. **They agree on WHICH FACT and not on what string**: this
+/// returns the shortened form for the row while the record keeps the whole name — see
+/// [`short_name`], which is a line width and not a rule about names.
+///
+/// ⚠️ **And `project` emits EVERY hostname fact, not the first.** Measured at the 2026-09-09
+/// review: a sighting carrying two names makes `reconcile` abstain rather than pick, which is
+/// FR16 working. So the true sentence is narrower than *three readers, one rule* — this reader
+/// picks one for display, the engine refuses to pick at all, and the difference matters the day a
+/// connector reports a DHCP name beside an mDNS one.
 fn hostname_of(facts: &[Fact]) -> Option<String> {
     facts.iter().find_map(|fact| match fact {
         Fact::Hostname { name, .. } => Some(short_name(name)),
@@ -370,9 +376,14 @@ fn hostname_of(facts: &[Fact]) -> Option<String> {
 /// [`source_label`] already shows eight characters of a source's UUID.
 fn short_name(name: &str) -> String {
     match name.split_once('.') {
-        // A leading dot would make the first label empty, and an empty label displayed beside an
-        // address reads as a name the host does not have. Keep the whole string instead.
-        Some((first, _)) if !first.is_empty() => first.to_string(),
+        // 🔴 **The first label must carry the property the WHOLE name was admitted on.**
+        // `reverse_dns::sanitise` requires one ASCII alphanumeric anywhere in the name; the queue
+        // shows only the first label, which inherits nothing. Measured at the 2026-09-09 review:
+        // `-.example.com` passed the resolver's check and the queue rendered a bare `-` as the
+        // machine's name — exactly the class `sanitise`'s own doc calls *"a refusal to answer, not
+        // an answer"*, reached through the shortening added in the same commit. An empty first
+        // label is the same defect one degree smaller.
+        Some((first, _)) if first.chars().any(|c| c.is_ascii_alphanumeric()) => first.to_string(),
         _ => name.to_string(),
     }
 }
@@ -477,12 +488,25 @@ fn build_view(
     let declared_pairs: Vec<(String, String)> = attrs.clone();
 
     // Observed rows: the projected facts of in-perimeter observations, de-duplicated in order.
+    // 🔴 **This pane reads what the ENGINE read, and it did not until the 2026-09-09 review.**
+    // Two layers found it independently: the loop walked EVERY in-perimeter batch and
+    // de-duplicated by value, while `reconcile` narrows to the last value each source gave for
+    // each field. A renamed host therefore listed two `hostname` rows beside a gap naming one —
+    // the page stating three things about one field, two of which contradicted the third. The
+    // engine's own choice is now the display's, so they cannot drift again.
+    let obs: Vec<Observation> = observations.iter().map(observation_from_batch).collect();
+    let result = reconcile(("ipv4", &ipv4), &declared_pairs, &obs);
     let mut observed: Vec<KeyValue> = Vec::new();
     for batch in &observations {
         if !in_perimeter(&batch.facts, &ipv4) {
             continue;
         }
         for (key, value) in batch.facts.iter().filter_map(display_fact) {
+            // Only the sighting the engine attributed this field to. A field that abstained points
+            // at no sighting and shows nothing, which is what abstaining means.
+            if result.observed_from.get(&key) != Some(&batch.id) {
+                continue;
+            }
             if !observed.iter().any(|r| r.key == key && r.value == value) {
                 observed.push(KeyValue { key, value });
             }
@@ -490,9 +514,6 @@ fn build_view(
     }
 
     // Reconcile through the pure engine.
-    let obs: Vec<Observation> = observations.iter().map(observation_from_batch).collect();
-    let result = reconcile(("ipv4", &ipv4), &declared_pairs, &obs);
-
     let gaps = result
         .gaps
         .iter()
@@ -556,6 +577,9 @@ struct QueueRow {
     kind: String,
     /// The entity the row is about.
     entity: String,
+    /// The instant of the sighting that supplied this row — the ordering key the overwrite above
+    /// compares, so the queue does not depend on the order the store hands its rows in.
+    observed_at: chrono::DateTime<chrono::Utc>,
     /// The name the entity answers to, when the sighting carries one; empty otherwise.
     ///
     /// 🔑 **This is what a queue of addresses is missing, and it is display ONLY.** The row is
@@ -1010,6 +1034,7 @@ fn build_triage_offering(
                 id: id.clone(),
                 kind: t!("triage.kind.ecart").to_string(),
                 entity: ipv4.clone(),
+                observed_at: newest.map_or(chrono::DateTime::UNIX_EPOCH, |b| b.observed_at),
                 // ⚠️ Suppressed on a `hostname` row, where the diff two columns along already
                 // shows the observed name: the same value twice in one line reads as two facts.
                 name: if gap.field == "hostname" {
@@ -1062,6 +1087,7 @@ fn build_triage_offering(
                 id: id.clone(),
                 kind: label.to_string(),
                 entity: ipv4.clone(),
+                observed_at: newest.map_or(chrono::DateTime::UNIX_EPOCH, |b| b.observed_at),
                 name: observed_name.clone(),
                 field: String::new(),
                 declared: String::new(),
@@ -1132,9 +1158,23 @@ fn build_triage_offering(
             if let Some(&at) = newest.get(&value) {
                 // A later sighting of an address already queued: replace what the row shows and
                 // what the pane would act on, in place, keeping the queue's order.
+                //
+                // 🔴 **The comparison is the INSTANT, and it was the POSITION until 2026-09-09.**
+                // The overwrite was unconditional and correct only because
+                // `load_observation_facts` sorts `observed_at` ascending — a pure builder whose
+                // answer depended on an ordering stated nowhere in its signature. The blind review
+                // layer found the guard unable to tell *latest wins* from *last row wins*, and
+                // rebuilding the same two sightings in the other order produced the OLDER one's
+                // name under the NEWER one's age. `reconcile` was made order-independent the same
+                // day; this is the same fix on the display side, and the guard now builds both
+                // orders.
+                if batch.observed_at < rows[at].observed_at {
+                    continue;
+                }
                 let seen = relative_time(now, batch.observed_at);
                 rows[at].seen = seen.clone();
                 rows[at].age_seconds = (now - batch.observed_at).num_seconds().max(0);
+                rows[at].observed_at = batch.observed_at;
                 // The NAME moves with the freshness, for the reason story 6.4's review gave about
                 // the source: a row showing the first sighting's name beside the latest one's age
                 // would be two sightings in one line. A host that has since lost its lease shows
@@ -1166,6 +1206,7 @@ fn build_triage_offering(
                 id: id.clone(),
                 kind: t!("triage.kind.nouveau").to_string(),
                 entity: value.clone(),
+                observed_at: batch.observed_at,
                 name: hostname_of(&batch.facts).unwrap_or_default(),
                 field: "ipv4".to_string(),
                 declared: String::new(),
@@ -1481,6 +1522,9 @@ pub(crate) struct TriageState {
     /// The configured perimeter, already normalised by [`crate::AppConfig::from_env`] — `None`
     /// when unset OR blank, which is why this handler must not re-derive it.
     pub(crate) perimeter: Option<String>,
+    /// The resolver the scan asks for hostnames, from [`crate::AppConfig`] — `None` is the system
+    /// one. Carried as a PARAMETER, never re-read at the point of use (story 6.1's rule).
+    pub(crate) dns_server: Option<std::net::IpAddr>,
     /// What `/diagnostic` reports about the product itself (story 6b.9).
     ///
     /// 🔑 **Facts, carried as data.** The log descriptor is what `init_tracing` INSTALLED and the
@@ -1507,6 +1551,7 @@ pub(crate) struct TriageState {
 pub(crate) fn triage_router(
     pool: MySqlPool,
     perimeter: Option<String>,
+    dns_server: Option<std::net::IpAddr>,
     diagnostic: crate::diagnostic::DiagnosticFacts,
     document_enabled: bool,
 ) -> Router {
@@ -1530,6 +1575,7 @@ pub(crate) fn triage_router(
         .with_state(TriageState {
             pool,
             perimeter,
+            dns_server,
             diagnostic,
             document_enabled,
         })
@@ -1725,7 +1771,7 @@ pub async fn sources(State(state): State<TriageState>) -> Response {
         Err(error) => return server_error(error),
     };
     let body = SourcesBody {
-        source: build_sources(state.perimeter.clone(), last, now_utc()),
+        source: build_sources(state.perimeter.clone(), state.dns_server, last, now_utc()),
         s: source_strings(),
     };
     match body.render() {
@@ -4137,8 +4183,17 @@ mod tests {
         perimeter: Option<String>,
         last: Option<chrono::DateTime<chrono::Utc>>,
     ) -> String {
+        rendered_sources_with(perimeter, None, last)
+    }
+
+    /// The same, with the resolver stated — the axis `rendered_sources` fixes at *the system one*.
+    fn rendered_sources_with(
+        perimeter: Option<String>,
+        dns_server: Option<std::net::IpAddr>,
+        last: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> String {
         SourcesBody {
-            source: build_sources(perimeter, last, at(600)),
+            source: build_sources(perimeter, dns_server, last, at(600)),
             s: source_strings(),
         }
         .render()
@@ -4352,11 +4407,44 @@ mod tests {
         }
     }
 
+    /// 🔴 **The resolver in force reaches the SERVED PAGE, in both directions.**
+    ///
+    /// The boot refusal for `OPENCMDB_DNS_SERVER` is justified in the code by *"no screen anywhere
+    /// would tell you otherwise"* — and the 2026-09-09 review measured that this stayed true after
+    /// the variable shipped: the value reached the connector and no screen at all. On the story's
+    /// own field measurement it is the difference between 2 names and 37, so Guy's arbitration was
+    /// to name it here, on the one screen of this product that is entirely real.
+    ///
+    /// ⚠️ Asserted on the RENDER, never on the builder: story 6b.4b's four HIGH findings were one
+    /// mistake made four times, every guard reading the source while every defect lived in what
+    /// was served.
+    #[test]
+    fn the_sources_screen_names_the_resolver_it_asks() {
+        let configured = rendered_sources_with(
+            Some("192.0.2.0/24".into()),
+            Some("192.0.2.53".parse().unwrap()),
+            Some(at(0)),
+        );
+        assert!(
+            configured.contains("192.0.2.53"),
+            "an operator who pointed the scan somewhere must be able to SEE where: {configured}"
+        );
+        let system = rendered_sources_with(Some("192.0.2.0/24".into()), None, Some(at(0)));
+        assert!(
+            !system.contains("192.0.2.53"),
+            "and the unconfigured page must not name an address nobody chose"
+        );
+        assert!(
+            system.contains(&rust_i18n::t!("sources.resolver_system").to_string()),
+            "unset is not blank — the page says the machine's own resolver is asked: {system}"
+        );
+    }
+
     /// The view builder reads no clock of its own — the house rule for every builder in this file.
     #[test]
     fn build_sources_reads_no_clock_of_its_own() {
-        let a = build_sources(Some("192.0.2.0/24".into()), Some(at(0)), at(600));
-        let b = build_sources(Some("192.0.2.0/24".into()), Some(at(0)), at(600));
+        let a = build_sources(Some("192.0.2.0/24".into()), None, Some(at(0)), at(600));
+        let b = build_sources(Some("192.0.2.0/24".into()), None, Some(at(0)), at(600));
         assert_eq!(
             a.expect("a source").last_observed,
             b.expect("a source").last_observed
@@ -4477,14 +4565,33 @@ mod tests {
     /// would be reading a name that is no longer answered to, dated with an age that says it is.
     #[test]
     fn a_name_the_latest_sighting_does_not_carry_is_not_kept() {
-        let observations = vec![
-            batch(
-                "arp",
-                10,
-                vec![ipv4("192.0.2.77"), hostname("was-called-this")],
-            ),
-            batch("arp", 600, vec![ipv4("192.0.2.77")]),
-        ];
+        // ⚠️ **Both arrival orders are built.** The blind review layer of 2026-09-09 found the
+        // first form unable to tell *latest wins* from *last row wins*: the later sighting was
+        // also the later element, so a positional overwrite would have passed it unchanged.
+        let newest = batch("arp", 600, vec![ipv4("192.0.2.77")]);
+        let older = batch(
+            "arp",
+            10,
+            vec![ipv4("192.0.2.77"), hostname("was-called-this")],
+        );
+        let backwards = build_triage(
+            Vec::new(),
+            Vec::new(),
+            vec![newest.clone(), older.clone()],
+            at(1_000),
+            None,
+            false,
+        );
+        assert_eq!(
+            backwards
+                .rows
+                .iter()
+                .find(|r| r.id == "nouveau:192.0.2.77")
+                .map(|r| (r.name.clone(), r.age_seconds)),
+            Some((String::new(), 400)),
+            "the freshest sighting supplies the row whichever order the store hands them in"
+        );
+        let observations = vec![older, newest];
         let view = build_triage(Vec::new(), Vec::new(), observations, at(1_000), None, false);
         let row = view
             .rows
@@ -4603,6 +4710,25 @@ mod tests {
     }
 
     /// The shortening refuses the shapes that would print an empty name beside an address.
+    /// 🔴 **The first label must carry the property the whole name was admitted on.** Measured at
+    /// the 2026-09-09 review: `-.example.com` satisfies `reverse_dns::sanitise` — which asks for
+    /// one ASCII alphanumeric ANYWHERE — and the queue rendered a bare `-` as the machine's name.
+    #[test]
+    fn a_first_label_with_no_letter_and_no_digit_is_not_shown_alone() {
+        for name in ["-.example.com", "_.home.arpa", "---.local"] {
+            assert_eq!(
+                short_name(name),
+                name,
+                "{name:?}'s first label is not a name; the whole string is shown instead"
+            );
+        }
+        assert_eq!(
+            short_name("sw03.home.arpa"),
+            "sw03",
+            "and an ordinary name still shortens — the control that makes the rule mean something"
+        );
+    }
+
     #[test]
     fn a_name_that_cannot_be_shortened_is_shown_whole() {
         assert_eq!(

@@ -47,8 +47,13 @@ const LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
 /// How many times one lookup is tried. One: a retry doubles the worst case to buy a name.
 const LOOKUP_ATTEMPTS: usize = 1;
 
-/// The longest name a PTR answer may carry, per RFC 1035 §2.3.4. A longer one is refused rather
-/// than truncated — a truncated hostname is a WRONG hostname, and this product does not guess.
+/// The longest name a PTR answer may carry: RFC 1035 §2.3.4 caps the wire form at 255 octets, of
+/// which 253 remain in the dotted presentation form. A longer one is refused rather than truncated
+/// — a truncated hostname is a WRONG hostname, and this product does not guess.
+///
+/// ⚠️ **The 63-octet per-LABEL cap of the same section is not enforced here**, because hickory
+/// refuses an over-long label at parse time and never hands one to [`sanitise`]. Stated rather
+/// than implied: this constant is one of the section's two limits, not both.
 const MAX_NAME_LEN: usize = 253;
 
 /// A reverse-DNS lookup, pointed either at the system resolver or at one named address.
@@ -93,9 +98,11 @@ impl ReverseDns {
     /// learnt* — and none of them may stop a sweep that has already found the host.
     pub(crate) async fn name_of(&self, ip: Ipv4Addr) -> Option<String> {
         let lookup = self.resolver.reverse_lookup(ip).await.ok()?;
-        // The FIRST PTR record, which is what every resolver library does. A host with two PTR
-        // records is answering two names and this product picks neither as *the* name; it repeats
-        // the first, deterministically, and the day that matters is the day a rule reads it.
+        // The first PTR record `sanitise` ACCEPTS — an answer it refuses is not an answer, so the
+        // next one is tried rather than the host being left unnamed. A host with two acceptable
+        // PTR records is answering two names and this product picks neither as *the* name; it
+        // repeats the first, deterministically, and the day that matters is the day a rule reads
+        // it.
         lookup
             .answers()
             .iter()
@@ -134,7 +141,44 @@ pub(crate) fn sanitise(raw: &str) -> Option<String> {
     if !name.chars().any(|c| c.is_ascii_alphanumeric()) {
         return None;
     }
+    // 🔴 **A PTR answer that is an ADDRESS is not a name.** Measured at the 2026-09-09 code
+    // review: `192.0.2.10` and `10.2.0.192.in-addr.arpa` both satisfied every check above, the
+    // queue displayed `192` and `10` as the machine's name, and the documenting gesture WROTE the
+    // address into the declared record as its hostname. A resolver that answers an address has
+    // told us what we already knew, which is not an answer.
+    if name.parse::<std::net::IpAddr>().is_ok() || name.ends_with(".in-addr.arpa") {
+        return None;
+    }
+    // 🔴 **Directional formatting characters are refused, not escaped.** Askama escapes markup —
+    // the same review verified there is no injection here — but `U+202E` is not a character any
+    // escaping touches: it survived into the served page and into the declared record, and
+    // everything after it on that row renders right to left. A name that rearranges the line it
+    // is displayed on is not a name this product repeats.
+    //
+    // ⚠️ **An enumeration cannot claim the completeness of a property** (story 5.12's sentence,
+    // met again). This is the bidi-control and default-ignorable set, widened ONCE and stated: a
+    // tripwire against the character a resolver hands you, never a barrier against every glyph
+    // that can mislead an eye.
+    if name.chars().any(is_directional_or_ignorable) {
+        return None;
+    }
     Some(name.to_string())
+}
+
+/// A character that reorders or hides the text around it — refused in a hostname.
+///
+/// The bidi overrides and isolates (`U+202A`–`U+202E`, `U+2066`–`U+2069`), the zero-width and
+/// word-joining set, and the interlinear annotation controls. See [`sanitise`] for why this is a
+/// stated enumeration rather than a property.
+fn is_directional_or_ignorable(c: char) -> bool {
+    matches!(c,
+        '\u{200b}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{2069}'
+            | '\u{feff}'
+            | '\u{fff9}'..='\u{fffb}'
+    ) || c.is_control()
 }
 
 #[cfg(test)]
@@ -172,6 +216,56 @@ mod tests {
         }
     }
 
+    /// 🔴 **A PTR answer that is an address is not an answer** — found at the 2026-09-09 review,
+    /// where the queue rendered `192` as a machine's name and the gesture wrote the address into
+    /// the declared record as its hostname.
+    #[test]
+    fn refuses_an_answer_that_is_an_address() {
+        for address in [
+            "192.0.2.10",
+            "192.0.2.10.",
+            "2001:db8::1",
+            "10.2.0.192.in-addr.arpa.",
+        ] {
+            assert_eq!(
+                sanitise(address),
+                None,
+                "{address:?} tells the operator what they already knew"
+            );
+        }
+        assert_eq!(
+            sanitise("printer-192-0-2-10.home.arpa."),
+            Some("printer-192-0-2-10.home.arpa".to_string()),
+            "a name that merely CONTAINS digits and dashes is still a name"
+        );
+    }
+
+    /// 🔴 **A bidi override survived into the served page and into the declared record.** Askama
+    /// escapes markup — verified, there is no injection here — and escaping does not touch
+    /// `U+202E`: everything after it renders right to left, so a hostname can rearrange the row it
+    /// sits on. A hostname is data an operator does not control: it comes from whoever answers the
+    /// `PTR` query.
+    #[test]
+    fn refuses_a_name_that_rearranges_the_line_it_is_shown_on() {
+        for hostile in [
+            "nas\u{202e}01.evil.example",
+            "a\u{200b}b.example",
+            "\u{feff}nas-01.example",
+            "nas\u{2066}01.example",
+        ] {
+            assert_eq!(
+                sanitise(hostile),
+                None,
+                "{hostile:?} carries a directional or invisible control"
+            );
+        }
+        assert_eq!(
+            sanitise("naïve-hôte.home.arpa."),
+            Some("naïve-hôte.home.arpa".to_string()),
+            "and an ordinary accented name is untouched — the refusal is about CONTROLS"
+        );
+    }
+
     #[test]
     fn refuses_an_empty_answer() {
         assert_eq!(sanitise(""), None);
@@ -190,7 +284,15 @@ mod tests {
         assert_eq!(
             sanitise(&at_the_limit),
             Some(at_the_limit.clone()),
-            "the limit itself is admitted; the refusal starts one character later"
+            "the limit itself is admitted"
+        );
+        // ⚠️ And the refusal really does start ONE character later. The blind review layer of
+        // 2026-09-09 found the message claiming this over a specimen 263 characters long: an
+        // off-by-one in the comparison was asserted by nothing.
+        assert_eq!(
+            sanitise(&"b".repeat(MAX_NAME_LEN + 1)),
+            None,
+            "the refusal starts one character past the limit, measured at the boundary itself"
         );
     }
 

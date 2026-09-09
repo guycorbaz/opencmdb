@@ -10,7 +10,9 @@
 //! costs no DNS traffic at all; which resolver is asked is [`crate::reverse_dns`]'s subject, and
 //! the answer decided the shape of the whole thing.
 //!
-//! Wired into the running app in a later step; the contract + a gated network test prove it.
+//! ⚠️ It IS wired into the running app — `spawn_scan_loop` builds it from `OPENCMDB_SCAN_CIDR` and
+//! drives it on a schedule. This line read *"wired in a later step"* until 2026-09-09, when the
+//! blind review layer noticed the diff editing the lines above it and leaving it standing.
 #![allow(dead_code)]
 
 use std::collections::BTreeSet;
@@ -94,10 +96,21 @@ impl ArpPingConnector {
     }
 }
 
-/// Expand an IPv4 CIDR (`addr/prefix`) into its host addresses — excluding the network and
-/// broadcast addresses for prefixes `<= 30`. Rejects prefixes below `/22` so a fat-fingered
-/// subnet cannot launch a huge scan (bounds it to ~1024 hosts).
-pub fn subnet_hosts(cidr: &str) -> Result<Vec<Ipv4Addr>, String> {
+/// The NETWORK address and prefix a CIDR names, whatever address inside it was written.
+///
+/// # 🔑 One parser, so two readers cannot disagree about what a perimeter IS
+///
+/// `192.0.2.0/24`, `192.0.2.1/24` and `192.0.2.0/024` all name the same 254 hosts, and before
+/// 2026-09-09 [`derived_connector_id`] hashed the raw string — so an operator who wrote one
+/// spelling and later corrected it to another had **two sources over one network**, the retired
+/// one holding a field in a conflict nothing could close. Measured at that day's code review, on
+/// four spellings. The normaliser was already in this file; it was simply not consulted.
+///
+/// # Errors
+///
+/// The reason as a sentence: no `/`, an address or prefix that does not parse, a prefix above 32,
+/// or a subnet below `/22` — which is refused so a fat-fingered mask cannot launch a huge scan.
+pub fn parse_cidr(cidr: &str) -> Result<(Ipv4Addr, u32), String> {
     let (addr, prefix) = cidr.split_once('/').ok_or("expected `address/prefix`")?;
     let base: Ipv4Addr = addr
         .parse()
@@ -116,7 +129,15 @@ pub fn subnet_hosts(cidr: &str) -> Result<Vec<Ipv4Addr>, String> {
     } else {
         u32::MAX << (32 - prefix)
     };
-    let network = u32::from(base) & mask;
+    Ok((Ipv4Addr::from(u32::from(base) & mask), prefix))
+}
+
+/// Expand an IPv4 CIDR (`addr/prefix`) into its host addresses — excluding the network and
+/// broadcast addresses for prefixes `<= 30`. Rejects prefixes below `/22` so a fat-fingered
+/// subnet cannot launch a huge scan (bounds it to ~1024 hosts).
+pub fn subnet_hosts(cidr: &str) -> Result<Vec<Ipv4Addr>, String> {
+    let (network, prefix) = parse_cidr(cidr)?;
+    let network = u32::from(network);
     let count = 1u32 << (32 - prefix);
     let mut hosts = Vec::new();
     for i in 0..count {
@@ -329,9 +350,16 @@ pub(crate) const SOURCE_NAME_KEY: &str = "sources.name.arp_ping";
 /// sightings of the old one stay in the store as a source that has stopped talking — registered,
 /// and the real closure is Epic 11's source registry.
 pub(crate) fn derived_connector_id(cidr: &str) -> ConnectorId {
+    // ⚠️ The NETWORK, never the string the operator typed. Four spellings of one subnet minted
+    // four sources until the 2026-09-09 review measured it; an unparseable value keeps its raw
+    // form, because there is no network to name and the scan will refuse it anyway.
+    let perimeter = parse_cidr(cidr).map_or_else(
+        |_| cidr.to_string(),
+        |(network, prefix)| format!("{network}/{prefix}"),
+    );
     ConnectorId::from_uuid(Uuid::new_v5(
         &Uuid::NAMESPACE_OID,
-        format!("opencmdb:arp_ping:{cidr}").as_bytes(),
+        format!("opencmdb:arp_ping:{perimeter}").as_bytes(),
     ))
 }
 
@@ -426,24 +454,40 @@ mod tests {
     /// the descriptor's. Making the declaration conditional on `dns_server` would say *"this
     /// source cannot see hostnames"* to an operator who simply has no PTR records — the
     /// fabricated absence NFR7 forbids, on the descriptor side.
-    #[test]
-    fn the_hostname_is_declared_whichever_resolver_is_asked() {
+    ///
+    /// ⚠️ **The blind review layer of 2026-09-09 found the first form measuring nothing about the
+    /// resolver**: the assertion the test is named for sat OUTSIDE the loop, and `declared_kinds`
+    /// takes no argument, so the conditional declaration this test argues against is
+    /// unrepresentable in the function under test. What carries it now is the DESCRIPTOR the
+    /// connector really publishes — `poll`'s `PollSummary`, built from the same connector whose
+    /// resolver was varied.
+    #[tokio::test]
+    async fn the_hostname_is_declared_whichever_resolver_is_asked() {
         for server in [None, Some("192.0.2.53".parse().unwrap())] {
-            let connector = ArpPingConnector::new(
-                ConnectorId::from_uuid(Uuid::nil()),
-                scope(),
-                vec![Ipv4Addr::LOCALHOST],
-            )
-            .with_dns_server(server);
+            let mut connector =
+                ArpPingConnector::new(ConnectorId::from_uuid(Uuid::nil()), scope(), Vec::new())
+                    .with_dns_server(server);
             assert_eq!(
                 connector.dns_server, server,
-                "the builder carries the operator's choice"
+                "the premise: the builder carries the operator's choice"
+            );
+            // An empty target list opens the socket and pings nothing, so this reaches the real
+            // descriptor without touching the network.
+            let mut sink = VecSink::default();
+            let Ok(summary) = connector
+                .poll(now(), &mut sink, CancellationToken::new())
+                .await
+            else {
+                // No ICMP socket in this environment: the descriptor cannot be reached here, and
+                // saying so is better than asserting the constant and calling it a measurement.
+                return;
+            };
+            assert!(
+                summary.capabilities.kinds.contains(&FactKind::Hostname),
+                "the descriptor says what the source ASKS for, never what one network answered — \
+                 and it says it with {server:?} configured"
             );
         }
-        assert!(
-            declared_kinds().contains(&FactKind::Hostname),
-            "the descriptor says what the source ASKS for, never what one network answered"
-        );
     }
 
     /// **Story 5.14 AC3, second half — the pin that carries the structural zero.**
@@ -470,7 +514,7 @@ mod tests {
         assert_eq!(
             facts.iter().map(Fact::kind).collect::<BTreeSet<_>>(),
             declared_kinds(),
-            "and the two halves agree today — the cross-check whose ABSENCE let a pin on one of              them stay green while the other changed"
+            "and the two halves agree today — the cross-check whose ABSENCE let a pin on one of              them stay green while the other changed. ⚠️ For a NAMED host: the sibling below              measures the unnamed case, where the vector is a strict subset of the declaration              because a name that was not learnt is not a fact (NFR7)"
         );
     }
 
@@ -538,23 +582,42 @@ mod tests {
     /// reference deployment's store carries EIGHT `connector_id`s for one connector, one per boot
     /// since July. `reconcile` compares the newest sighting of each source, so each dead boot
     /// would keep voting with the last thing it ever saw.
+    /// ⚠️ **The stability half is pinned against a LITERAL, not against a second call.** The
+    /// blind review layer of 2026-09-09 found the first form asserting purity where its name
+    /// promises stability across runs: two calls in one process agree for any derivation,
+    /// including a clock-derived one. This literal is what a restart — and a release — must
+    /// reproduce.
     #[test]
     fn the_same_perimeter_yields_the_same_source_across_restarts() {
+        assert_eq!(
+            derived_connector_id("192.0.2.0/24").to_string(),
+            "195df73c-b692-5608-9f18-f5a79b94939f",
+            "pinned: a derivation that changed between runs would pass a self-comparison and \
+             fail here, which is the whole difference between pure and stable"
+        );
         assert_eq!(
             derived_connector_id("192.0.2.0/24"),
             derived_connector_id("192.0.2.0/24"),
             "the identity is derived from what the source IS, so a restart changes nothing"
         );
+        // 🔴 Four spellings of ONE network are ONE source. Measured at the 2026-09-09 review:
+        // hashing the raw string gave four ids, so correcting a typo in `OPENCMDB_SCAN_CIDR`
+        // left two sources over one network and an unclosable conflict between them.
+        for spelling in ["192.0.2.1/24", "192.0.2.77/24", "192.0.2.0/024"] {
+            assert_eq!(
+                derived_connector_id(spelling),
+                derived_connector_id("192.0.2.0/24"),
+                "{spelling:?} names the same 254 hosts, so it is the same source"
+            );
+        }
         assert_ne!(
             derived_connector_id("192.0.2.0/24"),
             derived_connector_id("198.51.100.0/24"),
             "and two perimeters are two sources — what they see cannot be compared as one"
         );
-        assert_ne!(
-            derived_connector_id("192.0.2.0/24").as_uuid(),
-            Uuid::nil(),
-            "never the nil sentinel, which D21 reserves"
-        );
+        // ⚠️ No `assert_ne!` against the nil UUID here: a v5 of a fixed non-empty name is nil only
+        // by cryptographic accident, so it would be an assertion that cannot fail. The literal
+        // above pins the value, which covers it and more.
     }
 
     #[test]

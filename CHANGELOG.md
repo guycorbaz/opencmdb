@@ -10,6 +10,12 @@ schema will move.
 
 ## Unreleased — the queue says a name, and a rename is a gap
 
+⚠️ **A name the resolver refuses is not a name.** An answer that is itself an IP address, or that
+carries a directional or invisible control character, is discarded rather than repeated: the first
+told the operator what they already knew and the second reorders the line it is displayed on. A
+hostname is the first data in this product that neither the operator nor the product controls — it
+comes from whoever answers the query.
+
 **The scan asks who answers.** Every host that replies to a ping is now looked up in reverse DNS,
 and the name it answers to is recorded as an observed fact and shown in the triage queue. On the
 reference deployment that turns a list of 69 bare addresses into `sw03`, `wifi01-grange`,
@@ -42,15 +48,18 @@ minute earlier that was reporting two. The comparison now reads the most recent 
 source. A conflict is again what FR16 means: two sources that cannot both be right.
 
 **A restart no longer creates a second source.** `connector_id` was minted fresh at every boot, so
-the reference store carries **eight** ids for one connector, seven of them dead — and under the
-rule above a dead source's last words would have kept voting for ever. It is now derived from what
-the source is and what it watches. ⚠️ This also stabilises the source label on screen, which was
+the reference store carries **eight** ids for one connector, seven of them dead. It is now derived
+from what the source is and what it watches — **from the NETWORK, not from the string you typed**:
+`192.0.2.0/24`, `192.0.2.1/24` and `192.0.2.0/024` name the same 254 hosts and are one source, so
+correcting a typo in `OPENCMDB_SCAN_CIDR` no longer leaves two sources arguing over one network. ⚠️ This also stabilises the source label on screen, which was
 the top 32 bits of a v7 UUID and therefore a clock reading that rolled every 65 seconds.
 
 ⚠️ **Upgrading does not repair existing rows**: sightings recorded before this release keep the
-per-boot source ids they were written with. They carry no hostname, so they cannot conflict on the
-field that matters, and they age out of relevance rather than being rewritten — this product does
-not edit observations (NFR5).
+per-boot source ids they were written with, and **nothing ages them out** — the store is
+append-only and never pruned, so each of those ids keeps one live vote for ever. What makes them
+harmless is not time but content: they carry no hostname, so they can only agree with the present
+on the perimeter key. *That is a property of today's data, not a mechanism.* The product does not
+edit observations (NFR5); the mechanism is a source registry, Epic 11's.
 
 ---
 
