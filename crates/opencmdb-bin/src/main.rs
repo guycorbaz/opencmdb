@@ -1621,6 +1621,7 @@ mod tests {
         repo::insert_declared_attribute(&pool, "e-inv", "ipv4", "192.0.2.77")
             .await
             .expect("declare");
+        let pool_for_cleanup = pool.clone();
         let app = app(pool, config(false, Some(pair())), facts());
         let response = app
             .oneshot(
@@ -1653,6 +1654,16 @@ mod tests {
             real < marker,
             "the operator's own record must come BEFORE the demonstration, not after it"
         );
+        // ⚠️ **Left as it was found.** This suite shares one database and `nfr5_pool` cleans at the
+        // START, so a row left here reaches whatever runs next — and `the_marker_partition_…`
+        // reads the store: with a declared entity present, `/triage` renders a detail pane, which
+        // is how CI found the attribute-quote defect in `visible_text`. The defect is fixed; the
+        // coupling is not, and a test that seeds should unseed.
+        sqlx::query("DELETE FROM declared_attribute WHERE entity_id = ?")
+            .bind("e-inv")
+            .execute(&pool_for_cleanup)
+            .await
+            .expect("clean up after this test");
     }
 
     /// 🔴 **The filter narrows THROUGH THE ROUTE — the guard that could see what the pure one

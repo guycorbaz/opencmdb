@@ -906,7 +906,32 @@ pub(crate) fn visible_text(html: &str) -> String {
     // and the operator reads none of them.
     let mut text = String::new();
     let mut depth = 0_usize;
+    // 🔴 **Quoted attribute values are TRACKED, and CI is what found out why.** A `>` inside an
+    // attribute closed the tag as far as this walker was concerned, so everything after it became
+    // *visible text*. The live specimen is `/triage`'s
+    // `hx-on::before-swap="if (event.detail.xhr.status >= 400) …"`: the `>=` ended the tag and
+    // `event.detail.shouldSwap` was then reported as an i18n key rendered to the operator.
+    //
+    // ⚠️ **It only appears when a detail pane renders**, which needs rows in the store — so it was
+    // invisible on an empty database and reddened in CI, where an earlier test had left some. *A
+    // false positive that depends on the state of the store is one nobody can reproduce on
+    // demand*, and this file's own neighbouring comment says what such a guard is worth.
+    let mut quote: Option<char> = None;
     for c in html.chars() {
+        if depth > 0 {
+            match (quote, c) {
+                (Some(open), c) if c == open => {
+                    quote = None;
+                    continue;
+                }
+                (Some(_), _) => continue,
+                (None, '"' | '\'') => {
+                    quote = Some(c);
+                    continue;
+                }
+                (None, _) => {}
+            }
+        }
         match c {
             // 🔴 **A SPACE AT EVERY TAG BOUNDARY, and it took a live database to find out why.**
             // Without it the extractor joins across tags with nothing between them, so
@@ -936,6 +961,35 @@ mod tests {
     use super::*;
     use crate::state_vocabulary::{BINDING_STATE_AXIS, QUALIFIER_SEPARATOR};
     use std::collections::BTreeSet;
+
+    /// 🔴 **A `>` inside a quoted attribute does not end the tag.** CI found this and a local run
+    /// could not: the specimen is `/triage`'s real markup, and the pane that carries it renders
+    /// only when the store has rows, so an empty database never produced it.
+    ///
+    /// Without the fix, `visible_text` treated `>= 400) event.detail.shouldSwap = true"` as text
+    /// the operator reads, and [`key_names_in_text`] then reported `event.detail.shouldSwap` as an
+    /// i18n key rendered to the screen — *a check that fails for the wrong reason is worth
+    /// nothing*, which is what this helper's own doc says one file above.
+    #[test]
+    fn an_angle_bracket_inside_an_attribute_is_not_the_end_of_the_tag() {
+        let html = r#"<p id="x" hx-on::before-swap="if (event.detail.xhr.status >= 400) event.detail.shouldSwap = true">Documenté</p>"#;
+        assert_eq!(
+            visible_text(html).trim(),
+            "Documenté",
+            "everything inside the tag is markup, `>=` included"
+        );
+        assert!(
+            key_names_in_text(html).is_empty(),
+            "so no i18n key is reported: {:?}",
+            key_names_in_text(html)
+        );
+        // The control: a real dotted key in the TEXT is still caught, so the fix narrowed the
+        // helper rather than blinding it.
+        assert_eq!(
+            key_names_in_text("<p>nav.dashboard</p>"),
+            vec!["nav.dashboard".to_string()]
+        );
+    }
 
     /// Every `class="…"` literal a template names, with any Askama expression removed.
     fn body_of(query: &ScreenQuery) -> String {
