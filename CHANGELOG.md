@@ -8,6 +8,61 @@ schema will move.
 
 ---
 
+## Unreleased — the queue says a name, and a rename is a gap
+
+⚠️ **A name the resolver refuses is not a name.** An answer that is itself an IP address, or that
+carries a directional or invisible control character, is discarded rather than repeated: the first
+told the operator what they already knew and the second reorders the line it is displayed on. A
+hostname is the first data in this product that neither the operator nor the product controls — it
+comes from whoever answers the query.
+
+**The scan asks who answers.** Every host that replies to a ping is now looked up in reverse DNS,
+and the name it answers to is recorded as an observed fact and shown in the triage queue. On the
+reference deployment that turns a list of 69 bare addresses into `sw03`, `wifi01-grange`,
+`imprimante-bureau` — and it is the cheapest fact this product can learn about a host it can only
+ping.
+
+**`OPENCMDB_DNS_SERVER` — set it to your DHCP server.** Unset, the product asks the system
+resolver, which is the unsurprising default and, on a real home network, nearly useless: measured
+over those 69 addresses, the configured system resolver answered for **2** and the router that
+handed out the leases answered for **37**. A small network resolves its own hosts at the box that
+leases the addresses, and that box is usually not the resolver the hosts are pointed at. A value
+that is not a bare IP address refuses to start, by name.
+
+🔑 **A documented record now has two fields, so it can drift** — and this is the release where the
+product's founding claim is exercised end to end for the first time. Until now the only declarable
+field was `ipv4`, which is also the key by which an entity is recognised, so a documented machine
+could never disagree with the network. Document a host today and rename it tomorrow, and the queue
+shows one **Gap** — `wifi01-grange.home.arpa → wifi01-grange-2.home.arpa` — which the gesture can
+close.
+
+### 🔴 Two corrections the hostname made visible, and neither was new
+
+**A source that changes its mind is a history, not a disagreement.** `reconcile` compared a
+declared value against *every observation ever recorded*, and refused to conclude when two of them
+disagreed. That was written when a field could only come from two SOURCES; `hostname` is the first
+field on which one source can disagree with itself, an hour apart. Measured on a real network
+before the fix: a renamed host produced a *Conflict* row **and** an *Absence* row, neither closable
+by any gesture, with the *Absence* pane reading *"no source reported a value"* about a host seen one
+minute earlier that was reporting two. The comparison now reads the most recent sighting of each
+source. A conflict is again what FR16 means: two sources that cannot both be right.
+
+**A restart no longer creates a second source.** `connector_id` was minted fresh at every boot, so
+the reference store carries **eight** ids for one connector, seven of them dead. It is now derived
+from what the source is and what it watches — **from the NETWORK, not from the string you typed**:
+`192.0.2.0/24`, `192.0.2.1/24` and `192.0.2.0/024` name the same 254 hosts and are one source, so
+correcting a typo in `OPENCMDB_SCAN_CIDR` no longer leaves two sources arguing over one network. ⚠️ This also stabilises the source label on screen, which was
+the top 32 bits of a v7 UUID and therefore a clock reading that rolled every 65 seconds.
+
+⚠️ **Upgrading does not repair existing rows**: sightings recorded before this release keep the
+per-boot source ids they were written with, and **nothing ages them out** — the store is
+append-only and never pruned, so each of those ids keeps one live vote for ever. What makes them
+harmless is not time but content: they carry no hostname, so they can only agree with the present
+on the perimeter key. *That is a property of today's data, not a mechanism.* The product does not
+edit observations (NFR5); the mechanism is a source registry, Epic 11's.
+
+---
+
 ## 0.3.1 — the button says what it does
 
 One label, and the reason it changed is worth more than the change.

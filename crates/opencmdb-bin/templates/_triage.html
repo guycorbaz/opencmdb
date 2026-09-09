@@ -54,6 +54,10 @@
           <span class="kind mono">{{ row.kind }}</span>
           <span class="subject">
             <span class="entity mono">{{ row.entity }}</span>
+            {#- The name the address answers to, when the sighting carried one. Display only: the
+                 row is still addressed by its address, and a host with no PTR record — 32 of 69 on
+                 the reference network — simply shows none. -#}
+            {% if !row.name.is_empty() %}<span class="entity-name">{{ row.name }}</span>{% endif %}
             {% if !row.field.is_empty() %}<span class="field mono">{{ row.field }}</span>{% endif %}
             {% if row.counted %}<span class="count">{{ row.count }}</span>{% endif %}
             {#- The field diff, as the mock puts it: the declared value, the arrow, the observed

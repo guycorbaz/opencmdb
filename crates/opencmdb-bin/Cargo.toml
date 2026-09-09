@@ -58,9 +58,10 @@ tracing = "0.1.44"
 # Daily-rotating file logs (non-blocking), for on-NAS debugging alongside stdout.
 tracing-appender = "0.2.3"
 # Mint client-side obs_ids (UUIDv7 — sortable by creation time, D48).
-uuid = { version = "1.24.0", features = ["v7"] }
+uuid = { version = "1.24.0", features = ["v5", "v7"] }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 zeroize = "1.9.0"
+hickory-resolver = "0.26.2"
 
 [dev-dependencies]
 # opencmdb-core is ALREADY a normal dependency above; this entry adds the `test-support` FEATURE

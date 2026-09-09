@@ -1390,6 +1390,7 @@ mod tests {
         let router = crate::page::triage_router(
             pool,
             Some("192.0.2.0/24".to_string()),
+            None,
             facts(security_posture(true, false)),
             // This test is about `/diagnostic`, not about the documenting gesture.
             false,
