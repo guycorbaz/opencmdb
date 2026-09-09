@@ -335,6 +335,60 @@ triage.n_fields_one:
 triage.n_fields_other:
   en: "%{n} fields"
   fr: "%{n} champs"
+inventory.title:
+  en: "Your records"
+  fr: "Vos fiches"
+inventory.lede:
+  en: "What you have documented. A row here is a record you wrote; an address nobody has claimed is a question, and questions are in the triage."
+  fr: "Ce que vous avez documenté. Une ligne est une fiche que vous avez écrite ; une adresse que personne ne revendique est une question, et les questions sont dans le triage."
+inventory.none_before:
+  en: "Nothing documented yet. A record is written in the"
+  fr: "Rien de documenté pour l'instant. Une fiche s'écrit dans la"
+inventory.none_after:
+  en: "queue: select a row the network shows, and press the button that adds it."
+  fr: "file de triage : choisissez une ligne que le réseau montre, et pressez le bouton qui l'ajoute."
+inventory.col_name:
+  en: "Name"
+  fr: "Nom"
+inventory.col_ipv4:
+  en: "Address"
+  fr: "Adresse"
+inventory.col_fields:
+  en: "Declared"
+  fr: "Déclaré"
+inventory.col_origin:
+  en: "Written"
+  fr: "Écrit"
+inventory.col_documented:
+  en: "Documented"
+  fr: "Documenté"
+inventory.col_seen:
+  en: "Last seen"
+  fr: "Vu"
+inventory.unnamed:
+  en: "no name documented"
+  fr: "aucun nom documenté"
+inventory.origin_adopted:
+  en: "adopted from a sighting"
+  fr: "adopté depuis un constat"
+inventory.origin_manual:
+  en: "entered by hand"
+  fr: "saisi à la main"
+inventory.origin_unknown:
+  en: "provenance not recorded"
+  fr: "provenance non enregistrée"
+inventory.n_fields_one:
+  en: "%{n} field"
+  fr: "%{n} champ"
+inventory.n_fields_other:
+  en: "%{n} fields"
+  fr: "%{n} champs"
+inventory.n_entities_one:
+  en: "%{n} record"
+  fr: "%{n} fiche"
+inventory.n_entities_other:
+  en: "%{n} records"
+  fr: "%{n} fiches"
 meta.no_source:
   en: "No source"
   fr: "Aucune source"

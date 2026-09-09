@@ -8,7 +8,29 @@ schema will move.
 
 ---
 
-## Unreleased — the queue says a name, and a rename is a gap
+## Unreleased — the queue says a name, a rename is a gap, and documenting no longer hides a machine
+
+🔑 **`/devices` shows what YOU documented.** Until now it showed eight invented machines and none of
+yours, so the one live control in this product — *Add*, on a triage row — wrote a record that landed
+nowhere you could see. The gesture worked and its result was invisible, which is a worse dead end
+than a screen that says it is empty. Your records come first now, with the name, the address, how
+many fields they carry, whether they were adopted from a sighting or entered by hand, when they were
+written, and **when the network last showed the address** — a documented machine nobody has seen for
+a month is this product's own subject.
+
+The example list keeps its place below them, under its marker: it goes on showing the shape Epic 6's
+grouping will fill. ⚠️ With one or two records of your own the screen still shows mostly
+demonstration, and putting yours above it mitigates that rather than removing it.
+
+⚠️ **`/devices` now needs the database.** It read nothing before, so it always rendered; it answers
+an honest 500 within five seconds when the store cannot be reached, like `/triage` and `/dashboard`.
+
+🔑 **And `/sources` stopped hanging.** It has read the store since `v0.2.0` without a time budget, so
+an unreachable database left it holding the browser for **thirty seconds** before the calm sentence
+arrived. Nobody had noticed; the guard written for the inventory found it on its first run, because
+it walks the route table instead of a list.
+
+### The reverse-DNS half
 
 ⚠️ **A name the resolver refuses is not a name.** An answer that is itself an IP address, or that
 carries a directional or invisible control character, is discarded rather than repeated: the first
