@@ -11,15 +11,16 @@ use axum::extract::{Path, State};
 use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
-use opencmdb_core::observation::{
-    ConnectorId, Fact, FactKind, L2DomainId, ObsId, Observation, Scope, VantageId,
-};
+use opencmdb_core::observation::{ConnectorId, Fact, L2DomainId, Observation, Scope, VantageId};
 use opencmdb_core::{AbstentionCause, reconcile};
 use sqlx::MySqlPool;
 use uuid::Uuid;
 
 use crate::identity_view::{IdentityView, build_identity_view};
-use crate::repo::{classify, count_engine_reach, load_declared_attributes, load_observation_facts};
+use crate::repo::{
+    ObservedBatch, classify, count_engine_reach, load_declared_attributes, load_observation_facts,
+};
+use crate::sources_view::{SourcesBody, build_sources, source_strings};
 
 /// Committed front-end assets, embedded into the binary (no CDN, self-hosted single binary).
 #[derive(rust_embed::Embed)]
@@ -342,6 +343,40 @@ fn display_fact(fact: &Fact) -> Option<(String, String)> {
     }
 }
 
+/// The name a batch's facts carry, if any — the display half of story 6.7's hostname.
+///
+/// The FIRST hostname fact wins, which is the same rule [`gap::project`] applies when it builds the
+/// comparable pairs, and the same one the documenting gesture then writes. Three readers, one rule:
+/// were they to differ, the row would show one name, the record would store another, and the gap
+/// the operator just closed would still be open.
+fn hostname_of(facts: &[Fact]) -> Option<String> {
+    facts.iter().find_map(|fact| match fact {
+        Fact::Hostname { name, .. } => Some(short_name(name)),
+        _ => None,
+    })
+}
+
+/// The first label of a name, for a queue row that has to stay one line.
+///
+/// 🔴 **Guy's arbitration, 2026-09-09, and it was taken at a BROWSER.** The row shows the address,
+/// the name, the field and the freshness; the reference network's real names run to
+/// `swiss-domotique-plug-5751f8.home.arpa` (37 characters) and `Miele-001D63FFFEACAF10.home.arpa`,
+/// which wrapped the row onto two lines — inconsistently, since the shorter names did not. No test
+/// could see that: the served text was correct in every respect a string assertion can check.
+///
+/// ⚠️ **This shortens the DISPLAY and nothing else.** The observed fact carries the whole name, the
+/// documenting gesture writes the whole name, and `reconcile` compares the whole name — so what is
+/// declared is what the network said, and only the queue's line is abbreviated. Precedent:
+/// [`source_label`] already shows eight characters of a source's UUID.
+fn short_name(name: &str) -> String {
+    match name.split_once('.') {
+        // A leading dot would make the first label empty, and an empty label displayed beside an
+        // address reads as a name the host does not have. Keep the whole string instead.
+        Some((first, _)) if !first.is_empty() => first.to_string(),
+        _ => name.to_string(),
+    }
+}
+
 /// Does an observation carry the perimeter identity `("ipv4", ipv4)`?
 fn in_perimeter(facts: &[Fact], ipv4: &str) -> bool {
     facts
@@ -351,18 +386,49 @@ fn in_perimeter(facts: &[Fact], ipv4: &str) -> bool {
 
 /// Build the [`Observation`] the engine reconciles from a bag of facts. The engine reads only the
 /// facts, so the ids/scope/time are placeholders — this keeps the page independent of them.
-fn observation_from_facts(facts: Vec<Fact>) -> Observation {
+fn observation_from_batch(batch: &ObservedBatch) -> Observation {
     Observation {
-        obs_id: ObsId::from_uuid(Uuid::nil()),
-        connector_id: ConnectorId::from_uuid(Uuid::nil()),
-        observed_at: chrono::DateTime::from_timestamp(0, 0).expect("epoch is representable"),
+        obs_id: batch.id,
+        // 🔴 **The source and the instant used to be `nil` and the epoch, for every batch.** The
+        // doc here read *"the engine reads only the facts"*, which was true until 2026-09-09: since
+        // `reconcile` compares only the most recent sighting of each SOURCE, feeding it one
+        // constant source at one constant instant would collapse every observation into an
+        // arbitrary single one. The comment was the kind that goes silently false when the callee
+        // changes, so the placeholders are gone rather than re-explained.
+        connector_id: ConnectorId::from_uuid(source_uuid(&batch.connector_id)),
+        observed_at: batch.observed_at,
+        // The scope is still a placeholder: reconciliation is scope-blind (it compares one
+        // entity's declared fields against what was seen at its address), and the identity engine
+        // — which is what reads a scope — never comes through here.
         scope: Scope {
             l2_domain: L2DomainId::from_uuid(Uuid::nil()),
             vantage: VantageId::from_uuid(Uuid::nil()),
         },
-        facts,
+        facts: batch.facts.clone(),
         raw: None,
     }
+}
+
+/// The source's id as the domain wants it — a UUID.
+///
+/// ⚠️ **A value that is not a UUID gets a DERIVED one rather than nil**, and the difference is not
+/// academic: `reconcile` groups by this id, so folding every unparseable value onto one constant
+/// would merge two genuinely different sources into one and SILENCE the conflict between them.
+/// The derivation is deterministic within a call, which is all the grouping needs.
+///
+/// The store's column is a `CHAR(36)` this product writes itself, so the fallback is for a decode
+/// anomaly — and for the tests, which name their sources `"unifi"` and `"arp"` because that is
+/// what those tests are about.
+fn source_uuid(raw: &str) -> Uuid {
+    raw.parse::<Uuid>().unwrap_or_else(|_| {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        raw.hash(&mut hasher);
+        let high = hasher.finish();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        (raw, 0xC0FFEEu32).hash(&mut hasher);
+        Uuid::from_u128(u128::from(high) << 64 | u128::from(hasher.finish()))
+    })
 }
 
 /// PURE: shape the declared rows + observation facts into a renderable view. Picks the perimeter
@@ -370,7 +436,7 @@ fn observation_from_facts(facts: Vec<Fact>) -> Observation {
 /// reconciles it, and returns an honest empty view when there is no such entity.
 fn build_view(
     declared: Vec<(String, String, String)>,
-    observations: Vec<Vec<Fact>>,
+    observations: Vec<ObservedBatch>,
     preferred_ipv4: Option<String>,
 ) -> ReconciledView {
     // Group declared attributes by entity, preserving first-seen order.
@@ -412,11 +478,11 @@ fn build_view(
 
     // Observed rows: the projected facts of in-perimeter observations, de-duplicated in order.
     let mut observed: Vec<KeyValue> = Vec::new();
-    for facts in &observations {
-        if !in_perimeter(facts, &ipv4) {
+    for batch in &observations {
+        if !in_perimeter(&batch.facts, &ipv4) {
             continue;
         }
-        for (key, value) in facts.iter().filter_map(display_fact) {
+        for (key, value) in batch.facts.iter().filter_map(display_fact) {
             if !observed.iter().any(|r| r.key == key && r.value == value) {
                 observed.push(KeyValue { key, value });
             }
@@ -424,10 +490,7 @@ fn build_view(
     }
 
     // Reconcile through the pure engine.
-    let obs: Vec<Observation> = observations
-        .into_iter()
-        .map(observation_from_facts)
-        .collect();
+    let obs: Vec<Observation> = observations.iter().map(observation_from_batch).collect();
     let result = reconcile(("ipv4", &ipv4), &declared_pairs, &obs);
 
     let gaps = result
@@ -493,6 +556,14 @@ struct QueueRow {
     kind: String,
     /// The entity the row is about.
     entity: String,
+    /// The name the entity answers to, when the sighting carries one; empty otherwise.
+    ///
+    /// 🔑 **This is what a queue of addresses is missing, and it is display ONLY.** The row is
+    /// still addressed by `?sel=nouveau:{ipv4}` and the entity is still the address: a name is
+    /// what the network calls a host today, and this product does not let a DHCP-assigned name
+    /// become an identity. Empty for a host with no PTR record, which on the reference network is
+    /// 32 addresses out of 69 — so the column has to read well half-empty.
+    name: String,
     /// The field, for a row the engine names one for; empty otherwise.
     field: String,
     /// The declared value, when there is one.
@@ -887,10 +958,7 @@ fn build_triage_offering(
             .find(|p| p.entity_id == entity && p.attr_key == field)
     };
 
-    let obs: Vec<Observation> = observations
-        .iter()
-        .map(|batch| observation_from_facts(batch.facts.clone()))
-        .collect();
+    let obs: Vec<Observation> = observations.iter().map(observation_from_batch).collect();
 
     let mut rows: Vec<QueueRow> = Vec::new();
     let mut panes: Vec<(String, DetailPane)> = Vec::new();
@@ -917,6 +985,11 @@ fn build_triage_offering(
                 i64::MAX,
             ),
         };
+        // The name comes from the SAME sighting as the freshness and the source above. An entity
+        // nothing has been seen for shows none — never the name it answered to last month.
+        let observed_name = newest
+            .and_then(|b| hostname_of(&b.facts))
+            .unwrap_or_default();
 
         // 🔴 A CAUSE row is about the whole entity, so its declared meta-line is the entity's most
         // recent declared write — never `None`. Passing `None` made the Absence pane say *"2 champs
@@ -937,6 +1010,13 @@ fn build_triage_offering(
                 id: id.clone(),
                 kind: t!("triage.kind.ecart").to_string(),
                 entity: ipv4.clone(),
+                // ⚠️ Suppressed on a `hostname` row, where the diff two columns along already
+                // shows the observed name: the same value twice in one line reads as two facts.
+                name: if gap.field == "hostname" {
+                    String::new()
+                } else {
+                    observed_name.clone()
+                },
                 field: gap.field.clone(),
                 declared: gap.declared.clone(),
                 observed: gap.observed.clone(),
@@ -982,6 +1062,7 @@ fn build_triage_offering(
                 id: id.clone(),
                 kind: label.to_string(),
                 entity: ipv4.clone(),
+                name: observed_name.clone(),
                 field: String::new(),
                 declared: String::new(),
                 observed: String::new(),
@@ -1054,6 +1135,11 @@ fn build_triage_offering(
                 let seen = relative_time(now, batch.observed_at);
                 rows[at].seen = seen.clone();
                 rows[at].age_seconds = (now - batch.observed_at).num_seconds().max(0);
+                // The NAME moves with the freshness, for the reason story 6.4's review gave about
+                // the source: a row showing the first sighting's name beside the latest one's age
+                // would be two sightings in one line. A host that has since lost its lease shows
+                // no name rather than the name it used to answer to.
+                rows[at].name = hostname_of(&batch.facts).unwrap_or_default();
                 let key = rows[at].id.clone();
                 if let Some((_, pane)) = panes.iter_mut().find(|(id, _)| *id == key) {
                     // 🔴 The SOURCE moves with the freshness and the subject. It did not until
@@ -1080,6 +1166,7 @@ fn build_triage_offering(
                 id: id.clone(),
                 kind: t!("triage.kind.nouveau").to_string(),
                 entity: value.clone(),
+                name: hostname_of(&batch.facts).unwrap_or_default(),
                 field: "ipv4".to_string(),
                 declared: String::new(),
                 observed: value.clone(),
@@ -1234,12 +1321,12 @@ async fn reconcile_view(pool: &MySqlPool) -> Result<(ReconciledView, IdentityVie
     let observations = load_observation_facts(pool).await.map_err(server_error)?;
     let reach = count_engine_reach(pool).await.map_err(server_error)?;
     let preferred = std::env::var("OPENCMDB_ENTITY_IPV4").ok();
-    // 🔑 The comparison gets FACTS ONLY. `ObservedBatch` carries the source and the instant for the
-    // triage screen's meta-lines; `build_view` is handed neither, and the declared side's
-    // provenance is not loaded on this path at all — see `load_declared_provenance_for_display`.
-    let facts: Vec<Vec<Fact>> = observations.into_iter().map(|b| b.facts).collect();
+    // 🔑 The comparison gets the WHOLE batch since 2026-09-09: `reconcile` compares only the most
+    // recent sighting of each source, so the source and the instant are part of the comparison and
+    // no longer only the triage screen's meta-lines. The declared side's provenance is still not
+    // loaded on this path — see `load_declared_provenance_for_display`.
     Ok((
-        build_view(declared, facts, preferred),
+        build_view(declared, observations, preferred),
         build_identity_view(reach),
     ))
 }
@@ -1619,165 +1706,6 @@ pub async fn dashboard(State(state): State<TriageState>) -> Response {
     }
 }
 
-/// One capability line: a fact kind the source does or does not observe, with its sentence.
-struct KindLine {
-    /// The kind's name, in the operator's language.
-    label: String,
-    /// What its presence or absence MEANS to the operator — the unlock framing, never the fault one.
-    meaning: String,
-}
-
-/// Everything `/sources` renders: the product's real capability boundary, and its real freshness.
-struct SourceView {
-    /// The source's name, resolved — a TYPE name (see [`crate::arp_ping::SOURCE_NAME_KEY`]).
-    name: String,
-    /// Whether the product REFUSED this perimeter — measured with the connector's own parser.
-    ///
-    /// 🔴 A refused perimeter shown as an in-force one is the sharpest thing the code review found
-    /// on this screen: the product already knows the configuration is bad, and said so in a log
-    /// nobody reads. See [`build_sources`].
-    refused: bool,
-    /// The perimeter it was configured with.
-    ///
-    /// 🔑 **Not an `Option`, and the code review is why.** `build_sources` returns `None` outright
-    /// when no perimeter is configured, so inside a `SourceView` this could never be absent — and
-    /// the template carried a `when None` arm that could never execute. *A branch placed where the
-    /// case cannot occur reads as handling and is none.*
-    perimeter: String,
-    /// What it is built to observe.
-    observes: Vec<KindLine>,
-    /// What it is built NOT to observe — the section AC1 requires to be real.
-    cannot_see: Vec<KindLine>,
-    /// How long ago anything was observed, or `None`.
-    ///
-    /// 🔴 **`None` is FOUR different states of the world and the screen says so.** Story 6b.8's
-    /// validation booted the real binary four times against four fresh databases: never scanned,
-    /// scanned-and-nobody-answered, an INVALID perimeter the product refused, and a blank one — all
-    /// four leave `MAX(observed_at)` NULL. FR8's own distinction fails at boot level, so the copy
-    /// states the ambiguity instead of picking one reading.
-    last_observed: Option<String>,
-}
-
-/// The sources screen's body.
-#[derive(Template)]
-#[template(path = "_sources.html")]
-struct SourcesBody {
-    /// `None` when no source is configured at all — the case the story's first draft assumed away.
-    source: Option<SourceView>,
-    s: SourceStrings,
-}
-
-/// The copy `/sources` needs, resolved once.
-struct SourceStrings {
-    title: String,
-    lede: String,
-    observes_title: String,
-    cannot_see_title: String,
-    unlock: String,
-    freshness_title: String,
-    never: String,
-    ambiguity: String,
-    incident_axis: String,
-    perimeter_label: String,
-    no_source: String,
-    /// What the screen says when the product REFUSED the configured perimeter.
-    refused: String,
-}
-
-/// Resolve `/sources`' copy.
-fn source_strings() -> SourceStrings {
-    SourceStrings {
-        title: rust_i18n::t!("sources.title").to_string(),
-        lede: rust_i18n::t!("sources.lede").to_string(),
-        observes_title: rust_i18n::t!("sources.observes").to_string(),
-        cannot_see_title: rust_i18n::t!("sources.cannot_see").to_string(),
-        unlock: rust_i18n::t!("sources.unlock").to_string(),
-        freshness_title: rust_i18n::t!("sources.freshness").to_string(),
-        never: rust_i18n::t!("sources.never").to_string(),
-        ambiguity: rust_i18n::t!("sources.ambiguity").to_string(),
-        incident_axis: rust_i18n::t!("sources.incident_axis").to_string(),
-        perimeter_label: rust_i18n::t!("sources.perimeter").to_string(),
-        no_source: rust_i18n::t!("sources.no_source").to_string(),
-        refused: rust_i18n::t!("sources.refused").to_string(),
-    }
-}
-
-/// The i18n keys of one [`FactKind`]'s name and of what it means to the operator.
-///
-/// 🔑 **A `match` on a `FactKind`, and the `_` arm is FORCED by `#[non_exhaustive]`** — the compiler
-/// cannot carry exhaustiveness across the crate boundary, so a wildcard is mandatory and is then
-/// permanently silent.
-///
-/// 🔴 **The fallback returns a GENERIC pair, and the doc said *"the kind's `Debug` name"* until the
-/// code review caught it two lines above the code that refutes it.** Every unmapped kind would render
-/// *identically* — *"Unrecognised kind"* — with nothing on the page telling an operator or a
-/// log-reading developer WHICH one appeared.
-///
-/// ⚠️ **And `FactKind::ALL`'s cross-crate guard does not protect THIS map.** It pins `ALL` against the
-/// enum's declaration; it says nothing about whether each member has a key pair here. So an eighth
-/// kind correctly added to `ALL` would satisfy that guard and still render *"Genre non reconnu"* on
-/// `/sources` — *a guard placed where the defect cannot occur*, one field over. Closed by
-/// [`crate::page::tests::every_fact_kind_has_its_own_sentence`], which reds on exactly that.
-fn kind_keys(kind: FactKind) -> (&'static str, &'static str) {
-    match kind {
-        FactKind::Mac => ("kind.mac", "kind.mac.meaning"),
-        FactKind::IpV4 => ("kind.ipv4", "kind.ipv4.meaning"),
-        FactKind::Hostname => ("kind.hostname", "kind.hostname.meaning"),
-        FactKind::DhcpLease => ("kind.dhcp_lease", "kind.dhcp_lease.meaning"),
-        FactKind::Uplink => ("kind.uplink", "kind.uplink.meaning"),
-        FactKind::OuiVendor => ("kind.oui_vendor", "kind.oui_vendor.meaning"),
-        FactKind::Rtt => ("kind.rtt", "kind.rtt.meaning"),
-        _ => ("kind.unknown", "kind.unknown.meaning"),
-    }
-}
-
-/// Build one capability line.
-fn kind_line(kind: FactKind) -> KindLine {
-    let (label, meaning) = kind_keys(kind);
-    KindLine {
-        label: rust_i18n::t!(label).to_string(),
-        meaning: rust_i18n::t!(meaning).to_string(),
-    }
-}
-
-/// Build the sources view. Pure: the caller supplies the instant and the perimeter.
-///
-/// ⚠️ **No clock here** — `now` is a parameter, on the precedent of every view builder in this file.
-fn build_sources(
-    perimeter: Option<String>,
-    last: Option<chrono::DateTime<chrono::Utc>>,
-    now: chrono::DateTime<chrono::Utc>,
-) -> Option<SourceView> {
-    // 🔴 **NO PERIMETER, NO SOURCE.** The story's first draft assumed one configured source
-    // throughout; the validation measured that with `OPENCMDB_SCAN_CIDR` unset there are ZERO, and
-    // the screen had no copy for it. Listing a source the product was never asked to build would be
-    // the same fabrication the liveness arbitration refuses.
-    // 🔑 The `?` on the field below is the ONLY place this is decided — it read `perimeter.as_ref()?`
-    // here as well, and two refusals of one fact drift.
-    let (observes, cannot_see) = crate::arp_ping::observes_and_cannot_see();
-    // 🔴 **A PERIMETER THE PRODUCT REFUSED IS NOT A PERIMETER, and the screen said otherwise.**
-    // Measured at the code review by booting with `OPENCMDB_SCAN_CIDR=nonsense`: the log carried
-    // `ERROR invalid OPENCMDB_SCAN_CIDR — skipping scan`, and this screen rendered a full source
-    // card reading *"Périmètre nonsense"* with the generic four-state sentence under it — **the
-    // rejected string PRESENTED AS AN IN-FORCE VALUE**. That is worse than the ambiguity the story
-    // registered: it is not *we cannot tell which of four*, it is *we are showing you a
-    // configuration we already refused, as though it were live*.
-    //
-    // 🔑 `subnet_hosts` is the SAME parser the connector uses, so the screen and the scan agree by
-    // construction rather than by two readings of one rule. ⚠️ `AppConfig::from_env` still does not
-    // validate the CIDR — the refusal happens in a detached thread whose error nobody reads — and
-    // moving it to boot time is registered rather than done here.
-    let refused = crate::arp_ping::subnet_hosts(perimeter.as_deref().unwrap_or_default()).is_err();
-    Some(SourceView {
-        name: rust_i18n::t!(crate::arp_ping::SOURCE_NAME_KEY).to_string(),
-        refused,
-        perimeter: perimeter?,
-        observes: observes.into_iter().map(kind_line).collect(),
-        cannot_see: cannot_see.into_iter().map(kind_line).collect(),
-        last_observed: last.map(|instant| relative_time(now, instant)),
-    })
-}
-
 /// `GET /sources` — what the product's sources can and cannot see.
 ///
 /// 🔴 **The capability section is REAL** (AC1): it is `FactKind::ALL` minus the connector's own
@@ -1978,6 +1906,9 @@ fn content_type(path: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use crate::sources_view::kind_keys;
+    use opencmdb_core::observation::FactKind;
+    use opencmdb_core::observation::ObsId;
     /// The ONE anchor every example section carries, on every screen (story 6b.6).
     ///
     /// 🔴 Before this story `_devices_example.html` said `screen-section` and `_dashboard.html`
@@ -2037,7 +1968,11 @@ mod tests {
             declared_row("e1", "ipv4", "192.0.2.10"),
             declared_row("e1", "hostname", "nas"),
         ];
-        let observations = vec![vec![ipv4("192.0.2.10"), hostname("intruder")]];
+        let observations = vec![batch(
+            "arp",
+            0,
+            vec![ipv4("192.0.2.10"), hostname("intruder")],
+        )];
         let view = build_view(declared, observations, None);
 
         assert!(view.has_entity);
@@ -2061,7 +1996,7 @@ mod tests {
     #[test]
     fn build_view_counts_out_of_perimeter_as_reach() {
         let declared = vec![declared_row("e1", "ipv4", "192.0.2.10")];
-        let observations = vec![vec![ipv4("192.0.2.99")]]; // an undocumented device
+        let observations = vec![batch("arp", 0, vec![ipv4("192.0.2.99")])]; // an undocumented device
         let view = build_view(declared, observations, None);
 
         assert!(view.has_entity);
@@ -2135,7 +2070,7 @@ mod tests {
     #[test]
     fn the_two_engines_counts_are_never_added() {
         let declared = vec![declared_row("e1", "ipv4", "192.0.2.10")];
-        let observations = vec![vec![ipv4("192.0.2.99")]]; // out of perimeter -> 2 abstentions
+        let observations = vec![batch("arp", 0, vec![ipv4("192.0.2.99")])]; // out of perimeter -> 2 abstentions
         let view = build_view(declared, observations, None);
         let identity = build_identity_view(vec![
             reach("abstained", Some("absence_of_proof"), 7),
@@ -2777,14 +2712,61 @@ mod tests {
             "nothing abstains while one sighting carries the field"
         );
 
-        // A SECOND, DISAGREEING sighting -> the gap CLOSES into two abstentions. FR16 working:
-        // never picked, never merged. This is the shape a real network produces, and it is why
-        // `epics.md:1790`'s "a divergence opens" is unreachable while the older sighting lives.
+        // 🔴 A LATER sighting from the SAME source SUPERSEDES: the host went back to answering
+        // `nas`, so the gap CLOSES — it does not turn into a conflict.
+        //
+        // ⚠️ **This assertion is the reverse of what it said until 2026-09-09**, and the comment it
+        // replaces is why: it read *"the shape a real network produces, and it is why
+        // `epics.md:1790`'s 'a divergence opens' is unreachable while the older sighting lives"*.
+        // That was true, and it was the defect — comparing a declared value against every sighting
+        // ever recorded meant one source arguing with its own past, for ever, over an append-only
+        // store. Measured on a real network the day the reverse-DNS story gave `hostname` a
+        // producer: a renamed host produced a `Conflict` row AND an `Absence` row, neither
+        // closable by any gesture.
         ingest(pool.clone(), vec![sighting(0x6311, "nas")]).await;
         let (view, _) = reconcile_view(&pool).await.expect("build the page's state");
         assert!(
             view.gaps.is_empty(),
-            "two disagreeing sightings must not pick one, yet {} gap(s) opened",
+            "the latest sighting agrees with the declared value, so nothing is a gap; {} opened",
+            view.gaps.len()
+        );
+        assert_eq!(
+            view.abstention_count, 0,
+            "and nothing abstains: the superseded sighting is history, not a disagreement"
+        );
+
+        // A SECOND SOURCE that disagrees -> the gap closes into two abstentions. FR16 working:
+        // never picked, never merged. This is what `ConflictingObservations` has always meant, and
+        // it is now the only thing that reaches it.
+        let other_source = ConnectorId::from_uuid(Uuid::from_u128(0x6303));
+        let from_another_source = Observation {
+            connector_id: other_source,
+            ..sighting(0x6312, "intruder")
+        };
+        let mut second = crate::fixture_connector::FixtureConnector::from_observations(
+            other_source,
+            opencmdb_core::observation::Capabilities {
+                as_of: chrono::DateTime::from_timestamp(1_700_000_000, 0).expect("in range"),
+                kinds: std::collections::BTreeSet::from([
+                    opencmdb_core::observation::FactKind::IpV4,
+                    opencmdb_core::observation::FactKind::Hostname,
+                ]),
+            },
+            vec![scope],
+            "story 6.3 divergence boundary, second source",
+            vec![from_another_source],
+        )
+        .expect("the in-memory stream must load");
+        crate::scan_pass::poll_ingest_resolve(
+            &mut second,
+            chrono::DateTime::from_timestamp(1_700_002_600, 0).expect("in range"),
+            &pool,
+        )
+        .await;
+        let (view, _) = reconcile_view(&pool).await.expect("build the page's state");
+        assert!(
+            view.gaps.is_empty(),
+            "two SOURCES that disagree must not pick one, yet {} gap(s) opened",
             view.gaps.len()
         );
         assert_eq!(
@@ -4165,30 +4147,35 @@ mod tests {
 
     /// 🔴 **AC1 — the capability boundary is REAL, and it is derived rather than listed.**
     ///
-    /// The complement is `FactKind::ALL` minus what the connector declares. Five kinds today, and
+    /// The complement is `FactKind::ALL` minus what the connector declares. Four kinds today, and
     /// the test names them — but it also asserts the PARTITION, so the day an eighth kind exists the
     /// two halves still cover it. ⚠️ A `#[test]` cannot add an enum variant; the eighth-kind case is
     /// a mutation, and its carrier is the cross-crate row in
     /// `screens::tests::every_variant_of_a_navigated_enum_is_listed_in_all`.
+    ///
+    /// 🔑 **`Hostname` crossed the line on 2026-09-09** — it was the first kind ever to do so, and
+    /// this test is what made the crossing visible: it reddened on the connector's declaration the
+    /// moment the reverse lookup landed, before any screen was looked at. *The section is derived,
+    /// so a connector that learns something new says so on `/sources` without anyone editing a
+    /// page.*
     #[test]
     fn what_the_source_cannot_see_is_derived_from_the_connectors_own_declaration() {
         let (observes, cannot_see) = crate::arp_ping::observes_and_cannot_see();
         assert_eq!(
             observes,
-            vec![FactKind::IpV4, FactKind::Rtt],
-            "the shipped connector observes an address and a round-trip time, and story 5.14 pinned \
-             that it declares no MAC, ever"
+            vec![FactKind::IpV4, FactKind::Hostname, FactKind::Rtt],
+            "the shipped connector observes an address, the name that address answers to, and a \
+             round-trip time — and story 5.14 pinned that it declares no MAC, ever"
         );
         assert_eq!(
             cannot_see,
             vec![
                 FactKind::Mac,
-                FactKind::Hostname,
                 FactKind::DhcpLease,
                 FactKind::Uplink,
                 FactKind::OuiVendor,
             ],
-            "and the five it cannot see are the complement — this is the one section of /sources \
+            "and the four it cannot see are the complement — this is the one section of /sources \
              that AC1 requires to be REAL"
         );
         // The PARTITION, which survives an eighth kind where the two literals above would not.
@@ -4434,6 +4421,201 @@ mod tests {
             nouveau[0].age_seconds, 400,
             "the row's age is the LATER sighting's (1000 - 600), not the earlier one's (990)"
         );
+    }
+
+    /// 🔑 **What ten days of unattended running produced, in one assertion.** The reference
+    /// deployment's queue held 69 questions and every one was a bare address; a PTR record turns
+    /// half of them into `wifi01-grange` and `sw03`. The name is DISPLAY: the row is still
+    /// addressed by `nouveau:{ipv4}` and the entity is still the address.
+    ///
+    /// ⚠️ The unnamed half is asserted beside the named one on purpose. 32 of those 69 addresses
+    /// answer to no name, so *renders nothing rather than a placeholder* is the ordinary case and
+    /// not an edge — and an empty string here is what NFR7 requires: the product did not learn a
+    /// name, which is not the same as the host having none.
+    #[test]
+    fn a_named_address_shows_its_name_and_an_unnamed_one_shows_none() {
+        let observations = vec![
+            batch(
+                "arp",
+                10,
+                vec![ipv4("192.0.2.77"), hostname("wifi01-grange")],
+            ),
+            batch("arp", 10, vec![ipv4("192.0.2.88")]),
+        ];
+        let view = build_triage(Vec::new(), Vec::new(), observations, at(1_000), None, false);
+        let named = view
+            .rows
+            .iter()
+            .find(|r| r.id == "nouveau:192.0.2.77")
+            .expect("the named address is queued");
+        let unnamed = view
+            .rows
+            .iter()
+            .find(|r| r.id == "nouveau:192.0.2.88")
+            .expect("the unnamed address is queued too");
+        assert_eq!(
+            named.name, "wifi01-grange",
+            "the queue's whole defect was that every row read as a bare address"
+        );
+        assert_eq!(
+            named.entity, "192.0.2.77",
+            "and the address stays: the name is what the network calls it today, never its identity"
+        );
+        assert_eq!(
+            unnamed.name, "",
+            "a host with no PTR record shows no name — not `unknown`, not the address twice"
+        );
+    }
+
+    /// 🔴 **The name moves with the freshness, and this is the direction that is easy to get
+    /// wrong**: a host whose name the network has STOPPED giving must stop showing one.
+    ///
+    /// The `Nouveau` loop overwrites a queued row in place when a later sighting of the same
+    /// address arrives, and story 6.4's code review found the same shape already: the pane showed
+    /// the FIRST sighting's provenance beside the LATEST one's freshness. A row that kept a name
+    /// the latest sighting did not carry would be two sightings in one line — and the operator
+    /// would be reading a name that is no longer answered to, dated with an age that says it is.
+    #[test]
+    fn a_name_the_latest_sighting_does_not_carry_is_not_kept() {
+        let observations = vec![
+            batch(
+                "arp",
+                10,
+                vec![ipv4("192.0.2.77"), hostname("was-called-this")],
+            ),
+            batch("arp", 600, vec![ipv4("192.0.2.77")]),
+        ];
+        let view = build_triage(Vec::new(), Vec::new(), observations, at(1_000), None, false);
+        let row = view
+            .rows
+            .iter()
+            .find(|r| r.id == "nouveau:192.0.2.77")
+            .expect("the address is queued");
+        assert_eq!(
+            row.age_seconds, 400,
+            "the premise: the LATER sighting supplied this row"
+        );
+        assert_eq!(
+            row.name, "",
+            "and it carried no name, so the row carries none — the earlier name is not kept"
+        );
+    }
+
+    /// A `hostname` gap already shows the observed name in its diff, so the row does not print it
+    /// twice. The same value in two columns of one line reads as two facts about the host.
+    #[test]
+    fn a_hostname_gap_does_not_print_the_name_twice() {
+        let declared = vec![
+            declared_row("e1", "ipv4", "192.0.2.10"),
+            declared_row("e1", "hostname", "nas-01"),
+        ];
+        let observations = vec![batch(
+            "arp",
+            10,
+            vec![ipv4("192.0.2.10"), hostname("nas-01-new")],
+        )];
+        let view = build_triage(
+            declared,
+            vec![prov("e1", "hostname", "manual", 0)],
+            observations,
+            at(1_000),
+            None,
+            false,
+        );
+        let gap = view
+            .rows
+            .iter()
+            .find(|r| r.field == "hostname")
+            .expect("the declared name and the observed one disagree, so there is a gap");
+        assert_eq!(
+            gap.observed, "nas-01-new",
+            "the premise: the diff is what carries the observed name on this row"
+        );
+        assert_eq!(
+            gap.name, "",
+            "so the name column stays empty — it would be the same string, two columns along"
+        );
+    }
+
+    /// 🔴 **Asserted on the RENDERED page, never on the struct.** Story 6b.4b's four HIGH findings
+    /// were one mistake made four times: every guard read the source and every defect lived in the
+    /// render. A `name` field a template never prints is a field the operator never sees.
+    #[test]
+    fn the_rendered_queue_carries_the_name() {
+        let observations = vec![batch(
+            "arp",
+            10,
+            vec![ipv4("192.0.2.77"), hostname("wifi01-grange")],
+        )];
+        let view = build_triage(Vec::new(), Vec::new(), observations, at(1_000), None, false);
+        let html = TriageBody {
+            triage: view,
+            identity: crate::identity_view::build_identity_view(Vec::new()),
+            documented: String::new(),
+            s: strings(),
+        }
+        .render()
+        .expect("the triage template and its struct are compiled together");
+        assert!(
+            html.contains("wifi01-grange"),
+            "the name reaches the served page: {html}"
+        );
+    }
+
+    /// 🔴 **The row abbreviates, the RECORD does not** — Guy's arbitration of 2026-09-09, taken at
+    /// a browser after the reference network's real names wrapped the queue onto two lines.
+    ///
+    /// The two halves are asserted together on purpose: a shortened display is honest only while
+    /// what gets written is the whole name. Were they to drift, the operator would document
+    /// `swiss-domotique-plug-5751f8` for a host the network calls
+    /// `swiss-domotique-plug-5751f8.home.arpa`, and the gap they just closed would reopen on the
+    /// next scan.
+    #[test]
+    fn the_row_shows_the_first_label_while_the_record_keeps_the_whole_name() {
+        let full = "swiss-domotique-plug-5751f8.home.arpa";
+        let facts = vec![ipv4("192.0.2.77"), hostname(full)];
+        let view = build_triage(
+            Vec::new(),
+            Vec::new(),
+            vec![batch("arp", 10, facts.clone())],
+            at(1_000),
+            None,
+            false,
+        );
+        let row = view
+            .rows
+            .iter()
+            .find(|r| r.id == "nouveau:192.0.2.77")
+            .expect("the address is queued");
+        assert_eq!(
+            row.name, "swiss-domotique-plug-5751f8",
+            "the queue shows the first label — 37 characters wrapped the row in a browser"
+        );
+        assert_eq!(
+            opencmdb_core::gap::project(&observation_from_batch(&batch("arp", 10, facts)))
+                .into_iter()
+                .find(|(field, _)| field == "hostname")
+                .map(|(_, value)| value),
+            Some(full.to_string()),
+            "and the pair the documenting gesture WRITES is the whole name, unabbreviated — the \
+             abbreviation is a line width, never a fact"
+        );
+    }
+
+    /// The shortening refuses the shapes that would print an empty name beside an address.
+    #[test]
+    fn a_name_that_cannot_be_shortened_is_shown_whole() {
+        assert_eq!(
+            short_name("sw03"),
+            "sw03",
+            "a name with no dot is its own label"
+        );
+        assert_eq!(
+            short_name(".home.arpa"),
+            ".home.arpa",
+            "a leading dot would leave an empty label, which reads as a name the host lacks"
+        );
+        assert_eq!(short_name("a.b"), "a");
     }
 
     #[test]

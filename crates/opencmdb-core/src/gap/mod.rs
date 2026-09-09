@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use crate::observation::{Fact, Observation};
+use crate::observation::{ConnectorId, Fact, Observation};
 
 /// A field on which the declared value and the observed value disagree — **a gap**.
 ///
@@ -116,19 +116,52 @@ pub fn reconcile(
     let (id_field, id_value) = identity;
     let mut result = Reconciliation::default();
 
-    // Collect the observed values for in-perimeter observations; flag fields two of them disagree on.
-    let mut observed: BTreeMap<String, String> = BTreeMap::new();
-    let mut conflicting: BTreeSet<String> = BTreeSet::new();
+    // 🔴 **Only the MOST RECENT sighting of each source is compared, and that is the whole
+    // meaning of `ConflictingObservations`.** Guy's arbitration, 2026-09-09, on a measurement.
+    //
+    // The rule below reads *two in-perimeter observations disagree* (FR16), and it was written
+    // when a field could only ever come from two SOURCES. The reverse-DNS story made `hostname`
+    // the first field on which one source can disagree WITH ITSELF, an hour apart — and the store
+    // is append-only and never pruned, so comparing a declared value against every sighting ever
+    // recorded meant that a host renamed once conflicted **for ever**. Measured on a real network:
+    // a renamed host produced a `Conflit` row AND an `Absence` row (the conflicting field is
+    // withdrawn from `observed`, so the declared field then has no observed value), neither of
+    // them closable by any gesture, and the `Absence` pane read *"no source reported a value"*
+    // about a host seen one minute earlier that was reporting two.
+    //
+    // 🔑 *A source that changes its mind is a HISTORY, not a disagreement.* One source, one
+    // current answer; a conflict is two SOURCES that cannot both be right, which is the thing an
+    // operator has to arbitrate and the thing FR16 refuses to guess at.
+    //
+    // ⚠️ The out-of-perimeter count is unchanged: a sighting of something else is reach whether or
+    // not a later sighting of it exists. Only in-perimeter HISTORY is set aside.
+    let mut newest: BTreeMap<ConnectorId, &Observation> = BTreeMap::new();
     for observation in observations {
-        let projected = project(observation);
-        let in_perimeter = projected
+        let in_perimeter = project(observation)
             .iter()
             .any(|(f, v)| f == id_field && v == id_value);
         if !in_perimeter {
             result.abstain(AbstentionCause::OutOfPerimeter);
             continue;
         }
-        for (field, value) in projected {
+        // Ties are broken by `obs_id` so the choice is deterministic: two sightings from one
+        // source at the very same instant must not make the page depend on row order.
+        let supersedes = match newest.get(&observation.connector_id) {
+            None => true,
+            Some(kept) => {
+                (observation.observed_at, observation.obs_id) > (kept.observed_at, kept.obs_id)
+            }
+        };
+        if supersedes {
+            newest.insert(observation.connector_id, observation);
+        }
+    }
+
+    // Collect the observed values; flag fields two SOURCES disagree on.
+    let mut observed: BTreeMap<String, String> = BTreeMap::new();
+    let mut conflicting: BTreeSet<String> = BTreeSet::new();
+    for observation in newest.values() {
+        for (field, value) in project(observation) {
             match observed.get(&field) {
                 Some(existing) if *existing != value => {
                     conflicting.insert(field);
@@ -191,6 +224,19 @@ mod tests {
         }
     }
 
+    /// The same observation, attributed to a named source and dated. Ids are derived from the two
+    /// arguments so a test says *which source, when* and nothing else.
+    fn seen_by(source: u128, at_secs: i64, facts: Vec<Fact>) -> Observation {
+        Observation {
+            obs_id: ObsId::from_uuid(Uuid::from_u128(
+                u128::from(at_secs.unsigned_abs()) | (source << 64),
+            )),
+            connector_id: ConnectorId::from_uuid(Uuid::from_u128(source)),
+            observed_at: chrono::DateTime::from_timestamp(at_secs, 0).expect("representable"),
+            ..obs(facts)
+        }
+    }
+
     fn ip(a: u8, b: u8, c: u8, d: u8) -> Fact {
         Fact::IpV4 {
             addr: Ipv4Addr::new(a, b, c, d),
@@ -239,12 +285,17 @@ mod tests {
         );
     }
 
+    /// TWO SOURCES that cannot both be right: the engine refuses to pick (FR16).
+    ///
+    /// ⚠️ **Both sightings are attributed to DIFFERENT sources, and that is now what the test is
+    /// about.** It used to build them with the same (nil) connector at the same instant, which
+    /// after 2026-09-09 is one source contradicting itself — a history, not a disagreement.
     #[test]
-    fn conflicting_observations_abstain_never_pick() {
+    fn conflicting_sources_abstain_never_pick() {
         let d = declared(&[("ipv4", "192.0.2.10"), ("hostname", "nas")]);
         let obs = vec![
-            obs(vec![ip(192, 0, 2, 10), host("alpha")]),
-            obs(vec![ip(192, 0, 2, 10), host("beta")]),
+            seen_by(0xA, 100, vec![ip(192, 0, 2, 10), host("alpha")]),
+            seen_by(0xB, 100, vec![ip(192, 0, 2, 10), host("beta")]),
         ];
         let r = reconcile(("ipv4", "192.0.2.10"), &d, &obs);
         assert!(
@@ -258,6 +309,77 @@ mod tests {
                 .unwrap_or(0)
                 >= 1
         );
+    }
+
+    /// 🔴 **ONE source that changed its mind is a HISTORY, and the latest answer is the answer.**
+    ///
+    /// This is the case the reverse-DNS story made reachable and the reason the rule was narrowed.
+    /// `observation_record` is append-only and nothing prunes it, so before 2026-09-09 a host
+    /// whose PTR name changed once conflicted with its own past for ever: two queue rows, neither
+    /// closable by any gesture. The renamed host must produce **one gap**, which the documenting
+    /// gesture can then close.
+    #[test]
+    fn one_source_that_changed_its_mind_yields_a_gap_not_a_conflict() {
+        let d = declared(&[("ipv4", "192.0.2.10"), ("hostname", "was-called-this")]);
+        let obs = vec![
+            seen_by(0xA, 100, vec![ip(192, 0, 2, 10), host("was-called-this")]),
+            seen_by(0xA, 4_000, vec![ip(192, 0, 2, 10), host("renamed")]),
+        ];
+        let r = reconcile(("ipv4", "192.0.2.10"), &d, &obs);
+        assert_eq!(
+            r.gaps,
+            vec![Gap {
+                field: "hostname".into(),
+                declared: "was-called-this".into(),
+                observed: "renamed".into(),
+            }],
+            "the LATEST answer is what the network shows now"
+        );
+        assert_eq!(
+            r.abstention_count(),
+            0,
+            "and nothing abstains: the superseded sighting is history, not reach"
+        );
+    }
+
+    /// The order the rows arrive in must not decide the answer — the store's `ORDER BY` is not
+    /// part of this function's contract.
+    #[test]
+    fn the_latest_sighting_wins_whichever_order_it_arrives_in() {
+        let d = declared(&[("ipv4", "192.0.2.10"), ("hostname", "old")]);
+        let early = seen_by(0xA, 100, vec![ip(192, 0, 2, 10), host("old")]);
+        let late = seen_by(0xA, 4_000, vec![ip(192, 0, 2, 10), host("new")]);
+        let forwards = reconcile(("ipv4", "192.0.2.10"), &d, &[early.clone(), late.clone()]);
+        let backwards = reconcile(("ipv4", "192.0.2.10"), &d, &[late, early]);
+        assert_eq!(forwards, backwards);
+        assert_eq!(
+            forwards.gaps.len(),
+            1,
+            "and it is the later value that shows"
+        );
+        assert_eq!(forwards.gaps[0].observed, "new");
+    }
+
+    /// A superseded sighting is set aside; a sighting of something ELSE is still reach.
+    ///
+    /// ⚠️ The two must not be confused: the out-of-perimeter count is what story 5.14b's section
+    /// reports, and quietly shrinking it would change what the operator is told the product saw.
+    #[test]
+    fn superseded_history_is_set_aside_but_out_of_perimeter_reach_is_not() {
+        let d = declared(&[("ipv4", "192.0.2.10")]);
+        let obs = vec![
+            seen_by(0xA, 100, vec![ip(192, 0, 2, 10)]),
+            seen_by(0xA, 200, vec![ip(192, 0, 2, 10)]),
+            seen_by(0xA, 300, vec![ip(192, 0, 2, 99)]),
+            seen_by(0xA, 400, vec![ip(192, 0, 2, 98)]),
+        ];
+        let r = reconcile(("ipv4", "192.0.2.10"), &d, &obs);
+        assert_eq!(
+            r.abstentions.get(&AbstentionCause::OutOfPerimeter),
+            Some(&2),
+            "two sightings of other addresses are two pieces of reach, superseding or not"
+        );
+        assert!(r.gaps.is_empty());
     }
 
     #[test]

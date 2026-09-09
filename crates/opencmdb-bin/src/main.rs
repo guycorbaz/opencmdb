@@ -33,8 +33,10 @@ mod page;
 mod permute;
 mod repo;
 mod resolver;
+mod reverse_dns;
 mod scan_pass;
 mod screens;
+mod sources_view;
 mod state_vocabulary;
 mod trap_gate;
 
@@ -186,6 +188,20 @@ pub(crate) struct AppConfig {
     /// [`primary_subtag_is_available`], and story 6b.10's validation, which caught a draft that
     /// would have refused `fr-CH`, one of the forms that works.
     pub(crate) locale: String,
+    /// `OPENCMDB_DNS_SERVER`: the resolver the scan asks for a host's name, or `None` — the
+    /// default — for the system configuration.
+    ///
+    /// 🔑 **The default is the system resolver and the knob exists because that default was
+    /// MEASURED insufficient on a real network.** Over the 69 unnamed addresses the reference
+    /// deployment held on 2026-09-09, the configured system resolver answered for **2** and the
+    /// DHCP server that had issued the leases answered for **37**. A small network resolves its
+    /// own hosts at the box that leases the addresses, and that box is usually not the resolver
+    /// the hosts are pointed at.
+    ///
+    /// An unparseable value is refused BY NAME at boot rather than falling back in silence, on
+    /// `scan_interval`'s precedent: a typo here costs every hostname the scan would have learnt,
+    /// and nothing on any screen would say why.
+    pub(crate) dns_server: Option<std::net::IpAddr>,
 }
 
 /// The interface language when `OPENCMDB_LOCALE` is unset or blank. `rust_i18n::i18n!` names the
@@ -314,6 +330,12 @@ pub(crate) enum AppConfigError {
         /// The value found in `OPENCMDB_SCAN_INTERVAL_SECS`.
         value: String,
     },
+    /// `OPENCMDB_DNS_SERVER` is not a bare IP address. Refused by name: the silent fallback is a
+    /// scan that names nothing, which looks exactly like a network with no PTR records.
+    UnrecognisedDnsServer {
+        /// The value found in `OPENCMDB_DNS_SERVER`.
+        value: String,
+    },
 }
 
 impl std::fmt::Display for AppConfigError {
@@ -327,6 +349,13 @@ impl std::fmt::Display for AppConfigError {
                 f,
                 "OPENCMDB_SCAN_INTERVAL_SECS={value:?} is not a whole number of seconds — use a \
                  positive number, or 0 to sweep once at startup only"
+            ),
+            Self::UnrecognisedDnsServer { value } => write!(
+                f,
+                "OPENCMDB_DNS_SERVER={value:?} is not an IP address — give the bare address of \
+                 the resolver to ask for hostnames (often the box that hands out the DHCP \
+                 leases, e.g. 192.168.1.1), with no port and no scheme, or leave it unset to use \
+                 the system resolver"
             ),
             Self::HalfConfiguredPair { missing } => write!(
                 f,
@@ -436,6 +465,17 @@ impl AppConfig {
                 });
             }
         };
+        // Blank counts as unset — `scan_cidr`'s precedent. A port is refused rather than stripped:
+        // this product asks port 53, and accepting `1.2.3.4:5353` while ignoring the port would be
+        // a configuration that reads as honoured and is not.
+        let dns_server = match lookup("OPENCMDB_DNS_SERVER").filter(|v| carries_a_visible_glyph(v))
+        {
+            None => None,
+            Some(value) => match value.trim().parse::<std::net::IpAddr>() {
+                Ok(ip) => Some(ip),
+                Err(_) => return Err(AppConfigError::UnrecognisedDnsServer { value }),
+            },
+        };
         let user = lookup("OPENCMDB_BASIC_USER").filter(|value| !value.is_empty());
         let password = lookup("OPENCMDB_BASIC_PASSWORD").filter(|value| !value.is_empty());
         let basic = match (user, password) {
@@ -483,6 +523,7 @@ impl AppConfig {
             scan_cidr,
             metrics_token,
             locale,
+            dns_server,
             scan_interval,
         })
     }
@@ -596,6 +637,7 @@ async fn run(log: diagnostic::LogDescriptor) -> anyhow::Result<()> {
             database_url.clone(),
             cidr,
             config.scan_interval,
+            config.dns_server,
             scan_report.clone(),
         );
     }
@@ -675,9 +717,10 @@ fn spawn_scan_loop(
     database_url: String,
     cidr: String,
     interval: Option<std::time::Duration>,
+    dns_server: Option<std::net::IpAddr>,
     report: diagnostic::ScanReportSlot,
 ) {
-    use opencmdb_core::observation::{ConnectorId, L2DomainId, Scope, VantageId};
+    use opencmdb_core::observation::{L2DomainId, Scope, VantageId};
     use uuid::Uuid;
 
     use crate::arp_ping::ArpPingConnector;
@@ -699,7 +742,9 @@ fn spawn_scan_loop(
                 l2_domain: L2DomainId::from_uuid(Uuid::nil()),
                 vantage: VantageId::from_uuid(Uuid::nil()),
             };
-            let connector_id = ConnectorId::from_uuid(Uuid::now_v7());
+            // Derived from the connector's kind and its perimeter, never minted fresh: a restart
+            // must not create a second source. See `arp_ping::derived_connector_id`.
+            let connector_id = crate::arp_ping::derived_connector_id(&cidr);
             let connector = match ArpPingConnector::from_cidr(connector_id, scope, &cidr) {
                 Ok(connector) => connector,
                 Err(error) => {
@@ -723,7 +768,8 @@ fn spawn_scan_loop(
                 .unwrap_or(crate::arp_ping::DEFAULT_TIMEOUT_MS);
             let mut connector = connector
                 .with_concurrency(concurrency)
-                .with_timeout(std::time::Duration::from_millis(timeout_ms));
+                .with_timeout(std::time::Duration::from_millis(timeout_ms))
+                .with_dns_server(dns_server);
 
             tracing::info!(%cidr, concurrency, timeout_ms, "scan: pinging subnet");
             // Whether a sweep has already happened, so the startup-only mode can stop after one.
@@ -1003,6 +1049,9 @@ mod tests {
             // Story 6b.2: the shell's perimeter. `None` here so every pre-existing test keeps
             // exercising the shape it was written for; the perimeter has its own tests.
             scan_cidr: None,
+            // The scan's reverse resolver: unset means the system one, which is what a deployment
+            // that configures nothing gets. It reaches no HTTP surface; `from_env` has its tests.
+            dns_server: None,
             // Story 6b.9: `/metrics`' token moved out of the request path into the config, so it
             // is set HERE rather than through `std::env::set_var` — which two tests used to do.
             metrics_token: None,
@@ -2237,6 +2286,75 @@ mod tests {
         }
     }
 
+    /// 🔑 **The default is the system resolver, and the knob exists because the default was
+    /// MEASURED insufficient.** Over the 69 unnamed addresses the reference deployment held on
+    /// 2026-09-09, the configured system resolver answered for 2 and the DHCP server for 37.
+    #[test]
+    fn the_dns_server_defaults_to_the_system_resolver_and_takes_a_bare_address() {
+        assert_eq!(
+            config_from_env(lookup_of(&[]))
+                .expect("unset is not a misconfiguration")
+                .dns_server,
+            None,
+            "unset means the system resolver — an operator who configures nothing gets what \
+             their machine already does"
+        );
+        for blank in ["", " ", "\u{200b}"] {
+            assert_eq!(
+                config_from_env(lookup_of(&[("OPENCMDB_DNS_SERVER", blank)]))
+                    .expect("blank is unset")
+                    .dns_server,
+                None,
+                "{blank:?} counts as unset — `scan_cidr`'s precedent, and \
+                 `carries_a_visible_glyph` rather than `trim`, which is false for U+200B"
+            );
+        }
+        for good in ["192.168.1.1", " 192.168.1.1 ", "2001:db8::53"] {
+            let config = config_from_env(lookup_of(&[("OPENCMDB_DNS_SERVER", good)]))
+                .unwrap_or_else(|error| panic!("{good:?} is an address: {error}"));
+            assert_eq!(
+                config.dns_server,
+                Some(good.trim().parse().expect("the specimen is an address")),
+                "the operator's choice is carried unchanged"
+            );
+        }
+    }
+
+    /// 🔴 **A typo here is refused BY NAME, and the reason is that its silent failure is
+    /// INVISIBLE.** A mis-set scan interval produces a product that scans on a schedule nobody
+    /// chose; a mis-set resolver produces a scan that names nothing — which looks exactly like a
+    /// network with no PTR records, and no screen anywhere would say otherwise.
+    ///
+    /// ⚠️ **A port is refused rather than stripped.** `1.2.3.4:53` is the single most likely thing
+    /// a hand reaching for *a DNS server* types, and accepting it while ignoring the port would be
+    /// a configuration that reads as honoured and is not — the day this product asks port 5353,
+    /// the operator who wrote `:5353` would never learn it had been dropped.
+    #[test]
+    fn a_dns_server_that_is_not_an_address_is_refused_by_name() {
+        for wrong in [
+            "192.168.1.1:53",
+            "192.168.1.1:5353",
+            "udp://192.168.1.1",
+            "dns.example.com",
+            "192.168.1.256",
+            "192.168.1",
+        ] {
+            let refused = config_from_env(lookup_of(&[("OPENCMDB_DNS_SERVER", wrong)]));
+            assert_eq!(
+                refused,
+                Err(AppConfigError::UnrecognisedDnsServer {
+                    value: wrong.to_string()
+                }),
+                "{wrong:?} must be a boot refusal, never a scan that quietly stops naming hosts"
+            );
+            let message = refused.unwrap_err().to_string();
+            assert!(
+                message.contains("OPENCMDB_DNS_SERVER") && message.contains(wrong),
+                "and the message names the variable and what was typed: {message}"
+            );
+        }
+    }
+
     #[test]
     fn an_empty_environment_is_a_valid_minimal_config() {
         let config = config_from_env(lookup_of(&[])).expect("valid");
@@ -3125,12 +3243,20 @@ mod tests {
         );
     }
 
-    /// Story 6.3, AC2 — the boundary, pinned with BOTH numbers: while the documented sighting is
-    /// still in the store, a contradicting ingestion opens **no gap** and abstains **twice**.
+    /// Story 6.3, AC2 — the boundary, pinned with BOTH numbers, and **both sides of it since
+    /// 2026-09-09**: a contradicting sighting from the SAME source supersedes and opens a gap; two
+    /// SOURCES that disagree abstain twice.
     ///
-    /// ⚠️ Do NOT relax this to `gaps.is_empty()`: the pair `(0, 2)` and its cause breakdown are
-    /// what distinguish *"the product correctly refused to pick"* from *"the product saw
-    /// nothing"*. A third disagreeing sighting is asserted too, because the conflict is counted
+    /// 🔴 **The first half is the reverse of what this test asserted until the reverse-DNS story.**
+    /// It handed `reconcile` two sightings that carried the same (nil) connector, so the rule that
+    /// refuses to pick between two SOURCES was being exercised by one source arguing with its own
+    /// past — which over an append-only store meant for ever. The story that gave `hostname` a real
+    /// producer made that shape reachable on a live network and it was measured there: a renamed
+    /// host produced a `Conflict` row AND an `Absence` row, neither closable by any gesture.
+    ///
+    /// ⚠️ Do NOT relax the second half to `gaps.is_empty()`: the pair `(0, 2)` and its cause
+    /// breakdown are what distinguish *"the product correctly refused to pick"* from *"the product
+    /// saw nothing"*. A third disagreeing sighting is asserted too, because the conflict is counted
     /// once per FIELD and not once per sighting — counter-intuitive, and pinned for that reason.
     #[tokio::test]
     async fn two_disagreeing_sightings_abstain_rather_than_open_a_divergence() {
@@ -3148,6 +3274,37 @@ mod tests {
         ingest_through_the_pass(&pool, vec![contradicting]).await;
 
         let declared = declared_pairs(&pool, &entity_id).await;
+
+        // The SAME source, later: the network moved, and that is a gap the gesture can close.
+        let later = Observation {
+            observed_at: contradicting_copy.observed_at + chrono::Duration::seconds(60),
+            ..contradicting_copy.clone()
+        };
+        let moved = opencmdb_core::gap::reconcile(
+            ("ipv4", "192.0.2.40"),
+            &declared,
+            &[documented_copy.clone(), later],
+        );
+        assert_eq!(
+            moved.gaps.len(),
+            1,
+            "one source's later word supersedes its earlier one: {:?}",
+            moved.gaps
+        );
+        assert_eq!(moved.gaps[0].field, "hostname");
+        assert_eq!(moved.gaps[0].observed, "intruder");
+        assert_eq!(
+            moved.abstention_count(),
+            0,
+            "and the superseded sighting is history, not reach: {:?}",
+            moved.abstentions
+        );
+
+        // TWO SOURCES that cannot both be right: the engine refuses to pick (FR16).
+        let contradicting_copy = Observation {
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::from_u128(0x63_02)),
+            ..contradicting_copy
+        };
         let two = opencmdb_core::gap::reconcile(
             ("ipv4", "192.0.2.40"),
             &declared,
@@ -3155,7 +3312,7 @@ mod tests {
         );
         assert!(
             two.gaps.is_empty(),
-            "two disagreeing sightings must not pick one: {:?}",
+            "two disagreeing sources must not pick one: {:?}",
             two.gaps
         );
         assert_eq!(
@@ -3178,8 +3335,11 @@ mod tests {
             two.abstentions
         );
 
-        // A THIRD disagreeing sighting does not add an abstention: the conflict is per FIELD.
-        let third = nfr5_observation("192.0.2.40", "impostor", [0x02, 0, 0, 0, 0, 0x40]);
+        // A THIRD disagreeing SOURCE does not add an abstention: the conflict is per FIELD.
+        let third = Observation {
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::from_u128(0x63_03)),
+            ..nfr5_observation("192.0.2.40", "impostor", [0x02, 0, 0, 0, 0, 0x40])
+        };
         let three = opencmdb_core::gap::reconcile(
             ("ipv4", "192.0.2.40"),
             &declared,

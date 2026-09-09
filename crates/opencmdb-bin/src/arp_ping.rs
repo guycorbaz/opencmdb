@@ -2,8 +2,13 @@
 //!
 //! It pings a declared set of hosts over an UNPRIVILEGED ICMP datagram socket (no `NET_RAW`
 //! where `net.ipv4.ping_group_range` permits) and emits an [`Observation`] for each host that
-//! answers, carrying an `IpV4` and an `Rtt` fact, dated by the poll's `now`. It is ping-only:
-//! MAC facts (ARP) are the `NET_RAW` upgrade, later.
+//! answers, carrying an `IpV4`, an `Rtt` and — since 2026-09-09 — a `Hostname` fact when the host
+//! answers to a name, dated by the poll's `now`. It is ping-only: MAC facts (ARP) are the
+//! `NET_RAW` upgrade, later.
+//!
+//! The name comes from a reverse lookup and only for hosts that ANSWERED, so an empty subnet
+//! costs no DNS traffic at all; which resolver is asked is [`crate::reverse_dns`]'s subject, and
+//! the answer decided the shape of the whole thing.
 //!
 //! Wired into the running app in a later step; the contract + a gated network test prove it.
 #![allow(dead_code)]
@@ -15,7 +20,7 @@ use std::time::Duration;
 use futures_util::stream::{self, StreamExt};
 use opencmdb_core::connector::{Connector, ConnectorError, ObservationSink, PollSummary};
 use opencmdb_core::observation::{
-    Capabilities, ConnectorId, Fact, FactKind, ObsId, Observation, Scope, Timestamp,
+    Capabilities, ConnectorId, Fact, FactKind, HostnameSource, ObsId, Observation, Scope, Timestamp,
 };
 use surge_ping::{Client, Config, ICMP, PingIdentifier, PingSequence};
 use tokio_util::sync::CancellationToken;
@@ -42,6 +47,7 @@ pub struct ArpPingConnector {
     targets: Vec<Ipv4Addr>,
     timeout: Duration,
     concurrency: usize,
+    dns_server: Option<std::net::IpAddr>,
 }
 
 impl ArpPingConnector {
@@ -53,6 +59,7 @@ impl ArpPingConnector {
             targets,
             timeout: Duration::from_millis(DEFAULT_TIMEOUT_MS),
             concurrency: DEFAULT_CONCURRENCY,
+            dns_server: None,
         }
     }
 
@@ -72,6 +79,17 @@ impl ArpPingConnector {
     /// subnet actually costs, once probes overlap: `targets / concurrency` rounds of it.
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
+        self
+    }
+
+    /// Ask this one server for the hostnames instead of the system resolver.
+    ///
+    /// `None` — the default — is the system configuration, which is what an operator who
+    /// configures nothing expects. On a small network the names of the DHCP leases usually live at
+    /// the box that issued them, and that box is frequently not the resolver the hosts are
+    /// configured with: see [`crate::reverse_dns`] for the measurement that decided this shape.
+    pub fn with_dns_server(mut self, server: Option<std::net::IpAddr>) -> Self {
+        self.dns_server = server;
         self
     }
 }
@@ -142,6 +160,19 @@ impl Connector for ArpPingConnector {
         //
         // `buffered` (not `buffer_unordered`) preserves target order, so the observations a
         // scan emits are deterministic — the connector contract tests depend on it.
+        // The reverse resolver, built once per sweep. Best-effort by design: a resolver that cannot
+        // be built costs the sweep its hostnames and nothing else — the observations are what the
+        // product is here for, and a name is a nicety on top of one. Rebuilt each sweep on purpose,
+        // so an operator who fixes `/etc/resolv.conf` does not have to restart the product.
+        let dns = match crate::reverse_dns::ReverseDns::new(self.dns_server) {
+            Ok(dns) => Some(dns),
+            Err(detail) => {
+                tracing::warn!(%detail, "no reverse DNS this sweep — hosts stay unnamed");
+                None
+            }
+        };
+        let dns = dns.as_ref();
+
         let timeout = self.timeout;
         let client = &client;
         let mut probes = stream::iter(self.targets.iter().copied().enumerate())
@@ -150,10 +181,17 @@ impl Connector for ArpPingConnector {
                     .pinger(IpAddr::V4(ip), PingIdentifier((i as u16).wrapping_add(1)))
                     .await;
                 pinger.timeout(timeout);
-                match pinger.ping(PingSequence(0), &[0u8; 16]).await {
-                    Ok((_packet, rtt)) => Some((ip, rtt)),
-                    Err(_) => None,
-                }
+                let rtt = match pinger.ping(PingSequence(0), &[0u8; 16]).await {
+                    Ok((_packet, rtt)) => rtt,
+                    Err(_) => return None,
+                };
+                // Only a host that ANSWERED is asked about: the sweep learns names for the hosts
+                // it found, never for the 200-odd addresses of an empty subnet.
+                let hostname = match dns {
+                    Some(dns) => dns.name_of(ip).await,
+                    None => None,
+                };
+                Some((ip, rtt, hostname))
             })
             .buffered(self.concurrency);
 
@@ -167,14 +205,14 @@ impl Connector for ArpPingConnector {
                 next = probes.next() => next,
             };
             let Some(answer) = next else { break };
-            if let Some((ip, rtt)) = answer {
+            if let Some((ip, rtt, hostname)) = answer {
                 let millis = rtt.as_millis().min(u128::from(u32::MAX)) as u32;
                 sink.emit(Observation {
                     obs_id: ObsId::from_uuid(Uuid::now_v7()),
                     connector_id: self.id,
                     observed_at: now,
                     scope: self.scope,
-                    facts: emitted_facts(ip, millis),
+                    facts: emitted_facts(ip, millis, hostname),
                     raw: None,
                 });
             }
@@ -205,7 +243,7 @@ impl Connector for ArpPingConnector {
 /// question a connector story owns. The consequence is that `identity::l1::join`, which keys on
 /// `(l2_domain, mac)`, can place NOTHING this connector produces — see the tests below.
 pub(crate) fn declared_kinds() -> BTreeSet<FactKind> {
-    BTreeSet::from([FactKind::IpV4, FactKind::Rtt])
+    BTreeSet::from([FactKind::IpV4, FactKind::Rtt, FactKind::Hostname])
 }
 
 /// What this connector is BUILT to observe, and what it is built NOT to observe.
@@ -271,13 +309,65 @@ pub(crate) fn observes_and_cannot_see() -> (Vec<FactKind>, Vec<FactKind>) {
 /// classification is copy the operator reads in their own language.
 pub(crate) const SOURCE_NAME_KEY: &str = "sources.name.arp_ping";
 
+/// The connector's identity, DERIVED from what it is and what it watches rather than minted fresh.
+///
+/// # 🔴 Why this is not a `Uuid::now_v7()`, since 2026-09-09
+///
+/// It was, and the consequence was measured on the reference deployment: **eight distinct
+/// `connector_id`s in the store for ONE connector**, one per boot since July, seven of them dead.
+/// `reconcile` compares the most recent sighting of each SOURCE, so a dead source's last words
+/// would keep voting for ever — a host renamed after a restart would conflict with a boot that
+/// ended weeks earlier, and no gesture could close it.
+///
+/// ⚠️ It also closes half of story 6b.8's registered defect: `page::source_label` renders the top
+/// 32 bits of the id, which for a v7 UUID is a clock reading that **rolls every ≈65 seconds**, so
+/// the operator-visible source name changed at every restart. It is now stable.
+///
+/// 🔑 The name is the connector's KIND and its perimeter, because those are what make two sources
+/// different sources. Two instances watching two subnets are two sources; the same instance
+/// restarted is one. ⚠️ **Changing the perimeter therefore mints a new identity**, and the
+/// sightings of the old one stay in the store as a source that has stopped talking — registered,
+/// and the real closure is Epic 11's source registry.
+pub(crate) fn derived_connector_id(cidr: &str) -> ConnectorId {
+    ConnectorId::from_uuid(Uuid::new_v5(
+        &Uuid::NAMESPACE_OID,
+        format!("opencmdb:arp_ping:{cidr}").as_bytes(),
+    ))
+}
+
 /// The facts one answered host yields — the emission half.
 ///
 /// 🔴 **This is the half that carries the structural zero**, because `join` reads FACTS and never
 /// the descriptor. A pin on [`declared_kinds`] alone was measured GREEN while a `Fact::Mac` was
 /// added here.
-pub(crate) fn emitted_facts(addr: std::net::Ipv4Addr, millis: u32) -> Vec<Fact> {
-    vec![Fact::IpV4 { addr }, Fact::Rtt { millis }]
+///
+/// # 🔑 Why the hostname is a PARAMETER and not looked up here
+///
+/// The test module below predicted the shape of the next fact this connector would gain: *"a MAC
+/// comes from a neighbour lookup keyed on the address, which `emitted_facts(ip, millis)` cannot
+/// reach"*, and warned that a fact added at the emit site inside `poll` leaves both pins green.
+/// The hostname is exactly that shape — a PTR lookup keyed on the address, asynchronous, needing a
+/// resolver. So it arrives here as an argument rather than being fetched at the emit site, and the
+/// cross-check between what this vector carries and what [`declared_kinds`] declares keeps
+/// covering it. **That closes the predicted bypass for this fact; it does not close it for the
+/// next one**, which remains a connector story's to close (one construction site, or a CI that
+/// sets `OPENCMDB_NET_TESTS`).
+///
+/// `hostname` is `None` when the host answers to no name — the ordinary case, and not a failure:
+/// NFR7 forbids fabricating absence, so no fact is emitted rather than an empty one.
+pub(crate) fn emitted_facts(
+    addr: std::net::Ipv4Addr,
+    millis: u32,
+    hostname: Option<String>,
+) -> Vec<Fact> {
+    let mut facts = vec![Fact::IpV4 { addr }, Fact::Rtt { millis }];
+    if let Some(name) = hostname {
+        facts.push(Fact::Hostname {
+            name,
+            source: HostnameSource::Dns,
+        });
+    }
+    facts
 }
 
 #[cfg(test)]
@@ -322,8 +412,37 @@ mod tests {
         );
         assert_eq!(
             declared_kinds(),
-            BTreeSet::from([FactKind::IpV4, FactKind::Rtt]),
-            "exactly these two, so a third kind is a decision someone took rather than a drift"
+            BTreeSet::from([FactKind::IpV4, FactKind::Rtt, FactKind::Hostname]),
+            "exactly these three, so a fourth kind is a decision someone took rather than a drift"
+        );
+    }
+
+    /// The hostname is DECLARED unconditionally, and that is a statement about the connector
+    /// rather than about one sweep.
+    ///
+    /// 🔑 [`declared_kinds`] answers *what is this source BUILT to observe* — `/sources` renders it
+    /// under that heading and story 6b.8's whole honesty rests on the distinction. A ping sweep is
+    /// built to ask for a name; whether a given host answers to one is the sweep's business, not
+    /// the descriptor's. Making the declaration conditional on `dns_server` would say *"this
+    /// source cannot see hostnames"* to an operator who simply has no PTR records — the
+    /// fabricated absence NFR7 forbids, on the descriptor side.
+    #[test]
+    fn the_hostname_is_declared_whichever_resolver_is_asked() {
+        for server in [None, Some("192.0.2.53".parse().unwrap())] {
+            let connector = ArpPingConnector::new(
+                ConnectorId::from_uuid(Uuid::nil()),
+                scope(),
+                vec![Ipv4Addr::LOCALHOST],
+            )
+            .with_dns_server(server);
+            assert_eq!(
+                connector.dns_server, server,
+                "the builder carries the operator's choice"
+            );
+        }
+        assert!(
+            declared_kinds().contains(&FactKind::Hostname),
+            "the descriptor says what the source ASKS for, never what one network answered"
         );
     }
 
@@ -339,7 +458,11 @@ mod tests {
     /// live path would be skipped — and a mutation against a skipped test comes back green.
     #[test]
     fn the_ping_sweep_emits_no_mac() {
-        let facts = emitted_facts("203.0.113.1".parse().expect("a documentation address"), 7);
+        let facts = emitted_facts(
+            "203.0.113.1".parse().expect("a documentation address"),
+            7,
+            Some("nas-01.home.arpa".to_string()),
+        );
         assert!(
             !facts.iter().any(|f| matches!(f, Fact::Mac { .. })),
             "the identity engine keys on (l2_domain, mac) and reads FACTS: while this vector              carries no MAC, NOTHING the shipped product scans can ever be placed on an interface.              That is story 5.14's structural zero, and this assertion is what carries it"
@@ -348,6 +471,53 @@ mod tests {
             facts.iter().map(Fact::kind).collect::<BTreeSet<_>>(),
             declared_kinds(),
             "and the two halves agree today — the cross-check whose ABSENCE let a pin on one of              them stay green while the other changed"
+        );
+    }
+
+    /// A named host carries the name, and the name is attributed to DNS.
+    ///
+    /// The `source` is not decoration: `HostnameSource` is what tells a later rule whether a name
+    /// came from the DHCP lease, from mDNS or — here — from a PTR record, and a connector that
+    /// mislabels its own provenance lies to every rule downstream of it.
+    #[test]
+    fn a_named_host_carries_its_name_and_says_where_it_came_from() {
+        let facts = emitted_facts(
+            "203.0.113.1".parse().expect("a documentation address"),
+            7,
+            Some("wifi01-grange.home.arpa".to_string()),
+        );
+        assert!(
+            facts.iter().any(|f| matches!(
+                f,
+                Fact::Hostname { name, source }
+                    if name == "wifi01-grange.home.arpa" && *source == HostnameSource::Dns
+            )),
+            "the PTR answer is emitted as a Hostname fact attributed to DNS, and it is what turns              a queue of bare addresses into a queue an operator recognises: {facts:?}"
+        );
+    }
+
+    /// 🔴 **A host with no PTR record emits NO hostname fact — never an empty one.**
+    ///
+    /// 32 of the 69 addresses the reference deployment held on 2026-09-09 answer to no name, so
+    /// this is the ordinary case rather than an edge. NFR7/D35: the product states what it
+    /// observed and never fabricates absence, and `Fact::Hostname { name: "" }` would be an
+    /// assertion that the host is called nothing — which is not what the network said.
+    #[test]
+    fn an_unnamed_host_emits_exactly_what_it_did_before() {
+        let facts = emitted_facts(
+            "203.0.113.1".parse().expect("a documentation address"),
+            7,
+            None,
+        );
+        assert_eq!(
+            facts,
+            vec![
+                Fact::IpV4 {
+                    addr: "203.0.113.1".parse().unwrap()
+                },
+                Fact::Rtt { millis: 7 }
+            ],
+            "an unnamed host is the pre-hostname vector unchanged — no empty name, no placeholder"
         );
     }
     use opencmdb_core::connector::VecSink;
@@ -362,6 +532,29 @@ mod tests {
 
     fn now() -> Timestamp {
         chrono::DateTime::from_timestamp(0, 0).unwrap()
+    }
+
+    /// 🔴 **A restart must not create a second source**, and before 2026-09-09 it did: the
+    /// reference deployment's store carries EIGHT `connector_id`s for one connector, one per boot
+    /// since July. `reconcile` compares the newest sighting of each source, so each dead boot
+    /// would keep voting with the last thing it ever saw.
+    #[test]
+    fn the_same_perimeter_yields_the_same_source_across_restarts() {
+        assert_eq!(
+            derived_connector_id("192.0.2.0/24"),
+            derived_connector_id("192.0.2.0/24"),
+            "the identity is derived from what the source IS, so a restart changes nothing"
+        );
+        assert_ne!(
+            derived_connector_id("192.0.2.0/24"),
+            derived_connector_id("198.51.100.0/24"),
+            "and two perimeters are two sources — what they see cannot be compared as one"
+        );
+        assert_ne!(
+            derived_connector_id("192.0.2.0/24").as_uuid(),
+            Uuid::nil(),
+            "never the nil sentinel, which D21 reserves"
+        );
     }
 
     #[test]
