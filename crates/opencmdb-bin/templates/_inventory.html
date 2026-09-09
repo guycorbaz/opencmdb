@@ -1,9 +1,16 @@
 {#- The inventory: what the operator has DOCUMENTED, read from the store.
 
      🔴 No example marker anywhere in this file, and that is a statement rather than an omission:
-     every row here comes from `declared_attribute`. `Screen::Devices` is `Nature::Fed`, so the
-     route-table partition asserts the ABSENCE of a marker on this address — a marker added here
-     would red it. -#}
+     every row here comes from `declared_attribute`.
+
+     ⚠️ **What carries it is `the_inventorys_real_section_is_never_marked_a_demonstration`, and
+     nothing else.** An earlier version of this comment claimed `Screen::Devices` was
+     `Nature::Fed` and that the route-table partition would red a marker added here. Both halves
+     were false — the screen is `Mixed`, and for a `Mixed` screen the partition asserts a marker is
+     present SOMEWHERE — and two review layers MEASURED it by planting a badge in this very
+     section: 547 tests and ten gates green, on a page calling the operator's own records a
+     demonstration. *A comment that names a carrier the guard does not have tells the next author
+     the opposite of the truth.* -#}
 <section class="screen-section">
   <h2>{{ s.title }}{% if !inventory.total.is_empty() %} <span class="count">{{ inventory.total }}</span>{% endif %}</h2>
   <p class="lede">{{ s.lede }}</p>
@@ -11,7 +18,7 @@
   {%- if inventory.rows.is_empty() %}
   {#- The empty state NAMES the gesture that fills this screen. A screen that says "nothing here"
        and stops is a dead end; this one says where a record is written. -#}
-  <p class="empty">{{ s.none }} <a href="/triage">{{ s.triage }}</a></p>
+  <p class="empty">{{ s.none_before }} <a href="/triage">{{ s.triage }}</a> {{ s.none_after }}</p>
   {%- else %}
   <table class="grid">
     <thead>

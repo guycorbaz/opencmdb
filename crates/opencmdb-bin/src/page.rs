@@ -1599,7 +1599,7 @@ pub(crate) fn triage_router(
 /// 🔑 Guy's arbitration 4 of 2026-08-22, option (B), taken over setting `acquire_timeout` on the
 /// production pool: that governs the wait for a FREE connection, so under load it turns a
 /// legitimate wait into an error, and it would reach the scan pass as well.
-const PAGE_STORE_BUDGET: std::time::Duration = std::time::Duration::from_secs(5);
+pub(crate) const PAGE_STORE_BUDGET: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// A store read bounded by `budget`, or the response the operator gets instead.
 ///
@@ -1673,23 +1673,38 @@ pub async fn dashboard(State(state): State<TriageState>) -> Response {
 /// record that landed nowhere they could see — point 3 of the 2026-08-30 plan, and heavier since
 /// the reverse-DNS story made the gesture write two fields instead of one.
 ///
-/// It lives on the pool-bearing router because it reads the store, which is what `Nature::Fed`
-/// means here and what makes the demonstration loop skip it.
+/// It lives on the pool-bearing router because it reads the store. `Screen::Devices` is
+/// `Nature::Mixed` — the operator's records are real and the list below them is not — and the
+/// demonstration loop skips `Fed` and `Mixed` alike, which is why this handler exists at all.
 pub async fn devices(
     State(state): State<TriageState>,
     axum::extract::Query(query): axum::extract::Query<crate::example_screens::ScreenQuery>,
 ) -> Response {
-    let declared = match load_declared_attributes(&state.pool).await {
+    // 🔴 **BUDGETED, and the first draft was not** — all three review layers of 2026-09-09 found
+    // it and two measured it with the store paused: `/devices` answered in **30.00 s** where
+    // `/triage` and `/dashboard` answered in 5.00 s. That is sqlx's default acquire timeout and
+    // the exact figure Guy's arbitration 4 of 2026-08-22 exists to escape — *a calm sentence that
+    // takes half a minute to arrive is read as a fault of the product*. It was a strict
+    // REGRESSION for this address, which read nothing at all before this story.
+    //
+    // ⚠️ The three reads share ONE budget rather than three: what the operator waits is the whole
+    // page, not the slowest of its parts.
+    let store = store_within(PAGE_STORE_BUDGET, async {
+        let declared = load_declared_attributes(&state.pool)
+            .await
+            .map_err(server_error)?;
+        let provenance = crate::repo::load_declared_provenance_for_display(&state.pool)
+            .await
+            .map_err(server_error)?;
+        let observations = load_observation_facts(&state.pool)
+            .await
+            .map_err(server_error)?;
+        Ok((declared, provenance, observations))
+    })
+    .await;
+    let (declared, provenance, observations) = match store {
         Ok(rows) => rows,
-        Err(error) => return server_error(error),
-    };
-    let provenance = match crate::repo::load_declared_provenance_for_display(&state.pool).await {
-        Ok(rows) => rows,
-        Err(error) => return server_error(error),
-    };
-    let observations = match load_observation_facts(&state.pool).await {
-        Ok(rows) => rows,
-        Err(error) => return server_error(error),
+        Err(response) => return response,
     };
     let body = crate::inventory_view::InventoryBody {
         inventory: crate::inventory_view::build_inventory(
@@ -1743,9 +1758,19 @@ pub async fn devices(
 /// met** on its *blind gets a colour* half. The incident axis arrives with **Epic 13**, which
 /// `score.rs`, `connector/mod.rs` and `epics.md` all already name.
 pub async fn sources(State(state): State<TriageState>) -> Response {
-    let last = match crate::repo::last_observed_at(&state.pool).await {
+    // ⚠️ **Budgeted, and it was NOT — on `master`, since story 6b.8.** No review layer found it:
+    // all three tested the routes they thought of, and this one was not among them. The guard that
+    // did is derived from `Screen::ALL`, which is the whole argument for deriving a guard rather
+    // than listing what to check — measured at **30.00 s** the first time it ran.
+    let last = match store_within(PAGE_STORE_BUDGET, async {
+        crate::repo::last_observed_at(&state.pool)
+            .await
+            .map_err(server_error)
+    })
+    .await
+    {
         Ok(instant) => instant,
-        Err(error) => return server_error(error),
+        Err(response) => return response,
     };
     let body = SourcesBody {
         source: build_sources(state.perimeter.clone(), state.dns_server, last, now_utc()),
@@ -4418,7 +4443,9 @@ mod tests {
         );
     }
 
-    /// The inventory body as it is served, without the shell and without the example section.
+    /// The inventory body ALONE — not the page. The shell and the example section that follow it
+    /// in production are not here, and saying *"as it is served"* of this would be story 6b.4's
+    /// `triage_html` shape: a helper that renders what production does not.
     fn rendered_inventory(
         declared: Vec<(String, String, String)>,
         provenance: &[crate::repo::DeclaredProvenance],
@@ -4493,7 +4520,8 @@ mod tests {
     #[test]
     fn the_empty_inventory_says_where_a_record_is_written() {
         let html = rendered_inventory(Vec::new(), &[], &[]);
-        assert!(html.contains(&rust_i18n::t!("inventory.none").to_string()));
+        assert!(html.contains(&rust_i18n::t!("inventory.none_before").to_string()));
+        assert!(html.contains(&rust_i18n::t!("inventory.none_after").to_string()));
         assert!(
             html.contains("href=\"/triage\""),
             "and it LINKS there, so the sentence is a door rather than an instruction: {html}"
@@ -4504,6 +4532,20 @@ mod tests {
         assert!(
             html.contains(&format!(">{}</a>", rust_i18n::t!("nav.triage"))),
             "and the link says where it goes: {html}"
+        );
+        // 🔴 And the link is INSIDE the sentence, not stapled after its full stop. The first form
+        // served *"…press Add. **Triage**"* and this assertion PINNED it — *a test that pins the
+        // ugly thing is a test that requires it*, which the blind review layer named.
+        let before = html
+            .find(&rust_i18n::t!("inventory.none_before").to_string())
+            .expect("the sentence opens");
+        let link = html.find("href=\"/triage\"").expect("the door");
+        let after = html
+            .find(&rust_i18n::t!("inventory.none_after").to_string())
+            .expect("the sentence closes");
+        assert!(
+            before < link && link < after,
+            "the link must sit INSIDE the sentence: {html}"
         );
     }
 
@@ -4523,6 +4565,64 @@ mod tests {
         assert!(
             html.contains("192.0.2.10"),
             "and the addressable one is there"
+        );
+    }
+
+    /// 🔴 **Three properties this builder's own docs state were carried by NOTHING**, and the edge
+    /// review layer measured all three green: inverting *freshest first*, deleting the address
+    /// tie-break, and turning the provenance `max_by_key` into a `min_by_key`. The first is the
+    /// sharpest — the module's doc calls the last-seen column *"what makes the inventory worth
+    /// reading"*, and inverted, the machines nobody has seen sink to the bottom.
+    #[test]
+    fn the_inventory_is_ordered_freshest_first_and_says_which_write_it_names() {
+        let declared = vec![
+            declared_row("stale", "ipv4", "192.0.2.10"),
+            declared_row("fresh", "ipv4", "192.0.2.20"),
+            declared_row("same_a", "ipv4", "192.0.2.31"),
+            declared_row("same_b", "ipv4", "192.0.2.30"),
+        ];
+        let observations = [
+            batch("arp", 1_000, vec![ipv4("192.0.2.10")]),
+            batch("arp", 9_000, vec![ipv4("192.0.2.20")]),
+        ];
+        let view = crate::inventory_view::build_inventory(
+            declared,
+            &[
+                prov("stale", "ipv4", "adopted", 1_000),
+                prov("stale", "hostname", "manual", 9_500),
+            ],
+            &observations,
+            at(10_000),
+        );
+        let order: Vec<&str> = view.rows.iter().map(|r| r.ipv4.as_str()).collect();
+        assert_eq!(
+            order,
+            vec!["192.0.2.20", "192.0.2.10", "192.0.2.30", "192.0.2.31"],
+            "freshest first; then, among entities the network never showed, by address — which is \
+             what makes the tie-break load-bearing rather than decoration"
+        );
+        let stale = view
+            .rows
+            .iter()
+            .find(|r| r.ipv4 == "192.0.2.10")
+            .expect("queued");
+        assert_eq!(
+            stale.origin,
+            rust_i18n::t!("inventory.origin_manual"),
+            "the MOST RECENT declared write names the column — the earlier `adopted` one does not"
+        );
+    }
+
+    /// A record whose provenance the store does not carry says so, rather than rendering two empty
+    /// cells — the rule the name and last-seen columns already follow in the same table.
+    #[test]
+    fn a_record_with_no_provenance_row_says_so_rather_than_showing_nothing() {
+        let html = rendered_inventory(vec![declared_row("e1", "ipv4", "192.0.2.10")], &[], &[]);
+        assert!(html.contains(&rust_i18n::t!("inventory.origin_unknown").to_string()));
+        assert!(
+            !html.contains("<td class=\"muted\"></td>"),
+            "no empty cell anywhere: an empty cell reads as a value the product failed to \
+             render: {html}"
         );
     }
 
@@ -6579,6 +6679,40 @@ mod tests {
             !real.contains("example-marker-badge"),
             "the REAL section carries the marker: the product would be calling the operator's own \
              counts a demonstration"
+        );
+    }
+
+    #[test]
+    fn the_inventorys_real_section_is_never_marked_a_demonstration() {
+        // 🔴 **Two review layers PLANTED a marker inside the operator's own records and the whole
+        // suite stayed green** — 547 tests, ten gates, clippy — on a page that would then be
+        // calling the operator's documented machines a demonstration. The per-section guard
+        // beside this one exists for exactly that and is hardcoded to `rendered_dashboard`, so
+        // `/devices` inherited the shape of the dashboard without its property.
+        //
+        // ⚠️ The route-table partition cannot help: for a `Mixed` screen it asserts only that a
+        // marker is present SOMEWHERE. And the ordering guard reds only when the marker moves
+        // ABOVE the records — a POSITION accusation for a MARKING defect, and green when the same
+        // span sits below the table inside the same section.
+        let html = rendered_inventory(
+            vec![declared_row("e1", "ipv4", "192.0.2.10")],
+            &[prov("e1", "ipv4", "adopted", 9_000)],
+            &[batch("arp", 9_400, vec![ipv4("192.0.2.10")])],
+        );
+        assert!(
+            html.contains("192.0.2.10"),
+            "the premise: the operator's record is on this page"
+        );
+        assert_eq!(
+            html.matches("example-marker-badge").count(),
+            0,
+            "nothing in the operator's OWN section may carry the example marker: {html}"
+        );
+        assert_eq!(
+            html.matches("example-section").count(),
+            0,
+            "nor the anchor the marker guards read — a section marked that way is invisible to \
+             every check that walks example content: {html}"
         );
     }
 

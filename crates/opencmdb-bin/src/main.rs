@@ -1484,9 +1484,10 @@ mod tests {
         // read `1`, then `2`, then `5`, then `6`, each time with a message naming the stories that
         // decided them — and this is the first time it goes DOWN: `/devices` became `Mixed` on
         // 2026-09-09, so its example list is a SECTION of a screen rather than the whole of one
-        // and no longer appears in this partition, which walks whole screens by nature. — *"bumping the number without rewriting the sentence would leave a false
-        // explanation standing over a true count"* is story 6b.6's own warning, and this is the
-        // fourth bump.
+        // and no longer appears in this partition, which walks whole screens by nature.
+        // ⚠️ Story 6b.6's warning applies to a decrement exactly as it does to a bump: *"bumping
+        // the number without rewriting the sentence would leave a false explanation standing over
+        // a true count"* — which is why the sentence above is rewritten rather than the digit.
         // ⚠️ The count is a bookkeeping assertion whose failure message reads *update this number*,
         // which a developer follows: it is kept because it is the only thing that notices a screen
         // that GREW example content with no story behind it, and the two properties below are what
@@ -1602,6 +1603,86 @@ mod tests {
         );
     }
 
+    /// 🔴 **EVERY store-backed handler refuses within the budget, asserted through the ROUTE.**
+    ///
+    /// `a_screen_that_needs_the_store_refuses_within_its_budget` exercises `store_within` directly
+    /// with a budget of its own, so it stays green over a handler that never calls it and over a
+    /// `PAGE_STORE_BUDGET` set to an hour — the edge review layer of 2026-09-09 measured both.
+    /// That is how `/devices` shipped with no budget at all and held the browser **30.00 s** where
+    /// its siblings answered in 5.00 s.
+    ///
+    /// 🔑 **And this guard found a SECOND one on its first run: `/sources`, also 30.00 s, present
+    /// on `master` since story 6b.8.** No review layer saw it — all three probed the routes they
+    /// thought of. *That is the whole argument for deriving a guard from the route table rather
+    /// than listing what to check.*
+    ///
+    /// ⚠️ It asserts on the CLOCK, which no source-reading guard can do.
+    #[tokio::test]
+    async fn every_store_backed_screen_refuses_within_the_page_budget() {
+        let pool = sqlx::mysql::MySqlPoolOptions::new()
+            .acquire_timeout(std::time::Duration::from_secs(30))
+            .connect_lazy("mysql://nobody:nothing@127.0.0.1:1/none")
+            .expect("a lazy pool needs no server");
+        let budget = crate::page::PAGE_STORE_BUDGET;
+        // Derived from the route table, never a list: a screen that becomes store-backed is
+        // covered the day it does. `/diagnostic` is excluded because it RENDERS without the store
+        // and has a budget of its own.
+        //
+        // ⚠️ **Measured CONCURRENTLY.** Each screen waits out its whole budget here, so a
+        // sequential loop cost the suite `screens × budget` — twenty seconds for four. They are
+        // independent requests against a pool that answers none of them, so the wall clock is one
+        // budget rather than four, and the per-screen `elapsed` each assertion reads is still its
+        // own.
+        let probes = screens::Screen::ALL.into_iter().filter(|screen| {
+            matches!(
+                screen.nature(),
+                screens::Nature::Fed | screens::Nature::Mixed
+            ) && *screen != screens::Screen::Diagnostic
+        });
+        let measured = futures_util::future::join_all(probes.map(|screen| {
+            let pool = pool.clone();
+            async move {
+                let started = std::time::Instant::now();
+                let response = app(pool, config(false, Some(pair())), facts())
+                    .oneshot(
+                        Request::builder()
+                            .uri(screen.href())
+                            .header(
+                                axum::http::header::AUTHORIZATION,
+                                basic_header("op", "s3cret"),
+                            )
+                            .body(Body::empty())
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                (screen, response.status(), started.elapsed())
+            }
+        }))
+        .await;
+        assert!(
+            measured.len() >= 4,
+            "the premise: at least four screens read the store ({}) — with fewer, this guard has \
+             stopped seeing the surface it names",
+            measured.len()
+        );
+        for (screen, status, elapsed) in measured {
+            assert_eq!(
+                status,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "{} must refuse rather than hang",
+                screen.href()
+            );
+            assert!(
+                elapsed < budget * 2,
+                "{} answered in {elapsed:?}, past twice its {budget:?} budget — that is the \
+                 thirty-second sqlx default the budget exists to escape, and a calm sentence half \
+                 a minute late is read as a fault of the product",
+                screen.href()
+            );
+        }
+    }
+
     /// 🔴 **The operator's own records come FIRST, and the example list below them.**
     ///
     /// That order is the whole of Guy's arbitration of 2026-09-09. Story 6b.5's review found the
@@ -1618,10 +1699,10 @@ mod tests {
         let Some(pool) = nfr5_pool().await else {
             return;
         };
-        repo::insert_declared_attribute(&pool, "e-inv", "ipv4", "192.0.2.77")
+        repo::insert_declared_attribute(&pool, "e-inv", "ipv4", "198.51.100.42")
             .await
             .expect("declare");
-        let pool_for_cleanup = pool.clone();
+        let cleanup = pool.clone();
         let app = app(pool, config(false, Some(pair())), facts());
         let response = app
             .oneshot(
@@ -1644,8 +1725,30 @@ mod tests {
                 .to_vec(),
         )
         .unwrap();
+        // ⚠️ **A witness the example dataset cannot supply.** It was `192.0.2.77`, which is
+        // `desk-anna`'s address in the example list — measured on an EMPTY store, `/devices`
+        // already contains it — so the premise below was satisfied whether or not the real table
+        // rendered anything. The order assertion still reddened in every failure mode, but it
+        // would have named ORDER for a defect that is *the record never rendered*.
+        // 🔴 **Unseeded BEFORE the assertions, which is what makes it panic-safe.** The first form
+        // put the `DELETE` last and the edge review layer measured the consequence: plant a
+        // defect, watch the test fail, and `e-inv` is still in the shared database afterwards —
+        // where `the_marker_partition_…` reads it, on three routes, truncating nothing. Its own
+        // comment said *a test that seeds should unseed*, and the remedy written was not
+        // panic-safe.
+        //
+        // ⚠️ A `Drop` guard was tried and REVERTED: an sqlx pool belongs to the runtime that built
+        // it, so deleting from another thread's runtime waits out the thirty-second acquire
+        // timeout and deletes nothing. Measured at 30.03 s. Everything this test needs is in
+        // `body` by now, so the ordering is the whole fix.
+        sqlx::query("DELETE FROM declared_attribute WHERE entity_id = ?")
+            .bind("e-inv")
+            .execute(&cleanup)
+            .await
+            .expect("unseed");
+
         let real = body
-            .find("192.0.2.77")
+            .find("198.51.100.42")
             .expect("the documented record reaches the page");
         let marker = body
             .find("example-marker")
@@ -1654,16 +1757,6 @@ mod tests {
             real < marker,
             "the operator's own record must come BEFORE the demonstration, not after it"
         );
-        // ⚠️ **Left as it was found.** This suite shares one database and `nfr5_pool` cleans at the
-        // START, so a row left here reaches whatever runs next — and `the_marker_partition_…`
-        // reads the store: with a declared entity present, `/triage` renders a detail pane, which
-        // is how CI found the attribute-quote defect in `visible_text`. The defect is fixed; the
-        // coupling is not, and a test that seeds should unseed.
-        sqlx::query("DELETE FROM declared_attribute WHERE entity_id = ?")
-            .bind("e-inv")
-            .execute(&pool_for_cleanup)
-            .await
-            .expect("clean up after this test");
     }
 
     /// 🔴 **The filter narrows THROUGH THE ROUTE — the guard that could see what the pure one

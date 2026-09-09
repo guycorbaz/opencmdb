@@ -341,9 +341,12 @@ inventory.title:
 inventory.lede:
   en: "What you have documented. A row here is a record you wrote; an address nobody has claimed is a question, and questions are in the triage."
   fr: "Ce que vous avez documenté. Une ligne est une fiche que vous avez écrite ; une adresse que personne ne revendique est une question, et les questions sont dans le triage."
-inventory.none:
-  en: "Nothing documented yet. The triage queue is where a record is written: select a row the network shows and press Add."
-  fr: "Rien de documenté pour l'instant. C'est dans la file de triage qu'une fiche s'écrit : choisissez une ligne que le réseau montre et pressez Ajouter."
+inventory.none_before:
+  en: "Nothing documented yet. A record is written in the"
+  fr: "Rien de documenté pour l'instant. Une fiche s'écrit dans la"
+inventory.none_after:
+  en: "queue: select a row the network shows, and press the button that adds it."
+  fr: "file de triage : choisissez une ligne que le réseau montre, et pressez le bouton qui l'ajoute."
 inventory.col_name:
   en: "Name"
   fr: "Nom"
@@ -371,6 +374,9 @@ inventory.origin_adopted:
 inventory.origin_manual:
   en: "entered by hand"
   fr: "saisi à la main"
+inventory.origin_unknown:
+  en: "provenance not recorded"
+  fr: "provenance non enregistrée"
 inventory.n_fields_one:
   en: "%{n} field"
   fr: "%{n} champ"

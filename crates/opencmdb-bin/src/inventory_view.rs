@@ -27,6 +27,8 @@ use std::collections::BTreeMap;
 
 use askama::Template;
 
+use opencmdb_core::observation::Fact;
+
 use crate::repo::{DeclaredProvenance, ObservedBatch};
 
 /// One documented entity, as the inventory shows it.
@@ -78,8 +80,17 @@ pub(crate) struct InventoryStrings {
     pub(crate) title: String,
     /// The sentence under it.
     pub(crate) lede: String,
-    /// What the screen says when nothing has been documented yet.
-    pub(crate) none: String,
+    /// What the screen says when nothing has been documented yet, before the link.
+    ///
+    /// 🔴 **Split in two so the link sits INSIDE the sentence.** It was one string followed by a
+    /// bare `<a>Triage</a>`, which served *"…and press Add. **Triage**"* — a word stapled after a
+    /// full stop, not a door — and the guard asserted that shape, so a test REQUIRED it. ⚠️ It
+    /// also spelled the button's label as a literal, and that label was renamed once already
+    /// (« Merger » → « Ajouter », v0.3.1): the sentence now describes the control instead of
+    /// quoting it, so the next rename cannot make it false.
+    pub(crate) none_before: String,
+    /// The rest of that sentence, after the link.
+    pub(crate) none_after: String,
     /// The name column.
     pub(crate) col_name: String,
     /// The address column.
@@ -117,7 +128,8 @@ pub(crate) fn inventory_strings() -> InventoryStrings {
     InventoryStrings {
         title: rust_i18n::t!("inventory.title").to_string(),
         lede: rust_i18n::t!("inventory.lede").to_string(),
-        none: rust_i18n::t!("inventory.none").to_string(),
+        none_before: rust_i18n::t!("inventory.none_before").to_string(),
+        none_after: rust_i18n::t!("inventory.none_after").to_string(),
         col_name: rust_i18n::t!("inventory.col_name").to_string(),
         col_ipv4: rust_i18n::t!("inventory.col_ipv4").to_string(),
         col_fields: rust_i18n::t!("inventory.col_fields").to_string(),
@@ -147,6 +159,36 @@ pub(crate) fn build_inventory(
         entities.entry(entity_id).or_default().push((key, value));
     }
 
+    // 🔴 **The freshest sighting PER ADDRESS, computed once.** The first draft scanned every
+    // observation for every entity, so the cost was `entities × observations` — on the screen the
+    // same review found had no store budget. Measured by the edge layer at 300 entities and 50 000
+    // observations: **3.7 s**, and sixteen concurrent requests delayed `/healthz` by **7.57 s**,
+    // which is the route a container orchestrator polls with a three-to-five-second patience.
+    //
+    // ⚠️ The read itself is still unbounded (issue #150) and this does not bound it: it removes
+    // the multiplication, not the scan.
+    //
+    // 🔑 It keys on the SAME thing `crate::page::in_perimeter` matches — an `IpV4` fact whose
+    // rendered address equals the entity's — so the freshness shown here and the comparison behind
+    // the queue cannot disagree about which sightings belong to whom.
+    let mut freshest: BTreeMap<String, &ObservedBatch> = BTreeMap::new();
+    for batch in observations {
+        for fact in &batch.facts {
+            let Fact::IpV4 { addr } = fact else { continue };
+            let entry = freshest.entry(addr.to_string());
+            match entry {
+                std::collections::btree_map::Entry::Vacant(slot) => {
+                    slot.insert(batch);
+                }
+                std::collections::btree_map::Entry::Occupied(mut slot) => {
+                    if batch.observed_at > slot.get().observed_at {
+                        slot.insert(batch);
+                    }
+                }
+            }
+        }
+    }
+
     let mut rows: Vec<InventoryRow> = Vec::new();
     for (entity_id, attrs) in entities {
         let value_of = |key: &str| {
@@ -165,35 +207,43 @@ pub(crate) fn build_inventory(
         }
 
         // The entity's most recent declared write — the same rule the triage pane applies.
+        //
+        // ⚠️ **Provenance is per FIELD and this column shows ONE word for the entity.** The
+        // documenting gesture writes two fields in one transaction, so they share `updated_at` and
+        // the tie must not be decided by the store's row order: `attr_key` breaks it, which makes
+        // the column deterministic without pretending it is complete. An entity whose `ipv4` was
+        // adopted and whose `hostname` was entered by hand shows one of the two, and the day a
+        // field-level provenance matters this column is where it lands. Registered.
         let newest_write = provenance
             .iter()
             .filter(|p| p.entity_id == entity_id)
-            .max_by_key(|p| p.updated_at);
+            .max_by_key(|p| (p.updated_at, p.attr_key.clone()));
 
-        // The freshest sighting of this address. `crate::page::in_perimeter` is the SAME predicate
-        // the reconciliation uses to decide whether an observation is about this entity, so the
-        // freshness shown here and the comparison behind the queue cannot disagree about which
-        // sightings belong to whom.
-        let newest_sighting = observations
-            .iter()
-            .filter(|b| crate::page::in_perimeter(&b.facts, &ipv4))
-            .max_by_key(|b| b.observed_at);
+        let newest_sighting = freshest.get(&ipv4).copied();
 
         rows.push(InventoryRow {
             id: entity_id,
             name: value_of("hostname"),
             ipv4,
             fields: crate::page::counted_fields("inventory.n_fields", attrs.len()),
-            origin: newest_write.map_or_else(String::new, |p| {
-                rust_i18n::t!(match p.origin.as_str() {
-                    "adopted" => "inventory.origin_adopted",
-                    _ => "inventory.origin_manual",
-                })
-                .to_string()
-            }),
-            documented: newest_write.map_or_else(String::new, |p| {
-                crate::page::relative_time(now, p.updated_at)
-            }),
+            // ⚠️ **Words, never an empty cell** — the rule the name and last-seen columns already
+            // follow in this same table, and the review found these two breaking it: with no
+            // provenance row they rendered `<td class="muted"></td>`, which reads as a value the
+            // product failed to render rather than as a fact it does not hold.
+            origin: newest_write.map_or_else(
+                || rust_i18n::t!("inventory.origin_unknown").to_string(),
+                |p| {
+                    rust_i18n::t!(match p.origin.as_str() {
+                        "adopted" => "inventory.origin_adopted",
+                        _ => "inventory.origin_manual",
+                    })
+                    .to_string()
+                },
+            ),
+            documented: newest_write.map_or_else(
+                || rust_i18n::t!("meta.never_seen").to_string(),
+                |p| crate::page::relative_time(now, p.updated_at),
+            ),
             seen: newest_sighting.map_or_else(
                 || rust_i18n::t!("meta.never_seen").to_string(),
                 |b| crate::page::relative_time(now, b.observed_at),
@@ -204,6 +254,12 @@ pub(crate) fn build_inventory(
     }
 
     // Freshest first, then by address so the order is total and does not depend on the store's.
+    // Freshest first, then by address. ⚠️ Two entities may declare the SAME address (registered
+    // for the queue by story 6b.4 and inherited here), in which case both keys are equal and the
+    // tie falls to `sort_by`'s stability over the entity-id order of the `BTreeMap` above —
+    // deterministic, but by a mechanism worth naming rather than calling the order *total*.
+    // ⚠️ The address compares as a STRING, so `192.0.2.9` follows `192.0.2.10`. Cosmetic, and only
+    // within one freshness.
     rows.sort_by(|a, b| {
         a.age_seconds
             .cmp(&b.age_seconds)

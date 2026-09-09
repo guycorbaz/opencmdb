@@ -22,6 +22,14 @@ The example list keeps its place below them, under its marker: it goes on showin
 grouping will fill. ⚠️ With one or two records of your own the screen still shows mostly
 demonstration, and putting yours above it mitigates that rather than removing it.
 
+⚠️ **`/devices` now needs the database.** It read nothing before, so it always rendered; it answers
+an honest 500 within five seconds when the store cannot be reached, like `/triage` and `/dashboard`.
+
+🔑 **And `/sources` stopped hanging.** It has read the store since `v0.2.0` without a time budget, so
+an unreachable database left it holding the browser for **thirty seconds** before the calm sentence
+arrived. Nobody had noticed; the guard written for the inventory found it on its first run, because
+it walks the route table instead of a list.
+
 ### The reverse-DNS half
 
 ⚠️ **A name the resolver refuses is not a name.** An answer that is itself an IP address, or that

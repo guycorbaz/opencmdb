@@ -162,11 +162,11 @@ impl ExampleContent {
     /// Render this content's body.
     fn render(self, query: &crate::example_screens::ScreenQuery) -> String {
         match self {
-            ExampleContent::DevicesInventory => crate::example_screens::inventory_body(query),
             // ⚠️ `query`, not `ScreenQuery::default()`. It read `default()` after the parameter
             // had been threaded through the router, `demonstration_screen` and this signature —
             // and **nothing warned**: Rust does not lint an unused function PARAMETER. The route
             // filtered nothing while every pure test stayed green. Only the route test saw it.
+            ExampleContent::DevicesInventory => crate::example_screens::inventory_body(query),
             // Unreachable by construction, and by the SAME mechanism as `Nature::Fed` below:
             // `router` never registers this screen's address, because the parameterised route
             // serves it. It is `unreachable!` rather than a silent fallback so that the day

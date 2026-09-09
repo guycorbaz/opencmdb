@@ -879,6 +879,25 @@ pub(crate) fn key_names_in_text(html: &str) -> Vec<String> {
                 .filter(|part| part.chars().any(|c| c.is_ascii_alphabetic()))
                 .count()
                 >= 2
+            // 🔴 **The first segment must be one of THIS PRODUCT'S namespaces**, and until
+            // 2026-09-09 nothing checked it. Every page this guard walked rendered the product's
+            // own copy; `/devices` is the first to render OPERATOR DATA, and an ordinary
+            // documented hostname has exactly the shape above — the edge review layer reddened
+            // the whole suite by documenting `sw03.home.arpa`:
+            //
+            //     /devices renders ["sw03.home.arpa"], which are i18n KEYS and not words
+            //
+            // ⚠️ CI was green by luck: `a11y/seed.sql` names its hosts `nas-01`, `switch-core`,
+            // `printer-hp` — all hyphenated, which the shape test already rejects. But
+            // `reverse_dns::sanitise` keeps a FQDN WHOLE by decision, and its own tests admit
+            // `iPhone.home.arpa`.
+            //
+            // 🔑 The narrowing keeps the defect this guard was built for. Story 6b.6 shipped
+            // headings resolving to `devices.unplaced_*` — keys that do NOT exist, which
+            // `rust-i18n` renders verbatim — and `devices` IS a namespace of this file, so they
+            // are still caught. What is excluded is a first segment no key of ours ever starts
+            // with.
+            && KEY_NAMESPACES.contains(&parts[0])
     }
 
     visible_text(html)
@@ -887,6 +906,30 @@ pub(crate) fn key_names_in_text(html: &str) -> Vec<String> {
         .map(str::to_string)
         .collect()
 }
+
+/// The first segment of every key `app.yml` defines — the namespaces this product's copy uses.
+///
+/// 🔑 **Derived from the translation file at compile time, never a hand-kept list**: a namespace
+/// added to `app.yml` reaches [`key_names_in_text`] without anybody editing this, and one removed
+/// stops being claimed. `include_str!` is the same idiom `every_key_carries_both_locales` uses.
+#[cfg(test)]
+pub(crate) static KEY_NAMESPACES: std::sync::LazyLock<Vec<&'static str>> =
+    std::sync::LazyLock::new(|| {
+        let mut namespaces: Vec<&'static str> = include_str!("../locales/app.yml")
+            .lines()
+            .filter_map(|line| {
+                // A key line is `namespace.rest:` at column zero; anything indented is a value.
+                let key = line.strip_suffix(':')?;
+                if key.starts_with(char::is_whitespace) {
+                    return None;
+                }
+                key.split_once('.').map(|(head, _)| head)
+            })
+            .collect();
+        namespaces.sort_unstable();
+        namespaces.dedup();
+        namespaces
+    });
 
 /// What the operator actually reads: `html` with every tag removed.
 ///
@@ -916,6 +959,15 @@ pub(crate) fn visible_text(html: &str) -> String {
     // invisible on an empty database and reddened in CI, where an earlier test had left some. *A
     // false positive that depends on the state of the store is one nobody can reproduce on
     // demand*, and this file's own neighbouring comment says what such a guard is worth.
+    // ⚠️ **An unterminated quote is a PANIC, not a truncation.** The edge review layer measured
+    // that this tracking, left unbounded, trades the false positive it fixes for a silent false
+    // NEGATIVE: `<p title="unclosed>Documenté</p><p>nav.dashboard</p>` yields no text and no key
+    // at all, so the key guard AND the rendered-word floor go blind for the rest of the document.
+    //
+    // 🔑 Abandoning the quote at the next `>` was tried and REVERTED: it restores the very defect
+    // the tracking exists to fix, since `>=` inside an attribute is exactly such a `>`. A test
+    // helper that cannot do its job must say so — the assertion below is at the end of this
+    // function.
     let mut quote: Option<char> = None;
     for c in html.chars() {
         if depth > 0 {
@@ -953,6 +1005,11 @@ pub(crate) fn visible_text(html: &str) -> String {
             _ => {}
         }
     }
+    assert!(
+        quote.is_none(),
+        "unbalanced quote in the markup under test — this helper would silently return a \
+         TRUNCATED text and every guard reading it would go blind for the rest of the document"
+    );
     text
 }
 
@@ -961,6 +1018,42 @@ mod tests {
     use super::*;
     use crate::state_vocabulary::{BINDING_STATE_AXIS, QUALIFIER_SEPARATOR};
     use std::collections::BTreeSet;
+
+    /// 🔴 **An ordinary documented hostname is not an i18n key**, and until the 2026-09-09 review
+    /// this guard said it was. `/devices` is the first walked page that renders OPERATOR DATA, and
+    /// the edge layer reddened the whole suite by documenting `sw03.home.arpa`:
+    ///
+    /// > `/devices renders ["sw03.home.arpa"], which are i18n KEYS and not words`
+    ///
+    /// ⚠️ CI was green by luck — `a11y/seed.sql`'s hosts are all hyphenated, which the shape test
+    /// already rejects — while `reverse_dns::sanitise` keeps a FQDN whole by decision.
+    #[test]
+    fn a_documented_hostname_is_not_reported_as_a_key() {
+        for hostname in [
+            "sw03.home.arpa",
+            "iPhone.home.arpa",
+            "nas.lan",
+            "router.local",
+        ] {
+            assert!(
+                key_names_in_text(&format!("<td>{hostname}</td>")).is_empty(),
+                "{hostname:?} is a host's name, not a key of this product"
+            );
+        }
+        // The CONTROL, and it is what keeps the narrowing honest: story 6b.6 shipped headings
+        // resolving to keys that do NOT exist, and `rust-i18n` renders such a key verbatim.
+        // `devices` IS a namespace of `app.yml`, so the defect this guard was built for is still
+        // caught.
+        assert_eq!(
+            key_names_in_text("<h2>devices.unplaced_title</h2>"),
+            vec!["devices.unplaced_title".to_string()],
+            "a key-shaped word in one of THIS product's namespaces is still a key"
+        );
+        assert!(
+            KEY_NAMESPACES.contains(&"devices") && KEY_NAMESPACES.contains(&"inventory"),
+            "the namespaces are read from app.yml, so this test says what the file says"
+        );
+    }
 
     /// 🔴 **A `>` inside a quoted attribute does not end the tag.** CI found this and a local run
     /// could not: the specimen is `/triage`'s real markup, and the pane that carries it renders
@@ -989,6 +1082,16 @@ mod tests {
             key_names_in_text("<p>nav.dashboard</p>"),
             vec!["nav.dashboard".to_string()]
         );
+    }
+
+    /// 🔴 **Unbalanced markup is a PANIC rather than a silent truncation.** The edge review layer
+    /// measured the alternative: one unterminated quote and `visible_text` returns a space, so the
+    /// key guard and the rendered-word floor both go blind for everything after it — the floor's
+    /// own message would then be satisfied by nothing.
+    #[test]
+    #[should_panic(expected = "unbalanced quote")]
+    fn an_unterminated_quote_is_said_rather_than_swallowed() {
+        visible_text("<p title=\"unclosed>Documenté</p><p>nav.dashboard</p>");
     }
 
     /// Every `class="…"` literal a template names, with any Askama expression removed.
