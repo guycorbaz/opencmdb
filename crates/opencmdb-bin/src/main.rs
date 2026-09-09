@@ -12,6 +12,7 @@
 
 mod arp_ping;
 mod auth;
+mod dashboard_view;
 mod dburl;
 mod diagnostic;
 mod document;
@@ -21,6 +22,7 @@ mod fault_injection;
 mod fixture_connector;
 mod fixtures;
 mod identity_view;
+mod inventory_view;
 mod l1_runner;
 mod metrics;
 mod page;
@@ -1478,25 +1480,27 @@ mod tests {
             "the premise: every screen the loop should reach was probed — a loop that went empty, \
              or one whose skip rule drifted from the route table, would assert nothing"
         );
-        // 🔴 **SIX witness screens now, and every one is a DECISION rather than a drift.** This
-        // read `1`, then `2`, then `5`, each time with a message naming the stories that decided
-        // them — *"bumping the number without rewriting the sentence would leave a false
+        // 🔴 **FIVE witness screens now, and every one is a DECISION rather than a drift.** This
+        // read `1`, then `2`, then `5`, then `6`, each time with a message naming the stories that
+        // decided them — and this is the first time it goes DOWN: `/devices` became `Mixed` on
+        // 2026-09-09, so its example list is a SECTION of a screen rather than the whole of one
+        // and no longer appears in this partition, which walks whole screens by nature. — *"bumping the number without rewriting the sentence would leave a false
         // explanation standing over a true count"* is story 6b.6's own warning, and this is the
         // fourth bump.
         // ⚠️ The count is a bookkeeping assertion whose failure message reads *update this number*,
         // which a developer follows: it is kept because it is the only thing that notices a screen
         // that GREW example content with no story behind it, and the two properties below are what
         // notice a screen showing the wrong thing.
-        // 🔑 **And it is now the LAST such bump this epic can make**: `Screen::ALL` holds ten
-        // screens, six carry example content, three are fed by the store and one is mixed — so
-        // every address is accounted for and a seventh witness could only come from a NEW screen.
+        // 🔑 **Every address is accounted for**: `Screen::ALL` holds ten screens, five are wholly
+        // example, three are fed by the store and two are mixed — so a sixth witness could only
+        // come from a NEW screen.
         assert_eq!(
             example_contents.len(),
-            6,
-            "the witness screens are the inventory (6b.3), the device record (6b.6), the \
-             applications and IPAM frames (6b.7), the alert list (6b.8) and the commissioning \
-             walk-through (6b.9), and a seventh is a screen that grew example content without a \
-             story deciding it should: \
+            5,
+            "the witness screens are the device record (6b.6), the applications and IPAM frames \
+             (6b.7), the alert list (6b.8) and the commissioning walk-through (6b.9) — the \
+             inventory left this set on 2026-09-09 when `/devices` became mixed — and a sixth is \
+             a screen that grew example content without a story deciding it should: \
              {example_contents:?}"
         );
         // 🔴 **A WITNESS IS ONLY A WITNESS IF IT IS DISTINCTIVE, and nothing said so until story
@@ -1598,6 +1602,59 @@ mod tests {
         );
     }
 
+    /// 🔴 **The operator's own records come FIRST, and the example list below them.**
+    ///
+    /// That order is the whole of Guy's arbitration of 2026-09-09. Story 6b.5's review found the
+    /// dashboard's invented cards visually dominant over its honest section and 6b.12's visual
+    /// sweep confirmed it by eye; `/devices` inherits the risk the day it becomes mixed, and the
+    /// order is what mitigates it. ⚠️ Mitigates, not removes — with one documented record the
+    /// screen still shows mostly fiction, and that is registered rather than claimed closed.
+    ///
+    /// 🔑 Asserted on the SERVED page and through the real route, because the composition happens
+    /// in the handler and nowhere a pure builder can be reached.
+    #[tokio::test]
+    async fn the_inventory_puts_the_operators_records_above_the_example_list() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = nfr5_pool().await else {
+            return;
+        };
+        repo::insert_declared_attribute(&pool, "e-inv", "ipv4", "192.0.2.77")
+            .await
+            .expect("declare");
+        let app = app(pool, config(false, Some(pair())), facts());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/devices")
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "s3cret"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = String::from_utf8(
+            axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
+        let real = body
+            .find("192.0.2.77")
+            .expect("the documented record reaches the page");
+        let marker = body
+            .find("example-marker")
+            .expect("the example section keeps its marker");
+        assert!(
+            real < marker,
+            "the operator's own record must come BEFORE the demonstration, not after it"
+        );
+    }
+
     /// 🔴 **The filter narrows THROUGH THE ROUTE — the guard that could see what the pure one
     /// could not.**
     ///
@@ -1609,9 +1666,20 @@ mod tests {
     /// 🔑 Epic 5's dominant class — *a guard placed where the defect cannot occur reads as coverage
     /// and is none* — and story 6b.4's `triage_html` was the same shape: a helper that renders what
     /// production does not.
+    ///
+    /// ⚠️ **It needs a STORE since 2026-09-09**, because `/devices` became mixed and its real half
+    /// reads `declared_attribute`. It used to run on `lazy_pool()`'s dead URL and answered 200,
+    /// which is precisely the shape story 6b.3's review condemns — *a gate keyed on a fact that
+    /// does not govern the code under test*. CI supplies a store, so this runs there; without one
+    /// it SKIPS, and a skipped test comes back green under a mutation. That limit is stated here
+    /// rather than discovered.
     #[tokio::test]
     async fn the_filter_narrows_through_the_real_route() {
-        let app = app(lazy_pool(), config(false, Some(pair())), facts());
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = nfr5_pool().await else {
+            return;
+        };
+        let app = app(pool, config(false, Some(pair())), facts());
         let response = app
             .oneshot(
                 Request::builder()

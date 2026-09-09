@@ -16,6 +16,7 @@ use opencmdb_core::{AbstentionCause, reconcile};
 use sqlx::MySqlPool;
 use uuid::Uuid;
 
+use crate::dashboard_view::{DashboardBody, build_dashboard};
 use crate::identity_view::{IdentityView, build_identity_view};
 use crate::repo::{
     ObservedBatch, classify, count_engine_reach, load_declared_attributes, load_observation_facts,
@@ -151,82 +152,82 @@ struct ReconciledView {
 
 /// The user-facing strings, resolved through the i18n `t!()` seam (Story 3.8). The templates read
 /// these instead of literals, so every rendered string flows through `rust-i18n`.
-struct Strings {
-    tagline: String,
+pub(crate) struct Strings {
+    pub(crate) tagline: String,
     /// The navigation's accessible name (story 6b.2).
-    nav_label: String,
+    pub(crate) nav_label: String,
     /// The reconciliation card's accessible name (story 6b.10).
     ///
     /// 🔴 It was an English LITERAL in `_gap_card.html` until story 6b.10's sweep, and it is the
     /// clearest case that story exists for: copy a **sighted browser look cannot see**, on the
     /// card that predates this epic. Nine French looks walked past it; one `grep` over the
     /// templates' human-text attributes found it.
-    gap_card_label: String,
+    pub(crate) gap_card_label: String,
     /// The example-data marker's badge (story 6b.3).
-    example_badge: String,
+    pub(crate) example_badge: String,
     /// The example-data marker's sentence (story 6b.3).
-    example_sentence: String,
+    pub(crate) example_sentence: String,
     /// The dashboard's real-half heading (story 6b.5).
-    dash_real_heading: String,
+    pub(crate) dash_real_heading: String,
     /// The dashboard's example-half heading (story 6b.5).
-    dash_example_heading: String,
+    pub(crate) dash_example_heading: String,
     /// What the dashboard says when a scan has landed and the identity pass has not run (6b.5).
-    dash_pending_resolution: String,
+    pub(crate) dash_pending_resolution: String,
     /// The label before the last-observation instant (story 6b.5).
-    dash_last_observed: String,
+    pub(crate) dash_last_observed: String,
     /// What the dashboard says when nothing has ever been observed (story 6b.5).
-    dash_never_observed: String,
+    pub(crate) dash_never_observed: String,
     /// The heading of the *what grew since your last visit* section (story 6b.5).
-    dash_since_heading: String,
+    pub(crate) dash_since_heading: String,
     /// Its body — an example, because the product has no notion of a visit (story 6b.5).
-    dash_since_body: String,
+    pub(crate) dash_since_body: String,
     /// The triage screen's own heading (story 6b.4).
-    triage_title: String,
+    pub(crate) triage_title: String,
     /// The queue's count line — a fact in a sentence, never a badge (story 6b.4).
-    triage_pending: String,
+    pub(crate) triage_pending: String,
     /// The age-sort toggle's label (story 6b.4, AC3).
-    triage_sort_age: String,
+    pub(crate) triage_sort_age: String,
     /// The sentence that says what a triage row IS (story 6b.4).
-    triage_lede: String,
+    pub(crate) triage_lede: String,
     /// What the queue says when there is nothing to triage (story 6b.4).
-    triage_empty: String,
+    pub(crate) triage_empty: String,
     /// The badge a not-yet-built GESTURE carries (story 6b.4b).
     ///
     /// ⚠️ It was a pair of its own, distinct from the `pending_*` pair an `Empty` screen carried —
     /// that one said *this SCREEN is not built*, a different population saying a different thing.
     /// Story 6b.9 removed the last `Empty` screen and the pair with it; a control is now the only
     /// thing in this product that says *not built*.
-    gesture_badge: String,
+    pub(crate) gesture_badge: String,
     /// The one sentence the action bar shows, pointed at by every planned control (story 6b.4b).
-    gesture_not_built: String,
+    pub(crate) gesture_not_built: String,
     /// The badge on a control that is BUILT and switched off — never the same word as `gesture_badge`.
-    gesture_badge_off: String,
+    pub(crate) gesture_badge_off: String,
     /// The sentence for that state, naming the switch that turns it on.
-    gesture_not_enabled: String,
+    pub(crate) gesture_not_enabled: String,
     /// The perimeter label in the navigation footer, as the mock shows it (story 6b.2).
-    nav_perimeter: String,
-    entity: String,
-    refresh: String,
-    declared: String,
-    observed: String,
-    no_observation: String,
-    the_gap: String,
-    no_gap: String,
-    arrow_observed: String,
-    reach: String,
-    reach_hint: String,
-    nothing_unplaced: String,
-    no_declared_title: String,
-    no_declared_hint: String,
-    identity_title: String,
-    identity_placed: String,
-    identity_not_placed: String,
-    identity_because: String,
-    identity_floor: String,
-    identity_unit: String,
-    identity_nothing_seen: String,
-    identity_all_placed: String,
-    identity_settled: String,
+    pub(crate) nav_perimeter: String,
+    pub(crate) entity: String,
+    pub(crate) refresh: String,
+    pub(crate) declared: String,
+    pub(crate) observed: String,
+    pub(crate) no_observation: String,
+    pub(crate) the_gap: String,
+    pub(crate) no_gap: String,
+    pub(crate) arrow_observed: String,
+    pub(crate) reach: String,
+    pub(crate) reach_hint: String,
+    pub(crate) nothing_unplaced: String,
+    pub(crate) no_declared_title: String,
+    pub(crate) no_declared_hint: String,
+    pub(crate) identity_title: String,
+    pub(crate) identity_placed: String,
+    pub(crate) identity_not_placed: String,
+    pub(crate) identity_because: String,
+    pub(crate) identity_floor: String,
+    pub(crate) identity_unit: String,
+    pub(crate) identity_nothing_seen: String,
+    pub(crate) identity_all_placed: String,
+    pub(crate) identity_settled: String,
 }
 
 /// A count and its noun, INFLECTED — `1 field`, `2 fields`, `1 champ`, `2 champs`.
@@ -251,7 +252,7 @@ pub(crate) fn counted_fields(base: &str, count: usize) -> String {
     rust_i18n::t!(key.as_str(), n = count).to_string()
 }
 
-fn strings() -> Strings {
+pub(crate) fn strings() -> Strings {
     use rust_i18n::t;
     // One constant for the switch, bound here so the initialiser fits the one-line shape the field
     // scan below reads. ⚠️ That scan skips any initialiser rustfmt WRAPS. It is not blind to the
@@ -389,7 +390,7 @@ fn short_name(name: &str) -> String {
 }
 
 /// Does an observation carry the perimeter identity `("ipv4", ipv4)`?
-fn in_perimeter(facts: &[Fact], ipv4: &str) -> bool {
+pub(crate) fn in_perimeter(facts: &[Fact], ipv4: &str) -> bool {
     facts
         .iter()
         .any(|f| matches!(f, Fact::IpV4 { addr } if addr.to_string() == ipv4))
@@ -1572,6 +1573,7 @@ pub(crate) fn triage_router(
         // nature forgotten — reds **18 tests**, all `Overlapping method route`.
         // *The wrong order is silent; the right order fails loudly.*
         .route("/sources", get(sources))
+        .route("/devices", get(devices))
         .with_state(TriageState {
             pool,
             perimeter,
@@ -1581,100 +1583,6 @@ pub(crate) fn triage_router(
         })
 }
 
-/// One example figure on the dashboard, with its copy already resolved.
-struct StatCardView {
-    /// What it counts, in the operator's language.
-    label: String,
-    /// The figure itself — a STRING, because it is decoration and never arithmetic.
-    value: &'static str,
-    /// The shape a sparkline would draw, as a bare list of heights.
-    spark: Vec<u8>,
-}
-
-/// Everything `/dashboard` renders: the product's real reach, and the example surfaces beside it.
-///
-/// 🔴 **Two populations, never summed** (arbitration 10) — and the guard for that lives at the
-/// COMPOSITION and not on either builder, because story 5.14b measured its own guard GREEN when it
-/// asserted a property two pure builders cannot violate: neither sees the other's numbers, so
-/// neither can add them. This struct is where they meet, so this is where a sum could be written.
-struct DashboardView {
-    /// The real reach, exactly as story 5.14b shipped it and `/triage` renders it.
-    identity: IdentityView,
-    /// How long ago the product last observed anything — a `MAX(observed_at)`, in the BODY only.
-    last_observed: Option<String>,
-    /// The example figures. ⚠️ Example, and each carries the marker on its own section.
-    cards: Vec<StatCardView>,
-    /// True when something HAS been observed and the identity pass has not placed any of it yet.
-    ///
-    /// 🔴 **This story is what created the state that needs saying.** It co-located two populations
-    /// for the first time — the engine's reach and the last observation — and they can legitimately
-    /// disagree: an observation ingested but not yet resolved leaves `count_engine_reach` empty
-    /// while `MAX(observed_at)` is recent. The page then read *"Nothing observed yet — run a scan"*
-    /// directly above *"Last observed 8 h ago"*, in one div. Found at the code review by seeding the
-    /// two independently; **every test fed them from one fixture, so none could see it.**
-    pending_resolution: bool,
-}
-
-/// The dashboard's body: the real reach section beside labelled example sections (story 6b.5).
-#[derive(Template)]
-#[template(path = "_dashboard.html")]
-struct DashboardBody {
-    /// 🔴 **ONE source for the identity counts, and that is not tidying.** This struct carried its
-    /// own `identity` field beside `view.identity` until the mutation pass: the handler filled it
-    /// from the view and the TEST HELPER filled it from the un-composed original, so **the guard
-    /// rendered a shape production does not use** and mutation M1 — a sum planted at the
-    /// composition — left it green. *Two fields holding one fact will be filled from two places,
-    /// and the test's place is the one nobody ships.* The template now reads `view.identity`.
-    view: DashboardView,
-    s: Strings,
-}
-
-/// PURE: the example half. It reads nothing and depends on nothing.
-fn example_cards() -> Vec<StatCardView> {
-    use rust_i18n::t;
-    vec![
-        StatCardView {
-            label: t!("dash.card.devices").to_string(),
-            value: "37",
-            spark: vec![3, 5, 4, 6, 6, 7, 9],
-        },
-        StatCardView {
-            label: t!("dash.card.gaps").to_string(),
-            value: "4",
-            spark: vec![7, 6, 6, 4, 5, 3, 4],
-        },
-        StatCardView {
-            label: t!("dash.card.sources").to_string(),
-            value: "2",
-            spark: vec![1, 1, 2, 2, 2, 2, 2],
-        },
-    ]
-}
-
-/// PURE: assemble the real reach and the example surfaces into one view.
-///
-/// 🔴 **`now` is a PARAMETER.** The builder reads no clock, so one store renders identically twice;
-/// the instant is taken once at the impure edge. Story 5.14b's clock guard does **not** cover a
-/// populated builder — story 6b.4's review measured that — so this one has its own.
-fn build_dashboard(
-    identity: IdentityView,
-    last_observed_at: Option<chrono::DateTime<chrono::Utc>>,
-    now: chrono::DateTime<chrono::Utc>,
-) -> DashboardView {
-    DashboardView {
-        pending_resolution: !identity.has_any && last_observed_at.is_some(),
-        identity,
-        last_observed: last_observed_at.map(|then| relative_time(now, then)),
-        cards: example_cards(),
-    }
-}
-
-/// `GET /dashboard` — the real reach section beside labelled example sections.
-///
-/// ⚠️ **On the pool-bearing router, by Guy's arbitration of 2026-08-19.** Its real half reads the
-/// store, so it cannot live on `screens::router`'s `Router<()>`; the compile-time refusal of
-/// `State<MySqlPool>` therefore does not hold for this one screen, and holds for the eight that
-/// remain. See [`crate::screens::Nature::Mixed`] for the cost and the alternative that was refused.
 /// How long a screen that CANNOT render without the store waits for it.
 ///
 /// 🔴 **Story 6b.10 gave the store-down page a calm French sentence and nothing measured WHEN it
@@ -1717,6 +1625,12 @@ async fn store_within<T>(
     }
 }
 
+/// `GET /dashboard` — the real reach section beside labelled example sections.
+///
+/// ⚠️ **On the pool-bearing router, by Guy's arbitration of 2026-08-19.** Its real half reads the
+/// store, so it cannot live on `screens::router`'s `Router<()>`; the compile-time refusal of
+/// `State<MySqlPool>` therefore does not hold for this one screen, and holds for the eight that
+/// remain. See [`crate::screens::Nature::Mixed`] for the cost and the alternative that was refused.
 pub async fn dashboard(State(state): State<TriageState>) -> Response {
     let perimeter = state.perimeter.clone();
     let reach = match store_within(PAGE_STORE_BUDGET, async {
@@ -1747,6 +1661,69 @@ pub async fn dashboard(State(state): State<TriageState>) -> Response {
         .into_response(),
         Err(error) => {
             tracing::error!(%error, "rendering the dashboard");
+            (StatusCode::INTERNAL_SERVER_ERROR, render_error_body()).into_response()
+        }
+    }
+}
+
+/// `GET /devices` — the inventory: what the operator has DOCUMENTED.
+///
+/// 🔴 **The first screen to leave the example set.** Until 2026-09-09 this address served eight
+/// invented machines and none of the operator's, so the one live gesture in this product wrote a
+/// record that landed nowhere they could see — point 3 of the 2026-08-30 plan, and heavier since
+/// the reverse-DNS story made the gesture write two fields instead of one.
+///
+/// It lives on the pool-bearing router because it reads the store, which is what `Nature::Fed`
+/// means here and what makes the demonstration loop skip it.
+pub async fn devices(
+    State(state): State<TriageState>,
+    axum::extract::Query(query): axum::extract::Query<crate::example_screens::ScreenQuery>,
+) -> Response {
+    let declared = match load_declared_attributes(&state.pool).await {
+        Ok(rows) => rows,
+        Err(error) => return server_error(error),
+    };
+    let provenance = match crate::repo::load_declared_provenance_for_display(&state.pool).await {
+        Ok(rows) => rows,
+        Err(error) => return server_error(error),
+    };
+    let observations = match load_observation_facts(&state.pool).await {
+        Ok(rows) => rows,
+        Err(error) => return server_error(error),
+    };
+    let body = crate::inventory_view::InventoryBody {
+        inventory: crate::inventory_view::build_inventory(
+            declared,
+            &provenance,
+            &observations,
+            now_utc(),
+        ),
+        s: crate::inventory_view::inventory_strings(),
+    };
+    match body.render() {
+        // 🔑 **The real half FIRST, then the example one under its own marker.** The order is the
+        // whole of Guy's arbitration: story 6b.5's review found the dashboard's invented cards
+        // visually dominant over its honest section, and 6b.12's visual sweep confirmed it by eye.
+        // Putting the operator's own records above the demonstration mitigates that; it does not
+        // dissolve it, and saying so is the point.
+        Ok(body) => Html(render_shell(
+            Shell::new(crate::screens::Screen::Devices, state.perimeter),
+            format!(
+                "{body}{}",
+                // ⚠️ **The query, not `Default::default()`.** The first draft of this handler
+                // dropped it and `/devices?kind=printer` served the whole example list — the
+                // EXACT defect story 6b.6 found on this same screen, where the closure took no
+                // argument and nothing warned, because Rust does not lint an unused function
+                // parameter. `the_filter_narrows_through_the_real_route` caught it here.
+                crate::screens::example_section(
+                    crate::screens::ExampleContent::DevicesInventory,
+                    &query
+                )
+            ),
+        ))
+        .into_response(),
+        Err(error) => {
+            tracing::error!(%error, "rendering the inventory");
             (StatusCode::INTERNAL_SERVER_ERROR, render_error_body()).into_response()
         }
     }
@@ -3234,9 +3211,10 @@ mod tests {
         // one — and the test's own doc said *"six existed before story 6b.10"* while asserting
         // five. Raise this deliberately when you add an error body.
         assert_eq!(
-            checked, 8,
-            "the premise: eight operator-readable status sites exist across the four files — a \
-             scan that matched fewer has stopped seeing part of the surface it names"
+            checked, 9,
+            "the premise: nine operator-readable status sites exist across the four files — a \
+             scan that matched fewer has stopped seeing part of the surface it names. The ninth \
+             is the inventory's render failure, 2026-09-09"
         );
     }
 
@@ -4437,6 +4415,139 @@ mod tests {
         assert!(
             system.contains(&rust_i18n::t!("sources.resolver_system").to_string()),
             "unset is not blank — the page says the machine's own resolver is asked: {system}"
+        );
+    }
+
+    /// The inventory body as it is served, without the shell and without the example section.
+    fn rendered_inventory(
+        declared: Vec<(String, String, String)>,
+        provenance: &[crate::repo::DeclaredProvenance],
+        observations: &[crate::repo::ObservedBatch],
+    ) -> String {
+        crate::inventory_view::InventoryBody {
+            inventory: crate::inventory_view::build_inventory(
+                declared,
+                provenance,
+                observations,
+                at(10_000),
+            ),
+            s: crate::inventory_view::inventory_strings(),
+        }
+        .render()
+        .expect("the inventory template and its struct are compiled together")
+    }
+
+    /// 🔴 **What the operator documented is on a screen at last.** Until 2026-09-09 the one live
+    /// gesture in this product wrote a record that landed nowhere visible: `/devices` showed eight
+    /// invented machines and none of theirs.
+    ///
+    /// ⚠️ Asserted on the RENDER. Story 6b.4b's four HIGH findings were one mistake made four
+    /// times — every guard reading the source while every defect lived in what was served.
+    #[test]
+    fn the_inventory_shows_what_was_documented_and_when_it_was_last_seen() {
+        let declared = vec![
+            declared_row("e1", "ipv4", "192.0.2.10"),
+            declared_row("e1", "hostname", "sw03.home.arpa"),
+        ];
+        let html = rendered_inventory(
+            declared,
+            &[prov("e1", "ipv4", "adopted", 9_000)],
+            &[batch("arp", 9_400, vec![ipv4("192.0.2.10")])],
+        );
+        for needle in ["sw03.home.arpa", "192.0.2.10"] {
+            assert!(html.contains(needle), "the record reaches the page: {html}");
+        }
+        assert!(
+            html.contains(&counted_fields("inventory.n_fields", 2)),
+            "and it says how many fields it carries — two since the reverse-DNS story: {html}"
+        );
+        assert!(
+            html.contains(&rust_i18n::t!("inventory.origin_adopted").to_string()),
+            "and how it was written: adopted from a sighting, not entered by hand"
+        );
+        assert!(
+            html.contains(&relative_time(at(10_000), at(9_400))),
+            "and when the network last showed the address — the column that makes this screen \
+             worth reading, since a documented machine nobody has seen is the product's subject"
+        );
+    }
+
+    /// A documented entity the network has never shown says so, rather than showing an empty cell.
+    #[test]
+    fn a_record_the_network_never_showed_says_so() {
+        let html = rendered_inventory(
+            vec![declared_row("e1", "ipv4", "192.0.2.10")],
+            &[prov("e1", "ipv4", "manual", 9_000)],
+            &[],
+        );
+        assert!(html.contains(&rust_i18n::t!("meta.never_seen").to_string()));
+        assert!(
+            html.contains(&rust_i18n::t!("inventory.unnamed").to_string()),
+            "and a record with no documented name says THAT in words too: an empty cell reads as \
+             a value the product failed to render"
+        );
+    }
+
+    /// 🔴 **The empty state names the gesture that fills the screen.** A screen that says *nothing
+    /// here* and stops is a dead end; this product has enough of those.
+    #[test]
+    fn the_empty_inventory_says_where_a_record_is_written() {
+        let html = rendered_inventory(Vec::new(), &[], &[]);
+        assert!(html.contains(&rust_i18n::t!("inventory.none").to_string()));
+        assert!(
+            html.contains("href=\"/triage\""),
+            "and it LINKS there, so the sentence is a door rather than an instruction: {html}"
+        );
+        // 🔴 The door is labelled with the room it LEADS TO. It said *Inventaire* — the room you
+        // are already in — and no assertion could see it: the link and its text were both present
+        // and both resolved. Found by reading the served page.
+        assert!(
+            html.contains(&format!(">{}</a>", rust_i18n::t!("nav.triage"))),
+            "and the link says where it goes: {html}"
+        );
+    }
+
+    /// An entity with no address is not a row: the perimeter key is what an entity is recognised
+    /// by, and a row without one would be a row about nothing.
+    #[test]
+    fn an_entity_with_no_address_is_not_a_row() {
+        let html = rendered_inventory(
+            vec![
+                declared_row("e1", "hostname", "orphan"),
+                declared_row("e2", "ipv4", "192.0.2.10"),
+            ],
+            &[],
+            &[],
+        );
+        assert!(!html.contains("orphan"), "no row for it: {html}");
+        assert!(
+            html.contains("192.0.2.10"),
+            "and the addressable one is there"
+        );
+    }
+
+    /// The view builder reads no clock of its own — the house rule for every builder in this file.
+    #[test]
+    fn build_inventory_reads_no_clock_of_its_own() {
+        let declared = vec![declared_row("e1", "ipv4", "192.0.2.10")];
+        let observations = [batch("arp", 100, vec![ipv4("192.0.2.10")])];
+        let build = |now| {
+            crate::inventory_view::build_inventory(declared.clone(), &[], &observations, now)
+                .rows
+                .into_iter()
+                .map(|r| r.seen)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            build(at(10_000)),
+            build(at(10_000)),
+            "same instant, same page"
+        );
+        assert_ne!(
+            build(at(10_000)),
+            build(at(90_000)),
+            "and a different instant MOVES the freshness, which proves the instant is the one \
+             passed in rather than one the builder went and read"
         );
     }
 

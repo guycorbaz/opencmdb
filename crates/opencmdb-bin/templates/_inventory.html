@@ -1,0 +1,43 @@
+{#- The inventory: what the operator has DOCUMENTED, read from the store.
+
+     🔴 No example marker anywhere in this file, and that is a statement rather than an omission:
+     every row here comes from `declared_attribute`. `Screen::Devices` is `Nature::Fed`, so the
+     route-table partition asserts the ABSENCE of a marker on this address — a marker added here
+     would red it. -#}
+<section class="screen-section">
+  <h2>{{ s.title }}{% if !inventory.total.is_empty() %} <span class="count">{{ inventory.total }}</span>{% endif %}</h2>
+  <p class="lede">{{ s.lede }}</p>
+
+  {%- if inventory.rows.is_empty() %}
+  {#- The empty state NAMES the gesture that fills this screen. A screen that says "nothing here"
+       and stops is a dead end; this one says where a record is written. -#}
+  <p class="empty">{{ s.none }} <a href="/triage">{{ s.triage }}</a></p>
+  {%- else %}
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>{{ s.col_name }}</th>
+        <th>{{ s.col_ipv4 }}</th>
+        <th>{{ s.col_fields }}</th>
+        <th>{{ s.col_origin }}</th>
+        <th>{{ s.col_documented }}</th>
+        <th>{{ s.col_seen }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {%- for row in inventory.rows %}
+      <tr data-entity-id="{{ row.id }}">
+        {#- A record with no documented name says so in words rather than showing an empty cell:
+             an empty cell reads as a value the product failed to render. -#}
+        <td>{% if row.name.is_empty() %}<span class="muted">{{ s.unnamed }}</span>{% else %}{{ row.name }}{% endif %}</td>
+        <td class="mono">{{ row.ipv4 }}</td>
+        <td>{{ row.fields }}</td>
+        <td class="muted">{{ row.origin }}</td>
+        <td class="muted">{{ row.documented }}</td>
+        <td class="mono">{{ row.seen }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  {%- endif %}
+</section>

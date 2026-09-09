@@ -134,6 +134,10 @@ pub(crate) enum Nature {
 pub(crate) enum ExampleContent {
     /// The example inventory: the device list and the sightings the example engine did not place
     /// (story 6b.3's witness screen, filled out to the mock's shape by story 6b.6).
+    ///
+    /// ⚠️ **It is no longer the whole of `/devices`.** Since 2026-09-09 that screen is `Mixed`: the
+    /// operator's real records first, this list below them under its own marker — it goes on
+    /// showing the shape Epic 6's grouping will fill, which is what an example dataset is for.
     DevicesInventory,
     /// One device's record — its fields, what it hosts, its composite identity, its observation
     /// history (story 6b.6).
@@ -158,11 +162,11 @@ impl ExampleContent {
     /// Render this content's body.
     fn render(self, query: &crate::example_screens::ScreenQuery) -> String {
         match self {
+            ExampleContent::DevicesInventory => crate::example_screens::inventory_body(query),
             // ⚠️ `query`, not `ScreenQuery::default()`. It read `default()` after the parameter
             // had been threaded through the router, `demonstration_screen` and this signature —
             // and **nothing warned**: Rust does not lint an unused function PARAMETER. The route
             // filtered nothing while every pure test stayed green. Only the route test saw it.
-            ExampleContent::DevicesInventory => crate::example_screens::inventory_body(query),
             // Unreachable by construction, and by the SAME mechanism as `Nature::Fed` below:
             // `router` never registers this screen's address, because the parameterised route
             // serves it. It is `unreachable!` rather than a silent fallback so that the day
@@ -281,7 +285,17 @@ impl Screen {
             // construction (story 6b.5, Guy's arbitration of 2026-08-19).
             Screen::Dashboard => Nature::Mixed,
             // The witness screen, filled from the example dataset (Guy's arbitration, 2026-08-19).
-            Screen::Devices => Nature::Example(ExampleContent::DevicesInventory),
+            // 🔴 **`Mixed` since 2026-09-09** (Guy's arbitration). Point 3 of the 2026-08-30 plan:
+            // `/devices` showed eight invented machines and none of the operator's, so the one
+            // live gesture in this product wrote a record that landed nowhere visible. The real
+            // inventory now comes FIRST and the example list keeps its place below it, under its
+            // own marker — refused: deleting the example half, which is ~600 lines and would leave
+            // seven guards without a subject, among them the ones checking that every state word
+            // served belongs to the binding glossary. ⚠️ The cost accepted and written: with one
+            // documented record the screen still shows mostly fiction, which is story 6b.5's
+            // registered salience finding, mitigated by the ORDER and not removed by it.
+            // See `crate::inventory_view`.
+            Screen::Devices => Nature::Mixed,
             // The device record, served by the parameterised route (story 6b.6).
             Screen::Device => Nature::Example(ExampleContent::DeviceRecord),
             // ⚠️ Each of these became `Example` in ITS OWN story, listed beside it.
@@ -451,6 +465,19 @@ fn device_record(id: &str, perimeter: Option<String>) -> Response {
             .unwrap_or_else(crate::example_screens::unknown_device_body)
     );
     Html(render_shell(Shell::new(Screen::Device, perimeter), body)).into_response()
+}
+
+/// One example SECTION, with its marker, for a screen that also carries real content.
+///
+/// 🔑 **The marker and the body come from the same call, exactly as they do for a whole example
+/// screen.** Story 6b.6 moved the marker into the dispatch so that a section cannot be rendered
+/// without it, and a `Mixed` screen that assembled the two by hand would step around that. This is
+/// the same pairing, exposed for the one screen that needs half of it.
+pub(crate) fn example_section(
+    content: ExampleContent,
+    query: &crate::example_screens::ScreenQuery,
+) -> String {
+    format!("{}{}", crate::page::example_marker(), content.render(query))
 }
 
 /// A demonstration screen, rendered according to what its content IS.
