@@ -1364,12 +1364,50 @@ translation, one meaning.**_
 | The difference between them, as an object's state | **gap** | **écart** | ⚠️ **The SAME binding pair as the gesture axis above** — the core object, seen as a state. **Not a second term** |
 | Two observations disagree **with each other** | **conflict** | **conflit** | Source against source, **not observed against declared** — a distinct question from `gap`. `gap::AbstentionCause::ConflictingObservations` |
 | Several possible identities for one object | **ambiguous** | **ambigu** | **The operator LIFTS THE DOUBT.** `identity::cascade::IdentityAbstentionCause::Ambiguous` |
-| Observed, and no declared record claims it | **undeclared** | **non déclaré** | **The operator CREATES THE ENTITY** — the documenting gesture (FR13) |
+| Observed, and no declared record claims it | **undeclared** | **non déclaré** | **The operator CREATES THE MISSING RECORD** — the entity's own (FR13's documenting gesture), or its entry in the addressing plan (Epic 14). ⚠️ WIDENED by Guy on 2026-09-11: the state is *observed and unclaimed*, and which register is short decides which record gets created. It read *"CREATES THE ENTITY"*, which bound one state to one gesture and would have forced a synonym for the address case |
 
 🔑 **These five ARE Guy's three-case taxonomy of 2026-08-12, and the mapping is exact**: *no ambiguity
 → the software decides* (`concordant`, `gap`, `conflict`); *ambiguity → the operator lifts the doubt*
 (`ambiguous`); *unknown → the operator creates the entity* (`undeclared`). A sixth state that fits none
 of the three cases is a sign the taxonomy has changed, not that the table is short.
+
+#### The PLAN axis (binding — added 2026-09-11 by Guy's arbitration, Epic 14)
+
+_The two axes above say what the operator DOES and what an object IS. Neither can say what a stretch
+of address space is **MEANT FOR**, and an IPAM cannot be audited without it: the same unclaimed
+address is an anomaly in a static zone and entirely normal in a pool. **The policy is what decides
+the verdict** — without it an audit highlights every DHCP lease, permanently, and stops being read
+(measured on the reference LAN: 24 leases of the 32 addresses reverse DNS resolves). The same rule
+governs: one term, one translation, one meaning._
+
+| Concept | EN (docs, API, code — **and a UI locale**) | FR (UI) | Meaning |
+|---|---|---|---|
+| Addresses the operator assigns by hand | **static** | **statique** | One machine per address, chosen. An `undeclared` address here is an ANOMALY and is highlighted |
+| Addresses a DHCP server hands out | **dhcp-pool** | **pool DHCP** | The occupant changes **by design**. An `undeclared` address here is NORMAL — that is what a pool is for |
+| Addresses set aside, not to be allocated | **reserved** | **réservé** | Held for a use that has not arrived. Nothing should answer here yet, so an `undeclared` address is an anomaly **and** a surprise |
+| Addresses belonging to the network itself | **infrastructure** | **infrastructure** | Gateway, equipment management, and the network and broadcast addresses. Not host space; **never offered as free** |
+
+🔑 **The audit needs NO state noun of its own, and that is the point of this axis.** Both of its
+outcomes already have a binding pair: *observed with no plan entry* is `undeclared` (widened above),
+and *the plan says free while the network shows it occupied* is `gap` — declared against observed,
+the core object seen on an address instead of on a field. What was genuinely missing was never a
+name for the finding; it was the **intent** that decides whether the finding is one.
+
+⚠️ **`structural` is retired as a displayed word** (Guy, 2026-09-11). `example_data::CellState`
+carried it for the network and broadcast addresses, derived from the CIDR by arithmetic, beside a
+declared `infrastructure` — two words, adjacent meanings, one screen, which is the synonym problem
+this table exists to prevent. `.0` and `.255` are simply infrastructure the product knows without
+being told; the arithmetic is how those rows get there, not a second concept.
+
+⚠️ **The code still renders it, and the removal is OWNED rather than assumed**: `CellState` and its
+`.ipam-cell-structural` rule live on a screen fed by invented data, and **story 14.2 is what rebuilds
+that grid on the store** — it carries the retirement, and adding `structural` to the vocabulary gate's
+denylist before then would simply red the build. Until 14.2 lands, this row is a decision taken and
+not yet applied, which is what this sentence exists to say.
+
+⚠️ **VLANs (FR21) and IPv6 (FR25) get no row here.** They are in Epic 14's scope and outside the
+2026-09-10 arbitrations, and a term minted before its screen exists is a term minted by accident.
+
 
 ⚠️ **A suffix is a rendering detail, not a term** (Guy, 2026-08-19). The mock renders *"Écart · 1
 champ"*, *"Écart · 2 champs"* and *"Écart · présence"*: **the term is `écart`** and what follows the
