@@ -78,7 +78,7 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-30  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
+last_updated: 2026-09-11  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
                           # The first time in five weeks that what was built reached its user: the
                           # NAS had been on `0.1.0`, older than the identity engine, the write route
                           # and the ten screens, and nobody had checked.
@@ -5346,7 +5346,38 @@ development_status:
   epic-13-retrospective: required
 
   # ── Epic 14: IPAM (v0.12) ────────────────────────────────────────────────
-  epic-14: backlog
+  # 🔑 DECOMPOSED 2026-09-11 into FOUR stories (`epics.md`, PR #167 as `4b5db27`), on six
+  #   arbitrations Guy took 2026-09-10 BEFORE any story was written. The binding vocabulary was
+  #   ratified FIRST (PR #166 as `b466be7`, the PLAN axis) so that no story names a column ahead
+  #   of the table -- and no story may extend it.
+  # ⚠️ THE FOUR DO NOT CLOSE THE EPIC. FR21's VLAN half and FR25 (IPv6, observation-only) are in
+  #   scope and outside the arbitrations. Do not read the close off the story count.
+  # 🔑 THE REASON IS THE DELIVERABLE, NOT THE HIGHLIGHT: the audit exists to stop the operator
+  #   ALLOCATING an address already in use. That makes the "next free address" panel an
+  #   EXCLUSION -- the only place the product prevents the duplicate rather than reporting it.
+  epic-14: in-progress
+  14-1-plan-schema-and-no-producer: ready-for-dev
+  #   Opens the epic. Three tables, the policy domain, the adapter -- NO route, NO screen, NO
+  #   producer, exactly as story 6.5. It TAKES three decisions the epic left open, each with the
+  #   alternative refused: the tables sit OUTSIDE the `entity` supertype (a range is declared and
+  #   formed by nothing); an address is `VARBINARY(16)` rather than text (the registered
+  #   string-ordering defect at `inventory_view.rs:261` stops being cosmetic in the table that
+  #   answers containment) or `INT UNSIGNED` (FR25 is inside this epic, and 6.5's precedent poses
+  #   a domain once rather than ALTERing at boot on a published product); and the policy enum
+  #   lands in a NEW `opencmdb-core/src/ipam/`, which `architecture.md:3208` already prescribes.
+  #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
+  #   ⚠️ `repo.rs` is ~3800 code lines and the `file-size` gate is BLIND to it (registered at
+  #   6.5). A gate that cannot measure a file is not permission to grow it -- T3 says so.
+  14-2-the-plan-on-screen: backlog
+  #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
+  #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
+  14-3-the-audit: backlog
+  #   The story the epic exists for. Includes FR24's real conflict -- undetectable before PR #163,
+  #   because the connector read no hardware address; and NOT a conflict inside a `dhcp-pool`,
+  #   where the occupant changes by design.
+  14-4-maintaining-the-plan: backlog
+  #   Edit, delete, and RELEASE a held address -- the fourth write route, without which the grid
+  #   fills and never empties (constraint 3: a sighting protects an address until released).
   epic-14-retrospective: required
 
   # ── Epic 15: Applications & « Hosted here » (v0.13) ──────────────────────
