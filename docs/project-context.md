@@ -32,17 +32,29 @@ state (documented by the operator); the *gap* between them is the product. Open-
 
 ## State on 2026-08-30 — READ THIS FIRST
 
-🔑 **`v0.3.1` is running on Guy's NAS.** Docker Hub, GitHub release, tag on a commit whose own CI run
-was green. **That had been false for five weeks**: the NAS ran `0.1.0` — older than the identity
-engine, the write route and the ten screens — and nobody had checked.
+🔑 **`v0.4.0` is running on Guy's NAS**, and since 2026-09-10 `master` carries the change that ends
+the structural zero: **the connector reads a hardware address**, so the identity engine runs on a
+real network for the first time (PR #163, `4aaa23f`). One sweep of 46 hosts minted 45 interfaces.
 
-**What an operator can do**: install it, point it at a LAN, watch it re-sweep every five minutes, and
-**Add** a sighting to the declared side — the gap closes and the question leaves the queue. Verified
-on the PUBLISHED image against a real MariaDB, not only in tests.
+**What an operator can do**: install it, point it at a LAN, watch it re-sweep every five minutes,
+**Add** a sighting to the declared side — the gap closes, the question leaves the queue, **and the
+record now appears in the inventory** (PR #151). The queue says a NAME rather than a bare address
+(PR #143). Verified on the PUBLISHED image against a real MariaDB, not only in tests.
 
-⚠️ **What it cannot do**: the connector reads **no hardware address**, so the identity engine groups
-nothing; documenting a machine makes it appear in **no inventory**; six screens of ten carry labelled
-example content. The CHANGELOG says so in its own *"what this release does NOT change"* section.
+⚠️ **What it cannot do.** Three of the four sentences that stood here are now false and are replaced
+rather than softened; what remains is:
+
+- **It forms INTERFACES, not devices.** Two cards of one machine are two interfaces the engine can
+  see and cannot yet call one thing. `obelix` renders as two rows carrying one name — the grouping
+  problem, visible on a real network for the first time (#158).
+- **Five screens of ten are wholly labelled example content**, and two more carry an example section
+  beside real content (measured off `Screen::nature`, not recalled: 3 `Fed`, 2 `Mixed`, 5
+  `Example`). It read *"six of ten"* until the inventory story.
+- **It needs `macvlan`, `ipvlan` or host networking.** Behind a bridge the host answers every ARP
+  and the table holds the gateway alone — the deployment scans, records and names, and never groups,
+  **silently**. `/sources` and the administrator manual both carry it.
+- **The machine running opencmdb is the one machine it can never group.** A host keeps no neighbour
+  entry for its own address. Permanent, and on a NAS it is usually the machine that matters most.
 
 🔴 **WHAT THREE OUTSIDE REVIEWS MEASURED ON 2026-08-30**, after Guy said development was going in
 circles: epics 1-3 = **21 stories and everything that works**; epics 4-5 = **43 stories and nothing
@@ -52,13 +64,24 @@ plan; there is a v1.0 labelled MVP.* Two of the three reviews INSTALLED the prod
 measurement this project had never taken, and it found in one afternoon what ten gates and three
 review layers had not seen in five weeks.
 
-**EPIC 6 IS FROZEN AT 6.7.** Stories 6.8-6.13 build rules on facts (`Uplink`, `Hostname`, switch
-port) **no connector produces**.
+⚠️ **EPIC 6 IS STILL FROZEN AT 6.7, AND ITS STATED REASON HAS HALF DISSOLVED.** The freeze named
+three facts *"no connector produces"* — `Uplink`, `Hostname`, switch port. **`Hostname` has had a
+producer since PR #143 and `Mac` since PR #163**; `Uplink` and the switch port still have none. So
+the freeze is no longer one decision: which of 6.8–6.13 it still covers is a question for the epic,
+and it is posed here rather than answered, because a story may not re-scope an epic.
 
-**Next, in order**: reverse DNS for a hostname (~40 lines — it makes the queue readable AND gives
-`gap::project` a second field) · an inventory screen fed by the real store (~80) · rewrite
-`prd.md:766`. ⚠️ **And use it on the NAS before writing more of it** — that is what found everything
-above, including the « Merger » label, wrong since July and raised by no gate.
+**The 2026-08-30 plan had four points. Three are done** — reverse DNS (PR #143), the inventory fed
+by the store (PR #151), the hardware address (PR #163) — **and point 4 is not**: rewrite
+`prd.md:766`, the line that rejects effort-based de-scoping and is why this plan has no MVP.
+
+**Next**: IPAM, chosen by Guy on 2026-09-10 with six arbitrations already taken (a form rather than a
+file · ranges carry a policy · IPAM untouched by the documenting gesture · a sighting holds an
+address until released · two distinct treatments · the form warns and still writes). ⚠️ It needs at
+least FOUR write routes where the product has one, so it is several stories and the split is owed to
+Guy. Then `prd.md:766`.
+
+⚠️ **And use it on the NAS before writing more of it** — that is what found everything above,
+including the « Merger » label, wrong since July and raised by no gate.
 
 | Epic | State |
 |---|---|
