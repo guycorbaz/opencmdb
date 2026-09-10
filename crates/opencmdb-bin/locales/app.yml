@@ -854,8 +854,11 @@ sources.cannot_see:
   en: "What it cannot see"
   fr: "Ce qu'elle ne peut pas voir"
 sources.unlock:
-  en: "Reduced scope is not a fault to repair. It is a capability to unlock: granted the raw-socket privilege, this source would read hardware addresses."
-  fr: "Une portée réduite n'est pas un défaut à réparer. C'est une capacité à débloquer : si on lui accordait le privilège de socket brut, cette source lirait les adresses matérielles."
+  en: "Reduced scope is not a fault to repair. What this source cannot see belongs to another one: a lease is the DHCP server's, an uplink is the switch's. Each is a source still to be built, not a setting to turn on."
+  fr: "Une portée réduite n'est pas un défaut à réparer. Ce que cette source ne voit pas appartient à une autre : un bail est celui du serveur DHCP, une liaison montante celle du commutateur. Chacune est une source restant à construire, pas un réglage à activer."
+sources.mac_needs_l2:
+  en: "It reads hardware addresses from the kernel's own neighbour table, which needs no privilege — but it does need real layer-2 presence. Behind an ordinary Docker bridge that table holds the gateway alone, and nothing is ever grouped. Use macvlan, ipvlan or host networking."
+  fr: "Elle lit les adresses matérielles dans la table de voisinage du noyau, ce qui ne demande aucun privilège — mais exige une présence de niveau 2 réelle. Derrière un pont Docker ordinaire, cette table ne contient que la passerelle, et plus rien n'est jamais regroupé. Utilisez macvlan, ipvlan ou le réseau de l'hôte."
 sources.freshness:
   en: "Last observation"
   fr: "Dernière observation"

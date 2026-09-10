@@ -16,9 +16,21 @@ alone: two addresses of one server were two unrelated things, for ever, and the 
 of opencmdb — the engine, its rule cascade, its trap corpus, its resolver — had never run on
 anything but fixtures.
 
-Measured on the reference network the day it shipped: a sweep of 46 hosts minted **45 interfaces**
-and placed **45 sightings**. Before it, that table had been empty in every deployment that has ever
-existed.
+Measured on the reference network the day it shipped: **one** sweep of 46 hosts minted **45
+interfaces** and placed **45 sightings**. Before it, that table had been empty in every deployment
+that has ever existed.
+
+⚠️ **Read those two numbers differently, because they behave differently.** The interface count is a
+count of THINGS and it settles: a second sweep of the same network re-uses the same keys and mints
+nothing (measured — 52 interfaces after one sweep, 54 after four, the two new ones being machines
+that had not answered the first time). The sighting count is a count of TIMES WE LOOKED and it
+climbs with every sweep: at the shipped five-minute interval a 45-host network reads in the
+thousands after a day. The screen says so in its own words — *"this counts sightings, not devices:
+one machine seen ten times counts ten"* — and grouping them is Epic 6's.
+
+⚠️ **And the machine running opencmdb is never among them.** A host keeps no neighbour entry for its
+own address, so the scanner reads no hardware address for itself: it is observed, it is named, and
+it lands on no interface. That is the whole of the difference between the 46 above and the 45.
 
 It comes from the kernel's own neighbour table, read after each reply — no capability, no extra
 traffic, no new dependency.

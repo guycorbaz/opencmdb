@@ -4390,13 +4390,42 @@ mod tests {
         assert!(configured.contains(&name));
     }
 
+    /// A copy string as askama will have written it into the page.
+    ///
+    /// 🔴 **Without this, an oracle comparing a raw translation against rendered HTML reds for the
+    /// WRONG REASON.** It was found the day `sources.unlock` gained an apostrophe: the sentence was
+    /// on the screen, askama had escaped `'` to `&#x27;`, and the assertion reported that the
+    /// sentence was MISSING. *A check that fails for the wrong reason is worth nothing* (story
+    /// 5.14b) — and the repair it invites is to weaken the assertion, which is how a real absence
+    /// would then pass. Any copy containing `'`, `&`, `<`, `>` or `"` was latently affected; French
+    /// copy is full of apostrophes, and this oracle runs in the default locale, which is why it had
+    /// never fired.
+    /// ⚠️ **NUMERIC entities, and they are copied from askama's own escaper rather than guessed.**
+    /// The first draft of this helper wrote the named and hex forms (`&amp;`, `&#x27;`) — the ones
+    /// a person reaches for — and the assertion still failed, for the same wrong reason it was
+    /// written to remove. `askama-0.16.0/src/filters/escape.rs:129-134` is the authority:
+    /// `"` → `&#34;`, `&` → `&#38;`, `'` → `&#39;`, `<` → `&#60;`, `>` → `&#62;`.
+    /// The `&` substitution runs FIRST and the four that follow cannot re-enter its output.
+    fn as_rendered(text: &str) -> String {
+        text.replace('&', "&#38;")
+            .replace('"', "&#34;")
+            .replace('\'', "&#39;")
+            .replace('<', "&#60;")
+            .replace('>', "&#62;")
+    }
+
     /// The screen carries BOTH halves of the spec's card — *Observes* as well as *Cannot see*.
     #[test]
     fn the_screen_shows_what_the_source_observes_and_not_only_what_it_cannot() {
         let html = rendered_sources(Some("192.0.2.0/24".into()), Some(at(0)));
-        for key in ["sources.observes", "sources.cannot_see", "sources.unlock"] {
+        for key in [
+            "sources.observes",
+            "sources.cannot_see",
+            "sources.unlock",
+            "sources.mac_needs_l2",
+        ] {
             assert!(
-                html.contains(&rust_i18n::t!(key).to_string()),
+                html.contains(&as_rendered(rust_i18n::t!(key).as_ref())),
                 "{key} belongs on the screen: AC1 quotes the negative half only, and delivering \
                  only the negative half is the spec's illustration cut in two"
             );

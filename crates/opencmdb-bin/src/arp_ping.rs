@@ -2,9 +2,15 @@
 //!
 //! It pings a declared set of hosts over an UNPRIVILEGED ICMP datagram socket (no `NET_RAW`
 //! where `net.ipv4.ping_group_range` permits) and emits an [`Observation`] for each host that
-//! answers, carrying an `IpV4`, an `Rtt` and — since 2026-09-09 — a `Hostname` fact when the host
-//! answers to a name, dated by the poll's `now`. It is ping-only: MAC facts (ARP) are the
-//! `NET_RAW` upgrade, later.
+//! answers, carrying an `IpV4`, an `Rtt`, a `Hostname` when the host answers to a name (since
+//! 2026-09-09) and a `Mac` when the kernel's neighbour table knows one (since 2026-09-10), dated by
+//! the poll's `now`.
+//!
+//! ⚠️ **It sends no ARP of its own.** This line read *"MAC facts (ARP) are the `NET_RAW` upgrade,
+//! later"* until 2026-09-10, and it was wrong on both halves: the MAC arrives now, and it needs no
+//! privilege — the ping populates the kernel's neighbour table as a side effect and
+//! [`crate::neighbour`] reads it. What it needs instead is layer-2 presence, which that module's
+//! doc measures.
 //!
 //! The name comes from a reverse lookup and only for hosts that ANSWERED, so an empty subnet
 //! costs no DNS traffic at all; which resolver is asked is [`crate::reverse_dns`]'s subject, and
@@ -13,7 +19,15 @@
 //! ⚠️ It IS wired into the running app — `spawn_scan_loop` builds it from `OPENCMDB_SCAN_CIDR` and
 //! drives it on a schedule. This line read *"wired in a later step"* until 2026-09-09, when the
 //! blind review layer noticed the diff editing the lines above it and leaving it standing.
-#![allow(dead_code)]
+// 🔴 There is NO `#![allow(dead_code)]` here, and its absence is load-bearing.
+// It sat at the top of this module until 2026-09-10, inherited from the days when this connector
+// was not yet wired in. The code review measured its cost: with the blanket allow standing,
+// severing the MAC read — `let mac = neighbours().get(&ip).copied();` becoming `let mac = None;` —
+// left `neighbours()` and transitively `crate::neighbour::table()` completely unreferenced, and
+// clippy STILL exited 0. So the product's new capability could be cut by a refactor with no test,
+// no gate and no lint saying anything. Removing the attribute was measured to cost nothing: the
+// module has no genuinely dead item. Do not put it back to silence one warning — narrow it to the
+// item that needs it.
 
 use std::collections::BTreeSet;
 use std::net::{IpAddr, Ipv4Addr};
@@ -267,10 +281,20 @@ impl Connector for ArpPingConnector {
 /// one of them stays green when the other changes. Both are named now so both can be asserted, and
 /// the tests state which one carries what.
 ///
-/// ⚠️ **`Mac` is absent, and its absence is structural, not an omission.** A ping sweep sees an
-/// address and a round-trip time; reading a MAC means the neighbour table, which is a privilege
-/// question a connector story owns. The consequence is that `identity::l1::join`, which keys on
-/// `(l2_domain, mac)`, can place NOTHING this connector produces — see the tests below.
+/// 🔴 **`Mac` is here, and until 2026-09-10 this paragraph said the opposite three lines above the
+/// body that returns it.** It read *"`Mac` is absent, and its absence is structural"*, and drew the
+/// consequence that `identity::l1::join` — which keys on `(l2_domain, mac)` — *"can place NOTHING
+/// this connector produces"*. Both sentences were true for five weeks and false in the commit that
+/// carried them; the blind review layer found them from the diff alone.
+///
+/// ⚠️ **And the reason the old sentence gave was wrong even while its conclusion held.** It called
+/// the MAC *"a privilege question"*. It is not: `/proc/net/arp` needs no capability at all. What it
+/// needs is **layer-2 presence** — `macvlan`, `ipvlan` or host networking — and behind an ordinary
+/// bridge the table holds the gateway alone. See [`crate::neighbour`], which measured both.
+///
+/// 🔑 The declaration is UNCONDITIONAL: this connector declares `Mac` whatever network it sits on.
+/// A descriptor says what a source is BUILT to observe, and reading nothing is what a network
+/// answered, not what the source can ask (NFR7).
 pub(crate) fn declared_kinds() -> BTreeSet<FactKind> {
     BTreeSet::from([
         FactKind::IpV4,
@@ -394,9 +418,12 @@ fn neighbours() -> std::collections::BTreeMap<std::net::Ipv4Addr, MacAddr> {
 
 /// The facts one answered host yields — the emission half.
 ///
-/// 🔴 **This is the half that carries the structural zero**, because `join` reads FACTS and never
-/// the descriptor. A pin on [`declared_kinds`] alone was measured GREEN while a `Fact::Mac` was
-/// added here.
+/// 🔴 **This is the half that USED to carry the structural zero**, because `join` reads FACTS and
+/// never the descriptor: a pin on [`declared_kinds`] alone was measured GREEN while a `Fact::Mac`
+/// was added here. That zero is gone — this vector carries a `Fact::Mac` now — and the sentence is
+/// kept in the past tense rather than deleted, because the ASYMMETRY it names is permanent: the
+/// descriptor and the emission are two independent statements, and only the second one the engine
+/// reads.
 ///
 /// # 🔑 Why the hostname is a PARAMETER and not looked up here
 ///

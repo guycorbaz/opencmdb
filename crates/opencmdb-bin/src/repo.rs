@@ -802,7 +802,14 @@ where
 /// — [`InterfaceId`] is a UUID and its order is a construction device, exactly as
 /// `CandidatePair`'s is. Telling two interfaces on one key apart is the cloned-MAC problem and
 /// belongs to Epic 6; until then a second row on the same key is unreachable through the resolver,
-/// which mints at most one interface per key per pass.
+/// which mints at most one interface per key **per pass**.
+///
+/// ⚠️ **Per pass, and that qualifier is load-bearing.** Two passes running at once BOTH reach this
+/// function before either inserts, and nothing between here and the index refuses the second mint —
+/// measured deterministically in `the_mint_is_not_atomic_and_two_passes_can_duplicate_one_key`, and
+/// reproduced under real concurrency by two code-review layers. It is not reachable through the
+/// shipped binary, which runs one pass at a time; that is the caller's property and not this
+/// function's. → issue #161.
 ///
 /// # Errors
 ///
@@ -3100,6 +3107,110 @@ mod tests {
             Some(RepositoryError::Constraint("check")),
             "decided_by is ENGINE or OPERATOR — a scanner never decides identity"
         );
+    }
+
+    /// 🔴 **THE MINT IS READ-THEN-INSERT AND IT IS NOT ATOMIC — measured, not argued.**
+    ///
+    /// `deferred-work.md` handed the connector story this race by name: *"two concurrent passes
+    /// mint two interfaces for one MAC, both reporting success"*, and *"the connector story that
+    /// gives it a MAC REMOVES THAT SHIELD and must carry this race with it"*. The story reported
+    /// **it does not reproduce** — eight concurrent `poll_ingest_resolve` passes, one interface —
+    /// and that finding was WRONG. Two code-review layers reproduced it independently: 14 rounds of
+    /// 20 minted eight interfaces for one MAC at N=8, and it races at N=2.
+    ///
+    /// 🔑 **The difference was the INSTRUMENT, not the tree.** Eight `tokio::spawn`s on one runtime
+    /// can serialise through the read-then-insert window; eight OS threads released together by a
+    /// `Barrier` cannot. *A negative result from an instrument that cannot open the window measures
+    /// the instrument.*
+    ///
+    /// ⚠️ **So this test does not race at all — it INTERLEAVES BY HAND.** A concurrency test that
+    /// wins 14 times in 20 is a test that reds 6 times in 20, and a flaky guard is worse than none.
+    /// Two connections, the four steps in the order that loses, and the outcome is the same on
+    /// every run and on every machine. What a repeated real race would add is confidence about
+    /// FREQUENCY, which is not what needs pinning: the mechanism does.
+    ///
+    /// ⚠️ **And it is not reachable through the shipped product today**, because `spawn_scan_loop`
+    /// runs one pass at a time in one process. That is a property of the CALLER, not of the mint —
+    /// the day a second pass exists it is reachable, and this test is what will still be true then.
+    /// The remedy is registered rather than applied: a `UNIQUE` index is refused by story 5.9's
+    /// AC5 (see [`two_interfaces_may_share_one_l1_key`] directly below), so the closure has to be
+    /// a `SELECT … FOR UPDATE` or an upsert on a key the cloned-MAC case can still live with. →
+    /// issue #161, whose title said the race did not reproduce and is corrected.
+    #[tokio::test]
+    async fn the_mint_is_not_atomic_and_two_passes_can_duplicate_one_key() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = identity_fixture().await else {
+            return;
+        };
+        // Ids of this test's own, so it may be re-run against a store that kept the last run's
+        // rows — the lock serialises, it does not clean.
+        let l2 = L2DomainId::from_uuid(uuid::Uuid::nil());
+        let mac = MacAddr([0x02, 0x00, 0x00, 0x0f, 0xac, 0xe1]);
+        sqlx::query("DELETE FROM interface WHERE l2_domain = ? AND mac_canon = ?")
+            .bind(l2.to_string())
+            .bind(mac.to_string())
+            .execute(&pool)
+            .await
+            .expect("forget any earlier run's rows");
+
+        let mut pass_a = pool.acquire().await.expect("connection for pass A");
+        let mut pass_b = pool.acquire().await.expect("connection for pass B");
+
+        // The window, opened deliberately: BOTH passes look before EITHER writes.
+        let seen_by_a = find_interface_by_l1_key(&mut *pass_a, l2, &mac)
+            .await
+            .expect("pass A looks the key up");
+        let seen_by_b = find_interface_by_l1_key(&mut *pass_b, l2, &mac)
+            .await
+            .expect("pass B looks the key up");
+        assert_eq!(
+            (seen_by_a, seen_by_b),
+            (None, None),
+            "the premise: neither pass finds an interface, so both will mint one"
+        );
+
+        insert_interface(
+            &mut *pass_a,
+            InterfaceId::from_uuid(uuid::Uuid::now_v7()),
+            l2,
+            &mac,
+            at(1_700_000_000),
+            at(1_700_000_100),
+        )
+        .await
+        .map_err(classify)
+        .expect("pass A mints");
+        insert_interface(
+            &mut *pass_b,
+            InterfaceId::from_uuid(uuid::Uuid::now_v7()),
+            l2,
+            &mac,
+            at(1_700_000_000),
+            at(1_700_000_100),
+        )
+        .await
+        .map_err(classify)
+        .expect("pass B mints — and NOTHING refuses it, which is the whole finding");
+
+        let (rows,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM interface WHERE l2_domain = ? AND mac_canon = ?")
+                .bind(l2.to_string())
+                .bind(mac.to_string())
+                .fetch_one(&pool)
+                .await
+                .expect("count the interfaces on the key");
+        assert_eq!(
+            rows, 2,
+            "two interfaces stand for one hardware address, and both passes reported success — \
+             `interface_l1_key` is a plain index and the mint is read-then-insert"
+        );
+
+        sqlx::query("DELETE FROM interface WHERE l2_domain = ? AND mac_canon = ?")
+            .bind(l2.to_string())
+            .bind(mac.to_string())
+            .execute(&pool)
+            .await
+            .expect("clean up after this test");
     }
 
     /// AC5 — `interface (l2_domain, mac_canon)` is NOT unique. A cloned MAC is two real interfaces
