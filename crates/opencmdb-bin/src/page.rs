@@ -4211,29 +4211,32 @@ mod tests {
     /// a mutation, and its carrier is the cross-crate row in
     /// `screens::tests::every_variant_of_a_navigated_enum_is_listed_in_all`.
     ///
-    /// 🔑 **`Hostname` crossed the line on 2026-09-09** — it was the first kind ever to do so, and
-    /// this test is what made the crossing visible: it reddened on the connector's declaration the
-    /// moment the reverse lookup landed, before any screen was looked at. *The section is derived,
-    /// so a connector that learns something new says so on `/sources` without anyone editing a
-    /// page.*
+    /// 🔑 **`Hostname` crossed the line on 2026-09-09 and `Mac` on 2026-09-10** — and this test is
+    /// what made each crossing visible, reddening on the connector's declaration before any screen
+    /// was looked at. *The section is derived, so a connector that learns something new says so on
+    /// `/sources` without anyone editing a page.*
+    ///
+    /// 🔴 **The second crossing is the one that mattered.** `identity::l1::join` keys on
+    /// `(l2_domain, mac)`, so until the sweep could read a hardware address the whole identity
+    /// engine — forty-three stories of it — ran on fixtures alone.
     #[test]
     fn what_the_source_cannot_see_is_derived_from_the_connectors_own_declaration() {
         let (observes, cannot_see) = crate::arp_ping::observes_and_cannot_see();
         assert_eq!(
             observes,
-            vec![FactKind::IpV4, FactKind::Hostname, FactKind::Rtt],
-            "the shipped connector observes an address, the name that address answers to, and a \
-             round-trip time — and story 5.14 pinned that it declares no MAC, ever"
+            vec![
+                FactKind::Mac,
+                FactKind::IpV4,
+                FactKind::Hostname,
+                FactKind::Rtt
+            ],
+            "the shipped connector observes a hardware address, an IPv4 address, the name that \
+             address answers to, and a round-trip time"
         );
         assert_eq!(
             cannot_see,
-            vec![
-                FactKind::Mac,
-                FactKind::DhcpLease,
-                FactKind::Uplink,
-                FactKind::OuiVendor,
-            ],
-            "and the four it cannot see are the complement — this is the one section of /sources \
+            vec![FactKind::DhcpLease, FactKind::Uplink, FactKind::OuiVendor,],
+            "and the three it cannot see are the complement — this is the one section of /sources \
              that AC1 requires to be REAL"
         );
         // The PARTITION, which survives an eighth kind where the two literals above would not.

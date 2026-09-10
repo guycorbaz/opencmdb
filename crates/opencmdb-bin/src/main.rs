@@ -25,6 +25,7 @@ mod identity_view;
 mod inventory_view;
 mod l1_runner;
 mod metrics;
+mod neighbour;
 mod page;
 /// Deterministic permutation sources for the arrival-order measurements (story 5.11b).
 ///

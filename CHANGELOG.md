@@ -8,6 +8,40 @@ schema will move.
 
 ---
 
+## Unreleased — the identity engine runs on your network
+
+🔑 **The sweep reads a hardware address, and that is the fact everything else was waiting for.**
+`identity::l1::join` keys on `(l2_domain, mac)`, so until now every sighting the product made stood
+alone: two addresses of one server were two unrelated things, for ever, and the whole grouping half
+of opencmdb — the engine, its rule cascade, its trap corpus, its resolver — had never run on
+anything but fixtures.
+
+Measured on the reference network the day it shipped: a sweep of 46 hosts minted **45 interfaces**
+and placed **45 sightings**. Before it, that table had been empty in every deployment that has ever
+existed.
+
+It comes from the kernel's own neighbour table, read after each reply — no capability, no extra
+traffic, no new dependency.
+
+⚠️ **It needs `macvlan`, `ipvlan` or host networking.** Behind an ordinary bridge the host answers
+every ARP on the container's behalf and the table holds the gateway and nothing else. Such a
+deployment still scans, still records, still names hosts — **it simply never groups anything**, and
+nothing on any screen says so. The administrator manual carries the trap.
+
+⚠️ **A container's hardware address is not an identity.** Measured over 64 neighbours: 19 carry the
+locally-administered bit and 11 are Docker's `02:42:` followed by the four octets of the host's own
+IPv4 — `02:42:c0:a8:01:0a` for `192.168.1.10`. For those, *the hardware address IS the address,
+rewritten*: it corroborates nothing. D13 already calls such an address disqualifying as a grouping
+anchor; no rule reads that yet, and this release does not add one.
+
+### What this release does NOT do
+
+It forms **interfaces**, not devices. Two network cards of one machine are now two interfaces the
+engine can see and reason about — and nothing yet says they are one machine. That rule is Epic 6's,
+and it is the next thing this product needs.
+
+---
+
 ## 0.4.0 — the queue says a name, a rename is a gap, and documenting no longer hides a machine
 
 ### What to do when you upgrade
