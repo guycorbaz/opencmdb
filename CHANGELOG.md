@@ -8,7 +8,25 @@ schema will move.
 
 ---
 
-## Unreleased — the queue says a name, a rename is a gap, and documenting no longer hides a machine
+## 0.4.0 — the queue says a name, a rename is a gap, and documenting no longer hides a machine
+
+### What to do when you upgrade
+
+**Set `OPENCMDB_DNS_SERVER` to the box that hands out your DHCP leases** — usually your router,
+e.g. `OPENCMDB_DNS_SERVER=192.168.1.1`. It is one line in `.env` and it is the difference between a
+triage queue that reads `sw03` and `wifi01-grange` and one that reads a column of bare addresses.
+Measured on the reference network, over its 69 unnamed addresses: the system resolver — the default,
+and what you get by changing nothing — named **2** of them; the router named **37**. A small network
+resolves its own hosts at the box that leases the addresses, and that box is usually not the
+resolver your machines are pointed at. `/sources` now shows which one is being asked.
+
+Nothing else is required. There is no migration, and no configuration becomes invalid.
+
+⚠️ **Your existing observations keep the source ids they were written with.** `connector_id` used to
+be minted at every boot — the reference store carries eight of them for one connector — and it is
+derived now. The old ones carry no hostname, so they cannot disagree with the present about the one
+field that could; they are inert rather than repaired, and Epic 11's source registry is what repairs
+them. Nothing you need to do.
 
 🔑 **`/devices` shows what YOU documented.** Until now it showed eight invented machines and none of
 yours, so the one live control in this product — *Add*, on a triage row — wrote a record that landed
