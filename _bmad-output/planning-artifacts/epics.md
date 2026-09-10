@@ -473,6 +473,7 @@ Journey 4: the two-axis liveness/capability model made real — the frozen banne
 ### Epic 14: IPAM (v0.12)
 Manage subnets, VLANs, and DHCP ranges; view per-subnet occupancy; find a free IP; detect IP conflicts and identify the devices; document IPv6 (observation-only).
 **FRs covered:** FR21, FR22, FR23, FR24, FR25. UX-DR17,28,69.
+⚠️ **DECOMPOSED 2026-09-11 into FOUR stories (see the full section below), and the four do NOT close it**: FR21's VLAN half and FR25 (IPv6) are in scope and outside the 2026-09-10 arbitrations. Its close is not readable off the story count.
 
 ### Epic 15: Applications & « Hosted here » (v0.13)
 Record software instances (name, version, ports); group them into applications with owner and criticality; declare hosts/exposes; and the device-record "Hosted here" one-hop panel (never called "Impact").
@@ -2330,3 +2331,131 @@ So that the work that has been invisible for two epics becomes a thing I can run
 **Then** they name **what this release does NOT do**: the **six** example screens *(corrected at the retrospective: eight was written before 6b.8 and 6b.9 made two screens real)*, the gestures Epic 7 owns, and 🔴 **the change from a dark interface to a light one** (constraint 2). *Announcing an absent gesture is a promise; letting a colour change be discovered is a surprise. Neither is acceptable and the notes are where both are settled.*
 
 **And** the docs-current-before-push rule is discharged in the same push: the **User Manual** and **Administrator Manual** (⚠️ *which carry NO screenshots at all — corrected at the retrospective. Their staleness is a SENTENCE: `user-manual.tex:151` said "A dark theme is the default". A story hunting images would have found none, concluded the manuals were fine, and shipped it*), `README.md`, the `gh-pages` landing site, `docker/README.dockerhub.md`, `docs/project-context.md` and `CLAUDE.md`. ⚠️ **A release whose manual describes the previous interface is not ready**, and this is the first release where that risk is real: `v0.1.1` shipped one page.
+
+---
+
+## Epic 14: IPAM
+
+**Goal:** the operator can DEFINE an addressing plan, and the product audits the network against it — so that an address already in use is never handed to a second machine. **FRs:** FR21 (subnets and ranges; VLANs deferred), FR22, FR23, FR24. **NFRs:** 25 (WCAG 2.1 AA).
+
+_**Decomposed 2026-09-11 with Guy, on six arbitrations taken 2026-09-10 before any story was written.** Four stories. ⚠️ **The epic is NOT closed by them**: FR21's VLAN half and FR25 (IPv6, observation-only) are in scope and outside the arbitrations, and a term minted before its screen exists is minted by accident. They are named here so the epic's close is not read off the story count._
+
+_**🔑 The REASON is the deliverable, not the highlight.** Guy's words: *"elle doit aussi être mise en évidence dans l'IPAM afin d'éviter de l'allouer à un système et donc d'éviter des problèmes d'adresses dupliquées."* The audit exists to stop the operator allocating an address that is already in use. That reaches something no screen carries today — **the *next free address* panel**, which proposes an address on the grounds that no record claims it. Under this requirement it must EXCLUDE every observed address, and that is **an exclusion, not a highlight**: the only place where the product PREVENTS the duplicate rather than reporting it._
+
+_**Six measured constraints this decomposition respects, so no story rediscovers them:**_
+
+_**(1) The write cost is front-loaded, and the split exploits it.** The product has ONE write route (`POST /document-all`, behind `OPENCMDB_DOCUMENT_ENABLED`). The FIRST new one carries the shared machinery — validation, a keyed refusal body per status in BOTH locales (story 6.4's arbitration 2′), the Origin check (6.2), the `authorship` gate's sanction (5.12), and both browser gates. **The second is cheap.** That is why 14.2 ships two routes and not one._
+
+_**(2) The RANGE'S POLICY decides the verdict, and without it the audit is unreadable.** Measured on the reference LAN before the arbitration: the router serves **24 DHCP leases** of the 32 addresses reverse DNS resolves. An audit that highlights every unclaimed address highlights 24 of them permanently, and stops being read. `dhcp-pool` is where an unclaimed address is NORMAL._
+
+_**(3) A sighting protects an address FOREVER, until the operator releases it.** Refused: the last sweep only, and a named window. ⚠️ A laptop asleep, a machine off for the weekend, a monthly backup server — none answers, all keep their address, and **the product cannot tell *gone* from *silent***. One sweep of the reference LAN sees 46 hosts where 49 exist. Accepted cost, written rather than discovered: **the grid fills and never empties by itself**, every held cell carries the date of its last sighting, and releasing one is a FOURTH write route (14.4)._
+
+_**(4) IPAM and `declared_attribute` are TWO registers and the documenting gesture does not touch IPAM.** IPAM says what was MEANT to be there; `declared_attribute` says what is DOCUMENTED. A machine documented on an address the plan never planned is real information. Accepted cost: two gestures for one machine, and the two declared sides may disagree for a long time._
+
+_**(5) The vocabulary was ratified FIRST (PR #166), and no story may extend it.** The PLAN axis — `static` · `dhcp-pool` · `reserved` · `infrastructure` — is binding. 🔑 **The audit needs no state noun of its own**: *observed with no plan entry* is `undeclared` (widened in the same act) and *the plan says free while the network shows it occupied* is `gap`. ⚠️ **`structural` is retired as a displayed word and STORY 14.2 CARRIES THE REMOVAL** — the code still renders it, and adding it to the vocabulary gate's denylist before then simply reds the build._
+
+_**(6) Three states cannot be told apart by colour** (WCAG 1.4.1, NFR25). Story 6b.7 drew `reserved` as a hatched pattern for exactly this reason, and `/ipam` is already walked by the axe gate. Every state this epic adds carries a pattern and a word, never a hue alone._
+
+### Story 14.1: The plan has a schema and no producer
+
+As the operator,
+I want the addressing plan to have a place to live before anything writes to it,
+So that the shape of a range is settled while nothing depends on it.
+
+**Acceptance Criteria:**
+
+**Given** the migration
+**When** it is applied
+**Then** `ip_subnet`, `ip_range` and `ip_address` exist, `ip_range` carrying its policy.
+
+**Given** the policy column
+**When** it is declared
+**Then** it is a `VARCHAR` + `CHECK` on `ascii_bin`, **never a MariaDB `ENUM`** — story 6.5 measured that an `ENUM` lands `utf8mb4_general_ci`, accepts `'ACTIVE'`, is invisible to the `ddl-collation` gate and under `sql_mode=''` stores the **empty string**.
+
+**Given** the four policy values
+**When** they are compared against the binding table
+**Then** a test asserts the SET, not a count — story 6.5's M8: *a count is not a set*, and pointing two variants at one token left its predecessor green.
+
+**Given** this story
+**When** it is complete
+**Then** there is **no route, no screen and no producer**, and the operator gains nothing. Precedent: story 6.5.
+
+### Story 14.2: The plan on screen, and in the operator's hands
+
+As the operator,
+I want to define a range and an address and see them drawn,
+So that the product holds my addressing plan instead of an invented one.
+
+**Acceptance Criteria:**
+
+**Given** `/ipam`
+**When** it is served
+**Then** it leaves `Nature::Example` and is fed by the store; the invented dataset goes.
+
+**Given** the grid
+**When** a policy is drawn
+**Then** it carries a **pattern and a word**, never a hue alone (constraint 6).
+
+**Given** the two write routes
+**When** the first is built
+**Then** it carries the shared machinery (constraint 1) and the second reuses it.
+
+**Given** `structural`
+**When** this story rebuilds the grid
+**Then** it is **removed as a displayed word** and `.0`/`.255` render as `infrastructure` (constraint 5).
+
+**Given** an empty plan
+**When** the screen is served
+**Then** it names the gesture that fills it and links to it — story 6b.4's finding: a door labelled with the room you are already in is not a door.
+
+### Story 14.3: The audit, and the address the product must not offer
+
+As the operator,
+I want the product to tell me which addresses are in use but not in my plan,
+So that I never hand a busy address to a second machine.
+
+**Acceptance Criteria:**
+
+**Given** an observed address with no plan entry, in a `static` or `reserved` range or outside every range
+**When** the grid is drawn
+**Then** it is highlighted as `undeclared`; **in a `dhcp-pool` it is not** (constraint 2).
+
+**Given** an address the plan declares free and the network shows occupied
+**When** the grid is drawn
+**Then** it is a `gap`, distinct from `undeclared` — two treatments, because the corrections differ (add an entry vs. correct a wrong record).
+
+**Given** the *next free address* panel
+**When** it proposes one
+**Then** it **excludes every observed address**. 🔑 This is the criterion the whole epic exists for: the only place the product prevents rather than reports.
+
+**Given** the form
+**When** the operator enters a highlighted address
+**Then** it **warns, names what it knows (last sighting, hardware address), links to the triage row — and still writes.** ⚠️ Refusing was refused: the most frequent LEGITIMATE case is entering into the plan the machine that is already there, and a refusal blocks the correct gesture to prevent the wrong one.
+
+**Given** two hardware addresses seen on one IPv4 outside a `dhcp-pool`
+**When** the audit runs
+**Then** FR24's real conflict is reported with **both** addresses. ⚠️ It became detectable on 2026-09-10 and not before: until PR #163 the connector read no MAC. **In a `dhcp-pool` it is not a conflict** — the occupant changes by design, which is what makes the policy load-bearing rather than decorative.
+
+**Given** a held cell
+**When** it is drawn
+**Then** it carries the date of its last sighting (constraint 3).
+
+### Story 14.4: Maintaining the plan
+
+As the operator,
+I want to correct and release what I defined,
+So that the plan stays true as the network changes.
+
+**Acceptance Criteria:**
+
+**Given** a range or an address
+**When** the operator edits or deletes it
+**Then** the write succeeds, and deleting a range that still holds defined addresses is **refused by name** rather than cascading.
+
+**Given** a held address the operator knows is free
+**When** they release it
+**Then** the highlight goes and the release is recorded — constraint 3's fourth route, without which the grid never empties.
+
+**Given** every refusal this story adds
+**When** it is served
+**Then** it is a KEYED body in both locales, never a Rust `format!` — story 6.4's finding, where a success message shipped in English under a French UI with a raw UUID in it.
