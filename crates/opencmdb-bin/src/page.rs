@@ -4211,29 +4211,32 @@ mod tests {
     /// a mutation, and its carrier is the cross-crate row in
     /// `screens::tests::every_variant_of_a_navigated_enum_is_listed_in_all`.
     ///
-    /// 🔑 **`Hostname` crossed the line on 2026-09-09** — it was the first kind ever to do so, and
-    /// this test is what made the crossing visible: it reddened on the connector's declaration the
-    /// moment the reverse lookup landed, before any screen was looked at. *The section is derived,
-    /// so a connector that learns something new says so on `/sources` without anyone editing a
-    /// page.*
+    /// 🔑 **`Hostname` crossed the line on 2026-09-09 and `Mac` on 2026-09-10** — and this test is
+    /// what made each crossing visible, reddening on the connector's declaration before any screen
+    /// was looked at. *The section is derived, so a connector that learns something new says so on
+    /// `/sources` without anyone editing a page.*
+    ///
+    /// 🔴 **The second crossing is the one that mattered.** `identity::l1::join` keys on
+    /// `(l2_domain, mac)`, so until the sweep could read a hardware address the whole identity
+    /// engine — forty-three stories of it — ran on fixtures alone.
     #[test]
     fn what_the_source_cannot_see_is_derived_from_the_connectors_own_declaration() {
         let (observes, cannot_see) = crate::arp_ping::observes_and_cannot_see();
         assert_eq!(
             observes,
-            vec![FactKind::IpV4, FactKind::Hostname, FactKind::Rtt],
-            "the shipped connector observes an address, the name that address answers to, and a \
-             round-trip time — and story 5.14 pinned that it declares no MAC, ever"
+            vec![
+                FactKind::Mac,
+                FactKind::IpV4,
+                FactKind::Hostname,
+                FactKind::Rtt
+            ],
+            "the shipped connector observes a hardware address, an IPv4 address, the name that \
+             address answers to, and a round-trip time"
         );
         assert_eq!(
             cannot_see,
-            vec![
-                FactKind::Mac,
-                FactKind::DhcpLease,
-                FactKind::Uplink,
-                FactKind::OuiVendor,
-            ],
-            "and the four it cannot see are the complement — this is the one section of /sources \
+            vec![FactKind::DhcpLease, FactKind::Uplink, FactKind::OuiVendor,],
+            "and the three it cannot see are the complement — this is the one section of /sources \
              that AC1 requires to be REAL"
         );
         // The PARTITION, which survives an eighth kind where the two literals above would not.
@@ -4387,13 +4390,42 @@ mod tests {
         assert!(configured.contains(&name));
     }
 
+    /// A copy string as askama will have written it into the page.
+    ///
+    /// 🔴 **Without this, an oracle comparing a raw translation against rendered HTML reds for the
+    /// WRONG REASON.** It was found the day `sources.unlock` gained an apostrophe: the sentence was
+    /// on the screen, askama had escaped `'` to `&#x27;`, and the assertion reported that the
+    /// sentence was MISSING. *A check that fails for the wrong reason is worth nothing* (story
+    /// 5.14b) — and the repair it invites is to weaken the assertion, which is how a real absence
+    /// would then pass. Any copy containing `'`, `&`, `<`, `>` or `"` was latently affected; French
+    /// copy is full of apostrophes, and this oracle runs in the default locale, which is why it had
+    /// never fired.
+    /// ⚠️ **NUMERIC entities, and they are copied from askama's own escaper rather than guessed.**
+    /// The first draft of this helper wrote the named and hex forms (`&amp;`, `&#x27;`) — the ones
+    /// a person reaches for — and the assertion still failed, for the same wrong reason it was
+    /// written to remove. `askama-0.16.0/src/filters/escape.rs:129-134` is the authority:
+    /// `"` → `&#34;`, `&` → `&#38;`, `'` → `&#39;`, `<` → `&#60;`, `>` → `&#62;`.
+    /// The `&` substitution runs FIRST and the four that follow cannot re-enter its output.
+    fn as_rendered(text: &str) -> String {
+        text.replace('&', "&#38;")
+            .replace('"', "&#34;")
+            .replace('\'', "&#39;")
+            .replace('<', "&#60;")
+            .replace('>', "&#62;")
+    }
+
     /// The screen carries BOTH halves of the spec's card — *Observes* as well as *Cannot see*.
     #[test]
     fn the_screen_shows_what_the_source_observes_and_not_only_what_it_cannot() {
         let html = rendered_sources(Some("192.0.2.0/24".into()), Some(at(0)));
-        for key in ["sources.observes", "sources.cannot_see", "sources.unlock"] {
+        for key in [
+            "sources.observes",
+            "sources.cannot_see",
+            "sources.unlock",
+            "sources.mac_needs_l2",
+        ] {
             assert!(
-                html.contains(&rust_i18n::t!(key).to_string()),
+                html.contains(&as_rendered(rust_i18n::t!(key).as_ref())),
                 "{key} belongs on the screen: AC1 quotes the negative half only, and delivering \
                  only the negative half is the spec's illustration cut in two"
             );

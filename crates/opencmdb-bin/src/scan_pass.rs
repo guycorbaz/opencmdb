@@ -453,8 +453,12 @@ mod tests {
 
         assert_eq!(
             resolution.interfaces_minted, 0,
-            "no MAC, no interface: `join` keys on (l2_domain, mac), and the shipped connector emits \
-             neither — this is the structural zero the wiring does NOT remove"
+            "no MAC, no interface: `join` keys on (l2_domain, mac), so a sighting that carries \
+             none lands on nothing. 🔴 The message here read *'and the shipped connector emits \
+             neither — this is the structural zero the wiring does NOT remove'* until 2026-09-10, \
+             when the sweep learnt to read the kernel's neighbour table. The TEST was always about \
+             a MAC-less slice and is unchanged; the sentence about the connector had simply gone \
+             false, and this guard could not tell — see its twin below"
         );
         assert_eq!(
             resolution.abstentions, 0,
@@ -467,6 +471,42 @@ mod tests {
             slice.len(),
             "and the fact is COUNTED rather than dropped — `/sources` says it once, this says how \
              many sightings it applied to"
+        );
+    }
+
+    /// 🔴 **THE SHIELD IS GONE, and this is what says so.** Until 2026-09-10 nothing the shipped
+    /// product scanned could reach the `interface` mint: the ARP/ping sweep emitted no hardware
+    /// address, `join` keys on `(l2_domain, mac)`, and forty-three stories of identity engine,
+    /// trap corpus and resolver therefore ran on fixtures alone. The sweep reads the kernel's
+    /// neighbour table now.
+    ///
+    /// ⚠️ Its sibling above pins the MAC-LESS path, which is still real — a host whose address the
+    /// table does not carry lands on nothing, and that must not change. Neither test can see the
+    /// other's case: *this* one is what would have reddened had the connector's new fact never
+    /// reached the pass.
+    #[tokio::test]
+    async fn a_slice_carrying_a_mac_mints_its_interface_and_places_the_sighting() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = empty_pool().await else {
+            return;
+        };
+        let slice = vec![with_mac(6, 1_700_000_400, 0x11)];
+        let mut source = connector(slice);
+
+        let outcome = poll_ingest_resolve(&mut source, at(1_700_000_400), &pool).await;
+        let resolution = outcome.resolution.expect("the pass ran");
+
+        assert_eq!(
+            resolution.interfaces_minted, 1,
+            "one MAC, one interface — the thing that could not happen before"
+        );
+        assert_eq!(
+            resolution.sightings_without_a_key, 0,
+            "and the sighting is no longer among those the engine cannot key"
+        );
+        assert_eq!(
+            resolution.abstentions, 0,
+            "nor does it abstain: it was PLACED, which is what the reach section counts"
         );
     }
 

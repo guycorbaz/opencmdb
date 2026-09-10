@@ -2,9 +2,15 @@
 //!
 //! It pings a declared set of hosts over an UNPRIVILEGED ICMP datagram socket (no `NET_RAW`
 //! where `net.ipv4.ping_group_range` permits) and emits an [`Observation`] for each host that
-//! answers, carrying an `IpV4`, an `Rtt` and — since 2026-09-09 — a `Hostname` fact when the host
-//! answers to a name, dated by the poll's `now`. It is ping-only: MAC facts (ARP) are the
-//! `NET_RAW` upgrade, later.
+//! answers, carrying an `IpV4`, an `Rtt`, a `Hostname` when the host answers to a name (since
+//! 2026-09-09) and a `Mac` when the kernel's neighbour table knows one (since 2026-09-10), dated by
+//! the poll's `now`.
+//!
+//! ⚠️ **It sends no ARP of its own.** This line read *"MAC facts (ARP) are the `NET_RAW` upgrade,
+//! later"* until 2026-09-10, and it was wrong on both halves: the MAC arrives now, and it needs no
+//! privilege — the ping populates the kernel's neighbour table as a side effect and
+//! [`crate::neighbour`] reads it. What it needs instead is layer-2 presence, which that module's
+//! doc measures.
 //!
 //! The name comes from a reverse lookup and only for hosts that ANSWERED, so an empty subnet
 //! costs no DNS traffic at all; which resolver is asked is [`crate::reverse_dns`]'s subject, and
@@ -13,7 +19,15 @@
 //! ⚠️ It IS wired into the running app — `spawn_scan_loop` builds it from `OPENCMDB_SCAN_CIDR` and
 //! drives it on a schedule. This line read *"wired in a later step"* until 2026-09-09, when the
 //! blind review layer noticed the diff editing the lines above it and leaving it standing.
-#![allow(dead_code)]
+// 🔴 There is NO `#![allow(dead_code)]` here, and its absence is load-bearing.
+// It sat at the top of this module until 2026-09-10, inherited from the days when this connector
+// was not yet wired in. The code review measured its cost: with the blanket allow standing,
+// severing the MAC read — `let mac = neighbours().get(&ip).copied();` becoming `let mac = None;` —
+// left `neighbours()` and transitively `crate::neighbour::table()` completely unreferenced, and
+// clippy STILL exited 0. So the product's new capability could be cut by a refactor with no test,
+// no gate and no lint saying anything. Removing the attribute was measured to cost nothing: the
+// module has no genuinely dead item. Do not put it back to silence one warning — narrow it to the
+// item that needs it.
 
 use std::collections::BTreeSet;
 use std::net::{IpAddr, Ipv4Addr};
@@ -22,7 +36,8 @@ use std::time::Duration;
 use futures_util::stream::{self, StreamExt};
 use opencmdb_core::connector::{Connector, ConnectorError, ObservationSink, PollSummary};
 use opencmdb_core::observation::{
-    Capabilities, ConnectorId, Fact, FactKind, HostnameSource, ObsId, Observation, Scope, Timestamp,
+    Capabilities, ConnectorId, Fact, FactKind, HostnameSource, MacAddr, ObsId, Observation, Scope,
+    Timestamp,
 };
 use surge_ping::{Client, Config, ICMP, PingIdentifier, PingSequence};
 use tokio_util::sync::CancellationToken;
@@ -228,12 +243,19 @@ impl Connector for ArpPingConnector {
             let Some(answer) = next else { break };
             if let Some((ip, rtt, hostname)) = answer {
                 let millis = rtt.as_millis().min(u128::from(u32::MAX)) as u32;
+                // 🔑 **Read AFTER the reply, per host.** The kernel fills the neighbour table from
+                // the reply itself, so by the time this line runs the entry exists — and reading it
+                // here rather than once at the end of the sweep is what keeps the emission shape
+                // and the cancellation contract intact: an observation already emitted survives a
+                // cancelled scan, exactly as before. The table is a few kilobytes and this runs
+                // once per ANSWERING host, once an interval.
+                let mac = neighbours().get(&ip).copied();
                 sink.emit(Observation {
                     obs_id: ObsId::from_uuid(Uuid::now_v7()),
                     connector_id: self.id,
                     observed_at: now,
                     scope: self.scope,
-                    facts: emitted_facts(ip, millis, hostname),
+                    facts: emitted_facts(ip, millis, hostname, mac),
                     raw: None,
                 });
             }
@@ -259,12 +281,27 @@ impl Connector for ArpPingConnector {
 /// one of them stays green when the other changes. Both are named now so both can be asserted, and
 /// the tests state which one carries what.
 ///
-/// ⚠️ **`Mac` is absent, and its absence is structural, not an omission.** A ping sweep sees an
-/// address and a round-trip time; reading a MAC means the neighbour table, which is a privilege
-/// question a connector story owns. The consequence is that `identity::l1::join`, which keys on
-/// `(l2_domain, mac)`, can place NOTHING this connector produces — see the tests below.
+/// 🔴 **`Mac` is here, and until 2026-09-10 this paragraph said the opposite three lines above the
+/// body that returns it.** It read *"`Mac` is absent, and its absence is structural"*, and drew the
+/// consequence that `identity::l1::join` — which keys on `(l2_domain, mac)` — *"can place NOTHING
+/// this connector produces"*. Both sentences were true for five weeks and false in the commit that
+/// carried them; the blind review layer found them from the diff alone.
+///
+/// ⚠️ **And the reason the old sentence gave was wrong even while its conclusion held.** It called
+/// the MAC *"a privilege question"*. It is not: `/proc/net/arp` needs no capability at all. What it
+/// needs is **layer-2 presence** — `macvlan`, `ipvlan` or host networking — and behind an ordinary
+/// bridge the table holds the gateway alone. See [`crate::neighbour`], which measured both.
+///
+/// 🔑 The declaration is UNCONDITIONAL: this connector declares `Mac` whatever network it sits on.
+/// A descriptor says what a source is BUILT to observe, and reading nothing is what a network
+/// answered, not what the source can ask (NFR7).
 pub(crate) fn declared_kinds() -> BTreeSet<FactKind> {
-    BTreeSet::from([FactKind::IpV4, FactKind::Rtt, FactKind::Hostname])
+    BTreeSet::from([
+        FactKind::IpV4,
+        FactKind::Rtt,
+        FactKind::Hostname,
+        FactKind::Mac,
+    ])
 }
 
 /// What this connector is BUILT to observe, and what it is built NOT to observe.
@@ -363,11 +400,30 @@ pub(crate) fn derived_connector_id(cidr: &str) -> ConnectorId {
     ))
 }
 
+/// The neighbour table, or an empty one with the reason logged.
+///
+/// ⚠️ **Best-effort by design, exactly like the reverse lookup beside it.** A kernel without
+/// `/proc`, a sandbox that hides it, a container behind a bridge where the table holds only the
+/// gateway — all of them yield no hardware address, and none of them may cost the sweep the
+/// observations it has already found. What the product must never do is invent one.
+fn neighbours() -> std::collections::BTreeMap<std::net::Ipv4Addr, MacAddr> {
+    match crate::neighbour::table() {
+        Ok(table) => table,
+        Err(detail) => {
+            tracing::warn!(%detail, "no neighbour table this sweep — hosts stay without a MAC");
+            std::collections::BTreeMap::new()
+        }
+    }
+}
+
 /// The facts one answered host yields — the emission half.
 ///
-/// 🔴 **This is the half that carries the structural zero**, because `join` reads FACTS and never
-/// the descriptor. A pin on [`declared_kinds`] alone was measured GREEN while a `Fact::Mac` was
-/// added here.
+/// 🔴 **This is the half that USED to carry the structural zero**, because `join` reads FACTS and
+/// never the descriptor: a pin on [`declared_kinds`] alone was measured GREEN while a `Fact::Mac`
+/// was added here. That zero is gone — this vector carries a `Fact::Mac` now — and the sentence is
+/// kept in the past tense rather than deleted, because the ASYMMETRY it names is permanent: the
+/// descriptor and the emission are two independent statements, and only the second one the engine
+/// reads.
 ///
 /// # 🔑 Why the hostname is a PARAMETER and not looked up here
 ///
@@ -387,12 +443,25 @@ pub(crate) fn emitted_facts(
     addr: std::net::Ipv4Addr,
     millis: u32,
     hostname: Option<String>,
+    mac: Option<MacAddr>,
 ) -> Vec<Fact> {
     let mut facts = vec![Fact::IpV4 { addr }, Fact::Rtt { millis }];
     if let Some(name) = hostname {
         facts.push(Fact::Hostname {
             name,
             source: HostnameSource::Dns,
+        });
+    }
+    if let Some(addr) = mac {
+        facts.push(Fact::Mac {
+            // 🔑 **Derived from the address itself, never reported separately.** `MacAddr` owns the
+            // U/L bit and `Fact::Mac`'s doc calls this field *"the source's CLAIM"* — a claim this
+            // source is in no position to make independently, since it read the address and nothing
+            // else. Deriving it keeps the two in step by construction; reporting a constant would
+            // be a claim, and a wrong one for the 19 of 64 neighbours the reference network shows
+            // with the bit set.
+            locally_administered: addr.is_locally_administered(),
+            addr,
         });
     }
     facts
@@ -432,16 +501,25 @@ mod tests {
     /// facts; both validation layers measured that combination GREEN, because the two literals are
     /// independent. Whichever of the two you change, change the other's pin's expectation too — or
     /// find out that you did not.
+    /// 🔴 **This pin read `!contains(&FactKind::Mac)` from story 5.14 until 2026-09-10.** It carried
+    /// the DESCRIPTOR half of the structural zero: for five weeks the shipped connector declared no
+    /// hardware address, so `identity::l1::join` — which keys on `(l2_domain, mac)` — could place
+    /// nothing, and forty-three stories of engine, corpus and resolver ran on fixtures alone.
+    ///
+    /// 🔑 The sweep reads the kernel's neighbour table now. The pin is inverted rather than
+    /// deleted, because *which* kinds are declared is still a decision someone takes and not a
+    /// drift.
     #[test]
-    fn the_ping_sweep_declares_no_mac() {
-        assert!(
-            !declared_kinds().contains(&FactKind::Mac),
-            "a ping sweep declares an address and a round-trip time. The day it declares a MAC,              read `emitted_facts`' pin too: the identity engine keys on what is EMITTED"
-        );
+    fn the_ping_sweep_declares_the_four_kinds_it_can_read() {
         assert_eq!(
             declared_kinds(),
-            BTreeSet::from([FactKind::IpV4, FactKind::Rtt, FactKind::Hostname]),
-            "exactly these three, so a fourth kind is a decision someone took rather than a drift"
+            BTreeSet::from([
+                FactKind::IpV4,
+                FactKind::Rtt,
+                FactKind::Hostname,
+                FactKind::Mac,
+            ]),
+            "exactly these four, so a fifth kind is a decision someone took rather than a drift"
         );
     }
 
@@ -501,20 +579,68 @@ mod tests {
     /// emit is gated on `OPENCMDB_NET_TESTS`, which CI never sets, so a pin written against the
     /// live path would be skipped — and a mutation against a skipped test comes back green.
     #[test]
-    fn the_ping_sweep_emits_no_mac() {
+    fn the_ping_sweep_emits_what_it_declares() {
         let facts = emitted_facts(
             "203.0.113.1".parse().expect("a documentation address"),
             7,
             Some("nas-01.home.arpa".to_string()),
-        );
-        assert!(
-            !facts.iter().any(|f| matches!(f, Fact::Mac { .. })),
-            "the identity engine keys on (l2_domain, mac) and reads FACTS: while this vector              carries no MAC, NOTHING the shipped product scans can ever be placed on an interface.              That is story 5.14's structural zero, and this assertion is what carries it"
+            Some(MacAddr([0x00, 0x11, 0x32, 0xe9, 0x2f, 0xf8])),
         );
         assert_eq!(
             facts.iter().map(Fact::kind).collect::<BTreeSet<_>>(),
             declared_kinds(),
-            "and the two halves agree today — the cross-check whose ABSENCE let a pin on one of              them stay green while the other changed. ⚠️ For a NAMED host: the sibling below              measures the unnamed case, where the vector is a strict subset of the declaration              because a name that was not learnt is not a fact (NFR7)"
+            "the emitted vector and the declaration agree — the cross-check whose ABSENCE let a \
+             pin on one of them stay green while the other changed"
+        );
+        assert!(
+            facts.iter().any(|f| matches!(f, Fact::Mac { .. })),
+            "and the MAC is IN it: `identity::l1::join` keys on (l2_domain, mac) and reads FACTS, \
+             so this vector is what decides whether anything the product scans can be placed on \
+             an interface at all: {facts:?}"
+        );
+    }
+
+    /// 🔴 **The `locally_administered` flag is DERIVED from the address, and the reference network
+    /// is why that matters.** Measured over 64 neighbours on 2026-09-10: **19** carry the U/L bit,
+    /// and **11** are Docker's `02:42:` prefix followed by the four octets of the host's own IPv4 —
+    /// `02:42:c0:a8:01:0a` for `192.168.1.10`.
+    ///
+    /// ⚠️ *For those hosts the hardware address IS the IP address, rewritten*: it corroborates
+    /// nothing, and grouping on it is grouping on the address. Not a false signal — an empty one.
+    /// D13 calls a locally-administered address `Disqualifying` **as a grouping anchor** for
+    /// exactly this reason, and story 5.5 deliberately did not implement that predicate at L1
+    /// because two committed traps would have reddened. This flag is what a rule will read the day
+    /// that decision is revisited, so it must be true rather than convenient.
+    #[test]
+    fn the_locally_administered_flag_is_read_from_the_address_and_not_asserted() {
+        let docker = MacAddr([0x02, 0x42, 0xc0, 0xa8, 0x01, 0x0a]);
+        let burned_in = MacAddr([0x00, 0x11, 0x32, 0xe9, 0x2f, 0xf8]);
+        for (mac, expected) in [(docker, true), (burned_in, false)] {
+            let facts = emitted_facts("203.0.113.1".parse().unwrap(), 7, None, Some(mac));
+            let Some(Fact::Mac {
+                locally_administered,
+                ..
+            }) = facts.iter().find(|f| matches!(f, Fact::Mac { .. }))
+            else {
+                panic!("the MAC is emitted");
+            };
+            assert_eq!(
+                *locally_administered, expected,
+                "{mac} — the connector read an address and nothing else, so the only honest \
+                 claim it can make about the U/L bit is the one the address carries"
+            );
+        }
+    }
+
+    /// A host whose hardware address the sweep could not read emits no `Mac` fact — never a zero
+    /// one. NFR7/D35: the product states what it observed and never fabricates absence, and an
+    /// all-zero address is what an INCOMPLETE neighbour entry carries.
+    #[test]
+    fn a_host_with_no_readable_address_emits_no_mac() {
+        let facts = emitted_facts("203.0.113.1".parse().unwrap(), 7, None, None);
+        assert!(
+            !facts.iter().any(|f| matches!(f, Fact::Mac { .. })),
+            "no MAC, and no placeholder for one: {facts:?}"
         );
     }
 
@@ -529,6 +655,7 @@ mod tests {
             "203.0.113.1".parse().expect("a documentation address"),
             7,
             Some("wifi01-grange.home.arpa".to_string()),
+            None,
         );
         assert!(
             facts.iter().any(|f| matches!(
@@ -551,6 +678,7 @@ mod tests {
         let facts = emitted_facts(
             "203.0.113.1".parse().expect("a documentation address"),
             7,
+            None,
             None,
         );
         assert_eq!(

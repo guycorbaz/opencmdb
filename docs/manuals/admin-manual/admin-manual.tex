@@ -80,11 +80,42 @@ service surfaces only as \texttt{Address in use} late in startup --- and leaves 
 without an address on any Docker network, which breaks reverse-proxy discovery.
 \end{warning}
 
-ICMP echo is routed and crosses a NAT without difficulty, so an ordinary bridge network scans a
-LAN correctly. If you would rather reach opencmdb at a fixed address with no port mapping,
-attach it to a \texttt{macvlan} or \texttt{ipvlan} network: it keeps a separate namespace, so
-ICMP still works, while gaining real layer-2 presence --- which is also what the future ARP and
-MAC discovery will want.
+ICMP echo is routed and crosses a NAT without difficulty, so an ordinary bridge network
+\emph{scans} a LAN correctly: every host that answers a ping is found, dated and recorded.
+
+\begin{warning}
+\textbf{But a bridge network cannot read a hardware address, and that decides whether opencmdb can
+recognise a machine at all.} The identity engine keys on \texttt{(l2\_domain, mac)}: with no MAC,
+every sighting stands alone, two addresses of one server are two unrelated things for ever, and the
+whole grouping half of the product is inert.
+
+opencmdb reads the MAC from the kernel's own neighbour table after each reply --- no capability, no
+extra traffic. That table is only populated for hosts the container speaks to \emph{directly}, so
+it needs real layer-2 presence: attach opencmdb to a \texttt{macvlan} or \texttt{ipvlan} network,
+or use host networking with the caveats above. Behind a bridge the host answers every ARP on the
+container's behalf and the table holds the gateway and nothing else.
+
+Measured on 2026-09-10, same LAN, same image: from a macvlan container \emph{one} sweep of 46 hosts
+minted \textbf{45 interfaces and placed 45 sightings}; the identity engine had, until that day,
+never run on anything but fixtures.
+
+\textbf{The machine running opencmdb is the one machine it can never group}, and that is permanent
+rather than a defect to report. A host keeps no neighbour entry for its own address, so the scanner
+reads no hardware address for itself --- it answers its own ping, it is recorded, it is named, and
+it lands on no interface. That is the whole of the difference between the 46 and the 45 above. On a
+NAS this is usually the machine you care about most.
+
+\textbf{The failure is silent.} A bridge deployment scans, records, names hosts by reverse DNS and
+shows you a working product --- it simply never groups anything, and \texttt{/sources} will still
+list \emph{Hardware address} under what it observes, because a source descriptor states what the
+source is \emph{built} to ask for and not what your network answered. Since 2026-09-10 that screen
+carries the caveat in so many words, next to the list; before then it did not, and it told you a
+privilege would unlock what it could already do.
+\end{warning}
+
+A macvlan or ipvlan network also lets you reach opencmdb at a fixed address with no port mapping.
+\textbf{Do not then point \texttt{OPENCMDB\_DNS\_SERVER} at that host's own address} --- see the
+warning further down.
 
 \begin{warning}
 \textbf{With \texttt{macvlan}, a container cannot reach the address of the host interface it is

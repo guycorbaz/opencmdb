@@ -52,10 +52,19 @@
       <li><span class="kind-name">{{ kind.label }}</span> <span class="muted">{{ kind.meaning }}</span></li>
       {%- endfor %}
     </ul>
-    {#- 🔑 The UNLOCK framing, not the fault framing. The spec is explicit: *"Not 'fix your source'
-         but 'I could grant it the raw-socket privilege and it would read addresses'"* — and reduced
-         scope is a capability to unlock, which is this story's own user-story line. -#}
+    {#- 🔑 The UNLOCK framing, not the fault framing — that half of the spec stands.
+         🔴 ITS EXAMPLE DOES NOT. The spec illustrates the framing with *"I could grant it the
+         raw-socket privilege and it would read addresses"*, and the copy repeated that literally
+         until 2026-09-10, by which time this source READ hardware addresses — so the page listed
+         « Adresse matérielle » under *what it observes* and, eleven lines below, offered to unlock
+         the thing it had just done. The mechanism named was wrong too: `/proc/net/arp` needs no
+         privilege at all. Measured on a bridge with `--cap-add NET_RAW --cap-add NET_ADMIN`: zero
+         hardware addresses. On macvlan with no capability whatever: fifty-four.
+         The framing is kept, the example is replaced by what the remaining kinds really need. -#}
     <p class="source-unlock">{{ s.unlock }}</p>
+    {#- The caveat the manual has carried since #160 and this screen did not: the capability is
+         DECLARED unconditionally, and whether it yields anything is the network's answer. -#}
+    <p class="source-unlock">{{ s.mac_needs_l2 }}</p>
 
     {#- 🔴 THE LIVENESS AXIS, AND IT CARRIES NO COLOUR. The product can establish *an observation
          arrived at T*; it cannot establish *this source is blind*, which is a verdict nothing

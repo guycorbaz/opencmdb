@@ -86,6 +86,13 @@ pub(crate) struct SourceStrings {
     pub(crate) observes_title: String,
     pub(crate) cannot_see_title: String,
     pub(crate) unlock: String,
+    /// 🔴 **Why a hardware address can be declared and still never read.**
+    ///
+    /// The connector declares `Mac` unconditionally, because a descriptor says what a source is
+    /// BUILT to observe. Whether it reads one depends on the network it sits on, and behind an
+    /// ordinary Docker bridge the answer is never. Until 2026-09-10 this screen said nothing about
+    /// that and the sentence beside it said the opposite — see [`SourceStrings::unlock`].
+    pub(crate) mac_needs_l2: String,
     pub(crate) freshness_title: String,
     pub(crate) never: String,
     pub(crate) ambiguity: String,
@@ -106,6 +113,7 @@ pub(crate) fn source_strings() -> SourceStrings {
         observes_title: rust_i18n::t!("sources.observes").to_string(),
         cannot_see_title: rust_i18n::t!("sources.cannot_see").to_string(),
         unlock: rust_i18n::t!("sources.unlock").to_string(),
+        mac_needs_l2: rust_i18n::t!("sources.mac_needs_l2").to_string(),
         freshness_title: rust_i18n::t!("sources.freshness").to_string(),
         never: rust_i18n::t!("sources.never").to_string(),
         ambiguity: rust_i18n::t!("sources.ambiguity").to_string(),
@@ -199,4 +207,87 @@ pub(crate) fn build_sources(
         cannot_see: cannot_see.into_iter().map(kind_line).collect(),
         last_observed: last.map(|instant| relative_time(now, instant)),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 🔴 **The unlock sentence must not offer to unlock something the source already does.**
+    ///
+    /// This is the defect the code review found, and it is a class rather than an incident: the
+    /// derived half of the screen (`declared_kinds` → *what it cannot see*) was updated when the
+    /// connector gained `Mac`, and the LITERAL beside it was not — the two are in different files
+    /// and nothing tied them. `git diff master...HEAD -- locales/app.yml` was **empty**. The result
+    /// was a panel listing « Adresse matérielle » under *what it observes* and, eleven lines below,
+    /// promising that a privilege would let it read hardware addresses.
+    ///
+    /// 🔑 So the guard is DERIVED from [`crate::arp_ping::declared_kinds`] rather than pinning the
+    /// sentence: a future kind added to the connector reddens this without anyone remembering it
+    /// exists. *A literal is not a key, and the locale guard can only see keys* — story 6b.3's
+    /// sentence, met on a third axis.
+    ///
+    /// ⚠️ Its limit is written rather than implied: it matches the kind's own LABEL, so a sentence
+    /// that promises the capability in other words passes. A tripwire against the ordinary drift,
+    /// never a barrier against a paraphrase.
+    #[test]
+    fn the_unlock_sentence_promises_nothing_the_source_already_observes() {
+        for locale in ["en", "fr"] {
+            let unlock = rust_i18n::t!("sources.unlock", locale = locale).to_lowercase();
+            for kind in crate::arp_ping::declared_kinds() {
+                let (label_key, _) = kind_keys(kind);
+                let label = rust_i18n::t!(label_key, locale = locale).to_lowercase();
+                assert!(
+                    !unlock.contains(&label),
+                    "[{locale}] the unlock sentence names {label:?}, which this connector already \
+                     observes — it is offering to unlock a capability it has. Say what the kinds \
+                     it CANNOT see would really need instead."
+                );
+            }
+        }
+    }
+
+    /// ⚠️ **And no privilege is named**, because none is the mechanism.
+    ///
+    /// 🔴 **This guard reddened on the repair's OWN first sentence**, which read *"no privilege
+    /// would unlock"* — true, useful, and indistinguishable to a substring match from an offer.
+    /// *An unbounded needle cannot tell a denylist entry from a mention of one* (story 6b.10, met
+    /// again). The denial was MOVED to `sources.mac_needs_l2`, which states it positively — *"needs
+    /// no privilege"* — rather than blunting the needle: the information the operator needs is
+    /// kept, and the guard over this key stays as blunt as it honestly is. `/proc/net/arp` is readable
+    /// by anyone; what the hardware address needs is layer-2 presence. Measured on 2026-09-10: a
+    /// bridge container with `NET_RAW` and `NET_ADMIN` read **0** hardware addresses, a macvlan
+    /// container with no capability at all read **54**.
+    #[test]
+    fn no_capability_is_offered_as_the_unlock() {
+        for locale in ["en", "fr"] {
+            let unlock = rust_i18n::t!("sources.unlock", locale = locale).to_lowercase();
+            for claim in [
+                "raw-socket",
+                "socket brut",
+                "net_raw",
+                "privilege",
+                "privilège",
+            ] {
+                assert!(
+                    !unlock.contains(claim),
+                    "[{locale}] the unlock sentence offers {claim:?}; the mechanism is layer-2 \
+                     presence, and naming a privilege sends the operator to add capabilities that \
+                     were measured to change nothing"
+                );
+            }
+        }
+    }
+
+    /// The layer-2 caveat is on the screen in both languages, and it names what to DO.
+    #[test]
+    fn the_layer_two_caveat_names_the_remedy() {
+        for locale in ["en", "fr"] {
+            let caveat = rust_i18n::t!("sources.mac_needs_l2", locale = locale).to_lowercase();
+            assert!(
+                caveat.contains("macvlan"),
+                "[{locale}] the caveat must name the remedy, not only the symptom"
+            );
+        }
+    }
 }
