@@ -86,11 +86,41 @@ attach it to a \texttt{macvlan} or \texttt{ipvlan} network: it keeps a separate 
 ICMP still works, while gaining real layer-2 presence --- which is also what the future ARP and
 MAC discovery will want.
 
-\begin{note}
-With \texttt{macvlan}, a container normally cannot reach the address of the host interface it is
-attached to. If your database runs on that same host, connect to a \emph{different} interface of
-it, or keep an ordinary bridge network.
-\end{note}
+\begin{warning}
+\textbf{With \texttt{macvlan}, a container cannot reach the address of the host interface it is
+attached to.} That is macvlan's own isolation and not a quirk of any platform: it was measured on
+Synology DSM and reproduced on an ordinary Ubuntu host, where a container pinged every machine on
+the LAN in half a millisecond and lost 100\,\% of the packets sent to its own host. A user-defined
+\emph{bridge} network reaches the host perfectly; only \texttt{macvlan} and \texttt{ipvlan} do
+not.
+
+This bites twice, and the second one is quiet.
+
+\begin{itemize}
+  \item \textbf{The database.} If it runs on that same host, connect to a \emph{different}
+    interface of it, or keep an ordinary bridge network. This failure is loud: opencmdb refuses to
+    start and says which host it could not reach.
+  \item \textbf{\texttt{OPENCMDB\_DNS\_SERVER}.} If you point it at your host's own address,
+    every lookup times out and \textbf{nothing tells you}. The scan still runs, the page still
+    renders, \texttt{/sources} still displays the resolver you configured --- because it reports
+    the \emph{configuration}, not the outcome --- and the triage queue simply stays a column of
+    bare addresses. On the reference deployment this cost three configurations to find: the sweep
+    saw 49 hosts and learnt one name, while the same image elsewhere learnt nine with the same
+    setting.
+\end{itemize}
+
+Many home servers run their DNS on the machine that also hosts the containers. If yours has a
+second interface --- and a NAS usually does --- point opencmdb at \emph{that} address: it is the
+same resolver, serving the same zones, on an address the container can actually reach. Check it
+from the container itself, which needs no package installed:
+
+\begin{lstlisting}[language=bash]
+docker run --rm --network <your-network> alpine \
+  nslookup 192.168.1.40 <your-resolver>
+\end{lstlisting}
+
+An answer means opencmdb will get one too. A timeout means it will not, whatever the screen shows.
+\end{warning}
 
 \begin{note}
 Should you need host networking anyway, the published image carries the
@@ -156,17 +186,38 @@ it, is exactly why the connection is no longer configured as a single string.
     seconds; \texttt{300} by default. Set it to \texttt{0} to scan once at startup and never
     again, which is what every release before v0.3.0 did. A value that is not a whole number of
     seconds refuses to start, by name.
-  \item[\texttt{OPENCMDB\_DNS\_SERVER}] \textbf{Set this to your DHCP server.} It is the
-    resolver opencmdb asks for the \emph{name} each host answers to, and it decides whether your
-    triage queue reads \texttt{sw03} and \texttt{wifi01-grange} or a column of bare IP
-    addresses. Unset, opencmdb asks the system resolver --- the unsurprising default, and on a
-    real home network nearly useless: measured over the 69 unnamed addresses of the reference
-    deployment, the configured system resolver answered for \textbf{2} and the router that had
-    handed out the leases answered for \textbf{37}. A small network resolves its own hosts at the
-    box that leases the addresses, and that box is usually not the resolver your machines are
-    pointed at. Give a bare IP address, with no port and no scheme; anything else refuses to
-    start, by name, because a mistyped resolver produces a scan that names nothing --- which looks
-    exactly like a network with no \texttt{PTR} records, and no screen would tell you otherwise.
+  \item[\texttt{OPENCMDB\_DNS\_SERVER}] \textbf{The resolver that knows your hosts' names ---
+    and you have to find out which one that is.} It decides whether your triage queue reads
+    \texttt{sw03} and \texttt{wifi01-grange} or a column of bare IP addresses. Unset, opencmdb
+    asks the system resolver, which is the unsurprising default and on a real home network often
+    nearly useless.
+
+    Do not assume; measure. On the reference deployment the naming turned out to be \emph{split
+    across two servers with no overlap whatsoever}: the router, which hands out the DHCP leases,
+    named 24 of the 49 hosts a sweep saw; the network's actual DNS server named the 8 that are
+    declared statically; neither knew any of the other's. One command tells you which is which:
+
+\begin{lstlisting}[language=bash]
+for ip in 192.168.1.40 192.168.1.169; do
+  dig +short -x $ip @192.168.1.1     # your DHCP server
+  dig +short -x $ip @192.168.1.5     # your DNS server
+done
+\end{lstlisting}
+
+    If one server knows everything, name it here and you are done. If they split, you have two
+    honest options: name whichever covers more, or --- better --- make your DNS server forward the
+    reverse zone \texttt{1.168.192.in-addr.arpa} to the box that leases the addresses, after which
+    one server answers everything. opencmdb deliberately takes \emph{one} address: two resolvers
+    answering is the question \emph{which one is right}, and this product does not guess.
+
+    Give a bare IP address, with no port and no scheme; anything else refuses to start, by name,
+    because a mistyped resolver produces a scan that names nothing --- which looks exactly like a
+    network with no \texttt{PTR} records. \texttt{/sources} shows which resolver is being asked;
+    it does not yet show whether that resolver answers.
+
+    \textbf{If opencmdb runs on a \texttt{macvlan} network beside your DNS server, do not give
+    the host's own address} --- the container cannot reach it and every lookup times out in
+    silence. See section~\ref{sec:container-networking}.
 \end{description}
 
 \begin{warning}
