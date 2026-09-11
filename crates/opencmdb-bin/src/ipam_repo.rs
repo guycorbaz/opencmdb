@@ -41,7 +41,9 @@
 //
 // 🔴 The register said *eleven items*; a correction of it said *ten warnings covering fourteen*;
 // both were wrong. Measured on `38da035`: **eleven warnings covering fifteen items**, identically
-// under `cargo build` and `clippy --all-targets`. After this story's wiring: **seven**.
+// under `cargo build` and `clippy --all-targets`. After this story's wiring: **SIX**, one per attribute below — ⚠️ the first draft of
+// this very sentence said *seven*, in the paragraph correcting two other wrong counts of the same
+// figure. *A unit-sensitive sentence is where an unqualified number does the most damage.*
 
 use std::net::Ipv4Addr;
 
@@ -171,6 +173,15 @@ impl Subnet {
         let first = u32::from(self.network());
         let last = u32::from(self.last());
         (first..=last).map(Ipv4Addr::from)
+    }
+
+    /// How many addresses the subnet holds, network and broadcast included.
+    ///
+    /// 🔑 It is a `u64` because a `/0` holds 2³² addresses and a `u32` cannot say so. The count is
+    /// what lets a caller refuse to DRAW a subnet before it has paid for drawing it — see
+    /// `ipam_page::MAX_DRAWN_ADDRESSES`.
+    pub(crate) fn size(&self) -> u64 {
+        u64::from(u32::from(self.last()) - u32::from(self.network())) + 1
     }
 
     /// The subnet in CIDR notation, as an operator writes it — `192.0.2.0/24`.
@@ -392,13 +403,33 @@ where
     .fetch_all(executor)
     .await
     .map_err(classify)?;
-    rows.into_iter()
-        .map(|(id, base, prefix_len, label)| {
-            let base = from_canonical(&base).map_err(ipam)?;
-            let subnet = Subnet::new(base, prefix_len).map_err(ipam)?;
-            Ok((id, subnet, label))
-        })
-        .collect()
+    // 🔴 **ONE UNREADABLE ROW MUST NOT TAKE THE WHOLE SCREEN WITH IT, and it did.** `0007`
+    // deliberately admits `prefix_len` up to 128 (IPv6 forward-compat) and cannot check that a base
+    // is its own network address — both are same-row rules the ADAPTER owns. So a single
+    // schema-legal row (`prefix_len = 64`, or a base carrying host bits) made this function return
+    // `Err`, and `/ipam` answered **500 for every subnet, including the healthy ones** — measured
+    // by the code review's edge layer, with a log that named no id, a body reading *"the data
+    // behind it is intact; the fault is in the display"* (backwards here), and a `/diagnostic` that
+    // keeps no error history. *A row nobody can find, breaking a page nobody can read.*
+    //
+    // 🔑 The unreadable row is now SKIPPED AND NAMED: the screen draws what it can, and the log
+    // carries the id and the stored spelling so the row can be found and fixed. ⚠️ The trade is
+    // stated: a silent skip would hide a real defect, so it is a `warn` with the id in it, never a
+    // `debug`. A row that cannot be read is a row the operator never declared through the product.
+    let mut subnets = Vec::with_capacity(rows.len());
+    for (id, base, prefix_len, label) in rows {
+        match from_canonical(&base).and_then(|base| Subnet::new(base, prefix_len)) {
+            Ok(subnet) => subnets.push((id, subnet, label)),
+            Err(error) => tracing::warn!(
+                subnet_id = %id,
+                stored_base = %base,
+                stored_prefix_len = prefix_len,
+                %error,
+                "skipping an ip_subnet row this build cannot read — the rest of the plan is drawn"
+            ),
+        }
+    }
+    Ok(subnets)
 }
 
 /// Every range defined in one subnet, in numeric order of its first address.

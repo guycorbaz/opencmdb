@@ -47,9 +47,12 @@ rather than softened; what remains is:
 - **It forms INTERFACES, not devices.** Two cards of one machine are two interfaces the engine can
   see and cannot yet call one thing. `obelix` renders as two rows carrying one name — the grouping
   problem, visible on a real network for the first time (#158).
-- **Five screens of ten are wholly labelled example content**, and two more carry an example section
-  beside real content (measured off `Screen::nature`, not recalled: 3 `Fed`, 2 `Mixed`, 5
-  `Example`). It read *"six of ten"* until the inventory story.
+- **FOUR screens of ten are wholly labelled example content**, and two more carry an example
+  section beside real content (re-measured off `Screen::nature` on 2026-09-11: **4 `Fed`, 2
+  `Mixed`, 4 `Example`**). ⚠️ It read *"five … 3 Fed, 2 Mixed, 5 Example"* until story 14.2 fed
+  `/ipam` from the store, and *"six of ten"* before the inventory story — **a parenthesis promising
+  a measurement does not keep the measurement fresh**, which is why the story that changes a nature
+  owes this line.
 - **It needs `macvlan`, `ipvlan` or host networking.** Behind a bridge the host answers every ARP
   and the table holds the gateway alone — the deployment scans, records and names, and never groups,
   **silently**. `/sources` and the administrator manual both carry it.

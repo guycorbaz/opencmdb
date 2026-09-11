@@ -89,6 +89,14 @@ const RETIRED: &[(&str, &[&str])] = &[
             "revert",
             "accept-as-declared",
             "accept_as_declared",
+            // 🔑 Retired by Guy on 2026-09-11 with the PLAN axis (PR #166) and REMOVED FROM THE
+            // CODE by story 14.2: `structural` named the network and broadcast addresses beside a
+            // declared `infrastructure`, which the binding table already defines as including
+            // them — two words, adjacent meanings, one screen. ⚠️ It is forbidden in the KEY and
+            // in both VALUE columns and NOT under `crates/`, where the English adjective is used
+            // legitimately in prose ("a structural zero", "the structural fact shape"): the same
+            // asymmetry `drift` carries two lists above, and for the same reason.
+            "structural",
         ],
     ),
     (
@@ -113,11 +121,28 @@ const RETIRED: &[(&str, &[&str])] = &[
             "revert",
             "reverts",
             "accept-as-declared",
+            "structural",
         ],
     ),
     // « Merger » is BINDING here and must never join this list. French `ignore`/`ignorer` is the
     // retired verb — the same retirement as the English one, in the language it was retired for.
-    ("fr", &["ignorer", "ignore", "ignorez", "ignorée", "ignoré"]),
+    (
+        "fr",
+        &[
+            "ignorer",
+            "ignore",
+            "ignorez",
+            "ignorée",
+            "ignoré",
+            // The French value the retired key carried was « réseau ou diffusion », so the word
+            // itself never shipped in this column — it is listed so a translator cannot introduce
+            // it, which is what a denylist is for.
+            "structurel",
+            "structurelle",
+            "structurels",
+            "structurelles",
+        ],
+    ),
 ];
 
 /// The pseudo-locale under which a KEY PATH is linted rather than a translated value.

@@ -843,12 +843,34 @@ ipam.next_free_caveat:
 ipam.unknown_subnet:
   en: "No subnet is named by this identifier. Choose one above."
   fr: "Aucun sous-réseau ne porte cet identifiant. Choisissez-en un ci-dessus."
+# 🔴 A subnet larger than the ceiling is NOT drawn, and the sentence says what is shown instead.
+# Measured before the ceiling existed: a `10.0.0.0/8` served 2.08 GB in 44 s with status 200, on the
+# plain navigation link, because the default view is the numerically-lowest subnet.
+ipam.too_large:
+  en: "This subnet holds more than %{max} addresses, so its grid is not drawn. The ranges you declared are below."
+  fr: "Ce sous-réseau contient plus de %{max} adresses, sa grille n'est donc pas dessinée. Les plages que vous avez déclarées figurent ci-dessous."
+ipam.ranges_heading:
+  en: "Declared ranges"
+  fr: "Plages déclarées"
 ipam.empty_plan:
   en: "No subnet is declared yet, so there is no plan to draw."
   fr: "Aucun sous-réseau n'est déclaré, il n'y a donc pas de plan à dessiner."
+# 🔴 THE CONTROL'S OWN SENTENCE, and it exists because reusing `gesture.not_built` served the
+# ACTION BAR's copy on this screen: *"resolve an ambiguity, accept a gap as permanent, snooze a
+# question, attach a sighting"* — four gestures with nothing to do with an addressing plan, on the
+# IPAM screen, found by the acceptance layer reading the served page rather than the template.
+# ⚠️ NO STORY NUMBER, on `gesture.*`'s own rule: a number turns a label into a calendar, therefore
+# into a promise.
+# 🔑 The verb is « Définir » / *Define* and NOT *Declare*: `prd.md:992` binds `declared`/« déclaré »
+# to the operator-documented STATE, and the gesture axis carries no `declare` row — minting one
+# would give one word two meanings, which is what that table exists to prevent. *Define* names the
+# act without touching either axis.
 ipam.empty_plan_gesture:
-  en: "Declare a subnet"
-  fr: "Déclarer un sous-réseau"
+  en: "Define a subnet"
+  fr: "Définir un sous-réseau"
+ipam.empty_plan_not_built:
+  en: "Defining a subnet is not built yet. When it is, this is where the plan starts."
+  fr: "La définition d'un sous-réseau n'est pas encore construite. Quand elle le sera, c'est ici que le plan commencera."
 
 # ── Sources (story 6b.8) — the REAL capability boundary ──────────────────────
 sources.title:

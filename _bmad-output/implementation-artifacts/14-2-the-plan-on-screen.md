@@ -255,10 +255,13 @@ not-covered class would be seen by nothing.
    screens are merged AFTER `.with_state(pool.clone())` (`main.rs:680`) so their state is `()` and
    `State<MySqlPool>` fails to compile. A `Fed` `/ipam` must leave that router — story 6b.5 paid
    this for `/dashboard` and narrowed the promise in writing rather than dropping it. ⚠️ **This
-   paragraph first called `/ipam` the SECOND exemption; the validation measured that it is the
-   FIFTH.** `page::triage_router` (`page.rs:1552`) already carries five routes — `/triage`,
-   `/dashboard`, `/diagnostic`, `/sources`, `/devices` — so `/ipam` is the sixth route there and the
-   fifth screen to leave the pool-free router. 🔑 *The narrowed promise is worth less each time it
+   paragraph called `/ipam` the SECOND exemption; the validation measured FIFTH; the blind review
+   layer then measured SIXTH — and the blind layer is right.** `page::triage_router`
+   (`page.rs:1552`) already carries FIVE screens — `/triage`, `/dashboard`, `/diagnostic`,
+   `/sources`, `/devices` — so `/ipam` is the SIXTH screen served with a pool. 🔑 *Two review layers
+   gave two numbers and the tie was broken by counting, not by seniority*: the fact-check said
+   "fifth exemption" while listing five predecessors, which is the same sentence refuting its own
+   count that the blind layer caught in the code. 🔑 *The narrowed promise is worth less each time it
    is narrowed, and saying "the second" would have hidden that.* Say the true count.
 2. **Deleting `ExampleContent::IpamOccupancy` makes the compiler name THREE sites, and one the
    story listed is not among them.** Measured by deleting it and running `cargo check --workspace
@@ -316,7 +319,7 @@ when the story's own arbitration is what opens the path.
 Three `E0599`, and **one of them needs `--all-targets`** — a plain `cargo build` names only two, so
 *"let the compiler drive it"* silently misses `main.rs:1393` unless the flag is there. What the
 compiler names **nothing** about: **18** `ipam.*` keys in `app.yml`, **13** `.ipam*` rules in
-`app.css`, `_ipam_example.html`, **33** `ipam` references in `example_screens.rs` (`IpamStrings`,
+`app.css`, `_ipam_example.html`, **41** `ipam` references in `example_screens.rs` (the story first said 33, which was the lowercase count and under-reported what the sweep actually removed) (`IpamStrings`,
 the `Ipam` template struct, `ipam_body` and its tests), and `main.rs:1822-1840`'s `/ipam?subnet=`
 route test. ⚠️ And `example_contents.len() == 5`'s failure message reads *"a sixth is a screen that
 grew example content without a story deciding it should"* — **an invitation to edit the digit**,
@@ -564,10 +567,12 @@ Claude Opus 5 (1M context)
 - **AC5 · AC5b · AC6 · AC7** → story 14.2b, with their measurements.
 - **AC8** an empty plan names the gesture as NOT YET BUILT, through the badge `Gesture::Planned`
   renders — 14.2b cannot ship its route without meeting that site.
-- **AC9** `#![allow(dead_code)]` narrowed from module-wide to item-by-item: **eleven warnings before,
-  SEVEN after**, each naming 14.2b. 🔴 The register said *eleven items* and a correction of it said
+- **AC9** `#![allow(dead_code)]` narrowed from module-wide to item-by-item: **eleven warnings
+  before, SIX after** — one per attribute, each naming 14.2b. ⚠️ **This read *SEVEN* in four places
+  until the acceptance layer recounted**, in the criterion whose own subject is a wrong count of
+  this very figure. *A unit-sensitive sentence is where an unqualified number does the most damage.* 🔴 The register said *eleven items* and a correction of it said
   *ten warnings covering fourteen*; both were wrong, and the error was the INSTRUMENT (`grep "never
-  used"` cannot see ``struct `Subnet` is never constructed``). Corrected by PR #171.
+  used"` cannot see ``struct `Subnet` is never constructed``). ⚠️ **PR #171 carries the correction to the twins and the register and is OPEN, not merged** — the criterion first said *corrected before this story starts*, which was false while that PR waited.
 - **AC10** `ipam/mod.rs`'s false `Constraint` doc corrected, **and the variant that makes the
   corrected sentence true shipped with it** rather than leaving a doc describing future code.
 - **AC11** THE LIVE COUNT: **873 → 875 tests** (585 bin + 191 core + 99 xtask), the sum re-added
@@ -585,12 +590,12 @@ Claude Opus 5 (1M context)
 ### File List
 
 - `crates/opencmdb-bin/src/ipam_page.rs` — NEW (525 code lines): the cell vocabulary, the pure
-  `PlanView`, the router, the budgeted handler, the render, and eleven guards.
+  `PlanView`, the router, the budgeted handler, the render, and TWELVE guards.
 - `crates/opencmdb-bin/templates/_ipam.html` — NEW.
 - `crates/opencmdb-bin/templates/_ipam_example.html` — DELETED.
 - `crates/opencmdb-bin/src/ipam_repo.rs` — `list_subnets`, `ranges_in`, `policy_from_token`,
   `Subnet::addresses`/`is_edge`/`cidr`; `ipam()` now produces the named variant; the blanket
-  `allow` narrowed to five items.
+  `allow` narrowed to SIX items.
 - `crates/opencmdb-core/src/repo/mod.rs` — `RepositoryError::Ipam(IpamError)`.
 - `crates/opencmdb-core/src/ipam/mod.rs` — the false `Constraint` paragraph corrected.
 - `crates/opencmdb-bin/src/screens.rs` — `Ipam` is `Fed`; `ExampleContent::IpamOccupancy` deleted.

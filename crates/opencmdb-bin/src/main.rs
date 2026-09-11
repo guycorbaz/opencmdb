@@ -694,8 +694,11 @@ fn app(pool: MySqlPool, config: AppConfig, diagnostic: diagnostic::DiagnosticFac
             config.document_enabled,
         ))
         // 🔑 `/ipam` is store-fed since story 14.2, so it leaves the pool-free demonstration
-        // router — the FIFTH screen to do so, after `/triage`, `/dashboard`, `/diagnostic`,
-        // `/sources` and `/devices` (the last two since 6b.8 and 2026-09-09). ⚠️ The compile-time
+        // router — the SIXTH screen to do so, after `/triage`, `/dashboard`, `/diagnostic`,
+        // `/sources` and `/devices` (the last two since 6b.8 and 2026-09-09). ⚠️ This said FIFTH
+        // over a list of five, and the blind review layer caught it from the diff alone: the
+        // sentence refuted its own count, and the nature tally rewritten in the same commit —
+        // four fed plus two mixed — refuted it a second time. ⚠️ The compile-time
         // refusal of `State<MySqlPool>` therefore no longer covers it; it covers the screens that
         // remain, and saying which is what stops the narrowed promise being read as the original.
         // It is its OWN router rather than a sixth route on `page::triage_router`, because

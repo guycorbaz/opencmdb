@@ -21,9 +21,12 @@ rather than softened; what remains is:
 - **It forms INTERFACES, not devices.** Two cards of one machine are two interfaces the engine can
   see and cannot yet call one thing. `obelix` renders as two rows carrying one name — the grouping
   problem, visible on a real network for the first time (#158).
-- **Five screens of ten are wholly labelled example content**, and two more carry an example section
-  beside real content (measured off `Screen::nature`, not recalled: 3 `Fed`, 2 `Mixed`, 5
-  `Example`). It read *"six of ten"* until the inventory story.
+- **FOUR screens of ten are wholly labelled example content**, and two more carry an example
+  section beside real content (re-measured off `Screen::nature` on 2026-09-11: **4 `Fed`, 2
+  `Mixed`, 4 `Example`**). ⚠️ It read *"five … 3 Fed, 2 Mixed, 5 Example"* until story 14.2 fed
+  `/ipam` from the store, and *"six of ten"* before the inventory story — **a parenthesis promising
+  a measurement does not keep the measurement fresh**, which is why the story that changes a nature
+  owes this line.
 - **It needs `macvlan`, `ipvlan` or host networking.** Behind a bridge the host answers every ARP
   and the table holds the gateway alone — the deployment scans, records and names, and never groups,
   **silently**. `/sources` and the administrator manual both carry it.
@@ -134,7 +137,9 @@ including the « Merger » label, wrong since July and raised by no gate.
   (axe-core over the ten routes the navigation offers **plus FOUR query-string states no href carries**;
   CI seeds the store and sets `AXE_REQUIRE_QUEUE=1`, because an empty queue is *the gate could not run*
   and not a pass; `AXE_REQUIRE_GESTURE=1` likewise, because the product's one live control on no page
-  it walks is not a pass either) and `node a11y/kbd-probe.mjs` (**thirty** checks over the keyboard
+  it walks is not a pass either; **`AXE_REQUIRE_PLAN=1` since story 14.2**, because `/ipam`'s whole
+  content — the cells, their per-cell names, the selector, the legend — exists only when the store
+  holds a subnet, so an unseeded run measures one sentence and passes) and `node a11y/kbd-probe.mjs` (**thirty** checks over the keyboard
   layer, the focus contract, and — since story 6.4 — the documenting gesture PRESSED for real). Both answer **0 clean / 1 the product / 2 the gate could not run**, ⚠️ *once `node` is
   running them* — the shell before them keeps its own codes. Neither can be Rust: they measure the
   RENDERED, COMPUTED page, and `cargo xtask ci` has no browser.

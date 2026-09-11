@@ -924,12 +924,23 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
    absent rule so that the stylesheet says what the blank means. */
 .ipam-cell-not-covered { background: transparent; }
 
-/* The policy, on the border. Four line styles, told apart without colour and without pattern —
-   the third channel, because the fill is already spoken for by the state. */
+/* The policy, on the border. ⚠️ **THREE of the four are told apart, and the fourth is a STATED
+   LIMIT rather than an oversight** (Guy, 2026-09-11): a 14 px cell offers exactly three border
+   styles that render at 1 px — `solid`, `dashed`, `dotted` — and `border-style: double` collapses
+   to a solid line below 3 px. Measured in Chrome 151 at this story's code review by screenshotting
+   one cell per policy: `ipam-policy-static` and `ipam-policy-infrastructure` came back IDENTICAL
+   PIXELS. Not *"told apart by colour alone"*, which 1.4.1 would already forbid — not told apart.
+   🔑 The fill is already spoken for by the four STATES, which is the axis the grid separates; the
+   policy is carried by the accessible name and the legend, both of which name it in WORDS. That is
+   constraint 6 in its own terms — *a pattern and a word, never a hue alone* — and the UX spec's
+   *"find a free IP without sight"*. The refused alternatives are in `deferred-work.md`. */
 .ipam-policy-static { border-color: var(--color-neutral-600); }
 .ipam-policy-dhcp-pool { border-style: dashed; border-color: var(--color-neutral-600); }
 .ipam-policy-reserved { border-style: dotted; border-color: var(--color-neutral-600); }
 .ipam-policy-infrastructure { border-style: double; border-color: var(--color-neutral-600); }
+
+/* The ranges of a subnet too large to draw: what the plan holds, when the grid cannot show it. */
+.ipam-ranges { margin: 8px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.8; }
 
 .ipam-legend {
   display: flex;

@@ -5486,7 +5486,7 @@ development_status:
   #   `ipam/mod.rs:122-123` describes a `RepositoryError::Constraint` mapping THAT WAS NEVER
   #   WRITTEN (the code is `Backend(String)`, and that function's own doc says so fifteen lines
   #   above -- three review layers missed it); the register's "eleven items dead" is neither
-  #   count (measured: TEN warnings covering FOURTEEN items, identical under `cargo build` and
+  #   count (measured: ELEVEN warnings covering FIFTEEN items (a figure this entry itself got wrong as *ten and fourteen* before the instrument was corrected), identical under `cargo build` and
   #   `clippy --all-targets`, and what the attribute hides is the absence of a PRODUCER, not of a
   #   test); and the UX spec asks for `role="grid"` with keyboard navigation where story 6b.7
   #   shipped `role="list"` on a measured ARIA reason -- this story rebuilds that grid and may not

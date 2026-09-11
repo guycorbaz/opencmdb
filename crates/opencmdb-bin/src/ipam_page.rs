@@ -59,8 +59,20 @@ pub(crate) enum CellState {
     Defined(Option<IpPolicy>),
     /// Inside a range, and no `ip_address` row names it.
     Free(IpPolicy),
-    /// The subnet's network or broadcast address, covered by no range.
-    Infrastructure,
+    /// The subnet's network or broadcast address — carrying the policy of the range that covers
+    /// it, when one does.
+    ///
+    /// 🔴 **THE EDGE IS DECIDED BEFORE THE RANGES, and the first draft decided it after.** That
+    /// order is the whole of blind-review finding #1: with the ranges first, an operator who lays
+    /// a `static` range across the whole subnet made `.0` a `Free(Static)` cell, which
+    /// `offerable` then offered — *the reference mock's own defect, reproduced by the story that
+    /// quotes it three times*. Worse, the story's own test asserted 256 offerable cells and so
+    /// **required** the defect: a test that pins the ugly thing is a test that demands it.
+    ///
+    /// 🔑 An edge is infrastructure BY ARITHMETIC, and no declaration makes it assignable. The
+    /// policy is carried so the cell still shows what the operator declared over it — the plan is
+    /// drawn as written, and only the OFFER is refused.
+    Infrastructure(Option<IpPolicy>),
     /// Outside every range. The plan says nothing about it, and neither does this cell.
     NotCovered,
 }
@@ -77,7 +89,7 @@ impl CellState {
         match self {
             Self::Defined(_) => "ipam-cell-defined",
             Self::Free(_) => "ipam-cell-free",
-            Self::Infrastructure => "ipam-cell-infrastructure",
+            Self::Infrastructure(_) => "ipam-cell-infrastructure",
             Self::NotCovered => "ipam-cell-not-covered",
         }
     }
@@ -91,7 +103,7 @@ impl CellState {
             // the binding table's own definition, and giving them a second word is the synonym
             // problem that table exists to prevent. `structural` was that second word until
             // 2026-09-11.
-            Self::Infrastructure => "ipam.policy.infrastructure",
+            Self::Infrastructure(_) => "ipam.policy.infrastructure",
             Self::NotCovered => "ipam.state.not_covered",
         }
     }
@@ -101,17 +113,22 @@ impl CellState {
         match self {
             Self::Defined(policy) => policy,
             Self::Free(policy) => Some(policy),
-            Self::Infrastructure | Self::NotCovered => None,
+            Self::Infrastructure(policy) => policy,
+            Self::NotCovered => None,
         }
     }
 
     /// Whether this state may be offered as the next free address.
     ///
-    /// 🔴 **A CELL CAN BE `Free` AND STILL NOT OFFERABLE, and the first draft of this function got
-    /// it wrong.** It read `matches!(self, Self::Free(_))`, which offered `192.0.2.0` the moment an
-    /// operator declared a range with the `infrastructure` policy over it — measured by the test
-    /// below, which reddened on its first run with `left: Some(192.0.2.0)`. The binding table says
-    /// of `infrastructure`: *"Not host space; **never offered as free**"*, in those words.
+    /// 🔴 **A CELL CAN BE `Free` AND STILL NOT OFFERABLE, and this function was wrong TWICE.**
+    /// It first read `matches!(self, Self::Free(_))`, which offered `192.0.2.0` the moment a range
+    /// carried the `infrastructure` policy. Excluding that policy fixed the SYMPTOM and left the
+    /// CAUSE: the blind review layer then showed — from the diff alone — that a `static` range over
+    /// the subnet's edges made them `Free(Static)`, offerable, and the story's own test asserted
+    /// exactly that with `offerable == 256`. Measured: `left: Some(192.0.2.0)`.
+    /// 🔑 *The first fix named a policy; the defect was an ORDER.* The edge is now decided before
+    /// any range, so no policy can make an edge assignable. The binding table's *"never offered as
+    /// free"* still bars a declared infrastructure range, which is the other half.
     ///
     /// 🔑 *The state and the policy are two axes, and `free` is a statement about the STATE alone.*
     /// An address inside a declared infrastructure range is free of any individual claim and is
@@ -125,6 +142,23 @@ impl CellState {
         matches!(self, Self::Free(policy) if policy != IpPolicy::Infrastructure)
     }
 }
+
+/// The largest subnet this screen will DRAW, in addresses — a `/22`.
+///
+/// 🔴 **WITHOUT THIS CEILING THE SCREEN WAS A DENIAL OF SERVICE, measured rather than feared.**
+/// With a `10.0.0.0/8` in the plan, `/ipam` served **2.08 GB in 44 s with status 200**; a `/16` —
+/// an ordinary corporate subnet — already shipped 8.1 MB and 65 536 `<li>` elements. ⚠️ **And the
+/// page budget could not help**: `store_within` wraps the READS, while `PlanView::derive` and
+/// `render_plan` are synchronous, so `tokio::time::timeout` has nothing to preempt. Forty
+/// concurrent requests took `/healthz` from 1 ms to **10.1 s** and the process to 2.6 GB.
+///
+/// 🔑 Worse than a hostile URL: the default view is the numerically-lowest subnet, so ONE such row
+/// made the plain navigation link do it. The ceiling is therefore checked before the cells are
+/// MATERIALISED, not after — checking afterwards is paying the cost to learn you should not have.
+///
+/// ⚠️ Beyond it the plan is shown as the list of RANGES the operator declared, which is what the
+/// plan actually holds; a grid of a million cells was never readable anyway (Guy, 2026-09-11).
+pub(crate) const MAX_DRAWN_ADDRESSES: u64 = 1024;
 
 /// One subnet's plan, derived from the store's rows and from nothing else.
 ///
@@ -140,8 +174,14 @@ impl PlanView {
     /// Derive the plan for one subnet.
     ///
     /// `ranges` are `(first, last, policy)` and `defined` are the individually-defined addresses.
-    /// Overlapping ranges cannot occur — the adapter refuses them — so the first range containing
-    /// an address is the only one that does.
+    ///
+    /// ⚠️ **OVERLAPPING RANGES CAN OCCUR, and the first draft of this doc said they could not.**
+    /// The adapter refuses them, but §1(C) records that its rule does NOT hold under concurrency —
+    /// two overlapping ranges committed under an injected pause — and `a11y/seed.sql` inserts
+    /// ranges by RAW SQL, which bypasses the adapter entirely. So the `.find()` below resolves an
+    /// overlap to the LOWEST `first_addr`, and that is a rendering decision. 🔑 *A priority order
+    /// must not double as a repair* (story 6b.7): it is stated here rather than asserted away, and
+    /// the repair is story 14.2b's, which owns the concurrency fix.
     pub(crate) fn derive(
         subnet: Subnet,
         ranges: &[(Ipv4Addr, Ipv4Addr, IpPolicy)],
@@ -154,12 +194,17 @@ impl PlanView {
                     .iter()
                     .find(|(first, last, _)| addr >= *first && addr <= *last)
                     .map(|(_, _, policy)| *policy);
+                // 🔴 THE ORDER IS THE DECISION, and it is asserted rather than left to an `if`.
+                // An EDGE outranks a range: `.0` and `.255` are infrastructure by arithmetic and a
+                // declared range over them changes what they LOOK like, never whether they may be
+                // assigned. `Defined` outranks the edge only because an `ip_address` row naming
+                // `.0` is the operator's own statement, and a defined cell is never offered either.
                 let state = if defined.contains(&addr) {
                     CellState::Defined(policy)
+                } else if subnet.is_edge(addr) {
+                    CellState::Infrastructure(policy)
                 } else if let Some(policy) = policy {
                     CellState::Free(policy)
-                } else if subnet.is_edge(addr) {
-                    CellState::Infrastructure
                 } else {
                     CellState::NotCovered
                 };
@@ -192,7 +237,7 @@ impl PlanView {
             match state {
                 CellState::Defined(_) => defined += 1,
                 CellState::Free(_) => free += 1,
-                CellState::Infrastructure => infrastructure += 1,
+                CellState::Infrastructure(_) => infrastructure += 1,
                 CellState::NotCovered => not_covered += 1,
             }
         }
@@ -212,7 +257,13 @@ pub(crate) struct IpamState {
 /// The query string `/ipam` accepts.
 #[derive(Debug, Default, serde::Deserialize)]
 pub(crate) struct IpamQuery {
-    /// The subnet to draw, by its id. Absent or unknown selects the first.
+    /// The subnet to draw, by its id. **Absent selects the first; UNKNOWN selects nothing.**
+    ///
+    /// 🔴 This line read *"Absent or unknown selects the first"* until the blind review layer
+    /// caught it — the fallback the handler ten lines down exists to REFUSE, asserted on the type a
+    /// future caller reads first. Silently serving another subnet would tell the operator their
+    /// selection took when it did not (story 6b.4's `?sort=` finding). *A false doc is a defect,
+    /// and this one described the defect as the design.*
     ///
     /// ⚠️ **It was a SLUG until story 14.2** — `ExampleSubnet::slug`, from a dataset that no longer
     /// exists. `ip_subnet` has no slug column, so the selector's key had to change meaning, and the
@@ -289,6 +340,11 @@ async fn plan_data(
         return Ok(unknown_subnet_body(&subnets));
     };
     let ranges = ipam_repo::ranges_in(pool, &id).await?;
+    // 🔴 THE CEILING IS CHECKED BEFORE THE CELLS ARE MATERIALISED. Checking after would mean
+    // paying 2 GB to learn the page should not have been drawn — see `MAX_DRAWN_ADDRESSES`.
+    if subnet.size() > MAX_DRAWN_ADDRESSES {
+        return Ok(render_too_large(&subnets, &id, &ranges));
+    }
     let defined = ipam_repo::addresses_in(pool, &id).await?;
     let bounds: Vec<(Ipv4Addr, Ipv4Addr, IpPolicy)> = ranges
         .iter()
@@ -322,8 +378,10 @@ pub(crate) struct IpamStrings {
     empty_plan: String,
     empty_plan_gesture: String,
     unknown_subnet: String,
+    too_large: String,
+    range_heading: String,
     gesture_badge: String,
-    gesture_not_built: String,
+    empty_plan_not_built: String,
 }
 
 /// One cell, ready to render.
@@ -334,6 +392,17 @@ pub(crate) struct CellView {
     /// The policy's CSS modifier, or the empty string when no range covers this address.
     policy_modifier: &'static str,
     /// The accessible name: the address, its state, and its policy when it has one.
+    label: String,
+}
+
+/// One declared range, for a subnet too large to draw.
+#[derive(Debug, Clone)]
+pub(crate) struct RangeRow {
+    /// The bounds, as the operator writes them.
+    bounds: String,
+    /// The policy's own word.
+    policy: String,
+    /// The operator's label, or the empty string.
     label: String,
 }
 
@@ -363,8 +432,11 @@ pub(crate) struct IpamBody {
     s: IpamStrings,
     /// The selector.
     tabs: Vec<SubnetTab>,
-    /// The grid, or `None` when the plan holds no subnet at all.
+    /// The grid, or `None` when the plan holds no subnet at all, when the identifier names none,
+    /// or when the subnet is too large to draw.
     plan: Option<PlanRender>,
+    /// The declared ranges, rendered INSTEAD of a grid when the subnet is too large.
+    too_large: Option<Vec<RangeRow>>,
 }
 
 /// The CSS modifier for a policy.
@@ -397,6 +469,7 @@ fn empty_plan_body() -> String {
         s: strings(None, None),
         tabs: Vec::new(),
         plan: None,
+        too_large: None,
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -415,6 +488,7 @@ fn unknown_subnet_body(subnets: &[(String, Subnet, String)]) -> String {
             })
             .collect(),
         plan: None,
+        too_large: None,
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -464,13 +538,51 @@ fn strings(counts: Option<(usize, usize, usize, usize)>, next: Option<Ipv4Addr>)
         empty_plan: rust_i18n::t!("ipam.empty_plan").to_string(),
         empty_plan_gesture: rust_i18n::t!("ipam.empty_plan_gesture").to_string(),
         unknown_subnet: rust_i18n::t!("ipam.unknown_subnet").to_string(),
+        too_large: rust_i18n::t!("ipam.too_large", max = MAX_DRAWN_ADDRESSES).to_string(),
+        range_heading: rust_i18n::t!("ipam.ranges_heading").to_string(),
         gesture_badge: rust_i18n::t!("gesture.badge").to_string(),
-        gesture_not_built: rust_i18n::t!(
-            "gesture.not_built",
-            badge = rust_i18n::t!("gesture.badge")
-        )
-        .to_string(),
+        empty_plan_not_built: rust_i18n::t!("ipam.empty_plan_not_built").to_string(),
     }
+}
+
+/// Render a subnet the screen refuses to draw, as the list of ranges the operator declared.
+///
+/// 🔑 It shows what the PLAN holds rather than an apology: a `/16` has at most a handful of ranges,
+/// and those ranges are the thing the operator wrote. The grid is what does not scale; the plan
+/// does.
+fn render_too_large(
+    subnets: &[(String, Subnet, String)],
+    selected: &str,
+    ranges: &[(Ipv4Addr, Ipv4Addr, IpPolicy, String)],
+) -> String {
+    let rows = ranges
+        .iter()
+        .map(|(first, last, policy, label)| RangeRow {
+            bounds: format!("{first} – {last}"),
+            policy: rust_i18n::t!(policy_key(*policy)).to_string(),
+            label: label.clone(),
+        })
+        .collect();
+    let body = IpamBody {
+        s: strings(None, None),
+        tabs: tabs_for(subnets, selected),
+        plan: None,
+        too_large: Some(rows),
+    };
+    body.render()
+        .unwrap_or_else(|_| crate::page::render_error_body())
+}
+
+/// The selector, built once for every caller that renders it.
+fn tabs_for(subnets: &[(String, Subnet, String)], selected: &str) -> Vec<SubnetTab> {
+    subnets
+        .iter()
+        .map(|(id, subnet, label)| SubnetTab {
+            id: id.clone(),
+            label: tab_label(subnet, label),
+            active: id == selected,
+        })
+        .collect()
 }
 
 /// Render one subnet's grid.
@@ -479,14 +591,7 @@ pub(crate) fn render_plan(
     selected: &str,
     plan: &PlanView,
 ) -> String {
-    let tabs = subnets
-        .iter()
-        .map(|(id, subnet, label)| SubnetTab {
-            id: id.clone(),
-            label: tab_label(subnet, label),
-            active: id == selected,
-        })
-        .collect();
+    let tabs = tabs_for(subnets, selected);
     let cells = plan
         .cells
         .iter()
@@ -518,6 +623,7 @@ pub(crate) fn render_plan(
         s: strings(Some(plan.counts()), plan.next_offerable()),
         tabs,
         plan: Some(PlanRender { cells }),
+        too_large: None,
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -551,9 +657,17 @@ mod tests {
         assert_eq!(plan.cells.len(), 256, "a /24 holds 256 addresses");
         let offerable = plan.cells.iter().filter(|(_, s)| s.offerable()).count();
         assert_eq!(
-            offerable, 256,
-            "a range that covers the whole subnet makes every cell free — the EDGES are only \
-             infrastructure when no range covers them, which is what the next assertion measures"
+            offerable, 254,
+            "🔴 A RANGE OVER THE WHOLE SUBNET MUST STILL NOT PUT THE EDGES ON OFFER. This \
+             assertion read 256 until the blind review layer showed, FROM THE DIFF ALONE, that it \
+             pinned the very defect three comments in the same commit denounce — the mock's own \
+             *next free address* panel naming the network address. A test that pins the ugly thing \
+             is a test that demands it, and this one demanded it for a day"
+        );
+        assert_eq!(
+            plan.next_offerable(),
+            Some(v4("192.0.2.1")),
+            "and the offer starts at the first host, not at the network address"
         );
 
         // The ordinary shape: a range over the hosts, the edges covered by nothing.
@@ -568,8 +682,12 @@ mod tests {
             254,
             "the network and broadcast addresses are never offerable"
         );
-        assert_eq!(plan.cells[0].1, CellState::Infrastructure, "the .0");
-        assert_eq!(plan.cells[255].1, CellState::Infrastructure, "the .255");
+        assert_eq!(plan.cells[0].1, CellState::Infrastructure(None), "the .0");
+        assert_eq!(
+            plan.cells[255].1,
+            CellState::Infrastructure(None),
+            "the .255"
+        );
         assert_eq!(
             plan.next_offerable(),
             Some(v4("192.0.2.1")),
@@ -594,18 +712,26 @@ mod tests {
             Some(v4("192.0.2.10")),
             "the offer must skip the infrastructure range entirely"
         );
-        // ⚠️ A range whose policy is `infrastructure` renders as FREE-with-that-policy, not as the
-        // derived `Infrastructure` state — the derived state is for edges no range covers. The two
-        // are the same WORD by decision (the binding table covers both) and different STATES,
-        // because one is declared and the other is arithmetic. This assertion is what stops a
-        // future refactor fusing them.
-        assert!(
-            matches!(plan.cells[0].1, CellState::Free(IpPolicy::Infrastructure)),
-            "a declared infrastructure range is a covered cell, not a derived edge"
+        // 🔑 `.0` is an EDGE, so it is `Infrastructure` whatever covers it — and it CARRIES the
+        // policy of the range the operator declared over it, because the plan is drawn as written
+        // and only the OFFER is refused.
+        assert_eq!(
+            plan.cells[0].1,
+            CellState::Infrastructure(Some(IpPolicy::Infrastructure)),
+            "an edge keeps its declared policy and is still an edge"
+        );
+        assert!(!plan.cells[0].1.offerable(), "and it is not offerable");
+        // The other half of the rule, on a cell that is NOT an edge: a declared infrastructure
+        // range is free of any individual claim and still never offered — the binding table's
+        // *"never offered as free"*, which no ordering can satisfy on its own.
+        assert_eq!(
+            plan.cells[5].1,
+            CellState::Free(IpPolicy::Infrastructure),
+            "a mid-range address under an infrastructure policy is free-with-that-policy"
         );
         assert!(
-            !plan.cells[0].1.offerable(),
-            "and it is still not offerable"
+            !plan.cells[5].1.offerable(),
+            "and it is not offerable either"
         );
     }
 
@@ -686,7 +812,7 @@ mod tests {
         let states = [
             CellState::Defined(None),
             CellState::Free(IpPolicy::Static),
-            CellState::Infrastructure,
+            CellState::Infrastructure(None),
             CellState::NotCovered,
         ];
         let modifiers: BTreeSet<&str> = states.iter().map(|s| s.modifier()).collect();
@@ -702,24 +828,61 @@ mod tests {
     /// this test, which reads the sheet and the code rather than the markup.
     #[test]
     fn the_stylesheet_defines_every_modifier_the_grid_can_emit() {
-        let css = include_str!("../assets/app.css");
+        // 🔴 **COMMENTS ARE STRIPPED FIRST, and without that this guard was satisfied by its own
+        // explanation.** `app.css`'s comment narrating the `free`-versus-blank defect contains the
+        // string `.ipam-cell-free`, so `css.contains(…)` was true with the RULE deleted: measured
+        // by the edge layer with `cargo xtask mutate`, 875 tests, clippy and ten gates green over a
+        // stylesheet missing the one rule this story was re-arbitrated to add.
+        // 🔑 *A guard that greps a file greps its prose too* — and the better the prose explains
+        // the defect, the more reliably it hides it.
+        let raw = include_str!("../assets/app.css");
+        let mut css = String::with_capacity(raw.len());
+        let mut rest = raw;
+        while let Some(open) = rest.find("/*") {
+            css.push_str(&rest[..open]);
+            match rest[open..].find("*/") {
+                Some(close) => rest = &rest[open + close + 2..],
+                None => {
+                    rest = "";
+                    break;
+                }
+            }
+        }
+        css.push_str(rest);
+        let css = css.as_str();
+        assert!(
+            !css.contains("/*"),
+            "comment stripping left a comment opener behind"
+        );
         let states = [
             CellState::Defined(None),
             CellState::Free(IpPolicy::Static),
-            CellState::Infrastructure,
+            CellState::Infrastructure(None),
             CellState::NotCovered,
         ];
+        // ⚠️ **A SELECTOR ENDS WHERE AN IDENTIFIER ENDS**, and `contains` alone does not know that:
+        // renaming `.ipam-cell-free` to `.ipam-cell-free-GONE` left this guard GREEN, because the
+        // old name is a PREFIX of the new one. Found by a mutation of mine that was badly chosen —
+        // it meant to delete the rule and only renamed it — and the bad mutation is what exposed
+        // the weak oracle. *A mutation named for one thing and applied to another sometimes
+        // measures a third.*
+        let defines = |selector: &str| {
+            css.match_indices(selector).any(|(at, _)| {
+                let after = css[at + selector.len()..].chars().next();
+                !matches!(after, Some(c) if c.is_alphanumeric() || c == '-' || c == '_')
+            })
+        };
         for state in states {
             let rule = format!(".{}", state.modifier());
             assert!(
-                css.contains(&rule),
+                defines(&rule),
                 "{rule} is emitted by the grid and defined by nothing — the cell would ship with \
                  no treatment and every existing guard would stay green"
             );
         }
         for policy in IpPolicy::ALL {
             let rule = format!(".{}", policy_modifier(policy));
-            assert!(css.contains(&rule), "{rule} is emitted and undefined");
+            assert!(defines(&rule), "{rule} is emitted and undefined");
         }
     }
 
@@ -729,13 +892,24 @@ mod tests {
     /// deliberate redundancy that protects the other modifiers does not reach it. What protects it
     /// instead is `the_stylesheet_defines_every_modifier_the_grid_can_emit`, and this test names
     /// that dependency so nobody deletes the other one thinking the legend has it covered.
+    ///
+    /// ⚠️ **The universal was FALSE when written — there were TWO**, and two review layers found it
+    /// separately: `ipam-policy-infrastructure` is emitted by the grid and was in no legend entry,
+    /// which was not a decision but an omission. It is in the legend now, so the claim is true
+    /// again; the test below enumerates EVERY modifier the grid can emit rather than a hand-written
+    /// list, so the next omission reds instead of being described away.
+    ///
+    /// ⚠️ And the block it reads was `split("ipam-legend").nth(1)` — everything after the first
+    /// occurrence to END OF FILE, which made the positive assertions satisfiable by a literal
+    /// anywhere below. Bounded now.
     #[test]
     fn the_blank_cell_is_the_one_modifier_no_legend_entry_carries() {
         let template = include_str!("../templates/_ipam.html");
-        let legend = template
+        let after = template
             .split("ipam-legend")
             .nth(1)
             .expect("the legend block");
+        let legend = after.split("</p>").next().expect("the legend's end");
         assert!(
             !legend.contains("ipam-cell-not-covered"),
             "the legend must NOT name the blank cell — that is the arbitration, and a legend entry \
@@ -754,23 +928,182 @@ mod tests {
         }
     }
 
+    /// 🔴 **A SUBNET TOO LARGE TO DRAW IS NEVER MATERIALISED, and the ceiling is measured on the
+    /// SIZE rather than on the outcome.** Before it existed, `/ipam` served **2.08 GB in 44 s with
+    /// status 200** for a `10.0.0.0/8` — on the plain navigation link, the default view being the
+    /// numerically-lowest subnet — and the page budget could not help, because it wraps the reads
+    /// while the render is synchronous.
+    #[test]
+    fn a_subnet_beyond_the_ceiling_is_shown_as_its_ranges_and_never_drawn() {
+        let big = Subnet::new("10.0.0.0".parse().unwrap(), 8).expect("a /8");
+        assert_eq!(big.size(), 16_777_216, "a /8 holds 2^24 addresses");
+        assert!(big.size() > MAX_DRAWN_ADDRESSES);
+
+        let subnets = vec![("t-big".to_string(), big, "Everything".to_string())];
+        let ranges = vec![(
+            v4("10.0.0.1"),
+            v4("10.0.0.50"),
+            IpPolicy::Static,
+            "Servers".to_string(),
+        )];
+        let body = render_too_large(&subnets, "t-big", &ranges);
+        assert!(
+            !body.contains("ipam-grid"),
+            "no grid is drawn for a subnet beyond the ceiling"
+        );
+        assert!(
+            body.contains("10.0.0.1 – 10.0.0.50"),
+            "the plan is shown as what it HOLDS — the ranges the operator declared"
+        );
+        assert!(
+            body.contains(&rust_i18n::t!("ipam.ranges_heading").to_string()),
+            "and the list says what it is"
+        );
+
+        // 🔑 The BOUNDARY, both sides: a /22 is drawn, a /21 is not. Asserting only the /8 would
+        // leave the ceiling's VALUE untested — any ceiling at all would pass.
+        let at = Subnet::new("10.0.0.0".parse().unwrap(), 22).expect("a /22");
+        assert_eq!(
+            at.size(),
+            MAX_DRAWN_ADDRESSES,
+            "a /22 is exactly the ceiling"
+        );
+        let over = Subnet::new("10.0.0.0".parse().unwrap(), 21).expect("a /21");
+        assert!(over.size() > MAX_DRAWN_ADDRESSES, "a /21 is over it");
+    }
+
+    /// 🔴 **THE FOUR STATES ARE TOLD APART WITHOUT COLOUR; THE FOUR POLICIES ARE NOT, AND THAT IS
+    /// A STATED LIMIT RATHER THAN AN OVERSIGHT** (Guy, 2026-09-11).
+    ///
+    /// A 14 px cell offers exactly three border styles that RENDER at 1 px — `solid`, `dashed`,
+    /// `dotted` — and the fill is already spoken for by the four states. `border-style: double`
+    /// collapses to a solid line below 3 px, measured in Chrome 151 by screenshotting one cell per
+    /// policy: `ipam-policy-static` and `ipam-policy-infrastructure` came back **IDENTICAL PIXELS**.
+    /// So the channel is exhausted, and the honest answer is to say which axis the GRID separates.
+    ///
+    /// 🔑 **The policy is carried by each cell's accessible name and by the legend**, both of which
+    /// name it in words — which is what constraint 6 asks for in its own terms (*a pattern and a
+    /// word, never a hue alone*) and what the UX spec means by *"find a free IP without sight"*.
+    /// This test pins the half that IS visual, so a future change cannot quietly lose it too.
+    #[test]
+    fn the_four_states_carry_four_distinct_fills() {
+        let raw = include_str!("../assets/app.css");
+        for state in [
+            CellState::Defined(None),
+            CellState::Free(IpPolicy::Static),
+            CellState::Infrastructure(None),
+            CellState::NotCovered,
+        ] {
+            let selector = format!(".{} {{", state.modifier());
+            let at = raw
+                .find(&selector)
+                .unwrap_or_else(|| panic!("{selector} must be a rule of its own"));
+            let rule = &raw[at..at + raw[at..].find('}').expect("the rule ends")];
+            // Each state's fill is declared explicitly — a state that inherits the base cell's
+            // transparent background is indistinguishable from the blank, which is the defect
+            // arbitration (D) was re-aimed on.
+            assert!(
+                rule.contains("background"),
+                "{selector} declares no background: it would render as the blank cell, and \
+                 `free` did exactly that until this story measured it in a browser"
+            );
+        }
+        // And the policy limit is written where someone would look for it.
+        // ⚠️ **Whitespace-normalised before matching**, because a comment is wrapped and a needle
+        // that spans the wrap matches nothing: story 6b.6's review found a check reporting 7/9 for
+        // exactly that reason and recorded that *a check that fails for the wrong reason is worth
+        // nothing*. This one did too, on its first run.
+        let flat = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            flat.contains("three border styles that render at 1 px"),
+            "the stylesheet must SAY that the policy axis is not separable at this size — a limit \
+             nobody wrote down is a limit the next story rediscovers"
+        );
+    }
+
     /// 🔴 **AC2: THIS SCREEN READS NO OBSERVATION.** The audit is story 14.3's, and a join written
     /// here would be that story's deliverable arriving early and unmeasured. The guard is a source
     /// scan because the defect is an ADDED read, which no runtime test can provoke — story 5.12's
     /// *you cannot measure the absence of code by running code*.
+    ///
+    /// 🔴 **IT WALKED THIS FILE ALONE UNTIL THE ACCEPTANCE LAYER MEASURED THE HOLE**: every cell
+    /// state is fed by SQL written in `ipam_repo.rs`, so joining `observation_record` into
+    /// `ranges_in` left **875 tests green** — the guard was correct about the file it read and
+    /// blind to the file where the read would naturally be written. *A guard placed where the
+    /// defect cannot occur reads as coverage and is none*, this epic's dominant class, met inside
+    /// the guard written to close an epic constraint.
+    ///
+    /// ⚠️ **Its limit is STATED rather than implied**: it matches table names as literals, so a
+    /// read reached through an existing helper elsewhere in the crate is invisible to it. A
+    /// TRIPWIRE against the read someone writes here, never a barrier — story 5.12's own framing.
     #[test]
     fn the_plan_reads_no_observation() {
-        let source = include_str!("ipam_page.rs");
-        let code = source
-            .split("#[cfg(test)]")
-            .next()
-            .expect("the non-test half");
-        for needle in ["observation_record", "identity_link", "declared_attribute"] {
+        // Each file, with a witness the guard must have READ — never a proportion. The first
+        // oracle here was `code.len() > source.len() / 2`, which is a guess about how much of a
+        // file is tests; `ipam_repo.rs` is 44 % code and the guard reddened over a correct tree.
+        // 🔑 *A reach check must name what the reach is FOR.*
+        for (name, source, witness) in [
+            (
+                "ipam_page.rs",
+                include_str!("ipam_page.rs"),
+                "async fn plan_data",
+            ),
+            (
+                "ipam_repo.rs",
+                include_str!("ipam_repo.rs"),
+                "async fn ranges_in",
+            ),
+        ] {
+            // 🔴 **ANCHORED AT THE START OF A LINE, and the unanchored form read 382 BYTES OF
+            // 47 324.** `ipam_repo.rs`'s module doc quotes `#[cfg(test)]` on line 7 — in the very
+            // sentence explaining that the `file-size` gate stops at the first one and therefore
+            // reads 183 lines of `repo.rs` where 1743 are. So this guard cut at a MENTION of the
+            // attribute and inspected six lines of header. 🔑 *The defect the file documents,
+            // committed by the guard written while reading that documentation* — and it was found
+            // only because a mutation that should have reddened came back GREEN and was disbelieved.
+            let code = source
+                .split("\n#[cfg(test)]")
+                .next()
+                .expect("the non-test half");
             assert!(
-                !code.contains(needle),
-                "`{needle}` appears in the plan screen: the audit is story 14.3's, and the \
-                 criterion is that this screen draws the PLAN and nothing else"
+                code.contains(witness),
+                "{name}: the guard did not reach `{witness}` — it read {} bytes of {} and cut at \
+                 a MENTION of the attribute rather than at the module. A guard that stops in the \
+                 header measures the header: the unanchored form read 382 bytes of 47 324 here",
+                code.len(),
+                source.len()
             );
+            for needle in ["observation_record", "identity_link", "declared_attribute"] {
+                assert!(
+                    !code.contains(needle),
+                    "`{needle}` appears in {name}: the audit is story 14.3's, and the criterion \
+                     is that this screen draws the PLAN and nothing else"
+                );
+            }
+            // 🔴 **AND THE READ ARRIVES AS A CALL, not as SQL.** The edge layer inserted
+            // `crate::repo::count_observations(pool)` into the handler — a function whose own body
+            // carries none of the three literals — and measured 875 tests, clippy and TEN GATES
+            // GREEN over an `/ipam` that hit `observation_record` on every request. 🔑 *The
+            // natural way to add a read is the way the existing reads are written: a call.*
+            // So this module may speak to `ipam_repo` and to `page`, and to no other adapter.
+            // ⚠️ `ipam_repo` legitimately imports ONE item from `crate::repo` — `classify`, the
+            // single translation of a backend error in this crate (`repo.rs:1607`) — so the rule
+            // is *no other item*, stated as an allowlist of one rather than as an exception
+            // nobody can audit.
+            for reach in code.match_indices("crate::repo::") {
+                let tail = &code[reach.0 + "crate::repo::".len()..];
+                let item: String = tail
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect();
+                assert_eq!(
+                    item, "classify",
+                    "{name} reaches `crate::repo::{item}`, and the observation reads live there. \
+                     The plan's own adapter is `ipam_repo`; `classify` is the one allowed item, \
+                     being this crate's single backend-error translation. Anything else is the \
+                     audit arriving early, and story 14.3 is where it belongs"
+                );
+            }
         }
     }
 

@@ -32,10 +32,12 @@
   {%- if tabs.is_empty() %}
   <p class="empty">{{ s.empty_plan }}</p>
   <p class="ipam-planned-note">
-    <span class="btn-gesture planned" role="button" aria-disabled="true" tabindex="0">
+    <span class="btn-gesture planned" role="button" aria-disabled="true" tabindex="0"
+          aria-describedby="ipam-plan-not-built">
       {{ s.empty_plan_gesture }}<span class="gesture-badge">{{ s.gesture_badge }}</span>
     </span>
-    {{ s.gesture_not_built }}
+    <span id="ipam-plan-not-built">
+    {{ s.empty_plan_not_built }}</span>
   </p>
   {%- else %}
   {#- 🔑 An unknown id narrows to NOTHING and says so; it does NOT fall back to the first subnet.
@@ -47,7 +49,21 @@
     <a class="filter" href="/ipam?subnet={{ tab.id }}">{{ tab.label }}</a>
     {%- endfor %}
   </nav>
+  {%- match too_large %}
+  {%- when None %}
   <p class="empty">{{ s.unknown_subnet }}</p>
+  {%- when Some with (rows) %}
+  {#- 🔑 The plan is shown as what it HOLDS — the ranges the operator declared — rather than as an
+       apology for not drawing a grid. A `/16` has a handful of ranges; it is the grid that does not
+       scale, not the plan. -#}
+  <p class="empty">{{ s.too_large }}</p>
+  <h3 class="panel-label">{{ s.range_heading }}</h3>
+  <ul class="ipam-ranges">
+    {%- for row in rows %}
+    <li><span class="mono">{{ row.bounds }}</span> · {{ row.policy }}{% if row.label != "" %} · {{ row.label }}{% endif %}</li>
+    {%- endfor %}
+  </ul>
+  {%- endmatch %}
   {%- endif %}
   {%- when Some with (plan) %}
 
@@ -90,6 +106,7 @@
         <span class="ipam-key"><span class="ipam-cell ipam-policy-static"></span>{{ s.policy_static }}</span>
         <span class="ipam-key"><span class="ipam-cell ipam-policy-dhcp-pool"></span>{{ s.policy_dhcp_pool }}</span>
         <span class="ipam-key"><span class="ipam-cell ipam-policy-reserved"></span>{{ s.policy_reserved }}</span>
+        <span class="ipam-key"><span class="ipam-cell ipam-policy-infrastructure"></span>{{ s.policy_infrastructure }}</span>
         <span class="ipam-occupancy">{{ s.occupancy }}</span>
       </p>
     </div>
