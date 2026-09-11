@@ -28,6 +28,12 @@
 -- Addresses are RFC 5737 documentation range; no real network is referenced.
 
 -- Idempotent: this file may be re-run, and it starts from a known state on purpose.
+-- ⚠️ The plan's three tables are truncated in DEPENDENCY ORDER, children first: `ip_range` and
+-- `ip_address` both carry a foreign key to `ip_subnet`, so deleting the parent first answers
+-- `ERROR 1451` and the whole seed stops. Story 14.2 added them.
+DELETE FROM ip_address;
+DELETE FROM ip_range;
+DELETE FROM ip_subnet;
 DELETE FROM link_candidate;
 DELETE FROM identity_link;
 DELETE FROM observation_record;
@@ -107,3 +113,48 @@ INSERT INTO identity_link
   ('11111111-0000-0000-0000-0000000000b3', 'dddddddd-0000-0000-0000-0000000000b3',
    NULL, '00000000-0000-0000-0000-000000000000', 'abstained', NULL, 'ambiguous',
    '[]', 1, 'ENGINE', NOW(6), '9999-12-31 23:59:59.999999');
+
+-- ── The addressing plan (story 14.2) ────────────────────────────────────────
+--
+-- 🔴 WITHOUT THESE ROWS THE AXE GATE WOULD WALK AN EMPTY `/ipam` AND REPORT SUCCESS. That is the
+-- `AXE_REQUIRE_QUEUE` shape exactly: the screen's whole content — cells each carrying their own
+-- accessible name, a selector, a legend — exists only when a subnet does, so a gate run against a
+-- virgin store measures the empty-plan sentence and nothing else, and passes. `AXE_REQUIRE_PLAN=1`
+-- turns that into *the gate could not run*; these rows are what let it run.
+--
+-- 🔴 **THE PREFIX LENGTHS ARE /25, AND THAT IS NOT COSMETIC.** `ip_subnet_cidr` is UNIQUE on
+-- `(base, prefix_len)`, and `ipam_repo.rs`'s store-backed tests own the three RFC 5737 /24s
+-- (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) — one CIDR per test, which is story 14.1's
+-- own rule after a panicking test poisoned its successor and inflated every mutation count. Seeding
+-- a /24 here took the name a test needs: measured, FOUR tests went red with
+-- `the subnet: Constraint("unique")` the moment this file had run against a developer's store.
+-- ⚠️ CI never saw it — its seed step runs AFTER the tests — so the failure would have been local
+-- only, which is precisely where this project measures its mutations. *A fixture and a test that
+-- share a namespace are one collision apart, and the store does not forget between them.*
+--
+-- ⚠️ TWO subnets, because one cannot show a selector narrowing: with a single tab, `aria-current`
+-- is satisfied by the only thing there is. Story 6b.4's ordering finding is the same shape — a
+-- fixture that seeded ONE entity made an ordering structurally unobservable.
+--
+-- 🔑 The ranges are chosen so the grid draws EVERY cell state at once: a `static` range, a
+-- `dhcp-pool` range, one individually-defined address inside the static range, and a gap between
+-- the two ranges that no range covers — which is the blank cell, the one state no legend entry
+-- names, and half of the pair the gate compares in the browser. A gate that walks a grid showing
+-- three of four states measures three of four.
+--
+-- Addresses are RFC 5737 documentation blocks, as everything in this file is.
+INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES
+  ('22222222-0000-0000-0000-00000000a001', '192.000.002.000', 25, 'Office'),
+  ('22222222-0000-0000-0000-00000000a002', '198.051.100.128', 25, 'Workshop');
+
+INSERT INTO ip_range (id, subnet_id, first_addr, last_addr, policy, label) VALUES
+  ('33333333-0000-0000-0000-00000000b001', '22222222-0000-0000-0000-00000000a001',
+   '192.000.002.001', '192.000.002.040', 'static', 'Servers and gear'),
+  ('33333333-0000-0000-0000-00000000b002', '22222222-0000-0000-0000-00000000a001',
+   '192.000.002.080', '192.000.002.126', 'dhcp-pool', 'Laptops'),
+  ('33333333-0000-0000-0000-00000000b003', '22222222-0000-0000-0000-00000000a002',
+   '198.051.100.129', '198.051.100.200', 'reserved', 'Held for the new line');
+
+INSERT INTO ip_address (id, subnet_id, addr, label) VALUES
+  ('44444444-0000-0000-0000-00000000c001', '22222222-0000-0000-0000-00000000a001',
+   '192.000.002.009', 'nas-01');

@@ -1,6 +1,6 @@
 # Story 14.2: The plan on screen
 
-Status: ready-for-dev
+Status: review
 
 ✅ **The four arbitrations of §1 were TAKEN by Guy on 2026-09-11**, the recommendation in all four.
 ⚠️ They were taken BEFORE the mandatory validation pass, which is the order this project uses and
@@ -437,19 +437,19 @@ where the defect lives in the DOM.*
   corrected sentence TRUE shipped with it: `RepositoryError::Ipam(IpamError)`. Proved to red first —
   the assertion was moved to the variant and the build named `E0599` **only under `--all-targets`**,
   which is §3's finding met in its first minute.
-- [ ] **T2** (AC1) Delete `ExampleContent::IpamOccupancy` and let the compiler name its sites; sweep
+- [x] **T2** (AC1) Delete `ExampleContent::IpamOccupancy` and let the compiler name its sites; sweep
   what it cannot name — 18 `ipam.*` keys, 13 `.ipam*` rules, the template, 33 references in
   `example_screens.rs`, and `main.rs`'s `/ipam?subnet=` route test.
-- [ ] **T3** (AC2, AC3, AC4) The store-fed grid: the cell vocabulary, the policy treatments, `free`'s
+- [x] **T3** (AC2, AC3, AC4) The store-fed grid: the cell vocabulary, the policy treatments, `free`'s
   own treatment, `.0`/`.255` as derived `infrastructure`, the occupancy list, the next-offerable
   panel, and the subnet selector keyed on the id rather than on a slug that no longer exists.
-- [ ] **T4** (AC8) The empty-plan sentence, through `Gesture::Planned { owner }`.
-- [ ] **T5** (AC9) Narrow `#![allow(dead_code)]` to what this story leaves dead, and say what remains.
-- [ ] **T6** (§2.3) Replace the legend guard that dies with the dataset, and cover the one modifier
+- [x] **T4** (AC8) The empty-plan sentence, through `Gesture::Planned { owner }`.
+- [x] **T5** (AC9) Narrow `#![allow(dead_code)]` to what this story leaves dead, and say what remains.
+- [x] **T6** (§2.3) Replace the legend guard that dies with the dataset, and cover the one modifier
   no legend entry can carry — `not-covered`, which has none by decision.
-- [ ] **T7** (§2.4) Widen `a11y/seed.sql` with a plan, and give the axe gate an `/ipam` state with a
+- [x] **T7** (§2.4) Widen `a11y/seed.sql` with a plan, and give the axe gate an `/ipam` state with a
   FLOOR — without one it would walk an empty page and report success.
-- [ ] **T8** (AC11, AC12) Measure. Both browser gates ARE claimed: this story changes a screen.
+- [x] **T8** (AC11, AC12) Measure. Both browser gates ARE claimed: this story changes a screen.
 
 ## Dev Notes
 
@@ -508,15 +508,101 @@ comparison be costed before any epic reintroduces it, and this story does not re
 - [Source: `crates/opencmdb-bin/src/ipam_repo.rs:324-330` — the seam that names this story]
 - [Source: `_bmad-output/implementation-artifacts/deferred-work.md` — the two rows owned here]
 
+## §4 — Mutation record (predictions written FIRST)
+
+| # | mutation | predicted | measured | carrier |
+|---|---|---|---|---|
+| Q1 | assert the `Ipam` variant before it exists | compile failure | ✅ `E0599` — **and only under `--all-targets`**; a plain `cargo build` printed nothing | compiler |
+| Q2 | `offerable` as `matches!(self, Self::Free(_))` | *(shipped as the first draft)* | 🔴 RED on the first run, `left: Some(192.0.2.0)` — the network address offered | assertion |
+| Q3 | `/ipam` becomes `Fed` with no budget | green, per the story's first reading | 🔴 RED, *"must refuse rather than hang"* — the guard is DERIVED from `Screen::ALL` | assertion |
+| Q4 | delete `ExampleContent::IpamOccupancy` | 3 sites named | ✅ 3 × `E0599`, one only under `--all-targets`; `example_contents.len()` is NOT among them | compiler |
+| Q5 | remove `ScreenQuery.subnet` | 3 sites named | ✅ 3 × `E0560`, each an explicit field list — the house idiom against `..Default::default()` paying for itself | compiler |
+| Q6 | `.ipam-cell-free` back to `background: transparent` | the axe gate reds | ✅ **exit 1**, naming *"free and not-covered render IDENTICALLY"* — ⚠️ and **axe itself reported 0 violations** under the same mutation: this check is the sole carrier | browser gate |
+| Q7 | the a11y seed on a `/24` | green | 🔴 **FOUR tests RED**, `the subnet: Constraint("unique")` — the seed took a CIDR the tests own. ⚠️ CI could never see it: its seed step runs AFTER the tests | assertion |
+| Q8 | `AXE_REQUIRE_PLAN=1` against an unseeded store | exit 2 | ✅ exit 2 — measured incidentally when the gesture row was consumed: the gate refuses rather than passes | gate contract |
+
+🔑 **Q2 and Q7 are the pass's own findings, and neither was in any analysis.** Q2 is the argument for
+two axes rather than one flattened enum, made by a red rather than by prose. Q7 is a defect this
+story INTRODUCED and the measurement caught — *a fixture and a test that share a namespace are one
+collision apart, and the store does not forget between them.*
+
+## §5 — Registered rather than fixed
+
+- ⚠️ **The UX spec's `role="grid"` divergence** (`:1632-1634`): the spec asks for a two-dimensional
+  focus model with `role="gridcell"`; the grid ships as story 6b.7's `<ul role="list">`, whose ARIA
+  reason still holds, and the spec's real requirement — *find a free IP without sight* — is met by
+  the next-address panel in text. **Owner: Epic 14's retrospective.**
+- ⚠️ **`#![allow(dead_code)]` is narrowed, not removed**: eleven warnings before this story, SEVEN
+  after, each naming story 14.2b. It goes when the write path has a producer.
+- ⚠️ **`page.rs` is still at 1954 of 2000** — this story added no line to it, by putting `/ipam` on
+  its own router. 14.2b's routes must not undo that.
+
 ## Dev Agent Record
 
 ### Agent Model Used
 
 ### Debug Log References
 
+### Agent Model Used
+
+Claude Opus 5 (1M context)
+
 ### Completion Notes List
 
+- **AC1** `/ipam` is `Nature::Fed`, on its own pool-bearing router; `ExampleContent::IpamOccupancy`,
+  `_ipam_example.html` and `example_data`'s whole ipam half are DELETED. The compiler named three
+  sites; 18 keys, 13 CSS rules and 33 references were swept by hand because it could not.
+- **AC2** the grid reads `ip_subnet`, `ip_range` and `ip_address` and nothing else. The guard is a
+  SOURCE scan (`the_plan_reads_no_observation`), because the defect is an ADDED read and *you cannot
+  measure the absence of code by running code*.
+- **AC3** four policies × four line styles, four states × four fills, every pair asserted distinct
+  as a SET rather than counted. ⚠️ **`free` gained its own treatment**, and the browser says the pair
+  now differs in `background-image` where before it differed in nothing.
+- **AC4** no `ipam.state.structural`, no `.ipam-cell-structural`, no `CellState::Structural`;
+  `.0`/`.255` render as `infrastructure` **through the POLICY key**, because a second word for one
+  concept is the synonym problem the binding table exists to prevent.
+- **AC5 · AC5b · AC6 · AC7** → story 14.2b, with their measurements.
+- **AC8** an empty plan names the gesture as NOT YET BUILT, through the badge `Gesture::Planned`
+  renders — 14.2b cannot ship its route without meeting that site.
+- **AC9** `#![allow(dead_code)]` narrowed from module-wide to item-by-item: **eleven warnings before,
+  SEVEN after**, each naming 14.2b. 🔴 The register said *eleven items* and a correction of it said
+  *ten warnings covering fourteen*; both were wrong, and the error was the INSTRUMENT (`grep "never
+  used"` cannot see ``struct `Subnet` is never constructed``). Corrected by PR #171.
+- **AC10** `ipam/mod.rs`'s false `Constraint` doc corrected, **and the variant that makes the
+  corrected sentence true shipped with it** rather than leaving a doc describing future code.
+- **AC11** THE LIVE COUNT: **873 → 875 tests** (585 bin + 191 core + 99 xtask), the sum re-added
+  rather than recalled. `cargo test --workspace --locked`, wall clock, warm: **8.69 s** against a
+  live `mariadb:10.11.11` on port 13420, **5.61 s** with `DATABASE_URL` unset.
+  ✅ **The 5.6 s is NOT a store leaking in, and that is settled by a check rather than by a story**:
+  there is no `.env`, `DATABASE_URL` is absent from the environment, and `--skip budget` runs in
+  **0.74 s** while the three `budget` tests alone take **5.15 s**. Story 14.1's §6 recorded the same
+  floor. *The clock is a weaker tell than this project's notes claim.*
+- **AC12** ten `cargo xtask ci` gates ✅ · `clippy --workspace --all-targets` ✅ (zero warnings) ·
+  `RUSTFLAGS="-D warnings" cargo test` ✅ · `fmt --check` ✅. **BOTH BROWSER GATES ARE CLAIMED AND
+  WERE RUN**: axe **0 violation nodes** over 10 routes + 4 states with `AXE_REQUIRE_PLAN=1`,
+  `AXE_REQUIRE_QUEUE=1` and `AXE_REQUIRE_GESTURE=1`; kbd-probe **30 checks, 0 failed**.
+
 ### File List
+
+- `crates/opencmdb-bin/src/ipam_page.rs` — NEW (525 code lines): the cell vocabulary, the pure
+  `PlanView`, the router, the budgeted handler, the render, and eleven guards.
+- `crates/opencmdb-bin/templates/_ipam.html` — NEW.
+- `crates/opencmdb-bin/templates/_ipam_example.html` — DELETED.
+- `crates/opencmdb-bin/src/ipam_repo.rs` — `list_subnets`, `ranges_in`, `policy_from_token`,
+  `Subnet::addresses`/`is_edge`/`cidr`; `ipam()` now produces the named variant; the blanket
+  `allow` narrowed to five items.
+- `crates/opencmdb-core/src/repo/mod.rs` — `RepositoryError::Ipam(IpamError)`.
+- `crates/opencmdb-core/src/ipam/mod.rs` — the false `Constraint` paragraph corrected.
+- `crates/opencmdb-bin/src/screens.rs` — `Ipam` is `Fed`; `ExampleContent::IpamOccupancy` deleted.
+- `crates/opencmdb-bin/src/main.rs` — the ipam router merged; the partition count and its sentence;
+  the selector test rewritten against the store.
+- `crates/opencmdb-bin/src/page.rs` — `store_within` is `pub(crate)`; the attribute-scan floor.
+- `crates/opencmdb-bin/src/example_data.rs`, `example_screens.rs` — the ipam halves deleted.
+- `crates/opencmdb-bin/locales/app.yml` — the ipam block rewritten: 20 keys, both locales.
+- `crates/opencmdb-bin/assets/app.css` — the cell vocabulary; `.panel-caveat`, `.ipam-planned-note`.
+- `a11y/seed.sql` — a plan on two `/25`s, and the plan's tables truncated in dependency order.
+- `a11y/axe-gate.mjs` — the `/ipam` state, its floor, and the browser-only distinguishability check.
+- `.github/workflows/ci.yml` — `AXE_REQUIRE_PLAN=1`.
 
 ### Change Log
 
@@ -531,3 +617,8 @@ comparison be costed before any epic reintroduces it, and this story does not re
   AC5 became three routes. Every correction is recorded in place with what it replaced. Three defects found while contexting and carried as criteria rather than filed
   elsewhere: the false `Constraint` doc, the register's wrong dead-code figure, the UX-spec grid
   divergence. No code changed.
+- 2026-09-11 — implemented 14.2 after the split. Eight mutation ids, eight conforming outcomes,
+  **two of them the pass's own findings**: `offerable` offered the network address inside a declared
+  `infrastructure` range (which is the argument for two axes rather than one enum, made by a red),
+  and the a11y seed took a CIDR the tests own — four tests red, on a defect CI could never have seen
+  because its seed step runs after the tests.

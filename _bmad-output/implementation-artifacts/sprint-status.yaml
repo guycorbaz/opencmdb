@@ -5407,7 +5407,30 @@ development_status:
   #   the head commit `2f395c5` itself (run `34585865670`, 2m45) and `mergeStateStatus: CLEAN`.
   #   ⚠️ NEXT: story 14.2, which owns the concurrency row above, the `#![allow(dead_code)]`
   #   narrowing, and the `structural` removal.
-  14-2-the-plan-on-screen: in-progress
+  14-2-the-plan-on-screen: review
+  #   IMPLEMENTED 2026-09-11 after the split. 873 → 875 tests (585 bin + 191 core + 99 xtask), ten
+  #   gates, clippy --all-targets, RUSTFLAGS="-D warnings", fmt -- and BOTH BROWSER GATES CLAIMED
+  #   AND RUN: axe 0 violation nodes over 10 routes + 4 states under all three REQUIRE flags,
+  #   kbd-probe 30 checks 0 failed.
+  #   🔴 TWO FINDINGS THE MUTATION PASS PRODUCED, neither in any analysis:
+  #     - `offerable` read `matches!(self, Self::Free(_))` and OFFERED THE NETWORK ADDRESS inside a
+  #       declared `infrastructure` range -- the binding table says "never offered as free" in
+  #       those words. The guard reddened on its first run (`left: Some(192.0.2.0)`). *A cell can
+  #       be free of any individual claim and still not be the operator's to assign*, which is the
+  #       argument for two axes rather than one flattened enum, made by a red rather than by prose.
+  #     - The a11y seed took a CIDR the tests own: FOUR tests red with `Constraint("unique")`.
+  #       ⚠️ CI could NEVER have seen it -- its seed step runs AFTER the tests -- so it would have
+  #       been a local-only failure, which is exactly where this project measures its mutations.
+  #       Closed by moving the seed to two /25s. *A fixture and a test that share a namespace are
+  #       one collision apart, and the store does not forget between them.*
+  #   🔑 The page budget was NOT forgotten because the guard is DERIVED from `Screen::ALL`: the
+  #   moment `/ipam` became `Fed` it reddened with "must refuse rather than hang". Story 6b.8
+  #   shipped `/sources` without one and three review layers missed it.
+  #   🔑 The axe gate gains a check only a BROWSER can make -- that `free` and *not covered* differ
+  #   in a NON-COLOUR property. Proved to red: exit 1 under the mutation, and ⚠️ **axe itself
+  #   reported 0 violations under the same mutation**, so this check is its sole carrier.
+  #   ⚠️ The "5.6 s without a store" figure is settled by a CHECK, not a story: no `.env`, no
+  #   `DATABASE_URL`, `--skip budget` runs in 0.74 s and the three budget tests alone take 5.15 s.
   #   CONTEXTED 2026-09-11, its four arbitrations taken by Guy the same day -- and then the
   #   MANDATORY VALIDATION RAN BOTH LAYERS AND SENT ALL FOUR BACK. 🔑 This is the second
   #   consecutive story where the validation refuted the argument that chose an answer, and the

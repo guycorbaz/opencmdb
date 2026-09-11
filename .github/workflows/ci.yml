@@ -138,6 +138,7 @@ jobs:
             OPENCMDB_BASIC_PASSWORD="$OPENCMDB_BASIC_PASSWORD" \
             AXE_REQUIRE_QUEUE=1 \
             AXE_REQUIRE_GESTURE=1 \
+            AXE_REQUIRE_PLAN=1 \
             node a11y/axe-gate.mjs
           # 🔴 **THE KEYBOARD LAYER'S ONLY CARRIER, and until story 6b.11's repair pass it
           # ran nowhere.** `crates/opencmdb-bin/assets/app.js` could be EMPTIED with 490
