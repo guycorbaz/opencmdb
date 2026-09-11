@@ -1,6 +1,6 @@
 # Story 14.1: The plan has a schema and no producer
 
-Status: review
+Status: done
 
 Epic 14 (IPAM), decomposed 2026-09-11 in `epics.md` (`4b5db27`). Opens the epic.
 Baseline: `4b5db27` (master).
