@@ -5407,7 +5407,28 @@ development_status:
   #   the head commit `2f395c5` itself (run `34585865670`, 2m45) and `mergeStateStatus: CLEAN`.
   #   ⚠️ NEXT: story 14.2, which owns the concurrency row above, the `#![allow(dead_code)]`
   #   narrowing, and the `structural` removal.
-  14-2-the-plan-on-screen: backlog
+  14-2-the-plan-on-screen: ready-for-dev
+  #   CONTEXTED 2026-09-11. ⚠️ `ready-for-dev` is the workflow's status and NOT a statement that
+  #   nothing is open: the story poses FOUR arbitrations that are Guy's, and the mandatory
+  #   validation pass (two fresh-context agents) has not run.
+  #     (A) do the two write routes sit behind a switch, and if so which one
+  #     (B) what `RepositoryError` gains -- and what forces a handler to distinguish it, since
+  #         nothing will: the enum is not `non_exhaustive` and no exhaustive match traverses it,
+  #         so a new variant produces ZERO `E0004` (the mirror of story 6b.4b)
+  #     (C) how the overlap rule holds under concurrency -- the register says it may NOT be a
+  #         `UNIQUE`; the recommendation is a parent-row `FOR UPDATE` inside a transaction, on
+  #         `repo::insert_device`'s precedent, with the 400 ms pause harness as its proof
+  #     (D) what a cell shows when the plan says nothing about it -- `structural` itself is NOT
+  #         open, the binding table already puts `.0`/`.255` under `infrastructure`
+  #   🔴 THREE DEFECTS FOUND WHILE CONTEXTING, carried as criteria rather than filed elsewhere:
+  #   `ipam/mod.rs:122-123` describes a `RepositoryError::Constraint` mapping THAT WAS NEVER
+  #   WRITTEN (the code is `Backend(String)`, and that function's own doc says so fifteen lines
+  #   above -- three review layers missed it); the register's "eleven items dead" is neither
+  #   count (measured: TEN warnings covering FOURTEEN items, identical under `cargo build` and
+  #   `clippy --all-targets`, and what the attribute hides is the absence of a PRODUCER, not of a
+  #   test); and the UX spec asks for `role="grid"` with keyboard navigation where story 6b.7
+  #   shipped `role="list"` on a measured ARIA reason -- this story rebuilds that grid and may not
+  #   leave the two documents disagreeing silently.
   #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
   #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
   14-3-the-audit: backlog
