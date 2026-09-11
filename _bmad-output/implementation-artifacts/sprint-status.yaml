@@ -5407,7 +5407,7 @@ development_status:
   #   the head commit `2f395c5` itself (run `34585865670`, 2m45) and `mergeStateStatus: CLEAN`.
   #   ⚠️ NEXT: story 14.2, which owns the concurrency row above, the `#![allow(dead_code)]`
   #   narrowing, and the `structural` removal.
-  14-2-the-plan-on-screen: ready-for-dev
+  14-2-the-plan-on-screen: in-progress
   #   CONTEXTED 2026-09-11, its four arbitrations taken by Guy the same day -- and then the
   #   MANDATORY VALIDATION RAN BOTH LAYERS AND SENT ALL FOUR BACK. 🔑 This is the second
   #   consecutive story where the validation refuted the argument that chose an answer, and the
@@ -5470,6 +5470,33 @@ development_status:
   #   leave the two documents disagreeing silently.
   #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
   #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
+  14-2b-the-plan-in-the-operators-hands: backlog
+  #   🔴 INSERTED 2026-09-11 at story 14.2's IMPLEMENTATION -- Epic 14 goes from FOUR stories to
+  #   FIVE (`epics.md` NOT edited; a story may not re-scope an epic, and the divergence is
+  #   registered). The mandatory validation had grown 14.2 from two write routes to three and added
+  #   a `free` treatment, an auth-perimeter property, a permanent concurrency harness and a
+  #   `classify` repair. 14.2 is the SCREEN; this is the OPERATOR'S HANDS. Precedent: 5.9/5.9b,
+  #   5.14/5.14b, 6b.4/6b.4b, 6.4/6.4b.
+  #   It carries, each WITH the measurement that produced it rather than re-derived:
+  #     - THREE write routes (subnet, range, address), not two: `insert_subnet` has no caller
+  #       outside its own tests, so with two an empty plan stays empty for ever.
+  #     - The auth perimeter as a PROPERTY: an always-on POST mounted below `auth_deny` left 873
+  #       tests and TEN GATES GREEN over an unauthenticated write answering 201, the one carrying
+  #       test being hardcoded to `/document-all`. Story 6b.2's defect in its POST form.
+  #     - Keyed refusal bodies over what the HANDLER CAN RECEIVE, not over `IpamError::ALL`:
+  #       `NotFound` is every empty plan and `Constraint("unique")` is an operator retyping an
+  #       address, the likeliest refusal on the screen, and neither is an `IpamError`.
+  #     - The concurrency fix ON THE READ THAT DECIDES (`ip_range ... FOR UPDATE`), with its 400 ms
+  #       pause harness shipped as a PERMANENT test: the parent-row lock works and is defeated by
+  #       one ordinary DRY line, measured.
+  #     - `RepositoryError::Contention` is DEAD CODE -- `classify` compares sqlx's `code()`, which
+  #       is the SQLSTATE, against a MySQL NUMBER (1205 arrives as HY000, 1062 as 23000) -- and it
+  #       is this story's arbitration that first makes it reachable on a route an operator presses.
+  #     - Removing `ipam_repo.rs`'s `#![allow(dead_code)]` outright; 14.2 only narrows it.
+  #   ⚠️ ACCEPTED COST, SAID RATHER THAN DISCOVERED: between the two stories `/ipam` draws a plan
+  #   nothing can fill, so 14.2's empty-plan sentence names the gesture as NOT YET BUILT through
+  #   `Gesture::Planned { owner }` -- the shape story 6b.4b made a compile-time obligation, so this
+  #   story cannot ship its route without meeting that site.
   14-3-the-audit: backlog
   #   The story the epic exists for. Includes FR24's real conflict -- undetectable before PR #163,
   #   because the connector read no hardware address; and NOT a conflict inside a `dhcp-pool`,

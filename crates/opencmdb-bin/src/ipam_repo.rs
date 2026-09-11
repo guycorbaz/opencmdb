@@ -142,6 +142,28 @@ impl Subnet {
     pub(crate) fn contains(&self, addr: Ipv4Addr) -> bool {
         addr >= self.base && addr <= self.last()
     }
+
+    /// Every address of the subnet, network and broadcast included, in numeric order.
+    ///
+    /// 🔑 **256 addresses, 254 hosts, and the two are not the same number** — story 6b.7 found the
+    /// reference mock conflating them: it looped `0..256`, drew `.0` and `.255` as ordinary free
+    /// cells, and its *next free address* panel then named the NETWORK address. The grid draws
+    /// every address because the PLAN covers every address; what may be OFFERED is a separate
+    /// question, answered by `CellState::offerable`.
+    pub(crate) fn addresses(&self) -> impl Iterator<Item = Ipv4Addr> + use<> {
+        let first = u32::from(self.network());
+        let last = u32::from(self.last());
+        (first..=last).map(Ipv4Addr::from)
+    }
+
+    /// Whether this address is the subnet's network or broadcast address.
+    ///
+    /// ⚠️ On a `/31` and a `/32` the two coincide or vanish; the predicate is written as a
+    /// comparison against both bounds rather than as arithmetic on the prefix length, so those
+    /// cases answer without a special arm.
+    pub(crate) fn is_edge(&self, addr: Ipv4Addr) -> bool {
+        addr == self.network() || addr == self.last()
+    }
 }
 
 /// Insert one subnet of the addressing plan.
@@ -319,17 +341,102 @@ where
         .collect()
 }
 
+/// Every subnet in the plan, in numeric order of its base address.
+///
+/// 🔑 The order is the store's, for the reason `addresses_in` gives: the padded spelling makes
+/// lexicographic order numeric, so no caller sorts and no caller can forget to.
+///
+/// # Errors
+///
+/// The classified `sqlx::Error`, or [`IpamError`] when a stored row is not this store's canonical
+/// spelling or does not describe a subnet — reachable only by a write that went around this module.
+pub(crate) async fn list_subnets<'e, E>(
+    executor: E,
+) -> Result<Vec<(String, Subnet, String)>, RepositoryError>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String, String, u8, String)> =
+        sqlx::query_as("SELECT id, base, prefix_len, label FROM ip_subnet ORDER BY base, prefix_len")
+            .fetch_all(executor)
+            .await
+            .map_err(classify)?;
+    rows.into_iter()
+        .map(|(id, base, prefix_len, label)| {
+            let base = from_canonical(&base).map_err(ipam)?;
+            let subnet = Subnet::new(base, prefix_len).map_err(ipam)?;
+            Ok((id, subnet, label))
+        })
+        .collect()
+}
+
+/// Every range defined in one subnet, in numeric order of its first address.
+///
+/// # Errors
+///
+/// The classified `sqlx::Error`, or [`IpamError`] when a stored bound is not canonical or the
+/// stored policy token is not one this build knows — the second is reachable by a raw write, the
+/// `ascii_bin` PAD SPACE collation accepting `'static '` where [`IpPolicy::as_str`] does not.
+pub(crate) async fn ranges_in<'e, E>(
+    executor: E,
+    subnet_id: &str,
+) -> Result<Vec<(Ipv4Addr, Ipv4Addr, IpPolicy, String)>, RepositoryError>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String, String, String, String)> = sqlx::query_as(
+        "SELECT first_addr, last_addr, policy, label FROM ip_range WHERE subnet_id = ? \
+         ORDER BY first_addr",
+    )
+    .bind(subnet_id)
+    .fetch_all(executor)
+    .await
+    .map_err(classify)?;
+    rows.into_iter()
+        .map(|(first, last, policy, label)| {
+            let first = from_canonical(&first).map_err(ipam)?;
+            let last = from_canonical(&last).map_err(ipam)?;
+            let policy = policy_from_token(&policy)?;
+            Ok((first, last, policy, label))
+        })
+        .collect()
+}
+
+/// The one reading of a stored policy token, and it is EXACT.
+///
+/// 🔴 It compares against [`IpPolicy::as_str`] with no trimming and no case folding, because
+/// `ascii_bin` is a PAD SPACE collation: the schema's `IN (...)` CHECK accepts `'static '`, and so
+/// would `= TRIM(...)`. The schema's own defence is an INTEGER comparison
+/// (`LENGTH(policy) = LENGTH(TRIM(policy))`, `0007:142`); this is the second carrier, on the
+/// reasoning `from_canonical` states — *a value can reach here from a backfill that went around
+/// the adapter*.
+///
+/// # Errors
+///
+/// [`IpamError::MalformedAddress`] is deliberately NOT reused; an unknown policy is a row this
+/// build cannot render, so it surfaces as a backend failure naming the token.
+fn policy_from_token(token: &str) -> Result<IpPolicy, RepositoryError> {
+    IpPolicy::ALL
+        .into_iter()
+        .find(|policy| policy.as_str() == token)
+        .ok_or_else(|| {
+            RepositoryError::Backend(format!("stored policy token is not one this build knows: {token:?}"))
+        })
+}
+
 /// Carry an [`IpamError`] across the frontier.
 ///
-/// ⚠️ **This is the seam D47 makes awkward on purpose, and the awkwardness is named rather than
-/// hidden.** `RepositoryError` has no IPAM variant, so a refusal the domain states precisely
-/// arrives at the caller as a sentence. That is one step better than `Backend(sqlx_error)` — the
-/// text is the domain's, not the driver's — and one step worse than a named variant, which is what
-/// `InstantRegressed` and `ContradictoryObservation` are the precedent for. **Story 14.2 is the
-/// first story with a caller that must DISTINGUISH these refusals to render them**, and that is the
-/// story where the variant earns itself.
+/// ✅ **The seam D47 made awkward on purpose is now closed.** Story 14.1 carried these refusals as
+/// `RepositoryError::Backend(String)` and said so here, naming story 14.2 as the one that would
+/// earn the variant; this is that story, and [`RepositoryError::Ipam`] is that variant.
+///
+/// ⚠️ **What the variant does NOT buy, stated so nobody reads more into it than it gives**: adding
+/// it produced **zero** compiler errors outside this module's own tests — `RepositoryError` is not
+/// `#[non_exhaustive]` and no exhaustive `match` traverses it — so nothing forces a handler to
+/// distinguish these refusals. The obligation is carried by a test over what a handler can
+/// RECEIVE, which is deliberately larger than this enum.
 fn ipam(error: IpamError) -> RepositoryError {
-    RepositoryError::Backend(error.to_string())
+    RepositoryError::Ipam(error)
 }
 
 #[cfg(test)]
@@ -906,11 +1013,13 @@ mod tests {
         .await;
         assert_eq!(
             inverted,
-            Err(opencmdb_core::repo::RepositoryError::Backend(
-                IpamError::RangeBoundsInverted.to_string()
+            Err(opencmdb_core::repo::RepositoryError::Ipam(
+                IpamError::RangeBoundsInverted
             )),
             "an inverted range is refused BY NAME — asserting `is_err()` here would have passed \
-             over the wrong reason, which is the defect the review found"
+             over the wrong reason, which is the defect the review found. Story 14.2 turned the \
+             name from a SENTENCE into a VARIANT: `Backend(String)` forced a caller that wanted to \
+             render this refusal to match on prose, which is what D47 forbids"
         );
 
         // 🔴 THE CONTROL, and it is what makes the three assertions mean anything: the DDL does NOT

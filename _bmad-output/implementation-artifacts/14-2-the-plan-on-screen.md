@@ -1,4 +1,4 @@
-# Story 14.2: The plan on screen, and in the operator's hands
+# Story 14.2: The plan on screen
 
 Status: ready-for-dev
 
@@ -14,8 +14,21 @@ Baseline: `38da035` (master), **873 tests** (583 bin + 191 core + 99 xtask), ten
 ## Story
 
 As the operator,
-I want to define a range and an address and see them drawn,
-so that the product holds my addressing plan instead of an invented one.
+I want the addressing plan I hold to be the one the product draws,
+so that the screen stops showing an invented network and starts showing mine.
+
+🔴 **SPLIT at implementation — 14.2b INSERTED, Epic 14 → FIVE stories** (Guy, 2026-09-11;
+`epics.md` NOT edited, the divergence is registered). The mandatory validation had grown this story
+from two write routes to three and added a `free` treatment, an auth-perimeter property, a permanent
+concurrency harness and a `classify` repair. **14.2 is the SCREEN; 14.2b is the OPERATOR'S HANDS** —
+the three write routes, the keyed refusals, the concurrency fix, AC5b and `classify`. Precedent:
+5.9 (the schema) / 5.9b (the resolver that fills it), 5.14/5.14b, 6b.4/6b.4b, 6.4/6.4b.
+
+⚠️ **The accepted cost is stated rather than discovered: between the two, `/ipam` draws a plan
+nothing can fill.** So AC8 changes — the empty-plan sentence **names the gesture as NOT YET BUILT**,
+through `Gesture::Planned { owner }`, which is the product's own shape for exactly this and which
+story 6b.4b made a compile-time obligation. *A door labelled with a room that does not exist yet is
+honest; a door labelled with the room you are already in is not.*
 
 ## §0 — What is established and must not be re-opened
 
@@ -370,44 +383,20 @@ constraint (5) and `ux-design-specification.md:1404-1405` say adding it earlier 
 build, so adding it later is what nobody does. (Not `deferred-work.md`: there is no such row there,
 and in this project *the register* means that file.)
 
-**AC5 — THREE write routes, and the first carries the machinery.** 🔴 **It read *two* until the
-gap-hunt measured that nothing in this product can create a subnet**: `insert_subnet` has **no
-caller anywhere outside its own test module**, and `ip_range.subnet_id` and `ip_address.subnet_id`
-are both `NOT NULL` foreign keys to it (`0007:120`, `:157`). With two routes an empty plan stays
-empty for ever, every range write answers `Err(NotFound)` — measured — and **AC8 names a gesture the
-story does not ship: a door opening onto no room.** ✅ Guy, 2026-09-11: **a subnet, a range and an
-address.** Refused: deriving the subnet from `OPENCMDB_SCAN_CIDR` (it makes configuration a source
-of the declared plan and binds two registers nothing obliges to coincide) and minting it implicitly
-from the first range (a CIDR is not deducible from arbitrary bounds, and the operator would never
-see what was guessed in their name). 🔑 Constraint (1)'s argument — the first route carries the
-machinery and the rest are cheap — holds for three as well as for two.
+**AC5 · AC5b · AC6 · AC7 → STORY 14.2b.** The three write routes and the machinery the first one
+carries; the auth perimeter as a property; the keyed refusal bodies over what the handler can
+RECEIVE; the concurrency fix and its permanent pause harness. 🔑 They are moved WITH their
+measurements, not re-derived there: `insert_subnet` has no caller outside its own tests (so an empty
+plan stays empty and AC5 is three routes, not two); an always-on `POST` below `auth_deny` left 873
+tests and ten gates green over an unauthenticated `201`; the parent-row lock is defeated by one
+ordinary DRY line, so the lock goes on the read that DECIDES; and `RepositoryError::Contention` is
+dead code because `classify` compares sqlx's SQLSTATE against a MySQL number.
 
-The FIRST route carries: the Origin check, a KEYED refusal body per status in BOTH locales, the
-`authorship` sanction if it writes provenance (it does not — say so), and the browser gates. The
-others reuse them, and a test asserts the reuse rather than a comment claiming it.
-
-**AC5b — every route the router carries answers 401 without a credential, asserted as a PROPERTY.**
-🔴 The gap-hunt mounted an always-on `POST /ipam/range` BELOW `auth_deny` and measured **873 tests
-and ten gates GREEN over an unauthenticated write that answered `201 Created`.** The one test
-carrying the *route-above-the-layer* property is hardcoded to `/document-all`
-(`main.rs:2147`), and the perimeter guard iterates `Screen::ALL` (`main.rs:1570`) — **a POST path is
-in neither.** This is story 6b.2's measured defect (`GET /dashboard` → 200 below the layer) in its
-POST form. ⚠️ Without this criterion, arbitration (A)'s accepted cost — *a fresh install gains a
-live write surface with no opt-in* — is joined by one nobody accepted: **nothing notices if that
-surface is also unauthenticated.**
-
-**AC6 — every refusal the operator can reach is a KEY, in both locales, naming the rule.** The SET
-is over **what the handler can RECEIVE** (§1(B)'s re-scoping): the `IpamError` variants it maps,
-plus `NotFound`, plus `Constraint("unique")`, plus the contention case — compared in both
-directions. 🔴 Story 6.4's
-finding is the reason: a success message shipped in English under a French UI with a raw UUID in it,
-and three layers of guards were green over it.
-
-**AC7 — the overlap rule holds under concurrency**, by arbitration (C), and the 400 ms injected
-pause that made two overlapping ranges commit is re-run and measured to REFUSE the second writer.
-
-**AC8 — an empty plan names the gesture that fills it and links to it.** Story 6b.4's finding: *a
-door labelled with the room you are already in is not a door.*
+**AC8 — an empty plan says the gesture is NOT YET BUILT and names its owner.** ⚠️ Changed by the
+split: the gesture arrives in 14.2b, so promising a door here would be the defect AC8 exists to
+prevent, pointed the other way. It renders through `Gesture::Planned { owner }` — the product's
+existing shape, which story 6b.4b made a compile-time obligation by giving the enum one variant, so
+14.2b cannot ship the route without meeting this site.
 
 **AC9 — `#![allow(dead_code)]` is narrowed or removed.** Measured on `38da035` with the attribute
 removed: **ELEVEN warnings covering FIFTEEN items**, identically under `cargo build --workspace` and
@@ -418,7 +407,9 @@ never constructed``. *A measurement whose instrument cannot see the answer is no
 `deferred-work.md`'s *eleven items* was right about the number and wrong about the noun. Corrected
 in both twins and the register by PR #171 before this story starts. 🔑 What the attribute hides is
 the absence of a PRODUCER, not the absence of a test — the six `#[tokio::test]`s do call these
-functions.
+functions. ⚠️ **Narrowed by the split**: this story gives the READ functions a producer, so the
+attribute shrinks to what remains dead; **14.2b removes it**, and neither story may leave it
+module-wide while claiming to have paid it off.
 
 **AC10 — the doc that describes code that does not exist is corrected.** `ipam/mod.rs:122-123`
 claims a `Constraint` mapping that was never written. Correct it to what arbitration (B) decides,
@@ -439,20 +430,26 @@ where the defect lives in the DOM.*
 
 ## Tasks / Subtasks
 
-- [x] **T0** ✅ The four arbitrations of §1 were taken by Guy on 2026-09-11. ⚠️ A validation
-  measurement that refutes one returns it to him rather than settling it in the implementation.
-- [ ] **T1** (AC10, AC9) Correct `ipam/mod.rs:122-123`; measure the dead-code figure and correct the
-  register row. These are cheap and they are what the next reader trips on.
-- [ ] **T2** (AC1) Delete `ExampleContent::IpamOccupancy` FIRST and let the compiler name the sites.
-- [ ] **T3** (AC2, AC3, AC4, AC8) The store-fed view: read `ip_range` + `ip_address`, derive each
-  cell, the occupancy line, the next-free panel, the empty-plan sentence.
-- [ ] **T4** (AC5, AC6) The two write routes on `document.rs`'s shape — a port, a state with no
-  pool, the Origin check, keyed bodies, `hx-post` with the swap target carrying both handlers.
-- [ ] **T5** (AC7) The transaction and the parent-row lock, with the pause harness as its proof.
-- [ ] **T6** (§2.3, §2.4) Replace the legend guard that dies with the dataset; widen `a11y/seed.sql`
-  and the axe gate's states.
-- [ ] **T7** (§2.5) Settle the `role="grid"` divergence — implement or register, with the reason.
-- [ ] **T8** (AC11, AC12) Measure. Both gates, both store conditions, the command named.
+- [x] **T0** ✅ The four arbitrations of §1 were taken by Guy on 2026-09-11, then ALL FOUR came back
+  from the validation and were re-arbitrated the same day. ⚠️ Then the story was SPLIT at
+  implementation: 14.2 the screen, **14.2b the operator's hands**.
+- [x] **T1** (AC10) `ipam/mod.rs`'s false `Constraint` doc corrected, and the variant that makes the
+  corrected sentence TRUE shipped with it: `RepositoryError::Ipam(IpamError)`. Proved to red first —
+  the assertion was moved to the variant and the build named `E0599` **only under `--all-targets`**,
+  which is §3's finding met in its first minute.
+- [ ] **T2** (AC1) Delete `ExampleContent::IpamOccupancy` and let the compiler name its sites; sweep
+  what it cannot name — 18 `ipam.*` keys, 13 `.ipam*` rules, the template, 33 references in
+  `example_screens.rs`, and `main.rs`'s `/ipam?subnet=` route test.
+- [ ] **T3** (AC2, AC3, AC4) The store-fed grid: the cell vocabulary, the policy treatments, `free`'s
+  own treatment, `.0`/`.255` as derived `infrastructure`, the occupancy list, the next-offerable
+  panel, and the subnet selector keyed on the id rather than on a slug that no longer exists.
+- [ ] **T4** (AC8) The empty-plan sentence, through `Gesture::Planned { owner }`.
+- [ ] **T5** (AC9) Narrow `#![allow(dead_code)]` to what this story leaves dead, and say what remains.
+- [ ] **T6** (§2.3) Replace the legend guard that dies with the dataset, and cover the one modifier
+  no legend entry can carry — `not-covered`, which has none by decision.
+- [ ] **T7** (§2.4) Widen `a11y/seed.sql` with a plan, and give the axe gate an `/ipam` state with a
+  FLOOR — without one it would walk an empty page and report success.
+- [ ] **T8** (AC11, AC12) Measure. Both browser gates ARE claimed: this story changes a screen.
 
 ## Dev Notes
 

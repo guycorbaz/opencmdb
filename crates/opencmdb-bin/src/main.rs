@@ -23,6 +23,7 @@ mod fixture_connector;
 mod fixtures;
 mod identity_view;
 mod inventory_view;
+mod ipam_page;
 mod ipam_repo;
 mod l1_runner;
 mod metrics;
