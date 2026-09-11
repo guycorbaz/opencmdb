@@ -1283,6 +1283,22 @@ mod tests {
                 "FactKind",
                 7,
             ),
+            // 🔴 **A SECOND CROSS-CRATE ROW, and story 14.1's validation measured the hole it
+            // closes.** `IpPolicy` is compared against the schema's CHECK as a SET, which catches
+            // two variants on one token (story 6.5's M8) and says NOTHING about a variant missing
+            // from `ALL`. The gap-hunt layer added a fifth variant absent from `ALL` with a token
+            // the CHECK refuses: **866 tests, ten gates and clippy all GREEN**, while anything
+            // writing it takes `ERROR 4025` in production. *A set comparison closes one direction.*
+            //
+            // ⚠️ **The same mutation is green TODAY on `EntityState` and `EntityKind`**, which are
+            // NOT rows here — measured by the same layer, on the very precedent `IpPolicy`'s own
+            // guard cites. Registered rather than fixed: adding rows for enums this story does not
+            // own is scope, and `deferred-work.md` names story 6.12.
+            (
+                include_str!("../../opencmdb-core/src/ipam/mod.rs"),
+                "IpPolicy",
+                4,
+            ),
         ] {
             let declared = variants(source, enum_name);
             let in_all = listed(source, enum_name);

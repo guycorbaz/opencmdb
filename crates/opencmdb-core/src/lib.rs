@@ -25,6 +25,7 @@ pub mod connector;
 pub mod document;
 pub mod gap;
 pub mod identity;
+pub mod ipam;
 pub mod observation;
 pub mod repo;
 pub mod score;

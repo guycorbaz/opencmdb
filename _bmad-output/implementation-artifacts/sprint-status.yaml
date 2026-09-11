@@ -5356,7 +5356,11 @@ development_status:
   #   ALLOCATING an address already in use. That makes the "next free address" panel an
   #   EXCLUSION -- the only place the product prevents the duplicate rather than reporting it.
   epic-14: in-progress
-  14-1-plan-schema-and-no-producer: ready-for-dev  # VALIDATED 2026-09-11, two fresh-context
+  14-1-plan-schema-and-no-producer: review  # IMPLEMENTED 2026-09-11: 859 -> 871 tests
+  #   (581+191+99), ten gates, twelve mutation ids with TWO divergences that are the pass's own
+  #   findings. The story's own CHAR(15) contradicted the argument that chose it and shipped as
+  #   VARCHAR(39). NEXT: `code-review`, ideally on a different model.
+  # VALIDATED 2026-09-11, two fresh-context
   #   layers in their own worktrees and their own stores. 26 distinct findings; TWO reached by both
   #   layers independently. 🔴 GUY RE-ARBITRATED THE ADDRESS REPRESENTATION: zero-padded dotted text
   #   (`192.000.002.009`), NOT `VARBINARY(16)`. D10's own ISO-8601 precedent, D48's "3 a.m. dump"
