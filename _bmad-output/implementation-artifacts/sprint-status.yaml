@@ -5356,7 +5356,7 @@ development_status:
   #   ALLOCATING an address already in use. That makes the "next free address" panel an
   #   EXCLUSION -- the only place the product prevents the duplicate rather than reporting it.
   epic-14: in-progress
-  14-1-plan-schema-and-no-producer: review
+  14-1-plan-schema-and-no-producer: done
   #   🔴 THIS ENTRY CARRIED THREE CONTRADICTIONS UNTIL 2026-09-11, ALL BY ACCRETION: the review
   #   annotation was PREPENDED and the validation annotation was never removed, so the file said
   #   both "text, NOT VARBINARY(16)" and "an address is VARBINARY(16)"; both "repo.rs is 1743, NOT
@@ -5403,7 +5403,10 @@ development_status:
   #   ⚠️ REGISTERED, not fixed: `insert_range`'s overlap rule is unenforceable under concurrency
   #   (two overlapping ranges both committed with a pause injected) -- STORY 14.2 opens concurrent
   #   write routes and owns it.
-  #   ⚠️ NEXT: nothing. The story is at `review` and awaits the merge.
+  #   ✅ MERGED 2026-09-11 as `9f68d6e` (PR #168, squash), on Guy's word, after a CI run green on
+  #   the head commit `2f395c5` itself (run `34585865670`, 2m45) and `mergeStateStatus: CLEAN`.
+  #   ⚠️ NEXT: story 14.2, which owns the concurrency row above, the `#![allow(dead_code)]`
+  #   narrowing, and the `structural` removal.
   14-2-the-plan-on-screen: backlog
   #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
   #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
