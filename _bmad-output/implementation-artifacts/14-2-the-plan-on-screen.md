@@ -2,10 +2,11 @@
 
 Status: ready-for-dev
 
-⚠️ **`ready-for-dev` is the workflow's status, not a statement that nothing is open.** §1 poses FOUR
-arbitrations that are Guy's, and a dev agent that meets one of them mid-implementation will settle
-it silently — which is the defect this section exists to prevent. They are taken before `dev-story`,
-and the mandatory validation pass (two fresh-context agents) comes first either way.
+✅ **The four arbitrations of §1 were TAKEN by Guy on 2026-09-11**, the recommendation in all four.
+⚠️ They were taken BEFORE the mandatory validation pass, which is the order this project uses and
+which has already paid once: story 14.1's address representation was re-arbitrated after the
+validation REFUTED the argument that chose the first answer. **A measurement that refutes one of
+these four returns it to Guy; it does not get settled quietly in the implementation.**
 
 Epic 14 (IPAM), decomposed 2026-09-11 in `epics.md` (`4b5db27`). Second story of four.
 Baseline: `38da035` (master), **873 tests** (583 bin + 191 core + 99 xtask), ten gates.
@@ -37,12 +38,13 @@ touch IPAM; **(6)** no state is told apart by colour alone.
 **The audit is 14.3's and this story does not read `observation_record` at all.** A join written
 here is scope, and it is the one the epic exists for — it deserves its own story.
 
-## §1 — FOUR arbitrations this story cannot take alone
+## §1 — FOUR arbitrations, TAKEN by Guy on 2026-09-11
 
-Each is written with the option refused and with what it costs. **A dev agent that meets one of
-these mid-implementation settles it silently**, which is why they are here.
+Each is recorded with the options refused and with what the choice costs. **A dev agent that meets
+one of these mid-implementation settles it silently**, which is why they were posed rather than
+assumed.
 
-### (A) Do the two write routes sit behind a switch, and if so which one?
+### (A) ✅ NO switch — the IPAM write routes always exist
 
 `POST /document-all` exists only when `OPENCMDB_DOCUMENT_ENABLED` is set (`main.rs:695-701`), and
 the switch governs EXISTENCE, the route being merged ABOVE `auth_deny` so it is auth-gated like
@@ -63,11 +65,13 @@ every other path (`main.rs:696-700`).
   *"on the DEFAULT configuration there is still no gesture"* — a stock deployment would meet a
   seventh well-lit dead end, on the epic whose subject is the operator finally doing something.
 
-**My recommendation: (a).** The switch on the documenting gesture guards an authorship hazard this
-route does not have, and shipping a second dead-by-default surface is how this product got ten of
-them. **Guy's to take, because it is a posture decision and not a technical one.**
+✅ **Guy, 2026-09-11: option (a).** The switch on the documenting gesture guards an authorship
+hazard this route does not have, and shipping a second dead-by-default surface is how this product
+reached ten well-lit dead ends. ⚠️ **The accepted cost is written rather than discovered**: a fresh
+install gains a live write surface with no opt-in, and the release notes owe that sentence — the
+first deployment where an operator can change stored state without setting anything.
 
-### (B) What does `RepositoryError` gain, and what forces anyone to handle it?
+### (B) ✅ `RepositoryError::Ipam(IpamError)`, and the SET test is the deliverable
 
 🔴 **Two documents of the same commit contradict each other, and one describes code that does not
 exist.** `ipam/mod.rs:122-123` states the adapter maps its refusals *"into
@@ -100,12 +104,14 @@ story 6b.4b, where a one-variant enum forced the revisit; here the same gesture 
   `match` in the crate for one story's benefit and `non_exhaustive` forces a `_` arm, which is the
   arm that swallows the new variant silently — *the opposite of what is wanted*.
 
-**My recommendation: (a), and the SET test is the deliverable, not the variant.** ⚠️ Note it
-changes one existing assertion: `ipam_repo.rs:907-914` asserts
-`Err(RepositoryError::Backend(IpamError::RangeBoundsInverted.to_string()))` and becomes
-`Err(RepositoryError::Ipam(IpamError::RangeBoundsInverted))` — which is the guard doing its job.
+✅ **Guy, 2026-09-11: option (a), and the SET test is the deliverable, not the variant.** Adding the
+variant is half an hour; what earns the story is the test that makes an unhandled refusal
+impossible to ship, since the compiler will not. ⚠️ It changes one existing assertion:
+`ipam_repo.rs:907-914` asserts `Err(RepositoryError::Backend(IpamError::RangeBoundsInverted
+.to_string()))` and becomes `Err(RepositoryError::Ipam(IpamError::RangeBoundsInverted))` — which is
+the guard doing its job, not a regression.
 
-### (C) How is the overlap rule made to hold under concurrency?
+### (C) ✅ A transaction and a parent-row `FOR UPDATE`, with the pause harness as its proof
 
 🔴 Registered by 14.1 with **this story as owner**, and the register says it *"may not close it with
 a `UNIQUE`"*. `insert_range` (`ipam_repo.rs:237-250`) reads every sibling, decides in Rust, then
@@ -127,11 +133,14 @@ with a 400 ms pause injected, two overlapping ranges both committed, both report
 - **(c) Register it again and ship the routes without it.** ⚠️ Refused: the register already says
   this story owns it, and *an action nobody carries is not an action*.
 
-**My recommendation: (a).** ⚠️ **And the measurement is part of the deliverable**: the same 400 ms
-injected pause must be re-run and measured to REFUSE the second writer — a fix whose proof is the
-absence of the earlier symptom is not a proof, so the pause harness is what makes it one.
+✅ **Guy, 2026-09-11: option (a).** ⚠️ **And the measurement is half the deliverable**: the same
+400 ms injected pause is re-run and measured to REFUSE the second writer. *A fix whose evidence is
+the absence of the earlier symptom is not evidence* — 14.1's own review refused a one-shot negative
+for exactly this reason, and the harness is what turns the absence into a measurement. ⚠️ The
+serialisation is per subnet and is SAID: two operators defining ranges in one subnet queue; in two
+subnets they do not.
 
-### (D) What does a cell show when the plan says nothing about it?
+### (D) ✅ A cell the plan does not cover is drawn without a noun
 
 🔑 **`structural` is NOT an arbitration — the answer is already written.** The binding table defines
 `infrastructure` as *"Gateway, equipment management, **and the network and broadcast addresses**"*,
@@ -155,9 +164,13 @@ defined** (`ip_address`), **both**, or **covered by nothing at all**.
   Simple and severe: it makes the empty-plan case the ordinary case and AC5's *"name the gesture
   that fills it"* the whole screen on day one, which may be exactly right.
 
-**My recommendation: (a) drawn without a noun** — a cell the plan does not cover is left blank with
-its `aria-label` saying so, and no legend entry claims a state. ⚠️ It must still be told apart from
-`free` by something other than colour (constraint 6): blank-with-border vs. an explicit pattern.
+✅ **Guy, 2026-09-11: option (a), drawn without a noun** — the cell is left blank, its `aria-label`
+says the plan does not cover it, and **no legend entry claims a state**, because a story may not
+extend the binding vocabulary and *not covered* is not one of its four words. ⚠️ It must still be
+told apart from `free` by something other than colour (constraint 6) — blank-with-border against an
+explicit treatment — and that pair is what AC3's test measures. 🔑 The reason `free` was refused is
+the epic's own: `free` asserts the address may be allocated, and 14.3 exists so the product never
+offers one it has not checked.
 
 ## §2 — Five things the first draft would leave a dev agent to settle SILENTLY
 
@@ -251,7 +264,8 @@ where the defect lives in the DOM.*
 
 ## Tasks / Subtasks
 
-- [ ] **T0** Take the four arbitrations of §1 with Guy. Nothing below is stable until they are.
+- [x] **T0** ✅ The four arbitrations of §1 were taken by Guy on 2026-09-11. ⚠️ A validation
+  measurement that refutes one returns it to him rather than settling it in the implementation.
 - [ ] **T1** (AC10, AC9) Correct `ipam/mod.rs:122-123`; measure the dead-code figure and correct the
   register row. These are cheap and they are what the next reader trips on.
 - [ ] **T2** (AC1) Delete `ExampleContent::IpamOccupancy` FIRST and let the compiler name the sites.
@@ -330,6 +344,7 @@ comparison be costed before any epic reintroduces it, and this story does not re
 
 ### Change Log
 
-- 2026-09-11 — contexted. Four arbitrations posed rather than taken; three defects found while
-  contexting and carried as criteria (the false `Constraint` doc, the register's wrong dead-code
-  figure, the UX-spec grid divergence).
+- 2026-09-11 — contexted, and the four arbitrations TAKEN by Guy the same day (the recommendation
+  in all four). Three defects found while contexting and carried as criteria rather than filed
+  elsewhere: the false `Constraint` doc, the register's wrong dead-code figure, the UX-spec grid
+  divergence. No code changed.

@@ -5408,18 +5408,29 @@ development_status:
   #   ⚠️ NEXT: story 14.2, which owns the concurrency row above, the `#![allow(dead_code)]`
   #   narrowing, and the `structural` removal.
   14-2-the-plan-on-screen: ready-for-dev
-  #   CONTEXTED 2026-09-11. ⚠️ `ready-for-dev` is the workflow's status and NOT a statement that
-  #   nothing is open: the story poses FOUR arbitrations that are Guy's, and the mandatory
-  #   validation pass (two fresh-context agents) has not run.
-  #     (A) do the two write routes sit behind a switch, and if so which one
-  #     (B) what `RepositoryError` gains -- and what forces a handler to distinguish it, since
-  #         nothing will: the enum is not `non_exhaustive` and no exhaustive match traverses it,
-  #         so a new variant produces ZERO `E0004` (the mirror of story 6b.4b)
-  #     (C) how the overlap rule holds under concurrency -- the register says it may NOT be a
-  #         `UNIQUE`; the recommendation is a parent-row `FOR UPDATE` inside a transaction, on
-  #         `repo::insert_device`'s precedent, with the 400 ms pause harness as its proof
-  #     (D) what a cell shows when the plan says nothing about it -- `structural` itself is NOT
-  #         open, the binding table already puts `.0`/`.255` under `infrastructure`
+  #   CONTEXTED 2026-09-11, and its FOUR arbitrations TAKEN by Guy the same day -- the
+  #   recommendation in all four. ⚠️ Taken BEFORE the mandatory validation pass, which is this
+  #   project's order and which has already paid once: story 14.1's address representation was
+  #   re-arbitrated after the validation refuted the argument that chose the first answer. A
+  #   measurement that refutes one of these RETURNS IT TO GUY; it is not settled in the code.
+  #     (A) ✅ NO switch -- the IPAM write routes always exist. `OPENCMDB_DOCUMENT_ENABLED` guards
+  #         an AUTHORSHIP hazard (writing `origin='manual'`/`actor_id='operator'`, NFR5's subject)
+  #         that IPAM does not have. ⚠️ Accepted cost, owed to the release notes: a fresh install
+  #         gains a live write surface with no opt-in -- the first such in this product.
+  #     (B) ✅ `RepositoryError::Ipam(IpamError)`, and THE SET TEST IS THE DELIVERABLE, not the
+  #         variant: nothing forces a handler to distinguish the refusals (the enum is not
+  #         `non_exhaustive` and no exhaustive match traverses it, so a new variant gives ZERO
+  #         `E0004` -- the mirror of story 6b.4b). Seven `IpamError` against the statuses served,
+  #         compared as a SET both ways, on `IpPolicy::ALL`'s precedent.
+  #     (C) ✅ A transaction plus `SELECT ... FROM ip_subnet WHERE id = ? FOR UPDATE` on the PARENT
+  #         row, on `repo::insert_device`'s precedent -- and the 400 ms injected pause is re-run
+  #         and measured to REFUSE the second writer. *A fix whose evidence is the absence of the
+  #         earlier symptom is not evidence.* Serialisation is per subnet and is said.
+  #     (D) ✅ A cell the plan does not cover is drawn WITHOUT A NOUN -- blank, its `aria-label`
+  #         saying so, no legend entry claiming a state, told apart from `free` by something other
+  #         than colour. `free` was refused because it asserts the address may be allocated, which
+  #         is the sentence 14.3 exists to make false. `structural` itself was never open: the
+  #         binding table already puts `.0`/`.255` under `infrastructure`.
   #   🔴 THREE DEFECTS FOUND WHILE CONTEXTING, carried as criteria rather than filed elsewhere:
   #   `ipam/mod.rs:122-123` describes a `RepositoryError::Constraint` mapping THAT WAS NEVER
   #   WRITTEN (the code is `Backend(String)`, and that function's own doc says so fifteen lines
