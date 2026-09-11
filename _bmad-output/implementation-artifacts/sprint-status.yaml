@@ -5356,7 +5356,29 @@ development_status:
   #   ALLOCATING an address already in use. That makes the "next free address" panel an
   #   EXCLUSION -- the only place the product prevents the duplicate rather than reporting it.
   epic-14: in-progress
-  14-1-plan-schema-and-no-producer: ready-for-dev
+  14-1-plan-schema-and-no-producer: ready-for-dev  # VALIDATED 2026-09-11, two fresh-context
+  #   layers in their own worktrees and their own stores. 26 distinct findings; TWO reached by both
+  #   layers independently. 🔴 GUY RE-ARBITRATED THE ADDRESS REPRESENTATION: zero-padded dotted text
+  #   (`192.000.002.009`), NOT `VARBINARY(16)`. D10's own ISO-8601 precedent, D48's "3 a.m. dump"
+  #   argument (a binary column needs a HEX() per query and does not grep), one canonical form a
+  #   CHECK can impose -- and fixed width makes LENGTH the family discriminant, so the cross-family
+  #   guard becomes a same-row CHECK, which `VARBINARY` could not give.
+  #   🔴 The gap layer BUILT the schema and measured an IPv6 address returned by a containment query
+  #   over IPv4 bounds, sorted between .9 and .10; and one address stored TWICE (4-byte and
+  #   IPv4-mapped), the UNIQUE refusing neither.
+  #   🔴 AC7 ("no producer") FAILS CI: five `never used` under RUSTFLAGS="-D warnings". The new
+  #   module takes `#![allow(dead_code)]` -- and the arbitration is WRITTEN, because `arp_ping.rs:22`
+  #   records the same day that the ABSENCE of that attribute is load-bearing there.
+  #   🔴 AC5 applied story 5.9's M3 to the half it does not govern: raw SQL BYPASSES an adapter
+  #   guard rather than measuring it. Split into three refusals with three instruments.
+  #   🔴 AC3's set comparison closes ONE direction; a variant missing from ALL left 866 tests, ten
+  #   gates and clippy green -- and the same mutation is green TODAY on `EntityState`. Registered.
+  #   ⚠️ T7: `cargo xtask mutate` cannot drive a DDL mutation and the register names THIS story.
+  #   Guy, 2026-09-11: a purpose-built script, the debt STAYS registered -- 14.1 is the second to
+  #   route around it, and the row now says so.
+  #   ⚠️ `repo.rs` is 1743 code lines, NOT ~3800 -- the twins carried the file's TOTAL as a code
+  #   count and this story inherited it. Both twins corrected; the adapter goes in its own module
+  #   unconditionally rather than on a false number.
   #   Opens the epic. Three tables, the policy domain, the adapter -- NO route, NO screen, NO
   #   producer, exactly as story 6.5. It TAKES three decisions the epic left open, each with the
   #   alternative refused: the tables sit OUTSIDE the `entity` supertype (a range is declared and

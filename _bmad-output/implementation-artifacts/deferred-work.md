@@ -5127,12 +5127,25 @@ it re-derivable.*
   struct — while the trailing test module starts past 1600. The gate reads the file as ~181 code
   lines while it carries roughly 1700, so the 2000-line ceiling does not protect the file this
   story's adapter grows. **Owner: whichever story next approaches the ceiling**, or a maintenance
-  slice. ⚠️ Not fixed here: raising it would re-measure every file at once, which is a change of
+  slice. ✅ **Re-measured 2026-09-11 by both of story 14.1's validation layers**: the gate reads
+  **183**, the real production half is **1743**, the whole file is **4025**. So this row's ~1700 was
+  right — and ⚠️ **`CLAUDE.md` and `docs/project-context.md` carried *"~3800, 1.9× the ceiling"***,
+  the TOTAL reported as a CODE count, which story 14.1 then inherited from the twins rather than
+  from here. Both twins corrected in the same change. 🔑 **And the gate's OWN doc is falsified by
+  this file**: `main.rs:145` claims a file with test code above the marker *"would over-count itself
+  (fail earlier), **never under-count**"* — `repo.rs` under-counts by 1560 lines. Add that to
+  whatever closes this row. ⚠️ Not fixed here: raising it would re-measure every file at once, which is a change of
   scope inside a schema story.
 - ⚠️ **`cargo xtask mutate` cannot drive a DDL mutation**, and nothing said so. A changed migration
   cannot re-apply to a store that already ran it — `sqlx` checksums it — so every DDL mutation needs
   a virgin schema AND a warm-up that migrates once before the concurrent suite starts. This story
-  drove its seven DDL mutations with a purpose-built script instead. **Owner: whichever story next
+  drove its seven DDL mutations with a purpose-built script instead. ⚠️ **Story 14.1 is the SECOND to
+  route around it** (Guy, 2026-09-11: a purpose-built script again, the debt kept rather than paid —
+  repairing the driver means teaching it to drop and re-migrate a database, which is a subject of its
+  own, and 6.4b shows that is a whole story). 🔑 *A debt three stories route around stops being a
+  debt and becomes a practice* — **this row is what keeps that visible, so the next story to write a
+  migration must record its pass here too rather than quietly using a script.**
+  **Owner: whichever story next
   writes a migration**, or the driver's next revision.
 - 🔴 **A DDL mutation that leaves INVALID SQL measures the parser, not the guard** — and it reports
   a red indistinguishable from a real one. Measured twice in this story's own pass: deleting a
@@ -5386,3 +5399,15 @@ One row, and v0.3.0 is what made it live.
   move: *a screen about what is on the network now has no business reading what was on it in July.*
   **Owner: the first story after the freeze is lifted** — it is a v0.3.x concern, not an Epic 6 one,
   because it is the periodic scan that created it.
+
+- 🔴 **`EntityState` and `EntityKind` are not rows in `every_variant_of_a_navigated_enum_is_listed_in_all`,
+  and the hole is measured.** Story 14.1's gap-hunt added a seventh `EntityState` variant, absent from
+  `ALL`, with a token the schema's `CHECK` refuses: **866 tests, ten gates and clippy all GREEN**,
+  while anything writing it takes `ERROR 4025` in production. The carrier exists — that test is a
+  TABLE of `(source, enum, floor)` rows and already covers `Screen`, `NavGroup`, `ObjectState`,
+  `DeviceKind` and `FactKind` — so closing it is one row per enum. ⚠️ **Story 6.5's own AC compared
+  the enum to the schema as SETS (its M8) and that guard closes the OTHER direction only**: it catches
+  two variants on one token, never a variant missing from `ALL`. Story 14.1 adds its own `IpPolicy`
+  row and names these two rather than fixing them, because widening a guard over enums it does not own
+  is scope. **Owner: whichever story next touches `EntityState` or `EntityKind` — story 6.12 by name.**
+
