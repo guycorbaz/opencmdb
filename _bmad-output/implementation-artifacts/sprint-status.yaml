@@ -78,7 +78,7 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-08-30  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
+last_updated: 2026-09-11  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
                           # The first time in five weeks that what was built reached its user: the
                           # NAS had been on `0.1.0`, older than the identity engine, the write route
                           # and the ten screens, and nobody had checked.
@@ -5346,7 +5346,74 @@ development_status:
   epic-13-retrospective: required
 
   # ── Epic 14: IPAM (v0.12) ────────────────────────────────────────────────
-  epic-14: backlog
+  # 🔑 DECOMPOSED 2026-09-11 into FOUR stories (`epics.md`, PR #167 as `4b5db27`), on six
+  #   arbitrations Guy took 2026-09-10 BEFORE any story was written. The binding vocabulary was
+  #   ratified FIRST (PR #166 as `b466be7`, the PLAN axis) so that no story names a column ahead
+  #   of the table -- and no story may extend it.
+  # ⚠️ THE FOUR DO NOT CLOSE THE EPIC. FR21's VLAN half and FR25 (IPv6, observation-only) are in
+  #   scope and outside the arbitrations. Do not read the close off the story count.
+  # 🔑 THE REASON IS THE DELIVERABLE, NOT THE HIGHLIGHT: the audit exists to stop the operator
+  #   ALLOCATING an address already in use. That makes the "next free address" panel an
+  #   EXCLUSION -- the only place the product prevents the duplicate rather than reporting it.
+  epic-14: in-progress
+  14-1-plan-schema-and-no-producer: review
+  #   🔴 THIS ENTRY CARRIED THREE CONTRADICTIONS UNTIL 2026-09-11, ALL BY ACCRETION: the review
+  #   annotation was PREPENDED and the validation annotation was never removed, so the file said
+  #   both "text, NOT VARBINARY(16)" and "an address is VARBINARY(16)"; both "repo.rs is 1743, NOT
+  #   ~3800" and "repo.rs is ~3800"; and two incompatible NEXT lines. The blind review layer found
+  #   all three from the diff alone. 🔑 *A correction that adds the true text without removing the
+  #   false one leaves the record carrying both* -- the project's own rule, broken in the file that
+  #   tracks it, while both twins were corrected cleanly. Rewritten whole rather than appended to.
+  #
+  #   Opens Epic 14. Three tables, the PLAN vocabulary the schema enforces, the four refusals no
+  #   CHECK can express -- and NO route, NO screen, NO producer (story 6.5's precedent, met
+  #   literally). What the operator gains: nothing.
+  #
+  #   THREE DECISIONS IT TAKES, each with the alternative refused:
+  #     (a) the tables sit OUTSIDE the `entity` supertype -- a range is declared and formed by
+  #         nothing, and Guy's arbitration (4) keeps IPAM and declared_attribute apart.
+  #     (b) an address is a ZERO-PADDED DOTTED QUAD in VARCHAR(39) ascii_bin (Guy, 2026-09-11,
+  #         re-arbitrated after the validation refuted the first answer). Lexicographic order IS
+  #         numeric order -- D10's ISO-8601 precedent applied to addresses -- and D48's "3 a.m.
+  #         dump" argues against a binary column for a product whose subject IS addresses.
+  #         ⚠️ The story prescribed CHAR(15) and the implementation found that contradicts the
+  #         family argument that chose it; VARCHAR(39) poses the width once.
+  #     (c) the policy enum lands in a NEW opencmdb-core/src/ipam/, which architecture.md:3208
+  #         already prescribed and :3366 listed as unbuilt.
+  #
+  #   CODE-REVIEWED by three isolated layers and REPAIRED. 859 -> 873 tests (583+191+99), ten
+  #   gates, clippy --all-targets, RUSTFLAGS="-D warnings", fmt, cargo deny. The two BROWSER gates
+  #   are deliberately NOT claimed: this story renders nothing.
+  #   🔴 THE HEADLINE, INSIDE AC4b's OWN PROMISE: `$` is not end-of-string in MariaDB's RLIKE -- it
+  #   matches before a final NEWLINE -- so a trailing \n was a SECOND accepted spelling of every
+  #   address and neither UNIQUE key refused the pair. It also INVERTED the ordering the whole
+  #   representation was chosen for, and one poisoned row made `addresses_in` return Err for the
+  #   whole subnet. Closed by `\z` plus an octet-VALUE alternation, which also refuses
+  #   999.999.999.999. Two layers measured it independently.
+  #   🔴 ALL THREE LAYERS reached the same guard: `ip_range_same_family` is IMPLIED by the canonical
+  #   CHECKs and can never fire -- no mutation can be built that reds it, which is why the story's
+  #   own table had no row for it. Kept, with its vacuity PINNED by a test that reds the day FR25
+  #   adds a second width.
+  #   🔴 A guard that HEALED ITSELF into a permanent pass (all probes under one id `'t-x'`, cleanup
+  #   only for `t-ddl`, a panic skipping the trailing cleanup): red once over a broken schema, then
+  #   GREEN for ever on the same store. CI is safe; the LOCAL reading is not, and local is where
+  #   this project measures its mutations.
+  #   🔴 And my own mutation counts were inflated by collateral -- three tests shared one CIDR, so a
+  #   panicking test poisoned its successor. Q3/Q4/Q8/Q9 carry 1, not 2 or 3. One CIDR per test now.
+  #   ⚠️ REGISTERED, not fixed: `insert_range`'s overlap rule is unenforceable under concurrency
+  #   (two overlapping ranges both committed with a pause injected) -- STORY 14.2 opens concurrent
+  #   write routes and owns it.
+  #   ⚠️ NEXT: nothing. The story is at `review` and awaits the merge.
+  14-2-the-plan-on-screen: backlog
+  #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
+  #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
+  14-3-the-audit: backlog
+  #   The story the epic exists for. Includes FR24's real conflict -- undetectable before PR #163,
+  #   because the connector read no hardware address; and NOT a conflict inside a `dhcp-pool`,
+  #   where the occupant changes by design.
+  14-4-maintaining-the-plan: backlog
+  #   Edit, delete, and RELEASE a held address -- the fourth write route, without which the grid
+  #   fills and never empties (constraint 3: a sighting protects an address until released).
   epic-14-retrospective: required
 
   # ── Epic 15: Applications & « Hosted here » (v0.13) ──────────────────────

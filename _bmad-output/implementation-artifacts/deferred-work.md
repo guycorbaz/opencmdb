@@ -5127,12 +5127,25 @@ it re-derivable.*
   struct — while the trailing test module starts past 1600. The gate reads the file as ~181 code
   lines while it carries roughly 1700, so the 2000-line ceiling does not protect the file this
   story's adapter grows. **Owner: whichever story next approaches the ceiling**, or a maintenance
-  slice. ⚠️ Not fixed here: raising it would re-measure every file at once, which is a change of
+  slice. ✅ **Re-measured 2026-09-11 by both of story 14.1's validation layers**: the gate reads
+  **183**, the real production half is **1743**, the whole file is **4025**. So this row's ~1700 was
+  right — and ⚠️ **`CLAUDE.md` and `docs/project-context.md` carried *"~3800, 1.9× the ceiling"***,
+  the TOTAL reported as a CODE count, which story 14.1 then inherited from the twins rather than
+  from here. Both twins corrected in the same change. 🔑 **And the gate's OWN doc is falsified by
+  this file**: `main.rs:145` claims a file with test code above the marker *"would over-count itself
+  (fail earlier), **never under-count**"* — `repo.rs` under-counts by 1560 lines. Add that to
+  whatever closes this row. ⚠️ Not fixed here: raising it would re-measure every file at once, which is a change of
   scope inside a schema story.
 - ⚠️ **`cargo xtask mutate` cannot drive a DDL mutation**, and nothing said so. A changed migration
   cannot re-apply to a store that already ran it — `sqlx` checksums it — so every DDL mutation needs
   a virgin schema AND a warm-up that migrates once before the concurrent suite starts. This story
-  drove its seven DDL mutations with a purpose-built script instead. **Owner: whichever story next
+  drove its seven DDL mutations with a purpose-built script instead. ⚠️ **Story 14.1 is the SECOND to
+  route around it** (Guy, 2026-09-11: a purpose-built script again, the debt kept rather than paid —
+  repairing the driver means teaching it to drop and re-migrate a database, which is a subject of its
+  own, and 6.4b shows that is a whole story). 🔑 *A debt three stories route around stops being a
+  debt and becomes a practice* — **this row is what keeps that visible, so the next story to write a
+  migration must record its pass here too rather than quietly using a script.**
+  **Owner: whichever story next
   writes a migration**, or the driver's next revision.
 - 🔴 **A DDL mutation that leaves INVALID SQL measures the parser, not the guard** — and it reports
   a red indistinguishable from a real one. Measured twice in this story's own pass: deleting a
@@ -5386,3 +5399,36 @@ One row, and v0.3.0 is what made it live.
   move: *a screen about what is on the network now has no business reading what was on it in July.*
   **Owner: the first story after the freeze is lifted** — it is a v0.3.x concern, not an Epic 6 one,
   because it is the periodic scan that created it.
+
+- 🔴 **`EntityState` and `EntityKind` are not rows in `every_variant_of_a_navigated_enum_is_listed_in_all`,
+  and the hole is measured.** Story 14.1's gap-hunt added a seventh `EntityState` variant, absent from
+  `ALL`, with a token the schema's `CHECK` refuses: **866 tests, ten gates and clippy all GREEN**,
+  while anything writing it takes `ERROR 4025` in production. The carrier exists — that test is a
+  TABLE of `(source, enum, floor)` rows and already covers `Screen`, `NavGroup`, `ObjectState`,
+  `DeviceKind` and `FactKind` — so closing it is one row per enum. ⚠️ **Story 6.5's own AC compared
+  the enum to the schema as SETS (its M8) and that guard closes the OTHER direction only**: it catches
+  two variants on one token, never a variant missing from `ALL`. Story 14.1 adds its own `IpPolicy`
+  row and names these two rather than fixing them, because widening a guard over enums it does not own
+  is scope. **Owner: whichever story next touches `EntityState` or `EntityKind` — story 6.12 by name.**
+
+- 🔴 **`ipam_repo::insert_range`'s overlap rule is NOT enforceable under concurrency, and the
+  measurement took a second attempt to get.** It reads every sibling range, then inserts: no
+  transaction, no `SELECT … FOR UPDATE`, and no index that could catch the loser — a `CHECK` cannot
+  express the rule (`ERROR 1901`) and a `UNIQUE` cannot either, ranges overlapping partially.
+  ⚠️ **The first concurrent attempt did NOT reproduce**, and story 14.1's review layer refused to
+  read that as safety: with a 400 ms pause injected between the read and the insert — timing only,
+  no logic change — **two overlapping ranges both committed, both reporting success**. Story 14.1's
+  own §2 records the same shape on the interface mint (#161), where a one-shot negative was reported
+  as a property and two layers later refuted it. *A negative result from an instrument that cannot
+  open the window measures the instrument.*
+  🔑 **Unreachable today** — story 14.1 ships no producer — and **story 14.2 opens HTTP write
+  routes, which are concurrent by construction**. **Owner: story 14.2**, and it may not close it
+  with a `UNIQUE`.
+
+- ⚠️ **`crates/opencmdb-bin/src/ipam_repo.rs`'s `#![allow(dead_code)]` is module-wide, and nothing
+  makes anyone pay it off.** It is justified while story 14.1 ships no producer, and its own doc
+  states the trade against `arp_ping.rs`, where the ABSENCE of the same attribute was measured
+  load-bearing on 2026-09-10. ⚠️ But after story 14.2 wires *some* of these functions the attribute
+  goes on hiding the rest — measured at 14.1's review: with it removed, **eleven** items are dead
+  under `--all-targets`. **Owner: story 14.2**, which must narrow or remove it rather than inherit
+  it silently.

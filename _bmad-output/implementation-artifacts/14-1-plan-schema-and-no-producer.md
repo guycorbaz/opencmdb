@@ -1,0 +1,607 @@
+# Story 14.1: The plan has a schema and no producer
+
+Status: review
+
+Epic 14 (IPAM), decomposed 2026-09-11 in `epics.md` (`4b5db27`). Opens the epic.
+Baseline: `4b5db27` (master).
+
+## Story
+
+As the operator,
+I want the addressing plan to have a place to live before anything writes to it,
+so that the shape of a range is settled while nothing depends on it.
+
+## §0 — What was established before this story, and must not be re-opened
+
+**The vocabulary is RATIFIED** (PR #166, `b466be7`). The PLAN axis is binding: `static` ·
+`dhcp-pool` · `reserved` · `infrastructure`. **No story may extend it.** `undeclared` was widened in
+the same act, and `structural` is retired as a displayed word with **story 14.2** carrying the
+removal — not this one.
+
+**Guy's six arbitrations** (2026-09-10) are in `epics.md`'s Epic 14 preamble as six numbered
+constraints. This story is downstream of all six and re-decides none.
+
+## §1 — Three decisions this story TAKES, each with the alternative refused
+
+These are the three the epic left open, and settling them here is why the story exists. A dev agent
+that has to choose one of these mid-implementation will choose it silently.
+
+### (a) The three tables live OUTSIDE the `entity` supertype
+
+**Refused**: adding `Subnet`/`Range` to `EntityKind` and hanging them off `entity(id, kind)`.
+
+🔑 The supertype exists for **D21's interface/device disjunction** — things the identity engine
+FORMS from observations, carrying a lifecycle `state`. A range is **declared by the operator and
+formed by nothing**: it has no sighting, no identity, no `state` in that sense. Widening
+`EntityKind` would be a domain change buying no constraint.
+
+⚠️ And it follows from Guy's arbitration (4): **IPAM and `declared_attribute` are two registers**,
+and putting a range under the supertype is the first step towards fusing them. `interface` sits
+outside the supertype for its own reasons (6.5, Guy's option (a)) — this is a second, different
+reason for a second table.
+
+🔴 **A second argument stood here and was REFUTED by the validation**: *"`declared_attribute.entity_id`
+points at `entity`"*. It does not. Measured on the migrated schema — **zero foreign keys** on
+`declared_attribute`; the only table referencing `entity` is `device`. Story 6.5 records it in words
+(*"the documented subject is still in no entity model"*). The decision stands on its first argument
+and on arbitration (4); the refuted one is struck rather than quietly deleted.
+
+### (b) An address is stored as a ZERO-PADDED dotted quad, `CHAR(15)` `ascii_bin`
+
+`192.0.2.9` is stored `192.000.002.009`. **Guy, 2026-09-11**, after the validation refuted the first
+answer's argument. The whole of this sub-section is a replacement, and the refuted reasoning is kept
+below rather than erased.
+
+🔑 **Lexicographic order IS numeric order**, which is the property the store exists for — and it is
+**D10's own precedent applied to addresses**: *"timestamps stored as ISO-8601 UTC `TEXT` so
+lexicographic order == chronological order"* (`architecture.md:564`). The registered defect at
+`inventory_view.rs:261` — *"the address compares as a STRING, so `192.0.2.9` follows
+`192.0.2.10`"* — is caused by the ABSENCE of padding, not by text.
+
+🔑 **And D48's live reason argues for it.** D48 refuses `BINARY(16)` for opaque ids and its second
+reason is *"the 3 a.m. dump … with `BINARY(16)` you write a `HEX()` per query, get the endianness
+wrong one time in three, and **the grep does not work — the connective tissue between your tools is
+cut, at the exact hour you are worst**"*. D48 is scoped to identifiers and does not bind here; but
+for a product whose subject **is** addresses, `WHERE addr = UNHEX('C0000209')` cuts exactly that
+tissue. ⚠️ The first draft of this section refused two alternatives and never mentioned the register
+entry that most nearly governs the choice.
+
+🔑 **Fixed width makes the family a same-row CHECK.** `LENGTH(addr)` is 15 for IPv4 and, when FR25
+arrives, 39 for an expanded IPv6 form. So *"both bounds are the same family"* is
+`CHECK (LENGTH(first_addr) = LENGTH(last_addr))` — expressible, which is exactly what AC5 needed and
+could not get from a variable-width binary column.
+
+**Refused: `VARBINARY(16)`** — the first draft's answer. It works, and the validation measured four
+costs the draft did not see:
+
+- **The families INTERLEAVE.** The draft's own caveat said *"a 4-byte and a 16-byte value sort by
+  length first"* and nominated that sentence as what a future story must measure against. Measured:
+  `VARBINARY` compares bytewise on the common prefix, so `0.0.0.1` sorts before `2001:db8::1` and
+  `255.255.255.255` after it. **The stated mechanism is the opposite of the real one.**
+- **An IPv6 address was returned by a containment query over IPv4 bounds**, sorted between
+  `192.0.2.9` and `192.0.2.10`. Built and measured, not argued.
+- **One address, two rows.** `INET6_ATON` gives 4 bytes for `192.0.2.7` and 16 for
+  `::ffff:192.0.2.7`; both inserted, and the `UNIQUE (subnet_id, addr)` refused neither. The column
+  type was chosen and the **encoding** never was.
+- **`[u8; 16]` does not exist for sqlx MySQL** — `E0277` on both `Type` and `Decode`, measured on the
+  pinned `=0.9.0`. The draft named it as the cheap Rust type.
+
+**Refused: `INT UNSIGNED`** — unchanged, and for the reason the draft gave: **FR25 (IPv6) is inside
+Epic 14**, and story 6.5's precedent poses a domain once rather than `ALTER`ing at boot on a
+published product.
+
+⚠️ **The costs of the chosen form, written rather than discovered**: 15 bytes where 4 would do;
+one canonical form that a `CHECK` must IMPOSE (an unpadded `192.0.2.9` must be refused, or the store
+holds two spellings of one address — the same defect as `VARBINARY`'s, reachable by a different
+road); and the arithmetic still happens in Rust (D10), parsing and re-rendering the padded form.
+
+⚠️ **And 14.3's seam is foreseeable and named here**: the audit joins plan rows to
+`declared_attribute.ipv4`, which stores the **unpadded** dotted quad. That join converts at the
+boundary whatever this story chooses. It is 14.3's to build; it is 14.1's to have said.
+
+### (c) The policy enum lives in `crates/opencmdb-core/src/ipam/`, a NEW subdomain module
+
+`architecture.md:3208` already prescribes it — *"one `thiserror` per subdomain IS one per decider
+(D47): `identity::IdentityError`, `gap::GapError`, **`ipam::IpamError`**"* — and `:3366` lists
+`ipam/` among the modules that *"arrive"* unbuilt. This story is that arrival.
+
+⚠️ **D47 is the frontier**: the enum and its token mapping go in `opencmdb-core` (no `sqlx`, no
+`anyhow`); the DDL and the adapter go in `opencmdb-bin`. Exactly the `EntityState` / `repo.rs` split
+story 6.5 shipped.
+
+## §2 — Seven things the first draft left a dev agent to settle SILENTLY
+
+§1 opens with *"a dev agent that has to choose one of these mid-implementation will choose it
+silently"* — and then settled three while leaving these. The validation BUILT the schema and
+measured every one of them OPEN. Each is decided here.
+
+| question | measured in the built schema | decided |
+|---|---|---|
+| two OVERLAPPING ranges in one subnet | **accepted**, 3 of them; no `CHECK` can express it (`ERROR 1901` on the self-referencing subquery) | **the ADAPTER refuses it**, by name. Same instrument as AC5's third refusal, and the same control |
+| duplicate CIDRs | **accepted** — no unique key | **`UNIQUE (base, prefix_len)`** on `ip_subnet`. A plan with one subnet twice is not a plan |
+| a subnet base that is not the network address (`192.0.2.5/24`) | **accepted** | **refused by the adapter** — the base must be the network address for containment to mean anything |
+| an `ip_address` outside its subnet (`8.8.8.8` in `192.0.2.0/24`) | **accepted** — AC5 named the rule for `ip_range` and never for `ip_address` | **refused, same rule, both tables** |
+| `prefix_len` against the address family | **`192.0.2.0/24` accepted with `prefix_len = 64`**, and the natural Rust containment then computes `32 - 64` and **PANICS on subtract-with-overflow** (the validation wrote the test; it panics) | **the adapter binds `prefix_len` to the family**, beside the containment check. ⚠️ The panic is the finding: a DDL that admits an impossible pair hands the arithmetic an impossible input |
+| deleting a subnet that still holds ranges | **refused, `ERROR 1451`** — a plain FK, the good default | **kept**, and named: 14.4 asks for *"refused by name"*, and a raw `1451` is not a named refusal. 14.4's, not this story's |
+| `'static '` in `policy` | **accepted and stored with its trailing space** — `ascii_bin` is PAD SPACE, so the `IN` comparison pads and the `CHECK` passes | **refused by the DDL.** ⚠️ AC3's set comparison reads the `CHECK` CLAUSE and never a stored row, so it is **structurally blind** to this — *a guard placed where the defect cannot occur* |
+
+⚠️ **`ip_address`'s columns are not specified anywhere in this story**, and *"which addresses are
+individually defined"* is the whole spec a dev agent gets. Decide them in T2 and list them in the
+File List: at minimum the subnet it belongs to, the address, and a label.
+
+## Acceptance Criteria
+
+- **AC1** `0007` creates `ip_subnet`, `ip_range` and `ip_address`. `ip_range` carries its policy.
+  Ids are `CHAR(36)` `ascii_bin`, minted client-side (D48); every column holding letters carries a
+  binary collation (D64).
+- **AC2** The policy column is `VARCHAR` + `CHECK`, **never a MariaDB `ENUM`**. Story 6.5 measured
+  that an `ENUM` lands `utf8mb4_general_ci`, accepts `'ACTIVE'`, is **invisible to the
+  `ddl-collation` gate**, and under `sql_mode=''` stores the **empty string**.
+- **AC3** `IpPolicy` exists in `crates/opencmdb-core/src/ipam/`, with `ALL` and a token mapping, and
+  a test compares the enum's tokens against the schema's `CHECK` **as SETS**. 🔴 Story 6.5's **M8**:
+  *a count is not a set* — comparing counts left two variants pointing at one token green, with one
+  variant unreachable and one schema value nothing could read back.
+- **AC3b** 🔴 **And the OTHER direction, which the set comparison does not close.** `IpPolicy` becomes
+  a row in `screens.rs::every_variant_of_a_navigated_enum_is_listed_in_all`. The validation measured
+  the hole by adding a fifth variant absent from `ALL` with a token the `CHECK` refuses: **866 tests,
+  ten gates and clippy all GREEN**, while anything writing it takes `ERROR 4025` in production.
+  ⚠️ **The same mutation is green TODAY on `EntityState`** — the very precedent AC3 cites — because
+  neither it nor `EntityKind` is a row in that table. **That is registered, not fixed here**: this
+  story adds its own row and names the two that are missing.
+- **AC4** Addresses are `CHAR(15)` `ascii_bin` holding the ZERO-PADDED dotted quad per §1(b). A test
+  pins that `192.0.2.9` sorts **before** `192.0.2.10` in the store, with the UNPADDED form as the
+  **control that fails** — the defect `inventory_view.rs:261` registers, refused here by measurement
+  rather than by intention.
+- **AC4b** 🔴 **One address has ONE spelling, and a `CHECK` imposes it — VALUE as well as shape.**
+  An unpadded `192.0.2.9`, a short octet, a letter, **a trailing newline**, **a trailing space** and
+  **`999.999.999.999`** — each refused by the DDL, and both ends of the octet range accepted as the
+  control. ⚠️ **Two of those six were ACCEPTED until the code review**, inside this criterion's own
+  promise — see §5. The validation measured the
+  same defect on the refused alternative from the other side (`192.0.2.7` and `::ffff:192.0.2.7`
+  both inserted, the `UNIQUE` refusing neither); **a canonical form that is not imposed is not a
+  canonical form**, whatever the column type.
+- **AC5** Three refusals, **and they need THREE instruments, not one**:
+  - `last < first` → a same-row `CHECK`. Measured by **raw SQL** (5.9's M3: *a guard the adapter
+    cannot violate is measured by raw SQL or by nothing*). Verified expressible: `ERROR 4025`.
+  - `LENGTH(first_addr) = LENGTH(last_addr)` → a same-row `CHECK`. 🔴 **VACUOUS on the shipped
+    schema, and all three review layers reached it**: the canonical pattern admits exactly ONE
+    width, so every row the canonical CHECKs accept already satisfies this one and **no mutation can
+    be built that reds it**. *A guard placed where the defect cannot occur reads as coverage and is
+    none.* It is KEPT — the rule becomes real the day FR25 adds a second width — and
+    `the_family_check_is_implied_until_a_second_width_exists` now reds on that day, so **this AC
+    names TWO live instruments and one dormant one**, which is what it should have said.
+  - **a range outside its subnet** → the ADAPTER, because a `CHECK` referencing another table is
+    `ERROR 1901` (measured). 🔴 **And raw SQL does NOT measure this one — it BYPASSES it**: the
+    validation ran the write raw and it succeeded, which proves nothing about the guard. It is
+    measured **through the adapter**, with a raw insert as the **control showing the DDL does not
+    refuse it**. *The first draft applied 5.9's M3 to the half it does not govern, and a dev agent
+    following it literally writes one useful test and one vacuous one.*
+- **AC6** `0007` is re-runnable: `IF NOT EXISTS` throughout, and the header carries the recovery
+  recipe on `0003`'s idiom. 🔴 Story 6.5's AC6 claim — *"no `success = 0` to recover from"* — was
+  **FALSE and displaced a remedy already specified**: MySQL DDL is not transactional.
+- **AC7** **No route, no screen, no producer.** Nothing in this codebase writes an `ip_subnet`, an
+  `ip_range` or an `ip_address` outside this story's own tests. Precedent: story 6.5, whose criterion
+  said so and was met literally.
+- **AC7b** 🔴 **And that makes the adapter DEAD CODE, which fails CI.** Measured on THIS tree:
+  **eleven** errors under `RUSTFLAGS="-D warnings"` (10 *never used* + 1 *never constructed*).
+  ⚠️ It read *"five"* until the code review — a validation worktree's figure quoted as this tree's,
+  story 5.14's recorded class. Story 6.5 escaped it only because
+  `repo.rs` carries a module-level `#![allow(dead_code)]`; a new module carries none. **The new
+  module takes the attribute, and the reason is WRITTEN rather than assumed** — ⚠️ because
+  `arp_ping.rs:22` records, from 2026-09-10, that the ABSENCE of that same attribute is load-bearing
+  there (severing the MAC read left clippy green while it stood). *Both conclusions are right and
+  they are opposite: an allow is a trade between "the compiler cannot see a producer that does not
+  exist yet" and "the compiler is the only thing watching this wiring." Say which one you are in.*
+  The attribute is **removed by the story that gives these functions a producer** — 14.2.
+- **AC8** Every store-backed test takes `crate::DB_TEST_LOCK` **first**. 🔴 Story 6.5's review found
+  seven new tests without it and measured the cost: **6/6 RED on a virgin store where the parent
+  commit was 6/6 green** — the shape CI's own `Tests` step runs. *The per-test ids were a remedy for
+  a symptom of a rule that was simply not followed.*
+- **AC9** THE LIVE COUNT lives here: **859 → 873 tests** — **583 bin + 191 core + 99 xtask**, the
+  sum re-added rather than recalled. `cargo test --workspace --locked`, wall clock, warm, against a
+  **VIRGIN** `mariadb:10.11.11` on port **13406** (`DROP DATABASE` immediately before): **7.94 s**
+  live. ⚠️ It read **871** before the code review, which added two tests. ⚠️ The bin suite is non-deterministic against a REUSED database (Epic 6's register row), and
+  every figure above was taken after dropping it.
+- **AC10** No regression: ten `cargo xtask ci` gates, `clippy --all-targets`,
+  `RUSTFLAGS="-D warnings"`, fmt, `cargo deny`. ⚠️ **Both browser gates are NOT claimed** — this
+  story renders nothing — and saying so is the criterion, not an omission.
+
+## Tasks / Subtasks
+
+- [x] **T1** `crates/opencmdb-core/src/ipam/mod.rs` — `IpPolicy`, `ALL`, token mapping, `IpamError`
+      (AC3, §1c). ⚠️ D47: no `sqlx`, no `anyhow`, no `axum`, no `askama`.
+- [x] **T2** `crates/opencmdb-bin/migrations/0007_addressing_plan.sql` — the three tables, the
+      `CHECK`s, `IF NOT EXISTS`, the header's recovery recipe (AC1, AC2, AC4b, AC5, AC6).
+      ⚠️ **There is no `migrations/` at the repository root**; the first draft wrote the path two
+      ways and `sqlx::migrate!("./migrations")` is relative to the bin crate.
+- [x] **T3** The adapter in a NEW `crates/opencmdb-bin/src/ipam_repo.rs` — **unconditionally**, not
+      "if it would grow `repo.rs`" (AC1, AC5, AC7b).
+      🔴 **The first draft justified this with a false number and the instruction is now given
+      without one.** It said `repo.rs` is *"~3800 code lines"*; measured three ways, the gate reads
+      **183**, the real production half is **1743**, and **4025** is the whole file including tests.
+      `~3800` is the TOTAL reported as a CODE count — `repo.rs` is at **87 % of the ceiling, not
+      190 %**. ⚠️ And the provenance is the finding: story 6.5 records ~1620/~1700 **correctly,
+      twice**, while `CLAUDE.md` carries `~3800`, and this story inherited `CLAUDE.md` rather than
+      the source it cites. *`CLAUDE.md`'s figure is itself a defect and is registered.*
+      The gate genuinely cannot see the file (it stops at the first `#[cfg(test)]`, a test-only
+      helper at `repo.rs:184`) — ⚠️ and the gate's own doc claims it *"would over-count itself,
+      never under-count"*, which `repo.rs` falsifies by 1560 lines. *A gate that cannot measure a
+      file is not permission to grow it*, and a separate module costs nothing.
+- [x] **T4** The set-comparison test (AC3) — prove-to-red by pointing two variants at one token.
+- [x] **T5** The ordering test (AC4) — `192.0.2.9` before `192.0.2.10`, with the text representation
+      as the **control** that would fail.
+- [x] **T6** The refusal tests (AC5), through the adapter AND by raw SQL where the adapter cannot
+      reach.
+- [x] **T7** Mutation pass, **predictions written FIRST**, against a virgin store. ⚠️ Name the TREE
+      each row was measured on (story 6.7's lesson).
+      🔴 **`cargo xtask mutate` CANNOT drive a DDL mutation, and the register names THIS story**:
+      *"a changed migration cannot re-apply to a store that already ran it — `sqlx` checksums it —
+      so every DDL mutation needs a virgin schema AND a warm-up that migrates once before the
+      concurrent suite starts. **Owner: whichever story next writes a migration**"*
+      (`deferred-work.md:5132`). **Guy, 2026-09-11: a purpose-built script, and the debt STAYS
+      registered** — repairing the driver means teaching it to drop and re-migrate a database, which
+      is a subject of its own and is what made 6.4b a whole story. ⚠️ 14.1 is the **SECOND** story to
+      route around it — story 6.5 was the first, and the register row says SECOND. 🔴 This task said
+      *"third"* until the code review, which found the two files disagreeing about the same fact in
+      the same commit. The aphorism *a debt three stories route around is not a debt, it is a
+      practice* is kept as the reason the row exists, not as a count of what has happened.
+- [x] **T8** AC9's count, re-added rather than recalled; AC10's sweep.
+
+## §3 — What the implementation found, and one correction to §1(b)
+
+🔴 **§1(b) prescribed `CHAR(15)` and the column shipped as `VARCHAR(39)`.** The section's own third
+reason is *"`LENGTH()` is 15 for IPv4 and, when FR25 arrives, **39** for an expanded IPv6 form"* —
+and a `CHAR(15)` can never hold 39, so the type contradicted the argument that chose it, in the same
+paragraph. The width is posed ONCE rather than `ALTER`ed at boot on a published product, which is
+story 6.5's precedent and is exactly what `INT UNSIGNED` was refused for. ⚠️ Measured before
+choosing rather than assumed: **CHAR strips trailing padding on retrieval**, so `LENGTH()` stays
+semantic under either type — the type was chosen for the width alone, not to rescue the family check.
+
+🔴 **`ascii_bin` PAD SPACE needed a THIRD instrument, and the two obvious ones both fail.** The
+Dev Notes flagged `'static '` as a trap and left the remedy open. Measured on a live store:
+`policy IN ('static', …)` **accepts** it, because `IN` compares under PAD SPACE; and
+`policy = TRIM(policy)` **also accepts** it, because that comparison is PAD SPACE too and is
+therefore always true. The carrier is a comparison of **integers** — `LENGTH(policy) =
+LENGTH(TRIM(policy))` — which is why it reads as redundant and is not. 🔑 Story 6.5 registered this
+trap on `entity.kind` and did not close it; the same idiom closes it here.
+
+⚠️ **And the same trap on an ADDRESS is closed by a different thing entirely** — the `RLIKE`'s `$`
+anchor, which refuses a trailing space (measured: `ERROR 4025`). Without it, `ascii_bin`'s PAD SPACE
+comparison makes `'192.000.002.009 '` equal to the canonical value, so the `UNIQUE` key would not
+refuse the pair and the store would hold one address under two spellings. *A canonical form that is
+not imposed is not a canonical form* — and the thing that imposes it is not the thing you expect.
+
+✅ **The first draft of the DDL probe measured nothing and the output said so.** A helper grepped
+`ERROR [0-9]+|^$` and the empty alternative matched first, so every refusal printed blank. Re-run
+reading the EXIT STATUS from a file: ten rows, nine refusals with their error numbers, one control
+accepted. *This project's pipeline-status trap, met on a shell function rather than on a pipe.*
+
+## §4 — Mutation record (predictions written FIRST, before any run)
+
+⚠️ **Every row names the TREE it was measured on** (story 6.7's lesson), and the DDL rows name their
+driver. All Rust rows ran under `cargo xtask mutate --baseline` against a **virgin** store on 13403.
+
+| id | mutation | tree | driver | predicted | measured |
+|---|---|---|---|---|---|
+| Q1 | `IpPolicy::Reserved => "static"` — two variants, one token | **pre-core-tests** | xtask | red | red 1 ✅ |
+| Q1′ | the same, re-measured **on the shipped tree** | shipped | xtask | red | **red 2** — two carriers ✅ |
+| Q2 | a fifth variant absent from `ALL` | shipped | xtask | red | 🔴 **compile failure** — see below |
+| Q2b | the same, **with its `as_str` arm** — the honest shape | shipped | by hand | red | red 1 ✅, and it is the new guard |
+| Q3 | drop `CHECK ip_range_policy_exact` | shipped | script | red | red ✅ |
+| Q4 | drop the `RLIKE` on `ip_address.addr` | shipped | script | red | red ✅ |
+| Q5 | `canonical()` stops padding | shipped | xtask | red | red 3 ✅ |
+| Q6 | `Subnet::new` drops the prefix-family check | shipped | xtask | red | red 1 ✅ |
+| Q7 | `Subnet::new` drops the network-address check | shipped | xtask | red | red 1 ✅ |
+| Q8 | `insert_range` drops the overlap check | shipped | xtask | red | red 3 + clippy ✅ |
+| Q9 | `insert_range` drops the containment check | shipped | xtask | red | red 3 + clippy ✅ |
+| Q10 | `from_canonical` drops the length check | shipped | xtask | red | 🔴 **GREEN** — see below |
+| Q10b | the same property's OTHER carrier, the per-octet check | shipped | xtask | red | red 1 ✅ |
+
+🔴 **Q10 came back GREEN and the refutation is the deliverable.** The length check is not the
+carrier: the per-octet check catches every malformed spelling first — `"192.0.2.9"` splits to `0`,
+whose length is 1 — so **the property has TWO carriers and a mutation of either measures nothing**.
+Story 6.4b's P3 and story 6.5's M6, a third time. Q10b measures the real one. The length check is
+kept as a cheap early return and is **no longer claimed as a guard**.
+
+🔴 **Q2 is a COMPILE FAILURE where a red test was predicted, and that is BETTER than the
+prediction.** `as_str` matches exhaustively, so a variant added to the enum alone cannot compile —
+`error[E0004]`. ⚠️ **But that is not the shape a developer produces.** They add the variant AND its
+arm, which compiles cleanly; Q2b is that mutation, and it reds
+`every_variant_of_a_navigated_enum_is_listed_in_all` by name. *The validation measured this hole on
+its own prototype and AC3b's row is what closes it — Q2 alone would have credited the compiler with
+a guard it does not provide.*
+
+⚠️ **The DDL driver refuses rather than guesses.** It exits 2 on an anchor that matches zero or more
+than once, and on a restore that does not land — the two ways this project's throw-away scripts have
+lied before. It is thrown away with this story, and the register row stays open by Guy's decision.
+
+## §5 — The three-layer code review, and what it changed
+
+**Three isolated layers, each in its own worktree, the blind one on the diff alone.** ⚠️ **One
+finding was reached by ALL THREE** — the vacuous family check — and four more by two, which is the
+tell that a finding is in the product rather than in a reading.
+
+### 🔴 The headline, and it was INSIDE AC4b's promise
+
+**`$` is not end-of-string in MariaDB's `RLIKE`: it matches before a final newline.** So
+`'192.000.002.009' || CHAR(10)` passed the canonical CHECK and landed **beside** the canonical value
+— two rows, one address, and **neither `ip_address_in_subnet` nor `ip_subnet_cidr` refused the
+pair**. Measured end to end by two layers independently, with the cause established by a check and
+not a story: `'009\n'` → 1, `'009\r'` → **0**, `'009\nx'` → **0**, `'009\n'` under `\z` → **0**.
+
+Three consequences neither I nor the story anticipated:
+
+- **The ordering the whole representation was chosen for INVERTS** — `0x0A` sorts before the PAD
+  SPACE `0x20`, so the poisoned spelling comes back first.
+- **One poisoned row blinds the whole subnet**: `addresses_in` collects into a `Result`, so a single
+  bad row loses the good ones with it.
+- **`ip_range_same_family` is satisfied by two poisoned bounds** (16 = 16), so §1(b)'s third reason
+  does not hold against this class.
+
+⚠️ **And the threat model is the story's own.** `from_canonical`'s doc names *"a backfill that went
+around the adapter"* as the population the DDL exists for — and a trailing line terminator is how a
+bulk import, a `LOAD DATA INFILE` or a shell `$(…)` poisons a text column. **The ordinary gesture,
+not an adversary's probe.**
+
+🔑 **One pattern closed it and a second hole with it.** `[0-9]{3}` bounded the SHAPE and not the
+VALUE, so `999.999.999.999` was storable raw — and unreadable back, which is the same blinding. The
+octet alternation plus `\z` refuses both, the trailing space, and the unpadded form, while accepting
+`000.000.000.000` and `255.255.255.255`. Measured before it was written.
+
+### 🔴 The one all three layers reached: a guard that cannot fire
+
+`ip_range_same_family` is **implied by the canonical CHECKs** — one admitted width means the lengths
+are always equal — so **no mutation can be built that reds it**, and the blind layer noticed that my
+own twelve-row table contains no such row *because none can exist*. Its only live effect was to
+mask a MISMATCHED pair of newline-poisoned bounds. *This epic's dominant class, committed in the
+migration written to avoid it.* Kept with the vacuity **pinned by a test** rather than deleted.
+
+### 🔴 A guard that HEALED ITSELF into a permanent pass
+
+`the_schema_refuses_what_the_adapter_can_never_send` inserted all six probes under the literal id
+`'t-x'`, cleaned only `t-ddl`, and a panic skips the trailing cleanup. Measured over a deliberately
+broken schema: **run 1 red, run 2 GREEN on the same store, nothing changed** — the accepted row was
+already there, the primary key refused the retry, and `is_err()` cannot tell *the CHECK refused
+this* from *the PK refused this*. CI is safe (a fresh database per run); **the local reading is
+not**, and local is where this project measures its mutations. Closed by distinct ids and a cleanup
+at the START.
+
+### 🔴 My own mutation counts were inflated by collateral
+
+Three store-backed tests built `192.0.2.0/24` under different ids, so a panicking test left its
+subnet behind and the next one died on `ip_subnet_cidr` rather than on the mutation. Measured with a
+control: Q8 reds **3** in a full run and **1** when each test runs alone on a virgin store; Q3 the
+same. **Q5's 3 is honest.** The carrier counts for Q3/Q4/Q8/Q9 are **1**. Closed by one CIDR per
+test. ⚠️ A single leftover row also made a **pristine** tree red, with *which* test reddening
+depending on run order — which is what makes it read as flakiness. **Not claimed as the cause of
+issue #38 or of Epic 6's registered non-determinism**: it is a named, reproducible cause of
+non-determinism in this story's own tests, and nothing more.
+
+### 🔴 The hole I recognised for one type and left open for its neighbour
+
+`every_refusal_carries_a_sentence` enumerated its six variants inside its own body, so a seventh
+`IpamError` whose `Display` returned a **verbatim duplicate** left 871 tests, ten gates and clippy
+green — the exact thing that test's own message calls *"two refusals read the same, so the operator
+cannot tell them apart"*. 🔑 **And the mechanism was already in this commit, one type over**:
+`IpPolicy::ALL` plus a row in the enum-completeness guard. `IpamError` gains both.
+
+### 🔴 The invariant `insert_subnet`'s comment claimed was already false
+
+*"`Subnet` can only be built through `new`"* — both fields were `pub(crate)`, so a struct literal
+reached `contains` with `prefix_len = 64` and **panicked on `32 - 64`, the exact panic
+`PrefixLengthNotInFamily` documents itself as preventing**. And the silent half: a `192.0.2.5/24`
+literal reported `192.0.2.1` as OUTSIDE its own subnet. Fields are private now — story 5.6's
+precedent, *closed in the TYPE, not in a sentence* — which cost nothing, every use being in-module.
+
+### ⚠️ Two more numbers of mine, corrected
+
+**AC7b said five dead-code errors; it is eleven** (re-measured: 10 *never used* + 1 *never
+constructed*). **Q1 is red 2, not red 1** — and the cause is my own lesson: I measured it BEFORE
+adding the three core tests. *A mutation count is dated by the tree that produced it*, and the row
+now says which tree.
+
+### ⚠️ And "no screen changes" needs one qualifier
+
+`/diagnostic`'s schema row is derived from the embedded migration count, so it moves **6 → 7** and
+renders `7 · addressing plan`. No gesture is added and no route; one rendered value changes, and
+**the suite cannot see it** because both assertions derive from the same source. The browser-gate
+exemption still holds — no template, asset, locale or route is touched, verified by two layers.
+
+### 🔴 Repairs proved to red
+
+| id | reverted | driver | measured |
+|---|---|---|---|
+| R1 | `\z` back to `$` | script | red ✅ — the newline hole returns |
+| R4 | the octet alternation back to `[0-9]{3}` | script | red ✅ |
+| R2 | the inverted-bounds refusal deleted | xtask | red 1 ✅ |
+| R3 | a refusal given a duplicate sentence | xtask | red 1 ✅ |
+
+⚠️ **R1 exited 2 under `cargo xtask mutate`** — the DDL debt, live again in the repair pass, exactly
+as T7 records. And **the script refused two anchors before it measured anything** (zero matches once,
+four matches once): the pattern appears in four columns and a multi-match is a different mutation
+from the one predicted. *It is right to refuse.*
+
+### ✅ Refuted by the layers, with the check — so nobody re-chases them
+
+- **The round trip is total**: `from_canonical(canonical(x)) == x` on **84 480** addresses.
+- **`from_canonical` is fooled by nothing**: Arabic-indic and fullwidth digits, NUL, a 100 000-byte
+  string, `256.000.000.001`, tabs, the ideographic full stop, a combining acute — all sixteen `Err`.
+- **No overflow in `Subnet::last`**, and the boundaries are right at `/0`, `/32`, `0.0.0.0` and
+  `255.255.255.255`.
+- **The overlap loop is correct** on identical, nested, enclosing, touching and single-address
+  shapes; abutting is accepted.
+- **The control inside the adapter test is NOT unfailable** — giving the DDL the rule the adapter
+  carries reds it on its own message, which is what makes the three assertions above it mean
+  something.
+- **Raw SQL bypasses all five adapter guards**, and `ERROR 1901` on a cross-table `CHECK`
+  reproduced — so AC5's split is right.
+- **All four SQL gates walk `0007`** and name it with its line.
+- **AC7 holds**: nothing outside the migration and the adapter names the three tables.
+
+## §6 — Registered rather than fixed
+
+- 🔴 **`insert_range`'s overlap rule is not enforceable under concurrency.** Read-then-insert, no
+  transaction, no `FOR UPDATE`, no index that could catch the loser. The edge layer did not accept
+  its own first negative: with a 400 ms pause injected between the read and the insert, **two
+  overlapping ranges both committed, both reporting success**. Unreachable today (no producer);
+  **story 14.2 opens HTTP write routes, which are concurrent by construction**, and it is that
+  story's to close. Story 6.5's *two concurrent passes mint two interfaces for one MAC* family.
+- ⚠️ **`#![allow(dead_code)]` is module-wide and nothing makes 14.2 pay it off.** After 14.2 wires
+  *some* of these functions the attribute goes on hiding the rest. Registered with 14.2 by name.
+- ⚠️ **`EntityState` and `EntityKind` are still not rows** in the enum-completeness guard — measured
+  green on this tree by two layers. Story 6.12's, as the register already says.
+- ⚠️ **The clock is a weaker tell than this project's notes claim**: 873 green in **7.94 s** live and
+  **~5 s** with no store, because three pre-existing `budget` tests account for 5.00 s of the floor.
+  Not this story's code; worth knowing before anyone reads a timing as proof a store was reached.
+
+## Dev Notes
+
+### What the store must be able to answer, and what it must not
+
+**Must**: is this address inside a defined range · what is that range's policy · which addresses are
+individually defined · what is the subnet's extent. **Must not, in this story**: anything about
+observations. The audit is 14.3's and it joins the two sides; **this story does not read
+`observation_record` at all**, and a join written here would be the producer AC7 forbids.
+
+### Traps this project has already paid for, and which apply here
+
+- 🔴 **A DDL mutation that leaves invalid SQL measures the parser, not the guard** (story 6.5) — it
+  once reddened 101 tests over a guard never exercised. Mutate a DDL guard into *valid* SQL that
+  omits the constraint.
+- 🔴 **`ascii_bin` is PAD SPACE**, so a raw `'static '` satisfies every CHECK and reads back
+  unfamiliar (story 6.5, registered). Decide whether this story refuses it or registers it — **and
+  say which**.
+- ⚠️ **`cargo test` on a VIRGIN database races itself on concurrent `migrate!` calls** (story 6.5).
+  `DB_TEST_LOCK` is the remedy and AC8 is the criterion.
+- ⚠️ **The mutation driver refuses an anchor that matches twice.** A comment quoting the line you
+  are mutating is a second match — met twice on 2026-09-10. It is right to refuse; widen the anchor.
+- ⚠️ **A `/*` inside a double-quoted string blinded a whole file to three gates** (story 6.5's
+  review, fixed). Any new SQL text this story adds is walked by `sql_text.rs`.
+
+### What the validation measured about the instruments themselves
+
+- 🔴 **A store that ran the WITHDRAWN `0007` is poisoned and says nothing useful.** The MAC connector
+  story wrote a `0007` UNIQUE index, ran it, and withdrew it (issue #161). No artefact remains in the
+  repository — four checks, including `git rev-list --all --objects`. But a developer's own store
+  that applied it meets `VersionMissing(7)` or, once this story's `0007` exists,
+  `VersionMismatch(7)`, **and the error names no remedy**. AC9's *"drop it first"* cures it by
+  accident. Drop it on purpose.
+- ⚠️ **`ddl-collation` is a TRIPWIRE and a green one proves little.** Its matcher is
+  `up.contains("_BIN") || up.contains("COLLATE BINARY")` — **anywhere on the line**. Measured on this
+  story's own shape: `label VARCHAR(64) NOT NULL, -- indexed by ip_subnet_label_bin` passes GREEN;
+  the same line without the comment reds. Story 6.5 measured four of five planted violations passing.
+  Do not read a green `ddl-collation` as *the collation is right*.
+- ⚠️ **A DDL mutation that leaves INVALID SQL measures the parser, not the guard** (6.5) — it once
+  reddened 101 tests over a guard never exercised. Mutate into *valid* SQL that omits the constraint.
+- ⚠️ **The mutation driver refuses an anchor that matches twice.** A comment quoting the line you are
+  mutating is a second match — met twice on 2026-09-10. It is right to refuse; widen the anchor.
+- ✅ **Refuted by the validation, so nobody re-chases them**: `0007` IS the next free number (four
+  checks); `build.rs` watches the `migrations` DIRECTORY, so a new file is not invisible to
+  `cargo build`; the new `ipam/` module trips neither the D47 frontier gate nor `missing_docs`
+  (`opencmdb-core` does not deny it yet — the house rule still applies); the SQL gates DO walk a new
+  migration (a planted `UPDATE observation_record` reds `observed-immutable` naming
+  `0007…sql:40`); and the 859 baseline is exact on a virgin store.
+
+### Two questions this story does NOT answer, and says so
+
+- 🔑 **Containment runs in RUST, not in SQL** (D10: *"all value comparison and normalization happens
+  in Rust"*). The Dev Notes' *"Must: is this address inside a defined range"* describes what the
+  STORE holds, not a query this story writes. ⚠️ `architecture.md:4847` (F57) asks that SQL-side
+  comparison be **costed before any epic reintroduces it** — so if 14.3 wants
+  `WHERE ? BETWEEN first_addr AND last_addr`, that is the story that pays F57, not this one.
+- ⚠️ **`ipam/` is OUTSIDE the `float-free` gate**, which walks
+  `crates/opencmdb-core/src/identity/` alone. That is correct today and stated rather than
+  discovered: 14.1 ships an enum, a DDL and an adapter — **no arithmetic at all** — and the
+  occupancy figure is three COUNTS, not a ratio (`example_data.rs:829`: *"why the occupancy is a
+  LIST and never a formula"*). **14.3 is where a ratio could first appear**, and it is that story's
+  to decide whether the perimeter widens. D13's ban is scoped to identity DECISIONS; extending it
+  by reflex would apply a decision outside its stated domain.
+- ⚠️ **`IpamError` is created by T1 and has nowhere to go.** The adapter returns
+  `RepositoryError` (`Contention` · `Constraint` · `NotFound` · `InstantRegressed` ·
+  `ContradictoryObservation` · `Backend(String)`). The validation's prototype had to write
+  `.map_err(|e| RepositoryError::Backend(e.to_string()))` — which is precisely *"an error there is
+  domain data, not a string"* that D47 forbids. `InstantRegressed` and `ContradictoryObservation`
+  are the precedent for a NAMED variant. **T1 and T3 must join: decide which side gains it, and say
+  which in the File List.**
+
+### Project Structure Notes
+
+- New: `crates/opencmdb-core/src/ipam/mod.rs`, `crates/opencmdb-bin/src/ipam_repo.rs`,
+  `crates/opencmdb-bin/migrations/0007_addressing_plan.sql`.
+- Touched: `crates/opencmdb-core/src/lib.rs` and `crates/opencmdb-bin/src/main.rs` (module
+  declarations), `screens.rs` (AC3b's row). **`repo.rs` is NOT touched** (T3).
+- **Not touched**: `page.rs`, `templates/`, `locales/app.yml`, `a11y/`, `epics.md`, the UX spec.
+  A story may not edit the last two.
+
+### References
+
+- [Source: `_bmad-output/planning-artifacts/epics.md#Epic 14` — the six constraints]
+- [Source: `_bmad-output/planning-artifacts/prd.md#The PLAN axis` — the binding vocabulary, PR #166]
+- [Source: `_bmad-output/planning-artifacts/architecture.md:3208,3366` — `ipam::IpamError`, `ipam/`]
+- [Source: `crates/opencmdb-bin/migrations/0006_entity_device_and_state.sql` — the DDL precedent]
+- [Source: `crates/opencmdb-bin/src/inventory_view.rs:261` — the registered string-ordering defect]
+
+## Dev Agent Record
+
+### Agent Model Used
+
+Claude Opus 5 (1M context), 2026-09-11.
+
+### Debug Log References
+
+All measurements against a **virgin** `mariadb:10.11.11` on port **13403**, dropped and recreated
+before every full run. Mutation logs in the session scratchpad (`Q_*.log`); the DDL driver is
+`ddl_mutate.sh`, thrown away with this story by Guy's arbitration.
+
+### Completion Notes List
+
+- **AC1–AC2** `0007_addressing_plan.sql`: three tables, `CHAR(36)` `ascii_bin` ids, `VARCHAR` +
+  `CHECK` for the policy and never a MariaDB `ENUM`.
+- **AC3** the domain and the schema compared as SETS, both directions, against the live
+  `information_schema.CHECK_CONSTRAINTS` clause.
+- **AC3b** `IpPolicy` is a row in `every_variant_of_a_navigated_enum_is_listed_in_all` — the second
+  cross-crate row after `FactKind`. Q2b reds it by name.
+- **AC4/AC4b** the canonical form sorts numerically **with the unpadded form as the failing
+  control**, and one address has one spelling, imposed by an anchored `RLIKE`.
+- **AC5** three refusals, three instruments: two same-row `CHECK`s measured by raw SQL, and the
+  cross-table rules measured THROUGH the adapter with a raw insert as the control that proves the
+  DDL does not refuse them. ⚠️ The control is what makes the three assertions mean anything.
+- **AC6** `IF NOT EXISTS` throughout; the header carries the recovery recipe, and the warning about
+  a store poisoned by the WITHDRAWN `0007` (issue #161), whose `VersionMismatch(7)` names no remedy.
+- **AC7/AC7b** no route, no screen, no producer; the module takes `#![allow(dead_code)]` with the
+  arbitration written beside it, and story 14.2 removes it.
+- **AC8** every store-backed test takes `DB_TEST_LOCK` first; the full suite was run on a virgin
+  store, which is the shape that caught story 6.5.
+- **AC9** 859 → **871** (581 bin + 191 core + 99 xtask), 8.24 s live.
+- **AC10** ten gates ✅ · `clippy --all-targets` ✅ · `RUSTFLAGS="-D warnings"` ✅ · fmt ✅ ·
+  `cargo deny` ✅. ⚠️ **The two browser gates are NOT claimed** — this story renders nothing, and
+  saying so is the criterion.
+
+🔴 **Three things the implementation found, in §3**: the story's own `CHAR(15)` contradicted the
+argument that chose it (shipped `VARCHAR(39)`); `ascii_bin`'s PAD SPACE defeats **both** obvious
+remedies and needs an integer comparison; and my first DDL probe measured nothing because a grep
+alternative matched an empty line before the error.
+
+⚠️ **What the operator gains: NOTHING.** No route, no screen, no write, no producer — by the epic's
+own criterion. What story 14.2 gains is a plan with a shape, a vocabulary the schema enforces, and
+four refusals already written down.
+
+### File List
+
+- `crates/opencmdb-core/src/ipam/mod.rs` — NEW: `IpPolicy`, `IpPolicy::ALL`, `as_str`, `Display`,
+  `IpamError` and its `Display`, plus three tests.
+- `crates/opencmdb-core/src/lib.rs` — `pub mod ipam;`
+- `crates/opencmdb-bin/migrations/0007_addressing_plan.sql` — NEW.
+- `crates/opencmdb-bin/src/ipam_repo.rs` — NEW: the canonical form, `Subnet`, the four refusals no
+  `CHECK` can express, insert/read for each table, plus nine tests.
+- `crates/opencmdb-bin/src/main.rs` — `mod ipam_repo;`
+- `crates/opencmdb-bin/src/screens.rs` — AC3b's row in the enum-completeness guard.
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — status to `review`.
+
+### Change Log
+
+- 2026-09-11 — implemented 14.1: the addressing plan's schema, domain and adapter, with no producer.
+  Twelve mutation ids, ten conforming, **two divergences that are the pass's own findings** (Q10
+  green — two carriers for one property; Q2 a compile failure where a red test was predicted, and
+  Q2b the honest shape that reds the new guard). §1(b)'s `CHAR(15)` corrected to `VARCHAR(39)` with
+  the reason recorded rather than the change made silently.
