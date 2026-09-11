@@ -32,7 +32,7 @@ touch IPAM; **(6)** no state is told apart by colour alone.
 
 **14.1 shipped a domain, a schema and an adapter and NO producer.** `ip_subnet`, `ip_range`,
 `ip_address` (`0007_addressing_plan.sql:91`, `:111`, `:145`); `IpPolicy` and `IpamError`
-(`ipam/mod.rs:45`, `:128`); `canonical`/`from_canonical`/`Subnet`/`insert_subnet`/`load_subnet`/
+(`ipam/mod.rs:46`, `:129`); `canonical`/`from_canonical`/`Subnet`/`insert_subnet`/`load_subnet`/
 `insert_range`/`insert_address`/`addresses_in` (`ipam_repo.rs`). **This story is that producer.**
 
 **The audit is 14.3's and this story does not read `observation_record` at all.** A join written
@@ -57,10 +57,13 @@ every other path (`main.rs:696-700`).
   4). ⚠️ Cost: a fresh install gains a live write surface with no opt-in, on a product whose
   posture is closed-by-default (`is_public` is `/healthz` + `/assets/*` only, story 6.1).
 - **(b) Reuse `OPENCMDB_DOCUMENT_ENABLED`.** Cheapest. ⚠️ **Refused on a measurement of meaning, not
-  of cost**: that constant is named for the documenting gesture at four sites (`main.rs:113`,
-  `page.rs:1229-1232`, `gesture.not_enabled`'s `%{switch}`, the diagnostic's security row), and
-  arbitration (4) exists to keep the two registers apart. One switch for two registers re-fuses in
-  configuration what the arbitration separated in the schema.
+  of cost**: that constant is named for the documenting gesture at `main.rs:113`, `:350`, `:432`,
+  `page.rs:260`, `:760`, `:5772` and `app.yml:441,484-486`, and arbitration (4) exists to keep the
+  two registers apart. One switch for two registers re-fuses in configuration what the arbitration
+  separated in the schema. ⚠️ **The story first claimed a fourth site in the diagnostic's security
+  row; the validation measured that `diagnostic.rs` never names the constant at all** — its four
+  security rows are public paths, Basic, the metrics token and secrets. A refused option deserves a
+  true reason as much as a chosen one.
 - **(c) A new `OPENCMDB_IPAM_ENABLED`.** Symmetrical and prudent. ⚠️ Cost measured on story 6.4:
   *"on the DEFAULT configuration there is still no gesture"* — a stock deployment would meet a
   seventh well-lit dead end, on the epic whose subject is the operator finally doing something.
@@ -77,14 +80,19 @@ first deployment where an operator can change stored state without setting anyth
 exist.** `ipam/mod.rs:122-123` states the adapter maps its refusals *"into
 `RepositoryError::Constraint` with a name the caller can match on"*. It does not:
 `ipam_repo.rs:332` is `RepositoryError::Backend(error.to_string())`, and that function's own doc
-fifteen lines above says so (*"`RepositoryError` has no IPAM variant, so a refusal the domain states
+six lines above (`:325-326`) says so (*"`RepositoryError` has no IPAM variant, so a refusal the domain states
 precisely arrives at the caller as a sentence"*). **Three review layers did not catch it.**
 
 🔑 And `Constraint` would be the WRONG target even if the code did it, by the doctrine the
 `RepositoryError` file itself establishes for `InstantRegressed` and `ContradictoryObservation`:
 *"`Constraint` means 'a database constraint was violated' by its own doc, and no database was
-consulted here"* (`repo/mod.rs`). Six of the seven IPAM refusals are decided in Rust before any
-statement runs.
+consulted here"* (`repo/mod.rs:53-56`). ⚠️ **The story first wrote *"six of the seven are decided in
+Rust before any statement runs"*; measured, it is FOUR** — `MalformedAddress`,
+`PrefixLengthNotInFamily`, `BaseIsNotTheNetworkAddress` and `RangeBoundsInverted`; the other three
+follow a `load_subnet`. The conclusion survives on the doctrine's own terms, which are about whether
+a DATABASE CONSTRAINT was violated and not about whether a statement ran: **none of the seven is
+refused by the DDL** (`ipam/mod.rs:130-133`). *The conclusion was right and its stated premise
+matched no partition of the seven.*
 
 `ipam_repo.rs:324-330` names this story: *"**Story 14.2 is the first story with a caller that must
 DISTINGUISH these refusals to render them**, and that is the story where the variant earns itself."*
@@ -114,8 +122,8 @@ the guard doing its job, not a regression.
 ### (C) ✅ A transaction and a parent-row `FOR UPDATE`, with the pause harness as its proof
 
 🔴 Registered by 14.1 with **this story as owner**, and the register says it *"may not close it with
-a `UNIQUE`"*. `insert_range` (`ipam_repo.rs:237-250`) reads every sibling, decides in Rust, then
-inserts: no transaction, no lock, no index that could catch the loser. A `CHECK` referencing
+a `UNIQUE`"*. `insert_range` reads every sibling (`ipam_repo.rs:238`), decides in Rust (`:243-250`), then
+inserts (`:251`): no transaction, no lock, no index that could catch the loser. A `CHECK` referencing
 siblings is `ERROR 1901` and a partial-overlap rule is not a `UNIQUE` key in any case. ⚠️ **The
 first concurrent attempt did NOT reproduce and 14.1's review layer refused to read that as safety**:
 with a 400 ms pause injected, two overlapping ranges both committed, both reporting success.
@@ -175,14 +183,23 @@ offers one it has not checked.
 ## §2 — Five things the first draft would leave a dev agent to settle SILENTLY
 
 1. **`/ipam` leaves the pool-free router and loses a compile-time guard.** Today the demonstration
-   screens are merged AFTER `.with_state(pool)` so their state is `()` and `State<MySqlPool>` fails
-   to compile (`main.rs:681-685`). A `Fed` `/ipam` must leave that router — story 6b.5 paid this for
-   `/dashboard` and narrowed the promise in writing rather than dropping it. **Say the same sentence
-   here**: the refusal holds for the screens that remain, and `/ipam` is the second exemption.
-2. **Deleting `ExampleContent::IpamOccupancy` is what makes the compiler name the sites** — the
-   `render` dispatch (`screens.rs:180`), the route-table witness (`main.rs:1393-1395`) and
-   `example_contents.len() == 5` (`main.rs:1500-1508`). Delete the variant FIRST and let `E0004`
-   drive the sweep; do not grep for `ipam` and hope.
+   screens are merged AFTER `.with_state(pool.clone())` (`main.rs:680`) so their state is `()` and
+   `State<MySqlPool>` fails to compile. A `Fed` `/ipam` must leave that router — story 6b.5 paid
+   this for `/dashboard` and narrowed the promise in writing rather than dropping it. ⚠️ **This
+   paragraph first called `/ipam` the SECOND exemption; the validation measured that it is the
+   FIFTH.** `page::triage_router` (`page.rs:1552`) already carries five routes — `/triage`,
+   `/dashboard`, `/diagnostic`, `/sources`, `/devices` — so `/ipam` is the sixth route there and the
+   fifth screen to leave the pool-free router. 🔑 *The narrowed promise is worth less each time it
+   is narrowed, and saying "the second" would have hidden that.* Say the true count.
+2. **Deleting `ExampleContent::IpamOccupancy` makes the compiler name THREE sites, and one the
+   story listed is not among them.** Measured by deleting it and running `cargo check --workspace
+   --all-targets`: three errors, all **`E0599`** — the `render` dispatch (`screens.rs:180`), the
+   `nature()` arm (`screens.rs:304`, **which the story's first draft did not list**) and the
+   route-table witness (`main.rs:1393-1395`). ⚠️ **`example_contents.len() == 5` (`main.rs:1500`) is
+   NOT compiler-named** — it compiles and fails at run time, so it is carried by the test suite and
+   not by the build. And the sweep is driven by `E0599`, not `E0004`: **`E0004` is what ADDING a
+   variant produces**, which is arbitration (B)'s subject and the opposite gesture. Delete the
+   variant FIRST all the same; do not grep for `ipam` and hope.
 3. **The stylesheet guard cannot see the grid's classes.** `every_class_a_template_names_is_defined_
    in_the_stylesheet` skips any `class="…"` containing `{` (`page.rs:5426-5428`), and the cell is
    `class="ipam-cell {{ cell.modifier }}"`. What covers the four modifiers today is
@@ -190,15 +207,16 @@ offers one it has not checked.
    the example dataset that dies with it.** Its replacement is owed in the same commit, or the new
    modifiers ship covered by nothing.
 4. **The axe gate measures no `/ipam` state.** Routes are scraped from the nav and the only
-   query-string states it walks are `/triage`'s (`axe-gate.mjs:81`, `:86`). A store-fed `/ipam` has
+   query-string states it walks are `/triage`'s (`axe-gate.mjs:81`, `:87`). A store-fed `/ipam` has
    at least three states worth a pass — no plan, a plan with ranges, a refused form — and none is
    reachable today. ⚠️ And `a11y/seed.sql` seeds NO ipam row, so an axe pass over a real grid
    measures an empty one. **Widening the seed puts a new SQL writer in the `authorship` gate's
    perimeter** — `AUTHORSHIP_ROOTS` and `SANCTIONED_SITES` already name `a11y/seed.sql`, so this is
    free here, but the file's own header says the two are one act.
 5. **The UX spec asks for a grid this product does not render, and the divergence must be settled
-   rather than inherited.** `ux-design-specification.md:1634` wants `role="grid"` with keyboard
-   navigation, `role="gridcell"`, a synthetic summary and an accessible *"jump to next free IP"*.
+   rather than inherited.** `ux-design-specification.md:1632-1634` wants `role="grid"` with keyboard
+   navigation (`:1632`), `role="gridcell"` and a synthetic summary (`:1633`), and an accessible
+   *"jump to next free IP"* (`:1634`).
    Story 6b.7 shipped `<ul role="list">` and refused `role="img"` on a measured ARIA reason
    (`aria-label` on a bare `div` maps to `generic`, where ARIA 1.2 prohibits it). ⚠️ **This story
    rebuilds the grid**, so it either implements the spec's shape or records a divergence with its
@@ -209,8 +227,12 @@ offers one it has not checked.
 **AC1 — `/ipam` is fed by the store.** `Screen::Ipam.nature()` is `Nature::Fed`; the route leaves
 the pool-free router; `ExampleContent::IpamOccupancy` and the whole invented dataset
 (`example_data.rs:839-1055`: `ExampleSubnet`, `CellState`, the six octet constants, `subnets()`,
-`subnet_by_slug`, `address_conflict`) are DELETED, not bypassed. The route-table partition guard
-passes with four `ExampleContent` variants where there were five.
+`subnet_by_slug`, `address_conflict`) are DELETED, not bypassed. ⚠️ **Two counts, and the story
+first conflated them**: `ExampleContent` has **SIX** variants (`screens.rs:134-158`) and keeps five;
+what goes **5 → 4** is `example_contents` (`main.rs:1501`), which collects only screens whose nature
+is `Example` — `DevicesInventory` belongs to `Screen::Devices`, which is `Mixed`. **And
+`main.rs:1497-1499`'s sentence must change in the same commit**: *"five are wholly example, three
+are fed by the store and two are mixed"* becomes four / four / two.
 
 **AC2 — the grid draws the plan and nothing else.** Every cell's state is derived from `ip_range`
 and `ip_address` for the selected subnet; **no cell state reads `observation_record`** (that is
@@ -222,8 +244,10 @@ cannot compile without one. The `reserved` hatch already exists (`app.css:894-89
 
 **AC4 — `structural` is gone as a displayed word.** No `ipam.state.structural` key, no
 `.ipam-cell-structural` rule, no `CellState::Structural`; `.0`/`.255` render as `infrastructure`,
-derived. ⚠️ **And the vocabulary gate gains `structural` in its denylist in the SAME commit** — the
-register says adding it earlier simply reds the build, so adding it later is what nobody does.
+derived. ⚠️ **And the vocabulary gate gains `structural` in its denylist in the SAME commit** — `epics.md`'s
+constraint (5) and `ux-design-specification.md:1404-1405` say adding it earlier simply reds the
+build, so adding it later is what nobody does. (Not `deferred-work.md`: there is no such row there,
+and in this project *the register* means that file.)
 
 **AC5 — two write routes, and the first carries the machinery.** A range and an address can each be
 defined through `/ipam`. The FIRST route carries: the Origin check, a KEYED refusal body per status
@@ -242,19 +266,27 @@ pause that made two overlapping ranges commit is re-run and measured to REFUSE t
 **AC8 — an empty plan names the gesture that fills it and links to it.** Story 6b.4's finding: *a
 door labelled with the room you are already in is not a door.*
 
-**AC9 — `#![allow(dead_code)]` is narrowed or removed.** ⚠️ **The register's figure is wrong and the
-correction belongs here**: it says *eleven items*; measured on the merged tree, removing the
-attribute yields **TEN warnings covering FOURTEEN items** (one warning groups five associated
-items), identically under `cargo build` and under `clippy --all-targets`. 🔑 What the attribute
-hides is the absence of a PRODUCER, not the absence of a test — the six `#[tokio::test]`s do call
-these functions. Correct the register row at its site.
+**AC9 — `#![allow(dead_code)]` is narrowed or removed.** Measured on `38da035` with the attribute
+removed: **ELEVEN warnings covering FIFTEEN items**, identically under `cargo build --workspace` and
+`clippy --workspace --all-targets` (one warning groups `Subnet`'s five associated items). 🔴 **This
+criterion first said TEN and FOURTEEN, and the validation refuted it — the error was the
+INSTRUMENT**: the figure was taken with `grep "never used"`, which cannot see ``struct `Subnet` is
+never constructed``. *A measurement whose instrument cannot see the answer is not a measurement.*
+`deferred-work.md`'s *eleven items* was right about the number and wrong about the noun. Corrected
+in both twins and the register by PR #171 before this story starts. 🔑 What the attribute hides is
+the absence of a PRODUCER, not the absence of a test — the six `#[tokio::test]`s do call these
+functions.
 
 **AC10 — the doc that describes code that does not exist is corrected.** `ipam/mod.rs:122-123`
 claims a `Constraint` mapping that was never written. Correct it to what arbitration (B) decides,
 and say in the commit that it was false rather than fixing it silently.
 
 **AC11 — THE LIVE COUNT lives here**, with the command and both conditions named. Baseline: **873**
-(583 bin + 191 core + 99 xtask) at `38da035`.
+(583 bin + 191 core + 99 xtask) at `38da035`, re-measured by the validation. ⚠️ **And check what the
+"without a store" run actually had**: the validation measured the bin suite at **5.06 s** with
+`DATABASE_URL` unset, where this project's notes record ~0.65 s — so either a `.env` is supplying a
+store or the floor has moved, and recording a figure under the wrong label is how *"the clock is the
+tell"* stops being true.
 
 **AC12 — no regression**: ten `cargo xtask ci` gates, `clippy --workspace --all-targets -D
 warnings`, `RUSTFLAGS="-D warnings" cargo test --workspace --locked`, `fmt`, `cargo deny`. ⚠️ **And
@@ -314,9 +346,12 @@ comparison be costed before any epic reintroduces it, and this story does not re
 
 ### Project Structure Notes
 
-- New: a write-route module on `document.rs`'s shape; a store-fed ipam view module. ⚠️ `page.rs` is
-  at 2033-ceiling risk — story 6.4 split `identity_view.rs` out for exactly this, and the answer is
-  the split `CLAUDE.md` prescribes, never shorter prose.
+- New: a write-route module on `document.rs`'s shape; a store-fed ipam view module. ⚠️ **`page.rs`
+  is at 1954 code lines of the 2000 ceiling — 46 of headroom** (its first `#[cfg(test)]` is at 1955,
+  which is how the gate counts; `cargo xtask ci` reports `largest: 1954`). The story first wrote
+  *2033*, which is story 6.4's PRE-SPLIT figure — a number that was true before a split and false
+  after it. The view code does not fit, and the answer is the split `CLAUDE.md` prescribes, never
+  shorter prose.
 - Deleted: the ipam half of `example_data.rs`, `_ipam_example.html`, `ipam.state.structural`,
   `.ipam-cell-structural`.
 - Touched: `screens.rs` (nature, router skip), `main.rs` (route merge, the partition guard's
@@ -327,7 +362,8 @@ comparison be costed before any epic reintroduces it, and this story does not re
 
 - [Source: `_bmad-output/planning-artifacts/epics.md#Epic 14` — the six constraints, 14.2's five ACs]
 - [Source: `_bmad-output/planning-artifacts/prd.md#The PLAN axis` — the binding vocabulary]
-- [Source: `_bmad-output/planning-artifacts/ux-design-specification.md:1634` — the grid's a11y shape]
+- [Source: `_bmad-output/planning-artifacts/ux-design-specification.md:1632-1634` — the grid's a11y
+  shape; `role="grid"` is on :1632 and *"jump to next free IP"* on :1634]
 - [Source: `crates/opencmdb-bin/src/document.rs` — the write-route machinery to reuse]
 - [Source: `crates/opencmdb-bin/src/ipam_repo.rs:324-330` — the seam that names this story]
 - [Source: `_bmad-output/implementation-artifacts/deferred-work.md` — the two rows owned here]
@@ -344,7 +380,8 @@ comparison be costed before any epic reintroduces it, and this story does not re
 
 ### Change Log
 
-- 2026-09-11 — contexted, and the four arbitrations TAKEN by Guy the same day (the recommendation
-  in all four). Three defects found while contexting and carried as criteria rather than filed
+- 2026-09-11 — contexted; the four arbitrations TAKEN by Guy the same day (the recommendation in
+  all four); then the mandatory FACT-CHECK layer refuted **seven** claims of the story's own, four
+  of them numbers. Every one is corrected in place with what it said, rather than overwritten. Three defects found while contexting and carried as criteria rather than filed
   elsewhere: the false `Constraint` doc, the register's wrong dead-code figure, the UX-spec grid
   divergence. No code changed.
