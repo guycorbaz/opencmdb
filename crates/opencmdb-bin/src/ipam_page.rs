@@ -32,16 +32,17 @@
 //! forbid: **indistinguishable in every property there is.** So `free` gained a treatment of its
 //! own and the bare cell keeps the blank (Guy, 2026-09-11, re-arbitrated on that measurement).
 
+use askama::Template;
+use axum::Router;
 use axum::extract::{Query, State};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
-use axum::Router;
 use opencmdb_core::ipam::IpPolicy;
 use sqlx::MySqlPool;
 use std::net::Ipv4Addr;
 
 use crate::ipam_repo::{self, Subnet};
-use crate::page::{render_shell, Shell};
+use crate::page::{Shell, render_shell};
 use crate::screens::Screen;
 
 /// What one address in the grid is, as the PLAN says it.
@@ -86,7 +87,11 @@ impl CellState {
         match self {
             Self::Defined(_) => "ipam.state.defined",
             Self::Free(_) => "ipam.state.free",
-            Self::Infrastructure => "ipam.state.infrastructure",
+            // 🔑 The POLICY key, not a state key of its own: `.0` and `.255` ARE infrastructure by
+            // the binding table's own definition, and giving them a second word is the synonym
+            // problem that table exists to prevent. `structural` was that second word until
+            // 2026-09-11.
+            Self::Infrastructure => "ipam.policy.infrastructure",
             Self::NotCovered => "ipam.state.not_covered",
         }
     }
@@ -102,13 +107,22 @@ impl CellState {
 
     /// Whether this state may be offered as the next free address.
     ///
-    /// 🔑 Only [`Self::Free`] may, and `infrastructure` may not — the binding table says
-    /// *"never offered as free"* of it in so many words. ⚠️ **This is the PLAN's answer and not the
-    /// network's**: story 14.3 must additionally exclude every OBSERVED address, which is the
-    /// criterion the whole epic exists for and the only place the product prevents a duplicate
-    /// rather than reporting it.
+    /// 🔴 **A CELL CAN BE `Free` AND STILL NOT OFFERABLE, and the first draft of this function got
+    /// it wrong.** It read `matches!(self, Self::Free(_))`, which offered `192.0.2.0` the moment an
+    /// operator declared a range with the `infrastructure` policy over it — measured by the test
+    /// below, which reddened on its first run with `left: Some(192.0.2.0)`. The binding table says
+    /// of `infrastructure`: *"Not host space; **never offered as free**"*, in those words.
+    ///
+    /// 🔑 *The state and the policy are two axes, and `free` is a statement about the STATE alone.*
+    /// An address inside a declared infrastructure range is free of any individual claim and is
+    /// still not the operator's to assign — which is exactly why the two axes exist rather than one
+    /// flattened enum.
+    ///
+    /// ⚠️ **This is the PLAN's answer and not the network's**: story 14.3 must additionally exclude
+    /// every OBSERVED address, which is the criterion the whole epic exists for and the only place
+    /// the product prevents a duplicate rather than reporting it.
     pub(crate) fn offerable(self) -> bool {
-        matches!(self, Self::Free(_))
+        matches!(self, Self::Free(policy) if policy != IpPolicy::Infrastructure)
     }
 }
 
@@ -218,41 +232,64 @@ pub(crate) fn router(pool: MySqlPool, perimeter: Option<String>) -> Router {
 }
 
 /// Serve the plan.
+///
+/// ⚠️ **Budgeted, and the guard that demands it is DERIVED from `Screen::ALL`** — which is why this
+/// story could not forget it: the moment `Screen::Ipam` became `Nature::Fed`,
+/// `every_store_backed_screen_refuses_within_the_page_budget` reddened with *"must refuse rather
+/// than hang"*, before any human noticed the route had gained a database. Story 6b.8 shipped
+/// `/sources` WITHOUT a budget and no review layer found it; the derived guard measured **30.00 s**
+/// the first time it ran. *A guard built from an enum covers the screen nobody thought to check.*
 async fn ipam(State(state): State<IpamState>, Query(query): Query<IpamQuery>) -> Response {
-    match plan_body(&state.pool, query.subnet.as_deref()).await {
-        Ok(body) => Html(render_shell(
-            Shell::new(Screen::Ipam, state.perimeter.clone()),
-            body,
-        ))
-        .into_response(),
-        Err(body) => Html(render_shell(
-            Shell::new(Screen::Ipam, state.perimeter.clone()),
-            body,
-        ))
-        .into_response(),
-    }
+    let read = crate::page::store_within(crate::page::PAGE_STORE_BUDGET, async {
+        plan_data(&state.pool, query.subnet.as_deref())
+            .await
+            .map_err(|error| {
+                tracing::error!(%error, "reading the addressing plan");
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    axum::response::Html(crate::page::render_error_body()),
+                )
+                    .into_response()
+            })
+    })
+    .await;
+    let body = match read {
+        Ok(data) => data,
+        Err(response) => return response,
+    };
+    Html(render_shell(
+        Shell::new(Screen::Ipam, state.perimeter.clone()),
+        body,
+    ))
+    .into_response()
 }
 
-/// Read the plan and render it, or render why it could not be read.
-async fn plan_body(pool: &MySqlPool, selected: Option<&str>) -> Result<String, String> {
-    let subnets = ipam_repo::list_subnets(pool)
-        .await
-        .map_err(|_| crate::page::render_error_body())?;
+/// Read the plan and render it.
+///
+/// # Errors
+///
+/// The store's own failure, classified. A plan with no subnet at all is NOT an error — it is the
+/// ordinary state of a fresh install, and it renders the sentence that says so.
+async fn plan_data(
+    pool: &MySqlPool,
+    selected: Option<&str>,
+) -> Result<String, opencmdb_core::repo::RepositoryError> {
+    let subnets = ipam_repo::list_subnets(pool).await?;
     if subnets.is_empty() {
         return Ok(empty_plan_body());
     }
-    let (id, subnet, _label) = subnets
-        .iter()
-        .find(|(id, _, _)| Some(id.as_str()) == selected)
-        .or_else(|| subnets.first())
-        .cloned()
-        .expect("a non-empty list has a first element");
-    let ranges = ipam_repo::ranges_in(pool, &id)
-        .await
-        .map_err(|_| crate::page::render_error_body())?;
-    let defined = ipam_repo::addresses_in(pool, &id)
-        .await
-        .map_err(|_| crate::page::render_error_body())?;
+    // 🔑 An unknown id narrows to NOTHING rather than falling back to the first subnet, on
+    // `inventory_body`'s precedent: silently serving another subnet would tell the operator their
+    // selection took when it did not — story 6b.4's `?sort=` finding.
+    let chosen = match selected {
+        Some(wanted) => subnets.iter().find(|(id, _, _)| id == wanted).cloned(),
+        None => subnets.first().cloned(),
+    };
+    let Some((id, subnet, _label)) = chosen else {
+        return Ok(unknown_subnet_body(&subnets));
+    };
+    let ranges = ipam_repo::ranges_in(pool, &id).await?;
+    let defined = ipam_repo::addresses_in(pool, &id).await?;
     let bounds: Vec<(Ipv4Addr, Ipv4Addr, IpPolicy)> = ranges
         .iter()
         .map(|(first, last, policy, _)| (*first, *last, *policy))
@@ -261,16 +298,568 @@ async fn plan_body(pool: &MySqlPool, selected: Option<&str>) -> Result<String, S
     Ok(render_plan(&subnets, &id, &plan))
 }
 
-/// The sentence an empty plan shows, and the door it opens.
+/// Every string the template renders, resolved once.
+///
+/// 🔑 Fields, never a map: a missing field is a compile error where a missing map entry renders an
+/// unresolved key name to the operator — story 6b.6 shipped two of those and no guard could see
+/// them, `rust-i18n` rendering an unknown key verbatim.
+#[derive(Debug, Clone)]
+pub(crate) struct IpamStrings {
+    title: String,
+    lede: String,
+    selector_label: String,
+    grid_label: String,
+    state_defined: String,
+    state_free: String,
+    policy_static: String,
+    policy_dhcp_pool: String,
+    policy_reserved: String,
+    policy_infrastructure: String,
+    occupancy: String,
+    next_free_label: String,
+    next_free: String,
+    next_free_caveat: String,
+    empty_plan: String,
+    empty_plan_gesture: String,
+    unknown_subnet: String,
+    gesture_badge: String,
+    gesture_not_built: String,
+}
+
+/// One cell, ready to render.
+#[derive(Debug, Clone)]
+pub(crate) struct CellView {
+    /// The state's CSS modifier.
+    modifier: &'static str,
+    /// The policy's CSS modifier, or the empty string when no range covers this address.
+    policy_modifier: &'static str,
+    /// The accessible name: the address, its state, and its policy when it has one.
+    label: String,
+}
+
+/// One entry in the subnet selector.
+#[derive(Debug, Clone)]
+pub(crate) struct SubnetTab {
+    /// The subnet's id — the selector's key since story 14.2, a slug before it.
+    id: String,
+    /// What the operator reads: the CIDR, then the label when there is one.
+    label: String,
+    /// Whether this is the subnet in force.
+    active: bool,
+}
+
+/// The grid, ready to render.
+#[derive(Debug, Clone)]
+pub(crate) struct PlanRender {
+    /// One entry per address, in numeric order.
+    cells: Vec<CellView>,
+}
+
+/// The page.
+#[derive(askama::Template)]
+#[template(path = "_ipam.html")]
+pub(crate) struct IpamBody {
+    /// The strings.
+    s: IpamStrings,
+    /// The selector.
+    tabs: Vec<SubnetTab>,
+    /// The grid, or `None` when the plan holds no subnet at all.
+    plan: Option<PlanRender>,
+}
+
+/// The CSS modifier for a policy.
+fn policy_modifier(policy: IpPolicy) -> &'static str {
+    match policy {
+        IpPolicy::Static => "ipam-policy-static",
+        IpPolicy::DhcpPool => "ipam-policy-dhcp-pool",
+        IpPolicy::Reserved => "ipam-policy-reserved",
+        IpPolicy::Infrastructure => "ipam-policy-infrastructure",
+    }
+}
+
+/// The i18n key naming a policy to the operator.
+///
+/// 🔴 These four keys ARE the binding table's UI column (PR #166) and
+/// [`IpPolicy::as_str`] is its code column. `the_policy_words_are_the_binding_tables_own` compares
+/// the two as a SET, because *a count is not a set* (story 6.5's M8).
+fn policy_key(policy: IpPolicy) -> &'static str {
+    match policy {
+        IpPolicy::Static => "ipam.policy.static",
+        IpPolicy::DhcpPool => "ipam.policy.dhcp_pool",
+        IpPolicy::Reserved => "ipam.policy.reserved",
+        IpPolicy::Infrastructure => "ipam.policy.infrastructure",
+    }
+}
+
+/// Build the body for a plan that holds no subnet at all.
 fn empty_plan_body() -> String {
-    String::new()
+    let body = IpamBody {
+        s: strings(None, None),
+        tabs: Vec::new(),
+        plan: None,
+    };
+    body.render()
+        .unwrap_or_else(|_| crate::page::render_error_body())
+}
+
+/// Build the body for an identifier no subnet carries.
+fn unknown_subnet_body(subnets: &[(String, Subnet, String)]) -> String {
+    let body = IpamBody {
+        s: strings(None, None),
+        tabs: subnets
+            .iter()
+            .map(|(id, subnet, label)| SubnetTab {
+                id: id.clone(),
+                label: tab_label(subnet, label),
+                active: false,
+            })
+            .collect(),
+        plan: None,
+    };
+    body.render()
+        .unwrap_or_else(|_| crate::page::render_error_body())
+}
+
+/// What the operator reads on a selector tab.
+fn tab_label(subnet: &Subnet, label: &str) -> String {
+    if label.is_empty() {
+        subnet.cidr()
+    } else {
+        format!("{} · {}", subnet.cidr(), label)
+    }
+}
+
+/// Resolve every string, with the occupancy and next-free lines when there is a plan.
+fn strings(counts: Option<(usize, usize, usize, usize)>, next: Option<Ipv4Addr>) -> IpamStrings {
+    let occupancy = match counts {
+        Some((defined, free, infrastructure, not_covered)) => rust_i18n::t!(
+            "ipam.occupancy",
+            defined = defined,
+            free = free,
+            infrastructure = infrastructure,
+            not_covered = not_covered
+        )
+        .to_string(),
+        None => String::new(),
+    };
+    let next_free = match next {
+        Some(addr) => addr.to_string(),
+        None => rust_i18n::t!("ipam.next_free_none").to_string(),
+    };
+    IpamStrings {
+        title: rust_i18n::t!("ipam.title").to_string(),
+        lede: rust_i18n::t!("ipam.lede").to_string(),
+        selector_label: rust_i18n::t!("ipam.selector_label").to_string(),
+        grid_label: rust_i18n::t!("ipam.grid_label").to_string(),
+        state_defined: rust_i18n::t!("ipam.state.defined").to_string(),
+        state_free: rust_i18n::t!("ipam.state.free").to_string(),
+        policy_static: rust_i18n::t!("ipam.policy.static").to_string(),
+        policy_dhcp_pool: rust_i18n::t!("ipam.policy.dhcp_pool").to_string(),
+        policy_reserved: rust_i18n::t!("ipam.policy.reserved").to_string(),
+        policy_infrastructure: rust_i18n::t!("ipam.policy.infrastructure").to_string(),
+        occupancy,
+        next_free_label: rust_i18n::t!("ipam.next_free").to_string(),
+        next_free,
+        next_free_caveat: rust_i18n::t!("ipam.next_free_caveat").to_string(),
+        empty_plan: rust_i18n::t!("ipam.empty_plan").to_string(),
+        empty_plan_gesture: rust_i18n::t!("ipam.empty_plan_gesture").to_string(),
+        unknown_subnet: rust_i18n::t!("ipam.unknown_subnet").to_string(),
+        gesture_badge: rust_i18n::t!("gesture.badge").to_string(),
+        gesture_not_built: rust_i18n::t!(
+            "gesture.not_built",
+            badge = rust_i18n::t!("gesture.badge")
+        )
+        .to_string(),
+    }
 }
 
 /// Render one subnet's grid.
-fn render_plan(
-    _subnets: &[(String, Subnet, String)],
-    _selected: &str,
-    _plan: &PlanView,
+pub(crate) fn render_plan(
+    subnets: &[(String, Subnet, String)],
+    selected: &str,
+    plan: &PlanView,
 ) -> String {
-    String::new()
+    let tabs = subnets
+        .iter()
+        .map(|(id, subnet, label)| SubnetTab {
+            id: id.clone(),
+            label: tab_label(subnet, label),
+            active: id == selected,
+        })
+        .collect();
+    let cells = plan
+        .cells
+        .iter()
+        .map(|(addr, state)| {
+            let state_word = rust_i18n::t!(state.label_key()).to_string();
+            let label = match state.policy() {
+                Some(policy) => rust_i18n::t!(
+                    "ipam.cell_label_in_policy",
+                    address = addr.to_string(),
+                    state = state_word,
+                    policy = rust_i18n::t!(policy_key(policy))
+                )
+                .to_string(),
+                None => rust_i18n::t!(
+                    "ipam.cell_label",
+                    address = addr.to_string(),
+                    state = state_word
+                )
+                .to_string(),
+            };
+            CellView {
+                modifier: state.modifier(),
+                policy_modifier: state.policy().map(policy_modifier).unwrap_or(""),
+                label,
+            }
+        })
+        .collect();
+    let body = IpamBody {
+        s: strings(Some(plan.counts()), plan.next_offerable()),
+        tabs,
+        plan: Some(PlanRender { cells }),
+    };
+    body.render()
+        .unwrap_or_else(|_| crate::page::render_error_body())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A `/24` for the tests, with its two edges and 254 hosts.
+    fn office() -> Subnet {
+        Subnet::new("192.0.2.0".parse().unwrap(), 24).expect("a /24")
+    }
+
+    fn v4(text: &str) -> Ipv4Addr {
+        text.parse().expect("a v4 address")
+    }
+
+    /// 🔴 **256 ADDRESSES, 254 HOSTS, and the reference mock conflated them** — it looped `0..256`,
+    /// drew `.0` and `.255` as ordinary free cells, and its *next free address* panel then named
+    /// the NETWORK address, reproduced on a real build at story 6b.7's validation. ⚠️ That story's
+    /// own first draft prescribed a test asserting the counts *"sum to 256"*, which would have
+    /// pinned the defect as the expected behaviour.
+    #[test]
+    fn the_grid_draws_every_address_and_offers_only_hosts() {
+        let plan = PlanView::derive(
+            office(),
+            &[(v4("192.0.2.0"), v4("192.0.2.255"), IpPolicy::Static)],
+            &[],
+        );
+        assert_eq!(plan.cells.len(), 256, "a /24 holds 256 addresses");
+        let offerable = plan.cells.iter().filter(|(_, s)| s.offerable()).count();
+        assert_eq!(
+            offerable, 256,
+            "a range that covers the whole subnet makes every cell free — the EDGES are only \
+             infrastructure when no range covers them, which is what the next assertion measures"
+        );
+
+        // The ordinary shape: a range over the hosts, the edges covered by nothing.
+        let plan = PlanView::derive(
+            office(),
+            &[(v4("192.0.2.1"), v4("192.0.2.254"), IpPolicy::Static)],
+            &[],
+        );
+        assert_eq!(plan.cells.len(), 256);
+        assert_eq!(
+            plan.cells.iter().filter(|(_, s)| s.offerable()).count(),
+            254,
+            "the network and broadcast addresses are never offerable"
+        );
+        assert_eq!(plan.cells[0].1, CellState::Infrastructure, "the .0");
+        assert_eq!(plan.cells[255].1, CellState::Infrastructure, "the .255");
+        assert_eq!(
+            plan.next_offerable(),
+            Some(v4("192.0.2.1")),
+            "the lowest free host, and never the network address"
+        );
+    }
+
+    /// 🔑 **`infrastructure` is NEVER OFFERED AS FREE** — the binding table says so in those words,
+    /// and it is the one policy whose whole point is that it is not host space.
+    #[test]
+    fn infrastructure_is_never_offered_as_free() {
+        let plan = PlanView::derive(
+            office(),
+            &[
+                (v4("192.0.2.0"), v4("192.0.2.9"), IpPolicy::Infrastructure),
+                (v4("192.0.2.10"), v4("192.0.2.254"), IpPolicy::Static),
+            ],
+            &[],
+        );
+        assert_eq!(
+            plan.next_offerable(),
+            Some(v4("192.0.2.10")),
+            "the offer must skip the infrastructure range entirely"
+        );
+        // ⚠️ A range whose policy is `infrastructure` renders as FREE-with-that-policy, not as the
+        // derived `Infrastructure` state — the derived state is for edges no range covers. The two
+        // are the same WORD by decision (the binding table covers both) and different STATES,
+        // because one is declared and the other is arithmetic. This assertion is what stops a
+        // future refactor fusing them.
+        assert!(
+            matches!(plan.cells[0].1, CellState::Free(IpPolicy::Infrastructure)),
+            "a declared infrastructure range is a covered cell, not a derived edge"
+        );
+        assert!(
+            !plan.cells[0].1.offerable(),
+            "and it is still not offerable"
+        );
+    }
+
+    /// 🔴 **A PRIORITY ORDER IS A RENDERING DECISION AND MUST NOT DOUBLE AS A REPAIR** — story
+    /// 6b.7's own finding, where `state_of` tested `used` before `reserved` and an octet in BOTH
+    /// lists rendered silently as *used*: a deliberate corruption of the dataset changed no cell,
+    /// no count and no test. Here the one overlapping case is legal — the adapter accepts an
+    /// address inside a range, measured in both orders — so the decision is asserted rather than
+    /// left to the order of an `if`.
+    #[test]
+    fn an_address_both_defined_and_in_a_range_is_defined_and_keeps_its_policy() {
+        let plan = PlanView::derive(
+            office(),
+            &[(v4("192.0.2.1"), v4("192.0.2.100"), IpPolicy::DhcpPool)],
+            &[v4("192.0.2.50")],
+        );
+        let (_, state) = plan.cells[50];
+        assert_eq!(
+            state,
+            CellState::Defined(Some(IpPolicy::DhcpPool)),
+            "defined wins over free, and the policy is carried rather than lost"
+        );
+        assert!(!state.offerable(), "a defined address is not on offer");
+    }
+
+    /// A cell outside every range says the plan is silent, and says it WITHOUT A NOUN.
+    #[test]
+    fn a_cell_outside_every_range_is_not_covered() {
+        let plan = PlanView::derive(
+            office(),
+            &[(v4("192.0.2.1"), v4("192.0.2.9"), IpPolicy::Static)],
+            &[],
+        );
+        assert_eq!(plan.cells[10].1, CellState::NotCovered);
+        assert_eq!(plan.cells[10].1.policy(), None);
+        assert!(!plan.cells[10].1.offerable());
+        let (defined, free, infrastructure, not_covered) = plan.counts();
+        assert_eq!((defined, free, infrastructure), (0, 9, 2));
+        assert_eq!(not_covered, 245);
+        assert_eq!(
+            defined + free + infrastructure + not_covered,
+            256,
+            "every cell is accounted for exactly once"
+        );
+    }
+
+    /// 🔴 **THE FOUR POLICY WORDS ARE THE BINDING TABLE'S OWN, COMPARED AS A SET.**
+    ///
+    /// *A count is not a set* — story 6.5's M8, where pointing two enum variants at one token left
+    /// a count-based guard green with one variant unreachable. Here the two representations are
+    /// `IpPolicy::as_str` (the code column) and `ipam.policy.*` (the UI column), and the test
+    /// asserts they are in bijection rather than merely equinumerous.
+    #[test]
+    fn every_policy_carries_its_own_key_and_its_own_modifier() {
+        use std::collections::BTreeSet;
+        let keys: BTreeSet<&str> = IpPolicy::ALL.into_iter().map(policy_key).collect();
+        let modifiers: BTreeSet<&str> = IpPolicy::ALL.into_iter().map(policy_modifier).collect();
+        assert_eq!(keys.len(), IpPolicy::ALL.len(), "two policies share a key");
+        assert_eq!(
+            modifiers.len(),
+            IpPolicy::ALL.len(),
+            "two policies share a CSS modifier, so the grid cannot tell them apart"
+        );
+        // ⚠️ And the key must be the POLICY namespace, not a state one: `structural` was retired
+        // precisely because two adjacent words for one concept sat on one screen.
+        for policy in IpPolicy::ALL {
+            assert!(
+                policy_key(policy).starts_with("ipam.policy."),
+                "{policy} must be named by the binding table's own namespace"
+            );
+        }
+    }
+
+    /// Every state has its own modifier and its own key — the grid's other axis.
+    #[test]
+    fn every_state_carries_its_own_key_and_its_own_modifier() {
+        use std::collections::BTreeSet;
+        let states = [
+            CellState::Defined(None),
+            CellState::Free(IpPolicy::Static),
+            CellState::Infrastructure,
+            CellState::NotCovered,
+        ];
+        let modifiers: BTreeSet<&str> = states.iter().map(|s| s.modifier()).collect();
+        assert_eq!(modifiers.len(), states.len(), "two states share a modifier");
+        let keys: BTreeSet<&str> = states.iter().map(|s| s.label_key()).collect();
+        assert_eq!(keys.len(), states.len(), "two states share a key");
+    }
+
+    /// 🔴 **THE STYLESHEET MUST DEFINE EVERY MODIFIER THE GRID CAN EMIT, and the project's own
+    /// class guard CANNOT SEE THEM**: `every_class_a_template_names_is_defined_in_the_stylesheet`
+    /// skips any `class="…"` containing `{`, and the cell is `class="ipam-cell {{ … }}"`. What
+    /// covers the four legend entries is their LITERALS in the template; what covers the rest is
+    /// this test, which reads the sheet and the code rather than the markup.
+    #[test]
+    fn the_stylesheet_defines_every_modifier_the_grid_can_emit() {
+        let css = include_str!("../assets/app.css");
+        let states = [
+            CellState::Defined(None),
+            CellState::Free(IpPolicy::Static),
+            CellState::Infrastructure,
+            CellState::NotCovered,
+        ];
+        for state in states {
+            let rule = format!(".{}", state.modifier());
+            assert!(
+                css.contains(&rule),
+                "{rule} is emitted by the grid and defined by nothing — the cell would ship with \
+                 no treatment and every existing guard would stay green"
+            );
+        }
+        for policy in IpPolicy::ALL {
+            let rule = format!(".{}", policy_modifier(policy));
+            assert!(css.contains(&rule), "{rule} is emitted and undefined");
+        }
+    }
+
+    /// 🔴 **`not-covered` IS THE ONE MODIFIER NO LEGEND ENTRY CARRIES, BY ARBITRATION**, and that
+    /// hole is asserted rather than left unremarked. A story may not extend the binding vocabulary,
+    /// and *not covered* is not one of its four words — so the legend cannot name it, and the
+    /// deliberate redundancy that protects the other modifiers does not reach it. What protects it
+    /// instead is `the_stylesheet_defines_every_modifier_the_grid_can_emit`, and this test names
+    /// that dependency so nobody deletes the other one thinking the legend has it covered.
+    #[test]
+    fn the_blank_cell_is_the_one_modifier_no_legend_entry_carries() {
+        let template = include_str!("../templates/_ipam.html");
+        let legend = template
+            .split("ipam-legend")
+            .nth(1)
+            .expect("the legend block");
+        assert!(
+            !legend.contains("ipam-cell-not-covered"),
+            "the legend must NOT name the blank cell — that is the arbitration, and a legend entry \
+             for it would be a fifth word beside the binding table's four"
+        );
+        for modifier in [
+            "ipam-cell-defined",
+            "ipam-cell-free",
+            "ipam-cell-infrastructure",
+        ] {
+            assert!(
+                legend.contains(modifier),
+                "{modifier} must be a LITERAL in the legend: the class guard skips the cells \
+                 themselves, so these literals are what make the rules visible to it"
+            );
+        }
+    }
+
+    /// 🔴 **AC2: THIS SCREEN READS NO OBSERVATION.** The audit is story 14.3's, and a join written
+    /// here would be that story's deliverable arriving early and unmeasured. The guard is a source
+    /// scan because the defect is an ADDED read, which no runtime test can provoke — story 5.12's
+    /// *you cannot measure the absence of code by running code*.
+    #[test]
+    fn the_plan_reads_no_observation() {
+        let source = include_str!("ipam_page.rs");
+        let code = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("the non-test half");
+        for needle in ["observation_record", "identity_link", "declared_attribute"] {
+            assert!(
+                !code.contains(needle),
+                "`{needle}` appears in the plan screen: the audit is story 14.3's, and the \
+                 criterion is that this screen draws the PLAN and nothing else"
+            );
+        }
+    }
+
+    /// An empty plan says the gesture is not yet built, and names it.
+    #[test]
+    fn an_empty_plan_names_the_gesture_as_not_yet_built() {
+        let body = empty_plan_body();
+        assert!(
+            body.contains(&rust_i18n::t!("ipam.empty_plan").to_string()),
+            "the sentence saying there is no plan"
+        );
+        assert!(
+            body.contains(&rust_i18n::t!("ipam.empty_plan_gesture").to_string()),
+            "the gesture that would fill it, named"
+        );
+        assert!(
+            body.contains(&rust_i18n::t!("gesture.badge").to_string()),
+            "and marked NOT YET BUILT — story 14.2b owns the route, and promising a door that does \
+             not exist is story 6b.4's finding pointed the other way"
+        );
+        assert!(!body.contains("ipam-grid"), "an empty plan draws no grid");
+    }
+
+    /// Every cell of the rendered grid carries its own accessible name.
+    ///
+    /// ⚠️ Inherited from story 6b.7's `every_cell_of_the_grid_carries_its_own_aria_label`, which
+    /// died with the example dataset. The property did not die with it.
+    #[test]
+    fn every_cell_of_the_rendered_grid_carries_its_own_aria_label() {
+        let subnets = vec![("t-1".to_string(), office(), "Office".to_string())];
+        let plan = PlanView::derive(
+            office(),
+            &[(v4("192.0.2.1"), v4("192.0.2.254"), IpPolicy::Static)],
+            &[v4("192.0.2.9")],
+        );
+        let body = render_plan(&subnets, "t-1", &plan);
+        assert_eq!(
+            body.matches("<li class=\"ipam-cell").count(),
+            256,
+            "256 cells"
+        );
+        assert_eq!(
+            body.matches("aria-label=").count(),
+            258,
+            "one name per cell, plus the grid's own and the selector's"
+        );
+        assert!(body.contains("192.0.2.9 ·"), "the defined address is named");
+        assert!(
+            body.contains("192.0.2.0 ·"),
+            "and so is the network address"
+        );
+        // 🔑 The grid is a LIST and not a presentational image — story 6b.7's measured ARIA reason:
+        // `role="img"` makes the subtree presentational, so 256 names would be announced as one
+        // sentence, and `aria-label` on a bare `<div>` maps to `generic`, where ARIA 1.2 prohibits
+        // it outright.
+        assert!(body.contains("class=\"ipam-grid\" role=\"list\""));
+        assert!(!body.contains("role=\"img\""));
+    }
+
+    /// The selector marks exactly one tab, and never claims to be the page.
+    #[test]
+    fn the_selector_marks_one_tab_and_never_claims_to_be_the_page() {
+        let subnets = vec![
+            ("t-1".to_string(), office(), String::new()),
+            (
+                "t-2".to_string(),
+                Subnet::new("198.51.100.0".parse().unwrap(), 24).unwrap(),
+                "Workshop".to_string(),
+            ),
+        ];
+        let plan = PlanView::derive(office(), &[], &[]);
+        let body = render_plan(&subnets, "t-2", &plan);
+        assert_eq!(
+            body.matches("aria-current=\"true\"").count(),
+            1,
+            "exactly one tab is in force"
+        );
+        assert!(
+            !body.contains("aria-current=\"page\""),
+            "`page` belongs to the shell's navigation; two of them in one document is an ARIA error"
+        );
+        assert!(body.contains("/ipam?subnet=t-1"), "every subnet is offered");
+        assert!(
+            body.contains("198.51.100.0/24 · Workshop"),
+            "the label follows the CIDR"
+        );
+        assert!(
+            body.contains("192.0.2.0/24<"),
+            "a subnet with no label shows its CIDR alone, with no dangling separator"
+        );
+    }
 }

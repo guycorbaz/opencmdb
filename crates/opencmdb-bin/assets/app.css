@@ -851,11 +851,13 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
    marker's scope follows the screen's nature. The anchor is shared; the assertion is not. */
 .example-section { }
 
-/* ── Applications and IPAM — story 6b.7, the two example frames ──────────────
-   ⚠️ Epic 6b's constraint 5 is at its sharpest on the occupancy grid: a class BUILT in Rust is
-   invisible to `every_class_a_template_names_is_defined_in_the_stylesheet`, which skips any class
-   attribute carrying an Askama expression. `_ipam_example.html`'s legend names the four as LITERALS
-   for exactly that reason, and the deliberate redundancy is documented there and pinned by a test. */
+/* ── Applications (story 6b.7) and IPAM (the plan, story 14.2) ───────────────
+   ⚠️ Epic 6b's constraint 5 is at its sharpest on this grid: a class BUILT in Rust is invisible to
+   `every_class_a_template_names_is_defined_in_the_stylesheet`, which skips any class attribute
+   carrying an Askama expression. `_ipam.html`'s legend names the modifiers as LITERALS for exactly
+   that reason, and the deliberate redundancy is documented there and pinned by a test.
+   🔴 One modifier has NO legend entry — `ipam-cell-not-covered`, by arbitration — so it is the one
+   the legend cannot carry, and its own test says so rather than leaving the hole unremarked. */
 
 .screen-lede { margin: 0 0 20px; font-size: 13px; color: var(--muted); max-width: 70ch; }
 
@@ -884,21 +886,50 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
   border: 1px solid var(--border);
 }
 
-/* Blue is structure, amber is the gesture (epic constraint 3): occupied cells take the mock's
-   accent, never `--accent-document`. */
-.ipam-cell-used { background: var(--color-accent-700); border-color: var(--color-accent-700); }
+/* ── The cell vocabulary, story 14.2 ─────────────────────────────────────────
+   A cell carries a STATE (defined · free · infrastructure · not covered) and, when a range covers
+   it, a POLICY. The state is the fill; the policy is the border. Two axes, two visual channels,
+   and neither is a hue on its own — constraint 6, and NFR25.
 
-/* ⚠️ Reserved is a PATTERN and not a flat grey, and that is an accessibility requirement rather
-   than a flourish: three states told apart by colour alone is WCAG 1.4.1, and the validation
-   measured flat greys leaving reserved and free near-identical. The mock's own answer is hatching. */
-.ipam-cell-reserved {
+   🔴 `free` HAD TO GAIN A TREATMENT, and the reason is a measurement rather than taste. Until this
+   story `.ipam-cell-free` was `background: transparent` over a base that already draws the border,
+   so a free cell and a bare cell were BYTE-IDENTICAL in every computed property — measured in
+   Chrome against the shipped sheet, same `rgba(0,0,0,0)`, same `none` background image, same
+   border, same box. Not *hard to tell apart by colour*, which 1.4.1 would already forbid:
+   indistinguishable in every property there is. Arbitration (D) needed a cell the plan does not
+   cover to read as blank, which is only a statement if something else is not blank. */
+
+/* Blue is structure, amber is the gesture (epic constraint 3): a defined address takes the mock's
+   accent, never `--accent-document`. */
+.ipam-cell-defined { background: var(--color-accent-700); border-color: var(--color-accent-700); }
+
+/* Free: a fine dot field. Distinct from infrastructure's hatching at the same size — the two
+   patterns differ in direction AND in density, because at 21 px a cell is too small for a
+   difference of direction alone to survive. */
+.ipam-cell-free {
+  background: radial-gradient(var(--color-neutral-400) 0.5px, transparent 0.5px);
+  background-size: 3px 3px;
+}
+
+/* The network and broadcast addresses. 🔑 They are `infrastructure` and not a word of their own:
+   the binding table defines infrastructure as including them, so `structural` — which story 6b.7
+   minted for exactly these two cells — was retired by Guy on 2026-09-11. The arithmetic is how
+   those rows get there, not a second concept. */
+.ipam-cell-infrastructure {
   background: repeating-linear-gradient(45deg, var(--color-neutral-400) 0 2px, transparent 2px 4px);
 }
-.ipam-cell-free { background: transparent; }
 
-/* The network and broadcast addresses: not the operator's to assign, so they read as excluded
-   rather than as available. A /24 carries 256 addresses and 254 HOSTS. */
-.ipam-cell-structural { background: var(--color-neutral-200); border-style: dashed; }
+/* ⚠️ NOT COVERED IS THE BLANK, and it has no legend entry by decision: a story may not extend the
+   binding vocabulary, and *not covered* is not one of its four words. It is a rule rather than an
+   absent rule so that the stylesheet says what the blank means. */
+.ipam-cell-not-covered { background: transparent; }
+
+/* The policy, on the border. Four line styles, told apart without colour and without pattern —
+   the third channel, because the fill is already spoken for by the state. */
+.ipam-policy-static { border-color: var(--color-neutral-600); }
+.ipam-policy-dhcp-pool { border-style: dashed; border-color: var(--color-neutral-600); }
+.ipam-policy-reserved { border-style: dotted; border-color: var(--color-neutral-600); }
+.ipam-policy-infrastructure { border-style: double; border-color: var(--color-neutral-600); }
 
 .ipam-legend {
   display: flex;
@@ -924,6 +955,11 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
   color: var(--muted);
 }
 .panel-value { margin: 8px 0 12px; font-size: 22px; }
+/* The caveat under a panel value: it names the SOURCE of the number above it. Smaller than the
+   value and larger than nothing, because a sentence nobody reads is a sentence nobody is bound by. */
+.panel-caveat { margin: 0 0 4px; font-size: 12px; color: var(--muted); max-width: 40ch; }
+/* The sentence that accompanies a not-yet-built control, visible once and announced once. */
+.ipam-planned-note { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; font-size: 13px; color: var(--muted); }
 .conflict-parties { margin: 8px 0 12px; padding-left: 18px; font-size: 13px; line-height: 1.7; }
 
 /* ── Sources — story 6b.8, the epic's first REAL section ─────────────────────

@@ -773,63 +773,82 @@ example.criticality.low:
   en: "Low"
   fr: "Faible"
 
-# ── IPAM (story 6b.7, Epic 14's frame — example data) ────────────────────────
+# ── IPAM (story 14.2 — the addressing plan, fed by the store) ────────────────
+# 🔴 THE FOUR POLICY WORDS ARE BINDING (PR #166, 2026-09-11, `prd.md` and the UX spec). No story
+# may extend them, and no story may translate them twice. The four `ipam.policy.*` keys below ARE
+# that table's UI column, and `IpPolicy::as_str` is its code column; a test compares the two.
+# ⚠️ `structural` was retired here: `.0` and `.255` are simply `infrastructure`, which the binding
+# table already defines as including the network and broadcast addresses. They therefore render
+# with the POLICY key and not with a state key of their own — one concept, one word.
 ipam.title:
   en: "IPAM"
   fr: "IPAM"
 ipam.lede:
-  en: "Occupancy by subnet. One cell, one address."
-  fr: "Occupation par sous-réseau. Une case, une adresse."
+  en: "The addressing plan you declared. One cell, one address."
+  fr: "Le plan d'adressage que vous avez déclaré. Une case, une adresse."
 ipam.selector_label:
   en: "Subnet"
   fr: "Sous-réseau"
 ipam.grid_label:
-  en: "Subnet occupancy grid"
-  fr: "Grille d'occupation du sous-réseau"
-ipam.state.used:
-  en: "used"
-  fr: "utilisée"
-ipam.state.reserved:
+  en: "Addressing plan grid"
+  fr: "Grille du plan d'adressage"
+ipam.policy.static:
+  en: "static"
+  fr: "statique"
+ipam.policy.dhcp_pool:
+  en: "dhcp-pool"
+  fr: "pool DHCP"
+ipam.policy.reserved:
   en: "reserved"
-  fr: "réservée"
+  fr: "réservé"
+ipam.policy.infrastructure:
+  en: "infrastructure"
+  fr: "infrastructure"
+ipam.state.defined:
+  en: "defined"
+  fr: "définie"
 ipam.state.free:
   en: "free"
   fr: "libre"
-ipam.state.structural:
-  en: "network or broadcast"
-  fr: "réseau ou diffusion"
+# ⚠️ NOT COVERED HAS NO LEGEND ENTRY, by Guy's arbitration of 2026-09-11: a story may not extend the
+# binding vocabulary, and *not covered* is not one of its four words. The key exists because every
+# cell owes an `aria-label` — a cell that says nothing to a screen reader is worse than one that
+# says the plan is silent about it.
+ipam.state.not_covered:
+  en: "not covered by the plan"
+  fr: "hors du plan"
+ipam.cell_label:
+  en: "%{address} · %{state}"
+  fr: "%{address} · %{state}"
+ipam.cell_label_in_policy:
+  en: "%{address} · %{state}, %{policy}"
+  fr: "%{address} · %{state}, %{policy}"
+# 🔑 A LIST AND NEVER A RATIO. A percentage invites a reader to compare two subnets whose sizes
+# differ, and the occupancy of a plan is not a rate; it is also why `ipam/` needs no float.
 ipam.occupancy:
-  en: "%{used} used · %{reserved} reserved · %{free} free, of 254 hosts"
-  fr: "%{used} utilisées · %{reserved} réservées · %{free} libres, sur 254 hôtes"
+  en: "%{defined} defined · %{free} free · %{infrastructure} infrastructure · %{not_covered} not covered"
+  fr: "%{defined} définies · %{free} libres · %{infrastructure} infrastructure · %{not_covered} hors du plan"
 ipam.next_free:
-  en: "Next free address"
-  fr: "Prochaine adresse libre"
+  en: "Next address the plan can offer"
+  fr: "Prochaine adresse que le plan peut offrir"
+# ⚠️ It says THE PLAN and not *the network*: until story 14.3 excludes every observed address, this
+# panel answers what the plan allows and not what is actually free out there. Naming the source is
+# what stops the sentence being read as a promise it cannot keep.
 ipam.next_free_none:
-  en: "None — the subnet is full"
-  fr: "Aucune — le sous-réseau est plein"
+  en: "None — every address in this subnet is defined, infrastructure, or outside every range"
+  fr: "Aucune — toutes les adresses de ce sous-réseau sont définies, infrastructure, ou hors plage"
+ipam.next_free_caveat:
+  en: "From the plan alone; the network has not been consulted."
+  fr: "D'après le plan seul ; le réseau n'a pas été consulté."
 ipam.unknown_subnet:
-  en: "No subnet is named by this address. Choose one above."
-  fr: "Aucun sous-réseau ne porte ce nom. Choisissez-en un ci-dessus."
-ipam.conflict_title:
-  en: "Address conflict"
-  fr: "Conflit d'adresse"
-ipam.conflict_lede:
-  en: "Two devices answer here. These are the two:"
-  fr: "Deux appareils répondent. Voici lesquels :"
-ipam.conflict_declared:
-  en: "declared here"
-  fr: "déclaré ici"
-ipam.conflict_observed:
-  en: "also answering"
-  fr: "répond aussi"
-ipam.conflict_lease:
-  en: "DHCP lease seen %{at}"
-  fr: "bail DHCP vu %{at}"
-# ⚠️ *"in the triage"* is « dans le triage » carried across; English takes no article here. The
-# glossary's `triage`/« triage » pair survives the fix — the term is kept, the article is dropped.
-ipam.conflict_link:
-  en: "Settle it in triage"
-  fr: "Trancher dans le triage"
+  en: "No subnet is named by this identifier. Choose one above."
+  fr: "Aucun sous-réseau ne porte cet identifiant. Choisissez-en un ci-dessus."
+ipam.empty_plan:
+  en: "No subnet is declared yet, so there is no plan to draw."
+  fr: "Aucun sous-réseau n'est déclaré, il n'y a donc pas de plan à dessiner."
+ipam.empty_plan_gesture:
+  en: "Declare a subnet"
+  fr: "Déclarer un sous-réseau"
 
 # ── Sources (story 6b.8) — the REAL capability boundary ──────────────────────
 sources.title:

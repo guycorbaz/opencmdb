@@ -26,7 +26,22 @@
 //! *An `allow` is a trade between "the compiler cannot see a producer that does not exist yet" and
 //! "the compiler is the only thing watching this wiring". Say which one you are in.* Here it is the
 //! first, and the attribute is **removed by story 14.2**, which gives these functions a producer.
-#![allow(dead_code)]
+// 🔑 **NARROWED BY STORY 14.2, from module-wide to item-by-item.**
+//
+// Story 14.1 shipped this module with a blanket `#![allow(dead_code)]` because it had NO producer
+// by its own criterion, and `deferred-work.md` registered the debt with story 14.2 as its owner.
+// This story gives the READ path a producer — `/ipam` is fed from here — so the blanket attribute
+// would now hide something real: with it standing, severing the plan's read from the screen would
+// leave clippy green, which is exactly the trade `arp_ping.rs` was measured on in 2026-09-10 when
+// the ABSENCE of the same attribute was found load-bearing.
+//
+// ⚠️ What remains dead is the WRITE path, and **story 14.2b removes the last of these**. Each
+// attribute below names that story, so the day a route calls one, the attribute above it is the
+// thing that fails to be needed — and an unnecessary `allow` is visible where a blanket one is not.
+//
+// 🔴 The register said *eleven items*; a correction of it said *ten warnings covering fourteen*;
+// both were wrong. Measured on `38da035`: **eleven warnings covering fifteen items**, identically
+// under `cargo build` and `clippy --all-targets`. After this story's wiring: **seven**.
 
 use std::net::Ipv4Addr;
 
@@ -47,6 +62,7 @@ pub(crate) const IPV4_CANONICAL_LEN: usize = 15;
 /// it is D10's precedent applied to addresses. The registered defect at `inventory_view.rs:261` —
 /// *"the address compares as a STRING, so `192.0.2.9` follows `192.0.2.10`"* — is caused by the
 /// ABSENCE of padding, not by text.
+#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) fn canonical(addr: Ipv4Addr) -> String {
     let [a, b, c, d] = addr.octets();
     format!("{a:03}.{b:03}.{c:03}.{d:03}")
@@ -139,6 +155,7 @@ impl Subnet {
     /// 🔑 **In Rust, never in SQL** (D10: *"all value comparison and normalization happens in
     /// Rust"*). `architecture.md:4847` (F57) asks that SQL-side comparison be costed before any
     /// epic reintroduces it; this story does not reintroduce it.
+    #[allow(dead_code, reason = "used by the write path, which story 14.2b wires")]
     pub(crate) fn contains(&self, addr: Ipv4Addr) -> bool {
         addr >= self.base && addr <= self.last()
     }
@@ -154,6 +171,15 @@ impl Subnet {
         let first = u32::from(self.network());
         let last = u32::from(self.last());
         (first..=last).map(Ipv4Addr::from)
+    }
+
+    /// The subnet in CIDR notation, as an operator writes it — `192.0.2.0/24`.
+    ///
+    /// ⚠️ NOT the stored spelling: the store holds `192.000.002.000` so that lexicographic order is
+    /// numeric order, and that padding is an implementation of ordering, never something to show.
+    /// *A canonical form imposed for the machine is not a form to render.*
+    pub(crate) fn cidr(&self) -> String {
+        format!("{}/{}", self.base, self.prefix_len)
     }
 
     /// Whether this address is the subnet's network or broadcast address.
@@ -172,6 +198,7 @@ impl Subnet {
 ///
 /// [`RepositoryError::Backend`] carrying an [`IpamError`]'s sentence when the subnet is not one the
 /// arithmetic can answer for, or the `sqlx::Error` classified by [`classify`].
+#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) async fn insert_subnet<'e, E>(
     executor: E,
     id: &str,
@@ -209,6 +236,7 @@ where
 /// # Errors
 ///
 /// [`RepositoryError::NotFound`] when no such subnet exists; a backend error otherwise.
+#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) async fn load_subnet<'e, E>(executor: E, id: &str) -> Result<Subnet, RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
@@ -236,6 +264,7 @@ where
 /// not these: both rules compare two TABLES, a `CHECK` referencing another table is `ERROR 1901` on
 /// MariaDB 10.11, and a raw insert simply succeeds. They are measured THROUGH this function, with a
 /// raw insert as the control that shows the DDL does not refuse it.
+#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) async fn insert_range(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
@@ -292,6 +321,7 @@ pub(crate) async fn insert_range(
 ///
 /// [`IpamError::AddressOutsideSubnet`] through [`RepositoryError::Backend`], or the classified
 /// `sqlx::Error`. ⚠️ The same instrument note as [`insert_range`] applies: raw SQL bypasses this.
+#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) async fn insert_address(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
@@ -356,11 +386,12 @@ pub(crate) async fn list_subnets<'e, E>(
 where
     E: Executor<'e, Database = MySql>,
 {
-    let rows: Vec<(String, String, u8, String)> =
-        sqlx::query_as("SELECT id, base, prefix_len, label FROM ip_subnet ORDER BY base, prefix_len")
-            .fetch_all(executor)
-            .await
-            .map_err(classify)?;
+    let rows: Vec<(String, String, u8, String)> = sqlx::query_as(
+        "SELECT id, base, prefix_len, label FROM ip_subnet ORDER BY base, prefix_len",
+    )
+    .fetch_all(executor)
+    .await
+    .map_err(classify)?;
     rows.into_iter()
         .map(|(id, base, prefix_len, label)| {
             let base = from_canonical(&base).map_err(ipam)?;
@@ -420,7 +451,9 @@ fn policy_from_token(token: &str) -> Result<IpPolicy, RepositoryError> {
         .into_iter()
         .find(|policy| policy.as_str() == token)
         .ok_or_else(|| {
-            RepositoryError::Backend(format!("stored policy token is not one this build knows: {token:?}"))
+            RepositoryError::Backend(format!(
+                "stored policy token is not one this build knows: {token:?}"
+            ))
         })
 }
 
@@ -440,7 +473,7 @@ fn ipam(error: IpamError) -> RepositoryError {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use sqlx::MySqlPool;
 
@@ -454,7 +487,7 @@ mod tests {
     ///
     /// ⚠️ **The suite reports the same counts with and without a store, and the clock is the only
     /// tell.** Every figure this story records names the store it was taken against.
-    async fn ipam_fixture() -> Option<MySqlPool> {
+    pub(crate) async fn ipam_fixture() -> Option<MySqlPool> {
         let Ok(url) = std::env::var("DATABASE_URL") else {
             eprintln!("skipping ipam test: DATABASE_URL unset");
             return None;
@@ -469,7 +502,7 @@ mod tests {
 
     /// Remove one subnet and everything that points at it, so a test can be re-run against a store
     /// that kept the last run's rows. Children first — the foreign keys point that way.
-    async fn forget_subnet(pool: &MySqlPool, id: &str) {
+    pub(crate) async fn forget_subnet(pool: &MySqlPool, id: &str) {
         for statement in [
             "DELETE FROM ip_address WHERE subnet_id = ?",
             "DELETE FROM ip_range WHERE subnet_id = ?",

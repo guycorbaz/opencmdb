@@ -1607,7 +1607,7 @@ pub(crate) const PAGE_STORE_BUDGET: std::time::Duration = std::time::Duration::f
 /// guard whose test pool refused faster than the budget, leaving the timeout branch dead code
 /// under test while its own comment described why. *A guard placed where the defect cannot occur
 /// reads as coverage and is none.*
-async fn store_within<T>(
+pub(crate) async fn store_within<T>(
     budget: std::time::Duration,
     read: impl Future<Output = Result<T, Response>>,
 ) -> Result<T, Response> {
@@ -2984,9 +2984,11 @@ mod tests {
         // (this file's own rule, quoted in three places): `>= 4` tolerated the silent loss of
         // every prose attribute but four. Raise this deliberately when you add one.
         assert_eq!(
-            checked, 6,
-            "the premise: six prose-attribute occurrences exist to inspect — a scan that \
-             matched fewer has stopped seeing part of the surface it names"
+            checked, 7,
+            "the premise: SEVEN prose-attribute occurrences exist to inspect — a scan that \
+             matched fewer has stopped seeing part of the surface it names. ⚠️ It read six until \
+             story 14.2's grid added one: this is a FLOOR on the scan's own reach, so it moves \
+             only when a template really gained an attribute, never to make a red go away"
         );
     }
 

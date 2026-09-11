@@ -692,7 +692,17 @@ fn app(pool: MySqlPool, config: AppConfig, diagnostic: diagnostic::DiagnosticFac
             config.dns_server,
             diagnostic,
             config.document_enabled,
-        ));
+        ))
+        // 🔑 `/ipam` is store-fed since story 14.2, so it leaves the pool-free demonstration
+        // router — the FIFTH screen to do so, after `/triage`, `/dashboard`, `/diagnostic`,
+        // `/sources` and `/devices` (the last two since 6b.8 and 2026-09-09). ⚠️ The compile-time
+        // refusal of `State<MySqlPool>` therefore no longer covers it; it covers the screens that
+        // remain, and saying which is what stops the narrowed promise being read as the original.
+        // It is its OWN router rather than a sixth route on `page::triage_router`, because
+        // `page.rs` stands at 1954 code lines of the 2000 the `file-size` gate allows — 46 of
+        // headroom — and `CLAUDE.md`'s rule is *split, not grown*, which is only a rule if it is
+        // applied BEFORE the growth.
+        .merge(ipam_page::router(pool.clone(), config.scan_cidr.clone()));
     if config.document_enabled {
         // The switch governs EXISTENCE only (arbitration 4): merged above the layer, the route
         // is auth-gated exactly like every other non-public path. The pool lives INSIDE the
@@ -1391,9 +1401,6 @@ mod tests {
                     screens::ExampleContent::AppsInventory => {
                         rust_i18n::t!("apps.criticality").to_string()
                     }
-                    screens::ExampleContent::IpamOccupancy => {
-                        rust_i18n::t!("ipam.grid_label").to_string()
-                    }
                     // ⚠️ A column heading, not the screen's title: `alerts.title` is *"Alertes"*,
                     // which the shell's own navigation carries on EVERY page. A witness must be
                     // distinctive to its BODY, and the property below is what enforces it.
@@ -1495,16 +1502,20 @@ mod tests {
         // which a developer follows: it is kept because it is the only thing that notices a screen
         // that GREW example content with no story behind it, and the two properties below are what
         // notice a screen showing the wrong thing.
-        // 🔑 **Every address is accounted for**: `Screen::ALL` holds ten screens, five are wholly
-        // example, three are fed by the store and two are mixed — so a sixth witness could only
-        // come from a NEW screen.
+        // 🔑 **Every address is accounted for**: `Screen::ALL` holds ten screens, FOUR are wholly
+        // example, FOUR are fed by the store and two are mixed — so a fifth witness could only come
+        // from a NEW screen. ⚠️ It read *five example, three fed* until story 14.2 fed `/ipam` from
+        // the store; the sentence is rewritten rather than the digit alone, because a count with a
+        // stale sentence beside it is two claims of which one is false.
         assert_eq!(
             example_contents.len(),
-            5,
-            "the witness screens are the device record (6b.6), the applications and IPAM frames \
-             (6b.7), the alert list (6b.8) and the commissioning walk-through (6b.9) — the \
-             inventory left this set on 2026-09-09 when `/devices` became mixed — and a sixth is \
-             a screen that grew example content without a story deciding it should: \
+            4,
+            "the witness screens are the device record (6b.6), the applications frame (6b.7), the \
+             alert list (6b.8) and the commissioning walk-through (6b.9) — the inventory left this \
+             set on 2026-09-09 when `/devices` became mixed, and IPAM left it on 2026-09-11 when \
+             story 14.2 fed it from the store — and a FIFTH is a screen that grew example content \
+             without a story deciding it should. ⚠️ Do not simply move this digit: change it only \
+             with the story that changed a nature, and rewrite the sentence above it too: \
              {example_contents:?}"
         );
         // 🔴 **A WITNESS IS ONLY A WITNESS IF IT IS DISTINCTIVE, and nothing said so until story
@@ -1817,54 +1828,92 @@ mod tests {
         assert!(body.contains(r#"data-device-id="printer-hall""#));
     }
 
-    /// 🔴 **The subnet selector narrows THROUGH THE ROUTE**, for the reason its sibling above
-    /// exists.
+    /// 🔴 **The selector's key CHANGED MEANING in story 14.2, and that is why this test was
+    /// rewritten rather than repaired.** It used to name a SLUG from the example dataset
+    /// (`workshop`, `guest`); `ip_subnet` has no slug column, so the key is now the subnet's id.
+    /// A test that had merely swapped its literals would have kept asserting a shape the store
+    /// cannot produce.
     ///
-    /// `an_unrecognised_subnet_shows_no_grid_and_says_so` calls `ipam_body` directly and is
-    /// therefore blind to the one mutation this screen is most exposed to: **Rust does not lint an
-    /// unused function parameter**, so a `subnet` threaded through the router,
-    /// `demonstration_screen` and `ExampleContent::render` with the arm still passing
-    /// `Default::default()` leaves every pure test green while the selector does nothing. That is
-    /// story 6b.6's `?kind=printer` defect verbatim, on a screen written three stories later.
-    ///
-    /// 🔑 The oracle is an ADDRESS from the chosen subnet, not the count of cells: every subnet
-    /// draws 256, so a cell count is satisfied by whichever grid was served.
+    /// ⚠️ It drives the REAL route, not the pure builder. Story 6b.4's `triage_html` helper
+    /// rendered a fragment directly and never touched the route — the whole body of `/triage` could
+    /// be replaced with all 387 tests green, ten tests built on it. The narrowing lives in the
+    /// handler's query reading, so a builder-level test would measure the wrong half.
     #[tokio::test]
     async fn the_subnet_selector_narrows_through_the_real_route() {
-        for (slug, prefix, other) in [
-            ("workshop", "198.51.100.", "192.0.2."),
-            ("guest", "203.0.113.", "192.0.2."),
-        ] {
-            let response = app(lazy_pool(), config(false, Some(pair())), facts())
-                .oneshot(
-                    Request::builder()
-                        .uri(format!("/ipam?subnet={slug}"))
-                        .header(
-                            axum::http::header::AUTHORIZATION,
-                            basic_header("op", "s3cret"),
-                        )
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(response.status(), StatusCode::OK);
-            let body = String::from_utf8(
-                axum::body::to_bytes(response.into_body(), usize::MAX)
-                    .await
-                    .unwrap()
-                    .to_vec(),
+        let Some(pool) = crate::ipam_repo::tests::ipam_fixture().await else {
+            return;
+        };
+        let _guard = DB_TEST_LOCK.lock().await;
+        crate::ipam_repo::tests::forget_subnet(&pool, "t-sel-a").await;
+        crate::ipam_repo::tests::forget_subnet(&pool, "t-sel-b").await;
+        let mut conn = pool.acquire().await.expect("a connection");
+        for (id, base) in [("t-sel-a", "198.51.100.0"), ("t-sel-b", "203.0.113.0")] {
+            crate::ipam_repo::insert_subnet(
+                &mut *conn,
+                id,
+                crate::ipam_repo::Subnet::new(base.parse().unwrap(), 24).unwrap(),
+                "",
             )
-            .unwrap();
+            .await
+            .expect("the subnet");
+        }
+        drop(conn);
+
+        for (id, cidr, other) in [
+            ("t-sel-a", "198.51.100.0/24", "203.0.113."),
+            ("t-sel-b", "203.0.113.0/24", "198.51.100."),
+        ] {
+            let body = get_ipam(&pool, &format!("/ipam?subnet={id}")).await;
             assert!(
-                body.contains(prefix),
-                "?subnet={slug} must draw {prefix}0/24 — the route is not reading its query"
+                body.contains(cidr),
+                "?subnet={id} must draw {cidr} — the route is not reading its query"
             );
             assert!(
                 !body.contains(&format!("{other}1 ·")),
-                "?subnet={slug} served the default subnet's addresses as well"
+                "?subnet={id} served another subnet's addresses as well"
             );
         }
+
+        // 🔑 AN UNKNOWN ID NARROWS TO NOTHING AND SAYS SO — it does not fall back to the first
+        // subnet. Silently serving another one would tell the operator their selection took when
+        // it did not, which is story 6b.4's `?sort=` finding on a second screen.
+        let body = get_ipam(&pool, "/ipam?subnet=t-sel-nothing").await;
+        assert!(
+            body.contains(&rust_i18n::t!("ipam.unknown_subnet").to_string()),
+            "an unknown id must say so"
+        );
+        assert!(
+            !body.contains("198.51.100.1 ·"),
+            "an unknown id must not silently serve the first subnet"
+        );
+
+        crate::ipam_repo::tests::forget_subnet(&pool, "t-sel-a").await;
+        crate::ipam_repo::tests::forget_subnet(&pool, "t-sel-b").await;
+    }
+
+    /// Fetch `/ipam` through the real router, with a credential.
+    async fn get_ipam(pool: &sqlx::MySqlPool, uri: &str) -> String {
+        let response = app(pool.clone(), config(false, Some(pair())), facts())
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "s3cret"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{uri}");
+        String::from_utf8(
+            axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap()
     }
 
     /// 🔴 **The record route answers a NON-CANONICAL slug, and this is the only thing that holds
