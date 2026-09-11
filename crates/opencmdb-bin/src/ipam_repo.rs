@@ -85,9 +85,9 @@ pub(crate) fn from_canonical(text: &str) -> Result<Ipv4Addr, IpamError> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Subnet {
     /// The NETWORK address — not any address inside the subnet.
-    pub(crate) base: Ipv4Addr,
+    base: Ipv4Addr,
     /// How many leading bits the prefix fixes.
-    pub(crate) prefix_len: u8,
+    prefix_len: u8,
 }
 
 impl Subnet {
@@ -159,8 +159,14 @@ pub(crate) async fn insert_subnet<'e, E>(
 where
     E: Executor<'e, Database = MySql>,
 {
-    // Re-validated here rather than trusted: `Subnet` can only be built through `new`, but a
-    // caller holding one from a read has not passed through it.
+    // 🔴 The comment here read *"`Subnet` can only be built through `new`"* and it was FALSE: both
+    // fields were `pub(crate)`, so any module in this crate could write the literal and reach
+    // `contains` with `prefix_len = 64`, which panics on `32 - 64` — **the exact panic
+    // `PrefixLengthNotInFamily` is documented to exist for**, measured by the review. And the silent
+    // half: a `192.0.2.5/24` literal reports `192.0.2.1` as OUTSIDE the subnet.
+    // The fields are private now (story 5.6's precedent: closed in the TYPE, not in a sentence),
+    // which costs nothing — every use was already inside this module.
+    // The re-validation below is kept for the caller holding a `Subnet` read back from the store.
     Subnet::new(subnet.base, subnet.prefix_len).map_err(ipam)?;
     sqlx::query(
         "INSERT INTO ip_subnet (id, base, prefix_len, label) \
@@ -217,6 +223,13 @@ pub(crate) async fn insert_range(
     policy: IpPolicy,
     label: &str,
 ) -> Result<(), RepositoryError> {
+    // 🔴 BEFORE the overlap scan, and the order is the finding: an inverted range inside a populated
+    // subnet was refused as `RangeOverlapsAnother`. An empty interval overlaps nothing, so the
+    // reason was wrong wherever a sibling happened to be in the way — and story 14.2 renders these
+    // sentences to the operator. *A refusal that names the wrong rule is one nobody can act on.*
+    if last < first {
+        return Err(ipam(IpamError::RangeBoundsInverted));
+    }
     let subnet = load_subnet(&mut *conn, subnet_id).await?;
     if !subnet.contains(first) || !subnet.contains(last) {
         return Err(ipam(IpamError::RangeOutsideSubnet));
@@ -363,6 +376,15 @@ mod tests {
         }
     }
 
+    /// 🔴 **Each store-backed test owns its own CIDR, and the review measured why.** Three of them
+    /// built `192.0.2.0/24` under different ids; a test that panics skips its trailing cleanup, its
+    /// subnet survives, and the NEXT test's `insert_subnet` then dies on `ip_subnet_cidr` — not on
+    /// the thing under test. Measured: one mutation reported **red 3** in a full run and **red 1**
+    /// when each test ran alone on a virgin store, so the recorded carrier counts were inflated by
+    /// collateral; and a single leftover row made a PRISTINE tree red, with *which* test reddening
+    /// depending on run order — which is what makes it read as flakiness.
+    /// ⚠️ Not claimed as the cause of issue #38 or of Epic 6's registered non-determinism: it is a
+    /// named, reproducible cause of non-determinism in THIS story's tests, and nothing more.
     fn v4(text: &str) -> Ipv4Addr {
         text.parse().expect("a literal address")
     }
@@ -513,6 +535,31 @@ mod tests {
         let Some(pool) = ipam_fixture().await else {
             return;
         };
+        // 🔴 **CLEAN AT THE START, and every probe row has an id of its OWN.** The review measured
+        // what the first version did: all six refusals inserted under the literal id `'t-x'`, the
+        // cleanup ran only for `t-ddl`, and a panic skips the trailing cleanup entirely. So over a
+        // BROKEN schema this test reddened ONCE — and on the next run the accepted row was already
+        // there, the primary key refused the retry, `is_err()` could not tell *the CHECK refused
+        // this* from *the PK refused this*, and the test went green for ever on the same store.
+        // 🔑 *A guard that heals itself into a pass is worse than no guard*: CI is safe (a fresh
+        // database per run) and the LOCAL reading is not, which is where this project measures its
+        // mutations.
+        // ⚠️ The three statements are spelled out rather than built with `format!`: sqlx 0.9's
+        // `SqlSafeStr` is implemented for `&'static str` only, which refuses a dynamically
+        // assembled query at compile time. A good refusal, met here for a cleanup.
+        for probe in ["t-x1", "t-x2", "t-x3", "t-x4", "t-x5", "t-x6"] {
+            for statement in [
+                "DELETE FROM ip_address WHERE id = ?",
+                "DELETE FROM ip_range WHERE id = ?",
+                "DELETE FROM ip_subnet WHERE id = ?",
+            ] {
+                sqlx::query(statement)
+                    .bind(probe)
+                    .execute(&pool)
+                    .await
+                    .expect("clear any residue an earlier failed run left behind");
+            }
+        }
         forget_subnet(&pool, "t-ddl").await;
         sqlx::query("INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES (?,?,?,?)")
             .bind("t-ddl")
@@ -526,37 +573,37 @@ mod tests {
         let refusals: [(&str, &str, &str); 6] = [
             (
                 "an unpadded base",
-                "INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES ('t-x','192.0.2.0',24,'x')",
+                "INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES ('t-x1','192.0.2.0',24,'x')",
                 "the canonical form is imposed, not merely intended",
             ),
             (
                 "a prefix beyond any family",
-                "INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES ('t-x','010.000.000.000',200,'x')",
+                "INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES ('t-x2','010.000.000.000',200,'x')",
                 "128 is the only bound this shape admits",
             ),
             (
                 "bounds out of order",
                 "INSERT INTO ip_range (id,subnet_id,first_addr,last_addr,policy,label) \
-              VALUES ('t-x','t-ddl','192.000.002.100','192.000.002.010','static','x')",
+              VALUES ('t-x3','t-ddl','192.000.002.100','192.000.002.010','static','x')",
                 "a range that ends before it begins",
             ),
             (
                 "a policy the domain does not name",
                 "INSERT INTO ip_range (id,subnet_id,first_addr,last_addr,policy,label) \
-              VALUES ('t-x','t-ddl','192.000.002.010','192.000.002.100','STATIC','x')",
+              VALUES ('t-x4','t-ddl','192.000.002.010','192.000.002.100','STATIC','x')",
                 "`ascii_bin` is case-sensitive and the token set is closed",
             ),
             (
                 "a policy with a trailing space",
                 "INSERT INTO ip_range (id,subnet_id,first_addr,last_addr,policy,label) \
-              VALUES ('t-x','t-ddl','192.000.002.010','192.000.002.100','static ','x')",
+              VALUES ('t-x5','t-ddl','192.000.002.010','192.000.002.100','static ','x')",
                 "🔴 `ascii_bin` is PAD SPACE, so `IN (...)` and `= TRIM(...)` both ACCEPT this — the \
               carrier is the INTEGER comparison of lengths, which is why it looks redundant",
             ),
             (
                 "an address with a trailing space",
                 "INSERT INTO ip_address (id,subnet_id,addr,label) \
-              VALUES ('t-x','t-ddl','192.000.002.009 ','x')",
+              VALUES ('t-x6','t-ddl','192.000.002.009 ','x')",
                 "the same PAD SPACE trap, closed by the RLIKE's `$` anchor",
             ),
         ];
@@ -579,6 +626,144 @@ mod tests {
         forget_subnet(&pool, "t-ddl").await;
     }
 
+    /// 🔴 **The two holes the first pattern had, both INSIDE AC4b's promise, closed and pinned.**
+    ///
+    /// Two review layers reached them independently and a third deduced the second's consequence
+    /// from the diff alone:
+    ///
+    /// - **`$` is not end-of-string in MariaDB's `RLIKE`** — it matches before a final newline. A
+    ///   trailing `\n` was a SECOND accepted spelling of every address, and neither UNIQUE key
+    ///   refused the pair: two rows, one address, lengths 15 and 16. It also INVERTED the ordering
+    ///   this representation was chosen for (`0x0A` sorts before a space), and one poisoned row made
+    ///   [`addresses_in`] return `Err` for the whole subnet, losing the good rows with the bad.
+    /// - **`[0-9]{3}` bounds the SHAPE and not the VALUE**, so `999.999.999.999` was storable raw —
+    ///   and unreadable back, which is the same blinding.
+    ///
+    /// ⚠️ A trailing line terminator is how a bulk import or a shell `$(…)` poisons a text column:
+    /// the ordinary gesture, and the exact population this CHECK exists for.
+    #[tokio::test]
+    async fn one_address_has_exactly_one_spelling_in_the_store() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = ipam_fixture().await else {
+            return;
+        };
+        forget_subnet(&pool, "t-spell").await;
+        sqlx::query("INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES (?,?,?,?)")
+            .bind("t-spell")
+            .bind("192.000.002.000")
+            .bind(24_u8)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES (?,?,?,'spell')")
+            .bind("t-spell")
+            .bind("192.000.002.000")
+            .bind(24_u8)
+            .execute(&pool)
+            .await
+            .expect("the canonical subnet — the control for every refusal below");
+
+        for (what, spelling) in [
+            (
+                "a trailing NEWLINE, which `$` accepts and `\\z` refuses",
+                "192.000.002.009\n",
+            ),
+            (
+                "a trailing space, which `ascii_bin` compares as equal",
+                "192.000.002.009 ",
+            ),
+            (
+                "an octet out of range, which bounds the shape and not the value",
+                "999.999.999.999",
+            ),
+            ("an octet just over the top", "256.000.000.000"),
+            ("the unpadded form", "192.0.2.9"),
+            ("a leading newline", "\n192.000.002.009"),
+        ] {
+            let outcome =
+                sqlx::query("INSERT INTO ip_address (id, subnet_id, addr, label) VALUES (?,?,?,?)")
+                    .bind(format!("sp-{}", spelling.len()))
+                    .bind("t-spell")
+                    .bind(spelling)
+                    .bind("second spelling")
+                    .execute(&pool)
+                    .await;
+            assert!(
+                outcome.is_err(),
+                "the store accepted {what} — one address would then have two spellings, and the \
+                 UNIQUE key does not refuse the pair"
+            );
+        }
+
+        // THE CONTROL, and without it the six refusals above could all be one broken table.
+        sqlx::query("INSERT INTO ip_address (id, subnet_id, addr, label) VALUES (?,?,?,?)")
+            .bind("sp-ok")
+            .bind("t-spell")
+            .bind("192.000.002.009")
+            .bind("the one spelling")
+            .execute(&pool)
+            .await
+            .expect("the canonical form is still accepted");
+        // …and the two extremes of the octet range, which the alternation must not have clipped.
+        for edge in ["000.000.000.000", "255.255.255.255"] {
+            sqlx::query(
+                "INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES (?,?,0,'edge')",
+            )
+            .bind(format!("edge-{edge}"))
+            .bind(edge)
+            .execute(&pool)
+            .await
+            .expect("the alternation accepts both ends of the octet range");
+            sqlx::query("DELETE FROM ip_subnet WHERE id = ?")
+                .bind(format!("edge-{edge}"))
+                .execute(&pool)
+                .await
+                .ok();
+        }
+        forget_subnet(&pool, "t-spell").await;
+    }
+
+    /// ⚠️ **`ip_range_same_family` is VACUOUS TODAY, and this test is what says so out loud.**
+    ///
+    /// All three review layers reached it: the canonical pattern admits exactly ONE width, so every
+    /// row the two canonical CHECKs accept already satisfies the family check, and **no mutation can
+    /// be built that reds it**. *A guard placed where the defect cannot occur reads as coverage and
+    /// is none.*
+    ///
+    /// 🔑 It is kept rather than deleted because the rule becomes real the day FR25 adds a
+    /// 39-character alternative — and THIS test is what will red on that day, so the constraint
+    /// stops being decoration at the moment it stops being vacuous, rather than when someone
+    /// remembers.
+    #[tokio::test]
+    async fn the_family_check_is_implied_until_a_second_width_exists() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = ipam_fixture().await else {
+            return;
+        };
+        let (clause,): (String,) = sqlx::query_as(
+            "SELECT CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS \
+             WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'ip_range_first_canonical'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("the canonical CHECK exists and is readable");
+
+        // One alternation group per octet and no second width: every accepted value is 15 long.
+        assert_eq!(
+            clause.matches("25[0-5]").count(),
+            2,
+            "the canonical pattern is expected to hold ONE octet alternation reused for the tail \
+             ({clause}). If this changed, read the next assertion — the family check may have just \
+             become load-bearing."
+        );
+        assert!(
+            !clause.contains("[0-9a-f]") && !clause.contains(':'),
+            "the canonical pattern admits a SECOND address family, so `ip_range_same_family` is no \
+             longer implied by it — it has become a real guard, and it now needs a test of its own \
+             and a row in the refusal array. Clause: {clause}"
+        );
+    }
+
     /// AC4 — the ORDER the store itself returns, which is the padding's whole purpose.
     #[tokio::test]
     async fn the_store_returns_addresses_in_numeric_order() {
@@ -591,15 +776,15 @@ mod tests {
         insert_subnet(
             &mut *conn,
             "t-order",
-            Subnet::new(v4("192.0.2.0"), 24).unwrap(),
+            Subnet::new(v4("198.51.100.0"), 24).unwrap(),
             "order",
         )
         .await
         .expect("the subnet");
         for (id, addr) in [
-            ("o1", "192.0.2.100"),
-            ("o2", "192.0.2.9"),
-            ("o3", "192.0.2.10"),
+            ("o1", "198.51.100.100"),
+            ("o2", "198.51.100.9"),
+            ("o3", "198.51.100.10"),
         ] {
             insert_address(&mut conn, id, "t-order", v4(addr), "n")
                 .await
@@ -610,7 +795,11 @@ mod tests {
             .expect("read back");
         assert_eq!(
             read,
-            vec![v4("192.0.2.9"), v4("192.0.2.10"), v4("192.0.2.100")],
+            vec![
+                v4("198.51.100.9"),
+                v4("198.51.100.10"),
+                v4("198.51.100.100")
+            ],
             "the STORE's own ORDER BY is the numeric order, so no caller has to sort and no caller \
              can forget to"
         );
@@ -635,7 +824,7 @@ mod tests {
         insert_subnet(
             &mut *conn,
             "t-adapter",
-            Subnet::new(v4("192.0.2.0"), 24).unwrap(),
+            Subnet::new(v4("203.0.113.0"), 24).unwrap(),
             "office",
         )
         .await
@@ -646,8 +835,8 @@ mod tests {
             &mut conn,
             "t-a1",
             "t-adapter",
-            v4("192.0.2.10"),
-            v4("192.0.3.10"),
+            v4("203.0.113.10"),
+            v4("203.0.114.10"),
             IpPolicy::Static,
             "escapes",
         )
@@ -666,8 +855,8 @@ mod tests {
             &mut conn,
             "t-a3",
             "t-adapter",
-            v4("192.0.2.100"),
-            v4("192.0.2.199"),
+            v4("203.0.113.100"),
+            v4("203.0.113.199"),
             IpPolicy::DhcpPool,
             "pool",
         )
@@ -677,8 +866,8 @@ mod tests {
             &mut conn,
             "t-a4",
             "t-adapter",
-            v4("192.0.2.150"),
-            v4("192.0.2.250"),
+            v4("203.0.113.150"),
+            v4("203.0.113.250"),
             IpPolicy::Static,
             "overlaps",
         )
@@ -693,19 +882,42 @@ mod tests {
             &mut conn,
             "t-a5",
             "t-adapter",
-            v4("192.0.2.200"),
-            v4("192.0.2.250"),
+            v4("203.0.113.200"),
+            v4("203.0.113.250"),
             IpPolicy::Static,
             "abuts",
         )
         .await
         .expect("abutting is not overlapping");
 
+        // (4) 🔴 an INVERTED range, and the finding was the REASON rather than the acceptance. It
+        // was refused as `RangeOverlapsAnother` — an empty interval overlaps nothing — because the
+        // overlap scan ran first and a sibling happened to be in the way. Story 14.2 renders these
+        // sentences to the operator, so a refusal naming the wrong rule is one nobody can act on.
+        let inverted = insert_range(
+            &mut conn,
+            "t-a7",
+            "t-adapter",
+            v4("203.0.113.150"),
+            v4("203.0.113.120"),
+            IpPolicy::Static,
+            "ends before it begins",
+        )
+        .await;
+        assert_eq!(
+            inverted,
+            Err(opencmdb_core::repo::RepositoryError::Backend(
+                IpamError::RangeBoundsInverted.to_string()
+            )),
+            "an inverted range is refused BY NAME — asserting `is_err()` here would have passed \
+             over the wrong reason, which is the defect the review found"
+        );
+
         // 🔴 THE CONTROL, and it is what makes the three assertions mean anything: the DDL does NOT
         // refuse any of them. A raw insert of the escaping range succeeds.
         let raw = sqlx::query(
             "INSERT INTO ip_range (id,subnet_id,first_addr,last_addr,policy,label) \
-             VALUES ('t-a6','t-adapter','192.000.002.010','192.000.003.010','static','raw')",
+             VALUES ('t-a6','t-adapter','203.000.113.010','203.000.114.010','static','raw')",
         )
         .execute(&mut *conn)
         .await;

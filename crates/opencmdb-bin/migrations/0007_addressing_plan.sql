@@ -28,11 +28,34 @@
 -- Measured on mariadb:10.11.11 before choosing: CHAR strips trailing padding on retrieval, so
 -- LENGTH() stays semantic under either type; VARCHAR is chosen for the width alone.
 --
--- 🔴 ONE ADDRESS HAS ONE SPELLING, AND THE RLIKE IS WHAT IMPOSES IT. `ascii_bin` is a PAD SPACE
--- collation — measured, `'192.000.002.009' = '192.000.002.009 '` is TRUE under it — so without an
--- anchored pattern a trailing space would be a second spelling that the UNIQUE key does not refuse.
--- The `$` anchor catches it (measured: ERROR 4025). A canonical form that is not imposed is not a
--- canonical form.
+-- 🔴 ONE ADDRESS HAS ONE SPELLING, AND THE PATTERN BELOW IMPOSES IT — VALUE AS WELL AS SHAPE.
+-- `ascii_bin` is a PAD SPACE collation — measured, `'192.000.002.009' = '192.000.002.009 '` is TRUE
+-- under it — so without an anchored pattern a trailing space is a second spelling the UNIQUE key
+-- does not refuse. A canonical form that is not imposed is not a canonical form.
+--
+-- 🔴 THE FIRST VERSION OF THIS PATTERN WAS `^[0-9]{3}[.]…[0-9]{3}$` AND IT HAD TWO HOLES, BOTH
+-- INSIDE THE PROMISE ABOVE. Two review layers found them independently:
+--
+--   `$` IS NOT END-OF-STRING IN MariaDB's RLIKE — it matches before a final NEWLINE. Measured:
+--   `'192.000.002.009\n'` RLIKE the old pattern → 1, `'…\r'` → 0, `'…\n x'` → 0. So a trailing
+--   line terminator was a SECOND accepted spelling of every address, and neither
+--   `ip_address_in_subnet` nor `ip_subnet_cidr` refused the pair — measured end to end: two rows,
+--   one address, lengths 15 and 16. Worse, it INVERTED the ordering this whole representation was
+--   chosen for (`0x0A` sorts before the PAD SPACE `0x20`), and ONE poisoned row makes
+--   `addresses_in` return `Err` for the whole subnet, losing the good rows with the bad one.
+--   ⚠️ A trailing newline is how a bulk import, a `LOAD DATA INFILE` or a shell `$(…)` poisons a
+--   text column — the ordinary gesture, not an adversary's probe, and the very population this
+--   CHECK exists for ("a value can reach here from a backfill that went around the adapter").
+--   Closed by `\z`, which is end-of-string (measured: newline → 0, canonical → 1).
+--
+--   `[0-9]{3}` BOUNDS THE SHAPE AND NOT THE VALUE, so `999.999.999.999` and `256.000.000.000` were
+--   storable raw. The Rust side refused them, which is precisely why they were dangerous: a raw row
+--   nothing can read back is the `addresses_in` blinding above. Closed by the octet alternation.
+--
+-- 🔑 One pattern closes both, plus the trailing space and the unpadded form. Measured on
+-- mariadb:10.11.11 before it was written: canonical 1 · trailing newline 0 · trailing space 0 ·
+-- `999.999.999.999` 0 · `256.000.000.000` 0 · `255.255.255.255` 1 · `000.000.000.000` 1 ·
+-- `192.0.2.9` 0.
 --
 -- ⚠️ THE SAME TRAP ON `policy`, and it needs a DIFFERENT instrument. `policy IN (...)` compares
 -- under PAD SPACE too, so `'static '` satisfies it; and `policy = TRIM(policy)` is ALSO a PAD SPACE
@@ -77,7 +100,7 @@ CREATE TABLE IF NOT EXISTS ip_subnet (
   -- A plan that holds one subnet twice is not a plan.
   UNIQUE KEY ip_subnet_cidr (base, prefix_len),
   CONSTRAINT ip_subnet_base_canonical
-    CHECK (base RLIKE '^[0-9]{3}[.][0-9]{3}[.][0-9]{3}[.][0-9]{3}$'),
+    CHECK (base RLIKE '^(00[0-9]|0[0-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])([.](00[0-9]|0[0-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])){3}\\z'),
   -- 128 is the only bound this shape admits; binding the prefix to the FAMILY needs the base's
   -- length and lives in the adapter. The validation measured why it is a refusal and not a lint: a
   -- /64 on an IPv4 base makes the natural containment compute 32 - 64 and PANIC on subtract-with-
@@ -96,11 +119,21 @@ CREATE TABLE IF NOT EXISTS ip_range (
   KEY ip_range_subnet (subnet_id),
   CONSTRAINT ip_range_subnet_fk FOREIGN KEY (subnet_id) REFERENCES ip_subnet (id),
   CONSTRAINT ip_range_bounds_ordered CHECK (last_addr >= first_addr),
+  -- ⚠️ **VACUOUS TODAY BY CONSTRUCTION, AND THAT IS WRITTEN RATHER THAN LEFT TO BE DISCOVERED.**
+  -- All three review layers reached it: the two canonical CHECKs below admit exactly ONE width, so
+  -- every row they accept already satisfies this one, and no mutation can be built that reds it —
+  -- *a guard placed where the defect cannot occur reads as coverage and is none*, this epic's
+  -- dominant class, committed in the migration written to avoid it. 🔑 Its ONE live effect under
+  -- the first pattern was to partially mask the newline hole above, catching a MISMATCHED pair of
+  -- poisoned bounds and not a matched one; `\z` removes even that.
+  -- It is KEPT rather than deleted because the family rule is real the day FR25 adds a 39-character
+  -- alternative to the pattern — and `the_family_check_is_implied_until_a_second_width_exists` pins
+  -- the implication, so the day it stops being vacuous, a test says so instead of nobody noticing.
   CONSTRAINT ip_range_same_family CHECK (LENGTH(first_addr) = LENGTH(last_addr)),
   CONSTRAINT ip_range_first_canonical
-    CHECK (first_addr RLIKE '^[0-9]{3}[.][0-9]{3}[.][0-9]{3}[.][0-9]{3}$'),
+    CHECK (first_addr RLIKE '^(00[0-9]|0[0-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])([.](00[0-9]|0[0-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])){3}\\z'),
   CONSTRAINT ip_range_last_canonical
-    CHECK (last_addr RLIKE '^[0-9]{3}[.][0-9]{3}[.][0-9]{3}[.][0-9]{3}$'),
+    CHECK (last_addr RLIKE '^(00[0-9]|0[0-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])([.](00[0-9]|0[0-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])){3}\\z'),
   -- The PLAN axis of the binding vocabulary, ratified 2026-09-11 (PR #166). No story may extend it.
   CONSTRAINT ip_range_policy_domain
     CHECK (policy IN ('static', 'dhcp-pool', 'reserved', 'infrastructure')),
@@ -119,5 +152,5 @@ CREATE TABLE IF NOT EXISTS ip_address (
   UNIQUE KEY ip_address_in_subnet (subnet_id, addr),
   CONSTRAINT ip_address_subnet_fk FOREIGN KEY (subnet_id) REFERENCES ip_subnet (id),
   CONSTRAINT ip_address_canonical
-    CHECK (addr RLIKE '^[0-9]{3}[.][0-9]{3}[.][0-9]{3}[.][0-9]{3}$')
+    CHECK (addr RLIKE '^(00[0-9]|0[0-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])([.](00[0-9]|0[0-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])){3}\\z')
 ) ENGINE = InnoDB;

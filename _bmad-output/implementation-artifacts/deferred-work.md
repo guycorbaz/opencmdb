@@ -5411,3 +5411,24 @@ One row, and v0.3.0 is what made it live.
   row and names these two rather than fixing them, because widening a guard over enums it does not own
   is scope. **Owner: whichever story next touches `EntityState` or `EntityKind` — story 6.12 by name.**
 
+- 🔴 **`ipam_repo::insert_range`'s overlap rule is NOT enforceable under concurrency, and the
+  measurement took a second attempt to get.** It reads every sibling range, then inserts: no
+  transaction, no `SELECT … FOR UPDATE`, and no index that could catch the loser — a `CHECK` cannot
+  express the rule (`ERROR 1901`) and a `UNIQUE` cannot either, ranges overlapping partially.
+  ⚠️ **The first concurrent attempt did NOT reproduce**, and story 14.1's review layer refused to
+  read that as safety: with a 400 ms pause injected between the read and the insert — timing only,
+  no logic change — **two overlapping ranges both committed, both reporting success**. Story 14.1's
+  own §2 records the same shape on the interface mint (#161), where a one-shot negative was reported
+  as a property and two layers later refuted it. *A negative result from an instrument that cannot
+  open the window measures the instrument.*
+  🔑 **Unreachable today** — story 14.1 ships no producer — and **story 14.2 opens HTTP write
+  routes, which are concurrent by construction**. **Owner: story 14.2**, and it may not close it
+  with a `UNIQUE`.
+
+- ⚠️ **`crates/opencmdb-bin/src/ipam_repo.rs`'s `#![allow(dead_code)]` is module-wide, and nothing
+  makes anyone pay it off.** It is justified while story 14.1 ships no producer, and its own doc
+  states the trade against `arp_ping.rs`, where the ABSENCE of the same attribute was measured
+  load-bearing on 2026-09-10. ⚠️ But after story 14.2 wires *some* of these functions the attribute
+  goes on hiding the rest — measured at 14.1's review: with it removed, **eleven** items are dead
+  under `--all-targets`. **Owner: story 14.2**, which must narrow or remove it rather than inherit
+  it silently.

@@ -5356,44 +5356,54 @@ development_status:
   #   ALLOCATING an address already in use. That makes the "next free address" panel an
   #   EXCLUSION -- the only place the product prevents the duplicate rather than reporting it.
   epic-14: in-progress
-  14-1-plan-schema-and-no-producer: review  # IMPLEMENTED 2026-09-11: 859 -> 871 tests
-  #   (581+191+99), ten gates, twelve mutation ids with TWO divergences that are the pass's own
-  #   findings. The story's own CHAR(15) contradicted the argument that chose it and shipped as
-  #   VARCHAR(39). NEXT: `code-review`, ideally on a different model.
-  # VALIDATED 2026-09-11, two fresh-context
-  #   layers in their own worktrees and their own stores. 26 distinct findings; TWO reached by both
-  #   layers independently. 🔴 GUY RE-ARBITRATED THE ADDRESS REPRESENTATION: zero-padded dotted text
-  #   (`192.000.002.009`), NOT `VARBINARY(16)`. D10's own ISO-8601 precedent, D48's "3 a.m. dump"
-  #   argument (a binary column needs a HEX() per query and does not grep), one canonical form a
-  #   CHECK can impose -- and fixed width makes LENGTH the family discriminant, so the cross-family
-  #   guard becomes a same-row CHECK, which `VARBINARY` could not give.
-  #   🔴 The gap layer BUILT the schema and measured an IPv6 address returned by a containment query
-  #   over IPv4 bounds, sorted between .9 and .10; and one address stored TWICE (4-byte and
-  #   IPv4-mapped), the UNIQUE refusing neither.
-  #   🔴 AC7 ("no producer") FAILS CI: five `never used` under RUSTFLAGS="-D warnings". The new
-  #   module takes `#![allow(dead_code)]` -- and the arbitration is WRITTEN, because `arp_ping.rs:22`
-  #   records the same day that the ABSENCE of that attribute is load-bearing there.
-  #   🔴 AC5 applied story 5.9's M3 to the half it does not govern: raw SQL BYPASSES an adapter
-  #   guard rather than measuring it. Split into three refusals with three instruments.
-  #   🔴 AC3's set comparison closes ONE direction; a variant missing from ALL left 866 tests, ten
-  #   gates and clippy green -- and the same mutation is green TODAY on `EntityState`. Registered.
-  #   ⚠️ T7: `cargo xtask mutate` cannot drive a DDL mutation and the register names THIS story.
-  #   Guy, 2026-09-11: a purpose-built script, the debt STAYS registered -- 14.1 is the second to
-  #   route around it, and the row now says so.
-  #   ⚠️ `repo.rs` is 1743 code lines, NOT ~3800 -- the twins carried the file's TOTAL as a code
-  #   count and this story inherited it. Both twins corrected; the adapter goes in its own module
-  #   unconditionally rather than on a false number.
-  #   Opens the epic. Three tables, the policy domain, the adapter -- NO route, NO screen, NO
-  #   producer, exactly as story 6.5. It TAKES three decisions the epic left open, each with the
-  #   alternative refused: the tables sit OUTSIDE the `entity` supertype (a range is declared and
-  #   formed by nothing); an address is `VARBINARY(16)` rather than text (the registered
-  #   string-ordering defect at `inventory_view.rs:261` stops being cosmetic in the table that
-  #   answers containment) or `INT UNSIGNED` (FR25 is inside this epic, and 6.5's precedent poses
-  #   a domain once rather than ALTERing at boot on a published product); and the policy enum
-  #   lands in a NEW `opencmdb-core/src/ipam/`, which `architecture.md:3208` already prescribes.
-  #   ⚠️ NEXT: `create-story validate` (two fresh-context agents) is MANDATORY before dev-story.
-  #   ⚠️ `repo.rs` is ~3800 code lines and the `file-size` gate is BLIND to it (registered at
-  #   6.5). A gate that cannot measure a file is not permission to grow it -- T3 says so.
+  14-1-plan-schema-and-no-producer: review
+  #   🔴 THIS ENTRY CARRIED THREE CONTRADICTIONS UNTIL 2026-09-11, ALL BY ACCRETION: the review
+  #   annotation was PREPENDED and the validation annotation was never removed, so the file said
+  #   both "text, NOT VARBINARY(16)" and "an address is VARBINARY(16)"; both "repo.rs is 1743, NOT
+  #   ~3800" and "repo.rs is ~3800"; and two incompatible NEXT lines. The blind review layer found
+  #   all three from the diff alone. 🔑 *A correction that adds the true text without removing the
+  #   false one leaves the record carrying both* -- the project's own rule, broken in the file that
+  #   tracks it, while both twins were corrected cleanly. Rewritten whole rather than appended to.
+  #
+  #   Opens Epic 14. Three tables, the PLAN vocabulary the schema enforces, the four refusals no
+  #   CHECK can express -- and NO route, NO screen, NO producer (story 6.5's precedent, met
+  #   literally). What the operator gains: nothing.
+  #
+  #   THREE DECISIONS IT TAKES, each with the alternative refused:
+  #     (a) the tables sit OUTSIDE the `entity` supertype -- a range is declared and formed by
+  #         nothing, and Guy's arbitration (4) keeps IPAM and declared_attribute apart.
+  #     (b) an address is a ZERO-PADDED DOTTED QUAD in VARCHAR(39) ascii_bin (Guy, 2026-09-11,
+  #         re-arbitrated after the validation refuted the first answer). Lexicographic order IS
+  #         numeric order -- D10's ISO-8601 precedent applied to addresses -- and D48's "3 a.m.
+  #         dump" argues against a binary column for a product whose subject IS addresses.
+  #         ⚠️ The story prescribed CHAR(15) and the implementation found that contradicts the
+  #         family argument that chose it; VARCHAR(39) poses the width once.
+  #     (c) the policy enum lands in a NEW opencmdb-core/src/ipam/, which architecture.md:3208
+  #         already prescribed and :3366 listed as unbuilt.
+  #
+  #   CODE-REVIEWED by three isolated layers and REPAIRED. 859 -> 873 tests (583+191+99), ten
+  #   gates, clippy --all-targets, RUSTFLAGS="-D warnings", fmt, cargo deny. The two BROWSER gates
+  #   are deliberately NOT claimed: this story renders nothing.
+  #   🔴 THE HEADLINE, INSIDE AC4b's OWN PROMISE: `$` is not end-of-string in MariaDB's RLIKE -- it
+  #   matches before a final NEWLINE -- so a trailing \n was a SECOND accepted spelling of every
+  #   address and neither UNIQUE key refused the pair. It also INVERTED the ordering the whole
+  #   representation was chosen for, and one poisoned row made `addresses_in` return Err for the
+  #   whole subnet. Closed by `\z` plus an octet-VALUE alternation, which also refuses
+  #   999.999.999.999. Two layers measured it independently.
+  #   🔴 ALL THREE LAYERS reached the same guard: `ip_range_same_family` is IMPLIED by the canonical
+  #   CHECKs and can never fire -- no mutation can be built that reds it, which is why the story's
+  #   own table had no row for it. Kept, with its vacuity PINNED by a test that reds the day FR25
+  #   adds a second width.
+  #   🔴 A guard that HEALED ITSELF into a permanent pass (all probes under one id `'t-x'`, cleanup
+  #   only for `t-ddl`, a panic skipping the trailing cleanup): red once over a broken schema, then
+  #   GREEN for ever on the same store. CI is safe; the LOCAL reading is not, and local is where
+  #   this project measures its mutations.
+  #   🔴 And my own mutation counts were inflated by collateral -- three tests shared one CIDR, so a
+  #   panicking test poisoned its successor. Q3/Q4/Q8/Q9 carry 1, not 2 or 3. One CIDR per test now.
+  #   ⚠️ REGISTERED, not fixed: `insert_range`'s overlap rule is unenforceable under concurrency
+  #   (two overlapping ranges both committed with a pause injected) -- STORY 14.2 opens concurrent
+  #   write routes and owns it.
+  #   ⚠️ NEXT: nothing. The story is at `review` and awaits the merge.
   14-2-the-plan-on-screen: backlog
   #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
   #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.

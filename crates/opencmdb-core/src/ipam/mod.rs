@@ -148,11 +148,42 @@ pub enum IpamError {
     /// subtract-with-overflow**. *A schema that admits an impossible pair hands the arithmetic an
     /// impossible input.*
     PrefixLengthNotInFamily,
+    /// A range whose last address precedes its first.
+    ///
+    /// 🔴 **Found by the review, and the defect was the REASON rather than the acceptance.** An
+    /// inverted range inside a populated subnet was refused as `RangeOverlapsAnother` — an empty
+    /// interval overlaps nothing, and the DDL's `ip_range_bounds_ordered` caught it only when it
+    /// happened not to intersect a sibling. Story 14.2 renders these refusals to the operator, so a
+    /// refusal that names the wrong rule is a sentence the operator cannot act on.
+    RangeBoundsInverted,
     /// A value that is not this store's canonical form for an address.
     ///
     /// One address has ONE spelling — the zero-padded dotted quad — and it is imposed by the DDL as
     /// well as here, because *a canonical form that is not imposed is not a canonical form*.
     MalformedAddress,
+}
+
+impl IpamError {
+    /// Every refusal, so a test can assert a PROPERTY over them rather than over a list it wrote.
+    ///
+    /// 🔴 **The review measured why this exists.** `every_refusal_carries_a_sentence` hand-wrote its
+    /// six-element array inside its own body, so a seventh variant whose `Display` returned a
+    /// VERBATIM duplicate of another's left **871 tests, ten gates and clippy green** — the exact
+    /// thing that test's own message calls *"two refusals read the same, so the operator cannot tell
+    /// them apart"*.
+    ///
+    /// 🔑 And the mechanism was already in this commit, one type over: [`IpPolicy::ALL`] plus a row
+    /// in `screens.rs`'s enum-completeness guard. *The hole was recognised for one type and left
+    /// open for its neighbour, in the same file.* Both are rows now.
+    pub const ALL: [IpamError; 7] = [
+        IpamError::RangeOutsideSubnet,
+        IpamError::RangeOverlapsAnother,
+        IpamError::RangeBoundsInverted,
+        IpamError::AddressOutsideSubnet,
+        IpamError::BaseIsNotTheNetworkAddress,
+        IpamError::PrefixLengthNotInFamily,
+        IpamError::MalformedAddress,
+    ];
 }
 
 impl fmt::Display for IpamError {
@@ -167,6 +198,7 @@ impl fmt::Display for IpamError {
             IpamError::PrefixLengthNotInFamily => {
                 "the prefix length cannot belong to this address family"
             }
+            IpamError::RangeBoundsInverted => "the range ends before it begins",
             IpamError::MalformedAddress => "the address is not in this store's canonical form",
         })
     }
@@ -214,19 +246,13 @@ mod tests {
     /// or an error number would put the driver's vocabulary back where the domain's belongs.
     #[test]
     fn every_refusal_carries_a_sentence() {
-        let all = [
-            IpamError::RangeOutsideSubnet,
-            IpamError::RangeOverlapsAnother,
-            IpamError::AddressOutsideSubnet,
-            IpamError::BaseIsNotTheNetworkAddress,
-            IpamError::PrefixLengthNotInFamily,
-            IpamError::MalformedAddress,
-        ];
+        // 🔴 Reads `ALL` rather than a list of its own. The review added a seventh variant with a
+        // DUPLICATE sentence and this test — which then enumerated six by hand — stayed green.
         let sentences: std::collections::BTreeSet<String> =
-            all.iter().map(ToString::to_string).collect();
+            IpamError::ALL.iter().map(ToString::to_string).collect();
         assert_eq!(
             sentences.len(),
-            all.len(),
+            IpamError::ALL.len(),
             "two refusals read the same, so the operator cannot tell them apart"
         );
         for sentence in &sentences {

@@ -1299,6 +1299,17 @@ mod tests {
                 "IpPolicy",
                 4,
             ),
+            // 🔴 **Added by story 14.1's code review, and the reason is that the hole was left open
+            // one type over IN THE SAME FILE.** `IpamError`'s own test enumerated its variants by
+            // hand, so a seventh with a DUPLICATE sentence left 871 tests, ten gates and clippy
+            // green — the very thing that test's message calls *"two refusals read the same"*.
+            // The mechanism was already here for `IpPolicy`; recognising a class for one type and
+            // not for its neighbour is how a guard reads as coverage.
+            (
+                include_str!("../../opencmdb-core/src/ipam/mod.rs"),
+                "IpamError",
+                7,
+            ),
         ] {
             let declared = variants(source, enum_name);
             let in_all = listed(source, enum_name);
