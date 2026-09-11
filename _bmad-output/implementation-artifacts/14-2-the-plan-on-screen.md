@@ -113,11 +113,26 @@ story 6b.4b, where a one-variant enum forced the revisit; here the same gesture 
   arm that swallows the new variant silently — *the opposite of what is wanted*.
 
 ✅ **Guy, 2026-09-11: option (a), and the SET test is the deliverable, not the variant.** Adding the
-variant is half an hour; what earns the story is the test that makes an unhandled refusal
-impossible to ship, since the compiler will not. ⚠️ It changes one existing assertion:
-`ipam_repo.rs:907-914` asserts `Err(RepositoryError::Backend(IpamError::RangeBoundsInverted
-.to_string()))` and becomes `Err(RepositoryError::Ipam(IpamError::RangeBoundsInverted))` — which is
-the guard doing its job, not a regression.
+variant is half an hour; what earns the story is the test that makes an unhandled refusal impossible
+to ship, since the compiler will not. ✅ The gap-hunt confirmed both halves by building it: the
+variant composes with `#[from]`, `Clone`/`PartialEq`/`Eq` survive, **zero compiler errors**, and
+exactly one existing assertion breaks (`ipam_repo.rs:907-914`) — the guard doing its job.
+
+🔴 **RE-SCOPED the same day, because as first written the SET test was this epic's dominant defect
+one type over. Guy: the SET is over what the HANDLER CAN RECEIVE, not over `IpamError::ALL`.**
+Measured through the very adapters AC5's routes call:
+
+| gesture | what comes back | in `IpamError`? |
+|---|---|---|
+| a range in a subnet that does not exist | `Err(NotFound)` | **no** |
+| the same CIDR defined twice | `Err(Constraint("unique"))` | **no** |
+| **the same address defined twice** | `Err(Constraint("unique"))` | **no** |
+| the loser of a lock wait, once (C) lands | `Err(Backend("…1205…"))` | **no** |
+
+🔑 *A SET over `IpamError::ALL` is correct about `IpamError` and silent about the three refusals the
+operator meets first* — and the second row is **the single most likely refusal on this screen**, an
+operator typing an address they already entered. The first is the state of **every empty plan**. As
+first written, *"makes an unhandled refusal impossible to ship"* was false.
 
 ### (C) ✅ A transaction and a parent-row `FOR UPDATE`, with the pause harness as its proof
 
@@ -141,12 +156,34 @@ with a 400 ms pause injected, two overlapping ranges both committed, both report
 - **(c) Register it again and ship the routes without it.** ⚠️ Refused: the register already says
   this story owns it, and *an action nobody carries is not an action*.
 
-✅ **Guy, 2026-09-11: option (a).** ⚠️ **And the measurement is half the deliverable**: the same
-400 ms injected pause is re-run and measured to REFUSE the second writer. *A fix whose evidence is
-the absence of the earlier symptom is not evidence* — 14.1's own review refused a one-shot negative
-for exactly this reason, and the harness is what turns the absence into a measurement. ⚠️ The
-serialisation is per subnet and is SAID: two operators defining ranges in one subnet queue; in two
-subnets they do not.
+🔴 **RE-ARBITRATED the same day, on the gap-hunt's measurement. Guy: LOCK THE READ THAT DECIDES** —
+`SELECT first_addr, last_addr FROM ip_range WHERE subnet_id = ? FOR UPDATE`.
+
+**What the layer measured, in order.** First the instrument: a `#[cfg(test)]` pause inside the REAL
+`insert_range`, two concurrent callers — `a = Ok`, `b = Ok`, two overlapping ranges committed,
+`left: 2 right: 1`. *The harness can open the window*, which is what makes everything after it mean
+something. Then option (a): the loser blocks, re-reads, and is refused on the DOMAIN rule
+(`RangeOverlapsAnother`) — **no deadlock, no 1205, and a better answer than `Contention`**. Twelve
+ipam tests green.
+
+🔴 **Then the ordinary DRY gesture brought the race back.** Reusing `load_subnet` inside the
+transaction before taking the lock — the helper already exists, already takes an `Executor`, and is
+what `insert_range` calls today — gives `a = Ok`, `b = Ok`, **two overlapping ranges committed
+again, with the lock still taken and worthless.** Under REPEATABLE READ the snapshot is fixed by the
+first CONSISTENT read, and a locking read does not fix it; the parent lock only worked because the
+sibling `SELECT` happened to be that first read.
+
+🔑 **So the story's own reason for refusing (b) is REFUTED**: it said (b) *"depends on InnoDB gap
+locks under REPEATABLE READ … a guard whose correctness rests on an isolation level nobody states is
+a guard nobody can re-derive"* — and (a) rested on an isolation-level behaviour just as much, while
+stating none of it. *The refusal was right about the danger and wrong about which option carried
+it.* Measured, the locking sibling read refuses the second writer and survives the DRY line.
+
+⚠️ **AC7's harness ships as a PERMANENT test, not as a measurement taken once** — the statement
+ordering is load-bearing and invisible, and nothing else in the tree would catch its loss.
+⚠️ The serialisation is per subnet and is SAID: two operators defining ranges in one subnet queue;
+in two subnets they do not. **And there is no retry path**: `insert_range` takes a bare connection,
+not `WriteRepository::transact`, so NFR15's *"the caller replays the closure"* does not exist here.
 
 ### (D) ✅ A cell the plan does not cover is drawn without a noun
 
@@ -174,11 +211,30 @@ defined** (`ip_address`), **both**, or **covered by nothing at all**.
 
 ✅ **Guy, 2026-09-11: option (a), drawn without a noun** — the cell is left blank, its `aria-label`
 says the plan does not cover it, and **no legend entry claims a state**, because a story may not
-extend the binding vocabulary and *not covered* is not one of its four words. ⚠️ It must still be
-told apart from `free` by something other than colour (constraint 6) — blank-with-border against an
-explicit treatment — and that pair is what AC3's test measures. 🔑 The reason `free` was refused is
-the epic's own: `free` asserts the address may be allocated, and 14.3 exists so the product never
-offers one it has not checked.
+extend the binding vocabulary and *not covered* is not one of its four words. 🔑 `free` was refused
+because it asserts the address may be allocated, and 14.3 exists so the product never offers one it
+has not checked.
+
+🔴 **And the gap-hunt measured that this is UNBUILDABLE as first written, so Guy re-aimed it the
+same day: `free` GAINS AN EXPLICIT TREATMENT and the bare cell keeps the blank.** In Chrome, against
+the shipped stylesheet, a `free` cell and a bare `.ipam-cell` are **byte-identical in every computed
+property** — same `rgba(0,0,0,0)`, same `none` background image, same border, same box:
+`.ipam-cell-free` is `background: transparent` (`app.css:897`) over a base that already draws the
+border. *Not hard to tell apart by colour — indistinguishable in every property there is.*
+
+⚠️ **Two consequences the first draft did not carry.** AC4 deletes only `structural`, so **`free`'s
+new treatment is a criterion this story did not have** — it is added to AC3. And **AC3's guard
+cannot reach it**: AC3 asserts a treatment per `IpPolicy::ALL` so a fifth policy cannot compile
+without one, but *not covered* is **not a policy** — it sits outside that enum, and the guard is
+structurally blind to the one state this arbitration invents. 🔑 *A guard scoped to an enum cannot
+see a state that is not in it* — this epic's dominant class, reached through the type system rather
+than through a test. The pair `free` / *not covered* needs its own assertion.
+
+⚠️ And arbitration (D) removes the mechanism that makes a cell class visible to the stylesheet
+guard at all: the guard skips any `class="…"` containing `{` (`page.rs:5426`), so what covers the
+four modifiers today is the LEGEND's literals, pinned on purpose by
+`the_legend_names_every_cell_modifier_as_a_literal`. *"No legend entry claims a state"* means a
+not-covered class would be seen by nothing.
 
 ## §2 — Five things the first draft would leave a dev agent to settle SILENTLY
 
@@ -222,6 +278,67 @@ offers one it has not checked.
    rebuilds the grid**, so it either implements the spec's shape or records a divergence with its
    reason — it may not leave the two documents disagreeing silently a second time.
 
+## §3 — What the gap-hunt MEASURED, beyond the four re-arbitrations
+
+Each was built and run against a live `mariadb:10.11.11`, not reasoned about.
+
+### 🔴 `RepositoryError::Contention` is DEAD CODE, and arbitration (C) is what makes it reachable
+
+`classify` (`repo.rs:1613-1614`) matches `Some("1213") | Some("1205") => Contention`. It never
+fires. **The cause is named by a check rather than by a story**: sqlx's `code()` returns the
+**SQLSTATE**, and the MySQL number lives in a separate `number` field. Measured twice, on two
+different errors — a lock-wait timeout surfaces as `code() = Some("HY000"), number = 1205`, and a
+duplicate key as `code() = Some("23000"), number = 1062`. So the arm compares a SQLSTATE against a
+MySQL number and can never match.
+
+`Contention` has **one producer site, no test and no consumer**. ⚠️ It is pre-existing and NOT this
+story's to have caused — but **(C) is what first makes it reachable on a route an operator
+presses**, and it surfaces as a raw English driver sentence (`Backend("error returned from
+database: 1205 (HY000): Lock wait timeout exceeded…")`), which is exactly what AC6 forbids. **Decide
+here: fix `classify` or map the case in the handler — and say which.** A register row is not enough
+when the story's own arbitration is what opens the path.
+
+### ⚠️ The deletion sweep is smaller in the compiler and larger outside it than §2.2 says
+
+Three `E0599`, and **one of them needs `--all-targets`** — a plain `cargo build` names only two, so
+*"let the compiler drive it"* silently misses `main.rs:1393` unless the flag is there. What the
+compiler names **nothing** about: **18** `ipam.*` keys in `app.yml`, **13** `.ipam*` rules in
+`app.css`, `_ipam_example.html`, **33** `ipam` references in `example_screens.rs` (`IpamStrings`,
+the `Ipam` template struct, `ipam_body` and its tests), and `main.rs:1822-1840`'s `/ipam?subnet=`
+route test. ⚠️ And `example_contents.len() == 5`'s failure message reads *"a sixth is a screen that
+grew example content without a story deciding it should"* — **an invitation to edit the digit**,
+which is story 6b.6's recorded defect verbatim (*three bookkeeping counts whose messages read
+"update this number", which a developer follows*).
+
+### ⚠️ The split is FORCED, not optional
+
+`page.rs` is at **1954 of 2000** — 46 lines. `/ipam` must be mounted with a pool, and
+`triage_router` lives in `page.rs`. **Name where the route registration goes before a dev discovers
+it at line 2001.**
+
+### ⚠️ Six decisions the story does not take, each measured rather than supposed
+
+1. **A label is not required.** `label` is `NOT NULL` with no non-empty CHECK; `""` inserts cleanly.
+   The form's required-ness is undecided.
+2. **The nil UUID is accepted as an id.** Story 6.1's review added a nil-UUID refusal AT THE ROUTE
+   (D21/D48, *"before 6.2 can forget it"*) and `insert_device` refuses it — **none of
+   `insert_subnet`/`insert_range`/`insert_address` does.** Who mints a range's id, and is it v7?
+3. **An address inside an existing range is silently accepted, in BOTH orders.** Nothing objects, so
+   the grid must pick a **rendering priority** — and story 6b.7's own finding is this exact trap:
+   *"`state_of` tests `used` before `reserved`, so an octet in both lists renders silently as used —
+   a priority order is a rendering decision and must not double as a repair."* Now reachable against
+   real data.
+4. **The subnet selector has no key.** `ScreenQuery.subnet` is a SLUG from `ExampleSubnet::slug`,
+   which this story deletes; `ip_subnet` has **no slug column** — `id CHAR(36)`, `base`,
+   `prefix_len`, `label`. `/ipam?subnet=…` must change meaning and the story does not say to what.
+5. **`free` has no definition in a store-fed grid.** `ipam.state.free` and the *next free address*
+   panel survive AC4, but `free` is not one of the four binding PLAN words. 14.3 owns the
+   EXCLUSION; **14.2 owns the word.**
+6. **The axe gate has no floor for `/ipam`.** It walks a 256-cell grid today; after this story it
+   would walk an **empty page and report success** — the `AXE_REQUIRE_QUEUE` shape exactly. Widening
+   `a11y/seed.sql` is named in §2.4; **the missing floor is not**, and it is what turns the existing
+   pass into a pass over nothing.
+
 ## Acceptance Criteria
 
 **AC1 — `/ipam` is fed by the store.** `Screen::Ipam.nature()` is `Nature::Fed`; the route leaves
@@ -240,7 +357,11 @@ and `ip_address` for the selected subnet; **no cell state reads `observation_rec
 
 **AC3 — a policy carries a pattern and a word, never a hue alone** (constraint 6). Each of the four
 policies renders a distinct non-colour treatment, asserted over `IpPolicy::ALL` so a fifth policy
-cannot compile without one. The `reserved` hatch already exists (`app.css:894-896`).
+cannot compile without one. The `reserved` hatch already exists (`app.css:894-896`). ⚠️ **And
+`free` gains a treatment of its own**, by the re-arbitration of §1(D): measured in Chrome, a `free`
+cell and a bare cell are identical in every computed property, so *not covered* cannot be told from
+*free* on today's sheet. 🔑 **That pair needs its OWN assertion**, because the `IpPolicy::ALL` guard
+is structurally blind to a state that is not a policy.
 
 **AC4 — `structural` is gone as a displayed word.** No `ipam.state.structural` key, no
 `.ipam-cell-structural` rule, no `CellState::Structural`; `.0`/`.255` render as `infrastructure`,
@@ -249,14 +370,36 @@ constraint (5) and `ux-design-specification.md:1404-1405` say adding it earlier 
 build, so adding it later is what nobody does. (Not `deferred-work.md`: there is no such row there,
 and in this project *the register* means that file.)
 
-**AC5 — two write routes, and the first carries the machinery.** A range and an address can each be
-defined through `/ipam`. The FIRST route carries: the Origin check, a KEYED refusal body per status
-in BOTH locales, the `authorship` sanction if it writes provenance (it does not — say so), and the
-browser gates. The SECOND reuses them, and a test asserts the reuse rather than a comment claiming
-it.
+**AC5 — THREE write routes, and the first carries the machinery.** 🔴 **It read *two* until the
+gap-hunt measured that nothing in this product can create a subnet**: `insert_subnet` has **no
+caller anywhere outside its own test module**, and `ip_range.subnet_id` and `ip_address.subnet_id`
+are both `NOT NULL` foreign keys to it (`0007:120`, `:157`). With two routes an empty plan stays
+empty for ever, every range write answers `Err(NotFound)` — measured — and **AC8 names a gesture the
+story does not ship: a door opening onto no room.** ✅ Guy, 2026-09-11: **a subnet, a range and an
+address.** Refused: deriving the subnet from `OPENCMDB_SCAN_CIDR` (it makes configuration a source
+of the declared plan and binds two registers nothing obliges to coincide) and minting it implicitly
+from the first range (a CIDR is not deducible from arbitrary bounds, and the operator would never
+see what was guessed in their name). 🔑 Constraint (1)'s argument — the first route carries the
+machinery and the rest are cheap — holds for three as well as for two.
 
-**AC6 — every refusal the operator can reach is a KEY, in both locales, naming the rule.** The seven
-`IpamError` variants map to statuses and bodies as a SET compared in both directions. 🔴 Story 6.4's
+The FIRST route carries: the Origin check, a KEYED refusal body per status in BOTH locales, the
+`authorship` sanction if it writes provenance (it does not — say so), and the browser gates. The
+others reuse them, and a test asserts the reuse rather than a comment claiming it.
+
+**AC5b — every route the router carries answers 401 without a credential, asserted as a PROPERTY.**
+🔴 The gap-hunt mounted an always-on `POST /ipam/range` BELOW `auth_deny` and measured **873 tests
+and ten gates GREEN over an unauthenticated write that answered `201 Created`.** The one test
+carrying the *route-above-the-layer* property is hardcoded to `/document-all`
+(`main.rs:2147`), and the perimeter guard iterates `Screen::ALL` (`main.rs:1570`) — **a POST path is
+in neither.** This is story 6b.2's measured defect (`GET /dashboard` → 200 below the layer) in its
+POST form. ⚠️ Without this criterion, arbitration (A)'s accepted cost — *a fresh install gains a
+live write surface with no opt-in* — is joined by one nobody accepted: **nothing notices if that
+surface is also unauthenticated.**
+
+**AC6 — every refusal the operator can reach is a KEY, in both locales, naming the rule.** The SET
+is over **what the handler can RECEIVE** (§1(B)'s re-scoping): the `IpamError` variants it maps,
+plus `NotFound`, plus `Constraint("unique")`, plus the contention case — compared in both
+directions. 🔴 Story 6.4's
 finding is the reason: a success message shipped in English under a French UI with a raw UUID in it,
 and three layers of guards were green over it.
 
@@ -381,7 +524,13 @@ comparison be costed before any epic reintroduces it, and this story does not re
 ### Change Log
 
 - 2026-09-11 — contexted; the four arbitrations TAKEN by Guy the same day (the recommendation in
-  all four); then the mandatory FACT-CHECK layer refuted **seven** claims of the story's own, four
-  of them numbers. Every one is corrected in place with what it said, rather than overwritten. Three defects found while contexting and carried as criteria rather than filed
+  all four); then the mandatory validation ran both layers. **The FACT-CHECK layer refuted SEVEN
+  claims of the story's own, four of them numbers.** **The GAP-HUNT layer, which builds, REFUTED TWO
+  OF THE FOUR ARBITRATIONS and re-scoped a third** — (C)'s stated reason for refusing its
+  alternative was wrong and one ordinary DRY line defeats the chosen fix; (D) is unbuildable because
+  `free` already IS the blank cell, measured in a browser; (B)'s SET was scoped to a type that does
+  not contain three of the refusals the operator meets first. All four went back to Guy and were
+  re-arbitrated the same day. **And it found that nothing in this product can create a subnet**, so
+  AC5 became three routes. Every correction is recorded in place with what it replaced. Three defects found while contexting and carried as criteria rather than filed
   elsewhere: the false `Constraint` doc, the register's wrong dead-code figure, the UX-spec grid
   divergence. No code changed.
