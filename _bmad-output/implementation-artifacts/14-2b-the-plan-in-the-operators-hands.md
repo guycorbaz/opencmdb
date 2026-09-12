@@ -82,13 +82,22 @@ Measured through the very adapters these routes call:
 | a range in a subnet that does not exist | `Err(NotFound)` | **no** |
 | the same CIDR defined twice | `Err(Constraint("unique"))` | **no** |
 | **the same address defined twice** | `Err(Constraint("unique"))` | **no** |
-| the loser of a lock wait, once (d) lands | `Err(Backend("…1205…"))` | **no** |
+| the loser of a lock wait, once (d) lands | `Err(Backend("…**1213**…"))` | **no** |
+| **a label over 120 characters** | `Err(Backend("…1406: Data too long…"))` | **no** |
 
-🔑 *A SET over `IpamError::ALL` is correct about `IpamError` and silent about the three refusals the
+⚠️ **The story first wrote 1205 for row four; measured, it is 1213** — a deadlock, not a timeout.
+And **row five was missing entirely**: `label` is `VARCHAR(120)` on all three tables, so an operator
+typing a long name gets a driver sentence — ⚠️ and under a non-strict `sql_mode` the value would be
+silently TRUNCATED instead, which is worse than a refusal.
+
+🔑 *A SET over `IpamError::ALL` is correct about `IpamError` and silent about the four refusals the
 operator meets first* — and the second row is **the likeliest refusal on this screen**, an operator
-retyping an address. ⚠️ And **nothing in the compiler forces a handler to distinguish any of them**:
-`RepositoryError` is not `#[non_exhaustive]` and no exhaustive `match` traverses it, so the variant
-14.2 added produced **zero `E0004`**. The obligation is carried by the SET test or by nothing.
+retyping an address. 🔴 **And *"carried by the SET test or by nothing"* is a FALSE DICHOTOMY, measured.** The gap-hunt
+wrote the handler's mapping as an exhaustive `match &RepositoryError` with no `_` arm and then added
+a variant: **`error[E0004]: non-exhaustive patterns`**. One design line decides whether the compiler
+carries it. ⚠️ **The half that DOES hold**: `Constraint(&'static str)` forces a `_` inside, so a new
+constraint NAME stays invisible to the compiler. **So AC4 owes both** — the exhaustive match for the
+variants, and the SET test for the constraint names.
 
 ### (d) 🔴 The concurrency fix goes on the read that DECIDES, and the parent-row lock is defeated by one DRY line
 
@@ -97,17 +106,33 @@ which is that line's address on 14.2's baseline and is `.bind(label)` today), de
 inserts — no transaction, no lock. With a 400 ms pause injected, **two overlapping ranges both committed, both
 reporting success.**
 
-Guy's arbitration (C) of 2026-09-11, **re-aimed the same day on the gap-hunt's measurement**: a
-transaction plus `SELECT … FROM ip_subnet … FOR UPDATE` on the parent WORKS — the loser blocks,
-re-reads and is refused on the domain rule, no deadlock and no 1205 — **but reusing `load_subnet`
-inside the transaction, the DRY line anyone writes, BRINGS THE RACE BACK** with the lock still taken
-and worthless: under REPEATABLE READ the snapshot is fixed by the first CONSISTENT read, and a
-locking read does not fix it. **So the lock goes on `SELECT … FROM ip_range … FOR UPDATE`**, the
-read whose result decides.
+Guy's arbitration (C) of 2026-09-11, re-aimed once already, was **RE-ARBITRATED A THIRD TIME on
+2026-09-12 — and this time by a measurement that refuted the shape itself.**
 
-⚠️ **AC: the 400 ms pause harness ships as a PERMANENT test.** The ordering is load-bearing and
-invisible; nothing else in the tree would catch its loss. *A fix whose evidence is the absence of
-the earlier symptom is not evidence.*
+🔴 **`SELECT … FROM ip_range … FOR UPDATE` alone does not refuse: it DEADLOCKS.** The gap-hunt built
+five locking strategies and ran the matrix five times, in both sibling states:
+
+| strategy | loser gets | rows |
+|---|---|---|
+| no lock | `Ok` | **2** |
+| parent row `FOR UPDATE` | `Ipam(RangeOverlapsAnother)` | 1 |
+| parent row + an early `load_subnet` (the DRY line) | `Ok` | **2** |
+| **the deciding read `FOR UPDATE`** | **`Backend("…1213 (40001): Deadlock found…")`** | 1 |
+| **parent row THEN the deciding read** | **`Ipam(RangeOverlapsAnother)`** | 1 |
+
+**20 of 20 observations of the prescribed lock deadlocked.** `WHERE subnet_id = ?` is a non-unique
+index scan, so both transactions take compatible gap locks and then each needs an insert-intention
+lock. Correctness survives — one row every time — but the loser is told *deadlock, retry* where the
+product knows the honest answer, and a raw driver sentence on a form field is what AC4 forbids.
+
+✅ **Guy, 2026-09-12: lock the PARENT ROW first, THEN the deciding read.** Deterministic refusal,
+5/5, in both sibling states, no deadlock. ⚠️ **This is the option refused on 2026-09-11 as
+belt-and-braces, and the measurement overturned the refusal** — the two locks are not redundant: the
+parent row serialises entry, and the range lock is what the DRY line cannot walk past.
+
+⚠️ **AC5: the pause harness ships as a PERMANENT test**, and it must assert the REFUSAL, not merely
+that one row survives — all four locking strategies leave one row, and three of them tell the
+operator something false.
 
 ### (e) 🔴 `RepositoryError::Contention` is DEAD CODE, and this story is what makes it reachable
 
@@ -167,13 +192,30 @@ gates. The others reuse it, and a TEST asserts the reuse rather than a comment c
 **AC2 — the handler cannot extract `State<MySqlPool>`.** The sub-router's state holds a port. A
 mutation adding the pool must fail to COMPILE, measured and recorded as `E0277`/`E0308`.
 
-**AC3 — every route the router carries answers 401 without a credential, asserted as a PROPERTY**
-derived from the route table and never from a list. 🔴 §1(b)'s measurement is the reason: 873 tests
-and ten gates were green over an unauthenticated `201`.
+**AC3 — every route the router carries answers 401 without a credential, AND EXISTS.** ✅ Guy,
+2026-09-12, on two measurements that refuted the criterion as first written:
 
-**AC4 — every refusal the operator can reach is a KEY, in both locales, naming the rule.** The SET
-is over **what the handler can RECEIVE** (§1(c)), compared in both directions, and it reds the day a
-new refusal is reachable. ⚠️ Story 6.4's finding is the reason: a success message shipped in English
+🔴 **The shape it named does not exist.** axum 0.8's `Router` exposes `has_routes()` and nothing
+else; `PathRouter` is `pub(crate)`. **A router cannot be enumerated.** And a source scan is
+incomplete by construction: three of the fourteen `.route(` sites take a non-literal path
+(`screens.rs:406`, `:424`, `document.rs:80`).
+
+🔴 **And the guard as written PASSES OVER A ROUTE THAT DOES NOT EXIST.** `auth_deny` layers the
+fallback, so 401 proves nothing about existence — measured: `/totally/made/up` answers 401 without a
+credential exactly like a real route, and `/ipam/range` answered **404 with one** while unmounted. *A
+misspelt path, an unmounted route and a typo all satisfied it.*
+
+**The shape**: each sub-router declares `PATHS: &[&str]` and its `router()` is BUILT by iterating
+that list, so the list and the mounts cannot drift; the guard walks `PATHS` and asserts BOTH halves
+— 401 without a credential, and something **other than 404** with one. The positive control is what
+makes the negative one mean anything.
+
+**AC4 — every refusal the operator can reach is a KEY, in both locales, naming the rule** — and it
+is carried TWICE, because neither carrier covers the other: an **exhaustive `match` with no `_`
+arm** over `RepositoryError`, so a new VARIANT is an `E0004`; and a **SET test** over what the
+handler can receive, because `Constraint(&'static str)` forces a `_` inside and a new constraint
+NAME is invisible to the compiler. ⚠️ Six refusals are reachable today and `IpamError` contains
+none of four of them — §1(c). ⚠️ Story 6.4's finding is the reason: a success message shipped in English
 under a French UI with a raw UUID in it.
 
 **AC5 — the overlap rule holds under concurrency**, by §1(d), with the lock on the read that
@@ -198,20 +240,83 @@ undeliverable and this story delivers.
 value is not an ABSENT one — sqlx tries to connect to it and **118 tests fail**, measured while
 writing this story.
 
+**AC9b — the write routes are BUDGETED, and the budget wraps the TRANSACTION.** ✅ Guy, 2026-09-12.
+🔴 This story adds the product's **first blocking write**, and measured, the loser's wait tracks the
+holder's: a 3 s hold gave a **6.005 s** round trip, bounded only by `innodb_lock_wait_timeout` —
+**50 s** on a stock container. ⚠️ `document.rs` contains **zero** `store_within`; every budgeted
+file in this product is a GET screen. Story 6b.10 put a per-handler budget on GETs after measuring
+a 30 s hang, and this story is where a write can do it. 🔑 **The budget wraps the whole transaction,
+not the first read** — story 14.2's denial of service was exactly a budget around the wrong half.
+
 **AC10 — no regression**: ten gates, `clippy --workspace --all-targets -D warnings`,
-`RUSTFLAGS="-D warnings"`, fmt, `cargo deny`. **BOTH browser gates ARE claimed** — this story adds
-controls and a write; `a11y/seed.sql` and the axe gate's `/ipam` state may need widening, and
-`AXE_REQUIRE_PLAN=1` is already in CI.
+`RUSTFLAGS="-D warnings"`, fmt, `cargo deny`. **BOTH browser gates ARE claimed**, and each needs work the story first
+did not name: 🔴 **`kbd-probe.mjs` has NO `/ipam` coverage at all** — all sixteen of its `open(`
+sites name `/triage` — while story 6b.11's focus contract and story 6.4's focus-after-swap contract
+both apply to the three forms this story adds. And 🔴 **the axe gate never sees AC8's screen**:
+`a11y/seed.sql` always seeds a subnet and `AXE_REQUIRE_PLAN=1` REFUSES a run that draws no cell, so
+the empty-plan branch — AC8's whole deliverable — is the one `/ipam` state the gate is configured
+never to reach. Both are criteria here, not notes.
+
+## §3 — What the gap-hunt measured that this story must carry
+
+Each was BUILT and run, not reasoned about.
+
+### 🔴 `the_plan_reads_no_observation` is blind to the module this story creates
+
+The guard is a hardcoded two-file list (`ipam_page.rs:1045-1056`). The layer planted, in a new
+`ipam_write.rs`, **both** forms it exists to catch — a raw `SELECT COUNT(*) FROM observation_record`
+and a `crate::repo::count_observations` call — and measured **the test green and all ten gates
+green**. ⚠️ The story's own Dev Notes said the opposite (*"that guard will red if this story reaches
+for anything else there"*). **The file list must be DERIVED**, not written: every `.rs` under the
+plan's own perimeter, so a new module is covered the day it exists rather than the day someone
+remembers.
+
+### ⚠️ The machinery AC1 says to reuse is PRIVATE, and the story does not say where it should live
+
+`same_origin`, `malformed`, `CSRF_REFUSED_BODY` and `refusal_body` are all private in `document.rs`.
+*"The others reuse it"* needs either a widening of that file's surface or a shared module — and a
+dev agent will settle it silently, **most likely by copying `same_origin`**, which is the one
+function a CSRF check must never be duplicated for. **Decide it in T2 and say which.**
+
+### ⚠️ `/ipam` does not use `Gesture`, so the type guarantee will not cover its new controls
+
+`ipam_page.rs` never names `Gesture`; the empty-plan branch rolls its own strings, which 14.2 did
+deliberately. `Gesture::Live { route: &'static str }` exists so that *a live gesture posting nowhere
+is unrepresentable* (story 6b.4b's arbitration, made a compile obligation). AC8 makes IPAM the
+product's SECOND live gesture. **Adopt the type or say why not** — silence here loses a guarantee
+the product already bought.
+
+### ⚠️ A virgin-store `cargo test --workspace` races itself on `migrate!`
+
+Nineteen failures on a freshly created empty database; run one test first, then the same command is
+green. Story 6.6's register row requires a dropped database per mutation pass, so **the dev agent
+meets this on run one** rather than at the end.
+
+### ✅ Refuted, with the check, so nobody re-chases them
+
+The deadlock is not a gap-lock-on-empty artefact (it reproduces 10/10 with a pre-existing sibling) ·
+the `classify` repair does not break the working `Constraint("unique")` path (duplicate CIDR still
+`Constraint("unique")`, whole workspace green) · `page.rs` at 1954/2000 does **not** constrain this
+story (a separate module costs nothing; `file-size` green at 57 files) · a new write module reds
+none of `authorship`, `observed-immutable`, `entity-id-immutable` · and the form does have a key for
+the subnet (`_ipam.html:49,79` already carries the store's own id).
 
 ## Tasks / Subtasks
 
 - [ ] **T0** Take §2's decisions with Guy; §1 is settled and is not re-opened.
-- [ ] **T1** (AC6) `classify`'s `Contention` arm: repair or remove, with the check either way.
+- [ ] **T1** (AC6) `classify`'s `Contention` arm: repair or remove, with the check either way. ⚠️ The
+  repair was BUILT and measured safe (`try_downcast_ref` + `number()`, whole workspace green, the
+  `Constraint("unique")` path intact) — **but under the chosen lock it buys less than it looks
+  like**, the deadlock becoming `Contention` where the operator needs `RangeOverlapsAnother`.
 - [ ] **T2** (AC1, AC2) The sub-router and the first route, on `document.rs`'s shape.
 - [ ] **T3** (AC4) The refusal set over what the handler can receive, keyed in both locales.
-- [ ] **T4** (AC5) The lock on the deciding read, and the pause harness as a permanent test.
+- [ ] **T4** (AC5, AC9b) The parent row THEN the deciding read; the pause harness as a permanent
+  test asserting the REFUSAL and not merely the row count; and the budget around the transaction.
 - [ ] **T5** (AC1) The second and third routes, and the test that asserts the reuse.
-- [ ] **T6** (AC3) The auth perimeter as a derived property.
+- [ ] **T6** (AC3) `PATHS` per sub-router, the routers built by iterating it, and the guard with its
+  POSITIVE control.
+- [ ] **T6b** (§3) Derive `the_plan_reads_no_observation`'s file list; widen `kbd-probe.mjs` to
+  `/ipam`; give the axe gate the empty-plan state.
 - [ ] **T7** (AC7, AC8) Remove the last allows; link the empty plan to the gesture.
 - [ ] **T8** (AC9, AC10) Measure. Both browser gates, both store conditions, the command named.
 
