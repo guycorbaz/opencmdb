@@ -258,8 +258,7 @@ where
             .await
             .map_err(classify)?
             .ok_or(RepositoryError::NotFound)?;
-    let base = from_canonical(&base).map_err(ipam)?;
-    Subnet::new(base, prefix_len).map_err(ipam)
+    subnet_from_row(&base, prefix_len)
 }
 
 /// Insert one range, after the three refusals no `CHECK` can express.
@@ -284,23 +283,88 @@ pub(crate) async fn insert_range(
     policy: IpPolicy,
     label: &str,
 ) -> Result<(), RepositoryError> {
+    insert_range_pausing(
+        conn,
+        id,
+        subnet_id,
+        first,
+        last,
+        policy,
+        label,
+        std::future::ready(()),
+    )
+    .await
+}
+
+/// [`insert_range`] with a seam between the deciding read and the insert.
+///
+/// 🔑 **The seam is a FUTURE and not a flag**, so production passes `std::future::ready(())` and
+/// the seam cannot rot for want of a caller. AC5's harness passes a 400 ms sleep and drives two of
+/// these at once: without it the window is too short to observe, and *a race nobody can reproduce
+/// is a race nobody can prove closed*.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the seam is one argument on an already-wide row"
+)]
+async fn insert_range_pausing(
+    conn: &mut sqlx::MySqlConnection,
+    id: &str,
+    subnet_id: &str,
+    first: Ipv4Addr,
+    last: Ipv4Addr,
+    policy: IpPolicy,
+    label: &str,
+    after_the_deciding_read: impl std::future::Future<Output = ()>,
+) -> Result<(), RepositoryError> {
     // 🔴 BEFORE the overlap scan, and the order is the finding: an inverted range inside a populated
     // subnet was refused as `RangeOverlapsAnother`. An empty interval overlaps nothing, so the
     // reason was wrong wherever a sibling happened to be in the way — and story 14.2 renders these
     // sentences to the operator. *A refusal that names the wrong rule is one nobody can act on.*
+    // It is also before any statement, so a plainly impossible range costs no transaction.
     if last < first {
         return Err(ipam(IpamError::RangeBoundsInverted));
     }
-    let subnet = load_subnet(&mut *conn, subnet_id).await?;
+    // 🔑 THE FUNCTION OWNS ITS TRANSACTION, and that is what makes the locks below mean anything:
+    // in autocommit a `FOR UPDATE` is released at the end of its own statement, so read-decide-write
+    // would still race with every lock in place. ⚠️ It therefore must NOT be called from inside
+    // another transaction — MariaDB's `BEGIN` implicitly commits one — and no caller does.
+    let mut tx = sqlx::Connection::begin(&mut *conn)
+        .await
+        .map_err(classify)?;
+    // 🔴 THE PARENT ROW FIRST, THEN THE DECIDING READ, and the pair is Guy's arbitration of
+    // 2026-09-12 taken on a measured matrix of five strategies (§1(d)). The two locks are NOT
+    // redundant, which is why the same option was refused the day before as belt-and-braces:
+    //   · the deciding read alone DEADLOCKS, 20 observations of 20 — `WHERE subnet_id = ?` is a
+    //     non-unique index scan, so both transactions take compatible gap locks and each then needs
+    //     an insert-intention lock. One row survives either way, and the loser is told *deadlock,
+    //     retry* where the product knows the range overlaps;
+    //   · the parent row alone is defeated by ONE ORDINARY DRY LINE — a non-locking `load_subnet`
+    //     placed first fixes this transaction's REPEATABLE READ snapshot, and a locking read does
+    //     not refresh it, so the sibling scan reads a world without the other range and both
+    //     commit.
+    // ⚠️ So the rule is not *"take a lock"* but *"take the parent row's lock BEFORE any read of
+    // this subnet at all"*. `load_subnet_locked` exists so no caller can accidentally read first.
+    //
+    // 🔴 **NEITHER LOCK IS MEASURABLE ON ITS OWN, and the mutation pass is what found it.** Remove
+    // the deciding read's `FOR UPDATE` and AC5's harness stays GREEN, because the parent row alone
+    // serialises entry; add the DRY line with both locks in place and it stays green too, because
+    // the range lock catches it. Only the COMPOSITE — the DRY line together with an unlocked
+    // deciding read — reds, with `[Ok(()), Ok(())]`. *Two guards that each mask the other's
+    // mutation are two guards nothing measures*, so the pair is carried behaviourally by that
+    // composite and each half is named individually by
+    // `both_reads_of_a_subnet_under_write_take_their_lock`, a source guard that names the cause
+    // where the composite names only the symptom (story 6b.11's AC5, as amended).
+    let subnet = load_subnet_locked(&mut tx, subnet_id).await?;
     if !subnet.contains(first) || !subnet.contains(last) {
         return Err(ipam(IpamError::RangeOutsideSubnet));
     }
     let siblings: Vec<(String, String)> =
-        sqlx::query_as("SELECT first_addr, last_addr FROM ip_range WHERE subnet_id = ?")
+        sqlx::query_as("SELECT first_addr, last_addr FROM ip_range WHERE subnet_id = ? FOR UPDATE")
             .bind(subnet_id)
-            .fetch_all(&mut *conn)
+            .fetch_all(&mut *tx)
             .await
             .map_err(classify)?;
+    after_the_deciding_read.await;
     for (sibling_first, sibling_last) in siblings {
         let sibling_first = from_canonical(&sibling_first).map_err(ipam)?;
         let sibling_last = from_canonical(&sibling_last).map_err(ipam)?;
@@ -319,10 +383,38 @@ pub(crate) async fn insert_range(
     .bind(canonical(last))
     .bind(policy.as_str())
     .bind(label)
-    .execute(&mut *conn)
+    .execute(&mut *tx)
     .await
     .map_err(classify)?;
+    tx.commit().await.map_err(classify)?;
     Ok(())
+}
+
+/// [`load_subnet`], but taking the subnet ROW's lock — the entry point every write to a subnet's
+/// children must pass through first.
+///
+/// 🔑 It is a second SQL literal rather than `load_subnet` with four characters appended, and the
+/// redundancy is DELIBERATE in this codebase's sense: the two differ by the one thing that matters,
+/// and a shared helper taking a `lock: bool` would let a caller pass `false` at the exact place
+/// where `false` is the defect. What IS shared is the decoding, in [`subnet_from_row`].
+async fn load_subnet_locked(
+    tx: &mut sqlx::MySqlConnection,
+    id: &str,
+) -> Result<Subnet, RepositoryError> {
+    let row: Option<(String, u8)> =
+        sqlx::query_as("SELECT base, prefix_len FROM ip_subnet WHERE id = ? FOR UPDATE")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(classify)?;
+    let (base, prefix_len) = row.ok_or(RepositoryError::NotFound)?;
+    subnet_from_row(&base, prefix_len)
+}
+
+/// Turn a stored `(base, prefix_len)` pair into the subnet the arithmetic can answer for.
+fn subnet_from_row(base: &str, prefix_len: u8) -> Result<Subnet, RepositoryError> {
+    let base = from_canonical(base).map_err(ipam)?;
+    Subnet::new(base, prefix_len).map_err(ipam)
 }
 
 /// Insert one individually defined address.
@@ -1101,5 +1193,151 @@ pub(crate) mod tests {
 
         drop(conn);
         forget_subnet(&pool, "t-adapter").await;
+    }
+    /// **AC5 — two operators define overlapping ranges at the same time, and exactly one is told
+    /// why.** A PERMANENT test, not a one-off measurement.
+    ///
+    /// 🔴 **It asserts the REFUSAL and not merely that one row survives**, and that is the whole
+    /// design: §1(d)'s matrix of five locking strategies leaves ONE row in four of them, and three
+    /// of those four tell the operator something false. Counting rows would have passed on:
+    ///
+    /// | strategy | loser is told | rows |
+    /// |---|---|---|
+    /// | no lock | `Ok` — its range is simply not there | **2** |
+    /// | parent row only | `RangeOverlapsAnother` | 1 |
+    /// | parent row + a non-locking `load_subnet` first (the DRY line) | `Ok` | **2** |
+    /// | the deciding read only | `Backend("…1213 (40001): Deadlock found…")` | 1 |
+    /// | **parent row THEN the deciding read** | **`RangeOverlapsAnother`** | 1 |
+    ///
+    /// ⚠️ **The 400 ms pause is what makes the race observable**, and it is a FUTURE handed to the
+    /// production function rather than a flag inside it — production passes
+    /// `std::future::ready(())`, so the seam has a live caller and cannot rot.
+    ///
+    /// ⚠️ Its own `/25`, its own ids: `DB_TEST_LOCK` serialises store tests, but a row left by a
+    /// previous run is refused by `ip_subnet_cidr` and would read as *the guard fired* (story
+    /// 14.1's self-healing guard, and 14.2's four tests reddened by a shared CIDR).
+    #[tokio::test]
+    async fn two_overlapping_ranges_at_once_leave_one_row_and_one_named_refusal() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = ipam_fixture().await else {
+            return;
+        };
+        for statement in [
+            "DELETE FROM ip_range WHERE subnet_id = 't-race'",
+            "DELETE FROM ip_subnet WHERE id = 't-race'",
+        ] {
+            sqlx::query(statement)
+                .execute(&pool)
+                .await
+                .expect("the probe's own rows are its own to remove");
+        }
+        let subnet = Subnet::new(v4("198.51.100.128"), 25).expect("a subnet of its own");
+        let mut setup = pool.acquire().await.expect("a connection");
+        insert_subnet(&mut *setup, "t-race", subnet, "the race")
+            .await
+            .expect("the parent row");
+        drop(setup);
+
+        let mut left = pool.acquire().await.expect("a connection");
+        let mut right = pool.acquire().await.expect("a connection");
+        let pause = || tokio::time::sleep(std::time::Duration::from_millis(400));
+        let (first, second) = tokio::join!(
+            insert_range_pausing(
+                &mut left,
+                "t-race-a",
+                "t-race",
+                v4("198.51.100.130"),
+                v4("198.51.100.140"),
+                IpPolicy::Static,
+                "left",
+                pause(),
+            ),
+            insert_range_pausing(
+                &mut right,
+                "t-race-b",
+                "t-race",
+                v4("198.51.100.135"),
+                v4("198.51.100.150"),
+                IpPolicy::Static,
+                "right",
+                pause(),
+            )
+        );
+
+        let outcomes = [&first, &second];
+        let won = outcomes.iter().filter(|r| r.is_ok()).count();
+        assert_eq!(
+            won, 1,
+            "exactly one of the two writes may win: {outcomes:?}"
+        );
+        let loser = outcomes
+            .iter()
+            .find_map(|r| r.as_ref().err())
+            .expect("the other one was refused");
+        assert!(
+            matches!(
+                loser,
+                RepositoryError::Ipam(IpamError::RangeOverlapsAnother)
+            ),
+            "the loser must be told the RULE it broke. A deadlock, a backend sentence or a silent \
+             `Ok` all leave one row too, and none of them is an answer the operator can act on. \
+             Got: {loser:?}"
+        );
+
+        let (rows,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM ip_range WHERE subnet_id = 't-race'")
+                .fetch_one(&pool)
+                .await
+                .expect("counting the survivors");
+        assert_eq!(rows, 1, "the refused write must have left nothing behind");
+    }
+    /// Both reads a range write performs take their lock — named individually, because behaviour
+    /// cannot name them.
+    ///
+    /// 🔴 **The mutation pass measured that neither lock is observable on its own.** Drop the
+    /// deciding read's `FOR UPDATE` and AC5's harness stays GREEN (the parent row alone serialises
+    /// entry); add the DRY line with both locks present and it stays green too (the range lock
+    /// catches it). Only the composite reds. *Two guards that each mask the other's mutation are
+    /// two guards nothing measures* — so this one names each half, and the composite measures that
+    /// the pair works.
+    ///
+    /// ⚠️ **A source guard, with the limit that word carries** (story 6b.11's AC5 as amended): it
+    /// measures what was WRITTEN and not what the server executes, so it cannot see a lock the
+    /// engine declines to take. It is cheaper than the composite and it NAMES THE CAUSE where the
+    /// composite names only the symptom; the two cumulate rather than substitute.
+    ///
+    /// ⚠️ It reads the production half of this file only — the text before the first line that
+    /// starts a test module — so the mutation strings inside these very doc comments are outside
+    /// its perimeter. *A guard that greps a file greps its prose* (story 14.2), met three times in
+    /// this story alone.
+    #[test]
+    fn both_reads_of_a_subnet_under_write_take_their_lock() {
+        let source = include_str!("ipam_repo.rs");
+        let cut = source
+            .find("\n#[cfg(test)]")
+            .expect("this file has a trailing test module");
+        let production = &source[..cut];
+        for (needle, what) in [
+            (
+                "SELECT base, prefix_len FROM ip_subnet WHERE id = ? FOR UPDATE",
+                "the PARENT ROW's lock, which serialises entry to one subnet",
+            ),
+            (
+                "SELECT first_addr, last_addr FROM ip_range WHERE subnet_id = ? FOR UPDATE",
+                "the DECIDING read's lock, which is what an ordinary DRY line cannot walk past",
+            ),
+        ] {
+            assert!(
+                production.contains(needle),
+                "{what} is gone. AC5's harness will not tell you: each lock is masked by the \
+                 other, and only the composite mutation reds. Expected to find: {needle}"
+            );
+        }
+        assert!(
+            !production.contains("load_subnet(&mut *tx"),
+            "a non-locking read of the subnet was placed inside the write's transaction — the DRY \
+             line. Under REPEATABLE READ it fixes the snapshot, and the locking read that follows \
+             does not refresh it, so the sibling scan reads a world without the other range."
+        );
     }
 }

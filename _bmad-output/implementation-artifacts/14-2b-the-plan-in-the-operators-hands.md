@@ -359,8 +359,9 @@ the subnet (`_ipam.html:49,79` already carries the store's own id).
 - [x] **T3** (AC4) The refusal set over what the handler can receive, keyed in both locales.
   ✅ 2026-09-12 — both carriers measured: `E0004` for a new VARIANT, and a SET test for a new
   constraint NAME. ⚠️ One prediction CONTRADICTED, and the guard it doubted turned out sound.
-- [ ] **T4** (AC5, AC9b) The parent row THEN the deciding read; the pause harness as a permanent
+- [x] **T4** (AC5, AC9b) The parent row THEN the deciding read; the pause harness as a permanent
   test asserting the REFUSAL and not merely the row count; and the budget around the transaction.
+  ✅ 2026-09-12 — 🔴 and the pass found that NEITHER LOCK is observable on its own.
 - [ ] **T5** (AC1) The second and third routes, and the test that asserts the reuse.
 - [ ] **T6** (AC3) `PATHS` per sub-router, the routers built by iterating it, and the guard with its
   POSITIVE control.
@@ -574,6 +575,73 @@ recreated first, the migrations warmed by one full run.
 | M11 | the label read before the CIDR | red:1 | red:1 | the order test; T2 shipped the opposite with nothing asserting either |
 | M12 | `"check"` folded into the `_` arm | red:1 | red:1 | 🔑 the operator sees **no change at all** — same status, same sentence — and the `Option` is what makes the omission observable |
 | M13 | a French value blanked in `app.yml` | red | red:2 | the locale file IS a build input on this tree (`build.rs`, story 6b.10); the blank check and one inherited guard |
+- **T4 — `insert_range` owns its transaction, and that is what makes the locks mean anything.** In
+  autocommit a `FOR UPDATE` is released at the end of its own statement, so read-decide-write would
+  still race with every lock in place. The parent row is taken first, then the deciding read, per
+  Guy's arbitration of 2026-09-12 on §1(d)'s measured matrix of five strategies.
+- **T4 — AC5's harness ships as a PERMANENT test and asserts the REFUSAL, not the row count.** Four
+  of the five strategies leave exactly one row and three of those tell the operator something false
+  (`Ok`, or a raw `1213 (40001): Deadlock found`). The 400 ms pause is a FUTURE handed to the
+  production function, not a flag inside it: production passes `std::future::ready(())`, so the
+  seam has a live caller and cannot rot.
+- 🔴 **THE PASS'S OWN FINDING: NEITHER LOCK IS MEASURABLE ALONE, BECAUSE EACH MASKS THE OTHER'S
+  MUTATION.** M15 removes the deciding read's `FOR UPDATE` and the harness stays **GREEN** — the
+  parent row alone serialises entry. M16 plants the DRY line with both locks present and it stays
+  **GREEN** — the range lock catches it. Only the COMPOSITE reds, `[Ok(()), Ok(())]`. 🔑 *Two
+  guards that each mask the other's mutation are two guards nothing measures* — a variant of this
+  epic's dominant class in which both halves are individually correct. Closed by
+  `both_reads_of_a_subnet_under_write_take_their_lock`, a SOURCE guard naming each half, after
+  which M15b and M16c red one test each. ⚠️ Its limit is written: it measures what was WRITTEN, not
+  what the server executes, and it is cheaper than the composite and NAMES THE CAUSE where the
+  composite names only the symptom (story 6b.11's AC5 as amended — *the two cumulate*).
+- **T4 — AC9b's budget wraps the whole transaction**, on story 6b.10's precedent and against story
+  14.2's defect of budgeting the wrong half. ⚠️ A timeout is reported as `Contention`
+  DELIBERATELY: *the store never answered* and *the store said deadlock* are different facts and
+  the same action — nothing was written, try again — so the distinction is kept in the log, where
+  whoever is debugging is.
+- ⚠️ **M17 CANNOT GO THROUGH `cargo xtask mutate`, and that is a stated limit of the driver.**
+  Remove the budget and the test does not fail, it **HANGS** — measured by hand under `timeout 60`,
+  killed at 60 s with `running 1 test` and no result line. Which is the defect exactly: *a handler
+  with no budget does not answer wrongly, it does not answer.* The driver would have hung with it.
+- ⚠️ **The budget test's clock is PAUSED, and what that proves is narrower than it looks.**
+  `start_paused` auto-advances to the next timer, so it measures that a budget is armed, wraps the
+  work, and produces a sentence — **not** the five seconds. Under a paused clock a budget of ten
+  thousand seconds would pass this test identically. Said rather than implied.
+- ⚠️ **`tokio`'s `test-util` feature is added as a DEV edge**, on the `opencmdb-core`
+  `test-support` precedent already in that file: `features = ["full"]` does not include it. **No new
+  crate — `Cargo.lock` is byte-identical, verified by diff rather than assumed.**
+
+### T4's mutation pass
+
+**Eight ids. Two predictions CONTRADICTED and one mutation that no driver can run** — the three
+rows that carry the finding.
+
+| id | mutation | predicted | measured | what it says |
+|---|---|---|---|---|
+| M14 | the parent row's lock dropped | red:1 | red:1 (+clippy) | the harness reds; the loser gets the raw deadlock instead of the rule |
+| M15 | the deciding read's `FOR UPDATE` dropped | red:1 | **GREEN** 🔴 | **the finding**: the parent row alone serialises entry, so the harness cannot see this lock |
+| M16 | the DRY line, both locks present | green | green | the range lock is what it cannot walk past — §1(d)'s prose, now measured here |
+| M16b | the DRY line **and** an unlocked deciding read | red | red, `[Ok(()), Ok(())]` | the composite is the only behavioural carrier of the pair |
+| M15b | M15 again, after the source guard | red:1 | red:1 | each half now has an individual carrier that names it |
+| M16c | M16 again, after the source guard | red:1 | red:1 | same |
+| M17 | the write budget removed | the test HANGS | **hung; killed at 60 s** | ⚠️ not runnable through `cargo xtask mutate`, which would hang with it. Measured by hand under `timeout` |
+| — | `Cargo.lock` after the `test-util` feature | unchanged | unchanged | verified by diff, not assumed |
+
+⚠️ **Two runs before these were refused by the driver for a reason it named WRONGLY**, and the
+cause was outside the repository: `/tmp` (a 16 GB tmpfs) hit a per-user quota, so `cargo` could not
+write, and the driver reported **`THE BASELINE IS NOT CLEAN: Red { tests: 11 }`** over a tree that
+was green. Re-measured once space was freed: **898 tests, 0 failed**. 🔑 *The driver refusing was
+right; the cause it named was not* — and this project's rule is that a cause needs a check. The
+check here was the re-run.
+
+🔴 **AND `git checkout --` DESTROYED T4's UNCOMMITTED WORK — the FIFTH occurrence in this
+project**, in the session that had already read the rule in `CLAUDE.md`: *"revert the MUTATION,
+never the FILE" has an unstated precondition — a file revert equals a mutation revert only on a
+COMMITTED baseline.* The composite mutation M16b was planted by hand, and the restore reached for
+`git checkout --` out of habit; the baseline was the T3 commit, so `insert_range_pausing`,
+`load_subnet_locked`, `subnet_from_row` and the whole harness went with the mutation. Rebuilt
+verbatim from the session's own record and re-verified. **Every hand-planted mutation after it was
+restored from a `cp` copy**, which is the only form that does not depend on what is committed.
 
 ### File List
 
@@ -588,8 +656,19 @@ recreated first, the migrations warmed by one full run.
   fourteen refusals, each naming its rule.
 - `crates/opencmdb-bin/src/main.rs` — `mod ipam_write` and the unconditional merge, above
   `auth_deny` and beside `ipam_page::router` rather than inside it.
+- `crates/opencmdb-bin/src/ipam_repo.rs` — `insert_range`'s transaction and its two locks in order,
+  the pause seam, `load_subnet_locked`, `subnet_from_row`, AC5's harness and the source guard.
+- `crates/opencmdb-bin/Cargo.toml` — `tokio`'s `test-util` as a dev feature on an existing edge.
 
 ### Change Log
+
+- 2026-09-12 — **T4: the overlap rule holds under concurrency, and the pass found that neither lock
+  could be seen alone.** The parent row then the deciding read, a permanent 400 ms harness asserting
+  the named refusal, and a budget around the whole transaction. **897 → 900 tests** (610 bin + 191
+  core + 99 xtask), ten gates, clippy `--all-targets`, fmt; **5.02 s without a store and 8.78 s
+  against a live `mariadb:10.11.11`**. 🔴 Two predictions contradicted, one mutation no driver can
+  run, one driver refusal whose stated cause was wrong, and `git checkout --` destroying uncommitted
+  work for the fifth time in this project.
 
 - 2026-09-12 — **T3: the refusal set, carried twice.** `E0004` for a variant, a SET test for a
   constraint name, and the shape that makes the second possible — `constraint_refusal` returning an

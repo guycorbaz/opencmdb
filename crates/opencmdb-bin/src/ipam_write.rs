@@ -107,6 +107,48 @@ impl IntoResponse for Refusal {
     }
 }
 
+/// How long a write may hold the browser before the product answers instead of waiting.
+///
+/// 🔴 **This story adds the product's FIRST BLOCKING WRITE, and the loser's wait tracks the
+/// holder's**: measured at the validation, a 3 s hold gave a **6.005 s** round trip, bounded only
+/// by `innodb_lock_wait_timeout` — **50 s** on a stock container. ⚠️ Story 6b.10 put a per-handler
+/// budget on the GET screens after measuring a 30 s hang; every budgeted file in this product is a
+/// screen, and `document.rs` carries **zero**. This is where a write can do it.
+///
+/// 🔑 **The budget wraps the whole TRANSACTION and not its first read** — story 14.2's denial of
+/// service was exactly a budget around the wrong half, `store_within` wrapping the reads while the
+/// derivation and the render ran unbounded after them.
+///
+/// ⚠️ Five seconds, the same figure as [`crate::page::PAGE_STORE_BUDGET`], and the reason is that
+/// there is no measurement that would justify a different one. *A number invented to look
+/// considered is a number with nothing behind it.*
+const IPAM_WRITE_BUDGET: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Run one write within [`IPAM_WRITE_BUDGET`], answering rather than holding the browser.
+///
+/// ⚠️ **A timeout is reported to the operator as [`RepositoryError::Contention`], deliberately.**
+/// The two are different facts — *the store never answered* against *the store said deadlock* — and
+/// they are the same ACTION: nothing was written, try again. The distinction that matters to
+/// whoever is debugging is kept where it belongs, in the log.
+///
+/// 🔑 Dropping the future drops the transaction, so *nothing was written* is true and not a hope:
+/// an uncommitted MariaDB transaction is rolled back when its connection is returned.
+async fn within_budget<T>(
+    work: impl std::future::Future<Output = Result<T, RepositoryError>>,
+) -> Result<T, RepositoryError> {
+    match tokio::time::timeout(IPAM_WRITE_BUDGET, work).await {
+        Ok(result) => result,
+        Err(_elapsed) => {
+            tracing::error!(
+                budget_ms = IPAM_WRITE_BUDGET.as_millis(),
+                "the addressing plan's write did not finish within its budget — refusing rather \
+                 than holding the browser"
+            );
+            Err(RepositoryError::Contention)
+        }
+    }
+}
+
 /// One write route of the addressing plan.
 ///
 /// 🔑 **The router is BUILT by iterating [`WriteRoute::ALL`]**, so the list of paths and the set of
@@ -260,7 +302,7 @@ async fn define_subnet(
         Ok(label) => label,
         Err(refusal) => return refusal.into_response(),
     };
-    match state.port.define_subnet(subnet, label).await {
+    match within_budget(state.port.define_subnet(subnet, label)).await {
         Ok(id) => {
             tracing::info!(subnet = %subnet.cidr(), id = %id, "defined a subnet of the plan");
             // 🔑 `HX-Redirect` for the same reason story 6.4 adopted it: a narrow swap would leave
@@ -863,6 +905,47 @@ mod tests {
                 "the driver's own sentence reached the operator: {error}"
             );
         }
+    }
+
+    /// **AC9b — a write that never finishes answers, and does not hold the browser.**
+    ///
+    /// ⚠️ **The clock is PAUSED, and what that does and does not prove is said rather than left to
+    /// be assumed.** `start_paused` makes tokio auto-advance to the next timer, so this measures
+    /// the BRANCH — that the budget is armed, that it wraps the work, and that the operator gets a
+    /// sentence — and it does NOT measure five real seconds. The alternative was a five-second
+    /// test, which buys one number and costs it on every run for ever.
+    ///
+    /// 🔑 The port's future never completes, so without the budget this test would HANG rather
+    /// than fail — which is the defect exactly: a handler with no budget does not answer wrongly,
+    /// it does not answer.
+    #[tokio::test(start_paused = true)]
+    async fn a_write_that_never_finishes_answers_within_its_budget() {
+        struct NeverAnswers;
+        impl IpamWritePort for NeverAnswers {
+            fn define_subnet(
+                &self,
+                _subnet: Subnet,
+                _label: String,
+            ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+                Box::pin(std::future::pending())
+            }
+        }
+        let (status, body) = drive(
+            Arc::new(NeverAnswers),
+            form_post("cidr=192.0.2.0/24&label=Office"),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "a write that outlives its budget is answered, not waited out"
+        );
+        assert_eq!(
+            body,
+            key("ipam.refusal.contention"),
+            "the operator is told the same thing as for a real lock wait, because the action is \
+             the same: nothing was written, try again"
+        );
     }
 
     /// The list the router is built from is the list the guard walks — asserted, because the whole
