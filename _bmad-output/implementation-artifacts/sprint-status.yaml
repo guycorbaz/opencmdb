@@ -5408,6 +5408,37 @@ development_status:
   #   ⚠️ NEXT: story 14.2, which owns the concurrency row above, the `#![allow(dead_code)]`
   #   narrowing, and the `structural` removal.
   14-2-the-plan-on-screen: review
+  #   ✅ CODE-REVIEWED (three isolated layers, 2026-09-11/12) AND REPAIRED. 40 raw findings, 2 sent
+  #   back to Guy and re-arbitrated the same day. 875 -> 877 tests, ten gates, both browser gates
+  #   re-run green. ⚠️ All three layers ran at this session's capability -- isolated by context and
+  #   worktree, NOT on a different model, and that half is not claimed (story 6.5's wording).
+  #   🔴 THE SCREEN WAS A DENIAL OF SERVICE: a `10.0.0.0/8` in the plan served 2.08 GB in 44 s with
+  #   status 200, on the PLAIN navigation link, and the page budget could not see it -- it wraps
+  #   the READS while the derivation and the render are synchronous. Guy: beyond 1024 addresses the
+  #   grid is not built at all and the plan shows as the RANGES the operator declared, the ceiling
+  #   tested BEFORE materialising. Measured after: 2 295 bytes in 8.9 ms.
+  #   🔴 ONE SCHEMA-LEGAL ROW removed the whole screen -- `prefix_len = 64` is admitted by the
+  #   CHECK for IPv6 and refused by the adapter, so `/ipam` answered 500 for EVERY subnet with a
+  #   log naming no id and a body saying "the data is intact, the fault is in the display",
+  #   backwards. Skipped and named now.
+  #   🔴 TWO OF MY OWN GUARDS PASSED OVER A BROKEN PRODUCT. The stylesheet guard was satisfied by
+  #   its own COMMENT (the paragraph narrating the defect contains the selector) -- *a guard that
+  #   greps a file greps its prose too*. The AC2 guard was blind to a CALL. 🔑 And its earlier
+  #   widening had read 382 BYTES OF 47 324, because it split on `#[cfg(test)]` whose first
+  #   occurrence sits on line 7 INSIDE the sentence explaining that the `file-size` gate stops at
+  #   the first one. *The defect the file documents, committed by the guard written while reading
+  #   that documentation* -- found only because a mutation that should have reddened came back
+  #   green and was disbelieved.
+  #   🔴 `structural` was in NO denylist while the task was ticked and the PRD says this story adds
+  #   it. Added to three columns, proved red. ⚠️ And `cargo fmt` then blinded a neighbouring guard
+  #   by splitting the list it anchored on -- it PANICKED rather than passing, which is the right
+  #   failure, but *a guard a formatter can blind depends on something nobody is deciding*.
+  #   ✅ THE POLICY AXIS IS A STATED LIMIT (Guy): `border-style: double` at 1 px paints solid, so
+  #   two policies were IDENTICAL PIXELS in Chrome. The channel is exhausted at 14 px; the grid
+  #   separates the four STATES and the policy is carried by the accessible name and the legend.
+  #   ⚠️ NEXT: the merge. Then story 14.2b -- the three write routes, the keyed refusals, the
+  #   concurrency fix on the read that DECIDES, AC5b's auth property, and `classify`'s dead
+  #   `Contention` arm.
   #   IMPLEMENTED 2026-09-11 after the split. 873 → 875 tests (585 bin + 191 core + 99 xtask), ten
   #   gates, clippy --all-targets, RUSTFLAGS="-D warnings", fmt -- and BOTH BROWSER GATES CLAIMED
   #   AND RUN: axe 0 violation nodes over 10 routes + 4 states under all three REQUIRE flags,

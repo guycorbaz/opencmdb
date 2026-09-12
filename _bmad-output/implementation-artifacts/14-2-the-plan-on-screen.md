@@ -540,6 +540,124 @@ collision apart, and the store does not forget between them.*
 - ⚠️ **`page.rs` is still at 1954 of 2000** — this story added no line to it, by putting `/ipam` on
   its own router. 14.2b's routes must not undo that.
 
+## §6 — The three-layer code review, and what it changed
+
+Three isolated layers, 2026-09-11/12. ⚠️ **All three ran at this session's capability — isolated by
+context and by worktree, NOT on a different model, and that half is not claimed** (story 6.5's own
+wording). **40 raw findings; 5 arbitration-grade, 2 sent to Guy and re-arbitrated the same day.**
+
+### 🔴 The screen was a DENIAL OF SERVICE, and the page budget could not see it
+
+A `10.0.0.0/8` in the plan made `/ipam` serve **2.08 GB in 44 s with status 200**; a `/16` — an
+ordinary corporate subnet — shipped 8.1 MB and 65 536 `<li>`. ⚠️ **On the PLAIN navigation link**,
+the default view being the numerically-lowest subnet. Forty concurrent requests took `/healthz`
+from 1 ms to **10.1 s** and the process to 2.6 GB.
+
+🔑 **`store_within` wraps the READS; `PlanView::derive` and `render_plan` are synchronous**, so
+`tokio::time::timeout` had nothing to preempt. *A budget that bounds the wrong half of a handler is
+a budget that reads as coverage and is none* — this epic's dominant class, met at the level of a
+whole request rather than of a guard.
+
+✅ **Guy, 2026-09-12**: beyond `MAX_DRAWN_ADDRESSES` (1024, a `/22`) the grid is not built AT ALL and
+the plan is shown as the **ranges the operator declared** — what the plan actually holds; the grid is
+what does not scale. Refused: a bare refusal sentence (an operator with a `/16` would get nothing
+while the product holds their ranges) and paginating by `/24` (a pagination to design, to make
+keyboard-accessible and to walk with both gates — a story of its own). **The ceiling is tested
+BEFORE the cells are materialised**, and the boundary is asserted on both sides so the VALUE is
+pinned and not merely its existence. Measured after: **2 295 bytes in 8.9 ms**.
+
+### 🔴 One schema-legal row removed the whole screen, healthy subnets included
+
+`0007` admits `prefix_len` up to 128 (IPv6 forward-compat) and cannot check that a base is its own
+network address — both are adapter rules. So one row with `prefix_len = 64` made `list_subnets`
+return `Err` and `/ipam` answer **500 for every subnet**. Three aggravations, each measured: the log
+named **no id**; the 500 body read *"the data behind it is intact; the fault is in the display"*,
+which is backwards here; and it pointed at `/diagnostic`, which keeps no error history. *A row
+nobody can find, breaking a page nobody can read.* The row is now SKIPPED and NAMED, with the trade
+written: a silent skip would hide a real defect, so it is a `warn` carrying the id and the stored
+spelling.
+
+### 🔴 Two of my own guards passed over a broken product, and the reasons are worth more than the fixes
+
+- **The stylesheet guard was satisfied by its own COMMENT.** `app.css`'s paragraph narrating the
+  free-versus-blank defect contains `.ipam-cell-free`, so deleting the RULE left 875 tests, clippy
+  and ten gates green — measured with `cargo xtask mutate`. 🔑 *A guard that greps a file greps its
+  prose too, and the better the prose explains the defect, the more reliably it hides it.* Comments
+  are stripped now — ⚠️ **and a badly-chosen mutation of mine then exposed a second hole**: I renamed
+  the rule instead of deleting it, `contains` accepted the PREFIX, and the guard stayed green for a
+  different reason. *A mutation named for one thing and applied to another sometimes measures a
+  third.* The oracle now knows where a selector ends; both mutations red.
+- **The AC2 guard was blind to a CALL.** It forbade three table-name literals;
+  `crate::repo::count_observations` carries none, so an `/ipam` hitting `observation_record` on
+  every request was green under ten gates. It now allows exactly ONE item from `crate::repo` —
+  `classify`, this crate's single backend-error translation — stated as an allowlist rather than an
+  exception nobody can audit.
+- 🔑 **And its earlier widening had been worthless for a reason that is the story's best sentence**:
+  it split on `#[cfg(test)]`, whose first occurrence in `ipam_repo.rs` is **line 7, inside the
+  sentence explaining that the `file-size` gate stops at the first one and therefore reads 183 lines
+  of `repo.rs` where 1743 are**. It read **382 bytes of 47 324**. *The defect the file documents,
+  committed by the guard written while reading that documentation* — and found only because a
+  mutation that should have reddened came back green and was disbelieved.
+
+### 🔴 `structural` was in no denylist, and the task was ticked
+
+`git diff master...HEAD --stat -- xtask/` was **empty**. The Project Structure Notes listed `xtask`
+under *Touched*, T3 was `[x]`, and `prd.md:1055` says in writing that this story is the one that adds
+it. Added to three columns (`<key>`, `en`, `fr`), proved red — reintroducing the retired key reds the
+gate naming `app.yml:810`. ⚠️ **And `cargo fmt` then broke a neighbouring guard**: lengthening the
+French column pushed it past rustfmt's width, the formatter split it, and
+`the_two_carriers_agree_on_what_is_retired`'s `("fr",` anchor vanished. It PANICKED rather than
+passing — the right failure — but *a guard an automatic formatter can blind depends on something
+nobody is deciding*, and the anchor is now the literal.
+
+### 🔴 `next_offerable` offered the network address, and the story's own test demanded it
+
+Found by the blind layer from the diff alone, reproduced by the edge layer through the sanctioned
+`insert_range`. `derive` reached `is_edge` only in the `else` branch, so any range over `.0` made it
+`Free(_)` and offerable. 🔑 **My first fix that morning had named a POLICY; the defect was an
+ORDER** — the edge is decided before any range now, and carries the declared policy so the plan is
+drawn as written while only the OFFER is refused. ⚠️ The guard asserted `offerable == 256` on a
+`/24`: *a test that pins the ugly thing is a test that demands it*, and this one demanded it for a
+day, in a file whose header quotes that exact trap.
+
+### ✅ The policy axis is a STATED LIMIT (Guy, 2026-09-12)
+
+`border-style: double` at `border-width: 1px` collapses to a solid line, so `static` and
+`infrastructure` came back **IDENTICAL PIXELS** in Chrome 151. Not *"told apart by colour alone"*,
+which 1.4.1 would already forbid — not told apart. 🔑 **The channel is exhausted**: a 14 px cell
+offers three border styles that render at 1 px and the fill is spoken for by the four STATES. So the
+grid separates the STATES, the policy is carried by each cell's accessible name and by the legend
+— constraint 6 in its own terms, *a pattern and a word, never a hue alone* — and the limit is
+written in the stylesheet with a test that reds if the sentence goes. Refused: a thicker border for
+one policy (the cell changes apparent size), and composing state × policy into one fill (16 patterns
+at 14 px, which would need measuring rather than hoping).
+
+### ⚠️ Also repaired, each from a layer's measurement
+
+The empty plan served `/triage`'s sentence — *"resolve an ambiguity, accept a gap, snooze, attach"*,
+four gestures unrelated to an addressing plan — and now has its own key plus `aria-describedby`, so
+it is announced once as well as seen once; its verb is **Define**, not *Declare*, because `prd.md:992`
+binds `declared` to a STATE. `IpamQuery::subnet`'s doc promised the fallback the handler refuses. A
+comment said FIFTH over a list of five predecessors — ⚠️ **and two layers gave two numbers here**
+(the validation said fifth, the blind layer sixth); **the tie was broken by counting, not by
+seniority**: `triage_router` carries five screens, so `/ipam` is the sixth. Two modifiers, not one,
+lacked a legend entry. AC9's *SEVEN* was six. The File List's *eleven guards* was twelve, *five
+items* was six, *33 references* was 41. And **§5 said "registered" over a `deferred-work.md`
+identical to master** — story 6b.9's finding verbatim; five rows are written now and two inherited
+rows re-owned to 14.2b.
+
+### ✅ Refuted by the layers, with the check — so nobody re-chases them
+
+Fifteen suspicions were RUN and refuted by the edge layer: hostile `?subnet=` (15 probes — all 200,
+**nothing reflected**), duplicate `?subnet=` (**400** from axum's own extractor), XSS through a label
+or an id (escaped, `grep -c "<script>alert"` → 0), the budget on store failure (**500 in 5.004 s**),
+a mid-page failure (**500 in 5.002 s**), poisoned policy tokens and addresses (**all refused by the
+DDL**), `Subnet::addresses()` panicking (`/0`, `/31`, `/32`, `/129` — none), `AXE_REQUIRE_PLAN`
+satisfied by something that is not a grid (**exit 2**, the contract holds), and axe over five `/ipam`
+states including the first-boot empty plan (**0 violation nodes on all five**). ⚠️ Three of the
+eight guard mutations reddened **compiler-carried** rather than on an assertion, and that is named
+per row rather than folded into a headline.
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -575,9 +693,10 @@ Claude Opus 5 (1M context)
   used"` cannot see ``struct `Subnet` is never constructed``). ⚠️ **PR #171 carries the correction to the twins and the register and is OPEN, not merged** — the criterion first said *corrected before this story starts*, which was false while that PR waited.
 - **AC10** `ipam/mod.rs`'s false `Constraint` doc corrected, **and the variant that makes the
   corrected sentence true shipped with it** rather than leaving a doc describing future code.
-- **AC11** THE LIVE COUNT: **873 → 875 tests** (585 bin + 191 core + 99 xtask), the sum re-added
+- **AC11** THE LIVE COUNT: **873 → 877 tests** (587 bin + 191 core + 99 xtask, after the code
+  review's two new guards), the sum re-added
   rather than recalled. `cargo test --workspace --locked`, wall clock, warm: **8.69 s** against a
-  live `mariadb:10.11.11` on port 13420, **5.61 s** with `DATABASE_URL` unset.
+  live `mariadb:10.11.11`, **5.61 s** with `DATABASE_URL` unset.
   ✅ **The 5.6 s is NOT a store leaking in, and that is settled by a check rather than by a story**:
   there is no `.env`, `DATABASE_URL` is absent from the environment, and `--skip budget` runs in
   **0.74 s** while the three `budget` tests alone take **5.15 s**. Story 14.1's §6 recorded the same
