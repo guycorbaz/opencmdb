@@ -1,6 +1,6 @@
 # Story 14.2: The plan on screen
 
-Status: review
+Status: done
 
 ✅ **The four arbitrations of §1 were TAKEN by Guy on 2026-09-11**, the recommendation in all four.
 ⚠️ They were taken BEFORE the mandatory validation pass, which is the order this project uses and
