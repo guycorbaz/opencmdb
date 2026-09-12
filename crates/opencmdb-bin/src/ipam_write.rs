@@ -16,7 +16,7 @@
 //! [`crate::write_guard::same_origin`], reached from here and from `document.rs`, with a tripwire
 //! asserting the comparison exists in exactly one file: *a CSRF check is the one function that must
 //! never be duplicated*. The sentences are local, because `document.malformed` and
-//! `ipam.refusal.malformed` are different sentences about different gestures, and one body serving
+//! `ipam.refusal.malformed_subnet` are different sentences about different gestures, and one body serving
 //! two surfaces is the shape story 6.4 paid for.
 //!
 //! ⚠️ **Nothing here writes provenance, so the `authorship` gate owes this file no sanction.** The
@@ -162,23 +162,44 @@ async fn within_budget<T>(
 pub(crate) enum WriteRoute {
     /// `POST /ipam/subnet` — define a subnet, the entry the other two hang from.
     Subnet,
+    /// `POST /ipam/range` — define a stretch of it and say what it is MEANT for.
+    Range,
+    /// `POST /ipam/address` — define one address.
+    Address,
 }
 
 impl WriteRoute {
     /// Every write route this sub-router carries.
-    pub(crate) const ALL: &'static [WriteRoute] = &[WriteRoute::Subnet];
+    pub(crate) const ALL: &'static [WriteRoute] =
+        &[WriteRoute::Subnet, WriteRoute::Range, WriteRoute::Address];
 
     /// The path the route is mounted at, and the path the guard probes.
     pub(crate) const fn path(self) -> &'static str {
         match self {
             WriteRoute::Subnet => "/ipam/subnet",
+            WriteRoute::Range => "/ipam/range",
+            WriteRoute::Address => "/ipam/address",
         }
+    }
+
+    /// The shape refusal this form earns — one sentence per form, naming ITS fields.
+    const fn malformed(self) -> Refusal {
+        Refusal::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            match self {
+                WriteRoute::Subnet => "ipam.refusal.malformed_subnet",
+                WriteRoute::Range => "ipam.refusal.malformed_range",
+                WriteRoute::Address => "ipam.refusal.malformed_address",
+            },
+        )
     }
 
     /// The method router mounted at [`WriteRoute::path`].
     fn handler(self) -> MethodRouter<IpamWriteState> {
         match self {
             WriteRoute::Subnet => post(define_subnet),
+            WriteRoute::Range => post(define_range),
+            WriteRoute::Address => post(define_address),
         }
     }
 }
@@ -198,6 +219,32 @@ pub(crate) struct DefineSubnetRequest {
     pub(crate) label: String,
 }
 
+/// The `POST /ipam/range` request.
+#[derive(Debug, Deserialize)]
+pub(crate) struct DefineRangeRequest {
+    /// The subnet the range belongs to, by the id `/ipam`'s own selector carries.
+    pub(crate) subnet_id: String,
+    /// The first address of the range, as an operator writes it — `192.0.2.10`.
+    pub(crate) first: String,
+    /// The last address, inclusive.
+    pub(crate) last: String,
+    /// What the stretch is MEANT for, as one of the four binding tokens.
+    pub(crate) policy: String,
+    /// What the operator calls this range. Required, and bounded by [`MAX_LABEL_CHARS`].
+    pub(crate) label: String,
+}
+
+/// The `POST /ipam/address` request.
+#[derive(Debug, Deserialize)]
+pub(crate) struct DefineAddressRequest {
+    /// The subnet the address belongs to.
+    pub(crate) subnet_id: String,
+    /// The address itself, as an operator writes it.
+    pub(crate) addr: String,
+    /// What the operator calls it. Required, and bounded by [`MAX_LABEL_CHARS`].
+    pub(crate) label: String,
+}
+
 /// The port: one gesture of the plan, whole. The sub-router's state reaches the world only
 /// through this, and whatever it needs to do so lives INSIDE the impl.
 pub(crate) trait IpamWritePort: Send + Sync {
@@ -209,6 +256,34 @@ pub(crate) trait IpamWritePort: Send + Sync {
     fn define_subnet(
         &self,
         subnet: Subnet,
+        label: String,
+    ) -> BoxFuture<'_, Result<String, RepositoryError>>;
+
+    /// Define a range inside a subnet and answer with the id it was given.
+    ///
+    /// # Errors
+    ///
+    /// Whatever the adapter refuses, as a [`RepositoryError`] — an unknown subnet, an overlap, a
+    /// range outside its subnet, or the loser of a lock wait.
+    fn define_range(
+        &self,
+        subnet_id: String,
+        first: Ipv4Addr,
+        last: Ipv4Addr,
+        policy: opencmdb_core::ipam::IpPolicy,
+        label: String,
+    ) -> BoxFuture<'_, Result<String, RepositoryError>>;
+
+    /// Define one address inside a subnet and answer with the id it was given.
+    ///
+    /// # Errors
+    ///
+    /// Whatever the adapter refuses — an unknown subnet, an address outside it, or the same
+    /// address defined twice.
+    fn define_address(
+        &self,
+        subnet_id: String,
+        addr: Ipv4Addr,
         label: String,
     ) -> BoxFuture<'_, Result<String, RepositoryError>>;
 }
@@ -244,6 +319,46 @@ impl IpamWritePort for StoreIpamWrite {
             // become load-bearing (§1(d)), and wrapping this one would suggest a guarantee it does
             // not need and does not have.
             ipam_repo::insert_subnet(&mut *conn, &id, subnet, &label).await?;
+            Ok(id)
+        })
+    }
+
+    fn define_range(
+        &self,
+        subnet_id: String,
+        first: Ipv4Addr,
+        last: Ipv4Addr,
+        policy: opencmdb_core::ipam::IpPolicy,
+        label: String,
+    ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+        Box::pin(async move {
+            let id = uuid::Uuid::now_v7().to_string();
+            let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
+            // ⚠️ THE TRANSACTION AND THE TWO LOCKS ARE `insert_range`'s OWN, deliberately: the
+            // overlap rule is decided by a read, so the lock has to be taken by whatever performs
+            // that read. Opening a transaction here as well would nest one inside another, and
+            // MariaDB's `BEGIN` implicitly commits the outer.
+            ipam_repo::insert_range(&mut conn, &id, &subnet_id, first, last, policy, &label)
+                .await?;
+            Ok(id)
+        })
+    }
+
+    fn define_address(
+        &self,
+        subnet_id: String,
+        addr: Ipv4Addr,
+        label: String,
+    ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+        Box::pin(async move {
+            let id = uuid::Uuid::now_v7().to_string();
+            let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
+            // 🔑 NO LOCK HERE, and the asymmetry with the range is not an oversight: an address is
+            // refused twice by `ip_address_in_subnet`, a UNIQUE key, which needs no read to decide.
+            // The range's rule compares a row against its SIBLINGS, which a `CHECK` cannot express
+            // (`ERROR 1901`) and only a read can answer — *the lock is owed by the rule that reads,
+            // not by the act of writing*.
+            ipam_repo::insert_address(&mut conn, &id, &subnet_id, addr, &label).await?;
             Ok(id)
         })
     }
@@ -286,7 +401,7 @@ async fn define_subnet(
         return (StatusCode::FORBIDDEN, crate::write_guard::CSRF_REFUSED_BODY).into_response();
     }
     let Ok(Form(request)) = form else {
-        return malformed().into_response();
+        return WriteRoute::Subnet.malformed().into_response();
     };
     // 🔑 THE CIDR IS READ BEFORE THE LABEL, and the order is a decision rather than an accident.
     // A form wrong in two places can only be told about one of them, and the honest one to name is
@@ -302,28 +417,116 @@ async fn define_subnet(
         Ok(label) => label,
         Err(refusal) => return refusal.into_response(),
     };
-    match within_budget(state.port.define_subnet(subnet, label)).await {
+    let work = state.port.define_subnet(subnet, label);
+    answer(within_budget(work).await, None, "ipam.done.subnet")
+}
+
+/// `POST /ipam/range` — define a stretch of a subnet and say what it is MEANT for.
+///
+/// 🔑 **It reuses, it does not re-implement.** The Origin check, the label rules, the subnet-id
+/// refusal, the exhaustive `RepositoryError` mapping and the budget are the same functions the
+/// subnet route calls, and `every_route_reuses_the_shared_machinery` drives all three through the
+/// same probes rather than trusting this sentence.
+async fn define_range(
+    State(state): State<IpamWriteState>,
+    headers: HeaderMap,
+    form: Result<Form<DefineRangeRequest>, FormRejection>,
+) -> Response {
+    if !crate::write_guard::same_origin(&headers) {
+        return (StatusCode::FORBIDDEN, crate::write_guard::CSRF_REFUSED_BODY).into_response();
+    }
+    let route = WriteRoute::Range;
+    let Ok(Form(request)) = form else {
+        return route.malformed().into_response();
+    };
+    let subnet_id = match checked_subnet_id(&request.subnet_id, route) {
+        Ok(id) => id,
+        Err(refusal) => return refusal.into_response(),
+    };
+    let (first, last) = match (
+        request.first.trim().parse::<Ipv4Addr>(),
+        request.last.trim().parse::<Ipv4Addr>(),
+    ) {
+        (Ok(first), Ok(last)) => (first, last),
+        _ => return route.malformed().into_response(),
+    };
+    let policy = match parse_policy(&request.policy) {
+        Ok(policy) => policy,
+        Err(refusal) => return refusal.into_response(),
+    };
+    let label = match checked_label(&request.label) {
+        Ok(label) => label,
+        Err(refusal) => return refusal.into_response(),
+    };
+    let work = state
+        .port
+        .define_range(subnet_id.clone(), first, last, policy, label);
+    answer(
+        within_budget(work).await,
+        Some(&subnet_id),
+        "ipam.done.range",
+    )
+}
+
+/// `POST /ipam/address` — define one address of a subnet.
+async fn define_address(
+    State(state): State<IpamWriteState>,
+    headers: HeaderMap,
+    form: Result<Form<DefineAddressRequest>, FormRejection>,
+) -> Response {
+    if !crate::write_guard::same_origin(&headers) {
+        return (StatusCode::FORBIDDEN, crate::write_guard::CSRF_REFUSED_BODY).into_response();
+    }
+    let route = WriteRoute::Address;
+    let Ok(Form(request)) = form else {
+        return route.malformed().into_response();
+    };
+    let subnet_id = match checked_subnet_id(&request.subnet_id, route) {
+        Ok(id) => id,
+        Err(refusal) => return refusal.into_response(),
+    };
+    let Ok(addr) = request.addr.trim().parse::<Ipv4Addr>() else {
+        return route.malformed().into_response();
+    };
+    let label = match checked_label(&request.label) {
+        Ok(label) => label,
+        Err(refusal) => return refusal.into_response(),
+    };
+    let work = state.port.define_address(subnet_id.clone(), addr, label);
+    answer(
+        within_budget(work).await,
+        Some(&subnet_id),
+        "ipam.done.address",
+    )
+}
+
+/// Turn a port's answer into the operator's, sending the browser back to the plan it just changed.
+///
+/// 🔑 `HX-Redirect` for the reason story 6.4 adopted it: a narrow swap would leave the screen
+/// asserting the state it had before the write. The browser goes back to `/ipam` selected on the
+/// subnet concerned, which re-renders from the store — *one URL per state*, epic constraint 4.
+fn answer(
+    outcome: Result<String, RepositoryError>,
+    subnet_id: Option<&str>,
+    done_key: &'static str,
+) -> Response {
+    match outcome {
         Ok(id) => {
-            tracing::info!(subnet = %subnet.cidr(), id = %id, "defined a subnet of the plan");
-            // 🔑 `HX-Redirect` for the same reason story 6.4 adopted it: a narrow swap would leave
-            // the empty-plan sentence standing over a plan that now exists — a claim and its
-            // refutation in one viewport. The browser goes back to `/ipam`, which re-renders from
-            // the store, selected on the subnet just defined. *One URL per state* is epic
-            // constraint 4, and post-redirect-get is its idiom rather than an exception to it.
+            // `None` means the record just created IS the subnet, so it is its own redirect target.
+            let target = subnet_id.unwrap_or(&id);
+            tracing::info!(id = %id, subnet = %target, key = done_key, "the plan was changed");
             (
                 StatusCode::CREATED,
                 [(
                     axum::http::HeaderName::from_static("hx-redirect"),
-                    format!("/ipam?subnet={id}"),
+                    format!("/ipam?subnet={target}"),
                 )],
-                rust_i18n::t!("ipam.done.subnet").to_string(),
+                rust_i18n::t!(done_key).to_string(),
             )
                 .into_response()
         }
         Err(error) => {
             let refusal = repository_refusal(&error);
-            // The driver's sentence stays in the log and never reaches the body. Logged HERE
-            // rather than inside the mapper, so the mapper stays pure and testable as data.
             if refusal.status() == StatusCode::INTERNAL_SERVER_ERROR {
                 tracing::error!(%error, "the addressing plan's write failed at the backend");
             }
@@ -332,10 +535,63 @@ async fn define_subnet(
     }
 }
 
-/// The request-shape refusal, one sentence for every shape mistake: an extractor rejection of any
-/// class (the body-size limit included) and a CIDR the product cannot parse.
-const fn malformed() -> Refusal {
-    Refusal::new(StatusCode::UNPROCESSABLE_ENTITY, "ipam.refusal.malformed")
+/// The subnet id the form carried, or the refusal it earns.
+///
+/// 🔑 **THE NIL UUID IS REFUSED HERE, AT THE ROUTE** (Guy, 2026-09-12, §2's decision 3) — the other
+/// half of `document.rs`'s pair, whose `:120` mints a v7 for the record being created and whose
+/// `:195` refuses a nil ARRIVING from the client. Both halves are live on this route: it creates a
+/// range (id minted here) and it carries a subnet id chosen in the browser.
+///
+/// ⚠️ **A TRIPWIRE, not a barrier**: the adapter still accepts the nil, measured at story 14.2 on
+/// all three `insert_*`. Story 5.12's precedent, stated rather than implied.
+///
+/// ⚠️ The nil is folded into the form's shape sentence rather than given a key of its own
+/// (`document.rs:195`'s precedent): it is a sentinel no operator types, so a sentence for it would
+/// be a sentence spent on a hand-crafted request.
+///
+/// # Errors
+///
+/// The form's shape refusal when the id is not a UUID, or is the nil sentinel.
+fn checked_subnet_id(raw: &str, route: WriteRoute) -> Result<String, Refusal> {
+    let Ok(parsed) = raw.trim().parse::<uuid::Uuid>() else {
+        return Err(route.malformed());
+    };
+    if parsed.is_nil() {
+        return Err(route.malformed());
+    }
+    // Re-serialised canonical, so a braced, urn: or hyphenless spelling of a real id is harmless
+    // before any SQL sees it (story 6.2 §2).
+    Ok(parsed.to_string())
+}
+
+/// The policy the operator chose, or the refusal that says it is not one of the four.
+///
+/// 🔴 **NO `trim()`, and the first draft had one — its own test caught it.** A label is free text
+/// an operator typed, where a stray space is a typo worth absorbing; a policy is a TOKEN from a
+/// closed set, chosen by a control, where a stray space means the sender is not the form. Trimming
+/// it would make the route's acceptance set larger than the binding table's, which is the one
+/// property that table exists to hold — and `ascii_bin` being PAD SPACE, `'static '` is exactly the
+/// value the schema needed an INTEGER comparison to refuse one layer down. *The same reflex that is
+/// kindness on free text is a widened vocabulary on a token.*
+///
+/// ⚠️ **Not `ipam_repo::policy_from_token`, and the difference is the POPULATION.** That one reads a
+/// token the STORE holds, so an unknown one is a row this build cannot render — a fault, answered
+/// as a backend failure. This one reads a token the BROWSER sent, where an unknown one is an
+/// ordinary form mistake. *The same string means different things depending on who wrote it.*
+///
+/// # Errors
+///
+/// A 422 naming the axis rather than paraphrasing the four binding words.
+fn parse_policy(raw: &str) -> Result<opencmdb_core::ipam::IpPolicy, Refusal> {
+    opencmdb_core::ipam::IpPolicy::ALL
+        .into_iter()
+        .find(|policy| policy.as_str() == raw)
+        .ok_or_else(|| {
+            Refusal::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "ipam.refusal.unknown_policy",
+            )
+        })
 }
 
 /// The label the operator typed, or the refusal that names which rule it broke.
@@ -365,9 +621,10 @@ fn checked_label(raw: &str) -> Result<String, Refusal> {
 ///
 /// # Errors
 ///
-/// A 422: `ipam.refusal.malformed` when the text is not a CIDR at all, or the keyed sentence of
-/// whichever [`IpamError`] [`Subnet::new`] raises.
+/// A 422: the subnet form's own shape sentence when the text is not a CIDR at all, or the keyed
+/// sentence of whichever [`IpamError`] [`Subnet::new`] raises.
 fn parse_cidr(raw: &str) -> Result<Subnet, Refusal> {
+    let malformed = || WriteRoute::Subnet.malformed();
     let (base, prefix) = raw.trim().split_once('/').ok_or_else(malformed)?;
     let base: Ipv4Addr = base.parse().map_err(|_| malformed())?;
     // ⚠️ A prefix that does not fit a `u8` — `/999` — is MALFORMED, while one that fits and cannot
@@ -451,7 +708,7 @@ pub(crate) fn ipam_refusal(error: &IpamError) -> Refusal {
         IpamError::AddressOutsideSubnet => "ipam.refusal.address_outside_subnet",
         IpamError::BaseIsNotTheNetworkAddress => "ipam.refusal.base_not_network",
         IpamError::PrefixLengthNotInFamily => "ipam.refusal.prefix_not_in_family",
-        IpamError::MalformedAddress => "ipam.refusal.malformed_address",
+        IpamError::MalformedAddress => "ipam.refusal.not_an_address",
     };
     Refusal::new(StatusCode::UNPROCESSABLE_ENTITY, key)
 }
@@ -477,6 +734,16 @@ mod tests {
     }
 
     impl FakePort {
+        /// The one answer this port was built with. Panics on a second call, which is the point:
+        /// a test that reaches the port twice is a test whose refusal did not stop the handler.
+        fn take_answer(&self) -> Result<String, RepositoryError> {
+            self.answer
+                .lock()
+                .expect("the fake port's answer")
+                .take()
+                .expect("the fake port answers once per test")
+        }
+
         fn answering(answer: Result<String, RepositoryError>) -> Arc<Self> {
             Arc::new(Self {
                 answer: std::sync::Mutex::new(Some(answer)),
@@ -495,12 +762,37 @@ mod tests {
                 .lock()
                 .expect("the fake port's log")
                 .push((subnet.cidr(), label));
-            let answer = self
-                .answer
+            let answer = self.take_answer();
+            Box::pin(async move { answer })
+        }
+
+        fn define_range(
+            &self,
+            subnet_id: String,
+            first: Ipv4Addr,
+            last: Ipv4Addr,
+            _policy: opencmdb_core::ipam::IpPolicy,
+            label: String,
+        ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+            self.asked
                 .lock()
-                .expect("the fake port's answer")
-                .take()
-                .expect("the fake port answers once per test");
+                .expect("the fake port's log")
+                .push((format!("{subnet_id}:{first}-{last}"), label));
+            let answer = self.take_answer();
+            Box::pin(async move { answer })
+        }
+
+        fn define_address(
+            &self,
+            subnet_id: String,
+            addr: Ipv4Addr,
+            label: String,
+        ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+            self.asked
+                .lock()
+                .expect("the fake port's log")
+                .push((format!("{subnet_id}:{addr}"), label));
+            let answer = self.take_answer();
             Box::pin(async move { answer })
         }
     }
@@ -508,9 +800,14 @@ mod tests {
     /// A same-origin urlencoded POST to the subnet route. `Origin`/`Host` agree, so the CSRF check
     /// passes; the test that probes the check sets the headers itself.
     fn form_post(body: &str) -> Request<Body> {
+        form_post_to(WriteRoute::Subnet, body)
+    }
+
+    /// The same, to any of the three routes.
+    fn form_post_to(route: WriteRoute, body: &str) -> Request<Body> {
         Request::builder()
             .method("POST")
-            .uri(WriteRoute::Subnet.path())
+            .uri(route.path())
             .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
             .header(header::HOST, "opencmdb.example")
             .header(header::ORIGIN, "https://opencmdb.example")
@@ -595,7 +892,7 @@ mod tests {
         let port = FakePort::answering(Ok("unreached".to_string()));
         let (status, body) = drive(port, form_post("subject=nothing-like-it")).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(body, key("ipam.refusal.malformed"));
+        assert_eq!(body, key("ipam.refusal.malformed_subnet"));
     }
 
     #[tokio::test]
@@ -653,7 +950,11 @@ mod tests {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "`{spelling}` is not a subnet the product can evaluate"
             );
-            assert_eq!(body, key("ipam.refusal.malformed"), "for `{spelling}`");
+            assert_eq!(
+                body,
+                key("ipam.refusal.malformed_subnet"),
+                "for `{spelling}`"
+            );
         }
     }
 
@@ -761,7 +1062,7 @@ mod tests {
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(
             body,
-            key("ipam.refusal.malformed"),
+            key("ipam.refusal.malformed_subnet"),
             "the first field the operator filled is the one the refusal names"
         );
     }
@@ -929,6 +1230,24 @@ mod tests {
             ) -> BoxFuture<'_, Result<String, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
+            fn define_range(
+                &self,
+                _subnet_id: String,
+                _first: Ipv4Addr,
+                _last: Ipv4Addr,
+                _policy: opencmdb_core::ipam::IpPolicy,
+                _label: String,
+            ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+                Box::pin(std::future::pending())
+            }
+            fn define_address(
+                &self,
+                _subnet_id: String,
+                _addr: Ipv4Addr,
+                _label: String,
+            ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+                Box::pin(std::future::pending())
+            }
         }
         let (status, body) = drive(
             Arc::new(NeverAnswers),
@@ -946,6 +1265,181 @@ mod tests {
             "the operator is told the same thing as for a real lock wait, because the action is \
              the same: nothing was written, try again"
         );
+    }
+
+    /// A body every field of which is valid, for each route.
+    ///
+    /// 🔑 The `match` is exhaustive, so a fourth route cannot be added without saying what a good
+    /// request to it looks like — which is what makes the reuse test cover it automatically rather
+    /// than by someone remembering.
+    fn a_valid_body(route: WriteRoute, label: &str) -> String {
+        let subnet = "01900000-0000-7000-8000-0000000000aa";
+        match route {
+            WriteRoute::Subnet => format!("cidr=192.0.2.0/24&label={label}"),
+            WriteRoute::Range => format!(
+                "subnet_id={subnet}&first=192.0.2.10&last=192.0.2.20&policy=static&label={label}"
+            ),
+            WriteRoute::Address => format!("subnet_id={subnet}&addr=192.0.2.9&label={label}"),
+        }
+    }
+
+    /// **AC1 — the second and third routes REUSE the machinery, and this drives all three through
+    /// the same probes rather than trusting a comment that says so.**
+    ///
+    /// 🔴 The criterion's words are *"the others reuse it, and a TEST asserts the reuse rather than
+    /// a comment claiming it"*. A comment can be true when written and false two commits later; a
+    /// loop over `WriteRoute::ALL` covers a route the day it is added.
+    ///
+    /// ⚠️ What it asserts is that each route answers the SAME WAY to the same shared mistake — not
+    /// that they call the same function, which no test can see. A second implementation that
+    /// happened to behave identically would pass, and that is the honest limit of a behavioural
+    /// guard. What narrows it is that the shape refusal is per-route and asserted DISTINCT, so a
+    /// copy would have to reproduce the difference too.
+    #[tokio::test]
+    async fn every_route_reuses_the_shared_machinery() {
+        let mut shape_sentences: Vec<String> = Vec::new();
+        for route in WriteRoute::ALL {
+            let route = *route;
+            let at = route.path();
+
+            // The Origin check, decided first: the port answers a SUCCESS, so a route that skipped
+            // the check would go green on a 201.
+            let cross = Request::builder()
+                .method("POST")
+                .uri(at)
+                .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+                .header(header::HOST, "opencmdb.example")
+                .header(header::ORIGIN, "https://attacker.example")
+                .body(Body::from(a_valid_body(route, "Office")))
+                .expect("a well-formed test request");
+            let port = FakePort::answering(Ok("unreached".to_string()));
+            let (status, body) = drive(port.clone(), cross).await;
+            assert_eq!(
+                status,
+                StatusCode::FORBIDDEN,
+                "`{at}` skipped the Origin check"
+            );
+            assert_eq!(body, crate::write_guard::CSRF_REFUSED_BODY, "at `{at}`");
+            assert!(
+                port.asked.lock().expect("the log").is_empty(),
+                "`{at}` reached the port despite a cross-origin request"
+            );
+
+            // The label rules, both halves.
+            for (label, key_name, what) in [
+                ("%20%20", "ipam.refusal.label_empty", "a blank label"),
+                (
+                    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+                    "ipam.refusal.label_too_long",
+                    "a label past the column",
+                ),
+            ] {
+                let port = FakePort::answering(Ok("unreached".to_string()));
+                let (status, body) =
+                    drive(port, form_post_to(route, &a_valid_body(route, label))).await;
+                assert_eq!(
+                    status,
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "`{at}` accepted {what}"
+                );
+                assert_eq!(
+                    body,
+                    key(key_name),
+                    "`{at}` named the wrong rule for {what}"
+                );
+            }
+
+            // The shape refusal, which is per-route and must stay so.
+            let port = FakePort::answering(Ok("unreached".to_string()));
+            let (status, body) = drive(port, form_post_to(route, "nothing=useful")).await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "at `{at}`");
+            assert!(
+                !shape_sentences.contains(&body),
+                "`{at}` gives the same shape sentence as another form, so it names none of its own \
+                 fields: {body}"
+            );
+            shape_sentences.push(body);
+
+            // And the success path, including the redirect every route owes.
+            let port = FakePort::answering(Ok("01900000-0000-7000-8000-0000000000bb".to_string()));
+            let response = router_with(port)
+                .oneshot(form_post_to(route, &a_valid_body(route, "Office")))
+                .await
+                .expect("the sub-router answers");
+            assert_eq!(response.status(), StatusCode::CREATED, "at `{at}`");
+            assert!(
+                response
+                    .headers()
+                    .get("hx-redirect")
+                    .is_some_and(|value| value
+                        .to_str()
+                        .is_ok_and(|value| value.starts_with("/ipam?subnet="))),
+                "`{at}` does not send the browser back to the plan it changed"
+            );
+        }
+        assert_eq!(
+            shape_sentences.len(),
+            WriteRoute::ALL.len(),
+            "every route was probed"
+        );
+    }
+
+    /// The two routes that RECEIVE a subnet id refuse the nil sentinel, at the route.
+    #[tokio::test]
+    async fn a_nil_subnet_id_is_refused_before_the_store() {
+        for (route, body) in [
+            (
+                WriteRoute::Range,
+                "subnet_id=00000000-0000-0000-0000-000000000000&first=192.0.2.10&last=192.0.2.20&policy=static&label=Office",
+            ),
+            (
+                WriteRoute::Address,
+                "subnet_id=00000000-0000-0000-0000-000000000000&addr=192.0.2.9&label=Office",
+            ),
+        ] {
+            let port = FakePort::answering(Ok("unreached".to_string()));
+            let (status, _) = drive(port.clone(), form_post_to(route, body)).await;
+            assert_eq!(
+                status,
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "`{}` accepted the nil UUID",
+                route.path()
+            );
+            assert!(
+                port.asked.lock().expect("the log").is_empty(),
+                "`{}` handed the nil sentinel to the store",
+                route.path()
+            );
+        }
+    }
+
+    /// A policy outside the four binding words is refused, and the four are accepted.
+    #[tokio::test]
+    async fn only_the_four_binding_policies_are_accepted() {
+        for policy in opencmdb_core::ipam::IpPolicy::ALL {
+            let port = FakePort::answering(Ok("id".to_string()));
+            let body = format!(
+                "subnet_id=01900000-0000-7000-8000-0000000000aa&first=192.0.2.10&last=192.0.2.20&policy={}&label=Office",
+                policy.as_str()
+            );
+            let (status, _) = drive(port, form_post_to(WriteRoute::Range, &body)).await;
+            assert_eq!(status, StatusCode::CREATED, "`{policy}` is a binding word");
+        }
+        // ⚠️ `Static ` with a trailing space is the PAD SPACE trap one layer up: the schema's own
+        // `IN (...)` accepts it, so the route must not.
+        for rejected in ["structural", "Static", "static ", ""] {
+            let port = FakePort::answering(Ok("unreached".to_string()));
+            let body = format!(
+                "subnet_id=01900000-0000-7000-8000-0000000000aa&first=192.0.2.10&last=192.0.2.20&policy={rejected}&label=Office"
+            );
+            let (status, sentence) = drive(port, form_post_to(WriteRoute::Range, &body)).await;
+            assert_eq!(
+                status,
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "`{rejected}` was accepted as a policy"
+            );
+            assert_eq!(sentence, key("ipam.refusal.unknown_policy"));
+        }
     }
 
     /// The list the router is built from is the list the guard walks — asserted, because the whole

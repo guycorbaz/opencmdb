@@ -362,7 +362,9 @@ the subnet (`_ipam.html:49,79` already carries the store's own id).
 - [x] **T4** (AC5, AC9b) The parent row THEN the deciding read; the pause harness as a permanent
   test asserting the REFUSAL and not merely the row count; and the budget around the transaction.
   ✅ 2026-09-12 — 🔴 and the pass found that NEITHER LOCK is observable on its own.
-- [ ] **T5** (AC1) The second and third routes, and the test that asserts the reuse.
+- [x] **T5** (AC1) The second and third routes, and the test that asserts the reuse. ✅ 2026-09-12
+  — and **AC7's allow half landed here rather than at T7**: each attribute left with the route that
+  falsified its stated reason.
 - [ ] **T6** (AC3) `PATHS` per sub-router, the routers built by iterating it, and the guard with its
   POSITIVE control.
 - [ ] **T6b** (§3) Derive `the_plan_reads_no_observation`'s file list; widen `kbd-probe.mjs` to
@@ -642,6 +644,64 @@ COMMITTED baseline.* The composite mutation M16b was planted by hand, and the re
 `load_subnet_locked`, `subnet_from_row` and the whole harness went with the mutation. Rebuilt
 verbatim from the session's own record and re-verified. **Every hand-planted mutation after it was
 restored from a `cp` copy**, which is the only form that does not depend on what is committed.
+- **T5 — the plan can now be filled: a subnet, a range and an address.** The two variants added to
+  `WriteRoute` were forced into place by the compiler — `path()`, `malformed()` and `handler()` are
+  exhaustive `match`es, so **M18 (a fourth variant, unmounted) is `error[E0004]`**. A route cannot
+  be declared and left unmounted, which is the property AC3's guard will lean on at T6.
+- **T5 — the reuse is a TEST over `WriteRoute::ALL`, which is what AC1 asks for in those words.**
+  All three routes are driven through the same probes: the Origin check decided first (with the
+  port answering a SUCCESS, so a route that skipped it would go green on a 201), both label rules,
+  the redirect, and the shape refusal — which is asserted **DISTINCT per route**, because a sentence
+  that named none of the form's own fields is the *"malformed request"* nobody can act on.
+  ⚠️ Its limit is written: it asserts that each route ANSWERS the same way, not that it calls the
+  same function, which no behavioural test can see.
+- 🔴 **THE TEST WRITTEN FOR THE PAD SPACE TRAP CAUGHT MY OWN CODE.** `parse_policy` trimmed its
+  input by reflex, so `policy=static ` was accepted — and `ascii_bin` being PAD SPACE, `'static '`
+  is exactly the value the schema needed an INTEGER comparison to refuse one layer down. 🔑 *The
+  same reflex that is kindness on free text is a widened vocabulary on a token*: a label is text an
+  operator typed, where a stray space is a typo worth absorbing; a policy is a token from a closed
+  set chosen by a control, where a stray space means the sender is not the form. The trim is gone
+  from the policy and kept on the label, and M21 puts it back and reds.
+- **T5 — the nil UUID is refused at the route on the two forms that RECEIVE a subnet id**, which is
+  the other half of `document.rs`'s pair (`:120` mints, `:195` refuses an arriving nil). ⚠️ A
+  TRIPWIRE: the adapter still accepts the nil, measured at 14.2 on all three `insert_*`. ⚠️ And it
+  is folded into the form's shape sentence rather than given a key, on `document.rs:195`'s
+  precedent — a sentinel no operator types would be a sentence spent on a hand-crafted request.
+- 🔑 **`insert_address` takes NO lock, and the asymmetry with the range is argued rather than
+  inherited**: an address is refused twice by `ip_address_in_subnet`, a UNIQUE key, which needs no
+  read to decide. The range's rule compares a row against its SIBLINGS, which a `CHECK` cannot
+  express (`ERROR 1901`) and only a read can answer. *The lock is owed by the rule that reads, not
+  by the act of writing.*
+- ✅ **AC7 is MET here and not at T7**: the five remaining `#[allow(dead_code, reason = …)]` are
+  gone from `ipam_repo.rs`, each leaving with the route that gave its item a producer, and
+  `clippy --workspace --all-targets -D warnings` is green without them. 🔑 They went one at a time
+  because each `reason` read *"the write path has no producer until story 14.2b"* and became FALSE
+  the moment a route called the item — *an allow whose reason is untrue is a false doc, not a
+  deferral*. The module doc that described the arbitration is rewritten rather than left describing
+  a state the file has passed.
+- 🔴 **The key-coverage guard from T3 earned itself within the hour.** Renaming
+  `ipam.refusal.malformed` to a per-form key left three test literals naming a key that no longer
+  existed; the guard reddened on `ipam.refusal.malformed` rendering its own name. ⚠️ **And its
+  stated hole was live at the same moment**: two DOC comments named the dead key inside backticks,
+  which the needle cannot match, and only a reading caught them. *A guard whose limit is written is
+  a guard you know to read behind.*
+
+### T5's mutation pass
+
+Five ids, five conforming outcomes. Same conditions as before.
+
+| id | mutation | predicted | measured | what it says |
+|---|---|---|---|---|
+| M18 | a fourth `WriteRoute` variant, unmounted | compile-fail | compile-fail | `error[E0004]: … WriteRoute::Planted not covered` — a route cannot be declared and left unmounted |
+| M19 | the range form answers with the SUBNET form's shape sentence | red:1 | red:1 | the reuse test's distinctness assertion: a sentence naming none of a form's own fields |
+| M20 | the nil-UUID refusal removed | red:1 | red:1 | and it asserts the port was NOT reached, not merely the status |
+| M21 | `parse_policy` trims again | red:1 | red:1 | 🔴 the mutation that put back the defect this test found in my own first draft |
+| M22 | the address route skips the Origin check | red:1 | red:1 | the reuse loop; the port answers a success, so a skipped check cannot pass unnoticed |
+
+⚠️ **A budget mutation is missing on purpose, and it is the same limit T4 recorded**: removing
+`within_budget` from a handler makes the test HANG rather than fail, so `cargo xtask mutate` cannot
+run it. T4's M17 measured that once by hand for the class; repeating it per route buys the same
+sentence three times.
 
 ### File List
 
@@ -661,6 +721,15 @@ restored from a `cp` copy**, which is the only form that does not depend on what
 - `crates/opencmdb-bin/Cargo.toml` — `tokio`'s `test-util` as a dev feature on an existing edge.
 
 ### Change Log
+
+- 2026-09-12 — **T5: the plan can be filled — a subnet, a range and an address**, the two new routes
+  forced into place by an exhaustive `match` and their reuse asserted by a loop over
+  `WriteRoute::ALL` rather than by a comment. ✅ AC7 landed here too: no `allow(dead_code)` remains
+  in `ipam_repo.rs`. **900 → 903 tests** (613 bin + 191 core + 99 xtask), ten gates, clippy
+  `--all-targets`, `RUSTFLAGS="-D warnings"`, fmt; **5.02 s without a store and 10.11 s against a
+  live `mariadb:10.11.11`**. 🔴 The test written for the PAD SPACE trap caught my own `trim()`, and
+  T3's key guard caught a dead key three literals over — while its own stated hole let two
+  backticked mentions of the same dead key through.
 
 - 2026-09-12 — **T4: the overlap rule holds under concurrency, and the pass found that neither lock
   could be seen alone.** The parent row then the deciding read, a permanent 400 ms harness asserting

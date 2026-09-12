@@ -11,39 +11,35 @@
 //! 🔑 *A gate that cannot measure a file is not permission to grow it.* A separate module costs
 //! nothing, so the instruction is unconditional rather than resting on a number.
 //!
-//! # ⚠️ `#![allow(dead_code)]`, and it is an ARBITRATION rather than a formality
+//! # ✅ `#![allow(dead_code)]`, and there is none left
 //!
-//! Story 14.1 ships **no producer** by its own criterion, so every function below is dead code and
-//! CI — which builds under `RUSTFLAGS="-D warnings"` — fails without this attribute. Story 6.5
-//! escaped only because `repo.rs` carries the same one.
+//! Story 14.1 shipped this module with a blanket one because it had NO producer by its own
+//! criterion; story 14.2 narrowed it to six item-level attributes when the READ path gained one;
+//! **story 14.2b removed the last of them**, each as its route came to call the item it sat on.
+//! There is now **no `allow(dead_code)` in this file at all**, and `clippy --workspace
+//! --all-targets -D warnings` is green without one.
 //!
-//! 🔴 **And on 2026-09-10 the opposite conclusion was taken one file over, correctly.**
-//! `arp_ping.rs` had a blanket `allow(dead_code)` deleted, because with it standing, severing the
-//! product's MAC read left `neighbours()` and `neighbour::table()` completely unreferenced **with
-//! clippy still green** — the compiler was the only thing watching that wiring, and the attribute
-//! blinded it.
+//! 🔴 **The reason they went one at a time is not tidiness.** An attribute's `reason` said *"the
+//! write path has no producer until story 14.2b"*, and the moment a route called the item, that
+//! sentence was FALSE — *an allow whose reason is untrue is a false doc, not a deferral*. So each
+//! left with the route that falsified it rather than in one sweep at the end.
+//!
+//! 🔑 **What the attribute was a trade about, kept because the next module will face it.** On
+//! 2026-09-10 the OPPOSITE conclusion was taken one file over, correctly: `arp_ping.rs` had a
+//! blanket `allow(dead_code)` deleted, because with it standing, severing the product's MAC read
+//! left `neighbours()` and `neighbour::table()` completely unreferenced **with clippy still
+//! green** — the compiler was the only thing watching that wiring, and the attribute blinded it.
 //!
 //! *An `allow` is a trade between "the compiler cannot see a producer that does not exist yet" and
-//! "the compiler is the only thing watching this wiring". Say which one you are in.* Here it is the
-//! first, and the attribute is **removed by story 14.2**, which gives these functions a producer.
-// 🔑 **NARROWED BY STORY 14.2, from module-wide to item-by-item.**
-//
-// Story 14.1 shipped this module with a blanket `#![allow(dead_code)]` because it had NO producer
-// by its own criterion, and `deferred-work.md` registered the debt with story 14.2 as its owner.
-// This story gives the READ path a producer — `/ipam` is fed from here — so the blanket attribute
-// would now hide something real: with it standing, severing the plan's read from the screen would
-// leave clippy green, which is exactly the trade `arp_ping.rs` was measured on in 2026-09-10 when
-// the ABSENCE of the same attribute was found load-bearing.
-//
-// ⚠️ What remains dead is the WRITE path, and **story 14.2b removes the last of these**. Each
-// attribute below names that story, so the day a route calls one, the attribute above it is the
-// thing that fails to be needed — and an unnecessary `allow` is visible where a blanket one is not.
-//
-// 🔴 The register said *eleven items*; a correction of it said *ten warnings covering fourteen*;
-// both were wrong. Measured on `38da035`: **eleven warnings covering fifteen items**, identically
-// under `cargo build` and `clippy --all-targets`. After this story's wiring: **SIX**, one per attribute below — ⚠️ the first draft of
-// this very sentence said *seven*, in the paragraph correcting two other wrong counts of the same
-// figure. *A unit-sensitive sentence is where an unqualified number does the most damage.*
+//! "the compiler is the only thing watching this wiring". Say which one you are in.* This module
+//! was in the first and has left it.
+//!
+//! ⚠️ **The counting history is kept because every retelling of it was wrong.** The register said
+//! *eleven items*; a correction said *ten warnings covering fourteen*; measured on `38da035` it is
+//! **eleven warnings covering fifteen items**, identically under `cargo build` and
+//! `clippy --all-targets`. Story 14.2 left **six** attributes — and the first draft of that
+//! sentence said *seven*, inside the paragraph correcting two other wrong counts of the same
+//! figure. *A unit-sensitive sentence is where an unqualified number does the most damage.*
 
 use std::net::Ipv4Addr;
 
@@ -64,7 +60,6 @@ pub(crate) const IPV4_CANONICAL_LEN: usize = 15;
 /// it is D10's precedent applied to addresses. The registered defect at `inventory_view.rs:261` —
 /// *"the address compares as a STRING, so `192.0.2.9` follows `192.0.2.10`"* — is caused by the
 /// ABSENCE of padding, not by text.
-#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) fn canonical(addr: Ipv4Addr) -> String {
     let [a, b, c, d] = addr.octets();
     format!("{a:03}.{b:03}.{c:03}.{d:03}")
@@ -157,7 +152,6 @@ impl Subnet {
     /// 🔑 **In Rust, never in SQL** (D10: *"all value comparison and normalization happens in
     /// Rust"*). `architecture.md:4847` (F57) asks that SQL-side comparison be costed before any
     /// epic reintroduces it; this story does not reintroduce it.
-    #[allow(dead_code, reason = "used by the write path, which story 14.2b wires")]
     pub(crate) fn contains(&self, addr: Ipv4Addr) -> bool {
         addr >= self.base && addr <= self.last()
     }
@@ -246,7 +240,6 @@ where
 /// # Errors
 ///
 /// [`RepositoryError::NotFound`] when no such subnet exists; a backend error otherwise.
-#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) async fn load_subnet<'e, E>(executor: E, id: &str) -> Result<Subnet, RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
@@ -273,7 +266,6 @@ where
 /// not these: both rules compare two TABLES, a `CHECK` referencing another table is `ERROR 1901` on
 /// MariaDB 10.11, and a raw insert simply succeeds. They are measured THROUGH this function, with a
 /// raw insert as the control that shows the DDL does not refuse it.
-#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) async fn insert_range(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
@@ -423,7 +415,6 @@ fn subnet_from_row(base: &str, prefix_len: u8) -> Result<Subnet, RepositoryError
 ///
 /// [`IpamError::AddressOutsideSubnet`] through [`RepositoryError::Backend`], or the classified
 /// `sqlx::Error`. ⚠️ The same instrument note as [`insert_range`] applies: raw SQL bypasses this.
-#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) async fn insert_address(
     conn: &mut sqlx::MySqlConnection,
     id: &str,

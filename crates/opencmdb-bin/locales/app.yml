@@ -881,9 +881,31 @@ ipam.empty_plan_not_built:
 ipam.done.subnet:
   en: "Subnet defined. The plan now has somewhere to put ranges and addresses."
   fr: "Sous-réseau défini. Le plan a désormais où placer des plages et des adresses."
-ipam.refusal.malformed:
+ipam.done.range:
+  en: "Range defined. Its policy is what decides whether an address in it is a finding."
+  fr: "Plage définie. Sa politique est ce qui décide si une adresse qui s'y trouve est un écart."
+ipam.done.address:
+  en: "Address defined."
+  fr: "Adresse définie."
+# 🔑 ONE SHAPE SENTENCE PER FORM, and not one for all three. `document.rs` gives a single body for
+# every shape refusal because it has ONE field; these forms have two, five and three, and a sentence
+# that named none of them would be the *"malformed request"* an operator cannot act on. ⚠️ The NIL
+# UUID is folded in here rather than given a key of its own (`document.rs:195`'s precedent): it is a
+# sentinel no operator types, so naming it would spend a sentence on a hand-crafted request.
+ipam.refusal.malformed_subnet:
   en: "Malformed request: the form must carry a subnet in CIDR notation, such as 192.0.2.0/24, and a label."
   fr: "Requête mal formée : le formulaire doit porter un sous-réseau en notation CIDR, par exemple 192.0.2.0/24, et une étiquette."
+ipam.refusal.malformed_range:
+  en: "Malformed request: the form must carry a subnet, a first and a last address, a policy and a label."
+  fr: "Requête mal formée : le formulaire doit porter un sous-réseau, une première et une dernière adresse, une politique et une étiquette."
+ipam.refusal.malformed_address:
+  en: "Malformed request: the form must carry a subnet, an address and a label."
+  fr: "Requête mal formée : le formulaire doit porter un sous-réseau, une adresse et une étiquette."
+# The four policy words are BINDING (PR #166) and this refusal must not paraphrase them; it names
+# the axis and lets the form's own control carry the vocabulary.
+ipam.refusal.unknown_policy:
+  en: "That is not one of the plan's four policies."
+  fr: "Ce n'est pas l'une des quatre politiques du plan."
 # ⚠️ Required by Guy's decision of 2026-09-12, refused at the route and NOT in the schema: `label`
 # is `NOT NULL` with no non-empty CHECK, so `""` still inserts through raw SQL. A tripwire, never a
 # barrier — story 5.12's precedent, stated rather than implied.
@@ -931,7 +953,7 @@ ipam.refusal.base_not_network:
 ipam.refusal.prefix_not_in_family:
   en: "That prefix length cannot belong to an IPv4 subnet: 32 at most."
   fr: "Cette longueur de préfixe ne peut pas appartenir à un sous-réseau IPv4 : 32 au maximum."
-ipam.refusal.malformed_address:
+ipam.refusal.not_an_address:
   en: "That is not an address the plan can hold."
   fr: "Ce n'est pas une adresse que le plan sache porter."
 
