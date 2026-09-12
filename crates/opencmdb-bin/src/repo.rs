@@ -1609,9 +1609,30 @@ pub fn classify(error: sqlx::Error) -> RepositoryError {
         return RepositoryError::NotFound;
     }
     if let Some(db) = error.as_database_error() {
-        // MariaDB: 1213 = deadlock, 1205 = lock wait timeout → retryable contention (NFR15).
+        // 🔴 **THE NUMBER, NOT THE CODE — and this arm was DEAD from the day it was written.**
+        // `db.code()` returns the **SQLSTATE**: a lock-wait timeout arrives as `HY000` and a
+        // deadlock as `40001`, while MariaDB's own number lives in a separate `number()` field on
+        // the driver's concrete error. So `code() == "1205"` was never true, `Contention` had one
+        // producer and no consumer, and every contended write surfaced as an opaque `Backend`
+        // sentence in the driver's English — which NFR15's *"the caller replays the whole
+        // closure"* cannot act on, because it cannot tell that case from a terminal one.
+        //
+        // ⚠️ It went unnoticed because nothing in this product CONTENDED: the identity pass runs
+        // alone and the screens only read. Story 14.2b's addressing-plan routes take a row lock, so
+        // the loser is now an ordinary operator — *a dead arm is a promise until something walks
+        // into it*.
+        //
+        // 🔑 Measured on two errors before the repair (story 14.2b's validation): a lock wait gives
+        // `code() = Some("HY000"), number() = 1205`; a duplicate key gives `Some("23000")` and
+        // 1062. The unique/foreign-key/check arms below read `is_*_violation()`, which the driver
+        // derives correctly, and are untouched — verified by the whole suite staying green.
+        let contended = db
+            .try_downcast_ref::<sqlx::mysql::MySqlDatabaseError>()
+            .is_some_and(|mysql| matches!(mysql.number(), 1213 | 1205));
+        if contended {
+            return RepositoryError::Contention;
+        }
         match db.code().as_deref() {
-            Some("1213") | Some("1205") => return RepositoryError::Contention,
             _ if db.is_unique_violation() => {
                 return RepositoryError::Constraint("unique");
             }
@@ -2364,6 +2385,88 @@ mod tests {
         .await
         .expect("read back");
         assert_eq!(value, "nas", "and the original value is untouched");
+    }
+
+    /// 🔴 **`RepositoryError::Contention` WAS DEAD CODE, and this test is what makes the repair
+    /// honest rather than plausible.**
+    ///
+    /// `classify` matched `db.code()` against `"1213"`/`"1205"`, and **`code()` returns the
+    /// SQLSTATE**: a lock-wait timeout arrives as `HY000` and a deadlock as `40001`, while the
+    /// MySQL number lives in a separate `number()` field. So the arm could never fire — measured at
+    /// story 14.2b's validation on two different errors, with `Contention` carrying one producer,
+    /// no test and no consumer since the day it was written.
+    ///
+    /// ⚠️ **Story 14.2b is what makes it REACHABLE on a route an operator presses**: the addressing
+    /// plan's write routes take a row lock, so the loser of a contended write is an ordinary
+    /// operator rather than a background pass. *A variant nothing can produce is a promise; this
+    /// test is the receipt.*
+    #[tokio::test]
+    async fn a_lock_wait_timeout_is_contention_and_not_an_opaque_backend_error() {
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            eprintln!("skipping contention round-trip: DATABASE_URL unset");
+            return;
+        };
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        sqlx::query("DELETE FROM ip_subnet WHERE id = 't-contend'")
+            .execute(&pool)
+            .await
+            .expect("clean");
+        sqlx::query(
+            "INSERT INTO ip_subnet (id, base, prefix_len, label) \
+             VALUES ('t-contend', '203.000.113.000', 24, 'contention')",
+        )
+        .execute(&pool)
+        .await
+        .expect("the row to contend over");
+
+        // One transaction holds the row; the other asks for it with a one-second patience.
+        let mut holder = pool.acquire().await.expect("holder");
+        sqlx::query("START TRANSACTION")
+            .execute(&mut *holder)
+            .await
+            .expect("begin");
+        sqlx::query("SELECT id FROM ip_subnet WHERE id = 't-contend' FOR UPDATE")
+            .execute(&mut *holder)
+            .await
+            .expect("hold");
+
+        let mut waiter = pool.acquire().await.expect("waiter");
+        sqlx::query("SET SESSION innodb_lock_wait_timeout = 1")
+            .execute(&mut *waiter)
+            .await
+            .expect("patience");
+        sqlx::query("START TRANSACTION")
+            .execute(&mut *waiter)
+            .await
+            .expect("begin");
+        let refused = sqlx::query("SELECT id FROM ip_subnet WHERE id = 't-contend' FOR UPDATE")
+            .execute(&mut *waiter)
+            .await
+            .map_err(classify);
+
+        // 🔑 The CONTROL that makes the assertion mean something: the error really is a lock wait,
+        // not some other failure that happens to classify the same way.
+        assert_eq!(
+            refused.err(),
+            Some(RepositoryError::Contention),
+            "a lock-wait timeout must be the ONE retryable case (NFR15), not an opaque \
+             `Backend` sentence in the driver's English — which is what it was until story 14.2b, \
+             because `code()` is the SQLSTATE and the arm compared it against a MySQL number"
+        );
+
+        sqlx::query("ROLLBACK").execute(&mut *waiter).await.ok();
+        sqlx::query("ROLLBACK").execute(&mut *holder).await.ok();
+        drop(waiter);
+        drop(holder);
+        sqlx::query("DELETE FROM ip_subnet WHERE id = 't-contend'")
+            .execute(&pool)
+            .await
+            .ok();
     }
 
     /// A `transact` round-trip against a real MariaDB: the closure inserts a declared attribute

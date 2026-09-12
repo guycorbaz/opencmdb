@@ -5530,7 +5530,7 @@ development_status:
   #   leave the two documents disagreeing silently.
   #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
   #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
-  14-2b-the-plan-in-the-operators-hands: ready-for-dev
+  14-2b-the-plan-in-the-operators-hands: in-progress
   #   CONTEXTED 2026-09-12, then VALIDATED by both layers, and the validation OVERTURNED THE
   #   CONCURRENCY ARBITRATION FOR THE THIRD TIME -- this time on a measurement of the shape itself.
   #   🔴 `ip_range ... FOR UPDATE` alone does NOT refuse: it DEADLOCKS, 20 observations out of 20.
