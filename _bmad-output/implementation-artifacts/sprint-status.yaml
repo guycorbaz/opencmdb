@@ -5407,9 +5407,150 @@ development_status:
   #   the head commit `2f395c5` itself (run `34585865670`, 2m45) and `mergeStateStatus: CLEAN`.
   #   ⚠️ NEXT: story 14.2, which owns the concurrency row above, the `#![allow(dead_code)]`
   #   narrowing, and the `structural` removal.
-  14-2-the-plan-on-screen: backlog
+  14-2-the-plan-on-screen: review
+  #   ✅ CODE-REVIEWED (three isolated layers, 2026-09-11/12) AND REPAIRED. 40 raw findings, 2 sent
+  #   back to Guy and re-arbitrated the same day. 875 -> 877 tests, ten gates, both browser gates
+  #   re-run green. ⚠️ All three layers ran at this session's capability -- isolated by context and
+  #   worktree, NOT on a different model, and that half is not claimed (story 6.5's wording).
+  #   🔴 THE SCREEN WAS A DENIAL OF SERVICE: a `10.0.0.0/8` in the plan served 2.08 GB in 44 s with
+  #   status 200, on the PLAIN navigation link, and the page budget could not see it -- it wraps
+  #   the READS while the derivation and the render are synchronous. Guy: beyond 1024 addresses the
+  #   grid is not built at all and the plan shows as the RANGES the operator declared, the ceiling
+  #   tested BEFORE materialising. Measured after: 2 295 bytes in 8.9 ms.
+  #   🔴 ONE SCHEMA-LEGAL ROW removed the whole screen -- `prefix_len = 64` is admitted by the
+  #   CHECK for IPv6 and refused by the adapter, so `/ipam` answered 500 for EVERY subnet with a
+  #   log naming no id and a body saying "the data is intact, the fault is in the display",
+  #   backwards. Skipped and named now.
+  #   🔴 TWO OF MY OWN GUARDS PASSED OVER A BROKEN PRODUCT. The stylesheet guard was satisfied by
+  #   its own COMMENT (the paragraph narrating the defect contains the selector) -- *a guard that
+  #   greps a file greps its prose too*. The AC2 guard was blind to a CALL. 🔑 And its earlier
+  #   widening had read 382 BYTES OF 47 324, because it split on `#[cfg(test)]` whose first
+  #   occurrence sits on line 7 INSIDE the sentence explaining that the `file-size` gate stops at
+  #   the first one. *The defect the file documents, committed by the guard written while reading
+  #   that documentation* -- found only because a mutation that should have reddened came back
+  #   green and was disbelieved.
+  #   🔴 `structural` was in NO denylist while the task was ticked and the PRD says this story adds
+  #   it. Added to three columns, proved red. ⚠️ And `cargo fmt` then blinded a neighbouring guard
+  #   by splitting the list it anchored on -- it PANICKED rather than passing, which is the right
+  #   failure, but *a guard a formatter can blind depends on something nobody is deciding*.
+  #   ✅ THE POLICY AXIS IS A STATED LIMIT (Guy): `border-style: double` at 1 px paints solid, so
+  #   two policies were IDENTICAL PIXELS in Chrome. The channel is exhausted at 14 px; the grid
+  #   separates the four STATES and the policy is carried by the accessible name and the legend.
+  #   ⚠️ NEXT: the merge. Then story 14.2b -- the three write routes, the keyed refusals, the
+  #   concurrency fix on the read that DECIDES, AC5b's auth property, and `classify`'s dead
+  #   `Contention` arm.
+  #   IMPLEMENTED 2026-09-11 after the split. 873 → 875 tests (585 bin + 191 core + 99 xtask), ten
+  #   gates, clippy --all-targets, RUSTFLAGS="-D warnings", fmt -- and BOTH BROWSER GATES CLAIMED
+  #   AND RUN: axe 0 violation nodes over 10 routes + 4 states under all three REQUIRE flags,
+  #   kbd-probe 30 checks 0 failed.
+  #   🔴 TWO FINDINGS THE MUTATION PASS PRODUCED, neither in any analysis:
+  #     - `offerable` read `matches!(self, Self::Free(_))` and OFFERED THE NETWORK ADDRESS inside a
+  #       declared `infrastructure` range -- the binding table says "never offered as free" in
+  #       those words. The guard reddened on its first run (`left: Some(192.0.2.0)`). *A cell can
+  #       be free of any individual claim and still not be the operator's to assign*, which is the
+  #       argument for two axes rather than one flattened enum, made by a red rather than by prose.
+  #     - The a11y seed took a CIDR the tests own: FOUR tests red with `Constraint("unique")`.
+  #       ⚠️ CI could NEVER have seen it -- its seed step runs AFTER the tests -- so it would have
+  #       been a local-only failure, which is exactly where this project measures its mutations.
+  #       Closed by moving the seed to two /25s. *A fixture and a test that share a namespace are
+  #       one collision apart, and the store does not forget between them.*
+  #   🔑 The page budget was NOT forgotten because the guard is DERIVED from `Screen::ALL`: the
+  #   moment `/ipam` became `Fed` it reddened with "must refuse rather than hang". Story 6b.8
+  #   shipped `/sources` without one and three review layers missed it.
+  #   🔑 The axe gate gains a check only a BROWSER can make -- that `free` and *not covered* differ
+  #   in a NON-COLOUR property. Proved to red: exit 1 under the mutation, and ⚠️ **axe itself
+  #   reported 0 violations under the same mutation**, so this check is its sole carrier.
+  #   ⚠️ The "5.6 s without a store" figure is settled by a CHECK, not a story: no `.env`, no
+  #   `DATABASE_URL`, `--skip budget` runs in 0.74 s and the three budget tests alone take 5.15 s.
+  #   CONTEXTED 2026-09-11, its four arbitrations taken by Guy the same day -- and then the
+  #   MANDATORY VALIDATION RAN BOTH LAYERS AND SENT ALL FOUR BACK. 🔑 This is the second
+  #   consecutive story where the validation refuted the argument that chose an answer, and the
+  #   rule written into 14.2 ("a measurement that refutes one returns it to Guy") was exercised
+  #   within the hour rather than admired.
+  #   🔴 THE FACT-CHECK LAYER refuted SEVEN of the story's own claims, four of them numbers --
+  #   including one I had already merged into BOTH TWINS in PR #169 while calling the register's
+  #   figure wrong. Removing `ipam_repo.rs`'s allow gives ELEVEN warnings covering FIFTEEN items,
+  #   not ten and fourteen; the error was the INSTRUMENT (`grep "never used"` cannot see
+  #   `struct `Subnet` is never constructed`). Corrected by PR #171. 🔑 *A measurement whose
+  #   instrument cannot see the answer is not a measurement* -- and it happened TWICE in one
+  #   session, a `grep "PR #165"` returning zero having been read as "the twins ignore it" when a
+  #   record PR does not cite its own number.
+  #   🔴 THE GAP-HUNT LAYER, which BUILDS, refuted two arbitrations and re-scoped a third.
+  #     (A) ✅ NO switch -- the IPAM write routes always exist; `OPENCMDB_DOCUMENT_ENABLED` guards
+  #         an AUTHORSHIP hazard IPAM does not have. HELD. ⚠️ But the gap-hunt mounted an
+  #         always-on POST BELOW `auth_deny` and measured 873 tests and TEN GATES GREEN over an
+  #         unauthenticated write answering 201 -- story 6b.2's defect in its POST form, the one
+  #         carrying test being hardcoded to `/document-all`. New AC5b makes the perimeter a
+  #         PROPERTY over every route the router carries.
+  #     (B) ✅ `RepositoryError::Ipam(IpamError)` -- HELD, and the gap-hunt built it: zero compiler
+  #         errors, one broken assertion, `#[from]` composes. 🔴 RE-SCOPED: the SET was over
+  #         `IpamError::ALL`, which does not contain THREE reachable refusals -- `NotFound` (the
+  #         state of every empty plan) and `Constraint("unique")` twice, one of them an operator
+  #         retyping an address, the likeliest refusal on the screen. Guy: the SET is over what
+  #         the HANDLER CAN RECEIVE. As first written the criterion was this epic's dominant class
+  #         one type over.
+  #     (C) 🔴 RE-AIMED: LOCK THE READ THAT DECIDES (`ip_range ... FOR UPDATE`). The parent-row
+  #         lock WORKS -- measured, the loser refused on the domain rule, no deadlock, no 1205 --
+  #         but reusing `load_subnet` inside the transaction, the DRY line anyone writes, BRINGS
+  #         THE RACE BACK with the lock still taken and worthless: under REPEATABLE READ the
+  #         snapshot is fixed by the first CONSISTENT read and a locking read does not fix it.
+  #         🔑 So the story's own reason for refusing the alternative was FALSE -- (a) rested on an
+  #         isolation-level behaviour just as much, while stating none of it. AC7's harness ships
+  #         as a PERMANENT test; the ordering is load-bearing and invisible.
+  #     (D) 🔴 RE-AIMED: `free` GAINS AN EXPLICIT TREATMENT. Measured in Chrome against the shipped
+  #         sheet, a `free` cell and a bare cell are BYTE-IDENTICAL in every computed property, so
+  #         "blank against free" is unbuildable. ⚠️ And AC3's guard is structurally blind to it:
+  #         *not covered* is NOT a policy, so an `IpPolicy::ALL` guard cannot see the one state the
+  #         arbitration invents -- the dominant class reached through the type system.
+  #     🔴 AND AC5 IS THREE ROUTES, NOT TWO: `insert_subnet` has no caller outside its own tests
+  #         and both planned routes need a subnet, so an empty plan stayed empty for ever and AC8
+  #         named a door onto no room. Refused: deriving it from `OPENCMDB_SCAN_CIDR` (configuration
+  #         as a source of the declared plan) and minting it implicitly from the first range.
+  #     ⚠️ ALSO CARRIED, each measured: `RepositoryError::Contention` is DEAD CODE -- `classify`
+  #         compares sqlx's `code()`, which is the SQLSTATE, against a MySQL NUMBER (measured on
+  #         two errors: 1205 arrives as HY000, 1062 as 23000) -- and (C) is what first makes it
+  #         reachable on a route an operator presses; the deletion sweep needs `--all-targets` or
+  #         silently misses a site; `page.rs` has 46 lines of headroom so the split is FORCED; and
+  #         six unstated decisions, among them a rendering priority that is story 6b.7's own
+  #         recorded trap (*a priority order must not double as a repair*).
+  #   🔴 THREE DEFECTS FOUND WHILE CONTEXTING, carried as criteria rather than filed elsewhere:
+  #   `ipam/mod.rs:122-123` describes a `RepositoryError::Constraint` mapping THAT WAS NEVER
+  #   WRITTEN (the code is `Backend(String)`, and that function's own doc says so fifteen lines
+  #   above -- three review layers missed it); the register's "eleven items dead" is neither
+  #   count (measured: ELEVEN warnings covering FIFTEEN items (a figure this entry itself got wrong as *ten and fourteen* before the instrument was corrected), identical under `cargo build` and
+  #   `clippy --all-targets`, and what the attribute hides is the absence of a PRODUCER, not of a
+  #   test); and the UX spec asks for `role="grid"` with keyboard navigation where story 6b.7
+  #   shipped `role="list"` on a measured ARIA reason -- this story rebuilds that grid and may not
+  #   leave the two documents disagreeing silently.
   #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
   #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
+  14-2b-the-plan-in-the-operators-hands: backlog
+  #   🔴 INSERTED 2026-09-11 at story 14.2's IMPLEMENTATION -- Epic 14 goes from FOUR stories to
+  #   FIVE (`epics.md` NOT edited; a story may not re-scope an epic, and the divergence is
+  #   registered). The mandatory validation had grown 14.2 from two write routes to three and added
+  #   a `free` treatment, an auth-perimeter property, a permanent concurrency harness and a
+  #   `classify` repair. 14.2 is the SCREEN; this is the OPERATOR'S HANDS. Precedent: 5.9/5.9b,
+  #   5.14/5.14b, 6b.4/6b.4b, 6.4/6.4b.
+  #   It carries, each WITH the measurement that produced it rather than re-derived:
+  #     - THREE write routes (subnet, range, address), not two: `insert_subnet` has no caller
+  #       outside its own tests, so with two an empty plan stays empty for ever.
+  #     - The auth perimeter as a PROPERTY: an always-on POST mounted below `auth_deny` left 873
+  #       tests and TEN GATES GREEN over an unauthenticated write answering 201, the one carrying
+  #       test being hardcoded to `/document-all`. Story 6b.2's defect in its POST form.
+  #     - Keyed refusal bodies over what the HANDLER CAN RECEIVE, not over `IpamError::ALL`:
+  #       `NotFound` is every empty plan and `Constraint("unique")` is an operator retyping an
+  #       address, the likeliest refusal on the screen, and neither is an `IpamError`.
+  #     - The concurrency fix ON THE READ THAT DECIDES (`ip_range ... FOR UPDATE`), with its 400 ms
+  #       pause harness shipped as a PERMANENT test: the parent-row lock works and is defeated by
+  #       one ordinary DRY line, measured.
+  #     - `RepositoryError::Contention` is DEAD CODE -- `classify` compares sqlx's `code()`, which
+  #       is the SQLSTATE, against a MySQL NUMBER (1205 arrives as HY000, 1062 as 23000) -- and it
+  #       is this story's arbitration that first makes it reachable on a route an operator presses.
+  #     - Removing `ipam_repo.rs`'s `#![allow(dead_code)]` outright; 14.2 only narrows it.
+  #   ⚠️ ACCEPTED COST, SAID RATHER THAN DISCOVERED: between the two stories `/ipam` draws a plan
+  #   nothing can fill, so 14.2's empty-plan sentence names the gesture as NOT YET BUILT through
+  #   `Gesture::Planned { owner }` -- the shape story 6b.4b made a compile-time obligation, so this
+  #   story cannot ship its route without meeting that site.
   14-3-the-audit: backlog
   #   The story the epic exists for. Includes FR24's real conflict -- undetectable before PR #163,
   #   because the connector read no hardware address; and NOT a conflict inside a `dhcp-pool`,

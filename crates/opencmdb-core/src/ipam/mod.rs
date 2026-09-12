@@ -120,7 +120,15 @@ impl fmt::Display for IpPolicy {
 /// D47: *"an error there is domain data, not a string"*. Story 14.1's validation built the adapter
 /// and had to write `.map_err(|e| RepositoryError::Backend(e.to_string()))` for every one of these,
 /// which is precisely what D47 forbids — so the refusals live here and the adapter maps them into
-/// `RepositoryError::Constraint` with a name the caller can match on.
+/// [`RepositoryError::Ipam`](crate::repo::RepositoryError::Ipam), which carries the variant itself.
+///
+/// 🔴 **This paragraph asserted a `RepositoryError::Constraint` mapping from story 14.1 until
+/// 14.2, and no such code was ever written**: the adapter produced `Backend(String)`, and the
+/// mapping function's own doc said so six lines above its body. Three review layers read both and
+/// caught neither. ⚠️ `Constraint` would also have been the wrong target — it means *"a database
+/// constraint was violated"* by its own doc, and four of the seven refusals below are decided
+/// before any statement runs. *A doc that describes code nobody wrote outlives every reading; it
+/// dies only to a compiler or a test.*
 ///
 /// ⚠️ Every one of these is refused by the **ADAPTER** and not by the DDL, and the reason is the
 /// same in each case: the rule compares two TABLES, and a `CHECK` that references another table is

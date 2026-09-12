@@ -26,7 +26,24 @@
 //! *An `allow` is a trade between "the compiler cannot see a producer that does not exist yet" and
 //! "the compiler is the only thing watching this wiring". Say which one you are in.* Here it is the
 //! first, and the attribute is **removed by story 14.2**, which gives these functions a producer.
-#![allow(dead_code)]
+// 🔑 **NARROWED BY STORY 14.2, from module-wide to item-by-item.**
+//
+// Story 14.1 shipped this module with a blanket `#![allow(dead_code)]` because it had NO producer
+// by its own criterion, and `deferred-work.md` registered the debt with story 14.2 as its owner.
+// This story gives the READ path a producer — `/ipam` is fed from here — so the blanket attribute
+// would now hide something real: with it standing, severing the plan's read from the screen would
+// leave clippy green, which is exactly the trade `arp_ping.rs` was measured on in 2026-09-10 when
+// the ABSENCE of the same attribute was found load-bearing.
+//
+// ⚠️ What remains dead is the WRITE path, and **story 14.2b removes the last of these**. Each
+// attribute below names that story, so the day a route calls one, the attribute above it is the
+// thing that fails to be needed — and an unnecessary `allow` is visible where a blanket one is not.
+//
+// 🔴 The register said *eleven items*; a correction of it said *ten warnings covering fourteen*;
+// both were wrong. Measured on `38da035`: **eleven warnings covering fifteen items**, identically
+// under `cargo build` and `clippy --all-targets`. After this story's wiring: **SIX**, one per attribute below — ⚠️ the first draft of
+// this very sentence said *seven*, in the paragraph correcting two other wrong counts of the same
+// figure. *A unit-sensitive sentence is where an unqualified number does the most damage.*
 
 use std::net::Ipv4Addr;
 
@@ -47,6 +64,7 @@ pub(crate) const IPV4_CANONICAL_LEN: usize = 15;
 /// it is D10's precedent applied to addresses. The registered defect at `inventory_view.rs:261` —
 /// *"the address compares as a STRING, so `192.0.2.9` follows `192.0.2.10`"* — is caused by the
 /// ABSENCE of padding, not by text.
+#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) fn canonical(addr: Ipv4Addr) -> String {
     let [a, b, c, d] = addr.octets();
     format!("{a:03}.{b:03}.{c:03}.{d:03}")
@@ -139,8 +157,49 @@ impl Subnet {
     /// 🔑 **In Rust, never in SQL** (D10: *"all value comparison and normalization happens in
     /// Rust"*). `architecture.md:4847` (F57) asks that SQL-side comparison be costed before any
     /// epic reintroduces it; this story does not reintroduce it.
+    #[allow(dead_code, reason = "used by the write path, which story 14.2b wires")]
     pub(crate) fn contains(&self, addr: Ipv4Addr) -> bool {
         addr >= self.base && addr <= self.last()
+    }
+
+    /// Every address of the subnet, network and broadcast included, in numeric order.
+    ///
+    /// 🔑 **256 addresses, 254 hosts, and the two are not the same number** — story 6b.7 found the
+    /// reference mock conflating them: it looped `0..256`, drew `.0` and `.255` as ordinary free
+    /// cells, and its *next free address* panel then named the NETWORK address. The grid draws
+    /// every address because the PLAN covers every address; what may be OFFERED is a separate
+    /// question, answered by `CellState::offerable`.
+    pub(crate) fn addresses(&self) -> impl Iterator<Item = Ipv4Addr> + use<> {
+        let first = u32::from(self.network());
+        let last = u32::from(self.last());
+        (first..=last).map(Ipv4Addr::from)
+    }
+
+    /// How many addresses the subnet holds, network and broadcast included.
+    ///
+    /// 🔑 It is a `u64` because a `/0` holds 2³² addresses and a `u32` cannot say so. The count is
+    /// what lets a caller refuse to DRAW a subnet before it has paid for drawing it — see
+    /// `ipam_page::MAX_DRAWN_ADDRESSES`.
+    pub(crate) fn size(&self) -> u64 {
+        u64::from(u32::from(self.last()) - u32::from(self.network())) + 1
+    }
+
+    /// The subnet in CIDR notation, as an operator writes it — `192.0.2.0/24`.
+    ///
+    /// ⚠️ NOT the stored spelling: the store holds `192.000.002.000` so that lexicographic order is
+    /// numeric order, and that padding is an implementation of ordering, never something to show.
+    /// *A canonical form imposed for the machine is not a form to render.*
+    pub(crate) fn cidr(&self) -> String {
+        format!("{}/{}", self.base, self.prefix_len)
+    }
+
+    /// Whether this address is the subnet's network or broadcast address.
+    ///
+    /// ⚠️ On a `/31` and a `/32` the two coincide or vanish; the predicate is written as a
+    /// comparison against both bounds rather than as arithmetic on the prefix length, so those
+    /// cases answer without a special arm.
+    pub(crate) fn is_edge(&self, addr: Ipv4Addr) -> bool {
+        addr == self.network() || addr == self.last()
     }
 }
 
@@ -150,6 +209,7 @@ impl Subnet {
 ///
 /// [`RepositoryError::Backend`] carrying an [`IpamError`]'s sentence when the subnet is not one the
 /// arithmetic can answer for, or the `sqlx::Error` classified by [`classify`].
+#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) async fn insert_subnet<'e, E>(
     executor: E,
     id: &str,
@@ -187,6 +247,7 @@ where
 /// # Errors
 ///
 /// [`RepositoryError::NotFound`] when no such subnet exists; a backend error otherwise.
+#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) async fn load_subnet<'e, E>(executor: E, id: &str) -> Result<Subnet, RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
@@ -214,6 +275,7 @@ where
 /// not these: both rules compare two TABLES, a `CHECK` referencing another table is `ERROR 1901` on
 /// MariaDB 10.11, and a raw insert simply succeeds. They are measured THROUGH this function, with a
 /// raw insert as the control that shows the DDL does not refuse it.
+#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) async fn insert_range(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
@@ -270,6 +332,7 @@ pub(crate) async fn insert_range(
 ///
 /// [`IpamError::AddressOutsideSubnet`] through [`RepositoryError::Backend`], or the classified
 /// `sqlx::Error`. ⚠️ The same instrument note as [`insert_range`] applies: raw SQL bypasses this.
+#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) async fn insert_address(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
@@ -319,21 +382,129 @@ where
         .collect()
 }
 
+/// Every subnet in the plan, in numeric order of its base address.
+///
+/// 🔑 The order is the store's, for the reason `addresses_in` gives: the padded spelling makes
+/// lexicographic order numeric, so no caller sorts and no caller can forget to.
+///
+/// # Errors
+///
+/// The classified `sqlx::Error`, or [`IpamError`] when a stored row is not this store's canonical
+/// spelling or does not describe a subnet — reachable only by a write that went around this module.
+pub(crate) async fn list_subnets<'e, E>(
+    executor: E,
+) -> Result<Vec<(String, Subnet, String)>, RepositoryError>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String, String, u8, String)> = sqlx::query_as(
+        "SELECT id, base, prefix_len, label FROM ip_subnet ORDER BY base, prefix_len",
+    )
+    .fetch_all(executor)
+    .await
+    .map_err(classify)?;
+    // 🔴 **ONE UNREADABLE ROW MUST NOT TAKE THE WHOLE SCREEN WITH IT, and it did.** `0007`
+    // deliberately admits `prefix_len` up to 128 (IPv6 forward-compat) and cannot check that a base
+    // is its own network address — both are same-row rules the ADAPTER owns. So a single
+    // schema-legal row (`prefix_len = 64`, or a base carrying host bits) made this function return
+    // `Err`, and `/ipam` answered **500 for every subnet, including the healthy ones** — measured
+    // by the code review's edge layer, with a log that named no id, a body reading *"the data
+    // behind it is intact; the fault is in the display"* (backwards here), and a `/diagnostic` that
+    // keeps no error history. *A row nobody can find, breaking a page nobody can read.*
+    //
+    // 🔑 The unreadable row is now SKIPPED AND NAMED: the screen draws what it can, and the log
+    // carries the id and the stored spelling so the row can be found and fixed. ⚠️ The trade is
+    // stated: a silent skip would hide a real defect, so it is a `warn` with the id in it, never a
+    // `debug`. A row that cannot be read is a row the operator never declared through the product.
+    let mut subnets = Vec::with_capacity(rows.len());
+    for (id, base, prefix_len, label) in rows {
+        match from_canonical(&base).and_then(|base| Subnet::new(base, prefix_len)) {
+            Ok(subnet) => subnets.push((id, subnet, label)),
+            Err(error) => tracing::warn!(
+                subnet_id = %id,
+                stored_base = %base,
+                stored_prefix_len = prefix_len,
+                %error,
+                "skipping an ip_subnet row this build cannot read — the rest of the plan is drawn"
+            ),
+        }
+    }
+    Ok(subnets)
+}
+
+/// Every range defined in one subnet, in numeric order of its first address.
+///
+/// # Errors
+///
+/// The classified `sqlx::Error`, or [`IpamError`] when a stored bound is not canonical or the
+/// stored policy token is not one this build knows — the second is reachable by a raw write, the
+/// `ascii_bin` PAD SPACE collation accepting `'static '` where [`IpPolicy::as_str`] does not.
+pub(crate) async fn ranges_in<'e, E>(
+    executor: E,
+    subnet_id: &str,
+) -> Result<Vec<(Ipv4Addr, Ipv4Addr, IpPolicy, String)>, RepositoryError>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String, String, String, String)> = sqlx::query_as(
+        "SELECT first_addr, last_addr, policy, label FROM ip_range WHERE subnet_id = ? \
+         ORDER BY first_addr",
+    )
+    .bind(subnet_id)
+    .fetch_all(executor)
+    .await
+    .map_err(classify)?;
+    rows.into_iter()
+        .map(|(first, last, policy, label)| {
+            let first = from_canonical(&first).map_err(ipam)?;
+            let last = from_canonical(&last).map_err(ipam)?;
+            let policy = policy_from_token(&policy)?;
+            Ok((first, last, policy, label))
+        })
+        .collect()
+}
+
+/// The one reading of a stored policy token, and it is EXACT.
+///
+/// 🔴 It compares against [`IpPolicy::as_str`] with no trimming and no case folding, because
+/// `ascii_bin` is a PAD SPACE collation: the schema's `IN (...)` CHECK accepts `'static '`, and so
+/// would `= TRIM(...)`. The schema's own defence is an INTEGER comparison
+/// (`LENGTH(policy) = LENGTH(TRIM(policy))`, `0007:142`); this is the second carrier, on the
+/// reasoning `from_canonical` states — *a value can reach here from a backfill that went around
+/// the adapter*.
+///
+/// # Errors
+///
+/// [`IpamError::MalformedAddress`] is deliberately NOT reused; an unknown policy is a row this
+/// build cannot render, so it surfaces as a backend failure naming the token.
+fn policy_from_token(token: &str) -> Result<IpPolicy, RepositoryError> {
+    IpPolicy::ALL
+        .into_iter()
+        .find(|policy| policy.as_str() == token)
+        .ok_or_else(|| {
+            RepositoryError::Backend(format!(
+                "stored policy token is not one this build knows: {token:?}"
+            ))
+        })
+}
+
 /// Carry an [`IpamError`] across the frontier.
 ///
-/// ⚠️ **This is the seam D47 makes awkward on purpose, and the awkwardness is named rather than
-/// hidden.** `RepositoryError` has no IPAM variant, so a refusal the domain states precisely
-/// arrives at the caller as a sentence. That is one step better than `Backend(sqlx_error)` — the
-/// text is the domain's, not the driver's — and one step worse than a named variant, which is what
-/// `InstantRegressed` and `ContradictoryObservation` are the precedent for. **Story 14.2 is the
-/// first story with a caller that must DISTINGUISH these refusals to render them**, and that is the
-/// story where the variant earns itself.
+/// ✅ **The seam D47 made awkward on purpose is now closed.** Story 14.1 carried these refusals as
+/// `RepositoryError::Backend(String)` and said so here, naming story 14.2 as the one that would
+/// earn the variant; this is that story, and [`RepositoryError::Ipam`] is that variant.
+///
+/// ⚠️ **What the variant does NOT buy, stated so nobody reads more into it than it gives**: adding
+/// it produced **zero** compiler errors outside this module's own tests — `RepositoryError` is not
+/// `#[non_exhaustive]` and no exhaustive `match` traverses it — so nothing forces a handler to
+/// distinguish these refusals. The obligation is carried by a test over what a handler can
+/// RECEIVE, which is deliberately larger than this enum.
 fn ipam(error: IpamError) -> RepositoryError {
-    RepositoryError::Backend(error.to_string())
+    RepositoryError::Ipam(error)
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use sqlx::MySqlPool;
 
@@ -347,7 +518,7 @@ mod tests {
     ///
     /// ⚠️ **The suite reports the same counts with and without a store, and the clock is the only
     /// tell.** Every figure this story records names the store it was taken against.
-    async fn ipam_fixture() -> Option<MySqlPool> {
+    pub(crate) async fn ipam_fixture() -> Option<MySqlPool> {
         let Ok(url) = std::env::var("DATABASE_URL") else {
             eprintln!("skipping ipam test: DATABASE_URL unset");
             return None;
@@ -362,7 +533,7 @@ mod tests {
 
     /// Remove one subnet and everything that points at it, so a test can be re-run against a store
     /// that kept the last run's rows. Children first — the foreign keys point that way.
-    async fn forget_subnet(pool: &MySqlPool, id: &str) {
+    pub(crate) async fn forget_subnet(pool: &MySqlPool, id: &str) {
         for statement in [
             "DELETE FROM ip_address WHERE subnet_id = ?",
             "DELETE FROM ip_range WHERE subnet_id = ?",
@@ -906,11 +1077,13 @@ mod tests {
         .await;
         assert_eq!(
             inverted,
-            Err(opencmdb_core::repo::RepositoryError::Backend(
-                IpamError::RangeBoundsInverted.to_string()
+            Err(opencmdb_core::repo::RepositoryError::Ipam(
+                IpamError::RangeBoundsInverted
             )),
             "an inverted range is refused BY NAME — asserting `is_err()` here would have passed \
-             over the wrong reason, which is the defect the review found"
+             over the wrong reason, which is the defect the review found. Story 14.2 turned the \
+             name from a SENTENCE into a VARIANT: `Backend(String)` forced a caller that wanted to \
+             render this refusal to match on prose, which is what D47 forbids"
         );
 
         // 🔴 THE CONTROL, and it is what makes the three assertions mean anything: the DDL does NOT

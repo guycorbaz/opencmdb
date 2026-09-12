@@ -548,8 +548,14 @@ mod gesture_axis_tests {
         // noun to the ENGLISH column, where the French binding says nothing. It is the defect
         // this test's own doc narrates, met on a second axis: *an unbounded needle cannot tell
         // one locale's column from another's* any more than it can tell an entry from a mention.
+        // ⚠️ **The anchor is the LITERAL, not its punctuation, because the punctuation is
+        // `rustfmt`'s.** This read `("fr",` until story 14.2 added a term to that column: the list
+        // crossed rustfmt's width, the formatter broke it across lines, and the anchor vanished.
+        // The guard PANICKED rather than passing — which is the right failure and the reason it
+        // was noticed — but *a guard an automatic formatter can blind is a guard that depends on
+        // something nobody is deciding.*
         let fr_column = gate
-            .find("(\"fr\",")
+            .find("\"fr\"")
             .map(|at| &gate[at..])
             .expect("the gate declares a French column");
         let fr_column = &fr_column[..fr_column.find(']').expect("the column is an array")];

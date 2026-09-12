@@ -1,0 +1,127 @@
+{#- The addressing plan, drawn from the store (story 14.2).
+
+     🔴 THE GRID IS A LABELLED LIST, NOT THE MOCK'S `role="img"`, and story 6b.7's reason still
+     holds: an `aria-label` per cell is required, the mock puts one label on a `role="img"`
+     container — which makes its whole subtree presentational, so 256 labels inside it would be
+     announced as one sentence — and `aria-label` on a bare `<div>` maps to `generic`, where ARIA
+     1.2 PROHIBITS it (an axe-core `aria-prohibited-attr` violation). A `<ul role="list">` laid out
+     by CSS Grid keeps `listitem` with its name intact. `role="list"` is explicit because
+     `list-style: none` is known to drop the role in Safari/VoiceOver, and it costs nothing.
+
+     ⚠️ The UX spec (`:1632-1634`) asks for `role="grid"` with keyboard navigation, `role="gridcell"`
+     and a *"jump to next free IP"* action. That is a REGISTERED DIVERGENCE and not an oversight:
+     `role="grid"` brings a two-dimensional focus model — arrow keys moving a roving tabindex across
+     256 cells — which is story 6b.11's keyboard layer widened to a second surface, and it would
+     arrive here unmeasured by any browser gate state. The spec's real requirement, *"find a free IP
+     works without sight, via the list/action rather than the visual density"*, is met by the panel
+     below, which states the address in text. Registered with Epic 14's retrospective.
+
+     ⚠️ `epics.md:316` (UX-DR71) names this grid BY NAME as one of five WCAG 2.1 AA key views. -#}
+<section class="screen-section">
+  <h2>{{ s.title }}</h2>
+  <p class="screen-lede">{{ s.lede }}</p>
+
+  {%- match plan %}
+  {%- when None %}
+  {#- 🔑 AN EMPTY PLAN NAMES THE GESTURE AS NOT YET BUILT, and that is the honest sentence between
+       stories 14.2 and 14.2b. Story 6b.4's finding is *a door labelled with the room you are
+       already in is not a door*; a door labelled with a room that does not exist yet would be the
+       same defect pointed the other way. The badge and the owner come from `Gesture::Planned`,
+       which story 6b.4b made a compile-time obligation — 14.2b cannot ship its route without
+       meeting this site. -#}
+  {%- if tabs.is_empty() %}
+  <p class="empty">{{ s.empty_plan }}</p>
+  <p class="ipam-planned-note">
+    <span class="btn-gesture planned" role="button" aria-disabled="true" tabindex="0"
+          aria-describedby="ipam-plan-not-built">
+      {{ s.empty_plan_gesture }}<span class="gesture-badge">{{ s.gesture_badge }}</span>
+    </span>
+    <span id="ipam-plan-not-built">
+    {{ s.empty_plan_not_built }}</span>
+  </p>
+  {%- else %}
+  {#- 🔑 An unknown id narrows to NOTHING and says so; it does NOT fall back to the first subnet.
+       Silently serving another subnet would tell the operator their selection took when it did not
+       — story 6b.4's `?sort=` finding, and `inventory_body` states the same policy. The selector
+       is still rendered, because the way out of a wrong selection is a right one. -#}
+  <nav class="filters" aria-label="{{ s.selector_label }}">
+    {%- for tab in tabs %}
+    <a class="filter" href="/ipam?subnet={{ tab.id }}">{{ tab.label }}</a>
+    {%- endfor %}
+  </nav>
+  {%- match too_large %}
+  {%- when None %}
+  <p class="empty">{{ s.unknown_subnet }}</p>
+  {%- when Some with (rows) %}
+  {#- 🔑 The plan is shown as what it HOLDS — the ranges the operator declared — rather than as an
+       apology for not drawing a grid. A `/16` has a handful of ranges; it is the grid that does not
+       scale, not the plan. -#}
+  <p class="empty">{{ s.too_large }}</p>
+  <h3 class="panel-label">{{ s.range_heading }}</h3>
+  <ul class="ipam-ranges">
+    {%- for row in rows %}
+    <li><span class="mono">{{ row.bounds }}</span> · {{ row.policy }}{% if row.label != "" %} · {{ row.label }}{% endif %}</li>
+    {%- endfor %}
+  </ul>
+  {%- endmatch %}
+  {%- endif %}
+  {%- when Some with (plan) %}
+
+  {#- Links, not buttons: deep-linkable, and no JavaScript is owed to see a grid.
+       ⚠️ `aria-current="true"`, never `"page"`: the shell's nav already uses `"page"` for the screen
+       in force, and two `aria-current="page"` in one document is an ARIA error.
+       ⚠️ The key is the subnet's ID and no longer a slug — `ip_subnet` has no slug column, and the
+       dataset whose `slug` this used to carry was deleted by this story. -#}
+  <nav class="filters" aria-label="{{ s.selector_label }}">
+    {%- for tab in tabs %}
+    <a class="filter{% if tab.active %} is-active{% endif %}"
+       {% if tab.active %}aria-current="true"{% endif %}
+       href="/ipam?subnet={{ tab.id }}">{{ tab.label }}</a>
+    {%- endfor %}
+  </nav>
+
+  <div class="ipam-layout">
+    <div>
+      <ul class="ipam-grid" role="list" aria-label="{{ s.grid_label }}">
+        {%- for cell in plan.cells %}
+        <li class="ipam-cell {{ cell.modifier }}{% if cell.policy_modifier != "" %} {{ cell.policy_modifier }}{% endif %}"
+            aria-label="{{ cell.label }}"></li>
+        {%- endfor %}
+      </ul>
+
+      {#- 🔑 THE LEGEND'S CLASSES ARE LITERALS, AND THAT IS A DELIBERATE REDUNDANCY.
+           `every_class_a_template_names_is_defined_in_the_stylesheet` skips any class attribute
+           carrying an Askama expression, so the cells above — whose modifiers come from a Rust
+           `match` — are invisible to it. Measured at story 6b.7's validation: write this legend the
+           DRY way, from the same data the cells use, and deleting a rule from the sheet leaves the
+           WHOLE SUITE GREEN while every cell of that kind ships with no treatment.
+           ⚠️ `ipam-cell-not-covered` is ABSENT from this legend BY ARBITRATION — *not covered* is
+           not one of the binding vocabulary's four words — so it is the one modifier no literal
+           here can carry. `the_blank_cell_is_the_one_modifier_no_legend_entry_carries` says so, and
+           names the rule that covers it instead. -#}
+      <p class="ipam-legend">
+        <span class="ipam-key"><span class="ipam-cell ipam-cell-defined"></span>{{ s.state_defined }}</span>
+        <span class="ipam-key"><span class="ipam-cell ipam-cell-free"></span>{{ s.state_free }}</span>
+        <span class="ipam-key"><span class="ipam-cell ipam-cell-infrastructure"></span>{{ s.policy_infrastructure }}</span>
+        <span class="ipam-key"><span class="ipam-cell ipam-policy-static"></span>{{ s.policy_static }}</span>
+        <span class="ipam-key"><span class="ipam-cell ipam-policy-dhcp-pool"></span>{{ s.policy_dhcp_pool }}</span>
+        <span class="ipam-key"><span class="ipam-cell ipam-policy-reserved"></span>{{ s.policy_reserved }}</span>
+        <span class="ipam-key"><span class="ipam-cell ipam-policy-infrastructure"></span>{{ s.policy_infrastructure }}</span>
+        <span class="ipam-occupancy">{{ s.occupancy }}</span>
+      </p>
+    </div>
+
+    <div class="ipam-rail">
+      <div class="ipam-panel">
+        <p class="panel-label">{{ s.next_free_label }}</p>
+        <p class="panel-value mono">{{ s.next_free }}</p>
+        {#- ⚠️ The caveat is not decoration: until story 14.3 excludes every observed address, this
+             panel answers what the PLAN allows and not what is free on the network. Naming the
+             source is what stops the sentence being read as a promise it cannot keep — and 14.3 is
+             the only place the product PREVENTS a duplicate rather than reporting one. -#}
+        <p class="panel-caveat">{{ s.next_free_caveat }}</p>
+      </div>
+    </div>
+  </div>
+  {%- endmatch %}
+</section>

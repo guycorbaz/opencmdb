@@ -59,6 +59,27 @@ pub enum RepositoryError {
     /// tests depend on it.
     #[error("one observation id was supplied twice with different content")]
     ContradictoryObservation,
+    /// An addressing-plan rule the ADAPTER refuses, carried by name rather than as prose.
+    ///
+    /// Every [`crate::ipam::IpamError`] compares two TABLES or re-derives an address, so none of
+    /// them can be a `CHECK` (`ERROR 1901` on MariaDB 10.11) and none is a database constraint
+    /// being violated. It is its own variant for the reason story 5.11 established with
+    /// [`Self::InstantRegressed`]: [`Self::Constraint`] means *"a database constraint was
+    /// violated"* by its own doc, and for four of the seven no statement has run at all.
+    ///
+    /// 🔴 **Story 14.1 carried these as [`Self::Backend`]`(String)` and `ipam/mod.rs` claimed in
+    /// writing that they arrived as [`Self::Constraint`] — a sentence describing code that was
+    /// never written, which three review layers did not catch.** Story 14.2 is the first caller
+    /// that must DISTINGUISH these refusals in order to render one to the operator, and a caller
+    /// that has to match on prose to do it is precisely what D47 forbids.
+    ///
+    /// ⚠️ **Nothing in the compiler forces a handler to name this variant.** `RepositoryError` is
+    /// not `#[non_exhaustive]` and no exhaustive `match` traverses it, so adding it produced ZERO
+    /// `E0004` — measured. What carries the obligation is a test over the refusals a handler can
+    /// RECEIVE, which is a larger set than this variant: an empty plan answers [`Self::NotFound`]
+    /// and a re-entered address answers [`Self::Constraint`]`("unique")`.
+    #[error("{0}")]
+    Ipam(#[from] crate::ipam::IpamError),
     /// Any other backend failure — terminal, non-retryable, opaque by design.
     #[error("backend error: {0}")]
     Backend(String),

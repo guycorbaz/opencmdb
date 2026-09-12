@@ -110,6 +110,18 @@ const REQUIRE_QUEUE = process.env.AXE_REQUIRE_QUEUE === "1";
 // With `AXE_REQUIRE_GESTURE=1` (CI sets it) a run that finds no such row is *the gate could
 // not run*, never a pass: an unmounted route and a clean page are indistinguishable to axe.
 const REQUIRE_GESTURE = process.env.AXE_REQUIRE_GESTURE === "1";
+// 🔴 **`/ipam` IS THE SAME SHAPE AS AN EMPTY QUEUE, and story 14.2 is where it starts mattering.**
+// The screen's whole content — 256 cells each carrying its own accessible name, a subnet selector,
+// a legend — exists only when the store holds a subnet. Against a virgin store the route answers
+// 200 with one sentence, axe finds nothing to complain about, and the gate reports success over a
+// surface it never reached. `a11y/seed.sql` seeds a plan; `AXE_REQUIRE_PLAN=1` (CI sets it) turns
+// an unseeded run into *the gate could not run*, on `AXE_REQUIRE_QUEUE`'s own precedent.
+// 🔑 The grid is DERIVED, never named: the gate asks the page whether it carries cells, so it
+// cannot drift from what the product serves.
+const REQUIRE_PLAN = process.env.AXE_REQUIRE_PLAN === "1";
+// The grid's cells. A class the stylesheet guard pins, not a label and not a Rust identifier.
+const PLAN_CELL = "ul.ipam-grid li.ipam-cell";
+const PLAN_ROUTE = "/ipam";
 // The control the gate looks for. A CLASS the stylesheet guard already pins, not a label.
 const GESTURE = "button.btn-document";
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
@@ -225,6 +237,68 @@ async function main() {
     );
   }
 
+  // `/ipam`'s grid, measured the same way: opened, then asked whether it carries cells.
+  let planIndistinguishable = null;
+  {
+    const page = await openPage();
+    try {
+      await goOrGiveUp(page, PLAN_ROUTE);
+      const cells = await page.$$eval(PLAN_CELL, (nodes) => nodes.length);
+      if (cells === 0 && REQUIRE_PLAN) {
+        cannotRun(
+          `${PLAN_ROUTE} draws no cell, so the surface this state exists to measure — the ` +
+            `grid, its per-cell names, the selector, the legend — is not on the page. Seed a ` +
+            `plan before the gate runs.`,
+        );
+      } else if (cells === 0) {
+        console.log(
+          `⚠️  ${PLAN_ROUTE} draws no cell: the grid was NOT measured. ` +
+            `Set AXE_REQUIRE_PLAN=1 to make that a refusal rather than a gap.`,
+        );
+      } else {
+        console.log(`   ${PLAN_ROUTE}: ${cells} cell(s)`);
+        // 🔴 **THE ONE CHECK ONLY A BROWSER CAN MAKE, and story 14.2 exists partly because of
+        // it.** Until this story `.ipam-cell-free` was `background: transparent` over a base
+        // that already draws the border, so a free cell and an uncovered one were IDENTICAL in
+        // every computed property — measured, not supposed. A stylesheet guard cannot see that:
+        // both rules exist, both are correct, and the page is still wrong (story 6.4's *a source
+        // guard cannot see a cascade*). And WCAG 1.4.1 is not satisfied by a colour difference
+        // either, so the assertion is on a NON-COLOUR property.
+        const pair = await page.evaluate(() => {
+          const read = (sel) => {
+            const el = document.querySelector(sel);
+            if (!el) return null;
+            const c = getComputedStyle(el);
+            return { image: c.backgroundImage, style: c.borderTopStyle };
+          };
+          return { free: read("li.ipam-cell-free"), blank: read("li.ipam-cell-not-covered") };
+        });
+        if (pair.free && pair.blank) {
+          if (pair.free.image === pair.blank.image && pair.free.style === pair.blank.style) {
+            planIndistinguishable =
+              `a free cell and one the plan does not cover render IDENTICALLY in every ` +
+              `non-colour property measured: background-image ${pair.free.image}, ` +
+              `border-style ${pair.free.style}, on both`;
+            console.log(`🔴 ${PLAN_ROUTE}  ${planIndistinguishable}`);
+          } else {
+            console.log(
+              `   ${PLAN_ROUTE}: free and not-covered differ without colour ` +
+                `(background-image ${pair.free.image === "none" ? "none" : "pattern"} vs ` +
+                `${pair.blank.image === "none" ? "none" : "pattern"})`,
+            );
+          }
+        } else if (REQUIRE_PLAN) {
+          cannotRun(
+            `${PLAN_ROUTE} carries no free cell or no uncovered cell, so the pair this check ` +
+              `exists to compare is not on the page. The seed must draw both.`,
+          );
+        }
+      }
+    } finally {
+      await page.close();
+    }
+  }
+
   // The pane that carries the documenting gesture, found by opening each row and asking for
   // the control — never by recognising a selector or a translated word (see `REQUIRE_GESTURE`).
   let gestureRow = null;
@@ -260,6 +334,11 @@ async function main() {
   // ── Walk them ─────────────────────────────────────────────────────────────
   let nodes = 0;
   const failing = [];
+  // The grid's own non-colour check joins the product failures: it is a defect in what the page
+  // renders, exactly like an axe violation, and it must not be reported through a different door.
+  if (planIndistinguishable !== null) {
+    failing.push(`${PLAN_ROUTE} (free vs not-covered)`);
+  }
   for (const route of [...routes, ...states]) {
     const page = await openPage();
     await goOrGiveUp(page, route);

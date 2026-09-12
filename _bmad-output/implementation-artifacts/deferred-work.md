@@ -5411,6 +5411,43 @@ One row, and v0.3.0 is what made it live.
   row and names these two rather than fixing them, because widening a guard over enums it does not own
   is scope. **Owner: whichever story next touches `EntityState` or `EntityKind` — story 6.12 by name.**
 
+- ⚠️ **Epic 14 has FIVE stories and `epics.md` describes FOUR.** Story 14.2 was split at its
+  implementation on 2026-09-11 (Guy) into 14.2 *the screen* and **14.2b *the operator's hands***,
+  after the mandatory validation grew it from two write routes to three and added a `free`
+  treatment, an auth-perimeter property, a permanent concurrency harness and a `classify` repair.
+  A story may not edit `epics.md`; the divergence is here instead. **Owner: Epic 14's retrospective.**
+
+- ⚠️ **The UX spec asks for a grid this product does not render.**
+  `ux-design-specification.md:1632-1634` prescribes `role="grid"` with keyboard navigation,
+  `role="gridcell"` and an accessible *"jump to next free IP"*; story 6b.7 shipped `<ul
+  role="list">` on a measured ARIA reason and story 14.2 rebuilt that grid without changing the
+  shape. The spec's real requirement — *find a free IP without sight* — is met by the next-address
+  panel in text; what is NOT met is the two-dimensional focus model. **Owner: Epic 14's
+  retrospective.**
+
+- ⚠️ **`epics.md`'s 14.2 criterion 5 says the empty plan "names the gesture that fills it AND LINKS
+  TO IT"; the shipped control is a `role="button"` span with no href.** Deliberate under the split
+  — the gesture arrives in 14.2b, and a link to nothing is that criterion's own defect pointed the
+  other way — but it diverges from a document a story may not edit. **Owner: story 14.2b**, which
+  makes the control live and must make it a link in the same act.
+
+- 🔴 **Two policy treatments are PIXEL-IDENTICAL on the addressing grid.** `border-style: double` at
+  `border-width: 1px` collapses to a solid line, so a declared `static` range and a declared
+  `infrastructure` range are told apart by NOTHING visual — measured in Chrome 151 at story 14.2's
+  code review by screenshotting one cell per policy. ⚠️ It is not *"told apart by colour alone"*,
+  which WCAG 1.4.1 would already forbid; it is not told apart at all. 🔑 **The channel is
+  exhausted**: a 14 px cell offers three border styles that render at 1 px (`solid`, `dashed`,
+  `dotted`) and the fill is already spoken for by the four STATES. The axe gate's non-colour check
+  compares `free` against `not-covered` and no policy pair. **Owner: named at story 14.2's review
+  triage — it needs an arbitration**, the honest options being a fourth non-colour channel, a
+  thicker border on one policy, or stating that the grid separates STATES while the policy is
+  carried by the accessible name and the legend.
+
+- ⚠️ **The release notes owe a sentence: IPAM's write routes will exist with NO opt-in.** Guy's
+  arbitration (A) of 2026-09-11 — `OPENCMDB_DOCUMENT_ENABLED` guards an AUTHORSHIP hazard (a machine
+  writing as a human, NFR5) that IPAM does not have. A fresh install will gain a live write surface
+  with no switch, the first in this product. **Owner: the first release containing story 14.2b.**
+
 - 🔴 **`ipam_repo::insert_range`'s overlap rule is NOT enforceable under concurrency, and the
   measurement took a second attempt to get.** It reads every sibling range, then inserts: no
   transaction, no `SELECT … FOR UPDATE`, and no index that could catch the loser — a `CHECK` cannot
@@ -5421,9 +5458,16 @@ One row, and v0.3.0 is what made it live.
   own §2 records the same shape on the interface mint (#161), where a one-shot negative was reported
   as a property and two layers later refuted it. *A negative result from an instrument that cannot
   open the window measures the instrument.*
-  🔑 **Unreachable today** — story 14.1 ships no producer — and **story 14.2 opens HTTP write
-  routes, which are concurrent by construction**. **Owner: story 14.2**, and it may not close it
-  with a `UNIQUE`.
+  🔑 **Unreachable today** — story 14.1 ships no producer. ⚠️ **RE-OWNED 2026-09-11: story 14.2 was
+  SPLIT and the write routes went to STORY 14.2b**, which is the owner; 14.2 ships the screen and no
+  write at all. It may not close this with a `UNIQUE`. 🔑 **And the fix was BUILT and measured at
+  14.2's validation**: a transaction plus a parent-row `FOR UPDATE` works — the loser blocks,
+  re-reads and is refused on the domain rule, no deadlock and no 1205 — **but reusing `load_subnet`
+  inside the transaction, the DRY line anyone writes, BRINGS THE RACE BACK**, the lock still taken
+  and worthless, because under REPEATABLE READ the snapshot is fixed by the first CONSISTENT read.
+  Guy re-arbitrated on that measurement: **lock the read that DECIDES** (`ip_range … FOR UPDATE`),
+  and ship the 400 ms pause harness as a PERMANENT test, the ordering being load-bearing and
+  invisible.
 
 - ⚠️ **`crates/opencmdb-bin/src/ipam_repo.rs`'s `#![allow(dead_code)]` is module-wide, and nothing
   makes anyone pay it off.** It is justified while story 14.1 ships no producer, and its own doc
@@ -5434,7 +5478,10 @@ One row, and v0.3.0 is what made it live.
   the attribute removed, `cargo build --workspace` and `cargo clippy --workspace --all-targets` both
   report **ELEVEN warnings covering FIFTEEN items** (one warning groups the five associated items of
   `Subnet`). This row had the right number under the wrong noun; its correction was taken with
-  `grep "never used"`, which cannot see `struct `Subnet` is never constructed`. 🔑 *A measurement whose
-  instrument cannot see the answer is not a measurement* — and a half-right figure invites a
-  confident wrong one. **Owner: story 14.2**, which must narrow or remove the attribute rather than
-  inherit it silently.
+  `grep "never used"`, which cannot see `struct `Subnet` is never constructed`. 🔑 *A measurement
+  whose instrument cannot see the answer is not a measurement* — and a half-right figure invites a
+  confident wrong one.
+  ✅ **RE-OWNED 2026-09-11: story 14.2 NARROWED it from module-wide to SIX item-level attributes**,
+  giving the READ path a producer and not the write path, so **six warnings** remain — each naming
+  its owner. **Owner: story 14.2b**, which removes the last of them when its routes call those
+  functions. Neither story may leave it module-wide while claiming to have paid it off.

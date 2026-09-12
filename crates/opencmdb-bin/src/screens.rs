@@ -149,8 +149,6 @@ pub(crate) enum ExampleContent {
     DeviceRecord,
     /// The example application inventory — Epic 15's frame (story 6b.7).
     AppsInventory,
-    /// The example subnet occupancy — Epic 14's frame (story 6b.7).
-    IpamOccupancy,
     /// The example alert list — Epic 16's frame (story 6b.8).
     AlertList,
     /// The example commissioning walk-through and its baselining block — Epic 9's frame
@@ -177,7 +175,6 @@ impl ExampleContent {
             // ⚠️ Both take the query and one of them ignores it — see `apps_body`'s doc for why the
             // underscore there is a statement rather than a habit.
             ExampleContent::AppsInventory => crate::example_screens::apps_body(query),
-            ExampleContent::IpamOccupancy => crate::example_screens::ipam_body(query),
             ExampleContent::AlertList => crate::example_screens::alerts_body(query),
             ExampleContent::Commissioning => crate::example_screens::commissioning_body(query),
         }
@@ -301,7 +298,7 @@ impl Screen {
             // ⚠️ Each of these became `Example` in ITS OWN story, listed beside it.
             // Epic 15's and Epic 14's frames, filled from the example dataset (story 6b.7).
             Screen::Apps => Nature::Example(ExampleContent::AppsInventory),
-            Screen::Ipam => Nature::Example(ExampleContent::IpamOccupancy),
+            Screen::Ipam => Nature::Fed,
             // 🔴 **`Fed`, NOT `Mixed` — and the story said `Mixed` until the code was written.**
             // Its §0e reasoned that `/sources` would hold a real capability section beside an
             // example alert list. It does not: AC3 puts the alert list on its OWN screen, which
