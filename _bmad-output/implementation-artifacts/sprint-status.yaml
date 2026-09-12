@@ -5530,7 +5530,37 @@ development_status:
   #   leave the two documents disagreeing silently.
   #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
   #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
-  14-2b-the-plan-in-the-operators-hands: backlog
+  14-2b-the-plan-in-the-operators-hands: in-progress
+  #   CONTEXTED 2026-09-12, then VALIDATED by both layers, and the validation OVERTURNED THE
+  #   CONCURRENCY ARBITRATION FOR THE THIRD TIME -- this time on a measurement of the shape itself.
+  #   🔴 `ip_range ... FOR UPDATE` alone does NOT refuse: it DEADLOCKS, 20 observations out of 20.
+  #   `WHERE subnet_id = ?` is a non-unique index scan, so both transactions take compatible gap
+  #   locks and each then needs an insert-intention lock. Correctness survives (one row every time)
+  #   and the loser is told *deadlock, retry* where the product knows the honest answer.
+  #   ✅ Guy, 2026-09-12: the PARENT ROW first, THEN the deciding read -- deterministic refusal 5/5
+  #   in both sibling states. ⚠️ That is the option refused on 2026-09-11 as belt-and-braces, and
+  #   the measurement overturned the refusal: the two locks are not redundant, the parent serialises
+  #   entry and the range lock is what the DRY line cannot walk past.
+  #   ✅ Guy also took: a per-handler BUDGET on the write routes (this story adds the product's
+  #   first blocking write; a 3 s hold gave a 6.005 s round trip, bounded only by
+  #   `innodb_lock_wait_timeout` = 50 s, and `document.rs` carries zero `store_within`) -- and the
+  #   budget wraps the TRANSACTION, story 14.2's denial of service having been a budget around the
+  #   wrong half. And AC3's guard becomes `PATHS` per sub-router with a POSITIVE control, because
+  #   axum 0.8's `Router` cannot be enumerated and the guard as written passed over a route that
+  #   DOES NOT EXIST (`/totally/made/up` answers 401 like any other).
+  #   🔴 THE FACT-CHECK LAYER FOUND A CLASS: four of §1's six `file:line` citations were
+  #   `38da035`-era, copied from story 14.2 with the measurements they recorded -- and 14.2 is what
+  #   moved three of the four. 🔑 *Copying a measurement with its coordinates copies a photograph
+  #   with its date erased.* One premise fell with them (`insert_subnet` DOES have a caller, in a
+  #   test module 14.2 added) and AC7 was satisfiable by DOING NOTHING (14.2 had already removed the
+  #   blanket attribute, leaving six item-level ones).
+  #   ⚠️ Carried into the story rather than left for the dev agent: a SIXTH reachable refusal (a
+  #   label over 120 characters -- and under a non-strict `sql_mode` it would silently TRUNCATE);
+  #   `the_plan_reads_no_observation` is blind to the module this story creates (both forms planted,
+  #   test and ten gates green); `kbd-probe.mjs` has NO `/ipam` coverage at all; the axe gate never
+  #   sees AC8's empty-plan screen because `AXE_REQUIRE_PLAN=1` refuses a run that draws no cell;
+  #   and `document.rs`'s machinery is PRIVATE, so a dev agent would most likely copy `same_origin`
+  #   -- the one function a CSRF check must never be duplicated for.
   #   🔴 INSERTED 2026-09-11 at story 14.2's IMPLEMENTATION -- Epic 14 goes from FOUR stories to
   #   FIVE (`epics.md` NOT edited; a story may not re-scope an epic, and the divergence is
   #   registered). The mandatory validation had grown 14.2 from two write routes to three and added

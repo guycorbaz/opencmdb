@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use axum::extract::State;
 use axum::extract::rejection::FormRejection;
-use axum::http::{HeaderMap, StatusCode, header};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Form, Router};
@@ -33,10 +33,6 @@ use crate::repo;
 /// The route, under the vocabulary's own token (story 6.1 §5). Tests spell the literal out
 /// independently — deliberate redundancy, so renaming either side reds.
 pub(crate) const DOCUMENT_ALL_PATH: &str = "/document-all";
-
-/// The realm the CSRF 403 does NOT advertise — kept beside the check so the 403 body and the
-/// auth challenge never blur (§5: the 403 is not an auth failure).
-const CSRF_REFUSED_BODY: &str = "cross-origin request refused";
 
 /// The request shape: `application/x-www-form-urlencoded`, ⚠️ because that is what the vendored
 /// htmx 2.0.4 posts (measured: form-values encoding, zero `fetch(`, no `json-enc` extension).
@@ -185,8 +181,8 @@ async fn document_all(
     headers: HeaderMap,
     form: Result<Form<DocumentAllRequest>, FormRejection>,
 ) -> Response {
-    if !same_origin(&headers) {
-        return (StatusCode::FORBIDDEN, CSRF_REFUSED_BODY).into_response();
+    if !crate::write_guard::same_origin(&headers) {
+        return (StatusCode::FORBIDDEN, crate::write_guard::CSRF_REFUSED_BODY).into_response();
     }
     let Ok(Form(request)) = form else {
         return malformed();
@@ -285,46 +281,6 @@ fn refusal_body(refusal: DocumentRefusal) -> String {
         DocumentRefusal::NothingToDocument => rust_i18n::t!("document.nothing_to_document"),
     }
     .to_string()
-}
-
-/// The CSRF Origin check (story 6.2 §5), pure over the request headers. It is a TRIPWIRE against
-/// a browser holding the cached Basic credential being made to forge a cross-site write, at the
-/// stated strength and no higher:
-///
-/// - **`Origin` absent → PASS** — a machine caller (`curl -u`) sends none; the threat is a
-///   BROWSER, which sends `Origin` on every cross-site POST (measured, Blink);
-/// - **`Origin: null` → REFUSE** — sandboxed iframes / some redirect chains; refused because it
-///   carries no `://` authority to match (no dedicated branch — measured redundant);
-/// - **`Origin` present → compare its authority against `Host`**, ASCII case-insensitively;
-///   match → pass, mismatch → refuse. ⚠️ Stated limits: this needs the reverse proxy to FORWARD
-///   `Host` (`proxy_set_header Host $host;` — nginx's default rewrite would refuse every POST);
-///   `Host` ABSENT (HTTP/2 `:authority`) → refuse; the compare is authority-only, SCHEME-BLIND;
-///   default-port elision is compared literally. All registered, none silently absorbed;
-/// - **more than one `Origin` header → REFUSE** (6.1's `Authorization` precedent: first-value
-///   semantics let right-then-wrong through).
-fn same_origin(headers: &HeaderMap) -> bool {
-    let mut origins = headers.get_all(header::ORIGIN).into_iter();
-    let Some(origin) = origins.next() else {
-        return true; // absent → machine caller, pass
-    };
-    if origins.next().is_some() {
-        return false; // more than one Origin
-    }
-    let Ok(origin) = origin.to_str() else {
-        return false;
-    };
-    // Strip the scheme; compare host[:port] against Host. `Origin: null` (opaque origins —
-    // sandboxed iframes, some redirect chains) carries no `://`, so it falls into the refusal
-    // below without a dedicated branch (a dedicated `== "null"` check was measured redundant at
-    // the mutation pass — it is refused by the missing scheme regardless).
-    let origin_authority = origin.split_once("://").map(|(_, rest)| rest);
-    let Some(origin_authority) = origin_authority else {
-        return false;
-    };
-    let Some(host) = headers.get(header::HOST).and_then(|h| h.to_str().ok()) else {
-        return false; // Host absent (HTTP/2 :authority) → refuse
-    };
-    origin_authority.eq_ignore_ascii_case(host)
 }
 
 /// The request-shape refusal: 422, naming the field (story 6.1 §6). One body for EVERY shape
@@ -566,7 +522,7 @@ mod tests {
         ))
         .await;
         assert_eq!(status, StatusCode::FORBIDDEN);
-        assert_eq!(body, CSRF_REFUSED_BODY);
+        assert_eq!(body, crate::write_guard::CSRF_REFUSED_BODY);
     }
 
     #[tokio::test]
@@ -618,66 +574,6 @@ mod tests {
         .await
         .unwrap();
         assert_ne!(response.status(), StatusCode::FORBIDDEN);
-    }
-
-    /// The `same_origin` pure fn table (§5), including the stated limits pinned as behaviour.
-    #[test]
-    fn same_origin_decides_each_case() {
-        let with = |pairs: &[(&str, &str)]| {
-            let mut h = HeaderMap::new();
-            for (k, v) in pairs {
-                h.append(
-                    if *k == "origin" {
-                        header::ORIGIN
-                    } else {
-                        header::HOST
-                    },
-                    v.parse().unwrap(),
-                );
-            }
-            h
-        };
-        assert!(
-            same_origin(&with(&[("host", "nas:8080")])),
-            "absent origin passes"
-        );
-        assert!(
-            same_origin(&with(&[
-                ("origin", "http://nas:8080"),
-                ("host", "nas:8080")
-            ])),
-            "match passes"
-        );
-        assert!(
-            same_origin(&with(&[
-                ("origin", "HTTP://NAS:8080"),
-                ("host", "nas:8080")
-            ])),
-            "case-insensitive authority match passes"
-        );
-        assert!(
-            !same_origin(&with(&[
-                ("origin", "http://attacker"),
-                ("host", "nas:8080")
-            ])),
-            "mismatch refused"
-        );
-        assert!(
-            !same_origin(&with(&[("origin", "null"), ("host", "nas:8080")])),
-            "null refused"
-        );
-        assert!(
-            !same_origin(&with(&[("origin", "http://nas:8080")])),
-            "host absent refused"
-        );
-        // SCHEME-BLIND, stated limit: https origin passes against a bare-authority Host.
-        assert!(
-            same_origin(&with(&[
-                ("origin", "https://nas:8080"),
-                ("host", "nas:8080")
-            ])),
-            "scheme-blind (stated limit): same authority passes across schemes"
-        );
     }
 
     /// AC6's SOURCE tripwire (§9 M12): the PRODUCTION half of this file must NOT carry a local
