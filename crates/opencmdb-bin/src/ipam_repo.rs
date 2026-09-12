@@ -209,7 +209,6 @@ impl Subnet {
 ///
 /// [`RepositoryError::Backend`] carrying an [`IpamError`]'s sentence when the subnet is not one the
 /// arithmetic can answer for, or the `sqlx::Error` classified by [`classify`].
-#[allow(dead_code, reason = "the write path has no producer until story 14.2b")]
 pub(crate) async fn insert_subnet<'e, E>(
     executor: E,
     id: &str,

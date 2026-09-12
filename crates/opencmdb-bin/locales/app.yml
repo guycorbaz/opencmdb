@@ -872,6 +872,69 @@ ipam.empty_plan_not_built:
   en: "Defining a subnet is not built yet. When it is, this is where the plan starts."
   fr: "La définition d'un sous-réseau n'est pas encore construite. Quand elle le sera, c'est ici que le plan commencera."
 
+# ── The plan's write routes (story 14.2b) ────────────────────────────────────
+# 🔑 EVERY REFUSAL NAMES THE RULE IT BROKE, in both locales. Story 6.4's finding is the reason: its
+# success message shipped in ENGLISH under a French UI, with `field(s)` and a raw UUID in it,
+# because the body was a Rust `format!` and not a key. ⚠️ These sentences are LOCAL and are not
+# `document.*`'s: the DECISION to key a refusal is shared, the WORDING is not, and one body serving
+# two surfaces is the shape story 6.4 paid for.
+ipam.done.subnet:
+  en: "Subnet defined. The plan now has somewhere to put ranges and addresses."
+  fr: "Sous-réseau défini. Le plan a désormais où placer des plages et des adresses."
+ipam.refusal.malformed:
+  en: "Malformed request: the form must carry a subnet in CIDR notation, such as 192.0.2.0/24, and a label."
+  fr: "Requête mal formée : le formulaire doit porter un sous-réseau en notation CIDR, par exemple 192.0.2.0/24, et une étiquette."
+# ⚠️ Required by Guy's decision of 2026-09-12, refused at the route and NOT in the schema: `label`
+# is `NOT NULL` with no non-empty CHECK, so `""` still inserts through raw SQL. A tripwire, never a
+# barrier — story 5.12's precedent, stated rather than implied.
+ipam.refusal.label_empty:
+  en: "The subnet needs a label: a plan of numbers with no words is not a plan."
+  fr: "Le sous-réseau a besoin d'une étiquette : un plan de nombres sans mots n'est pas un plan."
+ipam.refusal.label_too_long:
+  en: "That label is too long: 120 characters at most."
+  fr: "Cette étiquette est trop longue : 120 caractères au maximum."
+ipam.refusal.already_defined:
+  en: "The plan already holds that subnet."
+  fr: "Le plan contient déjà ce sous-réseau."
+ipam.refusal.unknown_subnet:
+  en: "That subnet is not in the plan."
+  fr: "Ce sous-réseau n'est pas dans le plan."
+# 503 and not 409: nothing about the request is wrong. 🔴 Reachable only since this story — the arm
+# that produces it was dead code until `classify` was repaired, because nothing in this product
+# contended before the plan's routes took a row lock.
+ipam.refusal.contention:
+  en: "Another change to the plan was in flight. Nothing was written; try again."
+  fr: "Une autre modification du plan était en cours. Rien n'a été écrit ; réessayez."
+ipam.refusal.backend:
+  en: "The write did not go through. Nothing was changed; see the self-diagnostic if it persists."
+  fr: "L'écriture n'est pas passée. Rien n'a été modifié ; consultez l'auto-diagnostic si cela persiste."
+# The seven `IpamError` refusals, each naming its own rule. ⚠️ Four of them are unreachable from
+# the subnet route and reachable from the two this story adds after it; they are written once, here,
+# rather than grown one at a time as each route lands.
+ipam.refusal.range_outside_subnet:
+  en: "That range falls outside its subnet."
+  fr: "Cette plage sort de son sous-réseau."
+ipam.refusal.range_overlaps:
+  en: "That range overlaps one the plan already holds."
+  fr: "Cette plage en recouvre une que le plan contient déjà."
+ipam.refusal.range_bounds_inverted:
+  en: "That range ends before it begins."
+  fr: "Cette plage se termine avant de commencer."
+ipam.refusal.address_outside_subnet:
+  en: "That address falls outside its subnet."
+  fr: "Cette adresse sort de son sous-réseau."
+# 🔑 `192.0.2.5/24` is refused rather than corrected: containment is arithmetic on the base, and a
+# base carrying host bits makes every later answer wrong in a way nothing downstream can detect.
+ipam.refusal.base_not_network:
+  en: "A subnet is named by its network address: 192.0.2.5/24 is the subnet 192.0.2.0/24."
+  fr: "Un sous-réseau se nomme par son adresse de réseau : 192.0.2.5/24, c'est le sous-réseau 192.0.2.0/24."
+ipam.refusal.prefix_not_in_family:
+  en: "That prefix length cannot belong to an IPv4 subnet: 32 at most."
+  fr: "Cette longueur de préfixe ne peut pas appartenir à un sous-réseau IPv4 : 32 au maximum."
+ipam.refusal.malformed_address:
+  en: "That is not an address the plan can hold."
+  fr: "Ce n'est pas une adresse que le plan sache porter."
+
 # ── Sources (story 6b.8) — the REAL capability boundary ──────────────────────
 sources.title:
   en: "Sources"

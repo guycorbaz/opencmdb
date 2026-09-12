@@ -25,6 +25,7 @@ mod identity_view;
 mod inventory_view;
 mod ipam_page;
 mod ipam_repo;
+mod ipam_write;
 mod l1_runner;
 mod metrics;
 mod neighbour;
@@ -706,7 +707,17 @@ fn app(pool: MySqlPool, config: AppConfig, diagnostic: diagnostic::DiagnosticFac
         // `page.rs` stands at 1954 code lines of the 2000 the `file-size` gate allows — 46 of
         // headroom — and `CLAUDE.md`'s rule is *split, not grown*, which is only a rule if it is
         // applied BEFORE the growth.
-        .merge(ipam_page::router(pool.clone(), config.scan_cidr.clone()));
+        .merge(ipam_page::router(pool.clone(), config.scan_cidr.clone()))
+        // 🔑 THE PLAN'S WRITE ROUTES, and they carry NO SWITCH (story 14.2b).
+        // `OPENCMDB_DOCUMENT_ENABLED` guards an AUTHORSHIP hazard — a route that turns an OBSERVED
+        // value into a declared one — which the addressing plan does not have: it is a second
+        // declared register that no observation feeds (Guy's arbitration (4) of 2026-09-10).
+        // ⚠️ So a fresh install gains a live write surface with no opt-in, which the release notes
+        // owe a sentence.
+        // ⚠️ Merged as its OWN sub-router and never onto `ipam_page::router`, which BEARS THE POOL:
+        // fusing them would silently retire the compile-time refusal of `State<MySqlPool>` that
+        // `ipam_write::IpamWriteState` exists to hold (AC2).
+        .merge(ipam_write::router(pool.clone()));
     if config.document_enabled {
         // The switch governs EXISTENCE only (arbitration 4): merged above the layer, the route
         // is auth-gated exactly like every other non-public path. The pool lives INSIDE the

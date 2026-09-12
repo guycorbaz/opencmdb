@@ -353,7 +353,9 @@ the subnet (`_ipam.html:49,79` already carries the store's own id).
   repair was BUILT and measured safe (`try_downcast_ref` + `number()`, whole workspace green, the
   `Constraint("unique")` path intact) — **but under the chosen lock it buys less than it looks
   like**, the deadlock becoming `Contention` where the operator needs `RangeOverlapsAnother`.
-- [ ] **T2** (AC1, AC2) The sub-router and the first route, on `document.rs`'s shape.
+- [x] **T2** (AC1, AC2) The sub-router and the first route, on `document.rs`'s shape. ✅ 2026-09-12
+  — `POST /ipam/subnet` writes, eight mutations conform to predictions written first, and AC2's
+  compile refusal is measured `E0277` on the `Handler` bound.
 - [ ] **T3** (AC4) The refusal set over what the handler can receive, keyed in both locales.
 - [ ] **T4** (AC5, AC9b) The parent row THEN the deciding read; the pause harness as a permanent
   test asserting the REFUSAL and not merely the row count; and the budget around the transaction.
@@ -445,6 +447,73 @@ Claude Opus 5 (1M context), 2026-09-12.
   ⚠️ **What is NOT shared, by decision: the refusal BODIES.** `document.malformed` and the IPAM
   refusals are different sentences about different gestures; the DECISION is shared, the WORDING
   stays local. A shared body is the *one message for two surfaces* shape story 6.4 paid for.
+- **T2 — the plan has a producer, and `POST /ipam/subnet` is the first of the three.** The subnet
+  route comes first because the other two hang from it: with two routes an empty plan stays empty
+  for ever (§1(a)). `ipam_write.rs` carries the shared machinery epic constraint (1) front-loads —
+  the Origin check, keyed refusal bodies in both locales, and the exhaustive mapping of
+  `RepositoryError` — and the second and third routes reuse it.
+- **T2 — the refusal is DATA, and clippy and the design pointed the same way.** `Refusal { status,
+  key }` replaced `Result<_, Response>` after clippy's `result_large_err` refused the latter
+  outright (*the `Err`-variant is at least 128 bytes*). 🔑 The lint bought the property AC4 needs:
+  the mappers are now PURE, so a test asserts WHICH rule a refusal names instead of scraping a
+  rendered body. ⚠️ And the first draft of the distinctness test **restated the whole mapping in its
+  own body** — a second table that agrees with itself, story 6.5's M8 one degree over. It reads
+  `ipam_refusal(&error).key()` now.
+- **T2 — AC2 is MEASURED, not asserted.** `IpamWriteState` holds a port and no pool, so adding
+  `State<MySqlPool>` to the handler gives **`error[E0277]`: the trait bound … `Handler<…>` is not
+  satisfied** (M8), which is `document.rs`'s M4 reproduced for this module. ⚠️ The sub-router is
+  merged as its OWN router and never onto `ipam_page::router`, which BEARS the pool: fusing them
+  retires the guarantee silently, and `main.rs` says so at the merge.
+- **T2 — the label bound is in CHARACTERS and a test measures the difference.** `VARCHAR(120)`
+  counts characters under `utf8mb4`, so a byte bound would refuse 120 accented characters the column
+  accepts. M1 (`chars().count()` → `len()`) reds exactly that test. 🔑 The refusal is at the route
+  rather than left to the store because the store's answer is `1406: Data too long` in the driver's
+  English — and under a non-strict `sql_mode` it is not a refusal at all but a silent TRUNCATION.
+- **T2 — two sentences for what looks like one mistake, and the distinction is the honest one.**
+  `/999` does not fit a `u8` and is `malformed`; `/64` fits and cannot belong to IPv4, so it is
+  `prefix_not_in_family`. The product names only a rule it can evaluate. M6 collapses the second
+  into the first and reds 2.
+- ⚠️ **`insert_subnet`'s `#[allow(dead_code)]` is removed here and not at T7**, because its stated
+  reason — *"the write path has no producer until story 14.2b"* — became FALSE the moment this route
+  called it. AC7's other five wait for the routes that call them. *An allow whose reason is untrue
+  is a false doc, not a deferral.*
+- ⚠️ **THE CLOCK IS NO LONGER THE TELL IT WAS, measured rather than assumed.** The bin suite runs in
+  **5.02 s WITHOUT a store** and **8.66 s against a live `mariadb:10.11.11`** — a factor of 1.7,
+  where earlier stories in this project relied on a gap nearer 25×. 🔴 **Two candidate causes were
+  measured and REFUTED**: the 5 s page budget test alone is 0.33 s, and `arp_ping`'s overlap test
+  0.13 s (it is env-gated). Serial and parallel differ by 1.3 s, so it is not one blocking test but
+  603 tests' ordinary cost. **No cause is named** — the rule is this project's own — and what
+  confirmed the store genuinely answered is the mutation driver's own `store: reachable at
+  127.0.0.1:13450 (connected)` line, not the clock.
+
+### T2's mutation pass
+
+Every prediction was written BEFORE the run and every run went through `cargo xtask mutate
+--baseline`, which measures the unmutated tree first — story 6.6's register row asks for exactly
+that, and its own six mutations ran without it, *which is luck confirmed rather than rigour*. The
+store was DROPPED and recreated before the pass (story 6.6: this suite is non-deterministic against
+a reused database), and the migrations were warmed by one full run first (story 14.1: a virgin store
+races itself on `migrate!`).
+
+**Eight ids, eight conforming outcomes.** No *"every red assertion-carried"* headline is claimed;
+the carrier is named per row.
+
+| id | mutation | predicted | measured | carrier |
+|---|---|---|---|---|
+| M1 | the label bound in BYTES (`chars().count()` → `len()`) | red:1 | red:1 | the 120-accented-character test's own assertion |
+| M2 | the Origin check deleted from the handler | red:1 | red:1 | the cross-origin test's status assertion — ⚠️ its port answers a SUCCESS, so without the check it would go green on a 201 |
+| M3 | a re-entered subnet answers 500 instead of 409 | red:1 | red:1 | the conflict test's status assertion |
+| M4 | the redirect drops the subnet it just defined | red:1 | red:1 | the created test's header assertion — ⚠️ **and clippy, which the driver reports separately**: `format!("/ipam")` is a useless format. The row is dual-carried and that is an artefact of the mutation's spelling, not a second guard |
+| M5 | the label is not trimmed | red:1 | red:1 | the whitespace-label test (`label=%20%20`) |
+| M6 | a bad prefix collapses into `malformed` | red:2 | red:2 | the `/64` and the `192.0.2.5/24` tests, each on its own key |
+| M7 | two `IpamError` variants share one key | red:1 | red:1 | the distinctness property over `IpamError::ALL`, in both locales |
+| M8 | **AC2** — the handler extracts `State<MySqlPool>` | compile-fail | compile-fail | `error[E0277]`: the trait bound `…{define_subnet}: Handler<…>` is not satisfied |
+
+⚠️ **What is NOT covered and is said rather than left to be found**: the ORDER of the two shape
+refusals — a request that is both unlabelled and not a CIDR — is asserted by nothing, and no test
+distinguishes `checked_label` running first from `parse_cidr` running first. It is a real
+under-determination and not a defect today, since each refusal names its own rule; T3 owns the
+refusal set and is where it should either be pinned or declared indifferent.
 
 ### File List
 
@@ -452,8 +521,22 @@ Claude Opus 5 (1M context), 2026-09-12.
 - `crates/opencmdb-bin/src/repo.rs` — `classify`'s `Contention` arm, and the test that makes it live.
 - `crates/opencmdb-bin/src/document.rs` — the Origin check removed and taken from `write_guard`.
 - `crates/opencmdb-bin/src/main.rs` — the module declaration.
+- `crates/opencmdb-bin/src/ipam_write.rs` — NEW; the plan's write sub-router and its first route.
+- `crates/opencmdb-bin/src/ipam_repo.rs` — `insert_subnet`'s dead-code allow removed; it has a
+  producer now.
+- `crates/opencmdb-bin/locales/app.yml` — fifteen keys in both locales: one confirmation and
+  fourteen refusals, each naming its rule.
+- `crates/opencmdb-bin/src/main.rs` — `mod ipam_write` and the unconditional merge, above
+  `auth_deny` and beside `ipam_page::router` rather than inside it.
 
 ### Change Log
+
+- 2026-09-12 — **T2: the addressing plan has a producer.** `POST /ipam/subnet` writes, on
+  `document.rs`'s shape and with the machinery epic constraint (1) front-loads. **879 → 893 tests**
+  (603 bin + 191 core + 99 xtask), ten gates green, clippy `--all-targets`, fmt; measured in both
+  store conditions with `env -u DATABASE_URL` per AC9, **5.02 s without a store and 8.66 s against a
+  live `mariadb:10.11.11`** — ⚠️ and that ratio is the finding: see the Completion Notes, where two
+  candidate causes for the shrunken gap are measured and refuted and **no cause is named**.
 
 - 2026-09-12 — **T0: §2's five decisions taken**, and **the record caught up with the tree**. T1 had
   shipped in `860d0e4` — `classify`'s dead `Contention` arm and the shared Origin check — with its
