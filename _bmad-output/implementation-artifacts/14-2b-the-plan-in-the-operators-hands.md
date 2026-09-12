@@ -23,7 +23,9 @@ not yet built, which was honest and is not a product. This story is the gesture.
 
 **The vocabulary is RATIFIED** (PR #166): `static` · `dhcp-pool` · `reserved` · `infrastructure`.
 No story may extend it. `structural` is retired in the code AND in the `copy-vocabulary` gate's
-denylist since 14.2 — reintroducing the key reds the gate naming `app.yml:810`.
+denylist since 14.2 — reintroducing the key reds the gate, which names whatever line you put it on
+(⚠️ the story first said `app.yml:810`, which was the retired key's own address before 14.2 deleted
+it: *a line number is not a property*).
 
 **Guy's six arbitrations** (2026-09-10) are `epics.md`'s Epic 14 preamble. Constraint (1) is this
 story's shape: *the write cost is front-loaded — the FIRST new route carries the shared machinery
@@ -47,16 +49,26 @@ review, and the measurement is what makes it actionable.**
 
 ### (a) THREE write routes, not two
 
-`insert_subnet` has **no caller outside its own test module**, and `ip_range.subnet_id` /
-`ip_address.subnet_id` are both `NOT NULL` foreign keys to it (`0007:120`, `:157`). With two routes
-an empty plan stays empty for ever and every range write answers `Err(NotFound)` — measured.
+`insert_subnet` has **NO PRODUCTION CALLER**, and `ip_range.subnet_id` / `ip_address.subnet_id`
+are both `NOT NULL` foreign keys to it (`0007:120`, `:153`). With two routes an empty plan stays
+empty for ever and every range write answers `Err(NotFound)` — measured, twice.
+
+🔴 **This read *"no caller outside its own test module"* and story 14.2 itself had falsified it**:
+`main.rs:1854` calls `insert_subnet` from `main.rs`'s own test module, added by 14.2's rewritten
+selector test. The SUBSTANCE survives — nothing in production calls it — and the sentence did not.
+*An inherited measurement is dated by the tree that produced it, and the tree moved underneath this
+one.*
 
 ### (b) 🔴 The auth perimeter must be a PROPERTY, and today it is a literal
 
 The gap-hunt mounted an always-on `POST /ipam/range` BELOW `auth_deny` and measured **873 tests and
-TEN GATES GREEN over an unauthenticated write answering `201 Created`.** The one test carrying the
-*route-above-the-layer* property is hardcoded to `/document-all` (`main.rs:2147`), and the perimeter
-guard iterates `Screen::ALL` (`main.rs:1570`) — **a POST path is in neither.** This is story 6b.2's
+TEN GATES GREEN over an unauthenticated write answering `201 Created`** — ⚠️ **873 is 14.2's
+baseline at `38da035`, not this story's 877**, and it is dated here because a reader re-running it
+on `354283b` will not reproduce the figure. The test carrying the
+*route-above-the-layer* property is hardcoded to `/document-all` (`main.rs:2204`, re-derived), and
+the perimeter guard iterates `Screen::ALL` (`main.rs:1586`, re-derived) — **a POST path is in
+neither**, `Screen::href` yielding GET paths only. ⚠️ *"The ONE test"* is loose: the perimeter guard
+catches the same property for GET screens, as its own doc records. The conclusion is unaffected. This is story 6b.2's
 measured defect (`GET /dashboard` → 200 below the layer) in its POST form.
 
 **What it owes**: a guard over EVERY route the router carries, derived and not listed.
@@ -80,8 +92,9 @@ retyping an address. ⚠️ And **nothing in the compiler forces a handler to di
 
 ### (d) 🔴 The concurrency fix goes on the read that DECIDES, and the parent-row lock is defeated by one DRY line
 
-`insert_range` reads every sibling (`ipam_repo.rs:238`), decides in Rust, then inserts — no
-transaction, no lock. With a 400 ms pause injected, **two overlapping ranges both committed, both
+`insert_range` reads every sibling (`ipam_repo.rs:300`, re-derived — the story first cited `:238`,
+which is that line's address on 14.2's baseline and is `.bind(label)` today), decides in Rust, then
+inserts — no transaction, no lock. With a 400 ms pause injected, **two overlapping ranges both committed, both
 reporting success.**
 
 Guy's arbitration (C) of 2026-09-11, **re-aimed the same day on the gap-hunt's measurement**: a
@@ -103,7 +116,10 @@ fires: **sqlx's `code()` returns the SQLSTATE**, and the MySQL number lives in a
 field. Measured on two errors — a lock-wait timeout arrives as `code() = Some("HY000"), number =
 1205`, a duplicate key as `code() = Some("23000"), number = 1062`.
 
-`Contention` has one producer site, no test and no consumer (5 mentions, 4 of them prose).
+`Contention` has one producer site, no test and no consumer — **5 mentions, THREE of them prose**
+(`repo/mod.rs:6`, `:21`, `:103`) and two of them code: the variant's own declaration (`:27`) and the
+producer (`repo.rs:1614`). ⚠️ The story first wrote *four prose*, which counted the declaration as
+narration.
 ⚠️ **Pre-existing and NOT this story's to have caused — but (d) is what first makes it reachable on
 a route an operator presses**, and it would surface as a raw English driver sentence, which is
 exactly what (c) forbids. **Decide here: repair `classify` or map the case in the handler, and say
@@ -111,9 +127,16 @@ which.** A register row is not enough when this story's own arbitration opens th
 
 ### (f) The last six `#![allow(dead_code)]`
 
-`canonical`, `Subnet::contains`, `insert_subnet`, `load_subnet`, `insert_range`, `insert_address`.
-Eleven warnings before 14.2, **six after**. They go when these routes call them; neither story may
-leave one standing while claiming to have paid it off.
+`canonical`, `Subnet::contains`, `insert_subnet`, `load_subnet`, `insert_range`, `insert_address`
+— at `ipam_repo.rs:67, 160, 212, 250, 278, 335`. Eleven warnings before 14.2, **six after**, both
+re-measured by removing them. They go when these routes call them.
+
+🔴 **And the spelling matters, because AC7 was satisfiable by doing NOTHING.** There is no
+`#![allow(dead_code)]` in `ipam_repo.rs` at all — 14.2 removed the blanket one and left six
+ITEM-level `#[allow(dead_code, reason = …)]`. AC7 said *"`#![allow(dead_code)]` is GONE"*, which the
+committed tree already satisfies. *A criterion a tick can satisfy is a criterion that measures
+nothing*, and this project has shipped that defect before (story 6b.8's ticked task that delivered
+nothing).
 
 ## §2 — Decisions this story must take, and which are Guy's
 
@@ -161,8 +184,11 @@ moves back to the parent row alone.
 a test drives a real lock wait and asserts the variant; if it goes, the arm is deleted rather than
 left as a promise the driver cannot keep.
 
-**AC7 — `#![allow(dead_code)]` is GONE from `ipam_repo.rs`**, not narrowed further. Six items, six
-producers.
+**AC7 — the SIX item-level `#[allow(dead_code, reason = …)]` are GONE from `ipam_repo.rs`**, each
+because the item now has a producer, and removing them leaves **zero** warnings under
+`clippy --workspace --all-targets`. 🔴 This criterion first said *"`#![allow(dead_code)]` is GONE"*,
+which the committed tree already satisfied — 14.2 removed the blanket attribute and left six item
+ones. **A criterion a tick can satisfy is a criterion that measures nothing.**
 
 **AC8 — the empty plan LINKS to the gesture** (`epics.md` criterion 5), which 14.2 registered as
 undeliverable and this story delivers.
@@ -220,8 +246,10 @@ anything else there — which is the point.
 
 ### Project Structure Notes
 
-- New: a write-route module on `document.rs`'s shape. ⚠️ **`page.rs` is at 1954 of 2000** and
-  `ipam_page.rs` at ~700; the split rule applies BEFORE the growth.
+- New: a write-route module on `document.rs`'s shape. ⚠️ **`page.rs` is at 1954 of 2000** and `ipam_page.rs` at **631** (both computed as the gate
+  does, from the first `#[cfg(test)]` at a line start — the story first guessed *~700*, an 11 %
+  overstatement on the one figure the split rule is argued from); the rule applies BEFORE the
+  growth.
 - Touched: `ipam_repo.rs` (the transaction and the lock, the allows), `repo.rs` (`classify`),
   `main.rs` (the merge and the perimeter guard), `app.yml`, `_ipam.html`, `a11y/`.
 - **Not touched**: `epics.md`, the UX spec.
@@ -245,6 +273,13 @@ anything else there — which is the point.
 
 ### Change Log
 
+- 2026-09-12 — contexted, then corrected by the mandatory FACT-CHECK layer, which found **a
+  systematic class rather than a slip**: four of §1's six `file:line` citations were `38da035`-era,
+  copied from story 14.2 without re-deriving them, and the tree had moved underneath them — 14.2
+  itself being what moved three of the four. 🔑 **Copying a measurement with its coordinates copies
+  a photograph with its date erased.** One substantive premise fell with them (`insert_subnet` does
+  have a caller in a test module, added by 14.2), one criterion was satisfiable by doing nothing
+  (AC7), and three counts were wrong. Every one is corrected in place with what it said.
 - 2026-09-12 — contexted. Nothing in §1 is re-derived: each row carries the measurement that
   produced it at 14.2's validation or code review, so this story starts where that one stopped
   rather than where its plan did.
