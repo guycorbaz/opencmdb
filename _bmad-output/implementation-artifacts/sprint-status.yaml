@@ -5530,7 +5530,7 @@ development_status:
   #   leave the two documents disagreeing silently.
   #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
   #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
-  14-2b-the-plan-in-the-operators-hands: backlog
+  14-2b-the-plan-in-the-operators-hands: ready-for-dev
   #   🔴 INSERTED 2026-09-11 at story 14.2's IMPLEMENTATION -- Epic 14 goes from FOUR stories to
   #   FIVE (`epics.md` NOT edited; a story may not re-scope an epic, and the divergence is
   #   registered). The mandatory validation had grown 14.2 from two write routes to three and added
