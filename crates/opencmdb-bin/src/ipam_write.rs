@@ -246,12 +246,18 @@ async fn define_subnet(
     let Ok(Form(request)) = form else {
         return malformed().into_response();
     };
-    let label = match checked_label(&request.label) {
-        Ok(label) => label,
-        Err(refusal) => return refusal.into_response(),
-    };
+    // 🔑 THE CIDR IS READ BEFORE THE LABEL, and the order is a decision rather than an accident.
+    // A form wrong in two places can only be told about one of them, and the honest one to name is
+    // the FIRST field the operator filled — the form is `cidr` then `label`, and a sentence about
+    // the second while the first is unusable reads as though the first had been accepted.
+    // ⚠️ T2 shipped the opposite order with nothing asserting either, which is what made this a
+    // decision to take rather than a preference to keep.
     let subnet = match parse_cidr(&request.cidr) {
         Ok(subnet) => subnet,
+        Err(refusal) => return refusal.into_response(),
+    };
+    let label = match checked_label(&request.label) {
+        Ok(label) => label,
         Err(refusal) => return refusal.into_response(),
     };
     match state.port.define_subnet(subnet, label).await {
@@ -330,6 +336,39 @@ fn parse_cidr(raw: &str) -> Result<Subnet, Refusal> {
     Subnet::new(base, prefix).map_err(|error| ipam_refusal(&error))
 }
 
+/// The sentence a named database constraint earns, or `None` for a name nobody has mapped.
+///
+/// 🔑 **The `Option` is the whole point, and it exists because an explicit 500 and a fallthrough
+/// 500 are the same ANSWER and not the same STATEMENT.** [`RepositoryError::Constraint`] carries a
+/// `&'static str`, so no `match` over it can be exhaustive and the compiler cannot help; what
+/// carries AC4's second half is `every_constraint_name_the_store_can_produce_is_mapped`, which
+/// reads the names `repo::classify` can emit and asserts each one is `Some` here. Fold `check` into
+/// the `_` arm and the answer to the operator does not change by one byte — and that test reds,
+/// which is the difference between a decision and an omission.
+fn constraint_refusal(name: &str) -> Option<Refusal> {
+    match name {
+        // The likeliest refusal on this screen: the operator re-enters a subnet the plan already
+        // holds. It rides `ip_subnet_cidr`, and NO pre-read is taken — a check that commits
+        // separately from its write is a TOCTOU hole, not a check.
+        "unique" => Some(Refusal::new(
+            StatusCode::CONFLICT,
+            "ipam.refusal.already_defined",
+        )),
+        // A `subnet_id` that names no row — reachable from the two routes that receive one.
+        "foreign_key" => Some(Refusal::new(
+            StatusCode::NOT_FOUND,
+            "ipam.refusal.unknown_subnet",
+        )),
+        // 🔑 OURS, not the operator's, and mapped EXPLICITLY for that reason. Every `CHECK` on the
+        // plan's three tables restates something the adapter already refuses — the canonical
+        // spelling, the policy domain, the ordered bounds — so a `check` reaching here means a
+        // value went round the adapter. That is a fault in this product, not a mistake the operator
+        // can be told how to correct.
+        "check" => Some(backend()),
+        _ => None,
+    }
+}
+
 /// Map a [`RepositoryError`] to the operator's sentence.
 ///
 /// 🔑 **Exhaustive, with no `_` arm, and that is half of AC4's carrier**: a new VARIANT is an
@@ -340,15 +379,10 @@ pub(crate) fn repository_refusal(error: &RepositoryError) -> Refusal {
     match error {
         RepositoryError::Ipam(ipam) => ipam_refusal(ipam),
         // The three names `classify` can produce. ⚠️ The `_` is what the SET test covers.
-        RepositoryError::Constraint(name) => match *name {
-            // The likeliest refusal on this screen: the operator re-enters a subnet the plan
-            // already holds. It rides `ip_subnet_cidr`, and no pre-read is taken — a check that
-            // commits separately from its write is a TOCTOU hole, not a check.
-            "unique" => Refusal::new(StatusCode::CONFLICT, "ipam.refusal.already_defined"),
-            // A `subnet_id` that names no row — reachable from the two routes that receive one.
-            "foreign_key" => Refusal::new(StatusCode::NOT_FOUND, "ipam.refusal.unknown_subnet"),
-            _ => backend(),
-        },
+        // ⚠️ THE COMPILER STOPS HERE. `Constraint` carries a `&'static str`, so the match INSIDE
+        // it needs a `_` and a new constraint NAME is invisible to `E0004`. That half is carried by
+        // [`constraint_refusal`] answering `None`, which the SET test reads.
+        RepositoryError::Constraint(name) => constraint_refusal(name).unwrap_or_else(backend),
         RepositoryError::NotFound => {
             Refusal::new(StatusCode::NOT_FOUND, "ipam.refusal.unknown_subnet")
         }
@@ -673,6 +707,161 @@ mod tests {
                 );
                 seen.push(sentence);
             }
+        }
+    }
+
+    #[tokio::test]
+    async fn the_cidr_is_read_before_the_label() {
+        // A form wrong in BOTH places can only be told about one of them. Nothing pinned the order
+        // when T2 shipped, so either answer would have passed; this is the decision, asserted.
+        let port = FakePort::answering(Ok("unreached".to_string()));
+        let (status, body) = drive(port, form_post("cidr=nonsense&label=")).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(
+            body,
+            key("ipam.refusal.malformed"),
+            "the first field the operator filled is the one the refusal names"
+        );
+    }
+
+    /// Every constraint NAME `repo::classify` can produce is mapped here by name.
+    ///
+    /// 🔑 **This is AC4's second carrier, and it exists because the compiler cannot be the first
+    /// one twice.** An exhaustive `match` over `RepositoryError` makes a new VARIANT an `E0004`;
+    /// [`RepositoryError::Constraint`] carries a `&'static str`, so a new NAME is invisible to it.
+    /// Add `Constraint("range_overlap")` to `classify` and this test reds while every other test,
+    /// clippy and all ten gates stay green.
+    ///
+    /// ⚠️ **It reads the WHOLE of `repo.rs`, test module included, deliberately.** Story 14.2's
+    /// guard split on the first `#[cfg(test)]` and thereby read 382 bytes of 47 324; here the test
+    /// module's own literals are the same three names, so including them costs nothing and the trap
+    /// is not reachable at all. *A perimeter you do not have to compute is a perimeter that cannot
+    /// be computed wrongly.*
+    #[test]
+    fn every_constraint_name_the_store_can_produce_is_mapped() {
+        const NEEDLE: &str = "RepositoryError::Constraint(\"";
+        let source = include_str!("repo.rs");
+        let mut names: Vec<&str> = Vec::new();
+        let mut rest = source;
+        while let Some(at) = rest.find(NEEDLE) {
+            let after = &rest[at + NEEDLE.len()..];
+            let end = after.find('"').expect("a closed string literal");
+            let name = &after[..end];
+            if !names.contains(&name) {
+                names.push(name);
+            }
+            rest = &after[end..];
+        }
+        // 🔴 THE MAPPING IS ASSERTED FIRST, AND THE ORDER IS THE FINDING. The floor came first in
+        // the draft, so a new constraint name reddened on `left: 4, right: 3` — a count — and the
+        // assertion written for the defect was never reached. Story 5.13 met the same shape and
+        // this project has now met it five times: *an assertion that fires first decides what the
+        // failure says*, and a count says nothing a reader can act on.
+        for name in &names {
+            assert!(
+                constraint_refusal(name).is_some(),
+                "`Constraint(\"{name}\")` reaches the handler and nobody has said what it means \
+                 to the operator — map it by name, even when the answer is the backend sentence"
+            );
+        }
+        // A floor equal to what is there, never under it (story 6b.7). It catches the other
+        // direction: a name that DISAPPEARS, which leaves a mapping nothing can reach.
+        assert_eq!(
+            names.len(),
+            3,
+            "the names `classify` can produce changed: {names:?}"
+        );
+    }
+
+    /// Every key this module can render resolves in BOTH locales.
+    ///
+    /// ⚠️ **A source scan reads the file's prose as well as its code** (story 14.2's finding, where
+    /// a guard was satisfied by the comment narrating the defect). Here that is harmless and even
+    /// useful: the needle is a double-quoted literal, so a key named in a doc comment inside
+    /// backticks is not matched, and a key named in a literal that does NOT exist is a finding
+    /// whichever line it sits on.
+    #[test]
+    fn every_key_this_module_can_render_resolves_in_both_locales() {
+        let source = include_str!("ipam_write.rs");
+        // 🔴 THE NEEDLE IS BUILT AT RUNTIME, and the first version was not — it found ITSELF, then
+        // found the comment saying so. A scan of its own source matches the literal spelling the
+        // scan is written with, so the needle came back as a key named after the prefix alone and
+        // the test reddened on a key nobody wrote; the first repair explained the trap IN PROSE
+        // CONTAINING THE SEQUENCE, and reddened again on the explanation. 🔑 *A guard that greps a
+        // file greps its prose, and the better the prose explains the defect, the more reliably it
+        // reproduces it* — story 14.2's finding, met twice in five minutes. Hence: the prefix is
+        // assembled from a quote character and the namespace, and this comment names neither
+        // adjacently.
+        let needle = format!("{}ipam.", '"');
+        let mut keys: Vec<&str> = Vec::new();
+        let mut rest = source;
+        while let Some(at) = rest.find(&needle) {
+            let after = &rest[at + 1..];
+            let end = after.find('"').expect("a closed string literal");
+            let name = &after[..end];
+            if !keys.contains(&name) {
+                keys.push(name);
+            }
+            rest = &after[end..];
+        }
+        assert!(
+            keys.len() >= 15,
+            "the scan found only {} key(s), so it is no longer reading this file: {keys:?}",
+            keys.len()
+        );
+        for locale in ["en", "fr"] {
+            for name in &keys {
+                let sentence = rust_i18n::t!(*name, locale = locale).to_string();
+                assert_ne!(
+                    &sentence, name,
+                    "`{name}` has no `{locale}` translation, so the operator reads its key name"
+                );
+                assert!(
+                    !sentence.trim().is_empty(),
+                    "`{name}` is BLANK in `{locale}` — rendering nothing is worse than rendering \
+                     the other language"
+                );
+            }
+        }
+    }
+
+    /// Every refusal the HANDLER CAN RECEIVE names a rule the operator can read.
+    ///
+    /// 🔴 **The set is what the adapter hands back, not `IpamError::ALL`** — §1(c) measured that
+    /// four of the refusals an operator meets first are not `IpamError`s at all: an empty plan is
+    /// `NotFound`, a re-entered address is `Constraint("unique")`, the loser of a lock wait is
+    /// `Contention` since T1 repaired `classify`, and anything else is `Backend`. *A set over
+    /// `IpamError` is correct about `IpamError` and silent about the four.*
+    #[test]
+    fn every_refusal_the_handler_can_receive_names_a_rule() {
+        let receivable = [
+            RepositoryError::NotFound,
+            RepositoryError::Constraint("unique"),
+            RepositoryError::Constraint("foreign_key"),
+            RepositoryError::Constraint("check"),
+            RepositoryError::Contention,
+            RepositoryError::Backend("1406: Data too long for column 'label'".to_string()),
+            RepositoryError::Ipam(IpamError::RangeOverlapsAnother),
+        ];
+        for error in &receivable {
+            let refusal = repository_refusal(error);
+            assert!(
+                refusal.status().is_client_error() || refusal.status().is_server_error(),
+                "{error} answered {}, which is not a refusal at all",
+                refusal.status()
+            );
+            for locale in ["en", "fr"] {
+                let sentence = rust_i18n::t!(refusal.key(), locale = locale).to_string();
+                assert_ne!(
+                    sentence,
+                    refusal.key(),
+                    "{error} renders its key name in `{locale}`"
+                );
+            }
+            assert!(
+                !rust_i18n::t!(refusal.key()).contains("1406"),
+                "the driver's own sentence reached the operator: {error}"
+            );
         }
     }
 

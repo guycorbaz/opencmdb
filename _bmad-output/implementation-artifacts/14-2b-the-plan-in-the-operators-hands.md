@@ -356,7 +356,9 @@ the subnet (`_ipam.html:49,79` already carries the store's own id).
 - [x] **T2** (AC1, AC2) The sub-router and the first route, on `document.rs`'s shape. ✅ 2026-09-12
   — `POST /ipam/subnet` writes, eight mutations conform to predictions written first, and AC2's
   compile refusal is measured `E0277` on the `Handler` bound.
-- [ ] **T3** (AC4) The refusal set over what the handler can receive, keyed in both locales.
+- [x] **T3** (AC4) The refusal set over what the handler can receive, keyed in both locales.
+  ✅ 2026-09-12 — both carriers measured: `E0004` for a new VARIANT, and a SET test for a new
+  constraint NAME. ⚠️ One prediction CONTRADICTED, and the guard it doubted turned out sound.
 - [ ] **T4** (AC5, AC9b) The parent row THEN the deciding read; the pause harness as a permanent
   test asserting the REFUSAL and not merely the row count; and the budget around the transaction.
 - [ ] **T5** (AC1) The second and third routes, and the test that asserts the reuse.
@@ -514,6 +516,64 @@ refusals — a request that is both unlabelled and not a CIDR — is asserted by
 distinguishes `checked_label` running first from `parse_cidr` running first. It is a real
 under-determination and not a defect today, since each refusal names its own rule; T3 owns the
 refusal set and is where it should either be pinned or declared indifferent.
+- **T3 — AC4's two carriers are measured separately, because neither covers the other.** A new
+  VARIANT of `RepositoryError` is `error[E0004]: non-exhaustive patterns … Planted not covered`
+  (M9) — the first exhaustive `match` over that type in this codebase, `core`'s own doc having
+  recorded at story 14.1 that adding a variant then produced **zero** `E0004`. A new constraint
+  NAME is invisible to the compiler, because `Constraint` carries a `&'static str` and the match
+  inside it needs a `_`; that half is `every_constraint_name_the_store_can_produce_is_mapped`,
+  which reads the names `repo::classify` can emit and asserts each is mapped (M10b).
+- 🔑 **`constraint_refusal` returns an `Option`, and that shape IS the guard.** `check` maps to the
+  backend sentence, which is also what the fallthrough answers — so an explicit 500 and a
+  fallthrough 500 are **the same answer and not the same statement**, and a test cannot tell them
+  apart through the response. The `Option` makes the difference observable: M12 folds `check` into
+  the `_` arm, the operator sees no change whatever, and the test reds.
+- 🔴 **M10 CONTRADICTED ITS PREDICTION — 4 red where 1 was predicted — and the cause was the
+  mutation, not the guard.** It was written as *"a new constraint name"* and applied as a RENAME,
+  so it also broke the three `repo.rs` tests asserting the name it removed. **This project's
+  four-time class, met a fifth time**: *a mutation named for one thing and applied to another
+  measures the other thing.* Re-run as M10b, which ADDS an arm, it reds exactly one test.
+  ⚠️ And the contradiction was worth its cost twice over: it forced a separate measurement of
+  whether the SET test reds AT ALL under M10 — it does, quoting
+  `["check", "unique", "range_overlap", "foreign_key"]` — which the driver's bare count could not
+  have told me.
+- 🔴 **THE FLOOR WAS MASKING THE ASSERTION WRITTEN FOR THE DEFECT.** The draft asserted
+  `names.len() == 3` BEFORE the mapping loop, so a new name reddened on `left: 4, right: 3` — a
+  count — and the sentence telling a reader what to do was never reached. Story 5.13's finding,
+  and this project has now met it **five** times. The mapping is asserted first; the floor stays,
+  catching the other direction (a name that disappears leaves a mapping nothing can reach).
+- 🔴 **THE KEY-COVERAGE GUARD WAS DEFEATED TWICE BY ITS OWN SOURCE, THE SECOND TIME BY THE COMMENT
+  EXPLAINING THE FIRST.** It scans this file for the module's own i18n keys; written with a literal
+  needle it matched ITSELF and reported a key named after the bare prefix, and the repair — a
+  comment narrating the trap — contained the sequence and reddened again. 🔑 *A guard that greps a
+  file greps its prose, and the better the prose explains the defect, the more reliably it
+  reproduces it* — story 14.2's finding, met twice in five minutes. The needle is assembled at
+  runtime now and the comment names neither half adjacently. ⚠️ Fifteen keys found, and the floor
+  is **fifteen**: equal to what is there, never under it (story 6b.7).
+- ✅ **The `app.yml` build hazard is CLOSED and was verified rather than assumed.** Story 6b.9
+  measured that a translation-only change leaves the string absent from the binary; `build.rs`
+  closed it at 6b.10 with `rerun-if-changed`. M13 blanks a French value and reds **2** tests — so a
+  mutation on the locale file does measure something on this tree, where the register's warning
+  would have said it measures nothing.
+- ⚠️ **T2's under-determination is SETTLED rather than carried**: the CIDR is read before the label.
+  A form wrong in two places can only be told about one, and the honest one to name is the first
+  field the operator filled — a sentence about the second while the first is unusable reads as
+  though the first had been accepted. M11 swaps the order back and reds.
+
+### T3's mutation pass
+
+Six ids. **Five conform to predictions written first; M10 CONTRADICTS, and that row is the
+deliverable.** Same conditions as T2's pass: `--baseline` throughout, the store dropped and
+recreated first, the migrations warmed by one full run.
+
+| id | mutation | predicted | measured | what it says |
+|---|---|---|---|---|
+| M9 | a new VARIANT on `RepositoryError` (core) | compile-fail | compile-fail | `error[E0004]: non-exhaustive patterns: &…::RepositoryError::Planted not covered` — AC4's first carrier, on the first exhaustive match over that type in this codebase |
+| M10 | *"a new constraint name"* — applied as a RENAME of `foreign_key` | red:1 | **red:4** 🔴 | **the prediction was wrong and the mutation was the cause**: a rename also breaks the three `repo.rs` tests asserting the removed name. Re-measured in isolation, the SET test DOES red, quoting the four names it found |
+| M10b | the same as an ADDED arm, `Constraint("range_overlap")` | red:1 | red:1 | the SET test alone, on the mapping assertion — AC4's second carrier |
+| M11 | the label read before the CIDR | red:1 | red:1 | the order test; T2 shipped the opposite with nothing asserting either |
+| M12 | `"check"` folded into the `_` arm | red:1 | red:1 | 🔑 the operator sees **no change at all** — same status, same sentence — and the `Option` is what makes the omission observable |
+| M13 | a French value blanked in `app.yml` | red | red:2 | the locale file IS a build input on this tree (`build.rs`, story 6b.10); the blank check and one inherited guard |
 
 ### File List
 
@@ -530,6 +590,15 @@ refusal set and is where it should either be pinned or declared indifferent.
   `auth_deny` and beside `ipam_page::router` rather than inside it.
 
 ### Change Log
+
+- 2026-09-12 — **T3: the refusal set, carried twice.** `E0004` for a variant, a SET test for a
+  constraint name, and the shape that makes the second possible — `constraint_refusal` returning an
+  `Option`, so an explicit 500 and a fallthrough 500 stop being indistinguishable. **893 → 897
+  tests** (607 bin + 191 core + 99 xtask), ten gates, clippy `--all-targets`, fmt; **5.03 s without
+  a store and 8.59 s against a live `mariadb:10.11.11`**. 🔴 Three findings against my own
+  instruments: a mutation named for one thing and applied to another, a floor assertion masking the
+  assertion written for the defect, and a source-scanning guard that matched itself and then matched
+  the comment explaining that it had.
 
 - 2026-09-12 — **T2: the addressing plan has a producer.** `POST /ipam/subnet` writes, on
   `document.rs`'s shape and with the machinery epic constraint (1) front-loads. **879 → 893 tests**
