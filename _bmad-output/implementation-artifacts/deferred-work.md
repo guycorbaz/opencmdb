@@ -5473,10 +5473,15 @@ One row, and v0.3.0 is what made it live.
   makes anyone pay it off.** It is justified while story 14.1 ships no producer, and its own doc
   states the trade against `arp_ping.rs`, where the ABSENCE of the same attribute was measured
   load-bearing on 2026-09-10. ⚠️ But after story 14.2 wires *some* of these functions the attribute
-  goes on hiding the rest — measured at 14.1's review: with it removed, **eleven** items are dead
-  under `--all-targets` — ⚠️ **eleven WARNINGS covering fifteen ITEMS**, re-measured 2026-09-11; this
-  row had the right number under the wrong noun and a correction of it was wrong about both.
-  ⚠️ **RE-OWNED: story 14.2 NARROWED it to six item-level attributes**, giving the READ path a
-  producer and not the write path, so **six warnings** remain. **Owner: story 14.2b**, which removes
-  the last of them when its routes call those functions. Neither story may leave it module-wide
-  while claiming to have paid it off.
+  goes on hiding the rest. ⚠️ **Re-measured 2026-09-11 on `38da035`, because this row said *eleven
+  items* and a correction of it said *ten warnings covering fourteen*, and BOTH were wrong**: with
+  the attribute removed, `cargo build --workspace` and `cargo clippy --workspace --all-targets` both
+  report **ELEVEN warnings covering FIFTEEN items** (one warning groups the five associated items of
+  `Subnet`). This row had the right number under the wrong noun; its correction was taken with
+  `grep "never used"`, which cannot see `struct `Subnet` is never constructed`. 🔑 *A measurement
+  whose instrument cannot see the answer is not a measurement* — and a half-right figure invites a
+  confident wrong one.
+  ✅ **RE-OWNED 2026-09-11: story 14.2 NARROWED it from module-wide to SIX item-level attributes**,
+  giving the READ path a producer and not the write path, so **six warnings** remain — each naming
+  its owner. **Owner: story 14.2b**, which removes the last of them when its routes call those
+  functions. Neither story may leave it module-wide while claiming to have paid it off.
