@@ -5407,7 +5407,7 @@ development_status:
   #   the head commit `2f395c5` itself (run `34585865670`, 2m45) and `mergeStateStatus: CLEAN`.
   #   ⚠️ NEXT: story 14.2, which owns the concurrency row above, the `#![allow(dead_code)]`
   #   narrowing, and the `structural` removal.
-  14-2-the-plan-on-screen: review
+  14-2-the-plan-on-screen: done
   #   ✅ CODE-REVIEWED (three isolated layers, 2026-09-11/12) AND REPAIRED. 40 raw findings, 2 sent
   #   back to Guy and re-arbitrated the same day. 875 -> 877 tests, ten gates, both browser gates
   #   re-run green. ⚠️ All three layers ran at this session's capability -- isolated by context and
@@ -5436,9 +5436,15 @@ development_status:
   #   ✅ THE POLICY AXIS IS A STATED LIMIT (Guy): `border-style: double` at 1 px paints solid, so
   #   two policies were IDENTICAL PIXELS in Chrome. The channel is exhausted at 14 px; the grid
   #   separates the four STATES and the policy is carried by the accessible name and the legend.
-  #   ⚠️ NEXT: the merge. Then story 14.2b -- the three write routes, the keyed refusals, the
-  #   concurrency fix on the read that DECIDES, AC5b's auth property, and `classify`'s dead
-  #   `Contention` arm.
+  #   ✅ MERGED 2026-09-12 as `697e3da` (PR #170, squash), CI green on the head commit `f1e9ae8`.
+  #   ⚠️ The merge needed a conflict resolution with PR #171 on `deferred-work.md`'s dead-code row:
+  #   #171 corrected the FIGURE and recorded why the instrument was wrong, this branch RE-OWNED the
+  #   row to 14.2b -- both true, neither superseding the other, so BOTH were kept rather than
+  #   letting the later write win by arriving second.
+  #   ⚠️ NEXT: story 14.2b -- the three write routes, the keyed refusals over what the handler can
+  #   RECEIVE, the concurrency fix on the read that DECIDES with its pause harness as a permanent
+  #   test, AC5b's auth property, `classify`'s dead `Contention` arm, and the last six
+  #   `#[allow(dead_code)]`.
   #   IMPLEMENTED 2026-09-11 after the split. 873 → 875 tests (585 bin + 191 core + 99 xtask), ten
   #   gates, clippy --all-targets, RUSTFLAGS="-D warnings", fmt -- and BOTH BROWSER GATES CLAIMED
   #   AND RUN: axe 0 violation nodes over 10 routes + 4 states under all three REQUIRE flags,
