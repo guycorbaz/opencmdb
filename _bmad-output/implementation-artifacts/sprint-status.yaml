@@ -5531,6 +5531,21 @@ development_status:
   #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
   #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
   14-2b-the-plan-in-the-operators-hands: in-progress
+  #   ✅ T0 TAKEN 2026-09-12 — §2's five decisions, four of them Guy's, each recorded in the story
+  #   WITH the option refused and the cost accepted: the form is IN LINE IN THE RAIL, collapsed
+  #   (refused: a dedicated address, an eleventh outside `Screen::ALL` on story 6b.6's measured
+  #   cost); the SERVER mints `Uuid::now_v7()` and the nil is refused AT THE ROUTE, `document.rs`'s
+  #   two halves both being live here; a LABEL IS REQUIRED, refused at the route beside the over-120
+  #   refusal (⚠️ under a non-strict `sql_mode` 121 characters TRUNCATE in silence); and an address
+  #   inside an existing range is ACCEPTED SILENTLY here, the warning belonging to 14.3.
+  #   🔑 The last one was asked because the axes differ: `epics.md:2433` settles PLAN-against-
+  #   NETWORK (*warn, name what is known, and still write*) and covers no plan-against-plan case.
+  #   ⚠️ THREE OF THE FOUR SHIP A COST RATHER THAN A CLOSURE, and each says so at its site: the
+  #   empty plan's link is an ANCHOR onto a `<details>`, not an href to a page, so criterion 5 is
+  #   met in substance and not in the shape its wording suggests; the adapter still accepts the nil;
+  #   and `""` still inserts through raw SQL. Two tripwires and one divergence, written as such.
+  #   ✅ T1 DONE in `860d0e4` and THE RECORD CAUGHT UP 2026-09-12 — it had shipped with its task
+  #   unticked and the Dev Agent Record empty. *A commit message is not a story record.* 879 tests.
   #   CONTEXTED 2026-09-12, then VALIDATED by both layers, and the validation OVERTURNED THE
   #   CONCURRENCY ARBITRATION FOR THE THIRD TIME -- this time on a measurement of the shape itself.
   #   🔴 `ip_range ... FOR UPDATE` alone does NOT refuse: it DEADLOCKS, 20 observations out of 20.

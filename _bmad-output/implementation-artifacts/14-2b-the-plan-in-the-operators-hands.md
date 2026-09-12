@@ -165,22 +165,65 @@ nothing).
 
 ## §2 — Decisions this story must take, and which are Guy's
 
-1. **The form's shape and its mount point.** `document.rs` is the model: a sub-router whose state
-   holds a PORT and no pool, so `State<MySqlPool>` in the handler **fails to compile** (story 6.1's
-   M4, re-measured by two review layers). ⚠️ `/ipam` is now on its own pool-bearing router
-   (`ipam_page::router`), so the two must not be fused by accident.
-2. **Where the form lives on screen.** `/ipam` has a rail (`ipam-rail`) and an empty-plan branch
-   whose control currently says NOT YET BUILT through `Gesture::Planned`'s badge. ⚠️ **`epics.md`'s
-   criterion 5 says the empty plan "names the gesture that fills it AND LINKS TO IT"** — 14.2 could
-   not, and registered it; this story owes the link.
-3. **What a range's id is.** ⚠️ Measured at 14.2: `insert_subnet`/`insert_range`/`insert_address`
-   all accept the **nil UUID**, where story 6.1's review added a nil refusal AT THE ROUTE (D21/D48)
-   and `insert_device` refuses it outright. Who mints the id, and is it v7?
-4. **Whether a label is required.** `label` is `NOT NULL` with no non-empty CHECK; `""` inserts
-   cleanly — measured.
-5. **Whether the routes refuse an address inside an existing range.** Measured: the adapter accepts
-   it in BOTH orders, and 14.2 renders it as `Defined` carrying the range's policy. Legal today; the
-   form may still want to warn.
+✅ **ALL FIVE TAKEN, 2026-09-12.** Item 1 by precedent and stated rather than asked; items 2–5 are
+**Guy's**, each recorded with the option refused and the cost accepted, so that none is re-opened in
+silence by a dev agent meeting it mid-implementation.
+
+1. ✅ **The form's shape and its mount point — settled by precedent, not asked.** `document.rs` is
+   the model: a sub-router whose state holds a PORT and no pool, so `State<MySqlPool>` in the
+   handler **fails to compile** (story 6.1's M4, re-measured by two review layers). ⚠️ `/ipam` is
+   now on its own pool-bearing router (`ipam_page::router`), so the two must not be fused by
+   accident — AC2 is what measures that they were not.
+2. ✅ **Where the form lives on screen — IN LINE IN THE RAIL, COLLAPSED** (Guy, 2026-09-12). Three
+   `<details>` in `ipam-rail`; the empty-plan branch links to the subnet one. **Refused: a dedicated
+   address** (`/ipam/nouveau`) — an eleventh address outside `Screen::ALL`, whose cost this project
+   has measured at story 6b.6 on `/devices/{id}` (the nature dispatch, the route-table partition and
+   the navigation all have to be told about it), plus one round trip on a gesture the operator
+   repeats; and **refused: always visible**, three permanent forms above a 256-cell grid on the one
+   screen the axe gate walks under `AXE_REQUIRE_PLAN=1`.
+   ⚠️ **THE ACCEPTED COST, WRITTEN RATHER THAN DISCOVERED: `epics.md`'s criterion 5 says the empty
+   plan "names the gesture that fills it AND LINKS TO IT", and what this ships is an ANCHOR, not an
+   href to a page.** It is a real link — `href="#…"` onto a `<details>` the browser must open — and
+   it is NOT the same object the criterion's wording suggests. Say so at the site; do not let a tick
+   stand for it. ⚠️ And `<details>` is a disclosure the anchor must OPEN: an anchor onto a collapsed
+   element scrolls to a closed box, which is *a door that opens onto a door*. The `open` attribute,
+   or a `:target` rule, is part of this decision and not an implementation detail.
+3. ✅ **Who mints the id — THE SERVER, `Uuid::now_v7()`, AND THE NIL IS REFUSED AT THE ROUTE**
+   (Guy, 2026-09-12), exactly `document.rs`'s two halves: `:120` mints v7 for the record being
+   created, `:195` refuses a nil id ARRIVING from the client. Both halves are live here, and that is
+   what the question was really about — a range and an address create a record (minted) **and**
+   carry a `subnet_id` chosen in the browser (refused if nil). **Refused: a client-supplied id**,
+   which puts the nil, the duplicate and the guessed id on the outside of the product; and
+   **refused: refusing the nil in the adapter too** (`insert_device`'s shape), whose cost is three
+   more refusals to test and a redundancy this codebase requires to be LABELLED deliberate or a DRY
+   pass collapses it.
+   ⚠️ **THE ACCEPTED COST: the adapter still accepts the nil**, measured at 14.2 on all three
+   `insert_*`. So this is a TRIPWIRE at the route (story 5.12's precedent), never a barrier — write
+   it as one, and do not let AC1 read as *the nil cannot be stored*.
+4. ✅ **A label is REQUIRED, and refused AT THE ROUTE** (Guy, 2026-09-12): non-empty after `trim`, a
+   keyed refusal in both locales, beside the over-120 refusal this story already carries — ⚠️ under
+   a non-strict `sql_mode` a 121-character label TRUNCATES in silence, which is why that one is a
+   refusal and not a lint. **Refused: optional**, which is a plan of numbers with no words on the
+   screen whose whole subject is what was MEANT to be there (`_ipam.html` already renders the empty
+   label away: `{% if row.label != "" %}`). **Refused: a `CHECK` in a migration `0008`** — a real
+   barrier, at the price of an `ALTER` at boot on a published product, which is what story 6.5
+   refused for `entity.state`.
+   ⚠️ **THE ACCEPTED COST: `label` stays `NOT NULL` with no non-empty CHECK, so `""` still inserts
+   cleanly through raw SQL** (measured at 14.1). Second tripwire of this story; the barrier is the
+   same one story 5.12 registered — a privilege, not a matcher.
+5. ✅ **An address inside an existing range is ACCEPTED, SILENTLY, HERE — and the warning belongs to
+   14.3** (Guy, 2026-09-12). Measured at 14.2: the adapter accepts it in BOTH orders and the screen
+   renders it as `Defined` carrying the range's policy. **Refused: refusing it** — `epics.md:2433`
+   refused the refusal in the neighbouring case, on the ground that the most frequent LEGITIMATE
+   gesture is entering what is already there, and a static reservation inside a `dhcp-pool` is
+   ordinary and correct. **Refused: warning HERE**, which would build a second warning mechanism in
+   the story of the write while 14.3 is the story that owns them all.
+   🔑 **The two axes must not be confused, and that is why this was asked separately.**
+   `epics.md:2433` settles PLAN-against-NETWORK (an observed address the audit highlights): *warn,
+   name what is known, and still write*. This settles PLAN-against-PLAN, which no arbitration
+   covered. ⚠️ **THE ACCEPTED COST: between this story and 14.3, a reservation inside a DHCP pool is
+   written without a word** — legal, and not necessarily what the operator meant. Registered with
+   14.3 by name, not left to be rediscovered.
 
 ## Acceptance Criteria
 
@@ -303,8 +346,10 @@ the subnet (`_ipam.html:49,79` already carries the store's own id).
 
 ## Tasks / Subtasks
 
-- [ ] **T0** Take §2's decisions with Guy; §1 is settled and is not re-opened.
-- [ ] **T1** (AC6) `classify`'s `Contention` arm: repair or remove, with the check either way. ⚠️ The
+- [x] **T0** Take §2's decisions with Guy; §1 is settled and is not re-opened. ✅ 2026-09-12 —
+  all five recorded in §2 WITH the option refused and the cost accepted; items 2–5 are Guy's, item 1
+  is settled by precedent and stated rather than asked.
+- [x] **T1** (AC6) `classify`'s `Contention` arm: repair or remove, with the check either way. ⚠️ The
   repair was BUILT and measured safe (`try_downcast_ref` + `number()`, whole workspace green, the
   `Constraint("unique")` path intact) — **but under the chosen lock it buys less than it looks
   like**, the deadlock becoming `Contention` where the operator needs `RangeOverlapsAnother`.
@@ -370,14 +415,52 @@ anything else there — which is the point.
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context), 2026-09-12.
+
 ### Debug Log References
+
+- **T1's prove-to-red carried its own cause.** With the arm still comparing `db.code()`, the failure
+  message read `Backend("...1205 (HY000)...")` — the MariaDB number and the SQLSTATE side by side in
+  one string, which is the whole defect in one line.
 
 ### Completion Notes List
 
+- **T0 — §2's five decisions taken (2026-09-12).** Items 2–5 are Guy's, recorded in §2 with the
+  option refused and the cost accepted. Three of the four ship a cost rather than a closure and each
+  says so at its site: the empty plan's link is an ANCHOR onto a `<details>` and not an href to a
+  page, so `epics.md`'s criterion 5 is met in substance and not in the shape its wording suggests;
+  the nil refusal is at the ROUTE while the adapter still accepts it; and the label refusal is at
+  the ROUTE while `""` still inserts through raw SQL. **Two tripwires and one divergence, written as
+  such** — story 5.12's precedent, which this project has paid for twice.
+- **T1 — `RepositoryError::Contention` was dead from the day it was written.** `classify` compared
+  `db.code()`, the SQLSTATE, against a MariaDB NUMBER: a lock-wait timeout arrives as `HY000` and a
+  deadlock as `40001`, while the number lives in a separate field. One producer, no consumer, no
+  test. 🔑 **Why nobody had seen it: nothing in this product CONTENDED** — the identity pass runs
+  alone and the screens only read. This story's routes take a row lock, so the loser is an ordinary
+  operator. *A dead arm is a promise until something walks into it.*
+- **T1 — the Origin check is SHARED, and that is a refusal to copy.** `document.rs`'s machinery is
+  private, and the gap-hunt measured that a dev agent building a second write route would most
+  likely COPY `same_origin` — the one function a CSRF check must never be duplicated for. It moves
+  to `write_guard.rs` with a tripwire asserting the comparison exists in exactly one file.
+  ⚠️ **What is NOT shared, by decision: the refusal BODIES.** `document.malformed` and the IPAM
+  refusals are different sentences about different gestures; the DECISION is shared, the WORDING
+  stays local. A shared body is the *one message for two surfaces* shape story 6.4 paid for.
+
 ### File List
+
+- `crates/opencmdb-bin/src/write_guard.rs` — NEW; the shared Origin check and its two tests.
+- `crates/opencmdb-bin/src/repo.rs` — `classify`'s `Contention` arm, and the test that makes it live.
+- `crates/opencmdb-bin/src/document.rs` — the Origin check removed and taken from `write_guard`.
+- `crates/opencmdb-bin/src/main.rs` — the module declaration.
 
 ### Change Log
 
+- 2026-09-12 — **T0: §2's five decisions taken**, and **the record caught up with the tree**. T1 had
+  shipped in `860d0e4` — `classify`'s dead `Contention` arm and the shared Origin check — with its
+  task unticked and this whole section empty. ⚠️ *A commit message is not a story record*: the two
+  live in different files and only one of them is read by the next agent. **879 tests** (589 bin +
+  191 core + 99 xtask), re-measured on this tree with `cargo test --workspace --locked` rather than
+  recalled.
 - 2026-09-12 — contexted, then corrected by the mandatory FACT-CHECK layer, which found **a
   systematic class rather than a slip**: four of §1's six `file:line` citations were `38da035`-era,
   copied from story 14.2 without re-deriving them, and the tree had moved underneath them — 14.2
