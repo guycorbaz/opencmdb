@@ -369,8 +369,12 @@ the subnet (`_ipam.html:49,79` already carries the store's own id).
   POSITIVE control. ✅ 2026-09-12 — ⚠️ **the arbitrated shape was IMPROVED and the improvement was
   the compiler's idea**: on this sub-router the const is a second spelling with no production
   reader, and clippy said so twice.
-- [ ] **T6b** (§3) Derive `the_plan_reads_no_observation`'s file list; widen `kbd-probe.mjs` to
-  `/ipam`; give the axe gate the empty-plan state.
+- [x] **T6b** (§3) Derive `the_plan_reads_no_observation`'s file list. ✅ 2026-09-12 — and its first
+  derived run refuted a premise I had taken from D56b.
+  ⚠️ **The two browser-gate halves MOVE TO T7, with the reason rather than in silence**: widening
+  `kbd-probe.mjs` to `/ipam` measures the focus contract of controls T7 has not built yet, and the
+  axe gate's empty-plan state is the screen T7 changes. Doing either here means doing it twice, and
+  the second time is the one that counts. They are not dropped: T7 owns them and T8 measures them.
 - [ ] **T7** (AC7, AC8) Remove the last allows; link the empty plan to the gesture.
 - [ ] **T8** (AC9, AC10) Measure. Both browser gates, both store conditions, the command named.
 
@@ -750,6 +754,38 @@ Four ids. **One prediction contradicted, one mutation the driver cannot express.
 | M24a | the sub-router not merged into the app at all | red | **red:1 — this guard alone** | every `ipam_write` test builds its own router and passes over an app that mounts nothing |
 | M24b | merged BELOW `auth_deny` | red | red:3, by hand | ⚠️ not expressible as one anchor (`E0382`, a moved binding); this guard plus two generic probes that name no address |
 | — | the const `PATHS`, then the derived `paths()` | — | `never used`, twice | the compiler naming a second spelling with no production reader |
+- **T6b — `the_plan_reads_no_observation`'s perimeter is DERIVED, and it had to be.** The gap-hunt
+  had planted BOTH forms the guard exists to catch in a new `ipam_write.rs` and measured the test
+  and all ten gates green, while the story's own Dev Notes claimed the opposite. 🔑 Membership is
+  now a PROPERTY of what a file does, not of what it is called: a module is in the plan's perimeter
+  if its name says so **or** if its code names one of the three plan tables. Measured over `src/`
+  that is exactly the three ipam modules — `repo.rs` and `main.rs` mention a plan table only inside
+  their TEST modules, so the code-half rule leaves them out **with no exception list anyone has to
+  audit**.
+- 🔴 **THE FIRST DERIVED RUN REFUTED A PREMISE I HAD TAKEN FROM THE CONVENTION.** The guard asserted
+  D56b's *one trailing test module per file* over the whole crate, and `example_screens.rs` has
+  **four**. The assertion is scoped to the perimeter, where it is exactly what replaces the
+  hand-written witness the two-file version carried — and the crate-wide measurement is registered
+  rather than acted on, because *a guard about the addressing plan may not quietly become a guard
+  about the crate's test layout*.
+- 🔴 **COMMENTS ARE STRIPPED, and my own prose is what forced it.** `ipam_write.rs`'s module doc
+  says the plan *"is a SECOND declared register beside `declared_attribute`"* — a true sentence
+  about a table it never reads — so the derived guard would have reddened on the paragraph
+  explaining why the read must not exist. Story 14.2's finding again: *a guard that greps a file
+  greps its prose, and the better the prose the more reliably it fires.* ⚠️ The stripper's limit is
+  written: no string-literal awareness, so a `//` inside a literal blinds it, and no such literal
+  exists here. **M28 is the control** — the same read planted in a comment stays GREEN — so the
+  stripping is measured and not claimed.
+
+### T6b's mutation pass
+
+Three ids, three conforming outcomes, and the third is a CONTROL.
+
+| id | mutation | predicted | measured | what it says |
+|---|---|---|---|---|
+| M26 | a raw `SELECT COUNT(*) FROM observation_record` in `ipam_write.rs` | red:1 | red:1 (+clippy) | the form the gap-hunt measured GREEN before the perimeter was derived |
+| M27 | a `crate::repo::count_observations` CALL in `ipam_write.rs` | red:1 | red:1 | the natural way to add a read: the way the existing reads are written |
+| M28 | the same read planted in a COMMENT | **green** | green | 🔑 the control: the stripping is measured, not claimed — without it M26 and M27 would prove only that the guard reads the file |
 
 ### File List
 
@@ -767,8 +803,18 @@ Four ids. **One prediction contradicted, one mutation the driver cannot express.
 - `crates/opencmdb-bin/src/ipam_repo.rs` — `insert_range`'s transaction and its two locks in order,
   the pause seam, `load_subnet_locked`, `subnet_from_row`, AC5's harness and the source guard.
 - `crates/opencmdb-bin/Cargo.toml` — `tokio`'s `test-util` as a dev feature on an existing edge.
+- `crates/opencmdb-bin/src/ipam_page.rs` — the plan-reads-no-observation guard, derived and
+  comment-stripping.
 
 ### Change Log
+
+- 2026-09-12 — **T6b: the plan's perimeter guard now finds its own files.** Derived membership,
+  comments stripped, and a control proving the stripping. ⚠️ Its two browser-gate halves move to T7
+  with the reason stated: they measure controls T7 has not built and a screen T7 changes. **904
+  tests** unchanged in count (the guard was rewritten, not added), ten gates, clippy
+  `--all-targets`, fmt. 🔴 The first derived run refuted D56b's *one test module per file* —
+  `example_screens.rs` has four — and my own module doc would have reddened the guard, which is why
+  it strips comments.
 
 - 2026-09-12 — **T6: AC3's perimeter guard, with the control that makes it mean anything.** Four
   write routes, each asserted 401 without a credential and non-404 with one, against a

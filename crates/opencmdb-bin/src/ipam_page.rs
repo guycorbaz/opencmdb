@@ -1021,74 +1021,122 @@ mod tests {
         );
     }
 
-    /// 🔴 **AC2: THIS SCREEN READS NO OBSERVATION.** The audit is story 14.3's, and a join written
-    /// here would be that story's deliverable arriving early and unmeasured. The guard is a source
-    /// scan because the defect is an ADDED read, which no runtime test can provoke — story 5.12's
-    /// *you cannot measure the absence of code by running code*.
+    /// 🔴 **AC2: THE PLAN READS NO OBSERVATION.** The audit is story 14.3's, and a join written
+    /// anywhere in the plan's modules would be that story's deliverable arriving early and
+    /// unmeasured. The guard is a source scan because the defect is an ADDED read, which no runtime
+    /// test can provoke — story 5.12's *you cannot measure the absence of code by running code*.
     ///
-    /// 🔴 **IT WALKED THIS FILE ALONE UNTIL THE ACCEPTANCE LAYER MEASURED THE HOLE**: every cell
-    /// state is fed by SQL written in `ipam_repo.rs`, so joining `observation_record` into
-    /// `ranges_in` left **875 tests green** — the guard was correct about the file it read and
-    /// blind to the file where the read would naturally be written. *A guard placed where the
-    /// defect cannot occur reads as coverage and is none*, this epic's dominant class, met inside
-    /// the guard written to close an epic constraint.
+    /// # The perimeter is DERIVED, and it had to be
     ///
-    /// ⚠️ **Its limit is STATED rather than implied**: it matches table names as literals, so a
-    /// read reached through an existing helper elsewhere in the crate is invisible to it. A
-    /// TRIPWIRE against the read someone writes here, never a barrier — story 5.12's own framing.
+    /// 🔴 **It walked a HARDCODED PAIR until story 14.2b, and the gap-hunt measured the hole before
+    /// the module existed**: planting both forms it exists to catch — a raw
+    /// `SELECT COUNT(*) FROM observation_record` and a `crate::repo::count_observations` call — in a
+    /// new `ipam_write.rs` left **the test green and all ten gates green**, while the story's own
+    /// Dev Notes said the opposite. *A file list written by hand covers the files someone
+    /// remembered.*
+    ///
+    /// 🔑 **Membership is a PROPERTY of what a file does, not of what it is called**: a module is in
+    /// the plan's perimeter if its name says so OR if its code names one of the plan's three
+    /// tables. Measured over `src/` today that is exactly `ipam_page.rs`, `ipam_repo.rs` and
+    /// `ipam_write.rs` — `repo.rs` and `main.rs` mention a plan table only inside their test
+    /// modules, so the code-half rule leaves them out without an exception list anyone has to audit.
+    ///
+    /// # Two traps this guard has already paid for
+    ///
+    /// 🔴 **ANCHORED AT THE START OF A LINE, and the unanchored form read 382 BYTES OF 47 324.**
+    /// `ipam_repo.rs`'s module doc quotes `#[cfg(test)]` on line 7 — in the very sentence explaining
+    /// that the `file-size` gate stops at the first one. So the guard cut at a MENTION of the
+    /// attribute and inspected six lines of header. It was found only because a mutation that
+    /// should have reddened came back GREEN and was disbelieved. The witness is now DERIVED too:
+    /// D56b gives one trailing test module per file, so the guard asserts exactly ONE line-start
+    /// occurrence and cuts there — a hand-written witness per file could not have survived a
+    /// derived list. ⚠️ And the first draft asserted that convention for the WHOLE crate and was
+    /// refuted on its first run — `example_screens.rs` has four — so it is asserted for the
+    /// perimeter alone, and the measurement is registered.
+    ///
+    /// 🔴 **COMMENTS ARE STRIPPED, and the first derived run is what forced it.** `ipam_write.rs`'s
+    /// module doc says the plan *"is a SECOND declared register beside `declared_attribute`"* — a
+    /// true sentence about a table it never reads — and the guard would have reddened on the prose
+    /// explaining why the read must not exist. *A guard that greps a file greps its prose*, story
+    /// 14.2's finding, and the better the prose the more reliably it fires. ⚠️ The stripper is
+    /// simple: `//` to end of line and `/* … */`, with no string-literal awareness. It can therefore
+    /// blind the guard to a table name inside a literal containing `//` — stated rather than
+    /// implied, and no such literal exists here.
+    ///
+    /// ⚠️ **Its standing limit**: it matches table names as literals, so a read reached through an
+    /// existing helper elsewhere in the crate is invisible to it. A TRIPWIRE against the read
+    /// someone writes here, never a barrier — story 5.12's own framing.
     #[test]
     fn the_plan_reads_no_observation() {
-        // Each file, with a witness the guard must have READ — never a proportion. The first
-        // oracle here was `code.len() > source.len() / 2`, which is a guess about how much of a
-        // file is tests; `ipam_repo.rs` is 44 % code and the guard reddened over a correct tree.
-        // 🔑 *A reach check must name what the reach is FOR.*
-        for (name, source, witness) in [
-            (
-                "ipam_page.rs",
-                include_str!("ipam_page.rs"),
-                "async fn plan_data",
-            ),
-            (
-                "ipam_repo.rs",
-                include_str!("ipam_repo.rs"),
-                "async fn ranges_in",
-            ),
-        ] {
-            // 🔴 **ANCHORED AT THE START OF A LINE, and the unanchored form read 382 BYTES OF
-            // 47 324.** `ipam_repo.rs`'s module doc quotes `#[cfg(test)]` on line 7 — in the very
-            // sentence explaining that the `file-size` gate stops at the first one and therefore
-            // reads 183 lines of `repo.rs` where 1743 are. So this guard cut at a MENTION of the
-            // attribute and inspected six lines of header. 🔑 *The defect the file documents,
-            // committed by the guard written while reading that documentation* — and it was found
-            // only because a mutation that should have reddened came back GREEN and was disbelieved.
-            let code = source
-                .split("\n#[cfg(test)]")
-                .next()
-                .expect("the non-test half");
-            assert!(
-                code.contains(witness),
-                "{name}: the guard did not reach `{witness}` — it read {} bytes of {} and cut at \
-                 a MENTION of the attribute rather than at the module. A guard that stops in the \
-                 header measures the header: the unanchored form read 382 bytes of 47 324 here",
-                code.len(),
-                source.len()
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut perimeter: Vec<(String, String)> = Vec::new();
+        for entry in std::fs::read_dir(&src).expect("the crate's own source directory") {
+            let path = entry.expect("a readable entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .expect("a UTF-8 file name")
+                .to_string();
+            let source = std::fs::read_to_string(&path).expect("a readable file");
+
+            let cuts = source.matches("\n#[cfg(test)]").count();
+            let code = strip_comments(
+                source
+                    .split("\n#[cfg(test)]")
+                    .next()
+                    .expect("the non-test half"),
             );
+
+            let names_a_plan_table = ["ip_subnet", "ip_range", "ip_address"]
+                .iter()
+                .any(|table| code.contains(table));
+            if name.starts_with("ipam") || names_a_plan_table {
+                // 🔴 **ASSERTED FOR THE PERIMETER AND NOT FOR THE CRATE, because the first draft
+                // asserted it for the crate and was REFUTED on its first run**: `example_screens.rs`
+                // carries **four** line-start `#[cfg(test)]`, so D56b's *one trailing test module
+                // per file* is a convention this codebase does not hold everywhere. Registered
+                // rather than fixed here — a guard about the addressing plan may not quietly become
+                // a guard about the crate's test layout. What it needs is that the cut is
+                // unambiguous for the files it reads, and that is what this says.
+                assert_eq!(
+                    cuts, 1,
+                    "{name} has {cuts} line-start `#[cfg(test)]` and this guard cuts at the first: \
+                     with none it would read the whole file including its tests, with two it would \
+                     cut somewhere arbitrary"
+                );
+                perimeter.push((name, code));
+            }
+        }
+        perimeter.sort();
+
+        let found: Vec<&str> = perimeter.iter().map(|(name, _)| name.as_str()).collect();
+        // A floor equal to what is there, never under it (story 6b.7). It catches the direction a
+        // derived list cannot: a module that LEAVES the perimeter by being renamed or emptied.
+        assert_eq!(
+            found,
+            ["ipam_page.rs", "ipam_repo.rs", "ipam_write.rs"],
+            "the plan's perimeter changed. A module that joined it is covered from here on; one \
+             that left it needs saying why"
+        );
+
+        for (name, code) in &perimeter {
             for needle in ["observation_record", "identity_link", "declared_attribute"] {
                 assert!(
                     !code.contains(needle),
-                    "`{needle}` appears in {name}: the audit is story 14.3's, and the criterion \
-                     is that this screen draws the PLAN and nothing else"
+                    "`{needle}` appears in {name}: the audit is story 14.3's, and the criterion is \
+                     that the plan draws itself and nothing else"
                 );
             }
             // 🔴 **AND THE READ ARRIVES AS A CALL, not as SQL.** The edge layer inserted
             // `crate::repo::count_observations(pool)` into the handler — a function whose own body
             // carries none of the three literals — and measured 875 tests, clippy and TEN GATES
-            // GREEN over an `/ipam` that hit `observation_record` on every request. 🔑 *The
-            // natural way to add a read is the way the existing reads are written: a call.*
-            // So this module may speak to `ipam_repo` and to `page`, and to no other adapter.
-            // ⚠️ `ipam_repo` legitimately imports ONE item from `crate::repo` — `classify`, the
-            // single translation of a backend error in this crate (`repo.rs:1607`) — so the rule
-            // is *no other item*, stated as an allowlist of one rather than as an exception
+            // GREEN over an `/ipam` that hit `observation_record` on every request. 🔑 *The natural
+            // way to add a read is the way the existing reads are written: a call.*
+            // ⚠️ `classify` is the one allowed item — this crate's single translation of a backend
+            // error (`repo.rs:1607`) — stated as an allowlist of one rather than as an exception
             // nobody can audit.
             for reach in code.match_indices("crate::repo::") {
                 let tail = &code[reach.0 + "crate::repo::".len()..];
@@ -1099,10 +1147,49 @@ mod tests {
                 assert_eq!(
                     item, "classify",
                     "{name} reaches `crate::repo::{item}`, and the observation reads live there. \
-                     The plan's own adapter is `ipam_repo`; `classify` is the one allowed item, \
-                     being this crate's single backend-error translation. Anything else is the \
-                     audit arriving early, and story 14.3 is where it belongs"
+                     The plan's own adapter is `ipam_repo`; anything else is the audit arriving \
+                     early, and story 14.3 is where it belongs"
                 );
+            }
+        }
+    }
+
+    /// Remove `//` line comments and `/* … */` blocks, so a guard reads code and not prose.
+    ///
+    /// ⚠️ No string-literal awareness: a `//` inside a literal starts a comment as far as this is
+    /// concerned. Its one caller has no such literal, and the limit is written rather than assumed.
+    fn strip_comments(source: &str) -> String {
+        let mut out = String::with_capacity(source.len());
+        let mut rest = source;
+        loop {
+            let line = rest.find("//");
+            let block = rest.find("/*");
+            match (line, block) {
+                (None, None) => {
+                    out.push_str(rest);
+                    return out;
+                }
+                (Some(at), None) => {
+                    out.push_str(&rest[..at]);
+                    rest = rest[at..].find('\n').map_or("", |nl| &rest[at + nl..]);
+                }
+                (None, Some(at)) => {
+                    out.push_str(&rest[..at]);
+                    rest = rest[at..]
+                        .find("*/")
+                        .map_or("", |end| &rest[at + end + 2..]);
+                }
+                (Some(l), Some(b)) => {
+                    let at = l.min(b);
+                    out.push_str(&rest[..at]);
+                    rest = if l < b {
+                        rest[at..].find('\n').map_or("", |nl| &rest[at + nl..])
+                    } else {
+                        rest[at..]
+                            .find("*/")
+                            .map_or("", |end| &rest[at + end + 2..])
+                    };
+                }
             }
         }
     }
