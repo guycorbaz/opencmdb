@@ -1,0 +1,84 @@
+{#- The plan's three write forms (story 14.2b).
+
+     🔑 **ONE PARTIAL FOR THE THREE, and it renders in every branch of the screen.** An empty plan
+     shows the subnet form OPEN — there is nothing else on the page and the empty-plan sentence
+     links straight to it — while a drawn plan shows all three collapsed. That is what discharges
+     §2.2's recorded cost rather than merely stating it: an anchor onto a `<details>` the browser
+     has to expand is *a door that opens onto a door*, and the case where the link matters is
+     exactly the case where the form is already open.
+
+     ⚠️ **`hx-post`, so this needs JavaScript**, like the documenting gesture story 6.4 shipped.
+     The route answers 201 with `HX-Redirect`, which only htmx reads; a plain `<form method=post>`
+     would show the operator a bare sentence on a blank page. Stated rather than discovered: no-JS
+     is not supported for a write in this product today, on either screen.
+
+     ⚠️ The policy `value`s are the BINDING TOKENS and are never translated — the route compares
+     them without trimming or case folding, so a translated value would be refused. What the
+     operator reads is the label beside each.
+
+     ⚠️ **NO `placeholder`, and a guard is what settled it.**
+     `no_template_hard_codes_text_a_human_reads_from_an_attribute` reds on a hard-coded one, and it
+     is right: a placeholder is text a human reads. Translating an example IP address would be
+     silly, so the example moved INTO the label — which is better regardless, a placeholder being
+     invisible the moment the operator types and no substitute for an accessible name. -#}
+<div class="ipam-forms">
+  <h3 class="panel-label">{{ s.form_heading }}</h3>
+
+  <details class="ipam-form" id="ipam-form-subnet"{% if forms.subnet_id.is_none() %} open{% endif %}>
+    <summary>{{ s.empty_plan_gesture }}</summary>
+    <form hx-post="{{ forms.subnet_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
+      <label for="ipam-cidr">{{ s.form_cidr }}</label>
+      <input id="ipam-cidr" name="cidr" required>
+      <label for="ipam-subnet-label">{{ s.form_label }}</label>
+      <input id="ipam-subnet-label" name="label" required maxlength="120">
+      <button type="submit" class="btn-gesture live btn-document">{{ s.form_submit }}</button>
+    </form>
+  </details>
+
+  {%- match forms.subnet_id %}
+  {%- when Some with (subnet_id) %}
+  <details class="ipam-form" id="ipam-form-range">
+    <summary>{{ s.form_range_summary }}</summary>
+    <form hx-post="{{ forms.range_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
+      <input type="hidden" name="subnet_id" value="{{ subnet_id }}">
+      <label for="ipam-first">{{ s.form_first }}</label>
+      <input id="ipam-first" name="first" required>
+      <label for="ipam-last">{{ s.form_last }}</label>
+      <input id="ipam-last" name="last" required>
+      <label for="ipam-policy">{{ s.form_policy }}</label>
+      <select id="ipam-policy" name="policy" required>
+        {%- for (token, word) in forms.policies %}
+        <option value="{{ token }}">{{ word }}</option>
+        {%- endfor %}
+      </select>
+      <label for="ipam-range-label">{{ s.form_label }}</label>
+      <input id="ipam-range-label" name="label" required maxlength="120">
+      <button type="submit" class="btn-gesture live btn-document">{{ s.form_submit }}</button>
+    </form>
+  </details>
+
+  <details class="ipam-form" id="ipam-form-address">
+    <summary>{{ s.form_address_summary }}</summary>
+    <form hx-post="{{ forms.address_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
+      <input type="hidden" name="subnet_id" value="{{ subnet_id }}">
+      <label for="ipam-addr">{{ s.form_addr }}</label>
+      <input id="ipam-addr" name="addr" required>
+      <label for="ipam-address-label">{{ s.form_label }}</label>
+      <input id="ipam-address-label" name="label" required maxlength="120">
+      <button type="submit" class="btn-gesture live btn-document">{{ s.form_submit }}</button>
+    </form>
+  </details>
+  {%- when None %}
+  {#- Shown rather than hidden: Guy's premise (2) of 2026-08-13 — show and label rather than hide.
+       A screen that silently drops two of its three gestures reads as a screen missing them. -#}
+  <p class="empty">{{ s.form_needs_subnet }}</p>
+  {%- endmatch %}
+
+  {#- 🔴 ONE result paragraph for the three forms, and it FOCUSES itself after a swap — story
+       6.4's finding, where the handler sat on the button and `htmx:afterSwap` fires on the swap
+       TARGET, so it never ran and every Rust assertion stayed green. `before-swap` forces the swap
+       on a 4xx, or a refusal would leave the screen asserting the state it had before. -#}
+  <p id="ipam-form-result" class="gesture-result" tabindex="-1" role="status" aria-live="polite"
+     hx-on::before-swap="if (event.detail.xhr.status >= 400) event.detail.shouldSwap = true"
+     hx-on::after-swap="this.focus()"></p>
+</div>

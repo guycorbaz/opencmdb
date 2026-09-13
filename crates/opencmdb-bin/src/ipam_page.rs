@@ -380,8 +380,81 @@ pub(crate) struct IpamStrings {
     unknown_subnet: String,
     too_large: String,
     range_heading: String,
-    gesture_badge: String,
-    empty_plan_not_built: String,
+    form_heading: String,
+    form_range_summary: String,
+    form_address_summary: String,
+    form_cidr: String,
+    form_label: String,
+    form_first: String,
+    form_last: String,
+    form_policy: String,
+    form_addr: String,
+    form_submit: String,
+    form_needs_subnet: String,
+}
+
+/// The three forms, ready to render.
+///
+/// 🔑 **Each route is carried by a [`crate::page::Gesture::Live`] and taken back out of it**, which
+/// is §3's *"adopt the type or say why not"* answered by adopting. The variant exists so that *a
+/// live gesture posting nowhere is unrepresentable* (story 6b.4b), and until now `/ipam` named the
+/// type nowhere — so AC8 would have made this the product's second live gesture with none of the
+/// guarantee the first one bought.
+///
+/// ⚠️ **What the type does and does not buy is `page.rs`'s own narrowing, repeated rather than
+/// re-derived**: it is a labelling and typing DISCIPLINE, not a compiler-enforced guarantee. What
+/// it does buy here is that the route in the template comes from `WriteRoute::path()` through the
+/// variant, so a form and its handler cannot drift apart silently.
+#[derive(Debug, Clone)]
+pub(crate) struct IpamForms {
+    /// Where the subnet form posts.
+    subnet_route: &'static str,
+    /// Where the range form posts.
+    range_route: &'static str,
+    /// Where the address form posts.
+    address_route: &'static str,
+    /// The subnet in force, which the range and address forms carry as a hidden field. `None`
+    /// when no subnet is selected — the two forms are then replaced by a sentence saying so.
+    subnet_id: Option<String>,
+    /// The four binding policy words, as `(token, label)` — the token is what the route accepts,
+    /// the label is what the operator reads.
+    ///
+    /// ⚠️ The TOKEN is never translated: it is the binding word `IpPolicy::as_str` produces and
+    /// the route compares WITHOUT trimming or folding, so a translated value would be refused.
+    policies: Vec<(&'static str, String)>,
+}
+
+impl IpamForms {
+    /// The three forms for a screen whose subnet in force is `subnet_id`.
+    fn new(subnet_id: Option<String>) -> Self {
+        use crate::ipam_write::WriteRoute;
+        use crate::page::Gesture;
+        // Through the type, never around it: a `Gesture::Live` carries its route, and the template
+        // reads what the variant carries.
+        let route_of = |route: WriteRoute| match (Gesture::Live {
+            route: route.path(),
+        }) {
+            Gesture::Live { route } => route,
+            Gesture::Planned { .. } | Gesture::Disabled { .. } => {
+                unreachable!("built as Live one line above")
+            }
+        };
+        Self {
+            subnet_route: route_of(WriteRoute::Subnet),
+            range_route: route_of(WriteRoute::Range),
+            address_route: route_of(WriteRoute::Address),
+            subnet_id,
+            policies: IpPolicy::ALL
+                .into_iter()
+                .map(|policy| {
+                    (
+                        policy.as_str(),
+                        rust_i18n::t!(policy_key(policy)).to_string(),
+                    )
+                })
+                .collect(),
+        }
+    }
 }
 
 /// One cell, ready to render.
@@ -437,6 +510,8 @@ pub(crate) struct IpamBody {
     plan: Option<PlanRender>,
     /// The declared ranges, rendered INSTEAD of a grid when the subnet is too large.
     too_large: Option<Vec<RangeRow>>,
+    /// The three write forms.
+    forms: IpamForms,
 }
 
 /// The CSS modifier for a policy.
@@ -470,6 +545,7 @@ fn empty_plan_body() -> String {
         tabs: Vec::new(),
         plan: None,
         too_large: None,
+        forms: IpamForms::new(None),
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -489,6 +565,7 @@ fn unknown_subnet_body(subnets: &[(String, Subnet, String)]) -> String {
             .collect(),
         plan: None,
         too_large: None,
+        forms: IpamForms::new(None),
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -540,8 +617,17 @@ fn strings(counts: Option<(usize, usize, usize, usize)>, next: Option<Ipv4Addr>)
         unknown_subnet: rust_i18n::t!("ipam.unknown_subnet").to_string(),
         too_large: rust_i18n::t!("ipam.too_large", max = MAX_DRAWN_ADDRESSES).to_string(),
         range_heading: rust_i18n::t!("ipam.ranges_heading").to_string(),
-        gesture_badge: rust_i18n::t!("gesture.badge").to_string(),
-        empty_plan_not_built: rust_i18n::t!("ipam.empty_plan_not_built").to_string(),
+        form_heading: rust_i18n::t!("ipam.form.heading").to_string(),
+        form_range_summary: rust_i18n::t!("ipam.form.range_summary").to_string(),
+        form_address_summary: rust_i18n::t!("ipam.form.address_summary").to_string(),
+        form_cidr: rust_i18n::t!("ipam.form.cidr").to_string(),
+        form_label: rust_i18n::t!("ipam.form.label").to_string(),
+        form_first: rust_i18n::t!("ipam.form.first").to_string(),
+        form_last: rust_i18n::t!("ipam.form.last").to_string(),
+        form_policy: rust_i18n::t!("ipam.form.policy").to_string(),
+        form_addr: rust_i18n::t!("ipam.form.addr").to_string(),
+        form_submit: rust_i18n::t!("ipam.form.submit").to_string(),
+        form_needs_subnet: rust_i18n::t!("ipam.form.needs_subnet").to_string(),
     }
 }
 
@@ -568,6 +654,7 @@ fn render_too_large(
         tabs: tabs_for(subnets, selected),
         plan: None,
         too_large: Some(rows),
+        forms: IpamForms::new(Some(selected.to_string())),
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -624,6 +711,7 @@ pub(crate) fn render_plan(
         tabs,
         plan: Some(PlanRender { cells }),
         too_large: None,
+        forms: IpamForms::new(Some(selected.to_string())),
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -1194,9 +1282,23 @@ mod tests {
         }
     }
 
-    /// An empty plan says the gesture is not yet built, and names it.
+    /// **AC8 — an empty plan LINKS to the gesture that fills it, and the door is a door.**
+    ///
+    /// 🔴 It said NOT YET BUILT until this story, and correctly: `epics.md`'s criterion 5 asks the
+    /// empty plan to *name the gesture that fills it AND LINK TO IT*, which story 14.2 could not
+    /// deliver because no route existed. It registered the gap rather than faking the link —
+    /// *promising a door that does not exist is story 6b.4's finding pointed the other way*.
+    ///
+    /// 🔑 **The badge's ABSENCE is asserted, not just the link's presence.** A control that both
+    /// links and says NOT YET BUILT is worse than either, and nothing else would have caught it:
+    /// the two live in different elements.
+    ///
+    /// ⚠️ **And the anchor's target must be OPEN.** §2.2 accepted an in-page anchor rather than an
+    /// href to another address; what makes that honest is that on an empty plan the form is
+    /// rendered `open`, so the link never has to expand a `<details>` — *a door that opens onto a
+    /// door is not a door*. This asserts the `open` attribute on the very id the anchor names.
     #[test]
-    fn an_empty_plan_names_the_gesture_as_not_yet_built() {
+    fn an_empty_plan_links_to_the_gesture_that_fills_it() {
         let body = empty_plan_body();
         assert!(
             body.contains(&rust_i18n::t!("ipam.empty_plan").to_string()),
@@ -1204,14 +1306,51 @@ mod tests {
         );
         assert!(
             body.contains(&rust_i18n::t!("ipam.empty_plan_gesture").to_string()),
-            "the gesture that would fill it, named"
+            "the gesture that fills it, named"
         );
         assert!(
-            body.contains(&rust_i18n::t!("gesture.badge").to_string()),
-            "and marked NOT YET BUILT — story 14.2b owns the route, and promising a door that does \
-             not exist is story 6b.4's finding pointed the other way"
+            body.contains("href=\"#ipam-form-subnet\""),
+            "the criterion is a LINK, and story 14.2 registered it as undeliverable rather than \
+             faking one: {body}"
+        );
+        assert!(
+            !body.contains(&rust_i18n::t!("gesture.badge").to_string()),
+            "the NOT YET BUILT badge must be GONE: a control that links AND says it is not built \
+             is worse than either, and the two live in different elements"
+        );
+        assert!(
+            body.contains("id=\"ipam-form-subnet\" open"),
+            "the anchor's target must be rendered OPEN on an empty plan — an in-page anchor onto a \
+             collapsed `<details>` is a door that opens onto a door, which is the cost §2.2 \
+             accepted and this is what discharges it"
         );
         assert!(!body.contains("ipam-grid"), "an empty plan draws no grid");
+    }
+
+    /// Each form posts where its route is mounted, and the route comes through the TYPE.
+    ///
+    /// 🔑 §3 asked this story to *adopt `Gesture` or say why not*, because `/ipam` named the type
+    /// nowhere and AC8 makes it the product's second live gesture. `IpamForms` builds each route
+    /// through `Gesture::Live`, which exists so *a live gesture posting nowhere is
+    /// unrepresentable*. ⚠️ `page.rs`'s own narrowing applies unchanged and is not re-derived: a
+    /// labelling and typing DISCIPLINE, never a compiler-enforced guarantee. What it buys here is
+    /// that the form's action and the router's mount are one constant.
+    #[test]
+    fn every_form_posts_where_its_route_is_mounted() {
+        use crate::ipam_write::WriteRoute;
+        let body = render_plan(
+            &[("s1".to_string(), office(), "Office".to_string())],
+            "s1",
+            &PlanView::derive(office(), &[], &[]),
+        );
+        for route in WriteRoute::ALL {
+            assert!(
+                body.contains(&format!("hx-post=\"{}\"", route.path())),
+                "no form posts to `{}`, which the router mounts: a screen and a route that drift \
+                 apart leave a control that does nothing and a route nothing calls",
+                route.path()
+            );
+        }
     }
 
     /// Every cell of the rendered grid carries its own accessible name.

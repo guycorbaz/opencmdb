@@ -132,8 +132,18 @@ jobs:
           # the floor. Nothing guaranteed that. The harness's own seed TRUNCATES first, so the
           # gates measure a state this repository can reproduce rather than one the pipeline
           # accumulated.
-          mysql -h 127.0.0.1 -P 3306 -u root -popencmdb opencmdb_test < a11y/seed.sql
           npm --prefix a11y ci
+          # 🔴 **THE EMPTY-PLAN PASS RUNS FIRST, and it exists because the seeded one cannot see
+          # this state.** `AXE_REQUIRE_PLAN=1` below refuses a run that draws no cell — correctly,
+          # since an unseeded grid measures one sentence — which makes the EMPTY plan the one
+          # `/ipam` branch no browser ever opened, and it is where story 14.2b's AC8 puts the link
+          # into the gesture. One route, and it refuses (2) if the plan is not actually empty.
+          mysql -h 127.0.0.1 -P 3306 -u root -popencmdb opencmdb_test < a11y/empty-plan.sql
+          OPENCMDB_BASIC_USER="$OPENCMDB_BASIC_USER" \
+            OPENCMDB_BASIC_PASSWORD="$OPENCMDB_BASIC_PASSWORD" \
+            AXE_EMPTY_PLAN=1 \
+            node a11y/axe-gate.mjs
+          mysql -h 127.0.0.1 -P 3306 -u root -popencmdb opencmdb_test < a11y/seed.sql
           OPENCMDB_BASIC_USER="$OPENCMDB_BASIC_USER" \
             OPENCMDB_BASIC_PASSWORD="$OPENCMDB_BASIC_PASSWORD" \
             AXE_REQUIRE_QUEUE=1 \

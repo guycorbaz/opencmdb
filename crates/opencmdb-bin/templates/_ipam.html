@@ -30,15 +30,19 @@
        which story 6b.4b made a compile-time obligation — 14.2b cannot ship its route without
        meeting this site. -#}
   {%- if tabs.is_empty() %}
+  {#- 🔴 **THE DOOR IS A DOOR NOW.** Until story 14.2b this was a `<span role="button">` labelled
+       NOT YET BUILT, because the route did not exist and `epics.md`'s criterion 5 — *the empty plan
+       names the gesture that fills it AND LINKS TO IT* — was undeliverable; 14.2 registered it. The
+       route exists, so the span becomes an anchor and the badge goes.
+       ⚠️ It is an in-page anchor and not an href to another address, which §2.2 records as an
+       accepted cost. What removes the sting is that on an EMPTY plan the form below is rendered
+       `open`: the link never has to expand anything, so it cannot be *a door that opens onto a
+       door*. -#}
   <p class="empty">{{ s.empty_plan }}</p>
   <p class="ipam-planned-note">
-    <span class="btn-gesture planned" role="button" aria-disabled="true" tabindex="0"
-          aria-describedby="ipam-plan-not-built">
-      {{ s.empty_plan_gesture }}<span class="gesture-badge">{{ s.gesture_badge }}</span>
-    </span>
-    <span id="ipam-plan-not-built">
-    {{ s.empty_plan_not_built }}</span>
+    <a class="btn-gesture live btn-document" href="#ipam-form-subnet">{{ s.empty_plan_gesture }}</a>
   </p>
+  {% include "_ipam_forms.html" %}
   {%- else %}
   {#- 🔑 An unknown id narrows to NOTHING and says so; it does NOT fall back to the first subnet.
        Silently serving another subnet would tell the operator their selection took when it did not
@@ -64,6 +68,7 @@
     {%- endfor %}
   </ul>
   {%- endmatch %}
+  {% include "_ipam_forms.html" %}
   {%- endif %}
   {%- when Some with (plan) %}
 
@@ -122,6 +127,7 @@
         <p class="panel-caveat">{{ s.next_free_caveat }}</p>
       </div>
     </div>
+    {% include "_ipam_forms.html" %}
   </div>
   {%- endmatch %}
 </section>

@@ -375,7 +375,9 @@ the subnet (`_ipam.html:49,79` already carries the store's own id).
   `kbd-probe.mjs` to `/ipam` measures the focus contract of controls T7 has not built yet, and the
   axe gate's empty-plan state is the screen T7 changes. Doing either here means doing it twice, and
   the second time is the one that counts. They are not dropped: T7 owns them and T8 measures them.
-- [ ] **T7** (AC7, AC8) Remove the last allows; link the empty plan to the gesture.
+- [x] **T7** (AC7, AC8) Remove the last allows (done at T5); link the empty plan to the gesture —
+  and the two browser-gate halves T6b moved here. ✅ 2026-09-12 — 🔴 **the keyboard gate found a
+  contract I had asserted that the design structurally prevents.**
 - [ ] **T8** (AC9, AC10) Measure. Both browser gates, both store conditions, the command named.
 
 ## Dev Notes
@@ -786,6 +788,67 @@ Three ids, three conforming outcomes, and the third is a CONTROL.
 | M26 | a raw `SELECT COUNT(*) FROM observation_record` in `ipam_write.rs` | red:1 | red:1 (+clippy) | the form the gap-hunt measured GREEN before the perimeter was derived |
 | M27 | a `crate::repo::count_observations` CALL in `ipam_write.rs` | red:1 | red:1 | the natural way to add a read: the way the existing reads are written |
 | M28 | the same read planted in a COMMENT | **green** | green | 🔑 the control: the stripping is measured, not claimed — without it M26 and M27 would prove only that the guard reads the file |
+- 🔑 **T7 — THE OPERATOR CAN NOW CHANGE THE PLAN FROM THE SCREEN.** Three `<details>` in `/ipam`'s
+  rail: a subnet always, a range and an address once a subnet is in force. The empty plan's control
+  stops saying NOT YET BUILT and becomes a real link into the subnet form — `epics.md`'s criterion
+  5, which story 14.2 registered as undeliverable because no route existed.
+- ✅ **§2.2's accepted cost is DISCHARGED BY MEASUREMENT rather than restated.** The record said an
+  in-page anchor is not the href the criterion's wording suggests, and that an anchor onto a
+  collapsed `<details>` would be *a door that opens onto a door*. On an EMPTY plan the form renders
+  `open`, so the link never has to expand anything — and the axe gate's new mode measures exactly
+  that on a real page: **`link opens onto an open form`**.
+- **T7 — `Gesture::Live` is ADOPTED**, which is §3's *"adopt the type or say why not"* answered by
+  adopting. Each form's route comes through the variant that exists so *a live gesture posting
+  nowhere is unrepresentable*. ⚠️ `page.rs`'s own narrowing carries over unchanged and is not
+  re-derived: a labelling and typing DISCIPLINE, never a compiler-enforced guarantee.
+- 🔴 **THE KEYBOARD GATE FOUND A CONTRACT I HAD ASSERTED THAT THE DESIGN PREVENTS, and nothing else
+  could have.** The first version of the `/ipam` block asserted that a successful write swaps an
+  answer into the page and moves focus to it — copied from the documenting gesture. Measured:
+  `status=201 answer="" activeElement=""`. The route answers 201 with `HX-Redirect`, so htmx
+  NAVIGATES instead of swapping; the swap-and-focus contract lives on the REFUSAL path alone. 🔑 *A
+  contract copied from a neighbouring screen is a contract nobody has measured on this one.*
+  The probe now measures both paths separately: on success the browser lands on
+  `/ipam?subnet=<id>` **and the subnet is drawn** — the screen is the confirmation, which is why
+  none rides in the URL as it does on `/triage`, where a row disappearing needs a sentence; on a
+  re-submit the 409 body swaps and focus lands on the answer.
+- 🔴 **A `placeholder` is text a human reads, and a guard said so before I did.**
+  `no_template_hard_codes_text_a_human_reads_from_an_attribute` reddened on
+  `placeholder="192.0.2.0/24"`. Translating an example IP address would be silly, so the example
+  moved INTO the label key — which is better regardless: a placeholder disappears the moment the
+  operator types and is no substitute for an accessible name.
+- 🔴 **The compiler named the badge's leftovers, and my repair of the record cut a live key.**
+  Removing the NOT-YET-BUILT badge left `gesture_badge` and `empty_plan_not_built` unread — clippy
+  said so. Deleting the orphan key from `app.yml` by cutting from its comment block up to its value
+  took the NEIGHBOURING key with it, and `/ipam` began rendering `ipam.empty_plan_gesture` as its
+  own name. ⚠️ Caught in seconds by `the_marker_partition_follows_every_screens_declared_nature`,
+  which is what that guard is for — *a key-shaped cut in a YAML file is exactly as wide as the
+  block you anchored on.*
+- ✅ **The axe gate reaches the one `/ipam` state it was configured never to see.**
+  `AXE_EMPTY_PLAN=1` walks that branch alone, over a store emptied by the new `a11y/empty-plan.sql`,
+  and REFUSES (exit 2) if the plan is not actually empty — a mode that silently measured a populated
+  screen would report a pass over the state it exists for. CI runs it BEFORE the seed.
+- ⚠️ **`hx-post`, so the three forms need JavaScript** — like the documenting gesture story 6.4
+  shipped. The route answers 201 with `HX-Redirect`, which only htmx reads; a plain
+  `<form method=post>` would show the operator a bare sentence on a blank page. Stated rather than
+  discovered: no-JS is not supported for a write in this product, on either screen.
+- ⚠️ **A `<details>` per gesture and not three open forms**, because three forms permanently above a
+  256-cell grid is the SALIENCE defect story 6b.5 registered: the loudest thing on the screen would
+  be the machinery rather than the plan.
+
+### T7's browser measurements
+
+Both gates were RUN, against a real binary and a live `mariadb:10.11.11` — not reasoned about.
+
+| gate | condition | result |
+|---|---|---|
+| axe, empty-plan mode | plan emptied by `a11y/empty-plan.sql` | **exit 0** — 1 route, 0 violation nodes, `link opens onto an open form` |
+| axe, seeded | `a11y/seed.sql`, all three `REQUIRE` flags | **exit 0** — 10 routes + 4 states, 0 violation nodes |
+| kbd-probe | seeded | **exit 1 first**, 🔴 the finding; **exit 0** after the contract was corrected — 36 checks, 0 failed |
+| kbd-probe | re-run over a stale store | **exit 2**, naming its own cause: *the plan already holds this probe's subnet* |
+
+🔑 The last row is a repair of its own. Left tolerant, a stale re-run skipped the write half and
+died on the floor with *"34 checks ran where 36 are declared"* — true, and it tells the reader
+nothing. A gate that cannot run should name the cause, not the count.
 
 ### File List
 
@@ -804,9 +867,26 @@ Three ids, three conforming outcomes, and the third is a CONTROL.
   the pause seam, `load_subnet_locked`, `subnet_from_row`, AC5's harness and the source guard.
 - `crates/opencmdb-bin/Cargo.toml` — `tokio`'s `test-util` as a dev feature on an existing edge.
 - `crates/opencmdb-bin/src/ipam_page.rs` — the plan-reads-no-observation guard, derived and
-  comment-stripping.
+  comment-stripping; `IpamForms`, and the empty-plan test rewritten as AC8's.
+- `crates/opencmdb-bin/templates/_ipam_forms.html` — NEW; the three forms, one answer region.
+- `crates/opencmdb-bin/templates/_ipam.html` — the empty plan's link, and the partial in every
+  branch.
+- `crates/opencmdb-bin/assets/app.css` — the forms' rules.
+- `a11y/empty-plan.sql` — NEW; the state the gates could not reach.
+- `a11y/axe-gate.mjs` — the `AXE_EMPTY_PLAN` mode.
+- `a11y/kbd-probe.mjs` — `/ipam`'s first coverage in this file: 30 → 36 checks.
+- `.github/workflows/ci.yml` — the empty-plan pass, before the seed.
 
 ### Change Log
+
+- 2026-09-12 — **T7: the operator can change the plan from the screen.** Three forms, the empty
+  plan's link into the gesture, and the two browser-gate halves T6b moved here — both gates RUN, not
+  reasoned about. **904 → 905 tests** (615 bin + 191 core + 99 xtask), ten gates, clippy
+  `--all-targets`, fmt; axe **0 violation nodes** over 10 routes + 4 states *and* over the
+  empty-plan branch it had never reached; kbd-probe **36 checks, 0 failed**. 🔴 The keyboard gate
+  found a focus contract I had copied from `/triage` that `HX-Redirect` structurally prevents — the
+  fourth time in this project a focus contract has been asserted on the wrong thing, and the fourth
+  time only a browser could say so.
 
 - 2026-09-12 — **T6b: the plan's perimeter guard now finds its own files.** Derived membership,
   comments stripped, and a control proving the stripping. ⚠️ Its two browser-gate halves move to T7
