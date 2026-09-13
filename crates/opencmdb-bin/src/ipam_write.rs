@@ -173,6 +173,26 @@ impl WriteRoute {
     pub(crate) const ALL: &'static [WriteRoute] =
         &[WriteRoute::Subnet, WriteRoute::Range, WriteRoute::Address];
 
+    /// Every path this sub-router carries — AC3's list, DERIVED from the variants.
+    ///
+    /// 🔴 **The criterion says `PATHS: &[&str]`, and a const of that shape was written first and
+    /// then removed: clippy called it `never used`.** Nothing in production could read it — the
+    /// router is built from the variants, because only a variant carries its handler — so the const
+    /// existed for the guard alone, which is the compiler saying *this is a second spelling with no
+    /// reader*. Pinning the two together with a test was the alternative; deriving them removes the
+    /// question. 🔑 *The house rule keeps a redundancy a test pins; it does not ask for one where
+    /// there need be none.* Same shape as `Screen::ALL`, `IpPolicy::ALL`, `FactKind::ALL`.
+    ///
+    /// ⚠️ **`#[cfg(test)]`, because it has exactly one reader and that reader is a guard.** Left in
+    /// production it is `never used` under `-D warnings` — measured TWICE, first as a const and
+    /// then as this function. `document::PATHS` is a const in production because ITS router really
+    /// is built from it; here only a variant carries its handler. *Each list lives where its reader
+    /// is, and neither pretends to a use it has not got.*
+    #[cfg(test)]
+    pub(crate) fn paths() -> Vec<&'static str> {
+        Self::ALL.iter().map(|route| route.path()).collect()
+    }
+
     /// The path the route is mounted at, and the path the guard probes.
     pub(crate) const fn path(self) -> &'static str {
         match self {
@@ -380,6 +400,8 @@ pub(crate) fn router(pool: MySqlPool) -> Router {
 /// database.
 pub(crate) fn router_with(port: Arc<dyn IpamWritePort>) -> Router {
     let mut router = Router::new();
+    // Built from the variants and not from `PATHS`, because only the variant carries its handler —
+    // and the two lists are pinned equal by a test.
     for route in WriteRoute::ALL {
         router = router.route(route.path(), route.handler());
     }

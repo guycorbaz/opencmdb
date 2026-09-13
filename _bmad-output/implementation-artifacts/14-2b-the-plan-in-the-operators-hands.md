@@ -365,8 +365,10 @@ the subnet (`_ipam.html:49,79` already carries the store's own id).
 - [x] **T5** (AC1) The second and third routes, and the test that asserts the reuse. ✅ 2026-09-12
   — and **AC7's allow half landed here rather than at T7**: each attribute left with the route that
   falsified its stated reason.
-- [ ] **T6** (AC3) `PATHS` per sub-router, the routers built by iterating it, and the guard with its
-  POSITIVE control.
+- [x] **T6** (AC3) `PATHS` per sub-router, the routers built by iterating it, and the guard with its
+  POSITIVE control. ✅ 2026-09-12 — ⚠️ **the arbitrated shape was IMPROVED and the improvement was
+  the compiler's idea**: on this sub-router the const is a second spelling with no production
+  reader, and clippy said so twice.
 - [ ] **T6b** (§3) Derive `the_plan_reads_no_observation`'s file list; widen `kbd-probe.mjs` to
   `/ipam`; give the axe gate the empty-plan state.
 - [ ] **T7** (AC7, AC8) Remove the last allows; link the empty plan to the gesture.
@@ -702,6 +704,52 @@ Five ids, five conforming outcomes. Same conditions as before.
 `within_budget` from a handler makes the test HANG rather than fail, so `cargo xtask mutate` cannot
 run it. T4's M17 measured that once by hand for the class; repeating it per route buys the same
 sentence three times.
+- **T6 — AC3's guard exists and it carries its control.** `document::PATHS` and
+  `WriteRoute::paths()` are walked, and each path is asserted twice: 401 without a credential, and
+  **anything but 404 with one**. 🔑 The control is what makes the pair mean anything, and it is
+  ASSERTED rather than described: `/totally/made/up` answers **401 without** a credential (so the
+  negative half alone proves nothing about existence) and **404 with** one (so the positive half is
+  not satisfied by every string).
+- 🔴 **THE ARBITRATED SHAPE WAS `PATHS: &[&str]`, AND ON THIS SUB-ROUTER IT COULD NOT EARN ITS
+  KEEP.** The const was written, and clippy answered `constant PATHS is never used`: nothing in
+  production can read it, because the router is built from the VARIANTS — only a variant carries its
+  handler. So the const existed for the guard alone, which is the compiler saying *this is a second
+  spelling with no reader*. Rewritten as `WriteRoute::paths()`, derived from `ALL` — and clippy said
+  it again, so it is `#[cfg(test)]`, where its one reader is. ⚠️ `document::PATHS` stays a
+  production const because ITS router really is built from it. *Each list lives where its reader is,
+  and neither pretends to a use it has not got.*
+- 🔑 **Deriving the list DELETED a whole class of mutation.** With a const there are two failures to
+  measure — a path declared and not mounted, and one mounted and not declared — and a test pinning
+  them together. Derived, the second is unrepresentable and the pinning test has no subject; both
+  were removed rather than kept as ceremony. *The house rule keeps a redundancy a test pins; it does
+  not ask for one where there need be none.*
+- 🔴 **M24a is the measurement story 6b.2's finding predicts, and it is sharper than expected:
+  removing the `merge` from `main.rs` entirely reds EXACTLY ONE test — this guard.** Every route
+  test in `ipam_write` builds its own router and passes over an application that mounts none of
+  them. *A sub-router's own tests are structurally blind to whether the app mounts it*, which is the
+  hole the story-6b.2 review measured when `GET /dashboard` answered 200 below the layer.
+- 🔴 **M23 CONTRADICTED ITS PREDICTION — 4 red where 2 were predicted — and the guard is stronger
+  than I credited it.** Leaving `WriteRoute::Address` out of the mount reds the perimeter guard and
+  `every_declared_route_is_mounted` as predicted, plus the reuse loop and the nil-sentinel probe,
+  both of which POST to that route. The prediction counted the guards written FOR the property and
+  forgot the tests that merely use the route.
+- ⚠️ **M24b could not go through the driver and was measured by hand**: merging the sub-router below
+  `auth_deny` moves a binding across a `let`, so the mutation as a single anchor gives
+  `error[E0382]: borrow of moved value`. Planted by hand in two places, **3 red** — this guard plus
+  two generic auth probes inherited from story 6.1, which name none of these routes. That is the
+  distribution story 6b.2's review asked to change: the generic probes noticed, and nothing said
+  WHICH address had become writable without a credential.
+
+### T6's mutation pass
+
+Four ids. **One prediction contradicted, one mutation the driver cannot express.**
+
+| id | mutation | predicted | measured | what it says |
+|---|---|---|---|---|
+| M23 | `WriteRoute::Address` declared and not mounted | red:2 | **red:4** 🔴 | the two guards written for the property, plus the reuse loop and the nil probe, which POST to it |
+| M24a | the sub-router not merged into the app at all | red | **red:1 — this guard alone** | every `ipam_write` test builds its own router and passes over an app that mounts nothing |
+| M24b | merged BELOW `auth_deny` | red | red:3, by hand | ⚠️ not expressible as one anchor (`E0382`, a moved binding); this guard plus two generic probes that name no address |
+| — | the const `PATHS`, then the derived `paths()` | — | `never used`, twice | the compiler naming a second spelling with no production reader |
 
 ### File List
 
@@ -721,6 +769,14 @@ sentence three times.
 - `crates/opencmdb-bin/Cargo.toml` — `tokio`'s `test-util` as a dev feature on an existing edge.
 
 ### Change Log
+
+- 2026-09-12 — **T6: AC3's perimeter guard, with the control that makes it mean anything.** Four
+  write routes, each asserted 401 without a credential and non-404 with one, against a
+  `/totally/made/up` control measured both ways. ⚠️ The arbitrated `PATHS: &[&str]` shape was
+  improved to a derived list **because clippy twice called the const dead** — nothing in production
+  could read it. **903 → 904 tests** (614 bin + 191 core + 99 xtask), ten gates, clippy
+  `--all-targets`, fmt. 🔴 M24a reds exactly one test, which is the whole argument for a guard at
+  the application's level rather than the sub-router's.
 
 - 2026-09-12 — **T5: the plan can be filled — a subnet, a range and an address**, the two new routes
   forced into place by an exhaustive `match` and their reuse asserted by a loop over

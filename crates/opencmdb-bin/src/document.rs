@@ -34,6 +34,16 @@ use crate::repo;
 /// independently — deliberate redundancy, so renaming either side reds.
 pub(crate) const DOCUMENT_ALL_PATH: &str = "/document-all";
 
+/// Every path this sub-router carries, and the list its [`router_with`] is BUILT from.
+///
+/// 🔑 **AC3's shape (story 14.2b, Guy 2026-09-12): the list and the mounts cannot drift, because
+/// they are the same list.** The perimeter guard walks this rather than a copy, and it asserts BOTH
+/// halves — 401 without a credential, and something OTHER than 404 with one. ⚠️ The positive half
+/// is what makes the negative one mean anything: `auth_deny` layers the FALLBACK, so a misspelt
+/// path, an unmounted route and a typo all answer 401 exactly like a real route — measured, with
+/// `/totally/made/up`.
+pub(crate) const PATHS: &[&str] = &[DOCUMENT_ALL_PATH];
+
 /// The request shape: `application/x-www-form-urlencoded`, ⚠️ because that is what the vendored
 /// htmx 2.0.4 posts (measured: form-values encoding, zero `fetch(`, no `json-enc` extension).
 /// A JSON route here would force story 6.4 to vendor an extension or redo this shape.
@@ -167,9 +177,11 @@ pub(crate) fn router(pool: MySqlPool) -> Router {
 /// The sub-router over an explicit port — the seam tests use to drive the gesture without a
 /// database (an in-memory `DocumentPort`).
 pub(crate) fn router_with(port: Arc<dyn DocumentPort>) -> Router {
-    Router::new()
-        .route(DOCUMENT_ALL_PATH, post(document_all))
-        .with_state(DocumentState { port })
+    let mut router = Router::new();
+    for path in PATHS {
+        router = router.route(path, post(document_all));
+    }
+    router.with_state(DocumentState { port })
 }
 
 /// The handler. The CSRF check is decided FIRST — no refusal path consults the parsed form
