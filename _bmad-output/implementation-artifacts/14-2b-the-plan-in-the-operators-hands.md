@@ -899,6 +899,20 @@ order.
 | axe, seeded | `a11y/seed.sql`, then `AXE_REQUIRE_QUEUE=1 AXE_REQUIRE_GESTURE=1 AXE_REQUIRE_PLAN=1 node a11y/axe-gate.mjs` | exit 0 — 10 routes + 4 states, 0 violation nodes |
 | kbd-probe | `a11y/seed.sql` again (the probe writes), then `node a11y/kbd-probe.mjs` | exit 0 — **36 checks, 0 failed** |
 
+**Re-measured on `0bd1f52`**, the merge of `master` after PR #175 (`d29bbd4`) — because the lockfile
+moved under the measurement above, and a figure taken on `7ec25c9` is not a figure about this tree:
+
+| step | command | result |
+|---|---|---|
+| deny | `cargo deny check` | ✅ exit 0 — `advisories ok, bans ok, licenses ok, sources ok` |
+| deny, CI's form | `cargo deny check advisories licenses` | ✅ exit 0 |
+| build · clippy | `cargo build --workspace --locked` · `cargo clippy --workspace --all-targets --locked -- -D warnings` | exit 0 · exit 0 |
+| tests, virgin store | `DATABASE_URL=… cargo test --workspace --locked` (after one warm run) | **905 passed**, 0 failed — 10.74 s |
+
+⚠️ The browser gates were NOT re-run on `0bd1f52`: the merge changes `Cargo.lock` and `CHANGELOG.md`
+only, and neither is served — the rendered page cannot differ. Stated rather than implied; CI runs
+both on the push.
+
 ### File List
 
 - `crates/opencmdb-bin/src/write_guard.rs` — NEW; the shared Origin check and its two tests.
