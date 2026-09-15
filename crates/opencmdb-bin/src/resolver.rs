@@ -829,6 +829,7 @@ mod tests {
             "DELETE FROM identity_link",
             "DELETE FROM interface",
             "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
         ] {
             sqlx::query(statement).execute(&pool).await.expect("clean");
         }

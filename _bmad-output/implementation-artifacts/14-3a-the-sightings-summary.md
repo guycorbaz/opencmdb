@@ -1,6 +1,6 @@
 # Story 14.3a: The sightings summary
 
-Status: ready-for-dev
+Status: review
 
 ⚠️ **`ready-for-dev` is the workflow's status, not a statement that nothing is open.** Contexted and
 VALIDATED 2026-09-15 by two fresh-context layers (fact-check; gap-hunt, which built a prototype
@@ -341,16 +341,87 @@ shape:
 
 - [x] **T0** Take §2's decisions 1–3 with Guy; confirm or refuse the defaults of decision 4; rewrite
   affected ACs. *(2026-09-15: 1(a), 2(a), 3(a), defaults accepted — no AC changes.)*
-- [ ] **T1** (AC1) Migration `0008` and the marker table; raw-SQL CHECK tests first.
-- [ ] **T2** (AC3, AC4) The pure derivation: from an `Observation`, its pairs in key order (cross product,
+- [x] **T1** (AC1) Migration `0008` and the marker table; raw-SQL CHECK tests first.
+- [x] **T2** (AC3, AC4) The pure derivation: from an `Observation`, its pairs in key order (cross product,
   sentinel, zero MAC, canonical forms) — tested without a store.
-- [ ] **T3** (AC2, AC4) The upsert inside `insert_observation` (decision 1), `datetime_literal`, the
+- [x] **T3** (AC2, AC4) The upsert inside `insert_observation` (decision 1), `datetime_literal`, the
   replay, the Barrier test with its prove-to-red.
-- [ ] **T4** (AC5) The backfill at boot: streaming, one flush with the marker, skip-and-name; the reference
+- [x] **T4** (AC5) The backfill at boot: streaming, one flush with the marker, skip-and-name; the reference
   fold; the 1 M-row measurement.
-- [ ] **T5** (AC6, AC7) The reader; all fixture sites; the purge-and-replay pin.
-- [ ] **T6** (AC8) The seeds from one `@t`, and the test that executes them.
-- [ ] **T7** (AC9, AC10, AC11) Measure; docs; the live count.
+- [x] **T5** (AC6, AC7) The reader; all fixture sites; the purge-and-replay pin.
+- [x] **T6** (AC8) The seeds from one `@t`, and the test that executes them.
+- [x] **T7** (AC9, AC10, AC11) Measure; docs; the live count.
+
+### Review Findings
+
+Three isolated layers, 2026-09-15, on `cd24edf`: Blind Hunter (code diff only), Edge Case Hunter (own
+worktree and store, mutations), Acceptance Auditor (full diff, spec, register; re-ran M1, M7, M8). 36 raw
+findings → 23 after dedup: 1 decision, 18 patches, 1 deferral, 3 dismissed. _(This line first read
+*"36 raw … 22 … 17 patches"*, written before counting: the reports carry **29** raw findings — 14 blind, 7
+edge, 8 auditor — and the list below has 18 patch lines, the register row being one.)_
+
+- [x] [Review][Decision] **The boot placement of the backfill is carried by nothing** (edge MB, blind) —
+  moving the call into a `tokio::spawn` with its error swallowed, after the listener, left 656 tests, clippy
+  and gates green: decision 2's *before serving, refuse to start* has no carrier, `run()` being called by no
+  test. Options: extract a store-opening seam (migrations + backfill, returning `Result`) that a test
+  drives, leaving only its call and its position in `run()` uncarried (story 5.14's precedent); or register
+  it as uncarried as it stands.
+- [x] [Review][Patch] **Atomicity on the POOL path has no carrier** — mutation `rollback()` → `commit()` in
+  `insert_with_sightings`' error branch left 660 tests green (edge MA); `rollback()` → `drop(tx)` green (MC);
+  sightings before the observation row green (MD, blind): the order claim is carried by the transaction.
+  Test the settle-on-error path on a pool; say the explicit rollback is defensive and carried by no test
+  (story 14.2b's `settle` precedent); correct the order sentence [sighting_repo.rs:189-217]
+- [x] [Review][Patch] **The replay's wiring is not verified and the record overstates** — a predicate that
+  never matches left everything green (auditor P1); *"carried by a lint"* covers only the call's existence;
+  a deadlock on the ingest path is unreachable today (edge). Correct the record; register the limit
+  [sighting_repo.rs:230; story record M8]
+- [x] [Review][Patch] **Two instances booting at once: one refuses to start on the marker's duplicate key**
+  (blind, edge measured `1062`) — the flush widens, so a second completion is harmless; let the marker insert
+  not fail [sighting_repo.rs write_flush]
+- [x] [Review][Patch] **The idempotence test cannot tell widening from assigning** (blind) — the redo runs
+  over the same history; delete the observation that set a first sighting before the redo, which is
+  constraint (3)'s own case [sighting_repo.rs the_backfill_produces_exactly_what_ingest_maintains]
+- [x] [Review][Patch] **A test comment claims a planted undecodable row that is never planted** (blind) —
+  plant it [sighting_repo.rs same test]
+- [x] [Review][Patch] **`insert_observation_row` is `pub(crate)`: a ready-made way around decision 1**
+  (blind, auditor) — make it private [sighting_repo.rs:155]
+- [x] [Review][Patch] **The scan-pass test's doc and message overclaim** (blind) — a revert to
+  `transact` + `insert_observation` still writes sightings; *"one sighting per ingested observation"* is
+  false in general [scan_pass.rs the_seam_writes_the_sightings_of_what_it_ingests]
+- [x] [Review][Patch] **The seed tests leave the a11y seed's rows in the shared test store** (blind) — clean
+  up what the seeds write [sighting_repo.rs seed tests]
+- [x] [Review][Patch] **The demo seed's comment misstates a re-run without the DELETE** (blind: a plain
+  INSERT fails 1062, it keeps nothing) and the migration header's seed exemption does not name the demo
+  seed's scoped delete [docker/seed-example.sql; 0008 header]
+- [x] [Review][Patch] **The new demo seed against a store that has not booted this version deletes the demo
+  and then fails** (edge measured `ERROR 1146` after both DELETEs) — fail before deleting anything
+  [docker/seed-example.sql]
+- [x] [Review][Patch] **`replay_once_if` is generic and logs a deadlock message for any predicate** (blind)
+  [sighting_repo.rs:238]
+- [x] [Review][Patch] **The memory figures disagree and one instrument reads a lower bound** (blind, auditor,
+  edge) — `main.rs`'s comment carries the prototype's *"ten megabytes"*; VmHWM before/after is a process
+  peak, so *"+0.8 MB"* is a lower bound; the edge layer measured 200 000 pairs at 9.4 s / 78 MB (debug).
+  Correct `main.rs`, the manual, the changelog and the record
+- [x] [Review][Patch] **AC6's *"46 pairs after a year too"* is a claim the tree contradicts** (auditor) — the
+  sentinel row beside a MAC row, the host's own address, DHCP rotation [story record]
+- [x] [Review][Patch] **AC7 recorded MET while 15 of 16 sites clear the summary** (auditor) — record it as
+  met with a registered divergence [story record]
+- [x] [Review][Patch] **The count 946 includes the opt-in measurement test, which asserts nothing in a normal
+  run** (auditor) [story record]
+- [x] [Review][Patch] **The storeless 5 s now has a measured cause** — `every_store_backed_screen_refuses_within_the_page_budget`
+  waits out `PAGE_STORE_BUDGET` (5.007 s by `--report-time`, on `master` since PR #151/#170) — replace
+  *"no cause written"* [story record]
+- [x] [Review][Patch] **The sprint-status note for 14-3a is stale** (auditor) — it still describes (IPv4,
+  MAC) with a last-seen instant, *"being contexted"* [sprint-status.yaml]
+- [x] [Review][Patch] **The register rows the patches change** — the replay limit, the boot seam (whichever
+  the decision), the marker race row once fixed [deferred-work.md]
+- [x] [Review][Defer] **A slow first boot on a large store has no health endpoint while it runs** — 200 000
+  pairs measured 9.4 s (debug) with no `/healthz`; an orchestrator timeout could kill and loop it. The image
+  ships no `HEALTHCHECK` today [main.rs boot] — deferred, not reachable on the shipped deployment
+- Dismissed (3): the Barrier test flaky on round 0 (edge: 8 of 8 green with the sort, 29–37 deadlocks in 80
+  without — refuted); the migration header's *"sixteen fixture sites"* (true: 16 sites delete observations);
+  AC5's reference oracle built as a hand-written oracle plus a two-path comparison (the auditor judges it
+  acceptable).
 
 ## Dev Notes
 
@@ -393,17 +464,170 @@ shape:
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context), `claude-opus-5[1m]`.
+
 ### Debug Log References
+
+- Store: `mariadb:10.11` container on port **13450**, database `opencmdb_143a`, **dropped and recreated**
+  before every count, every mutation and the measurement. Port 3306 belongs to another project and was
+  not touched.
+- `LC_NUMERIC=C` in every timing script. Logs kept in the session scratchpad (`live.log`, `dry.log`,
+  `mut-M1.log` … `mut-M9.log`, `measure.log`).
 
 ### Completion Notes List
 
 - Contexted 2026-09-15 from a research pass on the ingest path and migration conventions, on Guy's split of
   story 14.3; validated the same day by a fact-check layer and a gap-hunt layer that built a prototype and
-  measured it. Three decisions and a set of defaults posed; none taken.
+  measured it. Three decisions and a set of defaults posed, all taken at T0.
+
+**What shipped, by AC.**
+
+- **AC1 — MET.** `0008_address_sighting.sql`: `address_sighting` with `PRIMARY KEY (addr, l2_domain, mac)`,
+  every column `NOT NULL`, `0007`'s octet-value `RLIKE … \z` on the address, the anchored MAC shape CHECK
+  admitting `-`, a UUID shape CHECK on `l2_domain`, `first_seen_at <= last_seen_at`; and
+  `sighting_backfill` (name, rows read, rows skipped, pairs flushed). `IF NOT EXISTS` with the `success = 0`
+  recipe. Raw-SQL tests refuse, for the MAC, `''`, `'-\n'`, `'- '`, `'--'`, `'zz'`, uppercase, a short MAC
+  and a dashed one, and admit `-` and a canonical MAC; for the address a trailing newline, a trailing space,
+  the unpadded form and `999.999.999.999`; for the domain uppercase, non-hex and undashed; a reversed
+  window; and a duplicate key (1062). `ddl-collation` green.
+- **AC2 — MET.** `repo::insert_observation` now takes `sqlx::Acquire` and delegates to
+  `sighting_repo::insert_with_sightings`: its own transaction on a pool, a SAVEPOINT on a unit's
+  connection. **No call site changed** — the validation's *"11 compile errors"* came from taking a
+  connection; `Acquire` accepts both a pool and a connection. Tested: a duplicate `obs_id` writes no
+  sighting; a unit failing AFTER the upsert (the premise asserted inside the unit) leaves neither row.
+  Rollbacks are explicit.
+- **AC3 — MET.** Cross product in key order, `-` sentinel, zero MAC read as absent, no `IpV4` → no row,
+  `DhcpLease` → no row, a repeated fact → one row (pure tests); both arrival orders widen and never narrow,
+  an address with and without a MAC keeps two rows, and an instant with microseconds round-trips exactly
+  (store tests). The observation's `observed_at` now goes through `datetime_literal`; the second format
+  string is gone.
+- **AC4 — MET.** `sighting_keys` sorts; two OS threads released by a `Barrier`, 40 rounds each, the same 46
+  MACs in opposite orders on one address: **0 deadlocks**, 46 rows, 80 observations. The scan pass ingests
+  through `sighting_repo::ingest_observation`, which replays once on `repo::is_deadlock`; the replay count
+  is tested with the predicate as a parameter.
+- **AC5 — MET.** `backfill_at_boot`, called in `main.rs` after the migrations and BEFORE the scan loop and
+  the listener: marker present → nothing read; otherwise one streaming `fetch` folded into a `BTreeMap`,
+  one flush transaction in key order that writes the marker. Tested on a corpus with two `l2_domain`s, a
+  two-MAC observation, a no-MAC one with two addresses, a lease-only one and out-of-order instants: ingest
+  equals a hand-written oracle, the backfill equals ingest row for row, a second boot returns the stored
+  report unchanged over a newly planted row, a redo over existing rows changes nothing, an undecodable row
+  (`Lldp` fact) is skipped and counted with the backfill completing, and a flush failing on its LAST key
+  leaves no pair and no marker, after which the next boot completes. **Measured at 1 000 000 rows**, release
+  build, 32 cores, 32 GB: **1.81 s, peak resident memory 9 352 → 10 172 kB, 46 pairs** (⚠️ `VmHWM` is the
+  whole process's high-water mark, so the pair is a LOWER bound of the backfill's own footprint; the
+  review's edge layer reproduced 1.38 s and measured **200 000 distinct pairs at 9.4 s and a 78 MB peak**,
+  debug build — memory grows with pairs, as designed, and a single pair count had not shown it) —
+  `OPENCMDB_MEASURE_SIGHTINGS=1000000 DATABASE_URL=… cargo test --release -p opencmdb-bin
+  sighting_repo::tests::measure_the_backfill_the_reader_and_the_ingest_cost -- --exact --nocapture`.
+  ⚠️ The validation's prototype measured 1.18 s for the streaming read alone; this figure includes the key
+  derivation, the fold and the flush. ⚠️ In CI the boot backfill runs over the `Tests` step's leftovers —
+  said, not hidden; nothing in CI reads the summary through a screen yet.
+- **AC6 — MET.** `load_sightings` decodes every row (`Ipv4Addr`, `L2DomainId`, `Option<MacAddr>`, both
+  instants), item-level `#[allow(dead_code, reason = …)]` naming 14.3b. Timed with the same command:
+  **46 pairs in 0.27 ms** — the 1 M-row corpus's count, and ⚠️ *not* a year's: the review's acceptance layer
+  refuted *"the reference network's count after a year too"* (an address's sentinel row beside its MAC row,
+  the host's own address, rotating DHCP clients all add pairs) — and **10 046 pairs in 10.1 ms** as a stress
+  point.
+- **AC7 — MET, with one registered DIVERGENCE** (the criterion says *all 16* sites; the review's acceptance
+  layer is right that this is a divergence, not a pass). The identity pass run twice with a purge between leaves the summary byte-identical.
+  **15 of the 16** `DELETE FROM observation_record` fixture sites clear the summary beside it; the
+  sixteenth, `main.rs`'s NFR5 test deleting one observation `WHERE id = ?` to model *"the old sighting aged
+  out"*, is left alone on purpose: under constraint (3) the summary must not forget that sighting
+  (registered). No screen, route or template changes — **and saying so is the criterion**: the browser
+  gates are not claimed.
+- **AC8 — MET.** Both seeds clear the summary (the demo seed scoped to its one key) and write their rows from
+  one `SET @t = NOW(6)`. Each is executed by a test through `sqlx::raw_sql(include_str!(…))` — **measured:
+  it runs a multi-statement file on one connection and `@t` holds across it** — and compared with the Rust
+  fold over the observations it wrote; the accessibility seed's rows share one instant; the demo seed is run
+  twice and its sighting follows the second run.
+- **AC9 — MET, with the noise stated.** 4 600 observations (100 sweeps × 46), one transaction each, two
+  rounds: round 0 **4.83 ms without / 3.56 ms with** — inverted, the first batch paying the warm-up; round 1
+  **3.10 ms without / 3.36 ms with**, **+0.26 ms (+8 %)** per observation. The validation measured +0.5 ms
+  (+16 %). One round on one box: an order of magnitude, not a benchmark.
+- **AC10 — THE LIVE COUNT.** Baseline **924** (634 bin + 191 core + 99 xtask) at `02d15f2`. After this
+  story and its code review: **950** (660 + 191 + 99) — 23 tests in `sighting_repo.rs`, one in
+  `scan_pass.rs`, two in `main.rs`. ⚠️ **One of them, the opt-in measurement, returns at once** unless
+  `OPENCMDB_MEASURE_SIGHTINGS` is set and asserts nothing in a normal run (the review's acceptance layer).
+  Both store conditions under `RUSTFLAGS="-D warnings"`: a **virgin** store after one warm run
+  (`cargo test --workspace --locked`, 22.8 s) and `env -u DATABASE_URL`. 🔑 **The storeless bin run's 5.0 s
+  now has a measured cause**: `every_store_backed_screen_refuses_within_the_page_budget` waits out
+  `PAGE_STORE_BUDGET` — 5.007 s by `--report-time`, the review's edge layer — on `master` since PR #151/#170,
+  not this story. (This read *"not compared against master, so no cause is written"* until the review.)
+- **AC11 — see the Change Log's verification line.** `repo.rs` does not grow: 4 153 → 4 150 lines in total
+  while its test module gained 8, so its production part shrank by 11 — the INSERT moved to the new module.
+  `sighting_repo.rs` is 503 code lines by the gate's rule. The administrator manual gains *The one-time
+  address sighting backfill*; both twins, the changelog and the register are updated; issue #150 is
+  commented at push.
+
+**The prove-to-red pass** — `cargo xtask mutate`, each on a virgin store, no `--baseline` (the unmutated
+tree was measured green on a virgin store immediately before: 945 + the scan-pass test). The driver
+reports counts, never names; the carrier column is the test written for that defect.
+
+| id | mutation | predicted | measured | carrier |
+|---|---|---|---|---|
+| M1 | remove `keys.sort()` | red | 🔴 2 tests | the Barrier test (deadlocks) and the key-order test |
+| M2 | drop the zero-MAC guard | red | 🔴 1 | `no_mac_is_the_sentinel_and_the_zero_mac_is_no_mac` |
+| M3 | `first_seen_at = VALUE(first_seen_at)` (no `LEAST`) | red | 🔴 2 | the two-order window test and the backfill-equals-ingest test |
+| M4 | an undecodable `facts` read as empty | red | 🔴 1 | the skip-and-count test |
+| M5 | ignore a refused observation insert | red | 🔴 1 | `a_refused_observation_writes_no_sighting` |
+| M6 | a11y seed writes `.098` instead of `.099` | red | 🔴 1 | the accessibility-seed test |
+| M7 | the MAC CHECK back to `mac = LOWER(mac)` | red | 🔴 1 | the MAC-column test |
+| M8 | the scan ingest without the deadlock replay | compile-fail | 🔴 **clippy only, 0 tests** | `dead_code` on `replay_once_if` |
+| M9 | the replay wraps the plain row insert | red | 🔴 1 | `the_seam_writes_the_sightings_of_what_it_ingests` |
+
+🔴 **M8 contradicted its prediction, and that is the finding.** The tree compiles; what reds is clippy's
+`dead_code`, because removing the call leaves `replay_once_if` unused. ⚠️ **And *"the wiring is carried by a
+lint"* OVERSTATED it** (the review's acceptance layer): the lint carries only that the call EXISTS — its
+mutation P1, a predicate that never matches, left the whole suite green. Whether the replay fires on a real
+deadlock is carried by nothing, and no deadlock can reach the ingest path today; registered with an owner.
+
+**Rows added by the code review** — same driver, each on a virgin store, tree `db72491`:
+
+| id | mutation | predicted | measured | carrier |
+|---|---|---|---|---|
+| P1 | (auditor) the replay's predicate never matches | green | ✅ green | nothing — the finding above |
+| MA | `insert_with_sightings`' rollback → commit | red | 🔴 1 | `a_sighting_write_failing_after_the_row_leaves_no_observation` |
+| MB | `open_store` swallows the backfill's error | red | 🔴 1 | `a_backfill_that_cannot_flush_refuses_to_open_the_store` |
+| MM | the marker insert back to a plain `INSERT` | red | 🔴 1 | `two_boots_at_once_both_complete` |
+| M3′ | M3 re-run on the repaired tree | red | 🔴 2 | unchanged: the shared upsert breaks INGEST first, so the backfill test dies on its first assertion and never reaches the new redo assertion — which guards a FLUSH-only assignment |
+
+⚠️ Two edge-layer mutations stay green BY STATEMENT, their docs now saying so: `rollback()` → `drop(tx)` (the
+pool's return ping flushes a queued rollback — the rollback is defensive, story 14.2b's `settle` precedent),
+and the sightings written before the observation row (the transaction, not the order, is the carrier). 🔑 **M9 exists because the first draft of the pass would have been green**:
+nothing tested that the SCAN PASS writes sightings, every sighting test calling the adapter directly; the
+seam test was added before the pass ran.
 
 ### File List
 
+- `crates/opencmdb-bin/migrations/0008_address_sighting.sql` — new
+- `crates/opencmdb-bin/src/sighting_repo.rs` — new
+- `crates/opencmdb-bin/src/repo.rs` — `insert_observation` delegates; two fixture sites
+- `crates/opencmdb-bin/src/scan_pass.rs` — ingest through `ingest_observation`; a fixture site; the seam test
+- `crates/opencmdb-bin/src/main.rs` — `mod sighting_repo`; the boot backfill; six fixture sites
+- `crates/opencmdb-bin/src/page.rs`, `resolver.rs`, `diagnostic.rs`, `fault_injection.rs` — fixture sites
+- `a11y/seed.sql`, `docker/seed-example.sql` — the summary from one `@t`
+- `docs/manuals/admin-manual/admin-manual.tex`, `CHANGELOG.md`, `CLAUDE.md`, `docs/project-context.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`, `sprint-status.yaml`, this file
+
 ### Change Log
+
+- 2026-09-15 — **code-reviewed by three isolated layers and repaired** (see *Review Findings*): Guy's
+  decision — the boot becomes the seam `main::open_store`, driven by two tests; 18 patches applied: the pool
+  path's rollback carried by a lock-timeout test, a second instance no longer refused on the marker, the
+  idempotence test deleting the observation that set a first sighting, `insert_observation_row` private,
+  the demo seed stopping before it deletes on a store without the table, seed tests cleaning up, docs and
+  figures made true. 946 → **950** tests; MA, MB, MM red as predicted, M3 re-run 2. Verified on `db72491`:
+  fmt, `clippy --all-targets`, ten gates, `cargo deny`, manuals, the suite both ways. Status stays `review`
+  until the merge.
+- 2026-09-15 — **implemented** (T1–T7): migration `0008`, `sighting_repo.rs`, the boot backfill, the seeds,
+  fifteen fixture sites; 924 → 946 tests; nine mutations, eight as predicted and M8 carried by clippy
+  alone; 1 M-row measurement 1.81 s / +0.8 MB.
+- 2026-09-15 — **verified on the final tree**, every status read from a log file and never through a pipe:
+  `cargo fmt --check` 0 · `cargo clippy --workspace --all-targets -- -D warnings` 0 · `cargo xtask ci` 0
+  (ten gates green, `views-hash` STALE by design) · `cargo deny check` 0 (advisories, bans, licenses,
+  sources) · `make` in `docs/manuals` 0 · `RUSTFLAGS="-D warnings" cargo test --workspace --locked` on a
+  virgin store after one warm run **656 + 191 + 99 = 946**, 24.0 s, and with `env -u DATABASE_URL`
+  **946**. Status → `review`.
 
 - 2026-09-15 — **T0: Guy took the four decisions**, the recommendation in each: maintenance inside
   `insert_observation`'s transaction with key-ordered upserts and one deadlock replay; the backfill at

@@ -5584,3 +5584,55 @@ One row, and v0.3.0 is what made it live.
   story 14.3's gap-hunt on the seed (`198.51.100.129`, a `reserved` address, proposed). Story 14.2's
   `offerable()` excludes only `infrastructure`. **Owner: story 14.3b** (decision 3: the offer draws from
   `static` ranges only).
+
+## Raised by story 14.3a's implementation (2026-09-15)
+
+- ⚠️ **`DhcpLease.ip` is not a sighting.** `sighting_repo::sighting_keys` keys `IpV4` facts only: no
+  connector produces a lease, and a lease is a server's promise rather than an address seen on the
+  wire. The day a DHCP connector exists, whether a leased-but-silent address protects itself under
+  constraint (3) is a real question. **Owner: the story that adds a lease producer (Epic 11), with
+  story 14.3b told.**
+- ⚠️ **The summary grows by distinct pairs, and a host that randomises its MAC adds one per new MAC.**
+  Bounded by the network for the shipped connector (46 pairs after a year of 46 stable hosts); not
+  bounded for a phone that rotates its address. Releasing an address — deleting its pairs — is the
+  only removal, and it is the operator's. **Owner: story 14.4** (release), which must delete every pair
+  of the address across L2 domains and MACs, sentinel row included.
+- ⚠️ **One fixture site deliberately does NOT clear the summary**: `main.rs`'s NFR5 test that deletes
+  ONE observation `WHERE id = ?` to model *"the old sighting aged out"*. Under constraint (3) the
+  summary must not forget that sighting, so the site is left as it is — fifteen of the sixteen
+  `DELETE FROM observation_record` sites clear the summary beside it, and the sixteenth is this one.
+  **Owner: none — recorded so a later sweep does not "fix" it.**
+- ⚠️ **The boot's ORDER is carried by nothing — its content now is.** Story 14.3a's code review
+  (decision) made the migrations and the backfill a seam, `main::open_store`, which two tests drive: a
+  store it opens has its summary and its marker, and a backfill that cannot flush refuses to open it.
+  What stays uncarried is the one call in `run` and its position BEFORE `spawn_scan_loop` and the
+  listener — `run` is called by no test, the same uncarried-startup shape story 5.14 measured for
+  `spawn_startup_scan`. **Owner: the first story that gives `run`'s boot sequence a testable order.**
+- ✅ ~~**Two instances booting at once on one store race on the marker** and the second refuses to
+  start.~~ **Fixed at story 14.3a's code review**: the marker insert tolerates a marker already there
+  (the flush widens, so the second completion changes nothing), and `two_boots_at_once_both_complete`
+  carries it. The review's edge layer had measured the refusal (`1062`).
+- ⚠️ **Whether the ingest's deadlock replay fires on a real deadlock is carried by NOTHING.** The count of
+  attempts is tested with a stand-in predicate; removing the call reds clippy's `dead_code` alone; a
+  predicate that never matches left the whole suite green (story 14.3a's review, acceptance layer). A
+  deadlock cannot happen on the ingest path today — the scan loop ingests one observation at a time and
+  nothing else writes the summary at runtime — so decision 1's stated answer to *"a deadlock loses the
+  observation"* is unexercised. **Owner: the first story that ingests concurrently (a second connector
+  or a second scan loop), which must manufacture that deadlock in a test.**
+- ⚠️ **`address_sighting` is not in `a11y/empty-plan.sql`'s concerns and not rendered anywhere yet.**
+  The reader carries an item-level `#[allow(dead_code)]` naming story 14.3b, which removes it. **Owner:
+  story 14.3b.**
+- 🔑 **Issue #150 (every render loads every observation) is served for INVENTORY's need and not for
+  TRIAGE's.** The summary holds the first and last instant per address, which is what the inventory's
+  freshness needs; triage needs the whole newest batch of facts, which the summary does not carry.
+  Issue #150 stays open. **Owner: the story that moves the inventory onto the summary.**
+
+## Deferred from: code review of 14-3a-the-sightings-summary (2026-09-15)
+
+- ⚠️ **A slow first boot on a large store answers nothing while it backfills.** The listener binds after the
+  backfill (decision 2), so `/healthz` is silent for its duration: measured by the review's edge layer at
+  **200 000 distinct pairs, 9.4 s and 78 MB peak** (debug build), against 1.8 s at the reference network's 46
+  pairs. An orchestrator health check with a short timeout could kill the process before the flush commits,
+  and the next boot would start over. Not reachable on the shipped deployment — the image and
+  `docker/docker-compose.yml` carry no `HEALTHCHECK` — **Owner: the story that adds a health check or a
+  readiness probe.**
