@@ -90,7 +90,7 @@ by three isolated layers and REPAIRED first): the operator's hands — three wri
 range, address), the overlap rule held under concurrency, the empty plan's link into the gesture;
 the fourth route, release, is 14.4's, and its story file carries the live count. ⚠️ **The five do
 NOT close the epic**: FR21's VLAN half and FR25 (IPv6) are in scope and outside the arbitrations —
-do not read the close off the story count. **Next is 14.3a** (the sighting summary the audit reads — reading every observation row measured 3.0–3.3 s at 1 M rows), then **14.3b** (the audit, and the address the product
+do not read the close off the story count. **14.3a is in review** (the sighting summary the audit reads — reading every observation row had measured 3.0–3.3 s at 1 M rows: migration `0008`'s `address_sighting`, written in each observation's own transaction and backfilled once at boot before serving; no screen, and its story file carries the live count), then **14.3b** (the audit, and the address the product
 must not offer — contexted, validated, all fourteen decisions taken), then 14.4. Then `prd.md:766`.
 
 ⚠️ **And use it on the NAS before writing more of it** — that is what found everything above,

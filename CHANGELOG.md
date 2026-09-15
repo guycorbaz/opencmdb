@@ -46,6 +46,20 @@ IPv4 — `02:42:c0:a8:01:0a` for `192.168.1.10`. For those, *the hardware addres
 rewritten*: it corroborates nothing. D13 already calls such an address disqualifying as a grouping
 anchor; no rule reads that yet, and this release does not add one.
 
+### The product remembers every address it has seen (story 14.3a)
+
+A new table, `address_sighting`, keeps one row per address, L2 domain and hardware address ever
+seen, with the first and the last time it was seen. It is written in the same transaction as each
+observation, and it is what the coming audit of the addressing plan reads — instead of every
+observation ever recorded, which measured 3.0–3.3 s at a million rows. **Nothing on screen changes
+yet.**
+
+⚠️ **When you upgrade, the first start takes a moment before it answers.** It reads every stored
+observation once, before the web port opens, and records that it has done so: 1.8 s and about 1 MB
+for a million observations on a 32-core workstation (about 75 days of sweeping 46 hosts), slower on a
+NAS. An observation it cannot decode is skipped and named in the log. If you load
+`docker/seed-example.sql`, use this version's copy: it writes the sighting its observation implies.
+
 ### Security
 
 `rustls` goes from 0.23.42 to **0.23.45** (and `rustls-webpki` from 0.103.13 to 0.103.15) for

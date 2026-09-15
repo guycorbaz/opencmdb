@@ -456,6 +456,30 @@ Upgrades are performed by replacing the binary or the container image; embedded 
 bring the schema forward on startup. Cargo.lock is committed and builds are reproducible, so
 a given release always resolves the same dependencies.
 
+\section{The one-time address sighting backfill}
+Migration \texttt{0008} adds the address sighting summary: one row per address, L2 domain and
+hardware address the product has ever seen, with the first and the last time it was seen. From
+then on every scan keeps it up to date. The \emph{first} start of a version carrying it also reads
+every observation already stored, once, and records in the database that it has done so; later
+starts skip that step.
+
+\begin{warning}
+That first start does not answer on the web port until the backfill is finished. Measured on a
+32-core workstation against MariaDB~10.11 with 1\,000\,000 stored observations --- about 75 days of
+sweeping 46 hosts every five minutes --- it took 1.8\,s and about 1\,MB of additional memory. The
+time grows with the number of stored observations, the memory with the number of distinct
+addresses; a NAS is slower. When it completes, the log says how many observations it read and
+skipped and how many sightings it wrote.
+\end{warning}
+
+\begin{note}
+An observation the backfill cannot decode --- written by a newer version, or by hand --- is skipped,
+named in the log (\texttt{the sighting backfill skipped an observation it cannot decode}), and
+counted; the backfill still completes. If you load \texttt{docker/seed-example.sql}, use the copy
+shipped with this version: it writes the sighting of the observation it inserts, because the
+backfill has already run by the time a seed is loaded.
+\end{note}
+
 \appendix
 \chapter{Troubleshooting}
 The source-health view is the first place to look once opencmdb is running: a scope that has
