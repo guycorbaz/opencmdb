@@ -55,11 +55,16 @@ by the store (PR #151), the hardware address (PR #163) — **and point 4 is not*
 file · ranges carry a policy · IPAM untouched by the documenting gesture · a sighting holds an
 address until released · two distinct treatments · the form warns and still writes). ✅ **The split is no
 longer owed**: Epic 14 was DECOMPOSED into four stories on 2026-09-10 (PR #167) and **14.1 is
-`done`** (PR #168) — the schema, with no producer and nothing operator-visible. It still needs at
-least FOUR write routes where the product has one, and that is why the four stories are shaped as
-they are. ⚠️ **The four do NOT close the epic**: FR21's VLAN half and FR25 (IPv6) are in scope and
-outside the arbitrations — do not read the close off the story count. **Next is 14.2**, which opens
-the write routes and owns the concurrency defect 14.1 registered. Then `prd.md:766`.
+`done`** (PR #168) — the schema, with no producer and nothing operator-visible. The epic needed at
+least FOUR write routes where the product had one, and that is why its stories are shaped as they
+are. ✅ **14.2 is `done`** (PR #170) — `/ipam` draws the operator's plan from the store — and it was
+SPLIT at implementation, so **Epic 14 has FIVE stories** (`epics.md` not edited). **14.2b is at
+`review`** (PR #173): the operator's hands — three write routes (subnet, range, address), the
+overlap rule held under concurrency, the empty plan's link into the gesture; measured 2026-09-15
+(its story file carries the live count), and the fourth route, release, is 14.4's. ⚠️ **The five do
+NOT close the epic**: FR21's VLAN half and FR25 (IPv6) are in scope and outside the arbitrations —
+do not read the close off the story count. **Next is 14.2b's three-layer code review**, then 14.3
+(the audit, and the address the product must not offer) and 14.4. Then `prd.md:766`.
 
 ⚠️ **And use it on the NAS before writing more of it** — that is what found everything above,
 including the « Merger » label, wrong since July and raised by no gate.
@@ -141,7 +146,9 @@ including the « Merger » label, wrong since July and raised by no gate.
   and not a pass; `AXE_REQUIRE_GESTURE=1` likewise, because the product's one live control on no page
   it walks is not a pass either; **`AXE_REQUIRE_PLAN=1` since story 14.2**, because `/ipam`'s whole
   content — the cells, their per-cell names, the selector, the legend — exists only when the store
-  holds a subnet, so an unseeded run measures one sentence and passes) and `node a11y/kbd-probe.mjs` (**thirty** checks over the keyboard
+  holds a subnet, so an unseeded run measures one sentence and passes; since story 14.2b an `AXE_EMPTY_PLAN=1` pass runs FIRST, over a plan emptied by
+  `a11y/empty-plan.sql` — the one `/ipam` state the seeded pass refuses to measure) and
+  `node a11y/kbd-probe.mjs` (**thirty-seven** checks — `/ipam`'s three forms since story 14.2b — over the keyboard
   layer, the focus contract, and — since story 6.4 — the documenting gesture PRESSED for real). Both answer **0 clean / 1 the product / 2 the gate could not run**, ⚠️ *once `node` is
   running them* — the shell before them keeps its own codes. Neither can be Rust: they measure the
   RENDERED, COMPUTED page, and `cargo xtask ci` has no browser.

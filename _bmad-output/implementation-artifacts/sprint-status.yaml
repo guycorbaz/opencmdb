@@ -5530,7 +5530,66 @@ development_status:
   #   leave the two documents disagreeing silently.
   #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
   #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
-  14-2b-the-plan-in-the-operators-hands: backlog
+  14-2b-the-plan-in-the-operators-hands: review
+  #   ✅ T2–T8 DONE 2026-09-12..15 — the operator can change the plan: three write routes, the refusal
+  #   set carried twice, the overlap rule under concurrency (two locks, neither observable alone), the
+  #   auth perimeter as a property, the empty plan's link into the gesture. T8 MEASURED on `7ec25c9`:
+  #   905 tests (615 + 191 + 99) with a virgin store, without one and under `-D warnings`; ten gates;
+  #   axe 0 violation nodes (empty plan + 10 routes + 4 states); kbd-probe 36 checks, 0 failed.
+  #   🔴 `cargo deny` RED on RUSTSEC-2026-0285 (`rustls 0.23.42`), published after the last green CI
+  #   over a lockfile identical to `master`'s -- fixed on `master` by PR #175 (#174), merged in, NOT
+  #   carried by this story (Guy, 2026-09-15).
+  #   ✅ CODE-REVIEWED AND REPAIRED 2026-09-15 — three isolated layers; 4 decisions by Guy (the 503
+  #   stops promising and the writes are transactions; a deadlock victim is replayed once; nested
+  #   subnets and edge addresses accepted and registered with 14.3), 21 patches, 3 deferred. 905 → 908
+  #   tests. The repair found one more on its own: a refused transaction kept its locks until its
+  #   connection was reused, which the blind layer had suspected from the diff and could not confirm.
+  #   13 mutations + 2 browser proofs, carriers named per row. STAYS `review` until the merge.
+  #   ✅ T0 TAKEN 2026-09-12 — §2's five decisions, four of them Guy's, each recorded in the story
+  #   WITH the option refused and the cost accepted: the form is IN LINE IN THE RAIL, collapsed
+  #   (refused: a dedicated address, an eleventh outside `Screen::ALL` on story 6b.6's measured
+  #   cost); the SERVER mints `Uuid::now_v7()` and the nil is refused AT THE ROUTE, `document.rs`'s
+  #   two halves both being live here; a LABEL IS REQUIRED, refused at the route beside the over-120
+  #   refusal (⚠️ under a non-strict `sql_mode` 121 characters TRUNCATE in silence); and an address
+  #   inside an existing range is ACCEPTED SILENTLY here, the warning belonging to 14.3.
+  #   🔑 The last one was asked because the axes differ: `epics.md:2433` settles PLAN-against-
+  #   NETWORK (*warn, name what is known, and still write*) and covers no plan-against-plan case.
+  #   ⚠️ THREE OF THE FOUR SHIP A COST RATHER THAN A CLOSURE, and each says so at its site: the
+  #   empty plan's link is an ANCHOR onto a `<details>`, not an href to a page, so criterion 5 is
+  #   met in substance and not in the shape its wording suggests; the adapter still accepts the nil;
+  #   and `""` still inserts through raw SQL. Two tripwires and one divergence, written as such.
+  #   ✅ T1 DONE in `860d0e4` and THE RECORD CAUGHT UP 2026-09-12 — it had shipped with its task
+  #   unticked and the Dev Agent Record empty. *A commit message is not a story record.* 879 tests.
+  #   CONTEXTED 2026-09-12, then VALIDATED by both layers, and the validation OVERTURNED THE
+  #   CONCURRENCY ARBITRATION FOR THE THIRD TIME -- this time on a measurement of the shape itself.
+  #   🔴 `ip_range ... FOR UPDATE` alone does NOT refuse: it DEADLOCKS, 20 observations out of 20.
+  #   `WHERE subnet_id = ?` is a non-unique index scan, so both transactions take compatible gap
+  #   locks and each then needs an insert-intention lock. Correctness survives (one row every time)
+  #   and the loser is told *deadlock, retry* where the product knows the honest answer.
+  #   ✅ Guy, 2026-09-12: the PARENT ROW first, THEN the deciding read -- deterministic refusal 5/5
+  #   in both sibling states. ⚠️ That is the option refused on 2026-09-11 as belt-and-braces, and
+  #   the measurement overturned the refusal: the two locks are not redundant, the parent serialises
+  #   entry and the range lock is what the DRY line cannot walk past.
+  #   ✅ Guy also took: a per-handler BUDGET on the write routes (this story adds the product's
+  #   first blocking write; a 3 s hold gave a 6.005 s round trip, bounded only by
+  #   `innodb_lock_wait_timeout` = 50 s, and `document.rs` carries zero `store_within`) -- and the
+  #   budget wraps the TRANSACTION, story 14.2's denial of service having been a budget around the
+  #   wrong half. And AC3's guard becomes `PATHS` per sub-router with a POSITIVE control, because
+  #   axum 0.8's `Router` cannot be enumerated and the guard as written passed over a route that
+  #   DOES NOT EXIST (`/totally/made/up` answers 401 like any other).
+  #   🔴 THE FACT-CHECK LAYER FOUND A CLASS: four of §1's six `file:line` citations were
+  #   `38da035`-era, copied from story 14.2 with the measurements they recorded -- and 14.2 is what
+  #   moved three of the four. 🔑 *Copying a measurement with its coordinates copies a photograph
+  #   with its date erased.* One premise fell with them (`insert_subnet` DOES have a caller, in a
+  #   test module 14.2 added) and AC7 was satisfiable by DOING NOTHING (14.2 had already removed the
+  #   blanket attribute, leaving six item-level ones).
+  #   ⚠️ Carried into the story rather than left for the dev agent: a SIXTH reachable refusal (a
+  #   label over 120 characters -- and under a non-strict `sql_mode` it would silently TRUNCATE);
+  #   `the_plan_reads_no_observation` is blind to the module this story creates (both forms planted,
+  #   test and ten gates green); `kbd-probe.mjs` has NO `/ipam` coverage at all; the axe gate never
+  #   sees AC8's empty-plan screen because `AXE_REQUIRE_PLAN=1` refuses a run that draws no cell;
+  #   and `document.rs`'s machinery is PRIVATE, so a dev agent would most likely copy `same_origin`
+  #   -- the one function a CSRF check must never be duplicated for.
   #   🔴 INSERTED 2026-09-11 at story 14.2's IMPLEMENTATION -- Epic 14 goes from FOUR stories to
   #   FIVE (`epics.md` NOT edited; a story may not re-scope an epic, and the divergence is
   #   registered). The mandatory validation had grown 14.2 from two write routes to three and added

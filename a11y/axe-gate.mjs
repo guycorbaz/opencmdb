@@ -119,6 +119,14 @@ const REQUIRE_GESTURE = process.env.AXE_REQUIRE_GESTURE === "1";
 // 🔑 The grid is DERIVED, never named: the gate asks the page whether it carries cells, so it
 // cannot drift from what the product serves.
 const REQUIRE_PLAN = process.env.AXE_REQUIRE_PLAN === "1";
+// 🔴 **THE ONE `/ipam` STATE THE GATE WAS CONFIGURED NEVER TO REACH.** `a11y/seed.sql` always
+// seeds a subnet and `AXE_REQUIRE_PLAN=1` REFUSES a run that draws no cell — so the EMPTY plan,
+// which is where story 14.2b's AC8 puts the link into the gesture, was the one branch of this
+// screen no browser ever opened. This mode walks that branch and nothing else: it is run BEFORE
+// the seed, over a plan emptied by `a11y/empty-plan.sql`, and it refuses (2) if the plan is not
+// empty — because a mode that silently measured a populated screen would report a pass over the
+// state it exists for.
+const EMPTY_PLAN = process.env.AXE_EMPTY_PLAN === "1";
 // The grid's cells. A class the stylesheet guard pins, not a label and not a Rust identifier.
 const PLAN_CELL = "ul.ipam-grid li.ipam-cell";
 const PLAN_ROUTE = "/ipam";
@@ -183,6 +191,64 @@ async function main() {
       cannotRun(`${route} answered ${status}, so nothing there can be measured`);
     }
     return page;
+  }
+
+  // ── The empty-plan branch, walked alone and only when asked ───────────────
+  if (EMPTY_PLAN) {
+    const page = await openPage();
+    await goOrGiveUp(page, PLAN_ROUTE);
+    // 🔴 NO CELL AND NO SUBNET, and cells alone were not enough (story 14.2b's review): a subnet
+    // too large to draw, or an unknown `?subnet=`, also draws zero cells over a plan that is full.
+    const cells = await page.$$eval(PLAN_CELL, (nodes) => nodes.length);
+    const subnets = await page.$$eval("nav.filters a.filter", (nodes) => nodes.length);
+    if (cells !== 0 || subnets !== 0) {
+      cannotRun(
+        `${PLAN_ROUTE} draws ${cells} cell(s) and offers ${subnets} subnet(s), so the plan is NOT ` +
+          `empty and this mode measured the wrong state. Run it before the seed, over a store ` +
+          `emptied by a11y/empty-plan.sql.`,
+      );
+    }
+    // The deliverable of AC8: the empty plan LINKS to the gesture, and the link's target is
+    // OPEN — an anchor onto a collapsed disclosure is a door that opens onto a door.
+    const door = await page.evaluate(() => {
+      const link = document.querySelector('a[href="#ipam-form-subnet"]');
+      const target = document.getElementById("ipam-form-subnet");
+      return {
+        link: link === null ? null : (link.textContent ?? "").trim(),
+        open: target === null ? null : target.open,
+      };
+    });
+    // 🔴 A PRODUCT DEFECT, NOT "COULD NOT RUN": the page answered and the plan is empty, so a
+    // missing link is the product failing AC8 — exit 1. It exited 2 until story 14.2b's review.
+    const linkMissing = door.link === null || door.link === "";
+    if (linkMissing) {
+      console.log(`🔴 ${PLAN_ROUTE} (empty plan)  shows no link into the subnet form, so AC8 is not on the page`);
+    }
+    await page.addScriptTag({ content: axeSource });
+    const results = await page.evaluate(
+      async (tags) => await window.axe.run(document, { runOnly: { type: "tag", values: tags } }),
+      TAGS,
+    );
+    const violations = results.violations;
+    const emptyNodes = violations.reduce((sum, v) => sum + v.nodes.length, 0);
+    for (const violation of violations) {
+      console.log(`🔴 ${PLAN_ROUTE} (empty plan)  ${violation.id}(${violation.nodes.length}, ${violation.impact})`);
+    }
+    if (door.open !== true) {
+      console.log(
+        `🔴 ${PLAN_ROUTE} (empty plan)  the link's target is collapsed: an in-page anchor onto a ` +
+          `closed <details> is a door that opens onto a door`,
+      );
+    }
+    await page.close();
+    const clean = violations.length === 0 && door.open === true && !linkMissing;
+    console.log(
+      `\naxe gate (empty plan): 1 route, ${emptyNodes} violation node(s), ` +
+        // 🔴 The link's state is said only when there IS a link: under a mutation removing it this
+        // line read "link opens onto an open form" beside the 🔴 saying the link was missing.
+        `link ${linkMissing ? "MISSING" : door.open === true ? "opens onto an open form" : "opens onto a closed form"}`,
+    );
+    return clean ? 0 : 1;
   }
 
   // ── Derive the routes from the rendered navigation ────────────────────────

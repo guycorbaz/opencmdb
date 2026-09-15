@@ -5430,6 +5430,10 @@ One row, and v0.3.0 is what made it live.
   — the gesture arrives in 14.2b, and a link to nothing is that criterion's own defect pointed the
   other way — but it diverges from a document a story may not edit. **Owner: story 14.2b**, which
   makes the control live and must make it a link in the same act.
+  ✅ **CLOSED 2026-09-15 by story 14.2b** (AC8): the empty plan's sentence is a link, onto the subnet
+  form rendered OPEN on that branch, and the axe gate's empty-plan pass measures both. ⚠️ **A
+  narrower divergence survives**: an in-page anchor onto a `<details>`, not an href to a page of its
+  own (§2's decision 2, Guy 2026-09-12). **Owner of that residual: Epic 14's retrospective.**
 
 - 🔴 **Two policy treatments are PIXEL-IDENTICAL on the addressing grid.** `border-style: double` at
   `border-width: 1px` collapses to a solid line, so a declared `static` range and a declared
@@ -5468,6 +5472,11 @@ One row, and v0.3.0 is what made it live.
   Guy re-arbitrated on that measurement: **lock the read that DECIDES** (`ip_range … FOR UPDATE`),
   and ship the 400 ms pause harness as a PERMANENT test, the ordering being load-bearing and
   invisible.
+  ✅ **CLOSED 2026-09-12 by story 14.2b** (AC5): a transaction, the parent row THEN the deciding
+  read, and the harness permanent. ⚠️ **Its code review of 2026-09-15 added two things the matrix
+  had not measured**: two ranges in two DIFFERENT subnets DEADLOCKED, 2 runs of 3 (one gap of the
+  non-unique index), now replayed once (Guy); and the source guard naming each lock was defeated by
+  a comment and by a second spelling of the DRY line, and now reads code and keys on the call.
 
 - ⚠️ **`crates/opencmdb-bin/src/ipam_repo.rs`'s `#![allow(dead_code)]` is module-wide, and nothing
   makes anyone pay it off.** It is justified while story 14.1 ships no producer, and its own doc
@@ -5485,3 +5494,52 @@ One row, and v0.3.0 is what made it live.
   giving the READ path a producer and not the write path, so **six warnings** remain — each naming
   its owner. **Owner: story 14.2b**, which removes the last of them when its routes call those
   functions. Neither story may leave it module-wide while claiming to have paid it off.
+  ✅ **CLOSED 2026-09-12 by story 14.2b** (AC7): no `allow(dead_code)` remains in `ipam_repo.rs` —
+  each item gained a producer — and removing the last ones left zero warnings under
+  `clippy --workspace --all-targets`.
+
+## Deferred from: code review of 14-2b-the-plan-in-the-operators-hands (2026-09-15)
+
+- ⚠️ **`document.rs`'s 403 is an English literal under a French UI** (`write_guard::CSRF_REFUSED_BODY`,
+  `"cross-origin request refused"`). Found by story 14.2b's review on the IPAM routes, where AC1 asks
+  for a key per status and the literal is patched; the documenting route inherited it from story
+  6.1, before refusal bodies were keyed, and is not 14.2b's to change. Reachable behind a proxy that
+  rewrites `Host` (`write_guard.rs`'s own doc). **Owner: unassigned** — the next story touching
+  `document.rs`.
+
+- ⚠️ **Nested and overlapping subnets are accepted, so one address can carry two contradictory
+  policies.** Measured by the review's Edge Case Hunter on `da28d3e`: `0.0.0.0/0`, `192.0.0.0/16`,
+  `192.0.2.0/24`, `192.0.2.0/25` and `192.0.2.7/32` all answer 201; `192.0.2.9` is defined in both the
+  /24 and the /25; a `static` range .0–.255 in the /24 and a `dhcp-pool` range .0–.127 in the /25 are
+  both accepted. Only `UNIQUE (base, prefix_len)` exists. ✅ Guy, 2026-09-15: **accepted, not refused
+  at the route** — outside Epic 14's six arbitrations, and a real plan legitimately holds a supernet
+  and its subnets. **Owner: story 14.3**, whose audit is the first code to meet an address under two
+  policies and must say which one decides.
+
+- ⚠️ **Network and broadcast addresses, and ranges covering them, can be defined.** Measured on
+  `da28d3e`: `192.0.2.0` and `192.0.2.255` as addresses → 201 each; a `static` range .0–.255 → 201 —
+  while `/ipam` draws the edges as `infrastructure` and never offers them. ✅ Guy, 2026-09-15:
+  **accepted** — documenting an edge is legitimate, the glossary files `.0`/`.255` under
+  `infrastructure`, which is a declarable policy. **Owner: story 14.3**, which owns keeping them out
+  of the next-free-address offer whatever the plan declares over them.
+
+- ⚠️ **An address defined inside an existing range is ACCEPTED SILENTLY** — story 14.2b's §2,
+  decision 5 (Guy, 2026-09-12). `epics.md:2433` settles plan-against-NETWORK (*warn, name what is
+  known, and still write*) and says nothing about plan-against-PLAN, so an address written inside a
+  `dhcp-pool` range gets no warning. The story said *"registered with 14.3 by name"*; its code review
+  found no row. **Owner: story 14.3**, where that warning belongs.
+
+- ⚠️ **D56b's *one trailing test module per file* does not hold across the crate**:
+  `crates/opencmdb-bin/src/example_screens.rs` carries FOUR line-start `#[cfg(test)]`. Measured by
+  story 14.2b's T6b, when `the_plan_reads_no_observation` first asserted the convention crate-wide
+  and was refuted; that guard now asserts it for the plan's perimeter alone. The story said
+  *"registered"*; its code review found no row. **Owner: unassigned** — the next story touching
+  `example_screens.rs`.
+
+- ⚠️ **`cargo xtask mutate` reports HOW MANY tests reddened and never WHICH.** Its log carries the
+  applied diff, each carrier's `test result:` line and `MEASURED: Red { tests: 1, … }` — no test
+  name, no panic message. So a conforming `red:1` confirms a count and not a carrier, which is the
+  shape of this project's four-time class *a mutation named for one thing and applied to another*.
+  Measured on story 14.2b's review pass, where 13 of 13 conformed and the carriers had to be named
+  by a second, hand-driven run. **Owner: unassigned** — the next story touching
+  `xtask/src/mutate.rs`.

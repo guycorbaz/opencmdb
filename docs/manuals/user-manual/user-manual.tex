@@ -157,10 +157,27 @@ conflicts (the same IP on two MACs, or a statically declared IP inside a DHCP ra
 identifying the devices involved. IPv6 addresses can be documented (observation-only at
 this stage).
 
+\section{Defining the addressing plan}
+The \emph{IPAM} screen draws the plan you define, one subnet at a time. On a fresh install the
+plan is empty; the screen says so and links to the form that fills it. From the
+\emph{Change the plan} panel you can:
+\begin{itemize}
+  \item define a \textbf{subnet}, in CIDR notation (for example \texttt{192.0.2.0/24}), with a
+        label;
+  \item inside the selected subnet, define a \textbf{range}: a first and a last address, a label,
+        and what the range is meant for --- \texttt{static}, \texttt{dhcp-pool},
+        \texttt{reserved} or \texttt{infrastructure};
+  \item inside the selected subnet, define an individual \textbf{address}, with a label.
+\end{itemize}
+A refused write says which rule it broke: a range that overlaps another or leaves its subnet, a
+subnet written with host bits set, a label that is empty or longer than 120 characters, a record
+the plan already holds. The forms need JavaScript. If a write takes too long, the screen says it
+may or may not have been saved: reload the plan before trying again.
+
 \begin{planned}
-The occupancy map ships as an \emph{example} screen: the subnets, the addresses and the
-conflict it draws are fabricated documentation data, labelled as such on the page. Epic~14
-reads a real subnet.
+Editing, deleting and releasing an entry of the plan; the audit that compares the plan with the
+network, and a next-free-address offer that leaves out addresses seen in use; VLANs; conflict
+detection; and IPv6 are not implemented yet.
 \end{planned}
 
 \chapter{Applications and hosted software}

@@ -38,7 +38,7 @@ const SETTLE_WAIT_MS = 900;
 // caught that twice, once in a privacy floor and once in a word count. If a check is added
 // this number moves deliberately; if one is skipped, the gate says so instead of printing
 // a green.
-const MIN_CHECKS = 30;
+const MIN_CHECKS = 37;
 const MIN_ROWS = 2;
 /// How long a navigation or a response may take before the gate calls it *could not run*.
 const NAV_TIMEOUT_MS = 20_000;
@@ -629,6 +629,179 @@ async function main() {
     );
     await stalePage.close();
     await gesturePage.close();
+  }
+
+  // ── `/ipam`'s three forms: the keyboard reaches them, and the focus contract holds ──────────
+  //
+  // 🔴 **THIS FILE HAD NO `/ipam` COVERAGE AT ALL until story 14.2b** — all sixteen of its `open(`
+  // sites named `/triage` — while story 6b.11's focus contract and story 6.4's focus-after-swap
+  // contract both apply to any live gesture, and 14.2b puts three of them on this screen.
+  //
+  // 🔑 **It PRESSES, it does not read.** A `<details>` collapsed by default hides its fields from
+  // the tab order entirely, so the only honest question is whether an operator using a keyboard
+  // can get from the page to a written row — open the disclosure, reach the fields, submit — and
+  // whether focus then lands where the answer is. No render assertion can see any of that.
+  {
+    const page = await open("/ipam");
+
+    const summaries = await page.$$eval("details.ipam-form > summary", (nodes) => nodes.length);
+    check(
+      summaries === 3,
+      "`/ipam` offers the three write gestures as disclosures",
+      `summary count=${summaries}`,
+    );
+
+    // 🔴 **COUNTING NODES IS NOT REACHING THEM, and story 14.2b's review said so**: the check above
+    // claimed "keyboard-reachable" over a count, and every step below focuses by script. This one
+    // PRESSES Tab from the top of the page, as an operator would, until the subnet form's
+    // disclosure has focus — bounded, so a control Tab never reaches fails rather than loops.
+    await page.evaluate(() => document.body.focus());
+    let reached = false;
+    for (let press = 0; press < 400 && !reached; press += 1) {
+      await page.keyboard.press("Tab");
+      reached = await page.evaluate(
+        () => document.activeElement === document.querySelector("#ipam-form-subnet > summary"),
+      );
+    }
+    check(reached, "Tab alone reaches the subnet form from the top of `/ipam`", `reached=${reached}`);
+
+    // A `<summary>` is focusable by construction; what is worth measuring is that Enter OPENS it,
+    // because a disclosure that only a pointer can expand hides the gesture from a keyboard.
+    await page.evaluate(() =>
+      document.querySelector("#ipam-form-subnet > summary").focus(),
+    );
+    await page.keyboard.press("Enter");
+    await wait(120);
+    const opened = await page.$eval("#ipam-form-subnet", (el) => el.open);
+    check(opened === true, "Enter on the summary OPENS the form", `open=${opened}`);
+    // ⚠️ Opened by script if Enter did not, so that failure is COUNTED (exit 1) rather than turning
+    // every check below into a timeout reported as "could not run" (exit 2) — the review's finding.
+    if (opened !== true) {
+      await page.$eval("#ipam-form-subnet", (el) => {
+        el.open = true;
+      });
+    }
+
+    // ⚠️ A CIDR of this probe's own, so it collides with neither the seed's two `/25`s nor the
+    // Rust tests' `/24`s — `198.18.0.0/24`, RFC 2544's benchmarking block. 🔴 It read
+    // `203.0.113.0/24` under this same sentence, which `repo.rs`'s contention test inserts; the
+    // review caught the comment asserting the opposite of the code. The FIRST submit writes and
+    // the SECOND is refused, measured separately because they take structurally different paths.
+    await page.type("#ipam-cidr", "198.18.0.0/24");
+    await page.type("#ipam-subnet-label", "kbd probe");
+    await page.evaluate(() =>
+      document.querySelector("#ipam-form-subnet button[type=submit]").focus(),
+    );
+    const posted = page.waitForResponse(
+      (response) => response.request().method() === "POST",
+      { timeout: NAV_TIMEOUT_MS },
+    );
+    await page.keyboard.press("Enter");
+    let status = null;
+    try {
+      status = (await posted).status();
+    } catch (error) {
+      cannotRun(`the plan form's press never answered — ${error.message}`);
+    }
+    // 🔑 **A 409 HERE NAMES ITS OWN CAUSE rather than becoming a count.** Left tolerant, a re-run
+    // over a store nobody re-seeded skipped the success half and died on the floor with
+    // *"34 checks ran where 36 are declared"* — true, and it tells the reader nothing. The
+    // documenting probe carries the same instruction one block up: re-seed before this step.
+    if (status === 409) {
+      cannotRun(
+        `the plan already holds this probe's subnet, so the write half could not be exercised. ` +
+          `Re-seed (a11y/seed.sql clears the plan) before running the keyboard gate.`,
+      );
+    }
+    if (status !== 201) {
+      cannotRun(
+        `the plan form answered ${status} where 201 was due — the request never reached the ` +
+          `route, so nothing below was exercised.`,
+      );
+    }
+    await wait(SETTLE_WAIT_MS);
+
+    // 🔴 **ON SUCCESS THERE IS NO SWAP, AND THE FIRST VERSION OF THIS PROBE ASSERTED THERE WAS.**
+    // The route answers 201 with `HX-Redirect`, so htmx NAVIGATES instead of swapping: the answer
+    // region stays empty, `after-swap` never fires, and focus is wherever a fresh page load puts
+    // it. Measured — `status=201 answer="" activeElement=""` — and the two checks written against
+    // the documenting gesture's REFUSAL path were simply wrong here. 🔑 *A contract copied from a
+    // neighbouring screen is a contract nobody has measured on this one.*
+    //
+    // 🔑 What the operator gets instead is stronger than a sentence: the subnet they just defined
+    // is DRAWN. On `/triage` a row disappearing needs a sentence to say why; here the plan visibly
+    // becomes the thing they asked for, which is why no confirmation rides in the URL.
+    {
+      const landed = await page.evaluate(() => ({
+        url: location.pathname + location.search,
+        tabs: [...document.querySelectorAll("nav.filters a.filter")].map((a) =>
+          (a.textContent ?? "").trim(),
+        ),
+      }));
+      check(
+        landed.url.startsWith("/ipam?subnet="),
+        "a written plan sends the browser back to the plan, selected on what it just defined",
+        `url=${landed.url}`,
+      );
+      check(
+        landed.tabs.some((label) => label.includes("198.18.0.0/24")),
+        "and the subnet is DRAWN — the screen is the confirmation, which is why none rides in " +
+          "the URL as it does on /triage",
+        `selector=${JSON.stringify(landed.tabs)}`,
+      );
+    }
+
+    // The REFUSAL path, which is where the swap and the focus contract actually live. A second
+    // press of the same CIDR meets the unique index, and `hx-on::before-swap` forces the swap on a
+    // 4xx precisely so a refusal is not silent.
+    {
+      const again = await open("/ipam");
+      await again.evaluate(() =>
+        document.querySelector("#ipam-form-subnet > summary").focus(),
+      );
+      await again.keyboard.press("Enter");
+      await wait(120);
+      await again.type("#ipam-cidr", "198.18.0.0/24");
+      await again.type("#ipam-subnet-label", "kbd probe");
+      await again.evaluate(() =>
+        document.querySelector("#ipam-form-subnet button[type=submit]").focus(),
+      );
+      const refusal = again.waitForResponse(
+        (response) => response.request().method() === "POST",
+        { timeout: NAV_TIMEOUT_MS },
+      );
+      await again.keyboard.press("Enter");
+      let refused = null;
+      try {
+        refused = (await refusal).status();
+      } catch (error) {
+        cannotRun(`the plan form's second press never answered — ${error.message}`);
+      }
+      if (refused !== 409) {
+        cannotRun(
+          `the second press answered ${refused} where 409 was due — the plan did not hold the ` +
+            `subnet the first press wrote, so the refusal path was not exercised at all.`,
+        );
+      }
+      await wait(SETTLE_WAIT_MS);
+      const after = await again.evaluate(() => ({
+        text: (document.getElementById("ipam-form-result")?.textContent ?? "").trim(),
+        focusedId: document.activeElement?.id ?? "",
+      }));
+      check(
+        after.text !== "",
+        "a REFUSED plan write says so on the page rather than failing in silence",
+        `status=${refused} answer=${JSON.stringify(after.text.slice(0, 60))}`,
+      );
+      check(
+        after.focusedId === "ipam-form-result",
+        "and FOCUS FOLLOWS THE SWAP on this screen too — story 6.4's contract, which sat on the " +
+          "wrong element for a whole story and no Rust assertion could see it",
+        `activeElement id=${JSON.stringify(after.focusedId)}`,
+      );
+      await again.close();
+    }
+    await page.close();
   }
 
   // 🔑 The floor: a run that measured less than the full set reports "could not run", not a

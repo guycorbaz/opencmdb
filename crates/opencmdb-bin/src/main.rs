@@ -25,6 +25,7 @@ mod identity_view;
 mod inventory_view;
 mod ipam_page;
 mod ipam_repo;
+mod ipam_write;
 mod l1_runner;
 mod metrics;
 mod neighbour;
@@ -44,6 +45,7 @@ mod screens;
 mod sources_view;
 mod state_vocabulary;
 mod trap_gate;
+mod write_guard;
 
 // The i18n seam (D39/D66): user-facing strings resolve through `t!()` against `locales/`. EN is
 // the fallback; the source YAML is greppable so the D65 vocabulary gate can later lint it.
@@ -705,7 +707,17 @@ fn app(pool: MySqlPool, config: AppConfig, diagnostic: diagnostic::DiagnosticFac
         // `page.rs` stands at 1954 code lines of the 2000 the `file-size` gate allows — 46 of
         // headroom — and `CLAUDE.md`'s rule is *split, not grown*, which is only a rule if it is
         // applied BEFORE the growth.
-        .merge(ipam_page::router(pool.clone(), config.scan_cidr.clone()));
+        .merge(ipam_page::router(pool.clone(), config.scan_cidr.clone()))
+        // 🔑 THE PLAN'S WRITE ROUTES, and they carry NO SWITCH (story 14.2b).
+        // `OPENCMDB_DOCUMENT_ENABLED` guards an AUTHORSHIP hazard — a route that turns an OBSERVED
+        // value into a declared one — which the addressing plan does not have: it is a second
+        // declared register that no observation feeds (Guy's arbitration (4) of 2026-09-10).
+        // ⚠️ So a fresh install gains a live write surface with no opt-in, which the release notes
+        // owe a sentence.
+        // ⚠️ Merged as its OWN sub-router and never onto `ipam_page::router`, which BEARS THE POOL:
+        // fusing them would silently retire the compile-time refusal of `State<MySqlPool>` that
+        // `ipam_write::IpamWriteState` exists to hold (AC2).
+        .merge(ipam_write::router(pool.clone()));
     if config.document_enabled {
         // The switch governs EXISTENCE only (arbitration 4): merged above the layer, the route
         // is auth-gated exactly like every other non-public path. The pool lives INSIDE the
@@ -1617,6 +1629,146 @@ mod tests {
             "the premise: thirteen addresses ({checked} probed) — ten screens, of which `Screen::Device` \
              is ITSELF a record address, plus two more chained here and `/`. A loop that went \
              empty would assert nothing"
+        );
+    }
+
+    /// 🔴 **AC3 — every write route answers 401 without a credential, AND EXISTS.**
+    ///
+    /// # Why both halves, and why the criterion as first written was refuted
+    ///
+    /// ✅ Guy, 2026-09-12, on two measurements. **A router cannot be enumerated**: axum 0.8's
+    /// `Router` exposes `has_routes()` and nothing else, `PathRouter` is `pub(crate)`, and a source
+    /// scan is incomplete by construction — three of this crate's `.route(` sites take a
+    /// non-literal path. So each sub-router DECLARES its list and its `router()` is built from it.
+    ///
+    /// 🔴 **And 401 alone proves nothing about existence.** `auth_deny` layers the FALLBACK, so a
+    /// misspelt path, an unmounted route and a typo all answer 401 exactly like a real route —
+    /// measured: `/totally/made/up` answers 401 without a credential, and `/ipam/range` answered
+    /// **404 with one** while it was unmounted. *The positive control is what makes the negative
+    /// one mean anything*, and it is asserted here as a control rather than described in a comment.
+    ///
+    /// ⚠️ A lazy pool is enough for the negative half BECAUSE the refusal happens in the layer,
+    /// above every handler. For the POSITIVE half the requests are shaped to be refused at the
+    /// route — an empty body is a shape refusal — so none of them reaches the database either. The
+    /// assertion is only *not 404*: an unmounted route answers 404, and any other status — the 422
+    /// an empty body earns, a 405 — proves the path is mounted. (It read *"a 200 would mean it was
+    /// never asked"* over an `assert_ne!` that accepts a 200; story 14.2b's review.)
+    ///
+    /// ⚠️ **AC3 is narrower than its letter, said rather than left to be found** (story 14.2b's
+    /// review): the criterion reads *every route the router carries*, and this walks the WRITE
+    /// routes — `document::PATHS` and `WriteRoute::paths()`. The GET screens are carried by story
+    /// 6b.2's guard over `Screen::ALL`; `ipam_page::router`, the triage router and the screens
+    /// router declare no path list of their own.
+    #[tokio::test]
+    async fn every_write_route_is_refused_without_a_credential_and_exists() {
+        let declared: Vec<&str> = document::PATHS
+            .iter()
+            .copied()
+            .chain(ipam_write::WriteRoute::paths())
+            .collect();
+        assert_eq!(
+            declared.len(),
+            4,
+            "the premise: four write routes today ({declared:?}). A loop that went empty would \
+             assert nothing, and a list that shrank silently would assert less"
+        );
+
+        for path in &declared {
+            // Without a credential: refused by the layer, with the challenge.
+            let router = app(lazy_pool(), config(true, Some(pair())), facts());
+            let response = router
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri(*path)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::UNAUTHORIZED,
+                "{path} must answer 401 without a credential — a write route below `auth_deny` is \
+                 an unauthenticated write, which is what story 6b.2 measured answering 201"
+            );
+            assert_eq!(
+                www_authenticate(&response).as_deref(),
+                Some(CHALLENGE),
+                "{path} must carry the challenge"
+            );
+
+            // With one: anything but 404. This is the half that proves the route is MOUNTED.
+            let router = app(lazy_pool(), config(true, Some(pair())), facts());
+            let response = router
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri(*path)
+                        .header(
+                            axum::http::header::AUTHORIZATION,
+                            basic_header("op", "s3cret"),
+                        )
+                        .header(
+                            axum::http::header::CONTENT_TYPE,
+                            "application/x-www-form-urlencoded",
+                        )
+                        .header(axum::http::header::HOST, "opencmdb.example")
+                        .header(axum::http::header::ORIGIN, "https://opencmdb.example")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{path} is DECLARED and not MOUNTED — the 401 above would have hidden it, because \
+                 `auth_deny` layers the fallback and refuses an address that does not exist \
+                 exactly as it refuses one that does"
+            );
+        }
+
+        // 🔑 THE CONTROL. Without it the positive half above could be satisfied by a router that
+        // answers everything, and the negative half by a layer that refuses everything.
+        let router = app(lazy_pool(), config(true, Some(pair())), facts());
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/totally/made/up")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "the control's premise: an address that does not exist is ALSO 401 without a \
+             credential, which is precisely why the negative half alone proves nothing"
+        );
+
+        let router = app(lazy_pool(), config(true, Some(pair())), facts());
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/totally/made/up")
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "s3cret"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::NOT_FOUND,
+            "the control: an address that does not exist must answer 404 WITH a credential. If it \
+             did not, the positive half above would be satisfied by every string"
         );
     }
 

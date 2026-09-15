@@ -72,6 +72,14 @@ hickory-resolver = "0.26.2"
 # `cargo test` or `cargo clippy --all-targets`, which DO build core with the feature; that gap is
 # the shape of the CI-only failures Epic 3's retrospective recorded, so run both locally.
 opencmdb-core = { workspace = true, features = ["test-support"] }
+# tokio is ALREADY a normal dependency above; this entry adds the `test-util` FEATURE to that
+# existing edge, for `#[tokio::test(start_paused = true)]` — a paused clock, so the write budget's
+# timeout branch is measured in microseconds instead of five real seconds on every run for ever.
+# ⚠️ `features = ["full"]` does NOT include `test-util`, deliberately, and the same resolver-3 note
+# as above applies: `cargo build` ships a tokio without it, `cargo test` and
+# `cargo clippy --all-targets` build one with it. No new crate — `Cargo.lock` is unchanged, and
+# that was verified rather than assumed.
+tokio = { version = "1.53.0", features = ["test-util"] }
 # `ServiceExt::oneshot` to drive the axum router in tests without binding a socket.
 tower = { version = "0.5.2", features = ["util"] }
 # TEST-ONLY. `every_key_carries_both_locales` reads `locales/app.yml`, and Guy's arbitration 3(d)
