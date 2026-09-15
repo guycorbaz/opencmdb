@@ -1,6 +1,6 @@
 # Story 14.2b: The plan in the operator's hands
 
-Status: review
+Status: done
 
 ⚠️ **Contexted and validated 2026-09-12, implemented T0–T8, measured 2026-09-15, code-reviewed by
 three isolated layers the same day** — see *Review Findings* under the tasks. (This paragraph read
@@ -1118,6 +1118,11 @@ The two browser-gate repairs, by hand (the driver does not drive the browser gat
   `git diff`; this line first said *five*.
 
 ### Change Log
+
+- 2026-09-15 — **MERGED: PR #173 squash-merged as `368e2e1`**, after a CI run green on the head
+  commit `6ba35b8` itself (read from the PR's own check rollup, `mergeStateStatus: CLEAN`). Status →
+  `done`. A second three-layer review of the REPAIR commit (`fc67664..6ba35b8`) was started the same
+  day, on 6b.11's precedent; its record goes in its own change.
 
 - 2026-09-15 — **CODE-REVIEWED (three isolated layers) AND REPAIRED.** 4 decisions (Guy), 21
   patches, 3 deferred, 6 dismissed. **905 → 908 tests.** The measured headlines: a 503 promising
