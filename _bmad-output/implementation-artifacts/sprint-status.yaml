@@ -5625,7 +5625,12 @@ development_status:
   #   `Gesture::Planned { owner }` -- the shape story 6b.4b made a compile-time obligation, so this
   #   story cannot ship its route without meeting that site.
   14-3-the-audit: ready-for-dev
-  #   CONTEXTED 2026-09-15 from three research passes. NOT validated yet (mandatory, two layers).
+  #   CONTEXTED AND VALIDATED 2026-09-15 (fact-check + gap-hunt that built and measured). The story
+  #   was rewritten whole: the offer serves `reserved`/`dhcp-pool` addresses today (measured
+  #   198.51.100.129); reusing the observation reader fails NFR2 after ~2 months (1 M rows 3.0-3.3 s),
+  #   so a bounded sighting summary (a migration) is now option (d) and a split is possible; FR24's
+  #   "two MACs" is always a succession; a cell marker fails 3:1 contrast where axe cannot see.
+  #   Fourteen decisions (eight Guy's) must be taken at T0 before any code.
   #   🔴 Two findings posed as decisions rather than settled: the epic's AC1 (`undeclared`) and AC2
   #   (`gap`) OVERLAP on a free cell in a `static` range with a sighting; and the guard
   #   `the_plan_reads_no_observation` forbids the audit BY DESIGN -- bypassing it would be a guard
