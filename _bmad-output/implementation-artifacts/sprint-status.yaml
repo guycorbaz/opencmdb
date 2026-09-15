@@ -5624,7 +5624,7 @@ development_status:
   #   nothing can fill, so 14.2's empty-plan sentence names the gesture as NOT YET BUILT through
   #   `Gesture::Planned { owner }` -- the shape story 6b.4b made a compile-time obligation, so this
   #   story cannot ship its route without meeting that site.
-  14-3a-the-sightings-summary: backlog
+  14-3a-the-sightings-summary: ready-for-dev
   #   🔴 INSERTED 2026-09-15 at story 14.3's VALIDATION (Guy: split) -- Epic 14 goes from FIVE stories
   #   to SIX (`epics.md` NOT edited; registered). The bounded SIGHTING SUMMARY the audit reads: one row
   #   per distinct observed (IPv4, MAC) with its last-seen instant, maintained at ingest, backfilled once
