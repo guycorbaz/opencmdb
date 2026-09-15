@@ -47,7 +47,7 @@ use opencmdb_core::repo::WriteRepository;
 use sqlx::MySqlPool;
 use tokio_util::sync::CancellationToken;
 
-use crate::repo::{MariaRepository, classify, insert_observation};
+use crate::repo::{MariaRepository, classify};
 use crate::resolver::{Resolution, resolve};
 
 /// What one scan-and-resolve pass did.
@@ -140,19 +140,14 @@ pub(crate) async fn poll_ingest_resolve<C: Connector>(
     let mut landed: Vec<Observation> = Vec::new();
     let mut failed = 0usize;
     for observation in sink.observations {
-        let stored = observation.clone();
-        let result = repo
-            .transact(move |unit| {
-                let observation = observation.clone();
-                Box::pin(async move {
-                    insert_observation(unit.executor(), &observation)
-                        .await
-                        .map_err(classify)
-                })
-            })
-            .await;
+        // One transaction per observation, holding the observation AND its address sightings
+        // (story 14.3a, decision 1), replayed once if it was a deadlock victim — a deadlock on the
+        // summary now rolls back the observation too, which the plain insert could not do.
+        let result = crate::sighting_repo::ingest_observation(pool, &observation)
+            .await
+            .map_err(classify);
         match result {
-            Ok(()) => landed.push(stored),
+            Ok(()) => landed.push(observation),
             Err(error) => {
                 failed += 1;
                 tracing::warn!(?error, "ingesting a scanned observation failed");
@@ -353,10 +348,37 @@ mod tests {
             "DELETE FROM identity_link",
             "DELETE FROM interface",
             "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
         ] {
             sqlx::query(statement).execute(&pool).await.expect("clean");
         }
         Some(pool)
+    }
+
+    /// Story 14.3a — the scan pass maintains the address sighting summary. Its ingest is the one
+    /// that writes an observation AND its sightings in one transaction, and a regression to the
+    /// plain row insert would leave every scanned address unsighted with the rest of this module
+    /// green.
+    #[tokio::test]
+    async fn the_seam_writes_the_sightings_of_what_it_ingests() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = empty_pool().await else {
+            return;
+        };
+        let mut source = connector(vec![
+            with_mac(1, 1_700_000_100, 1),
+            mac_less(2, 1_700_000_200),
+        ]);
+        let outcome = poll_ingest_resolve(&mut source, at(1_700_000_300), &pool).await;
+        assert_eq!(outcome.ingested, 2, "the premise: both observations landed");
+        let (sightings,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM address_sighting")
+            .fetch_one(&pool)
+            .await
+            .expect("count");
+        assert_eq!(
+            sightings, 2,
+            "one sighting per ingested observation: an address with its MAC, an address without"
+        );
     }
 
     /// **AC1** — the seam really polls, ingests and resolves, driven end to end by a test.

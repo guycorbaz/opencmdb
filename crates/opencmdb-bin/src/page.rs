@@ -2514,6 +2514,7 @@ mod tests {
             "DELETE FROM identity_link",
             "DELETE FROM interface",
             "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
             "DELETE FROM declared_attribute",
         ] {
             sqlx::query(statement).execute(&pool).await.expect("clean");
@@ -2691,6 +2692,7 @@ mod tests {
             "DELETE FROM identity_link",
             "DELETE FROM interface",
             "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
             "DELETE FROM declared_attribute",
         ] {
             sqlx::query(statement).execute(&pool).await.expect("clean");
@@ -6171,6 +6173,7 @@ mod tests {
             "DELETE FROM identity_link",
             "DELETE FROM interface",
             "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
             "DELETE FROM declared_attribute",
         ] {
             sqlx::query(statement).execute(&pool).await.expect("clean");

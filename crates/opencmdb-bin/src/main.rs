@@ -42,6 +42,7 @@ mod resolver;
 mod reverse_dns;
 mod scan_pass;
 mod screens;
+mod sighting_repo;
 /// Reading Rust source as code rather than prose, for the source-scanning guards (story 14.2b).
 ///
 /// Test-only, like `permute`: it supports no production path.
@@ -631,6 +632,25 @@ async fn run(log: diagnostic::LogDescriptor) -> anyhow::Result<()> {
         .await
         .context("applying database migrations")?;
     tracing::info!("database connected and migrations applied");
+
+    // 🔑 The address sighting summary's ONE-TIME backfill (story 14.3a, decision 2), here and not
+    // later: BEFORE the scan loop, so nothing ingests while it reads, and BEFORE the server binds,
+    // so no screen reads a partial summary. Measured at 1 M observation rows (≈ 75 days of
+    // sweeping): about a second and ten megabytes. A store that has completed it once skips it.
+    let backfill_started = std::time::Instant::now();
+    match sighting_repo::backfill_at_boot(&pool)
+        .await
+        .context("backfilling the address sighting summary")?
+    {
+        sighting_repo::BackfillOutcome::AlreadyDone(_) => {}
+        sighting_repo::BackfillOutcome::Completed(report) => tracing::info!(
+            observations_read = report.observations_read,
+            observations_skipped = report.observations_skipped,
+            pairs_flushed = report.pairs_flushed,
+            elapsed_ms = backfill_started.elapsed().as_millis(),
+            "address sighting summary backfilled from the stored observations"
+        ),
+    }
 
     // The scan loop: the real ARP/ping connector (story 3.5) sweeps a declared subnet and ingests
     // observations, so the page shows genuinely observed state. Unset perimeter → the page renders
@@ -2991,6 +3011,10 @@ mod tests {
             .execute(&pool)
             .await
             .expect("clean observations");
+        sqlx::query("DELETE FROM address_sighting")
+            .execute(&pool)
+            .await
+            .expect("clean sightings");
 
         // Declared: entity 192.0.2.10 named `nas`.
         let entity = "00000000-0000-0000-0000-0000000000aa";
@@ -3111,6 +3135,7 @@ mod tests {
             "DELETE FROM identity_link",
             "DELETE FROM interface",
             "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
         ] {
             sqlx::query(statement).execute(&pool).await.expect("clean");
         }
@@ -3256,6 +3281,7 @@ mod tests {
             "DELETE FROM identity_link",
             "DELETE FROM interface",
             "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
         ] {
             sqlx::query(statement).execute(&pool).await.expect("clean");
         }
@@ -3886,6 +3912,7 @@ mod tests {
             "DELETE FROM identity_link",
             "DELETE FROM interface",
             "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
         ] {
             sqlx::query(statement).execute(&pool).await.expect("clean");
         }
@@ -4040,6 +4067,7 @@ mod tests {
             "DELETE FROM interface",
             "DELETE FROM declared_attribute",
             "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
         ] {
             sqlx::query(statement).execute(&pool).await.expect("clean");
         }
@@ -4284,6 +4312,7 @@ mod tests {
             "DELETE FROM interface",
             "DELETE FROM declared_attribute",
             "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
         ] {
             sqlx::query(statement).execute(&pool).await.ok();
         }

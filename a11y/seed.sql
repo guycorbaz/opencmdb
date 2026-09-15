@@ -37,7 +37,16 @@ DELETE FROM ip_subnet;
 DELETE FROM link_candidate;
 DELETE FROM identity_link;
 DELETE FROM observation_record;
+-- Story 14.3a: the address sighting summary is cleared beside the observations it summarises.
+-- ⚠️ The binary's one-time backfill ran at BOOT, before this file — so it never sees these rows,
+-- and this file writes their summary itself (below, from the same `@t`).
+DELETE FROM address_sighting;
 DELETE FROM declared_attribute;
+
+-- 🔴 ONE instant for every observation and its sighting. `NOW(6)` is evaluated per STATEMENT —
+-- measured 2.3 ms apart between two back-to-back INSERTs — so an observation and its summary row
+-- written with two `NOW(6)`s would disagree about when the address was seen.
+SET @t = NOW(6);
 
 -- ── Four documented entities, three of which the network contradicts ──────────────────────
 INSERT INTO declared_attribute (entity_id, attr_key, attr_value, origin, actor_id, updated_at) VALUES
@@ -53,15 +62,15 @@ INSERT INTO declared_attribute (entity_id, attr_key, attr_value, origin, actor_i
 -- ── The observed side: each answers at its address with a DIFFERENT hostname ───────────────
 INSERT INTO observation_record (id, connector_id, observed_at, l2_domain, vantage, facts, raw) VALUES
   ('dddddddd-0000-0000-0000-0000000000b1',
-   '00000000-0000-0000-0000-000000000000', NOW(6),
+   '00000000-0000-0000-0000-000000000000', @t,
    '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
    '[{"IpV4":{"addr":"192.0.2.11"}},{"Hostname":{"name":"nas-01.lan","source":"Dns"}}]', NULL),
   ('dddddddd-0000-0000-0000-0000000000b2',
-   '00000000-0000-0000-0000-000000000000', NOW(6),
+   '00000000-0000-0000-0000-000000000000', @t,
    '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
    '[{"IpV4":{"addr":"192.0.2.12"}},{"Hostname":{"name":"sw-core-1","source":"Dns"}}]', NULL),
   ('dddddddd-0000-0000-0000-0000000000b3',
-   '00000000-0000-0000-0000-000000000000', NOW(6),
+   '00000000-0000-0000-0000-000000000000', @t,
    '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
    '[{"IpV4":{"addr":"192.0.2.13"}},{"Hostname":{"name":"hp-laserjet","source":"Dns"}}]', NULL),
   -- ── The UNDECLARED sighting: an address no declared entity claims ────────────────────────
@@ -77,9 +86,21 @@ INSERT INTO observation_record (id, connector_id, observed_at, l2_domain, vantag
   -- the WHOLE record, so a single-fact sighting would let a gate pass over a gesture that
   -- documents one field — which is FR13(b), Epic 7's, and a different gesture.
   ('dddddddd-0000-0000-0000-0000000000b9',
-   '00000000-0000-0000-0000-000000000000', NOW(6),
+   '00000000-0000-0000-0000-000000000000', @t,
    '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
    '[{"IpV4":{"addr":"192.0.2.99"}},{"Hostname":{"name":"unknown-99","source":"Dns"}}]', NULL);
+
+-- ── The address sighting summary those four observations imply (story 14.3a) ────────────────
+--
+-- One row per address: every observation above carries one `IpV4`, no `Mac` (so the `-` sentinel)
+-- and the nil L2 domain. Canonical padded addresses, `0007`'s form. A Rust test executes this file
+-- and asserts these rows equal what the adapter derives from the observations — so a fact added
+-- above without its row here reds that test instead of leaving `/ipam` blind to it.
+INSERT INTO address_sighting (addr, l2_domain, mac, first_seen_at, last_seen_at) VALUES
+  ('192.000.002.011', '00000000-0000-0000-0000-000000000000', '-', @t, @t),
+  ('192.000.002.012', '00000000-0000-0000-0000-000000000000', '-', @t, @t),
+  ('192.000.002.013', '00000000-0000-0000-0000-000000000000', '-', @t, @t),
+  ('192.000.002.099', '00000000-0000-0000-0000-000000000000', '-', @t, @t);
 
 -- ── The identity engine's reach, so the section that reports it is not empty ────────────────
 --

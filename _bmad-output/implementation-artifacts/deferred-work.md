@@ -5584,3 +5584,37 @@ One row, and v0.3.0 is what made it live.
   story 14.3's gap-hunt on the seed (`198.51.100.129`, a `reserved` address, proposed). Story 14.2's
   `offerable()` excludes only `infrastructure`. **Owner: story 14.3b** (decision 3: the offer draws from
   `static` ranges only).
+
+## Raised by story 14.3a's implementation (2026-09-15)
+
+- ⚠️ **`DhcpLease.ip` is not a sighting.** `sighting_repo::sighting_keys` keys `IpV4` facts only: no
+  connector produces a lease, and a lease is a server's promise rather than an address seen on the
+  wire. The day a DHCP connector exists, whether a leased-but-silent address protects itself under
+  constraint (3) is a real question. **Owner: the story that adds a lease producer (Epic 11), with
+  story 14.3b told.**
+- ⚠️ **The summary grows by distinct pairs, and a host that randomises its MAC adds one per new MAC.**
+  Bounded by the network for the shipped connector (46 pairs after a year of 46 stable hosts); not
+  bounded for a phone that rotates its address. Releasing an address — deleting its pairs — is the
+  only removal, and it is the operator's. **Owner: story 14.4** (release), which must delete every pair
+  of the address across L2 domains and MACs, sentinel row included.
+- ⚠️ **One fixture site deliberately does NOT clear the summary**: `main.rs`'s NFR5 test that deletes
+  ONE observation `WHERE id = ?` to model *"the old sighting aged out"*. Under constraint (3) the
+  summary must not forget that sighting, so the site is left as it is — fifteen of the sixteen
+  `DELETE FROM observation_record` sites clear the summary beside it, and the sixteenth is this one.
+  **Owner: none — recorded so a later sweep does not "fix" it.**
+- ⚠️ **The boot call to the backfill is carried by nothing.** `main.rs` calls
+  `sighting_repo::backfill_at_boot` between the migrations and the scan loop; every property of the
+  backfill is tested through the function, and removing the CALL leaves the suite green — the same
+  uncarried-startup shape story 5.14 measured for `spawn_startup_scan`. **Owner: the first story that
+  gives `main`'s boot sequence a testable seam.**
+- ⚠️ **Two instances booting at once on one store race on the marker.** Both read no marker, both fold,
+  and the second flush's marker insert is a duplicate key: that instance refuses to start with the error
+  named. The summary itself is not damaged (the flush widens). A single binary is the supported
+  deployment. **Owner: none until a clustered deployment is supported.**
+- ⚠️ **`address_sighting` is not in `a11y/empty-plan.sql`'s concerns and not rendered anywhere yet.**
+  The reader carries an item-level `#[allow(dead_code)]` naming story 14.3b, which removes it. **Owner:
+  story 14.3b.**
+- 🔑 **Issue #150 (every render loads every observation) is served for INVENTORY's need and not for
+  TRIAGE's.** The summary holds the first and last instant per address, which is what the inventory's
+  freshness needs; triage needs the whole newest batch of facts, which the summary does not carry.
+  Issue #150 stays open. **Owner: the story that moves the inventory onto the summary.**

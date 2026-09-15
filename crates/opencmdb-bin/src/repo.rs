@@ -428,36 +428,25 @@ where
     }))
 }
 
-/// Insert one observation (immutable, linked-never-merged, FR11). `facts` serialize to JSON —
-/// the engine deserializes and compares in Rust; SQL never compares (D10). All values are bound
-/// as Strings (D48); `observed_at` as a MariaDB datetime literal.
-pub async fn insert_observation<'e, E>(
-    executor: E,
+/// Insert one observation (immutable, linked-never-merged, FR11) **and the address sightings it
+/// implies, atomically**. `facts` serialize to JSON — the engine deserializes and compares in Rust;
+/// SQL never compares (D10).
+///
+/// 🔑 **Every writer of an observation goes through here, so every writer keeps the sighting summary
+/// in step** (story 14.3a, decision 1). The body is [`crate::sighting_repo::insert_with_sightings`]:
+/// on a pool it is its own transaction, on a unit's connection a savepoint.
+///
+/// # Errors
+///
+/// The `sqlx::Error` as it came; callers classify it with [`classify`].
+pub async fn insert_observation<'a, A>(
+    conn: A,
     observation: &opencmdb_core::observation::Observation,
 ) -> Result<(), sqlx::Error>
 where
-    E: Executor<'e, Database = MySql>,
+    A: sqlx::Acquire<'a, Database = MySql>,
 {
-    let facts =
-        serde_json::to_string(&observation.facts).map_err(|e| sqlx::Error::Encode(Box::new(e)))?;
-    let observed_at = observation
-        .observed_at
-        .format("%Y-%m-%d %H:%M:%S%.6f")
-        .to_string();
-    sqlx::query(
-        "INSERT INTO observation_record \
-         (id, connector_id, observed_at, l2_domain, vantage, facts, raw) \
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
-    )
-    .bind(observation.obs_id.to_string())
-    .bind(observation.connector_id.to_string())
-    .bind(observed_at)
-    .bind(observation.scope.l2_domain.to_string())
-    .bind(observation.scope.vantage.to_string())
-    .bind(facts)
-    .bind(observation.raw.clone())
-    .execute(executor)
-    .await?;
+    crate::sighting_repo::insert_with_sightings(conn, observation).await?;
     Ok(())
 }
 
@@ -2578,6 +2567,10 @@ mod tests {
             .execute(&pool)
             .await
             .expect("clean");
+        sqlx::query("DELETE FROM address_sighting")
+            .execute(&pool)
+            .await
+            .expect("clean sightings");
 
         let obs = Observation {
             obs_id: ObsId::from_uuid(uuid::Uuid::now_v7()),
@@ -2680,6 +2673,10 @@ mod tests {
             .execute(&pool)
             .await
             .expect("clean observations");
+        sqlx::query("DELETE FROM address_sighting")
+            .execute(&pool)
+            .await
+            .expect("clean sightings");
         Some(pool)
     }
 
