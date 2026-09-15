@@ -997,6 +997,26 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 /* The submit control keeps the amber FILL story 6.4 arbitrated: a tinted background lost the
    cascade to `.btn-gesture.live` at equal specificity, and only a browser could say so. */
 .ipam-form button { margin-top: 8px; align-self: flex-start; }
+/* ── The audit, story 14.3b ─────────────────────────────────────────────────────
+   A LIST under the grid and no marker on the cells (decision 8): a single-colour marker cannot reach
+   3:1 against both the defined fill and the page ground. The three words are three TREATMENTS as
+   well as three words (constraint 6): a filled badge for `gap`, a dashed outline for `undeclared`, a
+   heavy border for « Conflit d'adresse » — never a hue alone. */
+.ipam-audit { margin-top: 20px; }
+.ipam-findings,
+.ipam-warnings { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; }
+.ipam-finding { padding: 8px 0; border-top: 1px solid var(--border); }
+.ipam-outside { margin-top: 4px; }
+.ipam-word { display: inline-block; margin-left: 6px; padding: 0 6px; font-size: 12px; border: 1px solid var(--color-text); }
+.ipam-word-gap { background: var(--color-text); color: var(--color-bg); border-style: solid; }
+.ipam-word-undeclared { background: transparent; color: var(--color-text); border-style: dashed; }
+.ipam-word-conflict { background: transparent; color: var(--color-text); border-style: solid; border-width: 2px; font-weight: 600; }
+.ipam-conflict-note { margin-left: 6px; color: var(--muted); }
+.ipam-sightings { margin: 4px 0 0; padding-left: 18px; color: var(--muted); }
+.ipam-triage-link,
+.ipam-documented { display: inline-block; margin-top: 4px; font-size: 12px; }
+.ipam-documented { color: var(--muted); }
+.ipam-warnings li { padding: 4px 0; }
 
 .conflict-parties { margin: 8px 0 12px; padding-left: 18px; font-size: 13px; line-height: 1.7; }
 

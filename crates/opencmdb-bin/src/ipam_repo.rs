@@ -679,6 +679,55 @@ where
     Ok(subnets)
 }
 
+/// Every range of the plan, in every subnet, as `(first, last, policy)`.
+///
+/// 🔑 **Plan-wide, for story 14.3b's decision 2**: the most protective range decides across
+/// overlapping ranges and NESTED subnets, so the audit of one subnet reads the ranges of all of them.
+///
+/// # Errors
+///
+/// [`RepositoryError`] on a backend failure or a row this build cannot read — the same contract as
+/// [`ranges_in`].
+pub(crate) async fn plan_ranges<'e, E>(
+    executor: E,
+) -> Result<Vec<(Ipv4Addr, Ipv4Addr, IpPolicy)>, RepositoryError>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String, String, String)> =
+        sqlx::query_as("SELECT first_addr, last_addr, policy FROM ip_range ORDER BY first_addr")
+            .fetch_all(executor)
+            .await
+            .map_err(classify)?;
+    rows.into_iter()
+        .map(|(first, last, policy)| {
+            Ok((
+                from_canonical(&first).map_err(ipam)?,
+                from_canonical(&last).map_err(ipam)?,
+                policy_from_token(&policy)?,
+            ))
+        })
+        .collect()
+}
+
+/// Every address an `ip_address` row names, in every subnet — decision 2's plan-wide half.
+///
+/// # Errors
+///
+/// [`RepositoryError`] on a backend failure or a row this build cannot read.
+pub(crate) async fn plan_addresses<'e, E>(executor: E) -> Result<Vec<Ipv4Addr>, RepositoryError>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT addr FROM ip_address ORDER BY addr")
+        .fetch_all(executor)
+        .await
+        .map_err(classify)?;
+    rows.into_iter()
+        .map(|(addr,)| from_canonical(&addr).map_err(ipam))
+        .collect()
+}
+
 /// Every range defined in one subnet, in numeric order of its first address.
 ///
 /// # Errors

@@ -478,6 +478,29 @@ where
     Ok(rows)
 }
 
+/// Every documented IPv4 value — `declared_attribute.attr_value` where `attr_key = 'ipv4'` — as the
+/// operator wrote it.
+///
+/// 🔑 **Story 14.3b's decision 4**: the addressing plan's offer excludes an address documented here,
+/// even one the network has never shown. The values are parsed in Rust (D10) by
+/// `ipam_audit::documented_addresses`. ⚠️ **No provenance column is read** — the `authorship` gate
+/// guards `origin`, `actor_id` and `updated_at`, and whether an address is documented does not depend
+/// on how.
+///
+/// # Errors
+///
+/// A `sqlx::Error` on a backend failure.
+pub async fn load_documented_ipv4s<'e, E>(executor: E) -> Result<Vec<String>, sqlx::Error>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String,)> =
+        sqlx::query_as("SELECT attr_value FROM declared_attribute WHERE attr_key = 'ipv4'")
+            .fetch_all(executor)
+            .await?;
+    Ok(rows.into_iter().map(|(value,)| value).collect())
+}
+
 /// The instant of the most recent observation, or `None` when nothing has been observed.
 ///
 /// 🔴 **A `MAX(observed_at)`, and the register handed it to story 6b.5 by name**

@@ -67,6 +67,9 @@
     <li><span class="mono">{{ row.bounds }}</span> · {{ row.policy }}{% if row.label != "" %} · {{ row.label }}{% endif %}</li>
     {%- endfor %}
   </ul>
+  {#- Decision 14: a subnet too large to draw offers nothing, says so, and still shows its findings. -#}
+  <p class="empty">{{ s.too_large_no_offer }}</p>
+  {% include "_ipam_audit.html" %}
   {%- endmatch %}
   {% include "_ipam_forms.html" %}
   {%- endif %}
@@ -114,16 +117,18 @@
         <span class="ipam-key"><span class="ipam-cell ipam-policy-infrastructure"></span>{{ s.policy_infrastructure }}</span>
         <span class="ipam-occupancy">{{ s.occupancy }}</span>
       </p>
+      {% include "_ipam_audit.html" %}
     </div>
 
     <div class="ipam-rail">
       <div class="ipam-panel">
         <p class="panel-label">{{ s.next_free_label }}</p>
         <p class="panel-value mono">{{ s.next_free }}</p>
-        {#- ⚠️ The caveat is not decoration: until story 14.3 excludes every observed address, this
-             panel answers what the PLAN allows and not what is free on the network. Naming the
-             source is what stops the sentence being read as a promise it cannot keep — and 14.3 is
-             the only place the product PREVENTS a duplicate rather than reporting one. -#}
+        {#- 🔑 Since story 14.3b this panel excludes every address the network has been seen on,
+             every documented one, and everything outside a `static` range — the only place the
+             product PREVENTS a duplicate rather than reporting one. The caveat says what WAS
+             consulted, so the sentence is not read as a promise about what was not (the network
+             right now: a sleeping machine is seen only when it answered). -#}
         <p class="panel-caveat">{{ s.next_free_caveat }}</p>
       </div>
     </div>

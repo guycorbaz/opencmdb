@@ -312,11 +312,6 @@ pub(crate) struct Sighting {
 ///
 /// A `sqlx::Error` on a backend failure, or `Decode` on a row the schema admits and this reader
 /// cannot read — which the CHECKs make unreachable through the adapter.
-#[allow(
-    dead_code,
-    reason = "story 14.3b's audit is its production caller; story 14.3a ships the reader and its \
-              tests, and 14.3b removes this attribute"
-)]
 pub(crate) async fn load_sightings<'e, E>(executor: E) -> Result<Vec<Sighting>, sqlx::Error>
 where
     E: Executor<'e, Database = MySql>,

@@ -2,10 +2,12 @@
 //!
 //! # What this screen shows, and what it deliberately does not
 //!
-//! It draws the PLAN: the subnets, ranges and addresses the operator declared, and nothing else.
-//! **It reads no observation.** The audit — *which addresses are in use but not in the plan* — is
-//! story 14.3's, and a join written here would be that story's deliverable arriving early and
-//! unmeasured. `AC2`'s guard is a mutation: give this module an observation read and it reds.
+//! It draws the PLAN — the subnets, ranges and addresses the operator declared — and, since story
+//! 14.3b, **the audit of that plan against the network**: which observed addresses are a `gap` or
+//! `undeclared`, which carry « Conflit d'adresse », and which address may be offered. 🔑 It reads the
+//! network ONLY through [`crate::ipam_audit`], the one module of the plan that the guard
+//! `the_plan_reads_the_network_only_through_the_audit` allows to name the sighting reader and the
+//! documented read (Guy's decision 6, 2026-09-15).
 //!
 //! # The cell vocabulary, and why `free` is not one of the four binding words
 //!
@@ -41,6 +43,9 @@ use opencmdb_core::ipam::IpPolicy;
 use sqlx::MySqlPool;
 use std::net::Ipv4Addr;
 
+use std::collections::{BTreeMap, BTreeSet};
+
+use crate::ipam_audit::{self, FindingKind, Plan, Seen};
 use crate::ipam_repo::{self, Subnet};
 use crate::page::{Shell, render_shell};
 use crate::screens::Screen;
@@ -118,29 +123,11 @@ impl CellState {
         }
     }
 
-    /// Whether this state may be offered as the next free address.
-    ///
-    /// 🔴 **A CELL CAN BE `Free` AND STILL NOT OFFERABLE, and this function was wrong TWICE.**
-    /// It first read `matches!(self, Self::Free(_))`, which offered `192.0.2.0` the moment a range
-    /// carried the `infrastructure` policy. Excluding that policy fixed the SYMPTOM and left the
-    /// CAUSE: the blind review layer then showed — from the diff alone — that a `static` range over
-    /// the subnet's edges made them `Free(Static)`, offerable, and the story's own test asserted
-    /// exactly that with `offerable == 256`. Measured: `left: Some(192.0.2.0)`.
-    /// 🔑 *The first fix named a policy; the defect was an ORDER.* The edge is now decided before
-    /// any range, so no policy can make an edge assignable. The binding table's *"never offered as
-    /// free"* still bars a declared infrastructure range, which is the other half.
-    ///
-    /// 🔑 *The state and the policy are two axes, and `free` is a statement about the STATE alone.*
-    /// An address inside a declared infrastructure range is free of any individual claim and is
-    /// still not the operator's to assign — which is exactly why the two axes exist rather than one
-    /// flattened enum.
-    ///
-    /// ⚠️ **This is the PLAN's answer and not the network's**: story 14.3 must additionally exclude
-    /// every OBSERVED address, which is the criterion the whole epic exists for and the only place
-    /// the product prevents a duplicate rather than reporting it.
-    pub(crate) fn offerable(self) -> bool {
-        matches!(self, Self::Free(policy) if policy != IpPolicy::Infrastructure)
-    }
+    // ⚠️ **`offerable` LEFT this type at story 14.3b.** Whether an address may be offered is now a
+    // PLAN-WIDE question (decision 2: a nested subnet's range protects it) that also reads the
+    // network and the declared register (decisions 3 and 4), so one cell cannot answer it — see
+    // `ipam_audit::Plan::offerable`. The two defects it carried stay recorded there: the edge decided
+    // before any range, and `infrastructure` never offered as free.
 }
 
 /// The largest subnet this screen will DRAW, in addresses — a `/22`.
@@ -214,15 +201,11 @@ impl PlanView {
         Self { cells }
     }
 
-    /// The lowest address the PLAN can offer, or `None` when it can offer none.
-    pub(crate) fn next_offerable(&self) -> Option<Ipv4Addr> {
-        self.cells
-            .iter()
-            .find(|(_, state)| state.offerable())
-            .map(|(addr, _)| *addr)
-    }
-
     /// How many cells carry each state, as a LIST and never a ratio.
+    ///
+    /// ⚠️ **Its `free` is the STATE count and NOT the occupancy line's since story 14.3b** (decision
+    /// 12): the line counts as free only what the offer would propose, and shows no count of seen
+    /// addresses. The renderer composes that line from this and from the audit.
     ///
     /// 🔑 `example_data.rs:829` recorded the reason before this screen was real: a percentage
     /// invites a reader to compare two subnets whose sizes differ, and the occupancy of a plan is
@@ -340,18 +323,147 @@ async fn plan_data(
         return Ok(unknown_subnet_body(&subnets));
     };
     let ranges = ipam_repo::ranges_in(pool, &id).await?;
+    // The audit's inputs, all read inside the page budget and none of them grid-sized: the plan
+    // WHOLE (decision 2 is plan-wide), and the network through the one module allowed to read it.
+    let plan = Plan {
+        subnets: subnets.iter().map(|(_, subnet, _)| *subnet).collect(),
+        ranges: ipam_repo::plan_ranges(pool).await?,
+        defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
+    };
+    let (seen, documented) = ipam_audit::read_the_network(pool).await?;
+    let audit = Audit {
+        plan: &plan,
+        seen: &seen,
+        documented: &documented,
+        subnet,
+    };
     // 🔴 THE CEILING IS CHECKED BEFORE THE CELLS ARE MATERIALISED. Checking after would mean
     // paying 2 GB to learn the page should not have been drawn — see `MAX_DRAWN_ADDRESSES`.
     if subnet.size() > MAX_DRAWN_ADDRESSES {
-        return Ok(render_too_large(&subnets, &id, &ranges));
+        return Ok(render_too_large(&subnets, &id, &ranges, &audit));
     }
     let defined = ipam_repo::addresses_in(pool, &id).await?;
     let bounds: Vec<(Ipv4Addr, Ipv4Addr, IpPolicy)> = ranges
         .iter()
         .map(|(first, last, policy, _)| (*first, *last, *policy))
         .collect();
-    let plan = PlanView::derive(subnet, &bounds, &defined);
-    Ok(render_plan(&subnets, &id, &plan))
+    let view = PlanView::derive(subnet, &bounds, &defined);
+    Ok(render_plan(&subnets, &id, &view, &audit))
+}
+
+/// What the audit of the subnet in force needs, borrowed from the handler's reads.
+pub(crate) struct Audit<'a> {
+    /// The whole plan.
+    pub(crate) plan: &'a Plan,
+    /// What the network says, per address.
+    pub(crate) seen: &'a BTreeMap<Ipv4Addr, Seen>,
+    /// The documented addresses.
+    pub(crate) documented: &'a BTreeSet<Ipv4Addr>,
+    /// The subnet in force.
+    pub(crate) subnet: Subnet,
+}
+
+/// One address the audit names, ready to render.
+#[derive(Debug, Clone)]
+pub(crate) struct FindingRow {
+    /// The address.
+    address: String,
+    /// Whether its verdict is `gap`.
+    gap: bool,
+    /// Whether its verdict is `undeclared`.
+    undeclared: bool,
+    /// Whether it is « Conflit d'adresse ».
+    conflict: bool,
+    /// One line per hardware address with its absolute last sighting, and one for a sighting
+    /// without one (decision 9).
+    sightings: Vec<String>,
+    /// The triage question for it, when triage has one — only for an address no declared record
+    /// claims.
+    triage_href: Option<String>,
+}
+
+/// The audit's part of the page.
+#[derive(Debug, Clone)]
+pub(crate) struct AuditRender {
+    /// The subnet's findings, in numeric order.
+    findings: Vec<FindingRow>,
+    /// The observed addresses outside every subnet of the plan (decision 11).
+    outside: Vec<FindingRow>,
+    /// The subnet's addresses defined inside a `dhcp-pool` (decision 13).
+    pool_warnings: Vec<String>,
+}
+
+/// An instant as the audit shows it: ABSOLUTE and in UTC, never a relative age (decision 9) — a
+/// relative age would change with the clock of the render, and the derivation reads no clock.
+fn absolute(at: opencmdb_core::observation::Timestamp) -> String {
+    at.format("%Y-%m-%d %H:%M UTC").to_string()
+}
+
+/// One line per hardware address seen on an address, with its last sighting, and one for a sighting
+/// without a hardware address.
+fn sighting_lines(seen: &Seen) -> Vec<String> {
+    let mut lines: Vec<String> = seen
+        .macs
+        .iter()
+        .map(|(mac, at)| {
+            rust_i18n::t!(
+                "ipam.finding.seen_mac",
+                mac = mac.to_string(),
+                at = absolute(*at)
+            )
+            .to_string()
+        })
+        .collect();
+    if let Some(at) = seen.without_mac {
+        lines.push(rust_i18n::t!("ipam.finding.seen_no_mac", at = absolute(at)).to_string());
+    }
+    lines
+}
+
+/// The row for one observed address.
+fn finding_row(
+    seen: &Seen,
+    kind: Option<FindingKind>,
+    conflict: bool,
+    documented: bool,
+) -> FindingRow {
+    FindingRow {
+        address: seen.addr.to_string(),
+        gap: kind == Some(FindingKind::Gap),
+        undeclared: kind == Some(FindingKind::Undeclared),
+        conflict,
+        sightings: sighting_lines(seen),
+        // 🔑 Triage raises a `nouveau:` question only for an observed address no declared record
+        // claims (`page.rs`), so a documented address has no question to link to — and the row says
+        // so rather than linking to nothing.
+        triage_href: (!documented).then(|| format!("/triage?sel=nouveau:{}", seen.addr)),
+    }
+}
+
+/// Everything the audit shows for the subnet in force.
+fn audit_render(audit: &Audit) -> AuditRender {
+    AuditRender {
+        findings: audit
+            .plan
+            .audit(audit.subnet, audit.seen, audit.documented)
+            .iter()
+            .map(|f| finding_row(&f.seen, f.kind, f.conflict, f.documented))
+            .collect(),
+        outside: audit
+            .plan
+            .outside(audit.seen)
+            .into_iter()
+            .map(|seen| finding_row(seen, None, false, audit.documented.contains(&seen.addr)))
+            .collect(),
+        pool_warnings: audit
+            .plan
+            .defined_inside_a_pool(audit.subnet)
+            .into_iter()
+            .map(|addr| {
+                rust_i18n::t!("ipam.pool_warning.item", address = addr.to_string()).to_string()
+            })
+            .collect(),
+    }
 }
 
 /// Every string the template renders, resolved once.
@@ -392,6 +504,17 @@ pub(crate) struct IpamStrings {
     form_submit: String,
     form_needs_subnet: String,
     form_needs_first_subnet: String,
+    findings_heading: String,
+    no_findings: String,
+    word_gap: String,
+    word_undeclared: String,
+    word_conflict: String,
+    conflict_note: String,
+    triage_link: String,
+    documented_no_question: String,
+    outside_heading: String,
+    pool_warning_heading: String,
+    too_large_no_offer: String,
 }
 
 /// The three forms, ready to render.
@@ -521,6 +644,8 @@ pub(crate) struct IpamBody {
     too_large: Option<Vec<RangeRow>>,
     /// The three write forms.
     forms: IpamForms,
+    /// The audit, when a subnet is in force.
+    audit: Option<AuditRender>,
 }
 
 /// The CSS modifier for a policy.
@@ -555,6 +680,7 @@ fn empty_plan_body() -> String {
         plan: None,
         too_large: None,
         forms: IpamForms::new(None, true),
+        audit: None,
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -575,6 +701,7 @@ fn unknown_subnet_body(subnets: &[(String, Subnet, String)]) -> String {
         plan: None,
         too_large: None,
         forms: IpamForms::new(None, false),
+        audit: None,
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -638,6 +765,19 @@ fn strings(counts: Option<(usize, usize, usize, usize)>, next: Option<Ipv4Addr>)
         form_submit: rust_i18n::t!("ipam.form.submit").to_string(),
         form_needs_subnet: rust_i18n::t!("ipam.form.needs_subnet").to_string(),
         form_needs_first_subnet: rust_i18n::t!("ipam.form.needs_first_subnet").to_string(),
+        findings_heading: rust_i18n::t!("ipam.findings.heading").to_string(),
+        no_findings: rust_i18n::t!("ipam.findings.none").to_string(),
+        // 🔑 The audit's two words are the binding vocabulary's own keys, never new ones (constraint
+        // 5): `gap` is « écart », the queue's key; `undeclared` is the STATE axis's.
+        word_gap: rust_i18n::t!("triage.kind.ecart").to_string(),
+        word_undeclared: rust_i18n::t!("state.undeclared").to_string(),
+        word_conflict: rust_i18n::t!("ipam.finding.conflict").to_string(),
+        conflict_note: rust_i18n::t!("ipam.finding.conflict_note").to_string(),
+        triage_link: rust_i18n::t!("ipam.finding.triage_link").to_string(),
+        documented_no_question: rust_i18n::t!("ipam.finding.documented").to_string(),
+        outside_heading: rust_i18n::t!("ipam.outside.heading").to_string(),
+        pool_warning_heading: rust_i18n::t!("ipam.pool_warning.heading").to_string(),
+        too_large_no_offer: rust_i18n::t!("ipam.too_large_no_offer").to_string(),
     }
 }
 
@@ -646,10 +786,15 @@ fn strings(counts: Option<(usize, usize, usize, usize)>, next: Option<Ipv4Addr>)
 /// 🔑 It shows what the PLAN holds rather than an apology: a `/16` has at most a handful of ranges,
 /// and those ranges are the thing the operator wrote. The grid is what does not scale; the plan
 /// does.
+///
+/// ⚠️ **No offer, and the findings list IS shown** (decision 14): a subnet too large to draw is
+/// still a subnet the network can contradict, and its findings are bounded by what was SEEN, not by
+/// its size.
 fn render_too_large(
     subnets: &[(String, Subnet, String)],
     selected: &str,
     ranges: &[(Ipv4Addr, Ipv4Addr, IpPolicy, String)],
+    audit: &Audit,
 ) -> String {
     let rows = ranges
         .iter()
@@ -665,6 +810,7 @@ fn render_too_large(
         plan: None,
         too_large: Some(rows),
         forms: IpamForms::new(Some(selected.to_string()), false),
+        audit: Some(audit_render(audit)),
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -687,6 +833,7 @@ pub(crate) fn render_plan(
     subnets: &[(String, Subnet, String)],
     selected: &str,
     plan: &PlanView,
+    audit: &Audit,
 ) -> String {
     let tabs = tabs_for(subnets, selected);
     let cells = plan
@@ -694,7 +841,7 @@ pub(crate) fn render_plan(
         .iter()
         .map(|(addr, state)| {
             let state_word = rust_i18n::t!(state.label_key()).to_string();
-            let label = match state.policy() {
+            let base = match state.policy() {
                 Some(policy) => rust_i18n::t!(
                     "ipam.cell_label_in_policy",
                     address = addr.to_string(),
@@ -709,6 +856,17 @@ pub(crate) fn render_plan(
                 )
                 .to_string(),
             };
+            // 🔑 A held cell carries its last sightings in its accessible name (decision 9): the
+            // grid's density is not readable without sight, the name is.
+            let label = match audit.seen.get(addr) {
+                Some(seen) => rust_i18n::t!(
+                    "ipam.cell_label_seen",
+                    label = base,
+                    sightings = sighting_lines(seen).join("; ")
+                )
+                .to_string(),
+                None => base,
+            };
             CellView {
                 modifier: state.modifier(),
                 policy_modifier: state.policy().map(policy_modifier).unwrap_or(""),
@@ -716,12 +874,25 @@ pub(crate) fn render_plan(
             }
         })
         .collect();
+    // Decision 12: the occupancy line counts as free only what the offer would propose.
+    let (defined, _free_state, infrastructure, not_covered) = plan.counts();
+    let offerable = plan
+        .cells
+        .iter()
+        .filter(|(addr, _)| audit.plan.offerable(*addr, audit.seen, audit.documented))
+        .count();
     let body = IpamBody {
-        s: strings(Some(plan.counts()), plan.next_offerable()),
+        s: strings(
+            Some((defined, offerable, infrastructure, not_covered)),
+            audit
+                .plan
+                .next_offerable(audit.subnet, audit.seen, audit.documented),
+        ),
         tabs,
         plan: Some(PlanRender { cells }),
         too_large: None,
         forms: IpamForms::new(Some(selected.to_string()), false),
+        audit: Some(audit_render(audit)),
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -740,6 +911,25 @@ mod tests {
         text.parse().expect("a v4 address")
     }
 
+    /// The office subnet's plan, whole, for the offer — since story 14.3b the offer is the AUDIT's
+    /// answer (`ipam_audit::Plan::offerable`), not a cell's.
+    fn offer_of(ranges: &[(Ipv4Addr, Ipv4Addr, IpPolicy)], defined: &[Ipv4Addr]) -> Plan {
+        Plan {
+            subnets: vec![office()],
+            ranges: ranges.to_vec(),
+            defined: defined.iter().copied().collect(),
+        }
+    }
+
+    /// Every address of the office subnet the plan would offer, with no sighting and nothing
+    /// documented.
+    fn offered(plan: &Plan) -> Vec<Ipv4Addr> {
+        office()
+            .addresses()
+            .filter(|addr| plan.offerable(*addr, &BTreeMap::new(), &BTreeSet::new()))
+            .collect()
+    }
+
     /// 🔴 **256 ADDRESSES, 254 HOSTS, and the reference mock conflated them** — it looped `0..256`,
     /// drew `.0` and `.255` as ordinary free cells, and its *next free address* panel then named
     /// the NETWORK address, reproduced on a real build at story 6b.7's validation. ⚠️ That story's
@@ -753,7 +943,11 @@ mod tests {
             &[],
         );
         assert_eq!(plan.cells.len(), 256, "a /24 holds 256 addresses");
-        let offerable = plan.cells.iter().filter(|(_, s)| s.offerable()).count();
+        let whole = offer_of(
+            &[(v4("192.0.2.0"), v4("192.0.2.255"), IpPolicy::Static)],
+            &[],
+        );
+        let offerable = offered(&whole).len();
         assert_eq!(
             offerable, 254,
             "🔴 A RANGE OVER THE WHOLE SUBNET MUST STILL NOT PUT THE EDGES ON OFFER. This \
@@ -763,7 +957,7 @@ mod tests {
              is a test that demands it, and this one demanded it for a day"
         );
         assert_eq!(
-            plan.next_offerable(),
+            offered(&whole).first().copied(),
             Some(v4("192.0.2.1")),
             "and the offer starts at the first host, not at the network address"
         );
@@ -775,8 +969,12 @@ mod tests {
             &[],
         );
         assert_eq!(plan.cells.len(), 256);
+        let hosts = offer_of(
+            &[(v4("192.0.2.1"), v4("192.0.2.254"), IpPolicy::Static)],
+            &[],
+        );
         assert_eq!(
-            plan.cells.iter().filter(|(_, s)| s.offerable()).count(),
+            offered(&hosts).len(),
             254,
             "the network and broadcast addresses are never offerable"
         );
@@ -787,7 +985,7 @@ mod tests {
             "the .255"
         );
         assert_eq!(
-            plan.next_offerable(),
+            offered(&hosts).first().copied(),
             Some(v4("192.0.2.1")),
             "the lowest free host, and never the network address"
         );
@@ -805,8 +1003,15 @@ mod tests {
             ],
             &[],
         );
+        let infra = offer_of(
+            &[
+                (v4("192.0.2.0"), v4("192.0.2.9"), IpPolicy::Infrastructure),
+                (v4("192.0.2.10"), v4("192.0.2.254"), IpPolicy::Static),
+            ],
+            &[],
+        );
         assert_eq!(
-            plan.next_offerable(),
+            offered(&infra).first().copied(),
             Some(v4("192.0.2.10")),
             "the offer must skip the infrastructure range entirely"
         );
@@ -818,7 +1023,10 @@ mod tests {
             CellState::Infrastructure(Some(IpPolicy::Infrastructure)),
             "an edge keeps its declared policy and is still an edge"
         );
-        assert!(!plan.cells[0].1.offerable(), "and it is not offerable");
+        assert!(
+            !offered(&infra).contains(&v4("192.0.2.0")),
+            "and it is not offerable"
+        );
         // The other half of the rule, on a cell that is NOT an edge: a declared infrastructure
         // range is free of any individual claim and still never offered — the binding table's
         // *"never offered as free"*, which no ordering can satisfy on its own.
@@ -828,7 +1036,7 @@ mod tests {
             "a mid-range address under an infrastructure policy is free-with-that-policy"
         );
         assert!(
-            !plan.cells[5].1.offerable(),
+            !offered(&infra).contains(&v4("192.0.2.5")),
             "and it is not offerable either"
         );
     }
@@ -852,7 +1060,14 @@ mod tests {
             CellState::Defined(Some(IpPolicy::DhcpPool)),
             "defined wins over free, and the policy is carried rather than lost"
         );
-        assert!(!state.offerable(), "a defined address is not on offer");
+        assert!(
+            !offered(&offer_of(
+                &[(v4("192.0.2.1"), v4("192.0.2.100"), IpPolicy::DhcpPool)],
+                &[v4("192.0.2.50")],
+            ))
+            .contains(&v4("192.0.2.50")),
+            "a defined address is not on offer"
+        );
     }
 
     /// A cell outside every range says the plan is silent, and says it WITHOUT A NOUN.
@@ -865,7 +1080,13 @@ mod tests {
         );
         assert_eq!(plan.cells[10].1, CellState::NotCovered);
         assert_eq!(plan.cells[10].1.policy(), None);
-        assert!(!plan.cells[10].1.offerable());
+        assert!(
+            !offered(&offer_of(
+                &[(v4("192.0.2.1"), v4("192.0.2.9"), IpPolicy::Static)],
+                &[],
+            ))
+            .contains(&v4("192.0.2.10"))
+        );
         let (defined, free, infrastructure, not_covered) = plan.counts();
         assert_eq!((defined, free, infrastructure), (0, 9, 2));
         assert_eq!(not_covered, 245);
@@ -1044,7 +1265,19 @@ mod tests {
             IpPolicy::Static,
             "Servers".to_string(),
         )];
-        let body = render_too_large(&subnets, "t-big", &ranges);
+        let whole = Plan {
+            subnets: vec![big],
+            ranges: vec![(v4("10.0.0.1"), v4("10.0.0.50"), IpPolicy::Static)],
+            defined: BTreeSet::new(),
+        };
+        let (none, nobody) = (BTreeMap::new(), BTreeSet::new());
+        let audit = Audit {
+            plan: &whole,
+            seen: &none,
+            documented: &nobody,
+            subnet: big,
+        };
+        let body = render_too_large(&subnets, "t-big", &ranges, &audit);
         assert!(
             !body.contains("ipam-grid"),
             "no grid is drawn for a subnet beyond the ceiling"
@@ -1119,10 +1352,25 @@ mod tests {
         );
     }
 
-    /// 🔴 **AC2: THE PLAN READS NO OBSERVATION.** The audit is story 14.3's, and a join written
-    /// anywhere in the plan's modules would be that story's deliverable arriving early and
-    /// unmeasured. The guard is a source scan because the defect is an ADDED read, which no runtime
-    /// test can provoke — story 5.12's *you cannot measure the absence of code by running code*.
+    /// 🔴 **THE PLAN READS THE NETWORK ONLY THROUGH THE AUDIT** — story 14.3b's AC8, the guard that
+    /// read *"the plan reads no observation"* until the audit it forbade by design arrived. Guy's
+    /// decision 6 (2026-09-15) NARROWED it rather than retiring it, in three parts:
+    ///
+    /// 1. no module of the plan — `ipam_audit.rs` included — names `identity_link`,
+    ///    `observation_record`, `declared_attribute` or `address_sighting` in its code: the readers
+    ///    live outside the plan's modules;
+    /// 2. only `ipam_audit.rs` names the sighting reader (`sighting_repo`) or the documented read
+    ///    (`crate::repo::load_documented_ipv4s`);
+    /// 3. `ipam_write.rs` cannot read the network at all, because `IpamWriteState` holds a PORT and
+    ///    never a pool — carried by the type, and proven by a compile-fail mutation, not by this scan.
+    ///
+    /// ⚠️ **Two limits, MEASURED by story 14.3's gap-hunt and written rather than implied**:
+    /// `ipam_write.rs` calling `crate::ipam_audit::…` is GREEN here (what forbids it is part 3's type),
+    /// and a module OUTSIDE the perimeter — a new `src/audit.rs` joining everything with an
+    /// `identity_link` query — is GREEN (the perimeter is the plan's files, by name or by table).
+    ///
+    /// The guard is a source scan because the defect is an ADDED read, which no runtime test can
+    /// provoke — story 5.12's *you cannot measure the absence of code by running code*.
     ///
     /// # The perimeter is DERIVED, and it had to be
     ///
@@ -1171,7 +1419,7 @@ mod tests {
     /// is invisible to it. A TRIPWIRE against the read someone writes here, never a barrier — story
     /// 5.12's own framing.
     #[test]
-    fn the_plan_reads_no_observation() {
+    fn the_plan_reads_the_network_only_through_the_audit() {
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut perimeter: Vec<(String, String, String)> = Vec::new();
         // 🔴 RECURSIVE: the review found the flat `read_dir` blind to a `src/ipam/` submodule, which
@@ -1232,17 +1480,29 @@ mod tests {
         // derived list cannot: a module that LEAVES the perimeter by being renamed or emptied.
         assert_eq!(
             found,
-            ["ipam_page.rs", "ipam_repo.rs", "ipam_write.rs"],
+            [
+                "ipam_audit.rs",
+                "ipam_page.rs",
+                "ipam_repo.rs",
+                "ipam_write.rs"
+            ],
             "the plan's perimeter changed. A module that joined it is covered from here on; one \
              that left it needs saying why"
         );
 
         for (name, code, words) in &perimeter {
-            for needle in ["observation_record", "identity_link", "declared_attribute"] {
+            for needle in [
+                "observation_record",
+                "identity_link",
+                "declared_attribute",
+                "address_sighting",
+            ] {
                 assert!(
                     !code.contains(needle),
-                    "`{needle}` appears in {name}: the audit is story 14.3's, and the criterion is \
-                     that the plan draws itself and nothing else"
+                    "`{needle}` appears in {name}: no module of the plan writes SQL against a table \
+                     outside the plan — the audit reads the network through `sighting_repo` and \
+                     `repo::load_documented_ipv4s`, named from `ipam_audit.rs` alone, and \
+                     `identity_link` from nowhere (story 14.3b, decision 6)"
                 );
             }
             // 🔴 **AND THE READ ARRIVES AS A CALL, not as SQL.** The edge layer inserted
@@ -1278,16 +1538,38 @@ mod tests {
                 };
                 let allowed = before.ends_with("opencmdb_core::")
                     || (before.ends_with("crate::")
-                        && (names_one("classify") || names_one("is_deadlock")));
+                        && (names_one("classify") || names_one("is_deadlock")))
+                    || (name.as_str() == "ipam_audit.rs"
+                        && before.ends_with("crate::")
+                        && names_one("load_documented_ipv4s"));
                 let line = words[..at].matches('\n').count() + 1;
                 assert!(
                     allowed,
-                    "{name}:{line} names the `repo` module outside the two items this guard allows \
-                     (`crate::repo::classify`, `crate::repo::is_deadlock`) — imported whole, renamed \
-                     or reached another way, the observation reads live there. The plan's own \
-                     adapter is `ipam_repo`; anything else is the audit arriving early, and story \
-                     14.3 is where it belongs"
+                    "{name}:{line} names the `repo` module outside the items this guard allows \
+                     (`crate::repo::classify`, `crate::repo::is_deadlock` anywhere, and \
+                     `crate::repo::load_documented_ipv4s` from `ipam_audit.rs` alone) — imported \
+                     whole, renamed or reached another way, the network's reads live there, and the \
+                     plan reaches them only through the audit (story 14.3b, decision 6)"
                 );
+            }
+
+            // Part 2: the sighting reader is named from `ipam_audit.rs` alone.
+            if name.as_str() != "ipam_audit.rs" {
+                for (at, _) in words.match_indices("sighting_repo") {
+                    let is_ident = |c: char| c.is_alphanumeric() || c == '_';
+                    let before = &words[..at];
+                    let after = &words[at + "sighting_repo".len()..];
+                    if before.chars().next_back().is_some_and(is_ident)
+                        || after.chars().next().is_some_and(is_ident)
+                    {
+                        continue;
+                    }
+                    let line = words[..at].matches('\n').count() + 1;
+                    panic!(
+                        "{name}:{line} names `sighting_repo`: the sighting summary is read by \
+                         `ipam_audit.rs` and nowhere else in the plan (story 14.3b, decision 6)"
+                    );
+                }
             }
         }
     }
@@ -1382,10 +1664,18 @@ mod tests {
     #[test]
     fn every_form_posts_where_its_route_is_mounted() {
         use crate::ipam_write::WriteRoute;
+        let whole = offer_of(&[], &[]);
+        let (none, nobody) = (BTreeMap::new(), BTreeSet::new());
         let body = render_plan(
             &[("s1".to_string(), office(), "Office".to_string())],
             "s1",
             &PlanView::derive(office(), &[], &[]),
+            &Audit {
+                plan: &whole,
+                seen: &none,
+                documented: &nobody,
+                subnet: office(),
+            },
         );
         for route in WriteRoute::ALL {
             assert!(
@@ -1409,7 +1699,18 @@ mod tests {
             &[(v4("192.0.2.1"), v4("192.0.2.254"), IpPolicy::Static)],
             &[v4("192.0.2.9")],
         );
-        let body = render_plan(&subnets, "t-1", &plan);
+        let whole = offer_of(
+            &[(v4("192.0.2.1"), v4("192.0.2.254"), IpPolicy::Static)],
+            &[v4("192.0.2.9")],
+        );
+        let (none, nobody) = (BTreeMap::new(), BTreeSet::new());
+        let audit = Audit {
+            plan: &whole,
+            seen: &none,
+            documented: &nobody,
+            subnet: office(),
+        };
+        let body = render_plan(&subnets, "t-1", &plan, &audit);
         assert_eq!(
             body.matches("<li class=\"ipam-cell").count(),
             256,
@@ -1445,7 +1746,15 @@ mod tests {
             ),
         ];
         let plan = PlanView::derive(office(), &[], &[]);
-        let body = render_plan(&subnets, "t-2", &plan);
+        let whole = offer_of(&[], &[]);
+        let (none, nobody) = (BTreeMap::new(), BTreeSet::new());
+        let audit = Audit {
+            plan: &whole,
+            seen: &none,
+            documented: &nobody,
+            subnet: office(),
+        };
+        let body = render_plan(&subnets, "t-2", &plan, &audit);
         assert_eq!(
             body.matches("aria-current=\"true\"").count(),
             1,
@@ -1463,6 +1772,249 @@ mod tests {
         assert!(
             body.contains("192.0.2.0/24<"),
             "a subnet with no label shows its CIDR alone, with no dangling separator"
+        );
+    }
+
+    // ── The audit on screen (story 14.3b) ────────────────────────────────────────────────────
+
+    fn at(text: &str) -> opencmdb_core::observation::Timestamp {
+        chrono::DateTime::parse_from_rfc3339(text)
+            .expect("an instant")
+            .with_timezone(&chrono::Utc)
+    }
+
+    /// One sighting with a hardware address ending in `mac_octet`.
+    fn sighted(addr: &str, mac_octet: u8, last: &str) -> crate::sighting_repo::Sighting {
+        crate::sighting_repo::Sighting {
+            addr: v4(addr),
+            l2_domain: opencmdb_core::observation::L2DomainId::from_uuid(uuid::Uuid::nil()),
+            mac: Some(opencmdb_core::observation::MacAddr([
+                2, 0, 0, 0, 0, mac_octet,
+            ])),
+            first_seen_at: at("2026-09-01T09:00:00Z"),
+            last_seen_at: at(last),
+        }
+    }
+
+    /// Office: `static` .1–.40 with .9 defined, `dhcp-pool` .80–.126 with .90 defined, `reserved`
+    /// .130–.150.
+    fn audited_office() -> Plan {
+        offer_of(
+            &[
+                (v4("192.0.2.1"), v4("192.0.2.40"), IpPolicy::Static),
+                (v4("192.0.2.80"), v4("192.0.2.126"), IpPolicy::DhcpPool),
+                (v4("192.0.2.130"), v4("192.0.2.150"), IpPolicy::Reserved),
+            ],
+            &[v4("192.0.2.9"), v4("192.0.2.90")],
+        )
+    }
+
+    /// The part of a rendered body that is the audit, and nothing else.
+    fn audit_part(body: &str) -> &str {
+        let from = body
+            .find("ipam-audit")
+            .expect("the audit section is rendered");
+        &body[from..]
+    }
+
+    /// AC1, AC2, AC5, AC12 — the findings list words `gap`, `undeclared` and « Conflit d'adresse »
+    /// with a treatment each, links a triage question only where one exists, keeps the pool silent,
+    /// and lists the address outside every subnet.
+    #[test]
+    fn the_findings_list_words_each_verdict_and_links_only_where_triage_asks() {
+        let plan = audited_office();
+        let seen = crate::ipam_audit::merge_sightings(&[
+            sighted("192.0.2.20", 1, "2026-09-02T10:00:00Z"),
+            sighted("192.0.2.20", 2, "2026-09-03T11:30:00Z"),
+            sighted("192.0.2.140", 3, "2026-09-02T10:00:00Z"),
+            sighted("192.0.2.99", 4, "2026-09-02T10:00:00Z"),
+            sighted("10.9.9.9", 5, "2026-09-02T10:00:00Z"),
+        ]);
+        let documented = BTreeSet::from([v4("192.0.2.140")]);
+        let audit = Audit {
+            plan: &plan,
+            seen: &seen,
+            documented: &documented,
+            subnet: office(),
+        };
+        let body = render_plan(
+            &[("s1".to_string(), office(), "Office".to_string())],
+            "s1",
+            &PlanView::derive(office(), &[], &[]),
+            &audit,
+        );
+        let part = audit_part(&body);
+        let gap_word = rust_i18n::t!("triage.kind.ecart").to_string();
+        let undeclared_word = rust_i18n::t!("state.undeclared").to_string();
+        let conflict_word = rust_i18n::t!("ipam.finding.conflict").to_string();
+        assert!(
+            part.contains(&format!(
+                "<span class=\"ipam-word ipam-word-gap\">{gap_word}</span>"
+            )),
+            "a gap carries its word AND its treatment: {part}"
+        );
+        assert!(part.contains(&format!(
+            "<span class=\"ipam-word ipam-word-undeclared\">{undeclared_word}</span>"
+        )));
+        assert!(part.contains(&format!(
+            "<span class=\"ipam-word ipam-word-conflict\">{conflict_word}</span>"
+        )));
+        assert!(
+            part.contains("href=\"/triage?sel=nouveau:192.0.2.20\""),
+            "an undocumented address links to its triage question"
+        );
+        assert!(
+            !part.contains("nouveau:192.0.2.140"),
+            "a documented address has no triage question to link to"
+        );
+        assert!(
+            part.contains(&rust_i18n::t!("ipam.finding.documented").to_string()),
+            "and it says so rather than linking to nothing"
+        );
+        let findings = part
+            .split(&rust_i18n::t!("ipam.outside.heading").to_string())
+            .next()
+            .expect("the findings before the outside list");
+        assert!(
+            !findings.contains("192.0.2.99"),
+            "nothing inside a dhcp-pool is a finding"
+        );
+        assert!(
+            part.contains(&rust_i18n::t!("ipam.outside.heading").to_string())
+                && part.contains("10.9.9.9"),
+            "the address outside every subnet is listed"
+        );
+        assert!(
+            part.contains(
+                &rust_i18n::t!("ipam.pool_warning.item", address = "192.0.2.90").to_string()
+            ),
+            "AC7 — an address defined inside a dhcp-pool is warned about"
+        );
+    }
+
+    /// AC6 — a held cell and a finding carry each hardware address with an ABSOLUTE last sighting,
+    /// and the render is a pure function of its data: rendered twice, identical.
+    #[test]
+    fn a_seen_address_names_each_mac_with_an_absolute_date() {
+        let plan = audited_office();
+        let seen = crate::ipam_audit::merge_sightings(&[
+            sighted("192.0.2.9", 1, "2026-09-02T10:00:00Z"),
+            sighted("192.0.2.9", 2, "2026-09-03T11:30:00Z"),
+        ]);
+        let nobody = BTreeSet::new();
+        let audit = Audit {
+            plan: &plan,
+            seen: &seen,
+            documented: &nobody,
+            subnet: office(),
+        };
+        let view = PlanView::derive(office(), &[], &[v4("192.0.2.9")]);
+        let subnets = [("s1".to_string(), office(), "Office".to_string())];
+        let body = render_plan(&subnets, "s1", &view, &audit);
+        let cell = body
+            .split("aria-label=\"192.0.2.9 ·")
+            .nth(1)
+            .expect("the held cell")
+            .split('"')
+            .next()
+            .expect("its name");
+        assert!(
+            cell.contains("02:00:00:00:00:01") && cell.contains("2026-09-02 10:00 UTC"),
+            "the first MAC with its absolute date: {cell}"
+        );
+        assert!(
+            cell.contains("02:00:00:00:00:02") && cell.contains("2026-09-03 11:30 UTC"),
+            "the second MAC with its own: {cell}"
+        );
+        assert_eq!(
+            render_plan(&subnets, "s1", &view, &audit),
+            body,
+            "the same data renders the same page — no clock is read"
+        );
+    }
+
+    /// AC3, AC13 — the occupancy line counts as free only what the offer proposes, and when the offer
+    /// is empty the panel says so with the new exclusions named.
+    #[test]
+    fn the_occupancy_and_the_empty_offer_follow_the_audit() {
+        let plan = offer_of(
+            &[(v4("192.0.2.1"), v4("192.0.2.3"), IpPolicy::Static)],
+            &[v4("192.0.2.1")],
+        );
+        let seen =
+            crate::ipam_audit::merge_sightings(&[sighted("192.0.2.2", 1, "2026-09-02T10:00:00Z")]);
+        let documented = BTreeSet::from([v4("192.0.2.3")]);
+        let audit = Audit {
+            plan: &plan,
+            seen: &seen,
+            documented: &documented,
+            subnet: office(),
+        };
+        let view = PlanView::derive(
+            office(),
+            &[(v4("192.0.2.1"), v4("192.0.2.3"), IpPolicy::Static)],
+            &[v4("192.0.2.1")],
+        );
+        let body = render_plan(
+            &[("s1".to_string(), office(), "Office".to_string())],
+            "s1",
+            &view,
+            &audit,
+        );
+        assert!(
+            body.contains(&rust_i18n::t!("ipam.next_free_none").to_string()),
+            "a defined, a seen and a documented address leave nothing to offer, and the panel says so"
+        );
+        assert!(
+            body.contains(
+                &rust_i18n::t!(
+                    "ipam.occupancy",
+                    defined = 1,
+                    free = 0,
+                    infrastructure = 2,
+                    not_covered = 251
+                )
+                .to_string()
+            ),
+            "the seen and the documented address are not counted as free to assign: {}",
+            body.split("ipam-occupancy").nth(1).unwrap_or("")
+        );
+    }
+
+    /// Decision 14 — a subnet too large to draw offers nothing, says so, and shows its findings.
+    #[test]
+    fn a_subnet_too_large_to_draw_offers_nothing_and_shows_its_findings() {
+        let big = Subnet::new("10.0.0.0".parse().unwrap(), 8).expect("a /8");
+        let plan = Plan {
+            subnets: vec![big],
+            ranges: vec![(v4("10.0.0.1"), v4("10.0.0.50"), IpPolicy::Reserved)],
+            defined: BTreeSet::new(),
+        };
+        let seen =
+            crate::ipam_audit::merge_sightings(&[sighted("10.0.0.7", 1, "2026-09-02T10:00:00Z")]);
+        let nobody = BTreeSet::new();
+        let audit = Audit {
+            plan: &plan,
+            seen: &seen,
+            documented: &nobody,
+            subnet: big,
+        };
+        let body = render_too_large(
+            &[("t-big".to_string(), big, "Everything".to_string())],
+            "t-big",
+            &[(
+                v4("10.0.0.1"),
+                v4("10.0.0.50"),
+                IpPolicy::Reserved,
+                "Held".to_string(),
+            )],
+            &audit,
+        );
+        assert!(body.contains(&rust_i18n::t!("ipam.too_large_no_offer").to_string()));
+        assert!(
+            audit_part(&body).contains("10.0.0.7")
+                && audit_part(&body).contains("ipam-word-undeclared"),
+            "the findings list is shown for a subnet too large to draw"
         );
     }
 }

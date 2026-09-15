@@ -174,10 +174,40 @@ subnet written with host bits set, a label that is empty or longer than 120 char
 the plan already holds. The forms need JavaScript. If a write takes too long, the screen says it
 may or may not have been saved: reload the plan before trying again.
 
+\section{What the network shows against the plan}
+Under the grid, \emph{What the network shows} lists every address of the selected subnet the
+scanner has seen that the plan has something to say about:
+\begin{itemize}
+  \item \textbf{gap} --- the plan would offer the address as free, and a machine is using it;
+  \item \textbf{undeclared} --- the address is in use, has no entry in the plan, and is not one
+        the plan would offer: inside a \texttt{reserved} or \texttt{infrastructure} range, on the
+        network or broadcast address, or where no range says anything;
+  \item \textbf{Address conflict} --- two hardware addresses were seen on one address inside a
+        \texttt{static} or \texttt{reserved} range. A replaced network card and a duplicate look the
+        same from the network, so the entry names both hardware addresses and when each was last
+        seen, and leaves the judgement to you.
+\end{itemize}
+Nothing inside a \texttt{dhcp-pool} range is listed: there, the machine using an address changes by
+design. Each entry gives, for every hardware address seen, the date it was last seen --- a date, not
+an age --- and links to its question in the triage screen when there is one. An address documented
+in the inventory has no triage question, and the entry says so.
+
+A sighting protects an address \emph{until you release it}: the product cannot tell a machine that
+left from one that is asleep, so an address seen once stays listed. The list also names addresses
+seen outside every subnet of the plan, and addresses you defined inside a \texttt{dhcp-pool} range,
+which the pool may hand to another machine.
+
+\section{The next address the plan can offer}
+The panel beside the grid proposes the lowest address that is safe to assign: inside a
+\texttt{static} range, not the network or broadcast address, not defined in the plan, \emph{never
+seen on the network}, and not documented in the inventory. When several ranges cover an address ---
+overlapping ranges, or a subnet nested in another --- the most protective one decides: a
+\texttt{reserved} range over a \texttt{static} one takes the address out of the offer. A subnet too
+large to draw proposes nothing and still lists what the network shows. The occupancy line counts as
+free only what the offer would propose.
+
 \begin{planned}
-Editing, deleting and releasing an entry of the plan; the audit that compares the plan with the
-network, and a next-free-address offer that leaves out addresses seen in use; VLANs; conflict
-detection; and IPv6 are not implemented yet.
+Editing, deleting and releasing an entry of the plan; VLANs; and IPv6 are not implemented yet.
 \end{planned}
 
 \chapter{Applications and hosted software}

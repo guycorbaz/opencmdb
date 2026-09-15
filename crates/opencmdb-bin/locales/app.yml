@@ -826,8 +826,8 @@ ipam.cell_label_in_policy:
 # 🔑 A LIST AND NEVER A RATIO. A percentage invites a reader to compare two subnets whose sizes
 # differ, and the occupancy of a plan is not a rate; it is also why `ipam/` needs no float.
 ipam.occupancy:
-  en: "%{defined} defined · %{free} free · %{infrastructure} infrastructure · %{not_covered} not covered"
-  fr: "%{defined} définies · %{free} libres · %{infrastructure} infrastructure · %{not_covered} hors du plan"
+  en: "%{defined} defined · %{free} free to assign · %{infrastructure} infrastructure · %{not_covered} not covered"
+  fr: "%{defined} définies · %{free} libres à attribuer · %{infrastructure} infrastructure · %{not_covered} hors du plan"
 ipam.next_free:
   en: "Next address the plan can offer"
   fr: "Prochaine adresse que le plan peut offrir"
@@ -835,11 +835,50 @@ ipam.next_free:
 # panel answers what the plan allows and not what is actually free out there. Naming the source is
 # what stops the sentence being read as a promise it cannot keep.
 ipam.next_free_none:
-  en: "None — every address in this subnet is defined, infrastructure, or outside every range"
-  fr: "Aucune — toutes les adresses de ce sous-réseau sont définies, infrastructure, ou hors plage"
+  en: "None — every address a static range holds here is defined, documented, already seen on the network, or an edge"
+  fr: "Aucune — chaque adresse qu'une plage statique contient ici est définie, documentée, déjà vue sur le réseau, ou une bordure"
 ipam.next_free_caveat:
-  en: "From the plan alone; the network has not been consulted."
-  fr: "D'après le plan seul ; le réseau n'a pas été consulté."
+  en: "Only from static ranges, and never an address the network has been seen on or a documented one."
+  fr: "Uniquement dans les plages statiques, et jamais une adresse vue sur le réseau ni une adresse documentée."
+ipam.cell_label_seen:
+  en: "%{label} · seen: %{sightings}"
+  fr: "%{label} · vue : %{sightings}"
+ipam.findings.heading:
+  en: "What the network shows"
+  fr: "Ce que montre le réseau"
+ipam.findings.none:
+  en: "Nothing the network has shown contradicts this subnet's plan."
+  fr: "Rien de ce que le réseau a montré ne contredit le plan de ce sous-réseau."
+ipam.finding.seen_mac:
+  en: "hardware address %{mac}, last seen %{at}"
+  fr: "adresse matérielle %{mac}, vue pour la dernière fois le %{at}"
+ipam.finding.seen_no_mac:
+  en: "no hardware address, last seen %{at}"
+  fr: "sans adresse matérielle, vue pour la dernière fois le %{at}"
+ipam.finding.conflict:
+  en: "Address conflict"
+  fr: "Conflit d'adresse"
+ipam.finding.conflict_note:
+  en: "Two hardware addresses were seen on this address. A replaced card and a duplicate look the same from here."
+  fr: "Deux adresses matérielles ont été vues sur cette adresse. Une carte remplacée et un doublon se ressemblent vus d'ici."
+ipam.finding.triage_link:
+  en: "Open its question in triage"
+  fr: "Ouvrir sa question dans le tri"
+ipam.finding.documented:
+  en: "Documented in the inventory, so triage asks nothing about it"
+  fr: "Documentée dans l'inventaire, le tri ne pose donc aucune question à son sujet"
+ipam.outside.heading:
+  en: "Seen outside every subnet of the plan"
+  fr: "Vues hors de tout sous-réseau du plan"
+ipam.pool_warning.heading:
+  en: "Defined inside a DHCP pool"
+  fr: "Définies dans un pool DHCP"
+ipam.pool_warning.item:
+  en: "%{address} is defined inside a dhcp-pool range: the pool may hand it to another machine."
+  fr: "%{address} est définie dans une plage pool DHCP : le pool peut l'attribuer à une autre machine."
+ipam.too_large_no_offer:
+  en: "No address is offered for a subnet this size."
+  fr: "Aucune adresse n'est proposée pour un sous-réseau de cette taille."
 ipam.unknown_subnet:
   en: "No subnet is named by this identifier. Choose one above."
   fr: "Aucun sous-réseau ne porte cet identifiant. Choisissez-en un ci-dessus."
