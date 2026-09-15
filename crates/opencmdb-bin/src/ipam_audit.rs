@@ -233,6 +233,17 @@ impl Plan {
             .collect()
     }
 
+    /// Whether a `dhcp-pool` range covers `addr`, in any subnet — the address check's warning that
+    /// the pool may hand the address to another machine (decision 13).
+    pub(crate) fn covered_by_a_pool(&self, addr: Ipv4Addr) -> bool {
+        self.covering(addr).any(|p| p == IpPolicy::DhcpPool)
+    }
+
+    /// Whether an `ip_address` row names `addr`, in any subnet.
+    pub(crate) fn defines(&self, addr: Ipv4Addr) -> bool {
+        self.defined.contains(&addr)
+    }
+
     /// The lowest address of `subnet` that may be offered, or `None`.
     pub(crate) fn next_offerable(
         &self,

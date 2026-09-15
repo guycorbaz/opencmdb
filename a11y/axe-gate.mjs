@@ -119,6 +119,14 @@ const REQUIRE_GESTURE = process.env.AXE_REQUIRE_GESTURE === "1";
 // 🔑 The grid is DERIVED, never named: the gate asks the page whether it carries cells, so it
 // cannot drift from what the product serves.
 const REQUIRE_PLAN = process.env.AXE_REQUIRE_PLAN === "1";
+// 🔴 **STORY 14.3b's AUDIT IS THE SAME SHAPE AGAIN.** The findings list, its three words and the warning
+// the address field shows before a write exist only when the store holds sightings the plan has
+// something to say about. `a11y/seed.sql` seeds one per case; `AXE_REQUIRE_AUDIT=1` (CI sets it) turns
+// a seeded run with no finding — or without both a `gap` and an `undeclared` to compare — into *the
+// gate could not run*, never a pass.
+const REQUIRE_AUDIT = process.env.AXE_REQUIRE_AUDIT === "1";
+// An address the seed shows in use, typed into the address field to reach the warning.
+const SEEN_ADDRESS = "192.0.2.20";
 // 🔴 **THE ONE `/ipam` STATE THE GATE WAS CONFIGURED NEVER TO REACH.** `a11y/seed.sql` always
 // seeds a subnet and `AXE_REQUIRE_PLAN=1` REFUSES a run that draws no cell — so the EMPTY plan,
 // which is where story 14.2b's AC8 puts the link into the gesture, was the one branch of this
@@ -305,6 +313,9 @@ async function main() {
 
   // `/ipam`'s grid, measured the same way: opened, then asked whether it carries cells.
   let planIndistinguishable = null;
+  // Story 14.3b: the audit's two words told apart without colour, and the warning's own axe run.
+  let auditIndistinguishable = null;
+  let warningViolations = 0;
   {
     const page = await openPage();
     try {
@@ -359,6 +370,99 @@ async function main() {
               `exists to compare is not on the page. The seed must draw both.`,
           );
         }
+
+        // ── Story 14.3b: the findings list, its words told apart WITHOUT colour ─────────────
+        // 🔑 Constraint 6 and AC2: `gap` and `undeclared` are distinct by word AND by treatment. A
+        // stylesheet guard sees that both rules exist, never that they render differently — so the
+        // browser compares a NON-colour property, the badge's border style.
+        const audit = await page.evaluate(() => {
+          const read = (sel) => {
+            const el = document.querySelector(sel);
+            return el ? getComputedStyle(el).borderTopStyle : null;
+          };
+          return {
+            findings: document.querySelectorAll(".ipam-audit .ipam-finding").length,
+            gap: read(".ipam-word-gap"),
+            undeclared: read(".ipam-word-undeclared"),
+          };
+        });
+        if (audit.findings === 0 || audit.gap === null || audit.undeclared === null) {
+          if (REQUIRE_AUDIT) {
+            cannotRun(
+              `${PLAN_ROUTE} shows ${audit.findings} finding(s), gap=${audit.gap}, ` +
+                `undeclared=${audit.undeclared}: the audit this state exists to measure is not on ` +
+                `the page. Seed the sightings (a11y/seed.sql) before the gate runs.`,
+            );
+          }
+          console.log(
+            `⚠️  ${PLAN_ROUTE} shows no gap/undeclared pair: the audit was NOT measured. ` +
+              `Set AXE_REQUIRE_AUDIT=1 to make that a refusal rather than a gap.`,
+          );
+        } else if (audit.gap === audit.undeclared) {
+          auditIndistinguishable =
+            `a gap and an undeclared finding carry the same border style (${audit.gap}): the two ` +
+            `words are told apart by nothing but their text and colour`;
+          console.log(`🔴 ${PLAN_ROUTE}  ${auditIndistinguishable}`);
+        } else {
+          console.log(
+            `   ${PLAN_ROUTE}: ${audit.findings} finding(s); gap and undeclared differ without ` +
+              `colour (${audit.gap} vs ${audit.undeclared})`,
+          );
+        }
+
+        // ── Story 14.3b: the warning the address field shows BEFORE the write, under axe ────
+        // It appears only when someone types, so no URL state can reach it: the gate opens the
+        // address form, types an address the seed shows in use, waits for the warning, and runs axe
+        // over the page as it then stands.
+        const hasForm = await page.$("#ipam-form-address");
+        if (hasForm !== null) {
+          await page.$eval("#ipam-form-address", (el) => {
+            el.open = true;
+          });
+          const asked = page
+            .waitForResponse((r) => r.url().includes("/ipam/address-check"), {
+              timeout: NAV_TIMEOUT_MS,
+            })
+            .catch(() => null);
+          await page.focus("#ipam-addr");
+          await page.keyboard.type(SEEN_ADDRESS);
+          const answered = await asked;
+          const warning = await page
+            .waitForFunction(
+              () => (document.getElementById("ipam-addr-warning")?.textContent ?? "").trim() !== "",
+              { timeout: NAV_TIMEOUT_MS },
+            )
+            .then(() => true)
+            .catch(() => false);
+          if (answered === null || !warning) {
+            if (REQUIRE_AUDIT) {
+              cannotRun(
+                `typing ${SEEN_ADDRESS} into the address field produced no warning, so the state ` +
+                  `this check exists to measure is not on the page.`,
+              );
+            }
+            console.log(`⚠️  ${PLAN_ROUTE}: the address warning did not appear and was NOT measured.`);
+          } else {
+            await page.addScriptTag({ content: axeSource });
+            const results = await page.evaluate(
+              async (tags) =>
+                await window.axe.run(document, { runOnly: { type: "tag", values: tags } }),
+              TAGS,
+            );
+            warningViolations = results.violations.reduce((sum, v) => sum + v.nodes.length, 0);
+            if (results.violations.length > 0) {
+              for (const violation of results.violations) {
+                console.log(
+                  `🔴 ${PLAN_ROUTE} (address warning)  ${violation.id}(${violation.nodes.length}, ${violation.impact})`,
+                );
+              }
+            } else {
+              console.log(`✅ ${PLAN_ROUTE} (address warning shown)`);
+            }
+          }
+        } else if (REQUIRE_AUDIT) {
+          cannotRun(`${PLAN_ROUTE} carries no address form, so the warning cannot be reached.`);
+        }
       }
     } finally {
       await page.close();
@@ -404,6 +508,13 @@ async function main() {
   // renders, exactly like an axe violation, and it must not be reported through a different door.
   if (planIndistinguishable !== null) {
     failing.push(`${PLAN_ROUTE} (free vs not-covered)`);
+  }
+  if (auditIndistinguishable !== null) {
+    failing.push(`${PLAN_ROUTE} (gap vs undeclared)`);
+  }
+  if (warningViolations > 0) {
+    failing.push(`${PLAN_ROUTE} (address warning)`);
+    nodes += warningViolations;
   }
   for (const route of [...routes, ...states]) {
     const page = await openPage();

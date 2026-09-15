@@ -1492,8 +1492,9 @@ mod tests {
         let seeded = load_sightings(&pool).await.expect("read");
         assert_eq!(
             seeded.len(),
-            4,
-            "the premise: the seed sights four addresses"
+            11,
+            "the premise: the seed sights eleven (address, MAC) pairs — four without a MAC, and \
+             seven story 14.3b added so the audit has a case on a page each gate walks"
         );
         assert_eq!(seeded, implied_by_the_observations(&pool).await);
         assert!(

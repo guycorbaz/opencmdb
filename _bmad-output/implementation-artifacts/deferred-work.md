@@ -4407,6 +4407,11 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   carried by nothing.** Putting a full subnet in the example dataset to exercise one line would be
   shaping the demonstration around the test. **Owner: Epic 14**, where a full subnet is an ordinary
   state rather than a fixture.
+  ✅ **CLOSED by story 14.3b**: the sentence is reworded to name the new exclusions (defined, documented,
+  seen on the network, an edge) and its RENDER is carried by
+  `the_occupancy_and_the_empty_offer_follow_the_audit` — in English, the default locale the test
+  renders in; the French value exists and is carried by `every_key_carries_both_locales`, and no test
+  renders it.
   ⚠️ **STALE since story 14.2** (story 14.3's fact-check, 2026-09-15): the example dataset is gone and the
   key IS reachable on the real product — any subnet with no range renders it (`ipam_page.rs:607`). What
   is still missing is a RENDER test, and its text (*"every address in this subnet is defined,
@@ -5539,7 +5544,9 @@ One row, and v0.3.0 is what made it live.
   `dhcp-pool` range gets no warning. The story said *"registered with 14.3 by name"*; its code review
   found no row. **Owner: story 14.3b**, where that warning belongs. ✅ **Decided by Guy, 2026-09-15 (14.3b decision 13)**:
   an address defined inside a `dhcp-pool` carries a keyed WARNING on `/ipam`, not a conflict, and still
-  writes.
+  writes. ✅ **CLOSED by story 14.3b**: `/ipam` lists it under *Defined inside a DHCP pool*
+  (`ipam.pool_warning.*`), and the address field warns about it BEFORE the write (`ipam.check.in_pool`);
+  the write still succeeds.
 
 - ⚠️ **D56b's *one trailing test module per file* does not hold across the crate**:
   `crates/opencmdb-bin/src/example_screens.rs` carries FOUR line-start `#[cfg(test)]`. Measured by

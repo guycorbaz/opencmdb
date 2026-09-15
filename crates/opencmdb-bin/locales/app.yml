@@ -879,6 +879,21 @@ ipam.pool_warning.item:
 ipam.too_large_no_offer:
   en: "No address is offered for a subnet this size."
   fr: "Aucune adresse n'est proposée pour un sous-réseau de cette taille."
+ipam.check.seen:
+  en: "%{address} has been seen on the network: a machine may already be using it."
+  fr: "%{address} a été vue sur le réseau : une machine l'utilise peut-être déjà."
+ipam.check.documented:
+  en: "%{address} is documented in the inventory."
+  fr: "%{address} est documentée dans l'inventaire."
+ipam.check.defined:
+  en: "%{address} is already defined in the plan."
+  fr: "%{address} est déjà définie dans le plan."
+ipam.check.in_pool:
+  en: "%{address} is inside a dhcp-pool range: the pool may hand it to another machine."
+  fr: "%{address} est dans une plage pool DHCP : le pool peut l'attribuer à une autre machine."
+ipam.check.still_writes:
+  en: "You can still define it."
+  fr: "Vous pouvez tout de même la définir."
 ipam.unknown_subnet:
   en: "No subnet is named by this identifier. Choose one above."
   fr: "Aucun sous-réseau ne porte cet identifiant. Choisissez-en un ci-dessus."

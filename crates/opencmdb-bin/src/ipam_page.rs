@@ -262,7 +262,138 @@ pub(crate) struct IpamQuery {
 pub(crate) fn router(pool: MySqlPool, perimeter: Option<String>) -> Router {
     Router::new()
         .route("/ipam", get(ipam))
+        .route(ADDRESS_CHECK_PATH, get(address_check))
         .with_state(IpamState { pool, perimeter })
+}
+
+/// Where the address form asks, BEFORE the write, what the network and the registers know about
+/// the address being typed (Guy's decision 7, 2026-09-15).
+///
+/// 🔴 **A GET route that is neither a write route nor a `Screen`**, so neither perimeter guard walks
+/// it by default — story 6b.2's defect, measured on a screen route. `main.rs` names it in its own
+/// perimeter test and in the page-budget guard.
+pub(crate) const ADDRESS_CHECK_PATH: &str = "/ipam/address-check";
+
+/// The query the address check accepts.
+#[derive(Debug, Default, serde::Deserialize)]
+pub(crate) struct AddressCheckQuery {
+    /// The address as typed so far. Anything that is not yet an IPv4 address is answered with an
+    /// empty warning, before the store is touched.
+    pub(crate) addr: Option<String>,
+}
+
+/// Warn about an address before it is defined — and never refuse it.
+///
+/// 🔑 **The form warns and still writes** (Guy's arbitration of 2026-09-10): the most frequent
+/// legitimate case is entering into the plan the machine that is already there. So this answers a
+/// fragment the form shows beside the field, and the POST is untouched.
+///
+/// ⚠️ **Budgeted like the screen**, and focus is NOT moved: the region is `aria-live`, so the warning
+/// is announced while the operator keeps typing.
+async fn address_check(
+    State(state): State<IpamState>,
+    Query(query): Query<AddressCheckQuery>,
+) -> Response {
+    let Some(addr) = query
+        .addr
+        .as_deref()
+        .and_then(|typed| typed.trim().parse::<Ipv4Addr>().ok())
+    else {
+        return Html(String::new()).into_response();
+    };
+    let read = crate::page::store_within(crate::page::PAGE_STORE_BUDGET, async {
+        address_check_data(&state.pool, addr)
+            .await
+            .map_err(|error| {
+                tracing::error!(%error, "checking an address against the plan and the network");
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    axum::response::Html(crate::page::render_error_body()),
+                )
+                    .into_response()
+            })
+    })
+    .await;
+    match read {
+        Ok(body) => Html(body).into_response(),
+        Err(response) => response,
+    }
+}
+
+/// Read what the address check needs and render it.
+///
+/// # Errors
+///
+/// The store's own failure, classified.
+async fn address_check_data(
+    pool: &MySqlPool,
+    addr: Ipv4Addr,
+) -> Result<String, opencmdb_core::repo::RepositoryError> {
+    let plan = Plan {
+        subnets: ipam_repo::list_subnets(pool)
+            .await?
+            .into_iter()
+            .map(|(_, subnet, _)| subnet)
+            .collect(),
+        ranges: ipam_repo::plan_ranges(pool).await?,
+        defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
+    };
+    let (seen, documented) = ipam_audit::read_the_network(pool).await?;
+    Ok(render_address_check(addr, &plan, &seen, &documented))
+}
+
+/// The address check's fragment.
+#[derive(askama::Template)]
+#[template(path = "_ipam_address_check.html")]
+pub(crate) struct AddressCheck {
+    /// One sentence per thing worth knowing, or none.
+    lines: Vec<String>,
+    /// Each hardware address seen on it with its absolute last sighting, joined.
+    sightings: String,
+    /// The triage question for it, when it was seen and no declared record claims it.
+    triage_href: Option<String>,
+    /// The link's words.
+    triage_link: String,
+}
+
+/// Render what is worth knowing about `addr` before it is defined — the empty string when nothing is.
+pub(crate) fn render_address_check(
+    addr: Ipv4Addr,
+    plan: &Plan,
+    seen: &BTreeMap<Ipv4Addr, Seen>,
+    documented: &BTreeSet<Ipv4Addr>,
+) -> String {
+    let address = addr.to_string();
+    let mut lines = Vec::new();
+    let mut sightings = String::new();
+    let mut triage_href = None;
+    let is_documented = documented.contains(&addr);
+    if let Some(seen) = seen.get(&addr) {
+        lines.push(rust_i18n::t!("ipam.check.seen", address = address.as_str()).to_string());
+        sightings = sighting_lines(seen).join("; ");
+        triage_href = (!is_documented).then(|| format!("/triage?sel=nouveau:{addr}"));
+    }
+    if is_documented {
+        lines.push(rust_i18n::t!("ipam.check.documented", address = address.as_str()).to_string());
+    }
+    if plan.defines(addr) {
+        lines.push(rust_i18n::t!("ipam.check.defined", address = address.as_str()).to_string());
+    }
+    if plan.covered_by_a_pool(addr) {
+        lines.push(rust_i18n::t!("ipam.check.in_pool", address = address.as_str()).to_string());
+    }
+    if lines.is_empty() {
+        return String::new();
+    }
+    lines.push(rust_i18n::t!("ipam.check.still_writes").to_string());
+    AddressCheck {
+        lines,
+        sightings,
+        triage_href,
+        triage_link: rust_i18n::t!("ipam.finding.triage_link").to_string(),
+    }
+    .render()
+    .unwrap_or_else(|_| crate::page::render_error_body())
 }
 
 /// Serve the plan.
@@ -540,6 +671,8 @@ pub(crate) struct IpamForms {
     range_route: &'static str,
     /// Where the address form posts.
     address_route: &'static str,
+    /// Where the address field asks for a warning before the write (decision 7).
+    address_check_route: &'static str,
     /// The subnet in force, which the range and address forms carry as a hidden field. `None`
     /// when no subnet is selected — the two forms are then replaced by a sentence saying so.
     subnet_id: Option<String>,
@@ -574,6 +707,7 @@ impl IpamForms {
             subnet_route: route_of(WriteRoute::Subnet),
             range_route: route_of(WriteRoute::Range),
             address_route: route_of(WriteRoute::Address),
+            address_check_route: ADDRESS_CHECK_PATH,
             subnet_id,
             plan_is_empty,
             policies: IpPolicy::ALL
@@ -1777,6 +1911,119 @@ mod tests {
 
     // ── The audit on screen (story 14.3b) ────────────────────────────────────────────────────
 
+    /// The process's peak resident memory, in kB. ⚠️ A process-wide HIGH-WATER mark, so a before/after
+    /// pair is a LOWER bound of what happened in between — story 14.3a's review. Duplicated from
+    /// `sighting_repo`'s private test module rather than widened into a shared helper for two
+    /// opt-in measurements.
+    fn peak_kib() -> u64 {
+        std::fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|status| {
+                status
+                    .lines()
+                    .find(|line| line.starts_with("VmHWM:"))
+                    .and_then(|line| line.split_whitespace().nth(1))
+                    .and_then(|kib| kib.parse().ok())
+            })
+            .unwrap_or(0)
+    }
+
+    /// AC9 — `/ipam`'s whole read-and-render path, timed over a long history. Opt-in:
+    /// `OPENCMDB_MEASURE_IPAM=<observation rows>` with `--release -- --exact --nocapture`, against a
+    /// store that holds nothing else of value (it clears the plan and the observations).
+    ///
+    /// 🔑 **Why this is the measurement that matters**: story 14.3's validation timed the reader this
+    /// story would have used at 3.0–3.3 s over 1 000 000 rows, against NFR2's 1.5 s. `/ipam` reads story
+    /// 14.3a's summary instead, so the observation rows are generated here only to prove that their
+    /// number no longer reaches the screen. It asserts the worst of twenty renders stays under NFR2.
+    #[tokio::test]
+    async fn measure_the_plan_screen_over_a_long_history() {
+        let Ok(rows) = std::env::var("OPENCMDB_MEASURE_IPAM") else {
+            return;
+        };
+        let rows: u64 = rows.parse().expect("a row count");
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        let clean = [
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
+            "DELETE FROM sighting_backfill",
+            "DELETE FROM ip_address",
+            "DELETE FROM ip_range",
+            "DELETE FROM ip_subnet",
+        ];
+        for statement in clean {
+            sqlx::query(statement).execute(&pool).await.expect("clean");
+        }
+        const NIL: &str = "00000000-0000-0000-0000-000000000000";
+        let started = std::time::Instant::now();
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "INSERT INTO observation_record (id, connector_id, observed_at, l2_domain, vantage, facts, raw) \
+             SELECT CONCAT('eeeeeeee-0000-0000-0000-', LPAD(LOWER(HEX(seq)), 12, '0')), '{NIL}', \
+             TIMESTAMP('2026-01-01 00:00:00') + INTERVAL ((seq - 1) DIV 46) * 300 SECOND, '{NIL}', '{NIL}', \
+             CONCAT('[{{\"IpV4\":{{\"addr\":\"192.0.2.', ((seq - 1) MOD 46) + 1, \
+             '\"}}}},{{\"Mac\":{{\"addr\":[2,0,0,0,0,', ((seq - 1) MOD 46) + 1, \
+             '],\"locally_administered\":true}}}}]'), NULL FROM seq_1_to_{rows}"
+        )))
+        .execute(&pool)
+        .await
+        .expect("generate the observations");
+        crate::sighting_repo::backfill_at_boot(&pool)
+            .await
+            .expect("backfill the summary");
+        println!(
+            "MEASURE generated and backfilled {rows} observation rows in {:?}",
+            started.elapsed()
+        );
+        sqlx::query(
+            "INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES \
+             ('55555555-0000-0000-0000-00000000e001', '192.000.002.000', 24, 'Measured')",
+        )
+        .execute(&pool)
+        .await
+        .expect("a subnet");
+        sqlx::query(
+            "INSERT INTO ip_range (id, subnet_id, first_addr, last_addr, policy, label) VALUES \
+             ('55555555-0000-0000-0000-00000000e002', '55555555-0000-0000-0000-00000000e001', \
+             '192.000.002.001', '192.000.002.254', 'static', 'Hosts')",
+        )
+        .execute(&pool)
+        .await
+        .expect("a static range over the hosts");
+
+        let hwm_before = peak_kib();
+        let mut worst = std::time::Duration::ZERO;
+        let mut bytes = 0;
+        for _ in 0..20 {
+            let started = std::time::Instant::now();
+            let body = plan_data(&pool, None).await.expect("the plan renders");
+            worst = worst.max(started.elapsed());
+            bytes = body.len();
+        }
+        println!(
+            "MEASURE /ipam over {rows} observation rows: worst of 20 read-and-renders {worst:?}, \
+             {bytes} bytes; VmHWM {hwm_before} kB -> {} kB",
+            peak_kib()
+        );
+        assert!(
+            worst < std::time::Duration::from_millis(1500),
+            "NFR2's 1.5 s p95: the plan screen took {worst:?} over {rows} observation rows"
+        );
+        for statement in clean {
+            sqlx::query(statement).execute(&pool).await.expect("clean");
+        }
+    }
+
     fn at(text: &str) -> opencmdb_core::observation::Timestamp {
         chrono::DateTime::parse_from_rfc3339(text)
             .expect("an instant")
@@ -1807,6 +2054,87 @@ mod tests {
             ],
             &[v4("192.0.2.9"), v4("192.0.2.90")],
         )
+    }
+
+    /// AC4 — the address check warns about what is known and says the write stays possible, links a
+    /// triage question only where one exists, and is empty when nothing is worth knowing.
+    #[test]
+    fn the_address_check_warns_and_still_writes() {
+        let plan = audited_office();
+        let seen = crate::ipam_audit::merge_sightings(&[
+            sighted("192.0.2.20", 1, "2026-09-02T10:00:00Z"),
+            sighted("192.0.2.140", 2, "2026-09-02T10:00:00Z"),
+        ]);
+        let documented = BTreeSet::from([v4("192.0.2.140")]);
+        let still = rust_i18n::t!("ipam.check.still_writes").to_string();
+
+        let fresh = render_address_check(v4("192.0.2.20"), &plan, &seen, &documented);
+        assert!(
+            fresh.contains(&rust_i18n::t!("ipam.check.seen", address = "192.0.2.20").to_string()),
+            "a seen address is named as seen: {fresh}"
+        );
+        assert!(
+            fresh.contains("2026-09-02 10:00 UTC"),
+            "with its absolute last sighting"
+        );
+        assert!(
+            fresh.contains("href=\"/triage?sel=nouveau:192.0.2.20\""),
+            "and its triage question, since no declared record claims it"
+        );
+        assert!(fresh.contains(&still), "the form warns and STILL writes");
+
+        let known = render_address_check(v4("192.0.2.140"), &plan, &seen, &documented);
+        assert!(
+            known.contains(
+                &rust_i18n::t!("ipam.check.documented", address = "192.0.2.140").to_string()
+            ),
+            "a documented address says so"
+        );
+        assert!(
+            !known.contains("nouveau:"),
+            "and links to no triage question, because triage asks none"
+        );
+
+        let defined =
+            render_address_check(v4("192.0.2.9"), &plan, &BTreeMap::new(), &BTreeSet::new());
+        assert!(
+            defined
+                .contains(&rust_i18n::t!("ipam.check.defined", address = "192.0.2.9").to_string())
+        );
+        let pooled =
+            render_address_check(v4("192.0.2.85"), &plan, &BTreeMap::new(), &BTreeSet::new());
+        assert!(
+            pooled
+                .contains(&rust_i18n::t!("ipam.check.in_pool", address = "192.0.2.85").to_string()),
+            "decision 13's warning, before the write too"
+        );
+        assert_eq!(
+            render_address_check(v4("192.0.2.30"), &plan, &BTreeMap::new(), &BTreeSet::new()),
+            "",
+            "nothing worth knowing is an empty region, which announces nothing"
+        );
+    }
+
+    /// The address field asks its warning from the route the router mounts, and announces it where
+    /// it is typed.
+    #[test]
+    fn the_address_field_asks_the_mounted_check_and_describes_itself_with_the_answer() {
+        let whole = offer_of(&[], &[]);
+        let (none, nobody) = (BTreeMap::new(), BTreeSet::new());
+        let body = render_plan(
+            &[("s1".to_string(), office(), "Office".to_string())],
+            "s1",
+            &PlanView::derive(office(), &[], &[]),
+            &Audit {
+                plan: &whole,
+                seen: &none,
+                documented: &nobody,
+                subnet: office(),
+            },
+        );
+        assert!(body.contains(&format!("hx-get=\"{ADDRESS_CHECK_PATH}\"")));
+        assert!(body.contains("aria-describedby=\"ipam-addr-warning\""));
+        assert!(body.contains("id=\"ipam-addr-warning\" class=\"ipam-check-region\" role=\"status\" aria-live=\"polite\""));
     }
 
     /// The part of a rendered body that is the audit, and nothing else.

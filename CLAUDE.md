@@ -148,8 +148,8 @@ including the « Merger » label, wrong since July and raised by no gate.
   it walks is not a pass either; **`AXE_REQUIRE_PLAN=1` since story 14.2**, because `/ipam`'s whole
   content — the cells, their per-cell names, the selector, the legend — exists only when the store
   holds a subnet, so an unseeded run measures one sentence and passes; since story 14.2b an `AXE_EMPTY_PLAN=1` pass runs FIRST, over a plan emptied by
-  `a11y/empty-plan.sql` — the one `/ipam` state the seeded pass refuses to measure) and
-  `node a11y/kbd-probe.mjs` (**thirty-seven** checks — `/ipam`'s three forms since story 14.2b — over the keyboard
+  `a11y/empty-plan.sql` — the one `/ipam` state the seeded pass refuses to measure; **`AXE_REQUIRE_AUDIT=1` since story 14.3b**, refusing a seeded run with no finding or without both a `gap` and an `undeclared` to compare without colour, and typing into the address field so the warning before a write is under axe too) and
+  `node a11y/kbd-probe.mjs` (**forty-one** checks — `/ipam`'s three forms since story 14.2b, its address warning and findings list since story 14.3b — over the keyboard
   layer, the focus contract, and — since story 6.4 — the documenting gesture PRESSED for real). Both answer **0 clean / 1 the product / 2 the gate could not run**, ⚠️ *once `node` is
   running them* — the shell before them keeps its own codes. Neither can be Rust: they measure the
   RENDERED, COMPUTED page, and `cargo xtask ci` has no browser.

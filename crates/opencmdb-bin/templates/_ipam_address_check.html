@@ -1,0 +1,20 @@
+{#- The warning the address field shows BEFORE the write (story 14.3b, decision 7).
+
+     🔑 It warns and the write stays possible: the last sentence says so, because the most frequent
+     legitimate case is entering into the plan the machine that is already there. An empty body when
+     there is nothing worth knowing — the region then announces nothing. -#}
+{%- if !lines.is_empty() %}
+<span class="ipam-check">
+  {%- for line in lines %}
+  <span class="ipam-check-line">{{ line }}</span>
+  {%- endfor %}
+  {%- if sightings != "" %}
+  <span class="ipam-check-line ipam-sightings-inline">{{ sightings }}</span>
+  {%- endif %}
+  {%- match triage_href %}
+  {%- when Some with (href) %}
+  <a class="ipam-triage-link" href="{{ href }}">{{ triage_link }}</a>
+  {%- when None %}
+  {%- endmatch %}
+</span>
+{%- endif %}

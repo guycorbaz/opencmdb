@@ -191,10 +191,13 @@ fixture corpus lock (both directions: edited AND orphan), the file-size ceiling 
 `entity-id-immutable` (D15, story 6.5) — plus the
 informational `views-hash` staleness check, which reports `ℹ STALE` and exits 0 by design.
 **Two BROWSER gates run in CI as well** — axe (ten routes + **four** query-string states, plus an
-empty-plan pass since story 14.2b, run first over `a11y/empty-plan.sql`), and
-`a11y/kbd-probe.mjs` (story 6b.11, **thirty-seven** checks since story 14.2b gave `/ipam`'s three
-forms their first coverage; story 6.4 made it PRESS the documenting gesture and read the store's
-answer back).
+empty-plan pass since story 14.2b, run first over `a11y/empty-plan.sql`; since story 14.3b
+`AXE_REQUIRE_AUDIT=1` refuses a seeded run with no finding or without both a `gap` and an
+`undeclared` to compare without colour, and the gate types into the address field so the warning
+before a write is under axe too), and
+`a11y/kbd-probe.mjs` (story 6b.11, **forty-one** checks since story 14.3b added the address warning
+and the findings list to the three forms story 14.2b first covered; story 6.4 made it PRESS the
+documenting gesture and read the store's answer back).
 ⚠️ They are not `xtask` gates, and the `xtask` count stays at ten (nine until story 6.5).
 ⚠️ **`declared-authorship` is a TRIPWIRE, not a barrier**, and the difference is measured: story
 5.12's code review wrote thirty violations of NFR5 against its first implementation and **sixteen

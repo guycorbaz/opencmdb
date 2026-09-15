@@ -1972,8 +1972,40 @@ mod tests {
                     .unwrap();
                 (screen, response.status(), started.elapsed())
             }
-        }))
-        .await;
+        }));
+        // 🔴 Story 14.3b's address check reads the store and is NOT a `Screen`, so the derivation
+        // above cannot see it — probed here by name, concurrently, so the guard still costs one
+        // budget and not two.
+        let check = {
+            let pool = pool.clone();
+            async move {
+                let started = std::time::Instant::now();
+                let response = app(pool, config(false, Some(pair())), facts())
+                    .oneshot(
+                        Request::builder()
+                            .uri(format!("{}?addr=192.0.2.9", ipam_page::ADDRESS_CHECK_PATH))
+                            .header(
+                                axum::http::header::AUTHORIZATION,
+                                basic_header("op", "s3cret"),
+                            )
+                            .body(Body::empty())
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                (response.status(), started.elapsed())
+            }
+        };
+        let (measured, (check_status, check_elapsed)) = tokio::join!(measured, check);
+        assert_eq!(
+            check_status,
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the address check must refuse rather than hang"
+        );
+        assert!(
+            check_elapsed < budget * 2,
+            "the address check answered in {check_elapsed:?}, past twice its {budget:?} budget"
+        );
         assert!(
             measured.len() >= 4,
             "the premise: at least four screens read the store ({}) — with fewer, this guard has \
@@ -1995,6 +2027,44 @@ mod tests {
                 screen.href()
             );
         }
+    }
+
+    /// Story 14.3b's AC4 — the address check is a GET route that is neither a write route nor a
+    /// `Screen`, so neither perimeter guard walks it by default (story 6b.2's defect, where a route
+    /// no guard named answered 200 without a credential). It is named here, both halves.
+    #[tokio::test]
+    async fn the_address_check_is_refused_without_a_credential_and_exists() {
+        let uri = format!("{}?addr=", ipam_page::ADDRESS_CHECK_PATH);
+        let response = app(lazy_pool(), config(true, Some(pair())), facts())
+            .oneshot(Request::builder().uri(&uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "the address check must answer 401 without a credential"
+        );
+        assert_eq!(www_authenticate(&response).as_deref(), Some(CHALLENGE));
+
+        let response = app(lazy_pool(), config(true, Some(pair())), facts())
+            .oneshot(
+                Request::builder()
+                    .uri(&uri)
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "s3cret"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "with a credential the route exists — and an address not yet typed is answered before \
+             the store is touched, which is why a lazy pool is enough"
+        );
     }
 
     /// 🔴 **The operator's own records come FIRST, and the example list below them.**

@@ -1017,6 +1017,11 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 .ipam-documented { display: inline-block; margin-top: 4px; font-size: 12px; }
 .ipam-documented { color: var(--muted); }
 .ipam-warnings li { padding: 4px 0; }
+/* The warning the address field shows before the write (decision 7). */
+.ipam-check-region { margin: 2px 0 0; font-size: 12px; }
+.ipam-check { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border: 1px dashed var(--color-text); }
+.ipam-check-line { display: block; }
+.ipam-sightings-inline { color: var(--muted); }
 
 .conflict-parties { margin: 8px 0 12px; padding-left: 18px; font-size: 13px; line-height: 1.7; }
 

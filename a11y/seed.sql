@@ -102,6 +102,53 @@ INSERT INTO address_sighting (addr, l2_domain, mac, first_seen_at, last_seen_at)
   ('192.000.002.013', '00000000-0000-0000-0000-000000000000', '-', @t, @t),
   ('192.000.002.099', '00000000-0000-0000-0000-000000000000', '-', @t, @t);
 
+-- ── The audit's cases (story 14.3b) ───────────────────────────────────────────────────────
+--
+-- 🔴 WITHOUT THESE ROWS `/ipam` SHOWS NO FINDING AND THE AXE GATE WOULD PASS OVER AN EMPTY LIST —
+-- the `AXE_REQUIRE_QUEUE` shape again, which is why `AXE_REQUIRE_AUDIT=1` refuses a seeded run with no
+-- finding. One sighting per case, each with a hardware address so the audit has something to name:
+--   .20  twice, two MACs, in the `static` range, undocumented   → gap + « Conflit d'adresse » + a triage link
+--   .11  (above, no MAC), `static`, DOCUMENTED                    → gap with no triage question
+--   .50  covered by no range                                     → undeclared
+--   .42  inside the `infrastructure` range added below           → undeclared
+--   .9   the defined address                                     → a held cell, no finding
+--   .99  (above) inside the `dhcp-pool`                          → no finding
+--   198.51.100.150 in the Workshop's `reserved` range            → undeclared, on the second subnet
+--   10.9.9.9 outside every subnet of the plan                    → the plan-wide list
+-- ⚠️ These are observations too, so each undocumented address adds a `Nouveau` row to the triage queue;
+-- both browser gates FIND their rows by the control they carry, so a longer queue moves nothing.
+INSERT INTO observation_record (id, connector_id, observed_at, l2_domain, vantage, facts, raw) VALUES
+  ('dddddddd-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"192.0.2.20"}},{"Mac":{"addr":[2,0,94,0,0,1],"locally_administered":true}}]', NULL),
+  ('dddddddd-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"192.0.2.20"}},{"Mac":{"addr":[2,0,94,0,0,2],"locally_administered":true}}]', NULL),
+  ('dddddddd-0000-0000-0000-0000000000c3', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"192.0.2.50"}},{"Mac":{"addr":[2,0,94,0,0,3],"locally_administered":true}}]', NULL),
+  ('dddddddd-0000-0000-0000-0000000000c4', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"192.0.2.42"}},{"Mac":{"addr":[2,0,94,0,0,4],"locally_administered":true}}]', NULL),
+  ('dddddddd-0000-0000-0000-0000000000c5', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"192.0.2.9"}},{"Mac":{"addr":[2,0,94,0,0,5],"locally_administered":true}}]', NULL),
+  ('dddddddd-0000-0000-0000-0000000000c6', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"198.51.100.150"}},{"Mac":{"addr":[2,0,94,0,0,6],"locally_administered":true}}]', NULL),
+  ('dddddddd-0000-0000-0000-0000000000c7', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"10.9.9.9"}},{"Mac":{"addr":[2,0,94,0,0,7],"locally_administered":true}}]', NULL);
+
+INSERT INTO address_sighting (addr, l2_domain, mac, first_seen_at, last_seen_at) VALUES
+  ('192.000.002.020', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:01', @t, @t),
+  ('192.000.002.020', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:02', @t, @t),
+  ('192.000.002.050', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:03', @t, @t),
+  ('192.000.002.042', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:04', @t, @t),
+  ('192.000.002.009', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:05', @t, @t),
+  ('198.051.100.150', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:06', @t, @t),
+  ('010.009.009.009', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:07', @t, @t);
+
 -- ── The identity engine's reach, so the section that reports it is not empty ────────────────
 --
 -- 🔴 **STORY 6.4 ADDED THIS TOO, and without it the reach section renders "Nothing observed
@@ -174,7 +221,12 @@ INSERT INTO ip_range (id, subnet_id, first_addr, last_addr, policy, label) VALUE
   ('33333333-0000-0000-0000-00000000b002', '22222222-0000-0000-0000-00000000a001',
    '192.000.002.080', '192.000.002.126', 'dhcp-pool', 'Laptops'),
   ('33333333-0000-0000-0000-00000000b003', '22222222-0000-0000-0000-00000000a002',
-   '198.051.100.129', '198.051.100.200', 'reserved', 'Held for the new line');
+   '198.051.100.129', '198.051.100.200', 'reserved', 'Held for the new line'),
+  -- Story 14.3b: an `infrastructure` range, so an observed address inside one is on a page a gate walks.
+  -- ⚠️ .41–.45 only: the gap .46–.79 must stay covered by nothing, or the free-versus-blank pair the
+  -- axe gate compares loses its blank cell.
+  ('33333333-0000-0000-0000-00000000b004', '22222222-0000-0000-0000-00000000a001',
+   '192.000.002.041', '192.000.002.045', 'infrastructure', 'Switch management');
 
 INSERT INTO ip_address (id, subnet_id, addr, label) VALUES
   ('44444444-0000-0000-0000-00000000c001', '22222222-0000-0000-0000-00000000a001',
