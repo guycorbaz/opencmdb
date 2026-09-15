@@ -19,11 +19,17 @@
 -- The tables are created automatically by opencmdb on startup (sqlx migrations); run this AFTER
 -- the container has started at least once.
 
+-- ⚠️ Stop HERE, before anything is deleted, on a store the current opencmdb has not started on:
+-- the sighting table below arrives with the binary's migrations. Without this line the two DELETEs
+-- below ran and the first INSERT then failed (`ERROR 1146`), leaving no demo at all.
+SELECT 1 FROM address_sighting LIMIT 0;
+
 -- Idempotent: clear any prior copy of this demo entity/observation first.
 DELETE FROM declared_attribute WHERE entity_id = '00000000-0000-0000-0000-0000000000aa';
 DELETE FROM observation_record WHERE id       = 'dddddddd-0000-0000-0000-0000000000aa';
--- ...and the address sighting that observation implies (opencmdb 0.5+). Without it a re-run keeps
--- the FIRST run's instant as the address's first sighting, for an observation that no longer exists.
+-- ...and the address sighting that observation implies. Without it a re-run's INSERT below meets
+-- the first run's row and stops on a duplicate key (`ERROR 1062`), after the observation above has
+-- already been replaced. This is the ONE row this seed owns: a documentation address, no MAC.
 DELETE FROM address_sighting
   WHERE addr = '192.000.002.010' AND l2_domain = '00000000-0000-0000-0000-000000000000' AND mac = '-';
 

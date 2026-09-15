@@ -152,7 +152,13 @@ async fn upsert_sighting(
 /// _(Until story 14.3a this statement lived in `repo::insert_observation` with a second
 /// `format("%Y-%m-%d %H:%M:%S%.6f")` of its own — the format string `datetime_literal`'s doc says
 /// must not exist twice. Same output, one site.)_
-pub(crate) async fn insert_observation_row<'e, E>(
+///
+/// 🔴 **Private, and that is decision 1's premise made structural.** An observation written through
+/// this alone has no sightings, and after the one-time backfill nothing ever repairs that — so the
+/// only crate-visible writer is [`insert_with_sightings`], through `repo::insert_observation`. It was
+/// `pub(crate)` until story 14.3a's code review, two layers of which named it the ready-made way
+/// around the summary.
+async fn insert_observation_row<'e, E>(
     executor: E,
     observation: &Observation,
 ) -> Result<(), sqlx::Error>
@@ -184,9 +190,15 @@ where
 /// `MariaUnit`'s — `begin` is a SAVEPOINT, so a unit failing after this call rolls back both the
 /// observation and its sightings (`a_unit_failing_after_the_upsert_leaves_neither`).
 ///
-/// 🔴 **The rollback is explicit.** A dropped sqlx `Transaction` only QUEUES its rollback until the
-/// connection is next used, and story 14.2b's review measured a lock held for fifty seconds that
-/// way.
+/// 🔑 **Atomic on the pool path too, and a test makes the SECOND write fail to show it**:
+/// `a_sighting_write_failing_after_the_row_leaves_no_observation` holds the sighting's row from
+/// another transaction, so the upsert times out with the observation row already inserted. The
+/// review's edge layer had replaced the rollback below with a commit and every test stayed green.
+///
+/// ⚠️ **The rollback is explicit, and DEFENSIVE — carried by no test**, on story 14.2b's `settle`
+/// precedent: a dropped sqlx `Transaction` queues its rollback, and the pool pings a returned
+/// connection, which flushes it — so `drop(tx)` in its place also leaves every test green (measured by
+/// the review). It is kept so releasing the locks does not depend on a pool's return path.
 ///
 /// # Errors
 ///
@@ -211,8 +223,12 @@ where
     }
 }
 
-/// The two writes of [`insert_with_sightings`], on one connection: the observation first, so a
-/// refused observation writes no sighting, then its sightings in key order.
+/// The two writes of [`insert_with_sightings`], on one connection: the observation, then its
+/// sightings in key order.
+///
+/// ⚠️ **What keeps a refused observation from leaving a sighting is the TRANSACTION, not this
+/// order** — the review measured the reversed order green. The observation goes first so a duplicate
+/// `obs_id` is refused before any sighting row is locked.
 async fn write_observation_and_sightings(
     conn: &mut MySqlConnection,
     observation: &Observation,
@@ -230,6 +246,12 @@ async fn write_observation_and_sightings(
 ///
 /// The replay lives HERE, at the transaction's owner, and not inside [`insert_with_sightings`]: a
 /// deadlock rolls back the WHOLE transaction, so a savepoint caller has nothing left to replay into.
+///
+/// ⚠️ **Whether the replay fires on a real deadlock is carried by NOTHING, and that is stated.** The
+/// count of attempts is tested with a stand-in predicate, and removing the call reds clippy's
+/// `dead_code` alone; a predicate that never matches left the whole suite green (the review's
+/// acceptance layer). No test manufactures a deadlock on this path, and none can happen here today:
+/// the scan loop ingests one observation at a time and nothing else writes the summary at runtime.
 ///
 /// # Errors
 ///
@@ -257,7 +279,7 @@ where
         Err(error) if retryable(&error) => {
             tracing::warn!(
                 ?error,
-                "an observation's ingest was a deadlock victim — replaying once"
+                "an attempt failed with a retryable error — replaying once"
             );
             attempt().await
         }
@@ -488,9 +510,14 @@ async fn write_flush(
     for (key, (first, last)) in pairs {
         upsert_sighting(&mut *conn, key, *first, *last).await?;
     }
+    // 🔑 A marker that is already there is NOT an error. Two instances booting on one store both
+    // find no marker, both fold and both flush; the flush widens, so the second one's rows change
+    // nothing. The first design inserted plainly and the review's edge layer measured the second
+    // instance refuse to START on `1062` — a refusal that protected nothing. The first report stays.
     sqlx::query(
         "INSERT INTO sighting_backfill \
-         (name, observations_read, observations_skipped, pairs_flushed) VALUES (?, ?, ?, ?)",
+         (name, observations_read, observations_skipped, pairs_flushed) VALUES (?, ?, ?, ?) \
+         ON DUPLICATE KEY UPDATE name = VALUE(name)",
     )
     .bind(BACKFILL_NAME)
     .bind(report.observations_read)
@@ -1159,7 +1186,8 @@ mod tests {
         let Some(pool) = store().await else {
             return;
         };
-        ingest(&pool, &corpus()).await;
+        let observations = corpus();
+        ingest(&pool, &observations).await;
         let maintained = load_sightings(&pool).await.expect("read");
         assert_eq!(
             maintained,
@@ -1194,23 +1222,145 @@ mod tests {
         )
         .await
         .expect("insert");
+        plant_unreadable(&pool, "2026-03-01 10:00:08").await;
         assert_eq!(
             backfill_at_boot(&pool).await.expect("backfill"),
             BackfillOutcome::AlreadyDone(report),
-            "the marker's report is returned unchanged: seven rows were not re-read"
+            "the marker's report is returned unchanged: eight rows, one unreadable, were not re-read"
         );
 
-        // Idempotent: a redo over rows ingest already wrote changes none of them.
+        // A redo WIDENS, it never assigns — and a redo over the SAME history cannot tell the two
+        // apart (the review's blind layer). So the observation that set (.1, mac 1)'s first sighting
+        // is deleted first: constraint (3)'s own case, the summary remembering what the table forgot.
+        // A flush that assigned would move that first sighting from 10:00:01 to 10:00:05.
+        sqlx::query("DELETE FROM observation_record WHERE id = ?")
+            .bind(observations[1].obs_id.to_string())
+            .execute(&pool)
+            .await
+            .expect("forget the earliest observation");
         sqlx::query("DELETE FROM sighting_backfill")
             .execute(&pool)
             .await
             .expect("forget the marker");
         let before = load_sightings(&pool).await.expect("read");
+        assert_eq!(
+            before[0],
+            sighting(
+                1,
+                domain(1),
+                Some(1),
+                "2026-03-01T10:00:01Z",
+                "2026-03-01T10:00:05Z"
+            ),
+            "the premise: the deleted observation's instant is the first sighting on record"
+        );
         assert!(matches!(
             backfill_at_boot(&pool).await.expect("backfill"),
-            BackfillOutcome::Completed(_)
+            BackfillOutcome::Completed(BackfillReport {
+                observations_skipped: 1,
+                ..
+            })
         ));
-        assert_eq!(load_sightings(&pool).await.expect("read"), before);
+        assert_eq!(
+            load_sightings(&pool).await.expect("read"),
+            before,
+            "a redo over a history that lost an observation must keep what that observation sighted"
+        );
+    }
+
+    /// Plant an observation this binary cannot decode — a fact kind it does not know, which is how a
+    /// newer binary's row reads to this one — around the adapter.
+    async fn plant_unreadable(pool: &MySqlPool, at: &str) {
+        sqlx::query(
+            "INSERT INTO observation_record \
+             (id, connector_id, observed_at, l2_domain, vantage, facts, raw) \
+             VALUES (?, ?, ?, ?, ?, ?, NULL)",
+        )
+        .bind(uuid::Uuid::now_v7().to_string())
+        .bind(NIL)
+        .bind(at)
+        .bind(NIL)
+        .bind(NIL)
+        .bind(r#"[{"IpV4":{"addr":"192.0.2.50"}},{"Lldp":{"chassis":"x"}}]"#)
+        .execute(pool)
+        .await
+        .expect("plant an unreadable observation");
+    }
+
+    /// AC2 on the PRODUCTION path — a pool, not a unit. Nothing had made a sighting write fail AFTER
+    /// the observation row, so the review's edge layer replaced the rollback with a commit and every
+    /// test stayed green. A row held by another transaction does it: with a one-second lock wait the
+    /// upsert times out (1205), and a timed-out statement is rolled back alone, not its transaction.
+    #[tokio::test]
+    async fn a_sighting_write_failing_after_the_row_leaves_no_observation() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else {
+            return;
+        };
+        let url = std::env::var("DATABASE_URL").expect("store() checked it");
+        let impatient = sqlx::mysql::MySqlPoolOptions::new()
+            .after_connect(|conn, _meta| {
+                Box::pin(async move {
+                    sqlx::query("SET SESSION innodb_lock_wait_timeout = 1")
+                        .execute(conn)
+                        .await
+                        .map(|_| ())
+                })
+            })
+            .connect(&url)
+            .await
+            .expect("connect");
+        let at = "2026-03-01T10:00:00Z";
+        let mut holder = pool.begin().await.expect("begin");
+        upsert_sighting(
+            &mut holder,
+            &key("192.000.002.009", domain(1), MAC_ABSENT),
+            ts(at),
+            ts(at),
+        )
+        .await
+        .expect("hold the row");
+        let refused =
+            insert_with_sightings(&impatient, &observation(domain(1), at, vec![ipv4(9)])).await;
+        holder.rollback().await.expect("release the row");
+        assert_eq!(
+            refused.map_err(classify),
+            Err(RepositoryError::Contention),
+            "the premise: the upsert waited out its lock after the observation row was written"
+        );
+        assert_eq!(
+            count(&pool, "observation_record").await,
+            0,
+            "the observation row must be rolled back with the sighting that could not be written"
+        );
+        assert_eq!(count(&pool, "address_sighting").await, 0);
+    }
+
+    /// Two instances booting on one store at once both complete. The first design refused the second
+    /// on the marker's duplicate key after its flush had already widened every row (measured `1062`).
+    #[tokio::test]
+    async fn two_boots_at_once_both_complete() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = store().await else {
+            return;
+        };
+        ingest(&pool, &corpus()).await;
+        sqlx::query("DELETE FROM address_sighting")
+            .execute(&pool)
+            .await
+            .expect("forget the summary");
+        let url = std::env::var("DATABASE_URL").expect("store() checked it");
+        let other = MySqlPool::connect(&url).await.expect("connect");
+        let (first, second) = tokio::join!(backfill_at_boot(&pool), backfill_at_boot(&other));
+        assert!(
+            first.is_ok() && second.is_ok(),
+            "both boots must complete: {first:?} / {second:?}"
+        );
+        assert_eq!(
+            load_sightings(&pool).await.expect("read"),
+            corpus_sightings()
+        );
+        assert!(load_backfill_marker(&pool).await.expect("marker").is_some());
     }
 
     /// AC5 — an undecodable row is skipped, named in the log, counted in the marker, and the
@@ -1227,20 +1377,7 @@ mod tests {
             vec![ipv4(1), mac_fact(1)],
         );
         ingest(&pool, std::slice::from_ref(&good)).await;
-        // A fact kind this binary does not know — how a newer binary's row reads to this one.
-        sqlx::query(
-            "INSERT INTO observation_record \
-             (id, connector_id, observed_at, l2_domain, vantage, facts, raw) \
-             VALUES (?, ?, '2026-03-01 10:00:02', ?, ?, ?, NULL)",
-        )
-        .bind(uuid::Uuid::now_v7().to_string())
-        .bind(NIL)
-        .bind(NIL)
-        .bind(NIL)
-        .bind(r#"[{"IpV4":{"addr":"192.0.2.50"}},{"Lldp":{"chassis":"x"}}]"#)
-        .execute(&pool)
-        .await
-        .expect("plant an unreadable observation");
+        plant_unreadable(&pool, "2026-03-01 10:00:02").await;
         sqlx::query("DELETE FROM address_sighting")
             .execute(&pool)
             .await
@@ -1371,6 +1508,28 @@ mod tests {
                     && s.last_seen_at == seeded[0].first_seen_at),
             "one @t for every observation and every sighting"
         );
+        forget_the_seed(&pool).await;
+    }
+
+    /// Remove what a seed wrote, children first, so a seed test does not leave four declared
+    /// entities, two subnets and their links in the shared test store (the review's blind layer).
+    /// ⚠️ A failing assertion skips it; each other test's fixture clears its own tables.
+    async fn forget_the_seed(pool: &MySqlPool) {
+        for statement in [
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM ip_address",
+            "DELETE FROM ip_range",
+            "DELETE FROM ip_subnet",
+            "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
+            "DELETE FROM declared_attribute",
+        ] {
+            sqlx::query(statement)
+                .execute(pool)
+                .await
+                .expect("forget the seed");
+        }
     }
 
     /// AC8 — the operator's demo seed, run twice: its sighting follows its observation, and a re-run
@@ -1390,6 +1549,7 @@ mod tests {
             assert_eq!(seeded.len(), 1, "the premise: the seed sights one address");
             assert_eq!(seeded, implied_by_the_observations(&pool).await);
         }
+        forget_the_seed(&pool).await;
     }
 
     // ── The measurement (AC5, AC6, AC9) ──────────────────────────────────────────────────────

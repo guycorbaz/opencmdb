@@ -352,6 +352,75 @@ shape:
 - [x] **T6** (AC8) The seeds from one `@t`, and the test that executes them.
 - [x] **T7** (AC9, AC10, AC11) Measure; docs; the live count.
 
+### Review Findings
+
+Three isolated layers, 2026-09-15, on `cd24edf`: Blind Hunter (code diff only), Edge Case Hunter (own
+worktree and store, mutations), Acceptance Auditor (full diff, spec, register; re-ran M1, M7, M8). 36 raw
+findings → 22 after dedup: 1 decision, 17 patches, 1 deferral, 3 dismissed.
+
+- [ ] [Review][Decision] **The boot placement of the backfill is carried by nothing** (edge MB, blind) —
+  moving the call into a `tokio::spawn` with its error swallowed, after the listener, left 656 tests, clippy
+  and gates green: decision 2's *before serving, refuse to start* has no carrier, `run()` being called by no
+  test. Options: extract a store-opening seam (migrations + backfill, returning `Result`) that a test
+  drives, leaving only its call and its position in `run()` uncarried (story 5.14's precedent); or register
+  it as uncarried as it stands.
+- [ ] [Review][Patch] **Atomicity on the POOL path has no carrier** — mutation `rollback()` → `commit()` in
+  `insert_with_sightings`' error branch left 660 tests green (edge MA); `rollback()` → `drop(tx)` green (MC);
+  sightings before the observation row green (MD, blind): the order claim is carried by the transaction.
+  Test the settle-on-error path on a pool; say the explicit rollback is defensive and carried by no test
+  (story 14.2b's `settle` precedent); correct the order sentence [sighting_repo.rs:189-217]
+- [ ] [Review][Patch] **The replay's wiring is not verified and the record overstates** — a predicate that
+  never matches left everything green (auditor P1); *"carried by a lint"* covers only the call's existence;
+  a deadlock on the ingest path is unreachable today (edge). Correct the record; register the limit
+  [sighting_repo.rs:230; story record M8]
+- [ ] [Review][Patch] **Two instances booting at once: one refuses to start on the marker's duplicate key**
+  (blind, edge measured `1062`) — the flush widens, so a second completion is harmless; let the marker insert
+  not fail [sighting_repo.rs write_flush]
+- [ ] [Review][Patch] **The idempotence test cannot tell widening from assigning** (blind) — the redo runs
+  over the same history; delete the observation that set a first sighting before the redo, which is
+  constraint (3)'s own case [sighting_repo.rs the_backfill_produces_exactly_what_ingest_maintains]
+- [ ] [Review][Patch] **A test comment claims a planted undecodable row that is never planted** (blind) —
+  plant it [sighting_repo.rs same test]
+- [ ] [Review][Patch] **`insert_observation_row` is `pub(crate)`: a ready-made way around decision 1**
+  (blind, auditor) — make it private [sighting_repo.rs:155]
+- [ ] [Review][Patch] **The scan-pass test's doc and message overclaim** (blind) — a revert to
+  `transact` + `insert_observation` still writes sightings; *"one sighting per ingested observation"* is
+  false in general [scan_pass.rs the_seam_writes_the_sightings_of_what_it_ingests]
+- [ ] [Review][Patch] **The seed tests leave the a11y seed's rows in the shared test store** (blind) — clean
+  up what the seeds write [sighting_repo.rs seed tests]
+- [ ] [Review][Patch] **The demo seed's comment misstates a re-run without the DELETE** (blind: a plain
+  INSERT fails 1062, it keeps nothing) and the migration header's seed exemption does not name the demo
+  seed's scoped delete [docker/seed-example.sql; 0008 header]
+- [ ] [Review][Patch] **The new demo seed against a store that has not booted this version deletes the demo
+  and then fails** (edge measured `ERROR 1146` after both DELETEs) — fail before deleting anything
+  [docker/seed-example.sql]
+- [ ] [Review][Patch] **`replay_once_if` is generic and logs a deadlock message for any predicate** (blind)
+  [sighting_repo.rs:238]
+- [ ] [Review][Patch] **The memory figures disagree and one instrument reads a lower bound** (blind, auditor,
+  edge) — `main.rs`'s comment carries the prototype's *"ten megabytes"*; VmHWM before/after is a process
+  peak, so *"+0.8 MB"* is a lower bound; the edge layer measured 200 000 pairs at 9.4 s / 78 MB (debug).
+  Correct `main.rs`, the manual, the changelog and the record
+- [ ] [Review][Patch] **AC6's *"46 pairs after a year too"* is a claim the tree contradicts** (auditor) — the
+  sentinel row beside a MAC row, the host's own address, DHCP rotation [story record]
+- [ ] [Review][Patch] **AC7 recorded MET while 15 of 16 sites clear the summary** (auditor) — record it as
+  met with a registered divergence [story record]
+- [ ] [Review][Patch] **The count 946 includes the opt-in measurement test, which asserts nothing in a normal
+  run** (auditor) [story record]
+- [ ] [Review][Patch] **The storeless 5 s now has a measured cause** — `every_store_backed_screen_refuses_within_the_page_budget`
+  waits out `PAGE_STORE_BUDGET` (5.007 s by `--report-time`, on `master` since PR #151/#170) — replace
+  *"no cause written"* [story record]
+- [ ] [Review][Patch] **The sprint-status note for 14-3a is stale** (auditor) — it still describes (IPv4,
+  MAC) with a last-seen instant, *"being contexted"* [sprint-status.yaml]
+- [ ] [Review][Patch] **The register rows the patches change** — the replay limit, the boot seam (whichever
+  the decision), the marker race row once fixed [deferred-work.md]
+- [x] [Review][Defer] **A slow first boot on a large store has no health endpoint while it runs** — 200 000
+  pairs measured 9.4 s (debug) with no `/healthz`; an orchestrator timeout could kill and loop it. The image
+  ships no `HEALTHCHECK` today [main.rs boot] — deferred, not reachable on the shipped deployment
+- Dismissed (3): the Barrier test flaky on round 0 (edge: 8 of 8 green with the sort, 29–37 deadlocks in 80
+  without — refuted); the migration header's *"sixteen fixture sites"* (true: 16 sites delete observations);
+  AC5's reference oracle built as a hand-written oracle plus a two-path comparison (the auditor judges it
+  acceptable).
+
 ## Dev Notes
 
 ### Traps this project has paid for, and which apply here

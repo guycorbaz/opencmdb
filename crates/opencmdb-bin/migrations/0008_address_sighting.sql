@@ -12,8 +12,10 @@
 -- with story 14.4, which releases addresses).
 --
 -- 🔑 EPIC CONSTRAINT (3): a sighting protects an address until the operator releases it. PRODUCT
--- CODE NEVER DELETES A ROW HERE — release is story 14.4's. Test fixtures and the two seeds clear it
--- beside `observation_record`, which they already clear.
+-- CODE NEVER DELETES A ROW HERE — release is story 14.4's. Test fixtures and `a11y/seed.sql` clear it
+-- beside `observation_record`, which they already clear; the operator's demo seed
+-- `docker/seed-example.sql` deletes the ONE row it owns (`192.000.002.010`, nil domain, `-`, a
+-- documentation address) before writing it again.
 --
 -- 🔴 THE KEY IS (addr, l2_domain, mac) AND `mac` IS NEVER NULL. MariaDB holds NULLs distinct in a
 -- UNIQUE key (`0002`'s header), so a sighting with no hardware address carries the SENTINEL `-`:

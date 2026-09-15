@@ -355,10 +355,13 @@ mod tests {
         Some(pool)
     }
 
-    /// Story 14.3a — the scan pass maintains the address sighting summary. Its ingest is the one
-    /// that writes an observation AND its sightings in one transaction, and a regression to the
-    /// plain row insert would leave every scanned address unsighted with the rest of this module
-    /// green.
+    /// Story 14.3a — the scan pass maintains the address sighting summary: a regression of its ingest
+    /// to a row-only insert leaves every scanned address unsighted, and reds here (mutation M9).
+    ///
+    /// ⚠️ **What it does NOT carry, stated after the code review**: a revert to `transact` +
+    /// `repo::insert_observation` still writes sightings — `insert_observation` delegates to the
+    /// summary — and loses only the deadlock replay, which no test carries (see
+    /// `sighting_repo::ingest_observation`).
     #[tokio::test]
     async fn the_seam_writes_the_sightings_of_what_it_ingests() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
@@ -377,7 +380,7 @@ mod tests {
             .expect("count");
         assert_eq!(
             sightings, 2,
-            "one sighting per ingested observation: an address with its MAC, an address without"
+            "these two observations imply two sightings: an address with its MAC, another without one"
         );
     }
 

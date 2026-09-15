@@ -55,9 +55,9 @@ observation ever recorded, which measured 3.0–3.3 s at a million rows. **Nothi
 yet.**
 
 ⚠️ **When you upgrade, the first start takes a moment before it answers.** It reads every stored
-observation once, before the web port opens, and records that it has done so: 1.8 s and about 1 MB
-for a million observations on a 32-core workstation (about 75 days of sweeping 46 hosts), slower on a
-NAS. An observation it cannot decode is skipped and named in the log. If you load
+observation once, before the web port opens, and records that it has done so: about 2 s for a
+million observations on a 32-core workstation (about 75 days of sweeping 46 hosts), the whole process
+peaking near 10 MB; slower on a NAS, and longer on a network with very many distinct addresses. An observation it cannot decode is skipped and named in the log. If you load
 `docker/seed-example.sql`, use this version's copy: it writes the sighting its observation implies.
 
 ### Security

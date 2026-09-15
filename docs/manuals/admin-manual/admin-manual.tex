@@ -466,9 +466,10 @@ starts skip that step.
 \begin{warning}
 That first start does not answer on the web port until the backfill is finished. Measured on a
 32-core workstation against MariaDB~10.11 with 1\,000\,000 stored observations --- about 75 days of
-sweeping 46 hosts every five minutes --- it took 1.8\,s and about 1\,MB of additional memory. The
-time grows with the number of stored observations, the memory with the number of distinct
-addresses; a NAS is slower. When it completes, the log says how many observations it read and
+sweeping 46 hosts every five minutes --- it took about 2\,s, the whole process peaking near 10\,MB.
+The time grows with the number of stored observations; the final write grows with the number of
+distinct addresses and hardware addresses seen --- 200\,000 of them took 9.4\,s and 78\,MB in a
+test build. A NAS is slower. If two instances start on the same database at once, both complete. When it completes, the log says how many observations it read and
 skipped and how many sightings it wrote.
 \end{warning}
 

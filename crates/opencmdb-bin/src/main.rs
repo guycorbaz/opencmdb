@@ -627,30 +627,10 @@ async fn run(log: diagnostic::LogDescriptor) -> anyhow::Result<()> {
             return Err(anyhow::Error::new(error).context("connecting to MariaDB"));
         }
     };
-    sqlx::migrate!("./migrations")
-        .run(&pool)
-        .await
-        .context("applying database migrations")?;
-    tracing::info!("database connected and migrations applied");
-
-    // 🔑 The address sighting summary's ONE-TIME backfill (story 14.3a, decision 2), here and not
-    // later: BEFORE the scan loop, so nothing ingests while it reads, and BEFORE the server binds,
-    // so no screen reads a partial summary. Measured at 1 M observation rows (≈ 75 days of
-    // sweeping): about a second and ten megabytes. A store that has completed it once skips it.
-    let backfill_started = std::time::Instant::now();
-    match sighting_repo::backfill_at_boot(&pool)
-        .await
-        .context("backfilling the address sighting summary")?
-    {
-        sighting_repo::BackfillOutcome::AlreadyDone(_) => {}
-        sighting_repo::BackfillOutcome::Completed(report) => tracing::info!(
-            observations_read = report.observations_read,
-            observations_skipped = report.observations_skipped,
-            pairs_flushed = report.pairs_flushed,
-            elapsed_ms = backfill_started.elapsed().as_millis(),
-            "address sighting summary backfilled from the stored observations"
-        ),
-    }
+    // 🔑 BEFORE the scan loop, so nothing ingests while the summary is backfilled, and BEFORE the
+    // server binds, so no screen reads a partial summary (story 14.3a, decision 2). ⚠️ This call and
+    // its position are the only part of that decision no test carries — `run` is called by none.
+    open_store(&pool).await?;
 
     // The scan loop: the real ARP/ping connector (story 3.5) sweeps a declared subnet and ingests
     // observations, so the page shows genuinely observed state. Unset perimeter → the page renders
@@ -686,6 +666,46 @@ async fn run(log: diagnostic::LogDescriptor) -> anyhow::Result<()> {
     axum::serve(listener, app(pool, config, diagnostic_facts))
         .await
         .context("serving the HTTP app")?;
+    Ok(())
+}
+
+/// Bring the store forward before anything uses it: apply the migrations, then backfill the address
+/// sighting summary once (story 14.3a, decision 2).
+///
+/// 🔑 **A seam, and story 14.3a's code review is why.** The backfill used to be written inline in
+/// `run`, which no test calls, so moving it into a background task after the listener — or dropping
+/// its `?` — left the whole suite green. Here a test drives both halves: a store opened through this
+/// function has its summary and its marker, and a backfill that cannot flush refuses to open it.
+///
+/// Measured at 1 000 000 observation rows (≈ 75 days of sweeping 46 hosts) in a release build: about
+/// two seconds, the whole process peaking near 10 MB. The time grows with the stored observations;
+/// the flush's time and memory grow with the distinct sightings — 200 000 of them took 9.4 s and a
+/// 78 MB peak in a debug build. A store that has completed it once skips it.
+///
+/// # Errors
+///
+/// A migration that fails, or a backfill that cannot read or flush — the caller refuses to start
+/// rather than serve an audit over a partial summary.
+async fn open_store(pool: &MySqlPool) -> anyhow::Result<()> {
+    sqlx::migrate!("./migrations")
+        .run(pool)
+        .await
+        .context("applying database migrations")?;
+    tracing::info!("database connected and migrations applied");
+    let backfill_started = std::time::Instant::now();
+    match sighting_repo::backfill_at_boot(pool)
+        .await
+        .context("backfilling the address sighting summary")?
+    {
+        sighting_repo::BackfillOutcome::AlreadyDone(_) => {}
+        sighting_repo::BackfillOutcome::Completed(report) => tracing::info!(
+            observations_read = report.observations_read,
+            observations_skipped = report.observations_skipped,
+            pairs_flushed = report.pairs_flushed,
+            elapsed_ms = backfill_started.elapsed().as_millis(),
+            "address sighting summary backfilled from the stored observations"
+        ),
+    }
     Ok(())
 }
 
@@ -1078,6 +1098,105 @@ fn build_file_writer() -> Option<(
 mod tests {
     use super::*;
     use axum::body::Body;
+
+    // ── Opening the store (story 14.3a's code review, decision) ─────────────────────────────
+
+    /// Clear what the two store-opening tests write, and plant one observation around the adapter —
+    /// how an older binary's history reads to this one: a row with no sighting.
+    async fn a_store_with_an_unsighted_observation(pool: &MySqlPool) {
+        for statement in [
+            "DELETE FROM link_candidate",
+            "DELETE FROM identity_link",
+            "DELETE FROM interface",
+            "DELETE FROM observation_record",
+            "DELETE FROM address_sighting",
+            "DELETE FROM sighting_backfill",
+        ] {
+            sqlx::query(statement).execute(pool).await.expect("clean");
+        }
+        sqlx::query(
+            "INSERT INTO observation_record \
+             (id, connector_id, observed_at, l2_domain, vantage, facts, raw) \
+             VALUES (?, '00000000-0000-0000-0000-000000000000', '2026-03-01 10:00:00', \
+             '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', \
+             '[{\"IpV4\":{\"addr\":\"192.0.2.9\"}}]', NULL)",
+        )
+        .bind(uuid::Uuid::now_v7().to_string())
+        .execute(pool)
+        .await
+        .expect("plant an observation with no sighting");
+    }
+
+    async fn count_rows(pool: &MySqlPool, table: &str) -> i64 {
+        let (n,): (i64,) =
+            sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT COUNT(*) FROM {table}")))
+                .fetch_one(pool)
+                .await
+                .expect("count");
+        n
+    }
+
+    /// Decision 2's first half, through the seam `run` calls: a store opened by [`open_store`] has
+    /// its summary backfilled and its marker written BEFORE the function returns.
+    #[tokio::test]
+    async fn opening_the_store_backfills_the_summary_before_it_returns() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        open_store(&pool).await.expect("a first open migrates");
+        a_store_with_an_unsighted_observation(&pool).await;
+        open_store(&pool).await.expect("open the store");
+        assert_eq!(count_rows(&pool, "address_sighting").await, 1);
+        assert_eq!(count_rows(&pool, "sighting_backfill").await, 1);
+    }
+
+    /// Decision 2's second half: a backfill that cannot flush refuses to open the store. The review's
+    /// edge layer moved the backfill into a background task with its error swallowed and every test
+    /// stayed green. A row held by another transaction makes the flush time out here.
+    #[tokio::test]
+    async fn a_backfill_that_cannot_flush_refuses_to_open_the_store() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        open_store(&pool).await.expect("a first open migrates");
+        a_store_with_an_unsighted_observation(&pool).await;
+        let impatient = sqlx::mysql::MySqlPoolOptions::new()
+            .after_connect(|conn, _meta| {
+                Box::pin(async move {
+                    sqlx::query("SET SESSION innodb_lock_wait_timeout = 1")
+                        .execute(conn)
+                        .await
+                        .map(|_| ())
+                })
+            })
+            .connect(&url)
+            .await
+            .expect("connect");
+        let mut holder = pool.begin().await.expect("begin");
+        sqlx::query(
+            "INSERT INTO address_sighting (addr, l2_domain, mac, first_seen_at, last_seen_at) \
+             VALUES ('192.000.002.009', '00000000-0000-0000-0000-000000000000', '-', \
+             '2026-03-01 10:00:00', '2026-03-01 10:00:00')",
+        )
+        .execute(&mut *holder)
+        .await
+        .expect("hold the row the flush needs");
+        let opened = open_store(&impatient).await;
+        holder.rollback().await.expect("release the row");
+        assert!(
+            opened.is_err(),
+            "a backfill that cannot flush must refuse to open the store, never let the server start"
+        );
+        assert_eq!(count_rows(&pool, "sighting_backfill").await, 0);
+        sqlx::query("DELETE FROM observation_record")
+            .execute(&pool)
+            .await
+            .expect("clean");
+    }
     use axum::http::Request;
     use base64::Engine as _;
     use tower::ServiceExt; // for `oneshot`
