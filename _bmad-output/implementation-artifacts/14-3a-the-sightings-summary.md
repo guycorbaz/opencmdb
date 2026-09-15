@@ -4,8 +4,9 @@ Status: ready-for-dev
 
 ⚠️ **`ready-for-dev` is the workflow's status, not a statement that nothing is open.** Contexted and
 VALIDATED 2026-09-15 by two fresh-context layers (fact-check; gap-hunt, which built a prototype
-migration and measured it); §2's decisions are Guy's and are not taken yet — **T0 takes them before
-any code**.
+migration and measured it). **T0 TAKEN 2026-09-15: Guy took §2's four decisions, the recommendation in each** —
+maintained in the observation's transaction (key order, one replay); backfilled at boot before serving;
+key (address, `l2_domain`, MAC) with `'-'`; every default accepted. The ACs below stand as written.
 
 Epic 14 (IPAM). 🔴 **INSERTED 2026-09-15 at story 14.3's VALIDATION (Guy: split)** — Epic 14 goes from
 five stories to SIX (`epics.md` not edited; registered). Story 14.3b (the audit) is decided and blocked
@@ -338,8 +339,8 @@ shape:
 
 ## Tasks / Subtasks
 
-- [ ] **T0** Take §2's decisions 1–3 with Guy; confirm or refuse the defaults of decision 4; rewrite
-  affected ACs.
+- [x] **T0** Take §2's decisions 1–3 with Guy; confirm or refuse the defaults of decision 4; rewrite
+  affected ACs. *(2026-09-15: 1(a), 2(a), 3(a), defaults accepted — no AC changes.)*
 - [ ] **T1** (AC1) Migration `0008` and the marker table; raw-SQL CHECK tests first.
 - [ ] **T2** (AC3, AC4) The pure derivation: from an `Observation`, its pairs in key order (cross product,
   sentinel, zero MAC, canonical forms) — tested without a store.
@@ -404,6 +405,10 @@ shape:
 
 ### Change Log
 
+- 2026-09-15 — **T0: Guy took the four decisions**, the recommendation in each: maintenance inside
+  `insert_observation`'s transaction with key-ordered upserts and one deadlock replay; the backfill at
+  boot before serving, streaming, one flush with the marker, skip-and-name; the key (address,
+  `l2_domain`, MAC) with the `'-'` sentinel; decision 4's defaults accepted.
 - 2026-09-15 — **validated and rewritten whole.** The fold AC5 prescribed could not produce the key; the MAC
   CHECK copied from `interface` admitted `'zz'`, `''` and a second spelling of the sentinel; unsorted
   multi-pair upserts deadlocked 200 times in 400 and, in the observation's transaction, a deadlock loses the
