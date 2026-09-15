@@ -79,7 +79,11 @@ pool.
    corrected. Refused: plan and network only.
 5. **The sightings are read from STORY 14.3a's bounded summary** (split). Refused: reusing
    `load_observation_facts` (fails NFR2 after ≈ 2 months), a narrower reader (at the limit at ≈ 75
-   days), waiting for retention.
+   days), waiting for retention. ⚠️ **The reader's shape is 14.3a's (validated 2026-09-15)**: one row per
+   (address, `l2_domain`, MAC) with `Option<MacAddr>` — `None` for the `'-'` sentinel — and first/last
+   seen. **Merging across `l2_domain`s is THIS story's**, and so is the sentinel's treatment: an address
+   seen both with and without a MAC carries a `None` row beside its MAC row, and the two-MAC conflict
+   (decision 9) must NOT count `None` as a second hardware address.
 6. **The guard is NARROWED**: one named module may reach the sighting reader and the documented read;
    `identity_link` stays forbidden; renamed; its two measured greens written as limits. Refused:
    retiring it.
@@ -201,8 +205,10 @@ observed address `declared_attribute` does not claim. Seed: the only `nouveau:` 
 `a11y/seed.sql` (`:54-82`, `:146-160`): no `Mac` facts; `.11/.12/.13` free `static`, `.99` pool; Office
 `static` .1–.40, `dhcp-pool` .80–.126, defined `.9`, .41–.79 uncovered; Workshop `reserved` .129–.200.
 Nothing refuses a seeded run that draws no audit state. An address in no plan subnet (e.g. `10.9.9.9`)
-has no `/ipam` screen today (decision 11). ⚠️ After 14.3a, the seed must also populate the SUMMARY — or
-the backfill must run over it — or `/ipam` sees no sighting at all.
+has no `/ipam` screen today (decision 11). ⚠️ After 14.3a, the seed must also populate the SUMMARY, or
+`/ipam` sees no sighting at all. ~~or the backfill must run over it~~ — **struck at 14.3a's validation**:
+the seeds run AFTER boot (`ci.yml:111` starts the binary, `:146` seeds), so a backfill that runs once at
+boot never sees seed rows; story 14.3a's AC8 makes both seeds write their own summary from one `@t`.
 
 ### (j) File sizes (code lines before the first line-start `#[cfg(test)]`)
 
