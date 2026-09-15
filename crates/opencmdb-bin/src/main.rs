@@ -1649,8 +1649,16 @@ mod tests {
     ///
     /// ⚠️ A lazy pool is enough for the negative half BECAUSE the refusal happens in the layer,
     /// above every handler. For the POSITIVE half the requests are shaped to be refused at the
-    /// route — an empty body is a shape refusal — so none of them reaches the database either. A
-    /// 404 there would mean the route is not mounted; a 200 would mean it was never asked.
+    /// route — an empty body is a shape refusal — so none of them reaches the database either. The
+    /// assertion is only *not 404*: an unmounted route answers 404, and any other status — the 422
+    /// an empty body earns, a 405 — proves the path is mounted. (It read *"a 200 would mean it was
+    /// never asked"* over an `assert_ne!` that accepts a 200; story 14.2b's review.)
+    ///
+    /// ⚠️ **AC3 is narrower than its letter, said rather than left to be found** (story 14.2b's
+    /// review): the criterion reads *every route the router carries*, and this walks the WRITE
+    /// routes — `document::PATHS` and `WriteRoute::paths()`. The GET screens are carried by story
+    /// 6b.2's guard over `Screen::ALL`; `ipam_page::router`, the triage router and the screens
+    /// router declare no path list of their own.
     #[tokio::test]
     async fn every_write_route_is_refused_without_a_credential_and_exists() {
         let declared: Vec<&str> = document::PATHS

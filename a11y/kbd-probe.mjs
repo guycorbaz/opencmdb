@@ -38,7 +38,7 @@ const SETTLE_WAIT_MS = 900;
 // caught that twice, once in a privacy floor and once in a word count. If a check is added
 // this number moves deliberately; if one is skipped, the gate says so instead of printing
 // a green.
-const MIN_CHECKS = 36;
+const MIN_CHECKS = 37;
 const MIN_ROWS = 2;
 /// How long a navigation or a response may take before the gate calls it *could not run*.
 const NAV_TIMEOUT_MS = 20_000;
@@ -647,9 +647,23 @@ async function main() {
     const summaries = await page.$$eval("details.ipam-form > summary", (nodes) => nodes.length);
     check(
       summaries === 3,
-      "`/ipam` offers the three write gestures as keyboard-reachable disclosures",
+      "`/ipam` offers the three write gestures as disclosures",
       `summary count=${summaries}`,
     );
+
+    // 🔴 **COUNTING NODES IS NOT REACHING THEM, and story 14.2b's review said so**: the check above
+    // claimed "keyboard-reachable" over a count, and every step below focuses by script. This one
+    // PRESSES Tab from the top of the page, as an operator would, until the subnet form's
+    // disclosure has focus — bounded, so a control Tab never reaches fails rather than loops.
+    await page.evaluate(() => document.body.focus());
+    let reached = false;
+    for (let press = 0; press < 400 && !reached; press += 1) {
+      await page.keyboard.press("Tab");
+      reached = await page.evaluate(
+        () => document.activeElement === document.querySelector("#ipam-form-subnet > summary"),
+      );
+    }
+    check(reached, "Tab alone reaches the subnet form from the top of `/ipam`", `reached=${reached}`);
 
     // A `<summary>` is focusable by construction; what is worth measuring is that Enter OPENS it,
     // because a disclosure that only a pointer can expand hides the gesture from a keyboard.
@@ -660,11 +674,20 @@ async function main() {
     await wait(120);
     const opened = await page.$eval("#ipam-form-subnet", (el) => el.open);
     check(opened === true, "Enter on the summary OPENS the form", `open=${opened}`);
+    // ⚠️ Opened by script if Enter did not, so that failure is COUNTED (exit 1) rather than turning
+    // every check below into a timeout reported as "could not run" (exit 2) — the review's finding.
+    if (opened !== true) {
+      await page.$eval("#ipam-form-subnet", (el) => {
+        el.open = true;
+      });
+    }
 
     // ⚠️ A CIDR of this probe's own, so it collides with neither the seed's two `/25`s nor the
-    // Rust tests' `/24`s. The FIRST submit writes and the SECOND is refused, and the two are
-    // measured separately because they take structurally different paths.
-    await page.type("#ipam-cidr", "203.0.113.0/24");
+    // Rust tests' `/24`s — `198.18.0.0/24`, RFC 2544's benchmarking block. 🔴 It read
+    // `203.0.113.0/24` under this same sentence, which `repo.rs`'s contention test inserts; the
+    // review caught the comment asserting the opposite of the code. The FIRST submit writes and
+    // the SECOND is refused, measured separately because they take structurally different paths.
+    await page.type("#ipam-cidr", "198.18.0.0/24");
     await page.type("#ipam-subnet-label", "kbd probe");
     await page.evaluate(() =>
       document.querySelector("#ipam-form-subnet button[type=submit]").focus(),
@@ -721,7 +744,7 @@ async function main() {
         `url=${landed.url}`,
       );
       check(
-        landed.tabs.some((label) => label.includes("203.0.113.0/24")),
+        landed.tabs.some((label) => label.includes("198.18.0.0/24")),
         "and the subnet is DRAWN — the screen is the confirmation, which is why none rides in " +
           "the URL as it does on /triage",
         `selector=${JSON.stringify(landed.tabs)}`,
@@ -738,7 +761,7 @@ async function main() {
       );
       await again.keyboard.press("Enter");
       await wait(120);
-      await again.type("#ipam-cidr", "203.0.113.0/24");
+      await again.type("#ipam-cidr", "198.18.0.0/24");
       await again.type("#ipam-subnet-label", "kbd probe");
       await again.evaluate(() =>
         document.querySelector("#ipam-form-subnet button[type=submit]").focus(),

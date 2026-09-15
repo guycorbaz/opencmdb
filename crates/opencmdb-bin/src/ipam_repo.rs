@@ -316,13 +316,102 @@ async fn insert_range_pausing(
     if last < first {
         return Err(ipam(IpamError::RangeBoundsInverted));
     }
+    // 🔴 **ONE REPLAY ON A DEADLOCK, and the review measured why it is owed** (Guy, 2026-09-15).
+    // Two ranges defined at once in two DIFFERENT, empty subnets deadlocked 2 runs of 3 in 0.42 s:
+    // both subnet ids fall in one gap of the non-unique `ip_range_subnet` index, the parent locks
+    // are different rows and serialise nothing between them, and each transaction then needs an
+    // insert-intention lock the other's gap lock blocks. The loser was told *another change was in
+    // flight* about a write that conflicted with nothing. InnoDB has already rolled the victim back,
+    // so replaying the whole attempt is exactly NFR15's *"the caller replays the whole closure"*.
+    // ⚠️ Once, and on 1213 alone: a lock-wait TIMEOUT (1205) is not replayed — the operator's
+    // budget is already spent by then — and a second deadlock is answered as `Contention`.
+    // The seam is not replayed either: it exists to open ONE window for AC5's harness.
+    match range_attempt(
+        conn,
+        id,
+        subnet_id,
+        first,
+        last,
+        policy,
+        label,
+        after_the_deciding_read,
+    )
+    .await
+    {
+        Ok(()) => Ok(()),
+        Err(RangeAttempt::Refused(error)) => Err(error),
+        Err(RangeAttempt::Deadlocked) => {
+            tracing::warn!(
+                subnet = subnet_id,
+                "a range write was chosen as a deadlock victim — replaying it once"
+            );
+            match range_attempt(
+                conn,
+                id,
+                subnet_id,
+                first,
+                last,
+                policy,
+                label,
+                std::future::ready(()),
+            )
+            .await
+            {
+                Ok(()) => Ok(()),
+                Err(RangeAttempt::Refused(error)) => Err(error),
+                Err(RangeAttempt::Deadlocked) => Err(RepositoryError::Contention),
+            }
+        }
+    }
+}
+
+/// Why one attempt at a range write did not land.
+enum RangeAttempt {
+    /// InnoDB chose this transaction as a deadlock victim (1213) and rolled it back — the one
+    /// outcome worth replaying.
+    Deadlocked,
+    /// Anything else: a domain refusal, a constraint, a lock-wait timeout, a backend fault.
+    Refused(RepositoryError),
+}
+
+impl From<RepositoryError> for RangeAttempt {
+    fn from(error: RepositoryError) -> Self {
+        Self::Refused(error)
+    }
+}
+
+/// Classify a `sqlx::Error` met inside a range attempt, keeping a deadlock apart from the rest.
+fn attempt_error(error: sqlx::Error) -> RangeAttempt {
+    if crate::repo::is_deadlock(&error) {
+        RangeAttempt::Deadlocked
+    } else {
+        RangeAttempt::Refused(classify(error))
+    }
+}
+
+/// One transaction of [`insert_range`]: lock, decide, write, commit.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the seam is one argument on an already-wide row"
+)]
+async fn range_attempt(
+    conn: &mut sqlx::MySqlConnection,
+    id: &str,
+    subnet_id: &str,
+    first: Ipv4Addr,
+    last: Ipv4Addr,
+    policy: IpPolicy,
+    label: &str,
+    after_the_deciding_read: impl std::future::Future<Output = ()>,
+) -> Result<(), RangeAttempt> {
     // 🔑 THE FUNCTION OWNS ITS TRANSACTION, and that is what makes the locks below mean anything:
     // in autocommit a `FOR UPDATE` is released at the end of its own statement, so read-decide-write
-    // would still race with every lock in place. ⚠️ It therefore must NOT be called from inside
-    // another transaction — MariaDB's `BEGIN` implicitly commits one — and no caller does.
+    // would still race with every lock in place. ⚠️ It must not be called from inside another
+    // transaction: sqlx would open a SAVEPOINT there, so this `commit` would only release it and the
+    // locks would live as long as the OUTER transaction chose. No caller does.
     let mut tx = sqlx::Connection::begin(&mut *conn)
         .await
-        .map_err(classify)?;
+        .map_err(attempt_error)?;
     // 🔴 THE PARENT ROW FIRST, THEN THE DECIDING READ, and the pair is Guy's arbitration of
     // 2026-09-12 taken on a measured matrix of five strategies (§1(d)). The two locks are NOT
     // redundant, which is why the same option was refused the day before as belt-and-braces:
@@ -346,40 +435,59 @@ async fn insert_range_pausing(
     // composite and each half is named individually by
     // `both_reads_of_a_subnet_under_write_take_their_lock`, a source guard that names the cause
     // where the composite names only the symptom (story 6b.11's AC5, as amended).
-    let subnet = load_subnet_locked(&mut tx, subnet_id).await?;
-    if !subnet.contains(first) || !subnet.contains(last) {
-        return Err(ipam(IpamError::RangeOutsideSubnet));
+    let decided: Result<(), RangeAttempt> = async {
+        let subnet = load_subnet_locked(&mut tx, subnet_id).await?;
+        if !subnet.contains(first) || !subnet.contains(last) {
+            return Err(ipam(IpamError::RangeOutsideSubnet).into());
+        }
+        let siblings: Vec<(String, String)> = sqlx::query_as(
+            "SELECT first_addr, last_addr FROM ip_range WHERE subnet_id = ? FOR UPDATE",
+        )
+        .bind(subnet_id)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(attempt_error)?;
+        after_the_deciding_read.await;
+        for (sibling_first, sibling_last) in siblings {
+            let sibling_first = from_canonical(&sibling_first).map_err(ipam)?;
+            let sibling_last = from_canonical(&sibling_last).map_err(ipam)?;
+            // Two closed intervals overlap unless one ends before the other begins.
+            if first <= sibling_last && sibling_first <= last {
+                return Err(ipam(IpamError::RangeOverlapsAnother).into());
+            }
+        }
+        sqlx::query(
+            "INSERT INTO ip_range (id, subnet_id, first_addr, last_addr, policy, label) \
+         VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(id)
+        .bind(subnet_id)
+        .bind(canonical(first))
+        .bind(canonical(last))
+        .bind(policy.as_str())
+        .bind(label)
+        .execute(&mut *tx)
+        .await
+        .map_err(attempt_error)?;
+        Ok(())
     }
-    let siblings: Vec<(String, String)> =
-        sqlx::query_as("SELECT first_addr, last_addr FROM ip_range WHERE subnet_id = ? FOR UPDATE")
-            .bind(subnet_id)
-            .fetch_all(&mut *tx)
-            .await
-            .map_err(classify)?;
-    after_the_deciding_read.await;
-    for (sibling_first, sibling_last) in siblings {
-        let sibling_first = from_canonical(&sibling_first).map_err(ipam)?;
-        let sibling_last = from_canonical(&sibling_last).map_err(ipam)?;
-        // Two closed intervals overlap unless one ends before the other begins.
-        if first <= sibling_last && sibling_first <= last {
-            return Err(ipam(IpamError::RangeOverlapsAnother));
+    .await;
+    match decided {
+        Ok(()) => tx.commit().await.map_err(attempt_error),
+        // 🔴 ROLLED BACK HERE, EXPLICITLY, and the review's own repair is what exposed it. A refused
+        // attempt used to return with `?` and leave `tx` to its `Drop`, which only QUEUES the
+        // rollback on the connection: the locks — the parent row and the sibling gap — stay held
+        // until that connection is next used. The race test's new end-of-test cleanup met exactly
+        // that: its loser still held its connection, and `forget_subnet` waited out
+        // `innodb_lock_wait_timeout` (1205, 50 s). The Blind Hunter had suspected it from the diff
+        // alone and could not confirm it; this is the confirmation, and the fix is the cause's.
+        Err(refused) => {
+            if let Err(error) = tx.rollback().await {
+                tracing::warn!(%error, "rolling back a refused range write failed");
+            }
+            Err(refused)
         }
     }
-    sqlx::query(
-        "INSERT INTO ip_range (id, subnet_id, first_addr, last_addr, policy, label) \
-         VALUES (?, ?, ?, ?, ?, ?)",
-    )
-    .bind(id)
-    .bind(subnet_id)
-    .bind(canonical(first))
-    .bind(canonical(last))
-    .bind(policy.as_str())
-    .bind(label)
-    .execute(&mut *tx)
-    .await
-    .map_err(classify)?;
-    tx.commit().await.map_err(classify)?;
-    Ok(())
 }
 
 /// [`load_subnet`], but taking the subnet ROW's lock — the entry point every write to a subnet's
@@ -1281,7 +1389,85 @@ pub(crate) mod tests {
                 .await
                 .expect("counting the survivors");
         assert_eq!(rows, 1, "the refused write must have left nothing behind");
+        // 🔴 Cleaned at the END as well as at the start — the review found its `/25` left behind.
+        forget_subnet(&pool, "t-race").await;
     }
+
+    /// 🔴 **Two ranges defined at once in two DIFFERENT subnets both land** — the review's Edge Case
+    /// Hunter measured them DEADLOCKING, 2 runs of 3, the loser answered in 0.42 s: two empty subnets
+    /// fall in one gap of the non-unique `ip_range_subnet` index, the parent-row locks are two
+    /// different rows and serialise nothing between them, and each transaction then needs an
+    /// insert-intention lock the other's gap lock blocks. The operator was told *another change was
+    /// in flight* about a write that conflicted with nothing. Guy, 2026-09-15: replay a deadlock
+    /// victim ONCE.
+    ///
+    /// ⚠️ **FIVE ROUNDS, because one round is a coin toss**: a single run deadlocked two times in
+    /// three, so a guard of one round would pass a third of the time with the replay deleted. Five
+    /// rounds of a 2/3 event leave that at under half a percent — a measurement of a race states its
+    /// odds rather than implying a certainty it does not have.
+    #[tokio::test]
+    async fn two_ranges_at_once_in_two_subnets_both_land() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = ipam_fixture().await else {
+            return;
+        };
+        for id in ["t-dl-a", "t-dl-b"] {
+            forget_subnet(&pool, id).await;
+        }
+        let mut setup = pool.acquire().await.expect("a connection");
+        for (id, base) in [("t-dl-a", "100.64.10.0"), ("t-dl-b", "100.64.20.0")] {
+            let subnet = Subnet::new(v4(base), 24).expect("a subnet of its own");
+            insert_subnet(&mut *setup, id, subnet, "deadlock probe")
+                .await
+                .expect("the parent row");
+        }
+        drop(setup);
+
+        for round in 0..5 {
+            for id in ["t-dl-a", "t-dl-b"] {
+                sqlx::query("DELETE FROM ip_range WHERE subnet_id = ?")
+                    .bind(id)
+                    .execute(&pool)
+                    .await
+                    .expect("the probe's own ranges");
+            }
+            let mut left = pool.acquire().await.expect("a connection");
+            let mut right = pool.acquire().await.expect("a connection");
+            let pause = || tokio::time::sleep(std::time::Duration::from_millis(400));
+            let (left_id, right_id) = (format!("t-dl-a-{round}"), format!("t-dl-b-{round}"));
+            let (a, b) = tokio::join!(
+                insert_range_pausing(
+                    &mut left,
+                    &left_id,
+                    "t-dl-a",
+                    v4("100.64.10.10"),
+                    v4("100.64.10.20"),
+                    IpPolicy::Static,
+                    "left",
+                    pause(),
+                ),
+                insert_range_pausing(
+                    &mut right,
+                    &right_id,
+                    "t-dl-b",
+                    v4("100.64.20.10"),
+                    v4("100.64.20.20"),
+                    IpPolicy::Static,
+                    "right",
+                    pause(),
+                )
+            );
+            assert!(
+                a.is_ok() && b.is_ok(),
+                "round {round}: two ranges in two DIFFERENT subnets conflict with nothing, so both \
+                 must land — a deadlock victim is replayed once. Got {a:?} / {b:?}"
+            );
+        }
+        for id in ["t-dl-a", "t-dl-b"] {
+            forget_subnet(&pool, id).await;
+        }
+    }
+
     /// Both reads a range write performs take their lock — named individually, because behaviour
     /// cannot name them.
     ///
@@ -1301,34 +1487,79 @@ pub(crate) mod tests {
     /// starts a test module — so the mutation strings inside these very doc comments are outside
     /// its perimeter. *A guard that greps a file greps its prose* (story 14.2), met three times in
     /// this story alone.
+    ///
+    /// 🔴 **COMMENTS ARE STRIPPED AND THE DRY LINE IS KEYED ON THE CALL, because the review defeated
+    /// both halves of the first version.** G1: drop the deciding read's `FOR UPDATE` and keep the old
+    /// SQL quoted in a comment above it — all 905 tests GREEN, this guard included, one lock gone and
+    /// nothing saying so. G2: G1 plus the DRY line spelled `load_subnet(tx.as_mut(), …)` — this guard
+    /// still green, because its needle was one spelling of the argument. So it reads CODE, and it
+    /// reads the ATTEMPT's body, where a read of the subnet without the lock is refused whatever its
+    /// argument looks like.
+    ///
+    /// ⚠️ Its stripper cuts `//` outside a double-quoted string on the same line; an escaped `\"`
+    /// inside a literal would confuse it. No such literal exists in this file's production half.
     #[test]
     fn both_reads_of_a_subnet_under_write_take_their_lock() {
         let source = include_str!("ipam_repo.rs");
         let cut = source
             .find("\n#[cfg(test)]")
             .expect("this file has a trailing test module");
-        let production = &source[..cut];
-        for (needle, what) in [
-            (
-                "SELECT base, prefix_len FROM ip_subnet WHERE id = ? FOR UPDATE",
-                "the PARENT ROW's lock, which serialises entry to one subnet",
+        let production = code_only(&source[..cut]);
+        let start = production
+            .find("async fn range_attempt(")
+            .expect("the range write's attempt");
+        let body = &production[start..];
+        let body = &body[..body.find("\n}\n").expect("the attempt's closing brace")];
+
+        assert!(
+            production.contains("SELECT base, prefix_len FROM ip_subnet WHERE id = ? FOR UPDATE"),
+            "the PARENT ROW's lock is gone, which serialises entry to one subnet. AC5's harness will \
+             not tell you: each lock is masked by the other, and only the composite mutation reds."
+        );
+        assert!(
+            body.contains("load_subnet_locked("),
+            "the range attempt no longer enters through the parent row's lock"
+        );
+        assert!(
+            body.contains(
+                "SELECT first_addr, last_addr FROM ip_range WHERE subnet_id = ? FOR UPDATE"
             ),
-            (
-                "SELECT first_addr, last_addr FROM ip_range WHERE subnet_id = ? FOR UPDATE",
-                "the DECIDING read's lock, which is what an ordinary DRY line cannot walk past",
-            ),
-        ] {
+            "the DECIDING read's lock is gone — the one an ordinary DRY line cannot walk past. AC5's \
+             harness will not tell you: the parent row masks it."
+        );
+        for unlocked in ["load_subnet(", "FROM ip_subnet"] {
             assert!(
-                production.contains(needle),
-                "{what} is gone. AC5's harness will not tell you: each lock is masked by the \
-                 other, and only the composite mutation reds. Expected to find: {needle}"
+                !body.contains(unlocked),
+                "a non-locking read of the subnet (`{unlocked}`) inside the range write's transaction \
+                 — the DRY line. Under REPEATABLE READ it fixes the snapshot, and the locking read \
+                 that follows does not refresh it, so the sibling scan reads a world without the \
+                 other range."
             );
         }
-        assert!(
-            !production.contains("load_subnet(&mut *tx"),
-            "a non-locking read of the subnet was placed inside the write's transaction — the DRY \
-             line. Under REPEATABLE READ it fixes the snapshot, and the locking read that follows \
-             does not refresh it, so the sibling scan reads a world without the other range."
-        );
+    }
+
+    /// The code of a Rust source with its `//` comments removed, a `//` inside a double-quoted
+    /// string on the same line being kept.
+    fn code_only(source: &str) -> String {
+        source
+            .lines()
+            .map(|line| {
+                let bytes = line.as_bytes();
+                let mut in_string = false;
+                let mut cut = line.len();
+                for at in 0..bytes.len().saturating_sub(1) {
+                    match bytes[at] {
+                        b'"' => in_string = !in_string,
+                        b'/' if !in_string && bytes[at + 1] == b'/' => {
+                            cut = at;
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+                &line[..cut]
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }

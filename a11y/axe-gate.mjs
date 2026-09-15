@@ -197,11 +197,15 @@ async function main() {
   if (EMPTY_PLAN) {
     const page = await openPage();
     await goOrGiveUp(page, PLAN_ROUTE);
+    // 🔴 NO CELL AND NO SUBNET, and cells alone were not enough (story 14.2b's review): a subnet
+    // too large to draw, or an unknown `?subnet=`, also draws zero cells over a plan that is full.
     const cells = await page.$$eval(PLAN_CELL, (nodes) => nodes.length);
-    if (cells !== 0) {
+    const subnets = await page.$$eval("nav.filters a.filter", (nodes) => nodes.length);
+    if (cells !== 0 || subnets !== 0) {
       cannotRun(
-        `${PLAN_ROUTE} draws ${cells} cell(s), so the plan is NOT empty and this mode measured ` +
-          `the wrong state. Run it before the seed, over a store emptied by a11y/empty-plan.sql.`,
+        `${PLAN_ROUTE} draws ${cells} cell(s) and offers ${subnets} subnet(s), so the plan is NOT ` +
+          `empty and this mode measured the wrong state. Run it before the seed, over a store ` +
+          `emptied by a11y/empty-plan.sql.`,
       );
     }
     // The deliverable of AC8: the empty plan LINKS to the gesture, and the link's target is
@@ -214,8 +218,11 @@ async function main() {
         open: target === null ? null : target.open,
       };
     });
-    if (door.link === null || door.link === "") {
-      cannotRun(`${PLAN_ROUTE} shows no link into the subnet form, so AC8 is not on the page`);
+    // 🔴 A PRODUCT DEFECT, NOT "COULD NOT RUN": the page answered and the plan is empty, so a
+    // missing link is the product failing AC8 — exit 1. It exited 2 until story 14.2b's review.
+    const linkMissing = door.link === null || door.link === "";
+    if (linkMissing) {
+      console.log(`🔴 ${PLAN_ROUTE} (empty plan)  shows no link into the subnet form, so AC8 is not on the page`);
     }
     await page.addScriptTag({ content: axeSource });
     const results = await page.evaluate(
@@ -234,10 +241,12 @@ async function main() {
       );
     }
     await page.close();
-    const clean = violations.length === 0 && door.open === true;
+    const clean = violations.length === 0 && door.open === true && !linkMissing;
     console.log(
       `\naxe gate (empty plan): 1 route, ${emptyNodes} violation node(s), ` +
-        `link ${door.open === true ? "opens onto an open form" : "opens onto a closed form"}`,
+        // 🔴 The link's state is said only when there IS a link: under a mutation removing it this
+        // line read "link opens onto an open form" beside the 🔴 saying the link was missing.
+        `link ${linkMissing ? "MISSING" : door.open === true ? "opens onto an open form" : "opens onto a closed form"}`,
     );
     return clean ? 0 : 1;
   }

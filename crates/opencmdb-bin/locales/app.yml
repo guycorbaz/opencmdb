@@ -917,9 +917,12 @@ ipam.form.submit:
 # ⚠️ Shown where the range and address forms would be, when no subnet is in force. It says what to
 # do rather than hiding the two forms, on Guy's premise (2) of 2026-08-13 — show and label rather
 # than hide.
+#
+# 🔴 It said *"Choose a subnet above"* on the EMPTY plan too, where there is none to choose (story
+# 14.2b's review). The sentence now holds in both cases the forms meet with no subnet in force.
 ipam.form.needs_subnet:
-  en: "Choose a subnet above to define a range or an address inside it."
-  fr: "Choisissez un sous-réseau ci-dessus pour y définir une plage ou une adresse."
+  en: "A range or an address is defined inside a subnet: choose one above, or define it first."
+  fr: "Une plage ou une adresse se définit dans un sous-réseau : choisissez-en un ci-dessus, ou définissez-le d'abord."
 ipam.done.subnet:
   en: "Subnet defined. The plan now has somewhere to put ranges and addresses."
   fr: "Sous-réseau défini. Le plan a désormais où placer des plages et des adresses."
@@ -951,24 +954,46 @@ ipam.refusal.unknown_policy:
 # ⚠️ Required by Guy's decision of 2026-09-12, refused at the route and NOT in the schema: `label`
 # is `NOT NULL` with no non-empty CHECK, so `""` still inserts through raw SQL. A tripwire, never a
 # barrier — story 5.12's precedent, stated rather than implied.
+# 🔴 It named THE SUBNET and served all three forms (story 14.2b's review). A label with nothing
+# visible in it — a zero-width space — is empty too.
 ipam.refusal.label_empty:
-  en: "The subnet needs a label: a plan of numbers with no words is not a plan."
-  fr: "Le sous-réseau a besoin d'une étiquette : un plan de nombres sans mots n'est pas un plan."
+  en: "A label is required: a plan of numbers with no words is not a plan."
+  fr: "Une étiquette est requise : un plan de nombres sans mots n'est pas un plan."
+ipam.refusal.label_control:
+  en: "That label carries a control character, such as a line break: a label is one line of text."
+  fr: "Cette étiquette contient un caractère de contrôle, comme un saut de ligne : une étiquette tient sur une ligne."
 ipam.refusal.label_too_long:
   en: "That label is too long: 120 characters at most."
   fr: "Cette étiquette est trop longue : 120 caractères au maximum."
-ipam.refusal.already_defined:
+# 🔴 ONE PER RECORD: a single sentence told a re-entered ADDRESS that the plan already held that
+# SUBNET (story 14.2b's review, measured 409).
+ipam.refusal.already_defined_subnet:
   en: "The plan already holds that subnet."
   fr: "Le plan contient déjà ce sous-réseau."
+ipam.refusal.already_defined_range:
+  en: "The plan already holds that range."
+  fr: "Le plan contient déjà cette plage."
+ipam.refusal.already_defined_address:
+  en: "That address is already defined in this subnet."
+  fr: "Cette adresse est déjà définie dans ce sous-réseau."
 ipam.refusal.unknown_subnet:
   en: "That subnet is not in the plan."
   fr: "Ce sous-réseau n'est pas dans le plan."
+# 🔴 A KEY, where the documenting route still answers an English literal: the review found that
+# literal swapped into the page under a French UI. Behind a reverse proxy, `Host` must be forwarded.
+ipam.refusal.cross_origin:
+  en: "Refused: this write did not come from this opencmdb's own page. Behind a reverse proxy, the Host header must be forwarded."
+  fr: "Refusé : cette écriture ne vient pas de la page de cet opencmdb. Derrière un proxy inverse, l'en-tête Host doit être transmis."
 # 503 and not 409: nothing about the request is wrong. 🔴 Reachable only since this story — the arm
 # that produces it was dead code until `classify` was repaired, because nothing in this product
 # contended before the plan's routes took a row lock.
+#
+# 🔴 It promised *"Nothing was written"*, and story 14.2b's review measured a row written after it.
+# A timeout during the commit cannot be settled by anyone, so the sentence does not promise either
+# way (Guy, 2026-09-15).
 ipam.refusal.contention:
-  en: "Another change to the plan was in flight. Nothing was written; try again."
-  fr: "Une autre modification du plan était en cours. Rien n'a été écrit ; réessayez."
+  en: "Another change to the plan was in flight, or the write took too long. It may or may not have been saved: reload the plan, and try again if it is missing."
+  fr: "Une autre modification du plan était en cours, ou l'écriture a pris trop de temps. Elle a pu être enregistrée ou non : rechargez le plan, et réessayez si elle n'y figure pas."
 ipam.refusal.backend:
   en: "The write did not go through. Nothing was changed; see the self-diagnostic if it persists."
   fr: "L'écriture n'est pas passée. Rien n'a été modifié ; consultez l'auto-diagnostic si cela persiste."

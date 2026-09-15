@@ -1648,6 +1648,19 @@ pub fn classify(error: sqlx::Error) -> RepositoryError {
     RepositoryError::Backend(error.to_string())
 }
 
+/// Whether a `sqlx::Error` is MariaDB choosing this transaction as a DEADLOCK victim (1213).
+///
+/// Kept apart from [`classify`], which folds 1213 and 1205 into one `Contention`, because the two
+/// call for different acts: a deadlock victim has already been rolled back and can be replayed at
+/// once, while a lock-wait timeout has already spent its wait (story 14.2b's review, where two
+/// ranges in two different subnets deadlocked and `ipam_repo`'s range write now replays once).
+pub(crate) fn is_deadlock(error: &sqlx::Error) -> bool {
+    error
+        .as_database_error()
+        .and_then(|db| db.try_downcast_ref::<sqlx::mysql::MySqlDatabaseError>())
+        .is_some_and(|mysql| mysql.number() == 1213)
+}
+
 /// Insert one row of the `entity` supertype.
 ///
 /// The supertype is what makes D21's interface/device disjunction structural rather than
@@ -2444,15 +2457,27 @@ mod tests {
             .execute(&mut *waiter)
             .await
             .expect("begin");
-        let refused = sqlx::query("SELECT id FROM ip_subnet WHERE id = 't-contend' FOR UPDATE")
+        let raw = sqlx::query("SELECT id FROM ip_subnet WHERE id = 't-contend' FOR UPDATE")
             .execute(&mut *waiter)
             .await
-            .map_err(classify);
+            .expect_err("the waiter must give up on the held row");
 
-        // 🔑 The CONTROL that makes the assertion mean something: the error really is a lock wait,
-        // not some other failure that happens to classify the same way.
+        // 🔑 THE CONTROL that makes the assertion mean something — and the review found it announced
+        // here and ABSENT: the comment promised it while the only assertion read `classify`'s own
+        // output. The raw number is read FIRST, so a failure that merely classifies the same way
+        // cannot satisfy the test.
+        let number = raw
+            .as_database_error()
+            .and_then(|db| db.try_downcast_ref::<sqlx::mysql::MySqlDatabaseError>())
+            .map(sqlx::mysql::MySqlDatabaseError::number);
         assert_eq!(
-            refused.err(),
+            number,
+            Some(1205),
+            "premise: the waiter's error must be MariaDB's lock-wait timeout, or the assertion below \
+             measures some other failure: {raw}"
+        );
+        assert_eq!(
+            Some(classify(raw)),
             Some(RepositoryError::Contention),
             "a lock-wait timeout must be the ONE retryable case (NFR15), not an opaque \
              `Backend` sentence in the driver's English — which is what it was until story 14.2b, \

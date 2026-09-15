@@ -969,7 +969,8 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 /* The caveat under a panel value: it names the SOURCE of the number above it. Smaller than the
    value and larger than nothing, because a sentence nobody reads is a sentence nobody is bound by. */
 .panel-caveat { margin: 0 0 4px; font-size: 12px; color: var(--muted); max-width: 40ch; }
-/* The sentence that accompanies a not-yet-built control, visible once and announced once. */
+/* The empty plan's sentence and its link into the subnet form — a live control since story 14.2b,
+   where this comment still called it a not-yet-built one. */
 .ipam-planned-note { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; font-size: 13px; color: var(--muted); }
 /* ── The plan's three write forms (story 14.2b) ──────────────────────────────
    🔑 A `<details>` per gesture, because three forms permanently open above a 256-cell grid is the

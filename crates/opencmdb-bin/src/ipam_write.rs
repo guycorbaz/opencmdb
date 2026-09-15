@@ -128,11 +128,18 @@ const IPAM_WRITE_BUDGET: std::time::Duration = std::time::Duration::from_secs(5)
 ///
 /// ⚠️ **A timeout is reported to the operator as [`RepositoryError::Contention`], deliberately.**
 /// The two are different facts — *the store never answered* against *the store said deadlock* — and
-/// they are the same ACTION: nothing was written, try again. The distinction that matters to
-/// whoever is debugging is kept where it belongs, in the log.
+/// they call for the same ACT: reload the plan, and try again if the change is missing. The
+/// distinction that matters to whoever is debugging is kept where it belongs, in the log.
 ///
-/// 🔑 Dropping the future drops the transaction, so *nothing was written* is true and not a hope:
-/// an uncommitted MariaDB transaction is rolled back when its connection is returned.
+/// 🔴 **This doc promised *"nothing was written is true and not a hope"*, and the review measured it
+/// false.** The subnet and address writes ran in AUTOCOMMIT, so a statement already at the server
+/// when the future was dropped committed AFTER the 503: a held parent row, `POST /ipam/address`
+/// answered at 5.002 s, the row present once the holder committed, and the retry refused as
+/// already defined. All three writes now run inside a transaction, so a write dropped BEFORE its
+/// commit is rolled back with its connection — `a_write_dropped_while_waiting_leaves_no_row_behind`.
+/// ⚠️ **What no transaction settles is a timeout DURING `COMMIT`**: the server may have committed
+/// and the answer never arrived. So the operator's sentence does not promise either way — *it may
+/// have been saved; reload the plan* — which is true in every case (Guy, 2026-09-15).
 async fn within_budget<T>(
     work: impl std::future::Future<Output = Result<T, RepositoryError>>,
 ) -> Result<T, RepositoryError> {
@@ -210,6 +217,23 @@ impl WriteRoute {
                 WriteRoute::Subnet => "ipam.refusal.malformed_subnet",
                 WriteRoute::Range => "ipam.refusal.malformed_range",
                 WriteRoute::Address => "ipam.refusal.malformed_address",
+            },
+        )
+    }
+
+    /// The conflict a re-entered record earns, naming WHICH record is already there.
+    ///
+    /// 🔴 **One sentence served all three routes until story 14.2b's review, and it named the
+    /// subnet**: a re-entered ADDRESS was told *"the plan already holds that subnet"* (measured,
+    /// 409). `Constraint("unique")` carries no index name, so the route is what knows which record
+    /// collided.
+    const fn already_defined(self) -> Refusal {
+        Refusal::new(
+            StatusCode::CONFLICT,
+            match self {
+                WriteRoute::Subnet => "ipam.refusal.already_defined_subnet",
+                WriteRoute::Range => "ipam.refusal.already_defined_range",
+                WriteRoute::Address => "ipam.refusal.already_defined_address",
             },
         )
     }
@@ -334,11 +358,16 @@ impl IpamWritePort for StoreIpamWrite {
             // that receive a `subnet_id` from the browser; this one receives no id at all.
             let id = uuid::Uuid::now_v7().to_string();
             let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
-            // ⚠️ ONE statement, so no transaction: `insert_subnet` reads nothing and decides
-            // nothing against another row. The range route is where a transaction and a lock
-            // become load-bearing (§1(d)), and wrapping this one would suggest a guarantee it does
-            // not need and does not have.
-            ipam_repo::insert_subnet(&mut *conn, &id, subnet, &label).await?;
+            // 🔴 A TRANSACTION FOR ONE STATEMENT, and the review is why. This read *"one statement,
+            // so no transaction … wrapping it would suggest a guarantee it does not need"* — and the
+            // guarantee it needed was the budget's: in autocommit a statement waiting on the unique
+            // key when the budget drops its future COMMITS once the key is free, under a sentence
+            // telling the operator nothing was written. Inside a transaction the drop rolls it back.
+            let mut tx = sqlx::Connection::begin(&mut *conn)
+                .await
+                .map_err(crate::repo::classify)?;
+            let written = ipam_repo::insert_subnet(&mut *tx, &id, subnet, &label).await;
+            settle(tx, written).await?;
             Ok(id)
         })
     }
@@ -356,8 +385,10 @@ impl IpamWritePort for StoreIpamWrite {
             let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
             // ⚠️ THE TRANSACTION AND THE TWO LOCKS ARE `insert_range`'s OWN, deliberately: the
             // overlap rule is decided by a read, so the lock has to be taken by whatever performs
-            // that read. Opening a transaction here as well would nest one inside another, and
-            // MariaDB's `BEGIN` implicitly commits the outer.
+            // that read — and so is the one replay of a deadlock victim. Opening a transaction here
+            // as well would turn `insert_range`'s into a sqlx SAVEPOINT, whose `commit` releases
+            // the savepoint and commits nothing, and whose replay would run inside a transaction
+            // InnoDB had already rolled back.
             ipam_repo::insert_range(&mut conn, &id, &subnet_id, first, last, policy, &label)
                 .await?;
             Ok(id)
@@ -378,9 +409,37 @@ impl IpamWritePort for StoreIpamWrite {
             // The range's rule compares a row against its SIBLINGS, which a `CHECK` cannot express
             // (`ERROR 1901`) and only a read can answer — *the lock is owed by the rule that reads,
             // not by the act of writing*.
-            ipam_repo::insert_address(&mut conn, &id, &subnet_id, addr, &label).await?;
+            // 🔴 **But a TRANSACTION, which is not a lock**: measured at the review, an address
+            // whose foreign-key check waited on a held parent row was written after the budget's
+            // 503. Dropped inside a transaction, it is rolled back instead.
+            let mut tx = sqlx::Connection::begin(&mut *conn)
+                .await
+                .map_err(crate::repo::classify)?;
+            let written = ipam_repo::insert_address(&mut tx, &id, &subnet_id, addr, &label).await;
+            settle(tx, written).await?;
             Ok(id)
         })
+    }
+}
+
+/// Commit a write that went through, and roll back one that was refused — EXPLICITLY.
+///
+/// 🔴 **Not on `Drop`**: a dropped sqlx transaction only QUEUES its rollback on the connection, so a
+/// refused write (a duplicate subnet, an address outside its subnet) would keep its locks until the
+/// connection was next used. Measured on the range write at story 14.2b's review, where a held
+/// connection kept the loser's locks for the full 50 s `innodb_lock_wait_timeout`.
+async fn settle(
+    tx: sqlx::Transaction<'_, sqlx::MySql>,
+    written: Result<(), RepositoryError>,
+) -> Result<(), RepositoryError> {
+    match written {
+        Ok(()) => tx.commit().await.map_err(crate::repo::classify),
+        Err(refused) => {
+            if let Err(error) = tx.rollback().await {
+                tracing::warn!(%error, "rolling back a refused plan write failed");
+            }
+            Err(refused)
+        }
     }
 }
 
@@ -400,8 +459,9 @@ pub(crate) fn router(pool: MySqlPool) -> Router {
 /// database.
 pub(crate) fn router_with(port: Arc<dyn IpamWritePort>) -> Router {
     let mut router = Router::new();
-    // Built from the variants and not from `PATHS`, because only the variant carries its handler —
-    // and the two lists are pinned equal by a test.
+    // Built from the variants, because only a variant carries its handler — and the list AC3's
+    // guard walks is DERIVED from the same variants (`WriteRoute::paths`), so there is no second
+    // list to pin.
     for route in WriteRoute::ALL {
         router = router.route(route.path(), route.handler());
     }
@@ -420,7 +480,7 @@ async fn define_subnet(
     form: Result<Form<DefineSubnetRequest>, FormRejection>,
 ) -> Response {
     if !crate::write_guard::same_origin(&headers) {
-        return (StatusCode::FORBIDDEN, crate::write_guard::CSRF_REFUSED_BODY).into_response();
+        return cross_origin().into_response();
     }
     let Ok(Form(request)) = form else {
         return WriteRoute::Subnet.malformed().into_response();
@@ -440,7 +500,12 @@ async fn define_subnet(
         Err(refusal) => return refusal.into_response(),
     };
     let work = state.port.define_subnet(subnet, label);
-    answer(within_budget(work).await, None, "ipam.done.subnet")
+    answer(
+        within_budget(work).await,
+        WriteRoute::Subnet,
+        None,
+        "ipam.done.subnet",
+    )
 }
 
 /// `POST /ipam/range` — define a stretch of a subnet and say what it is MEANT for.
@@ -455,7 +520,7 @@ async fn define_range(
     form: Result<Form<DefineRangeRequest>, FormRejection>,
 ) -> Response {
     if !crate::write_guard::same_origin(&headers) {
-        return (StatusCode::FORBIDDEN, crate::write_guard::CSRF_REFUSED_BODY).into_response();
+        return cross_origin().into_response();
     }
     let route = WriteRoute::Range;
     let Ok(Form(request)) = form else {
@@ -485,6 +550,7 @@ async fn define_range(
         .define_range(subnet_id.clone(), first, last, policy, label);
     answer(
         within_budget(work).await,
+        route,
         Some(&subnet_id),
         "ipam.done.range",
     )
@@ -497,7 +563,7 @@ async fn define_address(
     form: Result<Form<DefineAddressRequest>, FormRejection>,
 ) -> Response {
     if !crate::write_guard::same_origin(&headers) {
-        return (StatusCode::FORBIDDEN, crate::write_guard::CSRF_REFUSED_BODY).into_response();
+        return cross_origin().into_response();
     }
     let route = WriteRoute::Address;
     let Ok(Form(request)) = form else {
@@ -517,6 +583,7 @@ async fn define_address(
     let work = state.port.define_address(subnet_id.clone(), addr, label);
     answer(
         within_budget(work).await,
+        route,
         Some(&subnet_id),
         "ipam.done.address",
     )
@@ -529,6 +596,7 @@ async fn define_address(
 /// subnet concerned, which re-renders from the store — *one URL per state*, epic constraint 4.
 fn answer(
     outcome: Result<String, RepositoryError>,
+    route: WriteRoute,
     subnet_id: Option<&str>,
     done_key: &'static str,
 ) -> Response {
@@ -548,7 +616,7 @@ fn answer(
                 .into_response()
         }
         Err(error) => {
-            let refusal = repository_refusal(&error);
+            let refusal = repository_refusal(&error, route);
             if refusal.status() == StatusCode::INTERNAL_SERVER_ERROR {
                 tracing::error!(%error, "the addressing plan's write failed at the backend");
             }
@@ -621,13 +689,24 @@ fn parse_policy(raw: &str) -> Result<opencmdb_core::ipam::IpPolicy, Refusal> {
 /// # Errors
 ///
 /// A 422 keyed on the rule: empty (§2's decision 4 — a plan of numbers with no words is not a
-/// plan) or longer than [`MAX_LABEL_CHARS`].
+/// plan), carrying a control character, or longer than [`MAX_LABEL_CHARS`].
 fn checked_label(raw: &str) -> Result<String, Refusal> {
     let label = raw.trim();
-    if label.is_empty() {
+    // 🔴 NOTHING VISIBLE IS EMPTY, and `trim` alone let it through: the review posted
+    // `%E2%80%8B%E2%80%8B`, got 201, and `/ipam` rendered a subnet with no name —
+    // `"\u{200B}".trim().is_empty()` is `false` in Rust. The crate's own predicate, story 6b.2's.
+    if !crate::carries_a_visible_glyph(label) {
         return Err(Refusal::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "ipam.refusal.label_empty",
+        ));
+    }
+    // 🔴 A CONTROL CHARACTER IS REFUSED, NOT STORED: `%0A%0Dctrl%00` answered 201 and every `/ipam`
+    // page then served a NUL byte, which `grep` took for a binary file. A label is one line of text.
+    if label.chars().any(char::is_control) {
+        return Err(Refusal::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "ipam.refusal.label_control",
         ));
     }
     if label.chars().count() > MAX_LABEL_CHARS {
@@ -666,15 +745,13 @@ fn parse_cidr(raw: &str) -> Result<Subnet, Refusal> {
 /// reads the names `repo::classify` can emit and asserts each one is `Some` here. Fold `check` into
 /// the `_` arm and the answer to the operator does not change by one byte — and that test reds,
 /// which is the difference between a decision and an omission.
-fn constraint_refusal(name: &str) -> Option<Refusal> {
+fn constraint_refusal(name: &str, route: WriteRoute) -> Option<Refusal> {
     match name {
-        // The likeliest refusal on this screen: the operator re-enters a subnet the plan already
-        // holds. It rides `ip_subnet_cidr`, and NO pre-read is taken — a check that commits
-        // separately from its write is a TOCTOU hole, not a check.
-        "unique" => Some(Refusal::new(
-            StatusCode::CONFLICT,
-            "ipam.refusal.already_defined",
-        )),
+        // The likeliest refusal on this screen: the operator re-enters what the plan already holds.
+        // It rides a UNIQUE key, and NO pre-read is taken — a check that commits separately from its
+        // write is a TOCTOU hole, not a check. 🔴 The ROUTE names the record: the name carries no
+        // index, and one sentence for all three told a re-entered address it was a subnet.
+        "unique" => Some(route.already_defined()),
         // A `subnet_id` that names no row — reachable from the two routes that receive one.
         "foreign_key" => Some(Refusal::new(
             StatusCode::NOT_FOUND,
@@ -696,14 +773,16 @@ fn constraint_refusal(name: &str) -> Option<Refusal> {
 /// `error[E0004]` here. ⚠️ The other half cannot be the compiler — [`RepositoryError::Constraint`]
 /// carries a `&'static str`, which forces a `_` inside, so a new constraint NAME is invisible to
 /// it. That half is a SET test over the names the adapter can produce.
-pub(crate) fn repository_refusal(error: &RepositoryError) -> Refusal {
+pub(crate) fn repository_refusal(error: &RepositoryError, route: WriteRoute) -> Refusal {
     match error {
         RepositoryError::Ipam(ipam) => ipam_refusal(ipam),
         // The three names `classify` can produce. ⚠️ The `_` is what the SET test covers.
         // ⚠️ THE COMPILER STOPS HERE. `Constraint` carries a `&'static str`, so the match INSIDE
         // it needs a `_` and a new constraint NAME is invisible to `E0004`. That half is carried by
         // [`constraint_refusal`] answering `None`, which the SET test reads.
-        RepositoryError::Constraint(name) => constraint_refusal(name).unwrap_or_else(backend),
+        RepositoryError::Constraint(name) => {
+            constraint_refusal(name, route).unwrap_or_else(backend)
+        }
         RepositoryError::NotFound => {
             Refusal::new(StatusCode::NOT_FOUND, "ipam.refusal.unknown_subnet")
         }
@@ -739,6 +818,17 @@ pub(crate) fn ipam_refusal(error: &IpamError) -> Refusal {
 /// logged by the caller, which is what keeps this mapper pure.
 const fn backend() -> Refusal {
     Refusal::new(StatusCode::INTERNAL_SERVER_ERROR, "ipam.refusal.backend")
+}
+
+/// The refusal a cross-origin write earns — a KEY, where `document.rs` still answers
+/// [`crate::write_guard::CSRF_REFUSED_BODY`]'s English literal.
+///
+/// 🔴 **The review found that literal on these routes, under AC1's *"a keyed refusal body per
+/// status in both locales"***: `hx-on::before-swap` swaps a 4xx into the page, so a French operator
+/// behind a proxy that rewrites `Host` read *"cross-origin request refused"* on every write. The
+/// documenting route's literal is story 6.1's and is registered rather than changed here.
+const fn cross_origin() -> Refusal {
+    Refusal::new(StatusCode::FORBIDDEN, "ipam.refusal.cross_origin")
 }
 
 #[cfg(test)]
@@ -877,7 +967,7 @@ mod tests {
             StatusCode::FORBIDDEN,
             "a cross-origin write is refused"
         );
-        assert_eq!(body, crate::write_guard::CSRF_REFUSED_BODY);
+        assert_eq!(body, key("ipam.refusal.cross_origin"));
         assert!(
             port.asked.lock().expect("the log").is_empty(),
             "the port must not have been reached at all"
@@ -1009,7 +1099,29 @@ mod tests {
             StatusCode::CONFLICT,
             "the likeliest refusal on this screen: the operator re-enters what is already there"
         );
-        assert_eq!(body, key("ipam.refusal.already_defined"));
+        assert_eq!(body, key("ipam.refusal.already_defined_subnet"));
+    }
+
+    #[tokio::test]
+    async fn a_re_entered_address_is_told_it_is_the_address() {
+        // 🔴 The review's measurement, as a test: the same `Constraint("unique")` on the address
+        // route answered *"The plan already holds that subnet."*
+        let port = FakePort::answering(Err(RepositoryError::Constraint("unique")));
+        let (status, body) = drive(
+            port,
+            form_post_to(
+                WriteRoute::Address,
+                &a_valid_body(WriteRoute::Address, "Office"),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body, key("ipam.refusal.already_defined_address"));
+        assert_ne!(
+            body,
+            key("ipam.refusal.already_defined_subnet"),
+            "a re-entered address must not be told it is a subnet"
+        );
     }
 
     #[tokio::test]
@@ -1033,11 +1145,10 @@ mod tests {
         )));
         let (status, body) = drive(port, form_post("cidr=192.0.2.0/24&label=Office")).await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        // 🔑 The equality IS the no-leak assertion: the body is the backend KEY's sentence and
+        // nothing else. A `!body.contains("root")` beside it could not fail — a `Refusal` holds a
+        // `&'static str` key and no room for the driver's text — and the review called it vacuous.
         assert_eq!(body, key("ipam.refusal.backend"));
-        assert!(
-            !body.contains("root") && !body.contains("password"),
-            "the driver's sentence stays in the log: {body}"
-        );
     }
 
     /// Every refusal the plan's domain can raise renders a DISTINCT sentence.
@@ -1123,11 +1234,14 @@ mod tests {
         // this project has now met it five times: *an assertion that fires first decides what the
         // failure says*, and a count says nothing a reader can act on.
         for name in &names {
-            assert!(
-                constraint_refusal(name).is_some(),
-                "`Constraint(\"{name}\")` reaches the handler and nobody has said what it means \
-                 to the operator — map it by name, even when the answer is the backend sentence"
-            );
+            for route in WriteRoute::ALL {
+                assert!(
+                    constraint_refusal(name, *route).is_some(),
+                    "`Constraint(\"{name}\")` reaches `{}` and nobody has said what it means to \
+                     the operator — map it by name, even when the answer is the backend sentence",
+                    route.path()
+                );
+            }
         }
         // A floor equal to what is there, never under it (story 6b.7). It catches the other
         // direction: a name that DISAPPEARS, which leaves a mapping nothing can reach.
@@ -1169,10 +1283,13 @@ mod tests {
             }
             rest = &after[end..];
         }
-        assert!(
-            keys.len() >= 15,
-            "the scan found only {} key(s), so it is no longer reading this file: {keys:?}",
-            keys.len()
+        // A floor EQUAL to what is there (story 6b.7) — it read `>= 15` over 20-odd keys until the
+        // review, which is a floor that tolerates losing a quarter of what it guards.
+        assert_eq!(
+            keys.len(),
+            24,
+            "the keys this file can render changed — update the count only after reading the list: \
+             {keys:?}"
         );
         for locale in ["en", "fr"] {
             for name in &keys {
@@ -1208,25 +1325,39 @@ mod tests {
             RepositoryError::Backend("1406: Data too long for column 'label'".to_string()),
             RepositoryError::Ipam(IpamError::RangeOverlapsAnother),
         ];
-        for error in &receivable {
-            let refusal = repository_refusal(error);
-            assert!(
-                refusal.status().is_client_error() || refusal.status().is_server_error(),
-                "{error} answered {}, which is not a refusal at all",
-                refusal.status()
-            );
-            for locale in ["en", "fr"] {
-                let sentence = rust_i18n::t!(refusal.key(), locale = locale).to_string();
-                assert_ne!(
-                    sentence,
-                    refusal.key(),
-                    "{error} renders its key name in `{locale}`"
-                );
+        // ⚠️ The review found two assertions here that could not fail — a status check restating the
+        // mapper's construction, and `"1406"` absent from a sentence built from a key. They are gone;
+        // what can fail is a key with no translation, and a sentence naming the wrong RECORD.
+        for route in WriteRoute::ALL {
+            for error in &receivable {
+                let refusal = repository_refusal(error, *route);
+                for locale in ["en", "fr"] {
+                    let sentence = rust_i18n::t!(refusal.key(), locale = locale).to_string();
+                    assert_ne!(
+                        sentence,
+                        refusal.key(),
+                        "{error} renders its key name in `{locale}` at `{}`",
+                        route.path()
+                    );
+                }
             }
-            assert!(
-                !rust_i18n::t!(refusal.key()).contains("1406"),
-                "the driver's own sentence reached the operator: {error}"
-            );
+        }
+        // 🔴 The defect this test was blind to: one `unique` sentence for three records. A key that
+        // resolves says nothing about WHICH rule it names, so the three conflicts are asserted
+        // DISTINCT, in both locales.
+        for locale in ["en", "fr"] {
+            let mut seen: Vec<String> = Vec::new();
+            for route in WriteRoute::ALL {
+                let refusal = repository_refusal(&RepositoryError::Constraint("unique"), *route);
+                let sentence = rust_i18n::t!(refusal.key(), locale = locale).to_string();
+                assert!(
+                    !seen.contains(&sentence),
+                    "`{}` answers a re-entered record with another route's sentence in `{locale}`: \
+                     {sentence}",
+                    route.path()
+                );
+                seen.push(sentence);
+            }
         }
     }
 
@@ -1271,22 +1402,42 @@ mod tests {
                 Box::pin(std::future::pending())
             }
         }
-        let (status, body) = drive(
-            Arc::new(NeverAnswers),
-            form_post("cidr=192.0.2.0/24&label=Office"),
-        )
-        .await;
-        assert_eq!(
-            status,
-            StatusCode::SERVICE_UNAVAILABLE,
-            "a write that outlives its budget is answered, not waited out"
-        );
-        assert_eq!(
-            body,
-            key("ipam.refusal.contention"),
-            "the operator is told the same thing as for a real lock wait, because the action is \
-             the same: nothing was written, try again"
-        );
+        // 🔴 **EVERY ROUTE, and the review measured why**: this drove the subnet route alone, and
+        // replacing `within_budget(work).await` with `work.await` in `define_range` — the only route
+        // that takes locks — reddened nothing and hung nothing. The story said a missing budget
+        // would HANG this test and so repeating it per route bought nothing; it was never run on the
+        // other two. 🔑 The outer timeout is what turns that hang into a red: the paused clock
+        // advances to it, and a handler with no budget never answers before it.
+        for route in WriteRoute::ALL {
+            let answered = tokio::time::timeout(
+                IPAM_WRITE_BUDGET * 2,
+                drive(
+                    Arc::new(NeverAnswers),
+                    form_post_to(*route, &a_valid_body(*route, "Office")),
+                ),
+            )
+            .await;
+            let Ok((status, body)) = answered else {
+                panic!(
+                    "`{}` did not answer within twice its budget: the handler has no budget, so a \
+                     write that never finishes holds the browser for as long as the store likes",
+                    route.path()
+                );
+            };
+            assert_eq!(
+                status,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "`{}`: a write that outlives its budget is answered, not waited out",
+                route.path()
+            );
+            assert_eq!(
+                body,
+                key("ipam.refusal.contention"),
+                "`{}`: the operator is told the same thing as for a real lock wait — reload, and \
+                 try again if the change is missing",
+                route.path()
+            );
+        }
     }
 
     /// A body every field of which is valid, for each route.
@@ -1341,15 +1492,26 @@ mod tests {
                 StatusCode::FORBIDDEN,
                 "`{at}` skipped the Origin check"
             );
-            assert_eq!(body, crate::write_guard::CSRF_REFUSED_BODY, "at `{at}`");
+            assert_eq!(body, key("ipam.refusal.cross_origin"), "at `{at}`");
             assert!(
                 port.asked.lock().expect("the log").is_empty(),
                 "`{at}` reached the port despite a cross-origin request"
             );
 
-            // The label rules, both halves.
+            // The label rules. 🔴 The last two are the review's measurements: a zero-width label
+            // answered 201 and rendered no name, and a NUL was stored and then served in every page.
             for (label, key_name, what) in [
                 ("%20%20", "ipam.refusal.label_empty", "a blank label"),
+                (
+                    "%E2%80%8B%E2%80%8B",
+                    "ipam.refusal.label_empty",
+                    "a label with nothing visible in it",
+                ),
+                (
+                    "ctrl%00",
+                    "ipam.refusal.label_control",
+                    "a label carrying a control character",
+                ),
                 (
                     "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
                     "ipam.refusal.label_too_long",
@@ -1490,5 +1652,134 @@ mod tests {
                 route.path()
             );
         }
+    }
+
+    /// 🔴 **A write the budget drops leaves NO ROW BEHIND** — the review measured the opposite.
+    ///
+    /// The subnet and address writes ran in autocommit. With the parent row held for 15 s,
+    /// `POST /ipam/address` answered 503 *"Nothing was written"* at 5.002 s, no row existed right
+    /// after, the row WAS there once the holder committed, and the retry answered 409. The statement
+    /// had already reached the server when its future was dropped.
+    ///
+    /// 🔑 This drops the port's future directly with a short `timeout`, which is what the budget
+    /// does after five seconds, and holds each write on a lock its own statement needs: the parent
+    /// row for the address (its foreign-key check), and an uncommitted copy of the same CIDR for the
+    /// subnet (its unique check). Then it releases the lock, gives a statement that outlived its
+    /// future time to land, and counts. In autocommit both counts are 1; inside a transaction the
+    /// dropped write is rolled back with its connection.
+    #[tokio::test]
+    async fn a_write_dropped_while_waiting_leaves_no_row_behind() {
+        const PARENT: &str = "t-drop-parent";
+        const HOLDER: &str = "t-drop-holder";
+        const HELD_BASE: &str = "100.064.031.000";
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = crate::ipam_repo::tests::ipam_fixture().await else {
+            return;
+        };
+        let cleanup = || async {
+            for id in [PARENT, HOLDER] {
+                crate::ipam_repo::tests::forget_subnet(&pool, id).await;
+            }
+            sqlx::query("DELETE FROM ip_subnet WHERE base = ? AND prefix_len = 24")
+                .bind(HELD_BASE)
+                .execute(&pool)
+                .await
+                .expect("the probe's own CIDR");
+        };
+        cleanup().await;
+        let parent = Subnet::new("100.64.30.0".parse().expect("an address"), 24).expect("a subnet");
+        ipam_repo::insert_subnet(&pool, PARENT, parent, "the parent")
+            .await
+            .expect("the parent row");
+        let port = StoreIpamWrite::new(pool.clone());
+        let patience = std::time::Duration::from_millis(500);
+        let mut holder = pool.acquire().await.expect("a holder connection");
+
+        // The ADDRESS: a holder takes the parent row, so the insert's foreign-key check waits.
+        sqlx::query("START TRANSACTION")
+            .execute(&mut *holder)
+            .await
+            .expect("begin");
+        sqlx::query("SELECT id FROM ip_subnet WHERE id = ? FOR UPDATE")
+            .bind(PARENT)
+            .execute(&mut *holder)
+            .await
+            .expect("hold the parent row");
+        let dropped = tokio::time::timeout(
+            patience,
+            port.define_address(
+                PARENT.to_string(),
+                "100.64.30.7".parse().expect("an address"),
+                "dropped".to_string(),
+            ),
+        )
+        .await;
+        assert!(
+            dropped.is_err(),
+            "premise: the address write must still be waiting on the held row when it is dropped, \
+             or this measures nothing: {dropped:?}"
+        );
+        sqlx::query("COMMIT")
+            .execute(&mut *holder)
+            .await
+            .expect("release the parent row");
+
+        // The SUBNET: a holder inserts the same CIDR without committing, so the unique check waits.
+        sqlx::query("START TRANSACTION")
+            .execute(&mut *holder)
+            .await
+            .expect("begin");
+        sqlx::query(
+            "INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES (?, ?, 24, 'holder')",
+        )
+        .bind(HOLDER)
+        .bind(HELD_BASE)
+        .execute(&mut *holder)
+        .await
+        .expect("hold the CIDR");
+        let dropped = tokio::time::timeout(
+            patience,
+            port.define_subnet(
+                Subnet::new("100.64.31.0".parse().expect("an address"), 24).expect("a subnet"),
+                "dropped".to_string(),
+            ),
+        )
+        .await;
+        assert!(
+            dropped.is_err(),
+            "premise: the subnet write must still be waiting on the held CIDR when it is dropped: \
+             {dropped:?}"
+        );
+        sqlx::query("ROLLBACK")
+            .execute(&mut *holder)
+            .await
+            .expect("release the CIDR");
+        drop(holder);
+
+        // A statement that outlived its future lands now, if it is going to.
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        let (addresses,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM ip_address WHERE subnet_id = ?")
+                .bind(PARENT)
+                .fetch_one(&pool)
+                .await
+                .expect("counting addresses");
+        let (subnets,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM ip_subnet WHERE base = ? AND prefix_len = 24")
+                .bind(HELD_BASE)
+                .fetch_one(&pool)
+                .await
+                .expect("counting subnets");
+        cleanup().await;
+        assert_eq!(
+            addresses, 0,
+            "the address the budget dropped was written anyway — under a sentence that could not \
+             say so"
+        );
+        assert_eq!(
+            subnets, 0,
+            "the subnet the budget dropped was written anyway — under a sentence that could not say \
+             so"
+        );
     }
 }

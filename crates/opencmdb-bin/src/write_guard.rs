@@ -9,18 +9,20 @@
 //! copies means two places to weaken, and the second is the one nobody re-reads.
 //!
 //! ⚠️ **What is NOT here, by decision**: the refusal BODIES. `document.malformed` and
-//! `ipam.malformed` are different sentences about different gestures, and a shared body would be
+//! `ipam.refusal.malformed_subnet` are different sentences about different gestures, and a shared body would be
 //! the *"one message for two surfaces"* shape this project has paid for on screens (story 6.4's
 //! success sentence, written once and wrong on the second page). What is shared is the DECISION;
 //! what stays local is the WORDING.
 
 use axum::http::{HeaderMap, header};
 
-/// The body a cross-origin refusal carries.
+/// The body the DOCUMENTING route's cross-origin refusal carries.
 ///
-/// ⚠️ A Rust literal and not an i18n key, deliberately, on story 6.1's reasoning: this is refused
-/// before any gesture is identified, so it belongs beside the check rather than in the copy of a
-/// surface it may not have come from.
+/// ⚠️ A Rust literal and not an i18n key, on story 6.1's reasoning: refused before any gesture is
+/// identified. 🔴 **Story 14.2b's review found that reasoning does not survive a swap**:
+/// `hx-on::before-swap` puts a 4xx body into the page, so a French operator read this English
+/// sentence. The addressing plan's routes answer the key `ipam.refusal.cross_origin` instead; this
+/// literal remains `document.rs`'s, and that half is registered rather than changed.
 pub(crate) const CSRF_REFUSED_BODY: &str = "cross-origin request refused";
 
 /// The CSRF Origin check (story 6.2 §5), pure over the request headers. It is a TRIPWIRE against
@@ -138,18 +140,35 @@ mod tests {
     /// ⚠️ **A TRIPWIRE, not a barrier** (story 5.12's framing): it greps for the comparison's own
     /// shape, so a second implementation written differently is invisible to it. It catches the
     /// COPY, which is the gesture that actually happens.
+    ///
+    /// 🔴 **Recursive, and rooted at the crate rather than at the working directory** — the review
+    /// found a flat `read_dir("src")`, blind to a copy in `src/<module>/` and dependent on where
+    /// `cargo test` happened to be run from.
     #[test]
     fn the_origin_comparison_exists_exactly_once() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut found = Vec::new();
-        for entry in std::fs::read_dir("src").expect("the crate's own sources") {
-            let path = entry.expect("a directory entry").path();
-            if path.extension().is_none_or(|e| e != "rs") {
-                continue;
-            }
-            let text = std::fs::read_to_string(&path).expect("a source file");
-            let code = text.split("\n#[cfg(test)]").next().unwrap_or(&text);
-            if code.contains("eq_ignore_ascii_case(host)") {
-                found.push(path.display().to_string());
+        let mut pending = vec![root.join("src")];
+        while let Some(dir) = pending.pop() {
+            for entry in std::fs::read_dir(&dir).expect("the crate's own sources") {
+                let path = entry.expect("a directory entry").path();
+                if path.is_dir() {
+                    pending.push(path);
+                    continue;
+                }
+                if path.extension().is_none_or(|e| e != "rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).expect("a source file");
+                let code = text.split("\n#[cfg(test)]").next().unwrap_or(&text);
+                if code.contains("eq_ignore_ascii_case(host)") {
+                    found.push(
+                        path.strip_prefix(root)
+                            .expect("a file under the crate")
+                            .display()
+                            .to_string(),
+                    );
+                }
             }
         }
         assert_eq!(

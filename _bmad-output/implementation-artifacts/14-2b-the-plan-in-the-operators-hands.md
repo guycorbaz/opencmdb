@@ -2,8 +2,10 @@
 
 Status: review
 
-⚠️ **`ready-for-dev` is the workflow's status, not a statement that nothing is open.** §1 poses
-decisions that are Guy's, and the mandatory validation (two fresh-context agents) has not run.
+⚠️ **Contexted and validated 2026-09-12, implemented T0–T8, measured 2026-09-15, code-reviewed by
+three isolated layers the same day** — see *Review Findings* under the tasks. (This paragraph read
+*"`ready-for-dev` … the mandatory validation has not run"* under `Status: review` until the review
+caught the contradiction.)
 
 Epic 14 (IPAM). 🔴 **INSERTED 2026-09-11 at story 14.2's implementation** — `epics.md` describes
 FOUR stories and there are FIVE; a story may not edit it, and the divergence is registered with
@@ -252,6 +254,11 @@ misspelt path, an unmounted route and a typo all satisfied it.*
 that list, so the list and the mounts cannot drift; the guard walks `PATHS` and asserts BOTH halves
 — 401 without a credential, and something **other than 404** with one. The positive control is what
 makes the negative one mean anything.
+⚠️ **NARROWER THAN ITS LETTER, and the code review asked for that to be said**: what shipped walks
+the WRITE routes (`document::PATHS` + `WriteRoute::paths()`), not *every route the router carries* —
+the GET screens are carried by story 6b.2's guard over `Screen::ALL`, and `ipam_page::router`, the
+triage router and the screens router declare no path list. Stated in the guard's own doc
+(`main.rs`), not widened.
 
 **AC4 — every refusal the operator can reach is a KEY, in both locales, naming the rule** — and it
 is carried TWICE, because neither carrier covers the other: an **exhaustive `match` with no `_`
@@ -264,6 +271,13 @@ under a French UI with a raw UUID in it.
 **AC5 — the overlap rule holds under concurrency**, by §1(d), with the lock on the read that
 DECIDES — and **the 400 ms pause harness ships as a permanent test**, proven to red when the lock
 moves back to the parent row alone.
+⚠️ **NARROWED AT THE CODE REVIEW (2026-09-15), because its letter was unmet and T4 was ticked over
+it**: with the deciding read's lock removed ALONE the harness stays GREEN — the parent row masks it
+(M15, re-measured by the auditor). The harness reds on the COMPOSITE, the DRY line together with an
+unlocked deciding read; the deciding read's lock alone is carried by the source guard
+`both_reads_of_a_subnet_under_write_take_their_lock`, which the same review then defeated twice and
+which now reads code and keys on the call. And the review added what the criterion never asked:
+two ranges in two DIFFERENT subnets deadlocked, and a victim is now replayed once (Guy).
 
 **AC6 — `Contention` either fires or goes.** §1(e): decide, implement, and say which. If it fires,
 a test drives a real lock wait and asserts the variant; if it goes, the arm is deleted rather than
@@ -390,29 +404,29 @@ Code review 2026-09-15, three isolated layers on `da28d3e` (Blind Hunter: code d
 Hunter: own worktree and store, measured · Acceptance Auditor: full diff, this story,
 `deferred-work.md`). 4 decision-needed, 19 patch, 1 defer, 6 dismissed.
 
-- [ ] [Review][Patch] ✅ *Decided by Guy 2026-09-15: (a) — subnet and address writes go into a transaction, AND the sentence stops promising, for the commit-time case.* **The 503 says "Nothing was written" and the row is written** — blind+edge, HIGH, measured: an external `FOR UPDATE` on the subnet row for 15 s; `POST /ipam/address` answered `ipam.refusal.contention` 503 at 5.002 s, no row right after, **the row present once the holder committed**, and the retry answered 409 *"already holds that subnet"*. `within_budget`'s doc (*"dropping the future drops the transaction, so nothing was written is true and not a hope"*) is false for `define_subnet` (one autocommit statement) and `define_address` (plain connection); `define_range` held under the same hold (no row, no open `innodb_trx`), but a timeout during `tx.commit()` is still ambiguous. Options: (a) put subnet and address in a transaction AND reword the sentence for the commit-time case; (b) keep autocommit and make the sentence honest (*"it may have been written — reload the plan"*); (c) both.
-- [ ] [Review][Patch] ✅ *Decided by Guy 2026-09-15: (a) — `insert_range` replays its transaction ONCE on a deadlock (1213); the parent-row lock and the deciding read stay as T4 measured them, and a test replays the two-subnet scenario.* **Two ranges in two DIFFERENT subnets deadlock each other** — edge, measured with a temporary test on `insert_range_pausing` over `100.64.10.0/24` and `100.64.20.0/24`: `Err(Contention)/Ok` in 0.42 s, `Ok/Ok`, `Ok/Err(Contention)` in 0.42 s — a 1213, not a timeout. Both empty subnets fall in one gap of the non-unique `ip_range_subnet` index, the parent locks are different rows, and both need an insert-intention lock. The loser reads *"another change was in flight"* for a write that conflicted with nothing; the recorded matrix only considered one subnet. Options: (a) retry once on a deadlock inside `insert_range`; (b) change the deciding read so it takes no gap lock (e.g. `READ COMMITTED` for that transaction, the parent row still serialising a subnet); (c) accept and register.
+- [x] [Review][Patch] ✅ *Decided by Guy 2026-09-15: (a) — subnet and address writes go into a transaction, AND the sentence stops promising, for the commit-time case.* **The 503 says "Nothing was written" and the row is written** — blind+edge, HIGH, measured: an external `FOR UPDATE` on the subnet row for 15 s; `POST /ipam/address` answered `ipam.refusal.contention` 503 at 5.002 s, no row right after, **the row present once the holder committed**, and the retry answered 409 *"already holds that subnet"*. `within_budget`'s doc (*"dropping the future drops the transaction, so nothing was written is true and not a hope"*) is false for `define_subnet` (one autocommit statement) and `define_address` (plain connection); `define_range` held under the same hold (no row, no open `innodb_trx`), but a timeout during `tx.commit()` is still ambiguous. Options: (a) put subnet and address in a transaction AND reword the sentence for the commit-time case; (b) keep autocommit and make the sentence honest (*"it may have been written — reload the plan"*); (c) both.
+- [x] [Review][Patch] ✅ *Decided by Guy 2026-09-15: (a) — `insert_range` replays its transaction ONCE on a deadlock (1213); the parent-row lock and the deciding read stay as T4 measured them, and a test replays the two-subnet scenario.* **Two ranges in two DIFFERENT subnets deadlock each other** — edge, measured with a temporary test on `insert_range_pausing` over `100.64.10.0/24` and `100.64.20.0/24`: `Err(Contention)/Ok` in 0.42 s, `Ok/Ok`, `Ok/Err(Contention)` in 0.42 s — a 1213, not a timeout. Both empty subnets fall in one gap of the non-unique `ip_range_subnet` index, the parent locks are different rows, and both need an insert-intention lock. The loser reads *"another change was in flight"* for a write that conflicted with nothing; the recorded matrix only considered one subnet. Options: (a) retry once on a deadlock inside `insert_range`; (b) change the deciding read so it takes no gap lock (e.g. `READ COMMITTED` for that transaction, the parent row still serialising a subnet); (c) accept and register.
 - [x] [Review][Defer] ✅ *Decided by Guy 2026-09-15: accepted and registered with 14.3 — outside Epic 14's arbitrations, a real plan can hold a supernet and its subnets, and 14.3's audit is the first to meet the policy conflict.* **Nested and overlapping subnets are accepted, so one address carries two policies** — edge, measured: `0.0.0.0/0`, `192.0.0.0/16`, `192.0.2.0/24`, `192.0.2.0/25`, `192.0.2.7/32` all 201; `192.0.2.9` defined in both the /24 and the /25; a `static` .0–.255 in the /24 and a `dhcp-pool` .0–.127 in the /25 both 201. Only `UNIQUE (base, prefix_len)` exists. Options: refuse an overlapping subnet at the route (a lock scheme like ranges'), or accept and register with 14.3, whose audit meets it first.
 - [x] [Review][Defer] ✅ *Decided by Guy 2026-09-15: accepted and registered with 14.3 — documenting an edge is legitimate (the glossary files `.0`/`.255` under `infrastructure`, a declarable policy); keeping them out of the offer is 14.3's.* **Network and broadcast addresses, and edge-covering ranges, can be defined** — edge, measured: `192.0.2.0` and `192.0.2.255` as addresses 201; a `static` .0–.255 range 201 — while the page treats the edges as `infrastructure` and never offers them. Options: refuse at the route, or accept (documenting an edge is legitimate) and register with 14.3.
-- [ ] [Review][Patch] **The budget on the range and address routes is carried by nothing, and the record's reason is false** — auditor, measured: `within_budget(work).await` → `work.await` in `define_range`, full bin suite against the store, nothing hung and nothing reddened for it; only `define_subnet` meets `NeverAnswers`. T5's *"removing it makes the test HANG … the same sentence three times"* is refuted. Drive `NeverAnswers` through every `WriteRoute`. [crates/opencmdb-bin/src/ipam_write.rs]
-- [ ] [Review][Patch] **Rows this story says it REGISTERED are not in the register, and the three rows it owns are left open** — auditor: `deferred-work.md` is not in the diff; §2.5's *"registered with 14.3 by name"* has no row (`grep 14\.3` empty); `example_screens.rs`'s four `#[cfg(test)]` has no row; the rows owned by 14.2b (empty-plan link — shipped as an anchor, not an href; the overlap race; the dead-code allows) are neither closed nor re-shaped. [_bmad-output/implementation-artifacts/deferred-work.md]
-- [ ] [Review][Patch] **A duplicate ADDRESS is refused with the SUBNET's sentence, and an empty label on a range or address says "the subnet needs a label"** — blind+edge, measured 409 *"The plan already holds that subnet."* on a re-entered address; `every_route_reuses_the_shared_machinery` asserts `label_empty` on all three routes, so a test requires the wrong sentence and the key-resolution test cannot see it. Make the refusal key route-aware. [crates/opencmdb-bin/src/ipam_write.rs:674, locales/app.yml]
-- [ ] [Review][Patch] **The 403 refusal is an English literal under a French UI** — blind+auditor: the three IPAM handlers return `write_guard::CSRF_REFUSED_BODY` (`"cross-origin request refused"`), and `hx-on::before-swap` swaps it into `#ipam-form-result`; reachable behind a Host-rewriting proxy. AC1 and AC4 ask for a key per status. [crates/opencmdb-bin/src/write_guard.rs:24, ipam_write.rs]
-- [ ] [Review][Patch] **The two-lock source guard is defeated by a comment and by a second spelling** — edge, measured: G1 (drop `FOR UPDATE` from the deciding read, keep the old SQL quoted in a comment above) → 615+191+99 ALL GREEN, the guard included, one lock gone and nothing saying so; G2 (G1 + `load_subnet(tx.as_mut(), …)`) → guard still green, harness red 3/3. Strip comments before scanning; key the DRY-line needle on `load_subnet(` inside `insert_range`, not on one spelling. [crates/opencmdb-bin/src/ipam_repo.rs:1305-1335]
-- [ ] [Review][Patch] **AC5's letter is unmet and T4 is ticked over it** — auditor, re-measured: M15 leaves the pause harness GREEN; only the source guard reds. The record says so, the criterion does not. State the narrowing at AC5 (the harness reds on the COMPOSITE; the deciding read alone is carried by the source guard). [this file, AC5 / T4]
-- [ ] [Review][Patch] **`the_plan_reads_no_observation` misses a `use` alias, and both file-walking guards are non-recursive** — auditor, measured: `use crate::repo;` + `repo::count_observations(pool)` in production `ipam_write.rs` → guard GREEN (it matches the text `crate::repo::`); blind: `read_dir` on `src/` only, so `src/ipam/` is invisible, and the two guards resolve `src` differently (`CARGO_MANIFEST_DIR` vs a relative path). [crates/opencmdb-bin/src/ipam_page.rs, write_guard.rs]
-- [ ] [Review][Patch] **A label may be invisible or carry control bytes, and a NUL is served in every `/ipam` page** — edge, measured: `label=%E2%80%8B%E2%80%8B` → 201 (renders an empty name); `label=%0A%0Dctrl%00` → 201, `GET /ipam` carries `NUL=1` and `grep` calls the page binary. Apply the `carries_a_visible_glyph` precedent and refuse control characters. [crates/opencmdb-bin/src/ipam_write.rs:625-640]
-- [ ] [Review][Patch] **The empty plan tells the operator to "Choose a subnet above" when there is none** — blind: `IpamForms::new(None)` renders `ipam.form.needs_subnet` on AC8's own branch. [crates/opencmdb-bin/templates/_ipam_forms.html:74, locales/app.yml:920]
-- [ ] [Review][Patch] **The keyboard probe's CIDR collides with a Rust test, under a comment saying it does not** — blind, confirmed: `kbd-probe.mjs:664-667` types `203.0.113.0/24` *"so it collides with … neither the Rust tests' `/24`s"*, while `repo.rs`'s contention test inserts `'203.000.113.000', 24` and cleans by id only. [a11y/kbd-probe.mjs:664]
-- [ ] [Review][Patch] **The contention test announces a CONTROL it does not have** — blind: *"the error really is a lock wait"* is followed by one `assert_eq!` on `classify`'s own output; nothing checks `number() == 1205` first. [crates/opencmdb-bin/src/repo.rs:2452]
-- [ ] [Review][Patch] **The empty-plan axe mode exits 2 on a product defect, and its "plan is empty" check counts cells** — blind: a missing link is *"the gate could not run"* where it is the product failing (1); zero cells also means a too-large or unknown subnet. [a11y/axe-gate.mjs]
-- [ ] [Review][Patch] **The keyboard probe says "keyboard-reachable" and counts nodes; it never presses Tab** — blind: `summaries === 3` and scripted `element.focus()`; a disclosure Enter cannot open makes the probe time out and exit 2 rather than report the product. [a11y/kbd-probe.mjs]
-- [ ] [Review][Patch] **AC3 shipped narrower than written, silently** — auditor: the guard walks `document::PATHS` + `WriteRoute::paths()` with a hardcoded `len() == 4`; `ipam_page`, triage and screens routers declare no list. State the narrowing (write routes; GET screens are carried by story 6b.2's `Screen::ALL` guard) or widen. [crates/opencmdb-bin/src/main.rs, this file AC3/T6]
-- [ ] [Review][Patch] **Documents contradict the pushed state** — auditor, confirmed: `CLAUDE.md:149` and its twin say kbd-probe has **thirty** checks (`MIN_CHECKS = 36`) and neither names the `AXE_EMPTY_PLAN` pass CI now runs; `user-manual.tex:161-162` still says the occupancy map *"ships as an example screen … fabricated documentation data"*, and no manual describes defining a subnet, range or address. [CLAUDE.md:149, docs/project-context.md, docs/manuals/user-manual/user-manual.tex:154-163]
-- [ ] [Review][Patch] **False or stale doc comments** — blind+auditor+edge: `router_with` says the variants and `PATHS` *"are pinned equal by a test"* (no `PATHS`, the test was removed — `ipam_write.rs:403`); `write_guard.rs:12` names a key `ipam.malformed` that does not exist; `app.css` calls `.ipam-planned-note` the sentence of a *not-yet-built* control while it wraps a live link; *"MariaDB's `BEGIN` implicitly commits one"* — sqlx-mysql 0.9 issues `SAVEPOINT` when nested (`ipam_repo.rs`, `ipam_write.rs:357-360`); `main.rs`'s *"a 200 would mean it was never asked"* over an `assert_ne!(NOT_FOUND)` that accepts 200; `empty-plan.sql` says *"IT TRUNCATES"* and issues `DELETE`; `ipam_page.rs:398` credits `Gesture::Live` with a no-drift guarantee that `WriteRoute::path()` alone provides.
-- [ ] [Review][Patch] **Vacuous assertions and a floor below what is there** — blind: `"1406"` absent from a body built from a `&'static str` key, twice (`every_refusal_the_handler_can_receive_names_a_rule`, `a_backend_failure_leaks_none_of_its_cause`), cannot fail; the key-scan floor is `>= 15` where production carries about 20 `ipam.*` literals. [crates/opencmdb-bin/src/ipam_write.rs]
-- [ ] [Review][Patch] **The race test leaves its rows behind** — blind: it cleans only at start, so its `/25` stays in the store. [crates/opencmdb-bin/src/ipam_repo.rs]
-- [ ] [Review][Patch] **The story contradicts itself, and a mutation row is stale** — auditor: line 3 reads `review`, lines 5-6 still say `ready-for-dev` and that validation has not run; M2 reds **2** on HEAD (`a_cross_origin_post_is_refused_before_anything_else`, `every_route_reuses_the_shared_machinery`) where the row says 1, measured on T2's tree without saying so. [this file]
+- [x] [Review][Patch] **The budget on the range and address routes is carried by nothing, and the record's reason is false** — auditor, measured: `within_budget(work).await` → `work.await` in `define_range`, full bin suite against the store, nothing hung and nothing reddened for it; only `define_subnet` meets `NeverAnswers`. T5's *"removing it makes the test HANG … the same sentence three times"* is refuted. Drive `NeverAnswers` through every `WriteRoute`. [crates/opencmdb-bin/src/ipam_write.rs]
+- [x] [Review][Patch] **Rows this story says it REGISTERED are not in the register, and the three rows it owns are left open** — auditor: `deferred-work.md` is not in the diff; §2.5's *"registered with 14.3 by name"* has no row (`grep 14\.3` empty); `example_screens.rs`'s four `#[cfg(test)]` has no row; the rows owned by 14.2b (empty-plan link — shipped as an anchor, not an href; the overlap race; the dead-code allows) are neither closed nor re-shaped. [_bmad-output/implementation-artifacts/deferred-work.md]
+- [x] [Review][Patch] **A duplicate ADDRESS is refused with the SUBNET's sentence, and an empty label on a range or address says "the subnet needs a label"** — blind+edge, measured 409 *"The plan already holds that subnet."* on a re-entered address; `every_route_reuses_the_shared_machinery` asserts `label_empty` on all three routes, so a test requires the wrong sentence and the key-resolution test cannot see it. Make the refusal key route-aware. [crates/opencmdb-bin/src/ipam_write.rs:674, locales/app.yml]
+- [x] [Review][Patch] **The 403 refusal is an English literal under a French UI** — blind+auditor: the three IPAM handlers return `write_guard::CSRF_REFUSED_BODY` (`"cross-origin request refused"`), and `hx-on::before-swap` swaps it into `#ipam-form-result`; reachable behind a Host-rewriting proxy. AC1 and AC4 ask for a key per status. [crates/opencmdb-bin/src/write_guard.rs:24, ipam_write.rs]
+- [x] [Review][Patch] **The two-lock source guard is defeated by a comment and by a second spelling** — edge, measured: G1 (drop `FOR UPDATE` from the deciding read, keep the old SQL quoted in a comment above) → 615+191+99 ALL GREEN, the guard included, one lock gone and nothing saying so; G2 (G1 + `load_subnet(tx.as_mut(), …)`) → guard still green, harness red 3/3. Strip comments before scanning; key the DRY-line needle on `load_subnet(` inside `insert_range`, not on one spelling. [crates/opencmdb-bin/src/ipam_repo.rs:1305-1335]
+- [x] [Review][Patch] **AC5's letter is unmet and T4 is ticked over it** — auditor, re-measured: M15 leaves the pause harness GREEN; only the source guard reds. The record says so, the criterion does not. State the narrowing at AC5 (the harness reds on the COMPOSITE; the deciding read alone is carried by the source guard). [this file, AC5 / T4]
+- [x] [Review][Patch] **`the_plan_reads_no_observation` misses a `use` alias, and both file-walking guards are non-recursive** — auditor, measured: `use crate::repo;` + `repo::count_observations(pool)` in production `ipam_write.rs` → guard GREEN (it matches the text `crate::repo::`); blind: `read_dir` on `src/` only, so `src/ipam/` is invisible, and the two guards resolve `src` differently (`CARGO_MANIFEST_DIR` vs a relative path). [crates/opencmdb-bin/src/ipam_page.rs, write_guard.rs]
+- [x] [Review][Patch] **A label may be invisible or carry control bytes, and a NUL is served in every `/ipam` page** — edge, measured: `label=%E2%80%8B%E2%80%8B` → 201 (renders an empty name); `label=%0A%0Dctrl%00` → 201, `GET /ipam` carries `NUL=1` and `grep` calls the page binary. Apply the `carries_a_visible_glyph` precedent and refuse control characters. [crates/opencmdb-bin/src/ipam_write.rs:625-640]
+- [x] [Review][Patch] **The empty plan tells the operator to "Choose a subnet above" when there is none** — blind: `IpamForms::new(None)` renders `ipam.form.needs_subnet` on AC8's own branch. [crates/opencmdb-bin/templates/_ipam_forms.html:74, locales/app.yml:920]
+- [x] [Review][Patch] **The keyboard probe's CIDR collides with a Rust test, under a comment saying it does not** — blind, confirmed: `kbd-probe.mjs:664-667` types `203.0.113.0/24` *"so it collides with … neither the Rust tests' `/24`s"*, while `repo.rs`'s contention test inserts `'203.000.113.000', 24` and cleans by id only. [a11y/kbd-probe.mjs:664]
+- [x] [Review][Patch] **The contention test announces a CONTROL it does not have** — blind: *"the error really is a lock wait"* is followed by one `assert_eq!` on `classify`'s own output; nothing checks `number() == 1205` first. [crates/opencmdb-bin/src/repo.rs:2452]
+- [x] [Review][Patch] **The empty-plan axe mode exits 2 on a product defect, and its "plan is empty" check counts cells** — blind: a missing link is *"the gate could not run"* where it is the product failing (1); zero cells also means a too-large or unknown subnet. [a11y/axe-gate.mjs]
+- [x] [Review][Patch] **The keyboard probe says "keyboard-reachable" and counts nodes; it never presses Tab** — blind: `summaries === 3` and scripted `element.focus()`; a disclosure Enter cannot open makes the probe time out and exit 2 rather than report the product. [a11y/kbd-probe.mjs]
+- [x] [Review][Patch] **AC3 shipped narrower than written, silently** — auditor: the guard walks `document::PATHS` + `WriteRoute::paths()` with a hardcoded `len() == 4`; `ipam_page`, triage and screens routers declare no list. State the narrowing (write routes; GET screens are carried by story 6b.2's `Screen::ALL` guard) or widen. [crates/opencmdb-bin/src/main.rs, this file AC3/T6]
+- [x] [Review][Patch] **Documents contradict the pushed state** — auditor, confirmed: `CLAUDE.md:149` and its twin say kbd-probe has **thirty** checks (`MIN_CHECKS = 36`) and neither names the `AXE_EMPTY_PLAN` pass CI now runs; `user-manual.tex:161-162` still says the occupancy map *"ships as an example screen … fabricated documentation data"*, and no manual describes defining a subnet, range or address. [CLAUDE.md:149, docs/project-context.md, docs/manuals/user-manual/user-manual.tex:154-163]
+- [x] [Review][Patch] **False or stale doc comments** — blind+auditor+edge: `router_with` says the variants and `PATHS` *"are pinned equal by a test"* (no `PATHS`, the test was removed — `ipam_write.rs:403`); `write_guard.rs:12` names a key `ipam.malformed` that does not exist; `app.css` calls `.ipam-planned-note` the sentence of a *not-yet-built* control while it wraps a live link; *"MariaDB's `BEGIN` implicitly commits one"* — sqlx-mysql 0.9 issues `SAVEPOINT` when nested (`ipam_repo.rs`, `ipam_write.rs:357-360`); `main.rs`'s *"a 200 would mean it was never asked"* over an `assert_ne!(NOT_FOUND)` that accepts 200; `empty-plan.sql` says *"IT TRUNCATES"* and issues `DELETE`; `ipam_page.rs:398` credits `Gesture::Live` with a no-drift guarantee that `WriteRoute::path()` alone provides.
+- [x] [Review][Patch] **Vacuous assertions and a floor below what is there** — blind: `"1406"` absent from a body built from a `&'static str` key, twice (`every_refusal_the_handler_can_receive_names_a_rule`, `a_backend_failure_leaks_none_of_its_cause`), cannot fail; the key-scan floor is `>= 15` where production carries about 20 `ipam.*` literals. [crates/opencmdb-bin/src/ipam_write.rs]
+- [x] [Review][Patch] **The race test leaves its rows behind** — blind: it cleans only at start, so its `/25` stays in the store. [crates/opencmdb-bin/src/ipam_repo.rs]
+- [x] [Review][Patch] **The story contradicts itself, and a mutation row is stale** — auditor: line 3 reads `review`, lines 5-6 still say `ready-for-dev` and that validation has not run; M2 reds **2** on HEAD (`a_cross_origin_post_is_refused_before_anything_else`, `every_route_reuses_the_shared_machinery`) where the row says 1, measured on T2's tree without saying so. [this file]
 - [x] [Review][Defer] **`document.rs`'s 403 is the same English literal** [crates/opencmdb-bin/src/document.rs] — deferred, pre-existing (story 6.1): the IPAM half is patched above; the documenting route's is not this story's to change.
 
 Dismissed (6), each with its check: a lock outliving an early return (edge: no row in `innodb_trx` after a range 503, next write 201) · CI order before the keyboard probe (auditor: empty-plan pass before `seed.sql`, which clears the plan tables) · a `Constraint` built outside `repo.rs` (grep: none) · the race test's pool size (no evidence; the harness runs green) · `maxlength` in UTF-16 units vs `char`s (stricter in the browser, harmless) · `ipam.done.*` bodies nobody sees (the 201 body is the contract for a non-htmx client, story 6.2's).
@@ -575,7 +589,7 @@ the carrier is named per row.
 | id | mutation | predicted | measured | carrier |
 |---|---|---|---|---|
 | M1 | the label bound in BYTES (`chars().count()` → `len()`) | red:1 | red:1 | the 120-accented-character test's own assertion |
-| M2 | the Origin check deleted from the handler | red:1 | red:1 | the cross-origin test's status assertion — ⚠️ its port answers a SUCCESS, so without the check it would go green on a 201 |
+| M2 | the Origin check deleted from the handler | red:1 | red:1 **on T2's tree** — ⚠️ **red:2 on `da28d3e`** (the code review's auditor: `a_cross_origin_post_is_refused_before_anything_else` and `every_route_reuses_the_shared_machinery`, the second added at T5). *A mutation count is dated by the tree that produced it.* | the cross-origin test's status assertion — ⚠️ its port answers a SUCCESS, so without the check it would go green on a 201 |
 | M3 | a re-entered subnet answers 500 instead of 409 | red:1 | red:1 | the conflict test's status assertion |
 | M4 | the redirect drops the subnet it just defined | red:1 | red:1 | the created test's header assertion — ⚠️ **and clippy, which the driver reports separately**: `format!("/ipam")` is a useless format. The row is dual-carried and that is an artefact of the mutation's spelling, not a second guard |
 | M5 | the label is not trimmed | red:1 | red:1 | the whitespace-label test (`label=%20%20`) |
@@ -670,10 +684,19 @@ recreated first, the migrations warmed by one full run.
   DELIBERATELY: *the store never answered* and *the store said deadlock* are different facts and
   the same action — nothing was written, try again — so the distinction is kept in the log, where
   whoever is debugging is.
+  🔴 **"Nothing was written" was FALSE, measured at the code review**: the subnet and address
+  writes ran in autocommit, so a statement already at the server when the budget dropped its future
+  committed after the 503 (a held parent row; 503 at 5.002 s; the row present once the holder
+  committed; the retry refused as already defined). All three writes now run in a transaction, and
+  the sentence no longer promises either way — a timeout during `COMMIT` cannot be settled — *it may
+  or may not have been saved; reload the plan* (Guy, 2026-09-15).
 - ⚠️ **M17 CANNOT GO THROUGH `cargo xtask mutate`, and that is a stated limit of the driver.**
   Remove the budget and the test does not fail, it **HANGS** — measured by hand under `timeout 60`,
   killed at 60 s with `running 1 test` and no result line. Which is the defect exactly: *a handler
   with no budget does not answer wrongly, it does not answer.* The driver would have hung with it.
+  ✅ **No longer a limit since the code review**: the test wraps each route in an outer `timeout`
+  the paused clock advances to, so a missing budget RED instead of hanging — and M17 can go through
+  `cargo xtask mutate` like any other mutation.
 - ⚠️ **The budget test's clock is PAUSED, and what that proves is narrower than it looks.**
   `start_paused` auto-advances to the next timer, so it measures that a budget is armed, wraps the
   work, and produces a sentence — **not** the five seconds. Under a paused clock a budget of ten
@@ -771,6 +794,14 @@ Five ids, five conforming outcomes. Same conditions as before.
 `within_budget` from a handler makes the test HANG rather than fail, so `cargo xtask mutate` cannot
 run it. T4's M17 measured that once by hand for the class; repeating it per route buys the same
 sentence three times.
+🔴 **REFUTED AT THE CODE REVIEW (2026-09-15), and the refutation is the finding**: the budget test
+drove the SUBNET route alone, so M17's hang was a fact about that route and never about *"a
+handler"*. The auditor replaced `within_budget(work).await` with `work.await` in `define_range` —
+the only route that takes locks — and the whole bin suite ran to completion GREEN: nothing hung,
+nothing reddened. *A measurement taken on one route and generalised to three is a sentence, not a
+measurement* — and it was the sentence that excused not repeating it. The test now loops over
+`WriteRoute::ALL` inside an outer `timeout`, so a missing budget REDS on any route instead of
+hanging.
 - **T6 — AC3's guard exists and it carries its control.** `document::PATHS` and
   `WriteRoute::paths()` are walked, and each path is asserted twice: 401 without a credential, and
   **anything but 404 with one**. 🔑 The control is what makes the pair mean anything, and it is
@@ -946,6 +977,91 @@ moved under the measurement above, and a figure taken on `7ec25c9` is not a figu
 only, and neither is served — the rendered page cannot differ. Stated rather than implied; CI runs
 both on the push.
 
+### Code review repair (2026-09-15)
+
+All 21 patches applied (19 found, 2 decisions turned into patches); the 3 deferred items are in
+`deferred-work.md` with owners. **905 → 908 tests** (618 bin + 191 core + 99 xtask): `+3` for
+`a_re_entered_address_is_told_it_is_the_address`, `two_ranges_at_once_in_two_subnets_both_land` and
+`a_write_dropped_while_waiting_leaves_no_row_behind`; every other patch widened an existing test.
+The story STAYS at `review` — `done` is the merge's business in this project.
+
+- 🔴 **THE REPAIR PRODUCED A FINDING OF ITS OWN, and it confirms the one suspicion the Blind Hunter
+  could not.** The race test's new end-of-test cleanup (a patch) waited out
+  `innodb_lock_wait_timeout` and panicked on 1205: the LOSER of the race had returned with `?`,
+  leaving its transaction to `Drop`, which only QUEUES the rollback on a connection the test still
+  held — so the parent row's lock and the sibling gap stayed taken. The blind layer had read that
+  shape off the diff (*"an early return drops `tx`… the lock could outlive the request"*) and could
+  not confirm it. Fixed at the cause, not in the test: `range_attempt` and the two single-statement
+  writes (`settle`) now roll back EXPLICITLY. MR1 is that mutation.
+- 🔴 **The two decisions shipped as designed.** Subnet and address writes run in a transaction and
+  the 503 sentence stops promising (*"it may or may not have been saved — reload the plan"*); a
+  deadlock victim is replayed ONCE, on 1213 alone, through `repo::is_deadlock`, kept apart from
+  `classify` which folds 1213 and 1205. The deadlock test runs FIVE rounds because one round of a
+  2-in-3 event is a coin toss.
+- ⚠️ **Three defects of my own instruments, caught before they were believed.** A run compiled while
+  I was applying a two-part edit and reported exit 101 over an *"unclosed delimiter"* — a state the
+  source was in for a minute, not a defect (*do not edit while a measurement compiles*). Mutation MP1b
+  was first written as `crate::{repo}::…`, which is not Rust outside a `use`, and would have measured
+  the compiler; rewritten as `super::repo::…` before running. And the axe gate's empty-plan summary
+  line said *"link opens onto an open form"* beside the 🔴 saying the link was missing — found by
+  reading BA's output, not by any check; fixed.
+- ⚠️ **`cargo xtask mutate` names no carrier.** All 13 review mutations conformed to their predicted
+  counts, and the log says `Red { tests: 1 }` without saying which test. So each was run a second time
+  by hand to read the red test's own panic message — the table below. Registered in
+  `deferred-work.md`.
+
+#### The review repair's mutation pass
+
+On the repaired tree, a virgin `mariadb:10.11.11` warmed once, `--baseline` on the first. Counts
+from `cargo xtask mutate`; carriers from a second hand-driven run reading each panic message.
+
+| id | mutation | predicted | measured | carrier |
+|---|---|---|---|---|
+| MR1 | the refused range attempt's rollback left to `Drop` | red:1 | red:1 | `two_overlapping_ranges_at_once…` — ⚠️ **`.expect()`-carried**, on the cleanup's `forget the subnet: … 1205`, after a 50 s wait |
+| MR3 | `is_deadlock` never true (no replay) | red:1 | red:1 | `two_ranges_at_once_in_two_subnets_both_land`, assertion — *round 0*: `Ok(()) / Err(Contention)` |
+| MR4 | G1: the deciding read's `FOR UPDATE` dropped, old SQL kept in a comment | red:1 | red:1 | `both_reads_of_a_subnet_under_write_take_their_lock`, assertion — *the DECIDING read's lock is gone* |
+| MR5 | G2: the DRY line as `load_subnet(tx.as_mut(), …)` | red:1 | red:1 | the same guard, assertion — *a non-locking read of the subnet (`load_subnet(`)* |
+| MW1 | the address write back in autocommit | red:1 | red:1 (+clippy: unused `mut`) | `a_write_dropped_while_waiting_leaves_no_row_behind`, assertion — addresses `left: 1` |
+| MW2 | the subnet write back in autocommit | red:1 | red:1 (+clippy: unused `mut`) | the same test, assertion — subnets `left: 1` |
+| MW3 | the range route loses its budget (the auditor's green mutation) | red:1 | red:1 | `a_write_that_never_finishes_answers_within_its_budget` — ⚠️ **`panic!`-carried**, the `let … else` on the outer timeout: *`/ipam/range` did not answer within twice its budget* |
+| MW4 | every re-entered record told it is a subnet | red:2 | red:2 (+clippy: unused `route`) | `a_re_entered_address_is_told_it_is_the_address` and `every_refusal_the_handler_can_receive_names_a_rule`, both assertion |
+| MW5 | a label with nothing visible accepted | red:1 | red:1 | `every_route_reuses_the_shared_machinery`, assertion — `left: 201` |
+| MW6 | a label with a control character accepted | red:1 | red:1 | the same test, assertion — `left: 201` |
+| MW7 | the range route answers the English 403 literal | red:1 | red:1 | the same test, assertion — `left: "cross-origin request refused"` |
+| MP1a | `use crate::repo;` imported whole | red:1 | red:1 | `the_plan_reads_no_observation`, assertion — *imports `crate::repo` as a module* |
+| MP1b | the auditor's bypass, as `super::repo::count_observations` | red:1 | red:1 | the same guard, assertion — *reaches `repo::count_observations`* |
+
+Thirteen mutations, thirteen conforming counts, carriers named row by row: eleven assertion-carried,
+**one `.expect()`-carried (MR1)** and **one `panic!`-carried (MW3)**, three with clippy as a second
+carrier. No *"every red assertion-carried"* is claimed — and this sentence first said *eleven and
+one*, leaving MW3 out, until the rows were recounted.
+
+#### The repaired tree, measured (the live count, AC9)
+
+On `fc67664` plus the uncommitted repair, 2026-09-15, one script, every status from `$?`; the 13
+mutated sites first checked restored (each anchor present exactly once). Store: a virgin
+`mariadb:10.11.11`, warmed once. Commands as in *T8's measurements*.
+
+| step | result |
+|---|---|
+| `cargo fmt --all --check` · `cargo build --workspace --locked` | exit 0 · exit 0 |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` | exit 0 |
+| `cargo xtask ci` | exit 0 — ten gates |
+| `cargo deny check` | exit 0 — `advisories ok, bans ok, licenses ok, sources ok` |
+| tests, virgin store | **908 passed** (618 + 191 + 99), 0 failed — 14.22 s |
+| tests, `env -u DATABASE_URL` | **908 passed**, 0 failed — 5.57 s |
+| tests, `RUSTFLAGS="-D warnings"`, store | **908 passed**, 0 failed |
+| axe, empty plan | exit 0 — 1 route, 0 violation nodes, link onto an open form |
+| axe, seeded, all three `REQUIRE` flags | exit 0 — 10 routes + 4 states, 0 violation nodes |
+| kbd-probe | exit 0 — **37 checks, 0 failed** |
+
+The two browser-gate repairs, by hand (the driver does not drive the browser gates):
+
+| id | mutation | predicted | measured |
+|---|---|---|---|
+| BA | the empty plan's link points at `#nowhere` (markup confirmed in the served binary) | axe empty-plan exit 1 | **exit 1** — *shows no link into the subnet form*, 0 violation nodes: a product failure, no longer *"could not run"* |
+| BK | the subnet form's `<summary>` given `tabindex="-1"` | kbd exit 1, one failure | **exit 1**, 37 run, 1 failed — *Tab alone reaches the subnet form* `reached=false` |
+
 ### File List
 
 - `crates/opencmdb-bin/src/write_guard.rs` — NEW; the shared Origin check and its two tests.
@@ -973,7 +1089,46 @@ both on the push.
 - `a11y/kbd-probe.mjs` — `/ipam`'s first coverage in this file: 30 → 36 checks.
 - `.github/workflows/ci.yml` — the empty-plan pass, before the seed.
 
+**Code review repair (2026-09-15):**
+
+- `crates/opencmdb-bin/src/ipam_repo.rs` — `range_attempt` with an explicit rollback and one replay
+  of a deadlock victim; the two-lock source guard reads code and keys on the call; the deadlock test;
+  the race test cleans up after itself.
+- `crates/opencmdb-bin/src/repo.rs` — `is_deadlock`; the contention test reads the raw 1205 first.
+- `crates/opencmdb-bin/src/ipam_write.rs` — subnet and address writes in a transaction (`settle`);
+  route-aware conflict sentences; the keyed 403; labels with nothing visible or a control character
+  refused; the budget test over every route; the dropped-write store test; vacuous assertions gone.
+- `crates/opencmdb-bin/src/ipam_page.rs` — the plan guard walks recursively and follows any path to
+  `repo`; the `Gesture::Live` doc narrowed.
+- `crates/opencmdb-bin/src/write_guard.rs` — docs corrected; the Origin guard walks recursively from
+  the crate root.
+- `crates/opencmdb-bin/src/main.rs` — AC3's guard doc: the narrowing stated, the false 200 sentence gone.
+- `crates/opencmdb-bin/locales/app.yml` — five keys added (`label_control`, `cross_origin`, and
+  `already_defined` split into one per record, which removes the original), three rewritten
+  (`needs_subnet`, `label_empty`, `contention`). Counted off `git diff`; this line first said *nine*.
+- `crates/opencmdb-bin/assets/app.css`, `a11y/empty-plan.sql` — false comments corrected.
+- `a11y/axe-gate.mjs` — a missing link is a product failure; the empty check counts subnets too.
+- `a11y/kbd-probe.mjs` — a real Tab walk, the Enter fallback, a CIDR of its own; 37 checks.
+- `CLAUDE.md`, `docs/project-context.md`, `docs/manuals/user-manual/user-manual.tex` — the
+  browser-gate counts, and the IPAM chapter describes the plan an operator can now define.
+- `_bmad-output/implementation-artifacts/deferred-work.md` — three rows closed (the empty-plan link,
+  the overlap race, the dead-code allows) and six added: three by the review's triage (`document.rs`'s
+  403, nested subnets and edge addresses → 14.3) and three by the repair (an address inside a range →
+  14.3, `example_screens.rs`'s four test modules, the mutation driver naming no carrier). Counted off
+  `git diff`; this line first said *five*.
+
 ### Change Log
+
+- 2026-09-15 — **CODE-REVIEWED (three isolated layers) AND REPAIRED.** 4 decisions (Guy), 21
+  patches, 3 deferred, 6 dismissed. **905 → 908 tests.** The measured headlines: a 503 promising
+  *"nothing was written"* over a row that was written (now a transaction and an honest sentence);
+  two ranges in two different subnets deadlocking (now replayed once); one lock removable with the
+  whole suite green, the guard written for it included (now reads code, keys on the call); the range
+  and address budgets carried by nothing; a re-entered address told it was a subnet; a NUL served in
+  every page; and rows the story called registered, absent from the register. 🔴 The repair found
+  one more on its own — a refused transaction's locks held until its connection was reused — which
+  the blind layer had suspected and could not confirm. Thirteen mutations and two browser proofs,
+  carriers named row by row. Status stays `review` until the merge.
 
 - 2026-09-15 — **T8: measured, and the one red was not this branch's.** **905 tests** (615 bin +
   191 core + 99 xtask) with a virgin store, without one and under `RUSTFLAGS="-D warnings"`; ten

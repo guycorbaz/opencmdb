@@ -402,9 +402,12 @@ pub(crate) struct IpamStrings {
 /// guarantee the first one bought.
 ///
 /// ⚠️ **What the type does and does not buy is `page.rs`'s own narrowing, repeated rather than
-/// re-derived**: it is a labelling and typing DISCIPLINE, not a compiler-enforced guarantee. What
-/// it does buy here is that the route in the template comes from `WriteRoute::path()` through the
-/// variant, so a form and its handler cannot drift apart silently.
+/// re-derived**: it is a labelling and typing DISCIPLINE, not a compiler-enforced guarantee.
+/// 🔴 **And this sentence overclaimed until story 14.2b's review**: it credited the variant with *"a
+/// form and its handler cannot drift apart silently"*. What ties them is `WriteRoute::path()`, the
+/// one function the router and the template both read; the variant carries that path in and hands
+/// it straight back. It is kept as the product's vocabulary for a live gesture, and it adds no
+/// guarantee here that the path does not.
 #[derive(Debug, Clone)]
 pub(crate) struct IpamForms {
     /// Where the subnet form posts.
@@ -1151,22 +1154,33 @@ mod tests {
     /// blind the guard to a table name inside a literal containing `//` — stated rather than
     /// implied, and no such literal exists here.
     ///
-    /// ⚠️ **Its standing limit**: it matches table names as literals, so a read reached through an
-    /// existing helper elsewhere in the crate is invisible to it. A TRIPWIRE against the read
-    /// someone writes here, never a barrier — story 5.12's own framing.
+    /// ⚠️ **Its standing limit**: it matches table names as literals and follows calls into `repo`
+    /// only, so a read reached through another adapter — `identity_view`, say — is invisible to it.
+    /// A TRIPWIRE against the read someone writes here, never a barrier — story 5.12's own framing.
     #[test]
     fn the_plan_reads_no_observation() {
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut perimeter: Vec<(String, String)> = Vec::new();
-        for entry in std::fs::read_dir(&src).expect("the crate's own source directory") {
-            let path = entry.expect("a readable entry").path();
-            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
-                continue;
+        // 🔴 RECURSIVE: the review found the flat `read_dir` blind to a `src/ipam/` submodule, which
+        // is the ordinary way a module that grows is split.
+        let mut pending = vec![src.clone()];
+        let mut files = Vec::new();
+        while let Some(dir) = pending.pop() {
+            for entry in std::fs::read_dir(&dir).expect("a readable source directory") {
+                let path = entry.expect("a readable entry").path();
+                if path.is_dir() {
+                    pending.push(path);
+                } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+                    files.push(path);
+                }
             }
+        }
+        for path in files {
             let name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .expect("a UTF-8 file name")
+                .strip_prefix(&src)
+                .expect("a file found under `src`")
+                .to_str()
+                .expect("a UTF-8 path")
                 .to_string();
             let source = std::fs::read_to_string(&path).expect("a readable file");
 
@@ -1226,17 +1240,38 @@ mod tests {
             // ⚠️ `classify` is the one allowed item — this crate's single translation of a backend
             // error (`repo.rs:1607`) — stated as an allowlist of one rather than as an exception
             // nobody can audit.
-            for reach in code.match_indices("crate::repo::") {
-                let tail = &code[reach.0 + "crate::repo::".len()..];
+            //
+            // 🔴 **ANY PATH TO `repo`, not only the qualified one**: story 14.2b's review planted
+            // `use crate::repo;` and `repo::count_observations(pool)` in production `ipam_write.rs`
+            // and this guard stayed GREEN, its needle being the text `crate::repo::`. A match
+            // preceded by `ipam_` is the plan's own adapter, and one preceded by `opencmdb_core::`
+            // is the domain crate's port traits. `is_deadlock` joins `classify` in the allowlist,
+            // for the same reason: it translates a backend error and reads nothing.
+            for (at, _) in code.match_indices("repo::") {
+                let before = &code[..at];
+                if before.ends_with("ipam_") || before.ends_with("opencmdb_core::") {
+                    continue;
+                }
+                let tail = &code[at + "repo::".len()..];
                 let item: String = tail
                     .chars()
                     .take_while(|c| c.is_alphanumeric() || *c == '_')
                     .collect();
-                assert_eq!(
-                    item, "classify",
-                    "{name} reaches `crate::repo::{item}`, and the observation reads live there. \
-                     The plan's own adapter is `ipam_repo`; anything else is the audit arriving \
-                     early, and story 14.3 is where it belongs"
+                assert!(
+                    ["classify", "is_deadlock"].contains(&item.as_str()),
+                    "{name} reaches `repo::{item}`, and the observation reads live there. The \
+                     plan's own adapter is `ipam_repo`; anything else is the audit arriving early, \
+                     and story 14.3 is where it belongs"
+                );
+            }
+            // And the module imported WHOLE, or renamed, would let a call through as
+            // `store::count_observations` — refused at the import rather than chased at the call.
+            for (at, _) in code.match_indices("crate::repo") {
+                assert!(
+                    code[at + "crate::repo".len()..].starts_with("::"),
+                    "{name} imports `crate::repo` as a module, so its calls no longer spell \
+                     `repo::` and this guard cannot follow them — reach the one item needed by its \
+                     path"
                 );
             }
         }
