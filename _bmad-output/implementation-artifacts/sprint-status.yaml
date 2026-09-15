@@ -78,7 +78,7 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-09-11  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
+last_updated: 2026-09-15  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
                           # The first time in five weeks that what was built reached its user: the
                           # NAS had been on `0.1.0`, older than the identity engine, the write route
                           # and the ten screens, and nobody had checked.
@@ -5530,7 +5530,7 @@ development_status:
   #   leave the two documents disagreeing silently.
   #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
   #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
-  14-2b-the-plan-in-the-operators-hands: review
+  14-2b-the-plan-in-the-operators-hands: done
   #   ✅ T2–T8 DONE 2026-09-12..15 — the operator can change the plan: three write routes, the refusal
   #   set carried twice, the overlap rule under concurrency (two locks, neither observable alone), the
   #   auth perimeter as a property, the empty plan's link into the gesture. T8 MEASURED on `7ec25c9`:
@@ -5544,7 +5544,9 @@ development_status:
   #   subnets and edge addresses accepted and registered with 14.3), 21 patches, 3 deferred. 905 → 908
   #   tests. The repair found one more on its own: a refused transaction kept its locks until its
   #   connection was reused, which the blind layer had suspected from the diff and could not confirm.
-  #   13 mutations + 2 browser proofs, carriers named per row. STAYS `review` until the merge.
+  #   13 mutations + 2 browser proofs, carriers named per row.
+  #   ✅ MERGED 2026-09-15 — PR #173 squash-merged as `368e2e1` after a CI run green on the head
+  #   commit `6ba35b8` itself. A second review of the repair commit was started the same day.
   #   ✅ T0 TAKEN 2026-09-12 — §2's five decisions, four of them Guy's, each recorded in the story
   #   WITH the option refused and the cost accepted: the form is IN LINE IN THE RAIL, collapsed
   #   (refused: a dedicated address, an eleventh outside `Screen::ALL` on story 6b.6's measured
