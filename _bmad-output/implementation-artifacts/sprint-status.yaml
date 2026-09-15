@@ -5631,7 +5631,7 @@ development_status:
   #   observation's own transaction, backfilled once at boot before serving, NO screen. Why: reading
   #   every observation row on each render measured 3.0-3.3 s at 1 M rows (~75 days of sweeping).
   #   IMPLEMENTED 2026-09-15 (PR #179): 1 M rows backfilled in ~2 s. Code-reviewed by three isolated
-  #   layers the same day: 1 decision (the boot becomes the tested seam `open_store`), 17 patches.
+  #   layers the same day: 1 decision (the boot becomes the tested seam `open_store`), 18 patches.
   14-3b-the-audit: ready-for-dev
   #   ✅ T0 TAKEN 2026-09-15 -- all fourteen decisions, the recommendations throughout: gap = an observed
   #   address the plan would OFFER, undeclared = every other unrowed one, never in a dhcp-pool; the most
