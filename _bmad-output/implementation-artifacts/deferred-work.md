@@ -4407,6 +4407,11 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   carried by nothing.** Putting a full subnet in the example dataset to exercise one line would be
   shaping the demonstration around the test. **Owner: Epic 14**, where a full subnet is an ordinary
   state rather than a fixture.
+  ⚠️ **STALE since story 14.2** (story 14.3's fact-check, 2026-09-15): the example dataset is gone and the
+  key IS reachable on the real product — any subnet with no range renders it (`ipam_page.rs:607`). What
+  is still missing is a RENDER test, and its text (*"every address in this subnet is defined,
+  infrastructure, or outside every range"*) becomes false once the offer excludes seen, documented and
+  non-`static` addresses. **Owner: story 14.3b** (AC3), which renders it, rewords it and closes this row.
 
 - 🔴 **A REVIEW LAYER CAN ONLY AUDIT WHAT ITS INPUT CONTAINS, and this one was asked to audit what
   had been excluded from it.** The Acceptance Auditor reported story 6b.7's AC4 as NOT MET — *"no
@@ -5416,6 +5421,9 @@ One row, and v0.3.0 is what made it live.
   after the mandatory validation grew it from two write routes to three and added a `free`
   treatment, an auth-perimeter property, a permanent concurrency harness and a `classify` repair.
   A story may not edit `epics.md`; the divergence is here instead. **Owner: Epic 14's retrospective.**
+  ⚠️ **SIX since 2026-09-15**: story 14.3 was split at its VALIDATION (Guy) into **14.3a**, a bounded
+  sighting summary (schema, ingest maintenance, backfill, no screen), and **14.3b**, the audit — because
+  reading every observation row on each render measured 3.0–3.3 s at 1 M rows (≈ 75 days of sweeping).
 
 - ⚠️ **The UX spec asks for a grid this product does not render.**
   `ux-design-specification.md:1632-1634` prescribes `role="grid"` with keyboard navigation,
@@ -5513,21 +5521,25 @@ One row, and v0.3.0 is what made it live.
   /24 and the /25; a `static` range .0–.255 in the /24 and a `dhcp-pool` range .0–.127 in the /25 are
   both accepted. Only `UNIQUE (base, prefix_len)` exists. ✅ Guy, 2026-09-15: **accepted, not refused
   at the route** — outside Epic 14's six arbitrations, and a real plan legitimately holds a supernet
-  and its subnets. **Owner: story 14.3**, whose audit is the first code to meet an address under two
-  policies and must say which one decides.
+  and its subnets. **Owner: story 14.3b**, whose audit is the first code to meet an address under two
+  policies and must say which one decides. ✅ **Decided by Guy, 2026-09-15 (14.3b decision 2): the MOST
+  PROTECTIVE range decides** — any non-`dhcp-pool` range covering the address, in any subnet, makes it a
+  finding and takes it out of the offer; the cell's LOOK keeps 14.2's lowest-`first_addr` rule.
 
 - ⚠️ **Network and broadcast addresses, and ranges covering them, can be defined.** Measured on
   `da28d3e`: `192.0.2.0` and `192.0.2.255` as addresses → 201 each; a `static` range .0–.255 → 201 —
   while `/ipam` draws the edges as `infrastructure` and never offers them. ✅ Guy, 2026-09-15:
   **accepted** — documenting an edge is legitimate, the glossary files `.0`/`.255` under
-  `infrastructure`, which is a declarable policy. **Owner: story 14.3**, which owns keeping them out
-  of the next-free-address offer whatever the plan declares over them.
+  `infrastructure`, which is a declarable policy. **Owner: story 14.3b**, which owns keeping them out
+  of the next-free-address offer whatever the plan declares over them (its AC3).
 
 - ⚠️ **An address defined inside an existing range is ACCEPTED SILENTLY** — story 14.2b's §2,
   decision 5 (Guy, 2026-09-12). `epics.md:2433` settles plan-against-NETWORK (*warn, name what is
   known, and still write*) and says nothing about plan-against-PLAN, so an address written inside a
   `dhcp-pool` range gets no warning. The story said *"registered with 14.3 by name"*; its code review
-  found no row. **Owner: story 14.3**, where that warning belongs.
+  found no row. **Owner: story 14.3b**, where that warning belongs. ✅ **Decided by Guy, 2026-09-15 (14.3b decision 13)**:
+  an address defined inside a `dhcp-pool` carries a keyed WARNING on `/ipam`, not a conflict, and still
+  writes.
 
 - ⚠️ **D56b's *one trailing test module per file* does not hold across the crate**:
   `crates/opencmdb-bin/src/example_screens.rs` carries FOUR line-start `#[cfg(test)]`. Measured by
@@ -5553,3 +5565,22 @@ One row, and v0.3.0 is what made it live.
   doc — *an enumeration cannot claim the completeness of a property* (story 5.12). Real labels in
   other scripts were measured accepted and must stay so, which is why no wider class is refused
   blindly. **Owner: unassigned** — the next story touching `carries_a_visible_glyph`.
+
+## Raised by story 14.3's validation and T0 (2026-09-15)
+
+- ⚠️ **The epic's AC1 names `static` among the places an observed address is `undeclared`; story 14.3b
+  calls it `gap` there.** Guy's decision 1 (2026-09-15): `gap` = an observed address the plan WOULD
+  OFFER (a free cell in a `static` range), `undeclared` = every other observed address with no row. The
+  epic's AC1 and AC2 overlapped on exactly that cell, and read literally AC2 made every DHCP lease a
+  `gap`; the letter of AC1 for `static` is the part given up. A story may not edit `epics.md`. **Owner:
+  Epic 14's retrospective.**
+- ⚠️ **PRD FR24 counts *"a static-declared IP inside a DHCP range"* as an IP conflict (`prd.md:909`);
+  story 14.3b shows it as a WARNING, not a conflict** (Guy, decisions 10 and 13), on story 14.2b's
+  finding that a static reservation inside a pool is *"ordinary and correct"*. And FR24's two-MAC half is
+  scoped to `static`/`reserved` ranges because the neighbour table holds one MAC per address per sweep
+  (`neighbour.rs:83`): two MACs are always a succession, permanent under constraint 3. **Owner: Epic
+  14's retrospective**, which may carry it to the PRD.
+- 🔴 **The next-free-address offer serves `reserved` and `dhcp-pool` addresses today** — measured by
+  story 14.3's gap-hunt on the seed (`198.51.100.129`, a `reserved` address, proposed). Story 14.2's
+  `offerable()` excludes only `infrastructure`. **Owner: story 14.3b** (decision 3: the offer draws from
+  `static` ranges only).

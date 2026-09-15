@@ -5624,7 +5624,32 @@ development_status:
   #   nothing can fill, so 14.2's empty-plan sentence names the gesture as NOT YET BUILT through
   #   `Gesture::Planned { owner }` -- the shape story 6b.4b made a compile-time obligation, so this
   #   story cannot ship its route without meeting that site.
-  14-3-the-audit: backlog
+  14-3a-the-sightings-summary: ready-for-dev
+  #   🔴 INSERTED 2026-09-15 at story 14.3's VALIDATION (Guy: split) -- Epic 14 goes from FIVE stories
+  #   to SIX (`epics.md` NOT edited; registered). The bounded SIGHTING SUMMARY the audit reads: one row
+  #   per distinct observed (IPv4, MAC) with its last-seen instant, maintained at ingest, backfilled once
+  #   from `observation_record`, NO screen. Why: reading every observation row on each render measured
+  #   3.0-3.3 s at 1 M rows (~75 days of sweeping), failing NFR2 after ~2 months. Being contexted.
+  14-3b-the-audit: ready-for-dev
+  #   ✅ T0 TAKEN 2026-09-15 -- all fourteen decisions, the recommendations throughout: gap = an observed
+  #   address the plan would OFFER, undeclared = every other unrowed one, never in a dhcp-pool; the most
+  #   protective range decides; the offer draws from `static` only and excludes seen AND documented
+  #   addresses; the guard NARROWED to one module; the form warns BEFORE the write (a GET fragment no
+  #   perimeter guard covers yet); findings LIST + a marker kept only at >= 3:1; absolute per-MAC dates;
+  #   « Conflit d'adresse » in static/reserved only. 🔴 BLOCKED ON 14.3a. File renamed from
+  #   `14-3-the-audit.md`.
+  #   CONTEXTED AND VALIDATED 2026-09-15 (fact-check + gap-hunt that built and measured). The story
+  #   was rewritten whole: the offer serves `reserved`/`dhcp-pool` addresses today (measured
+  #   198.51.100.129); reusing the observation reader fails NFR2 after ~2 months (1 M rows 3.0-3.3 s),
+  #   so a bounded sighting summary (a migration) is now option (d) and a split is possible; FR24's
+  #   "two MACs" is always a succession; a cell marker fails 3:1 contrast where axe cannot see.
+  #   Fourteen decisions (eight Guy's) must be taken at T0 before any code.
+  #   🔴 Two findings posed as decisions rather than settled: the epic's AC1 (`undeclared`) and AC2
+  #   (`gap`) OVERLAP on a free cell in a `static` range with a sighting; and the guard
+  #   `the_plan_reads_no_observation` forbids the audit BY DESIGN -- bypassing it would be a guard
+  #   placed where the defect cannot occur. Ten decisions for Guy in §2, among them: which policy
+  #   decides for overlapping ranges, what the offer excludes, how the sightings are read (the only
+  #   reader loads every row), and where the form's warning appears (a 201 body is lost to HX-Redirect).
   #   The story the epic exists for. Includes FR24's real conflict -- undetectable before PR #163,
   #   because the connector read no hardware address; and NOT a conflict inside a `dhcp-pool`,
   #   where the occupant changes by design.
