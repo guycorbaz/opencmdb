@@ -5543,3 +5543,13 @@ One row, and v0.3.0 is what made it live.
   Measured on story 14.2b's review pass, where 13 of 13 conformed and the carriers had to be named
   by a second, hand-driven run. **Owner: unassigned** — the next story touching
   `xtask/src/mutate.rs`.
+
+## Deferred from: second code review of 14-2b-the-plan-in-the-operators-hands, on its repair (2026-09-15)
+
+- ⚠️ **A label made only of invisible fillers is accepted.** Measured by the second review's Edge Case
+  Hunter on `368e2e1`: `"\u{3164}"` (Hangul filler), `"\u{115F}"`, `"\u{2800}"` (braille blank) and a
+  lone `"\u{0301}"` pass `checked_label`, each rendering a subnet, range or address with no visible
+  name. `crate::is_invisible` is an ENUMERATION of default-ignorable ranges and says so in its own
+  doc — *an enumeration cannot claim the completeness of a property* (story 5.12). Real labels in
+  other scripts were measured accepted and must stay so, which is why no wider class is refused
+  blindly. **Owner: unassigned** — the next story touching `carries_a_visible_glyph`.

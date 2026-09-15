@@ -431,6 +431,37 @@ Hunter: own worktree and store, measured · Acceptance Auditor: full diff, this 
 
 Dismissed (6), each with its check: a lock outliving an early return (edge: no row in `innodb_trx` after a range 503, next write 201) · CI order before the keyboard probe (auditor: empty-plan pass before `seed.sql`, which clears the plan tables) · a `Constraint` built outside `repo.rs` (grep: none) · the race test's pool size (no evidence; the harness runs green) · `maxlength` in UTF-16 units vs `char`s (stricter in the browser, harmless) · `ipam.done.*` bodies nobody sees (the 201 body is the contract for a non-htmx client, story 6.2's).
 
+### Review Findings — second round, on the repair commit (2026-09-15)
+
+✅ **All 17 patches applied** (15 found + the 2 decisions) on branch `review2/14-2b-repair`; the
+defer is registered. See *Second review repair* under the Dev Agent Record for the measurements.
+
+Three isolated layers on `fc67664..6ba35b8` after the merge (Blind Hunter: diff only · Edge Case
+Hunter: own worktree and store, measured · Acceptance Auditor: diff, this story, the register).
+2 decision-needed, 15 patch, 1 defer, 11 dismissed (this read *16 patch* until the tick counted 17 items for 15 + 2). The story is merged and stays `done`; these land
+in a follow-up change.
+
+- [x] [Review][Patch] ✅ *Decided by Guy 2026-09-15: (a) — bounded replays, up to three, each after a short jittered pause, inside the budget; a four-writer test beside the two-writer one.* **One replay does not survive more than two writers** — edge, measured twice with the story's 400 ms seam: 4 range writes at once in 4 different empty subnets → **11 of 40 answered `Contention`**, each conflicting with nothing; the replay itself deadlocked again (17 errors for 11 replays). The shipped two-writer test holds (3, 2, 2 deadlocks per run, all replayed). Options: (a) bounded replays — up to three, with a short jittered pause, inside the budget; (b) take the gap lock out of the picture — `READ COMMITTED` for the range transaction, the parent row still serialising one subnet, with T4's matrix re-measured; (c) keep one replay and state the limit as *two concurrent writers*, registered.
+- [x] [Review][Patch] ✅ *Decided by Guy 2026-09-15: (a) — cap the lock wait of the plan's write statements below the budget, so the server gives up before the browser is told to.* **A write dropped by its budget keeps its pool connection until the server's wait ends** — edge, on the booted binary: after each 503 the server-side statement was still in `LOCK WAIT`, and went away only after the holder released (no row written, retry 201). A lock held elsewhere for up to `innodb_lock_wait_timeout` (50 s) therefore pins one connection per timed-out write. Options: (a) cap `innodb_lock_wait_timeout` on the write transactions at the budget, so the server gives up when the browser was told to; (b) register it.
+- [x] [Review][Patch] **The "defect found by the repair" is not a production defect, and five documents say it is** — auditor + edge, measured: sqlx 0.9 pings a connection on its return to the pool (`pool/connection.rs:306-314`, *"flush … transaction rollbacks"*); through `StoreIpamWrite` a refused range followed by the next write on the same subnet answered `Ok` in 2.56 ms with MR1 applied, and `settle`'s rollback replaced by `drop(tx)` left every test green. MR1 reds only because the race test HOLDS its connections. The explicit rollbacks stay, as defensive; the narrative in the repair section, the Change Log, `sprint-status.yaml`, `settle`'s doc and `range_attempt`'s comment is corrected — and `within_budget`'s doc and `settle`'s now agree. [ipam_write.rs, ipam_repo.rs, this file, sprint-status.yaml]
+- [x] [Review][Patch] **The replay runs even when the rollback before it failed** — blind: `range_attempt` logs a failed rollback and the caller replays on the same connection, whose transaction state is then unknown. Skip the replay and answer `Contention` when the rollback did not succeed. [ipam_repo.rs]
+- [x] [Review][Patch] **A deadlock on the parent-row read is not replayed, though the comment promises "on 1213"** — blind: `load_subnet_locked` returns an already-`classify`'d error, wrapped as `Refused`. Route its `sqlx::Error` through `attempt_error`. [ipam_repo.rs]
+- [x] [Review][Patch] **The lock guard is still defeated by a comment — a block one** — auditor + edge, measured: the deciding read's `FOR UPDATE` dropped with the old SQL kept in `/* … */` → 618/618 green, the guard included. Blind: `in_string` resets per line (a SQL string spanning two lines), a `'"'` char literal flips it, and the parent-row SQL is checked over the whole file rather than inside `load_subnet_locked`. A string-aware stripper for both comment forms. [ipam_repo.rs]
+- [x] [Review][Patch] **The plan guard is defeated by ordinary imports and by a string** — auditor + edge, measured green: `use crate::{repo as store};` then `store::count_observations`; `use super::repo as store;`; and `const P: &str = "/ipam/*";` before a bare `crate::repo::count_observations`, because `strip_comments` takes `/*` inside a string for a comment and drops the rest of the file (story 6.5's `sql_text.rs` class, not inherited). Match the `repo` TOKEN rather than two spellings, with a string-aware stripper. [ipam_page.rs]
+- [x] [Review][Patch] **The backend sentence still promises "Nothing was changed"** — blind: a connection error during `COMMIT` is `Backend`, the case the contention sentence was rewritten for. [locales/app.yml]
+- [x] [Review][Patch] **The 403 sentence is false in the one case an operator reads it** — auditor: behind a proxy that rewrites `Host`, the write DID come from the page; only a mismatch between `Origin` and the received `Host` is known. [locales/app.yml]
+- [x] [Review][Patch] **The empty plan still points "above" at nothing, and no test renders that sentence** — blind + auditor: *"choose one above, or define it first"* on a plan with no subnet, and `IpamForms::new(None)` covered by no render assertion. A sentence of its own for the empty plan, and a test. [ipam_page.rs, templates/_ipam_forms.html, locales/app.yml]
+- [x] [Review][Patch] **"A label is one line of text" lets line separators and bidi controls through** — blind + auditor + edge, measured: `"a\u{2028}b"`, `"a\u{2029}b"` and `"Office\u{202E}live"` accepted and rendered. Refuse Zl/Zp and the bidi embedding, override and isolate controls; real labels (Genève, 東京オフィス, 📡, the ZWJ family, `❤\u{FE0F}`, Hebrew, Arabic) measured accepted and must stay so. [ipam_write.rs]
+- [x] [Review][Patch] **The dropped-write test says less than it seems, and can poison the pool** — blind: its oracle is a non-locking `COUNT(*)`, which cannot tell a rolled-back row from an open one; and a premise panic drops `holder` inside a raw `START TRANSACTION`. State its scope (rows; the lock question was measured on the booted binary) and release the holder before asserting. [ipam_write.rs]
+- [x] [Review][Patch] **The deadlock test's odds sentence is an assumption** — blind: *"under half a percent"* holds only where the 2-in-3 rate does. Say what carries it instead: MR3 and the edge layer's M1 (replay removed → red 3/3). [ipam_repo.rs]
+- [x] [Review][Patch] **The Tab walk may not start from the top** — blind: `document.body.focus()` neither focuses a `<body>` without `tabindex` nor blurs what has focus. [a11y/kbd-probe.mjs]
+- [x] [Review][Patch] **Two test nits** — blind: a vacuous `assert_ne!` after an `assert_eq!` in `a_re_entered_address_is_told_it_is_the_address`, in the commit that removed vacuous assertions; `Some(classify(raw))` against `Some(Contention)`. [ipam_write.rs, repo.rs]
+- [x] [Review][Patch] **The register count is wrong while claiming to be counted** — auditor: `git diff fc67664 6ba35b8` adds THREE rows; the triage's three were already in `fc67664`. [this file, File List]
+- [x] [Review][Patch] **The twin still says "the `xtask` count stays at nine"** — auditor: ten since story 6.5. [docs/project-context.md]
+- [x] [Review][Defer] **Whole labels of invisible fillers are accepted** [crates/opencmdb-bin/src/main.rs `is_invisible`] — deferred, pre-existing enumeration: edge measured `"\u{3164}"`, `"\u{115F}"`, `"\u{2800}"` and a lone `"\u{0301}"` accepted as labels with nothing visible. `is_invisible` is an enumeration and says so; *an enumeration cannot claim the completeness of a property*.
+
+Dismissed (11), each with its check: a lock outliving a 503 (edge, booted binary: the transaction gone once the holder released, 0 rows, retry 201 — the residual is the decision above) · the replay after a non-deadlock failure, a real overlap turned into success, a replay inside a rolled-back transaction (edge: 0 replays on `RangeOverlapsAnother`, overlap test 2/2, 25+ replays clean) · the dropped-write test passing for the wrong reason (edge: autocommit mutations red `left: 1`, pristine green 3/3) · `CLAUDE.md` still naming the review as next (true on `6ba35b8`, fixed by PR #176 on master) · the per-route loop in the SET test (it guards a per-route `None` added later) · the key count 24 (grep: 24, the test green) · `nav.filters a.filter` (auditor: matches the real markup) · `start_paused` (present on the test) · `empty-plan.sql`'s `DELETE` (the statements are there) · `insert_subnet`/`insert_address` opening their own transaction (they do not) · a nested file excluded from the plan perimeter (`name.starts_with("ipam")` holds for `ipam/x.rs`).
+
 ## Dev Notes
 
 ### Traps this project has paid for, and which apply here
@@ -993,6 +1024,15 @@ The story STAYS at `review` — `done` is the merge's business in this project.
   shape off the diff (*"an early return drops `tx`… the lock could outlive the request"*) and could
   not confirm it. Fixed at the cause, not in the test: `range_attempt` and the two single-statement
   writes (`settle`) now roll back EXPLICITLY. MR1 is that mutation.
+  ⚠️ **CORRECTED BY THE SECOND REVIEW, and this bullet overstated it**: the second review's auditor
+  and edge layer measured that it is NOT a production defect. sqlx 0.9 pings a connection on its
+  return to the pool, which flushes the queued rollback (`pool/connection.rs:306-314`): through
+  `StoreIpamWrite`, with MR1 applied, a refused range followed by the next write on the same subnet
+  answered in 2.56 ms, and `settle`'s rollback replaced by `drop(tx)` left every test green. MR1
+  reds only because the race test HOLDS its two connections. The explicit rollbacks stay, as
+  defensive; *"the confirmation of the Blind Hunter's suspicion"* was a property of the holder,
+  presented as one of the product — the defect of *a cause needs a check*, committed in the section
+  that credited itself with a finding.
 - 🔴 **The two decisions shipped as designed.** Subnet and address writes run in a transaction and
   the 503 sentence stops promising (*"it may or may not have been saved — reload the plan"*); a
   deadlock victim is replayed ONCE, on 1213 alone, through `repo::is_deadlock`, kept apart from
@@ -1062,6 +1102,72 @@ The two browser-gate repairs, by hand (the driver does not drive the browser gat
 | BA | the empty plan's link points at `#nowhere` (markup confirmed in the served binary) | axe empty-plan exit 1 | **exit 1** — *shows no link into the subnet form*, 0 violation nodes: a product failure, no longer *"could not run"* |
 | BK | the subnet form's `<summary>` given `tabindex="-1"` | kbd exit 1, one failure | **exit 1**, 37 run, 1 failed — *Tab alone reaches the subnet form* `reached=false` |
 
+### Second review repair (2026-09-15, after the merge)
+
+Seventeen patches — fifteen found and Guy's two decisions — from the second three-layer review, on branch `review2/14-2b-repair`. **908 → 924
+tests** (634 bin + 191 core + 99 xtask): ten for `source_scan`'s traps, and
+`four_ranges_at_once_in_four_subnets_all_land`, `a_plan_write_stops_waiting_on_a_lock_before_the_budget`,
+`every_plan_statement_that_can_wait_on_a_lock_is_capped`, `the_plan_lock_wait_cap_is_below_the_write_budget`,
+`real_labels_in_any_script_are_accepted` and `the_forms_say_the_right_thing_when_no_subnet_is_in_force`.
+
+- 🔑 **`src/source_scan.rs`, test-only: one string-aware tokenizer for the source-scanning guards**,
+  where each guard had carried its own stripper and both were defeated by ordinary code — a
+  `/* … */` comment, a `"/ipam/*"` string swallowing the rest of a file, a SQL string over two
+  lines, a `'"'` char literal. Each trap is a test in that module. The plan guard now matches the
+  `repo` TOKEN outside literals instead of two spellings of a path.
+- 🔑 **Guy's two decisions, measured**: up to three replays of a deadlock victim, each after a random
+  pause; and every plan statement that can wait on a lock carries `SET STATEMENT
+  innodb_lock_wait_timeout=4` through one `capped!` macro — MariaDB accepts it in a prepared
+  statement, measured by the suite rather than assumed. A write waiting on a held row now answers
+  `Contention` after four seconds instead of fifty.
+- 🔴 **M2-2 CONTRADICTED ITS PREDICTION, and the refutation is recorded, not tuned away**: with the
+  pause set to zero the four-writer test stays GREEN — three immediate replays were enough. The
+  randomness had been justified by a measurement of ONE replay. Kept as decided, and its doc now
+  says it is carried by nothing.
+- ⚠️ **The first repair's headline is corrected in place** — the locks of a refused transaction are
+  a HELD connection's, not production's (sqlx flushes the rollback on return to the pool) — in the
+  repair section, the Change Log, `sprint-status.yaml`, `settle`'s doc and `range_attempt`'s comment.
+
+#### The second repair's mutation pass
+
+On the repaired tree, a virgin `mariadb:10.11.11` warmed once. Each mutation applied from a `cp`
+copy, the full `cargo test --workspace --locked --no-fail-fast` run, the red tests read by NAME off
+the output, the file restored and touched; afterwards every mutated file checked byte-identical
+(`sha256sum -c`). Predictions written in the script before the run.
+
+| id | mutation | predicted | measured | carrier |
+|---|---|---|---|---|
+| M2-1 | `MAX_DEADLOCK_REPLAYS` 3 → 1 | red:1 | red:1 | `four_ranges_at_once_in_four_subnets_all_land`, assertion — round 0: `[Ok, Ok, Ok, Err(Contention)]` |
+| M2-2 | the replay pause set to zero | red:1 | 🔴 **GREEN** | **the finding**: the randomness is carried by nothing; three immediate replays sufficed |
+| M2-3 | the cap raised to the server default (`=50`) | red:1 | red:1 | `a_plan_write_stops_waiting_on_a_lock_before_the_budget`, assertion — *waited 50.001 s* |
+| M2-4 | the address insert uncapped | red:1 | red:1 | `every_plan_statement_that_can_wait_on_a_lock_is_capped`, assertion — names `"INSERT INTO ip_` |
+| M2-5 | `PLAN_LOCK_WAIT_SECONDS` 4 → 5 | red:2 | red:2 | `the_plan_lock_wait_cap_is_below_the_write_budget` and the lock-wait test's premise, both assertion |
+| M2-6 | `source_scan` stops stripping block comments | red:2 | red:2 | its two block-comment tests, assertion |
+| M2-7 | the review's G1 in `/* … */`: deciding read's `FOR UPDATE` dropped, old SQL in a block comment | red:2 | red:2 | `both_reads_of_a_subnet_under_write_take_their_lock` and `every_plan_statement…_is_capped`, assertion |
+| M2-8 | `use crate::{repo as store};` + `store::count_observations` in `ipam_write.rs` | red:1 | red:1 | `the_plan_reads_no_observation`, assertion — *ipam_write.rs:58 names the `repo` module* |
+| M2-9 | `use super::repo as store;` + the same call | red:1 | red:1 | the same guard, assertion |
+| M2-10 | `const P: &str = "/ipam/*";` before a bare `crate::repo::count_observations` | red:1 | red:1 | the same guard, assertion — *ipam_write.rs:62* |
+| M2-11 | line separators and direction overrides accepted again | red:1 | red:1 | `every_route_reuses_the_shared_machinery`, assertion — *a label carrying a line separator*, `left: 201` |
+| M2-12 | the forms template ignores `plan_is_empty` | red:1 | red:1 | `the_forms_say_the_right_thing_when_no_subnet_is_in_force`, assertion |
+| M2-13 | CONTROL: `settle`'s rollback replaced by `drop(tx)` | green | green | as the second review measured — defensive, carried by nothing, said in its doc |
+
+Twelve reds conforming, one control green as predicted, **one prediction refuted (M2-2)**; every red
+assertion-carried in this pass, each read from its own panic message. Not mutated, and said: the
+replay skipped after a failed rollback, and `load_subnet_locked`'s deadlock routing — neither can be
+provoked by a test without a fault-injecting connection.
+
+#### The second repair, measured
+
+| step | result |
+|---|---|
+| `cargo fmt --all --check` · `cargo build` · `clippy --all-targets -D warnings` | exit 0 |
+| `cargo xtask ci` · `cargo deny check` | exit 0 · `advisories ok, bans ok, licenses ok, sources ok` |
+| tests, virgin store | **924 passed** (634 + 191 + 99), 0 failed — 20.33 s |
+| tests, `env -u DATABASE_URL` | **924 passed**, 0 failed — 5.62 s |
+| tests, `RUSTFLAGS="-D warnings"`, store | **924 passed**, 0 failed |
+| axe empty plan · axe seeded (three `REQUIRE` flags) | exit 0 · exit 0 — 0 violation nodes |
+| kbd-probe | exit 0 — **37 checks, 0 failed** |
+
 ### File List
 
 - `crates/opencmdb-bin/src/write_guard.rs` — NEW; the shared Origin check and its two tests.
@@ -1114,10 +1220,20 @@ The two browser-gate repairs, by hand (the driver does not drive the browser gat
 - `_bmad-output/implementation-artifacts/deferred-work.md` — three rows closed (the empty-plan link,
   the overlap race, the dead-code allows) and six added: three by the review's triage (`document.rs`'s
   403, nested subnets and edge addresses → 14.3) and three by the repair (an address inside a range →
-  14.3, `example_screens.rs`'s four test modules, the mutation driver naming no carrier). Counted off
-  `git diff`; this line first said *five*.
+  14.3, `example_screens.rs`'s four test modules, the mutation driver naming no carrier). ⚠️ **Only
+  the repair's three are in the repair commit** — `git diff fc67664 6ba35b8` adds three rows, the
+  triage's three being already in `fc67664` (the second review's auditor). This line said *five*,
+  then *six "counted off `git diff`"*, a total counted across two commits and credited to one diff.
 
 ### Change Log
+
+- 2026-09-15 — **SECOND REVIEW (three isolated layers, on the repair commit) AND ITS REPAIR.** 2
+  decisions (Guy: up to three jittered replays; a 4 s lock-wait cap on every plan statement), 15
+  patches, 1 deferred, 11 dismissed. **908 → 924 tests.** 🔴 It refuted the first repair's headline
+  — the locks of a refused transaction were a held connection's, not production's — and found both
+  hardened guards still defeated by ordinary code, closed by one shared string-aware tokenizer. One
+  replay was measured insufficient beyond two writers. 13 mutations: 12 conforming, and **M2-2
+  refuted its own prediction** — the replay pause is carried by nothing, and its doc now says so.
 
 - 2026-09-15 — **MERGED: PR #173 squash-merged as `368e2e1`**, after a CI run green on the head
   commit `6ba35b8` itself (read from the PR's own check rollup, `mergeStateStatus: CLEAN`). Status →
@@ -1132,7 +1248,9 @@ The two browser-gate repairs, by hand (the driver does not drive the browser gat
   and address budgets carried by nothing; a re-entered address told it was a subnet; a NUL served in
   every page; and rows the story called registered, absent from the register. 🔴 The repair found
   one more on its own — a refused transaction's locks held until its connection was reused — which
-  the blind layer had suspected and could not confirm. Thirteen mutations and two browser proofs,
+  the blind layer had suspected and could not confirm (⚠️ true of a HELD connection only, the second
+  review measured: sqlx flushes the rollback when a connection returns to the pool). Thirteen
+  mutations and two browser proofs,
   carriers named row by row. Status stays `review` until the merge.
 
 - 2026-09-15 — **T8: measured, and the one red was not this branch's.** **905 tests** (615 bin +

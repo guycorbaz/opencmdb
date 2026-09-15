@@ -42,6 +42,11 @@ mod resolver;
 mod reverse_dns;
 mod scan_pass;
 mod screens;
+/// Reading Rust source as code rather than prose, for the source-scanning guards (story 14.2b).
+///
+/// Test-only, like `permute`: it supports no production path.
+#[cfg(test)]
+mod source_scan;
 mod sources_view;
 mod state_vocabulary;
 mod trap_gate;

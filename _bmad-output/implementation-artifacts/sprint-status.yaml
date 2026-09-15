@@ -5542,11 +5542,17 @@ development_status:
   #   ✅ CODE-REVIEWED AND REPAIRED 2026-09-15 — three isolated layers; 4 decisions by Guy (the 503
   #   stops promising and the writes are transactions; a deadlock victim is replayed once; nested
   #   subnets and edge addresses accepted and registered with 14.3), 21 patches, 3 deferred. 905 → 908
-  #   tests. The repair found one more on its own: a refused transaction kept its locks until its
+  #   tests. The repair found one more on its own (⚠️ a HELD connection's only — the second review measured
+  #   sqlx flushing the rollback on return to the pool): a refused transaction kept its locks until its
   #   connection was reused, which the blind layer had suspected from the diff and could not confirm.
   #   13 mutations + 2 browser proofs, carriers named per row.
   #   ✅ MERGED 2026-09-15 — PR #173 squash-merged as `368e2e1` after a CI run green on the head
   #   commit `6ba35b8` itself. A second review of the repair commit was started the same day.
+  #   ✅ SECOND REVIEW TRIAGED AND REPAIRED 2026-09-15 (branch `review2/14-2b-repair`): Guy chose up to
+  #   three jittered deadlock replays and a 4 s lock-wait cap; 15 patches, 1 deferred; 908 → 924 tests.
+  #   It refuted the first repair's "production defect" (a held connection's only) and closed both
+  #   guard bypasses with one string-aware tokenizer. M2-2 refuted its prediction: the jitter is
+  #   carried by nothing, and says so.
   #   ✅ T0 TAKEN 2026-09-12 — §2's five decisions, four of them Guy's, each recorded in the story
   #   WITH the option refused and the cost accepted: the form is IN LINE IN THE RAIL, collapsed
   #   (refused: a dedicated address, an eleventh outside `Screen::ALL` on story 6b.6's measured

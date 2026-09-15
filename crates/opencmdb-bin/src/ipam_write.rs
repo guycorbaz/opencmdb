@@ -422,12 +422,16 @@ impl IpamWritePort for StoreIpamWrite {
     }
 }
 
-/// Commit a write that went through, and roll back one that was refused — EXPLICITLY.
+/// Commit a write that went through, and roll back one that was refused — explicitly.
 ///
-/// 🔴 **Not on `Drop`**: a dropped sqlx transaction only QUEUES its rollback on the connection, so a
-/// refused write (a duplicate subnet, an address outside its subnet) would keep its locks until the
-/// connection was next used. Measured on the range write at story 14.2b's review, where a held
-/// connection kept the loser's locks for the full 50 s `innodb_lock_wait_timeout`.
+/// ⚠️ **Defensive, and the second review measured how far.** A dropped sqlx transaction QUEUES its
+/// rollback on the connection, and sqlx 0.9 pings a connection on its return to the pool, which
+/// flushes it (`pool/connection.rs`, *"flush … transaction rollbacks"*). On this handler path the
+/// connection is returned at once, so replacing the rollback below with `drop(tx)` left every test
+/// green: it is carried by no test, and that is said rather than implied. It is kept so releasing the
+/// locks does not depend on a pool's return path. (This doc read *"would keep its locks until the
+/// connection was next used … measured"*, true of the race test's HELD connections and presented as
+/// true of production.)
 async fn settle(
     tx: sqlx::Transaction<'_, sqlx::MySql>,
     written: Result<(), RepositoryError>,
@@ -703,7 +707,10 @@ fn checked_label(raw: &str) -> Result<String, Refusal> {
     }
     // 🔴 A CONTROL CHARACTER IS REFUSED, NOT STORED: `%0A%0Dctrl%00` answered 201 and every `/ipam`
     // page then served a NUL byte, which `grep` took for a binary file. A label is one line of text.
-    if label.chars().any(char::is_control) {
+    if label
+        .chars()
+        .any(|glyph| glyph.is_control() || breaks_the_line_or_its_direction(glyph))
+    {
         return Err(Refusal::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "ipam.refusal.label_control",
@@ -716,6 +723,20 @@ fn checked_label(raw: &str) -> Result<String, Refusal> {
         ));
     }
     Ok(label.to_string())
+}
+
+/// A character that ends a line or reorders the text around it — refused in a label, which is one
+/// line of plain text.
+///
+/// 🔴 `char::is_control` is category Cc alone, and the second review measured U+2028, U+2029 and
+/// U+202E accepted and rendered. Directional MARKS (U+200E, U+200F) stay allowed — a label in Hebrew
+/// or Arabic may legitimately carry one — while embeddings, overrides and isolates, which reorder
+/// what surrounds them, do not.
+const fn breaks_the_line_or_its_direction(glyph: char) -> bool {
+    matches!(
+        glyph,
+        '\u{2028}' | '\u{2029}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'
+    )
 }
 
 /// Parse `192.0.2.0/24` into the subnet the arithmetic can answer for.
@@ -1116,12 +1137,37 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::CONFLICT);
+        // The equality is the whole assertion: that the address sentence differs from the subnet's is
+        // `every_refusal_the_handler_can_receive_names_a_rule`'s, and an `assert_ne!` repeating it
+        // here could not fail on its own (the second review).
         assert_eq!(body, key("ipam.refusal.already_defined_address"));
-        assert_ne!(
-            body,
-            key("ipam.refusal.already_defined_subnet"),
-            "a re-entered address must not be told it is a subnet"
-        );
+    }
+
+    /// A label an operator really types, in any script, is accepted.
+    ///
+    /// 🔑 The control that makes the refusals mean something: the second review's edge layer measured
+    /// each of these accepted, and a wider refusal written in a hurry — every invisible code point,
+    /// every combining mark — would refuse a family emoji, a decomposed accent or an Arabic label.
+    #[test]
+    fn real_labels_in_any_script_are_accepted() {
+        for label in [
+            "Bureau Genève",
+            "東京オフィス",
+            "📡 Wi-Fi",
+            "משרד ראשי",
+            "مكتب",
+            "e\u{301}cole",
+            "👨\u{200D}👩\u{200D}👧 lab",
+            "❤\u{FE0F} rack",
+            "Ὀδυσσεύς",
+            "\u{5E9}\u{5E8}\u{5EA} \u{200F}2",
+        ] {
+            assert!(
+                checked_label(label).is_ok(),
+                "`{label}` is a label an operator types, and it was refused: {:?}",
+                checked_label(label)
+            );
+        }
     }
 
     #[tokio::test]
@@ -1513,6 +1559,16 @@ mod tests {
                     "a label carrying a control character",
                 ),
                 (
+                    "a%E2%80%A8b",
+                    "ipam.refusal.label_control",
+                    "a label carrying a line separator",
+                ),
+                (
+                    "Office%E2%80%AElive",
+                    "ipam.refusal.label_control",
+                    "a label carrying a direction override",
+                ),
+                (
                     "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
                     "ipam.refusal.label_too_long",
                     "a label past the column",
@@ -1654,6 +1710,17 @@ mod tests {
         }
     }
 
+    /// The lock-wait cap on the plan's statements sits BELOW the handler's budget, so the server gives
+    /// up before the browser is told to (the second review, Guy 2026-09-15).
+    #[test]
+    fn the_plan_lock_wait_cap_is_below_the_write_budget() {
+        assert!(
+            crate::ipam_repo::tests::PLAN_LOCK_WAIT_SECONDS < IPAM_WRITE_BUDGET.as_secs(),
+            "a cap at or past the budget lets the budget drop a write that is still waiting, and that \
+             write keeps its connection until the server gives up"
+        );
+    }
+
     /// 🔴 **A write the budget drops leaves NO ROW BEHIND** — the review measured the opposite.
     ///
     /// The subnet and address writes ran in autocommit. With the parent row held for 15 s,
@@ -1667,6 +1734,13 @@ mod tests {
     /// subnet (its unique check). Then it releases the lock, gives a statement that outlived its
     /// future time to land, and counts. In autocommit both counts are 1; inside a transaction the
     /// dropped write is rolled back with its connection.
+    ///
+    /// ⚠️ **What it measures is ROWS, not locks** (the second review): `COUNT(*)` is a non-locking
+    /// read, so it cannot tell a rolled-back row from one inside a transaction still open. Whether a
+    /// dropped write keeps its locks was measured on the booted binary instead — gone once the holder
+    /// released, and since the same review the server gives up after the statement's lock-wait cap.
+    /// And the holder is released BEFORE any premise is asserted, so a failing premise cannot hand a
+    /// connection inside a raw `START TRANSACTION` back to the pool.
     #[tokio::test]
     async fn a_write_dropped_while_waiting_leaves_no_row_behind() {
         const PARENT: &str = "t-drop-parent";
@@ -1714,15 +1788,17 @@ mod tests {
             ),
         )
         .await;
-        assert!(
-            dropped.is_err(),
-            "premise: the address write must still be waiting on the held row when it is dropped, \
-             or this measures nothing: {dropped:?}"
-        );
+        let address_premise = (dropped.is_err(), format!("{dropped:?}"));
         sqlx::query("COMMIT")
             .execute(&mut *holder)
             .await
             .expect("release the parent row");
+        assert!(
+            address_premise.0,
+            "premise: the address write must still be waiting on the held row when it is dropped, \
+             or this measures nothing: {}",
+            address_premise.1
+        );
 
         // The SUBNET: a holder inserts the same CIDR without committing, so the unique check waits.
         sqlx::query("START TRANSACTION")
@@ -1745,16 +1821,17 @@ mod tests {
             ),
         )
         .await;
-        assert!(
-            dropped.is_err(),
-            "premise: the subnet write must still be waiting on the held CIDR when it is dropped: \
-             {dropped:?}"
-        );
+        let subnet_premise = (dropped.is_err(), format!("{dropped:?}"));
         sqlx::query("ROLLBACK")
             .execute(&mut *holder)
             .await
             .expect("release the CIDR");
         drop(holder);
+        assert!(
+            subnet_premise.0,
+            "premise: the subnet write must still be waiting on the held CIDR when it is dropped: {}",
+            subnet_premise.1
+        );
 
         // A statement that outlived its future lands now, if it is going to.
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
