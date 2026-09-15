@@ -84,14 +84,14 @@ longer owed**: Epic 14 was DECOMPOSED into four stories on 2026-09-10 (PR #167) 
 `done`** (PR #168) — the schema, with no producer and nothing operator-visible. The epic needed at
 least FOUR write routes where the product had one, and that is why its stories are shaped as they
 are. ✅ **14.2 is `done`** (PR #170) — `/ipam` draws the operator's plan from the store — and it was
-SPLIT at implementation, so **Epic 14 has FIVE stories** (`epics.md` not edited). **14.2b is
+SPLIT at implementation, so **Epic 14 has SIX stories** (`epics.md` not edited; 14.3 was split at its validation on 2026-09-15 into 14.3a, a bounded sighting summary, and 14.3b, the audit). **14.2b is
 `done`** (PR #173 squash-merged 2026-09-15 as `368e2e1`, CI green on the head commit, code-reviewed
 by three isolated layers and REPAIRED first): the operator's hands — three write routes (subnet,
 range, address), the overlap rule held under concurrency, the empty plan's link into the gesture;
 the fourth route, release, is 14.4's, and its story file carries the live count. ⚠️ **The five do
 NOT close the epic**: FR21's VLAN half and FR25 (IPv6) are in scope and outside the arbitrations —
-do not read the close off the story count. **Next is 14.3** (the audit, and the address the product
-must not offer), then 14.4. Then `prd.md:766`.
+do not read the close off the story count. **Next is 14.3a** (the sighting summary the audit reads — reading every observation row measured 3.0–3.3 s at 1 M rows), then **14.3b** (the audit, and the address the product
+must not offer — contexted, validated, all fourteen decisions taken), then 14.4. Then `prd.md:766`.
 
 ⚠️ **And use it on the NAS before writing more of it** — that is what found everything above,
 including the « Merger » label, wrong since July and raised by no gate.

@@ -5624,7 +5624,20 @@ development_status:
   #   nothing can fill, so 14.2's empty-plan sentence names the gesture as NOT YET BUILT through
   #   `Gesture::Planned { owner }` -- the shape story 6b.4b made a compile-time obligation, so this
   #   story cannot ship its route without meeting that site.
-  14-3-the-audit: ready-for-dev
+  14-3a-the-sightings-summary: backlog
+  #   🔴 INSERTED 2026-09-15 at story 14.3's VALIDATION (Guy: split) -- Epic 14 goes from FIVE stories
+  #   to SIX (`epics.md` NOT edited; registered). The bounded SIGHTING SUMMARY the audit reads: one row
+  #   per distinct observed (IPv4, MAC) with its last-seen instant, maintained at ingest, backfilled once
+  #   from `observation_record`, NO screen. Why: reading every observation row on each render measured
+  #   3.0-3.3 s at 1 M rows (~75 days of sweeping), failing NFR2 after ~2 months. Being contexted.
+  14-3b-the-audit: ready-for-dev
+  #   ✅ T0 TAKEN 2026-09-15 -- all fourteen decisions, the recommendations throughout: gap = an observed
+  #   address the plan would OFFER, undeclared = every other unrowed one, never in a dhcp-pool; the most
+  #   protective range decides; the offer draws from `static` only and excludes seen AND documented
+  #   addresses; the guard NARROWED to one module; the form warns BEFORE the write (a GET fragment no
+  #   perimeter guard covers yet); findings LIST + a marker kept only at >= 3:1; absolute per-MAC dates;
+  #   « Conflit d'adresse » in static/reserved only. 🔴 BLOCKED ON 14.3a. File renamed from
+  #   `14-3-the-audit.md`.
   #   CONTEXTED AND VALIDATED 2026-09-15 (fact-check + gap-hunt that built and measured). The story
   #   was rewritten whole: the offer serves `reserved`/`dhcp-pool` addresses today (measured
   #   198.51.100.129); reusing the observation reader fails NFR2 after ~2 months (1 M rows 3.0-3.3 s),
