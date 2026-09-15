@@ -5643,3 +5643,28 @@ One row, and v0.3.0 is what made it live.
   and the next boot would start over. Not reachable on the shipped deployment — the image and
   `docker/docker-compose.yml` carry no `HEALTHCHECK` — **Owner: the story that adds a health check or a
   readiness probe.**
+
+## Raised by story 14.3b's implementation (2026-09-15)
+
+- ⚠️ **No "seen" marker on the grid's cells, by decision 8's own condition.** Guy kept a marker only if it
+  reached 3:1 on every fill, and no single colour can: measured by arithmetic on the shipped palette, it
+  needs a relative luminance of at least 0.43 for 3:1 against the defined fill (`--color-accent-700`,
+  #416180) and at most 0.30 for 3:1 against the page ground (#f2f2f3). The seen state is carried by each
+  cell's accessible name and by the findings list. A two-tone marker (a light ring inside a dark one) is
+  the untried alternative. **Owner: Epic 14's retrospective**, which may ask for it.
+- ⚠️ **The RANGE form does not warn when its `static` range covers seen addresses** — AC4's *"or the story
+  says why not"*, taken. The address form warns as it is typed; a range is two addresses and a policy, and
+  the useful warning is *"n seen addresses would fall inside this static range"*, which needs its own
+  fragment, its own focus contract and its own gate checks. The findings list shows the result the moment
+  the range is written. **Owner: story 14.4** (maintaining the plan), where the range form is revisited.
+- ⚠️ **A finding's triage link is decided from the DECLARED register, not from the triage queue.** The
+  queue raises a `nouveau:` row for an observed IPv4 no declared value claims, from `observation_record`;
+  the audit reads story 14.3a's summary, which keeps a sighting after its observation is gone. So an
+  address whose only observation was purged would link to a question triage no longer asks — unreachable
+  today (nothing purges observations; issue #150). **Owner: the story that retires observations.**
+- ⚠️ **The address check reads the whole plan and the whole summary on every answered keystroke**, after
+  a 400 ms `delay:`. Bounded by the plan's size and the network's distinct pairs, both small on the
+  reference network, and inside the page budget; not measured at a large plan. **Owner: the story that
+  measures `/ipam` at a plan of thousands of ranges.**
+- ⚠️ **The epic's AC1 letter for `static`** is registered above (story 14.3's validation) and applied as
+  decided: an observed address the plan would offer is a `gap`, never `undeclared`.

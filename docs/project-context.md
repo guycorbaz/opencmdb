@@ -90,8 +90,8 @@ by three isolated layers and REPAIRED first): the operator's hands — three wri
 range, address), the overlap rule held under concurrency, the empty plan's link into the gesture;
 the fourth route, release, is 14.4's, and its story file carries the live count. ⚠️ **The five do
 NOT close the epic**: FR21's VLAN half and FR25 (IPv6) are in scope and outside the arbitrations —
-do not read the close off the story count. **14.3a is `done`** (PR #179 squash-merged 2026-09-15 as `8d8a45f`, CI green on the head commit, code-reviewed by three isolated layers and REPAIRED first — the sighting summary the audit reads — reading every observation row had measured 3.0–3.3 s at 1 M rows: migration `0008`'s `address_sighting`, written in each observation's own transaction and backfilled once at boot before serving; no screen, and its story file carries the live count), then **14.3b** (the audit, and the address the product
-must not offer — contexted, validated, all fourteen decisions taken), then 14.4. Then `prd.md:766`.
+do not read the close off the story count. **14.3a is `done`** (PR #179 squash-merged 2026-09-15 as `8d8a45f`, CI green on the head commit, code-reviewed by three isolated layers and REPAIRED first — the sighting summary the audit reads — reading every observation row had measured 3.0–3.3 s at 1 M rows: migration `0008`'s `address_sighting`, written in each observation's own transaction and backfilled once at boot before serving; no screen, and its story file carries the live count), then **14.3b is in review** (the audit, and the address the product
+must not offer: `/ipam` lists every observed address as `gap`, `undeclared` or « Conflit d'adresse », offers only from `static` ranges and never a seen or documented address, and warns before an address is defined; its story file carries the live count), then 14.4. Then `prd.md:766`.
 
 ⚠️ **And use it on the NAS before writing more of it** — that is what found everything above,
 including the « Merger » label, wrong since July and raised by no gate.

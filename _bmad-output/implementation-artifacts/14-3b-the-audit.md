@@ -1,6 +1,6 @@
 # Story 14.3b: The audit, and the address the product must not offer
 
-Status: in-progress
+Status: review
 
 ⚠️ **`ready-for-dev` is the workflow's status, not a statement that nothing is open.** Contexted and
 VALIDATED 2026-09-15 by two fresh-context layers (fact-check; gap-hunt, which built and measured);
@@ -320,23 +320,23 @@ Two fresh-context layers on `7373f9f`, 2026-09-15 — fact-check (3 HIGH, 7 MED,
 
 - [x] **T0** Take §2's decisions with Guy. ✅ 2026-09-15 — all fourteen, the recommendations in every
   case; the story split (14.3a / 14.3b).
-- [ ] **T1** (AC11, AC5, AC6) The pure audit core: from sightings (`Ipv4Addr` → per-MAC last seen),
+- [x] **T1** (AC11, AC5, AC6) The pure audit core: from sightings (`Ipv4Addr` → per-MAC last seen),
   documented addresses and a plan, derive each address's finding and offerability — no store, no clock;
   tests first.
-- [ ] **T2** (AC1, AC2, AC7) Verdicts per decisions 1, 2, 10, 13, including nesting.
-- [ ] **T3** (AC3, AC13) The offer; the caveat; `next_free_none` rendered and reworded; `offerable`'s
+- [x] **T2** (AC1, AC2, AC7) Verdicts per decisions 1, 2, 10, 13, including nesting.
+- [x] **T3** (AC3, AC13) The offer; the caveat; `next_free_none` rendered and reworded; `offerable`'s
   doc; the occupancy line; the too-large branch.
-- [ ] **T4** (AC8, AC9) The reads (14.3a's reader, the documented read) inside the budget, after the
+- [x] **T4** (AC8, AC9) The reads (14.3a's reader, the documented read) inside the budget, after the
   ceiling; the guard narrowed with its three-part mutations; module docs corrected; the end-to-end
   timing at ≥ 1 M rows.
-- [ ] **T5** (AC1, AC2, AC5, AC6, AC12) The screen: findings list, marker (if it reaches 3:1),
+- [x] **T5** (AC1, AC2, AC5, AC6, AC12) The screen: findings list, marker (if it reaches 3:1),
   outside-every-subnet list, keyed words, absolute dates, legend literals, stylesheet — §1(f)'s tests
-  updated deliberately.
-- [ ] **T6** (AC4) The warning fragment route with its perimeter test, budget and keyed copy; the range
-  form's case.
-- [ ] **T7** (AC10) The seed (and the summary for it), the `REQUIRE` flag, the contrast check, both
+  updated deliberately. *(No marker: it cannot reach 3:1 on every fill — see the record.)*
+- [x] **T6** (AC4) The warning fragment route with its perimeter test, budget and keyed copy; the range
+  form's case. *(The range form's case is said and registered, not built — see the record.)*
+- [x] **T7** (AC10) The seed (and the summary for it), the `REQUIRE` flag, the contrast check, both
   gates' row-finding, the kbd-probe; both gates run.
-- [ ] **T8** (AC14, AC15) Measure; docs; the live count.
+- [x] **T8** (AC14, AC15) Measure; docs; the live count.
 
 ## Dev Notes
 
@@ -386,16 +386,145 @@ it never reads `identity_link`. No migration in this story — 14.3a carries it.
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context), `claude-opus-5[1m]`.
+
 ### Debug Log References
+
+- Store: `mariadb:10.11` on port **13450** (never 3306): `opencmdb_143b` for the suite and the mutations,
+  `opencmdb_143b_gate` for the browser gates, each dropped and recreated before every count and mutation.
+- Browser gates run as `ci.yml` runs them: a debug build serving on :8080 with
+  `OPENCMDB_DOCUMENT_ENABLED=1`, `a11y/empty-plan.sql` then the empty-plan axe pass, `a11y/seed.sql` then
+  axe with `AXE_REQUIRE_QUEUE/GESTURE/PLAN/AUDIT=1`, re-seed, then `kbd-probe.mjs`. Logs in the session
+  scratchpad (`g-*.log`, `c-*.log`, `bmut-*.log`).
 
 ### Completion Notes List
 
 - Contexted 2026-09-15 from three research passes; validated the same day (fact-check + gap-hunt that
-  built and measured); split and decided by Guy the same day.
+  built and measured); split and decided by Guy the same day. Unblocked by story 14.3a's merge
+  (PR #179, `8d8a45f`) and developed the same day.
+
+**What shipped, by AC.**
+
+- **AC1 / AC2 — MET.** `ipam_audit.rs` (new) derives, from story 14.3a's summary merged across L2
+  domains, the documented addresses and the WHOLE plan: `gap` = observed and the plan would offer it;
+  `undeclared` = observed, no address row, not offerable (a `reserved` or `infrastructure` range, an edge,
+  uncovered space); nothing inside a `dhcp-pool`; a defined address is a held cell. The most protective
+  range decides across overlapping ranges AND nested subnets (a nested /26's edge is an edge too).
+  On screen the two words are the binding keys (`triage.kind.ecart`, `state.undeclared`) with two
+  treatments — a filled badge and a dashed outline — and the axe gate compares them WITHOUT colour in the
+  browser (`solid vs dashed`). ⚠️ The epic's AC1 letter for `static` is the registered divergence.
+- **AC3 — MET.** `ipam_audit::Plan::offerable`: inside a subnet, not an edge, not defined, every covering
+  range `static` (at least one), never seen, never documented. `CellState::offerable` and
+  `PlanView::next_offerable` are GONE — a cell cannot answer a plan-wide question — and §1(f)'s tests were
+  moved to the plan's answer deliberately. The seed's reserved-only Workshop offers nothing (it offered
+  `198.51.100.129`). The caveat and `ipam.next_free_none` are reworded; the latter is RENDERED by a test
+  (English, the default locale). 🔑 **Proven red by MA1**, which re-admits every seen address: 2 tests
+  (`the_offer_excludes_seen_documented_and_everything_outside_static` and
+  `the_occupancy_and_the_empty_offer_follow_the_audit`), plus clippy on the unused parameter.
+- **AC4 — MET for the address form; the range form's case is SAID, not built.** `GET /ipam/address-check`
+  answers, as the operator types (`hx-get`, `input changed delay:400ms`), what the network and the
+  registers know: seen (each MAC with its absolute last sighting, and the triage link when triage asks),
+  documented, already defined, inside a `dhcp-pool` — and *"You can still define it"*; the POST is
+  untouched. A polite live region described by the field; focus stays on the field. Named in a perimeter
+  test (401 without a credential, 200 with one), and probed by name in the page-budget guard. The
+  keyboard gate types `192.0.2.20` and reads the warning, the unmoved focus and the link; the axe gate
+  runs axe over the page with the warning shown. **MW** (route unmounted) reds 2 tests and clippy. The
+  range form's warning is registered to story 14.4, with the reason.
+- **AC5 — MET.** « Conflit d'adresse » only for two MACs inside a `static` or `reserved` range; not in a
+  pool, not in uncovered space, not the same MAC in two L2 domains, not a MAC beside a no-MAC sighting; a
+  defined address can conflict. Both MACs shown with their dates, and a sentence that a replaced card and a
+  duplicate look the same. **MA5** (a no-MAC sighting counted as a MAC) reds 1.
+- **AC6 — MET.** A held cell's accessible name and each finding carry every MAC with an ABSOLUTE date
+  (`YYYY-MM-DD HH:MM UTC`); the render is pure — rendered twice, identical; the derivation takes no clock.
+  **MA6** (an hour instead of a date) reds 2.
+- **AC7 — MET.** An address defined inside a `dhcp-pool` is listed under *Defined inside a DHCP pool* and
+  warned about before the write; register row closed.
+- **AC8 — MET, three parts, each proven.** `the_plan_reads_the_network_only_through_the_audit` (renamed):
+  the perimeter is now four files; no plan module names `observation_record`, `identity_link`,
+  `declared_attribute` or `address_sighting`; only `ipam_audit.rs` names `sighting_repo` or
+  `crate::repo::load_documented_ipv4s`. **MG1** (`identity_link` in `ipam_audit.rs`) reds 1; **MG2** (the
+  sighting reader named from `ipam_page.rs`) reds 1; **MG3** (`declared_attribute` in `ipam_page.rs`) reds
+  1; **MG4** (`State<MySqlPool>` added to a write handler) is a compile refusal, `E0277` on the `Handler`
+  bound. The two measured greens are written as limits in the guard's doc; `ipam_page.rs`'s module doc is
+  corrected.
+- **AC9 — MET.** The reads — the plan whole (`ipam_repo::plan_ranges`, `plan_addresses`), the summary and
+  the documented values — run inside `store_within`, before the ceiling decides whether to draw; none is
+  grid-sized. The end-to-end measurement is recorded in the Change Log with its command.
+- **AC10 — MET.** `a11y/seed.sql` gains one sighting per case (a two-MAC gap, a documented gap, uncovered,
+  an `infrastructure` range added for it, a defined address, the reserved Workshop, outside every subnet)
+  with their summary rows from `@t`; `AXE_REQUIRE_AUDIT=1` in `ci.yml` refuses a run without findings or
+  without both words to compare; row-finding survives the longer queue; the kbd-probe reaches the warning
+  and the findings list (37 → **41** checks). All three browser passes green locally: empty plan 0, axe 0
+  violation nodes over 10 routes + 4 states with 7 findings and the warning measured, kbd 41/41. ⚠️ **No
+  marker**, so no contrast check for one: decision 8's condition cannot be met by a single colour — the
+  arithmetic is in `_ipam_audit.html` and the register. 🔑 The browser comparison was proven red by hand:
+  `.ipam-word-undeclared` set to `solid` makes the axe gate exit 1 (Change Log).
+- **AC11 — MET.** No sighting → no finding and no offer withheld (a test); no clock anywhere in the core.
+- **AC12 — MET.** Observed addresses outside every subnet are listed plan-wide on `/ipam`, with dates.
+- **AC13 — MET.** The occupancy line counts as free only what the offer proposes (*free to assign*); no
+  count of seen addresses; a subnet too large to draw says it offers nothing and shows its findings.
+- **AC14 — THE LIVE COUNT.** Baseline **950** (660 + 191 + 99) at `8d8a45f` (story 14.3a merged). After
+  this story: **967** (677 + 191 + 99) — 9 tests in `ipam_audit.rs`, 7 in `ipam_page.rs` (one of them the
+  opt-in `/ipam` measurement, which returns at once unless `OPENCMDB_MEASURE_IPAM` is set) and 1 in
+  `main.rs`. Both store conditions in the final verification (Change Log).
+- **AC15 — see the Change Log's verification line.** The user manual's IPAM chapter gains *What the network
+  shows against the plan* and *The next address the plan can offer*; both twins (the browser gates and the
+  status); the register (two rows closed, five raised).
+
+**Mutations** — `cargo xtask mutate`, each on a virgin store, counts and never names; the carrier column is
+the test written for that defect.
+
+| id | mutation | predicted | measured | carrier |
+|---|---|---|---|---|
+| MA1 | the offer re-admits seen addresses | red | 🔴 2 + clippy | the offer test and the occupancy/empty-offer test |
+| MA2 | the offer re-admits documented addresses | red | 🔴 2 + clippy | the same two |
+| MA3 | the offer from any non-infrastructure range | red | 🔴 5 | the verdict, nesting, offer, occupancy tests |
+| MA4 | a `reserved`-only coverage treated like a pool | red | 🔴 3 | the verdict and findings tests |
+| MA5 | a no-MAC sighting counted as a second MAC | red | 🔴 1 | `two_mac_addresses_conflict_only_inside_static_or_reserved` |
+| MA6 | an hour instead of an absolute date | red | 🔴 2 | the absolute-date tests |
+| MG1 | `identity_link` in `ipam_audit.rs` | red | 🔴 1 | the plan guard, part 1 |
+| MG2 | the sighting reader named from `ipam_page.rs` | red | 🔴 1 | the plan guard, part 2 |
+| MG3 | `declared_attribute` in `ipam_page.rs` | red | 🔴 1 | the plan guard, part 1 |
+| MG4 | a pool injected into a write handler | compile-fail | 🔴 `E0277` | the `IpamWriteState` type, part 3 |
+| MW | the address check unmounted | red | 🔴 2 + clippy | the perimeter test and the budget guard |
 
 ### File List
 
+- `crates/opencmdb-bin/src/ipam_audit.rs` — new
+- `crates/opencmdb-bin/templates/_ipam_audit.html`, `_ipam_address_check.html` — new
+- `crates/opencmdb-bin/src/ipam_page.rs` — the audit on screen, the address check, the guard, tests
+- `crates/opencmdb-bin/src/ipam_repo.rs` — `plan_ranges`, `plan_addresses`
+- `crates/opencmdb-bin/src/repo.rs` — `load_documented_ipv4s`
+- `crates/opencmdb-bin/src/sighting_repo.rs` — the reader's dead-code allowance removed; the seed test's count
+- `crates/opencmdb-bin/src/main.rs` — `mod ipam_audit`; the address check's perimeter test; the budget guard
+- `crates/opencmdb-bin/templates/_ipam.html`, `_ipam_forms.html`; `assets/app.css`; `locales/app.yml`
+- `a11y/seed.sql`, `a11y/axe-gate.mjs`, `a11y/kbd-probe.mjs`; `.github/workflows/ci.yml`
+- `docs/manuals/user-manual/user-manual.tex`; `CLAUDE.md`, `docs/project-context.md`
+- `_bmad-output/implementation-artifacts/deferred-work.md`, `sprint-status.yaml`, `14-3a-the-sightings-summary.md`
+  (status `done`), this file
+
 ### Change Log
+
+- 2026-09-15 — **implemented** (T1–T8): the audit core, the offer, the findings list, the address check,
+  the narrowed guard, the seed and both browser gates; 950 → 967 tests; eleven mutations as predicted.
+- 2026-09-15 — **AC9 measured**, release build, 32 cores:
+  `OPENCMDB_MEASURE_IPAM=1000000 DATABASE_URL=… cargo test --release -p opencmdb-bin
+  ipam_page::tests::measure_the_plan_screen_over_a_long_history -- --exact --nocapture` — 1 000 000
+  observation rows generated and backfilled in 3.9 s; **`/ipam`'s read-and-render, worst of 20: 7.1 ms**,
+  56 679 bytes; whole-process peak resident 9 640 → 10 604 kB (a lower bound of the render's own
+  footprint). Against NFR2's 1.5 s, where story 14.3's validation had timed the observation reader at
+  3.0–3.3 s over the same rows. ⚠️ At the reference network's 46 distinct addresses; not measured at a
+  plan of thousands of ranges (registered).
+- 2026-09-15 — **the browser comparison proven red by hand**: `.ipam-word-undeclared` given `border-style:
+  solid` makes `node a11y/axe-gate.mjs` (with `AXE_REQUIRE_QUEUE/GESTURE/PLAN/AUDIT=1`) exit **1**, naming
+  *"a gap and an undeclared finding carry the same border style (solid)"*; the stylesheet restored from a
+  copy, `git diff` empty afterwards.
+- 2026-09-15 — **verified on the final tree** (`20190b4` + the record), every status read from a log file:
+  `cargo fmt --check` 0 · `cargo clippy --workspace --all-targets -- -D warnings` 0 · `cargo xtask ci` 0
+  (ten gates; `file-size` 57 files, largest 1954) · `cargo deny check` 0 · `make` in `docs/manuals` 0 ·
+  `RUSTFLAGS="-D warnings" cargo test --workspace --locked` on a virgin store after one warm run **677 + 191
+  + 99 = 967**, 22.5 s, and with `env -u DATABASE_URL` **967** · browser gates as `ci.yml` runs them: empty
+  plan 0, axe 0 (10 routes + 4 states, 7 findings, the warning measured), kbd 41/41. Status → `review`.
 
 - 2026-09-15 — **T0: Guy took all fourteen decisions and SPLIT the story** — 14.3a the sighting summary,
   14.3b this audit. File renamed from `14-3-the-audit.md`.
