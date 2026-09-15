@@ -5485,3 +5485,28 @@ One row, and v0.3.0 is what made it live.
   giving the READ path a producer and not the write path, so **six warnings** remain — each naming
   its owner. **Owner: story 14.2b**, which removes the last of them when its routes call those
   functions. Neither story may leave it module-wide while claiming to have paid it off.
+
+## Deferred from: code review of 14-2b-the-plan-in-the-operators-hands (2026-09-15)
+
+- ⚠️ **`document.rs`'s 403 is an English literal under a French UI** (`write_guard::CSRF_REFUSED_BODY`,
+  `"cross-origin request refused"`). Found by story 14.2b's review on the IPAM routes, where AC1 asks
+  for a key per status and the literal is patched; the documenting route inherited it from story
+  6.1, before refusal bodies were keyed, and is not 14.2b's to change. Reachable behind a proxy that
+  rewrites `Host` (`write_guard.rs`'s own doc). **Owner: unassigned** — the next story touching
+  `document.rs`.
+
+- ⚠️ **Nested and overlapping subnets are accepted, so one address can carry two contradictory
+  policies.** Measured by the review's Edge Case Hunter on `da28d3e`: `0.0.0.0/0`, `192.0.0.0/16`,
+  `192.0.2.0/24`, `192.0.2.0/25` and `192.0.2.7/32` all answer 201; `192.0.2.9` is defined in both the
+  /24 and the /25; a `static` range .0–.255 in the /24 and a `dhcp-pool` range .0–.127 in the /25 are
+  both accepted. Only `UNIQUE (base, prefix_len)` exists. ✅ Guy, 2026-09-15: **accepted, not refused
+  at the route** — outside Epic 14's six arbitrations, and a real plan legitimately holds a supernet
+  and its subnets. **Owner: story 14.3**, whose audit is the first code to meet an address under two
+  policies and must say which one decides.
+
+- ⚠️ **Network and broadcast addresses, and ranges covering them, can be defined.** Measured on
+  `da28d3e`: `192.0.2.0` and `192.0.2.255` as addresses → 201 each; a `static` range .0–.255 → 201 —
+  while `/ipam` draws the edges as `infrastructure` and never offers them. ✅ Guy, 2026-09-15:
+  **accepted** — documenting an edge is legitimate, the glossary files `.0`/`.255` under
+  `infrastructure`, which is a declarable policy. **Owner: story 14.3**, which owns keeping them out
+  of the next-free-address offer whatever the plan declares over them.
