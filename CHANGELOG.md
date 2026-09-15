@@ -46,6 +46,15 @@ IPv4 — `02:42:c0:a8:01:0a` for `192.168.1.10`. For those, *the hardware addres
 rewritten*: it corroborates nothing. D13 already calls such an address disqualifying as a grouping
 anchor; no rule reads that yet, and this release does not add one.
 
+### Security
+
+`rustls` goes from 0.23.42 to **0.23.45** (and `rustls-webpki` from 0.103.13 to 0.103.15) for
+[RUSTSEC-2026-0285](https://rustsec.org/advisories/RUSTSEC-2026-0285): TLS 1.3 handshake messages
+were accepted across encryption-level boundaries (#174). opencmdb uses rustls only as a **client**,
+towards MariaDB; per the advisory the handshake stays authenticated, so an attacker on the path can
+neither alter nor complete it — what was wrong is that messages which should have arrived encrypted
+were accepted in plaintext. A lockfile change only; nothing to do when you upgrade.
+
 ### What this release does NOT do
 
 It forms **interfaces**, not devices. Two network cards of one machine are now two interfaces the
