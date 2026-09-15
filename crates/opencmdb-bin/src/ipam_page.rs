@@ -391,6 +391,7 @@ pub(crate) struct IpamStrings {
     form_addr: String,
     form_submit: String,
     form_needs_subnet: String,
+    form_needs_first_subnet: String,
 }
 
 /// The three forms, ready to render.
@@ -419,6 +420,9 @@ pub(crate) struct IpamForms {
     /// The subnet in force, which the range and address forms carry as a hidden field. `None`
     /// when no subnet is selected — the two forms are then replaced by a sentence saying so.
     subnet_id: Option<String>,
+    /// Whether the plan holds no subnet at all — the one case where *"choose one above"* points at
+    /// nothing (story 14.2b's second review), so the sentence in place of the two forms differs.
+    plan_is_empty: bool,
     /// The four binding policy words, as `(token, label)` — the token is what the route accepts,
     /// the label is what the operator reads.
     ///
@@ -428,8 +432,9 @@ pub(crate) struct IpamForms {
 }
 
 impl IpamForms {
-    /// The three forms for a screen whose subnet in force is `subnet_id`.
-    fn new(subnet_id: Option<String>) -> Self {
+    /// The three forms for a screen whose subnet in force is `subnet_id`, over a plan that holds no
+    /// subnet at all when `plan_is_empty`.
+    fn new(subnet_id: Option<String>, plan_is_empty: bool) -> Self {
         use crate::ipam_write::WriteRoute;
         use crate::page::Gesture;
         // Through the type, never around it: a `Gesture::Live` carries its route, and the template
@@ -447,6 +452,7 @@ impl IpamForms {
             range_route: route_of(WriteRoute::Range),
             address_route: route_of(WriteRoute::Address),
             subnet_id,
+            plan_is_empty,
             policies: IpPolicy::ALL
                 .into_iter()
                 .map(|policy| {
@@ -548,7 +554,7 @@ fn empty_plan_body() -> String {
         tabs: Vec::new(),
         plan: None,
         too_large: None,
-        forms: IpamForms::new(None),
+        forms: IpamForms::new(None, true),
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -568,7 +574,7 @@ fn unknown_subnet_body(subnets: &[(String, Subnet, String)]) -> String {
             .collect(),
         plan: None,
         too_large: None,
-        forms: IpamForms::new(None),
+        forms: IpamForms::new(None, false),
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -631,6 +637,7 @@ fn strings(counts: Option<(usize, usize, usize, usize)>, next: Option<Ipv4Addr>)
         form_addr: rust_i18n::t!("ipam.form.addr").to_string(),
         form_submit: rust_i18n::t!("ipam.form.submit").to_string(),
         form_needs_subnet: rust_i18n::t!("ipam.form.needs_subnet").to_string(),
+        form_needs_first_subnet: rust_i18n::t!("ipam.form.needs_first_subnet").to_string(),
     }
 }
 
@@ -657,7 +664,7 @@ fn render_too_large(
         tabs: tabs_for(subnets, selected),
         plan: None,
         too_large: Some(rows),
-        forms: IpamForms::new(Some(selected.to_string())),
+        forms: IpamForms::new(Some(selected.to_string()), false),
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -714,7 +721,7 @@ pub(crate) fn render_plan(
         tabs,
         plan: Some(PlanRender { cells }),
         too_large: None,
-        forms: IpamForms::new(Some(selected.to_string())),
+        forms: IpamForms::new(Some(selected.to_string()), false),
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -1149,18 +1156,24 @@ mod tests {
     /// module doc says the plan *"is a SECOND declared register beside `declared_attribute`"* — a
     /// true sentence about a table it never reads — and the guard would have reddened on the prose
     /// explaining why the read must not exist. *A guard that greps a file greps its prose*, story
-    /// 14.2's finding, and the better the prose the more reliably it fires. ⚠️ The stripper is
-    /// simple: `//` to end of line and `/* … */`, with no string-literal awareness. It can therefore
-    /// blind the guard to a table name inside a literal containing `//` — stated rather than
-    /// implied, and no such literal exists here.
+    /// 14.2's finding, and the better the prose the more reliably it fires.
     ///
-    /// ⚠️ **Its standing limit**: it matches table names as literals and follows calls into `repo`
-    /// only, so a read reached through another adapter — `identity_view`, say — is invisible to it.
-    /// A TRIPWIRE against the read someone writes here, never a barrier — story 5.12's own framing.
+    /// 🔴 **The second review defeated its first stripper and its `repo` needles with ordinary
+    /// code**, measured green each time: `const P: &str = "/ipam/*";` — the stripper took the `/*`
+    /// inside the string for a comment and dropped the rest of the file — and the imports
+    /// `use crate::{repo as store};` and `use super::repo as store;`, which spell neither
+    /// `crate::repo` nor `repo::`. It reads through [`crate::source_scan`] now (string-aware, each
+    /// trap a test), and it looks for the `repo` TOKEN outside literals rather than for two
+    /// spellings of a path.
+    ///
+    /// ⚠️ **Its standing limit**: it matches table names as literals and follows the `repo` module
+    /// only, so a read reached through another adapter — `identity_view`, say — or through a macro
+    /// is invisible to it. A TRIPWIRE against the read someone writes here, never a barrier — story
+    /// 5.12's own framing.
     #[test]
     fn the_plan_reads_no_observation() {
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let mut perimeter: Vec<(String, String)> = Vec::new();
+        let mut perimeter: Vec<(String, String, String)> = Vec::new();
         // 🔴 RECURSIVE: the review found the flat `read_dir` blind to a `src/ipam/` submodule, which
         // is the ordinary way a module that grows is split.
         let mut pending = vec![src.clone()];
@@ -1185,12 +1198,12 @@ mod tests {
             let source = std::fs::read_to_string(&path).expect("a readable file");
 
             let cuts = source.matches("\n#[cfg(test)]").count();
-            let code = strip_comments(
-                source
-                    .split("\n#[cfg(test)]")
-                    .next()
-                    .expect("the non-test half"),
-            );
+            let half = source
+                .split("\n#[cfg(test)]")
+                .next()
+                .expect("the non-test half");
+            let code = crate::source_scan::code_only(half);
+            let words = crate::source_scan::code_without_literals(half);
 
             let names_a_plan_table = ["ip_subnet", "ip_range", "ip_address"]
                 .iter()
@@ -1209,12 +1222,12 @@ mod tests {
                      with none it would read the whole file including its tests, with two it would \
                      cut somewhere arbitrary"
                 );
-                perimeter.push((name, code));
+                perimeter.push((name, code, words));
             }
         }
         perimeter.sort();
 
-        let found: Vec<&str> = perimeter.iter().map(|(name, _)| name.as_str()).collect();
+        let found: Vec<&str> = perimeter.iter().map(|(name, _, _)| name.as_str()).collect();
         // A floor equal to what is there, never under it (story 6b.7). It catches the direction a
         // derived list cannot: a module that LEAVES the perimeter by being renamed or emptied.
         assert_eq!(
@@ -1224,7 +1237,7 @@ mod tests {
              that left it needs saying why"
         );
 
-        for (name, code) in &perimeter {
+        for (name, code, words) in &perimeter {
             for needle in ["observation_record", "identity_link", "declared_attribute"] {
                 assert!(
                     !code.contains(needle),
@@ -1241,80 +1254,76 @@ mod tests {
             // error (`repo.rs:1607`) — stated as an allowlist of one rather than as an exception
             // nobody can audit.
             //
-            // 🔴 **ANY PATH TO `repo`, not only the qualified one**: story 14.2b's review planted
-            // `use crate::repo;` and `repo::count_observations(pool)` in production `ipam_write.rs`
-            // and this guard stayed GREEN, its needle being the text `crate::repo::`. A match
-            // preceded by `ipam_` is the plan's own adapter, and one preceded by `opencmdb_core::`
-            // is the domain crate's port traits. `is_deadlock` joins `classify` in the allowlist,
-            // for the same reason: it translates a backend error and reads nothing.
-            for (at, _) in code.match_indices("repo::") {
-                let before = &code[..at];
-                if before.ends_with("ipam_") || before.ends_with("opencmdb_core::") {
+            // 🔴 **THE `repo` TOKEN, wherever it stands, outside literals.** The first review planted
+            // `use crate::repo;` + `repo::count_observations`; the second, `use crate::{repo as
+            // store};` and `use super::repo as store;` — each GREEN against a needle that knew two
+            // spellings. So every whole-word `repo` in the code is refused unless it is one of the
+            // two allowed shapes: the domain crate's ports (`opencmdb_core::repo`) and the two
+            // translations of a backend error that read nothing (`crate::repo::classify`,
+            // `crate::repo::is_deadlock`). `ipam_repo` is not a whole word and never matches.
+            for (at, _) in words.match_indices("repo") {
+                let before = &words[..at];
+                let after = &words[at + "repo".len()..];
+                let is_ident = |c: char| c.is_alphanumeric() || c == '_';
+                if before.chars().next_back().is_some_and(is_ident)
+                    || after.chars().next().is_some_and(is_ident)
+                {
                     continue;
                 }
-                let tail = &code[at + "repo::".len()..];
-                let item: String = tail
-                    .chars()
-                    .take_while(|c| c.is_alphanumeric() || *c == '_')
-                    .collect();
+                let names_one = |item: &str| {
+                    after
+                        .strip_prefix("::")
+                        .and_then(|rest| rest.strip_prefix(item))
+                        .is_some_and(|rest| !rest.chars().next().is_some_and(is_ident))
+                };
+                let allowed = before.ends_with("opencmdb_core::")
+                    || (before.ends_with("crate::")
+                        && (names_one("classify") || names_one("is_deadlock")));
+                let line = words[..at].matches('\n').count() + 1;
                 assert!(
-                    ["classify", "is_deadlock"].contains(&item.as_str()),
-                    "{name} reaches `repo::{item}`, and the observation reads live there. The \
-                     plan's own adapter is `ipam_repo`; anything else is the audit arriving early, \
-                     and story 14.3 is where it belongs"
-                );
-            }
-            // And the module imported WHOLE, or renamed, would let a call through as
-            // `store::count_observations` — refused at the import rather than chased at the call.
-            for (at, _) in code.match_indices("crate::repo") {
-                assert!(
-                    code[at + "crate::repo".len()..].starts_with("::"),
-                    "{name} imports `crate::repo` as a module, so its calls no longer spell \
-                     `repo::` and this guard cannot follow them — reach the one item needed by its \
-                     path"
+                    allowed,
+                    "{name}:{line} names the `repo` module outside the two items this guard allows \
+                     (`crate::repo::classify`, `crate::repo::is_deadlock`) — imported whole, renamed \
+                     or reached another way, the observation reads live there. The plan's own \
+                     adapter is `ipam_repo`; anything else is the audit arriving early, and story \
+                     14.3 is where it belongs"
                 );
             }
         }
     }
 
-    /// Remove `//` line comments and `/* … */` blocks, so a guard reads code and not prose.
+    /// When no subnet is in force, the forms say what to do — and the empty plan does not point
+    /// "above" at a subnet it does not have.
     ///
-    /// ⚠️ No string-literal awareness: a `//` inside a literal starts a comment as far as this is
-    /// concerned. Its one caller has no such literal, and the limit is written rather than assumed.
-    fn strip_comments(source: &str) -> String {
-        let mut out = String::with_capacity(source.len());
-        let mut rest = source;
-        loop {
-            let line = rest.find("//");
-            let block = rest.find("/*");
-            match (line, block) {
-                (None, None) => {
-                    out.push_str(rest);
-                    return out;
-                }
-                (Some(at), None) => {
-                    out.push_str(&rest[..at]);
-                    rest = rest[at..].find('\n').map_or("", |nl| &rest[at + nl..]);
-                }
-                (None, Some(at)) => {
-                    out.push_str(&rest[..at]);
-                    rest = rest[at..]
-                        .find("*/")
-                        .map_or("", |end| &rest[at + end + 2..]);
-                }
-                (Some(l), Some(b)) => {
-                    let at = l.min(b);
-                    out.push_str(&rest[..at]);
-                    rest = if l < b {
-                        rest[at..].find('\n').map_or("", |nl| &rest[at + nl..])
-                    } else {
-                        rest[at..]
-                            .find("*/")
-                            .map_or("", |end| &rest[at + end + 2..])
-                    };
-                }
-            }
-        }
+    /// 🔴 The second review found *"choose one above, or define it first"* on the EMPTY plan, where
+    /// nothing is above, and no test rendering that branch at all.
+    #[test]
+    fn the_forms_say_the_right_thing_when_no_subnet_is_in_force() {
+        let choose = rust_i18n::t!("ipam.form.needs_subnet").to_string();
+        let define = rust_i18n::t!("ipam.form.needs_first_subnet").to_string();
+        assert_ne!(choose, define, "two cases, two sentences");
+
+        let empty = empty_plan_body();
+        assert!(
+            empty.contains(&define),
+            "the empty plan must say to define a subnet first"
+        );
+        assert!(
+            !empty.contains(&choose),
+            "the empty plan must not point above at a subnet it does not have"
+        );
+
+        let known = [(
+            "01900000-0000-7000-8000-0000000000cc".to_string(),
+            Subnet::new("192.0.2.0".parse().expect("an address"), 24).expect("a subnet"),
+            "Office".to_string(),
+        )];
+        let unknown = unknown_subnet_body(&known);
+        assert!(
+            unknown.contains(&choose),
+            "an identifier no subnet carries, over a plan that has one, says to choose it above"
+        );
+        assert!(!unknown.contains(&define));
     }
 
     /// **AC8 — an empty plan LINKS to the gesture that fills it, and the door is a door.**

@@ -197,6 +197,20 @@ impl Subnet {
     }
 }
 
+/// Prefix one of the plan's write statements with its lock-wait cap.
+///
+/// 🔴 **The server's own default is 50 s, and the handler's budget is 5 s** — story 14.2b's second
+/// review measured a write dropped by its budget staying in `LOCK WAIT` on the server, holding its
+/// pool connection, until whatever held the lock let go. So every statement of the plan that can
+/// wait on a lock waits FOUR seconds at most: the server gives up first, the handler receives a real
+/// 1205 as `Contention`, and the connection goes back to the pool (Guy, 2026-09-15). `SET STATEMENT`
+/// scopes the cap to the one statement, so a pooled connection carries nothing to its next user.
+macro_rules! capped {
+    ($sql:literal) => {
+        concat!("SET STATEMENT innodb_lock_wait_timeout=4 FOR ", $sql)
+    };
+}
+
 /// Insert one subnet of the addressing plan.
 ///
 /// # Errors
@@ -221,10 +235,10 @@ where
     // which costs nothing — every use was already inside this module.
     // The re-validation below is kept for the caller holding a `Subnet` read back from the store.
     Subnet::new(subnet.base, subnet.prefix_len).map_err(ipam)?;
-    sqlx::query(
+    sqlx::query(capped!(
         "INSERT INTO ip_subnet (id, base, prefix_len, label) \
-         VALUES (?, ?, ?, ?)",
-    )
+         VALUES (?, ?, ?, ?)"
+    ))
     .bind(id)
     .bind(canonical(subnet.base))
     .bind(subnet.prefix_len)
@@ -316,17 +330,19 @@ async fn insert_range_pausing(
     if last < first {
         return Err(ipam(IpamError::RangeBoundsInverted));
     }
-    // 🔴 **ONE REPLAY ON A DEADLOCK, and the review measured why it is owed** (Guy, 2026-09-15).
-    // Two ranges defined at once in two DIFFERENT, empty subnets deadlocked 2 runs of 3 in 0.42 s:
-    // both subnet ids fall in one gap of the non-unique `ip_range_subnet` index, the parent locks
-    // are different rows and serialise nothing between them, and each transaction then needs an
-    // insert-intention lock the other's gap lock blocks. The loser was told *another change was in
-    // flight* about a write that conflicted with nothing. InnoDB has already rolled the victim back,
-    // so replaying the whole attempt is exactly NFR15's *"the caller replays the whole closure"*.
-    // ⚠️ Once, and on 1213 alone: a lock-wait TIMEOUT (1205) is not replayed — the operator's
-    // budget is already spent by then — and a second deadlock is answered as `Contention`.
-    // The seam is not replayed either: it exists to open ONE window for AC5's harness.
-    match range_attempt(
+    // 🔴 **A DEADLOCK VICTIM IS REPLAYED, and the reviews measured why it is owed.** Two ranges
+    // defined at once in two DIFFERENT, empty subnets deadlocked 2 runs of 3: both subnet ids fall in
+    // one gap of the non-unique `ip_range_subnet` index, the parent locks are different rows and
+    // serialise nothing between them, and each transaction then needs an insert-intention lock the
+    // other's gap lock blocks. InnoDB has already rolled the victim back, so replaying the whole
+    // attempt is exactly NFR15's *"the caller replays the whole closure"*.
+    // 🔴 **ONE replay was the first answer and the second review refuted it**: four writers in four
+    // subnets left 11 writes of 40 answered `Contention`, the replay deadlocking again in lock-step
+    // with the other victims. So up to [`MAX_DEADLOCK_REPLAYS`], each after a short RANDOM pause that
+    // breaks the lock-step (Guy, 2026-09-15).
+    // ⚠️ On 1213 alone: a lock-wait TIMEOUT (1205) is not replayed — it has already spent its wait —
+    // and the seam is not replayed either: it exists to open ONE window for AC5's harness.
+    let mut outcome = range_attempt(
         conn,
         id,
         subnet_id,
@@ -336,33 +352,56 @@ async fn insert_range_pausing(
         label,
         after_the_deciding_read,
     )
-    .await
-    {
+    .await;
+    for replay in 1..=MAX_DEADLOCK_REPLAYS {
+        if !matches!(outcome, Err(RangeAttempt::Deadlocked)) {
+            break;
+        }
+        tracing::warn!(
+            subnet = subnet_id,
+            replay,
+            "a range write was chosen as a deadlock victim — replaying it"
+        );
+        tokio::time::sleep(replay_pause(replay)).await;
+        outcome = range_attempt(
+            conn,
+            id,
+            subnet_id,
+            first,
+            last,
+            policy,
+            label,
+            std::future::ready(()),
+        )
+        .await;
+    }
+    match outcome {
         Ok(()) => Ok(()),
         Err(RangeAttempt::Refused(error)) => Err(error),
-        Err(RangeAttempt::Deadlocked) => {
-            tracing::warn!(
-                subnet = subnet_id,
-                "a range write was chosen as a deadlock victim — replaying it once"
-            );
-            match range_attempt(
-                conn,
-                id,
-                subnet_id,
-                first,
-                last,
-                policy,
-                label,
-                std::future::ready(()),
-            )
-            .await
-            {
-                Ok(()) => Ok(()),
-                Err(RangeAttempt::Refused(error)) => Err(error),
-                Err(RangeAttempt::Deadlocked) => Err(RepositoryError::Contention),
-            }
-        }
+        Err(RangeAttempt::Deadlocked) => Err(RepositoryError::Contention),
     }
+}
+
+/// How many times a range write chosen as a deadlock victim is replayed before `Contention`.
+const MAX_DEADLOCK_REPLAYS: u32 = 3;
+
+/// The pause before a replay: random, and growing with the replay.
+///
+/// ⚠️ **The randomness is DEFENSIVE and carried by no test, measured rather than assumed.** It was
+/// added on the argument that victims replaying in lock-step meet again — but the four-writer
+/// measurement that argued for more replays was of ONE replay, and mutation M2-2 (the pause set to
+/// zero) left `four_ranges_at_once_in_four_subnets_all_land` GREEN: three immediate replays were
+/// enough there. It is kept as Guy decided (2026-09-15), because a larger burst or a busier store
+/// may lock-step where five rounds of four writers did not, and this doc says so instead of
+/// crediting a measurement that never measured it. At most 49 ms × the replay number, so three
+/// replays cost under 300 ms of a 5 s budget; the noise is `RandomState`'s per-instance keys, so no
+/// dependency is taken for it.
+fn replay_pause(replay: u32) -> std::time::Duration {
+    use std::hash::{BuildHasher, Hasher};
+    let noise = std::collections::hash_map::RandomState::new()
+        .build_hasher()
+        .finish();
+    std::time::Duration::from_millis((10 + noise % 40) * u64::from(replay))
 }
 
 /// Why one attempt at a range write did not land.
@@ -440,9 +479,9 @@ async fn range_attempt(
         if !subnet.contains(first) || !subnet.contains(last) {
             return Err(ipam(IpamError::RangeOutsideSubnet).into());
         }
-        let siblings: Vec<(String, String)> = sqlx::query_as(
-            "SELECT first_addr, last_addr FROM ip_range WHERE subnet_id = ? FOR UPDATE",
-        )
+        let siblings: Vec<(String, String)> = sqlx::query_as(capped!(
+            "SELECT first_addr, last_addr FROM ip_range WHERE subnet_id = ? FOR UPDATE"
+        ))
         .bind(subnet_id)
         .fetch_all(&mut *tx)
         .await
@@ -456,10 +495,10 @@ async fn range_attempt(
                 return Err(ipam(IpamError::RangeOverlapsAnother).into());
             }
         }
-        sqlx::query(
+        sqlx::query(capped!(
             "INSERT INTO ip_range (id, subnet_id, first_addr, last_addr, policy, label) \
-         VALUES (?, ?, ?, ?, ?, ?)",
-        )
+         VALUES (?, ?, ?, ?, ?, ?)"
+        ))
         .bind(id)
         .bind(subnet_id)
         .bind(canonical(first))
@@ -474,19 +513,29 @@ async fn range_attempt(
     .await;
     match decided {
         Ok(()) => tx.commit().await.map_err(attempt_error),
-        // 🔴 ROLLED BACK HERE, EXPLICITLY, and the review's own repair is what exposed it. A refused
-        // attempt used to return with `?` and leave `tx` to its `Drop`, which only QUEUES the
-        // rollback on the connection: the locks — the parent row and the sibling gap — stay held
-        // until that connection is next used. The race test's new end-of-test cleanup met exactly
-        // that: its loser still held its connection, and `forget_subnet` waited out
-        // `innodb_lock_wait_timeout` (1205, 50 s). The Blind Hunter had suspected it from the diff
-        // alone and could not confirm it; this is the confirmation, and the fix is the cause's.
-        Err(refused) => {
-            if let Err(error) = tx.rollback().await {
-                tracing::warn!(%error, "rolling back a refused range write failed");
+        // ⚠️ ROLLED BACK HERE, EXPLICITLY — and the second review sized what that buys. A refused
+        // attempt left to `Drop` only QUEUES its rollback; sqlx pings a connection returned to the
+        // pool, which flushes it, so on the handler path the locks go with the request either way
+        // (measured through `StoreIpamWrite`: the next write on the subnet answered in 2.56 ms). What
+        // the explicit rollback changes is a HELD connection — the race test keeps both of its own,
+        // and there the queued rollback kept the loser's locks for 50 s (MR1). The first repair
+        // called that a production defect; it was a property of the holder.
+        // 🔴 **And a FAILED rollback ends the replays**: the connection's transaction state is then
+        // unknown, so a deadlock is answered as `Contention` rather than replayed on it (the second
+        // review's blind layer).
+        Err(refused) => match tx.rollback().await {
+            Ok(()) => Err(refused),
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    "rolling back a refused range write failed — not replaying on this connection"
+                );
+                Err(match refused {
+                    RangeAttempt::Deadlocked => RangeAttempt::Refused(RepositoryError::Contention),
+                    other @ RangeAttempt::Refused(_) => other,
+                })
             }
-            Err(refused)
-        }
+        },
     }
 }
 
@@ -497,18 +546,24 @@ async fn range_attempt(
 /// redundancy is DELIBERATE in this codebase's sense: the two differ by the one thing that matters,
 /// and a shared helper taking a `lock: bool` would let a caller pass `false` at the exact place
 /// where `false` is the defect. What IS shared is the decoding, in [`subnet_from_row`].
+///
+/// 🔴 **It answers a [`RangeAttempt`], not a `RepositoryError`**: its `sqlx::Error` went through
+/// `classify`, so a deadlock on THIS read was wrapped as a refusal and never replayed, while the
+/// comment above the replays promised *"on 1213"* for the whole attempt (the second review's blind
+/// layer). It goes through `attempt_error` like every other statement of the attempt.
 async fn load_subnet_locked(
     tx: &mut sqlx::MySqlConnection,
     id: &str,
-) -> Result<Subnet, RepositoryError> {
-    let row: Option<(String, u8)> =
-        sqlx::query_as("SELECT base, prefix_len FROM ip_subnet WHERE id = ? FOR UPDATE")
-            .bind(id)
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(classify)?;
-    let (base, prefix_len) = row.ok_or(RepositoryError::NotFound)?;
-    subnet_from_row(&base, prefix_len)
+) -> Result<Subnet, RangeAttempt> {
+    let row: Option<(String, u8)> = sqlx::query_as(capped!(
+        "SELECT base, prefix_len FROM ip_subnet WHERE id = ? FOR UPDATE"
+    ))
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(attempt_error)?;
+    let (base, prefix_len) = row.ok_or(RangeAttempt::Refused(RepositoryError::NotFound))?;
+    Ok(subnet_from_row(&base, prefix_len)?)
 }
 
 /// Turn a stored `(base, prefix_len)` pair into the subnet the arithmetic can answer for.
@@ -534,14 +589,16 @@ pub(crate) async fn insert_address(
     if !subnet.contains(addr) {
         return Err(ipam(IpamError::AddressOutsideSubnet));
     }
-    sqlx::query("INSERT INTO ip_address (id, subnet_id, addr, label) VALUES (?, ?, ?, ?)")
-        .bind(id)
-        .bind(subnet_id)
-        .bind(canonical(addr))
-        .bind(label)
-        .execute(&mut *conn)
-        .await
-        .map_err(classify)?;
+    sqlx::query(capped!(
+        "INSERT INTO ip_address (id, subnet_id, addr, label) VALUES (?, ?, ?, ?)"
+    ))
+    .bind(id)
+    .bind(subnet_id)
+    .bind(canonical(addr))
+    .bind(label)
+    .execute(&mut *conn)
+    .await
+    .map_err(classify)?;
     Ok(())
 }
 
@@ -1401,10 +1458,12 @@ pub(crate) mod tests {
     /// in flight* about a write that conflicted with nothing. Guy, 2026-09-15: replay a deadlock
     /// victim ONCE.
     ///
-    /// ⚠️ **FIVE ROUNDS, because one round is a coin toss**: a single run deadlocked two times in
-    /// three, so a guard of one round would pass a third of the time with the replay deleted. Five
-    /// rounds of a 2/3 event leave that at under half a percent — a measurement of a race states its
-    /// odds rather than implying a certainty it does not have.
+    /// ⚠️ **FIVE ROUNDS, because one round is a coin toss** — and what carries the replay is not an
+    /// odds sentence but two measurements: MR3 (`is_deadlock` never true) and the second review's M1
+    /// (replay removed) both red, 3 runs of 3. The rate a deadlock occurs at depends on the gap
+    /// locking and the ids around them, so the oracle `a.is_ok() && b.is_ok()` would also be green
+    /// where no deadlock happens at all; the mutations are what say it does happen here. (This read
+    /// *"under half a percent"* until the second review called the figure an assumption.)
     #[tokio::test]
     async fn two_ranges_at_once_in_two_subnets_both_land() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
@@ -1468,6 +1527,180 @@ pub(crate) mod tests {
         }
     }
 
+    /// 🔴 **FOUR ranges at once in four different subnets all land** — the second review's edge layer
+    /// measured ONE replay insufficient here: 11 writes of 40 answered `Contention`, each conflicting
+    /// with nothing, the replay deadlocking again in lock-step. Bounded, jittered replays are the
+    /// answer (Guy, 2026-09-15), and this is their measurement.
+    #[tokio::test]
+    async fn four_ranges_at_once_in_four_subnets_all_land() {
+        const SUBNETS: [(&str, &str, &str, &str); 4] = [
+            ("t-dl4-a", "100.65.10.0", "100.65.10.10", "100.65.10.20"),
+            ("t-dl4-b", "100.65.11.0", "100.65.11.10", "100.65.11.20"),
+            ("t-dl4-c", "100.65.12.0", "100.65.12.10", "100.65.12.20"),
+            ("t-dl4-d", "100.65.13.0", "100.65.13.10", "100.65.13.20"),
+        ];
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = ipam_fixture().await else {
+            return;
+        };
+        for (id, _, _, _) in SUBNETS {
+            forget_subnet(&pool, id).await;
+        }
+        let mut setup = pool.acquire().await.expect("a connection");
+        for (id, base, _, _) in SUBNETS {
+            let subnet = Subnet::new(v4(base), 24).expect("a subnet of its own");
+            insert_subnet(&mut *setup, id, subnet, "four-writer probe")
+                .await
+                .expect("the parent row");
+        }
+        drop(setup);
+
+        for round in 0..5 {
+            for (id, _, _, _) in SUBNETS {
+                sqlx::query("DELETE FROM ip_range WHERE subnet_id = ?")
+                    .bind(id)
+                    .execute(&pool)
+                    .await
+                    .expect("the probe's own ranges");
+            }
+            let mut connections = Vec::new();
+            for _ in SUBNETS {
+                connections.push(pool.acquire().await.expect("a connection"));
+            }
+            let ids: Vec<String> = SUBNETS
+                .iter()
+                .map(|(id, _, _, _)| format!("{id}-{round}"))
+                .collect();
+            let writes = connections.iter_mut().zip(SUBNETS).zip(&ids).map(
+                |((conn, (subnet_id, _, first, last)), range_id)| {
+                    insert_range_pausing(
+                        conn,
+                        range_id,
+                        subnet_id,
+                        v4(first),
+                        v4(last),
+                        IpPolicy::Static,
+                        "writer",
+                        tokio::time::sleep(std::time::Duration::from_millis(400)),
+                    )
+                },
+            );
+            let outcomes = futures_util::future::join_all(writes).await;
+            assert!(
+                outcomes.iter().all(Result::is_ok),
+                "round {round}: four ranges in four DIFFERENT subnets conflict with nothing, so all \
+                 must land — a deadlock victim is replayed with a random pause. Got {outcomes:?}"
+            );
+        }
+        for (id, _, _, _) in SUBNETS {
+            forget_subnet(&pool, id).await;
+        }
+    }
+
+    /// The lock-wait cap the plan's write statements carry, in seconds — asserted below the handler's
+    /// budget by `ipam_write`'s tests.
+    pub(crate) const PLAN_LOCK_WAIT_SECONDS: u64 = 4;
+
+    /// 🔴 **A plan write stops waiting on a lock BEFORE the handler's budget does** — the second
+    /// review measured a write dropped by its 5 s budget staying in `LOCK WAIT` on the server for as
+    /// long as the lock was held, up to the default 50 s, pinning its pool connection. Here the parent
+    /// row is held by another transaction and a range write is made to wait on it: it must come back
+    /// as `Contention` after the cap, not after fifty seconds.
+    #[tokio::test]
+    async fn a_plan_write_stops_waiting_on_a_lock_before_the_budget() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = ipam_fixture().await else {
+            return;
+        };
+        forget_subnet(&pool, "t-cap").await;
+        let subnet = Subnet::new(v4("100.64.40.0"), 24).expect("a subnet of its own");
+        insert_subnet(&pool, "t-cap", subnet, "the capped wait")
+            .await
+            .expect("the parent row");
+
+        let mut holder = pool.acquire().await.expect("a holder");
+        sqlx::query("START TRANSACTION")
+            .execute(&mut *holder)
+            .await
+            .expect("begin");
+        sqlx::query("SELECT id FROM ip_subnet WHERE id = 't-cap' FOR UPDATE")
+            .execute(&mut *holder)
+            .await
+            .expect("hold the parent row");
+
+        let mut writer = pool.acquire().await.expect("a writer");
+        let started = std::time::Instant::now();
+        let refused = insert_range(
+            &mut writer,
+            "t-cap-r",
+            "t-cap",
+            v4("100.64.40.10"),
+            v4("100.64.40.20"),
+            IpPolicy::Static,
+            "capped",
+        )
+        .await;
+        let waited = started.elapsed();
+
+        sqlx::query("ROLLBACK")
+            .execute(&mut *holder)
+            .await
+            .expect("release the parent row");
+        drop(holder);
+        drop(writer);
+        forget_subnet(&pool, "t-cap").await;
+
+        assert!(
+            matches!(refused, Err(RepositoryError::Contention)),
+            "a write that waited out its cap is a lock-wait timeout: {refused:?}"
+        );
+        assert!(
+            waited >= std::time::Duration::from_secs(PLAN_LOCK_WAIT_SECONDS),
+            "premise: the write must really have waited on the held row, or this measures nothing \
+             ({waited:?})"
+        );
+        assert!(
+            waited < std::time::Duration::from_secs(PLAN_LOCK_WAIT_SECONDS + 2),
+            "the write waited {waited:?}: past the cap, the server's own 50 s default is what \
+             answered, and a write the budget dropped keeps its connection that long"
+        );
+    }
+
+    /// Every statement of the plan that can wait on a lock carries the cap.
+    ///
+    /// 🔑 A source guard beside the behavioural one above, because that one measures the RANGE write
+    /// and the subnet and address inserts wait on locks too (a unique key, a foreign key). It names
+    /// the statement that lost its cap where the behaviour would only show a slow write.
+    #[test]
+    fn every_plan_statement_that_can_wait_on_a_lock_is_capped() {
+        let source = include_str!("ipam_repo.rs");
+        let cut = source
+            .find("\n#[cfg(test)]")
+            .expect("this file has a trailing test module");
+        let production = crate::source_scan::code_only(&source[..cut]);
+        let mut checked = 0;
+        for needle in ["\"INSERT INTO ip_", "FOR UPDATE\""] {
+            for (at, _) in production.match_indices(needle) {
+                let start = production[..at]
+                    .rfind('"')
+                    .map_or(at, |q| if needle.starts_with('"') { at } else { q });
+                let before = production[..start].trim_end();
+                assert!(
+                    before.ends_with("capped!("),
+                    "a plan statement that can wait on a lock is not capped — `{}` — so a write the \
+                     budget drops keeps its connection for the server's 50 s default",
+                    &production[start..(at + needle.len()).min(production.len())]
+                );
+                checked += 1;
+            }
+        }
+        assert_eq!(
+            checked, 5,
+            "the plan's lockable statements changed (three inserts, two locking reads) — a new one \
+             must be capped, and this count updated only after reading it"
+        );
+    }
+
     /// Both reads a range write performs take their lock — named individually, because behaviour
     /// cannot name them.
     ///
@@ -1496,23 +1729,23 @@ pub(crate) mod tests {
     /// reads the ATTEMPT's body, where a read of the subnet without the lock is refused whatever its
     /// argument looks like.
     ///
-    /// ⚠️ Its stripper cuts `//` outside a double-quoted string on the same line; an escaped `\"`
-    /// inside a literal would confuse it. No such literal exists in this file's production half.
+    /// 🔴 **And the second review defeated that too, with the other comment form**: the lock dropped
+    /// and the old SQL kept in a `/* … */` block — 618 tests green. Its stripper also reset its
+    /// string state per line and flipped on a `'"'` char literal. It reads through
+    /// [`crate::source_scan::code_only`] now, which carries each of those traps as a test, and the
+    /// parent-row SQL is looked for INSIDE `load_subnet_locked` rather than anywhere in the file.
     #[test]
     fn both_reads_of_a_subnet_under_write_take_their_lock() {
         let source = include_str!("ipam_repo.rs");
         let cut = source
             .find("\n#[cfg(test)]")
             .expect("this file has a trailing test module");
-        let production = code_only(&source[..cut]);
-        let start = production
-            .find("async fn range_attempt(")
-            .expect("the range write's attempt");
-        let body = &production[start..];
-        let body = &body[..body.find("\n}\n").expect("the attempt's closing brace")];
+        let production = crate::source_scan::code_only(&source[..cut]);
+        let body = body_of(&production, "async fn range_attempt(");
+        let parent = body_of(&production, "async fn load_subnet_locked(");
 
         assert!(
-            production.contains("SELECT base, prefix_len FROM ip_subnet WHERE id = ? FOR UPDATE"),
+            parent.contains("SELECT base, prefix_len FROM ip_subnet WHERE id = ? FOR UPDATE"),
             "the PARENT ROW's lock is gone, which serialises entry to one subnet. AC5's harness will \
              not tell you: each lock is masked by the other, and only the composite mutation reds."
         );
@@ -1538,28 +1771,14 @@ pub(crate) mod tests {
         }
     }
 
-    /// The code of a Rust source with its `//` comments removed, a `//` inside a double-quoted
-    /// string on the same line being kept.
-    fn code_only(source: &str) -> String {
-        source
-            .lines()
-            .map(|line| {
-                let bytes = line.as_bytes();
-                let mut in_string = false;
-                let mut cut = line.len();
-                for at in 0..bytes.len().saturating_sub(1) {
-                    match bytes[at] {
-                        b'"' => in_string = !in_string,
-                        b'/' if !in_string && bytes[at + 1] == b'/' => {
-                            cut = at;
-                            break;
-                        }
-                        _ => {}
-                    }
-                }
-                &line[..cut]
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+    /// The body of the first item whose code starts with `head`, up to its closing brace at column 0.
+    fn body_of<'a>(code: &'a str, head: &str) -> &'a str {
+        let start = code
+            .find(head)
+            .unwrap_or_else(|| panic!("`{head}` is gone"));
+        let tail = &code[start..];
+        &tail[..tail
+            .find("\n}\n")
+            .unwrap_or_else(|| panic!("`{head}` has no closing brace at column 0"))]
     }
 }

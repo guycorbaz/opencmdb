@@ -920,9 +920,15 @@ ipam.form.submit:
 #
 # 🔴 It said *"Choose a subnet above"* on the EMPTY plan too, where there is none to choose (story
 # 14.2b's review). The sentence now holds in both cases the forms meet with no subnet in force.
+#
+# 🔴 And the second review found that fix still pointing "above" on the empty plan, where nothing is
+# above, with an "it" that read back to the range. Two sentences, one per case.
 ipam.form.needs_subnet:
-  en: "A range or an address is defined inside a subnet: choose one above, or define it first."
-  fr: "Une plage ou une adresse se définit dans un sous-réseau : choisissez-en un ci-dessus, ou définissez-le d'abord."
+  en: "A range or an address is defined inside a subnet: choose one above."
+  fr: "Une plage ou une adresse se définit dans un sous-réseau : choisissez-en un ci-dessus."
+ipam.form.needs_first_subnet:
+  en: "A range or an address is defined inside a subnet: define a subnet first."
+  fr: "Une plage ou une adresse se définit dans un sous-réseau : définissez d'abord un sous-réseau."
 ipam.done.subnet:
   en: "Subnet defined. The plan now has somewhere to put ranges and addresses."
   fr: "Sous-réseau défini. Le plan a désormais où placer des plages et des adresses."
@@ -960,8 +966,8 @@ ipam.refusal.label_empty:
   en: "A label is required: a plan of numbers with no words is not a plan."
   fr: "Une étiquette est requise : un plan de nombres sans mots n'est pas un plan."
 ipam.refusal.label_control:
-  en: "That label carries a control character, such as a line break: a label is one line of text."
-  fr: "Cette étiquette contient un caractère de contrôle, comme un saut de ligne : une étiquette tient sur une ligne."
+  en: "That label carries a control or text-direction character, such as a line break: a label is one line of plain text."
+  fr: "Cette étiquette contient un caractère de contrôle ou de direction du texte, comme un saut de ligne : une étiquette tient sur une ligne de texte simple."
 ipam.refusal.label_too_long:
   en: "That label is too long: 120 characters at most."
   fr: "Cette étiquette est trop longue : 120 caractères au maximum."
@@ -981,9 +987,12 @@ ipam.refusal.unknown_subnet:
   fr: "Ce sous-réseau n'est pas dans le plan."
 # 🔴 A KEY, where the documenting route still answers an English literal: the review found that
 # literal swapped into the page under a French UI. Behind a reverse proxy, `Host` must be forwarded.
+# ⚠️ It first said the write "did not come from this opencmdb's own page" — false in the one case an
+# operator reads it, behind a proxy rewriting Host, where it DID (the second review). Only the
+# mismatch is known, so only the mismatch is said.
 ipam.refusal.cross_origin:
-  en: "Refused: this write did not come from this opencmdb's own page. Behind a reverse proxy, the Host header must be forwarded."
-  fr: "Refusé : cette écriture ne vient pas de la page de cet opencmdb. Derrière un proxy inverse, l'en-tête Host doit être transmis."
+  en: "Refused: the origin of this write does not match the host the server received. Behind a reverse proxy, the Host header must be forwarded."
+  fr: "Refusé : l'origine de cette écriture ne correspond pas à l'hôte reçu par le serveur. Derrière un proxy inverse, l'en-tête Host doit être transmis."
 # 503 and not 409: nothing about the request is wrong. 🔴 Reachable only since this story — the arm
 # that produces it was dead code until `classify` was repaired, because nothing in this product
 # contended before the plan's routes took a row lock.
@@ -994,9 +1003,11 @@ ipam.refusal.cross_origin:
 ipam.refusal.contention:
   en: "Another change to the plan was in flight, or the write took too long. It may or may not have been saved: reload the plan, and try again if it is missing."
   fr: "Une autre modification du plan était en cours, ou l'écriture a pris trop de temps. Elle a pu être enregistrée ou non : rechargez le plan, et réessayez si elle n'y figure pas."
+# 🔴 It promised "Nothing was changed", and a connection lost during COMMIT is a backend error the
+# server may have committed (the second review) — the case the contention sentence was rewritten for.
 ipam.refusal.backend:
-  en: "The write did not go through. Nothing was changed; see the self-diagnostic if it persists."
-  fr: "L'écriture n'est pas passée. Rien n'a été modifié ; consultez l'auto-diagnostic si cela persiste."
+  en: "The write did not go through, or its answer was lost: reload the plan to see what it holds, and see the self-diagnostic if this persists."
+  fr: "L'écriture n'est pas passée, ou sa réponse s'est perdue : rechargez le plan pour voir ce qu'il contient, et consultez l'auto-diagnostic si cela persiste."
 # The seven `IpamError` refusals, each naming its own rule. ⚠️ Four of them are unreachable from
 # the subnet route and reachable from the two this story adds after it; they are written once, here,
 # rather than grown one at a time as each route lands.

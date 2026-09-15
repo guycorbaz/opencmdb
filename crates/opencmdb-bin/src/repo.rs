@@ -2477,8 +2477,8 @@ mod tests {
              measures some other failure: {raw}"
         );
         assert_eq!(
-            Some(classify(raw)),
-            Some(RepositoryError::Contention),
+            classify(raw),
+            RepositoryError::Contention,
             "a lock-wait timeout must be the ONE retryable case (NFR15), not an opaque \
              `Backend` sentence in the driver's English — which is what it was until story 14.2b, \
              because `code()` is the SQLSTATE and the arm compared it against a MySQL number"

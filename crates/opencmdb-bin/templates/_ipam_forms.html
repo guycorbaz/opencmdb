@@ -71,7 +71,11 @@
   {%- when None %}
   {#- Shown rather than hidden: Guy's premise (2) of 2026-08-13 — show and label rather than hide.
        A screen that silently drops two of its three gestures reads as a screen missing them. -#}
+  {%- if forms.plan_is_empty %}
+  <p class="empty">{{ s.form_needs_first_subnet }}</p>
+  {%- else %}
   <p class="empty">{{ s.form_needs_subnet }}</p>
+  {%- endif %}
   {%- endmatch %}
 
   {#- 🔴 ONE result paragraph for the three forms, and it FOCUSES itself after a swap — story

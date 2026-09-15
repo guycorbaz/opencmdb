@@ -195,7 +195,7 @@ empty-plan pass since story 14.2b, run first over `a11y/empty-plan.sql`), and
 `a11y/kbd-probe.mjs` (story 6b.11, **thirty-seven** checks since story 14.2b gave `/ipam`'s three
 forms their first coverage; story 6.4 made it PRESS the documenting gesture and read the store's
 answer back).
-⚠️ They are not `xtask` gates, and the `xtask` count stays at nine.
+⚠️ They are not `xtask` gates, and the `xtask` count stays at ten (nine until story 6.5).
 ⚠️ **`declared-authorship` is a TRIPWIRE, not a barrier**, and the difference is measured: story
 5.12's code review wrote thirty violations of NFR5 against its first implementation and **sixteen
 passed**. The corpus is committed at `xtask/probes/authorship/`, all 32 verdicts pinned; three are

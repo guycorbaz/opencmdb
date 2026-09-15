@@ -655,7 +655,12 @@ async function main() {
     // claimed "keyboard-reachable" over a count, and every step below focuses by script. This one
     // PRESSES Tab from the top of the page, as an operator would, until the subnet form's
     // disclosure has focus — bounded, so a control Tab never reaches fails rather than loops.
-    await page.evaluate(() => document.body.focus());
+    // ⚠️ BLUR, not `body.focus()`: a `<body>` without `tabindex` takes no focus and blurs nothing, so
+    // the walk would start from whatever held focus (the second review).
+    await page.evaluate(() => {
+      document.activeElement?.blur();
+      window.scrollTo(0, 0);
+    });
     let reached = false;
     for (let press = 0; press < 400 && !reached; press += 1) {
       await page.keyboard.press("Tab");
