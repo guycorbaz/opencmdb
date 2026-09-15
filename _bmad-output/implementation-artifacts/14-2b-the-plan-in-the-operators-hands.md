@@ -1,6 +1,6 @@
 # Story 14.2b: The plan in the operator's hands
 
-Status: ready-for-dev
+Status: review
 
 ⚠️ **`ready-for-dev` is the workflow's status, not a statement that nothing is open.** §1 poses
 decisions that are Guy's, and the mandatory validation (two fresh-context agents) has not run.
@@ -378,7 +378,11 @@ the subnet (`_ipam.html:49,79` already carries the store's own id).
 - [x] **T7** (AC7, AC8) Remove the last allows (done at T5); link the empty plan to the gesture —
   and the two browser-gate halves T6b moved here. ✅ 2026-09-12 — 🔴 **the keyboard gate found a
   contract I had asserted that the design structurally prevents.**
-- [ ] **T8** (AC9, AC10) Measure. Both browser gates, both store conditions, the command named.
+- [x] **T8** (AC9, AC10) Measure. Both browser gates, both store conditions, the command named.
+  ✅ 2026-09-15 — **905 tests in three conditions, both browser gates, ten gates**, and nothing in
+  the tree moved. 🔴 **`cargo deny` reddened on an advisory published AFTER this branch's last green
+  CI** (RUSTSEC-2026-0285, `rustls 0.23.42`), over a lockfile identical to `master`'s — fixed on
+  `master` by PR #175 (#174), not here, and re-measured after the merge.
 
 ## Dev Notes
 
@@ -498,6 +502,30 @@ Claude Opus 5 (1M context), 2026-09-12.
   603 tests' ordinary cost. **No cause is named** — the rule is this project's own — and what
   confirmed the store genuinely answered is the mutation driver's own `store: reachable at
   127.0.0.1:13450 (connected)` line, not the clock.
+- **T8 — THE LIVE COUNT (AC9): 905 tests** (615 bin + 191 core + 99 xtask), 1 ignored, 0 failed,
+  on `7ec25c9`, with `cargo test --workspace --locked` in three conditions: against a VIRGIN
+  `mariadb:10.11.11` database (dropped and recreated, then one warm run for `migrate!`'s race —
+  §3), with `env -u DATABASE_URL`, and under `RUSTFLAGS="-D warnings"` against the store. Baseline
+  877 at `354283b`, so the story is **+28**. Every status was read from `$?` into a file, never
+  through a pipe. The per-step table is in *T8's measurements* below.
+- **T8 — AC10's `cargo deny` was RED, and the cause is not this branch.** RUSTSEC-2026-0285
+  (`rustls 0.23.42`, via sqlx: TLS 1.3 handshake messages accepted across encryption levels) was
+  published after PR #173's last green run on this same commit, and `Cargo.lock` is byte-identical
+  to `master`'s — so `master` was red too, and CI's `cargo deny check advisories licenses` would
+  have reddened the next push of any branch. ✅ Guy, 2026-09-15: **fixed on `master` in its own PR**
+  (#175, issue #174 — `rustls 0.23.45`, `rustls-webpki 0.103.15`, lockfile only) rather than here,
+  so this story does not carry a dependency change that is not its own; `master` is then merged
+  into this branch (a merge, not a rebase, so nothing already pushed is rewritten).
+- ⚠️ **T8 — the timings are NOT comparable with T2–T5's, and saying so is the point.** Those were
+  the BIN suite's; these are the wall clock of the whole `cargo test --workspace --locked`, cargo's
+  own fingerprint pass included: **10.71 s with the store, 5.62 s without**. Same command, two
+  conditions, and the ratio (1.9) agrees with T2's finding that the clock is no longer the tell.
+- 🔴 **T8 — my own timing instrument lied on its first run.** The script printed each step's
+  duration with `printf '%.2f'` over `bc`'s output, and under this machine's `LC_NUMERIC=fr_FR`
+  `printf` refuses `31.49` as *nombre non valable* and prints `0,00` or a truncated `31,00` — while
+  the exit codes beside them were right. Caught by reading the script's stderr, not by the numbers
+  looking wrong; stopped, `LC_NUMERIC=C` exported, run again from the top. *A column of plausible
+  zeros is the mutation driver's lie in a new costume.*
 
 ### T2's mutation pass
 
@@ -850,6 +878,27 @@ Both gates were RUN, against a real binary and a live `mariadb:10.11.11` — not
 died on the floor with *"34 checks ran where 36 are declared"* — true, and it tells the reader
 nothing. A gate that cannot run should name the cause, not the count.
 
+### T8's measurements
+
+On `7ec25c9`, tree clean, 2026-09-15, one script, each status read from `$?`. The store is a live
+`mariadb:10.11.11` on port 13450; the browser gates boot `./target/debug/opencmdb` with
+`OPENCMDB_DOCUMENT_ENABLED=1` against a separate, freshly created `a11y` database, in `ci.yml`'s
+order.
+
+| step | command | result |
+|---|---|---|
+| fmt | `cargo fmt --all --check` | exit 0 |
+| build | `cargo build --workspace --locked` | exit 0 |
+| clippy | `cargo clippy --workspace --all-targets --locked -- -D warnings` | exit 0 |
+| gates | `cargo xtask ci` | exit 0 — ten gates, `views-hash` ℹ STALE by design (#50) |
+| deny | `cargo deny check` | 🔴 **exit 1** — `advisories FAILED, bans ok, licenses ok, sources ok`: RUSTSEC-2026-0285 only (#174) |
+| tests, virgin store | `DATABASE_URL=… cargo test --workspace --locked` (after one warm run) | **905 passed**, 0 failed — 10.71 s |
+| tests, no store | `env -u DATABASE_URL cargo test --workspace --locked` | **905 passed**, 0 failed — 5.62 s |
+| tests, `-D warnings` | `RUSTFLAGS="-D warnings" DATABASE_URL=… cargo test --workspace --locked` | **905 passed**, 0 failed |
+| axe, empty plan | `a11y/empty-plan.sql`, then `AXE_EMPTY_PLAN=1 node a11y/axe-gate.mjs` | exit 0 — 1 route, 0 violation nodes, `link opens onto an open form` |
+| axe, seeded | `a11y/seed.sql`, then `AXE_REQUIRE_QUEUE=1 AXE_REQUIRE_GESTURE=1 AXE_REQUIRE_PLAN=1 node a11y/axe-gate.mjs` | exit 0 — 10 routes + 4 states, 0 violation nodes |
+| kbd-probe | `a11y/seed.sql` again (the probe writes), then `node a11y/kbd-probe.mjs` | exit 0 — **36 checks, 0 failed** |
+
 ### File List
 
 - `crates/opencmdb-bin/src/write_guard.rs` — NEW; the shared Origin check and its two tests.
@@ -878,6 +927,14 @@ nothing. A gate that cannot run should name the cause, not the count.
 - `.github/workflows/ci.yml` — the empty-plan pass, before the seed.
 
 ### Change Log
+
+- 2026-09-15 — **T8: measured, and the one red was not this branch's.** **905 tests** (615 bin +
+  191 core + 99 xtask) with a virgin store, without one and under `RUSTFLAGS="-D warnings"`; ten
+  gates, clippy `--all-targets`, fmt; axe **0 violation nodes** over the empty plan and over 10
+  routes + 4 states; kbd-probe **36 checks, 0 failed**. 🔴 `cargo deny` reddened on RUSTSEC-2026-0285,
+  published after the last green CI over a lockfile identical to `master`'s — fixed on `master` by
+  PR #175 (#174) and merged in, not carried here. And my own timing script printed `0,00` under a
+  French numeric locale, caught on its stderr. Status → `review`.
 
 - 2026-09-12 — **T7: the operator can change the plan from the screen.** Three forms, the empty
   plan's link into the gesture, and the two browser-gate halves T6b moved here — both gates RUN, not

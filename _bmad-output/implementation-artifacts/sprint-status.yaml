@@ -5530,7 +5530,15 @@ development_status:
   #   leave the two documents disagreeing silently.
   #   ⚠️ CARRIES THE `structural` REMOVAL (PR #166's row names this story as its owner). The code
   #   still renders it; adding it to the vocabulary gate's denylist before then reds the build.
-  14-2b-the-plan-in-the-operators-hands: in-progress
+  14-2b-the-plan-in-the-operators-hands: review
+  #   ✅ T2–T8 DONE 2026-09-12..15 — the operator can change the plan: three write routes, the refusal
+  #   set carried twice, the overlap rule under concurrency (two locks, neither observable alone), the
+  #   auth perimeter as a property, the empty plan's link into the gesture. T8 MEASURED on `7ec25c9`:
+  #   905 tests (615 + 191 + 99) with a virgin store, without one and under `-D warnings`; ten gates;
+  #   axe 0 violation nodes (empty plan + 10 routes + 4 states); kbd-probe 36 checks, 0 failed.
+  #   🔴 `cargo deny` RED on RUSTSEC-2026-0285 (`rustls 0.23.42`), published after the last green CI
+  #   over a lockfile identical to `master`'s -- fixed on `master` by PR #175 (#174), merged in, NOT
+  #   carried by this story (Guy, 2026-09-15). NEXT: the three-layer code review.
   #   ✅ T0 TAKEN 2026-09-12 — §2's five decisions, four of them Guy's, each recorded in the story
   #   WITH the option refused and the cost accepted: the form is IN LINE IN THE RAIL, collapsed
   #   (refused: a dedicated address, an eleventh outside `Screen::ALL` on story 6b.6's measured
