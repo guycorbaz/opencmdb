@@ -5624,7 +5624,14 @@ development_status:
   #   nothing can fill, so 14.2's empty-plan sentence names the gesture as NOT YET BUILT through
   #   `Gesture::Planned { owner }` -- the shape story 6b.4b made a compile-time obligation, so this
   #   story cannot ship its route without meeting that site.
-  14-3-the-audit: backlog
+  14-3-the-audit: ready-for-dev
+  #   CONTEXTED 2026-09-15 from three research passes. NOT validated yet (mandatory, two layers).
+  #   🔴 Two findings posed as decisions rather than settled: the epic's AC1 (`undeclared`) and AC2
+  #   (`gap`) OVERLAP on a free cell in a `static` range with a sighting; and the guard
+  #   `the_plan_reads_no_observation` forbids the audit BY DESIGN -- bypassing it would be a guard
+  #   placed where the defect cannot occur. Ten decisions for Guy in §2, among them: which policy
+  #   decides for overlapping ranges, what the offer excludes, how the sightings are read (the only
+  #   reader loads every row), and where the form's warning appears (a 201 body is lost to HX-Redirect).
   #   The story the epic exists for. Includes FR24's real conflict -- undetectable before PR #163,
   #   because the connector read no hardware address; and NOT a conflict inside a `dhcp-pool`,
   #   where the occupant changes by design.
