@@ -5694,6 +5694,30 @@ development_status:
   #   ✅ Guy, 2026-09-16: the controls are LISTS IN THE RAIL (refused: a control per cell, which is the
   #   `role="grid"` cost 14.2 declined; refused: a detail panel on a selection the screen lacks).
   #   ✅ `a11y/seed.sql` already reaches both delete cases, refused and accepted.
+  #   ✅ T0 TAKEN 2026-09-16 -- the four remaining decisions, each with the option refused:
+  #     (1) MORE POST ROUTES on the existing machinery (refused: real verbs -- htmx emits them, but the
+  #         write sub-router, the CSRF guard and the perimeter guard have only ever seen POST, and that
+  #         is new machinery in the story that ships the first irreversible gestures). Accepted cost: a
+  #         path that says `delete` in a product whose every gesture is a POST.
+  #     (2) DELETING A SUBNET IS IN -- arbitration 4 separates the registers, `ip_subnet` is the PLAN
+  #         (refused: leaving it to Epic 21, whose FR41 names subnets; without it, creating a subnet
+  #         stays a one-way act -- the ratchet this story exists to end). The database refuses a
+  #         non-empty one alone (1451), so: one route, one sentence, no race -- and
+  #         `constraint_refusal`'s `foreign_key` arm is SPLIT, because "this subnet still holds ranges"
+  #         is not "no such subnet".
+  #     (3) A DELETE WARNS BEFORE IT FIRES, for BOTH deletes, on 14.3b's contract (a GET check, a polite
+  #         live region, no refusal). Refused: the range only (the operator would have to guess which
+  #         gesture speaks); refused: a refusal plus a confirmation, which say "not allowed" and "are
+  #         you sure" but never "here is what will change".
+  #     (4) NO NEW GATE, and the REASON IS WRITTEN rather than left to the gates' silence: the plan is
+  #         the operator's own register, where deleting IS the gesture. Refused: a sanctioned-site gate
+  #         (an eleventh gate and its probe corpus); refused: deferring with a register row -- a row
+  #         with no named owner is not an action. What IS owed, and is AC1's work, is widening the
+  #         lock-wait cap's guard.
+  #   ⚠️ ACCEPTED COST OF (2) AND (3), WRITTEN RATHER THAN DISCOVERED: this half is now FIVE write
+  #   routes plus one check route, where 14.2b -- this epic's size reference -- shipped THREE write
+  #   routes in 22 files and +5071 lines. The split already taken is not re-opened; the size is recorded
+  #   so the final measurement is read against it rather than against a memory of three.
   14-4b-releasing-an-address: ready-for-dev
   #   🔴 INSERTED 2026-09-16 at 14.4's validation (Guy: split) -- Epic 14 -> SEVEN stories (`epics.md`
   #   NOT edited; registered). Constraint (3)'s fourth route: without it the grid fills and never
