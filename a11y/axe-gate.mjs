@@ -119,6 +119,14 @@ const REQUIRE_GESTURE = process.env.AXE_REQUIRE_GESTURE === "1";
 // 🔑 The grid is DERIVED, never named: the gate asks the page whether it carries cells, so it
 // cannot drift from what the product serves.
 const REQUIRE_PLAN = process.env.AXE_REQUIRE_PLAN === "1";
+// 🔴 **STORY 14.3b's AUDIT IS THE SAME SHAPE AGAIN.** The findings list, its three words and the warning
+// the address field shows before a write exist only when the store holds sightings the plan has
+// something to say about. `a11y/seed.sql` seeds one per case; `AXE_REQUIRE_AUDIT=1` (CI sets it) turns
+// a seeded run with no finding — or without both a `gap` and an `undeclared` to compare — into *the
+// gate could not run*, never a pass.
+const REQUIRE_AUDIT = process.env.AXE_REQUIRE_AUDIT === "1";
+// An address the seed shows in use, typed into the address field to reach the warning.
+const SEEN_ADDRESS = "192.0.2.20";
 // 🔴 **THE ONE `/ipam` STATE THE GATE WAS CONFIGURED NEVER TO REACH.** `a11y/seed.sql` always
 // seeds a subnet and `AXE_REQUIRE_PLAN=1` REFUSES a run that draws no cell — so the EMPTY plan,
 // which is where story 14.2b's AC8 puts the link into the gesture, was the one branch of this
@@ -305,6 +313,19 @@ async function main() {
 
   // `/ipam`'s grid, measured the same way: opened, then asked whether it carries cells.
   let planIndistinguishable = null;
+  // Story 14.3b: the audit's two words told apart without colour, and the warning's own axe run.
+  let auditIndistinguishable = null;
+  // Decision 8's marker, measured in the browser because no rule and no guard can see it.
+  let markerFailure = null;
+  // A product regression the warning state reveals: the form is there, the store holds the
+  // sighting, and no warning arrives. 🔴 It was `cannotRun` (exit 2) until the code review — *the
+  // gate could not run* and *the product stopped warning* are not the same answer, and the second
+  // one is the one this gate exists to report.
+  let warningFailure = null;
+  let warningViolations = 0;
+  // Whether axe actually ran over the page with the warning shown — the state is counted in the
+  // summary only when it was measured.
+  let warningStateMeasured = false;
   {
     const page = await openPage();
     try {
@@ -359,6 +380,226 @@ async function main() {
               `exists to compare is not on the page. The seed must draw both.`,
           );
         }
+
+        // ── Story 14.3b: the findings list, its words told apart WITHOUT colour ─────────────
+        // 🔑 Constraint 6 and AC2: `gap` and `undeclared` are distinct by word AND by treatment. A
+        // stylesheet guard sees that both rules exist, never that they render differently — so the
+        // browser compares a NON-colour property, the badge's border style.
+        // 🔴 **THREE WORDS, NOT TWO, AND MORE THAN A BORDER STYLE.** Until the code review this
+        // compared `border-style` on `gap` and `undeclared` alone — so « Conflit d'adresse », the
+        // third word and the one FR24 exists for, was compared with nothing and could have shipped
+        // identical to either. The tuple is every NON-COLOUR channel the three rules use, and the
+        // three must be pairwise distinct on it: 1.4.1 is not satisfied by a colour difference.
+        const audit = await page.evaluate(() => {
+          const read = (sel) => {
+            const el = document.querySelector(sel);
+            if (el === null) return null;
+            const c = getComputedStyle(el);
+            return `${c.borderTopStyle}/${c.borderTopWidth}/${c.fontWeight}/${c.textDecorationLine}`;
+          };
+          return {
+            findings: document.querySelectorAll(".ipam-audit .ipam-finding").length,
+            gap: read(".ipam-word-gap"),
+            undeclared: read(".ipam-word-undeclared"),
+            conflict: read(".ipam-word-conflict"),
+          };
+        });
+        const words = [
+          ["gap", audit.gap],
+          ["undeclared", audit.undeclared],
+          ["conflict", audit.conflict],
+        ];
+        const missing = words.filter(([, treatment]) => treatment === null);
+        if (audit.findings === 0 || missing.length > 0) {
+          if (REQUIRE_AUDIT) {
+            cannotRun(
+              `${PLAN_ROUTE} shows ${audit.findings} finding(s) and carries no ` +
+                `${missing.map(([name]) => name).join(", ")}: the audit this state exists to ` +
+                `measure is not on the page. Seed the sightings (a11y/seed.sql) before the gate runs.`,
+            );
+          }
+          console.log(
+            `⚠️  ${PLAN_ROUTE} does not carry all three audit words: the audit was NOT measured. ` +
+              `Set AXE_REQUIRE_AUDIT=1 to make that a refusal rather than a gap.`,
+          );
+        } else {
+          const same = words.flatMap(([name, treatment], i) =>
+            words
+              .slice(i + 1)
+              .filter(([, other]) => other === treatment)
+              .map(([other]) => `${name} and ${other} (${treatment})`),
+          );
+          if (same.length > 0) {
+            auditIndistinguishable =
+              `two of the audit's words carry the SAME non-colour treatment — ${same.join(", ")} — ` +
+              `so they are told apart by nothing but their text and their colour`;
+            console.log(`🔴 ${PLAN_ROUTE}  ${auditIndistinguishable}`);
+          } else {
+            console.log(
+              `   ${PLAN_ROUTE}: ${audit.findings} finding(s); the three words differ without ` +
+                `colour (${words.map(([name, t]) => `${name} ${t}`).join(" · ")})`,
+            );
+          }
+        }
+
+        // ── Story 14.3b, decision 8: the SEEN marker's contrast, computed here ──────────────
+        // 🔴 **axe CANNOT SEE A PSEUDO-ELEMENT**, and the marker is one — so the condition Guy put
+        // on it (3:1 against every fill a cell can carry) is invisible to every rule this file runs
+        // and to every guard in Rust, which can read that the rule EXISTS and never what it renders
+        // against. The story first dropped the marker on arithmetic done by hand and got it wrong
+        // in the safe direction; this computes the ratio in the browser, on the four fills, and
+        // fails under 3:1. ⚠️ A fill that is a PATTERN over a transparent background is measured
+        // against the page's own ground, which is what the eye sees between the pattern's strokes.
+        const marker = await page.evaluate(() => {
+          const parse = (value) => {
+            const found = (value ?? "").match(/[\d.]+/g);
+            if (found === null || found.length < 3) return null;
+            if (found.length > 3 && Number(found[3]) === 0) return null;
+            return found.slice(0, 3).map(Number);
+          };
+          const luminance = (rgb) => {
+            const channel = (v) => {
+              const s = v / 255;
+              return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+            };
+            return (
+              0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2])
+            );
+          };
+          const ratio = (a, b) => {
+            const [hi, lo] = luminance(a) > luminance(b) ? [a, b] : [b, a];
+            return (luminance(hi) + 0.05) / (luminance(lo) + 0.05);
+          };
+          const cell = document.querySelector("li.ipam-cell-seen");
+          if (cell === null) return { cells: 0 };
+          const dot = parse(getComputedStyle(cell, "::after").backgroundColor);
+          if (dot === null) return { cells: 1, dot: null };
+          const ground = parse(getComputedStyle(document.body).backgroundColor) ?? [255, 255, 255];
+          const fills = [
+            "ipam-cell-defined",
+            "ipam-cell-free",
+            "ipam-cell-infrastructure",
+            "ipam-cell-not-covered",
+          ].map((modifier) => {
+            const el = document.querySelector(`li.${modifier}`);
+            const own = el === null ? null : parse(getComputedStyle(el).backgroundColor);
+            return {
+              modifier,
+              measured: el !== null,
+              onGround: own === null,
+              ratio: Math.round(ratio(dot, own ?? ground) * 100) / 100,
+            };
+          });
+          return {
+            cells: document.querySelectorAll("li.ipam-cell-seen").length,
+            dot,
+            fills,
+          };
+        });
+        if (marker.cells === 0) {
+          if (REQUIRE_AUDIT) {
+            cannotRun(
+              `${PLAN_ROUTE} draws no cell the network has been seen on, so decision 8's marker ` +
+                `is on no cell this gate can measure. Seed the sightings before the gate runs.`,
+            );
+          }
+          console.log(`⚠️  ${PLAN_ROUTE}: no seen cell, so the marker was NOT measured.`);
+        } else if (marker.dot === null) {
+          markerFailure =
+            `the seen marker paints NOTHING: \`.ipam-cell-seen::after\` has no background colour, ` +
+            `so the cells the network has been seen on are marked by nothing at all`;
+          console.log(`🔴 ${PLAN_ROUTE}  ${markerFailure}`);
+        } else {
+          const missedFill = marker.fills.filter((fill) => !fill.measured);
+          if (missedFill.length > 0 && REQUIRE_AUDIT) {
+            cannotRun(
+              `${PLAN_ROUTE} draws no ${missedFill.map((f) => f.modifier).join(", ")} cell, so ` +
+                `the marker was not measured against every fill. The seed must draw all four.`,
+            );
+          }
+          const tooFaint = marker.fills.filter((fill) => fill.ratio < 3);
+          if (tooFaint.length > 0) {
+            markerFailure =
+              `the seen marker falls under 3:1 on ${tooFaint
+                .map((f) => `${f.modifier} (${f.ratio}:1)`)
+                .join(", ")} — decision 8 keeps the marker only while it clears 3:1 on every fill`;
+            console.log(`🔴 ${PLAN_ROUTE}  ${markerFailure}`);
+          } else {
+            console.log(
+              `   ${PLAN_ROUTE}: ${marker.cells} seen cell(s); marker contrast ` +
+                marker.fills
+                  .map((f) => `${f.modifier} ${f.ratio}:1${f.onGround ? " (on the ground)" : ""}`)
+                  .join(" · "),
+            );
+          }
+        }
+
+        // ── Story 14.3b: the warning the address field shows BEFORE the write, under axe ────
+        // It appears only when someone types, so no URL state can reach it: the gate opens the
+        // address form, types an address the seed shows in use, waits for the warning, and runs axe
+        // over the page as it then stands.
+        const hasForm = await page.$("#ipam-form-address");
+        if (hasForm !== null) {
+          await page.$eval("#ipam-form-address", (el) => {
+            el.open = true;
+          });
+          const asked = page
+            .waitForResponse((r) => r.url().includes("/ipam/address-check"), {
+              timeout: NAV_TIMEOUT_MS,
+            })
+            .catch(() => null);
+          await page.focus("#ipam-addr");
+          await page.keyboard.type(SEEN_ADDRESS);
+          const answered = await asked;
+          const warning = await page
+            .waitForFunction(
+              () => (document.getElementById("ipam-addr-warning")?.textContent ?? "").trim() !== "",
+              { timeout: NAV_TIMEOUT_MS },
+            )
+            .then(() => true)
+            .catch(() => false);
+          if (answered === null || !warning) {
+            // 🔴 **THE FORM IS ON THE PAGE AND THE SEEDED SIGHTING IS IN THE STORE, so a warning
+            // that does not arrive is the PRODUCT** — reported as a failure (1), not as *the gate
+            // could not run* (2). The `cannotRun` this replaces would have turned a broken warning
+            // into an amber *fix your harness*, which is the one thing a gate must never say about
+            // a real regression.
+            warningFailure =
+              `typing ${SEEN_ADDRESS} into the address field produced no warning: the form is on ` +
+              `the page and the store holds that sighting, so the warning is broken`;
+            console.log(`🔴 ${PLAN_ROUTE}  ${warningFailure}`);
+          } else {
+            await page.addScriptTag({ content: axeSource });
+            const results = await page.evaluate(
+              async (tags) =>
+                await window.axe.run(document, { runOnly: { type: "tag", values: tags } }),
+              TAGS,
+            );
+            warningStateMeasured = true;
+            warningViolations = results.violations.reduce((sum, v) => sum + v.nodes.length, 0);
+            if (results.violations.length > 0) {
+              for (const violation of results.violations) {
+                console.log(
+                  `🔴 ${PLAN_ROUTE} (address warning)  ${violation.id}(${violation.nodes.length}, ${violation.impact})`,
+                );
+              }
+            } else {
+              console.log(`✅ ${PLAN_ROUTE} (address warning shown)`);
+            }
+          }
+        } else if (REQUIRE_AUDIT) {
+          // No FORM is a harness or seed problem — the plan has no subnet in force, so the two
+          // forms that hang from one are not rendered at all. That really is *could not run*.
+          cannotRun(`${PLAN_ROUTE} carries no address form, so the warning cannot be reached.`);
+        } else {
+          // 🔴 **AND IT USED TO SKIP IN SILENCE.** Without `AXE_REQUIRE_AUDIT` the missing form
+          // produced no line at all, so a run that measured nothing looked exactly like a run that
+          // measured everything — the shape this whole file exists to prevent, one branch over.
+          console.log(
+            `⚠️  ${PLAN_ROUTE} carries no address form: the warning was NOT measured. ` +
+              `Set AXE_REQUIRE_AUDIT=1 to make that a refusal rather than a gap.`,
+          );
+        }
       }
     } finally {
       await page.close();
@@ -405,6 +646,27 @@ async function main() {
   if (planIndistinguishable !== null) {
     failing.push(`${PLAN_ROUTE} (free vs not-covered)`);
   }
+  if (auditIndistinguishable !== null) {
+    failing.push(`${PLAN_ROUTE} (the audit's three words)`);
+  }
+  if (markerFailure !== null) {
+    failing.push(`${PLAN_ROUTE} (the seen marker)`);
+  }
+  if (warningFailure !== null) {
+    failing.push(`${PLAN_ROUTE} (the address warning did not appear)`);
+  }
+  // 🔑 The warning state is a STATE, counted as one — its violation nodes join the total and its
+  // name joins the list of states measured. ⚠️ It was added to `nodes` while being absent from the
+  // state COUNT the summary prints, so the line reported N nodes over fewer states than had been
+  // walked: a numerator and a denominator that do not describe the same set.
+  let extraStates = 0;
+  if (warningStateMeasured) {
+    extraStates += 1;
+    nodes += warningViolations;
+    if (warningViolations > 0) {
+      failing.push(`${PLAN_ROUTE} (address warning)`);
+    }
+  }
   for (const route of [...routes, ...states]) {
     const page = await openPage();
     await goOrGiveUp(page, route);
@@ -441,7 +703,7 @@ async function main() {
 
   console.log(
     `\naxe gate: ${routes.length} route(s) derived from the navigation plus ` +
-      `${states.length} state(s) no href carries, ${nodes} violation node(s)`,
+      `${states.length + extraStates} state(s) no href carries, ${nodes} violation node(s)`,
   );
   // 🔑 Keyed on the FAILING ROUTES, not on the node count: a violation carrying zero nodes
   // printed a red line and exited 0 — a failure indistinguishable from a success, which is

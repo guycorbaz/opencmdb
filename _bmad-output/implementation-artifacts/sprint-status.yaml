@@ -5624,7 +5624,7 @@ development_status:
   #   nothing can fill, so 14.2's empty-plan sentence names the gesture as NOT YET BUILT through
   #   `Gesture::Planned { owner }` -- the shape story 6b.4b made a compile-time obligation, so this
   #   story cannot ship its route without meeting that site.
-  14-3a-the-sightings-summary: review
+  14-3a-the-sightings-summary: done
   #   🔴 INSERTED 2026-09-15 at story 14.3's VALIDATION (Guy: split) -- Epic 14 goes from FIVE stories
   #   to SIX (`epics.md` NOT edited; registered). The bounded SIGHTING SUMMARY the audit reads: one row
   #   per distinct (address, l2_domain, MAC or `-`) with its first and last sighting, written in each
@@ -5632,7 +5632,7 @@ development_status:
   #   every observation row on each render measured 3.0-3.3 s at 1 M rows (~75 days of sweeping).
   #   IMPLEMENTED 2026-09-15 (PR #179): 1 M rows backfilled in ~2 s. Code-reviewed by three isolated
   #   layers the same day: 1 decision (the boot becomes the tested seam `open_store`), 18 patches.
-  14-3b-the-audit: ready-for-dev
+  14-3b-the-audit: review
   #   ✅ T0 TAKEN 2026-09-15 -- all fourteen decisions, the recommendations throughout: gap = an observed
   #   address the plan would OFFER, undeclared = every other unrowed one, never in a dhcp-pool; the most
   #   protective range decides; the offer draws from `static` only and excludes seen AND documented

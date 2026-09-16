@@ -21,8 +21,16 @@
 //!
 //! ⚠️ **Nothing here writes provenance, so the `authorship` gate owes this file no sanction.** The
 //! plan is a SECOND declared register beside `declared_attribute` (Guy's arbitration (4) of
-//! 2026-09-10) and the two never touch; `ip_subnet` has no `origin` column and no author. Said
-//! rather than left to be inferred from the gate staying green.
+//! 2026-09-10); `ip_subnet` has no `origin` column and no author. Said rather than left to be
+//! inferred from the gate staying green.
+//!
+//! 🔴 **The two registers are COMPARED since story 14.3b, and this doc said they *never touch*.**
+//! The audit reads the documented `ipv4` values to decide what may be offered (decision 4) and what
+//! triage has a question about — through `ipam_audit.rs` alone, which is the one module the plan's
+//! guard allows to reach them. They are still not FUSED, which is what Guy's arbitration protects:
+//! *IPAM says what was MEANT to be there, `declared_attribute` says what is DOCUMENTED*, and an
+//! address documented outside the plan stays visible as exactly that. ⚠️ Nothing changed for THIS
+//! file — `IpamWriteState` holds a port and no pool, so it cannot read either register.
 //!
 //! # The state holds a PORT and no pool, and that is a compile-time property
 //!

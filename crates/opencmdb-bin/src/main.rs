@@ -23,6 +23,7 @@ mod fixture_connector;
 mod fixtures;
 mod identity_view;
 mod inventory_view;
+mod ipam_audit;
 mod ipam_page;
 mod ipam_repo;
 mod ipam_write;
@@ -1971,8 +1972,65 @@ mod tests {
                     .unwrap();
                 (screen, response.status(), started.elapsed())
             }
-        }))
-        .await;
+        }));
+        // 🔴 Story 14.3b's two checks read the store and are NOT `Screen`s, so the derivation above
+        // cannot see them — probed here by name, concurrently, so the guard still costs one budget
+        // and not three.
+        let probe_check = |uri: String| {
+            let pool = pool.clone();
+            async move {
+                let started = std::time::Instant::now();
+                let response = app(pool, config(false, Some(pair())), facts())
+                    .oneshot(
+                        Request::builder()
+                            .uri(uri)
+                            .header(
+                                axum::http::header::AUTHORIZATION,
+                                basic_header("op", "s3cret"),
+                            )
+                            .body(Body::empty())
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                let status = response.status();
+                let elapsed = started.elapsed();
+                (status, elapsed, body_text(response).await)
+            }
+        };
+        let (measured, address, range) = tokio::join!(
+            measured,
+            probe_check(format!("{}?addr=192.0.2.9", ipam_page::ADDRESS_CHECK_PATH)),
+            probe_check(format!(
+                "{}?first=192.0.2.1&last=192.0.2.9&policy=static",
+                ipam_page::RANGE_CHECK_PATH
+            )),
+        );
+        // 🔴 **A CHECK REFUSES WITH A SENTENCE AND NOT WITH A STATUS, and this assertion read
+        // `INTERNAL_SERVER_ERROR` until the code review.** htmx does not swap a 5xx, so the failing
+        // answer left the live region holding the PREVIOUS address's warning under a new value —
+        // measured. What must still hold is the CLOCK, which is what this guard is for; what
+        // changed is that the refusal is now something the operator can read.
+        let unavailable = rust_i18n::t!("ipam.check.unavailable").to_string();
+        for (what, (status, elapsed, body)) in
+            [("the address check", address), ("the range check", range)]
+        {
+            assert_eq!(
+                status,
+                StatusCode::OK,
+                "{what} must answer a body rather than a status: a refusal htmx does not swap \
+                 leaves the previous answer standing under a new value"
+            );
+            assert!(
+                body.contains(&unavailable),
+                "{what} must SAY it could not check — a silent empty answer is read as \
+                 *nothing is known about this address*, which is the opposite: {body}"
+            );
+            assert!(
+                elapsed < budget * 2,
+                "{what} answered in {elapsed:?}, past twice its {budget:?} budget"
+            );
+        }
         assert!(
             measured.len() >= 4,
             "the premise: at least four screens read the store ({}) — with fewer, this guard has \
@@ -1994,6 +2052,58 @@ mod tests {
                 screen.href()
             );
         }
+    }
+
+    /// Story 14.3b's AC4 — the two checks are GET routes that are neither write routes nor
+    /// `Screen`s, so neither perimeter guard walks them by default (story 6b.2's defect, where a
+    /// route no guard named answered 200 without a credential). They are named here, both halves.
+    ///
+    /// ⚠️ **The RANGE check joined them at the code review**, which found the range form's warning
+    /// deferred by the implementer where AC4 asks for it or for a reason — and a second unguarded
+    /// GET route would have been the very defect this test exists for, added by the patch that
+    /// closed another finding.
+    #[tokio::test]
+    async fn the_address_check_is_refused_without_a_credential_and_exists() {
+        for uri in [
+            format!("{}?addr=", ipam_page::ADDRESS_CHECK_PATH),
+            format!("{}?first=&last=&policy=", ipam_page::RANGE_CHECK_PATH),
+        ] {
+            the_check_is_refused_without_a_credential_and_exists(&uri).await;
+        }
+    }
+
+    /// One check's two halves: 401 without a credential, and something other than 404 with one.
+    async fn the_check_is_refused_without_a_credential_and_exists(uri: &str) {
+        let response = app(lazy_pool(), config(true, Some(pair())), facts())
+            .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "{uri} must answer 401 without a credential"
+        );
+        assert_eq!(www_authenticate(&response).as_deref(), Some(CHALLENGE));
+
+        let response = app(lazy_pool(), config(true, Some(pair())), facts())
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .header(
+                        axum::http::header::AUTHORIZATION,
+                        basic_header("op", "s3cret"),
+                    )
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "with a credential the route exists — and an address not yet typed is answered before \
+             the store is touched, which is why a lazy pool is enough"
+        );
     }
 
     /// 🔴 **The operator's own records come FIRST, and the example list below them.**

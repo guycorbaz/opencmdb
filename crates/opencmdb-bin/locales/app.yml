@@ -826,20 +826,114 @@ ipam.cell_label_in_policy:
 # 🔑 A LIST AND NEVER A RATIO. A percentage invites a reader to compare two subnets whose sizes
 # differ, and the occupancy of a plan is not a rate; it is also why `ipam/` needs no float.
 ipam.occupancy:
-  en: "%{defined} defined · %{free} free · %{infrastructure} infrastructure · %{not_covered} not covered"
-  fr: "%{defined} définies · %{free} libres · %{infrastructure} infrastructure · %{not_covered} hors du plan"
+  en: "%{defined} defined · %{free} free to assign · %{infrastructure} infrastructure · %{not_covered} not covered"
+  fr: "%{defined} définies · %{free} libres à attribuer · %{infrastructure} infrastructure · %{not_covered} hors du plan"
 ipam.next_free:
   en: "Next address the plan can offer"
   fr: "Prochaine adresse que le plan peut offrir"
 # ⚠️ It says THE PLAN and not *the network*: until story 14.3 excludes every observed address, this
 # panel answers what the plan allows and not what is actually free out there. Naming the source is
 # what stops the sentence being read as a promise it cannot keep.
+# 🔴 TWO SENTENCES, and the code review is what separated them: the one below was VACUOUS over a
+# subnet no static range reaches — it announced an exhausted offer where nothing was ever offered —
+# and FALSE when an overlapping `reserved` range is what emptied a static one, which it did not name.
 ipam.next_free_none:
-  en: "None — every address in this subnet is defined, infrastructure, or outside every range"
-  fr: "Aucune — toutes les adresses de ce sous-réseau sont définies, infrastructure, ou hors plage"
+  en: "None — nothing a static range holds here can be offered: each address is defined, documented, already seen on the network, an edge, or covered by a more protective range"
+  fr: "Aucune — rien de ce qu'une plage statique contient ici ne peut être proposé : chaque adresse est définie, documentée, déjà vue sur le réseau, une bordure, ou couverte par une plage plus protectrice"
+ipam.next_free_no_static:
+  en: "None — no static range reaches this subnet, and the offer draws from static ranges only"
+  fr: "Aucune — aucune plage statique n'atteint ce sous-réseau, et l'offre ne puise que dans les plages statiques"
 ipam.next_free_caveat:
-  en: "From the plan alone; the network has not been consulted."
-  fr: "D'après le plan seul ; le réseau n'a pas été consulté."
+  en: "Only from static ranges, and never an address the network has been seen on or a documented one."
+  fr: "Uniquement dans les plages statiques, et jamais une adresse vue sur le réseau ni une adresse documentée."
+ipam.cell_label_seen:
+  en: "%{label} · seen: %{sightings}"
+  fr: "%{label} · vue : %{sightings}"
+ipam.findings.heading:
+  en: "What the network shows"
+  fr: "Ce que montre le réseau"
+ipam.findings.none:
+  en: "Nothing the network has shown contradicts this subnet's plan."
+  fr: "Rien de ce que le réseau a montré ne contredit le plan de ce sous-réseau."
+ipam.finding.seen_mac:
+  en: "hardware address %{mac}, last seen %{at}"
+  fr: "adresse matérielle %{mac}, vue pour la dernière fois le %{at}"
+ipam.finding.seen_no_mac:
+  en: "no hardware address, last seen %{at}"
+  fr: "sans adresse matérielle, vue pour la dernière fois le %{at}"
+# 🔴 ONE SENTENCE PER COUNT, NEVER `(s)`. Story 6b.10's review found `1 field(s)` on `/triage` and
+# fixed it as a CLASS with a property over this whole file; a new parenthetical plural here would
+# reopen it. A cell's name carries the three most recent hardware addresses and then says how many
+# it is not showing — the findings list below the grid keeps every one of them.
+ipam.finding.more_one:
+  en: "and %{count} other hardware address"
+  fr: "et %{count} autre adresse matérielle"
+ipam.finding.more_many:
+  en: "and %{count} other hardware addresses"
+  fr: "et %{count} autres adresses matérielles"
+ipam.finding.conflict:
+  en: "Address conflict"
+  fr: "Conflit d'adresse"
+ipam.finding.conflict_note:
+  en: "Two hardware addresses were seen on this address. A replaced card and a duplicate look the same from here."
+  fr: "Deux adresses matérielles ont été vues sur cette adresse. Une carte remplacée et un doublon se ressemblent vus d'ici."
+ipam.finding.triage_link:
+  en: "Open its question in triage"
+  fr: "Ouvrir sa question dans le tri"
+ipam.finding.documented:
+  en: "Documented in the inventory, so triage asks nothing about it"
+  fr: "Documentée dans l'inventaire, le tri ne pose donc aucune question à son sujet"
+ipam.outside.heading:
+  en: "Seen outside every subnet of the plan"
+  fr: "Vues hors de tout sous-réseau du plan"
+# Decision 11 says *short*, and the code review measured 5 000 addresses there on one page. The list
+# shows the twenty most recently seen and SAYS how many it is not showing — a bound that hides its
+# own existence would let the screen claim the network showed only what it had room for.
+ipam.outside.more_one:
+  en: "and %{count} other address seen outside the plan"
+  fr: "et %{count} autre adresse vue hors du plan"
+ipam.outside.more_many:
+  en: "and %{count} other addresses seen outside the plan"
+  fr: "et %{count} autres adresses vues hors du plan"
+ipam.pool_warning.heading:
+  en: "Defined inside a DHCP pool"
+  fr: "Définies dans un pool DHCP"
+ipam.pool_warning.item:
+  en: "%{address} is defined inside a dhcp-pool range: the pool may hand it to another machine."
+  fr: "%{address} est définie dans une plage pool DHCP : le pool peut l'attribuer à une autre machine."
+ipam.too_large_no_offer:
+  en: "No address is offered for a subnet this size."
+  fr: "Aucune adresse n'est proposée pour un sous-réseau de cette taille."
+ipam.check.seen:
+  en: "%{address} has been seen on the network: a machine may already be using it."
+  fr: "%{address} a été vue sur le réseau : une machine l'utilise peut-être déjà."
+ipam.check.documented:
+  en: "%{address} is documented in the inventory."
+  fr: "%{address} est documentée dans l'inventaire."
+ipam.check.defined:
+  en: "%{address} is already defined in the plan."
+  fr: "%{address} est déjà définie dans le plan."
+ipam.check.in_pool:
+  en: "%{address} is inside a dhcp-pool range: the pool may hand it to another machine."
+  fr: "%{address} est dans une plage pool DHCP : le pool peut l'attribuer à une autre machine."
+ipam.check.still_writes:
+  en: "You can still define it."
+  fr: "Vous pouvez tout de même la définir."
+# 🔴 THE ANSWER WHEN THERE IS NO ANSWER. A check that refused with a status left htmx holding the
+# PREVIOUS address's warning under a new value — a sentence about an address the operator is no
+# longer writing — and a render failure put a whole error page inside a live region.
+ipam.check.unavailable:
+  en: "The plan could not be checked just now. The write does not depend on this check."
+  fr: "La vérification du plan n'a pas abouti. L'écriture ne dépend pas de cette vérification."
+# The RANGE form's warning before the write (Guy, 2026-09-15). It names the count and refuses
+# nothing: defining a static range over addresses already in use is ordinary when the operator is
+# writing down what is already there.
+ipam.check.range_seen_one:
+  en: "%{count} address already seen on the network would fall inside this static range."
+  fr: "%{count} adresse déjà vue sur le réseau tomberait dans cette plage statique."
+ipam.check.range_seen_many:
+  en: "%{count} addresses already seen on the network would fall inside this static range."
+  fr: "%{count} adresses déjà vues sur le réseau tomberaient dans cette plage statique."
 ipam.unknown_subnet:
   en: "No subnet is named by this identifier. Choose one above."
   fr: "Aucun sous-réseau ne porte cet identifiant. Choisissez-en un ci-dessus."

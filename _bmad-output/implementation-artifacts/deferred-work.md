@@ -4407,6 +4407,11 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   carried by nothing.** Putting a full subnet in the example dataset to exercise one line would be
   shaping the demonstration around the test. **Owner: Epic 14**, where a full subnet is an ordinary
   state rather than a fixture.
+  ✅ **CLOSED by story 14.3b**: the sentence is reworded to name the new exclusions (defined, documented,
+  seen on the network, an edge) and its RENDER is carried by
+  `the_occupancy_and_the_empty_offer_follow_the_audit` — in English, the default locale the test
+  renders in; the French value exists and is carried by `every_key_carries_both_locales`, and no test
+  renders it.
   ⚠️ **STALE since story 14.2** (story 14.3's fact-check, 2026-09-15): the example dataset is gone and the
   key IS reachable on the real product — any subnet with no range renders it (`ipam_page.rs:607`). What
   is still missing is a RENDER test, and its text (*"every address in this subnet is defined,
@@ -5539,7 +5544,9 @@ One row, and v0.3.0 is what made it live.
   `dhcp-pool` range gets no warning. The story said *"registered with 14.3 by name"*; its code review
   found no row. **Owner: story 14.3b**, where that warning belongs. ✅ **Decided by Guy, 2026-09-15 (14.3b decision 13)**:
   an address defined inside a `dhcp-pool` carries a keyed WARNING on `/ipam`, not a conflict, and still
-  writes.
+  writes. ✅ **CLOSED by story 14.3b**: `/ipam` lists it under *Defined inside a DHCP pool*
+  (`ipam.pool_warning.*`), and the address field warns about it BEFORE the write (`ipam.check.in_pool`);
+  the write still succeeds.
 
 - ⚠️ **D56b's *one trailing test module per file* does not hold across the crate**:
   `crates/opencmdb-bin/src/example_screens.rs` carries FOUR line-start `#[cfg(test)]`. Measured by
@@ -5636,3 +5643,91 @@ One row, and v0.3.0 is what made it live.
   and the next boot would start over. Not reachable on the shipped deployment — the image and
   `docker/docker-compose.yml` carry no `HEALTHCHECK` — **Owner: the story that adds a health check or a
   readiness probe.**
+
+## Raised by story 14.3b's implementation (2026-09-15)
+
+- ✅ ~~**No "seen" marker on the grid's cells, by decision 8's own condition.**~~ **BUILT at the code
+  review (Guy, 2026-09-15), and the row above was standing on ARITHMETIC THAT WAS WRONG.** It required one
+  colour to clear both bounds and named two fills of four; two review layers re-did it. A BLACK marker
+  reaches **3.25:1** against the defined fill (#416180, relative luminance 0.1124) and **18.77:1** against
+  the page ground (#f2f2f3) — the other three fills are patterns over that same ground — so decision 8's
+  condition is MET. ⚠️ Those two figures are the BROWSER's, printed by `a11y/axe-gate.mjs` over the seeded
+  plan; the hand arithmetic that opened the question said 3.25 and 18.6, and the second was an estimate. ⚠️ `--color-text` (#1d1f20) does **not**: 2.56:1 on the defined fill, which is what the
+  *"at most 0.30"* bound was really about. The marker is a `::after` dot, **invisible to axe**, so
+  `a11y/axe-gate.mjs` computes the ratio in the browser on all four fills and fails under 3:1. *A treatment
+  no gate measures is a treatment nobody maintains.*
+- ✅ ~~**The RANGE form does not warn when its `static` range covers seen addresses.**~~ **BUILT at the code
+  review**: `GET /ipam/range-check` answers *n addresses already seen on the network would fall inside this
+  static range*, on the address check's own contract — it warns, it refuses nothing, the POST is untouched —
+  with its own live region, its own perimeter test, its own budget probe and two keyboard-gate checks.
+  ⚠️ **The deferral was the implementer's and not Guy's**, which the acceptance layer named: §1(e) claimed
+  decision 7 covered this form, and AC4's *"or says why not"* was spent on a reason nobody had taken.
+- ⚠️ **The warning is silent for `reserved`, `infrastructure`, edge and outside-the-plan addresses, and it
+  announces INTERMEDIATE addresses while the operator types.** `192.0.2.1` is a complete address on the way
+  to `192.0.2.14`, so a warning about the first can be announced before the second is finished; and an
+  address the plan protects for another reason gets no sentence, because the check speaks only about what
+  is SEEN, DOCUMENTED, DEFINED or inside a pool. Both are stated limits rather than defects — the live
+  region is polite, so nothing is interrupted — and the second is the price of warning before the write at
+  all. **Owner: the story that revisits the address form** (14.4), which may want a *policy* line too.
+- ⚠️ **`ipam_repo::addresses_in` was REMOVED, not deprecated.** The grid reads the plan-wide defined
+  addresses since the code review (decision 2 applied to the grid), so the per-subnet read had no
+  production caller at all and clippy said so under `-D warnings`. Its test went with it. **Owner: story
+  14.4**, which may need a per-subnet address read for release and should write it then rather than inherit
+  a function kept warm for a use it had not got — `ipam_write.rs`'s own rule about `WriteRoute::paths`.
+- ⚠️ **Decision 5's merge across L2 domains reads REUSED PRIVATE SPACE as a conflict.** `192.168.1.10` in
+  two separate broadcast domains is two hardware addresses on one IPv4 here, so `/ipam` calls it
+  « Conflit d'adresse ». It is the price of merging, and the plan has no VLAN axis to tell the two apart
+  (FR21's VLAN half is in Epic 14's scope and outside the arbitrations). Not reachable on the shipped
+  product — the connector reports one `l2_domain`, the nil UUID — and pinned by
+  `one_address_in_two_l2_domains_is_read_as_a_conflict` so the day it changes, a test says so.
+  **Owner: the story that adds the VLAN axis (FR21).**
+- ⚠️ **A finding's triage link is decided from the DECLARED register, not from the triage queue.** The
+  queue raises a `nouveau:` row for an observed IPv4 no declared value claims, from `observation_record`;
+  the audit reads story 14.3a's summary, which keeps a sighting after its observation is gone. So an
+  address whose only observation was purged would link to a question triage no longer asks — unreachable
+  today (nothing purges observations; issue #150). **Owner: the story that retires observations.**
+- ⚠️ **The address check reads the whole plan and the whole summary on every answered keystroke**, after
+  a 400 ms `delay:`. Bounded by the plan's size and the network's distinct pairs, both small on the
+  reference network, and inside the page budget; not measured at a large plan. **Owner: the story that
+  measures `/ipam` at a plan of thousands of ranges.**
+- ⚠️ **The epic's AC1 letter for `static`** is registered above (story 14.3's validation) and applied as
+  decided: an observed address the plan would offer is a `gap`, never `undeclared`.
+
+## Raised by the code review of 14-3b-the-audit (2026-09-15)
+
+- ⚠️ **The plan's guard misses a read reached through a THIRD module's reader** — measured by the review's
+  edge layer, which planted `crate::scan_pass::counted_current_engine_links(pool)` in `ipam_page.rs` and
+  watched the whole suite stay green. The call names neither a plan-foreign table nor the `repo` token,
+  because the table is named inside `scan_pass.rs`. The guard follows ONE module by name; any module that
+  re-exports a read is a door beside it. Closing it means following the call graph, which is a different
+  instrument from a source scan. Written into the guard's own doc as its third stated limit — a TRIPWIRE,
+  never a barrier (story 5.12's framing). **Owner: the story that needs the guard to be a barrier.**
+
+- 🔴 **A `contains` ORACLE OVER A TRANSLATED SENTENCE CANNOT MEASURE THE NEGATIVE DIRECTION.** Found by
+  mutation MP6 in 14.3b's repair pass: `!body.contains(&t!("ipam.findings.none"))` passed over a page that
+  carried the sentence, because the value holds an apostrophe and **Askama escapes it to `&#x27;`** —
+  a resolved string never matches an escaped render. The positive direction is safe only for values with
+  no escapable character, which nothing checks. ⚠️ **This is a CLASS, not an instance**: `app.yml` holds
+  many values with `'`, `"`, `<` or `&`, and any test asserting their absence is vacuous the same way.
+  The repaired test anchors on an `id` the template emits as a literal. **Owner: unassigned** — the next
+  story that adds a render assertion on a translated sentence; a property over the locale file (which
+  values carry an escapable character) would close it as a class.
+- ⚠️ **An empty ARIA landmark with a dangling `aria-labelledby` shipped past BOTH browser gates.** With no
+  subnet in force, `/ipam` rendered `<section class="ipam-audit" aria-labelledby="ipam-findings-heading">`
+  with no such `id` on the page and, when nothing was outside the plan, no content either. axe reported 0
+  violations over it on both the empty-plan and the seeded passes. Fixed in 14.3b's repair (the section
+  renders only when it has content, the attribute only where its target exists); **what is registered is
+  that neither gate saw it** — the empty-plan pass measures a page whose audit section is usually
+  non-empty, and no check asserts that an `aria-labelledby` resolves. **Owner: the next story touching the
+  browser gates**, which could add that assertion once for every landmark.
+
+## Deferred from: code review of 14-3b-the-audit (2026-09-15)
+
+- ⚠️ **A screen read waiting on a METADATA lock keeps its pool connection past its budget.** Measured by the
+  review's edge layer: with `LOCK TABLES address_sighting WRITE` held, fourteen `/ipam/address-check`
+  requests each answered 500 at 5.00 s — and the pool stayed exhausted, so `/triage`, which does not read
+  that table, answered 500 too; it recovered in 5.8 ms once the lock was released. `store_within` drops the
+  future while the server-side read keeps waiting. Ordinary InnoDB row locks from ingestion do not block
+  these reads, so the trigger is narrow (DDL, `LOCK TABLES`); the class is every budgeted screen's, which the
+  address check multiplies per keystroke. The plan's WRITES carry a 4 s lock-wait cap (story 14.2b); no read
+  does. **Owner: the story that gives the page budget a server-side statement cap (`max_statement_time`).**

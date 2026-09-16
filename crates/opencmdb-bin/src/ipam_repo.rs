@@ -189,11 +189,28 @@ impl Subnet {
 
     /// Whether this address is the subnet's network or broadcast address.
     ///
-    /// ⚠️ On a `/31` and a `/32` the two coincide or vanish; the predicate is written as a
-    /// comparison against both bounds rather than as arithmetic on the prefix length, so those
-    /// cases answer without a special arm.
+    /// 🔴 **A `/31` AND A `/32` HAVE NO EDGES, and the first draft said the comparison handled them
+    /// "without a special arm" — it did, and the answer was WRONG.** Measured by the code review's
+    /// edge layer: on a `/31` both addresses compare equal to a bound, so a point-to-point link
+    /// declared `static` offered NEITHER of its two addresses, and a `/32` host route offered
+    /// nothing at all — the two shapes an operator declares for exactly the addresses they mean to
+    /// assign. **RFC 3021** says both addresses of a `/31` are usable, and a `/32` is a single host.
+    ///
+    /// 🔑 The prefix length is what settles it, so the arm is explicit rather than implied: there is
+    /// no network/broadcast pair to reserve when the subnet is too small to hold one.
     pub(crate) fn is_edge(&self, addr: Ipv4Addr) -> bool {
+        if self.prefix_len >= 31 {
+            return false;
+        }
         addr == self.network() || addr == self.last()
+    }
+
+    /// Whether any address of this subnet falls inside the closed interval `first..=last`.
+    ///
+    /// 🔑 An INTERVAL comparison and never a walk: a `/8` holds 16 777 216 addresses, and the one
+    /// caller asks this question while rendering a page the ceiling refuses to draw.
+    pub(crate) fn overlaps(&self, first: Ipv4Addr, last: Ipv4Addr) -> bool {
+        last >= self.network() && first <= self.last()
     }
 }
 
@@ -602,37 +619,19 @@ pub(crate) async fn insert_address(
     Ok(())
 }
 
-/// Every defined address in one subnet, in address order.
-///
-/// 🔑 The `ORDER BY` is the padding's whole point: the store's own order is the numeric order, so
-/// no caller has to sort and no caller can forget to.
-///
-/// # Errors
-///
-/// The classified `sqlx::Error`, or [`IpamError::MalformedAddress`] when a stored value is not this
-/// store's canonical spelling — reachable only by a write that went around this module.
-pub(crate) async fn addresses_in<'e, E>(
-    executor: E,
-    subnet_id: &str,
-) -> Result<Vec<Ipv4Addr>, RepositoryError>
-where
-    E: Executor<'e, Database = MySql>,
-{
-    let rows: Vec<(String,)> =
-        sqlx::query_as("SELECT addr FROM ip_address WHERE subnet_id = ? ORDER BY addr")
-            .bind(subnet_id)
-            .fetch_all(executor)
-            .await
-            .map_err(classify)?;
-    rows.into_iter()
-        .map(|(addr,)| from_canonical(&addr).map_err(ipam))
-        .collect()
-}
+// ⚠️ **`addresses_in` — the per-subnet defined-address read — was REMOVED at story 14.3b's code
+// review, and this note is here so the next reader knows it was a decision.** The grid is derived
+// from the PLAN-WIDE ranges and addresses since then (decision 2 applied to the cells, not only to
+// the offer), so the function had no production caller at all and clippy said so under
+// `-D warnings`. Kept only for its own test, it would have been SQL nothing runs, verified by a
+// guard where the defect cannot occur — this epic's dominant class. Story 14.4 may need a
+// per-subnet read for release; writing it then is cheaper than keeping this one warm for a use it
+// had not got (`ipam_write.rs`'s own rule about `WriteRoute::paths`). Registered.
 
 /// Every subnet in the plan, in numeric order of its base address.
 ///
-/// 🔑 The order is the store's, for the reason `addresses_in` gives: the padded spelling makes
-/// lexicographic order numeric, so no caller sorts and no caller can forget to.
+/// 🔑 The order is the STORE's: the padded spelling makes lexicographic order numeric, so no caller
+/// sorts and no caller can forget to.
 ///
 /// # Errors
 ///
@@ -677,6 +676,102 @@ where
         }
     }
     Ok(subnets)
+}
+
+/// Every range of the plan, in every subnet, as `(first, last, policy)`.
+///
+/// 🔑 **Plan-wide, for story 14.3b's decision 2**: the most protective range decides across
+/// overlapping ranges and NESTED subnets, so the audit of one subnet reads the ranges of all of them.
+///
+/// # Errors
+///
+/// [`RepositoryError`] on a backend failure or a row this build cannot read — the same contract as
+/// [`ranges_in`].
+pub(crate) async fn plan_ranges<'e, E>(
+    executor: E,
+) -> Result<Vec<(Ipv4Addr, Ipv4Addr, IpPolicy)>, RepositoryError>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String, String, String)> =
+        sqlx::query_as("SELECT first_addr, last_addr, policy FROM ip_range ORDER BY first_addr")
+            .fetch_all(executor)
+            .await
+            .map_err(classify)?;
+    // 🔴 **ONE UNREADABLE ROW MUST NOT TAKE EVERY PAGE WITH IT — `list_subnets`'s finding, one table
+    // over, and this read is WORSE placed because it is PLAN-WIDE.** Measured by the code review's
+    // blind layer: a single `ip_range` row a raw write left unreadable — a non-canonical bound, or a
+    // policy token `ascii_bin`'s PAD SPACE collation accepts (`'static '`) — made this return `Err`,
+    // and with it `/ipam` answered 500 for EVERY subnet and the address check answered 500 for every
+    // address. *A row in one subnet breaking the page of all the others.*
+    //
+    // 🔑 Skipped and NAMED, exactly as `list_subnets` does it: the screen draws what it can and the
+    // log carries the stored spelling so the row can be found. ⚠️ A `warn`, never a `debug` — a
+    // silent skip would hide a real defect, and the audit is then reading an INCOMPLETE plan: an
+    // address a skipped `reserved` range protected can be offered, which is why this must be loud.
+    let mut ranges = Vec::with_capacity(rows.len());
+    for (first, last, policy) in rows {
+        match read_range_row(&first, &last, &policy) {
+            Ok(range) => ranges.push(range),
+            Err(error) => tracing::warn!(
+                stored_first = %first,
+                stored_last = %last,
+                stored_policy = %policy,
+                %error,
+                "skipping an ip_range row this build cannot read — the rest of the plan is drawn"
+            ),
+        }
+    }
+    Ok(ranges)
+}
+
+/// Read one `ip_range` row into the plan's vocabulary.
+///
+/// # Errors
+///
+/// [`IpamError`] behind a [`RepositoryError`] when a bound is not canonical, or a backend-shaped
+/// error naming the policy token when it is not one this build knows.
+fn read_range_row(
+    first: &str,
+    last: &str,
+    policy: &str,
+) -> Result<(Ipv4Addr, Ipv4Addr, IpPolicy), RepositoryError> {
+    Ok((
+        from_canonical(first).map_err(ipam)?,
+        from_canonical(last).map_err(ipam)?,
+        policy_from_token(policy)?,
+    ))
+}
+
+/// Every address an `ip_address` row names, in every subnet — decision 2's plan-wide half.
+///
+/// # Errors
+///
+/// [`RepositoryError`] on a backend failure or a row this build cannot read.
+pub(crate) async fn plan_addresses<'e, E>(executor: E) -> Result<Vec<Ipv4Addr>, RepositoryError>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT addr FROM ip_address ORDER BY addr")
+        .fetch_all(executor)
+        .await
+        .map_err(classify)?;
+    // Skipped and NAMED, for [`plan_ranges`]'s reason: this read is plan-wide, so one unreadable
+    // row took every `/ipam` page and every address check down with it. ⚠️ The consequence here is
+    // the mirror one: a skipped `ip_address` row is an address the plan holds and the offer no
+    // longer knows about, so it can be proposed — loud on purpose.
+    let mut defined = Vec::with_capacity(rows.len());
+    for (addr,) in rows {
+        match from_canonical(&addr) {
+            Ok(parsed) => defined.push(parsed),
+            Err(error) => tracing::warn!(
+                stored_addr = %addr,
+                %error,
+                "skipping an ip_address row this build cannot read — the rest of the plan is drawn"
+            ),
+        }
+    }
+    Ok(defined)
 }
 
 /// Every range defined in one subnet, in numeric order of its first address.
@@ -1053,7 +1148,10 @@ pub(crate) mod tests {
     ///   trailing `\n` was a SECOND accepted spelling of every address, and neither UNIQUE key
     ///   refused the pair: two rows, one address, lengths 15 and 16. It also INVERTED the ordering
     ///   this representation was chosen for (`0x0A` sorts before a space), and one poisoned row made
-    ///   [`addresses_in`] return `Err` for the whole subnet, losing the good rows with the bad.
+    ///   the defined-address read return `Err` for the whole subnet, losing the good rows with the
+    ///   bad. ⚠️ That read was `addresses_in`, removed at story 14.3b's code review; the plan-wide
+    ///   [`plan_addresses`] inherited the hazard and answers it the other way — it SKIPS the
+    ///   unreadable row and names it, because one poisoned row was taking down every `/ipam` page.
     /// - **`[0-9]{3}` bounds the SHAPE and not the VALUE**, so `999.999.999.999` was storable raw —
     ///   and unreadable back, which is the same blinding.
     ///
@@ -1183,6 +1281,11 @@ pub(crate) mod tests {
     }
 
     /// AC4 — the ORDER the store itself returns, which is the padding's whole purpose.
+    ///
+    /// ⚠️ It read back through `addresses_in` until story 14.3b's code review removed that function
+    /// with its last production caller; it reads the PLAN-WIDE `plan_addresses` now, which is what
+    /// the grid and the offer both use. The property is the store's `ORDER BY` and is unchanged —
+    /// *the test follows the reader the product has, not the one it used to have*.
     #[tokio::test]
     async fn the_store_returns_addresses_in_numeric_order() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
@@ -1208,9 +1311,7 @@ pub(crate) mod tests {
                 .await
                 .expect("the address");
         }
-        let read = addresses_in(&mut *conn, "t-order")
-            .await
-            .expect("read back");
+        let read = plan_addresses(&mut *conn).await.expect("read back");
         assert_eq!(
             read,
             vec![
@@ -1223,6 +1324,48 @@ pub(crate) mod tests {
         );
         drop(conn);
         forget_subnet(&pool, "t-order").await;
+    }
+
+    /// 🔴 **ONE UNREADABLE ROW MUST NOT TAKE EVERY `/ipam` PAGE WITH IT** — the code review's blind
+    /// layer, reasoning from the code: [`plan_ranges`] and [`plan_addresses`] are PLAN-WIDE, so a
+    /// single row this build cannot read made both return `Err`, and with them every subnet's page
+    /// and every address check answered 500. They skip and NAME it now, as [`list_subnets`] does.
+    ///
+    /// ⚠️ **AND THE STORE CANNOT PRODUCE SUCH A ROW TODAY, which is said rather than implied.** Every
+    /// spelling below is refused by `0007`'s own CHECKs: the canonical pattern admits exactly ONE
+    /// address family (pinned by `the_family_check_is_implied_until_a_second_width_exists`, whose
+    /// own subject is that vacuity) so a stored bound always parses, and
+    /// `LENGTH(policy) = LENGTH(TRIM(policy))` closes the PAD SPACE door the `IN (...)` list leaves
+    /// open. ⚠️ The address half of the decision is also pinned by
+    /// `only_the_canonical_spelling_reads_back`; it is asserted here too because this test is about
+    /// what the PLAN-WIDE readers refuse, and that redundancy is deliberate. So the skip is **defensive code whose trigger is out of
+    /// reach until FR25 widens that CHECK for IPv6** — at which point a v6 bound in a v4 build is
+    /// exactly this case. 🔑 *What is testable here is the DECISION — which spellings this build
+    /// calls unreadable — and that is what this pins; the loop around it is one `match`.*
+    /// Registering the unreachability is the honest half: a guard nobody can red is a guard whose
+    /// reach must be written down (story 14.1's `ip_range_same_family`, same shape).
+    #[test]
+    fn an_unreadable_plan_row_is_refused_by_the_reader_the_skip_consults() {
+        let canonical_first = canonical(v4("192.0.2.1"));
+        let canonical_last = canonical(v4("192.0.2.40"));
+        assert!(
+            read_range_row(&canonical_first, &canonical_last, "static").is_ok(),
+            "the control: a row this build CAN read is read"
+        );
+        assert!(
+            read_range_row("192.0.2.1", &canonical_last, "static").is_err(),
+            "an unpadded bound is a row this build cannot read — it would also sort wrongly, which \
+             is what the padding exists for"
+        );
+        assert!(
+            read_range_row(&canonical_first, &canonical_last, "static ").is_err(),
+            "and so is a policy token the `ascii_bin` PAD SPACE collation would accept in an \
+             `IN (...)` comparison"
+        );
+        assert!(
+            from_canonical("192.0.2.9").is_err(),
+            "the address half of the same decision"
+        );
     }
 
     /// 🔴 **AC5's adapter half, and the instrument is the opposite of the DDL half's.**

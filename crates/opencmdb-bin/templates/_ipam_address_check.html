@@ -1,0 +1,31 @@
+{#- The warning a form shows BEFORE the write (story 14.3b, decision 7) — the ADDRESS field's, the
+     RANGE form's, and the *could not check* sentence when the store did not answer.
+
+     🔑 It warns and the write stays possible: the last sentence says so, because the most frequent
+     legitimate case is entering into the plan the machine that is already there. An empty body when
+     there is nothing worth knowing — the region then announces nothing.
+
+     🔴 **One fragment for all three, and the third is why it matters.** A refusal used to answer
+     500, which htmx does not swap, so the region kept the PREVIOUS address's warning under a new
+     value — a sentence about an address the operator is no longer writing. Every answer is a body
+     now, including *could not check*. -#}
+{%- if !lines.is_empty() %}
+<span class="ipam-check">
+  {%- for line in lines %}
+  <span class="ipam-check-line">{{ line }}</span>
+  {%- endfor %}
+  {%- if sightings != "" %}
+  <span class="ipam-check-line ipam-sightings-inline">{{ sightings }}</span>
+  {%- endif %}
+  {#- 🔑 The link when triage has a question, and a SENTENCE when it has none — the findings list
+       said why and this fragment said nothing, so the same address read two ways one click apart. -#}
+  {%- match triage_href %}
+  {%- when Some with (href) %}
+  <a class="ipam-triage-link" href="{{ href }}">{{ triage_link }}</a>
+  {%- when None %}
+  {%- if claimed_note != "" %}
+  <span class="ipam-documented">{{ claimed_note }}</span>
+  {%- endif %}
+  {%- endmatch %}
+</span>
+{%- endif %}

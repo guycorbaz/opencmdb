@@ -312,11 +312,6 @@ pub(crate) struct Sighting {
 ///
 /// A `sqlx::Error` on a backend failure, or `Decode` on a row the schema admits and this reader
 /// cannot read — which the CHECKs make unreachable through the adapter.
-#[allow(
-    dead_code,
-    reason = "story 14.3b's audit is its production caller; story 14.3a ships the reader and its \
-              tests, and 14.3b removes this attribute"
-)]
 pub(crate) async fn load_sightings<'e, E>(executor: E) -> Result<Vec<Sighting>, sqlx::Error>
 where
     E: Executor<'e, Database = MySql>,
@@ -1497,8 +1492,14 @@ mod tests {
         let seeded = load_sightings(&pool).await.expect("read");
         assert_eq!(
             seeded.len(),
-            4,
-            "the premise: the seed sights four addresses"
+            13,
+            "the premise: the seed sights thirteen (address, MAC) pairs — four without a MAC, seven \
+             story 14.3b added so the audit has a case on a page each gate walks, and TWO its code \
+             review added, because the seed walked no conflict outside a `static` range and none on \
+             a defined address, so two of the audit's rules were on no page either gate opens. \
+             ⚠️ A premise like this is a FLOOR and must EQUAL what is there: it read eleven the \
+             moment the seed grew, which is how this project has twice caught a guard tolerating \
+             the loss of what it was written to pin"
         );
         assert_eq!(seeded, implied_by_the_observations(&pool).await);
         assert!(

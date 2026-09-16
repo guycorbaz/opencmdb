@@ -1,0 +1,105 @@
+{#- The audit of the plan against the network (story 14.3b).
+
+     🔑 A LIST under the grid (Guy's decision 8, 2026-09-15) AND a marker on the cells the network has
+     been seen on. 🔴 **This comment said the marker could not exist, and the arithmetic behind that was
+     wrong in the safe direction**: it demanded ONE colour clear both bounds and named two fills of four.
+     Black clears them — measured in the browser by `a11y/axe-gate.mjs`, **3.25:1** on the defined fill
+     (`--color-accent-700`, #416180) and **18.77:1** on the other three, which are patterns over the page
+     ground (#f2f2f3). A cell's seen state is carried by its accessible name AND by that marker; the name
+     is what a screen reader gets, and neither replaces the other.
+
+     🔑 The words are the binding vocabulary's own (constraint 5): `gap` is « écart », `undeclared` is
+     the STATE axis's word, and FR24's case is « Conflit d'adresse », never a bare `conflict`. Each is
+     a word AND a treatment (constraint 6): a filled badge, a dashed one, a heavy border — never a hue.
+
+     ⚠️ Every class below is a LITERAL, one per `if` branch, so the stylesheet guard can see them: it
+     skips a `class` attribute carrying an Askama expression. -#}
+{%- match audit %}
+{%- when Some with (audit) %}
+{#- 🔴 **NO SECTION WHEN THERE IS NOTHING IN IT, and `aria-labelledby` ONLY where its target exists.**
+     Both were found by a mutation that came back green: the wrapper rendered unconditionally, so on a
+     page with no subnet in force and nothing outside the plan it emitted an EMPTY landmark whose
+     `aria-labelledby` named an `id` the page does not carry — a dangling ARIA reference, and an empty
+     region announced to a screen reader as a section with a name and no content. -#}
+{%- if audit.subnet_in_force || !audit.outside.is_empty() %}
+<section class="ipam-audit"{% if audit.subnet_in_force %} aria-labelledby="ipam-findings-heading"{% endif %}>
+  {#- 🔑 The findings and the pool warnings are about ONE subnet; the list of addresses seen outside
+       the plan is about the PLAN. So the two pages with no subnet in force — an empty plan, and an
+       identifier no subnet carries — render the outside list alone, which the code review found
+       them dropping entirely. On an empty plan every observed address is outside, and that list is
+       the only true thing this screen has to say. -#}
+  {%- if audit.subnet_in_force %}
+  <h3 id="ipam-findings-heading" class="panel-label">{{ s.findings_heading }}</h3>
+  {%- if audit.findings.is_empty() %}
+  <p class="empty">{{ s.no_findings }}</p>
+  {%- else %}
+  <ul class="ipam-findings">
+    {%- for row in audit.findings %}
+    <li class="ipam-finding">
+      <span class="mono">{{ row.address }}</span>
+      {%- if row.gap %}
+      <span class="ipam-word ipam-word-gap">{{ s.word_gap }}</span>
+      {%- endif %}
+      {%- if row.undeclared %}
+      <span class="ipam-word ipam-word-undeclared">{{ s.word_undeclared }}</span>
+      {%- endif %}
+      {%- if row.conflict %}
+      <span class="ipam-word ipam-word-conflict">{{ s.word_conflict }}</span>
+      <span class="ipam-conflict-note">{{ s.conflict_note }}</span>
+      {%- endif %}
+      <ul class="ipam-sightings">
+        {%- for line in row.sightings %}
+        <li>{{ line }}</li>
+        {%- endfor %}
+      </ul>
+      {%- match row.triage_href %}
+      {%- when Some with (href) %}
+      <a class="ipam-triage-link" href="{{ href }}">{{ s.triage_link }}</a>
+      {%- when None %}
+      <span class="ipam-documented">{{ s.documented_no_question }}</span>
+      {%- endmatch %}
+    </li>
+    {%- endfor %}
+  </ul>
+  {%- endif %}
+
+  {%- if !audit.pool_warnings.is_empty() %}
+  <h3 class="panel-label">{{ s.pool_warning_heading }}</h3>
+  <ul class="ipam-warnings">
+    {%- for warning in audit.pool_warnings %}
+    <li>{{ warning }}</li>
+    {%- endfor %}
+  </ul>
+  {%- endif %}
+  {%- endif %}
+
+  {%- if !audit.outside.is_empty() %}
+  <h3 class="panel-label">{{ s.outside_heading }}</h3>
+  <ul class="ipam-findings ipam-outside">
+    {%- for row in audit.outside %}
+    <li class="ipam-finding">
+      <span class="mono">{{ row.address }}</span>
+      <ul class="ipam-sightings">
+        {%- for line in row.sightings %}
+        <li>{{ line }}</li>
+        {%- endfor %}
+      </ul>
+      {%- match row.triage_href %}
+      {%- when Some with (href) %}
+      <a class="ipam-triage-link" href="{{ href }}">{{ s.triage_link }}</a>
+      {%- when None %}
+      <span class="ipam-documented">{{ s.documented_no_question }}</span>
+      {%- endmatch %}
+    </li>
+    {%- endfor %}
+  </ul>
+  {#- The bound SAYS it is one. Without this line a page showing twenty of five thousand reads as a
+       network with twenty addresses outside the plan. -#}
+  {%- if audit.outside_more != "" %}
+  <p class="empty">{{ audit.outside_more }}</p>
+  {%- endif %}
+  {%- endif %}
+</section>
+{%- endif %}
+{%- when None %}
+{%- endmatch %}

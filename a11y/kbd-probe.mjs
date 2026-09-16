@@ -38,8 +38,13 @@ const SETTLE_WAIT_MS = 900;
 // caught that twice, once in a privacy floor and once in a word count. If a check is added
 // this number moves deliberately; if one is skipped, the gate says so instead of printing
 // a green.
-const MIN_CHECKS = 37;
+const MIN_CHECKS = 45;
 const MIN_ROWS = 2;
+// 🔑 The seed's own two-hardware-address sighting, in ONE place. It was written twice — typed into
+// the field at one site and spelled out inside the expected triage href at another — so a seed that
+// moved the address would have left the two disagreeing, with the gate asserting a link to a
+// question about an address it had not typed.
+const SEEN_ADDRESS = "192.0.2.20";
 /// How long a navigation or a response may take before the gate calls it *could not run*.
 const NAV_TIMEOUT_MS = 20_000;
 // The product's one live control — a CLASS the stylesheet guard already pins, never a label
@@ -805,6 +810,154 @@ async function main() {
         `activeElement id=${JSON.stringify(after.focusedId)}`,
       );
       await again.close();
+    }
+
+    // ── Story 14.3b: the address field warns BEFORE the write, and the findings are reachable ──
+    //
+    // 🔑 The warning is a GET route no perimeter guard walks by default and no axe state reaches:
+    // it appears only when someone TYPES. So this block types, as an operator would, an address the
+    // seed shows in use (`192.0.2.20`, two hardware addresses in the `static` range) and reads back
+    // three things no render assertion can see — that the warning arrived, that focus STAYED on the
+    // field (a live region announces, it never grabs), and that it links the address's triage question.
+    {
+      const probe = await open("/ipam");
+      await probe.evaluate(() =>
+        document.querySelector("#ipam-form-address > summary").focus(),
+      );
+      await probe.keyboard.press("Enter");
+      await wait(120);
+      await probe.evaluate(() => document.getElementById("ipam-addr").focus());
+      // 🔴 **THE DEBOUNCE IS MEASURED HERE AND NOWHERE ELSE.** In Rust it is a string in a template;
+      // what it BUYS — one request for a burst of keystrokes rather than one per keystroke — only a
+      // browser can see. Every answered check reads the whole plan and the whole summary, so a lost
+      // debounce is ten of those per address typed.
+      let answers = 0;
+      probe.on("response", (response) => {
+        if (response.url().includes("/ipam/address-check")) answers += 1;
+      });
+      const asked = probe
+        .waitForResponse((response) => response.url().includes("/ipam/address-check"), {
+          timeout: NAV_TIMEOUT_MS,
+        })
+        .catch(() => null);
+      await probe.keyboard.type(SEEN_ADDRESS);
+      // 🔑 **A check that never answers is the PRODUCT, not the harness**: the form is open, the
+      // field has focus and the seed holds that sighting, so `cannotRun` here would have reported a
+      // broken warning as *fix your environment*. The assertions below carry it as a failure.
+      const answered = await asked;
+      await wait(SETTLE_WAIT_MS);
+      const warned = await probe.evaluate(() => ({
+        text: (document.getElementById("ipam-addr-warning")?.textContent ?? "").trim(),
+        focusedId: document.activeElement?.id ?? "",
+        link: document.querySelector("#ipam-addr-warning a")?.getAttribute("href") ?? null,
+      }));
+      check(
+        answered !== null && warned.text !== "",
+        "typing an address the network shows in use warns BEFORE the write",
+        `answered=${answered !== null} warning=${JSON.stringify(warned.text.slice(0, 80))}`,
+      );
+      check(
+        answers === 1,
+        `the field asks the store ONCE for a burst of ${SEEN_ADDRESS.length} keystrokes — the ` +
+          "debounce is what keeps a warning from reading the whole plan per character",
+        `answers=${answers}`,
+      );
+      check(
+        warned.focusedId === "ipam-addr",
+        "and focus STAYS on the field — the warning is announced, never grabbed",
+        `activeElement id=${JSON.stringify(warned.focusedId)}`,
+      );
+      check(
+        warned.link === `/triage?sel=nouveau:${SEEN_ADDRESS}`,
+        "and the warning links the address's own triage question",
+        `link=${JSON.stringify(warned.link)}`,
+      );
+
+      // 🔴 **THE LINK IS FOLLOWED, because the audit and triage decide the question's existence
+      // from DIFFERENT COMPARISONS** — the audit from the declared register, triage from the
+      // observed facts against the declared VALUES as strings. The review measured them disagreeing
+      // on a value stored with whitespace. Asserting the href's shape cannot see that; landing on
+      // the page and finding the address can. ⚠️ `open` refuses anything but 200, so a link into a
+      // question triage does not ask fails here rather than passing quietly.
+      if (warned.link !== null) {
+        const landed = await open(warned.link);
+        const names = await landed.evaluate(
+          (address) => (document.body.textContent ?? "").includes(address),
+          SEEN_ADDRESS,
+        );
+        check(
+          names,
+          "and following it lands on a triage question about that very address",
+          `link=${warned.link}`,
+        );
+        await landed.close();
+      }
+      await probe.close();
+
+      // ── The RANGE form warns too (Guy, 2026-09-15) ──────────────────────────────────────────
+      // 🔑 Same contract as the address field and measured the same way: the answer arrives, and
+      // focus STAYS where the operator is typing. A live region announces; it never grabs.
+      {
+        const ranged = await open("/ipam");
+        await ranged.evaluate(() =>
+          document.querySelector("#ipam-form-range > summary").focus(),
+        );
+        await ranged.keyboard.press("Enter");
+        await wait(120);
+        const rangeAsked = ranged
+          .waitForResponse((response) => response.url().includes("/ipam/range-check"), {
+            timeout: NAV_TIMEOUT_MS,
+          })
+          .catch(() => null);
+        await ranged.evaluate(() => document.getElementById("ipam-first").focus());
+        await ranged.keyboard.type("192.0.2.1");
+        await ranged.evaluate(() => document.getElementById("ipam-last").focus());
+        await ranged.keyboard.type("192.0.2.40");
+        const rangeAnswered = await rangeAsked;
+        await wait(SETTLE_WAIT_MS);
+        const rangeWarned = await ranged.evaluate(() => ({
+          text: (document.getElementById("ipam-range-warning")?.textContent ?? "").trim(),
+          focusedId: document.activeElement?.id ?? "",
+        }));
+        check(
+          rangeAnswered !== null && rangeWarned.text !== "",
+          "a static range over addresses the network already shows warns BEFORE the write",
+          `answered=${rangeAnswered !== null} warning=${JSON.stringify(rangeWarned.text.slice(0, 80))}`,
+        );
+        check(
+          rangeWarned.focusedId === "ipam-last",
+          "and focus STAYS in the field being typed — the range's warning announces, like the " +
+            "address's",
+          `activeElement id=${JSON.stringify(rangeWarned.focusedId)}`,
+        );
+        await ranged.close();
+      }
+
+      // 🔴 **THE FINDINGS WALK STARTS FROM A FRESH PAGE, and it did not until the code review.**
+      // It ran on the page the block above had just typed into, so the walk began wherever the
+      // address field had left focus — *"Tab alone reaches a link in the findings list"* was
+      // measuring a few presses from mid-page, not the journey it names. A blur is not a reset when
+      // the page has been scrolled and a disclosure opened.
+      const walk = await open("/ipam");
+      await walk.evaluate(() => {
+        document.activeElement?.blur();
+        window.scrollTo(0, 0);
+      });
+      let reachedFinding = false;
+      for (let press = 0; press < 600 && !reachedFinding; press += 1) {
+        await walk.keyboard.press("Tab");
+        reachedFinding = await walk.evaluate(
+          () =>
+            document.activeElement?.tagName === "A" &&
+            document.activeElement?.closest(".ipam-audit") !== null,
+        );
+      }
+      check(
+        reachedFinding,
+        "Tab alone reaches a link in the findings list, from the top of a FRESH page",
+        `reached=${reachedFinding}`,
+      );
+      await walk.close();
     }
     await page.close();
   }

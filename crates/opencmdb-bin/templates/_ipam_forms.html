@@ -41,16 +41,28 @@
     <summary>{{ s.form_range_summary }}</summary>
     <form hx-post="{{ forms.range_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
       <input type="hidden" name="subnet_id" value="{{ subnet_id }}">
+      {#- 🔑 The range form warns too (Guy, 2026-09-15): the three fields that decide the answer ask
+           for it, `hx-include` sends the whole form, and the answer lands in the range's own live
+           region. The POST is untouched — it warns and still writes, exactly like the address field.
+           ⚠️ The same 400 ms debounce: a range is typed one octet at a time, and a request per
+           keystroke would ask the store about ranges nobody means. -#}
       <label for="ipam-first">{{ s.form_first }}</label>
-      <input id="ipam-first" name="first" required>
+      <input id="ipam-first" name="first" required aria-describedby="ipam-range-warning"
+             hx-get="{{ forms.range_check_route }}" hx-include="closest form"
+             hx-trigger="input changed delay:400ms" hx-target="#ipam-range-warning" hx-swap="innerHTML">
       <label for="ipam-last">{{ s.form_last }}</label>
-      <input id="ipam-last" name="last" required>
+      <input id="ipam-last" name="last" required aria-describedby="ipam-range-warning"
+             hx-get="{{ forms.range_check_route }}" hx-include="closest form"
+             hx-trigger="input changed delay:400ms" hx-target="#ipam-range-warning" hx-swap="innerHTML">
       <label for="ipam-policy">{{ s.form_policy }}</label>
-      <select id="ipam-policy" name="policy" required>
+      <select id="ipam-policy" name="policy" required aria-describedby="ipam-range-warning"
+              hx-get="{{ forms.range_check_route }}" hx-include="closest form"
+              hx-trigger="change delay:400ms" hx-target="#ipam-range-warning" hx-swap="innerHTML">
         {%- for (token, word) in forms.policies %}
         <option value="{{ token }}">{{ word }}</option>
         {%- endfor %}
       </select>
+      <p id="ipam-range-warning" class="ipam-check-region" role="status" aria-live="polite"></p>
       <label for="ipam-range-label">{{ s.form_label }}</label>
       <input id="ipam-range-label" name="label" required maxlength="120">
       <button type="submit" class="btn-gesture live btn-document">{{ s.form_submit }}</button>
@@ -62,7 +74,14 @@
     <form hx-post="{{ forms.address_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
       <input type="hidden" name="subnet_id" value="{{ subnet_id }}">
       <label for="ipam-addr">{{ s.form_addr }}</label>
-      <input id="ipam-addr" name="addr" required>
+      {#- 🔑 Decision 7: the field asks what the network and the registers know about the address
+           BEFORE the write, and the answer is announced where it is typed — `aria-describedby` plus
+           a polite live region, focus left on the field. The POST below is untouched: the form
+           warns and still writes. -#}
+      <input id="ipam-addr" name="addr" required aria-describedby="ipam-addr-warning"
+             hx-get="{{ forms.address_check_route }}" hx-trigger="input changed delay:400ms"
+             hx-target="#ipam-addr-warning" hx-swap="innerHTML">
+      <p id="ipam-addr-warning" class="ipam-check-region" role="status" aria-live="polite"></p>
       <label for="ipam-address-label">{{ s.form_label }}</label>
       <input id="ipam-address-label" name="label" required maxlength="120">
       <button type="submit" class="btn-gesture live btn-document">{{ s.form_submit }}</button>
