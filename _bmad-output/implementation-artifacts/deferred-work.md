@@ -5731,3 +5731,29 @@ One row, and v0.3.0 is what made it live.
   these reads, so the trigger is narrow (DDL, `LOCK TABLES`); the class is every budgeted screen's, which the
   address check multiplies per keystroke. The plan's WRITES carry a 4 s lock-wait cap (story 14.2b); no read
   does. **Owner: the story that gives the page budget a server-side statement cap (`max_statement_time`).**
+
+## Raised by story 14.4's contexting and validation (2026-09-16)
+
+- ⚠️ **Epic 14 now has SEVEN stories where `epics.md` describes FOUR.** 14.2b was inserted at 14.2's
+  implementation, 14.3 split into 14.3a/14.3b at its validation, and **14.4 split into 14.4 (the
+  corrections) and 14.4b (the release) at its own**, on Guy's decision of 2026-09-16 taken on measured
+  evidence: the two halves share no table, no module, no migration and no vocabulary. A story may not
+  edit `epics.md`. **Owner: Epic 14's retrospective.**
+- 🔴 **`WriteRoute::ALL` is a HAND-WRITTEN array, and the file's own doc over-claims what the compiler
+  carries.** `path()` and `handler()` are exhaustive `match`es, so a new variant reds there — but a
+  variant added to both and **omitted from `ALL` compiles cleanly and is never mounted**, and nothing
+  pins `ALL`'s completeness (`paths()` is `#[cfg(test)]` and derives *from* `ALL`). `ipam_write.rs`'s
+  module doc says the list *"cannot drift"*. Measured by the validation's fact-check layer. The same
+  shape as `Screen::ALL`, which story 6b.3 closed with a source-scanning property. **Owner: the next
+  story that adds a write route** (14.4, unless it chooses otherwise).
+- 🔴 **`ux-design-specification.md:1345` still gives `document`'s FR label as « Merger »** — the word
+  story 6b.10 retired by name, in a **BINDING table**, where `prd.md:997` says « Ajouter ». A developer
+  sent to the UX spec for the gesture vocabulary meets a stale row. ⚠️ **A story may not edit a planning
+  artefact**: this needs a planning act or a retrospective. **Owner: Epic 14's retrospective**, or Guy
+  in the same act that mints `release`.
+- ⚠️ **Story 6b.7's absent *Réserver* control is called *registered* and is in NO register row.** Its
+  own file (`6b-7-applications-and-ipam.md:442`, `:805`) records the decision and no row was ever
+  written here; no code site carries it either. It is this file's own class — *a section that says
+  "registered" is not a registration* (`:4530`). Registered now, at second hand. **Owner: Epic 14's
+  retrospective**, which may decide whether `/ipam` owes that control at all now that 14.4 puts
+  controls on the screen.
