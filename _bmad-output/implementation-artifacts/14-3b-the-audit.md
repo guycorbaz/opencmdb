@@ -1,6 +1,6 @@
 # Story 14.3b: The audit, and the address the product must not offer
 
-Status: review
+Status: done
 
 ⚠️ **`ready-for-dev` is the workflow's status, not a statement that nothing is open.** Contexted and
 VALIDATED 2026-09-15 by two fresh-context layers (fact-check; gap-hunt, which built and measured);
