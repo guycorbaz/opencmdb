@@ -8,6 +8,13 @@
      dozen buttons all reading *Remove* is a page a screen reader cannot navigate, and this product
      has already shipped controls a keyboard could not reach at all (story 6b.4b).
 
+     🔑 **A correction form carries the record's id and NOTHING about its parent** (Guy's decision 1,
+     2026-09-16). Each of these four forms used to carry a hidden `subnet_id` that served only as the
+     redirect target and was never checked against the record — so a stale tab could remove a range
+     from one subnet and land the operator on another's plan, under a success sentence, looking at a
+     page where nothing had changed. The adapter reads the parent off the row now, and there is
+     nothing left here to get wrong.
+
      ⚠️ **`hx-post`, so this needs JavaScript**, exactly like the three definition forms: the routes
      answer with `HX-Redirect`, which only htmx reads. Stated rather than discovered.
 
@@ -30,7 +37,6 @@
         <summary>{{ s.rail_edit }} — {{ r.bounds }}</summary>
         <form hx-post="{{ forms.edit_range_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
           <input type="hidden" name="id" value="{{ r.id }}">
-          <input type="hidden" name="subnet_id" value="{{ rail.subnet_id }}">
           <label for="ipam-edit-first-{{ r.id }}">{{ s.form_first }}</label>
           <input id="ipam-edit-first-{{ r.id }}" name="first" required value="{{ r.first }}">
           <label for="ipam-edit-last-{{ r.id }}">{{ s.form_last }}</label>
@@ -55,7 +61,6 @@
            the address field's contract, applied to a gesture instead of a keystroke. -#}
       <form hx-post="{{ forms.delete_range_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
         <input type="hidden" name="id" value="{{ r.id }}">
-        <input type="hidden" name="subnet_id" value="{{ rail.subnet_id }}">
         <button type="submit" class="btn-gesture live" aria-describedby="ipam-delete-warning-{{ r.id }}"
                 hx-get="{{ forms.delete_check_route }}?subnet={{ rail.subnet_id }}&first={{ r.first }}&last={{ r.last }}"
                 hx-trigger="focus" hx-target="#ipam-delete-warning-{{ r.id }}" hx-swap="innerHTML">{{ s.rail_delete }} — {{ r.bounds }}</button>
@@ -79,7 +84,6 @@
         <summary>{{ s.rail_edit }} — {{ a.addr }}</summary>
         <form hx-post="{{ forms.edit_address_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
           <input type="hidden" name="id" value="{{ a.id }}">
-          <input type="hidden" name="subnet_id" value="{{ rail.subnet_id }}">
           <label for="ipam-edit-addr-{{ a.id }}">{{ s.form_addr }}</label>
           <input id="ipam-edit-addr-{{ a.id }}" name="addr" required value="{{ a.addr }}">
           <label for="ipam-edit-address-label-{{ a.id }}">{{ s.form_label }}</label>
@@ -91,7 +95,6 @@
            the check would answer with the subnet's sentence — true, and about the wrong gesture. -#}
       <form hx-post="{{ forms.delete_address_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
         <input type="hidden" name="id" value="{{ a.id }}">
-        <input type="hidden" name="subnet_id" value="{{ rail.subnet_id }}">
         <button type="submit" class="btn-gesture live" aria-describedby="ipam-delete-warning-{{ a.id }}"
                 hx-get="{{ forms.delete_check_route }}?subnet={{ rail.subnet_id }}&addr={{ a.addr }}"
                 hx-trigger="focus" hx-target="#ipam-delete-warning-{{ a.id }}" hx-swap="innerHTML">{{ s.rail_delete }} — {{ a.addr }}</button>

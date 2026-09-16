@@ -166,13 +166,25 @@ async fn within_budget<T>(
 
 /// One write route of the addressing plan.
 ///
-/// 🔑 **The router is BUILT by iterating [`WriteRoute::ALL`]**, so the list of paths and the set of
-/// mounts cannot drift — and because each variant must answer [`WriteRoute::path`] and
-/// [`WriteRoute::handler`] through an exhaustive `match`, adding a route without mounting it is an
-/// `error[E0004]` rather than a route nobody registered. AC3's guard walks this same list, which is
-/// what lets it assert both halves: 401 without a credential, and something OTHER than 404 with
-/// one. ⚠️ Story 6b.2 measured why the positive half is needed — `auth_deny` layers the fallback,
-/// so a misspelt path, an unmounted route and a typo all answer 401 exactly like a real route.
+/// 🔑 **The router is BUILT by iterating [`WriteRoute::ALL`]**, and every variant must answer
+/// [`WriteRoute::path`] and [`WriteRoute::handler`] through an exhaustive `match`, so a variant
+/// cannot exist without a path and a handler.
+///
+/// 🔴 **BUT `ALL` ITSELF IS A HAND-WRITTEN ARRAY, AND THE COMPILER SAYS NOTHING ABOUT WHAT IS
+/// MISSING FROM IT.** This doc claimed that *"adding a route without mounting it is an
+/// `error[E0004]`"*; that sentence was false when written and the review measured how far. A variant
+/// left out of `ALL` is mounted by nothing, and **everything that looks like a check derives from
+/// `ALL`**: `router_with` iterates it, [`WriteRoute::paths`] maps over it, `main.rs`'s nine-path
+/// premise is built from it, and even this story's own route-coverage assertion compares against
+/// `ALL.len()`. All of them agree, because none of them has a second opinion to disagree with.
+/// What carries it instead is `every_variant_is_in_the_route_list`, a hand-written second list
+/// pinned by an equality test — the deliberate redundancy this codebase sanctions, and the only
+/// shape that can notice an omission.
+///
+/// AC3's guard walks this same list, which is what lets it assert both halves: 401 without a
+/// credential, and something OTHER than 404 with one. ⚠️ Story 6b.2 measured why the positive half
+/// is needed — `auth_deny` layers the fallback, so a misspelt path, an unmounted route and a typo
+/// all answer 401 exactly like a real route.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WriteRoute {
     /// `POST /ipam/subnet` — define a subnet, the entry the other two hang from.
@@ -232,16 +244,24 @@ impl WriteRoute {
 
     /// The sentence a [`RepositoryError::NotFound`] earns, which NAMES THE RECORD THE ID MEANT.
     ///
-    /// 🔴 **One sentence served every route until this story, and it was false on five of them**:
+    /// 🔴 **One sentence served every route until this story, and it was false on four of them**:
     /// `NotFound` answered *"that subnet is not in the plan"*, so an edit of a range the plan no
     /// longer holds told the operator their SUBNET was gone — and sent them to look in the wrong
     /// place. The same defect `already_defined` carried at 14.2b's review, one error variant over.
+    /// ⚠️ It read *"false on five"* until the review: that is the count of routes this story ADDS,
+    /// and `DeleteSubnet` is one of them where the old sentence was right. *Two populations, one
+    /// number* — and under the other reading it is incoherent, the sentence having served three
+    /// routes when it could not have been false on five.
     const fn unknown_record(self) -> Refusal {
         Refusal::new(
             StatusCode::NOT_FOUND,
             match self {
-                // The three definitions receive a `subnet_id` from the browser; for them the only
-                // row that can be missing IS the subnet.
+                // ⚠️ **The four routes for which a missing row can only be a SUBNET, and the reason
+                // is different for each pair.** `Range` and `Address` are looked up through the
+                // `subnet_id` their form carries, so the absent row is that parent. `Subnet` and
+                // `DeleteSubnet` address a subnet directly. (This comment read *"the three
+                // definitions receive a `subnet_id`"* until the review, which is false of `Subnet`
+                // — it carries a CIDR and no parent at all — and silent about `DeleteSubnet`.)
                 WriteRoute::Subnet
                 | WriteRoute::Range
                 | WriteRoute::Address
@@ -345,18 +365,21 @@ impl WriteRoute {
             match self {
                 // 🔑 Grouped by the RECORD rather than by the route, because the sentence names the
                 // record that collided and a `unique` violation knows nothing about which gesture
-                // provoked it. ⚠️ For the three deletes this arm is UNREACHABLE — a `DELETE` hits no
-                // unique key — and it is mapped rather than swept into a `_` for
-                // [`repository_refusal`]'s own stated reason: the `_` is what would swallow a
-                // variant added tomorrow.
-                WriteRoute::Subnet | WriteRoute::DeleteSubnet => {
-                    "ipam.refusal.already_defined_subnet"
-                }
-                WriteRoute::Range | WriteRoute::DeleteRange | WriteRoute::EditRange => {
-                    "ipam.refusal.already_defined_range"
-                }
-                WriteRoute::Address | WriteRoute::DeleteAddress | WriteRoute::EditAddress => {
+                // provoked it.
+                WriteRoute::Subnet => "ipam.refusal.already_defined_subnet",
+                WriteRoute::Range | WriteRoute::EditRange => "ipam.refusal.already_defined_range",
+                WriteRoute::Address | WriteRoute::EditAddress => {
                     "ipam.refusal.already_defined_address"
+                }
+                // 🔴 **THE THREE DELETES ANSWER THE BACKEND SENTENCE, and this is the ONLY place
+                // that says so.** A `DELETE` writes no row and can hit no unique key, so reaching
+                // here from one is a fault in this product rather than a mistake an operator can
+                // correct. ⚠️ The review found this function mapping them to *already defined*
+                // while [`constraint_refusal`] routed them to [`backend`] — **two statements of one
+                // delete's sentence, disagreeing**, with the doc here describing copy the product
+                // never emits. One statement now, and the caller no longer decides.
+                WriteRoute::DeleteSubnet | WriteRoute::DeleteRange | WriteRoute::DeleteAddress => {
+                    return backend();
                 }
             },
         )
@@ -429,22 +452,23 @@ pub(crate) struct DeleteSubnetRequest {
 }
 
 /// The `POST /ipam/range/delete` request.
+///
+/// 🔑 **One id, and no `subnet_id`** (Guy's decision 1, 2026-09-16). The field this form carried was
+/// used for the redirect alone and was never compared with the range's actual parent; the adapter
+/// now reads that parent off the row. See [`Written`] for what the review measured.
 #[derive(Debug, Deserialize)]
 pub(crate) struct DeleteRangeRequest {
     /// The range to remove.
     pub(crate) id: String,
-    /// The subnet it belongs to — carried by the form so the operator lands back on the plan they
-    /// were looking at, rather than on whichever subnet sorts lowest.
-    pub(crate) subnet_id: String,
 }
 
 /// The `POST /ipam/address/delete` request.
+///
+/// 🔑 One id, and no `subnet_id` — [`DeleteRangeRequest`]'s reason.
 #[derive(Debug, Deserialize)]
 pub(crate) struct DeleteAddressRequest {
     /// The defined address to remove.
     pub(crate) id: String,
-    /// The subnet it belongs to, for the redirect.
-    pub(crate) subnet_id: String,
 }
 
 /// The `POST /ipam/range/edit` request.
@@ -457,8 +481,6 @@ pub(crate) struct DeleteAddressRequest {
 pub(crate) struct EditRangeRequest {
     /// The range being corrected.
     pub(crate) id: String,
-    /// The subnet it belongs to, for the redirect.
-    pub(crate) subnet_id: String,
     /// The first address of the range, as an operator writes it.
     pub(crate) first: String,
     /// The last address, inclusive.
@@ -474,12 +496,53 @@ pub(crate) struct EditRangeRequest {
 pub(crate) struct EditAddressRequest {
     /// The defined address being corrected.
     pub(crate) id: String,
-    /// The subnet it belongs to, for the redirect.
-    pub(crate) subnet_id: String,
     /// The address itself, as an operator writes it.
     pub(crate) addr: String,
     /// What the operator calls it.
     pub(crate) label: String,
+}
+
+/// What a write that went through answers with: the record it touched, and the plan to send the
+/// operator back to.
+///
+/// 🔴 **`subnet_id` is READ BACK FROM THE RECORD on every route that addresses one by its own id,
+/// and is never the value the form sent** (Guy's decision 1, 2026-09-16). Until this story the four
+/// record-addressed forms carried a `subnet_id` beside the record's id, and the route used it as the
+/// redirect target **without ever asking whether it was that record's subnet**. The review measured
+/// both halves of the cost on the running binary: a mismatched pair removed an address from subnet A
+/// and landed the operator on subnet B's plan, under a success sentence, looking at a page where
+/// nothing had changed; and a malformed value in that field **refused a deletion it takes no part
+/// in**. Reading the parent back removes the question instead of answering it — there is nothing
+/// left to mismatch and nothing left to refuse.
+///
+/// 🔑 `None` means *the record IS the subnet*: `define_subnet` mints one and `delete_subnet` removes
+/// one, and neither has a parent to return to. The two remaining definitions carry the form's
+/// `subnet_id` and it is verified — **by the foreign key**, which is what the insert writes through:
+/// a `subnet_id` naming no row cannot produce a written record at all.
+#[derive(Debug)]
+pub(crate) struct Written {
+    /// The id of the record the gesture touched.
+    pub(crate) id: String,
+    /// The subnet to show the operator afterwards, or `None` when the record is itself a subnet.
+    pub(crate) subnet_id: Option<String>,
+}
+
+impl Written {
+    /// A write whose record is itself a subnet — there is no parent plan to return to.
+    pub(crate) fn subnet(id: String) -> Self {
+        Self {
+            id,
+            subnet_id: None,
+        }
+    }
+
+    /// A write inside a subnet, which is where the operator is sent back to.
+    pub(crate) fn inside(id: String, subnet_id: String) -> Self {
+        Self {
+            id,
+            subnet_id: Some(subnet_id),
+        }
+    }
 }
 
 /// The port: one gesture of the plan, whole. The sub-router's state reaches the world only
@@ -494,7 +557,7 @@ pub(crate) trait IpamWritePort: Send + Sync {
         &self,
         subnet: Subnet,
         label: String,
-    ) -> BoxFuture<'_, Result<String, RepositoryError>>;
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
     /// Define a range inside a subnet and answer with the id it was given.
     ///
@@ -509,7 +572,7 @@ pub(crate) trait IpamWritePort: Send + Sync {
         last: Ipv4Addr,
         policy: opencmdb_core::ipam::IpPolicy,
         label: String,
-    ) -> BoxFuture<'_, Result<String, RepositoryError>>;
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
     /// Define one address inside a subnet and answer with the id it was given.
     ///
@@ -522,7 +585,7 @@ pub(crate) trait IpamWritePort: Send + Sync {
         subnet_id: String,
         addr: Ipv4Addr,
         label: String,
-    ) -> BoxFuture<'_, Result<String, RepositoryError>>;
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
     /// Remove a subnet, answering with the id that was removed.
     ///
@@ -531,29 +594,31 @@ pub(crate) trait IpamWritePort: Send + Sync {
     /// [`RepositoryError::NotFound`] when no subnet carries the id, or
     /// [`RepositoryError::Constraint`] `"foreign_key"` when it still holds ranges or addresses —
     /// the database's own refusal, on two foreign keys.
-    fn delete_subnet(&self, id: String) -> BoxFuture<'_, Result<String, RepositoryError>>;
+    fn delete_subnet(&self, id: String) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
-    /// Remove a range, answering with the id that was removed.
+    /// Remove a range, answering with the id that was removed **and the subnet it belonged to**.
     ///
     /// # Errors
     ///
     /// [`RepositoryError::NotFound`], or [`opencmdb_core::ipam::IpamError::RangeStillHoldsAddresses`]
     /// — **computed**, not raised: nothing relates an address to a range.
-    fn delete_range(&self, id: String) -> BoxFuture<'_, Result<String, RepositoryError>>;
+    fn delete_range(&self, id: String) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
-    /// Remove one defined address, answering with the id that was removed.
+    /// Remove one defined address, answering with the id that was removed **and its subnet**.
     ///
     /// # Errors
     ///
     /// [`RepositoryError::NotFound`] alone: nothing in the plan points at an address.
-    fn delete_address(&self, id: String) -> BoxFuture<'_, Result<String, RepositoryError>>;
+    fn delete_address(&self, id: String) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
-    /// Correct a range's bounds, its policy and its label.
+    /// Correct a range's bounds, its policy and its label, answering with **its subnet**.
     ///
     /// # Errors
     ///
     /// [`RepositoryError::NotFound`], or the insert's own rules re-asked — outside its subnet,
-    /// inverted bounds, or overlapping a SIBLING, which is the one rule whose scan differs.
+    /// inverted bounds, or overlapping a SIBLING, which is the one rule whose scan differs — plus
+    /// [`opencmdb_core::ipam::IpamError::RangeStillHoldsAddresses`] when the new bounds would
+    /// abandon an address the old ones held (Guy's arbitration, 2026-09-16).
     fn edit_range(
         &self,
         id: String,
@@ -561,9 +626,9 @@ pub(crate) trait IpamWritePort: Send + Sync {
         last: Ipv4Addr,
         policy: opencmdb_core::ipam::IpPolicy,
         label: String,
-    ) -> BoxFuture<'_, Result<String, RepositoryError>>;
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
-    /// Correct one defined address, or what the operator calls it.
+    /// Correct one defined address, or what the operator calls it, answering with **its subnet**.
     ///
     /// # Errors
     ///
@@ -574,7 +639,7 @@ pub(crate) trait IpamWritePort: Send + Sync {
         id: String,
         addr: Ipv4Addr,
         label: String,
-    ) -> BoxFuture<'_, Result<String, RepositoryError>>;
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 }
 
 /// The production wiring: the plan's gestures over a MariaDB pool, which lives HERE and not on
@@ -596,7 +661,7 @@ impl IpamWritePort for StoreIpamWrite {
         &self,
         subnet: Subnet,
         label: String,
-    ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
             // 🔑 THE SERVER MINTS THE ID, v7 (Guy, 2026-09-12) — `document.rs:120`'s half of the
             // same decision. The other half, refusing an ARRIVING nil, belongs to the two routes
@@ -613,7 +678,8 @@ impl IpamWritePort for StoreIpamWrite {
                 .map_err(crate::repo::classify)?;
             let written = ipam_repo::insert_subnet(&mut *tx, &id, subnet, &label).await;
             settle(tx, written).await?;
-            Ok(id)
+            // A subnet IS the plan the operator returns to; there is no parent above it.
+            Ok(Written::subnet(id))
         })
     }
 
@@ -624,7 +690,7 @@ impl IpamWritePort for StoreIpamWrite {
         last: Ipv4Addr,
         policy: opencmdb_core::ipam::IpPolicy,
         label: String,
-    ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
             let id = uuid::Uuid::now_v7().to_string();
             let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
@@ -636,7 +702,10 @@ impl IpamWritePort for StoreIpamWrite {
             // InnoDB had already rolled back.
             ipam_repo::insert_range(&mut conn, &id, &subnet_id, first, last, policy, &label)
                 .await?;
-            Ok(id)
+            // 🔑 The form's `subnet_id`, and it is VERIFIED — by the foreign key the insert writes
+            // through: a `subnet_id` naming no row produces no record at all, so a written range
+            // proves its parent. That is what the four record-addressed routes had no equivalent of.
+            Ok(Written::inside(id, subnet_id))
         })
     }
 
@@ -645,7 +714,7 @@ impl IpamWritePort for StoreIpamWrite {
         subnet_id: String,
         addr: Ipv4Addr,
         label: String,
-    ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
             let id = uuid::Uuid::now_v7().to_string();
             let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
@@ -662,11 +731,12 @@ impl IpamWritePort for StoreIpamWrite {
                 .map_err(crate::repo::classify)?;
             let written = ipam_repo::insert_address(&mut tx, &id, &subnet_id, addr, &label).await;
             settle(tx, written).await?;
-            Ok(id)
+            // The form's `subnet_id`, verified by the foreign key — `define_range`'s reason.
+            Ok(Written::inside(id, subnet_id))
         })
     }
 
-    fn delete_subnet(&self, id: String) -> BoxFuture<'_, Result<String, RepositoryError>> {
+    fn delete_subnet(&self, id: String) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
             let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
             // A TRANSACTION FOR ONE STATEMENT, on `define_subnet`'s measured precedent: the adapter
@@ -678,23 +748,24 @@ impl IpamWritePort for StoreIpamWrite {
                 .map_err(crate::repo::classify)?;
             let written = ipam_repo::delete_subnet(&mut tx, &id).await;
             settle(tx, written).await?;
-            Ok(id)
+            // A removed subnet is no plan to return to; `answer` sends the operator to `/ipam`.
+            Ok(Written::subnet(id))
         })
     }
 
-    fn delete_range(&self, id: String) -> BoxFuture<'_, Result<String, RepositoryError>> {
+    fn delete_range(&self, id: String) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
             let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
             // ⚠️ NO TRANSACTION HERE, and the asymmetry with the subnet above is deliberate:
             // `delete_range` owns its own, because its refusal is DECIDED by a read and the lock has
             // to be held by whatever performs that read. Opening one here would turn the adapter's
             // into a sqlx SAVEPOINT, whose `commit` releases the savepoint and commits nothing.
-            ipam_repo::delete_range(&mut conn, &id).await?;
-            Ok(id)
+            let subnet_id = ipam_repo::delete_range(&mut conn, &id).await?;
+            Ok(Written::inside(id, subnet_id))
         })
     }
 
-    fn delete_address(&self, id: String) -> BoxFuture<'_, Result<String, RepositoryError>> {
+    fn delete_address(&self, id: String) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
             let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
             // One statement, no read to decide anything — so the budget's transaction, as above.
@@ -702,8 +773,8 @@ impl IpamWritePort for StoreIpamWrite {
                 .await
                 .map_err(crate::repo::classify)?;
             let written = ipam_repo::delete_address(&mut tx, &id).await;
-            settle(tx, written).await?;
-            Ok(id)
+            let subnet_id = settle(tx, written).await?;
+            Ok(Written::inside(id, subnet_id))
         })
     }
 
@@ -714,12 +785,13 @@ impl IpamWritePort for StoreIpamWrite {
         last: Ipv4Addr,
         policy: opencmdb_core::ipam::IpPolicy,
         label: String,
-    ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
             let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
             // The adapter's own transaction, for `delete_range`'s reason: its sibling scan decides.
-            ipam_repo::update_range(&mut conn, &id, first, last, policy, &label).await?;
-            Ok(id)
+            let subnet_id =
+                ipam_repo::update_range(&mut conn, &id, first, last, policy, &label).await?;
+            Ok(Written::inside(id, subnet_id))
         })
     }
 
@@ -728,12 +800,12 @@ impl IpamWritePort for StoreIpamWrite {
         id: String,
         addr: Ipv4Addr,
         label: String,
-    ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
             let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
             // Likewise: `update_address` re-validates containment under the parent row's lock.
-            ipam_repo::update_address(&mut conn, &id, addr, &label).await?;
-            Ok(id)
+            let subnet_id = ipam_repo::update_address(&mut conn, &id, addr, &label).await?;
+            Ok(Written::inside(id, subnet_id))
         })
     }
 }
@@ -748,12 +820,16 @@ impl IpamWritePort for StoreIpamWrite {
 /// locks does not depend on a pool's return path. (This doc read *"would keep its locks until the
 /// connection was next used … measured"*, true of the race test's HELD connections and presented as
 /// true of production.)
-async fn settle(
+async fn settle<T>(
     tx: sqlx::Transaction<'_, sqlx::MySql>,
-    written: Result<(), RepositoryError>,
-) -> Result<(), RepositoryError> {
+    written: Result<T, RepositoryError>,
+) -> Result<T, RepositoryError> {
     match written {
-        Ok(()) => tx.commit().await.map_err(crate::repo::classify),
+        Ok(value) => tx
+            .commit()
+            .await
+            .map_err(crate::repo::classify)
+            .map(|()| value),
         Err(refused) => {
             if let Err(error) = tx.rollback().await {
                 tracing::warn!(%error, "rolling back a refused plan write failed");
@@ -823,7 +899,6 @@ async fn define_subnet(
     answer(
         within_budget(work).await,
         WriteRoute::Subnet,
-        None,
         "ipam.done.subnet",
     )
 }
@@ -865,15 +940,12 @@ async fn define_range(
         Ok(label) => label,
         Err(refusal) => return refusal.into_response(),
     };
+    // 🔑 No `clone`: the port takes the id and hands it back inside [`Written`], so the redirect
+    // target is what the store answered rather than what the handler still happened to hold.
     let work = state
         .port
-        .define_range(subnet_id.clone(), first, last, policy, label);
-    answer(
-        within_budget(work).await,
-        route,
-        Some(&subnet_id),
-        "ipam.done.range",
-    )
+        .define_range(subnet_id, first, last, policy, label);
+    answer(within_budget(work).await, route, "ipam.done.range")
 }
 
 /// `POST /ipam/address` — define one address of a subnet.
@@ -900,13 +972,8 @@ async fn define_address(
         Ok(label) => label,
         Err(refusal) => return refusal.into_response(),
     };
-    let work = state.port.define_address(subnet_id.clone(), addr, label);
-    answer(
-        within_budget(work).await,
-        route,
-        Some(&subnet_id),
-        "ipam.done.address",
-    )
+    let work = state.port.define_address(subnet_id, addr, label);
+    answer(within_budget(work).await, route, "ipam.done.address")
 }
 
 /// The id of the record a correction names, or the refusal it earns.
@@ -951,12 +1018,7 @@ async fn delete_subnet(
         Err(refusal) => return refusal.into_response(),
     };
     let work = state.port.delete_subnet(id);
-    answer(
-        within_budget(work).await,
-        route,
-        None,
-        "ipam.done.delete_subnet",
-    )
+    answer(within_budget(work).await, route, "ipam.done.delete_subnet")
 }
 
 /// `POST /ipam/range/delete` — remove a range.
@@ -972,21 +1034,12 @@ async fn delete_range(
     let Ok(Form(request)) = form else {
         return route.malformed().into_response();
     };
-    let subnet_id = match checked_subnet_id(&request.subnet_id, route) {
-        Ok(id) => id,
-        Err(refusal) => return refusal.into_response(),
-    };
     let id = match checked_record_id(&request.id, route) {
         Ok(id) => id,
         Err(refusal) => return refusal.into_response(),
     };
     let work = state.port.delete_range(id);
-    answer(
-        within_budget(work).await,
-        route,
-        Some(&subnet_id),
-        "ipam.done.delete_range",
-    )
+    answer(within_budget(work).await, route, "ipam.done.delete_range")
 }
 
 /// `POST /ipam/address/delete` — remove one defined address.
@@ -1002,28 +1055,24 @@ async fn delete_address(
     let Ok(Form(request)) = form else {
         return route.malformed().into_response();
     };
-    let subnet_id = match checked_subnet_id(&request.subnet_id, route) {
-        Ok(id) => id,
-        Err(refusal) => return refusal.into_response(),
-    };
     let id = match checked_record_id(&request.id, route) {
         Ok(id) => id,
         Err(refusal) => return refusal.into_response(),
     };
     let work = state.port.delete_address(id);
-    answer(
-        within_budget(work).await,
-        route,
-        Some(&subnet_id),
-        "ipam.done.delete_address",
-    )
+    answer(within_budget(work).await, route, "ipam.done.delete_address")
 }
 
 /// `POST /ipam/range/edit` — correct a range's bounds, its policy or its label.
 ///
-/// 🔑 **The field order is the definition route's, and deliberately so**: the bounds are read before
-/// the policy and the policy before the label, because a form wrong in two places can only be told
-/// about one of them and the honest one to name is the first the operator filled.
+/// 🔑 **Among the fields the OPERATOR filled, the order is the definition route's**: the bounds are
+/// read before the policy and the policy before the label, because a form wrong in two places can
+/// only be told about one of them and the honest one to name is the first they filled.
+///
+/// ⚠️ **The record's own id is read before all of them, and it is not one of those fields** — the
+/// review found this sentence claiming the rule for the whole routine when it governs only its
+/// operator-visible tail. A mangled hidden `id` is a form that is not the product's, and it earns
+/// the shape refusal before any typed value is looked at.
 async fn edit_range(
     State(state): State<IpamWriteState>,
     headers: HeaderMap,
@@ -1035,10 +1084,6 @@ async fn edit_range(
     let route = WriteRoute::EditRange;
     let Ok(Form(request)) = form else {
         return route.malformed().into_response();
-    };
-    let subnet_id = match checked_subnet_id(&request.subnet_id, route) {
-        Ok(id) => id,
-        Err(refusal) => return refusal.into_response(),
     };
     let id = match checked_record_id(&request.id, route) {
         Ok(id) => id,
@@ -1060,12 +1105,7 @@ async fn edit_range(
         Err(refusal) => return refusal.into_response(),
     };
     let work = state.port.edit_range(id, first, last, policy, label);
-    answer(
-        within_budget(work).await,
-        route,
-        Some(&subnet_id),
-        "ipam.done.edit_range",
-    )
+    answer(within_budget(work).await, route, "ipam.done.edit_range")
 }
 
 /// `POST /ipam/address/edit` — correct one defined address, or what the operator calls it.
@@ -1081,10 +1121,6 @@ async fn edit_address(
     let Ok(Form(request)) = form else {
         return route.malformed().into_response();
     };
-    let subnet_id = match checked_subnet_id(&request.subnet_id, route) {
-        Ok(id) => id,
-        Err(refusal) => return refusal.into_response(),
-    };
     let id = match checked_record_id(&request.id, route) {
         Ok(id) => id,
         Err(refusal) => return refusal.into_response(),
@@ -1097,12 +1133,7 @@ async fn edit_address(
         Err(refusal) => return refusal.into_response(),
     };
     let work = state.port.edit_address(id, addr, label);
-    answer(
-        within_budget(work).await,
-        route,
-        Some(&subnet_id),
-        "ipam.done.edit_address",
-    )
+    answer(within_budget(work).await, route, "ipam.done.edit_address")
 }
 
 /// Turn a port's answer into the operator's, sending the browser back to the plan it just changed.
@@ -1111,15 +1142,18 @@ async fn edit_address(
 /// asserting the state it had before the write. The browser goes back to `/ipam` selected on the
 /// subnet concerned, which re-renders from the store — *one URL per state*, epic constraint 4.
 fn answer(
-    outcome: Result<String, RepositoryError>,
+    outcome: Result<Written, RepositoryError>,
     route: WriteRoute,
-    subnet_id: Option<&str>,
     done_key: &'static str,
 ) -> Response {
     match outcome {
-        Ok(id) => {
-            // `None` means the record just created IS the subnet, so it is its own redirect target.
-            let target = subnet_id.unwrap_or(&id);
+        Ok(Written { id, subnet_id }) => {
+            // 🔑 `None` means the record the gesture touched IS a subnet — `define_subnet` mints one
+            // and `delete_subnet` removes one — so a defined subnet is its own redirect target.
+            // ⚠️ **The target is no longer anything the browser can choose** (decision 1): the four
+            // corrections read it off the record, and the two definitions inside a subnet carry a
+            // `subnet_id` the foreign key vouched for by writing through it.
+            let target = subnet_id.unwrap_or_else(|| id.clone());
             // 🔴 **A REMOVED SUBNET CANNOT BE REDIRECTED TO.** Every other gesture leaves the
             // operator looking at the plan it changed; this one leaves them looking at a plan that
             // no longer exists, and `/ipam?subnet=<the id just deleted>` would render the
@@ -1278,7 +1312,9 @@ fn parse_cidr(raw: &str) -> Result<Subnet, Refusal> {
     // sentences for what looks like one mistake, and the distinction is the honest one: the product
     // can only name a rule it can evaluate.
     let prefix: u8 = prefix.parse().map_err(|_| malformed())?;
-    Subnet::new(base, prefix).map_err(|error| ipam_refusal(&error))
+    // The subnet route is the only caller of this parser, and it is the gesture whose sentence this
+    // refusal will carry.
+    Subnet::new(base, prefix).map_err(|error| ipam_refusal(&error, WriteRoute::Subnet))
 }
 
 /// The sentence a named database constraint earns, or `None` for a name nobody has mapped.
@@ -1302,27 +1338,38 @@ fn constraint_refusal(name: &str, route: WriteRoute) -> Option<Refusal> {
         // this product rather than something an operator can correct: `check`'s own reasoning a few
         // lines down, met on a second constraint name. Enumerated rather than left to a `_`, for the
         // reason this file gives elsewhere — the `_` is what swallows a variant added tomorrow.
-        "unique" => Some(match route {
-            WriteRoute::Subnet
-            | WriteRoute::Range
-            | WriteRoute::Address
-            | WriteRoute::EditRange
-            | WriteRoute::EditAddress => route.already_defined(),
-            WriteRoute::DeleteSubnet | WriteRoute::DeleteRange | WriteRoute::DeleteAddress => {
-                backend()
-            }
-        }),
+        "unique" => Some(route.already_defined()),
         // 🔴 **THE SAME CONSTRAINT NAME MEANS TWO OPPOSITE THINGS, and one sentence served both.**
         // On a DEFINITION, `1451` is a `subnet_id` naming no row: the parent is missing. On a
         // SUBNET DELETE it is the exact reverse — the parent is right there and its CHILDREN are
         // what refuse to let it go. Until this story both answered *"that subnet is not in the
         // plan"*, so an operator removing a populated subnet was told it did not exist while
         // looking at it. The route is what knows which direction the key was pointing.
+        // ⚠️ **Enumerated, where the review found a `_`** — three lines below the `unique` arm whose
+        // own comment forbids one, and in the arm this story exists to split. A compile probe put
+        // the cost in figures: a ninth variant produces seven `error[E0004]`s and **this arm was in
+        // none of them**, so a route added tomorrow would silently inherit *that subnet is not in
+        // the plan* — the wrong-record defect, one arm below its fix. 🔑 The four record-addressed
+        // routes cannot reach it today (a child `DELETE` violates no key, and neither `UPDATE`
+        // touches `subnet_id`), so what was live was the hole and not the sentence; it is named
+        // rather than left for the next route to discover.
         "foreign_key" => Some(match route {
+            // The parent is right there and its CHILDREN refuse to let it go.
             WriteRoute::DeleteSubnet => {
                 Refusal::new(StatusCode::CONFLICT, "ipam.refusal.subnet_still_holds")
             }
-            _ => Refusal::new(StatusCode::NOT_FOUND, "ipam.refusal.unknown_subnet"),
+            // A definition whose `subnet_id` names no row: the parent is missing.
+            WriteRoute::Range | WriteRoute::Address => {
+                Refusal::new(StatusCode::NOT_FOUND, "ipam.refusal.unknown_subnet")
+            }
+            // A subnet definition writes no foreign key, and the four corrections address a record
+            // by its own id without touching its parent — so a key violation from any of these is
+            // ours, not the operator's.
+            WriteRoute::Subnet
+            | WriteRoute::DeleteRange
+            | WriteRoute::DeleteAddress
+            | WriteRoute::EditRange
+            | WriteRoute::EditAddress => backend(),
         }),
         // 🔑 OURS, not the operator's, and mapped EXPLICITLY for that reason. Every `CHECK` on the
         // plan's three tables restates something the adapter already refuses — the canonical
@@ -1342,7 +1389,7 @@ fn constraint_refusal(name: &str, route: WriteRoute) -> Option<Refusal> {
 /// it. That half is a SET test over the names the adapter can produce.
 pub(crate) fn repository_refusal(error: &RepositoryError, route: WriteRoute) -> Refusal {
     match error {
-        RepositoryError::Ipam(ipam) => ipam_refusal(ipam),
+        RepositoryError::Ipam(ipam) => ipam_refusal(ipam, route),
         // The three names `classify` can produce. ⚠️ The `_` is what the SET test covers.
         // ⚠️ THE COMPILER STOPS HERE. `Constraint` carries a `&'static str`, so the match INSIDE
         // it needs a `_` and a new constraint NAME is invisible to `E0004`. That half is carried by
@@ -1370,22 +1417,72 @@ pub(crate) fn repository_refusal(error: &RepositoryError, route: WriteRoute) -> 
 }
 
 /// Map an [`IpamError`] to the operator's sentence — exhaustive, no `_` arm.
-pub(crate) fn ipam_refusal(error: &IpamError) -> Refusal {
-    let key = match error {
-        IpamError::RangeOutsideSubnet => "ipam.refusal.range_outside_subnet",
-        IpamError::RangeOverlapsAnother => "ipam.refusal.range_overlaps",
-        IpamError::RangeBoundsInverted => "ipam.refusal.range_bounds_inverted",
-        IpamError::AddressOutsideSubnet => "ipam.refusal.address_outside_subnet",
-        IpamError::BaseIsNotTheNetworkAddress => "ipam.refusal.base_not_network",
-        IpamError::PrefixLengthNotInFamily => "ipam.refusal.prefix_not_in_family",
-        IpamError::MalformedAddress => "ipam.refusal.not_an_address",
+pub(crate) fn ipam_refusal(error: &IpamError, route: WriteRoute) -> Refusal {
+    let (status, key) = match error {
+        IpamError::RangeOutsideSubnet => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "ipam.refusal.range_outside_subnet",
+        ),
+        IpamError::RangeOverlapsAnother => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "ipam.refusal.range_overlaps",
+        ),
+        IpamError::RangeBoundsInverted => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "ipam.refusal.range_bounds_inverted",
+        ),
+        IpamError::AddressOutsideSubnet => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "ipam.refusal.address_outside_subnet",
+        ),
+        IpamError::BaseIsNotTheNetworkAddress => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "ipam.refusal.base_not_network",
+        ),
+        IpamError::PrefixLengthNotInFamily => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "ipam.refusal.prefix_not_in_family",
+        ),
+        IpamError::MalformedAddress => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "ipam.refusal.not_an_address",
+        ),
         // 🔑 Story 14.4: the one refusal of this plan that is DECIDED rather than raised. A range
         // holds an address by arithmetic — `ip_address` references `ip_subnet` and never
         // `ip_range` — so no `ERROR 1451` answers it and no `CHECK` can express it; it is counted
         // under the parent row's lock and named here.
-        IpamError::RangeStillHoldsAddresses => "ipam.refusal.range_still_holds_addresses",
+        //
+        // 🔴 **409 AND NOT 422** (Guy's decision 3, 2026-09-16), which ALIGNS it with the subnet
+        // delete's own refusal. Every other refusal above is about the CONTENT of the request —
+        // outside its subnet, bounds inverted, not an address — and 422 is its status. This one says
+        // nothing is wrong with the request: it is the STATE OF THE PLAN that opposes it, which is
+        // what 409 means, and `constraint_refusal` already answers 409 when the database refuses a
+        // populated subnet. Two refusals that both say *this container is not empty* answered two
+        // different statuses, and nobody had decided that — it fell out of which layer raised them.
+        //
+        // 🔴 **AND THE GESTURE PICKS THE SENTENCE** (Guy's decision 2, 2026-09-16). Since the
+        // review's repair, an EDIT that would move a range off an address it holds earns this same
+        // rule — so the delete's sentence, which ends *"deleting the range would leave them with
+        // nothing saying what that space is meant for"*, was served to an operator who had SHRUNK a
+        // range. *A true sentence about the wrong gesture, which is worse than none* — this file's
+        // own words, one route over, and the defect this story exists to remove. The route is what
+        // knows which gesture asked, exactly as it does in [`WriteRoute::unknown_record`] and in
+        // [`constraint_refusal`]; enumerated rather than left to a `_`, for their reason.
+        IpamError::RangeStillHoldsAddresses => (
+            StatusCode::CONFLICT,
+            match route {
+                WriteRoute::EditRange => "ipam.refusal.range_edit_would_abandon",
+                WriteRoute::Subnet
+                | WriteRoute::Range
+                | WriteRoute::Address
+                | WriteRoute::DeleteSubnet
+                | WriteRoute::DeleteRange
+                | WriteRoute::DeleteAddress
+                | WriteRoute::EditAddress => "ipam.refusal.range_still_holds_addresses",
+            },
+        ),
     };
-    Refusal::new(StatusCode::UNPROCESSABLE_ENTITY, key)
+    Refusal::new(status, key)
 }
 
 /// A backend failure: answered with a sentence that leaks none of its cause. The cause itself is
@@ -1438,18 +1535,26 @@ mod tests {
         }
     }
 
+    /// The subnet the fake reports as a record's real parent.
+    ///
+    /// 🔑 **It comes from the PORT, which is the point of decision 1**: the four record-addressed
+    /// routes no longer receive a subnet from the form, so the redirect a test asserts can only have
+    /// come from the store's answer. Before the repair the same expectation was satisfied by the
+    /// request body echoing itself back.
+    const FAKE_PARENT: &str = "01900000-0000-7000-8000-0000000000aa";
+
     impl IpamWritePort for FakePort {
         fn define_subnet(
             &self,
             subnet: Subnet,
             label: String,
-        ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+        ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
                 .lock()
                 .expect("the fake port's log")
                 .push((subnet.cidr(), label));
             let answer = self.take_answer();
-            Box::pin(async move { answer })
+            Box::pin(async move { answer.map(Written::subnet) })
         }
 
         fn define_range(
@@ -1459,13 +1564,13 @@ mod tests {
             last: Ipv4Addr,
             _policy: opencmdb_core::ipam::IpPolicy,
             label: String,
-        ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+        ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
                 .lock()
                 .expect("the fake port's log")
                 .push((format!("{subnet_id}:{first}-{last}"), label));
             let answer = self.take_answer();
-            Box::pin(async move { answer })
+            Box::pin(async move { answer.map(|id| Written::inside(id, subnet_id)) })
         }
 
         fn define_address(
@@ -1473,40 +1578,45 @@ mod tests {
             subnet_id: String,
             addr: Ipv4Addr,
             label: String,
-        ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+        ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
                 .lock()
                 .expect("the fake port's log")
                 .push((format!("{subnet_id}:{addr}"), label));
             let answer = self.take_answer();
-            Box::pin(async move { answer })
+            Box::pin(async move { answer.map(|id| Written::inside(id, subnet_id)) })
         }
 
-        fn delete_subnet(&self, id: String) -> BoxFuture<'_, Result<String, RepositoryError>> {
+        // 🔴 **THE THREE DELETES LOG DISTINCT MARKERS, and the review is why**: all three pushed the
+        // bare word `"delete"`, and `DeleteRange`/`DeleteAddress` also shared a body shape, a status
+        // and — until decision 1 — a redirect. Wiring `/ipam/range/delete` to the address handler was
+        // therefore invisible to every guard in this file. *Two routes a test double cannot tell
+        // apart are two routes no test distinguishes.*
+        fn delete_subnet(&self, id: String) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
                 .lock()
                 .expect("the fake port's log")
-                .push((id, "delete".to_string()));
+                .push((id, "delete_subnet".to_string()));
             let answer = self.take_answer();
-            Box::pin(async move { answer })
+            Box::pin(async move { answer.map(Written::subnet) })
         }
 
-        fn delete_range(&self, id: String) -> BoxFuture<'_, Result<String, RepositoryError>> {
+        fn delete_range(&self, id: String) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
                 .lock()
                 .expect("the fake port's log")
-                .push((id, "delete".to_string()));
+                .push((id, "delete_range".to_string()));
             let answer = self.take_answer();
-            Box::pin(async move { answer })
+            Box::pin(async move { answer.map(|id| Written::inside(id, FAKE_PARENT.to_string())) })
         }
 
-        fn delete_address(&self, id: String) -> BoxFuture<'_, Result<String, RepositoryError>> {
+        fn delete_address(&self, id: String) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
                 .lock()
                 .expect("the fake port's log")
-                .push((id, "delete".to_string()));
+                .push((id, "delete_address".to_string()));
             let answer = self.take_answer();
-            Box::pin(async move { answer })
+            Box::pin(async move { answer.map(|id| Written::inside(id, FAKE_PARENT.to_string())) })
         }
 
         fn edit_range(
@@ -1516,13 +1626,13 @@ mod tests {
             last: Ipv4Addr,
             _policy: opencmdb_core::ipam::IpPolicy,
             label: String,
-        ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+        ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
                 .lock()
                 .expect("the fake port's log")
                 .push((format!("{id}:{first}-{last}"), label));
             let answer = self.take_answer();
-            Box::pin(async move { answer })
+            Box::pin(async move { answer.map(|id| Written::inside(id, FAKE_PARENT.to_string())) })
         }
 
         fn edit_address(
@@ -1530,13 +1640,13 @@ mod tests {
             id: String,
             addr: Ipv4Addr,
             label: String,
-        ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+        ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
                 .lock()
                 .expect("the fake port's log")
                 .push((format!("{id}:{addr}"), label));
             let answer = self.take_answer();
-            Box::pin(async move { answer })
+            Box::pin(async move { answer.map(|id| Written::inside(id, FAKE_PARENT.to_string())) })
         }
     }
 
@@ -1817,11 +1927,23 @@ mod tests {
         for locale in ["en", "fr"] {
             let mut seen: Vec<String> = Vec::new();
             for error in IpamError::ALL {
-                let refusal = ipam_refusal(&error);
+                // The delete's gesture, so the sentence read here is the one `DeleteRange` earns;
+                // `the_edit_and_the_delete_do_not_share_a_sentence` covers the other gesture.
+                let refusal = ipam_refusal(&error, WriteRoute::DeleteRange);
+                // ⚠️ **409 for the one refusal about the PLAN'S STATE, 422 for the seven about the
+                // REQUEST** (Guy's decision 3, 2026-09-16). This asserted 422 for all eight under a
+                // message reading *"the operator's mistake, not the server's"* — true of both, and
+                // not what separates them.
+                let expected = if matches!(error, IpamError::RangeStillHoldsAddresses) {
+                    StatusCode::CONFLICT
+                } else {
+                    StatusCode::UNPROCESSABLE_ENTITY
+                };
                 assert_eq!(
                     refusal.status(),
-                    StatusCode::UNPROCESSABLE_ENTITY,
-                    "{error:?} is the operator's mistake, not the server's"
+                    expected,
+                    "{error:?} is the operator's mistake, not the server's — and a refusal about \
+                     what the plan HOLDS is a conflict, where one about the request is not"
                 );
                 // 🔑 The key comes from the MAPPER, never from a copy of it written here. A test
                 // that restates the mapping measures the copy: story 6.5's M8 — *a count is not a
@@ -1943,7 +2065,7 @@ mod tests {
         // review, which is a floor that tolerates losing a quarter of what it guards.
         assert_eq!(
             keys.len(),
-            38,
+            39,
             "the keys this file can render changed — update the count only after reading the list: \
              {keys:?}"
         );
@@ -2021,12 +2143,25 @@ mod tests {
             WriteRoute::DeleteRange,
             WriteRoute::DeleteAddress,
         ];
-        // A ninth route must be classified rather than silently uncovered.
+        // 🔴 **A SET, NOT A COUNT** — story 6.5's M8 met one file over, and the review measured it
+        // here: this summed the group lengths and compared the total against `ALL.len()`, so listing
+        // one route TWICE and omitting another also reaches eight and passes. The message asserted
+        // membership; the assertion checked cardinality.
+        let mut classified: Vec<WriteRoute> = BY_RECORD.concat();
+        classified.extend(CANNOT_COLLIDE);
+        for route in WriteRoute::ALL {
+            assert_eq!(
+                classified.iter().filter(|listed| *listed == route).count(),
+                1,
+                "`{}` belongs to no record group and to no cannot-collide list — or to more than \
+                 one — so nothing says which sentence it owes for a re-entered record",
+                route.path()
+            );
+        }
         assert_eq!(
-            BY_RECORD.iter().map(|group| group.len()).sum::<usize>() + CANNOT_COLLIDE.len(),
+            classified.len(),
             WriteRoute::ALL.len(),
-            "a route belongs to no record group and to no cannot-collide list, so nothing says \
-             which sentence it owes for a re-entered record"
+            "a route was classified here that the route list does not carry"
         );
         for locale in ["en", "fr"] {
             let mut by_record: Vec<String> = Vec::new();
@@ -2086,7 +2221,7 @@ mod tests {
                 &self,
                 _subnet: Subnet,
                 _label: String,
-            ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+            ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
             fn define_range(
@@ -2096,7 +2231,7 @@ mod tests {
                 _last: Ipv4Addr,
                 _policy: opencmdb_core::ipam::IpPolicy,
                 _label: String,
-            ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+            ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
             fn define_address(
@@ -2104,19 +2239,22 @@ mod tests {
                 _subnet_id: String,
                 _addr: Ipv4Addr,
                 _label: String,
-            ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+            ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
-            fn delete_subnet(&self, _id: String) -> BoxFuture<'_, Result<String, RepositoryError>> {
+            fn delete_subnet(
+                &self,
+                _id: String,
+            ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
-            fn delete_range(&self, _id: String) -> BoxFuture<'_, Result<String, RepositoryError>> {
+            fn delete_range(&self, _id: String) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
             fn delete_address(
                 &self,
                 _id: String,
-            ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+            ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
             fn edit_range(
@@ -2126,7 +2264,7 @@ mod tests {
                 _last: Ipv4Addr,
                 _policy: opencmdb_core::ipam::IpPolicy,
                 _label: String,
-            ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+            ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
             fn edit_address(
@@ -2134,7 +2272,7 @@ mod tests {
                 _id: String,
                 _addr: Ipv4Addr,
                 _label: String,
-            ) -> BoxFuture<'_, Result<String, RepositoryError>> {
+            ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
         }
@@ -2195,16 +2333,20 @@ mod tests {
                 "subnet_id={subnet}&first=192.0.2.10&last=192.0.2.20&policy=static&label={label}"
             ),
             WriteRoute::Address => format!("subnet_id={subnet}&addr=192.0.2.9&label={label}"),
-            WriteRoute::DeleteSubnet => format!("id={record}"),
-            WriteRoute::DeleteRange | WriteRoute::DeleteAddress => {
-                format!("id={record}&subnet_id={subnet}")
+            // 🔴 **THE DELETE FORMS SEND A LABEL HERE, AND THAT IS THE REPAIR.** The label branch
+            // below asserts that a delete route DROPS an unknown `label` and writes anyway — and
+            // these arms interpolated none, so twelve byte-identical label-free requests were driven
+            // through a branch whose comment claimed to be measuring serde's behaviour. *A
+            // `continue` wearing an assertion*, which is the shape that comment says it exists to
+            // avoid; three review layers reached it. The field is sent now, so the sentence beside
+            // the assertion is true and measured rather than asserted about a request nobody made.
+            WriteRoute::DeleteSubnet | WriteRoute::DeleteRange | WriteRoute::DeleteAddress => {
+                format!("id={record}&label={label}")
             }
-            WriteRoute::EditRange => format!(
-                "id={record}&subnet_id={subnet}&first=192.0.2.10&last=192.0.2.20&policy=static&label={label}"
-            ),
-            WriteRoute::EditAddress => {
-                format!("id={record}&subnet_id={subnet}&addr=192.0.2.9&label={label}")
+            WriteRoute::EditRange => {
+                format!("id={record}&first=192.0.2.10&last=192.0.2.20&policy=static&label={label}")
             }
+            WriteRoute::EditAddress => format!("id={record}&addr=192.0.2.9&label={label}"),
         }
     }
 
@@ -2284,17 +2426,25 @@ mod tests {
                 // `label` field and there is no label rule for it to hold. ⚠️ This is ASSERTED
                 // rather than skipped: a `continue` here would read exactly like a passing check,
                 // which is the shape this project keeps finding in its own guards. What is measured
-                // instead is the real behaviour — serde DROPS the unknown field and the write goes
-                // through — so the day a delete form gains a label, this assertion reds and the
-                // rules must be extended rather than quietly not applying.
+                // is the real behaviour — `a_valid_body` really does send `label=` at these three
+                // routes, serde DROPS the unknown field, and the write goes through — so the day a
+                // delete form gains a label, this assertion reds and the rules must be extended
+                // rather than quietly not applying.
+                //
+                // ⚠️ **Until the review the body carried no `label` at all**, so this branch drove
+                // identical label-free requests and the sentence above described a measurement
+                // nobody had taken. *The claim was the defect, not the code.*
                 if !route.carries_label() {
                     let port =
                         FakePort::answering(Ok("01900000-0000-7000-8000-0000000000bb".to_string()));
                     let (status, _) =
                         drive(port, form_post_to(route, &a_valid_body(route, label))).await;
+                    // A literal, not `route.success_status()`: the three routes reaching this branch
+                    // are deletions and a correction answers 200. Comparing against the mapper would
+                    // restate its own output — the defect the review found one assertion down.
                     assert_eq!(
                         status,
-                        route.success_status(),
+                        StatusCode::OK,
                         "`{at}` carries no label, so {what} is a field nothing reads — if this form \
                          has gained one, the label rules must now cover it"
                     );
@@ -2332,9 +2482,24 @@ mod tests {
                 .oneshot(form_post_to(route, &a_valid_body(route, "Office")))
                 .await
                 .expect("the sub-router answers");
+            // 🔴 **A SECOND, HAND-WRITTEN STATEMENT OF THE MAPPING — not `route.success_status()`,
+            // which is exactly what `answer` returns.** The assertion compared the producer against
+            // itself: `success_status` answering `OK` for every route, or `IM_A_TEAPOT` for every
+            // route, left it green while its own message named the split it could not check. What it
+            // still caught is a handler bypassing the mapper with a hardcoded status; what it could
+            // not catch is the mapper being wrong. Two representations of one decision pinned by an
+            // equality is the deliberate redundancy this codebase sanctions.
+            let expected_status = match route {
+                WriteRoute::Subnet | WriteRoute::Range | WriteRoute::Address => StatusCode::CREATED,
+                WriteRoute::DeleteSubnet
+                | WriteRoute::DeleteRange
+                | WriteRoute::DeleteAddress
+                | WriteRoute::EditRange
+                | WriteRoute::EditAddress => StatusCode::OK,
+            };
             assert_eq!(
                 response.status(),
-                route.success_status(),
+                expected_status,
                 "`{at}` answered the wrong status for a write that went through: 201 belongs to \
                  the three definitions, 200 to the five corrections"
             );
@@ -2352,7 +2517,19 @@ mod tests {
                 WriteRoute::Subnet => {
                     "/ipam?subnet=01900000-0000-7000-8000-0000000000bb".to_string()
                 }
-                _ => "/ipam?subnet=01900000-0000-7000-8000-0000000000aa".to_string(),
+                // ⚠️ Enumerated, where the review found a `_` under a comment arguing against a
+                // different loosening: a ninth route inherited this expectation in silence.
+                // 🔑 For the four corrections this value now comes from the PORT (`FAKE_PARENT`),
+                // not from the request body — which is decision 1 made visible in the test: before
+                // it, the assertion was satisfied by the form echoing its own hidden field back.
+                WriteRoute::Range
+                | WriteRoute::Address
+                | WriteRoute::DeleteRange
+                | WriteRoute::DeleteAddress
+                | WriteRoute::EditRange
+                | WriteRoute::EditAddress => {
+                    "/ipam?subnet=01900000-0000-7000-8000-0000000000aa".to_string()
+                }
             };
             let redirect = response
                 .headers()
@@ -2399,6 +2576,131 @@ mod tests {
                 route.path()
             );
         }
+    }
+
+    /// **AC2's own repair, which until the review was carried by NOTHING.**
+    ///
+    /// 🔴 `"ipam.refusal.subnet_still_holds"` occurred exactly ONCE in all of `crates/` — the mapper
+    /// itself. The only test that fed `Constraint("foreign_key")` asserted that whatever key came
+    /// back RESOLVES in both locales, never which key or which status. Measured by mutation at the
+    /// review: turning the repaired 409 back into the 404 this story exists to remove left 700
+    /// tests, `clippy --all-targets` and all ten gates green. *The behaviour was right and nothing
+    /// would have noticed it regressing.*
+    #[tokio::test]
+    async fn a_populated_subnet_is_refused_by_name_rather_than_as_a_missing_one() {
+        let port = FakePort::answering(Err(RepositoryError::Constraint("foreign_key")));
+        let (status, body) = drive(
+            port,
+            form_post_to(
+                WriteRoute::DeleteSubnet,
+                &a_valid_body(WriteRoute::DeleteSubnet, "Office"),
+            ),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::CONFLICT,
+            "a subnet that still holds records is a CONFLICT with the plan's state, not a 404"
+        );
+        assert_eq!(
+            body,
+            key("ipam.refusal.subnet_still_holds"),
+            "the operator was told their subnet is not in the plan while they were looking at it"
+        );
+        // 🔑 **THE CONTROL IS WHAT MAKES THE PAIR MEAN ANYTHING**: the same database refusal on a
+        // DEFINITION really is a missing parent, and there the 404 is the honest answer. Without
+        // this half the assertion above would be satisfied by answering 409 everywhere.
+        let port = FakePort::answering(Err(RepositoryError::Constraint("foreign_key")));
+        let (status, body) = drive(
+            port,
+            form_post_to(
+                WriteRoute::Range,
+                &a_valid_body(WriteRoute::Range, "Office"),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(body, key("ipam.refusal.unknown_subnet"));
+    }
+
+    /// **The same rule, two gestures, two sentences** (Guy's decision 2, 2026-09-16).
+    ///
+    /// 🔴 The review's repair made an EDIT that abandons an address earn the delete's refusal — and
+    /// with it the delete's SENTENCE, so an operator who had shrunk a range read *"deleting the
+    /// range would leave them with nothing…"*. `ipam_refusal` took no route where its two
+    /// neighbours, [`constraint_refusal`] and [`WriteRoute::unknown_record`], both do.
+    #[test]
+    fn the_edit_and_the_delete_do_not_share_a_refusal_sentence() {
+        let deleting = ipam_refusal(
+            &IpamError::RangeStillHoldsAddresses,
+            WriteRoute::DeleteRange,
+        );
+        let editing = ipam_refusal(&IpamError::RangeStillHoldsAddresses, WriteRoute::EditRange);
+        assert_ne!(
+            deleting.key(),
+            editing.key(),
+            "one sentence for both gestures is how an operator who shrank a range was told what \
+             deleting it would do"
+        );
+        for locale in ["en", "fr"] {
+            let edit_sentence = rust_i18n::t!(editing.key(), locale = locale).to_string();
+            assert_ne!(
+                edit_sentence,
+                editing.key(),
+                "the edit's refusal has no `{locale}` translation"
+            );
+            // The needle is the DELETE's own phrase in each language, so this reds the day the two
+            // keys are collapsed back into one.
+            for describing_a_deletion in ["deleting the range", "supprimer la plage"] {
+                assert!(
+                    !edit_sentence.to_lowercase().contains(describing_a_deletion),
+                    "the edit's refusal describes a deletion in `{locale}`: {edit_sentence}"
+                );
+            }
+        }
+    }
+
+    /// **`WriteRoute::ALL` is a hand-written array, and this is the only opinion in the module that
+    /// is not derived from it.**
+    ///
+    /// 🔴 The module doc claimed that adding a route without mounting it is an `error[E0004]`. It is
+    /// not: `router_with` iterates `ALL`, [`WriteRoute::paths`] maps over `ALL`, `main.rs`'s
+    /// nine-path premise is built from `ALL`, and this story's own coverage assertion compares
+    /// against `ALL.len()` — *they all agree because none of them has a second opinion to disagree
+    /// with*. A variant left out of `ALL` is mounted by nothing and answers 404 behind the auth
+    /// layer's 401, which story 6b.2 measured is indistinguishable from a typo.
+    ///
+    /// ⚠️ **Its limit, stated rather than implied: this is a TRIPWIRE, not a barrier** (story 5.12's
+    /// precedent). A ninth variant produces an `E0004` at every `match` in this file, so the
+    /// developer is forced past `path`, `handler`, `malformed`, `success_status` and the rest — and
+    /// forced past nothing that names `ALL`. If they do not write it here either, this stays green.
+    /// What it does carry is a route DELETED from `ALL` while its variant survives, and the two
+    /// lists drifting in length.
+    #[test]
+    fn every_variant_is_in_the_route_list() {
+        let written_out = [
+            WriteRoute::Subnet,
+            WriteRoute::Range,
+            WriteRoute::Address,
+            WriteRoute::DeleteSubnet,
+            WriteRoute::DeleteRange,
+            WriteRoute::DeleteAddress,
+            WriteRoute::EditRange,
+            WriteRoute::EditAddress,
+        ];
+        for route in written_out {
+            assert!(
+                WriteRoute::ALL.contains(&route),
+                "`{}` exists and is mounted by nothing: it is missing from `WriteRoute::ALL`, \
+                 which is the list `router_with` iterates",
+                route.path()
+            );
+        }
+        assert_eq!(
+            WriteRoute::ALL.len(),
+            written_out.len(),
+            "`WriteRoute::ALL` and this second list disagree about how many routes the plan has"
+        );
     }
 
     /// A policy outside the four binding words is refused, and the four are accepted.

@@ -564,6 +564,83 @@ turned two of them from readings into measurements.
 
 ✅ **Refuted by the layers themselves, with the check, so nobody re-chases them**: `delete_subnet` does NOT cascade (`0007:120,153` declare both foreign keys with no `ON DELETE`, so `ERROR 1451` really is the mechanism); a deadlock on any statement answers `Contention`, not a 500 (`repo.rs:1641-1646` maps `1213|1205`); the three new transaction-owning writes do NOT meet the savepoint hazard, verified at their call sites; and an over-long label errors rather than truncating (`STRICT_TRANS_TABLES`).
 
+### Review Findings — group B (the routes)
+
+Three isolated layers on `ipam_write.rs` and `main.rs`, 2026-09-16. None failed. **29 raw findings, 22
+distinct** — two reached by all three layers and four more by two, *so a count over three isolated
+reports measures the isolation and not the product*. 🔑 **The layer with no repository access found a
+HIGH the two sighted layers did not, for the ninth story running.** ⚠️ The layers ran at this
+session's capability, isolated by context, worktree and database — **not on a different model, and
+that half is not claimed**.
+
+- [x] [Review][Decision] **`subnet_id` is validated for SHAPE and never compared with the record's real parent** — the four record-addressed forms carried it, the adapter addresses the record by its own id, and the value served one purpose: the redirect. MEASURED on the running binary: `id=<address in subnet A>&subnet_id=<subnet B>` removed the row from A, answered 200 and sent the browser to **B's** plan under *"The address is no longer defined"*, over a page where nothing had changed. ⚠️ And the mirror: a malformed or nil `subnet_id` answered 422 and deleted nothing — **a gesture refused because of a field it takes no part in**. ✅ **Guy, option (a)**: the adapter READS the parent off the row and the field leaves the four forms — *the only remedy that removes the question instead of answering it*, and it dissolves both halves at once. Refused: comparing and refusing a mismatch (keeps the field and its unjustified refusal), and registering it (reachable from a stale tab, a second window or a hand-made request). [`ipam_write.rs`, `ipam_repo.rs`, `_ipam_rail_lists.html`]
+- [x] [Review][Decision] **The one refusal this story mints serves the DELETE's sentence on an EDIT** — the review's own repair made an edit that abandons an address earn `RangeStillHoldsAddresses`, and `ipam_refusal` takes no route where both its neighbours do, so an operator who had SHRUNK a range read *"deleting the range would leave them with nothing saying what that space is meant for"*. **That is this story's own recorded class — *a true sentence about the wrong gesture, which is worse than none* — reintroduced by the repair, in the story whose headline is that a refusal must name the right record.** ✅ **Guy, option (a)**: `ipam_refusal` takes the route and the edit earns `ipam.refusal.range_edit_would_abandon`. The rule is one; the sentence is two, because the remedy differs — a delete must be given up, an edit can simply be widened. [`ipam_write.rs:1418`, `app.yml`]
+- [x] [Review][Decision] **Two refusals that both say *this container is not empty* answered two different statuses** — 409 for a subnet (the database's key) and 422 for a range (computed) — and nobody had decided that: it fell out of which layer raised them. ✅ **Guy: align on 409.** The seven other `IpamError`s are about the CONTENT of the request and keep 422; this one says the request is fine and the PLAN's state opposes it, which is what 409 means. [`ipam_write.rs:1418`]
+- [x] [Review][Patch] **The story's headline repair is carried by NO test** — `"ipam.refusal.subnet_still_holds"` occurs once in all of `crates/`, the mapper itself, and the only test feeding `Constraint("foreign_key")` asserts the key RESOLVES, never which key or which status. Measured: turning the repaired 409 back into the 404 left **700 tests, clippy `--all-targets` and ten gates green** [`ipam_write.rs:1321`]
+- [x] [Review][Patch] **The label branch measures a request that carries no label** — three passages claim serde DROPS an unknown field at a delete route, and `a_valid_body`'s three delete arms interpolated none, so twelve byte-identical label-free requests were driven through a branch whose own comment says a `continue` *"would read exactly like a passing check"*. *A `continue` wearing an assertion.* Reached by all three layers [`ipam_write.rs:2283`]
+- [x] [Review][Patch] `constraint_refusal`'s `foreign_key` arm is a `_`, three lines below the `unique` arm whose comment forbids one — compile probe: a ninth variant gives **seven `E0004`s and this arm is in none of them**, so a route added tomorrow inherits *that subnet is not in the plan*. ⚠️ Deflated with its bound: the four new routes cannot reach it today (a child `DELETE` violates no key, neither `UPDATE` touches `subnet_id`), so what was live is the hole and not the sentence [`ipam_write.rs:1321`]
+- [x] [Review][Patch] **The module doc promises an `error[E0004]` that does not exist** — `ALL` is a hand-written array, and `router_with`, `paths()`, `main.rs`'s nine-path premise and this story's own coverage assertion ALL derive from it: *they agree because none of them has a second opinion to disagree with*. Closed by a second hand-written list pinned by an equality, **with its limit written: a tripwire, not a barrier** [`ipam_write.rs:168`]
+- [x] [Review][Patch] The record-group completeness check is a **count, not a set** — listing one route twice and omitting another also sums to eight; and `sentences.windows(2)` is vacuously true on the one-element group. Story 6.5's *a count is not a set*, one file over [`ipam_write.rs:2025`]
+- [x] [Review][Patch] The success-status guard compares `response.status()` against `route.success_status()` — **the function that produced it** — so a mapper answering `OK`, or `IM_A_TEAPOT`, for every route left it green under a message naming the split [`ipam_write.rs:2336`]
+- [x] [Review][Patch] `already_defined` maps the three deletes to *already defined* while `constraint_refusal` routed them to `backend()` — **two statements of one delete's sentence, disagreeing**, the doc describing copy the product never emits. One statement now [`ipam_write.rs:343`]
+- [x] [Review][Patch] *"false on five of them"* is **four**: the count of routes this story ADDS, reused for a different population; `DeleteSubnet` is one where the old sentence was right [`ipam_write.rs:235`]
+- [x] [Review][Patch] *"The three definitions receive a `subnet_id`"* is false of `WriteRoute::Subnet`, which carries a CIDR, and silent about `DeleteSubnet` — refuted twice inside the same diff [`ipam_write.rs:243`]
+- [x] [Review][Patch] *"a fourth route cannot be added"* stands in a doc block this change edits, over a file with **eight** [`ipam_write.rs:2181`]
+- [x] [Review][Patch] The redirect expectation ends in a `_` under a comment arguing against a different loosening [`ipam_write.rs:2344`]
+- [x] [Review][Patch] The three delete fakes push the identical marker `"delete"`, and two of them shared a body shape, a status and a redirect — **wiring `/ipam/range/delete` to the address handler was invisible to every guard in the file** [`ipam_write.rs:1530`]
+- [x] [Review][Patch] `edit_range`'s field-order rationale claims for the whole routine a rule that governs only its operator-filled tail [`ipam_write.rs:1024`]
+- [x] [Review][Patch] **The delete check answers the SUBNET's sentence for an unreadable qualifier** — both reads used `.ok()` and dropped the failure, so `?subnet=…&addr=nonsense` was answered *"this subnet still holds 2 records"*, which is what `DeleteCheckQuery::addr`'s own doc says the route was shaped to prevent. ⚠️ **`192.000.002.015` — the store's own canonical spelling — is one of the values that reopens it.** Latent, not live: the rail renders dotted [`ipam_page.rs:539`]
+- [x] [Review][Patch] The delete check served `Failed to deserialize query string: duplicate field 'subnet'` at **400**, and htmx swaps a 4xx — English framework text in the `aria-live` region of a French page, at an `/ipam` address [`ipam_page.rs:526`]
+- [x] [Review][Patch] The four `malformed_*` sentences name a subnet field the forms no longer carry [`app.yml`]
+- [x] [Review][Patch] AC1's *"`settle` is reused"* holds on two of the five new routes; the exception is sound and was written only in code comments [`ipam_write.rs:669`]
+- [x] [Review][Defer] `GET` on a write route answers **405 with an empty body** — pre-existing (story 6.1 scoped the claim to the POST pair) and unreachable through the shipped forms; recorded because this story takes the surface from three routes to eight
+- [x] [Review][Defer] `subnet_id`'s removal makes the four forms un-parented at the ROUTE; a range and its addresses are still reachable only through their own ids, so a future *move this record to another subnet* gesture must re-open the question rather than inherit this answer
+
+**Prove-to-red, eight mutations — and TWO REFUSALS that are results.** ⚠️ The driver reports counts and
+never test NAMES, so **every carrier below was established by hand**, by applying the mutation from a
+scratchpad copy and reading the failure list (never `git checkout --`).
+
+| id | mutation | measured | carriers, named by hand |
+|----|----------|----------|--------------------------|
+| M-B1 | the repaired 409 becomes the 404 this story removes | 🔴 1 | `a_populated_subnet_is_refused_by_name_rather_than_as_a_missing_one` |
+| M-B2 | the edit is given the delete's sentence again | 🔴 2 | `the_edit_and_the_delete_do_not_share_a_refusal_sentence`; ⚠️ and `every_key_this_module_can_render_resolves_in_both_locales` **incidentally**, the key count falling 39 → 38 |
+| M-B3 | a variant exists and is left out of `ALL` | 🔴 3 | `every_variant_is_in_the_route_list`, `every_refusal_the_handler_can_receive_names_a_rule`, and `main.rs`'s `every_write_route_is_refused_without_a_credential_and_exists` — 🔑 which reds on a SHRINK and, as the auditor said, could never red on an omission |
+| M-B4 | one record classified twice, another not at all | 🔴 1 | `every_refusal_the_handler_can_receive_names_a_rule` — the set check; a count would not have seen it |
+| M-B5 | a definition answers 200 | 🔴 4 | `every_route_reuses_the_shared_machinery`; ⚠️ plus three incidental (`a_label_at_the_column…`, `a_well_formed_definition…`, `only_the_four_binding_policies…`) which assert 201 directly |
+| M-B6 | the fake port names a different parent | 🔴 1 | `every_route_reuses_the_shared_machinery` — decision 1's carrier: the redirect now comes from the PORT, where the old assertion was satisfied by the form echoing its own hidden field back |
+| M-B7 | the unreadable qualifier is swallowed again | 🔴 1 | `an_unreadable_qualifier_answers_nothing_rather_than_the_subnets_sentence` |
+| M-B8 | the framework answers for us again, in English | 🔴 1 | `a_query_the_extractor_refuses_says_nothing_in_the_frameworks_words` |
+
+🔑 **M-B5's first run was REFUSED — `ANCHOR MATCHED 2 TIMES` — and the refusal is the deliverable**:
+the second site is the guard's own hand-written table, so replacing both would have **repaired the
+guard the mutation was meant to red**. *The refusal is what establishes that the two representations
+are genuinely independent*, which is exactly what the mutation set out to show. Re-run anchored on the
+producer alone, it reds.
+
+⚠️ **The driver refused a second time, over a snapshot left by that interrupted run**, and named the
+hazard rather than guessing: *the file may still be MUTATED — compare, restore by hand, do NOT use
+`git checkout`*. Compared: identical, so the refused run never applied anything; snapshot deleted.
+
+⚠️ **Three instrument defects of mine, recorded because two of them nearly became findings**: the
+database reset ran `mariadb`, **which is not installed on this host** (`exit 127`), so a run I was
+about to report as *virgin store* was nothing of the kind — and it explains the 4-then-2 failure drift
+of that pass, the known non-determinism against a REUSED database. And **twice I read a log while it
+was still being written** and concluded four gate steps had not run, when all ten had. *A measurement
+read through a filter, or taken with an instrument that cannot answer, is not a measurement* — met
+three times in one afternoon.
+
+**990 → 995** (705 bin + 191 core + 99 xtask), ten gates, clippy `--all-targets`, `cargo fmt`;
+**25,03 s** with a store dropped and recreated against **5,03 s** without one — the clock is the tell.
+**Both browser gates re-run and green**, which this slice owed because the rail lost four hidden
+fields: axe **1 route / 0 nodes** on the empty plan and **10 routes + 5 states / 0 nodes** seeded,
+kbd-probe **52 checks, 0 failed** — including, in a browser, a correction form arriving as
+`{id, first, last, policy}` with **no `subnet_id`**, eleven rail controls with distinct accessible
+names, and the removal warning announced without stealing the focus.
+
+⚠️ **Slices C and D are NOT reviewed** — `ipam_page.rs`, the templates, `app.yml` and `app.css` (833
+lines), and `kbd-probe.mjs`, the manual and the status files (432 lines). Two of slice B's patches
+landed in `ipam_page.rs` because the route is this story's; that is not a review of that file.
+
 ## Dev Notes
 
 ### Traps this project has paid for, and which apply here

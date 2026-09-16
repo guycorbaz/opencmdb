@@ -1068,6 +1068,14 @@ ipam.done.address:
 ipam.refusal.range_still_holds_addresses:
   en: "This range still holds addresses you defined inside it. Remove or move them first; deleting the range would leave them with nothing saying what that space is meant for."
   fr: "Cette plage contient encore des adresses que vous y avez définies. Supprimez-les ou déplacez-les d'abord : supprimer la plage les laisserait sans rien qui dise à quoi cet espace est destiné."
+# 🔴 THE SAME RULE, THE OTHER GESTURE (Guy's decision 2, 2026-09-16). The review's repair made an
+# EDIT that abandons an address earn the delete's refusal — and with it the delete's sentence, so an
+# operator who had SHRUNK a range was told what deleting it would do. *A true sentence about the
+# wrong gesture, which is worse than none.* The rule is one; the sentence is two, because the remedy
+# differs: a delete has to be given up, an edit can simply be widened.
+ipam.refusal.range_edit_would_abandon:
+  en: "The bounds you asked for would leave addresses you defined outside this range. Widen it, or remove or move those addresses first."
+  fr: "Les bornes demandées laisseraient hors de cette plage des adresses que vous y avez définies. Élargissez-la, ou supprimez ou déplacez ces adresses d'abord."
 ipam.refusal.malformed_subnet:
   en: "Malformed request: the form must carry a subnet in CIDR notation, such as 192.0.2.0/24, and a label."
   fr: "Requête mal formée : le formulaire doit porter un sous-réseau en notation CIDR, par exemple 192.0.2.0/24, et une étiquette."
@@ -1174,17 +1182,17 @@ ipam.refusal.malformed_delete_subnet:
   en: "Malformed request: the form must carry the identifier of the subnet to remove."
   fr: "Requête mal formée : le formulaire doit porter l'identifiant du sous-réseau à supprimer."
 ipam.refusal.malformed_delete_range:
-  en: "Malformed request: the form must carry the identifier of the range to remove, and the subnet it belongs to."
-  fr: "Requête mal formée : le formulaire doit porter l'identifiant de la plage à supprimer et celui du sous-réseau auquel elle appartient."
+  en: "Malformed request: the form must carry the identifier of the range to remove."
+  fr: "Requête mal formée : le formulaire doit porter l'identifiant de la plage à supprimer."
 ipam.refusal.malformed_delete_address:
-  en: "Malformed request: the form must carry the identifier of the address to remove, and the subnet it belongs to."
-  fr: "Requête mal formée : le formulaire doit porter l'identifiant de l'adresse à supprimer et celui du sous-réseau auquel elle appartient."
+  en: "Malformed request: the form must carry the identifier of the address to remove."
+  fr: "Requête mal formée : le formulaire doit porter l'identifiant de l'adresse à supprimer."
 ipam.refusal.malformed_edit_range:
-  en: "Malformed request: the form must carry the identifier of the range, the subnet it belongs to, a first and a last address, a policy and a label."
-  fr: "Requête mal formée : le formulaire doit porter l'identifiant de la plage, celui du sous-réseau auquel elle appartient, une première et une dernière adresse, une politique et une étiquette."
+  en: "Malformed request: the form must carry the identifier of the range, a first and a last address, a policy and a label."
+  fr: "Requête mal formée : le formulaire doit porter l'identifiant de la plage, une première et une dernière adresse, une politique et une étiquette."
 ipam.refusal.malformed_edit_address:
-  en: "Malformed request: the form must carry the identifier of the address, the subnet it belongs to, the address itself and a label."
-  fr: "Requête mal formée : le formulaire doit porter l'identifiant de l'adresse, celui du sous-réseau auquel elle appartient, l'adresse elle-même et une étiquette."
+  en: "Malformed request: the form must carry the identifier of the address, the address itself and a label."
+  fr: "Requête mal formée : le formulaire doit porter l'identifiant de l'adresse, l'adresse elle-même et une étiquette."
 # 🔴 A KEY, where the documenting route still answers an English literal: the review found that
 # literal swapped into the page under a French UI. Behind a reverse proxy, `Host` must be forwarded.
 # ⚠️ It first said the write "did not come from this opencmdb's own page" — false in the one case an

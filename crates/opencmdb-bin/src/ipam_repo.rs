@@ -649,16 +649,33 @@ pub(crate) async fn insert_address(
 pub(crate) async fn delete_address(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
-) -> Result<(), RepositoryError> {
-    let done = sqlx::query(capped!("DELETE FROM ip_address WHERE id = ?"))
+) -> Result<String, RepositoryError> {
+    // 🔴 **THE PARENT IS READ BACK FROM THE ROW, never taken from the form** (Guy's decision 1,
+    // 2026-09-16). The route used to receive a `subnet_id` beside the record's id and use it as the
+    // redirect target without ever asking whether it WAS this record's subnet. Measured on the
+    // running binary: an address of subnet A was removed and the operator landed on subnet B's plan,
+    // under a success sentence, looking at a page where nothing had changed. There is now nothing to
+    // mismatch — and the mirror defect goes with it, a malformed `subnet_id` having refused a
+    // deletion it takes no part in.
+    //
+    // 🔑 The locked read also REPLACES the `rows_affected` test for absence, and is stronger: it
+    // holds the row between deciding it exists and deleting it, where two statements in autocommit
+    // decide against a world that can move in between.
+    let subnet_id: String = sqlx::query_as(capped!(
+        "SELECT subnet_id FROM ip_address WHERE id = ? FOR UPDATE"
+    ))
+    .bind(id)
+    .fetch_optional(&mut *conn)
+    .await
+    .map_err(classify)?
+    .map(|(subnet_id,): (String,)| subnet_id)
+    .ok_or(RepositoryError::NotFound)?;
+    sqlx::query(capped!("DELETE FROM ip_address WHERE id = ?"))
         .bind(id)
         .execute(&mut *conn)
         .await
         .map_err(classify)?;
-    if done.rows_affected() == 0 {
-        return Err(RepositoryError::NotFound);
-    }
-    Ok(())
+    Ok(subnet_id)
 }
 
 /// Delete one subnet — refused by the DATABASE while it still holds ranges or addresses.
@@ -729,7 +746,7 @@ pub(crate) async fn update_address(
     id: &str,
     addr: Ipv4Addr,
     label: &str,
-) -> Result<(), RepositoryError> {
+) -> Result<String, RepositoryError> {
     let mut tx = sqlx::Connection::begin(&mut *conn)
         .await
         .map_err(classify)?;
@@ -759,7 +776,9 @@ pub(crate) async fn update_address(
         .execute(&mut *tx)
         .await
         .map_err(classify)?;
-        Ok(())
+        // The subnet this address REALLY belongs to — the locked read above already had it, so the
+        // caller's redirect costs nothing beyond returning it. See [`delete_address`].
+        Ok(subnet_id)
     }
     .await;
     settle_plan_write(tx, written, "address edit").await
@@ -815,7 +834,7 @@ fn refused(attempt: RangeAttempt) -> RepositoryError {
 pub(crate) async fn delete_range(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
-) -> Result<(), RepositoryError> {
+) -> Result<String, RepositoryError> {
     delete_range_pausing(conn, id, std::future::ready(())).await
 }
 
@@ -846,7 +865,7 @@ async fn delete_range_pausing(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
     after_the_deciding_read: impl std::future::Future<Output = ()>,
-) -> Result<(), RepositoryError> {
+) -> Result<String, RepositoryError> {
     let mut tx = sqlx::Connection::begin(&mut *conn)
         .await
         .map_err(classify)?;
@@ -903,7 +922,9 @@ async fn delete_range_pausing(
             .execute(&mut *tx)
             .await
             .map_err(classify)?;
-        Ok(())
+        // The subnet this range REALLY belonged to, for the caller's redirect — read off the row
+        // above rather than accepted from the form. See [`delete_address`] for the measurement.
+        Ok(subnet_id)
     }
     .await;
     settle_plan_write(tx, written, "range delete").await
@@ -957,7 +978,7 @@ pub(crate) async fn update_range(
     last: Ipv4Addr,
     policy: IpPolicy,
     label: &str,
-) -> Result<(), RepositoryError> {
+) -> Result<String, RepositoryError> {
     let mut tx = sqlx::Connection::begin(&mut *conn)
         .await
         .map_err(classify)?;
@@ -1040,7 +1061,8 @@ pub(crate) async fn update_range(
         .execute(&mut *tx)
         .await
         .map_err(classify)?;
-        Ok(())
+        // The subnet this range REALLY belongs to, for the caller's redirect. See [`delete_address`].
+        Ok(subnet_id)
     }
     .await;
     settle_plan_write(tx, written, "range edit").await
@@ -1059,13 +1081,13 @@ pub(crate) async fn update_range(
 /// consumed by value here, so no second gesture is available or owed. What the caller loses is the
 /// distinction between *refused and clean* and *the commit itself failed*: both arrive as an `Err`,
 /// the second classified from the driver. Said rather than left to be inferred from an absence.
-async fn settle_plan_write(
+async fn settle_plan_write<T>(
     tx: sqlx::Transaction<'_, MySql>,
-    written: Result<(), RepositoryError>,
+    written: Result<T, RepositoryError>,
     what: &str,
-) -> Result<(), RepositoryError> {
+) -> Result<T, RepositoryError> {
     match written {
-        Ok(()) => tx.commit().await.map_err(classify),
+        Ok(value) => tx.commit().await.map_err(classify).map(|()| value),
         Err(refusal) => {
             if let Err(error) = tx.rollback().await {
                 tracing::warn!(%error, %what, "rolling back a refused plan correction failed");
@@ -3089,14 +3111,17 @@ pub(crate) mod tests {
             }
         }
         assert_eq!(
-            checked, 16,
+            checked, 17,
             "the plan's lockable statements changed — a new one must be capped, and this count \
              updated only after READING what it counts. Today: three inserts (subnet, range, \
              address), three deletes (address, subnet, range), two updates (address, range), and \
-             EIGHT locking reads — the insert's sibling scan, `load_subnet_locked`, the address \
-             edit's own, `delete_range`'s two (the range row, then the subnet's addresses) and \
-             `update_range`'s THREE (the range row carrying its current bounds, the sibling scan \
-             with `id <> ?`, and the address scan the code review's abandonment rule added)"
+             NINE locking reads — the insert's sibling scan, `load_subnet_locked`, the address \
+             DELETE's parent read, the address EDIT's own, `delete_range`'s two (the range row, \
+             then the subnet's addresses) and `update_range`'s THREE (the range row carrying its \
+             current bounds, the sibling scan with `id <> ?`, and the address scan the code \
+             review's abandonment rule added). ⚠️ The ninth arrived with the review's decision 1: \
+             `delete_address` reads its parent back instead of accepting one from the form, which \
+             also replaced its `rows_affected` test for absence with a locked read"
         );
     }
 

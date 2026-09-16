@@ -525,8 +525,17 @@ pub(crate) struct DeleteCheckQuery {
 /// showing the previous answer under a new question (story 14.3b's measured defect).
 async fn delete_check(
     State(state): State<IpamState>,
-    Query(query): Query<DeleteCheckQuery>,
+    // 🔴 **A REJECTED QUERY ANSWERS AN EMPTY REGION, not axum's English sentence.** With
+    // `Query<…>` extracted directly, `?subnet=a&subnet=b` served `Failed to deserialize query
+    // string: duplicate field 'subnet'` with status 400 — and htmx DOES swap a 4xx, so a framework
+    // sentence in English landed in the `aria-live` region of a French page. Story 6b.10's
+    // arbitration 2(a′) puts the bodies served at these addresses inside the copy perimeter, and
+    // this handler's own doc already says a failure must not leave the region under a new question.
+    query: Result<Query<DeleteCheckQuery>, axum::extract::rejection::QueryRejection>,
 ) -> Response {
+    let Ok(Query(query)) = query else {
+        return Html(String::new()).into_response();
+    };
     let Some(subnet_id) = query
         .subnet
         .as_deref()
@@ -536,23 +545,42 @@ async fn delete_check(
     else {
         return Html(String::new()).into_response();
     };
-    let bounds = match (
-        query
-            .first
-            .as_deref()
-            .and_then(|t| t.trim().parse::<Ipv4Addr>().ok()),
-        query
-            .last
-            .as_deref()
-            .and_then(|t| t.trim().parse::<Ipv4Addr>().ok()),
-    ) {
-        (Some(first), Some(last)) if last >= first => Some((first, last)),
-        _ => None,
+    // 🔴 **AN UNPARSEABLE QUALIFIER ANSWERS NOTHING — never the enclosing gesture's sentence.**
+    // Both reads used `.ok()` and dropped the failure, so `?subnet=…&addr=nonsense` fell through to
+    // the arm for a subnet's own removal and answered *"this subnet still holds 2 records"* over a
+    // control asking about one address. That is exactly what [`DeleteCheckQuery::addr`]'s own doc
+    // says this route was shaped to avoid — *a true sentence about the wrong gesture, which is worse
+    // than none* — reached through the one channel the shape does not close. ⚠️ Measured live by the
+    // review, including on the store's OWN canonical spelling (`192.000.002.015`, which
+    // `Ipv4Addr::from_str` refuses for its leading zeros): today the rail renders dotted, so this
+    // was latent rather than live, and any future producer passing the stored form would have
+    // degraded every range and address control into the subnet's warning in silence.
+    let bounds = match (query.first.as_deref(), query.last.as_deref()) {
+        (None, None) => None,
+        (Some(first), Some(last)) => {
+            let (Ok(first), Ok(last)) = (
+                first.trim().parse::<Ipv4Addr>(),
+                last.trim().parse::<Ipv4Addr>(),
+            ) else {
+                return Html(String::new()).into_response();
+            };
+            if last < first {
+                return Html(String::new()).into_response();
+            }
+            Some((first, last))
+        }
+        // One bound without the other names no interval, and a range control always sends both.
+        _ => return Html(String::new()).into_response(),
     };
-    let addr = query
-        .addr
-        .as_deref()
-        .and_then(|typed| typed.trim().parse::<Ipv4Addr>().ok());
+    let addr = match query.addr.as_deref() {
+        None => None,
+        Some(typed) => {
+            let Ok(addr) = typed.trim().parse::<Ipv4Addr>() else {
+                return Html(String::new()).into_response();
+            };
+            Some(addr)
+        }
+    };
     answer_a_check(
         crate::page::store_within(crate::page::PAGE_STORE_BUDGET, async {
             delete_check_data(&state.pool, &subnet_id, bounds, addr)
@@ -3364,6 +3392,108 @@ mod tests {
             !body.contains("nouveau:"),
             "it links to no triage question, because it knows nothing about the address"
         );
+    }
+
+    /// Drive one GET at the delete check, THROUGH THE ROUTE.
+    ///
+    /// 🔴 **Every other test of this check calls `render_delete_check`, the pure function — and
+    /// both repairs below live in the HANDLER, which that function cannot reach.** A guard written
+    /// on the neighbouring model would have been correct about what it tested and blind to what was
+    /// broken: this epic's dominant class, and the review found the product defect precisely because
+    /// it drove the route instead.
+    ///
+    /// 🔑 **The pool is unreachable ON PURPOSE, and that is what supplies the control.** Both
+    /// repairs return BEFORE the store is touched, so an empty body means *the handler declined to
+    /// answer*, while a request that does reach the store comes back carrying the keyed *could not
+    /// check* sentence at 200. Two outcomes a test can tell apart with no live MariaDB.
+    /// ⚠️ Port 1 refuses at once — deliberately **not** `main.rs`'s lazy-pool idiom, which names
+    /// 3306: on this machine that port belongs to an unrelated project's container, and a lazy pool
+    /// that never connects is one edit away from one that does.
+    async fn ask_the_delete_check(query: &str) -> (axum::http::StatusCode, String) {
+        use tower::ServiceExt;
+        let pool = MySqlPool::connect_lazy("mysql://root:x@127.0.0.1:1/none").expect("a lazy pool");
+        let response = router(pool, None)
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(format!("{DELETE_CHECK_PATH}?{query}"))
+                    .body(axum::body::Body::empty())
+                    .expect("a well-formed request"),
+            )
+            .await
+            .expect("the router answers");
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("a readable body");
+        (status, String::from_utf8_lossy(&body).into_owned())
+    }
+
+    /// **A qualifier this build cannot read answers NOTHING — never the enclosing gesture's
+    /// sentence.**
+    ///
+    /// 🔴 Both reads used `.ok()` and dropped the failure, so an unreadable `addr` or an unreadable
+    /// pair of bounds fell through to the arm for the SUBNET's own removal: a control asking about
+    /// one address was answered *"this subnet still holds 2 records"*. [`DeleteCheckQuery::addr`]'s
+    /// own doc says the route was shaped to prevent exactly that — *a true sentence about the wrong
+    /// gesture, which is worse than none* — and the shape did not close this channel.
+    ///
+    /// ⚠️ **`192.000.002.015` is in the list because the STORE holds addresses in that spelling**
+    /// (story 14.1's zero-padded canonical form), and `Ipv4Addr::from_str` refuses leading zeros.
+    /// The rail renders dotted today, so this was latent rather than live; any future producer
+    /// passing the stored form would have degraded every range and address control into the
+    /// subnet's warning, in silence.
+    #[tokio::test]
+    async fn an_unreadable_qualifier_answers_nothing_rather_than_the_subnets_sentence() {
+        for query in [
+            "subnet=s1&addr=nonsense",
+            "subnet=s1&addr=192.000.002.015",
+            "subnet=s1&first=nonsense&last=nonsense",
+            // One bound without the other names no interval, and a range control sends both.
+            "subnet=s1&first=192.0.2.10",
+        ] {
+            let (status, body) = ask_the_delete_check(query).await;
+            assert_eq!(status, axum::http::StatusCode::OK, "`{query}`");
+            assert!(
+                body.is_empty(),
+                "`{query}` was answered anyway, and the only sentence this route could have \
+                 reached for is the subnet's: {body}"
+            );
+        }
+        // 🔑 THE CONTROL, without which the assertions above are satisfied by a handler that
+        // answers nothing to anything: a READABLE qualifier does reach the store, and says so.
+        let (status, body) = ask_the_delete_check("subnet=s1&addr=192.0.2.15").await;
+        assert_eq!(status, axum::http::StatusCode::OK);
+        assert!(
+            !body.is_empty(),
+            "a readable address reached no further than an unreadable one, so the assertions \
+             above measure nothing"
+        );
+    }
+
+    /// **A query the extractor refuses answers an empty region, not a framework sentence.**
+    ///
+    /// 🔴 With `Query<…>` extracted directly, `?subnet=a&subnet=b` served
+    /// `Failed to deserialize query string: duplicate field 'subnet'` at 400 — and **htmx swaps a
+    /// 4xx**, so English framework text landed in the `aria-live` region of a French page, at an
+    /// `/ipam` address. Story 6b.10's arbitration 2(a′) puts the bodies served at these addresses
+    /// inside the copy perimeter.
+    #[tokio::test]
+    async fn a_query_the_extractor_refuses_says_nothing_in_the_frameworks_words() {
+        let (status, body) = ask_the_delete_check("subnet=a&subnet=b").await;
+        assert_eq!(
+            status,
+            axum::http::StatusCode::OK,
+            "a 4xx here is swapped into the live region by htmx"
+        );
+        // Asserted as the ABSENCE of the framework's vocabulary rather than as an empty body: what
+        // the operator must never read is English this product did not write, and a rejected query
+        // that somehow parsed would legitimately answer the keyed *could not check* sentence.
+        for framework_english in ["deserialize", "Failed to", "duplicate field"] {
+            assert!(
+                !body.contains(framework_english),
+                "the extractor's own sentence reached the operator: {body}"
+            );
+        }
     }
 
     /// Decision 11 on the two pages that have no subnet in force — **an empty plan, and an
