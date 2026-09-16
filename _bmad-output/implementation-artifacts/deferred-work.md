@@ -5788,3 +5788,26 @@ three independently. These are the ones deferred rather than patched — each wi
   nothing only because the parent-row lock still holds — so narrowing it to the range's own interval
   cannot be done without re-running M-T3/M-T3b/M-T3c and re-deciding what carries what.
   **Owner: the story that revisits the plan's locking**, with the three mutations as its entry price.
+
+## Raised by story 14.4's SECOND review round — the routes (2026-09-16)
+
+- ⚠️ **`GET` on a write route answers `405` with an EMPTY body.** Measured on the running binary:
+  `curl /ipam/subnet/delete` → `405 | []`. Story 6.1 scoped its *"never answers an empty body"*
+  promise to the POST pair, so this is inherited rather than new, and no shipped form can reach it —
+  every control posts. **Recorded because this story took the surface from three write routes to
+  eight**, and a residual sized for three is not automatically sized for eight: what was one address
+  an operator could only reach by hand is now five more. What is owed is a decision about whether the
+  method-not-allowed body joins the keyed perimeter story 6b.10's arbitration 2(a′) drew around the
+  bodies served at these addresses. **Owner: Epic 19**, which already carries Basic's closure and the
+  other HTTP-surface residuals.
+- ⚠️ **The four record-addressed forms are now UN-PARENTED at the route, and a *move* gesture must
+  re-open that rather than inherit it.** Guy's decision 1 of 2026-09-16 removed `subnet_id` from the
+  range and address corrections and deletions: the adapter reads the record's real parent off the row,
+  so nothing the browser sends can name a subnet any more. That is right for every gesture the product
+  has — all four change a record **inside** the subnet it already belongs to. ⚠️ **It is exactly wrong
+  for a gesture that MOVES a record between subnets**, which would need the operator to name a
+  destination, and would need it validated against the record's current parent rather than substituted
+  for it — the comparison this decision made unnecessary. Nothing in Epic 14 proposes such a gesture
+  today, which is why this is a row and not a task; the cost of not writing it is that the next story
+  wanting one reads decision 1 as settling a question it never considered. **Owner: Epic 14's
+  retrospective**, which should decide whether a move belongs to the plan at all.
