@@ -1,10 +1,12 @@
 {#- The audit of the plan against the network (story 14.3b).
 
-     🔑 A LIST under the grid (Guy's decision 8, 2026-09-15), and NO marker on the cells: decision 8
-     kept a "seen" marker only if it reached 3:1 on every fill, and no single colour can — measured by
-     arithmetic on the shipped palette, a marker needs a relative luminance of at least 0.43 to reach
-     3:1 against the defined fill (`--color-accent-700`, #416180) and at most 0.30 to reach 3:1 against
-     the page ground (#f2f2f3). A cell's seen state is carried by its accessible name instead.
+     🔑 A LIST under the grid (Guy's decision 8, 2026-09-15) AND a marker on the cells the network has
+     been seen on. 🔴 **This comment said the marker could not exist, and the arithmetic behind that was
+     wrong in the safe direction**: it demanded ONE colour clear both bounds and named two fills of four.
+     Black clears them — measured in the browser by `a11y/axe-gate.mjs`, **3.25:1** on the defined fill
+     (`--color-accent-700`, #416180) and **18.77:1** on the other three, which are patterns over the page
+     ground (#f2f2f3). A cell's seen state is carried by its accessible name AND by that marker; the name
+     is what a screen reader gets, and neither replaces the other.
 
      🔑 The words are the binding vocabulary's own (constraint 5): `gap` is « écart », `undeclared` is
      the STATE axis's word, and FR24's case is « Conflit d'adresse », never a bare `conflict`. Each is
@@ -14,7 +16,19 @@
      skips a `class` attribute carrying an Askama expression. -#}
 {%- match audit %}
 {%- when Some with (audit) %}
-<section class="ipam-audit" aria-labelledby="ipam-findings-heading">
+{#- 🔴 **NO SECTION WHEN THERE IS NOTHING IN IT, and `aria-labelledby` ONLY where its target exists.**
+     Both were found by a mutation that came back green: the wrapper rendered unconditionally, so on a
+     page with no subnet in force and nothing outside the plan it emitted an EMPTY landmark whose
+     `aria-labelledby` named an `id` the page does not carry — a dangling ARIA reference, and an empty
+     region announced to a screen reader as a section with a name and no content. -#}
+{%- if audit.subnet_in_force || !audit.outside.is_empty() %}
+<section class="ipam-audit"{% if audit.subnet_in_force %} aria-labelledby="ipam-findings-heading"{% endif %}>
+  {#- 🔑 The findings and the pool warnings are about ONE subnet; the list of addresses seen outside
+       the plan is about the PLAN. So the two pages with no subnet in force — an empty plan, and an
+       identifier no subnet carries — render the outside list alone, which the code review found
+       them dropping entirely. On an empty plan every observed address is outside, and that list is
+       the only true thing this screen has to say. -#}
+  {%- if audit.subnet_in_force %}
   <h3 id="ipam-findings-heading" class="panel-label">{{ s.findings_heading }}</h3>
   {%- if audit.findings.is_empty() %}
   <p class="empty">{{ s.no_findings }}</p>
@@ -57,6 +71,7 @@
     {%- endfor %}
   </ul>
   {%- endif %}
+  {%- endif %}
 
   {%- if !audit.outside.is_empty() %}
   <h3 class="panel-label">{{ s.outside_heading }}</h3>
@@ -78,7 +93,13 @@
     </li>
     {%- endfor %}
   </ul>
+  {#- The bound SAYS it is one. Without this line a page showing twenty of five thousand reads as a
+       network with twenty addresses outside the plan. -#}
+  {%- if audit.outside_more != "" %}
+  <p class="empty">{{ audit.outside_more }}</p>
+  {%- endif %}
   {%- endif %}
 </section>
+{%- endif %}
 {%- when None %}
 {%- endmatch %}

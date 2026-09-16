@@ -22,6 +22,11 @@
 //! what is DOCUMENTED.** A machine documented on an address the plan never planned is real
 //! information, and the day the two are fused that information is gone. Nothing here refers to an
 //! entity, an observation or an interface.
+//!
+//! ⚠️ **Apart is not unrelated, and story 14.3b is where that stopped being a distinction without a
+//! difference**: the audit COMPARES them — a documented address is never offered (decision 4) — in
+//! `opencmdb-bin`, which is where a read belongs. Nothing in this crate gained a reference to
+//! either side, and *compared* must not drift into *fused* in a later reading of this paragraph.
 
 use std::fmt;
 
@@ -40,8 +45,12 @@ use serde::{Deserialize, Serialize};
 /// **24 DHCP leases** of the 32 addresses reverse DNS resolves, so an audit that highlights every
 /// unclaimed address highlights 24 of them permanently and stops being read.
 ///
-/// ⚠️ **Nothing in this codebase reads a policy yet.** Story 14.3 is the audit; this enum is the
-/// vocabulary it will read, posed once so that story does not invent it.
+/// ✅ **It is READ, and this line said it was not.** True when story 14.1 posed the enum, false from
+/// story 14.2 — which draws each cell's policy on the grid and names it in every accessible name —
+/// and thoroughly false since story 14.3b, where the policy is what DECIDES: the offer draws from
+/// `static` alone, nothing covered only by a `dhcp-pool` is a finding, and « Conflit d'adresse »
+/// fires inside `static` or `reserved` and nowhere else. *A note saying a thing has no reader ages
+/// the moment it gets one, and this one aged for two stories.*
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum IpPolicy {
     /// Addresses the operator assigns by hand — one machine per address, chosen.

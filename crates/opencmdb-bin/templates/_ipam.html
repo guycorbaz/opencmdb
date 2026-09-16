@@ -42,6 +42,12 @@
   <p class="ipam-planned-note">
     <a class="btn-gesture live btn-document" href="#ipam-form-subnet">{{ s.empty_plan_gesture }}</a>
   </p>
+  {#- 🔴 **THE EMPTY PLAN STILL SAYS WHAT THE NETWORK SHOWS** (decision 11, code review): with no
+       subnet declared, EVERY observed address is outside the plan, so this list is the only true
+       thing this screen has to say on a fresh install — and it is what turns *there is no plan* into
+       *here is what a plan would have to account for*. The partial renders the outside list alone
+       when no subnet is in force. -#}
+  {% include "_ipam_audit.html" %}
   {% include "_ipam_forms.html" %}
   {%- else %}
   {#- 🔑 An unknown id narrows to NOTHING and says so; it does NOT fall back to the first subnet.
@@ -56,6 +62,9 @@
   {%- match too_large %}
   {%- when None %}
   <p class="empty">{{ s.unknown_subnet }}</p>
+  {#- Same reason as the empty plan: no subnet is in force, so the findings belong to nothing, and
+       what the network shows OUTSIDE the plan still belongs to the plan. -#}
+  {% include "_ipam_audit.html" %}
   {%- when Some with (rows) %}
   {#- 🔑 The plan is shown as what it HOLDS — the ranges the operator declared — rather than as an
        apology for not drawing a grid. A `/16` has a handful of ranges; it is the grid that does not
@@ -92,7 +101,12 @@
     <div>
       <ul class="ipam-grid" role="list" aria-label="{{ s.grid_label }}">
         {%- for cell in plan.cells %}
-        <li class="ipam-cell {{ cell.modifier }}{% if cell.policy_modifier != "" %} {{ cell.policy_modifier }}{% endif %}"
+        {#- 🔑 `ipam-cell-seen` is decision 8's marker, built after the code review measured the
+             argument for dropping it to be false: a BLACK marker reaches 3:1 against the defined
+             fill (3.25) and against the page ground (18.77), and the axe gate COMPUTES both rather
+             than trusting this comment — which is why these two figures are the gate's own. The state is also in the accessible name, so the marker
+             adds a channel and replaces none. -#}
+        <li class="ipam-cell {{ cell.modifier }}{% if cell.policy_modifier != "" %} {{ cell.policy_modifier }}{% endif %}{% if cell.seen %} ipam-cell-seen{% endif %}"
             aria-label="{{ cell.label }}"></li>
         {%- endfor %}
       </ul>

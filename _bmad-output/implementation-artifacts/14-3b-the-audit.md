@@ -338,6 +338,92 @@ Two fresh-context layers on `7373f9f`, 2026-09-15 — fact-check (3 HIGH, 7 MED,
   gates' row-finding, the kbd-probe; both gates run.
 - [x] **T8** (AC14, AC15) Measure; docs; the live count.
 
+### Review Findings
+
+Three isolated layers, 2026-09-15, on `9f13513`: Blind Hunter (code diff only), Edge Case Hunter (own
+worktree, store and server; measured MAC churn, locks, planted reads), Acceptance Auditor (full diff, spec,
+register; re-ran MA1, MG2, both gates). 39 raw findings (20 blind, 8 edge, 11 auditor) → **33 after dedup:
+4 decisions, 25 patches, 1 deferral, 3 dismissed** — every one applied.
+
+⚠️ **This header read *"34 after dedup: … 26 patches"* until the repair pass RECOUNTED the list below and
+found 25.** The number was written beside the list rather than derived from it, which is this project's
+own four-time defect (*a tally written in flight, inside the document explaining why not to write counts in
+flight*). It is corrected here rather than defended, and the list is the record.
+
+- [x] [Review][Decision] **The page grows without bound under MAC churn and outside sightings** (edge,
+  blind; auditor on "short") — measured 2.26 MB, 5 007 findings, a 13 688-byte cell name, axe 75 s, on 47
+  pool addresses × 200 MACs + 5 000 outside addresses. Caps for the cell name, the outside list (decision
+  11 says *short*) and the findings list are a design choice.
+- [x] [Review][Decision] **A nested subnet's page offers an address its grid draws as not covered, and
+  counts it twice** (blind) — the offer and the verdict read plan-wide ranges, the grid only the subnet's
+  own; a sighting there reads `gap` over a blank cell.
+- [x] [Review][Decision] **The range form's warning was deferred by the implementer, not by Guy**
+  (auditor) — §1(e) said decision 7 covers it; AC4 permits *"or says why not"*.
+- [x] [Review][Decision] **The marker was dropped on a false argument** (blind, auditor) — a near-black
+  marker reaches 3:1 on the defined fill (≈ 3.25) and on the ground (≈ 18.8); the "≤ 0.30" bound is 0.263;
+  the argument named two fills of four. Decision 8's condition is reachable.
+- [x] [Review][Patch] **One unreadable range or address row anywhere takes down every `/ipam` page and every
+  check** (blind) — `plan_ranges`/`plan_addresses` must skip and name, as `list_subnets` does [ipam_repo.rs]
+- [x] [Review][Patch] **AC3's proof re-admits EVERY seen address; re-admitting only MAC-less sightings left
+  677/191/99, clippy and the gates green** (auditor MX1b) — test the MAC-less shape and record the mutation
+  [ipam_audit.rs tests]
+- [x] [Review][Patch] **The triage link disagrees with triage on a declared value with whitespace**
+  (edge measured, auditor) — the link must use triage's raw comparison; the offer keeps the protective parse;
+  and a gate follows the link to a real row [ipam_audit.rs, ipam_page.rs, kbd-probe.mjs]
+- [x] [Review][Patch] **The empty-offer sentence is vacuous on a subnet with no static range and false when
+  an overlapping range alone empties it** (auditor, blind) — two sentences, both rendered [app.yml,
+  ipam_page.rs]
+- [x] [Review][Patch] **The address check does not say "no triage question" when there is none** (auditor)
+  [_ipam_address_check.html]
+- [x] [Review][Patch] **The outside list is missing on the empty and unknown-subnet pages** (auditor)
+  [ipam_page.rs]
+- [x] [Review][Patch] **A failed or timed-out check leaves the previous address's warning under a new value;
+  a render error would put a whole error page in the live region** (edge measured, blind) — answer a keyed
+  "could not check" fragment [ipam_page.rs]
+- [x] [Review][Patch] **Both gates report a product regression as "could not run" once the page and the form
+  exist** (blind) [axe-gate.mjs, kbd-probe.mjs]
+- [x] [Review][Patch] **The "Tab from the top" walk starts from the address field** (blind) — walk a fresh
+  page [kbd-probe.mjs]
+- [x] [Review][Patch] **The browser compares only border-style of two words; « Conflit d'adresse » is never
+  compared** (blind, auditor) [axe-gate.mjs]
+- [x] [Review][Patch] **The seed walks no pool warning and no reserved or defined conflict** (auditor)
+  [a11y/seed.sql]
+- [x] [Review][Patch] **The debounce and the live region are each held by one thing** (edge) [ipam_page.rs,
+  kbd-probe.mjs]
+- [x] [Review][Patch] **A /31 or /32 subnet takes its own addresses out of the offer** (edge measured) —
+  RFC 3021: no edges at 31 and 32 [ipam_repo.rs]
+- [x] [Review][Patch] **The module doc says nothing in a dhcp-pool is a finding; an overlap with static is**
+  (blind) [ipam_audit.rs]
+- [x] [Review][Patch] **Merging across L2 domains turns reused private space into conflicts — unstated and
+  untested** (blind) [ipam_audit.rs, register]
+- [x] [Review][Patch] **Tests passing for the wrong reason**: the edge cases sit in uncovered space; the
+  infrastructure exclusion from conflicts is untested (blind) [ipam_audit.rs tests]
+- [x] [Review][Patch] **The guard misses a read made by calling another module's reader** (edge planted
+  `scan_pass::counted_current_engine_links`, green) — a third limit, stated [ipam_page.rs]
+- [x] [Review][Patch] **The user manual says "safe to assign"** — the audit cannot see a sleeping machine or
+  anything outside the scan perimeter (auditor) [user-manual.tex]
+- [x] [Review][Patch] **Stale module docs AC8 named** — `ipam_write.rs:22-25`, `opencmdb-core` `ipam/mod.rs`
+  `:22-24`, `:43` (auditor)
+- [x] [Review][Patch] **The record overstates**: `next_free_none` rendered in English only while the register
+  closes it; AC6's clock claim rests on two back-to-back renders; AC9 measured `plan_data`, worst of 20, not
+  HTTP p95; the register's closure sits above its stale paragraph (auditor) [this file, register]
+- [x] [Review][Patch] **The axe gate counts `/ipam` violations twice and skips silently without the form**
+  (blind) [axe-gate.mjs]
+- [x] [Review][Patch] **Comments contradicted by their own file** — the seed's "each with a hardware address",
+  `FindingKind::Gap`'s "the plan would offer it" for a documented address (blind) [seed.sql, ipam_audit.rs]
+- [x] [Review][Patch] **The probe address is duplicated in the keyboard gate** (blind) [kbd-probe.mjs]
+- [x] [Review][Patch] **The warning is silent for reserved, infrastructure, edge and outside addresses, and
+  announces intermediate addresses while typing** (blind) — registered as a stated limit [register]
+- [x] [Review][Patch] **The measurement's generator holds distinct MACs at 46**, so "their number no longer
+  reaches the screen" is true of rows, not of pairs (blind, edge) [ipam_page.rs doc, record]
+- [x] [Review][Defer] **A check waiting on a metadata-locked summary keeps its pool connection; fourteen
+  exhausted the pool and `/triage` failed** (edge measured) — reads carry no lock-wait cap, a class every
+  screen shares; narrow trigger (DDL, `LOCK TABLES`) [ipam_page.rs] — deferred, cross-cutting
+- Dismissed (3): leading-zero input silently unchecked (edge refuted: the write route refuses the same
+  spelling, so the warning never goes silent on a spelling that writes); a repeated `addr` parameter answers
+  axum's plain 400 (unreachable through htmx); the opt-in measurement clears its store (documented, opt-in,
+  like 14.3a's).
+
 ## Dev Notes
 
 ### Traps this project has paid for, and which apply here
@@ -413,6 +499,13 @@ Claude Opus 5 (1M context), `claude-opus-5[1m]`.
   On screen the two words are the binding keys (`triage.kind.ecart`, `state.undeclared`) with two
   treatments — a filled badge and a dashed outline — and the axe gate compares them WITHOUT colour in the
   browser (`solid vs dashed`). ⚠️ The epic's AC1 letter for `static` is the registered divergence.
+  🔴 **Since the code review the GRID is derived from the same plan-wide ranges** (Guy's decision): it read
+  the selected subnet's own, so a NESTED subnet's page drew as *not covered* an address a parent's
+  `reserved` range protects, counted it as not covered, and named it a `gap` in the list underneath — one
+  address, one page, three answers. The overlap now resolves to the MOST PROTECTIVE covering range, which
+  is what the offer and the verdict already did, so the three agree by construction rather than by a
+  comment asking them to. ⚠️ And the cell's accessible name is **bounded to three hardware addresses**
+  (the review measured a 13 688-byte name under MAC churn); the list keeps every one of them.
 - **AC3 — MET.** `ipam_audit::Plan::offerable`: inside a subnet, not an edge, not defined, every covering
   range `static` (at least one), never seen, never documented. `CellState::offerable` and
   `PlanView::next_offerable` are GONE — a cell cannot answer a plan-wide question — and §1(f)'s tests were
@@ -421,6 +514,16 @@ Claude Opus 5 (1M context), `claude-opus-5[1m]`.
   (English, the default locale). 🔑 **Proven red by MA1**, which re-admits every seen address: 2 tests
   (`the_offer_excludes_seen_documented_and_everything_outside_static` and
   `the_occupancy_and_the_empty_offer_follow_the_audit`), plus clippy on the unused parameter.
+  🔴 **And that proof re-admitted EVERY seen address, so a mutation re-admitting only the MAC-LESS ones
+  came back GREEN** (acceptance layer, MX1b): every sighting in every offer test carried a hardware
+  address, so *seen* and *seen with a MAC* were one population. It is the ordinary shape on the shipped
+  product — the connector reads a MAC only when the neighbour table has one — and
+  `an_address_seen_with_no_hardware_address_is_still_never_offered` is what now separates them.
+  🔴 **A `/31` and a `/32` had their own addresses taken out of the offer** (edge layer): `is_edge`
+  compared against both bounds, which on a `/31` is every address it has, so a point-to-point link
+  offered neither of its two and a `/32` host route offered nothing — RFC 3021 says both are usable, and
+  the prefix length now settles it. ⚠️ The empty offer says **which of two states** it is: a subnet no
+  `static` range reaches was never offering anything, where an exhausted one names the reasons.
 - **AC4 — MET for the address form; the range form's case is SAID, not built.** `GET /ipam/address-check`
   answers, as the operator types (`hx-get`, `input changed delay:400ms`), what the network and the
   registers know: seen (each MAC with its absolute last sighting, and the triage link when triage asks),
@@ -428,15 +531,28 @@ Claude Opus 5 (1M context), `claude-opus-5[1m]`.
   untouched. A polite live region described by the field; focus stays on the field. Named in a perimeter
   test (401 without a credential, 200 with one), and probed by name in the page-budget guard. The
   keyboard gate types `192.0.2.20` and reads the warning, the unmoved focus and the link; the axe gate
-  runs axe over the page with the warning shown. **MW** (route unmounted) reds 2 tests and clippy. The
-  range form's warning is registered to story 14.4, with the reason.
+  runs axe over the page with the warning shown. **MW** (route unmounted) reds 2 tests and clippy.
+  🔴 **The range form's warning is BUILT at the code review and this line said it was registered** — the
+  deferral was the implementer's and not Guy's, which the acceptance layer named: §1(e) claimed decision 7
+  covered the range form, and AC4's *"or says why not"* was spent on a reason nobody had taken.
+  `GET /ipam/range-check` now answers *n addresses already seen on the network would fall inside this
+  static range*, on the address check's own contract — it warns, it refuses nothing, the POST is
+  untouched — with its own live region, its own perimeter half, its own budget probe and two keyboard-gate
+  checks. **AC4 is MET on both forms.**
 - **AC5 — MET.** « Conflit d'adresse » only for two MACs inside a `static` or `reserved` range; not in a
   pool, not in uncovered space, not the same MAC in two L2 domains, not a MAC beside a no-MAC sighting; a
   defined address can conflict. Both MACs shown with their dates, and a sentence that a replaced card and a
   duplicate look the same. **MA5** (a no-MAC sighting counted as a MAC) reds 1.
-- **AC6 — MET.** A held cell's accessible name and each finding carry every MAC with an ABSOLUTE date
-  (`YYYY-MM-DD HH:MM UTC`); the render is pure — rendered twice, identical; the derivation takes no clock.
-  **MA6** (an hour instead of a date) reds 2.
+- **AC6 — MET, and its clock claim is narrowed to what the test measures.** A held cell's accessible name
+  and each finding carry every hardware address with an ABSOLUTE date (`YYYY-MM-DD HH:MM UTC`).
+  ⚠️ *"The render is pure"* rests on **two back-to-back renders being identical**, which is a weak
+  instrument and is now said to be one: it catches a clock read at render time only if the clock ticks
+  between the two calls. What really carries the property is that the derivation is handed no clock —
+  `ipam_audit` takes no `Timestamp` argument and calls nothing that reads one — and story 6b.4's M6
+  measured the mirror trap (`chrono::Utc::now()` is `E0599` in the domain crate while `SystemTime::now()`
+  is not, so *a feature flag guards a spelling, never the act of reading a clock*). **MA6** (an hour
+  instead of a date) reds 2. ⚠️ A cell's name is **bounded to the three most recent** hardware addresses
+  since the code review; the findings list keeps every one of them.
 - **AC7 — MET.** An address defined inside a `dhcp-pool` is listed under *Defined inside a DHCP pool* and
   warned about before the write; register row closed.
 - **AC8 — MET, three parts, each proven.** `the_plan_reads_the_network_only_through_the_audit` (renamed):
@@ -450,23 +566,55 @@ Claude Opus 5 (1M context), `claude-opus-5[1m]`.
 - **AC9 — MET.** The reads — the plan whole (`ipam_repo::plan_ranges`, `plan_addresses`), the summary and
   the documented values — run inside `store_within`, before the ceiling decides whether to draw; none is
   grid-sized. The end-to-end measurement is recorded in the Change Log with its command.
+  ⚠️ **What it measures, said rather than implied** (acceptance and blind layers): `plan_data` — the read
+  and the render — **worst of twenty**, and NOT an HTTP p95: no server is bound in that test, so the shell,
+  the response and the socket are outside the figure. And the generator holds the DISTINCT hardware
+  address count at **46** (`(seq - 1) MOD 46`), so *"their number no longer reaches the screen"* is true of
+  observation ROWS and says nothing about a network whose distinct pairs grow — which is the axis story
+  14.3a's register row names and the one the summary does not bound.
 - **AC10 — MET.** `a11y/seed.sql` gains one sighting per case (a two-MAC gap, a documented gap, uncovered,
   an `infrastructure` range added for it, a defined address, the reserved Workshop, outside every subnet)
   with their summary rows from `@t`; `AXE_REQUIRE_AUDIT=1` in `ci.yml` refuses a run without findings or
   without both words to compare; row-finding survives the longer queue; the kbd-probe reaches the warning
-  and the findings list (37 → **41** checks). All three browser passes green locally: empty plan 0, axe 0
-  violation nodes over 10 routes + 4 states with 7 findings and the warning measured, kbd 41/41. ⚠️ **No
-  marker**, so no contrast check for one: decision 8's condition cannot be met by a single colour — the
-  arithmetic is in `_ipam_audit.html` and the register. 🔑 The browser comparison was proven red by hand:
-  `.ipam-word-undeclared` set to `solid` makes the axe gate exit 1 (Change Log).
+  and the findings list (37 → **45** checks after the code review). 🔑 The browser comparison was proven
+  red by hand: `.ipam-word-undeclared` set to `solid` makes the axe gate exit 1 (Change Log).
+  🔴 **THE MARKER EXISTS, and this paragraph said the condition could not be met.** The arithmetic was
+  wrong in the safe direction: it required ONE colour to clear both bounds and named two fills of four.
+  ⚠️ A `::after` dot is **invisible to axe**, so the gate computes the ratio in the browser against all
+  four fills and fails under 3:1: *a treatment no gate measures is a treatment nobody maintains*.
+  ✅ **MEASURED BY THE GATE ITSELF, not by my hand**: `ipam-cell-defined` **3.25:1**, and the other three
+  **18.77:1** each (patterns over the page ground, which is what the eye sees between their strokes), over
+  8 seen cells. 🔑 *My own estimate for the ground was 18.6 — close, and still an estimate; the figure
+  that belongs in a record is the one an instrument produced.* `--color-text` (#1d1f20) reaches **2.56:1**
+  on the defined fill and would NOT have met the condition, which is what makes the marker black rather
+  than *near enough to the text colour*.
+  ⚠️ The seed also gained the three cases it walked past — an address defined inside the pool (decision
+  13's warning), a conflict under `reserved`, and a conflict on the DEFINED address — so two of the
+  audit's rules stopped being on no page either gate opens.
 - **AC11 — MET.** No sighting → no finding and no offer withheld (a test); no clock anywhere in the core.
-- **AC12 — MET.** Observed addresses outside every subnet are listed plan-wide on `/ipam`, with dates.
+- **AC12 — MET, bounded, and on three pages rather than one.** Observed addresses outside every subnet are
+  listed plan-wide on `/ipam`, with dates — the **twenty most recently seen**, and the list SAYS how many
+  it is not showing (the review measured 5 000 of them on one page, 2.26 MB, axe 75 s). 🔴 **The two pages
+  with no subnet in force showed none of it**: an empty plan and an identifier no subnet carries dropped
+  the list entirely, and on an empty plan every observed address is outside the plan — *the only true
+  thing that screen has to say on a fresh install*.
 - **AC13 — MET.** The occupancy line counts as free only what the offer proposes (*free to assign*); no
   count of seen addresses; a subnet too large to draw says it offers nothing and shows its findings.
-- **AC14 — THE LIVE COUNT.** Baseline **950** (660 + 191 + 99) at `8d8a45f` (story 14.3a merged). After
-  this story: **967** (677 + 191 + 99) — 9 tests in `ipam_audit.rs`, 7 in `ipam_page.rs` (one of them the
-  opt-in `/ipam` measurement, which returns at once unless `OPENCMDB_MEASURE_IPAM` is set) and 1 in
-  `main.rs`. Both store conditions in the final verification (Change Log).
+  ⚠️ Since the code review the count is taken over the PLAN-WIDE cells, so an address protected by a range
+  declared in another subnet is no longer counted as *not covered* on one page and as protected on the
+  next — the blind layer's *counts it twice*.
+- **AC14 — THE LIVE COUNT.** Baseline **950** (660 + 191 + 99) at `8d8a45f` (story 14.3a merged). At
+  implementation: **967** (677 + 191 + 99) — 9 tests in `ipam_audit.rs`, 7 in `ipam_page.rs` (one of them
+  the opt-in `/ipam` measurement, which returns at once unless `OPENCMDB_MEASURE_IPAM` is set) and 1 in
+  `main.rs`. **After the code review's repair: 980** (690 + 191 + 99), **+13** — 5 in `ipam_audit.rs` (the
+  MAC-less offer, the triage link against triage's own comparison, a `/31` and a `/32`, the
+  `infrastructure` conflict exclusion on covered space, the L2-domain merge read as a conflict), 7 in
+  `ipam_page.rs` (the nested subnet's page agreeing with itself, the two bounded lists, the two
+  empty-offer sentences, the range check, the *could not check* fragment, the two subnet-less pages, the
+  marker) and 1
+  in `ipam_repo.rs` (which spellings this build calls unreadable). ⚠️ **No test was deleted**: the
+  order-by-the-store test was RE-AIMED at `plan_addresses` when `addresses_in` lost its last production
+  caller and was removed. Both store conditions in the final verification (Change Log).
 - **AC15 — see the Change Log's verification line.** The user manual's IPAM chapter gains *What the network
   shows against the plan* and *The next address the plan can offer*; both twins (the browser gates and the
   status); the register (two rows closed, five raised).
@@ -488,12 +636,50 @@ the test written for that defect.
 | MG4 | a pool injected into a write handler | compile-fail | 🔴 `E0277` | the `IpamWriteState` type, part 3 |
 | MW | the address check unmounted | red | 🔴 2 + clippy | the perimeter test and the budget guard |
 
+**The code review's repair pass — ten mutations, each on a DROPPED-AND-RECREATED store with `--baseline`,
+predictions written before the run.** Nine conformed; **one contradicted its prediction, and it is worth
+the other nine.**
+
+| id | mutation | predicted | measured | carrier |
+|---|---|---|---|---|
+| MC1 | the cell name's three-MAC cap raised to 99 | red | 🔴 conforms | the bounded-lists test |
+| MC2 | the outside list's twenty-address cap raised to 500 | red | 🔴 conforms | the bounded-lists test |
+| MD2 | the covering range resolved by `.next()` instead of the most protective | red | 🔴 conforms | the nested-subnet agreement test |
+| MK1 | the seen marker never emitted (`seen: false`) | red | 🔴 conforms | the marker test |
+| MR1 | the range check mounted at another path | red | 🔴 conforms | the perimeter test and the budget guard |
+| MU1 | the *could not check* fragment replaced by an empty body | red | 🔴 conforms | `main.rs`'s budget guard, which reads the sentence |
+| MP4 | both empty-offer states given the same sentence | red | 🔴 conforms | the two-sentences test |
+| MP6 | `subnet_in_force` forced true on every page | red | 🟢 **GREEN — contradicted**, then 🔴 1 after the repair | the subnet-less pages test, rewritten |
+| MX1b | the offer re-admits a sighting with no hardware address | red | 🔴 conforms | `an_address_seen_with_no_hardware_address_is_still_never_offered` |
+| ME1 | the `/31`–`/32` edge rule reverted | red | 🔴 conforms | `a_point_to_point_link_offers_both_its_addresses` |
+
+🔴 **MP6 IS THE PASS'S OWN FINDING, AND IT WAS MY ORACLE THAT WAS WORTHLESS, NOT THE PRODUCT.** The test
+asserted `!body.contains(&t!("ipam.findings.none"))`; that key's value is *"Nothing the network has shown
+contradicts this subnet's plan."*, **Askama escapes the apostrophe to `&#x27;`**, and a resolved string
+never matches an escaped render — so the negative assertion passed over a page that carried the sentence.
+Measured rather than reasoned: the plant was confirmed present at `ipam_page.rs:848` and the crate
+recompiled before the run, then the rendered body was PRINTED — the heading appeared twice and the
+sentence once. 🔑 ***A `contains` oracle over a translated sentence can only fail in the direction
+escaping does not touch, and the negative direction is the one it cannot measure.*** The needle is now the
+`id` the template emits as a literal, and MP6 reds 1.
+
+🔴 **AND THE REPAIR EXPOSED A DEFECT NO ASSERTION AND NEITHER BROWSER GATE HAD SEEN**: with no subnet in
+force the page emitted an **empty ARIA landmark whose `aria-labelledby` named an `id` the page does not
+carry**. Both gates had been green over it. The section is now rendered only when it has content, and the
+attribute only where its target exists.
+
 ### File List
 
 - `crates/opencmdb-bin/src/ipam_audit.rs` — new
 - `crates/opencmdb-bin/templates/_ipam_audit.html`, `_ipam_address_check.html` — new
 - `crates/opencmdb-bin/src/ipam_page.rs` — the audit on screen, the address check, the guard, tests
-- `crates/opencmdb-bin/src/ipam_repo.rs` — `plan_ranges`, `plan_addresses`
+- `crates/opencmdb-bin/src/ipam_repo.rs` — `plan_ranges`, `plan_addresses`; at the code review they SKIP
+  and NAME an unreadable row, `Subnet::is_edge` learns RFC 3021 (`/31`, `/32`), `Subnet::overlaps` arrives,
+  and **`addresses_in` is REMOVED** — the plan-wide grid left it with no production caller
+- `crates/opencmdb-bin/src/ipam_write.rs` — module doc: the two registers are COMPARED since this story,
+  where it said they *never touch*
+- `crates/opencmdb-core/src/ipam/mod.rs` — module doc, and `IpPolicy`'s *"nothing reads a policy yet"*,
+  false since story 14.2 and thoroughly false here
 - `crates/opencmdb-bin/src/repo.rs` — `load_documented_ipv4s`
 - `crates/opencmdb-bin/src/sighting_repo.rs` — the reader's dead-code allowance removed; the seed test's count
 - `crates/opencmdb-bin/src/main.rs` — `mod ipam_audit`; the address check's perimeter test; the budget guard
@@ -526,6 +712,26 @@ the test written for that defect.
   + 99 = 967**, 22.5 s, and with `env -u DATABASE_URL` **967** · browser gates as `ci.yml` runs them: empty
   plan 0, axe 0 (10 routes + 4 states, 7 findings, the warning measured), kbd 41/41. Status → `review`.
 
+- 2026-09-16 — **the code review's 4 decisions and 25 patches APPLIED, and the tree re-verified whole**,
+  every status read from a log file: `cargo fmt --check` 0 · `cargo clippy --workspace --all-targets --
+  -D warnings` 0 · `cargo xtask ci` 0 (ten gates) · `cargo deny --manifest-path Cargo.toml check` 0
+  (⚠️ the first run of this pass put `--manifest-path` after `check` and exited 2 — **my command, not the
+  tree**) · `make -C docs/manuals` 0 · `RUSTFLAGS="-D warnings" cargo test --workspace --locked` on a
+  DROPPED-AND-RECREATED store after one warm run **689 + 191 + 99 = 979**, 22.4 s, and with
+  `env -u DATABASE_URL` **979**, 5.0 s — the clock is the tell.
+  ✅ **Re-verified WHOLE after the MP6 repair, on the final tree**: fmt 0 · clippy `--all-targets` 0 ·
+  ten gates 0 · `cargo deny` 0 · manuals 0 · **690 + 191 + 99 = 980** on a dropped-and-recreated store
+  after one warm run (22.2 s) and **980** with `env -u DATABASE_URL` (5.0 s) · **MP6 re-measured: RED, 1
+  test** · both browser gates re-run because the template had changed under them — **axe (empty plan) 0,
+  axe (seeded) 0 over 10 routes + 5 states, kbd 45/45**, with the gate printing the marker's own contrast
+  (`ipam-cell-defined` **3.25:1**, the other three **18.77:1**) and the three audit words differing
+  without colour (`solid/1px/400` · `dashed/1px/400` · `solid/2px/600`).
+  🔴 **Two of MY OWN test expectations were wrong and were corrected in the product's direction, never the
+  product's**: a covered broadcast edge with two hardware addresses **IS** « Conflit d'adresse » (decision
+  10 grants an edge no exemption — the edge rule belongs to the OFFER), and the seed's premise floor read
+  eleven where the seed now sights **thirteen** pairs. ⚠️ **And a method fault of mine is recorded rather
+  than hidden**: a template was edited WHILE a measurement was compiling, so that run measured a tree that
+  no longer existed; the whole verification was re-run on the final tree with no source touched during it.
 - 2026-09-15 — **T0: Guy took all fourteen decisions and SPLIT the story** — 14.3a the sighting summary,
   14.3b this audit. File renamed from `14-3-the-audit.md`.
 - 2026-09-15 — validated and rewritten whole: the offer serves `reserved`/`dhcp-pool` addresses today;

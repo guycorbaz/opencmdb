@@ -43,9 +43,7 @@ use opencmdb_core::ipam::IpPolicy;
 use sqlx::MySqlPool;
 use std::net::Ipv4Addr;
 
-use std::collections::{BTreeMap, BTreeSet};
-
-use crate::ipam_audit::{self, FindingKind, Plan, Seen};
+use crate::ipam_audit::{self, FindingKind, Network, Plan, Seen};
 use crate::ipam_repo::{self, Subnet};
 use crate::page::{Shell, render_shell};
 use crate::screens::Screen;
@@ -157,18 +155,45 @@ pub(crate) struct PlanView {
     pub(crate) cells: Vec<(Ipv4Addr, CellState)>,
 }
 
+/// How protective a policy is, for the ONE question the grid, the offer and the verdict must answer
+/// the same way: *may this address be handed out?*
+///
+/// 🔑 `static` is the least protective because it is the only policy the offer draws from; every
+/// other policy takes an address OUT of the offer, so where several ranges cover one address the
+/// most protective of them is the one that decides — decision 2, made visible.
+fn protection_rank(policy: IpPolicy) -> u8 {
+    match policy {
+        IpPolicy::Static => 0,
+        IpPolicy::DhcpPool => 1,
+        IpPolicy::Reserved => 2,
+        IpPolicy::Infrastructure => 3,
+    }
+}
+
 impl PlanView {
     /// Derive the plan for one subnet.
     ///
     /// `ranges` are `(first, last, policy)` and `defined` are the individually-defined addresses.
     ///
+    /// 🔴 **BOTH ARGUMENTS ARE PLAN-WIDE SINCE THE CODE REVIEW, and passing the SUBNET's own was a
+    /// defect the blind layer found from the diff alone.** The offer and the verdict read every
+    /// range of the plan (decision 2), the grid read only the selected subnet's — so on a NESTED
+    /// subnet's page an address a parent subnet's `reserved` range protects was drawn as *not
+    /// covered*, counted as not covered, and still named a `gap` by the findings list underneath it;
+    /// the occupancy line counted it twice over two pages. *One address, one page, three answers.*
+    ///
+    /// 🔑 The grid is now derived from exactly what the audit reads, so the three agree by
+    /// CONSTRUCTION rather than by a comment asking them to.
+    ///
     /// ⚠️ **OVERLAPPING RANGES CAN OCCUR, and the first draft of this doc said they could not.**
     /// The adapter refuses them, but §1(C) records that its rule does NOT hold under concurrency —
     /// two overlapping ranges committed under an injected pause — and `a11y/seed.sql` inserts
-    /// ranges by RAW SQL, which bypasses the adapter entirely. So the `.find()` below resolves an
-    /// overlap to the LOWEST `first_addr`, and that is a rendering decision. 🔑 *A priority order
-    /// must not double as a repair* (story 6b.7): it is stated here rather than asserted away, and
-    /// the repair is story 14.2b's, which owns the concurrency fix.
+    /// ranges by RAW SQL, which bypasses the adapter entirely. The overlap resolves to the MOST
+    /// PROTECTIVE covering range ([`protection_rank`]), which is what [`Plan::offerable`] already
+    /// did; it resolved to the lowest `first_addr` until the review, so a `dhcp-pool` laid over a
+    /// `static` range drew a `static` border over a cell the offer refused. 🔑 *A priority order
+    /// must not double as a repair* (story 6b.7) — this one is not a repair: it is the audit's own
+    /// rule, applied where the operator looks.
     pub(crate) fn derive(
         subnet: Subnet,
         ranges: &[(Ipv4Addr, Ipv4Addr, IpPolicy)],
@@ -179,8 +204,9 @@ impl PlanView {
             .map(|addr| {
                 let policy = ranges
                     .iter()
-                    .find(|(first, last, _)| addr >= *first && addr <= *last)
-                    .map(|(_, _, policy)| *policy);
+                    .filter(|(first, last, _)| addr >= *first && addr <= *last)
+                    .map(|(_, _, policy)| *policy)
+                    .max_by_key(|policy| protection_rank(*policy));
                 // 🔴 THE ORDER IS THE DECISION, and it is asserted rather than left to an `if`.
                 // An EDGE outranks a range: `.0` and `.255` are infrastructure by arithmetic and a
                 // declared range over them changes what they LOOK like, never whether they may be
@@ -263,6 +289,7 @@ pub(crate) fn router(pool: MySqlPool, perimeter: Option<String>) -> Router {
     Router::new()
         .route("/ipam", get(ipam))
         .route(ADDRESS_CHECK_PATH, get(address_check))
+        .route(RANGE_CHECK_PATH, get(range_check))
         .with_state(IpamState { pool, perimeter })
 }
 
@@ -301,23 +328,46 @@ async fn address_check(
     else {
         return Html(String::new()).into_response();
     };
-    let read = crate::page::store_within(crate::page::PAGE_STORE_BUDGET, async {
-        address_check_data(&state.pool, addr)
-            .await
-            .map_err(|error| {
-                tracing::error!(%error, "checking an address against the plan and the network");
-                (
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    axum::response::Html(crate::page::render_error_body()),
-                )
-                    .into_response()
-            })
-    })
-    .await;
-    match read {
-        Ok(body) => Html(body).into_response(),
-        Err(response) => response,
+    answer_a_check(
+        crate::page::store_within(crate::page::PAGE_STORE_BUDGET, async {
+            address_check_data(&state.pool, addr)
+                .await
+                .map_err(|error| {
+                    tracing::error!(%error, "checking an address against the plan and the network");
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                })
+        })
+        .await,
+    )
+}
+
+/// Answer one of the two checks: the fragment it produced, or a keyed *could not check* sentence.
+///
+/// 🔴 **A REFUSAL USED TO LEAVE THE PREVIOUS ADDRESS'S WARNING STANDING UNDER A NEW VALUE, and a
+/// render error put a WHOLE ERROR PAGE inside the live region.** Measured by the review: the handler
+/// answered 500, htmx does not swap a 5xx by default, so the region kept the last answer — the
+/// operator read *"192.0.2.20 has been seen on the network"* while typing `192.0.2.30`, which is a
+/// warning about an address they are not writing. 🔑 **So a check always answers 200 with a body**:
+/// what it knows, or that it could not find out. *A live region that keeps a stale sentence is worse
+/// than one that says nothing, because the operator cannot tell which address it is about.*
+///
+/// ⚠️ The status is NOT how this refusal is signalled, and `main.rs`'s budget guard asserts the new
+/// contract (200 within the budget, carrying the keyed sentence) rather than the old one.
+fn answer_a_check(read: Result<String, Response>) -> Response {
+    Html(read.unwrap_or_else(|_| render_check_unavailable())).into_response()
+}
+
+/// The *could not check* fragment — one keyed sentence, and the write is untouched.
+fn render_check_unavailable() -> String {
+    AddressCheck {
+        lines: vec![rust_i18n::t!("ipam.check.unavailable").to_string()],
+        sightings: String::new(),
+        triage_href: None,
+        claimed_note: String::new(),
+        triage_link: rust_i18n::t!("ipam.finding.triage_link").to_string(),
     }
+    .render()
+    .unwrap_or_default()
 }
 
 /// Read what the address check needs and render it.
@@ -338,8 +388,114 @@ async fn address_check_data(
         ranges: ipam_repo::plan_ranges(pool).await?,
         defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
     };
-    let (seen, documented) = ipam_audit::read_the_network(pool).await?;
-    Ok(render_address_check(addr, &plan, &seen, &documented))
+    let network = ipam_audit::read_the_network(pool).await?;
+    Ok(render_address_check(addr, &plan, &network))
+}
+
+/// Where the RANGE form asks, before the write, how much of the network its range would cover
+/// (Guy's decision of 2026-09-15, at the code review).
+///
+/// 🔴 **It was deferred by the implementer and not by Guy**, which the acceptance layer caught: §1(e)
+/// said decision 7 covered the range form, and it did not. The address form warns about one address;
+/// this warns about a stretch of them — *n addresses already seen would fall inside this static
+/// range* — and, like the other, it **refuses nothing**.
+pub(crate) const RANGE_CHECK_PATH: &str = "/ipam/range-check";
+
+/// The query the range check accepts — the range form's own three fields.
+#[derive(Debug, Default, serde::Deserialize)]
+pub(crate) struct RangeCheckQuery {
+    /// The first address, as typed so far.
+    pub(crate) first: Option<String>,
+    /// The last address, as typed so far.
+    pub(crate) last: Option<String>,
+    /// The policy token the form's `<select>` carries.
+    pub(crate) policy: Option<String>,
+}
+
+/// Warn about a range before it is defined — and never refuse it.
+async fn range_check(
+    State(state): State<IpamState>,
+    Query(query): Query<RangeCheckQuery>,
+) -> Response {
+    let parse = |typed: &Option<String>| {
+        typed
+            .as_deref()
+            .and_then(|text| text.trim().parse::<Ipv4Addr>().ok())
+    };
+    let (Some(first), Some(last)) = (parse(&query.first), parse(&query.last)) else {
+        return Html(String::new()).into_response();
+    };
+    // 🔑 **`static` ALONE, which is Guy's wording and not a shortcut**: the warning is that the
+    // operator is about to promise addresses by hand that something already answers on. Inside a
+    // `dhcp-pool` the occupant changes by design (decision 1), and a `reserved` or `infrastructure`
+    // range takes the addresses out of the offer anyway, so the sentence would be noise there.
+    let is_static = query.policy.as_deref() == Some(IpPolicy::Static.as_str());
+    if first > last || !is_static {
+        return Html(String::new()).into_response();
+    }
+    answer_a_check(
+        crate::page::store_within(crate::page::PAGE_STORE_BUDGET, async {
+            range_check_data(&state.pool, first, last)
+                .await
+                .map_err(|error| {
+                    tracing::error!(%error, "checking a range against the network");
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                })
+        })
+        .await,
+    )
+}
+
+/// Read what the range check needs and render it.
+///
+/// # Errors
+///
+/// The store's own failure, classified.
+async fn range_check_data(
+    pool: &MySqlPool,
+    first: Ipv4Addr,
+    last: Ipv4Addr,
+) -> Result<String, opencmdb_core::repo::RepositoryError> {
+    let network = ipam_audit::read_the_network(pool).await?;
+    Ok(render_range_check(first, last, &network))
+}
+
+/// Render what is worth knowing about a `static` range before it is defined — the empty string when
+/// the network has been seen on none of its addresses.
+pub(crate) fn render_range_check(first: Ipv4Addr, last: Ipv4Addr, network: &Network) -> String {
+    let count = Plan::seen_inside(&network.seen, first, last);
+    if count == 0 {
+        return String::new();
+    }
+    AddressCheck {
+        lines: vec![
+            counted(
+                "ipam.check.range_seen_one",
+                "ipam.check.range_seen_many",
+                count,
+            ),
+            rust_i18n::t!("ipam.check.still_writes").to_string(),
+        ],
+        sightings: String::new(),
+        triage_href: None,
+        claimed_note: String::new(),
+        triage_link: rust_i18n::t!("ipam.finding.triage_link").to_string(),
+    }
+    .render()
+    .unwrap_or_else(|_| crate::page::render_error_body())
+}
+
+/// One sentence per count, and NEVER a parenthetical plural.
+///
+/// 🔴 Story 6b.10's review found `1 field(s)` on this product's primary screen and fixed it **as a
+/// class**, with a property guarding the whole locale file — *a parenthetical plural is a perfectly
+/// resolvable key*. Every count this story renders goes through here, so the class stays closed.
+fn counted(one: &str, many: &str, count: usize) -> String {
+    if count == 1 {
+        rust_i18n::t!(one, count = count).to_string()
+    } else {
+        rust_i18n::t!(many, count = count).to_string()
+    }
 }
 
 /// The address check's fragment.
@@ -352,26 +508,35 @@ pub(crate) struct AddressCheck {
     sightings: String,
     /// The triage question for it, when it was seen and no declared record claims it.
     triage_href: Option<String>,
+    /// Why there is no triage question, when the address was seen and a declared record claims it —
+    /// the empty string when there is nothing to say.
+    ///
+    /// 🔴 **The findings list said this and the check did not**, which the acceptance layer caught:
+    /// the same address, warned about in two places, linked to its question in one and said nothing
+    /// about it in the other. A missing link is indistinguishable from a forgotten one.
+    claimed_note: String,
     /// The link's words.
     triage_link: String,
 }
 
 /// Render what is worth knowing about `addr` before it is defined — the empty string when nothing is.
-pub(crate) fn render_address_check(
-    addr: Ipv4Addr,
-    plan: &Plan,
-    seen: &BTreeMap<Ipv4Addr, Seen>,
-    documented: &BTreeSet<Ipv4Addr>,
-) -> String {
+pub(crate) fn render_address_check(addr: Ipv4Addr, plan: &Plan, network: &Network) -> String {
     let address = addr.to_string();
     let mut lines = Vec::new();
     let mut sightings = String::new();
     let mut triage_href = None;
-    let is_documented = documented.contains(&addr);
-    if let Some(seen) = seen.get(&addr) {
+    let mut claimed_note = String::new();
+    let is_documented = network.documented.contains(&addr);
+    // Triage's own comparison, verbatim — see `ipam_audit::AddressFinding::claimed`.
+    let is_claimed = network.claimed.contains(&address);
+    if let Some(seen) = network.seen.get(&addr) {
         lines.push(rust_i18n::t!("ipam.check.seen", address = address.as_str()).to_string());
-        sightings = sighting_lines(seen).join("; ");
-        triage_href = (!is_documented).then(|| format!("/triage?sel=nouveau:{addr}"));
+        sightings = capped_sighting_lines(seen).join("; ");
+        if is_claimed {
+            claimed_note = rust_i18n::t!("ipam.finding.documented").to_string();
+        } else {
+            triage_href = Some(format!("/triage?sel=nouveau:{addr}"));
+        }
     }
     if is_documented {
         lines.push(rust_i18n::t!("ipam.check.documented", address = address.as_str()).to_string());
@@ -390,6 +555,7 @@ pub(crate) fn render_address_check(
         lines,
         sightings,
         triage_href,
+        claimed_note,
         triage_link: rust_i18n::t!("ipam.finding.triage_link").to_string(),
     }
     .render()
@@ -440,8 +606,26 @@ async fn plan_data(
     selected: Option<&str>,
 ) -> Result<String, opencmdb_core::repo::RepositoryError> {
     let subnets = ipam_repo::list_subnets(pool).await?;
+    // The audit's inputs, all read inside the page budget and none of them grid-sized: the plan
+    // WHOLE (decision 2 is plan-wide), and the network through the one module allowed to read it.
+    //
+    // 🔑 **Read BEFORE the empty-plan branch returns, which is what the code review's acceptance
+    // layer found missing**: with no subnet declared, every observed address is outside the plan,
+    // and decision 11's list is then the only true thing this screen has to say. It costs one read
+    // on a fresh install and it is what makes the empty plan an answer rather than a shrug.
+    let plan = Plan {
+        subnets: subnets.iter().map(|(_, subnet, _)| *subnet).collect(),
+        ranges: ipam_repo::plan_ranges(pool).await?,
+        defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
+    };
+    let network = ipam_audit::read_the_network(pool).await?;
+    let outside_only = Audit {
+        plan: &plan,
+        network: &network,
+        subnet: None,
+    };
     if subnets.is_empty() {
-        return Ok(empty_plan_body());
+        return Ok(empty_plan_body(&outside_only));
     }
     // 🔑 An unknown id narrows to NOTHING rather than falling back to the first subnet, on
     // `inventory_body`'s precedent: silently serving another subnet would tell the operator their
@@ -451,34 +635,25 @@ async fn plan_data(
         None => subnets.first().cloned(),
     };
     let Some((id, subnet, _label)) = chosen else {
-        return Ok(unknown_subnet_body(&subnets));
+        return Ok(unknown_subnet_body(&subnets, &outside_only));
     };
-    let ranges = ipam_repo::ranges_in(pool, &id).await?;
-    // The audit's inputs, all read inside the page budget and none of them grid-sized: the plan
-    // WHOLE (decision 2 is plan-wide), and the network through the one module allowed to read it.
-    let plan = Plan {
-        subnets: subnets.iter().map(|(_, subnet, _)| *subnet).collect(),
-        ranges: ipam_repo::plan_ranges(pool).await?,
-        defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
-    };
-    let (seen, documented) = ipam_audit::read_the_network(pool).await?;
     let audit = Audit {
         plan: &plan,
-        seen: &seen,
-        documented: &documented,
-        subnet,
+        network: &network,
+        subnet: Some(subnet),
     };
     // 🔴 THE CEILING IS CHECKED BEFORE THE CELLS ARE MATERIALISED. Checking after would mean
     // paying 2 GB to learn the page should not have been drawn — see `MAX_DRAWN_ADDRESSES`.
     if subnet.size() > MAX_DRAWN_ADDRESSES {
+        let ranges = ipam_repo::ranges_in(pool, &id).await?;
         return Ok(render_too_large(&subnets, &id, &ranges, &audit));
     }
-    let defined = ipam_repo::addresses_in(pool, &id).await?;
-    let bounds: Vec<(Ipv4Addr, Ipv4Addr, IpPolicy)> = ranges
-        .iter()
-        .map(|(first, last, policy, _)| (*first, *last, *policy))
-        .collect();
-    let view = PlanView::derive(subnet, &bounds, &defined);
+    // 🔴 **THE GRID IS DRAWN FROM THE PLAN-WIDE RANGES AND ADDRESSES** (`PlanView::derive`'s own
+    // doc): the subnet's own were what it read until the code review, and a nested subnet's page
+    // then drew as *not covered* an address a parent's `reserved` range protects — while the offer
+    // and the findings list, both plan-wide, said otherwise on the same screen.
+    let defined: Vec<Ipv4Addr> = plan.defined.iter().copied().collect();
+    let view = PlanView::derive(subnet, &plan.ranges, &defined);
     Ok(render_plan(&subnets, &id, &view, &audit))
 }
 
@@ -486,12 +661,15 @@ async fn plan_data(
 pub(crate) struct Audit<'a> {
     /// The whole plan.
     pub(crate) plan: &'a Plan,
-    /// What the network says, per address.
-    pub(crate) seen: &'a BTreeMap<Ipv4Addr, Seen>,
-    /// The documented addresses.
-    pub(crate) documented: &'a BTreeSet<Ipv4Addr>,
-    /// The subnet in force.
-    pub(crate) subnet: Subnet,
+    /// What the network and the declared register say — the sightings, the documented addresses and
+    /// the claimed values, read once per request.
+    pub(crate) network: &'a Network,
+    /// The subnet in force, or `None` on the pages where none is: an empty plan and an identifier no
+    /// subnet carries. 🔑 **Those two pages still show what the network shows OUTSIDE the plan**
+    /// (decision 11), which the code review found them dropping — and on an EMPTY plan every
+    /// observed address is outside it, so that list is the whole of what this screen can honestly
+    /// say on a fresh install.
+    pub(crate) subnet: Option<Subnet>,
 }
 
 /// One address the audit names, ready to render.
@@ -516,13 +694,37 @@ pub(crate) struct FindingRow {
 /// The audit's part of the page.
 #[derive(Debug, Clone)]
 pub(crate) struct AuditRender {
-    /// The subnet's findings, in numeric order.
+    /// Whether a subnet is in force — the findings and the pool warnings are about ONE subnet, and
+    /// the two subnet-less pages render the outside list alone.
+    subnet_in_force: bool,
+    /// The subnet's findings, in numeric order. ⚠️ **Not bounded** (Guy, 2026-09-15): it is bounded
+    /// by the plan — one entry per observed address of ONE subnet — where the two lists below are
+    /// bounded by the network.
     findings: Vec<FindingRow>,
-    /// The observed addresses outside every subnet of the plan (decision 11).
+    /// The observed addresses outside every subnet of the plan (decision 11), the twenty most
+    /// recently seen of them.
     outside: Vec<FindingRow>,
+    /// *and N others*, when the outside list is bounded — the empty string otherwise.
+    ///
+    /// 🔴 **A BOUND THAT DOES NOT SAY IT IS ONE IS A LIE BY OMISSION.** The edge layer measured 5 007
+    /// findings and a 2.26 MB page over 5 000 outside addresses; decision 11's own word is *short*,
+    /// and Guy's bound (2026-09-15) is twenty — with this sentence, so the page never claims the
+    /// network showed only what it had room for.
+    outside_more: String,
     /// The subnet's addresses defined inside a `dhcp-pool` (decision 13).
     pool_warnings: Vec<String>,
 }
+
+/// How many hardware addresses a CELL's accessible name carries before it says *and N others*.
+///
+/// 🔴 **A cell name reached 13 688 BYTES, measured, and every cell of a churning pool carried one.**
+/// A name that long is not read by anyone, with sight or without: a screen reader announces it in
+/// full on focus. Three is what Guy bounded it to (2026-09-15) — the findings list under the grid
+/// keeps every one of them, so nothing is lost, it is moved to where it can be read.
+const MAX_CELL_MACS: usize = 3;
+
+/// How many observed addresses outside the plan the list shows before it says *and N others*.
+const MAX_OUTSIDE: usize = 20;
 
 /// An instant as the audit shows it: ABSOLUTE and in UTC, never a relative age (decision 9) — a
 /// relative age would change with the clock of the render, and the derivation reads no clock.
@@ -551,12 +753,59 @@ fn sighting_lines(seen: &Seen) -> Vec<String> {
     lines
 }
 
+/// The hardware addresses a CELL's name carries: the [`MAX_CELL_MACS`] most recently seen, then
+/// *and N others*.
+///
+/// 🔑 Ordered by RECENCY here and by hardware address in the findings list, deliberately: a bound has
+/// to choose what it keeps, and the most recent sighting is the one an operator acts on. The list
+/// under the grid keeps every one of them in a stable order.
+fn capped_sighting_lines(seen: &Seen) -> Vec<String> {
+    let mut by_recency: Vec<(opencmdb_core::observation::Timestamp, String)> = seen
+        .macs
+        .iter()
+        .map(|(mac, at)| {
+            (
+                *at,
+                rust_i18n::t!(
+                    "ipam.finding.seen_mac",
+                    mac = mac.to_string(),
+                    at = absolute(*at)
+                )
+                .to_string(),
+            )
+        })
+        .collect();
+    if let Some(at) = seen.without_mac {
+        by_recency.push((
+            at,
+            rust_i18n::t!("ipam.finding.seen_no_mac", at = absolute(at)).to_string(),
+        ));
+    }
+    // Newest first, and the LINE breaks the tie so the order is total — two sightings share an
+    // instant whenever one sweep saw them, which is the ordinary case.
+    by_recency.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    let total = by_recency.len();
+    let mut lines: Vec<String> = by_recency
+        .into_iter()
+        .take(MAX_CELL_MACS)
+        .map(|(_, line)| line)
+        .collect();
+    if total > MAX_CELL_MACS {
+        lines.push(counted(
+            "ipam.finding.more_one",
+            "ipam.finding.more_many",
+            total - MAX_CELL_MACS,
+        ));
+    }
+    lines
+}
+
 /// The row for one observed address.
 fn finding_row(
     seen: &Seen,
     kind: Option<FindingKind>,
     conflict: bool,
-    documented: bool,
+    claimed: bool,
 ) -> FindingRow {
     FindingRow {
         address: seen.addr.to_string(),
@@ -565,35 +814,70 @@ fn finding_row(
         conflict,
         sightings: sighting_lines(seen),
         // 🔑 Triage raises a `nouveau:` question only for an observed address no declared record
-        // claims (`page.rs`), so a documented address has no question to link to — and the row says
-        // so rather than linking to nothing.
-        triage_href: (!documented).then(|| format!("/triage?sel=nouveau:{}", seen.addr)),
+        // claims (`page.rs`), so a claimed address has no question to link to — and the row says so
+        // rather than linking to nothing. ⚠️ `claimed` and not `documented`: triage compares the
+        // declared VALUES verbatim, so a value stored with whitespace documents the address for the
+        // offer and still leaves triage asking (`ipam_audit::AddressFinding::claimed`).
+        triage_href: (!claimed).then(|| format!("/triage?sel=nouveau:{}", seen.addr)),
     }
 }
 
-/// Everything the audit shows for the subnet in force.
+/// Everything the audit shows for the subnet in force — and, on the two pages where no subnet is,
+/// what the network shows outside the plan.
 fn audit_render(audit: &Audit) -> AuditRender {
-    AuditRender {
-        findings: audit
+    let findings = match audit.subnet {
+        Some(subnet) => audit
             .plan
-            .audit(audit.subnet, audit.seen, audit.documented)
+            .audit(subnet, &audit.network.seen, &audit.network.claimed)
             .iter()
-            .map(|f| finding_row(&f.seen, f.kind, f.conflict, f.documented))
+            .map(|f| finding_row(&f.seen, f.kind, f.conflict, f.claimed))
             .collect(),
-        outside: audit
-            .plan
-            .outside(audit.seen)
+        None => Vec::new(),
+    };
+    // Decision 11, BOUNDED (Guy, 2026-09-15): the twenty most recently seen, then a sentence saying
+    // how many are not shown. Selected by recency, rendered in numeric order — the selection is the
+    // useful half, the order is the readable one.
+    let mut outside: Vec<&Seen> = audit.plan.outside(&audit.network.seen);
+    let total_outside = outside.len();
+    if total_outside > MAX_OUTSIDE {
+        outside.sort_by(|a, b| b.last_seen().cmp(&a.last_seen()).then(a.addr.cmp(&b.addr)));
+        outside.truncate(MAX_OUTSIDE);
+        outside.sort_by_key(|seen| seen.addr);
+    }
+    AuditRender {
+        subnet_in_force: audit.subnet.is_some(),
+        findings,
+        outside: outside
             .into_iter()
-            .map(|seen| finding_row(seen, None, false, audit.documented.contains(&seen.addr)))
-            .collect(),
-        pool_warnings: audit
-            .plan
-            .defined_inside_a_pool(audit.subnet)
-            .into_iter()
-            .map(|addr| {
-                rust_i18n::t!("ipam.pool_warning.item", address = addr.to_string()).to_string()
+            .map(|seen| {
+                finding_row(
+                    seen,
+                    None,
+                    false,
+                    audit.network.claimed.contains(&seen.addr.to_string()),
+                )
             })
             .collect(),
+        outside_more: if total_outside > MAX_OUTSIDE {
+            counted(
+                "ipam.outside.more_one",
+                "ipam.outside.more_many",
+                total_outside - MAX_OUTSIDE,
+            )
+        } else {
+            String::new()
+        },
+        pool_warnings: match audit.subnet {
+            Some(subnet) => audit
+                .plan
+                .defined_inside_a_pool(subnet)
+                .into_iter()
+                .map(|addr| {
+                    rust_i18n::t!("ipam.pool_warning.item", address = addr.to_string()).to_string()
+                })
+                .collect(),
+            None => Vec::new(),
+        },
     }
 }
 
@@ -673,6 +957,8 @@ pub(crate) struct IpamForms {
     address_route: &'static str,
     /// Where the address field asks for a warning before the write (decision 7).
     address_check_route: &'static str,
+    /// Where the range form asks the same question about a stretch of addresses.
+    range_check_route: &'static str,
     /// The subnet in force, which the range and address forms carry as a hidden field. `None`
     /// when no subnet is selected — the two forms are then replaced by a sentence saying so.
     subnet_id: Option<String>,
@@ -708,6 +994,7 @@ impl IpamForms {
             range_route: route_of(WriteRoute::Range),
             address_route: route_of(WriteRoute::Address),
             address_check_route: ADDRESS_CHECK_PATH,
+            range_check_route: RANGE_CHECK_PATH,
             subnet_id,
             plan_is_empty,
             policies: IpPolicy::ALL
@@ -730,6 +1017,8 @@ pub(crate) struct CellView {
     modifier: &'static str,
     /// The policy's CSS modifier, or the empty string when no range covers this address.
     policy_modifier: &'static str,
+    /// Whether the network has been seen on this address — decision 8's marker.
+    seen: bool,
     /// The accessible name: the address, its state, and its policy when it has one.
     label: String,
 }
@@ -807,23 +1096,27 @@ fn policy_key(policy: IpPolicy) -> &'static str {
 }
 
 /// Build the body for a plan that holds no subnet at all.
-fn empty_plan_body() -> String {
+///
+/// 🔑 It still lists what the network shows OUTSIDE the plan, which with no subnet declared is
+/// EVERYTHING the scanner has seen — the code review found this page and the next one dropping that
+/// list, and on a fresh install it is the only true thing the screen has to say.
+fn empty_plan_body(audit: &Audit) -> String {
     let body = IpamBody {
-        s: strings(None, None),
+        s: strings(None, None, false),
         tabs: Vec::new(),
         plan: None,
         too_large: None,
         forms: IpamForms::new(None, true),
-        audit: None,
+        audit: Some(audit_render(audit)),
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
 }
 
 /// Build the body for an identifier no subnet carries.
-fn unknown_subnet_body(subnets: &[(String, Subnet, String)]) -> String {
+fn unknown_subnet_body(subnets: &[(String, Subnet, String)], audit: &Audit) -> String {
     let body = IpamBody {
-        s: strings(None, None),
+        s: strings(None, None, false),
         tabs: subnets
             .iter()
             .map(|(id, subnet, label)| SubnetTab {
@@ -835,7 +1128,7 @@ fn unknown_subnet_body(subnets: &[(String, Subnet, String)]) -> String {
         plan: None,
         too_large: None,
         forms: IpamForms::new(None, false),
-        audit: None,
+        audit: Some(audit_render(audit)),
     };
     body.render()
         .unwrap_or_else(|_| crate::page::render_error_body())
@@ -851,7 +1144,14 @@ fn tab_label(subnet: &Subnet, label: &str) -> String {
 }
 
 /// Resolve every string, with the occupancy and next-free lines when there is a plan.
-fn strings(counts: Option<(usize, usize, usize, usize)>, next: Option<Ipv4Addr>) -> IpamStrings {
+///
+/// `no_static` says the subnet in force is reached by NO `static` range at all, which is a different
+/// state from an exhausted offer and now has its own sentence.
+fn strings(
+    counts: Option<(usize, usize, usize, usize)>,
+    next: Option<Ipv4Addr>,
+    no_static: bool,
+) -> IpamStrings {
     let occupancy = match counts {
         Some((defined, free, infrastructure, not_covered)) => rust_i18n::t!(
             "ipam.occupancy",
@@ -863,8 +1163,14 @@ fn strings(counts: Option<(usize, usize, usize, usize)>, next: Option<Ipv4Addr>)
         .to_string(),
         None => String::new(),
     };
+    // 🔴 **TWO SENTENCES, because one of them was VACUOUS in one state and FALSE in the other.**
+    // *"Every address a static range holds here is defined, documented, already seen, or an edge"*
+    // says nothing over a subnet no static range reaches — nothing was ever on offer — and it is
+    // wrong when an overlapping `reserved` range is what emptied a static one. The screen now says
+    // which of the two it is.
     let next_free = match next {
         Some(addr) => addr.to_string(),
+        None if no_static => rust_i18n::t!("ipam.next_free_no_static").to_string(),
         None => rust_i18n::t!("ipam.next_free_none").to_string(),
     };
     IpamStrings {
@@ -939,7 +1245,7 @@ fn render_too_large(
         })
         .collect();
     let body = IpamBody {
-        s: strings(None, None),
+        s: strings(None, None, false),
         tabs: tabs_for(subnets, selected),
         plan: None,
         too_large: Some(rows),
@@ -969,6 +1275,11 @@ pub(crate) fn render_plan(
     plan: &PlanView,
     audit: &Audit,
 ) -> String {
+    // A grid needs a subnet in force; the two subnet-less pages have their own bodies. `None` is
+    // answered with the error body rather than with a panic on a request.
+    let Some(subnet) = audit.subnet else {
+        return crate::page::render_error_body();
+    };
     let tabs = tabs_for(subnets, selected);
     let cells = plan
         .cells
@@ -991,12 +1302,15 @@ pub(crate) fn render_plan(
                 .to_string(),
             };
             // 🔑 A held cell carries its last sightings in its accessible name (decision 9): the
-            // grid's density is not readable without sight, the name is.
-            let label = match audit.seen.get(addr) {
+            // grid's density is not readable without sight, the name is. ⚠️ BOUNDED to the three
+            // most recent (`capped_sighting_lines`): the review measured a 13 688-byte name under
+            // MAC churn, which is not a name anybody reads.
+            let seen = audit.network.seen.get(addr);
+            let label = match seen {
                 Some(seen) => rust_i18n::t!(
                     "ipam.cell_label_seen",
                     label = base,
-                    sightings = sighting_lines(seen).join("; ")
+                    sightings = capped_sighting_lines(seen).join("; ")
                 )
                 .to_string(),
                 None => base,
@@ -1004,6 +1318,9 @@ pub(crate) fn render_plan(
             CellView {
                 modifier: state.modifier(),
                 policy_modifier: state.policy().map(policy_modifier).unwrap_or(""),
+                // Decision 8's marker, built after the code review measured the argument for
+                // dropping it to be false: the cells the network has been seen on carry one.
+                seen: seen.is_some(),
                 label,
             }
         })
@@ -1013,14 +1330,20 @@ pub(crate) fn render_plan(
     let offerable = plan
         .cells
         .iter()
-        .filter(|(addr, _)| audit.plan.offerable(*addr, audit.seen, audit.documented))
+        .filter(|(addr, _)| {
+            audit
+                .plan
+                .offerable(*addr, &audit.network.seen, &audit.network.documented)
+        })
         .count();
+    let next = audit
+        .plan
+        .next_offerable(subnet, &audit.network.seen, &audit.network.documented);
     let body = IpamBody {
         s: strings(
             Some((defined, offerable, infrastructure, not_covered)),
-            audit
-                .plan
-                .next_offerable(audit.subnet, audit.seen, audit.documented),
+            next,
+            !audit.plan.has_static_range(subnet),
         ),
         tabs,
         plan: Some(PlanRender { cells }),
@@ -1035,6 +1358,26 @@ pub(crate) fn render_plan(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    /// What the network says, for a test that needs it to say nothing.
+    fn quiet() -> Network {
+        Network::default()
+    }
+
+    /// What the network says, from sightings and the declared values TRIAGE compares (verbatim).
+    fn network_of(seen: BTreeMap<Ipv4Addr, Seen>, declared: &[&str]) -> Network {
+        Network {
+            seen,
+            documented: crate::ipam_audit::documented_addresses(
+                &declared
+                    .iter()
+                    .map(|v| (*v).to_string())
+                    .collect::<Vec<_>>(),
+            ),
+            claimed: declared.iter().map(|v| (*v).to_string()).collect(),
+        }
+    }
 
     /// A `/24` for the tests, with its two edges and 254 hosts.
     fn office() -> Subnet {
@@ -1404,12 +1747,11 @@ mod tests {
             ranges: vec![(v4("10.0.0.1"), v4("10.0.0.50"), IpPolicy::Static)],
             defined: BTreeSet::new(),
         };
-        let (none, nobody) = (BTreeMap::new(), BTreeSet::new());
+        let quiet = quiet();
         let audit = Audit {
             plan: &whole,
-            seen: &none,
-            documented: &nobody,
-            subnet: big,
+            network: &quiet,
+            subnet: Some(big),
         };
         let body = render_too_large(&subnets, "t-big", &ranges, &audit);
         assert!(
@@ -1498,10 +1840,19 @@ mod tests {
     /// 3. `ipam_write.rs` cannot read the network at all, because `IpamWriteState` holds a PORT and
     ///    never a pool — carried by the type, and proven by a compile-fail mutation, not by this scan.
     ///
-    /// ⚠️ **Two limits, MEASURED by story 14.3's gap-hunt and written rather than implied**:
-    /// `ipam_write.rs` calling `crate::ipam_audit::…` is GREEN here (what forbids it is part 3's type),
-    /// and a module OUTSIDE the perimeter — a new `src/audit.rs` joining everything with an
-    /// `identity_link` query — is GREEN (the perimeter is the plan's files, by name or by table).
+    /// ⚠️ **THREE limits, MEASURED and written rather than implied** — the third was added by this
+    /// story's code review, which planted it and watched the whole suite stay green:
+    /// `ipam_write.rs` calling `crate::ipam_audit::…` is GREEN here (what forbids it is part 3's type);
+    /// a module OUTSIDE the perimeter — a new `src/audit.rs` joining everything with an
+    /// `identity_link` query — is GREEN (the perimeter is the plan's files, by name or by table);
+    /// and **a read reached through a THIRD module's reader is GREEN**, measured with
+    /// `crate::scan_pass::counted_current_engine_links(pool)` planted in `ipam_page.rs`: the call
+    /// names neither a plan-foreign table nor the `repo` token, because the table is named inside
+    /// `scan_pass.rs`. 🔑 *The guard follows ONE module — `repo` — and any module that re-exports a
+    /// read is a door beside it.* Following the call graph is what would close it, which is a
+    /// different instrument from a source scan; a TRIPWIRE against the read someone writes here,
+    /// never a barrier — story 5.12's own framing, stated for the third time because the third
+    /// hole was found by planting rather than by reading.
     ///
     /// The guard is a source scan because the defect is an ADDED read, which no runtime test can
     /// provoke — story 5.12's *you cannot measure the absence of code by running code*.
@@ -1719,7 +2070,14 @@ mod tests {
         let define = rust_i18n::t!("ipam.form.needs_first_subnet").to_string();
         assert_ne!(choose, define, "two cases, two sentences");
 
-        let empty = empty_plan_body();
+        let nothing = Plan::default();
+        let quiet = quiet();
+        let no_subnet = Audit {
+            plan: &nothing,
+            network: &quiet,
+            subnet: None,
+        };
+        let empty = empty_plan_body(&no_subnet);
         assert!(
             empty.contains(&define),
             "the empty plan must say to define a subnet first"
@@ -1734,7 +2092,7 @@ mod tests {
             Subnet::new("192.0.2.0".parse().expect("an address"), 24).expect("a subnet"),
             "Office".to_string(),
         )];
-        let unknown = unknown_subnet_body(&known);
+        let unknown = unknown_subnet_body(&known, &no_subnet);
         assert!(
             unknown.contains(&choose),
             "an identifier no subnet carries, over a plan that has one, says to choose it above"
@@ -1759,7 +2117,13 @@ mod tests {
     /// door is not a door*. This asserts the `open` attribute on the very id the anchor names.
     #[test]
     fn an_empty_plan_links_to_the_gesture_that_fills_it() {
-        let body = empty_plan_body();
+        let nothing = Plan::default();
+        let quiet = quiet();
+        let body = empty_plan_body(&Audit {
+            plan: &nothing,
+            network: &quiet,
+            subnet: None,
+        });
         assert!(
             body.contains(&rust_i18n::t!("ipam.empty_plan").to_string()),
             "the sentence saying there is no plan"
@@ -1799,16 +2163,15 @@ mod tests {
     fn every_form_posts_where_its_route_is_mounted() {
         use crate::ipam_write::WriteRoute;
         let whole = offer_of(&[], &[]);
-        let (none, nobody) = (BTreeMap::new(), BTreeSet::new());
+        let quiet = quiet();
         let body = render_plan(
             &[("s1".to_string(), office(), "Office".to_string())],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &Audit {
                 plan: &whole,
-                seen: &none,
-                documented: &nobody,
-                subnet: office(),
+                network: &quiet,
+                subnet: Some(office()),
             },
         );
         for route in WriteRoute::ALL {
@@ -1837,12 +2200,11 @@ mod tests {
             &[(v4("192.0.2.1"), v4("192.0.2.254"), IpPolicy::Static)],
             &[v4("192.0.2.9")],
         );
-        let (none, nobody) = (BTreeMap::new(), BTreeSet::new());
+        let quiet = quiet();
         let audit = Audit {
             plan: &whole,
-            seen: &none,
-            documented: &nobody,
-            subnet: office(),
+            network: &quiet,
+            subnet: Some(office()),
         };
         let body = render_plan(&subnets, "t-1", &plan, &audit);
         assert_eq!(
@@ -1881,12 +2243,11 @@ mod tests {
         ];
         let plan = PlanView::derive(office(), &[], &[]);
         let whole = offer_of(&[], &[]);
-        let (none, nobody) = (BTreeMap::new(), BTreeSet::new());
+        let quiet = quiet();
         let audit = Audit {
             plan: &whole,
-            seen: &none,
-            documented: &nobody,
-            subnet: office(),
+            network: &quiet,
+            subnet: Some(office()),
         };
         let body = render_plan(&subnets, "t-2", &plan, &audit);
         assert_eq!(
@@ -1936,6 +2297,17 @@ mod tests {
     /// story would have used at 3.0–3.3 s over 1 000 000 rows, against NFR2's 1.5 s. `/ipam` reads story
     /// 14.3a's summary instead, so the observation rows are generated here only to prove that their
     /// number no longer reaches the screen. It asserts the worst of twenty renders stays under NFR2.
+    ///
+    /// ⚠️ **AND IT MEASURES ROWS, NOT PAIRS — the generator holds the distinct MAC count at 46**
+    /// (`(seq - 1) MOD 46` on both the address and the hardware address), so *"their number no
+    /// longer reaches the screen"* is true of OBSERVATION ROWS and says nothing about a network
+    /// whose distinct pairs grow. That is the axis story 14.3a's register row names (a host that
+    /// rotates its hardware address adds a pair per rotation), and it is the one the summary does
+    /// not bound. Stated because the sentence read as a general claim; the blind and edge layers
+    /// found it separately.
+    ///
+    /// ⚠️ It also measures `plan_data` — the read and the render — and not an HTTP p95: no server is
+    /// bound here, so the shell, the response and the socket are outside it.
     #[tokio::test]
     async fn measure_the_plan_screen_over_a_long_history() {
         let Ok(rows) = std::env::var("OPENCMDB_MEASURE_IPAM") else {
@@ -2065,10 +2437,10 @@ mod tests {
             sighted("192.0.2.20", 1, "2026-09-02T10:00:00Z"),
             sighted("192.0.2.140", 2, "2026-09-02T10:00:00Z"),
         ]);
-        let documented = BTreeSet::from([v4("192.0.2.140")]);
+        let network = network_of(seen, &["192.0.2.140"]);
         let still = rust_i18n::t!("ipam.check.still_writes").to_string();
 
-        let fresh = render_address_check(v4("192.0.2.20"), &plan, &seen, &documented);
+        let fresh = render_address_check(v4("192.0.2.20"), &plan, &network);
         assert!(
             fresh.contains(&rust_i18n::t!("ipam.check.seen", address = "192.0.2.20").to_string()),
             "a seen address is named as seen: {fresh}"
@@ -2083,7 +2455,7 @@ mod tests {
         );
         assert!(fresh.contains(&still), "the form warns and STILL writes");
 
-        let known = render_address_check(v4("192.0.2.140"), &plan, &seen, &documented);
+        let known = render_address_check(v4("192.0.2.140"), &plan, &network);
         assert!(
             known.contains(
                 &rust_i18n::t!("ipam.check.documented", address = "192.0.2.140").to_string()
@@ -2095,21 +2467,19 @@ mod tests {
             "and links to no triage question, because triage asks none"
         );
 
-        let defined =
-            render_address_check(v4("192.0.2.9"), &plan, &BTreeMap::new(), &BTreeSet::new());
+        let defined = render_address_check(v4("192.0.2.9"), &plan, &quiet());
         assert!(
             defined
                 .contains(&rust_i18n::t!("ipam.check.defined", address = "192.0.2.9").to_string())
         );
-        let pooled =
-            render_address_check(v4("192.0.2.85"), &plan, &BTreeMap::new(), &BTreeSet::new());
+        let pooled = render_address_check(v4("192.0.2.85"), &plan, &quiet());
         assert!(
             pooled
                 .contains(&rust_i18n::t!("ipam.check.in_pool", address = "192.0.2.85").to_string()),
             "decision 13's warning, before the write too"
         );
         assert_eq!(
-            render_address_check(v4("192.0.2.30"), &plan, &BTreeMap::new(), &BTreeSet::new()),
+            render_address_check(v4("192.0.2.30"), &plan, &quiet()),
             "",
             "nothing worth knowing is an empty region, which announces nothing"
         );
@@ -2120,16 +2490,15 @@ mod tests {
     #[test]
     fn the_address_field_asks_the_mounted_check_and_describes_itself_with_the_answer() {
         let whole = offer_of(&[], &[]);
-        let (none, nobody) = (BTreeMap::new(), BTreeSet::new());
+        let quiet = quiet();
         let body = render_plan(
             &[("s1".to_string(), office(), "Office".to_string())],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &Audit {
                 plan: &whole,
-                seen: &none,
-                documented: &nobody,
-                subnet: office(),
+                network: &quiet,
+                subnet: Some(office()),
             },
         );
         assert!(body.contains(&format!("hx-get=\"{ADDRESS_CHECK_PATH}\"")));
@@ -2158,12 +2527,11 @@ mod tests {
             sighted("192.0.2.99", 4, "2026-09-02T10:00:00Z"),
             sighted("10.9.9.9", 5, "2026-09-02T10:00:00Z"),
         ]);
-        let documented = BTreeSet::from([v4("192.0.2.140")]);
+        let network = network_of(seen, &["192.0.2.140"]);
         let audit = Audit {
             plan: &plan,
-            seen: &seen,
-            documented: &documented,
-            subnet: office(),
+            network: &network,
+            subnet: Some(office()),
         };
         let body = render_plan(
             &[("s1".to_string(), office(), "Office".to_string())],
@@ -2229,12 +2597,11 @@ mod tests {
             sighted("192.0.2.9", 1, "2026-09-02T10:00:00Z"),
             sighted("192.0.2.9", 2, "2026-09-03T11:30:00Z"),
         ]);
-        let nobody = BTreeSet::new();
+        let network = network_of(seen, &[]);
         let audit = Audit {
             plan: &plan,
-            seen: &seen,
-            documented: &nobody,
-            subnet: office(),
+            network: &network,
+            subnet: Some(office()),
         };
         let view = PlanView::derive(office(), &[], &[v4("192.0.2.9")]);
         let subnets = [("s1".to_string(), office(), "Office".to_string())];
@@ -2271,12 +2638,11 @@ mod tests {
         );
         let seen =
             crate::ipam_audit::merge_sightings(&[sighted("192.0.2.2", 1, "2026-09-02T10:00:00Z")]);
-        let documented = BTreeSet::from([v4("192.0.2.3")]);
+        let network = network_of(seen, &["192.0.2.3"]);
         let audit = Audit {
             plan: &plan,
-            seen: &seen,
-            documented: &documented,
-            subnet: office(),
+            network: &network,
+            subnet: Some(office()),
         };
         let view = PlanView::derive(
             office(),
@@ -2320,12 +2686,11 @@ mod tests {
         };
         let seen =
             crate::ipam_audit::merge_sightings(&[sighted("10.0.0.7", 1, "2026-09-02T10:00:00Z")]);
-        let nobody = BTreeSet::new();
+        let network = network_of(seen, &[]);
         let audit = Audit {
             plan: &plan,
-            seen: &seen,
-            documented: &nobody,
-            subnet: big,
+            network: &network,
+            subnet: Some(big),
         };
         let body = render_too_large(
             &[("t-big".to_string(), big, "Everything".to_string())],
@@ -2343,6 +2708,345 @@ mod tests {
             audit_part(&body).contains("10.0.0.7")
                 && audit_part(&body).contains("ipam-word-undeclared"),
             "the findings list is shown for a subnet too large to draw"
+        );
+    }
+
+    /// 🔴 **THE GRID, THE OFFER AND THE VERDICT MUST SAY THE SAME THING ON A NESTED SUBNET'S PAGE**
+    /// — Guy's decision at the code review, on a defect the blind layer found from the diff alone.
+    /// The offer and the verdict read every range of the plan (decision 2); the grid read the
+    /// SELECTED subnet's, so an address a parent subnet's `reserved` range protects was drawn as
+    /// *not covered*, counted as not covered, and named a `gap` by the list underneath it.
+    #[test]
+    fn the_grid_the_offer_and_the_verdict_agree_on_a_nested_subnets_page() {
+        let nested = Subnet::new("192.0.2.0".parse().unwrap(), 26).expect("a /26");
+        let ranges = vec![
+            (v4("192.0.2.1"), v4("192.0.2.254"), IpPolicy::Static),
+            // Declared on the OUTER subnet, and covering part of the nested one.
+            (v4("192.0.2.10"), v4("192.0.2.19"), IpPolicy::Reserved),
+        ];
+        let plan = Plan {
+            subnets: vec![office(), nested],
+            ranges: ranges.clone(),
+            defined: BTreeSet::new(),
+        };
+        let network = network_of(
+            crate::ipam_audit::merge_sightings(&[sighted("192.0.2.12", 1, "2026-09-02T10:00:00Z")]),
+            &[],
+        );
+        let audit = Audit {
+            plan: &plan,
+            network: &network,
+            subnet: Some(nested),
+        };
+        // The cell carries the RESERVED policy, which is the range that decides — not `static`, the
+        // one that happens to start lower.
+        let view = PlanView::derive(nested, &ranges, &[]);
+        assert_eq!(
+            view.cells[12].1,
+            CellState::Free(IpPolicy::Reserved),
+            "the most protective covering range decides what the cell IS, on every page"
+        );
+        let body = render_plan(
+            &[("nested".to_string(), nested, "Nested".to_string())],
+            "nested",
+            &view,
+            &audit,
+        );
+        assert!(
+            body.contains("ipam-policy-reserved"),
+            "and the cell is drawn with it"
+        );
+        assert!(
+            audit_part(&body).contains(&rust_i18n::t!("state.undeclared").to_string())
+                && !audit_part(&body).contains(&rust_i18n::t!("triage.kind.ecart").to_string()),
+            "the list says `undeclared`, which is what the grid and the offer say too: {}",
+            audit_part(&body)
+        );
+        assert!(
+            !plan.offerable(v4("192.0.2.12"), &network.seen, &network.documented),
+            "and the offer refuses it"
+        );
+    }
+
+    /// 🔴 **THE PAGE GREW WITHOUT BOUND UNDER MAC CHURN**: the review measured 2.26 MB, 5 007
+    /// findings and a **13 688-byte cell name** over 47 pool addresses × 200 hardware addresses plus
+    /// 5 000 outside addresses, with axe taking 75 s over it. Guy's bound (2026-09-15): three
+    /// hardware addresses in a cell's NAME, twenty addresses in the outside list, the subnet's own
+    /// findings left whole — *and each bound SAYS how much it is not showing*.
+    #[test]
+    fn the_cell_name_and_the_outside_list_are_bounded_and_say_how_much_is_hidden() {
+        let plan = audited_office();
+        let churn: Vec<crate::sighting_repo::Sighting> = (1..=5)
+            .map(|n| sighted("192.0.2.20", n, &format!("2026-09-0{n}T10:00:00Z")))
+            .collect();
+        let mut outside = churn.clone();
+        for n in 0..25u8 {
+            outside.push(sighted(&format!("10.9.9.{n}"), n, "2026-09-01T10:00:00Z"));
+        }
+        let network = network_of(crate::ipam_audit::merge_sightings(&outside), &[]);
+        let audit = Audit {
+            plan: &plan,
+            network: &network,
+            subnet: Some(office()),
+        };
+        let view = PlanView::derive(office(), &[], &[]);
+        let body = render_plan(
+            &[("s1".to_string(), office(), "Office".to_string())],
+            "s1",
+            &view,
+            &audit,
+        );
+        let cell = body
+            .split("aria-label=\"192.0.2.20 ·")
+            .nth(1)
+            .expect("the seen cell")
+            .split('"')
+            .next()
+            .expect("its name");
+        assert_eq!(
+            cell.matches("02:00:00:00:00:").count(),
+            3,
+            "a cell's name carries THREE hardware addresses and not five: {cell}"
+        );
+        assert!(
+            cell.contains(&rust_i18n::t!("ipam.finding.more_many", count = 2).to_string()),
+            "and it says how many it is not showing: {cell}"
+        );
+        assert!(
+            cell.contains("2026-09-05 10:00 UTC") && !cell.contains("2026-09-01 10:00 UTC"),
+            "the three it keeps are the most recently seen: {cell}"
+        );
+        // The findings list keeps every one of them — the bound moves them, it does not lose them.
+        let part = audit_part(&body);
+        let listed = part
+            .split(&rust_i18n::t!("ipam.outside.heading").to_string())
+            .next()
+            .expect("the findings");
+        assert_eq!(
+            listed.matches("02:00:00:00:00:").count(),
+            5,
+            "the list under the grid carries all five"
+        );
+        assert_eq!(
+            part.split(&rust_i18n::t!("ipam.outside.heading").to_string())
+                .nth(1)
+                .expect("the outside list")
+                .matches("<li class=\"ipam-finding\">")
+                .count(),
+            20,
+            "the outside list shows twenty of the twenty-five"
+        );
+        assert!(
+            part.contains(&rust_i18n::t!("ipam.outside.more_many", count = 5).to_string()),
+            "and says that five are not shown — a bound that hides its own existence would let the \
+             page claim the network showed only what it had room for"
+        );
+    }
+
+    /// 🔴 **THE EMPTY-OFFER SENTENCE WAS VACUOUS IN ONE STATE AND FALSE IN THE OTHER** (acceptance
+    /// and blind layers): *"every address a static range holds here is defined, documented, already
+    /// seen, or an edge"* says nothing over a subnet no static range reaches, and names none of the
+    /// real reasons when an overlapping `reserved` range is what emptied one.
+    #[test]
+    fn the_empty_offer_says_which_of_the_two_states_it_is() {
+        let exhausted = rust_i18n::t!("ipam.next_free_none").to_string();
+        let never_offered = rust_i18n::t!("ipam.next_free_no_static").to_string();
+        assert_ne!(exhausted, never_offered, "two states, two sentences");
+
+        let subnets = [("s1".to_string(), office(), "Office".to_string())];
+        let quiet = quiet();
+        // (a) No static range reaches this subnet at all.
+        let reserved_only = offer_of(
+            &[(v4("192.0.2.1"), v4("192.0.2.254"), IpPolicy::Reserved)],
+            &[],
+        );
+        let body = render_plan(
+            &subnets,
+            "s1",
+            &PlanView::derive(
+                office(),
+                &[(v4("192.0.2.1"), v4("192.0.2.254"), IpPolicy::Reserved)],
+                &[],
+            ),
+            &Audit {
+                plan: &reserved_only,
+                network: &quiet,
+                subnet: Some(office()),
+            },
+        );
+        assert!(
+            body.contains(&never_offered) && !body.contains(&exhausted),
+            "a subnet with no static range was never offering anything, and says so"
+        );
+
+        // (b) A static range IS there, and an overlapping reserved one empties it.
+        let overlaid = Plan {
+            subnets: vec![office()],
+            ranges: vec![
+                (v4("192.0.2.1"), v4("192.0.2.3"), IpPolicy::Static),
+                (v4("192.0.2.1"), v4("192.0.2.3"), IpPolicy::Reserved),
+            ],
+            defined: BTreeSet::new(),
+        };
+        let body = render_plan(
+            &subnets,
+            "s1",
+            &PlanView::derive(office(), &overlaid.ranges, &[]),
+            &Audit {
+                plan: &overlaid,
+                network: &quiet,
+                subnet: Some(office()),
+            },
+        );
+        assert!(
+            body.contains(&exhausted) && !body.contains(&never_offered),
+            "a static range emptied by a more protective one is the OTHER sentence"
+        );
+    }
+
+    /// AC4's other half, built at the code review — **the RANGE form warns before the write too**,
+    /// and refuses nothing.
+    #[test]
+    fn the_range_check_counts_what_the_network_already_shows_and_still_writes() {
+        let network = network_of(
+            crate::ipam_audit::merge_sightings(&[
+                sighted("192.0.2.20", 1, "2026-09-02T10:00:00Z"),
+                sighted("192.0.2.30", 2, "2026-09-02T10:00:00Z"),
+                sighted("192.0.2.90", 3, "2026-09-02T10:00:00Z"),
+            ]),
+            &[],
+        );
+        let two = render_range_check(v4("192.0.2.1"), v4("192.0.2.40"), &network);
+        assert!(
+            two.contains(&rust_i18n::t!("ipam.check.range_seen_many", count = 2).to_string()),
+            "two of the three fall inside: {two}"
+        );
+        assert!(
+            two.contains(&rust_i18n::t!("ipam.check.still_writes").to_string()),
+            "and it warns without refusing — the write is untouched"
+        );
+        let one = render_range_check(v4("192.0.2.85"), v4("192.0.2.95"), &network);
+        assert!(
+            one.contains(&rust_i18n::t!("ipam.check.range_seen_one", count = 1).to_string()),
+            "one address is ONE sentence and never `1 address(es)` — story 6b.10 closed that as a \
+             class and a new parenthetical plural here would reopen it: {one}"
+        );
+        assert_eq!(
+            render_range_check(v4("192.0.2.200"), v4("192.0.2.210"), &network),
+            "",
+            "a range over nothing the network shows says nothing at all"
+        );
+    }
+
+    /// 🔴 **A CHECK THAT CANNOT READ THE STORE SAYS SO, and it used to leave the PREVIOUS address's
+    /// warning standing under a new value** — measured by the review's edge layer: the handler
+    /// answered 500, htmx does not swap a 5xx, so the region kept a sentence about an address the
+    /// operator was no longer writing. A render failure put a whole error page in the live region.
+    #[test]
+    fn a_check_that_cannot_read_the_store_says_so_rather_than_keeping_the_last_answer() {
+        let body = render_check_unavailable();
+        assert!(
+            body.contains(&rust_i18n::t!("ipam.check.unavailable").to_string()),
+            "the keyed sentence: {body}"
+        );
+        assert!(
+            !body.contains("<main") && !body.contains("<nav"),
+            "and it is a FRAGMENT: the error body is a whole page, and a whole page inside a live \
+             region is announced as one: {body}"
+        );
+        assert!(
+            !body.contains("nouveau:"),
+            "it links to no triage question, because it knows nothing about the address"
+        );
+    }
+
+    /// Decision 11 on the two pages that have no subnet in force — **an empty plan, and an
+    /// identifier no subnet carries.** Both dropped the list entirely until the code review, and on
+    /// an empty plan every observed address is outside the plan.
+    #[test]
+    fn the_subnet_less_pages_still_show_what_the_network_shows_outside_the_plan() {
+        let nothing = Plan::default();
+        let network = network_of(
+            crate::ipam_audit::merge_sightings(&[sighted("10.9.9.9", 1, "2026-09-02T10:00:00Z")]),
+            &[],
+        );
+        let audit = Audit {
+            plan: &nothing,
+            network: &network,
+            subnet: None,
+        };
+        let empty = empty_plan_body(&audit);
+        assert!(
+            empty.contains(&rust_i18n::t!("ipam.outside.heading").to_string())
+                && empty.contains("10.9.9.9"),
+            "with no subnet declared, every observed address is outside the plan — and that list is \
+             the only true thing this screen has to say: {empty}"
+        );
+        // 🔴 **THE NEEDLE IS THE STRUCTURE, NOT THE SENTENCE, AND THE MUTATION IS WHAT SAID SO.**
+        // This read `!empty.contains(&t!("ipam.findings.none"))` and was **VACUOUS**: that key's value
+        // is *"Nothing the network has shown contradicts this subnet's plan."*, Askama escapes the
+        // apostrophe to `&#x27;`, and a resolved string never matches an escaped render — so the
+        // negative assertion passed over a page that carried the sentence. Measured: under
+        // `subnet_in_force: true` the suite stayed GREEN (MP6 contradicted its `red` prediction),
+        // and printing the body showed the heading rendered twice and the sentence present.
+        // 🔑 *A `contains` oracle over a translated sentence can only fail in the direction that
+        // escaping does not touch, and the negative direction is exactly the one it cannot measure.*
+        // The id is emitted by the template as a literal and carries no escapable character.
+        assert!(
+            !empty.contains("id=\"ipam-findings-heading\""),
+            "the findings section belongs to ONE subnet and no subnet is in force: {empty}"
+        );
+
+        let known = [("s1".to_string(), office(), "Office".to_string())];
+        let unknown = unknown_subnet_body(&known, &audit);
+        assert!(
+            unknown.contains("10.9.9.9"),
+            "and the same holds for an identifier no subnet carries"
+        );
+    }
+
+    /// 🔴 **DECISION 8'S MARKER EXISTS, and the story dropped it on arithmetic that was wrong.** Two
+    /// review layers re-did it: BLACK reaches 3.25:1 against the defined fill (`--color-accent-700`)
+    /// and 18.77:1 against the page ground — both figures COMPUTED by the axe gate in a browser, not
+    /// by hand — so the condition Guy set is MET. ⚠️ `--color-text`
+    /// (#1d1f20) does not: 2.56:1. What no Rust test can see is the RENDERED contrast, which is why
+    /// `a11y/axe-gate.mjs` computes it in the browser on all four fills — this asserts the marker is
+    /// emitted and defined, never that it is visible.
+    #[test]
+    fn a_seen_cell_carries_the_marker_and_the_stylesheet_paints_it() {
+        let plan = audited_office();
+        let network = network_of(
+            crate::ipam_audit::merge_sightings(&[sighted("192.0.2.20", 1, "2026-09-02T10:00:00Z")]),
+            &[],
+        );
+        let body = render_plan(
+            &[("s1".to_string(), office(), "Office".to_string())],
+            "s1",
+            &PlanView::derive(office(), &[], &[]),
+            &Audit {
+                plan: &plan,
+                network: &network,
+                subnet: Some(office()),
+            },
+        );
+        assert_eq!(
+            body.matches("ipam-cell-seen").count(),
+            1,
+            "exactly the cell the network has been seen on carries the marker"
+        );
+        // ⚠️ The class is built in Rust, so `every_class_a_template_names_is_defined_in_the_stylesheet`
+        // cannot see it (it skips any `class="…"` carrying an expression) and the legend does not
+        // name it. This is what covers it, on `the_stylesheet_defines_every_modifier_the_grid_can_emit`'s
+        // own precedent.
+        let css = include_str!("../assets/app.css");
+        assert!(
+            css.contains(".ipam-cell-seen::after"),
+            "the marker is a pseudo-element and the sheet must define it"
+        );
+        assert!(
+            css.contains("--color-seen-marker: #000000"),
+            "and it is BLACK on purpose: #1d1f20 reaches 2.56:1 on the defined fill, under the 3:1 \
+             decision 8 conditions the marker on"
         );
     }
 }

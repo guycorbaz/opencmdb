@@ -1492,9 +1492,14 @@ mod tests {
         let seeded = load_sightings(&pool).await.expect("read");
         assert_eq!(
             seeded.len(),
-            11,
-            "the premise: the seed sights eleven (address, MAC) pairs — four without a MAC, and \
-             seven story 14.3b added so the audit has a case on a page each gate walks"
+            13,
+            "the premise: the seed sights thirteen (address, MAC) pairs — four without a MAC, seven \
+             story 14.3b added so the audit has a case on a page each gate walks, and TWO its code \
+             review added, because the seed walked no conflict outside a `static` range and none on \
+             a defined address, so two of the audit's rules were on no page either gate opens. \
+             ⚠️ A premise like this is a FLOOR and must EQUAL what is there: it read eleven the \
+             moment the seed grew, which is how this project has twice caught a guard tolerating \
+             the loss of what it was written to pin"
         );
         assert_eq!(seeded, implied_by_the_observations(&pool).await);
         assert!(

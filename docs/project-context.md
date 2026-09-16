@@ -91,7 +91,7 @@ range, address), the overlap rule held under concurrency, the empty plan's link 
 the fourth route, release, is 14.4's, and its story file carries the live count. ⚠️ **The five do
 NOT close the epic**: FR21's VLAN half and FR25 (IPv6) are in scope and outside the arbitrations —
 do not read the close off the story count. **14.3a is `done`** (PR #179 squash-merged 2026-09-15 as `8d8a45f`, CI green on the head commit, code-reviewed by three isolated layers and REPAIRED first — the sighting summary the audit reads — reading every observation row had measured 3.0–3.3 s at 1 M rows: migration `0008`'s `address_sighting`, written in each observation's own transaction and backfilled once at boot before serving; no screen, and its story file carries the live count), then **14.3b is in review** (the audit, and the address the product
-must not offer: `/ipam` lists every observed address as `gap`, `undeclared` or « Conflit d'adresse », offers only from `static` ranges and never a seen or documented address, and warns before an address is defined; its story file carries the live count), then 14.4. Then `prd.md:766`.
+must not offer: `/ipam` lists every observed address as `gap`, `undeclared` or « Conflit d'adresse », offers only from `static` ranges and never a seen or documented address, and warns — before the write and without refusing it — as an address is typed AND as a `static` range is drawn over addresses the network already shows; the cells the network has been seen on carry a BLACK marker whose contrast the axe gate COMPUTES on all four fills (3.25:1 on the defined fill, 18.77:1 on the other three), because axe cannot see a pseudo-element; its story file carries the live count), then 14.4. Then `prd.md:766`.
 
 ⚠️ **And use it on the NAS before writing more of it** — that is what found everything above,
 including the « Merger » label, wrong since July and raised by no gate.
@@ -195,9 +195,13 @@ empty-plan pass since story 14.2b, run first over `a11y/empty-plan.sql`; since s
 `AXE_REQUIRE_AUDIT=1` refuses a seeded run with no finding or without both a `gap` and an
 `undeclared` to compare without colour, and the gate types into the address field so the warning
 before a write is under axe too), and
-`a11y/kbd-probe.mjs` (story 6b.11, **forty-one** checks since story 14.3b added the address warning
-and the findings list to the three forms story 14.2b first covered; story 6.4 made it PRESS the
-documenting gesture and read the store's answer back).
+`a11y/kbd-probe.mjs` (story 6b.11, **forty-five** checks since story 14.3b added the address warning,
+the RANGE form's own warning, the debounce that keeps a warning from reading the whole plan per
+keystroke, the triage link FOLLOWED to a real question, and the findings list — to the three forms
+story 14.2b first covered; story 6.4 made it PRESS the documenting gesture and read the store's
+answer back). ⚠️ Since story 14.3b's code review the axe gate also computes, in the browser, the
+CONTRAST of the grid's *seen* marker against each of the four cell fills and fails under 3:1 — axe
+cannot see a pseudo-element, so no rule and no source guard could.
 ⚠️ They are not `xtask` gates, and the `xtask` count stays at ten (nine until story 6.5).
 ⚠️ **`declared-authorship` is a TRIPWIRE, not a barrier**, and the difference is measured: story
 5.12's code review wrote thirty violations of NFR5 against its first implementation and **sixteen

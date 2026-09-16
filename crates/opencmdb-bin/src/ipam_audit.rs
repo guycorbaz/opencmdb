@@ -16,8 +16,11 @@
 //! # The rules, Guy's decisions of 2026-09-15, each written where it is applied
 //!
 //! 1. **`gap` vs `undeclared` — by the OFFER.** An observed address the plan WOULD offer is a `gap`;
-//!    every other observed address without an address row is `undeclared`; nothing inside a
-//!    `dhcp-pool` is a finding.
+//!    every other observed address without an address row is `undeclared`; nothing covered ONLY by
+//!    `dhcp-pool` ranges is a finding. ⚠️ *Only* is load-bearing and the first draft of this line
+//!    left it out: an address a `static` range ALSO covers is judged by decision 2 like any other —
+//!    the pool does not silence it, it makes it `undeclared`. The code has always done this; the
+//!    sentence promised the opposite, which is the shape three reviews have caught in a doc.
 //! 2. **The most protective range decides**, across overlapping ranges and nested subnets.
 //! 3. **The offer draws from `static` ranges only.**
 //! 4. **A documented address is never offered**, even never observed.
@@ -55,9 +58,37 @@ pub(crate) struct Seen {
     pub(crate) without_mac: Option<Timestamp>,
 }
 
+impl Seen {
+    /// The last instant this address was seen at all, whatever hardware address answered.
+    ///
+    /// 🔑 It is what ORDERS the two bounded lists (Guy's decision of 2026-09-15 at the code review):
+    /// the three hardware addresses a cell's name carries, and the twenty addresses the outside list
+    /// shows. A bound has to keep SOMETHING, and *most recently seen* is the half an operator acts
+    /// on — an address last seen a year ago is the one they can most afford not to read today.
+    ///
+    /// `None` is unrepresentable in practice — a [`Seen`] exists because a row exists — and is
+    /// returned rather than asserted, because an empty one would otherwise panic a render.
+    pub(crate) fn last_seen(&self) -> Option<Timestamp> {
+        self.macs.values().copied().chain(self.without_mac).max()
+    }
+}
+
 /// Merge the summary's rows into one [`Seen`] per address, across L2 domains (decision 5).
 ///
 /// The same MAC seen in two L2 domains is ONE hardware address, with the later of its two instants.
+///
+/// 🔴 **AND TWO DIFFERENT MACHINES ON ONE ADDRESS IN TWO L2 DOMAINS BECOME A CONFLICT HERE, which
+/// decision 5 buys and nobody had written down.** `192.168.1.10` is the ordinary address of a
+/// machine on every private network there is: two of them, in two separate broadcast domains, are
+/// two hardware addresses on one IPv4 and are reported as « Conflit d'adresse » by
+/// [`Plan::is_conflict`] — *reused private space read as a duplicate*. It is the price of decision 5,
+/// which merges because the PLAN has no VLAN axis (FR21's VLAN half is Epic 14 scope and outside the
+/// arbitrations), so an address is one address here whatever domain saw it.
+///
+/// ⚠️ **Not reachable on the shipped product and tested anyway**: the connector reports one
+/// `l2_domain`, the nil UUID, so the second domain needs a second connector. The day FR21 lands, the
+/// plan gains a VLAN and this merge is what must be revisited — registered rather than left to be
+/// rediscovered by whoever meets the finding on a real network.
 pub(crate) fn merge_sightings(sightings: &[Sighting]) -> BTreeMap<Ipv4Addr, Seen> {
     let mut seen: BTreeMap<Ipv4Addr, Seen> = BTreeMap::new();
     for sighting in sightings {
@@ -100,8 +131,14 @@ pub(crate) struct Plan {
 /// What an observed address is, as the audit words it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FindingKind {
-    /// Observed, and the plan WOULD offer it: the plan says free, the network says occupied — the
+    /// Observed, and the PLAN would offer it: the plan says free, the network says occupied — the
     /// core object, seen on an address instead of on a field (`gap`, « écart »).
+    ///
+    /// ⚠️ **The plan ALONE, which is not the same predicate as [`Plan::offerable`]** — and the first
+    /// draft of this doc conflated them. A DOCUMENTED address the network has been seen on is a
+    /// `gap` here and is never offered (decision 4): the two answer different questions, *does the
+    /// plan say this address is free* and *may we hand it out*. Reading this as *"the product would
+    /// offer it"* makes the documented case read as a contradiction when it is the ordinary one.
     Gap,
     /// Observed, no address row, and not an address the plan would offer — in a `reserved` or
     /// `infrastructure` range, on an edge, or in space no range covers (`undeclared`).
@@ -117,10 +154,18 @@ pub(crate) struct AddressFinding {
     pub(crate) kind: Option<FindingKind>,
     /// Whether two hardware addresses were seen on it inside a `static` or `reserved` range.
     pub(crate) conflict: bool,
-    /// Whether `declared_attribute` documents it — which also says whether triage has a
-    /// `nouveau:` row for it: triage raises one only for an observed address no declared record
-    /// claims.
-    pub(crate) documented: bool,
+    /// Whether a declared record CLAIMS it, **compared the way triage compares it** — which is what
+    /// says whether triage has a `nouveau:` row to link to.
+    ///
+    /// 🔴 **This was the PARSED set until the code review, and the two disagree on an ordinary
+    /// value.** `page.rs:1156` filters the queue with `claimed.contains(&value)` over the declared
+    /// `attr_value` STRINGS, verbatim; [`documented_addresses`] parses them, so a value stored as
+    /// `" 192.0.2.12 "` documents the address for the OFFER and claims nothing for TRIAGE. Measured
+    /// by the review's edge layer: the finding said *"documented, so triage asks nothing"* while
+    /// triage was asking. 🔑 *Two questions, two comparisons, and the link must use the comparison of
+    /// the screen it links to* — the offer keeps the protective parse, which is the direction where
+    /// a false positive costs a duplicate address.
+    pub(crate) claimed: bool,
 }
 
 impl Plan {
@@ -175,7 +220,8 @@ impl Plan {
         }
         let policies: Vec<IpPolicy> = self.covering(addr).collect();
         if !policies.is_empty() && policies.iter().all(|p| *p == IpPolicy::DhcpPool) {
-            // Decision 1: nothing inside a `dhcp-pool` is a finding — the occupant changes by design.
+            // Decision 1: nothing covered ONLY by pools is a finding — the occupant changes by
+            // design. An overlap with a `static` or `reserved` range falls through to decision 2.
             return None;
         }
         if self.plan_would_offer(addr) {
@@ -196,11 +242,14 @@ impl Plan {
 
     /// The audit of one subnet: every observed address inside it that is a finding or a conflict,
     /// in numeric order.
+    /// `claimed` is the DECLARED VALUES AS STRINGS, because that is what triage compares (see
+    /// [`AddressFinding::claimed`]); the offer's `documented` set is parsed and is a different
+    /// question.
     pub(crate) fn audit(
         &self,
         subnet: Subnet,
         seen: &BTreeMap<Ipv4Addr, Seen>,
-        documented: &BTreeSet<Ipv4Addr>,
+        claimed: &BTreeSet<String>,
     ) -> Vec<AddressFinding> {
         seen.values()
             .filter(|s| subnet.contains(s.addr))
@@ -211,7 +260,7 @@ impl Plan {
                     seen: s.clone(),
                     kind,
                     conflict,
-                    documented: documented.contains(&s.addr),
+                    claimed: claimed.contains(&s.addr.to_string()),
                 })
             })
             .collect()
@@ -244,6 +293,37 @@ impl Plan {
         self.defined.contains(&addr)
     }
 
+    /// Whether any `static` range reaches into `subnet` at all.
+    ///
+    /// 🔴 **IT IS THE DIFFERENCE BETWEEN TWO SENTENCES THE SCREEN USED TO CONFUSE**, found by the
+    /// review's acceptance layer: *"every address a static range holds here is defined, documented,
+    /// already seen, or an edge"* is VACUOUS over a subnet with no static range — it announces an
+    /// exhausted offer where the truth is that nothing was ever on offer — and it is FALSE when a
+    /// `reserved` range laid over the static one is what emptied it. Two states, two sentences.
+    ///
+    /// ⚠️ It answers *does a static range REACH this subnet*, not *does one offer anything*: an
+    /// overlapping `reserved` range can empty the offer of a subnet that has one, which is exactly
+    /// the case the first sentence is for.
+    pub(crate) fn has_static_range(&self, subnet: Subnet) -> bool {
+        self.ranges.iter().any(|(first, last, policy)| {
+            *policy == IpPolicy::Static && subnet.overlaps(*first, *last)
+        })
+    }
+
+    /// How many observed addresses would fall inside the closed interval `first..=last`.
+    ///
+    /// The range form's warning before the write (Guy, 2026-09-15): *n addresses seen would fall in
+    /// this static range*. It refuses nothing — the write is untouched, like the address form's.
+    pub(crate) fn seen_inside(
+        seen: &BTreeMap<Ipv4Addr, Seen>,
+        first: Ipv4Addr,
+        last: Ipv4Addr,
+    ) -> usize {
+        seen.keys()
+            .filter(|addr| **addr >= first && **addr <= last)
+            .count()
+    }
+
     /// The lowest address of `subnet` that may be offered, or `None`.
     pub(crate) fn next_offerable(
         &self,
@@ -266,19 +346,35 @@ impl Plan {
 /// # Errors
 ///
 /// A backend failure, classified.
+/// It answers THREE things, and the third exists because two of them are the same fact compared two
+/// ways: the sightings, the documented ADDRESSES (parsed, for the offer) and the claimed VALUES
+/// (verbatim, for the triage link) — see [`AddressFinding::claimed`].
 pub(crate) async fn read_the_network(
     pool: &sqlx::MySqlPool,
-) -> Result<(BTreeMap<Ipv4Addr, Seen>, BTreeSet<Ipv4Addr>), opencmdb_core::repo::RepositoryError> {
+) -> Result<Network, opencmdb_core::repo::RepositoryError> {
     let sightings = crate::sighting_repo::load_sightings(pool)
         .await
         .map_err(crate::repo::classify)?;
-    let documented = crate::repo::load_documented_ipv4s(pool)
+    let values = crate::repo::load_documented_ipv4s(pool)
         .await
         .map_err(crate::repo::classify)?;
-    Ok((
-        merge_sightings(&sightings),
-        documented_addresses(&documented),
-    ))
+    Ok(Network {
+        seen: merge_sightings(&sightings),
+        documented: documented_addresses(&values),
+        claimed: values.into_iter().collect(),
+    })
+}
+
+/// What the network and the declared register say, as the audit needs it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Network {
+    /// What the network has shown, merged per address.
+    pub(crate) seen: BTreeMap<Ipv4Addr, Seen>,
+    /// The documented addresses, PARSED — the offer's question (decision 4).
+    pub(crate) documented: BTreeSet<Ipv4Addr>,
+    /// The declared `ipv4` values VERBATIM — triage's own comparison, and the only thing that says
+    /// whether triage has a question to link to.
+    pub(crate) claimed: BTreeSet<String>,
 }
 
 /// Parse `declared_attribute.ipv4` values into addresses, skipping what does not parse — a declared
@@ -582,6 +678,193 @@ mod tests {
         assert_eq!(
             documented_addresses(&values),
             BTreeSet::from([v4("192.0.2.11"), v4("192.0.2.12")])
+        );
+    }
+
+    /// 🔴 **AC3's PROOF RE-ADMITTED EVERY SEEN ADDRESS, AND THE MUTATION THAT RE-ADMITS ONLY THE
+    /// MAC-LESS ONES CAME BACK GREEN** — the acceptance layer's MX1b, measured over 677/191/99
+    /// tests, clippy and ten gates. Every sighting in every offer test carried a hardware address,
+    /// so *seen* and *seen with a MAC* were the same population and nothing could tell them apart.
+    ///
+    /// 🔑 **It is the ordinary shape on the shipped product**, which is what makes the hole matter:
+    /// the ARP/ping connector reads a MAC only when the neighbour table has one, and story 14.3a's
+    /// summary keeps the MAC-less sighting as a row of its own. *An address that answered a ping
+    /// and gave no hardware address is in use, and the plan must not hand it out.*
+    #[test]
+    fn an_address_seen_with_no_hardware_address_is_still_never_offered() {
+        let plan = plan();
+        let nobody = BTreeSet::new();
+        let seen = merge_sightings(&[sighting("192.0.2.1", 1, None, "2026-09-01T10:00:00Z")]);
+        assert!(
+            seen[&v4("192.0.2.1")].macs.is_empty(),
+            "the premise: this sighting carries NO hardware address, which is what MX1b re-admitted"
+        );
+        assert!(
+            !plan.offerable(v4("192.0.2.1"), &seen, &nobody),
+            "an address seen with no hardware address is in use and is never offered"
+        );
+        assert_eq!(
+            plan.next_offerable(office(), &seen, &nobody),
+            Some(v4("192.0.2.2")),
+            "and the offer moves past it"
+        );
+        assert_eq!(
+            kinds(&plan.audit(office(), &seen, &BTreeSet::new())),
+            vec![(v4("192.0.2.1"), Some(FindingKind::Gap), false)],
+            "it is a finding like any other — the plan says free, the network says occupied"
+        );
+    }
+
+    /// 🔴 **THE TRIAGE LINK USES TRIAGE'S OWN COMPARISON AND THE OFFER USES ITS OWN, and the two
+    /// disagree on a value an operator can type today.** `page.rs:1156` filters the queue with
+    /// `claimed.contains(&value)` over the declared `attr_value` STRINGS; the offer parses them. A
+    /// value stored as `" 192.0.2.12 "` therefore documents the address for the offer and claims
+    /// nothing for triage — measured by the review's edge layer, where the finding said *"documented,
+    /// so triage asks nothing"* over a triage that was asking.
+    ///
+    /// 🔑 The direction of each is deliberate: the OFFER keeps the protective parse, because a false
+    /// positive there costs a duplicate address; the LINK follows the screen it links to.
+    #[test]
+    fn the_triage_link_follows_triages_comparison_and_the_offer_keeps_the_parse() {
+        let plan = plan();
+        let stored = " 192.0.2.12 ".to_string();
+        let documented = documented_addresses(std::slice::from_ref(&stored));
+        let claimed: BTreeSet<String> = BTreeSet::from([stored]);
+        assert!(
+            documented.contains(&v4("192.0.2.12")),
+            "the parse sees the address through the whitespace"
+        );
+        assert!(
+            !plan.offerable(v4("192.0.2.12"), &BTreeMap::new(), &documented),
+            "so the offer never proposes it"
+        );
+        let seen = seen_at(&["192.0.2.12"]);
+        let findings = plan.audit(office(), &seen, &claimed);
+        assert_eq!(findings.len(), 1);
+        assert!(
+            !findings[0].claimed,
+            "and the finding must say triage HAS a question, because triage compares the stored \
+             string and that string is not `192.0.2.12`"
+        );
+    }
+
+    /// 🔴 **A `/31` AND A `/32` HAVE NO NETWORK OR BROADCAST ADDRESS (RFC 3021), and the offer took
+    /// both addresses of a point-to-point link out of service.** Measured by the review's edge
+    /// layer: `Subnet::is_edge` compared against both bounds, which on a `/31` is every address it
+    /// has — so the two shapes an operator declares for exactly the addresses they mean to assign
+    /// were the two shapes the plan refused to offer at all.
+    #[test]
+    fn a_point_to_point_link_offers_both_its_addresses() {
+        let link = subnet("192.0.2.4", 31);
+        let host = subnet("192.0.2.8", 32);
+        let plan = Plan {
+            subnets: vec![link, host],
+            ranges: vec![
+                (v4("192.0.2.4"), v4("192.0.2.5"), IpPolicy::Static),
+                (v4("192.0.2.8"), v4("192.0.2.8"), IpPolicy::Static),
+            ],
+            defined: BTreeSet::new(),
+        };
+        let (none, nobody) = (BTreeMap::new(), BTreeSet::new());
+        assert_eq!(
+            link.addresses().collect::<Vec<_>>(),
+            vec![v4("192.0.2.4"), v4("192.0.2.5")],
+            "the premise: a /31 holds exactly two addresses"
+        );
+        assert_eq!(
+            plan.next_offerable(link, &none, &nobody),
+            Some(v4("192.0.2.4")),
+            "RFC 3021: both addresses of a /31 are usable, the first one included"
+        );
+        assert!(
+            plan.offerable(v4("192.0.2.5"), &none, &nobody),
+            "and so is the second"
+        );
+        assert_eq!(
+            plan.next_offerable(host, &none, &nobody),
+            Some(v4("192.0.2.8")),
+            "a /32 is a single host, not a network address with nothing behind it"
+        );
+    }
+
+    /// The conflict rule on the two spaces the first test could not reach: an `infrastructure`
+    /// range, and an EDGE that a range covers.
+    ///
+    /// 🔴 **Both cases sat in UNCOVERED space in the original test, so they passed for the wrong
+    /// reason** (blind layer): uncovered space excludes a conflict on its own, whatever the policy
+    /// rule does, so the `infrastructure` exclusion was carried by nothing.
+    ///
+    /// 🔴 **AND THE COVERED EDGE IS A CONFLICT — this test asserted it was not, and the PRODUCT was
+    /// right.** The expectation was invented while writing the test and the assertion reddened on
+    /// the first run: decision 10 says *two hardware addresses on one IPv4 inside a `static` or
+    /// `reserved` range*, and it grants no exemption to an edge the operator laid a range over.
+    /// Two machines answering on a subnet's broadcast address is exactly the sort of thing an
+    /// operator wants named. 🔑 *The edge rule belongs to the OFFER — an edge is never assignable —
+    /// and reading it into the conflict rule would have been a second meaning for one arbitration.*
+    /// The expectation is corrected, never the product (story 6b.7's rule, met the other way round).
+    #[test]
+    fn two_macs_under_infrastructure_but_not_on_a_covered_edge_are_not_a_conflict() {
+        let plan = Plan {
+            subnets: vec![office()],
+            ranges: vec![
+                (v4("192.0.2.0"), v4("192.0.2.10"), IpPolicy::Infrastructure),
+                (v4("192.0.2.11"), v4("192.0.2.255"), IpPolicy::Static),
+            ],
+            defined: BTreeSet::new(),
+        };
+        let two = |addr: &str| {
+            vec![
+                sighting(addr, 1, Some(1), "2026-09-01T10:00:00Z"),
+                sighting(addr, 1, Some(2), "2026-09-02T10:00:00Z"),
+            ]
+        };
+        let mut sightings = two("192.0.2.5");
+        sightings.extend(two("192.0.2.255"));
+        sightings.extend(two("192.0.2.20"));
+        let seen = merge_sightings(&sightings);
+        let conflicts: Vec<Ipv4Addr> = plan
+            .audit(office(), &seen, &BTreeSet::new())
+            .iter()
+            .filter(|f| f.conflict)
+            .map(|f| f.seen.addr)
+            .collect();
+        assert_eq!(
+            conflicts,
+            vec![v4("192.0.2.20"), v4("192.0.2.255")],
+            "an `infrastructure` range is NOT a conflict even with two hardware addresses — that is \
+             the exclusion this test exists for, and it was carried by nothing while both cases sat \
+             in uncovered space. The broadcast edge covered by a `static` range IS one: the edge \
+             rule takes an address out of the OFFER, and decision 10 grants it no exemption from a \
+             conflict the operator would want to know about"
+        );
+        assert!(
+            !plan.offerable(v4("192.0.2.255"), &BTreeMap::new(), &BTreeSet::new()),
+            "the control that keeps the two rules apart: the same address is still never OFFERED"
+        );
+    }
+
+    /// 🔴 **DECISION 5 MERGES ACROSS L2 DOMAINS, WHICH TURNS REUSED PRIVATE SPACE INTO A CONFLICT**
+    /// — unstated and untested until the blind layer named it. Two machines answering at the same
+    /// ordinary private address in two separate broadcast domains are two hardware addresses on one
+    /// IPv4 here, and the screen calls it « Conflit d'adresse ».
+    ///
+    /// ⚠️ It is the PRICE of decision 5 and not a defect to fix in this story: the plan has no VLAN
+    /// axis (FR21's VLAN half is outside Epic 14's arbitrations), so an address is one address
+    /// whatever domain saw it. Registered, and pinned here so the day FR21 lands this test is what
+    /// says the behaviour changed.
+    #[test]
+    fn one_address_in_two_l2_domains_is_read_as_a_conflict() {
+        let plan = plan();
+        let seen = merge_sightings(&[
+            sighting("192.0.2.20", 1, Some(1), "2026-09-01T10:00:00Z"),
+            sighting("192.0.2.20", 2, Some(2), "2026-09-02T10:00:00Z"),
+        ]);
+        let findings = plan.audit(office(), &seen, &BTreeSet::new());
+        assert_eq!(
+            kinds(&findings),
+            vec![(v4("192.0.2.20"), Some(FindingKind::Gap), true)],
+            "two DIFFERENT hardware addresses in two domains read as a conflict — the merge is what \
+             makes it one address, and the plan has no VLAN to tell the two apart"
         );
     }
 }
