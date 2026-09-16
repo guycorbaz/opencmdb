@@ -621,20 +621,31 @@ pub(crate) async fn insert_address(
 
 /// Delete one defined address, by the id the plan gave it.
 ///
-/// 🔑 **It needs no lock and no computed refusal, and that is a property of the SCHEMA rather than a
-/// convenience**: `ip_address` is a leaf — nothing references it — so removing a row can orphan
-/// nothing. Every other destructive gesture of this story has a parent to protect; this one has
-/// none, and saying so is what stops a later reader adding a lock *"for symmetry"*.
+/// 🔑 **It takes no lock of its OWN and computes no refusal, and that is a property of the SCHEMA
+/// rather than a convenience**: `ip_address` is a leaf — nothing references it — so removing a row
+/// can orphan nothing. Every other destructive gesture of this story has a parent to protect; this
+/// one has none, and saying so is what stops a later reader adding a lock *"for symmetry"*.
 ///
-/// ⚠️ **It is still CAPPED.** A `DELETE` takes an exclusive lock on the row it matches and a shared
-/// one on the `ip_subnet` parent it references, so it can wait behind a concurrent write of that
-/// subnet — uncapped, for the server's 50 s default, with the handler's connection in hand.
+/// ⚠️ **The statement still takes locks, which is why it is CAPPED** — the review found the two
+/// sentences reading as a contradiction four lines apart, and the first one was the loose half. A
+/// `DELETE` takes an exclusive lock on the row it matches and a shared one on the `ip_subnet` parent
+/// it references, so it can wait behind a concurrent write of that subnet — uncapped, for the
+/// server's 50 s default, with the handler's connection in hand.
 ///
 /// # Errors
 ///
 /// [`RepositoryError::NotFound`] when no row carries that id — an id that names nothing is the
 /// operator pressing a control for a record someone else has already removed, and answering `Ok`
 /// there would tell them a deletion happened that did not. Otherwise the classified `sqlx::Error`.
+///
+/// ⚠️ **"No row carries that id" is true MODULO TRAILING SPACES, and this holds for every
+/// id-addressed statement in this module** — the five writes all match on `WHERE id = ?`, and the
+/// plan's id columns are `ascii_bin`, which is a **PAD SPACE** collation: `'abc'` and `'abc   '`
+/// compare equal (measured at the review). The row reached is still the intended one, so nothing
+/// wrong is deleted; what is weaker than it reads is the *uniqueness* of the spelling, on five
+/// routes that take the id from an operator-submitted form. Story 14.1 met the same collation on the
+/// policy token and closed it with an INTEGER length comparison; here the consequence is benign and
+/// the sentence is corrected rather than the comparison.
 pub(crate) async fn delete_address(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
@@ -689,16 +700,30 @@ pub(crate) async fn delete_subnet(
 /// afterwards is the same rule asked again, and skipping it here would let an edit write what the
 /// insert refuses — *the shape story 6.3 named: a rule held on one path and not on its twin.*
 ///
-/// 🔴 **The parent row is locked FIRST** ([`load_subnet_locked`]'s rule, story 14.2b's arbitration of
-/// 2026-09-12): the read that decides must not run before the lock, or a concurrent write of the same
-/// subnet fixes this transaction's REPEATABLE READ snapshot and the decision is taken against a world
-/// that has already moved.
+/// 🔴 **The parent row is locked BEFORE THE READ THAT DECIDES** ([`load_subnet_locked`]'s rule,
+/// story 14.2b's arbitration of 2026-09-12): that read must not run before the lock, or a concurrent
+/// write of the same subnet fixes this transaction's REPEATABLE READ snapshot and the decision is
+/// taken against a world that has already moved.
+///
+/// ⚠️ **It is NOT locked first outright, and the review caught three sites claiming it was.** The
+/// child row is locked first of all — and it has to be, because the parent's identity is only known
+/// once this row has been read: `subnet_id` lives on the child. So a strict *parent first* is
+/// unreachable here, and the weaker sentence above is the one that is true.
+///
+/// ⚠️ **The residual is declared rather than removed**: [`insert_range`] takes the parent and then
+/// locks sibling ranges, while this path takes a child row and then waits for the parent — a
+/// lock-order inversion between two shipped gestures on one subnet. It degrades to
+/// [`RepositoryError::Contention`] rather than to corruption (`repo.rs` maps `1213`/`1205`), so the
+/// operator meets *try again* and never a wrong answer; closing it properly means re-deciding where
+/// each gesture takes its first lock, which is more than a correction may take on itself.
 ///
 /// # Errors
 ///
 /// [`RepositoryError::NotFound`] when the id names no address; [`IpamError::AddressOutsideSubnet`]
-/// through [`RepositoryError::Backend`] when the new address leaves its subnet; a `Constraint`
-/// when the subnet already defines that address; otherwise the classified `sqlx::Error`.
+/// through [`RepositoryError::Ipam`] when the new address leaves its subnet — ⚠️ the review found
+/// this line naming `Backend`, which `ipam` never produces and which would have sent the route to a
+/// backend sentence where this module's whole contract is *refused BY NAME*; a `Constraint` when the
+/// subnet already defines that address; otherwise the classified `sqlx::Error`.
 pub(crate) async fn update_address(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
@@ -760,9 +785,12 @@ fn refused(attempt: RangeAttempt) -> RepositoryError {
 /// `ip_address` carries a foreign key to `ip_subnet` and NONE to `ip_range` (`0007:153`): an address
 /// falls inside a range by ARITHMETIC, so MariaDB raises nothing here — unlike [`delete_subnet`],
 /// whose refusal is a key. Story 14.4's validation measured the gap between counting and deleting:
-/// with the parent row's lock a concurrent `insert_address` waits **1404.8 ms** and the two acts
-/// serialise; without it the inserter returns in **4.5 ms** and **an address lands inside the range
-/// the same transaction is deleting**.
+/// with a lock held, a concurrent `insert_address` waits **1404.8 ms** and the two acts serialise;
+/// with NO lock at all the inserter returns in single-digit milliseconds and **an address lands
+/// inside the range the same transaction is deleting**. ⚠️ **That pair was first written here as
+/// *"without the parent row's lock"*, and the mutation pass below refuted the attribution**: removing
+/// that one lock changes nothing, because a second carrier holds the property up. The figures are
+/// real; what they separate is *locked* from *unlocked*, never one lock from the other.
 ///
 /// ⚠️ **THE SERIALISATION HAS TWO INDEPENDENT CARRIERS, AND EITHER ALONE SUFFICES — measured, after
 /// this sentence first claimed only one.** [`insert_address`] takes no lock of its own (*"NO LOCK
@@ -801,8 +829,10 @@ pub(crate) async fn delete_range(
 ///
 /// 🔑 **The seam sits exactly in the window §1(c) measured**: after the addresses have been counted
 /// and before the range is removed. That is where a concurrent `insert_address` slips a row into the
-/// space being deleted — 4.5 ms and the address lands, against 1404.8 ms and the two acts serialise
-/// once the parent row is locked. A seam anywhere else would open a window nothing writes through.
+/// space being deleted — **2.86 ms** with both locks gone and the address lands, against over a
+/// second while either one stands (M-T3c against M-T3/M-T3b). A seam anywhere else would open a
+/// window nothing writes through. ⚠️ This sentence read *"once the parent row is locked"* until the
+/// review; that attributes to one lock what two carry.
 ///
 /// ⚠️ **No replay, unlike the insert's.** A deadlock victim here answers [`RepositoryError::Contention`]
 /// through [`refused`]: the insert replays because a deadlock between two definitions in two empty
@@ -831,9 +861,10 @@ async fn delete_range_pausing(
         .ok_or(RepositoryError::NotFound)?;
         let first = from_canonical(&first).map_err(ipam)?;
         let last = from_canonical(&last).map_err(ipam)?;
-        // The parent row FIRST — `range_attempt`'s rule, and for its reason: a read of this subnet
-        // taken before the lock fixes the transaction's snapshot and the decision is then taken
-        // against a world that has already moved.
+        // The parent row BEFORE THE DECIDING READ — `range_attempt`'s rule, and for its reason: a
+        // read of this subnet taken before the lock fixes the transaction's snapshot and the
+        // decision is then taken against a world that has already moved. ⚠️ Not *first outright*:
+        // the range row above had to be read to learn which subnet this is.
         load_subnet_locked(&mut tx, &subnet_id)
             .await
             .map_err(refused)?;
@@ -844,8 +875,21 @@ async fn delete_range_pausing(
         .fetch_all(&mut *tx)
         .await
         .map_err(classify)?;
+        // ⚠️ The scan is over the whole SUBNET, so a row this build cannot read ANYWHERE in it stops
+        // a range delete. Failing closed is right; the refusal must not then name a rule about an
+        // address the operator never touched, so the unreadable row is named in the log and the
+        // gesture refuses as a backend fault rather than as `MalformedAddress`.
         for (addr,) in held {
-            let addr = from_canonical(&addr).map_err(ipam)?;
+            let Ok(addr) = from_canonical(&addr) else {
+                tracing::warn!(
+                    stored_addr = %addr,
+                    range_id = %id,
+                    "an ip_address row this build cannot read blocks a range delete in its subnet"
+                );
+                return Err(RepositoryError::Backend(
+                    "an address row of this subnet cannot be read back".to_string(),
+                ));
+            };
             if first <= addr && addr <= last {
                 return Err(ipam(IpamError::RangeStillHoldsAddresses));
             }
@@ -881,7 +925,24 @@ async fn delete_range_pausing(
 ///
 /// ⚠️ **The refusals are the insert's, re-asked**: an edit can move a range out of its subnet or
 /// invert its bounds just as a creation can, and a rule held on one path and not on its twin is the
-/// shape story 6.3 named. The parent row is locked first, for [`delete_range`]'s reason.
+/// shape story 6.3 named. The parent row is locked before the deciding read, for [`delete_range`]'s
+/// reason.
+///
+/// 🔴 **AND THE DELETE'S REFUSAL IS RE-ASKED TOO — the review found that it was not, and all three
+/// layers reached it** (Guy's arbitration, 2026-09-16). Asking only *"which of the INSERT's refusals
+/// apply to an edit?"* left the door shut and the window open: [`delete_range`] refuses while the
+/// range holds a defined address, and an edit that moved the range off that address answered `Ok`,
+/// leaving it under no range at all — after which the delete the product had just refused succeeded.
+/// MEASURED by probe: control refuses, `update_range .10-.20 → .30-.40` returns `Ok`, the address is
+/// orphaned. *The product refused the honest gesture and permitted the discreet one.*
+///
+/// 🔑 **The rule is the smallest one that closes it**: an address that was inside the OLD bounds must
+/// still be inside the NEW ones. So **widening is always legal** (nothing is abandoned), a policy or
+/// label correction is always legal (the ground does not move), and only a move or a shrink that
+/// would leave an address behind is refused — with [`delete_range`]'s own sentence, because it is
+/// the same rule. ⚠️ Refusing every edit of an occupied range was REFUSED as the coarser reading: it
+/// would make correcting a label impossible on any range holding an address, a cost the arbitration
+/// did not ask for.
 ///
 /// # Errors
 ///
@@ -901,14 +962,19 @@ pub(crate) async fn update_range(
         .await
         .map_err(classify)?;
     let written = async {
-        let (subnet_id,): (String,) = sqlx::query_as(capped!(
-            "SELECT subnet_id FROM ip_range WHERE id = ? FOR UPDATE"
+        // 🔑 The row's CURRENT bounds travel with its subnet id, because the orphan rule below needs
+        // to know what this range holds TODAY — the new bounds alone cannot say what is being
+        // abandoned.
+        let (subnet_id, held_first, held_last): (String, String, String) = sqlx::query_as(capped!(
+            "SELECT subnet_id, first_addr, last_addr FROM ip_range WHERE id = ? FOR UPDATE"
         ))
         .bind(id)
         .fetch_optional(&mut *tx)
         .await
         .map_err(classify)?
         .ok_or(RepositoryError::NotFound)?;
+        let held_first = from_canonical(&held_first).map_err(ipam)?;
+        let held_last = from_canonical(&held_last).map_err(ipam)?;
         let subnet = load_subnet_locked(&mut tx, &subnet_id)
             .await
             .map_err(refused)?;
@@ -935,6 +1001,34 @@ pub(crate) async fn update_range(
                 return Err(ipam(IpamError::RangeOverlapsAnother));
             }
         }
+        // 🔴 **THE DELETE'S REFUSAL, RE-ASKED** (Guy, 2026-09-16). An address inside the OLD bounds
+        // that the NEW ones do not hold is abandoned, which is exactly what `delete_range` refuses —
+        // so it earns the same sentence. ⚠️ Decided AFTER the overlap scan on purpose: an edit that
+        // collides with a neighbour has a more basic fault, and the operator should be told that one.
+        let held: Vec<(String,)> = sqlx::query_as(capped!(
+            "SELECT addr FROM ip_address WHERE subnet_id = ? FOR UPDATE"
+        ))
+        .bind(&subnet_id)
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(classify)?;
+        for (addr,) in held {
+            let Ok(addr) = from_canonical(&addr) else {
+                tracing::warn!(
+                    stored_addr = %addr,
+                    range_id = %id,
+                    "an ip_address row this build cannot read blocks a range edit in its subnet"
+                );
+                return Err(RepositoryError::Backend(
+                    "an address row of this subnet cannot be read back".to_string(),
+                ));
+            };
+            let was_held = held_first <= addr && addr <= held_last;
+            let still_held = first <= addr && addr <= last;
+            if was_held && !still_held {
+                return Err(ipam(IpamError::RangeStillHoldsAddresses));
+            }
+        }
         sqlx::query(capped!(
             "UPDATE ip_range SET first_addr = ?, last_addr = ?, policy = ?, label = ? WHERE id = ?"
         ))
@@ -959,6 +1053,12 @@ pub(crate) async fn update_range(
 /// project already carries a registered backlog of exactly those); this is its adapter-side twin,
 /// and the rollback is EXPLICIT for the reason story 14.2b measured: a dropped `Transaction` only
 /// QUEUES its rollback, so on a HELD connection the loser's locks outlive the refusal.
+///
+/// ⚠️ **The commit-failure path issues no rollback, and the review asked why.** A `COMMIT` that fails
+/// has already ended the transaction at the server — there is nothing left to roll back, and `tx` is
+/// consumed by value here, so no second gesture is available or owed. What the caller loses is the
+/// distinction between *refused and clean* and *the commit itself failed*: both arrive as an `Err`,
+/// the second classified from the driver. Said rather than left to be inferred from an absence.
 async fn settle_plan_write(
     tx: sqlx::Transaction<'_, MySql>,
     written: Result<(), RepositoryError>,
@@ -1171,9 +1271,18 @@ where
 /// this project keeps deliberately only when something pins it: what pins this one is that the
 /// display path must not carry ids into pages that offer no gesture.
 ///
+/// ⚠️ **NOT `capped!`, and that is a decision rather than an omission** — the review found it
+/// unwritten. Every capped statement in this module either writes or takes a lock, and can therefore
+/// wait behind one; this is a plain consistent read under REPEATABLE READ, which takes no row lock
+/// and waits for nothing. It is also why the guard that counts *"the plan's lockable statements"*
+/// does not see these two: they are not lockable. The day either grows a `FOR UPDATE`, it earns the
+/// cap and the count in the same act.
+///
 /// # Errors
 ///
-/// A row this build cannot read back — a non-canonical address or an unknown policy token.
+/// A row this build cannot read back — a non-canonical address or an unknown policy token — or the
+/// classified `sqlx::Error` when the query itself fails, which is the likelier of the two and was
+/// missing from this list.
 pub(crate) async fn correctable_ranges_in<'e, E>(
     executor: E,
     subnet_id: &str,
@@ -1206,11 +1315,19 @@ where
 /// it was removed because the audit reads the sighting summary and the plan's whole address set,
 /// never one subnet's. This one feeds the RAIL: the list of records the operator can correct on the
 /// screen they are looking at. The note left at the removal site warns against re-adding the reader
-/// for the audit's sake, and that warning stands; it is not what this is for.
+/// for the audit's sake, and that warning stands.
+///
+/// ⚠️ **It is a CONVENTION, not a barrier, and the review was right to press the difference.** This
+/// function is `pub(crate)`, its name does not say *rail only*, and nothing stops the audit path
+/// calling it — the discipline is two comments, which is a tripwire against the ordinary gesture and
+/// not a constraint. Story 5.12's precedent: say which of the two it is.
+///
+/// ⚠️ **Not `capped!`**, for [`correctable_ranges_in`]'s stated reason.
 ///
 /// # Errors
 ///
-/// A row whose address is not in this store's canonical spelling.
+/// A row whose address is not in this store's canonical spelling, or the classified `sqlx::Error`
+/// when the query itself fails.
 pub(crate) async fn correctable_addresses_in<'e, E>(
     executor: E,
     subnet_id: &str,
@@ -2099,11 +2216,17 @@ pub(crate) mod tests {
     /// `id <> ?`, because an insert has no id in the table yet, so **an edit that reuses it refuses
     /// every legal widening**.
     ///
-    /// 🔑 **The third assertion is the one that carries the exclusion clause, and it looks trivial
-    /// on purpose**: re-applying a range's OWN CURRENT BOUNDS must be accepted. That is the
-    /// self-overlap case in its purest form — under a scan without `id <> ?` it is refused, while
-    /// the widening above could still be argued about. *A guard that only exercises the interesting
-    /// case leaves the defect's simplest form untested.*
+    /// 🔴 **AND THE SENTENCE THAT STOOD HERE WAS WRONG ABOUT ITS OWN CARRIER, which the blind review
+    /// layer found from the diff alone.** It called the third assertion — re-applying a range's OWN
+    /// CURRENT BOUNDS — *"the one that carries the exclusion clause"*, on the grounds that the
+    /// widening above *"could still be argued about"*. Neither half holds: under a scan without
+    /// `id <> ?` the range overlaps ITSELF, so the FIRST `expect` panics and the third assertion is
+    /// never reached; and the third call repeats the first byte for byte, against a scan that
+    /// excludes the edited row, so its decision inputs are identical and it cannot fail alone.
+    ///
+    /// 🔑 **What the third call really buys is the IDEMPOTENCE of a correction** — applying the same
+    /// values twice is accepted — which is worth keeping and is not what the clause needs. The
+    /// clause's carrier is the FIRST call, and the doc now says so.
     ///
     /// ⚠️ Its own `/24` and its own ids, per this module's measured rule: a row left by a previous
     /// run is refused by `ip_subnet_cidr` and would read as *the guard fired*.
@@ -2295,9 +2418,11 @@ pub(crate) mod tests {
     /// 🔴 **THE COMPUTED REFUSAL RACES, AND THIS IS THE MEASUREMENT** (§1(c)). Between counting the
     /// addresses a range holds and removing the range there is a window, and an `insert_address`
     /// running in it lands a row inside the space being deleted. The validation measured both sides
-    /// with the inserter started 0.6 s into a 2 s window: **without** the parent row's lock the
-    /// insert returned in **4.5 ms** and the address landed; **with** it, the insert waited
-    /// **1404.8 ms** and the two acts serialised.
+    /// with the inserter started 0.6 s into a 2 s window: with no lock the insert returned in
+    /// single-digit milliseconds and the address landed; with one, it waited **1404.8 ms** and the
+    /// two acts serialised. ⚠️ Those figures were first written here as *"without the parent row's
+    /// lock"*; the mutation pass refuted that attribution, and the sentence now separates *locked*
+    /// from *unlocked* rather than one lock from the other.
     ///
     /// 🔴 **WHAT THIS TEST CANNOT TELL YOU, AND THE MUTATIONS THAT ESTABLISHED IT.** Its wait is
     /// carried TWICE over: by the parent row's lock (which `insert_address`'s foreign key on
@@ -2311,8 +2436,19 @@ pub(crate) mod tests {
     /// ⚠️ **What is asserted is the SERIALISATION, not a wall-clock figure.** A threshold well under
     /// the pause is what makes this a guard rather than a benchmark: the pause is 400 ms and the
     /// floor is 150 ms, so the test says *the inserter waited for the deleter* without failing on a
-    /// slow machine. It is the direction that is load-bearing, and the mutation that removes the
-    /// lock takes the wait to single-digit milliseconds.
+    /// slow machine. It is the direction that is load-bearing, and the mutation that removes BOTH
+    /// carriers takes the wait to single-digit milliseconds — removing either one alone does not.
+    ///
+    /// 🔴 **AND THE THRESHOLD ALONE CANNOT TELL "WAITED" FROM "WAS SLOW"**, which the blind review
+    /// layer caught: any change making `insert_address` take 150 ms for an unrelated reason would
+    /// pass it with the serialisation broken. So the ORDER is asserted directly as well — the
+    /// deleter's commit instant against the inserter's — and the threshold is kept beside it because
+    /// the two fail differently: the order says *the wrong thing happened*, the threshold says
+    /// *nothing waited at all*.
+    ///
+    /// ⚠️ **The name says more than the body measures, and is corrected rather than defended**: this
+    /// test does not establish that an address CANNOT land inside a range being deleted — the insert
+    /// is expected to SUCCEED. What it establishes is that it lands AFTER, never inside the window.
     #[tokio::test]
     async fn an_address_cannot_land_inside_a_range_while_it_is_being_deleted() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
@@ -2342,11 +2478,15 @@ pub(crate) mod tests {
         let mut inserter = pool.acquire().await.expect("a connection");
         let started = std::time::Instant::now();
         let (deleted, inserted) = tokio::join!(
-            delete_range_pausing(
-                &mut deleter,
-                "t-del-r",
-                tokio::time::sleep(std::time::Duration::from_millis(400)),
-            ),
+            async {
+                let outcome = delete_range_pausing(
+                    &mut deleter,
+                    "t-del-r",
+                    tokio::time::sleep(std::time::Duration::from_millis(400)),
+                )
+                .await;
+                (outcome, std::time::Instant::now())
+            },
             async {
                 // Into the window, not before it: the deleter must already have counted.
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -2359,21 +2499,31 @@ pub(crate) mod tests {
                     "the interloper",
                 )
                 .await;
-                (outcome, at.elapsed())
+                (outcome, at.elapsed(), std::time::Instant::now())
             }
         );
-        let (inserted, insert_took) = inserted;
+        let (deleted, delete_finished) = deleted;
+        let (inserted, insert_took, insert_finished) = inserted;
         drop(deleter);
         drop(inserter);
 
         deleted.expect("the range held no address, so the delete is legal");
         inserted.expect("the address is legal too — what is at stake is WHEN it lands");
+        // 🔴 **THE ORDER FIRST, because it is what the property actually is.** The threshold below
+        // cannot tell *waited for the deleter* from *was slow for its own reasons* — the review's
+        // blind layer caught the oracle admitting any 150 ms insert — so the instants are compared
+        // directly: the interloper may only complete once the deletion has.
+        assert!(
+            insert_finished >= delete_finished,
+            "the address completed BEFORE the deletion did, so it landed inside the window the \
+             deletion had already counted as empty — the two acts did not serialise"
+        );
         assert!(
             insert_took >= std::time::Duration::from_millis(150),
-            "the two acts did not serialise: the INSERTER returned in {insert_took:?} (the pair \
-             took {:?}), so it did not wait for the deleter's lock. Without that wait an address \
-             lands INSIDE a range whose deletion has already counted zero — measured at 4.5 ms \
-             without the parent row's lock against 1404.8 ms with it.",
+            "nothing made the inserter wait at all: it returned in {insert_took:?} (the pair took \
+             {:?}). This fails where the order assertion cannot — if both acts are instantaneous \
+             the order can hold by accident, and a wait well inside the 400 ms pause is what says a \
+             lock was met. With BOTH carriers removed the inserter returns in 2.86 ms.",
             started.elapsed()
         );
 
@@ -2467,6 +2617,277 @@ pub(crate) mod tests {
 
         drop(conn);
         forget_subnet(&pool, "t-del2").await;
+    }
+
+    /// 🔴 **AN EDIT MAY NOT ABANDON WHAT A DELETE MAY NOT ABANDON** (Guy's arbitration, 2026-09-16,
+    /// on a defect all three review layers reached and the Edge layer measured with a probe).
+    /// `delete_range` refused while the range held a defined address; `update_range` moved the range
+    /// off it and answered `Ok`, leaving the address under no range at all — after which the delete
+    /// the product had just refused succeeded. *The door was shut and the window beside it was open.*
+    ///
+    /// 🔑 **The two controls are the whole point of the chosen rule.** Widening abandons nothing and
+    /// stays legal; correcting a policy or a label does not move the ground and stays legal. Refusing
+    /// every edit of an occupied range would have been the coarser reading — and would have made
+    /// correcting a label impossible on any range holding an address.
+    #[tokio::test]
+    async fn a_range_edit_that_would_abandon_an_address_is_refused_and_the_address_stands_still() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = ipam_fixture().await else {
+            return;
+        };
+        forget_subnet(&pool, "t-edit3").await;
+        let subnet = Subnet::new(v4("100.66.14.0"), 24).expect("a subnet of its own");
+        let mut conn = pool.acquire().await.expect("a connection");
+        insert_subnet(&mut *conn, "t-edit3", subnet, "the abandoning edit")
+            .await
+            .expect("the parent row");
+        insert_range(
+            &mut conn,
+            "t-edit3-a",
+            "t-edit3",
+            v4("100.66.14.10"),
+            v4("100.66.14.20"),
+            IpPolicy::Static,
+            "servers",
+        )
+        .await
+        .expect("the range");
+        insert_address(
+            &mut conn,
+            "t-edit3-x",
+            "t-edit3",
+            v4("100.66.14.15"),
+            "nas-01",
+        )
+        .await
+        .expect("the address it holds");
+
+        for (first, last, what) in [
+            ("100.66.14.30", "100.66.14.40", "a move off the address"),
+            ("100.66.14.10", "100.66.14.12", "a shrink past the address"),
+        ] {
+            let refusal = update_range(
+                &mut conn,
+                "t-edit3-a",
+                v4(first),
+                v4(last),
+                IpPolicy::Static,
+                "servers",
+            )
+            .await
+            .expect_err(what);
+            assert!(
+                matches!(
+                    &refusal,
+                    RepositoryError::Ipam(IpamError::RangeStillHoldsAddresses)
+                ),
+                "{what} abandons `.15`, which is what the DELETE refuses by name — so it earns the \
+                 same sentence. Got: {refusal:?}"
+            );
+        }
+
+        // CONTROL ONE: widening abandons nothing.
+        update_range(
+            &mut conn,
+            "t-edit3-a",
+            v4("100.66.14.10"),
+            v4("100.66.14.25"),
+            IpPolicy::Static,
+            "servers",
+        )
+        .await
+        .expect("a widening keeps every address it held, so it is legal");
+
+        // CONTROL TWO: the ground does not move, so a policy and a label correction stay legal —
+        // this is what the coarser reading would have made impossible.
+        update_range(
+            &mut conn,
+            "t-edit3-a",
+            v4("100.66.14.10"),
+            v4("100.66.14.25"),
+            IpPolicy::Reserved,
+            "servers and gear",
+        )
+        .await
+        .expect("correcting a policy or a label on an occupied range is not an abandonment");
+
+        // And the address the refusals protected is still exactly where it was.
+        let (addresses,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM ip_address WHERE subnet_id = 't-edit3' AND addr = '100.066.014.015'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("the protected address");
+        assert_eq!(
+            addresses, 1,
+            "a refused edit may not touch the address it refused to abandon"
+        );
+        let left = ranges_in(&pool, "t-edit3").await.expect("the plan");
+        assert_eq!(
+            left,
+            vec![(
+                v4("100.66.14.10"),
+                v4("100.66.14.25"),
+                IpPolicy::Reserved,
+                "servers and gear".to_string()
+            )],
+            "only the two legal corrections landed"
+        );
+
+        drop(conn);
+        forget_subnet(&pool, "t-edit3").await;
+    }
+
+    /// 🔴 **`update_address`'s CONTAINMENT RE-VALIDATION, which was carried by no test at all.**
+    /// The review's Edge layer replaced `subnet.contains(addr)` with a predicate that is always true
+    /// and measured **987 tests, clippy and ten gates GREEN** while an edit moved an address clean
+    /// out of its subnet. The function's own doc calls this its reason for existing — *a rule held on
+    /// one path and not on its twin* — and nothing reddened when the rule went.
+    #[tokio::test]
+    async fn an_address_edit_is_re_validated_against_its_subnet() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = ipam_fixture().await else {
+            return;
+        };
+        forget_subnet(&pool, "t-edit4").await;
+        let subnet = Subnet::new(v4("100.66.15.0"), 24).expect("a subnet of its own");
+        let mut conn = pool.acquire().await.expect("a connection");
+        insert_subnet(&mut *conn, "t-edit4", subnet, "the address edit")
+            .await
+            .expect("the parent row");
+        insert_address(
+            &mut conn,
+            "t-edit4-x",
+            "t-edit4",
+            v4("100.66.15.9"),
+            "printer",
+        )
+        .await
+        .expect("the address");
+
+        let refusal = update_address(&mut conn, "t-edit4-x", v4("100.66.99.9"), "printer")
+            .await
+            .expect_err("an edit may not move an address out of its subnet");
+        assert!(
+            matches!(
+                &refusal,
+                RepositoryError::Ipam(IpamError::AddressOutsideSubnet)
+            ),
+            "the insert refuses this at birth, so the edit must refuse it by the same name. \
+             Got: {refusal:?}"
+        );
+
+        // CONTROL: a move WITHIN the subnet is the ordinary correction, and it lands.
+        update_address(&mut conn, "t-edit4-x", v4("100.66.15.10"), "printer-hp")
+            .await
+            .expect("moving an address inside its own subnet is legal");
+        let (moved,): (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM ip_address WHERE id = 't-edit4-x' AND addr = '100.066.015.010' \
+             AND label = 'printer-hp'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("the corrected row");
+        assert_eq!(moved, 1, "the edit carries the address AND the label");
+
+        assert!(
+            matches!(
+                update_address(&mut conn, "t-edit4-nope", v4("100.66.15.11"), "ghost").await,
+                Err(RepositoryError::NotFound)
+            ),
+            "an id the plan does not carry is NotFound — never a silent success over zero rows"
+        );
+
+        drop(conn);
+        forget_subnet(&pool, "t-edit4").await;
+    }
+
+    /// 🔴 **THE TWO DELETES THAT NO TEST TOUCHED.** The review measured both `NotFound` guards
+    /// carried by NOTHING — neutering `rows_affected() == 0` left the whole suite green — and
+    /// `delete_subnet`'s headline claim, that the DATABASE refuses a populated subnet by foreign key,
+    /// was asserted by no test at all. ⚠️ That claim rests on `0007`'s two foreign keys carrying no
+    /// `ON DELETE` clause, so MariaDB's default (`RESTRICT`) applies: if either were `CASCADE`, this
+    /// function would silently destroy the operator's whole plan. The layers refuted the cascade by
+    /// reading the migration; this measures the refusal itself.
+    #[tokio::test]
+    async fn the_deletes_refuse_a_populated_subnet_and_answer_a_stale_id() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = ipam_fixture().await else {
+            return;
+        };
+        forget_subnet(&pool, "t-del3").await;
+        let subnet = Subnet::new(v4("100.66.17.0"), 24).expect("a subnet of its own");
+        let mut conn = pool.acquire().await.expect("a connection");
+        insert_subnet(&mut *conn, "t-del3", subnet, "the populated subnet")
+            .await
+            .expect("the parent row");
+        insert_range(
+            &mut conn,
+            "t-del3-r",
+            "t-del3",
+            v4("100.66.17.10"),
+            v4("100.66.17.20"),
+            IpPolicy::Static,
+            "a range",
+        )
+        .await
+        .expect("the range");
+        insert_address(
+            &mut conn,
+            "t-del3-x",
+            "t-del3",
+            v4("100.66.17.90"),
+            "an address",
+        )
+        .await
+        .expect("the address");
+
+        let refusal = delete_subnet(&mut conn, "t-del3")
+            .await
+            .expect_err("a subnet still holding children may not be removed");
+        assert!(
+            matches!(&refusal, RepositoryError::Constraint(name) if *name == "foreign_key"),
+            "the DATABASE refuses this one — `ERROR 1451` on a foreign key, not arithmetic — and the \
+             route needs that name to say *it still holds ranges* rather than *no such subnet*. \
+             Got: {refusal:?}"
+        );
+
+        for id in ["t-del3-nope", ""] {
+            assert!(
+                matches!(
+                    delete_address(&mut conn, id).await,
+                    Err(RepositoryError::NotFound)
+                ),
+                "an address id naming nothing is NotFound, never a silent Ok: {id:?}"
+            );
+            assert!(
+                matches!(
+                    delete_subnet(&mut conn, id).await,
+                    Err(RepositoryError::NotFound)
+                ),
+                "and so is a subnet id naming nothing: {id:?}"
+            );
+        }
+
+        // Emptied in the order the foreign keys allow, and only THEN does the subnet go.
+        delete_address(&mut conn, "t-del3-x")
+            .await
+            .expect("a defined address is a leaf — nothing refuses its removal");
+        delete_range(&mut conn, "t-del3-r")
+            .await
+            .expect("the range holds no address now");
+        delete_subnet(&mut conn, "t-del3").await.expect(
+            "an empty subnet is removed — the refusal was about its children, not about it",
+        );
+
+        let (left,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM ip_subnet WHERE id = 't-del3'")
+            .fetch_one(&pool)
+            .await
+            .expect("the subnet");
+        assert_eq!(left, 0, "and it is really gone");
+
+        drop(conn);
+        forget_subnet(&pool, "t-del3").await;
     }
 
     /// 🔴 **FOUR ranges at once in four different subnets all land** — the second review's edge layer
@@ -2629,6 +3050,16 @@ pub(crate) mod tests {
     ///
     /// 🔑 **The count is the load-bearing half.** It is what says the list moved; move it only after
     /// READING the new statement and deciding it is capped, never to make a suite pass.
+    ///
+    /// ⚠️ **AND IT IS STILL AN ENUMERATION, WHICH THE FIRST VERSION OF THIS PARAGRAPH DID NOT SAY.**
+    /// Four needles are four spellings, not a property: this guard sees a statement REMOVED or
+    /// renamed out of their reach — the count falls and it reds — and is blind to one ADDED in a
+    /// spelling they cannot match. `"REPLACE INTO ip_`, `INSERT … ON DUPLICATE KEY UPDATE` (which
+    /// story 6.3's review had to add to the mirror gate for exactly this reason), `LOCK IN SHARE
+    /// MODE`, a lowercase verb, a literal split so the table name leaves the first line, or a table
+    /// reached through an alias all pass unseen, and `checked` stays where it was.
+    /// *An enumeration cannot claim the completeness of a property* — story 5.12's sentence, and the
+    /// honest reading of this guard is a TRIPWIRE against the ordinary gesture, never a barrier.
     #[test]
     fn every_plan_statement_that_can_wait_on_a_lock_is_capped() {
         let source = include_str!("ipam_repo.rs");
@@ -2658,13 +3089,14 @@ pub(crate) mod tests {
             }
         }
         assert_eq!(
-            checked, 15,
+            checked, 16,
             "the plan's lockable statements changed — a new one must be capped, and this count \
              updated only after READING what it counts. Today: three inserts (subnet, range, \
              address), three deletes (address, subnet, range), two updates (address, range), and \
-             seven locking reads — the insert's sibling scan, `load_subnet_locked`, the address \
+             EIGHT locking reads — the insert's sibling scan, `load_subnet_locked`, the address \
              edit's own, `delete_range`'s two (the range row, then the subnet's addresses) and \
-             `update_range`'s two (the range row, then the sibling scan carrying `id <> ?`)"
+             `update_range`'s THREE (the range row carrying its current bounds, the sibling scan \
+             with `id <> ?`, and the address scan the code review's abandonment rule added)"
         );
     }
 
@@ -2695,23 +3127,49 @@ pub(crate) mod tests {
     /// This test asserts the decision's OBSERVABLE half — that the plan's tables are named by no
     /// gate — so the day someone adds one, this reads as the contradiction it is rather than as a
     /// forgotten sentence.
+    ///
+    /// 🔴 **AND ITS FIRST VERSION READ TWO SOURCES OF SIX, WHICH ALL THREE REVIEW LAYERS REACHED.**
+    /// It named `observed_immutable.rs` and `entity_id_immutable.rs` through `include_str!` while its
+    /// own doc reasons about a THIRD gate, `authorship` — the one it calls most likely to acquire a
+    /// sanctioned site for a new writer — which lives in `xtask/src/main.rs` and was never read. The
+    /// Edge layer measured the hole rather than arguing it: a `PLAN_TABLES` const naming `ip_subnet`
+    /// planted in `copy_vocabulary.rs` left this test **green**. *An enumeration cannot claim the
+    /// completeness of a property*, in a guard written to record a decision about the whole gate set.
+    ///
+    /// 🔑 **So it reads the DIRECTORY, not a list.** `include_str!` cannot glob, so the walk happens
+    /// at test time over every `.rs` under `xtask/src` — which covers the gate nobody has written
+    /// yet, the case a list can never cover. ⚠️ The floor below is the premise this project insists
+    /// on: a walk that found nothing would make every assertion vacuously true, which is the shape
+    /// that hides here more often than a wrong assertion does.
     #[test]
     fn no_gate_claims_the_plans_tables_and_the_reason_is_recorded() {
-        let gates = [
-            include_str!("../../../xtask/src/observed_immutable.rs"),
-            include_str!("../../../xtask/src/entity_id_immutable.rs"),
-        ];
-        for gate in gates {
-            let code = crate::source_scan::code_only(gate);
+        let gate_sources = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../xtask/src");
+        let mut walked = 0;
+        for entry in std::fs::read_dir(&gate_sources).expect("the xtask sources are readable") {
+            let path = entry.expect("a directory entry").path();
+            if path.extension().is_none_or(|ext| ext != "rs") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).expect("a gate source");
+            let code = crate::source_scan::code_only(&source);
             for table in ["ip_subnet", "ip_range", "ip_address"] {
                 assert!(
                     !code.contains(table),
-                    "a gate now names `{table}`, which contradicts story 14.4's decision 4 — the \
-                     plan is the operator's own register and deleting there IS the gesture. If that \
-                     decision changed, this test is the place that says so"
+                    "`{}` now names `{table}`, which contradicts story 14.4's decision 4 — the plan \
+                     is the operator's own register and deleting there IS the gesture. If that \
+                     decision changed, this test is the place that says so",
+                    path.display()
                 );
             }
+            walked += 1;
         }
+        assert!(
+            walked >= 6,
+            "the premise: {} `.rs` files were walked under {}, and a walk that reads nothing asserts \
+             nothing — the six that exist today are the floor, not the target",
+            walked,
+            gate_sources.display()
+        );
     }
 
     /// Both reads a range write performs take their lock — named individually, because behaviour

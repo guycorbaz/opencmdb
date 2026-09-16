@@ -5757,3 +5757,34 @@ One row, and v0.3.0 is what made it live.
   "registered" is not a registration* (`:4530`). Registered now, at second hand. **Owner: Epic 14's
   retrospective**, which may decide whether `/ipam` owes that control at all now that 14.4 puts
   controls on the screen.
+
+## Deferred from: code review of 14-4-maintaining-the-plan (2026-09-16)
+
+Three isolated layers over the adapter slice; none failed, and three findings were reached by all
+three independently. These are the ones deferred rather than patched — each with the reason, because
+*a row that names its precondition is actionable and one that says "later" is not*.
+
+- ⚠️ **The two rail readers are UNBOUNDED in the one branch written for hugeness.**
+  `correctable_ranges_in` / `correctable_addresses_in` (`ipam_repo.rs:384`, `:421`) carry no `LIMIT`,
+  and `ipam_page.rs:848-857` calls them in exactly the branch where the grid is deliberately NOT built
+  because the subnet is too large to draw. **Deferred rather than fixed**: the volume is bounded by
+  what the operator DECLARED rather than by subnet size, so this is not story 14.2b's 2.08 GB defect —
+  and a `LIMIT` would silently truncate the operator's own list of records, which is worse than a long
+  list. What is owed is a decision about what a rail does with a thousand declared ranges, not a
+  number chosen here. **Owner: the story that gives the rail a filter or a pager.**
+- ⚠️ **Both new readers return POSITIONAL tuples whose first and last fields are both `String`.**
+  `(String, Ipv4Addr, Ipv4Addr, IpPolicy, String)` and `(String, Ipv4Addr, String)` — `id` and `label`
+  at opposite ends, same type. A call site that destructures them the wrong way round **compiles
+  cleanly and renders the label as the id a DELETE control names** (`ipam_repo.rs:389`, `:426`).
+  **Deferred rather than fixed**: the honest closure is a two-field struct or a newtype on the id —
+  this project's own *close it in the TYPE* precedent — and it ripples into `ipam_page.rs`'s
+  `RailLists::new`. ⚠️ It is one gesture away from a destructive control, which is what makes it worth
+  a row rather than a shrug. **Owner: 14.4b**, which touches the same rail.
+- ⚠️ **`delete_range`'s deciding read X-locks every address row of the SUBNET, not of the range.**
+  `SELECT addr FROM ip_address WHERE subnet_id = ? FOR UPDATE` with no bound (`ipam_repo.rs:227-239`),
+  so removing one range blocks address writes in **unrelated ranges of the same subnet** for the
+  transaction's life. **Deferred rather than narrowed**, and the reason is measured: that scan is one
+  of the **two independent carriers** of the serialisation this story proved — dropping it alone reds
+  nothing only because the parent-row lock still holds — so narrowing it to the range's own interval
+  cannot be done without re-running M-T3/M-T3b/M-T3c and re-deciding what carries what.
+  **Owner: the story that revisits the plan's locking**, with the three mutations as its entry price.

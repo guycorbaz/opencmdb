@@ -188,8 +188,15 @@ pub enum IpamError {
     /// ⚠️ **Computed, and it cannot be anything else**: `ip_address` carries a foreign key to
     /// `ip_subnet` and NONE to `ip_range` — an address falls in a range by ARITHMETIC — so no
     /// `ERROR 1451` answers this one. Story 14.4 measured the consequence: between the count and the
-    /// delete, a concurrent write can add an address, so the refusal is decided under the parent
-    /// row's lock (4.5 ms without it, and an address landed inside the range being deleted).
+    /// delete, a concurrent write can add an address, so the refusal is decided under a lock — with
+    /// none at all the inserter returns in **2.86 ms** and an address lands inside the range being
+    /// deleted. ⚠️ This read *"under the parent row's lock (4.5 ms without it)"* until the code
+    /// review: the serialisation has **two** independent carriers and removing either alone changes
+    /// nothing, so naming one of them was a cause without a check.
+    ///
+    /// 🔑 **It answers a range EDIT as well as a delete** (Guy, 2026-09-16). An edit that moved or
+    /// shrank the range off an address it held reached the same abandoned state and was accepted,
+    /// while the delete was refused — so the refusal was shut on one path and open on its twin.
     RangeStillHoldsAddresses,
 }
 

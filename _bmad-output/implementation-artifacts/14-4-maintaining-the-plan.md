@@ -81,9 +81,20 @@ address write. Measured, inserter started 0.6 s into a 2 s window:
 | **without** it (the ordinary DRY line) | 0 | **4.5 ms** | the range was deleted and **an address landed inside it** |
 
 🔑 **Name the mechanism, because neither function states it**: `insert_address` takes no lock at all
-(*"NO LOCK HERE"*, its own doc). What blocks it is the **foreign key's shared lock on `ip_subnet`**.
+(*"NO LOCK HERE"*, its own doc). ~~What blocks it is the **foreign key's shared lock on `ip_subnet`**.
 The delete's safety rests on a key, not on a promise — an address write that stops touching
-`ip_subnet` loses it in silence.
+`ip_subnet` loses it in silence.~~
+
+🔴 **STRUCK, AND THE STRIKE IS THE POINT — that sentence was REFUTED at T6 by three mutations, and
+the code review found it still standing here without a marker.** The section it sits in is headed
+*each WITH the measurement that produced it*, so a reader who stops at §1 takes a refuted attribution
+as measured fact. What the mutations established: the serialisation has **two independent carriers** —
+the parent row's lock AND the address scan's next-key/gap locks — and **removing either one alone reds
+nothing** (M-T3, M-T3b). Only removing BOTH collapses the wait, to **2.86 ms** (M-T3c). ⚠️ So the
+table above separates *locked* from *unlocked*, never one lock from the other, and the *"stops
+touching `ip_subnet` loses it in silence"* clause is false while the scan stands. *A correction that
+adds the true text without removing the false one leaves the record carrying both* — hence the strike
+rather than a quiet deletion.
 
 ❌ **`insert_range_pausing` is NOT the instrument.** It is a private seam inside `insert_range`'s body,
 parameterised on that function's decide-then-write; a delete needs **its own** seam. ⚠️ And its scope
@@ -241,16 +252,23 @@ gates, documents current before the push.
       cap's guard** to cover `DELETE`/`UPDATE`, proven red before it passes. ⚠️ Write, at the site, the
       reason no new gate is owed (decision 4) — the gates' silence must not stand in for it.
       ✅ 2026-09-16. **The widened guard was proven red on a prediction written first**: adding the
-      destructive verbs and `FOR UPDATE"` to its needles reddened at `left: 9, right: 5`, and the two
-      range writes then took it to **`left: 15, right: 9`** — predicted before the run, and the count
-      was moved only after recounting by hand what the fifteen are (3 inserts · 3 deletes · 2 updates ·
-      7 locking reads, each named in the failure message). Five writes land: `delete_address`,
-      `delete_subnet`, `update_address`, `delete_range` (the computed refusal under the parent-row
-      lock, containment compared in Rust per D10) and `update_range`, whose sibling scan is a SECOND
-      SQL literal carrying `id <> ?` rather than an `Option<&str>` on the insert's — *a parameter one
-      can forget to pass is exactly where forgetting becomes the defect*. `IpamError::RangeStillHoldsAddresses`
-      joins the domain (ALL 7 → 8) with the compiler naming the one non-exhaustive site, and its key
-      is in both locales. ⚠️ **Two things are NOT proven at T1 and are not claimed**: the widened guard
+      **two destructive verbs** to its needles reddened at `left: 9, right: 5`, and the two range
+      writes then took it to **`left: 15, right: 9`** — predicted before the run, and the count was
+      moved only after recounting by hand. ⚠️ **This read *"adding the destructive verbs AND
+      `FOR UPDATE"`"*, which the code review refuted from the diff: `FOR UPDATE"` was ALREADY a
+      needle** — the removed line is `for needle in ["\"INSERT INTO ip_", "FOR UPDATE\""]`, and §1(a)
+      of this very file says so. Only two needles were added, and the `left: 9` arithmetic works
+      *because* the fourth was already there (5 + 2 deletes + 1 update + the address edit's locking
+      read = 9). ⚠️ The count is **16** on the reviewed tree, not 15: the abandonment rule added a
+      locking read, and the figure was again read off the guard rather than written ahead.
+      Five writes land: `delete_address`, `delete_subnet`, `update_address`, `delete_range` (the
+      computed refusal, containment compared in Rust per D10) and `update_range`, whose sibling scan
+      is a SECOND SQL literal carrying `id <> ?` rather than an `Option<&str>` on the insert's — *a
+      parameter one can forget to pass is exactly where forgetting becomes the defect*.
+      `IpamError::RangeStillHoldsAddresses` joins the domain (ALL 7 → 8) with the compiler naming
+      **two** non-exhaustive sites — `Display` in the domain crate and `ipam_refusal` in
+      `ipam_write.rs`, an exhaustive `match` with no `_` arm — where this line said *"the one"*, a
+      miscount of the compiler's own help caught by the review. Its key is in both locales. ⚠️ **Two things are NOT proven at T1 and are not claimed**: the widened guard
       has reddened on a COUNT only, never yet on a `DELETE` that lost its cap — that is a T6 mutation —
       and the five writes have **no store-backed test at this point**, only the compiler and the source
       guards. ⚠️ The tree carries **seven `never used` warnings** (the five writes and two helpers) and
@@ -460,12 +478,13 @@ gates, documents current before the push.
       Counts: **695 + 191 + 99**, clippy clean over `--all-targets`.
 - [x] **T6** (AC7, AC8) Measure. Prove-to-red each new guard with `cargo xtask mutate --baseline`,
       predictions written first; both browser gates; the documents and both twins.
-      ✅ 2026-09-16. **AC7 — THE LIVE COUNT, both store conditions, commands named.** Baseline **980
-      → 987** (**697 bin + 191 core + 99 xtask**). Against a live `mariadb:10.11` on port 13450, the
-      database **dropped and recreated** and one **warm run** first: `cargo test --workspace --locked`
-      = 987, **22.40 s** (warm run 23.12 s). Storeless, same command with `RUSTFLAGS="-D warnings"`:
-      987, **5.04 s** — *the clock is the tell*, since the counts are identical either way and only
-      the wall time says the database-backed tests executed.
+      ✅ 2026-09-16, **re-measured after the code review's repairs**. **AC7 — THE LIVE COUNT, both
+      store conditions, commands named.** Baseline **980 → 990** (**700 bin + 191 core + 99 xtask**;
+      it read 987 before the review, which added three store-backed tests). Against a live
+      `mariadb:10.11` on port 13450, the database **dropped and recreated** and one **warm run**
+      first: `cargo test --workspace --locked` = 990, **27.17 s** (warm run 22.65 s). Storeless, same
+      command with `RUSTFLAGS="-D warnings"`: 990, **5.03 s** — *the clock is the tell*, since the
+      counts are identical either way and only the wall time says the database-backed tests executed.
       ✅ **AC8 — no regression**: ten gates (`cargo xtask ci` — all green) · `cargo clippy --workspace
       --all-targets --locked -- -D warnings` · `RUSTFLAGS="-D warnings" cargo test --workspace
       --locked` · `cargo deny --manifest-path Cargo.toml check` (advisories, bans, licenses, sources
@@ -473,11 +492,32 @@ gates, documents current before the push.
       `cargo fmt --all` · **both manuals build** (user manual 15 pages) · **both browser gates**: axe
       **10 routes + 5 states, 0 violation nodes** under all four `AXE_REQUIRE_*` flags, kbd **52
       checks, 0 failed**.
-      🔑 **Seven prove-to-red passes, every prediction written BEFORE the run**: the widened cap guard
-      (`left: 9, right: 5`, then `15/9`, recounted by hand before the count moved) · **M-T2a** and
-      **M-T2b**, each reding exactly one test with the OTHER as its green control · **M-T3, M-T3b,
-      M-T3c**, whose first two greens are the finding · the key guard, red on a blanked French value ·
-      and the two browser checks, red with a deliberate asymmetry (one fails, the other must not).
+      🔴 **THIS LINE READ *"Seven prove-to-red passes"* OVER A LIST OF NINE IDS, TWO OF THEM GREEN —
+      story 6b.10's recorded defect, recurring in the story that cites it.** The Acceptance layer
+      counted; the corrected record classifies instead of totalling, because a summary that can drift
+      from its own table is the thing being guarded against:
+      **Prove-to-red passes (predicted red, measured red):** the widened cap guard, twice on a COUNT
+      (`left: 9, right: 5`, then `15/9`, recounted by hand each time) · **M-T2a** and **M-T2b**, each
+      reding exactly one test with the OTHER as its green control · **M-T3c**, both locks removed ·
+      the key guard, red on a blanked French value · the two browser checks, red with a deliberate
+      asymmetry (one fails, the other must not) · **M-T6a** and **M-T6b**, added by this review below.
+      **NOT prove-to-red, and the finding precisely because they are green:** **M-T3** and **M-T3b**,
+      each removing one lock and reddening nothing — which is how the two-carrier property was found.
+      ✅ **M-T6a — the mutation T1 PROMISED T6 AND T6 DID NOT CONTAIN.** T1 wrote that the widened
+      guard *"has reddened on a COUNT only, never yet on a `DELETE` that lost its cap — that is a T6
+      mutation"*, and no such row existed. Run now: `capped!` removed from `DELETE FROM ip_address`,
+      `PREDICTED: Red(Some(1))` · `MEASURED: Red { tests: 1 }`, exit 0. 🔑 **Carrier established by
+      hand and it is the ASSERTION, not the count** — *"a plan statement that can wait on a lock is
+      not capped — `"DELETE FROM ip_`"* — which is the distinction the promise was about: the count
+      catches a statement REMOVED, the assertion one DECAPPED.
+      🔴 **M-T6b — the arbitration's own refusal, and the prediction was CONTRADICTED.** Neutering the
+      abandonment comparison predicted `red:1`; the driver measured **2** and exited 1. The second red
+      is **collateral, not a carrier**: the abandonment test panics at its first `expect_err` before
+      its trailing `forget_subnet`, so `100.66.14.15` survives into `the_store_returns_addresses_in_
+      numeric_order`, whose failure prints that very address. The same run's baseline is 700/191/99
+      green, so the leak is mutation-induced. ⚠️ Re-measured with the test ISOLATED (one filter,
+      never two): **exactly 1 red**, on its own assertion. Recorded as *1 carrier + 1 collateral* and
+      never as *two guards carry it* — this module's own documented hazard, met in its own story.
       ⚠️ **The driver reports no test NAMES — its whole log is 31 lines of summaries — so every
       carrier here was established BY HAND** (own copy, mutation verified applied, single filter,
       restore verified, never `git checkout` on a tree carrying hours of uncommitted work). *A
@@ -485,6 +525,44 @@ gates, documents current before the push.
       ✅ Documents: the user manual's *Defining the addressing plan* section now describes correcting
       and removing, the rail's two lists, and the warning before both removals; both twins and
       `sprint-status.yaml` updated in the same push.
+
+### Review Findings
+
+Three isolated layers on the group-A slice (`ipam_repo.rs`, `ipam/mod.rs`, the two twins), 2026-09-16.
+None failed. 🔑 **Three findings were reached by all three layers independently**, and the Edge layer
+turned two of them from readings into measurements.
+
+- [x] [Review][Decision] **A range EDIT can orphan the addresses a range DELETE refuses to orphan, and it carries neither a refusal nor a warning** — `delete_range` refuses by name while the range holds a defined address; `update_range` re-asks the insert's three refusals and not this one. MEASURED by probe: control `delete_range` → `Ipam(RangeStillHoldsAddresses)`; `update_range .10-.20 → .30-.40` → `Ok`; the address then stands under no range, and the delete the product refused two statements earlier now succeeds. Shrinking or flipping the policy reaches the same state. ⚠️ The three deletes all warn through `delete-check`; the two edit forms carry no `hx-get` at all, so a verdict-changing gesture has no guard of either kind. Both precedents exist in this project — `delete_range` REFUSES, and the 2026-09-10 arbitration says *the form warns and still writes*. Guy's call. [`ipam_repo.rs:279-340`]
+- [x] [Review][Patch] `update_address`'s containment re-validation — the function's stated reason for existing — is carried by no test; the mutation leaves 987 tests, clippy and ten gates green [`ipam_repo.rs:112`]
+- [x] [Review][Patch] The refuted single-carrier attribution survives at four code sites, one of them the assertion message a future debugger reads [`ipam_repo.rs` ×3, `ipam/mod.rs` ×1]
+- [x] [Review][Patch] The gate-absence test reads 2 of 6 `xtask` sources; a planted `ip_subnet` in `copy_vocabulary.rs` leaves it green (measured) [`ipam_repo.rs:2708`]
+- [x] [Review][Patch] `delete_subnet`, `delete_address` and `update_address` have no adapter test; both `NotFound` guards measured carried by nothing [`ipam_repo.rs:638,670,702`]
+- [x] [Review][Patch] The widening test's "third assertion" is unreachable under the mutation it claims to carry, and its decision inputs are identical to the first call's [`ipam_repo.rs:459-552`]
+- [x] [Review][Patch] `update_address`'s `# Errors` names `RepositoryError::Backend` where the code yields `Ipam` [`ipam_repo.rs:98-101`]
+- [x] [Review][Patch] "The parent row is locked FIRST" is false in three sites — the child row is locked first — and the order inverts against `insert_range`'s parent-then-siblings [`ipam_repo.rs` ×3]
+- [x] [Review][Patch] The concurrency test's oracle cannot tell "waited for the lock" from "was slow", and its name claims prevention where the body measures ordering [`ipam_repo.rs:679-744`]
+- [x] [Review][Patch] `settle_plan_write`'s commit-failure branch issues no rollback, on the one path its doc does not mention [`ipam_repo.rs:355-376`]
+- [x] [Review][Patch] The two new readers are neither capped nor counted, and that decision is unwritten [`ipam_repo.rs:384,421`]
+- [x] [Review][Patch] The widened cap guard is an enumeration presented as a closed property; its residual is unstated [`ipam_repo.rs:2633`]
+- [x] [Review][Patch] Both twins still promise a "release" route among 14.4's five, which 14.4b now owns [`CLAUDE.md`, `docs/project-context.md`]
+- [x] [Review][Patch] The twins disagree on AC6's end state (*half met* / *met*), and `project-context` drops the "range" qualifier, making the sentence false for `delete_subnet` [same]
+- [x] [Review][Patch] §1(c) still carries the refuted mechanism with no correction marker, in the section headed *each WITH the measurement that produced it* [story `:83-86`]
+- [x] [Review][Patch] The Completion Notes claim both corrections keep their first version visible — true for T5, **false for M-T3**, whose first version is only alluded to [story `:553-556`]
+- [x] [Review][Patch] "Seven prove-to-red passes" lists **nine** ids and counts **two greens** among them — story 6b.10's recorded defect, recurring [story `:476-480`]
+- [x] [Review][Patch] T1 says `FOR UPDATE"` was added as a needle; it pre-existed. And "the one non-exhaustive site" was **two** [story `:243,251`]
+- [x] [Review][Patch] `screens.rs`'s `IpamError` floor is 7 where the enum declares 8 — the rule this very story applied at T5 [`screens.rs:1307`]
+- [x] [Review][Patch] T1 promised a DELETE-loses-its-cap mutation to T6, and T6 does not contain it [story `:253,477`]
+- [x] [Review][Patch] `range_attempt`'s savepoint precondition is not inherited by the three new transaction-owning writes [`ipam_repo.rs:108,220,300`]
+- [x] [Review][Patch] One unreadable address anywhere in the subnet aborts a RANGE delete with `MalformedAddress` — the refusal names a rule about an address the operator never touched [`ipam_repo.rs:235`]
+- [x] [Review][Patch] `delete_address`'s doc contradicts itself four lines apart — *needs no lock* above *takes an exclusive lock* [`ipam_repo.rs:22-37`]
+- [x] [Review][Patch] The two readers' `# Errors` omit the backend failure, naming only the less likely cause [`ipam_repo.rs:394,431`]
+- [x] [Review][Patch] The re-added per-subnet reader is held off the audit path by prose stated as though it constrained something [`ipam_repo.rs:424-429`]
+- [x] [Review][Patch] `ascii_bin` is PAD SPACE, so the five id-addressed statements match ids differing by trailing spaces; the doc sentence is stronger than the behaviour [`ipam_repo.rs`, 5 sites]
+- [x] [Review][Defer] The two rail readers are unbounded in the one branch written for hugeness [`ipam_repo.rs:384,421`] — deferred: bounded by what the operator DECLARED rather than by subnet size, and a `LIMIT` would silently truncate their own list
+- [x] [Review][Defer] Positional tuples with `id` and `label` both `String` at opposite ends — a swap compiles and renders the label as the id a DELETE control names [`ipam_repo.rs:389,426`] — deferred: the fix is a struct or newtype, and it ripples into `ipam_page.rs`
+- [x] [Review][Defer] `delete_range`'s deciding read X-locks every address row of the SUBNET, so deleting one range blocks address writes in unrelated ranges [`ipam_repo.rs:227-239`] — deferred: it is one of the two serialisation carriers, so it cannot be narrowed without re-measuring that claim
+
+✅ **Refuted by the layers themselves, with the check, so nobody re-chases them**: `delete_subnet` does NOT cascade (`0007:120,153` declare both foreign keys with no `ON DELETE`, so `ERROR 1451` really is the mechanism); a deadlock on any statement answers `Contention`, not a 500 (`repo.rs:1641-1646` maps `1213|1205`); the three new transaction-owning writes do NOT meet the savepoint hazard, verified at their call sites; and an over-long label errors rather than truncating (`STRICT_TRANS_TABLES`).
 
 ## Dev Notes
 
@@ -556,7 +634,13 @@ went in over `484 passed; 1 failed`). Logs under this session's scratchpad: `t1-
   populated rail instead of the empty one the compiler would have accepted.
 - ⚠️ **Two of my own records were wrong when written and are corrected in place rather than
   replaced**: T5 claimed AC6 met while the too-large branch had no rail, and the M-T3 entry named a
-  carrier the next mutation refuted. Both keep their first version visible.
+  carrier the next mutation refuted. 🔴 **And this bullet claimed *"both keep their first version
+  visible"*, which the code review measured FALSE for one of the two.** T5's false line really is
+  preserved, with *"this line stays so the next reader sees…"* beside it; **M-T3's first version was
+  REPLACED** and survived only as an allusion — *"the probable carrier this record named one draft
+  earlier"* — while §1(c) went on carrying the refuted mechanism with no marker at all. *A correction
+  that describes the text it removed is not that text.* Both are struck-through in place now, and
+  this bullet says which of the two it was ever true of.
 - ⚠️ **The driver reports no test names**, so every mutation carrier here was established by hand —
   own copy, mutation verified applied, single filter, restore verified, never `git checkout`.
 - ⚠️ **What is NOT in this story**: the release (`14-4b`, blocked on Guy minting « release » /
