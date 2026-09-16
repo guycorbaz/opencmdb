@@ -5668,7 +5668,52 @@ development_status:
   #   The story the epic exists for. Includes FR24's real conflict -- undetectable before PR #163,
   #   because the connector read no hardware address; and NOT a conflict inside a `dhcp-pool`,
   #   where the occupant changes by design.
-  14-4-maintaining-the-plan: backlog
+  14-4-maintaining-the-plan: ready-for-dev
+  #   CONTEXTED 2026-09-16 on the merged tree (`82ff356`), VALIDATED the same day by two fresh-context
+  #   layers (fact-check; gap-hunt, which BUILT the options against a live MariaDB), and SPLIT by Guy
+  #   on what they measured -- Epic 14 goes from six stories to SEVEN. 14.4 keeps the CORRECTIONS
+  #   (edit and delete); `14-4b-releasing-an-address` takes the RELEASE. The halves share nothing.
+  #   🔴 THE STATEMENT CAP'S GUARD IS BLIND TO WHAT THIS STORY ADDS: five of the plan's ten production
+  #   statements carry the 4 s cap, and the guard matches only `INSERT INTO ip_` and `FOR UPDATE` with
+  #   `checked == 5` -- a DELETE or an UPDATE reds nothing. This epic's dominant class, handed over as
+  #   live work.
+  #   🔴 A RANGE EDIT OVERLAPS ITSELF: `range_attempt`'s sibling scan has no `id <> ?` clause (an insert
+  #   has no id yet), so reusing it refuses every legal widening -- "reuse, do not re-implement" is
+  #   false for that one function.
+  #   🔴 "A range that still holds defined addresses" is NOT a foreign key (`ip_address` references
+  #   `ip_subnet` only): a computed refusal that races a concurrent address write. Measured: with the
+  #   parent-row lock the inserter waits 1404.8 ms; without it, 4.5 ms and AN ADDRESS LANDS INSIDE A
+  #   RANGE THE SAME TRANSACTION IS DELETING. And `insert_range_pausing` does NOT generalise -- it is a
+  #   seam inside one function's body; the delete needs its own.
+  #   ⚠️ A DELETE changes OTHER addresses' verdicts (measured: deleting a pool range manufactures three
+  #   findings; deleting a static range empties the offer) and nothing warns before it, while 14.3b
+  #   built warnings before every create.
+  #   ⚠️ `edit` and `delete` are owned BY NAME by Epic 21 (FR40, FR41 -- which names SUBNETS); what
+  #   separates them is Guy's arbitration 4, two registers. Deleting a subnet is a foreign key (1451),
+  #   not arithmetic -- cheap, and `constraint_refusal` maps `foreign_key` to the WRONG sentence.
+  #   ✅ Guy, 2026-09-16: the controls are LISTS IN THE RAIL (refused: a control per cell, which is the
+  #   `role="grid"` cost 14.2 declined; refused: a detail panel on a selection the screen lacks).
+  #   ✅ `a11y/seed.sql` already reaches both delete cases, refused and accepted.
+  14-4b-releasing-an-address: ready-for-dev
+  #   🔴 INSERTED 2026-09-16 at 14.4's validation (Guy: split) -- Epic 14 -> SEVEN stories (`epics.md`
+  #   NOT edited; registered). Constraint (3)'s fourth route: without it the grid fills and never
+  #   empties, and 14.3b's audit is a one-way ratchet.
+  #   🔴 ALL FOUR RELEASE SHAPES WERE BUILT AND TWO WERE REFUTED. Marking `address_sighting` is defeated
+  #   by an ordinary MAC change (the key is (addr, l2_domain, mac), so a replaced NIC inserts a fresh
+  #   UNMARKED row and the address is back); deleting alone loses `first_seen_at`, so a released address
+  #   returns as NEWLY DISCOVERED and constraint (3)'s date is reset. The ALTER cost that was supposed to
+  #   separate the shapes is 8 ms at 200 000 rows.
+  #   ✅ Guy, 2026-09-16: a release is a ROW IN ITS OWN TABLE -- `address_release(addr PK, released_at)`,
+  #   keyed on the ADDRESS, consulted by the audit, THE INGEST PATH UNTOUCHED. It answers the MAC case,
+  #   and the `-` sentinel is not representable so the register's "sentinel row included" clause is not
+  #   needed.
+  #   ✅ AND IT KEEPS THE AUDIT A READER, measured by planting: with the release writing
+  #   `address_sighting` the only shape the plan's guard admits makes `ipam_audit.rs` EXPORT A WRITE and
+  #   falsifies its own module doc. `address_release` is a plan table, so `ipam_write.rs` owns it.
+  #   🔴 BLOCKED ON A PLANNING ACT: `release` / « libérer » has NO row in the binding gesture table (ten
+  #   rows; `create` has none either), and Guy takes the minting (PR #166's precedent). The story writes
+  #   the word; it may not invent it.
+  #   ⚠️ `a11y/seed.sql` carries no release case -- new seed work, unlike 14.4's deletes.
   #   Edit, delete, and RELEASE a held address -- the fourth write route, without which the grid
   #   fills and never empties (constraint 3: a sighting protects an address until released).
   epic-14-retrospective: required
