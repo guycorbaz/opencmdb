@@ -178,6 +178,19 @@ pub enum IpamError {
     /// One address has ONE spelling — the zero-padded dotted quad — and it is imposed by the DDL as
     /// well as here, because *a canonical form that is not imposed is not a canonical form*.
     MalformedAddress,
+    /// A range the operator asked to delete still holds addresses they defined inside it.
+    ///
+    /// 🔑 **Refused BY NAME rather than cascaded** (`epics.md:2453`): deleting the range would leave
+    /// those addresses standing with nothing saying what that stretch of space is meant for, and
+    /// deleting them WITH it would destroy records the operator never named. The plan says what was
+    /// MEANT to be there, so it may not quietly unmean part of itself.
+    ///
+    /// ⚠️ **Computed, and it cannot be anything else**: `ip_address` carries a foreign key to
+    /// `ip_subnet` and NONE to `ip_range` — an address falls in a range by ARITHMETIC — so no
+    /// `ERROR 1451` answers this one. Story 14.4 measured the consequence: between the count and the
+    /// delete, a concurrent write can add an address, so the refusal is decided under the parent
+    /// row's lock (4.5 ms without it, and an address landed inside the range being deleted).
+    RangeStillHoldsAddresses,
 }
 
 impl IpamError {
@@ -192,7 +205,7 @@ impl IpamError {
     /// 🔑 And the mechanism was already in this commit, one type over: [`IpPolicy::ALL`] plus a row
     /// in `screens.rs`'s enum-completeness guard. *The hole was recognised for one type and left
     /// open for its neighbour, in the same file.* Both are rows now.
-    pub const ALL: [IpamError; 7] = [
+    pub const ALL: [IpamError; 8] = [
         IpamError::RangeOutsideSubnet,
         IpamError::RangeOverlapsAnother,
         IpamError::RangeBoundsInverted,
@@ -200,6 +213,7 @@ impl IpamError {
         IpamError::BaseIsNotTheNetworkAddress,
         IpamError::PrefixLengthNotInFamily,
         IpamError::MalformedAddress,
+        IpamError::RangeStillHoldsAddresses,
     ];
 }
 
@@ -217,6 +231,9 @@ impl fmt::Display for IpamError {
             }
             IpamError::RangeBoundsInverted => "the range ends before it begins",
             IpamError::MalformedAddress => "the address is not in this store's canonical form",
+            IpamError::RangeStillHoldsAddresses => {
+                "the range still holds addresses defined inside it"
+            }
         })
     }
 }

@@ -38,7 +38,7 @@ const SETTLE_WAIT_MS = 900;
 // caught that twice, once in a privacy floor and once in a word count. If a check is added
 // this number moves deliberately; if one is skipped, the gate says so instead of printing
 // a green.
-const MIN_CHECKS = 45;
+const MIN_CHECKS = 52;
 const MIN_ROWS = 2;
 // 🔑 The seed's own two-hardware-address sighting, in ONE place. It was written twice — typed into
 // the field at one site and spelled out inside the expected triage href at another — so a seed that
@@ -649,7 +649,14 @@ async function main() {
   {
     const page = await open("/ipam");
 
-    const summaries = await page.$$eval("details.ipam-form > summary", (nodes) => nodes.length);
+    // 🔑 **SCOPED to the definition forms since story 14.4**, which added five CORRECTION
+    // disclosures in the rail: unscoped this counted 8 and reddened over a correct page. ⚠️ Scoped
+    // rather than loosened to `>= 3` — a floor that tolerates losing one of the three gestures is
+    // the shape this project has caught twice; the rail's own controls are counted separately.
+    const summaries = await page.$$eval(
+      ".ipam-forms details.ipam-form > summary",
+      (nodes) => nodes.length,
+    );
     check(
       summaries === 3,
       "`/ipam` offers the three write gestures as disclosures",
@@ -960,6 +967,121 @@ async function main() {
       await walk.close();
     }
     await page.close();
+  }
+
+  // ── The rail's two lists and their controls (story 14.4) ────────────────────────────────────
+  // 🔴 **Five of the eight write routes are PER-ROW controls**, so they exist only on a page that
+  // holds records. The seed's default subnet carries three ranges and two addresses, which is why
+  // this block opens `/ipam` bare rather than selecting a subnet: the page the operator meets
+  // first is the page the gate must measure.
+  {
+    const rail = await open("/ipam");
+    const controls = await rail.evaluate(() => {
+      const posts = (route) => document.querySelectorAll(`form[hx-post="${route}"]`).length;
+      return {
+        deleteRange: posts("/ipam/range/delete"),
+        deleteAddress: posts("/ipam/address/delete"),
+        deleteSubnet: posts("/ipam/subnet/delete"),
+        editRange: posts("/ipam/range/edit"),
+        editAddress: posts("/ipam/address/edit"),
+        names: [...document.querySelectorAll(".ipam-rail-lists button")].map((b) =>
+          (b.textContent ?? "").trim(),
+        ),
+      };
+    });
+    check(
+      controls.deleteRange > 0 &&
+        controls.deleteAddress > 0 &&
+        controls.deleteSubnet === 1 &&
+        controls.editRange > 0 &&
+        controls.editAddress > 0,
+      "the rail carries a control for each of the five corrections",
+      JSON.stringify(controls),
+    );
+    // 🔑 A page of buttons all reading *Remove* is a page a screen reader cannot navigate: the
+    // record's own description is IN the accessible name, not in a tooltip.
+    check(
+      controls.names.length > 0 && new Set(controls.names).size === controls.names.length,
+      "and every control's accessible name is DISTINCT, naming the record it acts on",
+      JSON.stringify(controls.names.slice(0, 8)),
+    );
+    // ⚠️ **The DELETE control, deliberately, and the first draft of this check got it wrong.** It
+    // took the first button in the rail, which is a correction form's submit INSIDE a collapsed
+    // `<details>` — content in a closed disclosure is correctly unfocusable, so the check reddened
+    // over a page that was behaving properly. *A check aimed at the wrong element measures the
+    // wrong thing in both directions.* The removal control sits outside any disclosure, which is
+    // exactly why it is the one an operator meets without opening anything.
+    const focusable = await rail.evaluate(() => {
+      const button = document.querySelector(
+        '.ipam-rail-lists form[hx-post="/ipam/range/delete"] button',
+      );
+      button?.focus();
+      return { reached: document.activeElement === button, tabIndex: button?.tabIndex ?? null };
+    });
+    check(
+      focusable.reached && focusable.tabIndex >= 0,
+      "a rail control is reachable by the keyboard — story 6b.4b shipped five controls that " +
+        "forty dispatched Tab presses reached none of",
+      JSON.stringify(focusable),
+    );
+    await rail.evaluate(() =>
+      document.querySelector(".ipam-rail-lists details.ipam-form > summary").focus(),
+    );
+    await rail.keyboard.press("Enter");
+    const opened = await rail.$eval(".ipam-rail-lists details.ipam-form", (el) => el.open);
+    check(opened, "a correction disclosure opens on Enter", `open=${opened}`);
+    // 🔑 **PRE-FILLED, and that is the difference between correcting and re-typing.** An edit form
+    // the operator must fill from scratch is a delete-and-redefine wearing another word, and it
+    // loses the row's identity — which is what `update_range` exists to keep.
+    const prefilled = await rail.evaluate(() => {
+      const form = document.querySelector('.ipam-rail-lists form[hx-post="/ipam/range/edit"]');
+      return {
+        id: form?.querySelector("input[name=id]")?.value ?? "",
+        first: form?.querySelector("input[name=first]")?.value ?? "",
+        last: form?.querySelector("input[name=last]")?.value ?? "",
+        policy: form?.querySelector("select[name=policy]")?.value ?? "",
+      };
+    });
+    check(
+      prefilled.id !== "" &&
+        prefilled.first !== "" &&
+        prefilled.last !== "" &&
+        ["static", "dhcp-pool", "reserved", "infrastructure"].includes(prefilled.policy),
+      "and it arrives carrying the record's current bounds, policy and id",
+      JSON.stringify(prefilled),
+    );
+    // 🔴 **THE REMOVAL WARNS BEFORE IT FIRES (decision 3), and it is reached only by a GESTURE** —
+    // so a source guard cannot see it and this gate must press it. The control asks on focus, the
+    // answer lands in that row's own polite region, and the write is untouched: it warns, it does
+    // not refuse.
+    const warned = await rail.evaluate(async () => {
+      const button = document.querySelector(
+        '.ipam-rail-lists form[hx-post="/ipam/range/delete"] button',
+      );
+      const region = document.getElementById(
+        button?.getAttribute("aria-describedby") ?? "",
+      );
+      button?.focus();
+      for (let i = 0; i < 40 && (region?.textContent ?? "").trim() === ""; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      return {
+        text: (region?.textContent ?? "").trim(),
+        focusedIsControl: document.activeElement === button,
+        region: region?.getAttribute("aria-live") ?? null,
+      };
+    });
+    check(
+      warned.text !== "" && warned.region === "polite",
+      "focusing a removal control warns BEFORE the write, into a polite live region",
+      `${JSON.stringify(warned.text.slice(0, 90))} aria-live=${warned.region}`,
+    );
+    check(
+      warned.focusedIsControl,
+      "and focus STAYS on the control — the warning is announced, never grabbed",
+      `focusedIsControl=${warned.focusedIsControl}`,
+    );
+    await rail.close();
   }
 
   // 🔑 The floor: a run that measured less than the full set reports "could not run", not a

@@ -79,6 +79,12 @@
   {#- Decision 14: a subnet too large to draw offers nothing, says so, and still shows its findings. -#}
   <p class="empty">{{ s.too_large_no_offer }}</p>
   {% include "_ipam_audit.html" %}
+  {#- 🔑 **AC6: the rail's two lists render in THIS branch too.** The grid is skipped here because
+       materialising it costs gigabytes; the lists are bounded by what the operator DECLARED and cost
+       the same at any subnet size — and a subnet too large to draw is where the controls matter
+       most, since there is no grid to click on. ⚠️ Safe for the unknown-subnet arm above: the
+       partial renders nothing at all when `rail` is `None`, which is what that arm carries. -#}
+  {% include "_ipam_rail_lists.html" %}
   {%- endmatch %}
   {% include "_ipam_forms.html" %}
   {%- endif %}
@@ -145,6 +151,7 @@
              right now: a sleeping machine is seen only when it answered). -#}
         <p class="panel-caveat">{{ s.next_free_caveat }}</p>
       </div>
+      {% include "_ipam_rail_lists.html" %}
     </div>
     {% include "_ipam_forms.html" %}
   </div>

@@ -174,6 +174,23 @@ subnet written with host bits set, a label that is empty or longer than 120 char
 the plan already holds. The forms need JavaScript. If a write takes too long, the screen says it
 may or may not have been saved: reload the plan before trying again.
 
+Beside the grid, two lists show what the selected subnet already holds --- its declared ranges and
+its defined addresses --- and each entry carries two controls, \emph{Correct} and \emph{Remove}.
+Correcting keeps the record: the form arrives holding its current values, so you change what is
+wrong rather than retyping the rest, and the same rules apply as when you defined it. A range may be
+widened onto ground it already occupies; it may not be widened onto a neighbour's. These lists are
+shown whether or not the grid is drawn, so a subnet too large to draw still offers the controls that
+correct it.
+
+Removing is refused when the removal would leave something behind: a range that still holds
+addresses you defined inside it says so by name, and a subnet that still holds ranges or addresses
+says that it holds them --- not that it does not exist. Before either removal fires, reaching its
+control tells you what the removal would change: how many addresses the network shows inside that
+range are explained by it today and would become findings once it is gone, whether it is the only
+\texttt{static} range and removing it would leave nothing to offer here, and, for a subnet, how many
+records are still holding it back. As with the other two warnings, it refuses nothing --- it says
+what would change, and the removal stays available.
+
 Two of the forms tell you what they know \emph{before} you write. As you type an address, the form
 says whether the network has been seen on it (and with which hardware addresses, and when), whether
 the inventory documents it, whether the plan already defines it, and whether it falls inside a

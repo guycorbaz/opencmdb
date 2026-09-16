@@ -78,7 +78,7 @@
 #   without measurement yields a list of SUSPICIONS"*). Carry them in; do not rediscover them.
 
 generated: 2026-07-21
-last_updated: 2026-09-15  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
+last_updated: 2026-09-16  # 🔑 **`v0.3.0` AND `v0.3.1` ARE PUBLISHED, AND `v0.3.1` RUNS ON THE NAS.**
                           # The first time in five weeks that what was built reached its user: the
                           # NAS had been on `0.1.0`, older than the identity engine, the write route
                           # and the ten screens, and nobody had checked.
@@ -5668,7 +5668,7 @@ development_status:
   #   The story the epic exists for. Includes FR24's real conflict -- undetectable before PR #163,
   #   because the connector read no hardware address; and NOT a conflict inside a `dhcp-pool`,
   #   where the occupant changes by design.
-  14-4-maintaining-the-plan: ready-for-dev
+  14-4-maintaining-the-plan: review
   #   CONTEXTED 2026-09-16 on the merged tree (`82ff356`), VALIDATED the same day by two fresh-context
   #   layers (fact-check; gap-hunt, which BUILT the options against a live MariaDB), and SPLIT by Guy
   #   on what they measured -- Epic 14 goes from six stories to SEVEN. 14.4 keeps the CORRECTIONS

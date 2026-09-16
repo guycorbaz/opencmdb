@@ -1,6 +1,6 @@
 # Story 14.4: Maintaining the plan — the corrections
 
-Status: ready-for-dev
+Status: review
 
 🔴 **SPLIT at its validation, 2026-09-16 (Guy): 14.4 keeps the CORRECTIONS — edit and delete — and
 `14-4b-releasing-an-address.md` takes the RELEASE.** Epic 14 goes from six stories to SEVEN
@@ -237,23 +237,254 @@ gates, documents current before the push.
 
 - [x] **T0** Take §2's four decisions with Guy. ✅ 2026-09-16 — all four taken, each recorded with the
       option refused; §0 and §1 are settled and are not re-opened.
-- [ ] **T1** (AC1) The adapter's edit and delete with the parent-row lock and `capped!`; **widen the
+- [x] **T1** (AC1) The adapter's edit and delete with the parent-row lock and `capped!`; **widen the
       cap's guard** to cover `DELETE`/`UPDATE`, proven red before it passes. ⚠️ Write, at the site, the
       reason no new gate is owed (decision 4) — the gates' silence must not stand in for it.
-- [ ] **T2** (AC1) The edit's own sibling scan (`id <> ?`): a legal widening accepted, an illegal one
-      still refused.
-- [ ] **T3** (AC2, AC5) The computed refusal, its **own** pause seam, the concurrent-inserter
+      ✅ 2026-09-16. **The widened guard was proven red on a prediction written first**: adding the
+      destructive verbs and `FOR UPDATE"` to its needles reddened at `left: 9, right: 5`, and the two
+      range writes then took it to **`left: 15, right: 9`** — predicted before the run, and the count
+      was moved only after recounting by hand what the fifteen are (3 inserts · 3 deletes · 2 updates ·
+      7 locking reads, each named in the failure message). Five writes land: `delete_address`,
+      `delete_subnet`, `update_address`, `delete_range` (the computed refusal under the parent-row
+      lock, containment compared in Rust per D10) and `update_range`, whose sibling scan is a SECOND
+      SQL literal carrying `id <> ?` rather than an `Option<&str>` on the insert's — *a parameter one
+      can forget to pass is exactly where forgetting becomes the defect*. `IpamError::RangeStillHoldsAddresses`
+      joins the domain (ALL 7 → 8) with the compiler naming the one non-exhaustive site, and its key
+      is in both locales. ⚠️ **Two things are NOT proven at T1 and are not claimed**: the widened guard
+      has reddened on a COUNT only, never yet on a `DELETE` that lost its cap — that is a T6 mutation —
+      and the five writes have **no store-backed test at this point**, only the compiler and the source
+      guards. ⚠️ The tree carries **seven `never used` warnings** (the five writes and two helpers) and
+      is therefore **not push-ready until T3 wires the routes**: they are the compiler naming work not
+      yet done, and silencing them with an `allow` would delete that signal and re-open the module-wide
+      allow story 14.1 registered for narrowing. Storeless: **691 + 191 + 99**.
+- [x] **T2** (AC1) The edit's own sibling scan (`id <> ?`): a legal widening accepted, an illegal one
+      still refused. ✅ 2026-09-16 — two store-backed tests, each on its own `/24`
+      (`100.66.10.0`, `100.66.11.0`), **9.67 s against a live store where the storeless run is 0.00 s**,
+      which is the tell that they executed rather than returning early. The widening test carries the
+      exclusion clause on THREE assertions, and the third is the load-bearing one: **re-applying a
+      range's own current bounds must be accepted** — the self-overlap case in its purest form, where
+      a widening could still be argued about. The refusal test reads the neighbours BACK and compares
+      the plan whole, because *an `Err` proves the decision and never the rollback*, and it re-asks the
+      insert's other refusals on the edit path (`RangeOutsideSubnet`, `RangeBoundsInverted`, plus
+      `NotFound` for a stale id) — a rule held on one path and not on its twin is the shape story 6.3
+      named.
+      🔴 **THE PROVE-TO-RED COULD NOT RUN, AND THE REFUSAL IS THE MEASUREMENT.** The planned pair was
+      written first — **M-T2a** neuter `id <> ?` (predicted `red:1`, the widening test alone, with the
+      refusal test GREEN as the control, since without the exclusion an overlap is still refused) and
+      **M-T2b** neuter the overlap decision (the mirror). ⚠️ Note the correction made before firing:
+      DELETING ` AND id <> ?` leaves **two binds against one placeholder**, so the query fails on arity
+      and the test reds for the wrong reason — this project's own *"a mutation named for one thing and
+      applied to another"*. The mutation therefore preserves arity (`id <> ?` → `? IS NOT NULL`).
+      `cargo xtask mutate --baseline` then answered **exit 2**: `🔴 THE BASELINE IS NOT CLEAN:
+      Red { tests: 0, clippy: true, gates: false } — nothing measured after this could be attributed
+      to the mutation`, clippy being red on the seven `never used` writes. 🔑 **So the dead-code
+      warnings do not merely block a push: they disable the instrument.** The pair was NOT dropped and
+      NOT hand-rolled around a correct refusal: it waited for **T3** to give the writes their callers,
+      which is what made the baseline clean.
+      ✅ **M-T2a then RAN and conformed** (baseline clean: clippy green over `--all-targets`,
+      695 + 191 + 99): `PREDICTED: Red(Some(1))` · `MEASURED: Red { tests: 1 }` · exit 0, applied at
+      `ipam_repo.rs:917`, one site, the diff printed. 🔴 **But the driver reports no test NAMES — its
+      whole log is 31 lines of summaries — so a matching COUNT is not a matching CARRIER**, which is
+      this project's four-occurrence class *a red credited to the wrong cause*. The carrier was
+      therefore established by hand (own copy, mutation verified applied, restore verified, never
+      `git checkout`): **`a_range_edit_widens_into_free_space_and_onto_its_own_ground` FAILED** and
+      **`a_range_edit_that_would_overlap_a_neighbour_is_refused_and_moves_nothing` stayed ok** — the
+      green control, which is what proves the exclusion clause is carried by the first test
+      SPECIFICALLY rather than by the pair between them. ⚠️ A correction made before firing is
+      recorded rather than smoothed away: DELETING ` AND id <> ?` leaves two binds against one
+      placeholder, so the query fails on arity and the test reds for the wrong reason — the mutation
+      preserves the arity (`id <> ?` → `? IS NOT NULL`) so that what it measures is the RULE.
+      ✅ **M-T2b, the mirror, also RAN and conformed**: neutering the overlap refusal
+      (`return Err(RangeOverlapsAnother)` → a binding-consuming no-op, so clippy stays green and the
+      mutation measures the RULE rather than a compile break) gave `PREDICTED: Red(Some(1))` ·
+      `MEASURED: Red { tests: 1 }` · exit 0 at `ipam_repo.rs:929`, one site. Carrier established by
+      hand as above: **the refusal test FAILED and the widening test stayed ok**. 🔑 **So each of the
+      two tests is the OTHER's green control**, which is what makes the pair a measurement rather
+      than two passes: M-T2a reds only the widening test, M-T2b reds only the refusal test, and
+      neither mutation reds both. *A guard covered only by a disjunction is a guard nothing covers*
+      (story 6b.10's finding) — this is its opposite, and it is measured rather than asserted.
+      🔴 **M-T3 CAME BACK GREEN, AND THE REFUTATION IS THE DELIVERABLE.** Removing the parent-row
+      lock from `delete_range_pausing` — *"the ordinary DRY line"* §1(c) says brings the race back —
+      reds **nothing**: the mutation verifiably applied (`load_subnet_locked` calls 7 → 6, restored
+      to 7) and `an_address_cannot_land_inside_a_range_while_it_is_being_deleted` stayed **ok**.
+      🔑 **The cause took THREE mutations to establish, and the first two each measured nothing.**
+      **M-T3b** (drop the address scan's `FOR UPDATE`, leaving the parent lock): the seam test again
+      **ok**, while the cap guard reddened at `left: 14, right: 15` — proving the mutation applied
+      and refuting the *"probable carrier"* this record named one draft earlier. **M-T3c** (drop
+      BOTH): the seam test finally **FAILED**, the inserter returning in **2.86 ms** where the pair
+      took **406.87 ms** — the deleter's 400 ms pause running alone, and the validation's
+      without-lock figure of 4.5 ms reproduced to the same order against its 1404.8 ms with.
+      🔴 **So the serialisation has TWO INDEPENDENT CARRIERS and either alone suffices**: the parent
+      row's lock, and the address scan's own next-key/gap locks over that subnet's index range,
+      which block an `INSERT` there with no foreign key involved. *A property with two carriers is a
+      property a mutation of either measures nothing about* — story 6.5's M6 and 6.4b's P3, met on a
+      third axis. ⚠️ The sentence at the site said ONE mechanism (*"the delete's safety rests on a
+      key, not on a promise"*); it is INCOMPLETE rather than false, and is corrected to what the
+      three mutations support, not explained away.
+      ⚠️ **M-T3c produced a THIRD red that is COLLATERAL and is not counted as a carrier**: the seam
+      test panicked, so its trailing `forget_subnet` never ran, and its interloper `100.66.12.15`
+      survived into a plan-wide address test. That is exactly the hazard this module's own doc
+      records — *a test that panics skips its cleanup, and the next test dies on something other
+      than the thing under test* — and counting it would be the inflated-carrier-count error that
+      doc exists to warn about. The database was dropped and recreated before the next count.
+- [x] **T3** (AC2, AC5) The computed refusal, its **own** pause seam, the concurrent-inserter
       measurement, the neighbours-stand-still test; the **subnet route**, whose refusal the database
       raises alone (`1451`); `constraint_refusal`'s `foreign_key` arm split by route, so *"this subnet
       still holds ranges"* stops being served as *"no such subnet"*.
-- [ ] **T3b** (AC2b) `GET /ipam/delete-check` on 14.3b's contract — a polite live region, focus left
+      ✅ 2026-09-16. **`WriteRoute` goes 3 → 8**, so every exhaustive `match` became an `E0004` naming
+      each site rather than a list someone had to remember: five POST routes (decision 1), five port
+      methods with three implementors, five handlers, five request structs. 🔑 **Giving the writes
+      their callers is what cleared the seven `never used` warnings and un-blocked the mutation
+      driver** — the T1 note that they merely blocked a push was HALF TRUE: they disabled the
+      instrument. **`delete_range_pausing` is the delete's OWN seam**, not `insert_range_pausing`,
+      which is parameterised on the insert's decide-then-write; the window sits after the addresses
+      are counted and before the range goes, which is exactly where §1(c) measured one landing.
+      🔴 **Both refusal mappings split by route**: `1451` on a subnet delete means *it still holds
+      ranges* (409) where it meant *no such subnet* (404) — the operator was told the subnet did not
+      exist while looking at it — and `NotFound` now names the RECORD the id meant, where one
+      sentence had reported a missing SUBNET for a range the plan no longer held.
+      🔑 **Three decisions taken at the site and recorded as mine, reversible**: a correction answers
+      **200, never 201** (the shared guard demanded `CREATED` for every route, and a deletion claiming
+      it created something is a false statement in the protocol that only the guard kept true — story
+      6b.4's raw UUID and 14.2's `offerable == 256` are the same shape); a **removed subnet redirects
+      to `/ipam` bare**, since `?subnet=<the id just deleted>` would render the unknown-subnet branch
+      one instant after the operator removed it at their request; and a **`unique` violation on a
+      DELETE is a fault, not a re-entry** — the three deletes answer the backend sentence on this
+      file's own reasoning for `check`, rather than being given re-entry copy no operator can reach.
+      ⚠️ **A guard's property was corrected, not satisfied**: the refusal-set test demanded a distinct
+      re-entry sentence per ROUTE, exact only while routes and records stood in bijection. They no
+      longer do — `EditAddress` and `Address` concern the SAME record and must answer the SAME
+      sentence — so it now asserts the property 14.2b actually found (distinct per RECORD, equal
+      within one) plus a coverage check that a ninth route cannot be silently unclassified.
+      Counts: **695 + 191 + 99**, clippy clean over `--all-targets`, 23.11 s against a virgin store
+      versus 5.02 s storeless — the clock is the tell. ⚠️ **T3b is NOT in this** and remains open.
+- [x] **T3b** (AC2b) `GET /ipam/delete-check` on 14.3b's contract — a polite live region, focus left
       where it was, **no refusal** — naming how many silent addresses a deletion turns into findings and
       whether it empties the offer. It is reached only by a gesture, so the keyboard gate PRESSES it.
-- [ ] **T4** (AC3) The refusal set over what each handler can RECEIVE, keyed in both locales.
-- [ ] **T5** (AC4, AC6) The rail's two lists and their controls; the keyboard gate's new checks; the axe
+      ✅ 2026-09-16 — **axe: 10 routes + 5 states, 0 violation nodes; kbd: 52 checks, 0 failed**, the
+      floor moved 50 → 52 for the two checks that PRESS the warning in a browser. The route reuses the
+      `AddressCheck` fragment rather than minting a parallel one, answers **200 with a keyed sentence**
+      on a store failure (htmx does not swap a 5xx, so the region would otherwise keep the previous
+      answer under a new question — 14.3b's measured defect), and computes from the audit's own API
+      (`seen_inside`, `has_static_range`) rather than restating either rule.
+      🔴 **A DESIGN FLAW CAUGHT WHILE WIRING THE CONTROL, not after**: `?subnet=<id>` alone means the
+      SUBNET's own removal, so the address row's control would have been answered *"this subnet still
+      holds 5 records"* — **a true sentence about the wrong gesture**, which is worse than none. The
+      query gained `addr`, the renderer an arm that answers it FIRST, and the test asserts the subnet
+      sentence is ABSENT there, so the confusion cannot come back silently.
+      🔴 **AND THE MODULE HAD NO KEY GUARD AT ALL.** `ipam_write.rs` has guarded its keys since 14.2b;
+      `ipam_page.rs` — which renders more of them — was covered by nothing, so this story's thirteen
+      new keys went in under a green suite, ten gates and a clean clippy. *The silent pass was not
+      evidence they were fine; it was evidence nobody was looking.* A guard now scans this file
+      (needle assembled at RUNTIME, or it finds itself — its sibling hit that twice in five minutes)
+      and asserts **73 keys** resolve non-blank in both locales. ⚠️ Its first list carried
+      `ipam.policy.`, a NAMESPACE PREFIX from another guard's `starts_with`; skipped as a property
+      (*a key never ends in its separator*), never by naming that one string.
+      ⚠️ **The count assertion fires BEFORE the resolution loop** (story 5.13's family), so until the
+      count was set from the printed list, not one translation had ever been checked. ✅ Then proven
+      red for its REAL property: blanking `ipam.rail.delete`'s French value reds it naming that key —
+      with a `.rs` touched to force a rebuild, because `app.yml` is invisible to Cargo's incremental
+      build and the old string stays embedded otherwise (story 6b.9's trap, neutralised rather than
+      walked into). Counts: **697 + 191 + 99**, clippy clean over `--all-targets`.
+      ✅ **And the two new browser checks were PROVEN RED, prediction written first**: removing the
+      `hx-get` from the range removal control gives **52 checks run, exactly 1 failed** — the *warns
+      before the write* check, its region measured `""` — while the *focus stays on the control*
+      check keeps PASSING, because focus is untouched by that mutation. 🔑 **The asymmetry is the
+      point**: a mutation that reddened both would have meant one property measured twice, and this
+      one shows them measuring different things. Anchor matched once, build clean, restore verified.
+      ⚠️ Neither check is reachable from source: the warning exists only once a browser focuses a
+      control, which is why it is the GATE that presses it and not a Rust assertion.
+- [x] **T4** (AC3) The refusal set over what each handler can RECEIVE, keyed in both locales.
+      ✅ 2026-09-16 — verified in BOTH halves of the criterion rather than the half that happened to
+      be covered. **Keyed, in both locales**: `every_refusal_the_handler_can_receive_names_a_rule`
+      drives **8 routes × 7 receivable errors × 2 locales** and asserts none renders its own key name;
+      two key guards now cover the modules that render them — 38 in `ipam_write.rs`, and **73 in
+      `ipam_page.rs`, which had none at all before this story**, both asserting non-blank in `en` and
+      `fr`. **Never a Rust `format!`**: measured across the write module, every production
+      `Refusal::new` takes a key literal and `into_response` renders `t!(key)`; the only `format!`
+      calls are the redirect URL and test helpers.
+      🔑 **And that half is stronger than the criterion asks, which is worth saying precisely**:
+      `Refusal` carries a `&'static str` key, so a formatted body is **unrepresentable** there rather
+      than merely absent — a property held by the TYPE, where a guard would be held by vigilance.
+      ⚠️ The refusal SET itself moved under this story and is recorded with T3: `NotFound` now names
+      the record the id meant instead of reporting a missing subnet for a range, and `1451` on a
+      subnet delete says *it still holds ranges* instead of *no such subnet* — two sentences that
+      were previously false on five routes and on one route respectively.
+- [x] **T5** (AC4, AC6) The rail's two lists and their controls; the keyboard gate's new checks; the axe
       pass. The seed already reaches both delete cases.
-- [ ] **T6** (AC7, AC8) Measure. Prove-to-red each new guard with `cargo xtask mutate --baseline`,
+      ✅ 2026-09-16 — **axe: 10 routes + 5 states, 0 violation nodes** (a fifth state, the rail's own);
+      **kbd: 50 checks, 0 failed**, the floor moved 45 → 50 to EQUAL what is there rather than sitting
+      under it. 🔴 **A blocker found before any markup: no reader carried a record id.** `ranges_in`
+      returns bounds, policy and label; `plan_addresses` returns addresses — and a control that cannot
+      name its record cannot exist. Hence `correctable_ranges_in`/`correctable_addresses_in`, named for
+      their purpose, with the note at the site that these are NOT the `addresses_in` story 14.3b
+      removed: that one fed the AUDIT, this pair feeds the RAIL, and the removal's warning stands.
+      🔑 The correction forms arrive **pre-filled**, because an edit the operator must retype is a
+      delete-and-redefine wearing another word, and it loses the row identity `update_range` exists to keep.
+      🔴 **THE BROWSER FOUND THREE THINGS NO RUST TEST COULD, and they are three different kinds.**
+      (1) A *stale premise*: the pre-existing check *"`/ipam` offers the three write gestures as
+      disclosures"* counted **8**, the rail having added five — scoped to `.ipam-forms` rather than
+      loosened to `>= 3`, since a floor that tolerates losing one of the three gestures is the shape
+      this project has caught twice. (2) **A PRODUCT DEFECT of mine**: every correction form's submit
+      button reused the definition forms' label, so four controls read *"Define"* — a false word on a
+      form that CORRECTS, and four identical accessible names on one page. The gate's own output is
+      the record: `["Define","Remove — 192.0.2.1 – 192.0.2.40","Define",…]`. (3) **A defect in my own
+      check**: it grabbed the first `.ipam-rail-lists button`, which is a submit inside a COLLAPSED
+      `<details>` — content in a closed disclosure is correctly unfocusable, so it reddened over a page
+      behaving properly. *A check aimed at the wrong element measures the wrong thing in both
+      directions*; it now targets the removal control, which is what an operator meets without opening
+      anything. ⚠️ **And a defect of mine caught before it shipped**: the first CSS used
+      `--color-border` and `--color-text-muted`, **neither of which exists** — valid syntax painting
+      nothing, invisible to any source guard, which is *a source guard cannot see a cascade* one step
+      earlier. Replaced with the tokens the sheet actually defines.
+      🔴 **AND THIS ENTRY WAS WRONG WHEN FIRST WRITTEN, which is recorded rather than quietly fixed.**
+      It said a subnet *too large to draw* renders no rail, *"registered rather than smuggled in"* —
+      but **AC6 says the two lists render in BOTH branches**, the drawn grid and the too-large one.
+      That is not a cost a story may accept on its own: a criterion is not a default to be explained
+      away, and *a story may not re-scope its own AC*. ⚠️ The justification did not even hold on its
+      own terms — the grid is skipped there because materialising 2 GB of cells costs gigabytes,
+      while the rail's lists are bounded by what the operator DECLARED and cost nothing at any subnet
+      size. Found by reading the criteria back against the record, which is the check that should have
+      run before the entry was written. The branch now renders the rail; this line stays so the next
+      reader sees that the first version of it claimed a criterion met that was not.
+      🔴 **AND THE REPAIR WAS ITSELF HALF DONE, WHICH THE NEW ASSERTION CAUGHT.** Having built the
+      rail, passed it and set `rail: Some(rail)` on the too-large body, the served page still carried
+      neither `/ipam/range/delete` nor `/ipam/range/edit`: the partial is included from the branch
+      that draws the GRID, so the Rust half of AC6 was met and the TEMPLATE half was not.
+      🔑 **What made that visible is a choice made one minute earlier**: the test could have passed
+      `no_rail()` — enough for the compiler, enough for a green suite — and AC6 would have shipped
+      implemented and measured by nothing. Passing the POPULATED rail and asserting a control is
+      present is the whole difference between a criterion met and a criterion claimed. *A guard
+      placed where the defect cannot occur reads as coverage and is none* — this is the same rule
+      used in the other direction, to put the guard where the defect actually was.
+      Counts: **695 + 191 + 99**, clippy clean over `--all-targets`.
+- [x] **T6** (AC7, AC8) Measure. Prove-to-red each new guard with `cargo xtask mutate --baseline`,
       predictions written first; both browser gates; the documents and both twins.
+      ✅ 2026-09-16. **AC7 — THE LIVE COUNT, both store conditions, commands named.** Baseline **980
+      → 987** (**697 bin + 191 core + 99 xtask**). Against a live `mariadb:10.11` on port 13450, the
+      database **dropped and recreated** and one **warm run** first: `cargo test --workspace --locked`
+      = 987, **22.40 s** (warm run 23.12 s). Storeless, same command with `RUSTFLAGS="-D warnings"`:
+      987, **5.04 s** — *the clock is the tell*, since the counts are identical either way and only
+      the wall time says the database-backed tests executed.
+      ✅ **AC8 — no regression**: ten gates (`cargo xtask ci` — all green) · `cargo clippy --workspace
+      --all-targets --locked -- -D warnings` · `RUSTFLAGS="-D warnings" cargo test --workspace
+      --locked` · `cargo deny --manifest-path Cargo.toml check` (advisories, bans, licenses, sources
+      ok — ⚠️ the flag goes BEFORE `check`, an ordering this project has already got wrong once) ·
+      `cargo fmt --all` · **both manuals build** (user manual 15 pages) · **both browser gates**: axe
+      **10 routes + 5 states, 0 violation nodes** under all four `AXE_REQUIRE_*` flags, kbd **52
+      checks, 0 failed**.
+      🔑 **Seven prove-to-red passes, every prediction written BEFORE the run**: the widened cap guard
+      (`left: 9, right: 5`, then `15/9`, recounted by hand before the count moved) · **M-T2a** and
+      **M-T2b**, each reding exactly one test with the OTHER as its green control · **M-T3, M-T3b,
+      M-T3c**, whose first two greens are the finding · the key guard, red on a blanked French value ·
+      and the two browser checks, red with a deliberate asymmetry (one fails, the other must not).
+      ⚠️ **The driver reports no test NAMES — its whole log is 31 lines of summaries — so every
+      carrier here was established BY HAND** (own copy, mutation verified applied, single filter,
+      restore verified, never `git checkout` on a tree carrying hours of uncommitted work). *A
+      matching count is not a matching carrier.*
+      ✅ Documents: the user manual's *Defining the addressing plan* section now describes correcting
+      and removing, the rail's two lists, and the warning before both removals; both twins and
+      `sprint-status.yaml` updated in the same push.
 
 ## Dev Notes
 
@@ -303,8 +534,44 @@ gates, documents current before the push.
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context).
+
 ### Debug Log References
+
+Every measurement in this file was written to a log and its exit status read from that file, never
+through a pipe (story 6b.10's defect: `cargo test | grep` takes the pipeline's status, and a commit
+went in over `484 passed; 1 failed`). Logs under this session's scratchpad: `t1-cap`, `t2-store`,
+`m-t2a` / `m-t2a-carrier`, `m-t2b` / `m-t2b-carrier`, `m-t3-carrier`, `m-t3b-carrier`, `m-t3c-both`,
+`page-keys`, `m-keys-carrier`, `m-kbd-carrier`, `gates`/`gates2`/`gates3`, `t6-final`.
 
 ### Completion Notes List
 
+- **The operator can correct and remove what they declared.** `WriteRoute` 3 → 8, five POST routes,
+  the rail's two lists with a control per record, and a delete warning that refuses nothing.
+- 🔴 **Three findings that cost the most, each measured rather than reasoned**: the delete's
+  serialisation has **two independent carriers** (removing either reds nothing; removing both takes
+  the inserter from over a second to **2.86 ms**); **`ipam_page.rs` had no key guard at all**, so
+  thirteen keys landed under a green suite and ten gates — 73 are now asserted in both locales; and
+  **AC6 was explained away, then met in Rust only**, caught solely because the test passed a
+  populated rail instead of the empty one the compiler would have accepted.
+- ⚠️ **Two of my own records were wrong when written and are corrected in place rather than
+  replaced**: T5 claimed AC6 met while the too-large branch had no rail, and the M-T3 entry named a
+  carrier the next mutation refuted. Both keep their first version visible.
+- ⚠️ **The driver reports no test names**, so every mutation carrier here was established by hand —
+  own copy, mutation verified applied, single filter, restore verified, never `git checkout`.
+- ⚠️ **What is NOT in this story**: the release (`14-4b`, blocked on Guy minting « release » /
+  « libérer » in `prd.md` and the UX spec), FR21's VLAN half and FR25.
+- ⚠️ **`a11y/seed.sql` is unchanged**, as T5 predicted: the default subnet already carries three
+  ranges and two addresses, which the keyboard gate confirms by finding 3 + 2 + 1 removal controls
+  and 3 + 2 correction controls on the page it opens.
+
 ### File List
+
+**New** — `crates/opencmdb-bin/templates/_ipam_rail_lists.html`
+
+**Modified** — `crates/opencmdb-bin/src/ipam_repo.rs` · `crates/opencmdb-bin/src/ipam_write.rs` ·
+`crates/opencmdb-bin/src/ipam_page.rs` · `crates/opencmdb-bin/src/main.rs` ·
+`crates/opencmdb-core/src/ipam/mod.rs` · `crates/opencmdb-bin/templates/_ipam.html` ·
+`crates/opencmdb-bin/locales/app.yml` · `crates/opencmdb-bin/assets/app.css` · `a11y/kbd-probe.mjs` ·
+`docs/manuals/user-manual/user-manual.tex` · `docs/project-context.md` · `CLAUDE.md` ·
+`_bmad-output/implementation-artifacts/sprint-status.yaml` · this story file.
