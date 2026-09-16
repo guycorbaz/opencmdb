@@ -147,29 +147,73 @@ from that one is **Guy's arbitration 4 — IPAM and `declared_attribute` are two
 said here rather than left for a dev agent to meet. ⚠️ FR41 naming *subnet* is what makes decision 2
 real.
 
-## §2 — Decisions remaining at T0
+## §2 — Decisions, ✅ ALL FOUR TAKEN 2026-09-16 (Guy)
 
-1. **The route shape** (§1(f)): more POST routes on the existing machinery, or real verbs on a router,
-   a guard and a gate that have only ever seen POST.
-2. 🔴 **Deleting a SUBNET: in or out?** Cheap here (a foreign key, one route, one refusal key, no race)
-   and **FR41's subject** (§1(g)). The two registers separate them; say which register this gesture is
-   about.
-3. **Does a delete WARN before it fires?** (§1(e)) — the mechanism exists since 14.3b, and these are
-   the irreversible gestures.
-4. **Is a GATE owed** for the product's first production `UPDATE`/`DELETE`? (§1(f)) — story 5.12's own
-   instruction, or a written reason it does not apply.
+Each is recorded **with the option refused**, so that none is re-opened in silence by a dev agent
+meeting it mid-implementation.
+
+1. ✅ **THE ROUTE SHAPE: more POST routes on the existing machinery.** `WriteRoute` gains its variants;
+   the exhaustive `match` reds if one is not mounted, and the Origin check, the keyed refusals, the
+   budget and `settle` are reused verbatim. **Refused: real verbs** (`hx-delete`, `hx-put`) — htmx
+   2.0.4 emits them, but the write sub-router, the CSRF guard and the perimeter guard have only ever
+   seen POST, and that is new machinery in the story that introduces the product's first irreversible
+   gestures. ⚠️ **THE ACCEPTED COST, written rather than discovered: a path that says `delete` in a
+   product whose every gesture is a POST.** Say it at the route; do not let the shape imply a verb.
+2. ✅ **DELETING A SUBNET IS IN.** Guy's arbitration 4 separates the registers: `ip_subnet` is the
+   PLAN, not `declared_attribute`, so the gesture belongs to this epic. **Refused: leaving it to Epic
+   21**, whose FR41 (`prd.md:962`) names subnets — the register distinction is what separates them, and
+   without this route creating a subnet stays a one-way act, which is the ratchet this story exists to
+   end. 🔑 Measured cheap: the database refuses it alone (`ERROR 1451` on `ip_range_subnet_fk` or
+   `ip_address_subnet_fk`) — one route, one refusal sentence, no count, no lock, no race. ⚠️ And
+   `constraint_refusal`'s `"foreign_key"` → 404 `ipam.refusal.unknown_subnet` must be **split by
+   route**: *"this subnet still holds ranges"* is not *"no such subnet"*.
+3. ✅ **A DELETE WARNS BEFORE IT FIRES — for BOTH deletes.** The product already warns before a
+   CREATE (14.3b's two check routes); not warning before an irreversible destruction that changes
+   **other** addresses' verdicts would be that asymmetry pointed the other way. Measured (§1(e)):
+   deleting a `dhcp-pool` range manufactures **three** findings at once; deleting a `static` range
+   empties the offer. **Refused: the range only** — an operator would have to guess which gesture
+   speaks; **refused: a refusal and a confirmation alone** — they say *this is not allowed* and *are
+   you sure*, never *here is what will change*. 🔑 It WARNS and does not refuse, on
+   `epics.md:2433`'s own rule.
+4. ✅ **NO NEW GATE — and the reason is WRITTEN rather than left to the gates' silence.** The ten
+   gates protect the OBSERVED side (`observed-immutable`) and the provenance of the DECLARED side
+   (`authorship`, `entity-id-immutable`). The plan is the operator's own register, where deleting **is
+   the gesture** and not a violation — so a gate refusing it would be a barrier against the product's
+   own subject. **Refused: a sanctioned-site gate** on `authorship`'s model (it would close the class
+   for good, at the price of an eleventh gate and its probe corpus, in a story already dense);
+   **refused: deferring with a register row**, because this project has measured that *a register row
+   with no named owner is not an action*. ⚠️ **What IS owed and is AC1's work: widening the lock-wait
+   cap's guard**, which is blind to `DELETE`/`UPDATE` (§1(a)) — the one place where the gates' silence
+   really does hide something.
+
+⚠️ **THE ACCEPTED COST OF 2 AND 3, STATED RATHER THAN DISCOVERED: this half is now FIVE write routes
+plus one check route** — edit range · edit address · delete range · delete address · delete subnet ·
+`GET /ipam/delete-check`. Story 14.2b, this epic's size reference, shipped **three** write routes in 22
+files and +5071 lines. The split already taken (corrections | release) is not re-opened here; the size
+is written so that T6's measurement is read against it rather than against a memory of three.
 
 ## Acceptance Criteria
 
-**AC1 — edit and delete a range and an address, on 14.2b's machinery — and WIDEN what its guard sees.**
-The Origin check, keyed refusals, the budget and `settle` are reused. Two exceptions are measured and
-must be BUILT: the statement cap's guard is blind to `DELETE`/`UPDATE` (§1(a)), and the sibling scan
-refuses a legal widening (§1(b)).
+**AC1 — FIVE write routes on 14.2b's machinery — and WIDEN what its guard sees.** Edit a range · edit
+an address · delete a range · delete an address · **delete a subnet** (decision 2), all POST (decision
+1), all mounted from `WriteRoute`'s exhaustive `match`. The Origin check, the keyed refusals, the
+budget and `settle` are reused, and a test asserts the reuse rather than a comment claiming it.
+⚠️ **Two exceptions are MEASURED and must be BUILT rather than assumed**: the statement cap's guard is
+blind to `DELETE`/`UPDATE` (§1(a)), and the sibling scan refuses a legal widening (§1(b)).
+⚠️ **`WriteRoute::ALL` is a hand-written array** (§1(f)): five new variants are five chances to add one
+to both `match`es and forget the list, which compiles cleanly and mounts nothing.
 
 **AC2 — deleting a range that still holds defined addresses is REFUSED BY NAME, never cascading**, and
 the refusal holds under concurrency with the parent-row lock (§1(c)). Its instrument is a **new** pause
-seam. A subnet delete, if decision 2 admits it, is a foreign key and needs its own sentence rather than
-`unknown_subnet`.
+seam. **A subnet delete is IN** (decision 2): the database refuses a non-empty one by foreign key, and
+that refusal needs **its own sentence** — `constraint_refusal`'s `foreign_key` arm is split by route,
+because *"this subnet still holds ranges"* is not *"no such subnet"*.
+
+**AC2b — a delete WARNS before it fires, for both deletes** (decision 3), on 14.3b's contract: a GET
+check route, a polite live region, focus left where the operator is, and **no refusal** — it says what
+will change, it does not stop the gesture. It names what the measurement names: how many silent
+addresses become findings, and whether the offer is emptied. ⚠️ The warning is reached only by a
+gesture, so it is on no page a URL walks: the keyboard gate PRESSES it, as it does the address check.
 
 **AC3 — every refusal is a KEYED body in both locales**, never a Rust `format!`.
 
@@ -191,13 +235,20 @@ gates, documents current before the push.
 
 ## Tasks / Subtasks
 
-- [ ] **T0** Take §2's four decisions with Guy. §0 and §1 are settled.
+- [x] **T0** Take §2's four decisions with Guy. ✅ 2026-09-16 — all four taken, each recorded with the
+      option refused; §0 and §1 are settled and are not re-opened.
 - [ ] **T1** (AC1) The adapter's edit and delete with the parent-row lock and `capped!`; **widen the
-      cap's guard** to cover `DELETE`/`UPDATE`, proven red before it passes.
+      cap's guard** to cover `DELETE`/`UPDATE`, proven red before it passes. ⚠️ Write, at the site, the
+      reason no new gate is owed (decision 4) — the gates' silence must not stand in for it.
 - [ ] **T2** (AC1) The edit's own sibling scan (`id <> ?`): a legal widening accepted, an illegal one
       still refused.
 - [ ] **T3** (AC2, AC5) The computed refusal, its **own** pause seam, the concurrent-inserter
-      measurement, the neighbours-stand-still test; `constraint_refusal`'s `foreign_key` arm split.
+      measurement, the neighbours-stand-still test; the **subnet route**, whose refusal the database
+      raises alone (`1451`); `constraint_refusal`'s `foreign_key` arm split by route, so *"this subnet
+      still holds ranges"* stops being served as *"no such subnet"*.
+- [ ] **T3b** (AC2b) `GET /ipam/delete-check` on 14.3b's contract — a polite live region, focus left
+      where it was, **no refusal** — naming how many silent addresses a deletion turns into findings and
+      whether it empties the offer. It is reached only by a gesture, so the keyboard gate PRESSES it.
 - [ ] **T4** (AC3) The refusal set over what each handler can RECEIVE, keyed in both locales.
 - [ ] **T5** (AC4, AC6) The rail's two lists and their controls; the keyboard gate's new checks; the axe
       pass. The seed already reaches both delete cases.
