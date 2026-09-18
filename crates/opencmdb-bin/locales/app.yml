@@ -934,6 +934,43 @@ ipam.check.range_seen_one:
 ipam.check.range_seen_many:
   en: "%{count} addresses already seen on the network would fall inside this static range."
   fr: "%{count} adresses déjà vues sur le réseau tomberaient dans cette plage statique."
+# 🔑 Story 14.4's delete warning (decision 3: a delete warns before it fires, for BOTH deletes). It
+# REFUSES NOTHING — the address and range checks' own contract — and says what the removal would
+# change: addresses the range explains today that become findings once it is gone, and whether the
+# subnet is left with nothing on offer.
+ipam.check.delete_range_seen_one:
+  en: "%{count} address the network shows inside this range is explained by it today; remove the range and it becomes a finding."
+  fr: "%{count} adresse vue sur le réseau dans cette plage est expliquée par elle aujourd'hui : supprimez la plage et elle devient un signalement."
+ipam.check.delete_range_seen_many:
+  en: "%{count} addresses the network shows inside this range are explained by it today; remove the range and they become findings."
+  fr: "%{count} adresses vues sur le réseau dans cette plage sont expliquées par elle aujourd'hui : supprimez la plage et elles deviennent des signalements."
+# 🔴 **THE REFUSAL THE RANGE DELETE ACTUALLY HAS, which the check never mentioned.** Story 14.4 mints
+# `ipam.refusal.range_still_holds_addresses` — computed, not raised — and the warning consulted the
+# NETWORK and the offer while never asking the one question that decides whether the gesture happens
+# at all. The operator was told the removal was still possible over a press the adapter answers 409.
+# 🔑 Worded like the subnet's, because it is the same shape: the refusal is coming, and saying so is
+# kinder than letting them meet it blind.
+ipam.check.delete_range_holds_one:
+  en: "This range still holds 1 address you defined inside it, so removing it will be refused until that address is gone."
+  fr: "Cette plage contient encore 1 adresse que vous y avez définie : sa suppression sera refusée tant qu'elle y sera."
+ipam.check.delete_range_holds_many:
+  en: "This range still holds %{count} addresses you defined inside it, so removing it will be refused until they are gone."
+  fr: "Cette plage contient encore %{count} adresses que vous y avez définies : sa suppression sera refusée tant qu'elles y seront."
+ipam.check.delete_empties_offer:
+  en: "This is the only static range reaching this subnet, so removing it leaves nothing to offer here."
+  fr: "C'est la seule plage statique qui couvre ce sous-réseau : la supprimer ne laissera plus rien à proposer ici."
+ipam.check.delete_subnet_holds_one:
+  en: "This subnet still holds %{count} record you defined, so removing it will be refused until that record is gone."
+  fr: "Ce sous-réseau contient encore %{count} enregistrement que vous avez défini : sa suppression sera refusée tant qu'il sera là."
+ipam.check.delete_subnet_holds_many:
+  en: "This subnet still holds %{count} records you defined, so removing it will be refused until they are gone."
+  fr: "Ce sous-réseau contient encore %{count} enregistrements que vous avez définis : sa suppression sera refusée tant qu'ils seront là."
+ipam.check.delete_address_seen:
+  en: "The network still shows this address in use. Removing its record does not free it — it leaves it as a finding."
+  fr: "Le réseau montre encore cette adresse en usage. Supprimer son enregistrement ne la libère pas : elle devient un signalement."
+ipam.check.still_removes:
+  en: "The removal is still possible — this is what it would change, not a refusal."
+  fr: "La suppression reste possible : ceci dit ce qu'elle changerait, ce n'est pas un refus."
 ipam.unknown_subnet:
   en: "No subnet is named by this identifier. Choose one above."
   fr: "Aucun sous-réseau ne porte cet identifiant. Choisissez-en un ci-dessus."
@@ -1037,6 +1074,20 @@ ipam.done.address:
 # that named none of them would be the *"malformed request"* an operator cannot act on. ⚠️ The NIL
 # UUID is folded in here rather than given a key of its own (`document.rs:195`'s precedent): it is a
 # sentinel no operator types, so naming it would spend a sentence on a hand-crafted request.
+# 🔑 Story 14.4's one DECIDED refusal: a range holds an address by arithmetic, so the database cannot
+# raise it and the adapter counts it under the parent row's lock. The sentence names what the operator
+# must do — remove or move those addresses — because a refusal they cannot act on is a dead end.
+ipam.refusal.range_still_holds_addresses:
+  en: "This range still holds addresses you defined inside it. Remove or move them first; deleting the range would leave them with nothing saying what that space is meant for."
+  fr: "Cette plage contient encore des adresses que vous y avez définies. Supprimez-les ou déplacez-les d'abord : supprimer la plage les laisserait sans rien qui dise à quoi cet espace est destiné."
+# 🔴 THE SAME RULE, THE OTHER GESTURE (Guy's decision 2, 2026-09-16). The review's repair made an
+# EDIT that abandons an address earn the delete's refusal — and with it the delete's sentence, so an
+# operator who had SHRUNK a range was told what deleting it would do. *A true sentence about the
+# wrong gesture, which is worse than none.* The rule is one; the sentence is two, because the remedy
+# differs: a delete has to be given up, an edit can simply be widened.
+ipam.refusal.range_edit_would_abandon:
+  en: "The bounds you asked for would leave addresses you defined outside this range. Widen it, or remove or move those addresses first."
+  fr: "Les bornes demandées laisseraient hors de cette plage des adresses que vous y avez définies. Élargissez-la, ou supprimez ou déplacez ces adresses d'abord."
 ipam.refusal.malformed_subnet:
   en: "Malformed request: the form must carry a subnet in CIDR notation, such as 192.0.2.0/24, and a label."
   fr: "Requête mal formée : le formulaire doit porter un sous-réseau en notation CIDR, par exemple 192.0.2.0/24, et une étiquette."
@@ -1079,6 +1130,89 @@ ipam.refusal.already_defined_address:
 ipam.refusal.unknown_subnet:
   en: "That subnet is not in the plan."
   fr: "Ce sous-réseau n'est pas dans le plan."
+# 🔑 The rail's two lists (Guy's decision 3, 2026-09-16: lists in the rail rather than controls on
+# the grid's cells). A cell is 14 px and already carries a state, a policy and an accessible name;
+# hanging two controls on it would have put the gesture where there is no room to say what it does.
+ipam.rail.ranges_heading:
+  en: "Declared ranges"
+  fr: "Plages déclarées"
+ipam.rail.addresses_heading:
+  en: "Defined addresses"
+  fr: "Adresses définies"
+ipam.rail.no_ranges:
+  en: "No range is declared in this subnet, so nothing says what its space is meant for."
+  fr: "Aucune plage n'est déclarée dans ce sous-réseau : rien ne dit à quoi son espace est destiné."
+ipam.rail.no_addresses:
+  en: "No address is defined in this subnet."
+  fr: "Aucune adresse n'est définie dans ce sous-réseau."
+# ⚠️ The two controls are LABELLED, never an icon alone: an icon-only button has no accessible name
+# unless one is supplied, and this product has already shipped a control that keyboard users could
+# not reach at all (story 6b.4b). The record's own description follows in the accessible name.
+ipam.rail.edit:
+  en: "Correct"
+  fr: "Corriger"
+ipam.rail.delete:
+  en: "Remove"
+  fr: "Supprimer"
+# The five corrections' completion sentences. 🔑 They say what BECAME TRUE rather than that a
+# statement ran: an operator reading "removed" wants to know the plan no longer claims that space.
+# 🔴 **THE CASCADE THIS SENTENCE USED TO PROMISE CAN NEVER HAPPEN**, and the review found the pair.
+# `delete_subnet` is refused by a foreign key while ANY range or address still points at the subnet,
+# so on success there is by definition nothing left to take with it — *"with everything that
+# described it"* described an outcome the schema makes unreachable. Its twin, `subnet_still_holds`,
+# justified the refusal by that same impossible cascade; both are corrected rather than softened.
+ipam.done.delete_subnet:
+  en: "The subnet is gone from the plan."
+  fr: "Le sous-réseau ne figure plus dans le plan."
+ipam.done.delete_range:
+  en: "The range is gone. That space is no longer meant for anything in particular."
+  fr: "La plage a été supprimée. Cet espace n'est plus destiné à quoi que ce soit en particulier."
+ipam.done.delete_address:
+  en: "The address is no longer defined. If something is still using it, the audit will say so."
+  fr: "L'adresse n'est plus définie. Si quelque chose l'utilise encore, l'audit le signalera."
+ipam.done.edit_range:
+  en: "The range now reads as you corrected it."
+  fr: "La plage correspond maintenant à votre correction."
+ipam.done.edit_address:
+  en: "The address now reads as you corrected it."
+  fr: "L'adresse correspond maintenant à votre correction."
+# 🔴 Story 14.4 SPLITS what one sentence used to serve. `RepositoryError::NotFound` answered
+# "that subnet is not in the plan" on EVERY route, so an edit of a range the plan no longer holds
+# told the operator their subnet was gone — a sentence that is false and that sends them to look in
+# the wrong place. The record the id names is what the sentence must name.
+# ⚠️ This paragraph sat ~50 lines above, over the `ipam.rail.*` keys, which it does not describe —
+# the review found it. A comment that explains the wrong keys is worse than none: the next reader
+# corrects the sentence it is standing on.
+ipam.refusal.unknown_range:
+  en: "That range is no longer in the plan. Someone may have removed it since this page was drawn — reload and look again."
+  fr: "Cette plage n'est plus dans le plan. Quelqu'un l'a peut-être supprimée depuis l'affichage de cette page : rechargez et regardez à nouveau."
+ipam.refusal.unknown_address:
+  en: "That address is no longer defined in the plan. Someone may have removed it since this page was drawn — reload and look again."
+  fr: "Cette adresse n'est plus définie dans le plan. Quelqu'un l'a peut-être supprimée depuis l'affichage de cette page : rechargez et regardez à nouveau."
+# 🔴 The OTHER half of the same split, and this one was actively misleading: deleting a subnet that
+# still holds ranges raises `ERROR 1451` on a foreign key, which `constraint_refusal` mapped to a
+# 404 "no such subnet" — the operator was told the subnet did not exist while looking at it.
+ipam.refusal.subnet_still_holds:
+  en: "This subnet still holds ranges or addresses you defined. Remove them first — the plan keeps a subnet as long as anything inside it is still declared."
+  fr: "Ce sous-réseau contient encore des plages ou des adresses que vous avez définies. Supprimez-les d'abord : le plan conserve un sous-réseau tant que quelque chose y est encore déclaré."
+# The five corrections each name THEIR OWN form's fields. One shared sentence was refused: the
+# reuse guard asserts the shape sentences are DISTINCT per route, precisely so that a form cannot
+# answer with a sentence naming fields it does not carry.
+ipam.refusal.malformed_delete_subnet:
+  en: "Malformed request: the form must carry the identifier of the subnet to remove."
+  fr: "Requête mal formée : le formulaire doit porter l'identifiant du sous-réseau à supprimer."
+ipam.refusal.malformed_delete_range:
+  en: "Malformed request: the form must carry the identifier of the range to remove."
+  fr: "Requête mal formée : le formulaire doit porter l'identifiant de la plage à supprimer."
+ipam.refusal.malformed_delete_address:
+  en: "Malformed request: the form must carry the identifier of the address to remove."
+  fr: "Requête mal formée : le formulaire doit porter l'identifiant de l'adresse à supprimer."
+ipam.refusal.malformed_edit_range:
+  en: "Malformed request: the form must carry the identifier of the range, a first and a last address, a policy and a label."
+  fr: "Requête mal formée : le formulaire doit porter l'identifiant de la plage, une première et une dernière adresse, une politique et une étiquette."
+ipam.refusal.malformed_edit_address:
+  en: "Malformed request: the form must carry the identifier of the address, the address itself and a label."
+  fr: "Requête mal formée : le formulaire doit porter l'identifiant de l'adresse, l'adresse elle-même et une étiquette."
 # 🔴 A KEY, where the documenting route still answers an English literal: the review found that
 # literal swapped into the page under a French UI. Behind a reverse proxy, `Host` must be forwarded.
 # ⚠️ It first said the write "did not come from this opencmdb's own page" — false in the one case an

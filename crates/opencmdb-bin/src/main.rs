@@ -1813,9 +1813,13 @@ mod tests {
             .collect();
         assert_eq!(
             declared.len(),
-            4,
-            "the premise: four write routes today ({declared:?}). A loop that went empty would \
-             assert nothing, and a list that shrank silently would assert less"
+            9,
+            "the premise: nine write routes today ({declared:?}) — `/document-all` plus the plan's \
+             three definitions and five corrections. A loop that went empty would assert nothing, \
+             and a list that shrank silently would assert less" // ⚠️ **This premise is DERIVED from `WriteRoute::ALL`, so it can catch a shrink and
+                                                                // never an omission**: a variant missing from that list is missing from `declared` too,
+                                                                // and 9 stays 9. `ipam_write`'s `every_variant_is_in_the_route_list` is what carries
+                                                                // that half, and it says its own limit.
         );
 
         for path in &declared {
@@ -1998,12 +2002,18 @@ mod tests {
                 (status, elapsed, body_text(response).await)
             }
         };
-        let (measured, address, range) = tokio::join!(
+        let (measured, address, range, removal) = tokio::join!(
             measured,
             probe_check(format!("{}?addr=192.0.2.9", ipam_page::ADDRESS_CHECK_PATH)),
             probe_check(format!(
                 "{}?first=192.0.2.1&last=192.0.2.9&policy=static",
                 ipam_page::RANGE_CHECK_PATH
+            )),
+            // Story 14.4's delete warning: a THIRD unguarded GET route would be exactly the defect
+            // this guard exists for, added by the task that closed another one.
+            probe_check(format!(
+                "{}?subnet=01900000-0000-7000-8000-0000000000aa&first=192.0.2.1&last=192.0.2.9",
+                ipam_page::DELETE_CHECK_PATH
             )),
         );
         // 🔴 **A CHECK REFUSES WITH A SENTENCE AND NOT WITH A STATUS, and this assertion read
@@ -2012,9 +2022,11 @@ mod tests {
         // measured. What must still hold is the CLOCK, which is what this guard is for; what
         // changed is that the refusal is now something the operator can read.
         let unavailable = rust_i18n::t!("ipam.check.unavailable").to_string();
-        for (what, (status, elapsed, body)) in
-            [("the address check", address), ("the range check", range)]
-        {
+        for (what, (status, elapsed, body)) in [
+            ("the address check", address),
+            ("the range check", range),
+            ("the delete check", removal),
+        ] {
             assert_eq!(
                 status,
                 StatusCode::OK,
@@ -2067,6 +2079,7 @@ mod tests {
         for uri in [
             format!("{}?addr=", ipam_page::ADDRESS_CHECK_PATH),
             format!("{}?first=&last=&policy=", ipam_page::RANGE_CHECK_PATH),
+            format!("{}?subnet=", ipam_page::DELETE_CHECK_PATH),
         ] {
             the_check_is_refused_without_a_credential_and_exists(&uri).await;
         }

@@ -174,6 +174,31 @@ subnet written with host bits set, a label that is empty or longer than 120 char
 the plan already holds. The forms need JavaScript. If a write takes too long, the screen says it
 may or may not have been saved: reload the plan before trying again.
 
+Beside the grid, two lists show what the selected subnet already holds --- its declared ranges and
+its defined addresses --- and each entry carries two controls, \emph{Correct} and \emph{Remove}.
+Correcting keeps the record: the form arrives holding its current values, so you change what is
+wrong rather than retyping the rest. The rules that governed the definition still apply --- a range
+may be widened onto ground it already occupies; it may not be widened onto a neighbour's --- and
+correcting a range carries one rule that defining it does not: a range may not be moved or narrowed
+off an address you defined inside it. Widening is therefore always allowed, and so is changing the
+policy or the label; what is refused is a correction that would leave one of your own addresses
+outside the range that explains it. These lists are
+shown whether or not the grid is drawn, so a subnet too large to draw still offers the controls that
+correct it.
+
+Removing is refused when the removal would leave something behind: a range that still holds
+addresses you defined inside it says so by name, and a subnet that still holds ranges or addresses
+says that it holds them --- not that it does not exist. Before any of the three removals fires,
+reaching its control tells you what that removal would change: for a range, how many addresses you
+defined inside it still hold it back --- which is the refusal above, announced before you meet it
+rather than after --- how many addresses the network shows inside it are explained by it today and
+would become findings once it is gone, and whether it is the only \texttt{static} range, so that
+removing it would leave nothing to offer here; for a defined address, whether the network still
+shows it; and for a subnet, how many records are still holding it back. As with the other two
+warnings, \emph{the warning} refuses nothing: it says what would change and never stops the gesture
+itself. Whether the removal is then refused is the paragraph above --- a range still holding your
+addresses, and a subnet still holding anything, are both refused until what they hold is gone.
+
 Two of the forms tell you what they know \emph{before} you write. As you type an address, the form
 says whether the network has been seen on it (and with which hardware addresses, and when), whether
 the inventory documents it, whether the plan already defines it, and whether it falls inside a
@@ -218,7 +243,8 @@ large to draw proposes nothing and still lists what the network shows. The occup
 free only what the offer would propose.
 
 \begin{planned}
-Editing, deleting and releasing an entry of the plan; VLANs; and IPv6 are not implemented yet.
+Releasing an entry of the plan; VLANs; and IPv6 are not implemented yet. Editing and deleting are
+described above and ship with this release.
 \end{planned}
 
 \chapter{Applications and hosted software}

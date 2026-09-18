@@ -5757,3 +5757,105 @@ One row, and v0.3.0 is what made it live.
   "registered" is not a registration* (`:4530`). Registered now, at second hand. **Owner: Epic 14's
   retrospective**, which may decide whether `/ipam` owes that control at all now that 14.4 puts
   controls on the screen.
+
+## Deferred from: code review of 14-4-maintaining-the-plan (2026-09-16)
+
+Three isolated layers over the adapter slice; none failed, and three findings were reached by all
+three independently. These are the ones deferred rather than patched — each with the reason, because
+*a row that names its precondition is actionable and one that says "later" is not*.
+
+- ⚠️ **The two rail readers are UNBOUNDED in the one branch written for hugeness.**
+  `correctable_ranges_in` / `correctable_addresses_in` (`ipam_repo.rs:384`, `:421`) carry no `LIMIT`,
+  and `ipam_page.rs:848-857` calls them in exactly the branch where the grid is deliberately NOT built
+  because the subnet is too large to draw. **Deferred rather than fixed**: the volume is bounded by
+  what the operator DECLARED rather than by subnet size, so this is not story 14.2b's 2.08 GB defect —
+  and a `LIMIT` would silently truncate the operator's own list of records, which is worse than a long
+  list. What is owed is a decision about what a rail does with a thousand declared ranges, not a
+  number chosen here. **Owner: the story that gives the rail a filter or a pager.**
+- ⚠️ **Both new readers return POSITIONAL tuples whose first and last fields are both `String`.**
+  `(String, Ipv4Addr, Ipv4Addr, IpPolicy, String)` and `(String, Ipv4Addr, String)` — `id` and `label`
+  at opposite ends, same type. A call site that destructures them the wrong way round **compiles
+  cleanly and renders the label as the id a DELETE control names** (`ipam_repo.rs:389`, `:426`).
+  **Deferred rather than fixed**: the honest closure is a two-field struct or a newtype on the id —
+  this project's own *close it in the TYPE* precedent — and it ripples into `ipam_page.rs`'s
+  `RailLists::new`. ⚠️ It is one gesture away from a destructive control, which is what makes it worth
+  a row rather than a shrug. **Owner: 14.4b**, which touches the same rail.
+- ⚠️ **`delete_range`'s deciding read X-locks every address row of the SUBNET, not of the range.**
+  `SELECT addr FROM ip_address WHERE subnet_id = ? FOR UPDATE` with no bound (`ipam_repo.rs:227-239`),
+  so removing one range blocks address writes in **unrelated ranges of the same subnet** for the
+  transaction's life. **Deferred rather than narrowed**, and the reason is measured: that scan is one
+  of the **two independent carriers** of the serialisation this story proved — dropping it alone reds
+  nothing only because the parent-row lock still holds — so narrowing it to the range's own interval
+  cannot be done without re-running M-T3/M-T3b/M-T3c and re-deciding what carries what.
+  **Owner: the story that revisits the plan's locking**, with the three mutations as its entry price.
+
+## Raised by story 14.4's SECOND review round — the routes (2026-09-16)
+
+- ⚠️ **`GET` on a write route answers `405` with an EMPTY body.** Measured on the running binary:
+  `curl /ipam/subnet/delete` → `405 | []`. Story 6.1 scoped its *"never answers an empty body"*
+  promise to the POST pair, so this is inherited rather than new, and no shipped form can reach it —
+  every control posts. **Recorded because this story took the surface from three write routes to
+  eight**, and a residual sized for three is not automatically sized for eight: what was one address
+  an operator could only reach by hand is now five more. What is owed is a decision about whether the
+  method-not-allowed body joins the keyed perimeter story 6b.10's arbitration 2(a′) drew around the
+  bodies served at these addresses. **Owner: Epic 19**, which already carries Basic's closure and the
+  other HTTP-surface residuals.
+- ⚠️ **The four record-addressed forms are now UN-PARENTED at the route, and a *move* gesture must
+  re-open that rather than inherit it.** Guy's decision 1 of 2026-09-16 removed `subnet_id` from the
+  range and address corrections and deletions: the adapter reads the record's real parent off the row,
+  so nothing the browser sends can name a subnet any more. That is right for every gesture the product
+  has — all four change a record **inside** the subnet it already belongs to. ⚠️ **It is exactly wrong
+  for a gesture that MOVES a record between subnets**, which would need the operator to name a
+  destination, and would need it validated against the record's current parent rather than substituted
+  for it — the comparison this decision made unnecessary. Nothing in Epic 14 proposes such a gesture
+  today, which is why this is a row and not a task; the cost of not writing it is that the next story
+  wanting one reads decision 1 as settling a question it never considered. **Owner: Epic 14's
+  retrospective**, which should decide whether a move belongs to the plan at all.
+
+## Raised by story 14.4's THIRD review round — the screen (2026-09-17/18)
+
+- 🔴 **`--accent-document` is written at FOUR call sites that are not the documenting gesture, and all
+  four predate story 14.4.** `_ipam_forms.html` ×3 and `_ipam.html` ×1, landed at 14.2b. `app.css`
+  asserted the token *"cannot leak … by construction"* on the true premise that `action_bar` was its
+  only producer; measured on `master`, it had not been for two stories. 14.4 added two more on the
+  rail's corrections and **removed its own two**; these four are left because widening a story's scope
+  to repair its predecessor's is how a defect stops having an owner. What is owed is a decision about
+  whether *define a subnet* and *fill an empty plan* are primary actions entitled to the amber, or
+  whether the token's reservation means what the UX spec says (`:587`, *solely for the documenting
+  gesture*). **Owner: Epic 15**, which owns the screens that write it.
+- ⚠️ **The scoping of the delete check's offer computation is carried by no unit test.** M-C6 reverted
+  it to the plan-wide value filter and measured **GREEN**: every fixture in `a_removal_warns…` uses one
+  subnet, so the scoped and plan-wide sets are identical there. The repair is right — the overlap rule
+  is per-subnet, so two subnets may legally carry ranges with identical bounds — and *a property no
+  test can tell from its opposite is a property a refactor removes in silence*. What is owed is a
+  fixture with two subnets carrying the same bounds. **Owner: the story that next touches the check**,
+  with M-C6 as its entry price.
+- ⚠️ **A correction disclosure announces its record twice**: the `<summary>` and its submit button both
+  render *"Correct — 192.0.2.9"*, so a screen reader meets the same name on the disclosure and on the
+  control inside it. Deferred rather than patched: the honest fix gives the button its own label —
+  *Save the correction* — which is a new copy key in both locales, and minting copy is scope a review
+  repair should not take on itself. **Owner: the story that next edits the rail's copy.**
+- ⚠️ **`ipam.rail.edit` is `"Correct"` in English**, an adjective/verb homograph as a button label,
+  beside `"Remove"`; the French « Corriger » is unambiguous, and English is the DEFAULT locale. This
+  project has arbitrated one English control label for exactly this class before (`gesture.merge`).
+  Deferred as a naming judgement rather than a defect. **Owner: Epic 15.**
+- ⚠️ **The removal warning re-reads the whole plan and the whole network on EVERY focus event.**
+  `hx-trigger="focus"` on all three removal controls, with no `once`, `throttle` or `delay`, and each
+  fire runs `list_subnets` + `plan_ranges` + `plan_addresses` + `read_the_network` +
+  `correctable_ranges_in` + `correctable_addresses_in`. Tabbing across the seeded rail is six full
+  plan-and-network reads, and each refocus repeats. ⚠️ **Deferred on a MEASUREMENT rather than a
+  shrug**: the review's edge layer timed it at **3–9 ms** at seed scale and explicitly declined to
+  inflate it into a finding. What is owed is the restraint story 14.3b gave the address field's own
+  warning for exactly this shape — the rail's warning inherited the live region and not the debounce.
+  🔴 **This row is here because the story claimed it was registered and it was not**: story 14.4's
+  group-C record listed it as `[Review][Defer]` while `deferred-work.md` carried no such row —
+  story 6b.9's finding verbatim, *a section that says "registered" is not a registration*, committed
+  in a push whose own message asserts the deferrals were written. **Owner: the story that next
+  touches the rail's warning.**
+- ⚠️ **`role="list"` on the rail's two lists is carried by nothing this repository can run.** It was
+  added because `list-style: none` drops the list role in Safari/VoiceOver (story 6b.7's finding), and
+  **axe reports 0 violations with or without it** — measured at this story's own gate runs. It is a
+  computed-accessibility property of a platform mapping, so neither the Rust guards nor axe can see
+  it; what would carry it is a VoiceOver check this project has no way to automate. Recorded so the
+  next reader does not delete it as unmotivated. **Owner: Epic 19**, with the other accessibility
+  residuals.

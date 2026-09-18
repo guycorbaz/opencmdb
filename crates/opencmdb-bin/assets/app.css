@@ -658,9 +658,24 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
    is *"reserved solely for the documenting gesture"* (`:587`) and the screen carries *"one primary
    action (amber Document) + secondary ghosts"* (`:1174`).
 
-   🔴 It cannot leak onto `Résoudre`: `action_bar` builds `Gesture::Live` only for the documenting
-   key, so this class and that gesture are the same thing by construction rather than by a sentence
-   about which primary happens to be live today.
+   ⚠️ **THAT SENTENCE USED TO READ *"it cannot leak … by construction"*, AND IT WAS ALREADY FALSE
+   WHEN IT WAS WRITTEN.** It held while `action_bar` was the only producer; measured at story 14.4's
+   slice-C review, `master` already carried FOUR other sites — three in `_ipam_forms.html` and one in
+   `_ipam.html` — all landed at 14.2b, none of them the documenting gesture. Story 14.4 then added
+   two more on the rail's correction controls, which is where the review caught it: on `/ipam` the
+   CORRECTIONS were the loudest controls on the page while the destructive ones stayed grey ghosts.
+   🔑 The two this story added are removed. The four older ones are REGISTERED rather than swept up
+   here, because widening a story's scope to repair its predecessor's is how a defect stops having an
+   owner — and the honest sentence now is that this class is reserved BY DISCIPLINE: one producer
+   that enforces it (`action_bar`) and four call sites that simply write it.
+   ⚠️ This paragraph twice CLOSED THIS COMMENT EARLY, nineteen lines before the block's own end, so
+   the prose below became CSS and a documenting-token read inside it was counted as an extra
+   declaration — 6, then 7. `ac4_the_amber_is_reserved_for_the_documenting_gesture` caught both.
+   🔑 The second time, the sentence that closed it was the sentence EXPLAINING the first — it quoted
+   the two characters that end a comment, and a comment ends at the first of them. *A guard that
+   greps a file greps its prose, and the better the prose explains the defect, the more reliably it
+   reproduces it* — this project's own law, met in the strongest form there is. The characters are
+   named and never written here, which is the only way this paragraph can survive its own subject.
 
    🔴 **AND IT PAINTED NOTHING FOR A DAY, BECAUSE OF THIS SELECTOR.** Written as a bare
    `.btn-document` it is specificity 0-1-0 and `.btn-gesture.live` above is 0-2-0, so ALL FOUR
@@ -985,6 +1000,21 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
 .ipam-occupancy { margin-left: auto; }
 
 .ipam-rail { display: flex; flex-direction: column; gap: 20px; }
+/* The rail's two lists of correctable records (story 14.4). The rows stack because a row carrying
+   bounds, a policy, a label and two controls does not fit across the rail the grid leaves.
+   ⚠️ That reason holds in the arm that DRAWS a grid and not in the other: a subnet too large to draw
+   renders this panel full width, with no grid beside it and no `.ipam-rail` wrapper, so nothing is
+   narrow there. The stacking is kept for both — one shape is easier to read than a layout that
+   changes with the branch — but the review found the sentence claiming a cause that applies to one
+   of the two branches AC6 requires.
+   ⚠️ `list-style: none` is why `_ipam_rail_lists.html` sets `role="list"` explicitly: Safari and
+   VoiceOver drop the list role when it is removed (story 6b.7's finding, on the grid's own list). */
+.ipam-rail-lists { display: flex; flex-direction: column; gap: 12px; }
+.ipam-rail-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ipam-rail-row { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid var(--color-divider); }
+/* One rule, where the review found two selectors carrying byte-identical declarations. */
+.ipam-rail-policy,
+.ipam-rail-label { color: var(--color-neutral-700); }
 .ipam-panel { border: 1px solid var(--border); padding: 16px 18px; }
 .panel-label {
   margin: 0;

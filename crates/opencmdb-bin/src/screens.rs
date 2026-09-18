@@ -1302,10 +1302,15 @@ mod tests {
             // green — the very thing that test's message calls *"two refusals read the same"*.
             // The mechanism was already here for `IpPolicy`; recognising a class for one type and
             // not for its neighbour is how a guard reads as coverage.
+            // ⚠️ **8 since story 14.4 added `RangeStillHoldsAddresses`** — and the review found this
+            // floor left at 7 in the very story that moved the keyboard gate's floor 45 → 53 *"to
+            // EQUAL what is there rather than sitting under it"*. A floor is only a guard while it
+            // equals what is there; one left under it tolerates the loss of a variant while still
+            // reading as a pass.
             (
                 include_str!("../../opencmdb-core/src/ipam/mod.rs"),
                 "IpamError",
-                7,
+                8,
             ),
         ] {
             let declared = variants(source, enum_name);
