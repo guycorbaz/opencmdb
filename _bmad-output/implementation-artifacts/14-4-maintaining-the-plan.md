@@ -220,7 +220,7 @@ seam. **A subnet delete is IN** (decision 2): the database refuses a non-empty o
 that refusal needs **its own sentence** — `constraint_refusal`'s `foreign_key` arm is split by route,
 because *"this subnet still holds ranges"* is not *"no such subnet"*.
 
-**AC2b — a delete WARNS before it fires, for both deletes** (decision 3), on 14.3b's contract: a GET
+**AC2b — a delete WARNS before it fires, for ALL THREE deletes** (decision 3), on 14.3b's contract: a GET
 check route, a polite live region, focus left where the operator is, and **no refusal** — it says what
 will change, it does not stop the gesture. It names what the measurement names: how many silent
 addresses become findings, and whether the offer is emptied. ⚠️ The warning is reached only by a
@@ -349,8 +349,17 @@ gates, documents current before the push.
       measurement, the neighbours-stand-still test; the **subnet route**, whose refusal the database
       raises alone (`1451`); `constraint_refusal`'s `foreign_key` arm split by route, so *"this subnet
       still holds ranges"* stops being served as *"no such subnet"*.
-      ✅ 2026-09-16. **`WriteRoute` goes 3 → 8**, so every exhaustive `match` became an `E0004` naming
-      each site rather than a list someone had to remember: five POST routes (decision 1), five port
+      ✅ 2026-09-16. **`WriteRoute` goes 3 → 8**, so ~~every exhaustive `match` became an `E0004`
+      naming each site rather than a list someone had to remember~~ — 🔴 **REFUTED by the group-B
+      review, and the strike is the correction**: every `match` is exhaustive, but `ALL` is a
+      HAND-WRITTEN array and `router_with`, `paths()`, `main.rs`'s premise and the coverage assertion
+      all derive from it, so they agree because none has a second opinion. A variant left out of
+      `ALL` is mounted by nothing and no `E0004` says so. What carries it is a second hand-written
+      list pinned by an equality, **a tripwire and not a barrier**. ⚠️ This sentence stood unstruck
+      here, and both twins published it as a property, until the slice-D review — *a correction that
+      adds the true text without removing the false one leaves the record carrying both*, which is
+      this story's own rule, applied twice elsewhere in this very file and not here. The routes are:
+      five POST routes (decision 1), five port
       methods with three implementors, five handlers, five request structs. 🔑 **Giving the writes
       their callers is what cleared the seven `never used` warnings and un-blocked the mutation
       driver** — the T1 note that they merely blocked a push was HALF TRUE: they disabled the
@@ -416,8 +425,9 @@ gates, documents current before the push.
       ✅ 2026-09-16 — verified in BOTH halves of the criterion rather than the half that happened to
       be covered. **Keyed, in both locales**: `every_refusal_the_handler_can_receive_names_a_rule`
       drives **8 routes × 7 receivable errors × 2 locales** and asserts none renders its own key name;
-      two key guards now cover the modules that render them — 38 in `ipam_write.rs`, and **73 in
-      `ipam_page.rs`, which had none at all before this story**, both asserting non-blank in `en` and
+      two key guards now cover the modules that render them — ~~38~~ **39** in `ipam_write.rs`, and
+      ~~73~~ **75** in **`ipam_page.rs`, which had none at all before this story**, both asserting
+      non-blank in `en` and
       `fr`. **Never a Rust `format!`**: measured across the write module, every production
       `Refusal::new` takes a key literal and `into_response` renders `t!(key)`; the only `format!`
       calls are the redirect URL and test helpers.
@@ -479,7 +489,14 @@ gates, documents current before the push.
 - [x] **T6** (AC7, AC8) Measure. Prove-to-red each new guard with `cargo xtask mutate --baseline`,
       predictions written first; both browser gates; the documents and both twins.
       ✅ 2026-09-16, **re-measured after the code review's repairs**. **AC7 — THE LIVE COUNT, both
-      store conditions, commands named.** Baseline **980 → 990** (**700 bin + 191 core + 99 xtask**;
+      store conditions, commands named.**
+      ⚠️ **LIVE AFTER THREE REVIEW ROUNDS: 995** (**705 bin + 191 core + 99 xtask**), 24.55 s against
+      a store dropped and recreated, 5.03 s without one, kbd-probe **53** checks. 🔴 The figures below
+      are round A's and are KEPT as the measurement they were rather than overwritten — but AC7 is
+      the one place this story says the live count lives, and it read **990** while the tree shipped
+      995 until the slice-D review found it. *A designated home that is five short is worse than no
+      designated home, because a reader who goes there stops looking.*
+      Baseline **980 → 990** (**700 bin + 191 core + 99 xtask**;
       it read 987 before the review, which added three store-backed tests). Against a live
       `mariadb:10.11` on port 13450, the database **dropped and recreated** and one **warm run**
       first: `cargo test --workspace --locked` = 990, **27.17 s** (warm run 22.65 s). Storeless, same
@@ -523,7 +540,7 @@ gates, documents current before the push.
       restore verified, never `git checkout` on a tree carrying hours of uncommitted work). *A
       matching count is not a matching carrier.*
       ✅ Documents: the user manual's *Defining the addressing plan* section now describes correcting
-      and removing, the rail's two lists, and the warning before both removals; both twins and
+      and removing, the rail's two lists, and the warning before all three removals; both twins and
       `sprint-status.yaml` updated in the same push.
 
 ### Review Findings
@@ -639,8 +656,12 @@ names, and the removal warning announced without stealing the focus.
 
 ⚠️ **Slice C is reviewed below. Slice D is NOT** — `kbd-probe.mjs`, the manual and the status files —
 🔴 **and neither is `screens.rs`, which the partition LEAKED**: it sits in no slice and no layer was
-ever handed it. Found by checking the partition rather than by any layer. Its whole change is +7/−2
-(the `IpamError` floor 7 → 8 and its comment) and it IS slice A's own repair, so the exposure is
+ever handed it. 🔴 **And the partition is not where the leak STARTS: the File List omitted the file**,
+which is the artefact a partition is cut from — so the diagnosis *"found by checking the partition"*
+named the symptom and the record's own manifest was the cause, still uncorrected in the commit that
+narrated it. `deferred-work.md` was omitted on the same footing, with no note at all. Its whole change
+is ~~+7/−2~~ **+6/−1** (the `IpamError` floor 7 → 8 and its comment) and it IS slice A's own repair,
+so the exposure is
 small — but small is not reviewed, and slice A's finding *about* that file was reached from
 `ipam/mod.rs` by a layer that could not see it. It goes into slice D.
 
@@ -749,7 +770,83 @@ no framework English; AC6 holds on a real `/8`; the unknown-subnet and empty-pla
 
 **995 tests** (705 + 191 + 99), ten gates, clippy `--all-targets`, `cargo fmt`; both browser gates
 re-run because the rail template changed again — axe **1 route / 0 nodes** empty-plan and **10 routes
-+ 5 states / 0 nodes** seeded, kbd-probe **52 checks, 0 failed**.
++ 5 states / 0 nodes** seeded, kbd-probe **52 checks, 0 failed** (that figure is slice C's own
+measurement; slice D added a check and the gate now runs **53**).
+
+### Review Findings — group D (the record, the gate, `screens.rs`, the manual)
+
+Three isolated layers, 2026-09-18. **~41 raw findings, 26 distinct.** 🔴 **THE CODE CAME THROUGH
+INTACT — no acceptance criterion is unmet, and `screens.rs`, read by a layer for the first and only
+time, passes on its merits (its floor of 8 equals the 8 variants `IpamError` declares, and the guard
+reds assertion-carried). EVERY defect in this slice is in the RECORD, and every one is mine**,
+committed in pushes whose own messages assert the opposite.
+
+- [x] [Review][Patch] 🔴 **The File List omitted `screens.rs` and `deferred-work.md`** — and *that* is
+  why the partition leaked: a slice is cut from the File List, so a file absent from it can reach no
+  layer. I had diagnosed the leak as a partition error; the manifest was the cause, still uncorrected
+  in the commit that narrated it. Reached by two layers.
+- [x] [Review][Patch] 🔴 **The gate converted a real failure into *"could not run"*.** Measured: break
+  the address warning's triage link and check 41 reds, check 42 (its dependant) never runs, `executed`
+  falls under the floor, and the floor **overwrites the verdict with 2** — the gate printing the red
+  and then telling the reader to fix the harness. A failure now decides before the floor does.
+  🔑 **M-D1, the prove-to-red for this repair**: the same defect replanted on the repaired tree answers
+  `kbd gate: 52 check(s) run, 1 failed — the keyboard layer has regressed`, **exit 1**, where it
+  answered **2** before. The 52 is the evidence that the mechanism is real and not theoretical — the
+  dependant check genuinely was skipped and `executed` genuinely did fall under the floor of 53; what
+  changed is that the floor no longer gets to speak over a detected regression.
+  ⚠️ **The run that measured it was killed mid-way and left the planted defect in the working tree**,
+  because the script had no `trap … EXIT`. Caught by checking the tree rather than by noticing, and
+  restored from a scratchpad copy after verifying that copy was the original — never `git checkout --`,
+  the gesture this project has recorded destroying uncommitted work four times. The re-run carries the
+  trap.
+- [x] [Review][Patch] 🔴 **The manual contradicted itself 45 lines apart**: new present-tense text
+  shipping *Correct* and *Remove*, and an untouched `\planned` block saying editing and deleting are
+  not implemented. Only releasing, VLANs and IPv6 are still owed.
+- [x] [Review][Patch] The manual said corrections obey the definition rules — false since round A's
+  arbitration; and its warning paragraph ended *"the removal stays available"* eleven lines after
+  opening *"Removing is refused when…"*. *Refuses nothing* is true of the WARNING, not the removal.
+- [x] [Review][Patch] AC7 — *"THE LIVE COUNT lives here"* — read **990** where the tree shipped 995
+- [x] [Review][Patch] A `[Review][Defer]` the record claimed was registered appeared in NO row, while
+  three rows existed that were never on the defer list: the mapping checked in neither direction.
+  Story 6b.9's finding verbatim, in a push asserting the deferrals were written
+- [x] [Review][Patch] T3's `E0004` claim stood **unstruck** and both twins published it as a compiler
+  guarantee, 230 lines above the group-B finding that refuted it — *a correction that adds the true
+  text without removing the false one leaves the record carrying both*, this story's own rule
+- [x] [Review][Patch] Three patch counts overstated (26/19/16 against a recount of 25/17/14), and
+  round C's 20 rows against *27 distinct* left unreconciled. **I recounted rather than adopt the
+  layer's arithmetic**; it agreed exactly
+- [x] [Review][Patch] *« either removal »* in four documents where **three** controls warn — the
+  address removal's warning shipped and documented nowhere
+- [x] [Review][Patch] `kbd-probe.mjs` carried *"five per-row controls"*, the sentence round C corrected
+  in two other places, surviving in the slice the record itself flagged as unreviewed
+- [x] [Review][Patch] Four of five rail control terms were `> 0` — sixty lines below a comment
+  arguing against exactly that — now the seed's exact counts; the distinctness evidence printed
+  `.slice(0, 8)` over eleven names; the disclosure check could not red for any product change and
+  threw (exit 2) on an ordinary class rename
+- [x] [Review][Patch] `MIN_CHECKS`'s justifying comment said *twenty* (story 6b.11's figure) beside a
+  constant of 52 — the one place a reader verifies *the floor equals what is there*
+- [x] [Review][Patch] `screens.rs` cited the gate floor as `45 → 50`, an intermediate superseded by 52
+- [x] [Review][Patch] `+7/−2` where the tree says `+6/−1`; `last_updated` two days behind its own
+  commit; the sprint entry recording the story as planned; decimal separators diverging between twins
+- [x] [Review][Patch] 🔴 **`CLAUDE.md` stated the sprint-status note convention BACKWARDS** — *"writes
+  each note ABOVE its key"* — **in the paragraph narrating that this misreading gave story 6.6 a false
+  premise.** Measured: `14-4-maintaining-the-plan:` carries its note below it. *The lesson was written
+  down inverted, so the next reader was set up to repeat it.*
+- [x] [Review][Patch] Both twins' gate bullet said **forty-five** checks and **FOUR** axe states where
+  the tree ships 53 and five — the bullet documenting the two gates this story moved
+- [x] [Review][Defer] The removal warning re-reads the whole plan and network per focus event —
+  ⚠️ **measured at 3–9 ms and explicitly NOT inflated into a finding** by the layer that measured it
+
+⚠️ **Three instrument defects of mine in this slice alone**: an unbounded grep counted *mentions* of
+`btn-document` as call sites; a second unbounded alternation matched **story 5.8's** record and I
+nearly "corrected" it; and the floor comment I repaired for being stale was stale again on save,
+because the same review added a check — **and a floor is a MINIMUM, so that drift reds nothing.** The
+number now comes off a live run rather than a hand count.
+
+✅ **Refuted with the check**: `MIN_CHECKS` equals what is there (48 static sites + 4 loop iterations
+= 52, then 53); the three new rail checks all red assertion-carried; no check is aimed at a control
+inside a collapsed `<details>`; the manual's labels match the shipped ones; `screens.rs`'s floor is
+right and reds.
 
 ## Dev Notes
 
@@ -852,5 +949,13 @@ went in over `484 passed; 1 failed`). Logs under this session's scratchpad: `t1-
 `crates/opencmdb-bin/src/ipam_page.rs` · `crates/opencmdb-bin/src/main.rs` ·
 `crates/opencmdb-core/src/ipam/mod.rs` · `crates/opencmdb-bin/templates/_ipam.html` ·
 `crates/opencmdb-bin/locales/app.yml` · `crates/opencmdb-bin/assets/app.css` · `a11y/kbd-probe.mjs` ·
-`docs/manuals/user-manual/user-manual.tex` · `docs/project-context.md` · `CLAUDE.md` ·
-`_bmad-output/implementation-artifacts/sprint-status.yaml` · this story file.
+`crates/opencmdb-bin/src/screens.rs` · `docs/manuals/user-manual/user-manual.tex` ·
+`docs/project-context.md` · `CLAUDE.md` ·
+`_bmad-output/implementation-artifacts/sprint-status.yaml` ·
+`_bmad-output/implementation-artifacts/deferred-work.md` · this story file.
+
+🔴 **`screens.rs` and `deferred-work.md` were both MISSING from this list until the slice-D review,
+and that omission is why the review partition leaked.** A slice is cut from the File List; a file
+absent from it is a file no slice can contain, and `screens.rs` was consequently handed to no layer
+across three rounds. `deferred-work.md` is the artefact this story cites as *"REGISTERED"* eleven
+times. *The manifest is load-bearing, and nothing in this project checks it against the diff.*

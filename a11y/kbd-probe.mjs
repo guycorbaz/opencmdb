@@ -32,13 +32,19 @@ const CHROME = process.env.AXE_CHROME ?? "/usr/bin/google-chrome";
 const QUEUE = ".queue .queue-row > a";
 // The settle in `app.js` is 250 ms; everything here waits past it with room for a document.
 const SETTLE_WAIT_MS = 900;
-// 🔑 The floor, and it EQUALS what is there rather than sitting under it: twenty checks
-// run on a queue of two, which is the shortest queue this gate accepts. A floor below what
-// is there tolerates the loss of a check while still reading as a pass — this project has
-// caught that twice, once in a privacy floor and once in a word count. If a check is added
-// this number moves deliberately; if one is skipped, the gate says so instead of printing
-// a green.
-const MIN_CHECKS = 52;
+// 🔑 The floor, and it EQUALS what is there rather than sitting under it: **fifty-three** checks run
+// on a queue of two, which is the shortest queue this gate accepts. ⚠️ This sentence said *twenty*
+// until story 14.4's slice-D review — story 6b.11's figure, left behind by every floor move since —
+// so the ONE place a reader verifies *the floor equals what is there* asserted a number 33 short of
+// the constant beneath it. ⚠️ And the repair's first version said *fifty-two*: the same review added
+// a check in the same breath, so the corrected sentence was stale before it was saved. **A floor is
+// a MINIMUM, so that drift reds nothing** — it just quietly stops equalling what is there, which is
+// the whole property. The number below is now read off a live run (`53 check(s) run`) rather than
+// counted by hand. A floor under what exists tolerates losing a check while still reading as a pass
+// — this project has caught that twice, once in a privacy floor and once in a word count. If a
+// check is added this number moves deliberately; if one is skipped, the gate says so instead of
+// printing a green.
+const MIN_CHECKS = 53;
 const MIN_ROWS = 2;
 // 🔑 The seed's own two-hardware-address sighting, in ONE place. It was written twice — typed into
 // the field at one site and spelled out inside the expected triage href at another — so a seed that
@@ -970,10 +976,15 @@ async function main() {
   }
 
   // ── The rail's two lists and their controls (story 14.4) ────────────────────────────────────
-  // 🔴 **Five of the eight write routes are PER-ROW controls**, so they exist only on a page that
-  // holds records. The seed's default subnet carries three ranges and two addresses, which is why
-  // this block opens `/ipam` bare rather than selecting a subnet: the page the operator meets
-  // first is the page the gate must measure.
+  // 🔴 **FOUR of the eight write routes are PER-ROW controls**, so they exist only on a page that
+  // holds records; the fifth, the subnet's own removal, names no row and renders over an empty rail.
+  // ⚠️ This read *"five"* until story 14.4's slice-D review — the same false sentence the review
+  // corrected in two comments on the Rust side, surviving here because this file was in the slice
+  // the record itself flagged as unreviewed. That is the concrete cost of an unreviewed slice,
+  // arriving in the same push that named it.
+  // The seed's default subnet carries three ranges and two addresses, which is why this block opens
+  // `/ipam` bare rather than selecting a subnet: the page the operator meets first is the page the
+  // gate must measure.
   {
     const rail = await open("/ipam");
     const controls = await rail.evaluate(() => {
@@ -989,13 +1000,20 @@ async function main() {
         ),
       };
     });
+    // ⚠️ **EXACT COUNTS, where four of these five terms read `> 0` until the slice-D review.** The
+    // seed is this harness's own committed fixture and it TRUNCATES first, so three ranges and two
+    // addresses is a number the gate may assert rather than tolerate — and a floor of `> 0` lets
+    // two of the three range controls vanish while still reading as a pass. 🔑 The check sixty
+    // lines up records the opposite decision for its own neighbour (*"Scoped rather than loosened
+    // to `>= 3` — a floor that tolerates losing one of the three gestures is the shape this project
+    // has caught twice"*), and this block then shipped four such floors.
     check(
-      controls.deleteRange > 0 &&
-        controls.deleteAddress > 0 &&
+      controls.deleteRange === 3 &&
+        controls.deleteAddress === 2 &&
         controls.deleteSubnet === 1 &&
-        controls.editRange > 0 &&
-        controls.editAddress > 0,
-      "the rail carries a control for each of the five corrections",
+        controls.editRange === 3 &&
+        controls.editAddress === 2,
+      "the rail carries a control for each of the five corrections, at the seed's own counts",
       JSON.stringify(controls),
     );
     // 🔑 A page of buttons all reading *Remove* is a page a screen reader cannot navigate: the
@@ -1003,7 +1021,11 @@ async function main() {
     check(
       controls.names.length > 0 && new Set(controls.names).size === controls.names.length,
       "and every control's accessible name is DISTINCT, naming the record it acts on",
-      JSON.stringify(controls.names.slice(0, 8)),
+      // ⚠️ ALL of them, where this printed `.slice(0, 8)` over a population of eleven: a duplicate
+      // pair sitting at positions 9–11 would have been omitted from the message announcing it.
+      // *A measurement read through a truncation is not a measurement* — this story's own rule,
+      // invoked twice in its record and then broken in its evidence string.
+      JSON.stringify(controls.names),
     );
     // ⚠️ **The DELETE control, deliberately, and the first draft of this check got it wrong.** It
     // took the first button in the rail, which is a correction form's submit INSIDE a collapsed
@@ -1024,12 +1046,34 @@ async function main() {
         "forty dispatched Tab presses reached none of",
       JSON.stringify(focusable),
     );
+    // 🔴 **A PRE-STATE, because without one this check could not red for any product change.** A
+    // `<summary>` opens on Enter by browser construction, so asserting only the after-state measures
+    // the browser: its two outcomes were green, or a TypeError if the element vanished. ⚠️ And the
+    // lookup was unguarded — measured at the review, renaming `.ipam-form` to anything else deletes
+    // every correction disclosure from the rail and the gate answered **2**, *the gate could not
+    // run*, over a page where the operator can no longer correct anything. Its own sibling twenty
+    // lines up uses `?.` and degrades to a failed check; this one threw.
+    const disclosure = await rail.evaluate(() => {
+      const summary = document.querySelector(".ipam-rail-lists details.ipam-form > summary");
+      return {
+        found: summary !== null,
+        closedBefore: summary?.parentElement?.open === false,
+      };
+    });
+    check(
+      disclosure.found && disclosure.closedBefore,
+      "a correction disclosure is present and starts CLOSED — the pre-state without which the " +
+        "next check measures the browser rather than the product",
+      JSON.stringify(disclosure),
+    );
     await rail.evaluate(() =>
-      document.querySelector(".ipam-rail-lists details.ipam-form > summary").focus(),
+      document.querySelector(".ipam-rail-lists details.ipam-form > summary")?.focus(),
     );
     await rail.keyboard.press("Enter");
-    const opened = await rail.$eval(".ipam-rail-lists details.ipam-form", (el) => el.open);
-    check(opened, "a correction disclosure opens on Enter", `open=${opened}`);
+    const opened = await rail.evaluate(
+      () => document.querySelector(".ipam-rail-lists details.ipam-form")?.open ?? null,
+    );
+    check(opened === true, "and Enter opens it", `open=${opened}`);
     // 🔑 **PRE-FILLED, and that is the difference between correcting and re-typing.** An edit form
     // the operator must fill from scratch is a delete-and-redefine wearing another word, and it
     // loses the row's identity — which is what `update_range` exists to keep.
@@ -1084,19 +1128,33 @@ async function main() {
     await rail.close();
   }
 
-  // 🔑 The floor: a run that measured less than the full set reports "could not run", not a
-  // pass. This is the assertion the file's predecessor did not have.
+  // 🔴 **A FAILURE DECIDES BEFORE THE FLOOR DOES, and the review MEASURED why this order matters.**
+  // Checks are not all independent: some run only if an earlier one's subject exists. So a check
+  // that fails FOR THE REASON IT WAS WRITTEN TO CATCH can skip its dependants, `executed` falls
+  // under the floor, and the floor then overwrites a detected regression with *could not run*.
+  // Measured by breaking the address warning's triage link: the gate PRINTED
+  // `🔴 the warning links the address's own triage question  link=null`, then answered **2** with a
+  // message telling the reader to re-seed — over a real product defect, forever. ⚠️ That is exactly
+  // the confusion this file's header exists to prevent (*"the store was empty" and "the keyboard
+  // layer is correct" must not be the same answer*), met on the other axis: here a product fault
+  // and an instrument fault were made the same answer.
+  if (failed > 0) {
+    console.log(
+      `\nkbd gate: ${executed} check(s) run, ${failed} failed — the keyboard layer has regressed`,
+    );
+    return 1;
+  }
+  // 🔑 The floor, which now speaks only when nothing failed: a run that measured less than the full
+  // set reports "could not run", not a pass. This is the assertion the file's predecessor did not
+  // have.
   if (executed < MIN_CHECKS) {
     cannotRun(
       `${executed} check(s) ran where ${MIN_CHECKS} are declared — a keyboard gate that ` +
         `skips half its checks must not report success.`,
     );
   }
-  console.log(
-    `\nkbd gate: ${executed} check(s) run, ${failed} failed` +
-      (failed === 0 ? "" : " — the keyboard layer has regressed"),
-  );
-  return failed === 0 ? 0 : 1;
+  console.log(`\nkbd gate: ${executed} check(s) run, 0 failed`);
+  return 0;
 }
 
 let code;

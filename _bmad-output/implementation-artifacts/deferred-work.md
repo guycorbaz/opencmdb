@@ -5839,6 +5839,19 @@ three independently. These are the ones deferred rather than patched — each wi
   beside `"Remove"`; the French « Corriger » is unambiguous, and English is the DEFAULT locale. This
   project has arbitrated one English control label for exactly this class before (`gesture.merge`).
   Deferred as a naming judgement rather than a defect. **Owner: Epic 15.**
+- ⚠️ **The removal warning re-reads the whole plan and the whole network on EVERY focus event.**
+  `hx-trigger="focus"` on all three removal controls, with no `once`, `throttle` or `delay`, and each
+  fire runs `list_subnets` + `plan_ranges` + `plan_addresses` + `read_the_network` +
+  `correctable_ranges_in` + `correctable_addresses_in`. Tabbing across the seeded rail is six full
+  plan-and-network reads, and each refocus repeats. ⚠️ **Deferred on a MEASUREMENT rather than a
+  shrug**: the review's edge layer timed it at **3–9 ms** at seed scale and explicitly declined to
+  inflate it into a finding. What is owed is the restraint story 14.3b gave the address field's own
+  warning for exactly this shape — the rail's warning inherited the live region and not the debounce.
+  🔴 **This row is here because the story claimed it was registered and it was not**: story 14.4's
+  group-C record listed it as `[Review][Defer]` while `deferred-work.md` carried no such row —
+  story 6b.9's finding verbatim, *a section that says "registered" is not a registration*, committed
+  in a push whose own message asserts the deferrals were written. **Owner: the story that next
+  touches the rail's warning.**
 - ⚠️ **`role="list"` on the rail's two lists is carried by nothing this repository can run.** It was
   added because `list-style: none` drops the list role in Safari/VoiceOver (story 6b.7's finding), and
   **axe reports 0 violations with or without it** — measured at this story's own gate runs. It is a
