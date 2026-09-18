@@ -5811,3 +5811,38 @@ three independently. These are the ones deferred rather than patched — each wi
   today, which is why this is a row and not a task; the cost of not writing it is that the next story
   wanting one reads decision 1 as settling a question it never considered. **Owner: Epic 14's
   retrospective**, which should decide whether a move belongs to the plan at all.
+
+## Raised by story 14.4's THIRD review round — the screen (2026-09-17/18)
+
+- 🔴 **`--accent-document` is written at FOUR call sites that are not the documenting gesture, and all
+  four predate story 14.4.** `_ipam_forms.html` ×3 and `_ipam.html` ×1, landed at 14.2b. `app.css`
+  asserted the token *"cannot leak … by construction"* on the true premise that `action_bar` was its
+  only producer; measured on `master`, it had not been for two stories. 14.4 added two more on the
+  rail's corrections and **removed its own two**; these four are left because widening a story's scope
+  to repair its predecessor's is how a defect stops having an owner. What is owed is a decision about
+  whether *define a subnet* and *fill an empty plan* are primary actions entitled to the amber, or
+  whether the token's reservation means what the UX spec says (`:587`, *solely for the documenting
+  gesture*). **Owner: Epic 15**, which owns the screens that write it.
+- ⚠️ **The scoping of the delete check's offer computation is carried by no unit test.** M-C6 reverted
+  it to the plan-wide value filter and measured **GREEN**: every fixture in `a_removal_warns…` uses one
+  subnet, so the scoped and plan-wide sets are identical there. The repair is right — the overlap rule
+  is per-subnet, so two subnets may legally carry ranges with identical bounds — and *a property no
+  test can tell from its opposite is a property a refactor removes in silence*. What is owed is a
+  fixture with two subnets carrying the same bounds. **Owner: the story that next touches the check**,
+  with M-C6 as its entry price.
+- ⚠️ **A correction disclosure announces its record twice**: the `<summary>` and its submit button both
+  render *"Correct — 192.0.2.9"*, so a screen reader meets the same name on the disclosure and on the
+  control inside it. Deferred rather than patched: the honest fix gives the button its own label —
+  *Save the correction* — which is a new copy key in both locales, and minting copy is scope a review
+  repair should not take on itself. **Owner: the story that next edits the rail's copy.**
+- ⚠️ **`ipam.rail.edit` is `"Correct"` in English**, an adjective/verb homograph as a button label,
+  beside `"Remove"`; the French « Corriger » is unambiguous, and English is the DEFAULT locale. This
+  project has arbitrated one English control label for exactly this class before (`gesture.merge`).
+  Deferred as a naming judgement rather than a defect. **Owner: Epic 15.**
+- ⚠️ **`role="list"` on the rail's two lists is carried by nothing this repository can run.** It was
+  added because `list-style: none` drops the list role in Safari/VoiceOver (story 6b.7's finding), and
+  **axe reports 0 violations with or without it** — measured at this story's own gate runs. It is a
+  computed-accessibility property of a platform mapping, so neither the Rust guards nor axe can see
+  it; what would carry it is a VoiceOver check this project has no way to automate. Recorded so the
+  next reader does not delete it as unmotivated. **Owner: Epic 19**, with the other accessibility
+  residuals.

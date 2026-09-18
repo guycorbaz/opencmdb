@@ -27,7 +27,13 @@
   {%- if rail.ranges.is_empty() %}
   <p class="empty">{{ s.rail_no_ranges }}</p>
   {%- else %}
-  <ul class="ipam-rail-list">
+  {#- 🔑 `role="list"` EXPLICITLY, because `app.css` sets `list-style: none` on this class and
+       Safari/VoiceOver drop the list role when it does — so the two lists would be announced as
+       loose text rather than as N items. Story 6b.7 met this on the IPAM grid's own list and gave
+       it the same explicit role for the same reason; this partial inherited the styling and not the
+       remedy. ⚠️ No guard in this project can see it: it is a computed-accessibility property, and
+       axe reports 0 violations either way (measured at this story's own gate runs). -#}
+  <ul class="ipam-rail-list" role="list">
     {%- for r in rail.ranges %}
     <li class="ipam-rail-row">
       <span class="mono">{{ r.bounds }}</span>
@@ -53,7 +59,11 @@
                exists, and the keyboard gate caught four controls sharing that one word. The record
                is named in the label because a page of buttons all reading the same thing is a page
                a screen reader cannot navigate. -#}
-          <button type="submit" class="btn-gesture live btn-document">{{ s.rail_edit }} — {{ r.bounds }}</button>
+          {#- ⚠️ NOT `btn-document`: that fill is the amber the UX spec reserves for the documenting
+               gesture, and a correction is not it. With it, the two CORRECTION controls were the
+               loudest thing on this page while the two destructive ones stayed grey — the review
+               found the salience exactly inverted. -#}
+          <button type="submit" class="btn-gesture live">{{ s.rail_edit }} — {{ r.bounds }}</button>
         </form>
       </details>
       {#- 🔑 Decision 3: the removal WARNS before it fires, and refuses nothing. The control asks on
@@ -75,7 +85,8 @@
   {%- if rail.addresses.is_empty() %}
   <p class="empty">{{ s.rail_no_addresses }}</p>
   {%- else %}
-  <ul class="ipam-rail-list">
+  {#- `role="list"` for the ranges list's reason, one section up. -#}
+  <ul class="ipam-rail-list" role="list">
     {%- for a in rail.addresses %}
     <li class="ipam-rail-row">
       <span class="mono">{{ a.addr }}</span>
@@ -88,7 +99,8 @@
           <input id="ipam-edit-addr-{{ a.id }}" name="addr" required value="{{ a.addr }}">
           <label for="ipam-edit-address-label-{{ a.id }}">{{ s.form_label }}</label>
           <input id="ipam-edit-address-label-{{ a.id }}" name="label" required maxlength="120" value="{{ a.label }}">
-          <button type="submit" class="btn-gesture live btn-document">{{ s.rail_edit }} — {{ a.addr }}</button>
+          {#- Not `btn-document`, for the range correction's reason one section up. -#}
+          <button type="submit" class="btn-gesture live">{{ s.rail_edit }} — {{ a.addr }}</button>
         </form>
       </details>
       {#- The address's own removal carries `addr`, so the warning is about THIS record: without it

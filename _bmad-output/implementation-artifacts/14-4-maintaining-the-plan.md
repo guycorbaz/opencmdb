@@ -637,9 +637,119 @@ kbd-probe **52 checks, 0 failed** — including, in a browser, a correction form
 `{id, first, last, policy}` with **no `subnet_id`**, eleven rail controls with distinct accessible
 names, and the removal warning announced without stealing the focus.
 
-⚠️ **Slices C and D are NOT reviewed** — `ipam_page.rs`, the templates, `app.yml` and `app.css` (833
-lines), and `kbd-probe.mjs`, the manual and the status files (432 lines). Two of slice B's patches
-landed in `ipam_page.rs` because the route is this story's; that is not a review of that file.
+⚠️ **Slice C is reviewed below. Slice D is NOT** — `kbd-probe.mjs`, the manual and the status files —
+🔴 **and neither is `screens.rs`, which the partition LEAKED**: it sits in no slice and no layer was
+ever handed it. Found by checking the partition rather than by any layer. Its whole change is +7/−2
+(the `IpamError` floor 7 → 8 and its comment) and it IS slice A's own repair, so the exposure is
+small — but small is not reviewed, and slice A's finding *about* that file was reached from
+`ipam/mod.rs` by a layer that could not see it. It goes into slice D.
+
+### Review Findings — group C (the screen)
+
+Three isolated layers on `ipam_page.rs`, the two templates, `app.yml` and `app.css`, 2026-09-17/18.
+None failed. **43 raw findings, 27 distinct** — three reached by all three layers and four more by
+two. 🔑 **The layer with no repository access again found HIGHs the two sighted ones did not**, and
+the Edge layer measured the three worst on a booted binary in both locales. ⚠️ The layers ran at this
+session's capability, isolated by context, worktree and database — **not on a different model**.
+
+🔴 **SIX OF THE WORST FINDINGS HAVE ONE CAUSE**: `render_delete_check` never consulted the rules that
+actually refuse a removal, trusted the bounds the query handed it, and appended *"the removal is
+still possible — not a refusal"* to **every** non-empty answer.
+
+- [x] [Review][Decision — MINE, delegated 2026-09-18] **The check's contract.** ✅ Option (a): it asks
+  the same rules the write path asks, in the same scope, and the closing sentence is appended only
+  when no refusal is coming. Refused and named: deleting that sentence outright (it is true and
+  useful for every gesture that really will go through), and patching only the contradiction (which
+  leaves the range arm silent about its own refusal). ⚠️ **Recorded as MINE rather than Guy's so it
+  can be reversed at the right cost.** 🔑 Cheaper than estimated: `delete_check_data` already read
+  this subnet's ranges and addresses for its `held` count, so **no change to `plan_ranges`' signature
+  was needed** — I said it would be and that estimate was wrong.
+- [x] [Review][Decision — MINE] **Silence or sentence.** ✅ The keyed sentence. `ipam.check.unavailable`
+  reads *"The plan could not be checked just now. The write does not depend on this check"* — worded
+  about the CHECK, not the store, so it is as true of a request this build cannot read as of a store
+  it cannot reach, and reusing it states nothing false. ⚠️ An empty region made *I could not ask*
+  indistinguishable from *nothing here is worth saying*, immediately before an irreversible gesture.
+  Refused: minting a second sentence, which buys a distinction the operator cannot act on.
+  ⚠️ **It cost my own slice-B oracles**: they read *empty = declined before the store*, and with both
+  cases now rendering one sentence that stops separating anything — replaced by the oracle aimed at
+  the defect itself, *a malformed qualifier never answers the SUBNET's sentence*.
+- [x] [Review][Decision — MINE] **The amber.** ✅ Removed from this story's two correction controls.
+  🔴 The stylesheet claimed the token *"cannot leak by construction"*; measured, **`master` already
+  carried four other sites** (three in `_ipam_forms.html`, one in `_ipam.html`), all landed at 14.2b —
+  so this story WIDENS an older false sentence rather than creating it. The four are REGISTERED, not
+  swept up here: widening a story's scope to repair its predecessor's is how a defect stops having an
+  owner.
+- [x] [Review][Patch] **The subnet warning contradicted itself in one live region** — *"removing it
+  will be refused"* then *"the removal is still possible — not a refusal"*, in both languages, with
+  the 409 settling which was false (three layers; Edge measured it)
+- [x] [Review][Patch] **The range check never mentioned the refusal this story minted**, then promised
+  the removal: `.1–.40` holds defined `.9`, the warning said *still possible*, the POST answered 409
+- [x] [Review][Patch] **A warning fabricated for bounds naming no range** — `0.0.0.0–255.255.255.255`
+  reported ten addresses; reachable from a stale tab, not only by hostility (Edge, measured)
+- [x] [Review][Patch] **The named subnet was never checked against the bounds** — Workshop's id with
+  Office's bounds answered Office's five addresses (Edge, measured)
+- [x] [Review][Patch] The offer computation filtered a **plan-wide** set **by value** while the overlap
+  rule is scoped per subnet, so a same-bounded range in another subnet was struck too
+- [x] [Review][Patch] **The subnet's Remove control names a generic noun** — *"Remove — Subnet"*,
+  byte-identical across two subnets (Edge), on the one gesture that takes everything with it. ⚠️ The
+  keyboard gate cannot see it: it tests DISTINCTNESS, and that name is distinct
+- [x] [Review][Patch] **AC6's guard covered one of its two lists** — the addresses list could have
+  vanished from the too-large branch with the test green, on the criterion already corrected twice
+- [x] [Review][Patch] The key guard's name and doc claimed *"every key this module can render"* while
+  scanning `"ipam.` literals in one file; `triage.kind.ecart` and `state.undeclared` are rendered in
+  production code and invisible to it — renamed, narrowed, and the two closed by name
+- [x] [Review][Patch] The refusal justified itself by a cascade the foreign key makes **impossible**,
+  and the success sentence promised that same cascade
+- [x] [Review][Patch] *"Five per-row controls"* is four, in two comments — the fifth names no row and
+  renders over an empty rail, so the justification was false precisely for the route it counted
+- [x] [Review][Patch] The too-large include's comment credited a protection the unknown-subnet arm
+  never exercises; `no_rail()` is a `Some`, not the `None` case
+- [x] [Review][Patch] Both `<ul>`s carry `list-style: none` with no `role="list"` — story 6b.7's own
+  lesson, one screen over. ⚠️ No guard in this project can see it and axe reports 0 either way
+- [x] [Review][Patch] The rail's CSS comment gave a reason inapplicable in one of AC6's two branches;
+  two selectors carried byte-identical declarations; a dead `Default` derive; a paragraph explaining
+  `unknown_range`/`unknown_address` sat fifty lines away over the `ipam.rail.*` keys
+- [x] [Review][Patch] **The structure note's figures were stale and every one understated** —
+  `ipam_page.rs` **1740** (read 1357), `ipam_write.rs` **1504** (862), `ipam_repo.rs` **1409** (847);
+  only `page.rs` 1954 was right. `ipam_page.rs` is now second at **87 % of the ceiling**
+- [x] [Review][Defer] The `<summary>` and its submit button carry identical accessible names — the
+  honest fix needs a new copy key, which is scope
+- [x] [Review][Defer] `"Correct"` as an English button label is an adjective/verb homograph — a naming
+  judgement, not a defect
+- [x] [Review][Defer] Six store reads per focus with no debounce — ⚠️ **Edge measured 3–9 ms at seed
+  scale and refused to inflate it into a finding**; recorded because 14.3b debounced the address
+  field for this same shape
+
+**Prove-to-red, six mutations — one refuted a prediction and one is a CONTROL.** ⚠️ Carriers
+established BY HAND: the driver reports counts and never names.
+
+| id | mutation | measured | carriers |
+|----|----------|----------|----------|
+| M-C1 | the rail's addresses half empties | 🔴 2 | the AC6 guard (too-large branch) + `every_form_posts_where_its_route_is_mounted` (GRID branch) — so the widening is the sole carrier **in its own branch only** |
+| M-C2 | the closing sentence unconditional again | 🔴 1 ⚠️ MIXED | `a_removal_warns…`; `clippy: true` too — neutering the flag leaves `refused` unread, so this is not an assertion-only red |
+| M-C3 | the range arm stops asking about abandonment | 🔴 1 | `a_removal_warns…`, clean |
+| M-C4 | bounds no longer checked against this subnet's ranges | **GREEN**, then 🔴 1 | 🔴 my assertion used `.50–.60`, an interval that speaks under neither tree — *a guard placed where the defect cannot occur*, committed inside the repair for a review that found that class. Re-aimed at `.14–.16`, which holds the seen `.15` |
+| M-C5 | an unreadable address back to silence | 🔴 1 | `an_unreadable_qualifier_never_answers_the_subnets_sentence`, clean |
+| M-C6 | the offer filter back to the plan-wide set | **GREEN by prediction** | a CONTROL: every fixture uses ONE subnet, so the two sets are identical there — **the scoping repair is carried by no unit test**, and that is a statement about coverage rather than a failed search |
+
+⚠️ **Two defects of my own, both caught by a guard rather than by reading, and both the same law.**
+Repairing the stylesheet's false sentence, I closed its comment nineteen lines early — freeing prose
+into the code half, where a documenting-token read was counted as a sixth declaration. The repair of
+*that* closed it again, because the sentence explaining the stray close **quoted the two characters
+that end a comment**. `ac4_the_amber_is_reserved_for_the_documenting_gesture` caught both (6, then 7).
+*A guard that greps a file greps its prose, and the better the prose explains the defect, the more
+reliably it reproduces it.* ⚠️ And a verification grep of mine counted `btn-document` **mentions** as
+call sites — *an unbounded needle cannot tell an entry from a mention of one* — while checking a
+figure I had just corrected for being wrong.
+
+✅ **Refuted with the check, so nobody re-chases them**: the rail is included exactly twice, in two
+mutually exclusive arms, so no page duplicates its ids; `/ipam/delete-check` IS behind both perimeter
+guards; `--color-divider` is defined; the hostile query battery answers 200 with nothing reflected and
+no framework English; AC6 holds on a real `/8`; the unknown-subnet and empty-plan pages render no rail.
+
+**995 tests** (705 + 191 + 99), ten gates, clippy `--all-targets`, `cargo fmt`; both browser gates
+re-run because the rail template changed again — axe **1 route / 0 nodes** empty-plan and **10 routes
++ 5 states / 0 nodes** seeded, kbd-probe **52 checks, 0 failed**.
 
 ## Dev Notes
 
@@ -662,8 +772,16 @@ landed in `ipam_page.rs` because the route is this story's; that is not a review
 ### Project Structure Notes
 
 - `ipam_write.rs` owns the routes, `ipam_repo.rs` the SQL, `ipam_page.rs` the screen.
-- The `file-size` ceiling is 2000 CODE lines: **`page.rs` is at 1954** — 46 from red — while
-  `ipam_page.rs` is at 1357, `ipam_write.rs` 862, `ipam_repo.rs` 847. `page.rs` is the file at risk.
+- The `file-size` ceiling is 2000 CODE lines — everything before the FIRST `#[cfg(test)]`, which is
+  the gate's own rule. Re-measured at the slice-C review on 2026-09-17, because **three of the four
+  figures this line carried were stale and every one of them understated**: `page.rs` **1954** (right,
+  46 from red), `ipam_page.rs` **1740** (read 1357 — short by 383), `ipam_write.rs` **1504** (read 862
+  — short by 642), `ipam_repo.rs` **1409** (read 847 — short by 562). They were true when the story
+  was contexted and were never re-taken while the story grew all three.
+- ⚠️ **`page.rs` is still the file at risk, and `ipam_page.rs` is now second at 87 % of the ceiling** —
+  it grew ~383 lines in this story, which is the one this slice touches. Nothing is red and no gate
+  complains; the house rule is *split, not grown*, and it asks to be honoured **before** the gate
+  asks, which no story in this epic has yet managed.
 
 ### References
 

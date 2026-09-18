@@ -944,6 +944,18 @@ ipam.check.delete_range_seen_one:
 ipam.check.delete_range_seen_many:
   en: "%{count} addresses the network shows inside this range are explained by it today; remove the range and they become findings."
   fr: "%{count} adresses vues sur le réseau dans cette plage sont expliquées par elle aujourd'hui : supprimez la plage et elles deviennent des signalements."
+# 🔴 **THE REFUSAL THE RANGE DELETE ACTUALLY HAS, which the check never mentioned.** Story 14.4 mints
+# `ipam.refusal.range_still_holds_addresses` — computed, not raised — and the warning consulted the
+# NETWORK and the offer while never asking the one question that decides whether the gesture happens
+# at all. The operator was told the removal was still possible over a press the adapter answers 409.
+# 🔑 Worded like the subnet's, because it is the same shape: the refusal is coming, and saying so is
+# kinder than letting them meet it blind.
+ipam.check.delete_range_holds_one:
+  en: "This range still holds 1 address you defined inside it, so removing it will be refused until that address is gone."
+  fr: "Cette plage contient encore 1 adresse que vous y avez définie : sa suppression sera refusée tant qu'elle y sera."
+ipam.check.delete_range_holds_many:
+  en: "This range still holds %{count} addresses you defined inside it, so removing it will be refused until they are gone."
+  fr: "Cette plage contient encore %{count} adresses que vous y avez définies : sa suppression sera refusée tant qu'elles y seront."
 ipam.check.delete_empties_offer:
   en: "This is the only static range reaching this subnet, so removing it leaves nothing to offer here."
   fr: "C'est la seule plage statique qui couvre ce sous-réseau : la supprimer ne laissera plus rien à proposer ici."
@@ -1118,10 +1130,6 @@ ipam.refusal.already_defined_address:
 ipam.refusal.unknown_subnet:
   en: "That subnet is not in the plan."
   fr: "Ce sous-réseau n'est pas dans le plan."
-# 🔴 Story 14.4 SPLITS what one sentence used to serve. `RepositoryError::NotFound` answered
-# "that subnet is not in the plan" on EVERY route, so an edit of a range the plan no longer holds
-# told the operator their subnet was gone — a sentence that is false and that sends them to look in
-# the wrong place. The record the id names is what the sentence must name.
 # 🔑 The rail's two lists (Guy's decision 3, 2026-09-16: lists in the rail rather than controls on
 # the grid's cells). A cell is 14 px and already carries a state, a policy and an accessible name;
 # hanging two controls on it would have put the gesture where there is no room to say what it does.
@@ -1148,9 +1156,14 @@ ipam.rail.delete:
   fr: "Supprimer"
 # The five corrections' completion sentences. 🔑 They say what BECAME TRUE rather than that a
 # statement ran: an operator reading "removed" wants to know the plan no longer claims that space.
+# 🔴 **THE CASCADE THIS SENTENCE USED TO PROMISE CAN NEVER HAPPEN**, and the review found the pair.
+# `delete_subnet` is refused by a foreign key while ANY range or address still points at the subnet,
+# so on success there is by definition nothing left to take with it — *"with everything that
+# described it"* described an outcome the schema makes unreachable. Its twin, `subnet_still_holds`,
+# justified the refusal by that same impossible cascade; both are corrected rather than softened.
 ipam.done.delete_subnet:
-  en: "The subnet is gone from the plan, with everything that described it."
-  fr: "Le sous-réseau ne figure plus dans le plan, avec tout ce qui le décrivait."
+  en: "The subnet is gone from the plan."
+  fr: "Le sous-réseau ne figure plus dans le plan."
 ipam.done.delete_range:
   en: "The range is gone. That space is no longer meant for anything in particular."
   fr: "La plage a été supprimée. Cet espace n'est plus destiné à quoi que ce soit en particulier."
@@ -1163,6 +1176,13 @@ ipam.done.edit_range:
 ipam.done.edit_address:
   en: "The address now reads as you corrected it."
   fr: "L'adresse correspond maintenant à votre correction."
+# 🔴 Story 14.4 SPLITS what one sentence used to serve. `RepositoryError::NotFound` answered
+# "that subnet is not in the plan" on EVERY route, so an edit of a range the plan no longer holds
+# told the operator their subnet was gone — a sentence that is false and that sends them to look in
+# the wrong place. The record the id names is what the sentence must name.
+# ⚠️ This paragraph sat ~50 lines above, over the `ipam.rail.*` keys, which it does not describe —
+# the review found it. A comment that explains the wrong keys is worse than none: the next reader
+# corrects the sentence it is standing on.
 ipam.refusal.unknown_range:
   en: "That range is no longer in the plan. Someone may have removed it since this page was drawn — reload and look again."
   fr: "Cette plage n'est plus dans le plan. Quelqu'un l'a peut-être supprimée depuis l'affichage de cette page : rechargez et regardez à nouveau."
@@ -1173,8 +1193,8 @@ ipam.refusal.unknown_address:
 # still holds ranges raises `ERROR 1451` on a foreign key, which `constraint_refusal` mapped to a
 # 404 "no such subnet" — the operator was told the subnet did not exist while looking at it.
 ipam.refusal.subnet_still_holds:
-  en: "This subnet still holds ranges or addresses you defined. Remove them first; deleting the subnet would take the whole plan for it with them."
-  fr: "Ce sous-réseau contient encore des plages ou des adresses que vous avez définies. Supprimez-les d'abord : supprimer le sous-réseau emporterait avec lui tout le plan qui le concerne."
+  en: "This subnet still holds ranges or addresses you defined. Remove them first — the plan keeps a subnet as long as anything inside it is still declared."
+  fr: "Ce sous-réseau contient encore des plages ou des adresses que vous avez définies. Supprimez-les d'abord : le plan conserve un sous-réseau tant que quelque chose y est encore déclaré."
 # The five corrections each name THEIR OWN form's fields. One shared sentence was refused: the
 # reuse guard asserts the shape sentences are DISTINCT per route, precisely so that a form cannot
 # answer with a sentence naming fields it does not carry.

@@ -82,8 +82,13 @@
   {#- 🔑 **AC6: the rail's two lists render in THIS branch too.** The grid is skipped here because
        materialising it costs gigabytes; the lists are bounded by what the operator DECLARED and cost
        the same at any subnet size — and a subnet too large to draw is where the controls matter
-       most, since there is no grid to click on. ⚠️ Safe for the unknown-subnet arm above: the
-       partial renders nothing at all when `rail` is `None`, which is what that arm carries. -#}
+       most, since there is no grid to click on. ⚠️ **This include sits INSIDE the too-large arm, and
+       the unknown-subnet arm above reaches no include at all** — the review found this note crediting
+       a protection that arm never exercises. The partial's own `None` arm is real and does guard its
+       other call sites; what was false was the placement the sentence described. The grid arm carries
+       its own include, so the two are mutually exclusive and no page renders the rail twice — which
+       matters, because a second copy would duplicate every `ipam-delete-warning-…` id and break both
+       `aria-describedby` and `hx-target`. -#}
   {% include "_ipam_rail_lists.html" %}
   {%- endmatch %}
   {% include "_ipam_forms.html" %}
