@@ -5668,7 +5668,10 @@ development_status:
   #   The story the epic exists for. Includes FR24's real conflict -- undetectable before PR #163,
   #   because the connector read no hardware address; and NOT a conflict inside a `dhcp-pool`,
   #   where the occupant changes by design.
-  14-4-maintaining-the-plan: review
+  14-4-maintaining-the-plan: done
+  #   ✅ MERGED 2026-09-18 as `c1d678e` (PR #184, squash), CI green on the HEAD COMMIT `e0ed498`
+  #   itself rather than inherited from the branch -- every one of the six commits of this review
+  #   carried its own green run. The operator can now CORRECT and REMOVE what they declared.
   #   CONTEXTED 2026-09-16 on the merged tree (`82ff356`), VALIDATED the same day by two fresh-context
   #   layers (fact-check; gap-hunt, which BUILT the options against a live MariaDB), and SPLIT by Guy
   #   on what they measured -- Epic 14 goes from six stories to SEVEN. 14.4 keeps the CORRECTIONS
