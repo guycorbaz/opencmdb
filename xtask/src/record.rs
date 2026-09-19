@@ -717,8 +717,11 @@ mod tests {
             MISMATCH,
             "a File List missing a touched file",
         );
+        // 🔴 The phrase keeps the row's own CASE: written `an old row …` it matched no row at all, and
+        // the plant reddened through the *"in no row"* rule instead of the one it names — mutation X4
+        // measured it (red 1 where 2 was predicted). *A plant named for one thing, carried by another.*
         plant(
-            story(3, &fork, "an old row about gadgets", &all),
+            story(3, &fork, "old row about gadgets", &all),
             MISMATCH,
             "a phrase naming an OLD row",
         );
