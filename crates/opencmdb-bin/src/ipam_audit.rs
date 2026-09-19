@@ -1071,6 +1071,30 @@ mod tests {
         crate::ipam_repo::tests::forget_subnet(pool, subnet_id).await;
     }
 
+    /// Run a store-backed test body, then clean up WHATEVER it did — and only then re-raise its panic.
+    ///
+    /// 🔴 **Found by this story's own mutation pass, and the count it corrected is the reason it
+    /// exists.** Five of nine mutations came back with ONE red more than predicted, every time the
+    /// same way: a test of this module panicked before its trailing cleanup, its DEFINED address
+    /// survived, and `ipam_repo`'s `the_store_returns_addresses_in_numeric_order` — which reads the
+    /// plan WIDE — reddened on it. *A carrier count inflated by collateral is not a measurement of
+    /// carriers* (story 14.1's own finding, one module over). The cleanup now runs on both paths.
+    async fn cleaned_up(
+        pool: &sqlx::MySqlPool,
+        subnet_id: &str,
+        addrs: &[Ipv4Addr],
+        body: impl std::future::Future<Output = ()>,
+    ) {
+        let outcome =
+            futures_util::FutureExt::catch_unwind(std::panic::AssertUnwindSafe(body)).await;
+        for addr in addrs {
+            forget_release_fixture(pool, subnet_id, *addr).await;
+        }
+        if let Err(panic) = outcome {
+            std::panic::resume_unwind(panic);
+        }
+    }
+
     async fn release_at(
         pool: &sqlx::MySqlPool,
         addr: Ipv4Addr,
@@ -1097,114 +1121,121 @@ mod tests {
         let subnet_id = "t-rel-a";
         let addr = v4("100.64.141.20");
         forget_release_fixture(&pool, subnet_id, addr).await;
-        crate::ipam_repo::insert_subnet(&pool, subnet_id, subnet("100.64.141.0", 24), "release")
-            .await
-            .expect("subnet");
-        {
-            let mut conn = pool.acquire().await.expect("a connection");
-            crate::ipam_repo::insert_range(
-                &mut conn,
-                "t-rel-a-r",
+
+        cleaned_up(&pool, subnet_id, &[addr], async {
+            crate::ipam_repo::insert_subnet(
+                &pool,
                 subnet_id,
-                v4("100.64.141.10"),
-                v4("100.64.141.30"),
-                IpPolicy::Static,
-                "static",
+                subnet("100.64.141.0", 24),
+                "release",
             )
             .await
-            .expect("range");
-        }
-        let plan = Plan {
-            subnets: vec![subnet("100.64.141.0", 24)],
-            ranges: vec![(v4("100.64.141.10"), v4("100.64.141.30"), IpPolicy::Static)],
-            defined: BTreeSet::new(),
-        };
-        let here = subnet("100.64.141.0", 24);
-
-        crate::sighting_repo::insert_with_sightings(
-            &pool,
-            &observed(addr, 1, "2026-09-01T10:00:00Z"),
-        )
-        .await
-        .expect("ingest");
-        let before = read_the_network(&pool).await.expect("read");
-        assert_eq!(
-            kinds(&plan.audit(here, &before.seen, &before.claimed)),
-            vec![(addr, Some(FindingKind::Gap), false)],
-            "the premise: the sighting holds the address"
-        );
-
-        assert_eq!(
-            release_at(&pool, addr, "2026-09-01T11:00:00Z")
+            .expect("subnet");
+            {
+                let mut conn = pool.acquire().await.expect("a connection");
+                crate::ipam_repo::insert_range(
+                    &mut conn,
+                    "t-rel-a-r",
+                    subnet_id,
+                    v4("100.64.141.10"),
+                    v4("100.64.141.30"),
+                    IpPolicy::Static,
+                    "static",
+                )
                 .await
-                .expect("released"),
-            Some(subnet_id.to_owned()),
-            "the operator goes back to the subnet that contains the address"
-        );
-        // AC3 — written and READ BACK.
-        let recorded = crate::ipam_repo::plan_releases(&pool)
+                .expect("range");
+            }
+            let plan = Plan {
+                subnets: vec![subnet("100.64.141.0", 24)],
+                ranges: vec![(v4("100.64.141.10"), v4("100.64.141.30"), IpPolicy::Static)],
+                defined: BTreeSet::new(),
+            };
+            let here = subnet("100.64.141.0", 24);
+
+            crate::sighting_repo::insert_with_sightings(
+                &pool,
+                &observed(addr, 1, "2026-09-01T10:00:00Z"),
+            )
             .await
-            .expect("read back");
-        assert_eq!(recorded.get(&addr), Some(&at("2026-09-01T11:00:00Z")));
+            .expect("ingest");
+            let before = read_the_network(&pool).await.expect("read");
+            assert_eq!(
+                kinds(&plan.audit(here, &before.seen, &before.claimed)),
+                vec![(addr, Some(FindingKind::Gap), false)],
+                "the premise: the sighting holds the address"
+            );
 
-        let after = read_the_network(&pool).await.expect("read");
-        assert!(
-            plan.audit(here, &after.seen, &after.claimed).is_empty(),
-            "released: no longer a finding"
-        );
-        assert_eq!(
-            plan.next_offerable(here, &after.seen, &after.documented),
-            Some(v4("100.64.141.10"))
-        );
-        assert!(
-            plan.offerable(addr, &after.seen, &after.documented),
-            "and offerable again"
-        );
+            assert_eq!(
+                release_at(&pool, addr, "2026-09-01T11:00:00Z")
+                    .await
+                    .expect("released"),
+                Some(subnet_id.to_owned()),
+                "the operator goes back to the subnet that contains the address"
+            );
+            // AC3 — written and READ BACK.
+            let recorded = crate::ipam_repo::plan_releases(&pool)
+                .await
+                .expect("read back");
+            assert_eq!(recorded.get(&addr), Some(&at("2026-09-01T11:00:00Z")));
 
-        // AC2 — an observation dated BEFORE the release: the upsert widens the summary row, and the
-        // release stands. The summary itself kept its history — the release deleted nothing.
-        crate::sighting_repo::insert_with_sightings(
-            &pool,
-            &observed(addr, 1, "2026-09-01T10:30:00Z"),
-        )
-        .await
-        .expect("ingest a late arrival");
-        let late = read_the_network(&pool).await.expect("read");
-        assert!(
-            plan.audit(here, &late.seen, &late.claimed).is_empty(),
-            "an observation older than the release does not undo it"
-        );
-        let (first_seen, rows): (String, i64) = sqlx::query_as(
-            "SELECT DATE_FORMAT(MIN(first_seen_at), '%Y-%m-%dT%H:%i:%sZ'), COUNT(*) \
-             FROM address_sighting WHERE addr = ?",
-        )
-        .bind(crate::ipam_repo::canonical(addr))
-        .fetch_one(&pool)
-        .await
-        .expect("the summary");
-        assert_eq!(
-            (first_seen.as_str(), rows),
-            ("2026-09-01T10:00:00Z", 1),
-            "the summary keeps its first sighting: a release is a row, never a deletion"
-        );
+            let after = read_the_network(&pool).await.expect("read");
+            assert!(
+                plan.audit(here, &after.seen, &after.claimed).is_empty(),
+                "released: no longer a finding"
+            );
+            assert_eq!(
+                plan.next_offerable(here, &after.seen, &after.documented),
+                Some(v4("100.64.141.10"))
+            );
+            assert!(
+                plan.offerable(addr, &after.seen, &after.documented),
+                "and offerable again"
+            );
 
-        // Decision 1 — the network answering after the release holds the address again, here on a
-        // NEW hardware address, which is the case the refused *mark the summary* shape lost.
-        crate::sighting_repo::insert_with_sightings(
-            &pool,
-            &observed(addr, 9, "2026-09-01T11:06:00Z"),
-        )
-        .await
-        .expect("ingest a later sighting");
-        let answered = read_the_network(&pool).await.expect("read");
-        assert_eq!(
-            kinds(&plan.audit(here, &answered.seen, &answered.claimed)),
-            vec![(addr, Some(FindingKind::Gap), false)],
-            "held again, and no conflict with the MAC the release forgot"
-        );
-        assert!(!plan.offerable(addr, &answered.seen, &answered.documented));
+            // AC2 — an observation dated BEFORE the release: the upsert widens the summary row, and the
+            // release stands. The summary itself kept its history — the release deleted nothing.
+            crate::sighting_repo::insert_with_sightings(
+                &pool,
+                &observed(addr, 1, "2026-09-01T10:30:00Z"),
+            )
+            .await
+            .expect("ingest a late arrival");
+            let late = read_the_network(&pool).await.expect("read");
+            assert!(
+                plan.audit(here, &late.seen, &late.claimed).is_empty(),
+                "an observation older than the release does not undo it"
+            );
+            let (first_seen, rows): (String, i64) = sqlx::query_as(
+                "SELECT DATE_FORMAT(MIN(first_seen_at), '%Y-%m-%dT%H:%i:%sZ'), COUNT(*) \
+                 FROM address_sighting WHERE addr = ?",
+            )
+            .bind(crate::ipam_repo::canonical(addr))
+            .fetch_one(&pool)
+            .await
+            .expect("the summary");
+            assert_eq!(
+                (first_seen.as_str(), rows),
+                ("2026-09-01T10:00:00Z", 1),
+                "the summary keeps its first sighting: a release is a row, never a deletion"
+            );
 
-        forget_release_fixture(&pool, subnet_id, addr).await;
+            // Decision 1 — the network answering after the release holds the address again, here on a
+            // NEW hardware address, which is the case the refused *mark the summary* shape lost.
+            crate::sighting_repo::insert_with_sightings(
+                &pool,
+                &observed(addr, 9, "2026-09-01T11:06:00Z"),
+            )
+            .await
+            .expect("ingest a later sighting");
+            let answered = read_the_network(&pool).await.expect("read");
+            assert_eq!(
+                kinds(&plan.audit(here, &answered.seen, &answered.claimed)),
+                vec![(addr, Some(FindingKind::Gap), false)],
+                "held again, and no conflict with the MAC the release forgot"
+            );
+            assert!(!plan.offerable(addr, &answered.seen, &answered.documented));
+        })
+        .await;
     }
 
     /// Decision 4 — a DEFINED address cannot be released, and nothing is written; and a second
@@ -1220,62 +1251,68 @@ mod tests {
         let stray = v4("100.64.142.30");
         forget_release_fixture(&pool, subnet_id, defined).await;
         forget_release_fixture(&pool, subnet_id, stray).await;
-        crate::ipam_repo::insert_subnet(&pool, subnet_id, subnet("100.64.142.0", 24), "release")
+
+        cleaned_up(&pool, subnet_id, &[defined, stray], async {
+            crate::ipam_repo::insert_subnet(
+                &pool,
+                subnet_id,
+                subnet("100.64.142.0", 24),
+                "release",
+            )
             .await
             .expect("subnet");
-        {
-            let mut conn = pool.acquire().await.expect("a connection");
-            crate::ipam_repo::insert_address(&mut conn, "t-rel-b-a", subnet_id, defined, "nas")
-                .await
-                .expect("address");
-        }
+            {
+                let mut conn = pool.acquire().await.expect("a connection");
+                crate::ipam_repo::insert_address(&mut conn, "t-rel-b-a", subnet_id, defined, "nas")
+                    .await
+                    .expect("address");
+            }
 
-        let refused = release_at(&pool, defined, "2026-09-01T11:00:00Z").await;
-        assert!(
-            matches!(
-                refused,
-                Err(opencmdb_core::repo::RepositoryError::Ipam(
-                    opencmdb_core::ipam::IpamError::ReleaseOfADefinedAddress
-                ))
-            ),
-            "a defined address is refused by NAME: {refused:?}"
-        );
-        assert!(
-            !crate::ipam_repo::plan_releases(&pool)
-                .await
-                .expect("read")
-                .contains_key(&defined),
-            "and the refusal wrote nothing"
-        );
+            let refused = release_at(&pool, defined, "2026-09-01T11:00:00Z").await;
+            assert!(
+                matches!(
+                    refused,
+                    Err(opencmdb_core::repo::RepositoryError::Ipam(
+                        opencmdb_core::ipam::IpamError::ReleaseOfADefinedAddress
+                    ))
+                ),
+                "a defined address is refused by NAME: {refused:?}"
+            );
+            assert!(
+                !crate::ipam_repo::plan_releases(&pool)
+                    .await
+                    .expect("read")
+                    .contains_key(&defined),
+                "and the refusal wrote nothing"
+            );
 
-        release_at(&pool, stray, "2026-09-01T11:00:00Z")
-            .await
-            .expect("released");
-        release_at(&pool, stray, "2026-09-01T09:00:00Z")
-            .await
-            .expect("released again, earlier");
-        assert_eq!(
-            crate::ipam_repo::plan_releases(&pool)
+            release_at(&pool, stray, "2026-09-01T11:00:00Z")
                 .await
-                .expect("read")
-                .get(&stray),
-            Some(&at("2026-09-01T11:00:00Z")),
-            "an earlier second release does not narrow what the first forgot"
-        );
-        release_at(&pool, stray, "2026-09-01T12:00:00Z")
-            .await
-            .expect("released later");
-        assert_eq!(
-            crate::ipam_repo::plan_releases(&pool)
+                .expect("released");
+            release_at(&pool, stray, "2026-09-01T09:00:00Z")
                 .await
-                .expect("read")
-                .get(&stray),
-            Some(&at("2026-09-01T12:00:00Z")),
-            "a later one widens it"
-        );
-
-        forget_release_fixture(&pool, subnet_id, defined).await;
-        forget_release_fixture(&pool, subnet_id, stray).await;
+                .expect("released again, earlier");
+            assert_eq!(
+                crate::ipam_repo::plan_releases(&pool)
+                    .await
+                    .expect("read")
+                    .get(&stray),
+                Some(&at("2026-09-01T11:00:00Z")),
+                "an earlier second release does not narrow what the first forgot"
+            );
+            release_at(&pool, stray, "2026-09-01T12:00:00Z")
+                .await
+                .expect("released later");
+            assert_eq!(
+                crate::ipam_repo::plan_releases(&pool)
+                    .await
+                    .expect("read")
+                    .get(&stray),
+                Some(&at("2026-09-01T12:00:00Z")),
+                "a later one widens it"
+            );
+        })
+        .await;
     }
 
     /// The production route, end to end: the clock read at the edge, the transaction, the redirect
@@ -1292,80 +1329,86 @@ mod tests {
         let defined = v4("100.64.143.9");
         forget_release_fixture(&pool, subnet_id, held).await;
         forget_release_fixture(&pool, subnet_id, defined).await;
-        crate::ipam_repo::insert_subnet(&pool, subnet_id, subnet("100.64.143.0", 24), "release")
+
+        cleaned_up(&pool, subnet_id, &[held, defined], async {
+            crate::ipam_repo::insert_subnet(
+                &pool,
+                subnet_id,
+                subnet("100.64.143.0", 24),
+                "release",
+            )
             .await
             .expect("subnet");
-        {
-            let mut conn = pool.acquire().await.expect("a connection");
-            crate::ipam_repo::insert_address(&mut conn, "t-rel-c-a", subnet_id, defined, "nas")
+            {
+                let mut conn = pool.acquire().await.expect("a connection");
+                crate::ipam_repo::insert_address(&mut conn, "t-rel-c-a", subnet_id, defined, "nas")
+                    .await
+                    .expect("address");
+            }
+            crate::sighting_repo::insert_with_sightings(
+                &pool,
+                &observed(held, 1, "2026-09-01T10:00:00Z"),
+            )
+            .await
+            .expect("ingest");
+
+            let post = |addr: Ipv4Addr| {
+                axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/ipam/release")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .header("host", "opencmdb.example")
+                    .header("origin", "https://opencmdb.example")
+                    .body(axum::body::Body::from(format!("addr={addr}")))
+                    .expect("a request")
+            };
+            let response = crate::ipam_write::router(pool.clone())
+                .oneshot(post(held))
                 .await
-                .expect("address");
-        }
-        crate::sighting_repo::insert_with_sightings(
-            &pool,
-            &observed(held, 1, "2026-09-01T10:00:00Z"),
-        )
-        .await
-        .expect("ingest");
+                .expect("an answer");
+            assert_eq!(response.status(), axum::http::StatusCode::OK);
+            assert_eq!(
+                response
+                    .headers()
+                    .get("hx-redirect")
+                    .and_then(|v| v.to_str().ok()),
+                Some(format!("/ipam?subnet={subnet_id}").as_str()),
+                "back to the subnet that contains the address"
+            );
+            let recorded = crate::ipam_repo::plan_releases(&pool).await.expect("read");
+            assert!(
+                recorded
+                    .get(&held)
+                    .is_some_and(|at| *at > self::at("2026-09-01T10:00:00Z")),
+                "the release is dated by the clock, after the sighting it forgets: {recorded:?}"
+            );
+            let network = read_the_network(&pool).await.expect("read");
+            assert!(
+                !network.seen.contains_key(&held),
+                "the audit forgot the sighting"
+            );
 
-        let post = |addr: Ipv4Addr| {
-            axum::http::Request::builder()
-                .method("POST")
-                .uri("/ipam/release")
-                .header("content-type", "application/x-www-form-urlencoded")
-                .header("host", "opencmdb.example")
-                .header("origin", "https://opencmdb.example")
-                .body(axum::body::Body::from(format!("addr={addr}")))
-                .expect("a request")
-        };
-        let response = crate::ipam_write::router(pool.clone())
-            .oneshot(post(held))
-            .await
-            .expect("an answer");
-        assert_eq!(response.status(), axum::http::StatusCode::OK);
-        assert_eq!(
-            response
-                .headers()
-                .get("hx-redirect")
-                .and_then(|v| v.to_str().ok()),
-            Some(format!("/ipam?subnet={subnet_id}").as_str()),
-            "back to the subnet that contains the address"
-        );
-        let recorded = crate::ipam_repo::plan_releases(&pool).await.expect("read");
-        assert!(
-            recorded
-                .get(&held)
-                .is_some_and(|at| *at > self::at("2026-09-01T10:00:00Z")),
-            "the release is dated by the clock, after the sighting it forgets: {recorded:?}"
-        );
-        let network = read_the_network(&pool).await.expect("read");
-        assert!(
-            !network.seen.contains_key(&held),
-            "the audit forgot the sighting"
-        );
-
-        let refused = crate::ipam_write::router(pool.clone())
-            .oneshot(post(defined))
-            .await
-            .expect("an answer");
-        assert_eq!(refused.status(), axum::http::StatusCode::CONFLICT);
-        let body = axum::body::to_bytes(refused.into_body(), usize::MAX)
-            .await
-            .expect("a body");
-        assert_eq!(
-            String::from_utf8_lossy(&body),
-            rust_i18n::t!("ipam.refusal.release_of_defined").to_string(),
-            "decision 4's refusal is the keyed sentence that names the gesture which does apply"
-        );
-        assert!(
-            !crate::ipam_repo::plan_releases(&pool)
+            let refused = crate::ipam_write::router(pool.clone())
+                .oneshot(post(defined))
                 .await
-                .expect("read")
-                .contains_key(&defined),
-            "and wrote nothing"
-        );
-
-        forget_release_fixture(&pool, subnet_id, held).await;
-        forget_release_fixture(&pool, subnet_id, defined).await;
+                .expect("an answer");
+            assert_eq!(refused.status(), axum::http::StatusCode::CONFLICT);
+            let body = axum::body::to_bytes(refused.into_body(), usize::MAX)
+                .await
+                .expect("a body");
+            assert_eq!(
+                String::from_utf8_lossy(&body),
+                rust_i18n::t!("ipam.refusal.release_of_defined").to_string(),
+                "decision 4's refusal is the keyed sentence that names the gesture which does apply"
+            );
+            assert!(
+                !crate::ipam_repo::plan_releases(&pool)
+                    .await
+                    .expect("read")
+                    .contains_key(&defined),
+                "and wrote nothing"
+            );
+        })
+        .await;
     }
 }
