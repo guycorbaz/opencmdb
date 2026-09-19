@@ -74,6 +74,7 @@ mod entity_id_immutable;
 /// The mutation driver — `cargo xtask mutate` (story 6.4b).
 mod mutate;
 mod observed_immutable;
+mod record;
 mod sql_text;
 pub(crate) use sql_text::*;
 
@@ -104,14 +105,27 @@ fn main() -> ExitCode {
                 ExitCode::from(mutate::CANNOT_MEASURE)
             }
         },
+        // 🔑 The record checker (story 14.4c): a story's `## Record` block against the tree. The
+        // driver's contract — `0` matches, `1` a mismatch, `2` it could not honestly check. NOT a
+        // gate: historical story files carry no block (Guy's decision 2, 2026-09-19).
+        Some("record") => match record::from_args(&args[1..], &workspace_root()) {
+            Ok(code) => ExitCode::from(code),
+            Err(e) => {
+                eprintln!("xtask record: {e:#}");
+                ExitCode::from(record::CANNOT_CHECK)
+            }
+        },
         Some(other) => {
             eprintln!(
-                "xtask: unknown command {other:?}\nusage: cargo xtask ci | cargo xtask mutate"
+                "xtask: unknown command {other:?}\nusage: cargo xtask ci | cargo xtask mutate | \
+                 cargo xtask record <story-file>"
             );
             ExitCode::FAILURE
         }
         None => {
-            eprintln!("usage: cargo xtask ci | cargo xtask mutate --help");
+            eprintln!(
+                "usage: cargo xtask ci | cargo xtask mutate --help | cargo xtask record <story-file>"
+            );
             ExitCode::FAILURE
         }
     }

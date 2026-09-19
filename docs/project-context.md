@@ -185,6 +185,13 @@ monotonicity is re-owned rather than discharged. **5.12 is `done`** — PR #75 s
 
 Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`, not this file.
 
+**Checking a story's record (story 14.4c):** `cargo xtask record <story-file>` checks the story's
+`## Record` block — the live count against `cargo test -- --list`, each `registered:` phrase against
+the rows the branch ADDED to `deferred-work.md`, the `file:` lines against
+`git diff --no-renames --name-only <merge-base>...HEAD` — and answers `0` / `1` / `2` like the mutation
+driver. Run it on the story branch's last commit before the merge, and again after every review
+repair; it refuses a dirty tree and a `base:` that is not the branch point, and never reads prose.
+
 **What exists today:** a three-crate workspace that builds and ships. `cargo xtask ci` runs **ten**
 real gates — dependency frontier (D47), DDL binary collation (D64), retired vocabulary (D65), the
 fixture corpus lock (both directions: edited AND orphan), the file-size ceiling (D56b),

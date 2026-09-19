@@ -5953,6 +5953,9 @@ three independently. These are the ones deferred rather than patched — each wi
   this story leaking a defined address into a plan-wide reader — was found only by replaying one mutation
   by hand to read the names. *A count without the population it counts is where collateral hides.*
   **Owner: the next story that touches `xtask/src/mutate.rs`.**
+  ✅ **CLOSED by story 14.4c (2026-09-19)**: a red run's `Outcome::Red` carries `names`, read from cargo's
+  own `failures:` lists and count-checked against each target's `failed` field, and `measure` prints
+  them as `red: <test>`.
 
 ## Deferred from: code review of 14-4b-releasing-an-address.md (2026-09-19)
 
@@ -5973,4 +5976,16 @@ The rows above owned by *"Epic 14's retrospective"* were decided one by one in
 `prd.md:766` rewrite, stories 14.5 and 14.6, or the FINAL Epic 14 retrospective). That table is the
 decision; this pointer exists so a reader of a row above finds it. ⚠️ The rows themselves are not
 rewritten one by one: the triage is dated, and a row read after it is read with it.
+
+## Raised by story 14.4c's implementation (2026-09-19)
+
+- ⚠️ **A story file without a `## Record` block is checked by nothing** — `cargo xtask record` refuses it
+  (exit 2) but only when someone runs it. The cheap closure is a presence tripwire in
+  `githooks/pre-push`: a story file changed on the branch, created after 14.4c, must contain
+  `## Record` (no build). Registered rather than built (Guy's decision 2, 2026-09-19), so 14.4c stayed
+  one deliverable. **Owner: the first story whose record is found missing its block.**
+- ⚠️ **`cargo xtask mutate` names the red tests of each run but does not COMPARE the baseline's red set
+  with the mutated run's** — which would expose collateral directly (a test red in the mutated run that
+  the mutation cannot reach). Names were enough to diagnose 14.4b's case by reading; the comparison is
+  registered (Guy's decision 4, option b). **Owner: the next story that touches `xtask/src/mutate.rs`.**
 
