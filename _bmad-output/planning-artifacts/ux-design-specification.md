@@ -1342,11 +1342,12 @@ the rule requires._
 | Operator-documented state | **declared** | **déclaré** | Chosen intent — *"the state the operator has **documented**"* |
 | The difference | **gap** | **écart** | The core object; **the product** |
 | Link observed to declared | **reconcile** | **réconcilier** | A **process — never a button** |
-| **Close the gap** — write observed values into the declared record, field by field | **document** (`document-field` / `document-all`) | **« Merger »** | The gap **closes**. The **amber action**. The observed record is untouched |
+| **Close the gap** — write observed values into the declared record, field by field | code/API: **document** (`document-field` / `document-all`) · **UI label: "Add"** | **« Ajouter »** | The gap **closes**. The **amber action**. The observed record is untouched |
 | **Keep the gap open** — record that a divergence is real and known, without deciding | **accept the gap** (`accept-gap`) | **« Accepter l'écart »** | *"Accepter une divergence qui devra être résolue."* **Neutral, never amber** — it closes nothing. Wakes on observed change, **never on a clock** |
 | Defer until a chosen time | **snooze** | **mettre en veille** | A **timer** — as opposed to `accept-gap`, which is a **sensor** |
 | Attach a discovery to an existing record | **attach** | **rattacher** | A link; no data moves |
 | **Put an object outside the frame of the question** | **exclude** | **exclure** | **SETTLED — replaces `ignore`.** The object is out of scope: factual, reversible, no verdict. **Deliberately the same words as an out-of-capability field — one concept, one term** (see *Source State: Two Axes*) |
+| **Stop the plan holding an address** | **release** | **« libérer »** | The plan stops holding the address: it ceases to be a finding and becomes offerable again. **A release is a ROW, never a deletion** — the kept history is what tells a re-sighting from a sighting that never stopped. ⚠️ **Not a software release** (a published version), which is what this word means everywhere else in the project — the one row here whose EN term carries a second meaning, admitted deliberately and named so it cannot surprise |
 | Resolving inbox items | **triage** | **triage** | document / accept-gap / attach / create / **exclude** / snooze |
 | A discovery origin | **source** | **source** | UniFi controller, generic scan, manual |
 

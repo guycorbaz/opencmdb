@@ -997,7 +997,9 @@ and no "elegant" synonyms are permitted. The pair need not share a root — only
 | **Close the gap** — write observed values into the declared record, field by field | code/API: **document** (`document-field` / `document-all`) · **UI label: "Add"** | **« Ajouter »** | The gap **closes**. The observed record is untouched; the link holds |
 | **Keep the gap open** — record that a divergence is real and known, without deciding | **accept the gap** (`accept-gap`) | **« Accepter l'écart »** | *"Accepter une divergence qui devra être résolue."* The gap **stays open and keeps counting**; wakes on observed change, never on a clock |
 | Defer until a chosen time | **snooze** | **mettre en veille** | A **timer** — distinct from `accept-gap`, which is a **sensor** |
+| Attach a discovery to an existing record | **attach** | **rattacher** | A link; no data moves |
 | **Put an object outside the frame of the question** | **exclude** | **exclure** | **Replaces `ignore`.** The object is out of scope: factual, reversible, no verdict. **Deliberately the same term as an out-of-capability field** (FR7) — one concept, one word |
+| **Stop the plan holding an address** | **release** | **« libérer »** | The plan stops holding the address: it ceases to be a finding and becomes offerable again. **A release is a ROW, never a deletion** — the kept history is what tells a re-sighting from a sighting that never stopped. ⚠️ **Not a software release** (a published version), which is what this word means everywhere else in the project — the one row here whose EN term carries a second meaning, admitted deliberately and named so it cannot surprise |
 | Resolving inbox items | **triage** | **triage** | document / accept-gap / create / attach / **exclude** / snooze |
 | A discovery origin | **source** | **source** | UniFi controller, generic scan, manual |
 

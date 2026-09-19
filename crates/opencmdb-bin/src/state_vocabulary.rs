@@ -215,18 +215,37 @@ mod tests {
 
 /// The binding glossary's GESTURE axis, transcribed: `(EN, FR)` exactly as the table carries them.
 ///
-/// ⚠️ **From `ux-design-specification.md:1341-1351`, and the source is NAMED because the two
-/// binding tables disagree.** The UX spec carries **eleven** gesture rows; `prd.md:993-1002`
-/// carries **ten** — `attach`/« rattacher » is missing from the PRD's. Both documents call
-/// themselves binding. This transcribes the superset and the divergence is registered rather than
-/// silently resolved by picking one: reconciling two planning documents is a planning act.
+/// ⚠️ **From the gesture table of BOTH binding documents, which now agree.**
+///
+/// 🔴 This doc read, until 2026-09-18: *"the source is NAMED because the two binding tables
+/// disagree — the UX spec carries **eleven** gesture rows, `prd.md` **ten**, `attach`/« rattacher »
+/// missing from the PRD's … the divergence is registered rather than silently resolved by picking
+/// one: reconciling two planning documents is a planning act."* **That planning act has since
+/// happened** (Guy, 2026-09-18, in the same act that minted `release`): the PRD gained the `attach`
+/// row and both tables gained `release`/« libérer », so both now carry **twelve** rows and the
+/// register rows that tracked the divergence are closed. The first version is kept rather than
+/// deleted, because a correction that removes the false text leaves nobody able to see what
+/// changed.
+///
+/// ⚠️ **Line numbers are deliberately absent here.** They were `:1341-1351` and `:993-1002`, and a
+/// planning act that inserts rows silently invalidates every citation below it — with nothing to
+/// name the sites, since they live in prose and comments no compiler reads.
+///
+/// 🔑 **Measured 2026-09-18, and the dates matter more than the count.** Roughly thirty-five
+/// `prd.md:<line>` / `ux-design-specification.md:<line>` citations sit across this repository,
+/// five of them under `crates/` and `xtask/`. **Almost none was broken by the 2026-09-18 act**:
+/// PR #166 (2026-09-11) inserted **38 lines** at `prd.md:1015` and at the UX spec's `:1364`, and
+/// every PRD citation found sits at `:1016` or below it in the file — so they had been stale by 38
+/// for a week. The 2026-09-18 rows add 2 and 1 respectively. Exactly ONE citation was invalidated
+/// by that act alone (`6b-4-triage-screen-on-the-real-gap.md:277`, a dated story file).
+/// *The drift is a standing condition of citing a planning document by line, not one act's debt.*
 ///
 /// 🔴 **Transcribed, not derived** — the same reason [`BINDING_STATE_AXIS`] gives: deriving it
 /// from `app.yml` would make the check compare the locale file to itself, and the whole point is
 /// that the copy must answer to a document written elsewhere. `CLAUDE.md` protects this
 /// redundancy by name.
 #[cfg(test)]
-pub(crate) const BINDING_GESTURE_AXIS: [(&str, &str); 11] = [
+pub(crate) const BINDING_GESTURE_AXIS: [(&str, &str); 12] = [
     ("observed", "observé"),
     ("declared", "déclaré"),
     ("gap", "écart"),
@@ -250,6 +269,10 @@ pub(crate) const BINDING_GESTURE_AXIS: [(&str, &str); 11] = [
     ("snooze", "mettre en veille"),
     ("attach", "rattacher"),
     ("exclude", "exclure"),
+    // Minted 2026-09-18 by Guy, for story 14.4b. ⚠️ No `gesture.release` key exists yet — 14.4b
+    // adds it, and adding it is what will pull this row into `GLOSSARY_BACKED` and make the
+    // rendered copy answer to it. Transcribed now so this constant does not lag its own source.
+    ("release", "libérer"),
     ("triage", "triage"),
     ("source", "source"),
 ];
