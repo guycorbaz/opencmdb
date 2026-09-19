@@ -687,7 +687,7 @@ mod tests {
 
         // Each plant is committed on its own, measured, then undone by a fresh commit of the honest
         // record — so the tree is never dirty when `check` runs (a dirty tree is its own refusal).
-        let mut plant = |text: String, expected: u8, why: &str| {
+        let plant = |text: String, expected: u8, why: &str| {
             write("story.md", &text);
             git(&["commit", "-q", "-am", why]);
             assert_eq!(run(), expected, "{why}");
