@@ -583,8 +583,6 @@ pub(crate) fn run_mutation(
         println!("   `git checkout`: on a dirty tree it destroys uncommitted work (defect row 7).");
         return Ok(CANNOT_MEASURE);
     }
-    std::fs::create_dir_all(&vault).with_context(|| format!("creating {}", vault.display()))?;
-    std::fs::write(&stash, &snapshot).with_context(|| format!("writing {}", stash.display()))?;
 
     // 🔑 THE BASELINE FIRST, on the UNMUTATED tree, so a pre-existing red is caught before the
     // mutation can be credited with it. A baseline that is not clean is a REFUSAL: measuring a
@@ -638,6 +636,15 @@ pub(crate) fn run_mutation(
         }
         Applied::Once => {}
     }
+    // 🔴 **THE SNAPSHOT IS WRITTEN HERE, immediately before the file is mutated — and it was written
+    // before the BASELINE until story 14.4c's own mutation pass tripped on it.** A refused baseline,
+    // a missed anchor, a multi-matched anchor and a no-op all RETURN before the file is touched, and
+    // all four left the snapshot on disk; the next run then refused with *"a snapshot from an earlier
+    // run is still here … may still be MUTATED"* over a file that never was — measured: seven
+    // mutations refused in a row after one baseline refusal. The stash is the recovery for the window
+    // in which the file IS mutated, and that window opens on the next line.
+    std::fs::create_dir_all(&vault).with_context(|| format!("creating {}", vault.display()))?;
+    std::fs::write(&stash, &snapshot).with_context(|| format!("writing {}", stash.display()))?;
     std::fs::write(&path, &mutated).with_context(|| format!("mutating {}", path.display()))?;
 
     // 🔴 **THE DRIVER SHOWS ITS WORK, and until the code review it showed none.** AC1, §0b row 4
@@ -1509,6 +1516,36 @@ version = \"0.0.0\"
             "the red run names the test that reddened"
         );
         unsafe { std::env::remove_var("CARGO_TARGET_DIR") };
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// 🔴 **A refusal before the mutation leaves NO snapshot** (story 14.4c): the snapshot was written
+    /// before the baseline, so a refused baseline — and a missed anchor, a multi-match, a no-op — left
+    /// it on disk, and every later run refused *"may still be MUTATED"* over a file never touched.
+    #[test]
+    fn a_refusal_before_the_mutation_leaves_no_snapshot_behind() {
+        let dir = std::env::temp_dir().join(format!("xtask-mutate-stash-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("src")).expect("scratch");
+        std::fs::write(dir.join("src/lib.rs"), "pub fn answer() -> u8 { 42 }\n").expect("lib");
+        let mutation = Mutation {
+            file: PathBuf::from("src/lib.rs"),
+            anchor: "an anchor that is nowhere".to_string(),
+            replacement: "anything".to_string(),
+            expect: Expect::Red(None),
+            targets: 2,
+            require_store: false,
+            baseline: false,
+        };
+        let code =
+            run_mutation(&dir, &mutation, |_| Ok((true, String::new()))).expect("the driver runs");
+        assert_eq!(
+            code, CANNOT_MEASURE,
+            "the premise: a missed anchor is refused"
+        );
+        assert!(
+            !dir.join("target/xtask-mutate/src%lib.rs.snapshot").exists(),
+            "the file was never mutated, so no snapshot may claim it might be"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
