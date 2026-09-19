@@ -423,7 +423,10 @@ pub(crate) fn check(story_path: &Path, env: &Checked<'_>) -> Result<u8> {
     let at = |rev: &str| git(&["show", &format!("{rev}:{REGISTER}")]).unwrap_or_default();
     let (base_register, head_register) = (at(&fork), at("HEAD"));
     let base_rows: BTreeSet<String> = register_rows(&base_register).into_iter().collect();
-    println!("rows this branch added to the register (compare them with the story's claims):");
+    println!(
+        "rows this branch added OR CHANGED in the register (an edited row reads as new text; the \
+         claims are checked against the NET count of rows added):"
+    );
     for row in register_rows(&head_register)
         .iter()
         .filter(|row| !base_rows.contains(*row))
