@@ -5619,6 +5619,13 @@ One row, and v0.3.0 is what made it live.
   bounded for a phone that rotates its address. Releasing an address — deleting its pairs — is the
   only removal, and it is the operator's. **Owner: story 14.4** (release), which must delete every pair
   of the address across L2 domains and MACs, sentinel row included.
+  ✅ **ANSWERED by story 14.4b (2026-09-19), and not in the shape this row prescribed.** A release is a
+  ROW in `address_release`, keyed on the address — it DELETES nothing (Guy, 2026-09-16: the delete
+  shape reset `first_seen_at` on the next sweep, and marking the summary was defeated by a MAC change).
+  The `-` sentinel is not representable in that key, so the *"sentinel row included"* clause has no
+  object. ⚠️ **The summary's growth under MAC randomisation is therefore NOT bounded by the release**:
+  the rows stay, the audit forgets them. What bounds the table is still nothing; re-owned to Epic 14's
+  retrospective as a question rather than an answer.
 - ⚠️ **One fixture site deliberately does NOT clear the summary**: `main.rs`'s NFR5 test that deletes
   ONE observation `WHERE id = ?` to model *"the old sighting aged out"*. Under constraint (3) the
   summary must not forget that sighting, so the site is left as it is — fifteen of the sixteen
@@ -5900,3 +5907,46 @@ three independently. These are the ones deferred rather than patched — each wi
   it; what would carry it is a VoiceOver check this project has no way to automate. Recorded so the
   next reader does not delete it as unmotivated. **Owner: Epic 19**, with the other accessibility
   residuals.
+
+## Raised by story 14.4b's implementation (2026-09-19)
+
+- ⚠️ **A release cannot be UNDONE from the screen** (Guy's decision 3, 2026-09-19): no fifth correction
+  route. Under decision 1 the network corrects a mistaken release of a machine that answers — its next
+  sighting is later than the release and holds the address again — but a mistaken release of a machine
+  that is asleep makes its address OFFERABLE until it wakes. The row can be removed by hand
+  (`DELETE FROM address_release WHERE addr = …`). **Owner: Epic 14's retrospective**, which decides
+  whether the Undo Toast (`ux-design-specification.md:1244`) or a rail list is owed.
+- ⚠️ **The OUTSIDE list offers no release** (decision 2 put the control on the SUBNET's findings). An
+  address seen outside every subnet stays listed until a subnet contains it. The route itself accepts
+  one — measured, it redirects to `/ipam` — so what is missing is a control, not a rule. **Owner: Epic
+  14's retrospective.**
+- 🔴 **AC2's letter and decision 1 disagree, and the story ships decision 1.** AC2 reads *"ingests an
+  observation of the released address afterwards and asserts the audit's answer is unchanged"*; under
+  decision 1 an observation LATER than the release holds the address again — by design, since an
+  address something answers on must never be offered. What the test asserts is the property the refused
+  shapes lost: an observation DATED BEFORE the release (a late arrival, a replay) leaves the audit
+  unchanged, and the summary keeps its first sighting. `epics.md` NOT edited. **Owner: Epic 14's
+  retrospective.**
+- ⚠️ **AC5's positive half is a SPELLING tripwire.** The plan guard asserts that `ipam_repo.rs`'s code
+  contains `INSERT INTO address_release`; mutation M3 (two spaces between `INTO` and the table) reds it
+  with the product correct. It is what makes the guard notice the write LEAVING the plan's modules, and
+  it is carried by a literal, not by a parse. Stated rather than hidden. **Owner: none.**
+- ⚠️ **The defined-address refusal reads without a lock**: a concurrent `define_address` landing between
+  the read and the insert leaves a release row on a defined address. Harmless by construction — a
+  defined address is never a verdict and never offered — and the row takes effect only if the record is
+  later removed, which is then the release the operator asked for. Recorded so nobody adds a lock *"for
+  symmetry"*. **Owner: none.**
+- 🔴 **The accessibility seed and `ipam_repo`'s store tests share a namespace, and that predates this
+  story.** Running `cargo test` AFTER both browser gates on the same store reds two tests: `t-race`
+  inserts `198.51.100.128/25`, exactly the seed's *Workshop* subnet (`Constraint("unique")` on
+  `ip_subnet_cidr`), and `the_store_returns_addresses_in_numeric_order` reads the plan WIDE and meets the
+  seed's defined `.9` and `.90`. Measured 2026-09-19 on a warm store; green on a recreated one. CI runs
+  the tests BEFORE the gates, so CI cannot see it — the local order is where it bites, which is where
+  this project measures its mutations. The seed's own header claims its `/25`s avoid the tests' `/24`s;
+  `t-race`'s `/25` is the counterexample. **Owner: the next story that touches `a11y/seed.sql` or
+  `ipam_repo`'s tests.**
+- ⚠️ **`cargo xtask mutate` does not print WHICH tests reddened**, only how many. Five of this story's
+  nine first-pass mutations came back one red over their prediction, and the cause — a panicking test of
+  this story leaking a defined address into a plan-wide reader — was found only by replaying one mutation
+  by hand to read the names. *A count without the population it counts is where collateral hides.*
+  **Owner: the next story that touches `xtask/src/mutate.rs`.**
