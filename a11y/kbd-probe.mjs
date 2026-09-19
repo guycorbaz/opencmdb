@@ -32,19 +32,20 @@ const CHROME = process.env.AXE_CHROME ?? "/usr/bin/google-chrome";
 const QUEUE = ".queue .queue-row > a";
 // The settle in `app.js` is 250 ms; everything here waits past it with room for a document.
 const SETTLE_WAIT_MS = 900;
-// 🔑 The floor, and it EQUALS what is there rather than sitting under it: **fifty-three** checks run
+// 🔑 The floor, and it EQUALS what is there rather than sitting under it: **fifty-eight** checks run
 // on a queue of two, which is the shortest queue this gate accepts. ⚠️ This sentence said *twenty*
 // until story 14.4's slice-D review — story 6b.11's figure, left behind by every floor move since —
 // so the ONE place a reader verifies *the floor equals what is there* asserted a number 33 short of
 // the constant beneath it. ⚠️ And the repair's first version said *fifty-two*: the same review added
 // a check in the same breath, so the corrected sentence was stale before it was saved. **A floor is
 // a MINIMUM, so that drift reds nothing** — it just quietly stops equalling what is there, which is
-// the whole property. The number below is now read off a live run (`53 check(s) run`) rather than
+// the whole property. The number below is now read off a live run (`58 check(s) run`, story 14.4b's
+// five release checks added to 14.4's fifty-three) rather than
 // counted by hand. A floor under what exists tolerates losing a check while still reading as a pass
 // — this project has caught that twice, once in a privacy floor and once in a word count. If a
 // check is added this number moves deliberately; if one is skipped, the gate says so instead of
 // printing a green.
-const MIN_CHECKS = 53;
+const MIN_CHECKS = 58;
 const MIN_ROWS = 2;
 // 🔑 The seed's own two-hardware-address sighting, in ONE place. It was written twice — typed into
 // the field at one site and spelled out inside the expected triage href at another — so a seed that
@@ -1126,6 +1127,97 @@ async function main() {
       `focusedIsControl=${warned.focusedIsControl}`,
     );
     await rail.close();
+  }
+
+  // ── Story 14.4b: the release, found by its CONTROL and PRESSED ─────────────────────────────
+  // 🔑 Found by the route it posts to and by the address its hidden field carries — never by a
+  // translated word (story 6.4's lesson). The seed's Office subnet is the one `/ipam` opens on, and
+  // its findings are a committed fixture, so the addresses below are EXACT rather than a floor:
+  // seven releasable findings (`gap` or `undeclared`); `.9` listed as a conflict and DEFINED, so it
+  // offers none (decision 4); `.61` sighted and ALREADY released, so it is not a finding at all.
+  // `.60` is the dedicated case this block presses — dedicated so the press removes nothing another
+  // check walks.
+  {
+    const RELEASABLE = [
+      "192.0.2.11",
+      "192.0.2.12",
+      "192.0.2.13",
+      "192.0.2.20",
+      "192.0.2.42",
+      "192.0.2.50",
+      "192.0.2.60",
+    ];
+    const read = (p) =>
+      p.evaluate(() => {
+        const forms = [...document.querySelectorAll('.ipam-audit form[hx-post="/ipam/release"]')];
+        return {
+          url: location.pathname + location.search,
+          released: forms.map((f) => f.querySelector("input[name=addr]")?.value ?? ""),
+          names: forms.map((f) => (f.querySelector("button")?.textContent ?? "").trim()),
+          findings: [
+            ...document.querySelectorAll(".ipam-audit ul.ipam-findings:not(.ipam-outside) > li > .mono"),
+          ].map((e) => (e.textContent ?? "").trim()),
+        };
+      });
+    const held = await open("/ipam");
+    const before = await read(held);
+    check(
+      JSON.stringify(before.released) === JSON.stringify(RELEASABLE) &&
+        before.findings.includes("192.0.2.9") &&
+        !before.findings.includes("192.0.2.61"),
+      "every releasable finding carries a release — not the DEFINED .9, and the already-released " +
+        ".61 is no finding at all",
+      JSON.stringify({ released: before.released, findings: before.findings }),
+    );
+    check(
+      before.names.length === RELEASABLE.length &&
+        new Set(before.names).size === before.names.length &&
+        before.names.every((name, i) => name.includes(before.released[i])),
+      "and each release names its address in its accessible name",
+      JSON.stringify(before.names),
+    );
+    const focusable = await held.evaluate(() => {
+      const button = [...document.querySelectorAll('.ipam-audit form[hx-post="/ipam/release"]')]
+        .find((f) => f.querySelector("input[name=addr]")?.value === "192.0.2.60")
+        ?.querySelector("button");
+      button?.focus();
+      return { reached: button != null && document.activeElement === button, tabIndex: button?.tabIndex ?? null };
+    });
+    check(
+      focusable.reached && focusable.tabIndex >= 0,
+      "the release control is reachable by the keyboard",
+      JSON.stringify(focusable),
+    );
+    // 🔑 PRESSED with Enter, awaited on its response rather than slept on (the documenting
+    // gesture's reason). A release is an UPSERT, so a store this gate already pressed answers 200
+    // again — the press cannot be refused by a stale store, which is why no re-seed branch is owed.
+    const answered = held.waitForResponse((r) => r.request().method() === "POST", {
+      timeout: NAV_TIMEOUT_MS,
+    });
+    await held.keyboard.press("Enter");
+    let status = null;
+    try {
+      status = (await answered).status();
+    } catch (error) {
+      cannotRun(`the release never answered — ${error.message}`);
+    }
+    await held
+      .waitForNavigation({ waitUntil: "networkidle0", timeout: NAV_TIMEOUT_MS })
+      .catch(() => {});
+    const after = await read(held);
+    check(
+      status === 200 && after.url.startsWith("/ipam?subnet="),
+      "pressing it writes, and sends the browser back to the plan it changed",
+      `status=${status} url=${after.url}`,
+    );
+    check(
+      !after.findings.includes("192.0.2.60") &&
+        !after.released.includes("192.0.2.60") &&
+        after.released.includes("192.0.2.20"),
+      "and the released address has LEFT the findings, while the others keep theirs",
+      JSON.stringify({ released: after.released, findings: after.findings }),
+    );
+    await held.close();
   }
 
   // 🔴 **A FAILURE DECIDES BEFORE THE FLOOR DOES, and the review MEASURED why this order matters.**

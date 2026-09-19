@@ -198,6 +198,13 @@ pub enum IpamError {
     /// shrank the range off an address it held reached the same abandoned state and was accepted,
     /// while the delete was refused — so the refusal was shut on one path and open on its twin.
     RangeStillHoldsAddresses,
+    /// The operator asked to RELEASE an address the plan itself DEFINES (story 14.4b).
+    ///
+    /// 🔑 **Refused rather than accepted** (Guy's decision 4, 2026-09-19): a defined address is never
+    /// offered whatever the network shows, so a release of it would change nothing about the offer
+    /// and could only hide a « Conflit d'adresse » without resolving it. What stops the plan holding
+    /// a defined address is removing its record, which is a different gesture with its own route.
+    ReleaseOfADefinedAddress,
 }
 
 impl IpamError {
@@ -212,7 +219,7 @@ impl IpamError {
     /// 🔑 And the mechanism was already in this commit, one type over: [`IpPolicy::ALL`] plus a row
     /// in `screens.rs`'s enum-completeness guard. *The hole was recognised for one type and left
     /// open for its neighbour, in the same file.* Both are rows now.
-    pub const ALL: [IpamError; 8] = [
+    pub const ALL: [IpamError; 9] = [
         IpamError::RangeOutsideSubnet,
         IpamError::RangeOverlapsAnother,
         IpamError::RangeBoundsInverted,
@@ -221,6 +228,7 @@ impl IpamError {
         IpamError::PrefixLengthNotInFamily,
         IpamError::MalformedAddress,
         IpamError::RangeStillHoldsAddresses,
+        IpamError::ReleaseOfADefinedAddress,
     ];
 }
 
@@ -240,6 +248,9 @@ impl fmt::Display for IpamError {
             IpamError::MalformedAddress => "the address is not in this store's canonical form",
             IpamError::RangeStillHoldsAddresses => {
                 "the range still holds addresses defined inside it"
+            }
+            IpamError::ReleaseOfADefinedAddress => {
+                "the address is defined in the plan, so there is nothing to release"
             }
         })
     }

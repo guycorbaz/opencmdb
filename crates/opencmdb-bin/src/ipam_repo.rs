@@ -1392,6 +1392,116 @@ fn policy_from_token(token: &str) -> Result<IpPolicy, RepositoryError> {
         })
 }
 
+/// Release one address: the plan forgets what the network showed on it up to `at` (story 14.4b).
+///
+/// 🔑 **A release is a ROW, never a deletion** — `0009`'s header carries the three refused shapes and
+/// what refuted each. Nothing here reads or writes `address_sighting`, which keeps every row it had:
+/// the audit is what consults this table ([`plan_releases`]), and `sighting_repo.rs` never learns it
+/// exists.
+///
+/// 🔑 **A second release WIDENS, it never narrows**: `GREATEST` keeps the later of the two instants,
+/// because re-releasing an address that answered again means *forget this too*.
+///
+/// 🔴 **A DEFINED address is refused** (Guy's decision 4, 2026-09-19), read under the same
+/// transaction as the write. ⚠️ **The read takes no lock, and the race it leaves is harmless by
+/// construction rather than by luck**: a concurrent `define_address` landing between the read and
+/// the insert leaves a release row on a defined address, and a defined address is never a verdict
+/// and never offered ([`crate::ipam_audit::Plan`]) — so the row changes nothing the operator can see
+/// until the record is removed, at which point it is exactly the release they asked for.
+///
+/// 🔑 **An address the network has never shown is ACCEPTED**, and silently so: this module may not
+/// read the sightings (the plan's guard), and a release of an unseen address forgets nothing. The
+/// only door to this route on the screen is a finding, which is a sighting by definition.
+///
+/// # Returns
+///
+/// The id of the INNERMOST subnet containing the address, which is where the operator goes back
+/// to — or `None` when no subnet of the plan contains it.
+///
+/// # Errors
+///
+/// [`IpamError::ReleaseOfADefinedAddress`] when an `ip_address` row names it, or the classified
+/// `sqlx::Error`.
+pub(crate) async fn release_address(
+    conn: &mut sqlx::MySqlConnection,
+    addr: Ipv4Addr,
+    at: opencmdb_core::observation::Timestamp,
+) -> Result<Option<String>, RepositoryError> {
+    let defined: Option<(String,)> =
+        sqlx::query_as(capped!("SELECT id FROM ip_address WHERE addr = ? LIMIT 1"))
+            .bind(canonical(addr))
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(classify)?;
+    if defined.is_some() {
+        return Err(ipam(IpamError::ReleaseOfADefinedAddress));
+    }
+    sqlx::query(capped!(
+        "INSERT INTO address_release (addr, released_at) VALUES (?, ?) \
+         ON DUPLICATE KEY UPDATE released_at = GREATEST(released_at, VALUES(released_at))"
+    ))
+    .bind(canonical(addr))
+    .bind(crate::repo::datetime_literal(at))
+    .execute(&mut *conn)
+    .await
+    .map_err(classify)?;
+    let innermost = list_subnets(&mut *conn)
+        .await?
+        .into_iter()
+        .filter(|(_, subnet, _)| subnet.contains(addr))
+        .min_by_key(|(_, subnet, _)| subnet.size())
+        .map(|(id, _, _)| id);
+    Ok(innermost)
+}
+
+/// Every release the plan holds, by address — the audit's third input (story 14.4b).
+///
+/// 🔑 **Plan-wide and read whole**: the table is bounded by what the operator released, and the
+/// lapse is decided in Rust against the sightings (D10 — a comparison never descends into SQL).
+///
+/// Skipped and NAMED, for [`plan_ranges`]'s reason: one unreadable row must not take `/ipam` down.
+/// ⚠️ The consequence of a skip is the PROTECTIVE one here — a release this build cannot read is a
+/// release that does not happen, so the address stays held.
+///
+/// # Errors
+///
+/// The classified `sqlx::Error`.
+pub(crate) async fn plan_releases<'e, E>(
+    executor: E,
+) -> Result<
+    std::collections::BTreeMap<Ipv4Addr, opencmdb_core::observation::Timestamp>,
+    RepositoryError,
+>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT addr, DATE_FORMAT(released_at, '%Y-%m-%dT%H:%i:%s.%fZ') \
+         FROM address_release ORDER BY addr",
+    )
+    .fetch_all(executor)
+    .await
+    .map_err(classify)?;
+    let mut released = std::collections::BTreeMap::new();
+    for (addr, at) in rows {
+        let instant =
+            chrono::DateTime::parse_from_rfc3339(&at).map(|t| t.with_timezone(&chrono::Utc));
+        match (from_canonical(&addr), instant) {
+            (Ok(parsed), Ok(instant)) => {
+                released.insert(parsed, instant);
+            }
+            (addr_read, instant_read) => tracing::warn!(
+                stored_addr = %addr,
+                stored_instant = %at,
+                addr_ok = addr_read.is_ok(),
+                instant_ok = instant_read.is_ok(),
+                "skipping an address_release row this build cannot read — the address stays held"
+            ),
+        }
+    }
+    Ok(released)
+}
+
 /// Carry an [`IpamError`] across the frontier.
 ///
 /// ✅ **The seam D47 made awkward on purpose is now closed.** Story 14.1 carried these refusals as

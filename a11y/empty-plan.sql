@@ -18,3 +18,5 @@
 DELETE FROM ip_range;
 DELETE FROM ip_address;
 DELETE FROM ip_subnet;
+-- Story 14.4b: a release is part of the plan, so an empty plan holds none.
+DELETE FROM address_release;

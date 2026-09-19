@@ -114,6 +114,45 @@ pub(crate) fn merge_sightings(sightings: &[Sighting]) -> BTreeMap<Ipv4Addr, Seen
     seen
 }
 
+/// Forget what the network showed on each RELEASED address up to the instant of its release (story
+/// 14.4b, Guy's decision 1 of 2026-09-19).
+///
+/// 🔑 **The release LAPSES by construction, never by a rule someone must remember**: a hardware
+/// address seen AFTER the release keeps its sighting, so the address is held again — the network
+/// answering again outranks the operator's word, because an address something answers on must never
+/// be offered. A released address whose every sighting predates the release leaves the map entirely,
+/// which is what makes it stop being a finding AND become offerable, in one act.
+///
+/// 🔑 **Per hardware address, not per address**: a NIC replaced after the release is a new MAC seen
+/// later — it holds the address — while the old NIC's sighting stays forgotten, so a « Conflit
+/// d'adresse » between the old and the new card cannot be manufactured by the release. This is the
+/// case the refused *mark `address_sighting`* shape lost (`0009`'s header), answered here on the
+/// merged view instead of on a summary row.
+///
+/// ⚠️ **An instant EQUAL to the release is forgotten**: the operator released what they saw, and what
+/// they saw includes the sighting at that instant.
+///
+/// 🔴 **Applied ONCE, in [`read_the_network`], so every consumer agrees by construction**: the audit,
+/// the offer, the grid's seen marker and the three warnings before a write all read `Network::seen`.
+/// Applying it at each consumer would make agreement a discipline; here it is a property of the only
+/// door.
+pub(crate) fn forget_released(
+    mut seen: BTreeMap<Ipv4Addr, Seen>,
+    released: &BTreeMap<Ipv4Addr, Timestamp>,
+) -> BTreeMap<Ipv4Addr, Seen> {
+    for (addr, at) in released {
+        let Some(entry) = seen.get_mut(addr) else {
+            continue;
+        };
+        entry.macs.retain(|_, last| *last > *at);
+        entry.without_mac = entry.without_mac.filter(|last| *last > *at);
+        if entry.macs.is_empty() && entry.without_mac.is_none() {
+            seen.remove(addr);
+        }
+    }
+    seen
+}
+
 /// The whole plan: every subnet, every range and every defined address, in any subnet.
 ///
 /// 🔑 **Plan-wide and not per subnet, because decision 2 is plan-wide**: a nested subnet's `reserved`
@@ -349,6 +388,10 @@ impl Plan {
 /// It answers THREE things, and the third exists because two of them are the same fact compared two
 /// ways: the sightings, the documented ADDRESSES (parsed, for the offer) and the claimed VALUES
 /// (verbatim, for the triage link) — see [`AddressFinding::claimed`].
+///
+/// 🔑 **Since story 14.4b the sightings arrive with the operator's releases already applied**
+/// ([`forget_released`]). `address_release` is a PLAN table, so reading it here breaks none of the
+/// guard's rules — and applying it here, the only door, is what makes every reader agree.
 pub(crate) async fn read_the_network(
     pool: &sqlx::MySqlPool,
 ) -> Result<Network, opencmdb_core::repo::RepositoryError> {
@@ -358,8 +401,9 @@ pub(crate) async fn read_the_network(
     let values = crate::repo::load_documented_ipv4s(pool)
         .await
         .map_err(crate::repo::classify)?;
+    let released = crate::ipam_repo::plan_releases(pool).await?;
     Ok(Network {
-        seen: merge_sightings(&sightings),
+        seen: forget_released(merge_sightings(&sightings), &released),
         documented: documented_addresses(&values),
         claimed: values.into_iter().collect(),
     })
@@ -866,5 +910,462 @@ mod tests {
             "two DIFFERENT hardware addresses in two domains read as a conflict — the merge is what \
              makes it one address, and the plan has no VLAN to tell the two apart"
         );
+    }
+
+    // ── Story 14.4b: the release ────────────────────────────────────────────────────────────────
+
+    fn released(pairs: &[(&str, &str)]) -> BTreeMap<Ipv4Addr, Timestamp> {
+        pairs
+            .iter()
+            .map(|(addr, when)| (v4(addr), at(when)))
+            .collect()
+    }
+
+    /// Decision 1 — a release forgets every sighting up to its instant, and an instant EQUAL to it.
+    /// 🔑 The CONTROL is the same map with no release, without which the removal proves nothing.
+    #[test]
+    fn a_release_forgets_every_sighting_up_to_its_instant() {
+        let seen = merge_sightings(&[
+            sighting("192.0.2.20", 1, Some(1), "2026-09-01T10:00:00Z"),
+            sighting("192.0.2.20", 1, None, "2026-09-01T10:30:00Z"),
+            sighting("192.0.2.21", 1, Some(2), "2026-09-01T11:00:00Z"),
+        ]);
+        let control = forget_released(seen.clone(), &BTreeMap::new());
+        assert_eq!(control, seen, "no release forgets nothing");
+
+        let after = forget_released(
+            seen,
+            &released(&[
+                ("192.0.2.20", "2026-09-01T11:00:00Z"),
+                ("192.0.2.21", "2026-09-01T11:00:00Z"),
+            ]),
+        );
+        assert!(
+            after.is_empty(),
+            "every sighting, with or without a MAC, at or before the release is forgotten: {after:?}"
+        );
+    }
+
+    /// Decision 1 — the network answering AFTER the release holds the address again, and a NIC
+    /// replaced after the release does not manufacture a conflict with the one it replaced.
+    #[test]
+    fn a_sighting_after_the_release_holds_the_address_again_on_its_own_mac() {
+        let seen = merge_sightings(&[
+            sighting("192.0.2.20", 1, Some(1), "2026-09-01T10:00:00Z"),
+            sighting("192.0.2.20", 1, Some(7), "2026-09-01T11:06:00Z"),
+        ]);
+        let plan = plan();
+        assert!(
+            plan.audit(office(), &seen, &BTreeSet::new())[0].conflict,
+            "the premise: without the release, two MACs inside `static` are a conflict"
+        );
+
+        let after = forget_released(seen, &released(&[("192.0.2.20", "2026-09-01T11:00:00Z")]));
+        let held = after
+            .get(&v4("192.0.2.20"))
+            .expect("the later MAC holds it");
+        assert_eq!(
+            held.macs.keys().copied().collect::<Vec<_>>(),
+            vec![mac(7)],
+            "only the hardware address seen AFTER the release is kept"
+        );
+        let findings = plan.audit(office(), &after, &BTreeSet::new());
+        assert_eq!(
+            kinds(&findings),
+            vec![(v4("192.0.2.20"), Some(FindingKind::Gap), false)],
+            "held again, as an ordinary finding — and no conflict with the card it replaced"
+        );
+        assert!(!plan.offerable(v4("192.0.2.20"), &after, &BTreeSet::new()));
+    }
+
+    /// AC4 — a released address stops being a finding AND becomes offerable, in one act; and a
+    /// released address the plan would never offer stops being a finding without being offered.
+    #[test]
+    fn a_released_address_stops_being_a_finding_and_the_offer_agrees() {
+        let plan = plan();
+        let seen = seen_at(&["192.0.2.1", "192.0.2.140"]);
+        assert_eq!(
+            kinds(&plan.audit(office(), &seen, &BTreeSet::new())),
+            vec![
+                (v4("192.0.2.1"), Some(FindingKind::Gap), false),
+                (v4("192.0.2.140"), Some(FindingKind::Undeclared), false),
+            ],
+            "the premise: both are findings before the release"
+        );
+        assert_eq!(
+            plan.next_offerable(office(), &seen, &BTreeSet::new()),
+            Some(v4("192.0.2.2")),
+            "the premise: the seen .1 is not offered"
+        );
+
+        let after = forget_released(
+            seen,
+            &released(&[
+                ("192.0.2.1", "2026-09-02T00:00:00Z"),
+                ("192.0.2.140", "2026-09-02T00:00:00Z"),
+            ]),
+        );
+        assert!(
+            plan.audit(office(), &after, &BTreeSet::new()).is_empty(),
+            "a released address is no longer a finding"
+        );
+        assert_eq!(
+            plan.next_offerable(office(), &after, &BTreeSet::new()),
+            Some(v4("192.0.2.1")),
+            "and the `static` one is offered again — the audit and the offer agree"
+        );
+        assert!(
+            !plan.offerable(v4("192.0.2.140"), &after, &BTreeSet::new()),
+            "a `reserved` address is never offered, released or not"
+        );
+    }
+
+    // ── Story 14.4b, against the store ──────────────────────────────────────────────────────────
+
+    fn observed(
+        addr: Ipv4Addr,
+        mac_octet: u8,
+        when: &str,
+    ) -> opencmdb_core::observation::Observation {
+        use opencmdb_core::observation::{ConnectorId, Fact, ObsId, Observation, Scope, VantageId};
+        Observation {
+            obs_id: ObsId::from_uuid(uuid::Uuid::now_v7()),
+            connector_id: ConnectorId::from_uuid(uuid::Uuid::nil()),
+            observed_at: at(when),
+            scope: Scope {
+                l2_domain: L2DomainId::from_uuid(uuid::Uuid::nil()),
+                vantage: VantageId::from_uuid(uuid::Uuid::nil()),
+            },
+            facts: vec![
+                Fact::IpV4 { addr },
+                Fact::Mac {
+                    addr: mac(mac_octet),
+                    locally_administered: true,
+                },
+            ],
+            raw: None,
+        }
+    }
+
+    /// Clear everything these tests write for one address and one subnet, so a re-run against a
+    /// store that kept the last run's rows starts clean.
+    async fn forget_release_fixture(pool: &sqlx::MySqlPool, subnet_id: &str, addr: Ipv4Addr) {
+        let canonical = crate::ipam_repo::canonical(addr);
+        for statement in [
+            "DELETE FROM address_release WHERE addr = ?",
+            "DELETE FROM address_sighting WHERE addr = ?",
+        ] {
+            sqlx::query(statement)
+                .bind(&canonical)
+                .execute(pool)
+                .await
+                .expect("clean");
+        }
+        sqlx::query(
+            "DELETE FROM observation_record WHERE JSON_SEARCH(facts, 'one', ?) IS NOT NULL",
+        )
+        .bind(addr.to_string())
+        .execute(pool)
+        .await
+        .expect("clean the observations");
+        crate::ipam_repo::tests::forget_subnet(pool, subnet_id).await;
+    }
+
+    async fn release_at(
+        pool: &sqlx::MySqlPool,
+        addr: Ipv4Addr,
+        when: &str,
+    ) -> Result<Option<String>, opencmdb_core::repo::RepositoryError> {
+        let mut conn = pool.acquire().await.expect("a connection");
+        crate::ipam_repo::release_address(&mut conn, addr, at(when)).await
+    }
+
+    /// AC2 and AC3 — the release is RECORDED, and nothing the ingest path does to the summary undoes
+    /// it; only a sighting LATER than the release holds the address again (decision 1).
+    ///
+    /// 🔴 **AC2's letter reads "ingests an observation afterwards and the audit is unchanged", and
+    /// under decision 1 that holds for an observation DATED before the release** — a late arrival,
+    /// a replay — which is exactly what the refused *delete only* shape could not survive: the upsert
+    /// re-creates the row it deleted. A sighting dated AFTER the release is the network answering,
+    /// and holding the address again is decision 1 itself, asserted in the last step.
+    #[tokio::test]
+    async fn a_release_is_recorded_and_only_a_later_sighting_undoes_it() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = crate::ipam_repo::tests::ipam_fixture().await else {
+            return;
+        };
+        let subnet_id = "t-rel-a";
+        let addr = v4("100.64.141.20");
+        forget_release_fixture(&pool, subnet_id, addr).await;
+        crate::ipam_repo::insert_subnet(&pool, subnet_id, subnet("100.64.141.0", 24), "release")
+            .await
+            .expect("subnet");
+        {
+            let mut conn = pool.acquire().await.expect("a connection");
+            crate::ipam_repo::insert_range(
+                &mut conn,
+                "t-rel-a-r",
+                subnet_id,
+                v4("100.64.141.10"),
+                v4("100.64.141.30"),
+                IpPolicy::Static,
+                "static",
+            )
+            .await
+            .expect("range");
+        }
+        let plan = Plan {
+            subnets: vec![subnet("100.64.141.0", 24)],
+            ranges: vec![(v4("100.64.141.10"), v4("100.64.141.30"), IpPolicy::Static)],
+            defined: BTreeSet::new(),
+        };
+        let here = subnet("100.64.141.0", 24);
+
+        crate::sighting_repo::insert_with_sightings(
+            &pool,
+            &observed(addr, 1, "2026-09-01T10:00:00Z"),
+        )
+        .await
+        .expect("ingest");
+        let before = read_the_network(&pool).await.expect("read");
+        assert_eq!(
+            kinds(&plan.audit(here, &before.seen, &before.claimed)),
+            vec![(addr, Some(FindingKind::Gap), false)],
+            "the premise: the sighting holds the address"
+        );
+
+        assert_eq!(
+            release_at(&pool, addr, "2026-09-01T11:00:00Z")
+                .await
+                .expect("released"),
+            Some(subnet_id.to_owned()),
+            "the operator goes back to the subnet that contains the address"
+        );
+        // AC3 — written and READ BACK.
+        let recorded = crate::ipam_repo::plan_releases(&pool)
+            .await
+            .expect("read back");
+        assert_eq!(recorded.get(&addr), Some(&at("2026-09-01T11:00:00Z")));
+
+        let after = read_the_network(&pool).await.expect("read");
+        assert!(
+            plan.audit(here, &after.seen, &after.claimed).is_empty(),
+            "released: no longer a finding"
+        );
+        assert_eq!(
+            plan.next_offerable(here, &after.seen, &after.documented),
+            Some(v4("100.64.141.10"))
+        );
+        assert!(
+            plan.offerable(addr, &after.seen, &after.documented),
+            "and offerable again"
+        );
+
+        // AC2 — an observation dated BEFORE the release: the upsert widens the summary row, and the
+        // release stands. The summary itself kept its history — the release deleted nothing.
+        crate::sighting_repo::insert_with_sightings(
+            &pool,
+            &observed(addr, 1, "2026-09-01T10:30:00Z"),
+        )
+        .await
+        .expect("ingest a late arrival");
+        let late = read_the_network(&pool).await.expect("read");
+        assert!(
+            plan.audit(here, &late.seen, &late.claimed).is_empty(),
+            "an observation older than the release does not undo it"
+        );
+        let (first_seen, rows): (String, i64) = sqlx::query_as(
+            "SELECT DATE_FORMAT(MIN(first_seen_at), '%Y-%m-%dT%H:%i:%sZ'), COUNT(*) \
+             FROM address_sighting WHERE addr = ?",
+        )
+        .bind(crate::ipam_repo::canonical(addr))
+        .fetch_one(&pool)
+        .await
+        .expect("the summary");
+        assert_eq!(
+            (first_seen.as_str(), rows),
+            ("2026-09-01T10:00:00Z", 1),
+            "the summary keeps its first sighting: a release is a row, never a deletion"
+        );
+
+        // Decision 1 — the network answering after the release holds the address again, here on a
+        // NEW hardware address, which is the case the refused *mark the summary* shape lost.
+        crate::sighting_repo::insert_with_sightings(
+            &pool,
+            &observed(addr, 9, "2026-09-01T11:06:00Z"),
+        )
+        .await
+        .expect("ingest a later sighting");
+        let answered = read_the_network(&pool).await.expect("read");
+        assert_eq!(
+            kinds(&plan.audit(here, &answered.seen, &answered.claimed)),
+            vec![(addr, Some(FindingKind::Gap), false)],
+            "held again, and no conflict with the MAC the release forgot"
+        );
+        assert!(!plan.offerable(addr, &answered.seen, &answered.documented));
+
+        forget_release_fixture(&pool, subnet_id, addr).await;
+    }
+
+    /// Decision 4 — a DEFINED address cannot be released, and nothing is written; and a second
+    /// release WIDENS the instant, never narrows it.
+    #[tokio::test]
+    async fn a_defined_address_is_refused_and_a_second_release_only_widens() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = crate::ipam_repo::tests::ipam_fixture().await else {
+            return;
+        };
+        let subnet_id = "t-rel-b";
+        let defined = v4("100.64.142.9");
+        let stray = v4("100.64.142.30");
+        forget_release_fixture(&pool, subnet_id, defined).await;
+        forget_release_fixture(&pool, subnet_id, stray).await;
+        crate::ipam_repo::insert_subnet(&pool, subnet_id, subnet("100.64.142.0", 24), "release")
+            .await
+            .expect("subnet");
+        {
+            let mut conn = pool.acquire().await.expect("a connection");
+            crate::ipam_repo::insert_address(&mut conn, "t-rel-b-a", subnet_id, defined, "nas")
+                .await
+                .expect("address");
+        }
+
+        let refused = release_at(&pool, defined, "2026-09-01T11:00:00Z").await;
+        assert!(
+            matches!(
+                refused,
+                Err(opencmdb_core::repo::RepositoryError::Ipam(
+                    opencmdb_core::ipam::IpamError::ReleaseOfADefinedAddress
+                ))
+            ),
+            "a defined address is refused by NAME: {refused:?}"
+        );
+        assert!(
+            !crate::ipam_repo::plan_releases(&pool)
+                .await
+                .expect("read")
+                .contains_key(&defined),
+            "and the refusal wrote nothing"
+        );
+
+        release_at(&pool, stray, "2026-09-01T11:00:00Z")
+            .await
+            .expect("released");
+        release_at(&pool, stray, "2026-09-01T09:00:00Z")
+            .await
+            .expect("released again, earlier");
+        assert_eq!(
+            crate::ipam_repo::plan_releases(&pool)
+                .await
+                .expect("read")
+                .get(&stray),
+            Some(&at("2026-09-01T11:00:00Z")),
+            "an earlier second release does not narrow what the first forgot"
+        );
+        release_at(&pool, stray, "2026-09-01T12:00:00Z")
+            .await
+            .expect("released later");
+        assert_eq!(
+            crate::ipam_repo::plan_releases(&pool)
+                .await
+                .expect("read")
+                .get(&stray),
+            Some(&at("2026-09-01T12:00:00Z")),
+            "a later one widens it"
+        );
+
+        forget_release_fixture(&pool, subnet_id, defined).await;
+        forget_release_fixture(&pool, subnet_id, stray).await;
+    }
+
+    /// The production route, end to end: the clock read at the edge, the transaction, the redirect
+    /// to the innermost subnet, the audit agreeing — and decision 4's refusal as a KEYED 409.
+    #[tokio::test]
+    async fn the_release_route_writes_through_the_store_and_the_audit_agrees() {
+        use tower::ServiceExt;
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = crate::ipam_repo::tests::ipam_fixture().await else {
+            return;
+        };
+        let subnet_id = "t-rel-c";
+        let held = v4("100.64.143.20");
+        let defined = v4("100.64.143.9");
+        forget_release_fixture(&pool, subnet_id, held).await;
+        forget_release_fixture(&pool, subnet_id, defined).await;
+        crate::ipam_repo::insert_subnet(&pool, subnet_id, subnet("100.64.143.0", 24), "release")
+            .await
+            .expect("subnet");
+        {
+            let mut conn = pool.acquire().await.expect("a connection");
+            crate::ipam_repo::insert_address(&mut conn, "t-rel-c-a", subnet_id, defined, "nas")
+                .await
+                .expect("address");
+        }
+        crate::sighting_repo::insert_with_sightings(
+            &pool,
+            &observed(held, 1, "2026-09-01T10:00:00Z"),
+        )
+        .await
+        .expect("ingest");
+
+        let post = |addr: Ipv4Addr| {
+            axum::http::Request::builder()
+                .method("POST")
+                .uri("/ipam/release")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .header("host", "opencmdb.example")
+                .header("origin", "https://opencmdb.example")
+                .body(axum::body::Body::from(format!("addr={addr}")))
+                .expect("a request")
+        };
+        let response = crate::ipam_write::router(pool.clone())
+            .oneshot(post(held))
+            .await
+            .expect("an answer");
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get("hx-redirect")
+                .and_then(|v| v.to_str().ok()),
+            Some(format!("/ipam?subnet={subnet_id}").as_str()),
+            "back to the subnet that contains the address"
+        );
+        let recorded = crate::ipam_repo::plan_releases(&pool).await.expect("read");
+        assert!(
+            recorded
+                .get(&held)
+                .is_some_and(|at| *at > self::at("2026-09-01T10:00:00Z")),
+            "the release is dated by the clock, after the sighting it forgets: {recorded:?}"
+        );
+        let network = read_the_network(&pool).await.expect("read");
+        assert!(
+            !network.seen.contains_key(&held),
+            "the audit forgot the sighting"
+        );
+
+        let refused = crate::ipam_write::router(pool.clone())
+            .oneshot(post(defined))
+            .await
+            .expect("an answer");
+        assert_eq!(refused.status(), axum::http::StatusCode::CONFLICT);
+        let body = axum::body::to_bytes(refused.into_body(), usize::MAX)
+            .await
+            .expect("a body");
+        assert_eq!(
+            String::from_utf8_lossy(&body),
+            rust_i18n::t!("ipam.refusal.release_of_defined").to_string(),
+            "decision 4's refusal is the keyed sentence that names the gesture which does apply"
+        );
+        assert!(
+            !crate::ipam_repo::plan_releases(&pool)
+                .await
+                .expect("read")
+                .contains_key(&defined),
+            "and wrote nothing"
+        );
+
+        forget_release_fixture(&pool, subnet_id, held).await;
+        forget_release_fixture(&pool, subnet_id, defined).await;
     }
 }

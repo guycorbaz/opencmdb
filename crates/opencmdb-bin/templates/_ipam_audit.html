@@ -58,6 +58,18 @@
       {%- when None %}
       <span class="ipam-documented">{{ s.documented_no_question }}</span>
       {%- endmatch %}
+      {#- 🔑 THE RELEASE LIVES ON THE FINDING (story 14.4b, Guy's decision 2 of 2026-09-19): this is
+           where the operator is already looking at the sighting that holds the address. Offered on a
+           `gap` or an `undeclared` row only — a row that is a conflict alone is a DEFINED address,
+           and a defined address cannot be released (decision 4); its record's removal is in the rail.
+           The address is in the accessible name, for the rail's reason: a list of buttons all reading
+           *Release* is a list a screen reader cannot navigate. -#}
+      {%- if row.gap || row.undeclared %}
+      <form hx-post="{{ forms.release_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
+        <input type="hidden" name="addr" value="{{ row.address }}">
+        <button type="submit" class="btn-gesture live">{{ s.finding_release }} — {{ row.address }}</button>
+      </form>
+      {%- endif %}
     </li>
     {%- endfor %}
   </ul>

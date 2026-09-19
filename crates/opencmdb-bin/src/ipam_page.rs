@@ -1256,6 +1256,9 @@ pub(crate) struct IpamStrings {
     rail_edit: String,
     /// The label on every removal control.
     rail_delete: String,
+    /// The label on every release control in the findings list — the binding gesture `release` /
+    /// « libérer » (story 14.4b), minted by Guy on 2026-09-19 and never invented here.
+    finding_release: String,
     next_free_label: String,
     next_free: String,
     next_free_caveat: String,
@@ -1328,6 +1331,8 @@ pub(crate) struct IpamForms {
     edit_address_route: &'static str,
     /// Where a removal control asks, before it fires, what the deletion would change (decision 3).
     delete_check_route: &'static str,
+    /// Where a finding's release posts (story 14.4b).
+    release_route: &'static str,
     /// The subnet in force, which the range and address forms carry as a hidden field. `None`
     /// when no subnet is selected — the two forms are then replaced by a sentence saying so.
     subnet_id: Option<String>,
@@ -1370,6 +1375,7 @@ impl IpamForms {
             edit_range_route: route_of(WriteRoute::EditRange),
             edit_address_route: route_of(WriteRoute::EditAddress),
             delete_check_route: DELETE_CHECK_PATH,
+            release_route: route_of(WriteRoute::Release),
             subnet_id,
             plan_is_empty,
             policies: IpPolicy::ALL
@@ -1655,6 +1661,7 @@ fn strings(
         rail_no_addresses: rust_i18n::t!("ipam.rail.no_addresses").to_string(),
         rail_edit: rust_i18n::t!("ipam.rail.edit").to_string(),
         rail_delete: rust_i18n::t!("ipam.rail.delete").to_string(),
+        finding_release: rust_i18n::t!("ipam.finding.release").to_string(),
         next_free_caveat: rust_i18n::t!("ipam.next_free_caveat").to_string(),
         empty_plan: rust_i18n::t!("ipam.empty_plan").to_string(),
         empty_plan_gesture: rust_i18n::t!("ipam.empty_plan_gesture").to_string(),
@@ -2492,6 +2499,30 @@ mod tests {
              that left it needs saying why"
         );
 
+        // 🔑 **AC5 of story 14.4b — THE RELEASE'S WRITE IS INSIDE THIS PERIMETER, asserted rather than
+        // inherited.** A release is a row in a PLAN table (`address_release`), written by the plan's
+        // adapter and reached from `ipam_write.rs`; the shapes Guy refused wrote `address_sighting`,
+        // which this guard forbids below — and the one of them it would have admitted made the audit
+        // EXPORT A WRITE. Without this positive half, moving the write out of the plan's modules
+        // would leave the guard green over a release it no longer walks.
+        let writer = perimeter
+            .iter()
+            .find(|(name, _, _)| name.as_str() == "ipam_repo.rs")
+            .expect("the plan's adapter is in the perimeter");
+        assert!(
+            writer.1.contains("INSERT INTO address_release"),
+            "the release's write is not in `ipam_repo.rs`: it must stay inside the plan's perimeter, \
+             where this guard can see that it touches no sighting (story 14.4b, AC5)"
+        );
+        let route = perimeter
+            .iter()
+            .find(|(name, _, _)| name.as_str() == "ipam_write.rs")
+            .expect("the plan's routes are in the perimeter");
+        assert!(
+            route.1.contains("ipam_repo::release_address"),
+            "the release route does not reach the plan's adapter from `ipam_write.rs` (AC5)"
+        );
+
         for (name, code, words) in &perimeter {
             for needle in [
                 "observation_record",
@@ -2538,9 +2569,15 @@ mod tests {
                         .and_then(|rest| rest.strip_prefix(item))
                         .is_some_and(|rest| !rest.chars().next().is_some_and(is_ident))
                 };
+                // 🔑 `datetime_literal` joined the allowlist with story 14.4b, on the list's own
+                // criterion: it READS NOTHING — it formats an instant the caller already holds, and
+                // it is this crate's single formatting site for one (`sighting_repo.rs` says why a
+                // second format string is a defect). The release's write needs it for `released_at`.
                 let allowed = before.ends_with("opencmdb_core::")
                     || (before.ends_with("crate::")
-                        && (names_one("classify") || names_one("is_deadlock")))
+                        && (names_one("classify")
+                            || names_one("is_deadlock")
+                            || names_one("datetime_literal")))
                     || (name.as_str() == "ipam_audit.rs"
                         && before.ends_with("crate::")
                         && names_one("load_documented_ipv4s"));
@@ -2548,7 +2585,8 @@ mod tests {
                 assert!(
                     allowed,
                     "{name}:{line} names the `repo` module outside the items this guard allows \
-                     (`crate::repo::classify`, `crate::repo::is_deadlock` anywhere, and \
+                     (`crate::repo::classify`, `crate::repo::is_deadlock`, \
+                     `crate::repo::datetime_literal` anywhere, and \
                      `crate::repo::load_documented_ipv4s` from `ipam_audit.rs` alone) — imported \
                      whole, renamed or reached another way, the network's reads live there, and the \
                      plan reaches them only through the audit (story 14.3b, decision 6)"
@@ -2680,14 +2718,20 @@ mod tests {
     fn every_form_posts_where_its_route_is_mounted() {
         use crate::ipam_write::WriteRoute;
         let whole = offer_of(&[], &[]);
-        let quiet = quiet();
+        // 🔑 **ONE ADDRESS SEEN, because the ninth route is a per-FINDING control** (story 14.4b):
+        // the release hangs off a `gap` or `undeclared` row, so over a silent network there is no
+        // row to hang it from — the populated rail's reason, one list over.
+        let seen = network_of(
+            crate::ipam_audit::merge_sightings(&[sighted("192.0.2.20", 1, "2026-09-02T10:00:00Z")]),
+            &[],
+        );
         let body = render_plan(
             &[("s1".to_string(), office(), "Office".to_string())],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &Audit {
                 plan: &whole,
-                network: &quiet,
+                network: &seen,
                 subnet: Some(office()),
             },
             // 🔑 The POPULATED rail: FOUR of the eight routes are per-row controls, and a control
@@ -2949,6 +2993,74 @@ mod tests {
             ],
             &[v4("192.0.2.9"), v4("192.0.2.90")],
         )
+    }
+
+    /// Story 14.4b, decisions 2 and 4 — the release hangs off a `gap` or an `undeclared` finding, and
+    /// off nothing else: not a DEFINED address that is only a conflict, and not the outside list.
+    ///
+    /// 🔑 Anchored on the hidden field's LITERAL and on the route, never on a translated word — a
+    /// negative `contains` over a sentence can pass for an escaping reason (story 14.3b's MP6).
+    #[test]
+    fn the_release_is_offered_on_a_gap_or_an_undeclared_finding_and_nowhere_else() {
+        let plan = audited_office();
+        let seen = crate::ipam_audit::merge_sightings(&[
+            sighted("192.0.2.20", 1, "2026-09-02T10:00:00Z"),
+            sighted("192.0.2.140", 2, "2026-09-02T10:00:00Z"),
+            sighted("192.0.2.9", 3, "2026-09-02T10:00:00Z"),
+            sighted("192.0.2.9", 4, "2026-09-02T10:00:00Z"),
+            sighted("10.0.0.7", 5, "2026-09-02T10:00:00Z"),
+        ]);
+        let network = network_of(seen, &[]);
+        let body = render_plan(
+            &[("s1".to_string(), office(), "Office".to_string())],
+            "s1",
+            &PlanView::derive(office(), &[], &[]),
+            &Audit {
+                plan: &plan,
+                network: &network,
+                subnet: Some(office()),
+            },
+            no_rail(),
+        );
+        let control =
+            |addr: &str| format!("<input type=\"hidden\" name=\"addr\" value=\"{addr}\">");
+        assert!(
+            body.contains(&control("192.0.2.20")),
+            "a `gap` finding carries its release"
+        );
+        assert!(
+            body.contains(&control("192.0.2.140")),
+            "an `undeclared` finding carries its release"
+        );
+        assert!(
+            body.contains("192.0.2.9</span>"),
+            "the premise: the defined address IS listed, as a conflict"
+        );
+        assert!(
+            !body.contains(&control("192.0.2.9")),
+            "a defined address cannot be released (decision 4), so its row offers no release"
+        );
+        assert!(
+            body.contains("10.0.0.7</span>"),
+            "the premise: the outside address IS listed"
+        );
+        assert!(
+            !body.contains(&control("10.0.0.7")),
+            "the outside list offers no release (decision 2 puts it on the subnet's findings)"
+        );
+        assert_eq!(
+            body.matches("hx-post=\"/ipam/release\"").count(),
+            2,
+            "exactly one release per releasable finding"
+        );
+        let name = format!(
+            "{} — 192.0.2.20</button>",
+            rust_i18n::t!("ipam.finding.release")
+        );
+        assert!(
+            body.contains(&name),
+            "the control names its address in its accessible name: {name}"
+        );
     }
 
     /// AC4 — the address check warns about what is known and says the write stays possible, links a
@@ -3981,9 +4093,11 @@ mod tests {
         // prints rather than inferred from the arithmetic: the two additions are
         // `ipam.check.delete_range_holds_one` and `…_many`, the sentences decision 1(a) mints so the
         // range delete's own refusal is announced before it is met.
+        // 🔑 75 → 76 at story 14.4b, read off the printed list: `ipam.finding.release`, the binding
+        // gesture's word on a finding's control.
         assert_eq!(
             keys.len(),
-            75,
+            76,
             "the keys this file can render changed — update the count only after reading the list: \
              {keys:?}"
         );
