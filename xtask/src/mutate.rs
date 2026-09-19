@@ -94,6 +94,14 @@ pub(crate) enum Outcome {
     Red {
         /// How many tests failed.
         tests: usize,
+        /// WHICH tests failed — or why they could not be named (story 14.4c).
+        ///
+        /// 🔴 **Carried in the value, where a test can assert it**, and not only printed: nothing in
+        /// this module's suite reads the driver's stdout, so a name that was only printed would be
+        /// carried by nothing — story 5.12's lesson, which the story's own validation found its first
+        /// draft repeating. It is what 14.4b lacked: five mutations came back ONE red over their
+        /// prediction, and the collateral test was found only by replaying one mutation by hand.
+        names: Names,
         /// Did `clippy --all-targets -D warnings` red?
         clippy: bool,
         /// Did the gates red?
@@ -105,6 +113,63 @@ pub(crate) enum Outcome {
     CompileFailure(String),
     /// The driver cannot honestly report — with the reason, which is the whole point.
     CannotMeasure(String),
+}
+
+/// The tests a red run named, or why it could not name them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Names {
+    /// Every red test, read from cargo's own `failures:` lists, in the order cargo printed them.
+    Named(Vec<String>),
+    /// The names could not be read honestly, and why — never a guess.
+    Unnamed(String),
+}
+
+/// Read the red tests' names out of a cargo run, target by target.
+///
+/// 🔴 **From the `failures:` LIST, never from `test … FAILED` lines**, and the story's validation
+/// measured why: cargo REPLAYS a failing test's captured output at column 0, so a test that prints —
+/// or panics with — `test x ... FAILED` manufactures a phantom. A naive grep read **four names, two of
+/// them phantoms**. The list cargo prints LAST before each target's `test result:` line is its own:
+/// every replay precedes it. `read_run`'s comment records the same class for `error[E…]`.
+///
+/// 🔑 **Count-checked**: the names read for a target must be exactly as many as its `failed` field, or
+/// the result is [`Names::Unnamed`] with the reason. A wrong name is worse than none — it sends the
+/// reader to the wrong test, which is the collateral defect this exists to expose.
+pub(crate) fn red_names(output: &str) -> Names {
+    let lines: Vec<&str> = output.lines().collect();
+    let mut names = Vec::new();
+    let mut last_list: Option<usize> = None;
+    for (at, line) in lines.iter().enumerate() {
+        if *line == "failures:" {
+            last_list = Some(at);
+            continue;
+        }
+        if !line.starts_with("test result:") {
+            continue;
+        }
+        let Some(result) = test_results(line).into_iter().next() else {
+            continue;
+        };
+        let listed: Vec<String> = match last_list.take() {
+            Some(from) => lines[from + 1..at]
+                .iter()
+                .skip_while(|l| l.trim().is_empty())
+                .take_while(|l| l.starts_with("    ") && !l.trim().is_empty())
+                .map(|l| l.trim().to_string())
+                .collect(),
+            None => Vec::new(),
+        };
+        if listed.len() != result.failed {
+            return Names::Unnamed(format!(
+                "a target reported {} failed test(s) and its `failures:` list names {} — the names \
+                 are not given rather than guessed",
+                result.failed,
+                listed.len()
+            ));
+        }
+        names.extend(listed);
+    }
+    Names::Named(names)
 }
 
 /// What the driver found when it looked for a store.
@@ -197,6 +262,7 @@ impl Expect {
                     tests,
                     clippy,
                     gates,
+                    ..
                 },
             ) => *tests > 0 || *clippy || *gates,
             (Self::Red(Some(want)), Outcome::Red { tests, .. }) => want == tests,
@@ -325,6 +391,7 @@ pub(crate) fn read_run(output: &str, status: Option<i32>, targets: usize) -> Out
     } else {
         Outcome::Red {
             tests: failed,
+            names: red_names(output),
             clippy: false,
             gates: false,
         }
@@ -725,6 +792,22 @@ fn measure(
     for line in output.lines().filter(|l| l.starts_with("test result:")) {
         println!("   {line}");
     }
+    // 🔑 Printed FROM THE VALUE the caller receives, so what a reader sees is what a test asserts.
+    match &outcome {
+        Outcome::Red {
+            names: Names::Named(names),
+            ..
+        } => {
+            for name in names {
+                println!("   red: {name}");
+            }
+        }
+        Outcome::Red {
+            names: Names::Unnamed(why),
+            ..
+        } => println!("   red tests NOT named: {why}"),
+        _ => {}
+    }
     println!("   (cargo test: {:.2?} wall)", test_clock.elapsed());
 
     // 🔴 **THE GATES RUN THROUGH A NESTED CARGO, and this is Guy's arbitration of 2026-08-26
@@ -761,15 +844,16 @@ fn measure(
 /// subsume — a dead binding in a test module reds `clippy --all-targets` alone, a migration losing
 /// its binary collation reds the gates alone.
 pub(crate) fn fold(tests_outcome: Outcome, clippy_red: bool, gates_green: bool) -> Outcome {
-    let tests = match tests_outcome {
-        Outcome::Red { tests, .. } => tests,
-        _ => 0,
+    let (tests, names) = match tests_outcome {
+        Outcome::Red { tests, names, .. } => (tests, names),
+        _ => (0, Names::Named(Vec::new())),
     };
     if tests == 0 && !clippy_red && gates_green {
         Outcome::Green
     } else {
         Outcome::Red {
             tests,
+            names,
             clippy: clippy_red,
             gates: !gates_green,
         }
@@ -1038,13 +1122,18 @@ mod tests {
 " + &line(161, 0, 0)
             + &line(92, 0, 0)
             + &line(0, 0, 0);
-        assert_eq!(
-            read_run(&red_with_a_quote, Some(101), 4),
-            Outcome::Red {
-                tests: 1,
-                clippy: false,
-                gates: false
-            },
+        // 🔑 `Unnamed`: this synthetic output carries no `failures:` list, and a name is never
+        // guessed (story 14.4c).
+        assert!(
+            matches!(
+                read_run(&red_with_a_quote, Some(101), 4),
+                Outcome::Red {
+                    tests: 1,
+                    clippy: false,
+                    gates: false,
+                    names: Names::Unnamed(_)
+                }
+            ),
             "one test failed and the tree compiled — reporting a compile failure here is a \
              PLAUSIBLE WRONG ANSWER, which is the one thing this module promises never to give"
         );
@@ -1082,13 +1171,16 @@ mod tests {
         let clean = line(503, 0, 0) + &line(161, 0, 0) + &line(77, 0, 0) + &line(0, 0, 0);
         assert_eq!(read_run(&clean, Some(0), 4), Outcome::Green);
         let red = line(495, 8, 0) + &line(152, 9, 0) + &line(77, 0, 0) + &line(0, 0, 0);
-        assert_eq!(
-            read_run(&red, Some(101), 4),
-            Outcome::Red {
-                tests: 17,
-                clippy: false,
-                gates: false
-            },
+        assert!(
+            matches!(
+                read_run(&red, Some(101), 4),
+                Outcome::Red {
+                    tests: 17,
+                    clippy: false,
+                    gates: false,
+                    ..
+                }
+            ),
             "17 — the figure `--no-fail-fast` restores, summed across every target"
         );
     }
@@ -1111,6 +1203,7 @@ mod tests {
     fn the_prediction_is_compared_and_a_bare_red_does_not_pin_a_count() {
         let red12 = Outcome::Red {
             tests: 12,
+            names: Names::Named(Vec::new()),
             clippy: false,
             gates: false,
         };
@@ -1141,6 +1234,7 @@ mod tests {
     fn a_red_on_any_carrier_is_a_red_and_the_outcome_says_which() {
         let clippy_only = Outcome::Red {
             tests: 0,
+            names: Names::Named(Vec::new()),
             clippy: true,
             gates: false,
         };
@@ -1287,6 +1381,7 @@ mod tests {
             folded,
             Outcome::Red {
                 tests: 0,
+                names: Names::Named(Vec::new()),
                 clippy: false,
                 gates: true
             },
@@ -1392,7 +1487,101 @@ version = \"0.0.0\"
             "and the tree is RESTORED — a driver that leaves its mutation behind poisons every \
              run after it"
         );
+        // 🔑 **And the red test is NAMED in the value the driver measures** (story 14.4c's AC5) —
+        // asserted end to end because nothing in this suite reads the driver's stdout, so a name
+        // that was only printed would be carried by nothing.
+        std::fs::write(
+            dir.join("src/lib.rs"),
+            "pub fn answer() -> u8 { 41 }\n\
+             #[cfg(test)]\nmod t {\n  #[test] fn it_is_42() { assert_eq!(super::answer(), 42); }\n}\n",
+        )
+        .expect("mutate by hand");
+        let measured =
+            measure(&dir, &mutation, &|_| Ok((true, String::new()))).expect("the driver measures");
+        assert_eq!(
+            measured,
+            Outcome::Red {
+                tests: 1,
+                names: Names::Named(vec!["t::it_is_42".to_string()]),
+                clippy: false,
+                gates: false,
+            },
+            "the red run names the test that reddened"
+        );
         unsafe { std::env::remove_var("CARGO_TARGET_DIR") };
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A captured cargo output, as cargo prints a target with two failures: the per-test lines, the
+    /// REPLAYED output of each failing test, then cargo's own `failures:` list and the result.
+    fn two_failures_with_phantoms() -> String {
+        [
+            "running 3 tests",
+            "test a::honest_one ... FAILED",
+            "test a::green ... ok",
+            "test a::honest_two ... FAILED",
+            "",
+            "failures:",
+            "",
+            "---- a::honest_one stdout ----",
+            // A test that PRINTS what cargo prints — replayed at column 0.
+            "test phantom::printed ... FAILED",
+            "",
+            "---- a::honest_two stdout ----",
+            // A test that PANICS with it.
+            "thread 'a::honest_two' panicked at src/lib.rs:9:5:",
+            "test phantom::inpanic ... FAILED",
+            "",
+            "",
+            "failures:",
+            "    a::honest_one",
+            "    a::honest_two",
+            "",
+            "test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; \
+             finished in 0.01s",
+            "",
+        ]
+        .join("\n")
+    }
+
+    /// 🔴 **The phantom is the story's validation finding**: a naive `test … FAILED` grep over this
+    /// output reads FOUR names, two of them phantoms replayed from the tests' own output. The list
+    /// cargo prints last is the honest source.
+    #[test]
+    fn a_red_run_names_its_tests_from_cargos_own_list_and_never_a_phantom() {
+        let output = two_failures_with_phantoms();
+        assert_eq!(
+            output
+                .lines()
+                .filter(|l| l.ends_with(" ... FAILED"))
+                .count(),
+            4,
+            "the premise: a naive grep reads four names, two of them phantoms"
+        );
+        assert_eq!(
+            red_names(&output),
+            Names::Named(vec![
+                "a::honest_one".to_string(),
+                "a::honest_two".to_string()
+            ]),
+            "the two tests cargo lists, and neither phantom"
+        );
+        // A list shorter than the target's `failed` field is refused, never completed by a guess.
+        let short = output.replace("    a::honest_two\n", "");
+        assert!(
+            matches!(red_names(&short), Names::Unnamed(_)),
+            "two failed, one listed — the names are not given"
+        );
+        // And two targets are read independently.
+        let second = output.replace("a::", "b::");
+        assert_eq!(
+            red_names(&format!("{output}\n{second}")),
+            Names::Named(vec![
+                "a::honest_one".to_string(),
+                "a::honest_two".to_string(),
+                "b::honest_one".to_string(),
+                "b::honest_two".to_string(),
+            ])
+        );
     }
 }
