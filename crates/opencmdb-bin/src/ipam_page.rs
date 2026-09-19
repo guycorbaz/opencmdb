@@ -4186,10 +4186,11 @@ mod tests {
         // `ipam.check.delete_range_holds_one` and `…_many`, the sentences decision 1(a) mints so the
         // range delete's own refusal is announced before it is met.
         // 🔑 75 → 76 at story 14.4b, read off the printed list: `ipam.finding.release`, the binding
-        // gesture's word on a finding's control.
+        // gesture's word on a finding's control; 76 → 77 at its code review: `ipam.released_note`, the
+        // confirmation that rides in the URL.
         assert_eq!(
             keys.len(),
-            76,
+            77,
             "the keys this file can render changed — update the count only after reading the list: \
              {keys:?}"
         );
