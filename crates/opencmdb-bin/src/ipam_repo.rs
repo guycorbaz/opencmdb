@@ -616,6 +616,30 @@ pub(crate) async fn insert_address(
     .execute(&mut *conn)
     .await
     .map_err(classify)?;
+    forget_release_of(&mut *conn, addr).await
+}
+
+/// Delete the release of an address the plan is about to DEFINE (story 14.4b's code review, Guy's
+/// decision of 2026-09-19).
+///
+/// 🔴 **A release row outlived its address's definition — measured 31 of 61 concurrent pairs, and
+/// reachable with no race at all**: release, then define. The row changed nothing while the record
+/// stood ([`crate::ipam_audit::read_the_network`] ignores it now), and came back into force in silence
+/// the day the record was removed — forgetting sightings up to an instant nobody remembered. Written in
+/// the definition's own statement sequence, so a definition that commits leaves no release behind.
+///
+/// # Errors
+///
+/// The classified `sqlx::Error`.
+async fn forget_release_of(
+    conn: &mut sqlx::MySqlConnection,
+    addr: Ipv4Addr,
+) -> Result<(), RepositoryError> {
+    sqlx::query(capped!("DELETE FROM address_release WHERE addr = ?"))
+        .bind(canonical(addr))
+        .execute(&mut *conn)
+        .await
+        .map_err(classify)?;
     Ok(())
 }
 
@@ -776,6 +800,8 @@ pub(crate) async fn update_address(
         .execute(&mut *tx)
         .await
         .map_err(classify)?;
+        // An edit that moves the address ONTO a released one defines it — the definition's reason.
+        forget_release_of(&mut tx, addr).await?;
         // The subnet this address REALLY belongs to — the locked read above already had it, so the
         // caller's redirect costs nothing beyond returning it. See [`delete_address`].
         Ok(subnet_id)
@@ -1390,6 +1416,121 @@ fn policy_from_token(token: &str) -> Result<IpPolicy, RepositoryError> {
                 "stored policy token is not one this build knows: {token:?}"
             ))
         })
+}
+
+/// Release one address: the plan forgets what the network showed on it up to `at` — the last sighting
+/// the operator was SHOWN, carried by the form, never a clock (story 14.4b's code review).
+///
+/// 🔑 **A release is a ROW, never a deletion** — `0009`'s header carries the three refused shapes and
+/// what refuted each. Nothing here reads or writes `address_sighting`, which keeps every row it had:
+/// the audit is what consults this table ([`plan_releases`]), and `sighting_repo.rs` never learns it
+/// exists.
+///
+/// 🔑 **A second release WIDENS, it never narrows**: `GREATEST` keeps the later of the two instants,
+/// because re-releasing an address that answered again means *forget this too*.
+///
+/// 🔴 **A DEFINED address is refused** (Guy's decision 4, 2026-09-19), read under the same
+/// transaction as the write. ⚠️ **The read takes no lock, and this doc called the race it leaves
+/// *"harmless by construction"* until the code review MEASURED it**: 31 of 61 concurrent
+/// define/release pairs left a release row on a defined address — which hid a « Conflit d'adresse »
+/// meanwhile and came back into force when the record was removed. Two carriers close it now, neither
+/// of them this read (Guy, 2026-09-19): the audit IGNORES a release on a defined address
+/// ([`crate::ipam_audit::read_the_network`]), whatever the order of the two writes; and defining or
+/// correcting an address DELETES its release ([`forget_release_of`]), so none survives the record.
+/// The read stays for the refusal's SENTENCE — the operator pressing on a defined address is told
+/// which gesture applies.
+///
+/// 🔑 **An address the network has never shown is ACCEPTED**, and silently so: this module may not
+/// read the sightings (the plan's guard), and a release of an unseen address forgets nothing. The
+/// only door to this route on the screen is a finding, which is a sighting by definition.
+///
+/// # Returns
+///
+/// The id of the INNERMOST subnet containing the address, which is where the operator goes back
+/// to — or `None` when no subnet of the plan contains it.
+///
+/// # Errors
+///
+/// [`IpamError::ReleaseOfADefinedAddress`] when an `ip_address` row names it, or the classified
+/// `sqlx::Error`.
+pub(crate) async fn release_address(
+    conn: &mut sqlx::MySqlConnection,
+    addr: Ipv4Addr,
+    at: opencmdb_core::observation::Timestamp,
+) -> Result<Option<String>, RepositoryError> {
+    let defined: Option<(String,)> =
+        sqlx::query_as(capped!("SELECT id FROM ip_address WHERE addr = ? LIMIT 1"))
+            .bind(canonical(addr))
+            .fetch_optional(&mut *conn)
+            .await
+            .map_err(classify)?;
+    if defined.is_some() {
+        return Err(ipam(IpamError::ReleaseOfADefinedAddress));
+    }
+    sqlx::query(capped!(
+        "INSERT INTO address_release (addr, released_at) VALUES (?, ?) \
+         ON DUPLICATE KEY UPDATE released_at = GREATEST(released_at, VALUES(released_at))"
+    ))
+    .bind(canonical(addr))
+    .bind(crate::repo::datetime_literal(at))
+    .execute(&mut *conn)
+    .await
+    .map_err(classify)?;
+    let innermost = list_subnets(&mut *conn)
+        .await?
+        .into_iter()
+        .filter(|(_, subnet, _)| subnet.contains(addr))
+        .min_by_key(|(_, subnet, _)| subnet.size())
+        .map(|(id, _, _)| id);
+    Ok(innermost)
+}
+
+/// Every release the plan holds, by address — the audit's third input (story 14.4b).
+///
+/// 🔑 **Plan-wide and read whole**: the table is bounded by what the operator released, and the
+/// lapse is decided in Rust against the sightings (D10 — a comparison never descends into SQL).
+///
+/// Skipped and NAMED, for [`plan_ranges`]'s reason: one unreadable row must not take `/ipam` down.
+/// ⚠️ The consequence of a skip is the PROTECTIVE one here — a release this build cannot read is a
+/// release that does not happen, so the address stays held.
+///
+/// # Errors
+///
+/// The classified `sqlx::Error`.
+pub(crate) async fn plan_releases<'e, E>(
+    executor: E,
+) -> Result<
+    std::collections::BTreeMap<Ipv4Addr, opencmdb_core::observation::Timestamp>,
+    RepositoryError,
+>
+where
+    E: Executor<'e, Database = MySql>,
+{
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT addr, DATE_FORMAT(released_at, '%Y-%m-%dT%H:%i:%s.%fZ') \
+         FROM address_release ORDER BY addr",
+    )
+    .fetch_all(executor)
+    .await
+    .map_err(classify)?;
+    let mut released = std::collections::BTreeMap::new();
+    for (addr, at) in rows {
+        let instant =
+            chrono::DateTime::parse_from_rfc3339(&at).map(|t| t.with_timezone(&chrono::Utc));
+        match (from_canonical(&addr), instant) {
+            (Ok(parsed), Ok(instant)) => {
+                released.insert(parsed, instant);
+            }
+            (addr_read, instant_read) => tracing::warn!(
+                stored_addr = %addr,
+                stored_instant = %at,
+                addr_ok = addr_read.is_ok(),
+                instant_ok = instant_read.is_ok(),
+                "skipping an address_release row this build cannot read — the address stays held"
+            ),
+        }
+    }
+    Ok(released)
 }
 
 /// Carry an [`IpamError`] across the frontier.

@@ -207,6 +207,10 @@ pub(crate) enum WriteRoute {
     EditRange,
     /// `POST /ipam/address/edit` — correct an address or what the operator calls it.
     EditAddress,
+    /// `POST /ipam/release` — stop the plan holding an address the network was seen on (story
+    /// 14.4b, the binding gesture `release` / « libérer »). 🔑 It writes a PLAN row
+    /// (`address_release`) and never touches a sighting, which is what keeps the audit a reader.
+    Release,
 }
 
 impl WriteRoute {
@@ -220,6 +224,7 @@ impl WriteRoute {
         WriteRoute::DeleteAddress,
         WriteRoute::EditRange,
         WriteRoute::EditAddress,
+        WriteRoute::Release,
     ];
 
     /// The status a write that went through earns.
@@ -238,7 +243,10 @@ impl WriteRoute {
             | WriteRoute::DeleteRange
             | WriteRoute::DeleteAddress
             | WriteRoute::EditRange
-            | WriteRoute::EditAddress => StatusCode::OK,
+            | WriteRoute::EditAddress
+            // 🔑 200 and not 201: a second release of one address WIDENS the row it already has
+            // (`ipam_repo::release_address`), so the route cannot promise it created anything.
+            | WriteRoute::Release => StatusCode::OK,
         }
     }
 
@@ -270,6 +278,11 @@ impl WriteRoute {
                 WriteRoute::DeleteAddress | WriteRoute::EditAddress => {
                     "ipam.refusal.unknown_address"
                 }
+                // 🔑 **A release names an ADDRESS, not a record**, and the address needs no row to
+                // exist: the write is an upsert and raises no `NotFound`. Reaching here from it is a
+                // fault in this product — answered with the backend's STATUS as well as its
+                // sentence, where the review found a dead arm pairing a 404 with that sentence.
+                WriteRoute::Release => return backend(),
             },
         )
     }
@@ -295,7 +308,10 @@ impl WriteRoute {
             | WriteRoute::Address
             | WriteRoute::EditRange
             | WriteRoute::EditAddress => true,
-            WriteRoute::DeleteSubnet | WriteRoute::DeleteRange | WriteRoute::DeleteAddress => false,
+            WriteRoute::DeleteSubnet
+            | WriteRoute::DeleteRange
+            | WriteRoute::DeleteAddress
+            | WriteRoute::Release => false,
         }
     }
 
@@ -330,6 +346,7 @@ impl WriteRoute {
             WriteRoute::DeleteAddress => "/ipam/address/delete",
             WriteRoute::EditRange => "/ipam/range/edit",
             WriteRoute::EditAddress => "/ipam/address/edit",
+            WriteRoute::Release => "/ipam/release",
         }
     }
 
@@ -349,6 +366,7 @@ impl WriteRoute {
                 WriteRoute::DeleteAddress => "ipam.refusal.malformed_delete_address",
                 WriteRoute::EditRange => "ipam.refusal.malformed_edit_range",
                 WriteRoute::EditAddress => "ipam.refusal.malformed_edit_address",
+                WriteRoute::Release => "ipam.refusal.malformed_release",
             },
         )
     }
@@ -378,7 +396,11 @@ impl WriteRoute {
                 // while [`constraint_refusal`] routed them to [`backend`] — **two statements of one
                 // delete's sentence, disagreeing**, with the doc here describing copy the product
                 // never emits. One statement now, and the caller no longer decides.
-                WriteRoute::DeleteSubnet | WriteRoute::DeleteRange | WriteRoute::DeleteAddress => {
+                // 🔑 The release is an UPSERT on its own primary key, so it cannot collide either.
+                WriteRoute::DeleteSubnet
+                | WriteRoute::DeleteRange
+                | WriteRoute::DeleteAddress
+                | WriteRoute::Release => {
                     return backend();
                 }
             },
@@ -396,6 +418,7 @@ impl WriteRoute {
             WriteRoute::DeleteAddress => post(delete_address),
             WriteRoute::EditRange => post(edit_range),
             WriteRoute::EditAddress => post(edit_address),
+            WriteRoute::Release => post(release_address),
         }
     }
 }
@@ -500,6 +523,27 @@ pub(crate) struct EditAddressRequest {
     pub(crate) addr: String,
     /// What the operator calls it.
     pub(crate) label: String,
+}
+
+/// The `POST /ipam/release` request.
+///
+/// 🔑 **The address itself, and no id**: a release is keyed on the ADDRESS (`0009`), because the
+/// sightings that hold it are keyed on the address too and no plan record need exist for it — most
+/// held addresses are exactly the ones nothing in the plan names.
+#[derive(Debug, Deserialize)]
+pub(crate) struct ReleaseRequest {
+    /// The address to release, as the findings list carries it.
+    pub(crate) addr: String,
+    /// The LAST instant the network had shown on it when the operator's page was rendered, as the
+    /// finding carries it (RFC 3339) — what the release forgets up to (Guy, code review 2026-09-19).
+    ///
+    /// 🔴 **Not the press instant, and the review is why.** Every observation of a sweep is dated at
+    /// the sweep's START (`arp_ping.rs`), so a release dated at the press forgot a host that answered
+    /// in a sweep already running — and inside `static` offered its address until the next sweep. All
+    /// three review layers reached it. *What the operator released is what they were shown*, and an
+    /// instant taken from the data needs no clock, so a skewed clock and a database in another time
+    /// zone stop mattering as well.
+    pub(crate) seen_until: String,
 }
 
 /// What a write that went through answers with: the record it touched, and the plan to send the
@@ -639,6 +683,20 @@ pub(crate) trait IpamWritePort: Send + Sync {
         id: String,
         addr: Ipv4Addr,
         label: String,
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
+
+    /// Release one address — the plan forgets what the network showed on it up to `until`, the last
+    /// sighting the operator was shown — answering with the address and **the innermost subnet
+    /// containing it**, or none.
+    ///
+    /// # Errors
+    ///
+    /// [`opencmdb_core::ipam::IpamError::ReleaseOfADefinedAddress`] when the plan defines it (Guy's
+    /// decision 4, 2026-09-19), or a backend failure.
+    fn release_address(
+        &self,
+        addr: Ipv4Addr,
+        until: opencmdb_core::observation::Timestamp,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 }
 
@@ -806,6 +864,28 @@ impl IpamWritePort for StoreIpamWrite {
             // Likewise: `update_address` re-validates containment under the parent row's lock.
             let subnet_id = ipam_repo::update_address(&mut conn, &id, addr, &label).await?;
             Ok(Written::inside(id, subnet_id))
+        })
+    }
+
+    fn release_address(
+        &self,
+        addr: Ipv4Addr,
+        until: opencmdb_core::observation::Timestamp,
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
+        Box::pin(async move {
+            // 🔑 **No clock**: the instant is the one the operator was SHOWN ([`ReleaseRequest`]).
+            let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
+            // The defined-address read and the write in one transaction, for `delete_address`'s
+            // reason; the race the read leaves is harmless and `release_address`'s doc says why.
+            let mut tx = sqlx::Connection::begin(&mut *conn)
+                .await
+                .map_err(crate::repo::classify)?;
+            let written = ipam_repo::release_address(&mut tx, addr, until).await;
+            let subnet_id = settle(tx, written).await?;
+            Ok(Written {
+                id: addr.to_string(),
+                subnet_id,
+            })
         })
     }
 }
@@ -1063,6 +1143,35 @@ async fn delete_address(
     answer(within_budget(work).await, route, "ipam.done.delete_address")
 }
 
+/// `POST /ipam/release` — stop the plan holding an address (story 14.4b).
+///
+/// 🔑 **The address is parsed and nothing else is asked of it here**: whether the plan DEFINES it is
+/// the adapter's refusal (decision 4), and whether the network was ever seen on it is a question this
+/// module may not ask — the plan's guard keeps the sightings behind `ipam_audit.rs`.
+async fn release_address(
+    State(state): State<IpamWriteState>,
+    headers: HeaderMap,
+    form: Result<Form<ReleaseRequest>, FormRejection>,
+) -> Response {
+    if !crate::write_guard::same_origin(&headers) {
+        return cross_origin().into_response();
+    }
+    let route = WriteRoute::Release;
+    let Ok(Form(request)) = form else {
+        return route.malformed().into_response();
+    };
+    let Ok(addr) = request.addr.trim().parse::<Ipv4Addr>() else {
+        return route.malformed().into_response();
+    };
+    let Ok(until) = chrono::DateTime::parse_from_rfc3339(request.seen_until.trim()) else {
+        return route.malformed().into_response();
+    };
+    let work = state
+        .port
+        .release_address(addr, until.with_timezone(&chrono::Utc));
+    answer(within_budget(work).await, route, "ipam.done.release")
+}
+
 /// `POST /ipam/range/edit` — correct a range's bounds, its policy or its label.
 ///
 /// 🔑 **Among the fields the OPERATOR filled, the order is the definition route's**: the bounds are
@@ -1153,18 +1262,33 @@ fn answer(
             // ⚠️ **The target is no longer anything the browser can choose** (decision 1): the four
             // corrections read it off the record, and the two definitions inside a subnet carry a
             // `subnet_id` the foreign key vouched for by writing through it.
-            let target = subnet_id.unwrap_or_else(|| id.clone());
+            // 🔴 **A RELEASE WITH NO CONTAINING SUBNET has no plan to return to**, and its `id` is an
+            // ADDRESS — `/ipam?subnet=192.0.2.9` would render the unknown-subnet branch.
+            let target = match (&subnet_id, route) {
+                (Some(subnet), _) => Some(subnet.clone()),
+                (None, WriteRoute::Release) => None,
+                (None, _) => Some(id.clone()),
+            };
             // 🔴 **A REMOVED SUBNET CANNOT BE REDIRECTED TO.** Every other gesture leaves the
             // operator looking at the plan it changed; this one leaves them looking at a plan that
             // no longer exists, and `/ipam?subnet=<the id just deleted>` would render the
             // unknown-subnet branch — the product telling them their subnet is missing one instant
             // after removing it at their request. The plan's own address is the honest target.
-            let destination = if matches!(route, WriteRoute::DeleteSubnet) {
-                "/ipam".to_string()
-            } else {
-                format!("/ipam?subnet={target}")
+            let destination = match (&target, route) {
+                (_, WriteRoute::DeleteSubnet) | (None, _) => "/ipam".to_string(),
+                (Some(target), _) => format!("/ipam?subnet={target}"),
             };
-            tracing::info!(id = %id, subnet = %target, key = done_key, "the plan was changed");
+            // 🔑 **The release's confirmation RIDES IN THE URL** (Guy, code review 2026-09-19, on
+            // `/triage`'s `?documented=` precedent): `HX-Redirect` makes htmx navigate, so the body
+            // below is never shown — and for the release it is the one sentence that says the
+            // release LAPSES when the network answers again. `id` is the address the port parsed.
+            let destination = if matches!(route, WriteRoute::Release) {
+                let join = if destination.contains('?') { '&' } else { '?' };
+                format!("{destination}{join}released={id}")
+            } else {
+                destination
+            };
+            tracing::info!(id = %id, subnet = ?target, key = done_key, "the plan was changed");
             (
                 // 201 for the three definitions, 200 for the five corrections — a deletion that
                 // answered *Created* would be a false statement in the protocol.
@@ -1365,11 +1489,14 @@ fn constraint_refusal(name: &str, route: WriteRoute) -> Option<Refusal> {
             // A subnet definition writes no foreign key, and the four corrections address a record
             // by its own id without touching its parent — so a key violation from any of these is
             // ours, not the operator's.
+            // ⚠️ `address_release` carries no foreign key at all (`0009`'s header), so a release
+            // reaching here is ours as well.
             WriteRoute::Subnet
             | WriteRoute::DeleteRange
             | WriteRoute::DeleteAddress
             | WriteRoute::EditRange
-            | WriteRoute::EditAddress => backend(),
+            | WriteRoute::EditAddress
+            | WriteRoute::Release => backend(),
         }),
         // 🔑 OURS, not the operator's, and mapped EXPLICITLY for that reason. Every `CHECK` on the
         // plan's three tables restates something the adapter already refuses — the canonical
@@ -1479,8 +1606,17 @@ pub(crate) fn ipam_refusal(error: &IpamError, route: WriteRoute) -> Refusal {
                 | WriteRoute::DeleteRange
                 | WriteRoute::DeleteAddress
                 | WriteRoute::EditAddress => "ipam.refusal.range_still_holds_addresses",
+                // A release touches no range, so this refusal reaching it is a fault here — not a
+                // true sentence about the wrong gesture, which is what the review found mapped.
+                WriteRoute::Release => return backend(),
             },
         ),
+        // 🔑 **409, for decision 3's reason**: nothing is wrong with the REQUEST — it is the STATE
+        // OF THE PLAN (the address has a record) that opposes it. The sentence names the gesture
+        // that does stop the plan holding a defined address: removing its record.
+        IpamError::ReleaseOfADefinedAddress => {
+            (StatusCode::CONFLICT, "ipam.refusal.release_of_defined")
+        }
     };
     Refusal::new(status, key)
 }
@@ -1645,6 +1781,19 @@ mod tests {
                 .lock()
                 .expect("the fake port's log")
                 .push((format!("{id}:{addr}"), label));
+            let answer = self.take_answer();
+            Box::pin(async move { answer.map(|id| Written::inside(id, FAKE_PARENT.to_string())) })
+        }
+
+        fn release_address(
+            &self,
+            addr: Ipv4Addr,
+            until: opencmdb_core::observation::Timestamp,
+        ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
+            self.asked
+                .lock()
+                .expect("the fake port's log")
+                .push((addr.to_string(), format!("release until {until}")));
             let answer = self.take_answer();
             Box::pin(async move { answer.map(|id| Written::inside(id, FAKE_PARENT.to_string())) })
         }
@@ -1934,7 +2083,12 @@ mod tests {
                 // REQUEST** (Guy's decision 3, 2026-09-16). This asserted 422 for all eight under a
                 // message reading *"the operator's mistake, not the server's"* — true of both, and
                 // not what separates them.
-                let expected = if matches!(error, IpamError::RangeStillHoldsAddresses) {
+                // Story 14.4b adds a second of the first kind: a release of an address the plan
+                // DEFINES is opposed by the plan's state, not by the request (decision 4).
+                let expected = if matches!(
+                    error,
+                    IpamError::RangeStillHoldsAddresses | IpamError::ReleaseOfADefinedAddress
+                ) {
                     StatusCode::CONFLICT
                 } else {
                     StatusCode::UNPROCESSABLE_ENTITY
@@ -2065,7 +2219,7 @@ mod tests {
         // review, which is a floor that tolerates losing a quarter of what it guards.
         assert_eq!(
             keys.len(),
-            39,
+            42,
             "the keys this file can render changed — update the count only after reading the list: \
              {keys:?}"
         );
@@ -2138,10 +2292,12 @@ mod tests {
             &[WriteRoute::Range, WriteRoute::EditRange],
             &[WriteRoute::Address, WriteRoute::EditAddress],
         ];
-        const CANNOT_COLLIDE: [WriteRoute; 3] = [
+        // 🔑 The release joins the deletes: it is an UPSERT on its own primary key (story 14.4b).
+        const CANNOT_COLLIDE: [WriteRoute; 4] = [
             WriteRoute::DeleteSubnet,
             WriteRoute::DeleteRange,
             WriteRoute::DeleteAddress,
+            WriteRoute::Release,
         ];
         // 🔴 **A SET, NOT A COUNT** — story 6.5's M8 met one file over, and the review measured it
         // here: this summed the group lengths and compared the total against `ALL.len()`, so listing
@@ -2275,6 +2431,13 @@ mod tests {
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
+            fn release_address(
+                &self,
+                _addr: Ipv4Addr,
+                _until: opencmdb_core::observation::Timestamp,
+            ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
+                Box::pin(std::future::pending())
+            }
         }
         // 🔴 **EVERY ROUTE, and the review measured why**: this drove the subnet route alone, and
         // replacing `within_budget(work).await` with `work.await` in `define_range` — the only route
@@ -2347,6 +2510,10 @@ mod tests {
                 format!("id={record}&first=192.0.2.10&last=192.0.2.20&policy=static&label={label}")
             }
             WriteRoute::EditAddress => format!("id={record}&addr=192.0.2.9&label={label}"),
+            // A release carries an address and no label; the label is sent for the deletes' reason.
+            WriteRoute::Release => {
+                format!("addr=192.0.2.9&seen_until=2026-09-01T10:00:00.000000Z&label={label}")
+            }
         }
     }
 
@@ -2495,7 +2662,8 @@ mod tests {
                 | WriteRoute::DeleteRange
                 | WriteRoute::DeleteAddress
                 | WriteRoute::EditRange
-                | WriteRoute::EditAddress => StatusCode::OK,
+                | WriteRoute::EditAddress
+                | WriteRoute::Release => StatusCode::OK,
             };
             assert_eq!(
                 response.status(),
@@ -2529,6 +2697,12 @@ mod tests {
                 | WriteRoute::EditRange
                 | WriteRoute::EditAddress => {
                     "/ipam?subnet=01900000-0000-7000-8000-0000000000aa".to_string()
+                }
+                // A release goes back to the innermost subnet the PORT found for the address, and
+                // carries its confirmation in the URL (`HX-Redirect` shows no body).
+                WriteRoute::Release => {
+                    "/ipam?subnet=01900000-0000-7000-8000-0000000000aa&released=01900000-0000-7000-8000-0000000000bb"
+                        .to_string()
                 }
             };
             let redirect = response
@@ -2665,7 +2839,7 @@ mod tests {
     ///
     /// 🔴 The module doc claimed that adding a route without mounting it is an `error[E0004]`. It is
     /// not: `router_with` iterates `ALL`, [`WriteRoute::paths`] maps over `ALL`, `main.rs`'s
-    /// nine-path premise is built from `ALL`, and this story's own coverage assertion compares
+    /// ten-path premise is built from `ALL`, and this story's own coverage assertion compares
     /// against `ALL.len()` — *they all agree because none of them has a second opinion to disagree
     /// with*. A variant left out of `ALL` is mounted by nothing and answers 404 behind the auth
     /// layer's 401, which story 6b.2 measured is indistinguishable from a typo.
@@ -2687,6 +2861,7 @@ mod tests {
             WriteRoute::DeleteAddress,
             WriteRoute::EditRange,
             WriteRoute::EditAddress,
+            WriteRoute::Release,
         ];
         for route in written_out {
             assert!(

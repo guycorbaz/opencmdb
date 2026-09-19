@@ -41,6 +41,8 @@ DELETE FROM observation_record;
 -- ⚠️ The binary's one-time backfill ran at BOOT, before this file — so it never sees these rows,
 -- and this file writes their summary itself (below, from the same `@t`).
 DELETE FROM address_sighting;
+-- Story 14.4b: the operator's releases, a PLAN table with no foreign key — cleared with the plan.
+DELETE FROM address_release;
 DELETE FROM declared_attribute;
 
 -- 🔴 ONE instant for every observation and its sighting. `NOW(6)` is evaluated per STATEMENT —
@@ -152,7 +154,18 @@ INSERT INTO observation_record (id, connector_id, observed_at, l2_domain, vantag
    '[{"IpV4":{"addr":"192.0.2.9"}},{"Mac":{"addr":[2,0,94,0,0,8],"locally_administered":true}}]', NULL),
   ('dddddddd-0000-0000-0000-0000000000c9', '00000000-0000-0000-0000-000000000000', @t,
    '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
-   '[{"IpV4":{"addr":"198.51.100.150"}},{"Mac":{"addr":[2,0,94,0,0,9],"locally_administered":true}}]', NULL);
+   '[{"IpV4":{"addr":"198.51.100.150"}},{"Mac":{"addr":[2,0,94,0,0,9],"locally_administered":true}}]', NULL),
+  -- Story 14.4b's two release cases, both covered by no range (so `undeclared`), both DEDICATED:
+  --   .60  the one `kbd-probe.mjs` PRESSES — dedicated so releasing it removes no case another
+  --        check or the axe gate walks;
+  --   .61  ALREADY released at `@t`, below — an instant EQUAL to its sighting's, which the release
+  --        forgets, so the browser shows the read path working: sighted, and not a finding.
+  ('dddddddd-0000-0000-0000-0000000000ca', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"192.0.2.60"}},{"Mac":{"addr":[2,0,94,0,0,10],"locally_administered":true}}]', NULL),
+  ('dddddddd-0000-0000-0000-0000000000cb', '00000000-0000-0000-0000-000000000000', @t,
+   '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000',
+   '[{"IpV4":{"addr":"192.0.2.61"}},{"Mac":{"addr":[2,0,94,0,0,11],"locally_administered":true}}]', NULL);
 
 INSERT INTO address_sighting (addr, l2_domain, mac, first_seen_at, last_seen_at) VALUES
   ('192.000.002.020', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:01', @t, @t),
@@ -163,7 +176,15 @@ INSERT INTO address_sighting (addr, l2_domain, mac, first_seen_at, last_seen_at)
   ('198.051.100.150', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:06', @t, @t),
   ('010.009.009.009', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:07', @t, @t),
   ('192.000.002.009', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:08', @t, @t),
-  ('198.051.100.150', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:09', @t, @t);
+  ('198.051.100.150', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:09', @t, @t),
+  ('192.000.002.060', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:0a', @t, @t),
+  ('192.000.002.061', '00000000-0000-0000-0000-000000000000', '02:00:5e:00:00:0b', @t, @t);
+
+-- ── The release already taken (story 14.4b) ─────────────────────────────────────────────────
+-- `@t` and not a later instant: the seed's one-instant rule holds (a Rust test asserts it), and an
+-- instant EQUAL to the sighting's is forgotten by the release — `ipam_audit::forget_released`.
+INSERT INTO address_release (addr, released_at) VALUES
+  ('192.000.002.061', @t);
 
 -- ── The identity engine's reach, so the section that reports it is not empty ────────────────
 --
