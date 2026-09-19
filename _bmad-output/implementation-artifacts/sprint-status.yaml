@@ -5761,7 +5761,27 @@ development_status:
   #   ⚠️ `a11y/seed.sql` carries no release case -- new seed work, unlike 14.4's deletes.
   #   Edit, delete, and RELEASE a held address -- the fourth write route, without which the grid
   #   fills and never empties (constraint 3: a sighting protects an address until released).
+  14-4c-the-record-checks-itself: backlog
+  #   Created by Epic 14's PARTIAL retrospective (2026-09-19, Guy) -- tooling, sequenced BEFORE 14.5 so
+  #   the two remaining stories' reviews benefit from it: (a) a mechanical check of a story's RECORD
+  #   (live count against `cargo test`, every "registered" against `deferred-work.md`, the File List
+  #   against `git diff --name-only`), replacing review rounds that found only record defects (14.4's
+  #   round D); (b) `cargo xtask mutate` NAMES the tests that redden (registered since 14.2b, no owner;
+  #   it hid 14.4b's collateral). Precedent: 6.4b, created by Epic 6b's retrospective.
+  14-5-vlans: backlog
+  #   FR21's VLAN half (Guy, 2026-09-19: deliver before closing). Inherits: 14.3b's merge across L2
+  #   domains reading reused private space as a conflict (pinned by
+  #   `one_address_in_two_l2_domains_is_read_as_a_conflict`, owner "the story that adds the VLAN axis");
+  #   the seed/test CIDR collision (`a11y/seed.sql` Workshop = `t-race`); the outside list's missing
+  #   release control.
+  14-6-ipv6-observation: backlog
+  #   FR25, IPv6 observation-only. The schema already reserves the width (`VARCHAR(39)`, `prefix_len`
+  #   <= 128) and `ip_range_same_family` is dormant until now. Inherits: `/ipam/release` accepting any
+  #   well-formed IPv4 and `plan_releases` reading the whole table per audit read.
   epic-14-retrospective: required
+  #   ⚠️ A PARTIAL retrospective was HELD 2026-09-19 (`epic-14-retro-2026-09-19.md`) over the seven
+  #   stories then done; Guy chose to add 14.5 and 14.6 before closing, so it stays `required` and the
+  #   FINAL retrospective follows 14.6, then the project review, then the release.
 
   # ── Epic 15: Applications & « Hosted here » (v0.13) ──────────────────────
   epic-15: backlog

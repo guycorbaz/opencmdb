@@ -473,7 +473,7 @@ Journey 4: the two-axis liveness/capability model made real — the frozen banne
 ### Epic 14: IPAM (v0.12)
 Manage subnets, VLANs, and DHCP ranges; view per-subnet occupancy; find a free IP; detect IP conflicts and identify the devices; document IPv6 (observation-only).
 **FRs covered:** FR21, FR22, FR23, FR24, FR25. UX-DR17,28,69.
-⚠️ **DECOMPOSED 2026-09-11 into FOUR stories (see the full section below), and the four do NOT close it**: FR21's VLAN half and FR25 (IPv6) are in scope and outside the 2026-09-10 arbitrations. Its close is not readable off the story count.
+⚠️ **DECOMPOSED 2026-09-11 into FOUR stories (see the full section below), and the four do NOT close it**: FR21's VLAN half and FR25 (IPv6) are in scope and outside the 2026-09-10 arbitrations. Its close is not readable off the story count. ✅ **Updated by Epic 14's (partial) retrospective, 2026-09-19**: the four became SEVEN by three splits (14.2b, 14.3a, 14.4b), all `done`; and Guy chose to deliver the rest before closing — **14.5 (VLANs, FR21's other half) and 14.6 (IPv6, observation-only, FR25)**, preceded by a tooling story 14.4c the retrospective owes. The final retrospective follows 14.6.
 
 ### Epic 15: Applications & « Hosted here » (v0.13)
 Record software instances (name, version, ports); group them into applications with owner and criticality; declare hosts/exposes; and the device-record "Hosted here" one-hop panel (never called "Impact").
@@ -2336,9 +2336,9 @@ So that the work that has been invisible for two epics becomes a thing I can run
 
 ## Epic 14: IPAM
 
-**Goal:** the operator can DEFINE an addressing plan, and the product audits the network against it — so that an address already in use is never handed to a second machine. **FRs:** FR21 (subnets and ranges; VLANs deferred), FR22, FR23, FR24. **NFRs:** 25 (WCAG 2.1 AA).
+**Goal:** the operator can DEFINE an addressing plan, and the product audits the network against it — so that an address already in use is never handed to a second machine. **FRs:** FR21 (subnets and ranges; VLANs deferred), FR22, FR23, FR24. **NFRs:** 25 (WCAG 2.1 AA). _(⚠️ FR25 was missing from this list while the Epic List above carries it; restored by the 2026-09-19 retrospective: **FR25**, IPv6 observation-only, story 14.6.)_
 
-_**Decomposed 2026-09-11 with Guy, on six arbitrations taken 2026-09-10 before any story was written.** Four stories. ⚠️ **The epic is NOT closed by them**: FR21's VLAN half and FR25 (IPv6, observation-only) are in scope and outside the arbitrations, and a term minted before its screen exists is minted by accident. They are named here so the epic's close is not read off the story count._
+_**Decomposed 2026-09-11 with Guy, on six arbitrations taken 2026-09-10 before any story was written.** Four stories _(seven by 2026-09-19 — 14.2b, 14.3a and 14.4b were split off at validation or implementation — and nine planned: 14.5 VLANs and 14.6 IPv6, decided by Guy at the partial retrospective)_. ⚠️ **The epic is NOT closed by them**: FR21's VLAN half and FR25 (IPv6, observation-only) are in scope and outside the arbitrations, and a term minted before its screen exists is minted by accident. They are named here so the epic's close is not read off the story count._
 
 _**🔑 The REASON is the deliverable, not the highlight.** Guy's words: *"elle doit aussi être mise en évidence dans l'IPAM afin d'éviter de l'allouer à un système et donc d'éviter des problèmes d'adresses dupliquées."* The audit exists to stop the operator allocating an address that is already in use. That reaches something no screen carries today — **the *next free address* panel**, which proposes an address on the grounds that no record claims it. Under this requirement it must EXCLUDE every observed address, and that is **an exclusion, not a highlight**: the only place where the product PREVENTS the duplicate rather than reporting it._
 

@@ -1,6 +1,6 @@
 # Story 14.4: Maintaining the plan — the corrections
 
-Status: review
+Status: done
 
 🔴 **SPLIT at its validation, 2026-09-16 (Guy): 14.4 keeps the CORRECTIONS — edit and delete — and
 `14-4b-releasing-an-address.md` takes the RELEASE.** Epic 14 goes from six stories to SEVEN
