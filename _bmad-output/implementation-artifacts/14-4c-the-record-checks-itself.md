@@ -1,6 +1,6 @@
 # Story 14.4c: The record checks itself
 
-Status: in-progress
+Status: review
 
 🔑 **In NO epic file** — created by Epic 14's PARTIAL retrospective (`epic-14-retro-2026-09-19.md`,
 actions **A1** and **A2**; Guy, 2026-09-19), sequenced BEFORE 14.5 so the two remaining Epic 14 stories'
@@ -89,126 +89,86 @@ its own record refutes that finding (`6b-7…md:816-821`, ten rows present); 6b.
 ## §2 — Decisions T0 must take with Guy (recommendations first, revised by the validation)
 
 1. **The convention.** *(a, recommended)* ONE `## Record` block (a line equal to `## Record`, outside
-   code fences, exactly once — the template's `## Dev Agent Record` must not match), one entry per
-   physical line, every line keyed, any other line → exit 2:
-   `live-count: bin=717 core=191 xtask=99` · `base: <sha>` · `registered: <phrase>` (one per row ADDED)
-   · `file: <path>` (one per touched file). **The live count lives ONLY in the block**; prose cites it.
-   *(b)* Heuristics over prose — refused-by-recommendation (wrong in both directions).
-2. **Where it runs.** *(a, recommended)* `cargo xtask record <story-file>`, run on the story branch's
-   LAST commit before the merge (by the developer at the close, and again after every review repair),
-   NOT a `cargo xtask ci` gate (historical story files carry no block; CI's `checkout@v5` fetches depth 1
-   and has no base). *(b)* Add now a presence tripwire in `githooks/pre-push`: a story file changed on
-   the branch and created after 14.4c must contain `## Record` — cheap, no build. Recommended as
-   **registered, not built**, so the story stays one deliverable.
-3. **The base.** *(a, recommended)* The checker COMPUTES `git merge-base HEAD master` and reds if `base:`
-   differs; a DIRTY tree (tracked changes or non-ignored untracked files) → exit 2; the diff is
-   `--no-renames` and NET. Stated limit: a branch that merges `master` into itself moves the merge-base —
-   rebase, do not merge.
-4. **A2.** *(a, recommended)* Names read from each target's `failures:` list, their count checked against
-   that target's `failed` field (a mismatch is a refusal to NAME, printed as such, never a guess), and
-   CARRIED IN THE RETURNED VALUE so a test can assert them; the existing end-to-end asserts the planted
-   test is named. Exit contract unchanged. *(b)* Also diff the baseline's red set against the mutated
-   run's — registered.
-
-## §3 — What the checker does NOT close, stated so nobody reads it as closed
-
-- **A prose claim.** "We registered three rows" with no `registered:` line and no row exits **0** —
-  measured. The checker refuses to read prose, rightly (*a guard that greps a file greps its prose*), so
-  class 2 is closed only for claims written in the block. What it adds: it ALWAYS PRINTS the rows the
-  branch added, so a reviewer compares a list instead of believing a sentence.
-- **Registrations outside `deferred-work.md`** — GitHub issues, retrospective tables, sprint-status
-  notes.
-- **A second live count elsewhere in the file** (14.1's case).
-- **A story file without a block** — until §2.2(b)'s tripwire exists.
-
-## Acceptance Criteria
-
-**AC1 — `cargo xtask record <story-file>`** follows the driver's contract: **0** the record matches the
-tree, **1** it does not (each mismatch named), **2** it could not honestly run — no `## Record` block or
-more than one, a line in the block that parses as nothing, a dirty tree, `base:` ≠ the computed merge-base,
-an unreadable file, a failed build.
-
-**AC2 — the live count** is compared target by target with the three `-p … -- --list` invocations; a
-mismatch names the target and both numbers. No database.
-
-**AC3 — registrations.** Each `registered:` phrase, whitespace-normalised, is ABSENT from
-`deferred-work.md` at the base and present EXACTLY ONCE at `HEAD`; and the number of `registered:` lines
-EQUALS the number of rows the branch ADDED (new bullets, not edited ones). The checker prints every added
-row it found.
-
-**AC4 — the File List** (`file:` lines) equals `git diff --no-renames --name-only <base>...HEAD`, in BOTH
-directions.
-
-**AC5 — A2**: a red run names its red tests from the `failures:` lists, for the baseline and the mutated
-run; the names are in the returned value; a unit test over a captured output with a failing test whose
-OWN output mimics a `test … FAILED` line yields no phantom; the end-to-end test asserts the planted test is
-named; every existing `xtask mutate` test passes.
-
-**AC6 — prove-to-red, end to end through the subcommand**, predictions first, six plants: a wrong count;
-a `registered:` phrase absent from the register; a File List missing a touched file; `base:` = `HEAD~1`;
-a `registered:` phrase matching an OLD row; and, for A2, a replayed phantom. The subcommand's core takes
-the target table and the target directory as PARAMETERS (passed to child commands with `Command::env`,
-never the process environment — the mutate end-to-end already mutates `CARGO_TARGET_DIR` globally).
-
-**AC7 — the convention is where the next story meets it**: this story's own `## Record` block, checked
-(exit 0); the practice (§2.2) in `CLAUDE.md` and `docs/project-context.md`; `deferred-work.md:5951`
-closed; 14.4b's File List corrected (`admin-manual.tex`).
-
-**AC8 — THE LIVE COUNT lives in this story's `## Record` block and is CHECKED by this story's
-subcommand.**
-
-**AC9 — no regression**: ten gates, `clippy --all-targets -D warnings`, `RUSTFLAGS="-D warnings"`, both
-store conditions, `cargo deny`; the browser gates are NOT touched (no product change), said as such.
-
-## Tasks / Subtasks
-
-- [x] **T0** Take §2's four decisions with Guy — ✅ **all four (a), 2026-09-19**: one `## Record` block;
-      a subcommand with the `pre-push` tripwire REGISTERED not built; the base computed and checked;
-      names from the `failures:` lists, carried in the returned value.
-- [ ] **T1** (AC5) A2 in `mutate.rs`: names from the `failures:` lists, count-checked, carried in the
-      returned value; the phantom unit test; the end-to-end assertion. Predict, then mutate the CALL SITE.
-- [ ] **T2** (AC1) `xtask/src/record.rs` (a NEW module): the block parser (one block, keyed lines,
-      refusals), the dirty-tree and merge-base refusals; dispatch and usage in `main.rs`.
-- [ ] **T3** (AC2) The three `-- --list` invocations, with the target table a parameter.
-- [ ] **T4** (AC3, AC4) Registrations against the base and HEAD registers; the net, no-renames File List.
-- [ ] **T5** (AC6) Six plants driven end to end through a seam taking the target table and directory.
-- [ ] **T6** (AC7, AC8) This story's `## Record` block, checked; the twins; row 5951 closed; 14.4b's
-      File List corrected.
-- [ ] **T7** (AC9) Both store conditions; ten gates; clippy; `cargo deny`.
-
-## Dev Notes
-
-### Traps this project has paid for, and which apply here
-
-- 🔴 **A gate whose helpers are tested and whose BODY is not is carried by nothing** (5.12; 6.4b's
-  `from_args` reached by no test) — AC6 drives the subcommand end to end.
-- 🔴 **A guard that greps a file greps its prose** (14.2, 14.2b, 14.4): the checker reads ONLY the
-  `## Record` block, never the story's narrative — or the paragraph explaining a defect satisfies it.
-- 🔴 **Read an exit status from a FILE, never through a pipe** (6b.1, 6b.10, 6.4b).
-- ⚠️ `cargo test -- A B` runs two filters; `--list` must be passed after `--` and ALONE, or the counts
-  are of a filtered set (6.4b's refusal).
-- ⚠️ A test that sets a process-global env var (`CARGO_TARGET_DIR`) races every other such test — pass
-  it to the child with `Command::env`.
-- ⚠️ `xtask/src/main.rs` carries the module-doc gate list pinned by
-  `the_module_doc_lists_exactly_the_gates_run_ci_reports` — a new SUBCOMMAND is not a gate and must not
-  be added to that list (6.5's test would red for the right reason).
-- ⚠️ `deferred-work.md` rows are multi-line bullets that wrap at ~100 columns: normalise whitespace on
-  both sides, and count a row as ADDED only if it is new — an edited row is a `-`/`+` pair (§1).
-
-### References
-
-- `epic-14-retro-2026-09-19.md` §3, §5 (decision 2), §6 (A1, A2).
-- `xtask/src/mutate.rs` `:209-337` (`apply`, `compiler_error`, `test_results`, `read_run`), `:638-762`
-  (`measure`, to `:755`), `:887` (`USAGE`), `:1342` (the end-to-end); `xtask/src/main.rs` `:88-113`, `:1757`.
-- Story 6.4b (`6-4b-mutation-driver-cannot-lie.md`) — the exit contract and its refusals.
-- Memory: *the File List is load-bearing*; *a watch is not a result*.
-
-## Dev Agent Record
+   code fences, exactly once — the template's `## Dev Agent Record
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context), 2026-09-19.
+
 ### Debug Log References
+
+**The mutation pass — predictions written to a file BEFORE any run** (`cargo xtask mutate --baseline`,
+the store dropped and recreated before each):
+
+| id | mutation | predicted | measured |
+|---|---|---|---|
+| X1 | `red_names` never refuses a short list | red:1 | **red 2** ❌ — the second carrier is `a_test_that_prints_a_diagnostic_is_not_a_compile_failure`, whose synthetic output has no `failures:` list and expects `Unnamed`: a legitimate carrier the prediction missed |
+| X2 | `read_run` carries no names | red:2 | red 2 ✅ |
+| X3 | a `base:` that is not the branch point is accepted | red:1 | red 1 ✅ |
+| X4 | a phrase already in the base register is accepted | red:2 | **red 1** ❌ — the END-TO-END plant wrote `an old row …` where the row reads `An old row …`, so it reddened through the *"in no row"* rule and not the one it names; repaired (case kept) |
+| X4b | the same, with the plant repaired | red:2 | red 2 ✅ |
+| X5 | fewer `registered:` lines than added rows is accepted | red:1 | red 1 ✅ |
+| X6 | the File List compared in one direction only | red:1 | red 1 ✅ |
+| X7 | a dirty tree is not refused | red:1 | red 1 ✅ |
+| X8 | the snapshot written BEFORE the baseline again | red:1 | red 1 ✅ |
+
+🔑 **Both contradictions were diagnosed from the driver's own `red:` lines, with no replay by hand** —
+the deliverable A2 working on its own story's first pass.
+
+🔴 **The pass found a defect in the DRIVER before it found anything else.** Its first run was refused at
+the baseline (no `DATABASE_URL`: the driver requires a store, by 6.4b's decision, and says so) — and that
+refusal LEFT THE SNAPSHOT ON DISK, because the snapshot was written before the baseline. Every following
+run then refused with *"a snapshot from an earlier run is still here … may still be MUTATED"* over files
+never touched (compared byte for byte before deleting them). Seven refusals in a row. Fixed — the snapshot
+is written immediately before the file is mutated, which is the only window it recovers — and pinned by
+`a_refusal_before_the_mutation_leaves_no_snapshot_behind`, which X8 reds.
+
+⚠️ **And the second run was refused for a REAL reason**: the baseline was red on `clippy --all-targets`
+(a needless `mut` in the record end-to-end), invisible to `cargo test`. The driver's refusal is what caught
+it; it left no snapshot this time.
 
 ### Completion Notes List
 
+- **What shipped.** `cargo xtask record <story-file>` (`xtask/src/record.rs`): the `## Record` block, the
+  live count by three `-p … -- --list` invocations, registrations against the base and HEAD registers
+  (absent at the base, one row at HEAD, net count equal), the File List against
+  `git diff --no-renames --name-only <merge-base>...HEAD` both ways, refusals for a dirty tree and a `base:`
+  that is not the branch point; `0` / `1` / `2`. `xtask mutate`: `Outcome::Red { names }`, read from
+  cargo's `failures:` lists and count-checked; `measure` prints `red: <test>` from that value; the
+  stale-snapshot defect fixed.
+- **AC6's plants**, end to end through `check` over a scratch repository and crate: a wrong count, a
+  registration with no row, a File List missing a touched file, a phrase naming an OLD row (each `1`), a
+  `base:` one commit up the branch, no block, a dirty tree (each `2`); the honest record `0`. A2's phantom
+  lives in `mutate.rs`'s unit test.
+- **AC7**: this story's `## Record` block below, checked; the practice in `CLAUDE.md` and
+  `docs/project-context.md`; `deferred-work.md:5951` closed; 14.4b's File List corrected; two rows
+  registered (the `pre-push` tripwire, the baseline-vs-mutated red-set comparison).
+- **AC8 — THE LIVE COUNT is the block's `live-count:`** — checked by `cargo xtask record` on this branch.
+- **AC9**: see the final measurement below.
+- ⚠️ **What the operator gains: nothing** — tooling; no route, no screen, no migration. The browser gates
+  are not touched and were not run, by AC9's own letter.
+
+## Record
+
+- live-count: bin=717 core=191 xtask=109
+- base: 365931d07fa99062b7f4241adf0cc8c7953d956c
+- registered: A story file without a `## Record` block is checked by nothing
+- registered: names the red tests of each run but does not COMPARE
+- file: CLAUDE.md
+- file: _bmad-output/implementation-artifacts/14-4b-releasing-an-address.md
+- file: _bmad-output/implementation-artifacts/14-4c-the-record-checks-itself.md
+- file: _bmad-output/implementation-artifacts/deferred-work.md
+- file: _bmad-output/implementation-artifacts/sprint-status.yaml
+- file: docs/project-context.md
+- file: xtask/src/main.rs
+- file: xtask/src/mutate.rs
+- file: xtask/src/record.rs
+
 ### File List
+
+The `## Record` block's `file:` lines are this story's File List (checked by `cargo xtask record`).
+
+### Change Log
+
+- 2026-09-19 — Contexted, validated by two fresh-context layers (rewritten from §0), T0 taken with Guy
+  (all four (a)), implemented, mutation-passed (9 ids + X4b); status → `review`.
