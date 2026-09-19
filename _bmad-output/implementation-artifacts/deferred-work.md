@@ -5966,3 +5966,11 @@ three independently. These are the ones deferred rather than patched — each wi
   subnet, whose view shows the same finding; what is lost is the page the operator pressed from.
   **Owner: Epic 14's retrospective.**
 
+## Triaged by Epic 14's PARTIAL retrospective (2026-09-19)
+
+The rows above owned by *"Epic 14's retrospective"* were decided one by one in
+`epic-14-retro-2026-09-19.md` §7 — closed, or kept with a NAMED owner (Epic 19, Epic 17, the
+`prd.md:766` rewrite, stories 14.5 and 14.6, or the FINAL Epic 14 retrospective). That table is the
+decision; this pointer exists so a reader of a row above finds it. ⚠️ The rows themselves are not
+rewritten one by one: the triage is dated, and a row read after it is read with it.
+
