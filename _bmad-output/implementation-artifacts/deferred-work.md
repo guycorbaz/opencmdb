@@ -4341,12 +4341,19 @@ collide. Nine findings; Guy scoped the repair to the three HIGH, and these are t
   `fr: "Conflit"` on a new IPAM key left the suite green). It joins the `Nouveau`/`undeclared`
   collision above. **Owner: Epic 6b's retrospective.**
 
-- 🔴 **THE TWO "BINDING" GLOSSARIES HAVE DRIFTED.** `ux-design-specification.md` carries **eleven**
-  gesture rows, `prd.md` **ten**: the UX spec has `| Attach a discovery to an existing record |
-  attach | rattacher |`, which in the PRD survives only inside the `triage` row's meaning cell and in
-  FR14. 🔑 For any criterion reading *"checked against the canonical glossary"* — this story's AC4,
-  story 6b.6's AC2 — **there is no single glossary**. Not this story's to reconcile. **Owner: Epic 6b's
-  retrospective.**
+- ✅ **CLOSED 2026-09-18 — THE TWO "BINDING" GLOSSARIES HAVE DRIFTED.** `ux-design-specification.md`
+  carries **eleven** gesture rows, `prd.md` **ten**: the UX spec has `| Attach a discovery to an
+  existing record | attach | rattacher |`, which in the PRD survives only inside the `triage` row's
+  meaning cell and in FR14. 🔑 For any criterion reading *"checked against the canonical glossary"* —
+  this story's AC4, story 6b.6's AC2 — **there is no single glossary**. Not this story's to
+  reconcile. **Owner: Epic 6b's retrospective.**
+  → **Discharged by Guy's planning act of 2026-09-18**, taken in the same gesture that minted
+  `release`: the PRD gained the `attach` row at its glossary position, and both tables gained
+  `release`/« libérer ». **Both now carry twelve gesture rows, in the same order.** The criteria
+  this row warns about now have a single glossary to check against. ⚠️ Four cosmetic differences
+  survive on purpose and are NOT a drift: the first four concept labels are worded differently
+  (*"The auto-discovered state"* against *"Auto-discovered state"*). Verified green by the
+  `vocabulary` gate's co-presence check, which reads both documents.
 
 - 🔴 **THE APPLICATIONS TABLE SHOWS A GAP AND DOES NOT NAME IT.** *Nextcloud — déclarée 28.0.4 ·
   observée 29.0.1* sits beside *Sage 50 — 2024.1 · 2024.1*, and **nothing distinguishes them**: no
@@ -4608,11 +4615,19 @@ before the commit** — story 6b.9's review found that file untouched under a se
   language only is exactly the defect this story exists to prevent"* describes a defect that **never
   happened**: every story added its keys in pairs. **Owner: Epic 6b's retrospective**, which owes the
   epic's AC a correction.
-- 🔴 **The two binding tables DISAGREE about the gesture axis and both call themselves binding.**
-  `ux-design-specification.md:1341-1351` carries **eleven** gesture rows; `prd.md:993-1002` carries
-  **ten** — `attach`/« rattacher » is missing from the PRD's. `state_vocabulary::BINDING_GESTURE_AXIS`
-  transcribes the UX spec's superset **and names its source**, because reconciling two planning
-  documents is a planning act and not a story's. **Owner: Guy**, at Epic 6b's retrospective.
+- ✅ **CLOSED 2026-09-18 — The two binding tables DISAGREE about the gesture axis and both call
+  themselves binding.** `ux-design-specification.md:1341-1351` carries **eleven** gesture rows;
+  `prd.md:993-1002` carries **ten** — `attach`/« rattacher » is missing from the PRD's.
+  `state_vocabulary::BINDING_GESTURE_AXIS` transcribes the UX spec's superset **and names its
+  source**, because reconciling two planning documents is a planning act and not a story's.
+  **Owner: Guy**, at Epic 6b's retrospective.
+  → **Discharged by Guy's planning act of 2026-09-18** (earlier than this row expected, and not at a
+  retrospective). `BINDING_GESTURE_AXIS` was updated in the same act — **arity 11 → 12** with
+  `("release", "libérer")` — and its doc no longer describes a divergence that is gone. 🔴 **The
+  arity earned itself in that minute**: the row was added and the type left at `; 11]`, and `E0308`
+  named the file and column at once, while **all ten gates reported green over a tree that does not
+  compile**. *A fixed-size array turns an incomplete transcription into a compiler error; the gates
+  are text scanners and none of them invokes `rustc`.*
 - ⚠️ **THREE gestures in `app.yml` have no glossary row**, not one: `gesture.resolve` (« Résoudre »,
   Epic 6's FR16 ranked candidates), and story 6b.9's `gesture.check_now` and `gesture.export_log`.
   `baseline` is a fourth of the same class, already owned by Epic 9. Story 6b.7's precedent governs
@@ -5746,11 +5761,37 @@ One row, and v0.3.0 is what made it live.
   module doc says the list *"cannot drift"*. Measured by the validation's fact-check layer. The same
   shape as `Screen::ALL`, which story 6b.3 closed with a source-scanning property. **Owner: the next
   story that adds a write route** (14.4, unless it chooses otherwise).
-- 🔴 **`ux-design-specification.md:1345` still gives `document`'s FR label as « Merger »** — the word
-  story 6b.10 retired by name, in a **BINDING table**, where `prd.md:997` says « Ajouter ». A developer
-  sent to the UX spec for the gesture vocabulary meets a stale row. ⚠️ **A story may not edit a planning
-  artefact**: this needs a planning act or a retrospective. **Owner: Epic 14's retrospective**, or Guy
-  in the same act that mints `release`.
+- ✅ **CLOSED 2026-09-18 — `ux-design-specification.md:1345` still gives `document`'s FR label as
+  « Merger »** — ~~the word story 6b.10 retired by name~~, in a **BINDING table**, where
+  `prd.md:997` says « Ajouter ». A developer sent to the UX spec for the gesture vocabulary meets a
+  stale row. ⚠️ **A story may not edit a planning artefact**: this needs a planning act or a
+  retrospective. **Owner: Epic 14's retrospective**, or Guy in the same act that mints `release`.
+  → **Discharged by Guy's planning act of 2026-09-18**, in exactly the act this row named. The row
+  now reads `code/API: document … · UI label: "Add"` / « Ajouter », matching the PRD and the
+  shipped binary.
+  → 🔴 **AND THIS ROW'S STATED CAUSE WAS WRONG, struck above rather than deleted.** Story 6b.10
+  retired **`merge` in ENGLISH** and *kept* « Merger » as the binding French — `app.yml:499` and
+  `BINDING_GESTURE_AXIS`'s own comment both say so. What changed the French was **v0.3.1**, on a
+  measurement: « Merger » is an anglicism for « fusionner », and **the action cannot fuse anything**
+  — no `ON DUPLICATE KEY UPDATE` in the adapter, primary key `(entity_id, attr_key)`, a second write
+  for one field errors 1062. *Whoever followed this row to 6b.10's arbitration would have found it
+  saying the opposite.* Right about the conclusion, wrong about the cause — this file's own class.
+
+- ⚠️ **CITING A PLANNING DOCUMENT BY LINE NUMBER IS A STANDING DEBT, and it is nobody's story.**
+  Measured 2026-09-18: roughly **thirty-five** `prd.md:<line>` / `ux-design-specification.md:<line>`
+  citations sit across this repository, **five of them under `crates/` and `xtask/`**
+  (`app.yml:501`, `main.rs:3491` and `:3795`, `repo.rs:290`, `observed_immutable.rs:5`). Any
+  inserted row invalidates every citation below it, **with nothing able to name the sites** — they
+  are prose and comments, and no compiler reads them. 🔑 **The drift is already large and mostly
+  predates this act**: PR #166 (2026-09-11) inserted **38 lines** at `prd.md:1015` and at the UX
+  spec's `:1364` and swept nothing, and every PRD citation found sits at `:1016` or below, so those
+  had been stale by 38 for a week. The 2026-09-18 rows add 2 and 1. **Exactly ONE citation was
+  invalidated by that act alone** (`6b-4-triage-screen-on-the-real-gap.md:277`, a dated story file).
+  ⚠️ A mechanical re-numbering pass is refused as the remedy: it is the shape this project has twice
+  recorded going wrong (*a mechanical `+25` is not a re-derivation*). The cheap half is to **cite the
+  table or the sentence rather than the line**, which `BINDING_GESTURE_AXIS`'s doc now does.
+  **Owner: Epic 14's retrospective**, which should decide whether the existing citations are worth
+  repairing at all or simply left as the dated pointers they are.
 - ⚠️ **Story 6b.7's absent *Réserver* control is called *registered* and is in NO register row.** Its
   own file (`6b-7-applications-and-ipam.md:442`, `:805`) records the decision and no row was ever
   written here; no code site carries it either. It is this file's own class — *a section that says
