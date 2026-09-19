@@ -5737,7 +5737,9 @@ development_status:
   #   ⚠️ 995 tests (705 + 191 + 99), ten gates, clippy --all-targets; axe 0 violation nodes over
   #   10 routes + 5 states and over the empty plan; kbd-probe 53 checks 0 failed.
   #   ⚠️ STAYS `review`: `done` is the MERGE's business.
-  14-4b-releasing-an-address: review
+  14-4b-releasing-an-address: done
+  #   ✅ DONE 2026-09-19: PR #187 squash-merged as `c605ac4`, CI green on its head `7d7771b` itself
+  #   (run 35451815399), code-reviewed by three isolated layers and REPAIRED first. 1 007 tests.
   #   🔴 INSERTED 2026-09-16 at 14.4's validation (Guy: split) -- Epic 14 -> SEVEN stories (`epics.md`
   #   NOT edited; registered). Constraint (3)'s fourth route: without it the grid fills and never
   #   empties, and 14.3b's audit is a one-way ratchet.
