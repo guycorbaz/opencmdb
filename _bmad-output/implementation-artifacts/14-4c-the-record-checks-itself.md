@@ -89,7 +89,121 @@ its own record refutes that finding (`6b-7…md:816-821`, ten rows present); 6b.
 ## §2 — Decisions T0 must take with Guy (recommendations first, revised by the validation)
 
 1. **The convention.** *(a, recommended)* ONE `## Record` block (a line equal to `## Record`, outside
-   code fences, exactly once — the template's `## Dev Agent Record
+   code fences, exactly once — the template's `## Dev Agent Record` must not match), one entry per
+   physical line, every line keyed, any other line → exit 2:
+   `live-count: bin=717 core=191 xtask=99` · `base: <sha>` · `registered: <phrase>` (one per row ADDED)
+   · `file: <path>` (one per touched file). **The live count lives ONLY in the block**; prose cites it.
+   *(b)* Heuristics over prose — refused-by-recommendation (wrong in both directions).
+2. **Where it runs.** *(a, recommended)* `cargo xtask record <story-file>`, run on the story branch's
+   LAST commit before the merge (by the developer at the close, and again after every review repair),
+   NOT a `cargo xtask ci` gate (historical story files carry no block; CI's `checkout@v5` fetches depth 1
+   and has no base). *(b)* Add now a presence tripwire in `githooks/pre-push`: a story file changed on
+   the branch and created after 14.4c must contain `## Record` — cheap, no build. Recommended as
+   **registered, not built**, so the story stays one deliverable.
+3. **The base.** *(a, recommended)* The checker COMPUTES `git merge-base HEAD master` and reds if `base:`
+   differs; a DIRTY tree (tracked changes or non-ignored untracked files) → exit 2; the diff is
+   `--no-renames` and NET. Stated limit: a branch that merges `master` into itself moves the merge-base —
+   rebase, do not merge.
+4. **A2.** *(a, recommended)* Names read from each target's `failures:` list, their count checked against
+   that target's `failed` field (a mismatch is a refusal to NAME, printed as such, never a guess), and
+   CARRIED IN THE RETURNED VALUE so a test can assert them; the existing end-to-end asserts the planted
+   test is named. Exit contract unchanged. *(b)* Also diff the baseline's red set against the mutated
+   run's — registered.
+
+## §3 — What the checker does NOT close, stated so nobody reads it as closed
+
+- **A prose claim.** "We registered three rows" with no `registered:` line and no row exits **0** —
+  measured. The checker refuses to read prose, rightly (*a guard that greps a file greps its prose*), so
+  class 2 is closed only for claims written in the block. What it adds: it ALWAYS PRINTS the rows the
+  branch added, so a reviewer compares a list instead of believing a sentence.
+- **Registrations outside `deferred-work.md`** — GitHub issues, retrospective tables, sprint-status
+  notes.
+- **A second live count elsewhere in the file** (14.1's case).
+- **A story file without a block** — until §2.2(b)'s tripwire exists.
+
+## Acceptance Criteria
+
+**AC1 — `cargo xtask record <story-file>`** follows the driver's contract: **0** the record matches the
+tree, **1** it does not (each mismatch named), **2** it could not honestly run — no `## Record` block or
+more than one, a line in the block that parses as nothing, a dirty tree, `base:` ≠ the computed merge-base,
+an unreadable file, a failed build.
+
+**AC2 — the live count** is compared target by target with the three `-p … -- --list` invocations; a
+mismatch names the target and both numbers. No database.
+
+**AC3 — registrations.** Each `registered:` phrase, whitespace-normalised, is ABSENT from
+`deferred-work.md` at the base and present EXACTLY ONCE at `HEAD`; and the number of `registered:` lines
+EQUALS the number of rows the branch ADDED (new bullets, not edited ones). The checker prints every added
+row it found.
+
+**AC4 — the File List** (`file:` lines) equals `git diff --no-renames --name-only <base>...HEAD`, in BOTH
+directions.
+
+**AC5 — A2**: a red run names its red tests from the `failures:` lists, for the baseline and the mutated
+run; the names are in the returned value; a unit test over a captured output with a failing test whose
+OWN output mimics a `test … FAILED` line yields no phantom; the end-to-end test asserts the planted test is
+named; every existing `xtask mutate` test passes.
+
+**AC6 — prove-to-red, end to end through the subcommand**, predictions first, six plants: a wrong count;
+a `registered:` phrase absent from the register; a File List missing a touched file; `base:` = `HEAD~1`;
+a `registered:` phrase matching an OLD row; and, for A2, a replayed phantom. The subcommand's core takes
+the target table and the target directory as PARAMETERS (passed to child commands with `Command::env`,
+never the process environment — the mutate end-to-end already mutates `CARGO_TARGET_DIR` globally).
+
+**AC7 — the convention is where the next story meets it**: this story's own `## Record` block, checked
+(exit 0); the practice (§2.2) in `CLAUDE.md` and `docs/project-context.md`; `deferred-work.md:5951`
+closed; 14.4b's File List corrected (`admin-manual.tex`).
+
+**AC8 — THE LIVE COUNT lives in this story's `## Record` block and is CHECKED by this story's
+subcommand.**
+
+**AC9 — no regression**: ten gates, `clippy --all-targets -D warnings`, `RUSTFLAGS="-D warnings"`, both
+store conditions, `cargo deny`; the browser gates are NOT touched (no product change), said as such.
+
+## Tasks / Subtasks
+
+- [x] **T0** Take §2's four decisions with Guy — ✅ **all four (a), 2026-09-19**: one `## Record` block;
+      a subcommand with the `pre-push` tripwire REGISTERED not built; the base computed and checked;
+      names from the `failures:` lists, carried in the returned value.
+- [x] **T1** (AC5) A2 in `mutate.rs`: names from the `failures:` lists, count-checked, carried in the
+      returned value; the phantom unit test; the end-to-end assertion. Predict, then mutate the CALL SITE.
+- [x] **T2** (AC1) `xtask/src/record.rs` (a NEW module): the block parser (one block, keyed lines,
+      refusals), the dirty-tree and merge-base refusals; dispatch and usage in `main.rs`.
+- [x] **T3** (AC2) The three `-- --list` invocations, with the target table a parameter.
+- [x] **T4** (AC3, AC4) Registrations against the base and HEAD registers; the net, no-renames File List.
+- [x] **T5** (AC6) Six plants driven end to end through a seam taking the target table and directory.
+- [x] **T6** (AC7, AC8) This story's `## Record` block, checked; the twins; row 5951 closed; 14.4b's
+      File List corrected.
+- [x] **T7** (AC9) Both store conditions; ten gates; clippy; `cargo deny`.
+
+## Dev Notes
+
+### Traps this project has paid for, and which apply here
+
+- 🔴 **A gate whose helpers are tested and whose BODY is not is carried by nothing** (5.12; 6.4b's
+  `from_args` reached by no test) — AC6 drives the subcommand end to end.
+- 🔴 **A guard that greps a file greps its prose** (14.2, 14.2b, 14.4): the checker reads ONLY the
+  `## Record` block, never the story's narrative — or the paragraph explaining a defect satisfies it.
+- 🔴 **Read an exit status from a FILE, never through a pipe** (6b.1, 6b.10, 6.4b).
+- ⚠️ `cargo test -- A B` runs two filters; `--list` must be passed after `--` and ALONE, or the counts
+  are of a filtered set (6.4b's refusal).
+- ⚠️ A test that sets a process-global env var (`CARGO_TARGET_DIR`) races every other such test — pass
+  it to the child with `Command::env`.
+- ⚠️ `xtask/src/main.rs` carries the module-doc gate list pinned by
+  `the_module_doc_lists_exactly_the_gates_run_ci_reports` — a new SUBCOMMAND is not a gate and must not
+  be added to that list (6.5's test would red for the right reason).
+- ⚠️ `deferred-work.md` rows are multi-line bullets that wrap at ~100 columns: normalise whitespace on
+  both sides, and count a row as ADDED only if it is new — an edited row is a `-`/`+` pair (§1).
+
+### References
+
+- `epic-14-retro-2026-09-19.md` §3, §5 (decision 2), §6 (A1, A2).
+- `xtask/src/mutate.rs` `:209-337` (`apply`, `compiler_error`, `test_results`, `read_run`), `:638-762`
+  (`measure`, to `:755`), `:887` (`USAGE`), `:1342` (the end-to-end); `xtask/src/main.rs` `:88-113`, `:1757`.
+- Story 6.4b (`6-4b-mutation-driver-cannot-lie.md`) — the exit contract and its refusals.
+- Memory: *the File List is load-bearing*; *a watch is not a result*.
+
+## Dev Agent Record
 
 ### Agent Model Used
 
