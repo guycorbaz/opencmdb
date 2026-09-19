@@ -1,6 +1,6 @@
 # Story 14.4b: Releasing an address
 
-Status: review
+Status: done
 
 🔴 **INSERTED at story 14.4's validation, 2026-09-16 (Guy): Epic 14 goes from six stories to SEVEN**
 (`epics.md` NOT edited; registered). 14.4 keeps the corrections — edit and delete — and this story
@@ -439,3 +439,4 @@ The binding rows were checked first: `release` / « libérer » stands at `prd.m
 - 2026-09-19 — Code review (three isolated layers): 3 decisions taken by Guy, 16 patches applied, 2
   deferred, 5 dismissed with their check; review-repair mutations R1–R7 all conform. Stays `review`
   until the merge.
+- 2026-09-19 — Merged: PR #187 squash-merged as `c605ac4`, CI green on the head `7d7771b` itself (run 35451815399). Status → `done`.
