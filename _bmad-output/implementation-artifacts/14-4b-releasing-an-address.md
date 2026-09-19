@@ -197,42 +197,67 @@ Three isolated layers, 2026-09-19 (Blind Hunter: code diff only; Edge Case Hunte
 own `mariadb:10.11.11` on :13420, measured; Acceptance Auditor: full diff incl. the register).
 31 raw findings → 21 distinct: 3 decisions, 13 patches, 2 deferrals, 5 dismissed with their check.
 
-- [ ] [Review][Decision] **A live host's address can be offered right after a release** (all THREE
+✅ **RESOLVED and REPAIRED the same day.** Guy took the three decisions, each on the recommended
+option: **(1)** a release forgets what the operator was SHOWN — the form carries the finding's last
+sighting as `seen_until`, and no clock is read at all; **(2)** both locks — the audit ignores a release
+on a defined address, and defining or correcting an address deletes its release; **(3)** the
+confirmation rides in the URL (`&released=<address>`), rendered only for a value that parses as an
+address. Then all thirteen patches were applied. The review-repair mutation pass, predictions written
+first (`cargo xtask mutate --baseline`, the store dropped and recreated before each):
+
+| id | mutation | predicted | measured |
+|---|---|---|---|
+| R1 | the audit stops ignoring a release on a defined address | red:1 | red 1 ✅ |
+| R2 | defining an address no longer deletes its release | red:1 | red 1 ✅ |
+| R3 | correcting onto a released address no longer deletes it | red:1 | red 1 ✅ |
+| R4 | the release forgets five minutes past what was shown | red:1 | red 1 ✅ |
+| R5 | the redirect goes to the OUTERMOST subnet | red:1 | red 1 ✅ |
+| R6 | the audit names a sighting WRITER in its code | red:1 | red 1 ✅ |
+| R7 | the confirmation renders for a value that is not an address | red:1 | red 1 ✅ |
+
+⚠️ **Not executable, and said rather than skipped**: a mutation of `0009`'s CHECK — the driver's baseline
+migrates the unmutated file first, so the mutated run meets a checksum mismatch and reds every store
+test for that reason. The CHECK is carried by raw inserts in
+`the_release_table_holds_one_spelling_and_the_reader_skips_what_went_round_it`.
+⚠️ **And one guard reddened in the full run that the targeted runs never reached**: the key-count guard
+saw `ipam.released_note` (76 → 77, read off its printed list). *A targeted run is not a regression run.*
+
+- [x] [Review][Decision] **A live host's address can be offered right after a release** (all THREE
   layers) — `released_at` is the PRESS instant (`page::now_utc()`), while every observation of a sweep
   is dated at the sweep's START (`arp_ping.rs:256`). A host answering in a sweep already running when
   the operator presses is forgotten, and inside `static` its address is offered until the next sweep
   (~5 min). The same clock choice makes the release depend on clock skew (a clock stepped forward makes
   it sticky under `GREATEST`) and makes the seed compare the database clock with the app's.
-- [ ] [Review][Decision] **A release row survives on a DEFINED address** (blind + edge, MEASURED 31 of
+- [x] [Review][Decision] **A release row survives on a DEFINED address** (blind + edge, MEASURED 31 of
   61 concurrent define/release pairs) — also reachable without a race: release, then define; nothing
   deletes the row, and when the record is later removed the old release silently comes back into
   force. It hides a « Conflit d'adresse » formed from the forgotten sightings meanwhile.
   `ipam_repo.rs:release_address`'s *"harmless by construction"* is false.
-- [ ] [Review][Decision] **After a release the operator sees no confirmation** (auditor) — the route
+- [x] [Review][Decision] **After a release the operator sees no confirmation** (auditor) — the route
   answers `HX-Redirect`, so `ipam.done.release` — the only in-product sentence saying the release
   LAPSES when the network answers — is never displayed; with no undo and no before-the-press warning.
-- [ ] [Review][Patch] kbd-probe: the *"no re-seed branch is owed"* comment gives the wrong reason, and
+- [x] [Review][Patch] kbd-probe: the *"no re-seed branch is owed"* comment gives the wrong reason, and
   the documenting block's *"the only check here that writes"* is now false [a11y/kbd-probe.mjs]
-- [ ] [Review][Patch] kbd-probe: `waitForNavigation` is armed AFTER the response, a race [a11y/kbd-probe.mjs]
-- [ ] [Review][Patch] a store-test assertion is vacuous: `next_offerable == .10` holds with or without
+- [x] [Review][Patch] kbd-probe: `waitForNavigation` is armed AFTER the response, a race [a11y/kbd-probe.mjs]
+- [x] [Review][Patch] a store-test assertion is vacuous: `next_offerable == .10` holds with or without
   the release [crates/opencmdb-bin/src/ipam_audit.rs]
-- [ ] [Review][Patch] `unknown_record`'s dead `Release` arm pairs 404 with the backend sentence, and
+- [x] [Review][Patch] `unknown_record`'s dead `Release` arm pairs 404 with the backend sentence, and
   `ipam_refusal` maps `Release` to a range sentence [crates/opencmdb-bin/src/ipam_write.rs]
-- [ ] [Review][Patch] kbd-probe's `.61` check proves "not a finding", not "sighted then forgotten" —
+- [x] [Review][Patch] kbd-probe's `.61` check proves "not a finding", not "sighted then forgotten" —
   the comment claims more than the check [a11y/kbd-probe.mjs]
-- [ ] [Review][Patch] the INNERMOST-subnet redirect is carried by no test (edge MEASURED
+- [x] [Review][Patch] the INNERMOST-subnet redirect is carried by no test (edge MEASURED
   `max_by_key` GREEN) [crates/opencmdb-bin/src/ipam_repo.rs]
-- [ ] [Review][Patch] `0009`'s canonical CHECK and `plan_releases`' skip branch are carried by no test
+- [x] [Review][Patch] `0009`'s canonical CHECK and `plan_releases`' skip branch are carried by no test
   [crates/opencmdb-bin/migrations/0009_address_release.sql]
-- [ ] [Review][Patch] AC5: the guard pins where the write lives, not that `ipam_audit.rs` stays a
+- [x] [Review][Patch] AC5: the guard pins where the write lives, not that `ipam_audit.rs` stays a
   READER of `sighting_repo` [crates/opencmdb-bin/src/ipam_page.rs]
-- [ ] [Review][Patch] both twins still say *"Epic 14 has SIX stories"* [CLAUDE.md, docs/project-context.md]
-- [ ] [Review][Patch] the story header's *"Baseline: 980"* is neither corrected nor struck
-- [ ] [Review][Patch] the register's recovery SQL uses the unpadded form and deletes nothing; the admin
+- [x] [Review][Patch] both twins still say *"Epic 14 has SIX stories"* [CLAUDE.md, docs/project-context.md]
+- [x] [Review][Patch] the story header's *"Baseline: 980"* is neither corrected nor struck
+- [x] [Review][Patch] the register's recovery SQL uses the unpadded form and deletes nothing; the admin
   manual does not mention the recovery [deferred-work.md, docs/manuals/admin-manual]
-- [ ] [Review][Patch] the user manual promises a released address is offered again, false for an
+- [x] [Review][Patch] the user manual promises a released address is offered again, false for an
   address DOCUMENTED in the inventory [docs/manuals/user-manual/user-manual.tex]
-- [ ] [Review][Patch] test cleanup deletes observations by `JSON_SEARCH` (LIKE semantics, any string
+- [x] [Review][Patch] test cleanup deletes observations by `JSON_SEARCH` (LIKE semantics, any string
   fact) [crates/opencmdb-bin/src/ipam_audit.rs]
 - [x] [Review][Defer] any well-formed IPv4 is accepted and `plan_releases` reads the table whole on
   every audit read (blind + edge) — deferred, bounded by an authenticated operator like every write
@@ -361,8 +386,10 @@ The binding rows were checked first: `release` / « libérer » stands at `prd.m
 ### Completion Notes List
 
 - **THE LIVE COUNT (AC9)** — `cargo test --workspace --locked`, wall clock, one warm run first:
-  **1 003 tests** (713 bin + 191 core + 99 xtask) — **24.1 s** against a DROPPED-AND-RECREATED
-  `mariadb:10.11.11` (port 13419) and **5.6 s** with `DATABASE_URL` unset; the clock is the tell.
+  **1 007 tests** (717 bin + 191 core + 99 xtask) after the code review's repair — **24.7 s** against a
+  DROPPED-AND-RECREATED `mariadb:10.11.11` (port 13419) and **5.6 s** with `DATABASE_URL` unset; the
+  clock is the tell. ~~1 003 (713 + 191 + 99), 24.1 s / 5.6 s~~ at implementation, before the review.
+  kbd-probe **59** checks (58 at implementation; the review added the confirmation's).
   Baseline `master` `031e2d7`: 995 (705 + 191 + 99). The story header's *980* was 14.4's validation
   baseline, before 14.4 shipped.
 - **AC10**: `cargo fmt --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`,
@@ -409,3 +436,6 @@ The binding rows were checked first: `release` / « libérer » stands at `prd.m
 
 - 2026-09-19 — T0 decisions taken with Guy; implemented T1–T7; mutation pass (9 + 1 re-designed), a
   defect in the story's own tests found and repaired; status → `review`.
+- 2026-09-19 — Code review (three isolated layers): 3 decisions taken by Guy, 16 patches applied, 2
+  deferred, 5 dismissed with their check; review-repair mutations R1–R7 all conform. Stays `review`
+  until the merge.
