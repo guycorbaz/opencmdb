@@ -1411,4 +1411,46 @@ mod tests {
         })
         .await;
     }
+
+    /// A release of an address OUTSIDE every subnet goes back to the plan itself — `/ipam` — and
+    /// never to `?subnet=<the address>`, which would render the unknown-subnet branch.
+    ///
+    /// 🔴 **Written because mutation M7 was predicted GREEN and came back green**: nothing covered a
+    /// release with no containing subnet, since every other test releases inside one.
+    #[tokio::test]
+    async fn a_release_outside_every_subnet_goes_back_to_the_plan_itself() {
+        use tower::ServiceExt;
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = crate::ipam_repo::tests::ipam_fixture().await else {
+            return;
+        };
+        let subnet_id = "t-rel-d";
+        let stray = v4("100.64.144.20");
+        forget_release_fixture(&pool, subnet_id, stray).await;
+        cleaned_up(&pool, subnet_id, &[stray], async {
+            let response = crate::ipam_write::router(pool.clone())
+                .oneshot(
+                    axum::http::Request::builder()
+                        .method("POST")
+                        .uri("/ipam/release")
+                        .header("content-type", "application/x-www-form-urlencoded")
+                        .header("host", "opencmdb.example")
+                        .header("origin", "https://opencmdb.example")
+                        .body(axum::body::Body::from(format!("addr={stray}")))
+                        .expect("a request"),
+                )
+                .await
+                .expect("an answer");
+            assert_eq!(response.status(), axum::http::StatusCode::OK);
+            assert_eq!(
+                response
+                    .headers()
+                    .get("hx-redirect")
+                    .and_then(|v| v.to_str().ok()),
+                Some("/ipam"),
+                "no subnet contains the address, so the plan itself is where the operator goes back"
+            );
+        })
+        .await;
+    }
 }
