@@ -67,6 +67,7 @@
       {%- if row.gap || row.undeclared %}
       <form hx-post="{{ forms.release_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
         <input type="hidden" name="addr" value="{{ row.address }}">
+        <input type="hidden" name="seen_until" value="{{ row.seen_until }}">
         <button type="submit" class="btn-gesture live">{{ s.finding_release }} — {{ row.address }}</button>
       </form>
       {%- endif %}

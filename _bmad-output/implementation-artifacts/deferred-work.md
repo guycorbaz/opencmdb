@@ -5913,8 +5913,10 @@ three independently. These are the ones deferred rather than patched — each wi
 - ⚠️ **A release cannot be UNDONE from the screen** (Guy's decision 3, 2026-09-19): no fifth correction
   route. Under decision 1 the network corrects a mistaken release of a machine that answers — its next
   sighting is later than the release and holds the address again — but a mistaken release of a machine
-  that is asleep makes its address OFFERABLE until it wakes. The row can be removed by hand
-  (`DELETE FROM address_release WHERE addr = …`). **Owner: Epic 14's retrospective**, which decides
+  that is asleep makes its address OFFERABLE until it wakes. The row can be removed by hand —
+  ⚠️ **in the PADDED form**, `DELETE FROM address_release WHERE addr = '192.000.002.009'`: the
+  unpadded `'192.0.2.9'` matches nothing and reports no error (the code review's acceptance layer
+  found this row silent about it). The Administrator Manual now carries it. **Owner: Epic 14's retrospective**, which decides
   whether the Undo Toast (`ux-design-specification.md:1244`) or a rail list is owed.
 - ⚠️ **The OUTSIDE list offers no release** (decision 2 put the control on the SUBNET's findings). An
   address seen outside every subnet stays listed until a subnet contains it. The route itself accepts
@@ -5931,11 +5933,12 @@ three independently. These are the ones deferred rather than patched — each wi
   contains `INSERT INTO address_release`; mutation M3 (two spaces between `INTO` and the table) reds it
   with the product correct. It is what makes the guard notice the write LEAVING the plan's modules, and
   it is carried by a literal, not by a parse. Stated rather than hidden. **Owner: none.**
-- ⚠️ **The defined-address refusal reads without a lock**: a concurrent `define_address` landing between
-  the read and the insert leaves a release row on a defined address. Harmless by construction — a
-  defined address is never a verdict and never offered — and the row takes effect only if the record is
-  later removed, which is then the release the operator asked for. Recorded so nobody adds a lock *"for
-  symmetry"*. **Owner: none.**
+- ~~⚠️ **The defined-address refusal reads without a lock** … Harmless by construction …~~ 🔴 **FALSE,
+  and struck rather than deleted**: the code review MEASURED 31 of 61 concurrent define/release pairs
+  leaving a release row on a defined address — and release-then-define leaves one with no race at all;
+  it hid a « Conflit d'adresse » and came back into force when the record was removed. ✅ **Closed in
+  the same review** (Guy, 2026-09-19): the audit ignores a release on a defined address, and defining
+  or correcting an address deletes its release. The read stays lock-free, for the refusal's sentence.
 - 🔴 **The accessibility seed and `ipam_repo`'s store tests share a namespace, and that predates this
   story.** Running `cargo test` AFTER both browser gates on the same store reds two tests: `t-race`
   inserts `198.51.100.128/25`, exactly the seed's *Workshop* subnet (`Constraint("unique")` on
@@ -5950,3 +5953,16 @@ three independently. These are the ones deferred rather than patched — each wi
   this story leaking a defined address into a plan-wide reader — was found only by replaying one mutation
   by hand to read the names. *A count without the population it counts is where collateral hides.*
   **Owner: the next story that touches `xtask/src/mutate.rs`.**
+
+## Deferred from: code review of 14-4b-releasing-an-address.md (2026-09-19)
+
+- ⚠️ **`/ipam/release` accepts any well-formed IPv4** — `0.0.0.0`, `255.255.255.255`, an address outside
+  every subnet, all answer 200 and write a row (edge layer, measured) — and `plan_releases` reads the
+  table WHOLE on every `read_the_network`, which includes the debounced per-keystroke address check.
+  Bounded only by what an authenticated client posts. **Owner: Epic 14's retrospective** (refuse
+  addresses outside every subnet, or index the read by the subnet in force).
+- ⚠️ **Releasing from an OUTER subnet's findings sends the operator to the INNER subnet** — measured on
+  `10.20.0.0/16` ⊃ `10.20.5.0/24`: the redirect names the `/24`. The address belongs to the inner
+  subnet, whose view shows the same finding; what is lost is the page the operator pressed from.
+  **Owner: Epic 14's retrospective.**
+

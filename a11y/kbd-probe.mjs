@@ -32,20 +32,20 @@ const CHROME = process.env.AXE_CHROME ?? "/usr/bin/google-chrome";
 const QUEUE = ".queue .queue-row > a";
 // The settle in `app.js` is 250 ms; everything here waits past it with room for a document.
 const SETTLE_WAIT_MS = 900;
-// 🔑 The floor, and it EQUALS what is there rather than sitting under it: **fifty-eight** checks run
+// 🔑 The floor, and it EQUALS what is there rather than sitting under it: **fifty-nine** checks run
 // on a queue of two, which is the shortest queue this gate accepts. ⚠️ This sentence said *twenty*
 // until story 14.4's slice-D review — story 6b.11's figure, left behind by every floor move since —
 // so the ONE place a reader verifies *the floor equals what is there* asserted a number 33 short of
 // the constant beneath it. ⚠️ And the repair's first version said *fifty-two*: the same review added
 // a check in the same breath, so the corrected sentence was stale before it was saved. **A floor is
 // a MINIMUM, so that drift reds nothing** — it just quietly stops equalling what is there, which is
-// the whole property. The number below is now read off a live run (`58 check(s) run`, story 14.4b's
-// five release checks added to 14.4's fifty-three) rather than
+// the whole property. The number below is now read off a live run (`59 check(s) run`, story 14.4b's
+// six release checks — five, then its code review's confirmation — added to 14.4's fifty-three) rather than
 // counted by hand. A floor under what exists tolerates losing a check while still reading as a pass
 // — this project has caught that twice, once in a privacy floor and once in a word count. If a
 // check is added this number moves deliberately; if one is skipped, the gate says so instead of
 // printing a green.
-const MIN_CHECKS = 58;
+const MIN_CHECKS = 59;
 const MIN_ROWS = 2;
 // 🔑 The seed's own two-hardware-address sighting, in ONE place. It was written twice — typed into
 // the field at one site and spelled out inside the expected triage href at another — so a seed that
@@ -434,7 +434,9 @@ async function main() {
   // where they were has no way to reach what just appeared — announcing is not reaching, which
   // is why `aria-live` and the focus move are both required and neither substitutes.
   //
-  // ⚠️ **THIS BLOCK WRITES TO THE STORE**, and it is the only check here that does: it adopts
+  // ⚠️ **THIS BLOCK WRITES TO THE STORE** — and it is NOT the only one, which this line claimed until
+  // story 14.4b's code review: the plan forms' block writes a subnet, and the release block presses a
+  // release. It adopts
   // the undeclared sighting `a11y/seed.sql` plants. So it must stay LAST, or be preceded by a
   // re-seed — a second run against the same store answers 409, htmx swaps nothing on a non-2xx,
   // and the focus checks below would then red over a product that is working. That is a HARNESS
@@ -1137,6 +1139,9 @@ async function main() {
   // offers none (decision 4); `.61` sighted and ALREADY released, so it is not a finding at all.
   // `.60` is the dedicated case this block presses — dedicated so the press removes nothing another
   // check walks.
+  // ⚠️ **What the `.61` half does and does not prove**: that a sighted, already-released address is
+  // no finding. That it IS sighted is not visible in a browser once released — the release hides it
+  // everywhere — and is carried by `sighting_repo`'s seed test, which counts its row among fifteen.
   {
     const RELEASABLE = [
       "192.0.2.11",
@@ -1189,11 +1194,18 @@ async function main() {
       JSON.stringify(focusable),
     );
     // 🔑 PRESSED with Enter, awaited on its response rather than slept on (the documenting
-    // gesture's reason). A release is an UPSERT, so a store this gate already pressed answers 200
-    // again — the press cannot be refused by a stale store, which is why no re-seed branch is owed.
+    // gesture's reason). ⚠️ **This gate is not re-runnable without a re-seed**, and this comment
+    // claimed the opposite until the code review: on a store already pressed, `.60` is no finding and
+    // the exact list above reds as a product fault. In practice the plan form's 409, earlier, stops a
+    // stale run first with *the gate could not run* — which is the re-seed instruction CI follows.
+    // 🔴 **The navigation is ARMED BEFORE THE PRESS**: armed after the response, it raced the
+    // `HX-Redirect` it waits for (the review's blind layer).
     const answered = held.waitForResponse((r) => r.request().method() === "POST", {
       timeout: NAV_TIMEOUT_MS,
     });
+    const navigated = held
+      .waitForNavigation({ waitUntil: "networkidle0", timeout: NAV_TIMEOUT_MS })
+      .catch(() => {});
     await held.keyboard.press("Enter");
     let status = null;
     try {
@@ -1201,9 +1213,7 @@ async function main() {
     } catch (error) {
       cannotRun(`the release never answered — ${error.message}`);
     }
-    await held
-      .waitForNavigation({ waitUntil: "networkidle0", timeout: NAV_TIMEOUT_MS })
-      .catch(() => {});
+    await navigated;
     const after = await read(held);
     check(
       status === 200 && after.url.startsWith("/ipam?subnet="),
@@ -1216,6 +1226,17 @@ async function main() {
         after.released.includes("192.0.2.20"),
       "and the released address has LEFT the findings, while the others keep theirs",
       JSON.stringify({ released: after.released, findings: after.findings }),
+    );
+    // 🔑 **The confirmation is SHOWN** (the code review's decision 3): `HX-Redirect` shows no body, so
+    // the one sentence saying a release lapses when the network answers rides in the URL.
+    const confirmed = await held.evaluate(() => ({
+      url: location.search,
+      text: (document.querySelector("p.gesture-result[role=status]")?.textContent ?? "").trim(),
+    }));
+    check(
+      confirmed.url.includes("released=192.0.2.60") && confirmed.text.includes("192.0.2.60"),
+      "and the page CONFIRMS the release, naming the address",
+      JSON.stringify(confirmed),
     );
     await held.close();
   }

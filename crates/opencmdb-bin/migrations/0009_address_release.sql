@@ -22,10 +22,12 @@
 -- LAPSES rather than standing against a machine that answers. That is the protective direction: an
 -- address something answers on is never offered.
 --
--- 🔑 `released_at` IS THE OPERATOR'S INSTANT, read from the application's clock at the write — the
--- same clock that dates every observation (`main.rs`'s `SystemClock`), so the two compare on one
--- time line. Not `NOW(6)`: the database may run on another host with another clock, and the lapse is
--- a comparison between this column and `address_sighting.last_seen_at`, which the application wrote.
+-- 🔑 `released_at` IS THE LAST SIGHTING THE OPERATOR WAS SHOWN, carried by the release form — NOT
+-- the instant of the press, and not any clock (story 14.4b's code review, Guy, 2026-09-19). Every
+-- observation of a sweep is dated at the sweep's START, so a release dated at the press forgot a host
+-- that answered in a sweep already running, and offered its address; all three review layers reached
+-- it. An instant taken from the data also makes clock skew and a database in another time zone
+-- irrelevant — the comparison is between two values the application wrote from the same sightings.
 --
 -- A second release of the same address REPLACES the instant with the later one (the adapter widens
 -- with `GREATEST`): an operator re-releasing an address that answered again is saying *forget this
@@ -34,6 +36,9 @@
 -- ⚠️ NO FOREIGN KEY onto `ip_address` or `ip_subnet`: a release names an address the plan may not
 -- define at all — most held addresses are exactly the ones no record claims. Decision 4 (a DEFINED
 -- address cannot be released) is refused by the adapter, not here: a CHECK cannot read another table.
+-- 🔴 And a row CAN stand on a defined address — the review measured 31 of 61 concurrent
+-- define/release pairs leaving one. The audit ignores such a row, and defining or correcting an
+-- address deletes its release (`ipam_repo::forget_release_of`).
 --
 -- 🔴 `\z` AND NOT `$`, and the octet alternation: `0007`'s pattern, byte for byte, for `0007`'s
 -- reasons (a trailing newline was a second spelling; `999.999.999.999` was storable raw).

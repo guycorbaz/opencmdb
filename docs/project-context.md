@@ -84,7 +84,7 @@ longer owed**: Epic 14 was DECOMPOSED into four stories on 2026-09-10 (PR #167) 
 `done`** (PR #168) — the schema, with no producer and nothing operator-visible. The epic needed at
 least FOUR write routes where the product had one, and that is why its stories are shaped as they
 are. ✅ **14.2 is `done`** (PR #170) — `/ipam` draws the operator's plan from the store — and it was
-SPLIT at implementation, so **Epic 14 has SIX stories** (`epics.md` not edited; 14.3 was split at its validation on 2026-09-15 into 14.3a, a bounded sighting summary, and 14.3b, the audit). **14.2b is
+SPLIT at implementation, so **Epic 14 had SIX stories** — ⚠️ **SEVEN since 14.4 was split at its validation into 14.4 and 14.4b** (this sentence read *SIX* in the present tense until 14.4b's code review) (`epics.md` not edited; 14.3 was split at its validation on 2026-09-15 into 14.3a, a bounded sighting summary, and 14.3b, the audit). **14.2b is
 `done`** (PR #173 squash-merged 2026-09-15 as `368e2e1`, CI green on the head commit, code-reviewed
 by three isolated layers and REPAIRED first): the operator's hands — three write routes (subnet,
 range, address), the overlap rule held under concurrency, the empty plan's link into the gesture;

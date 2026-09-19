@@ -616,6 +616,30 @@ pub(crate) async fn insert_address(
     .execute(&mut *conn)
     .await
     .map_err(classify)?;
+    forget_release_of(&mut *conn, addr).await
+}
+
+/// Delete the release of an address the plan is about to DEFINE (story 14.4b's code review, Guy's
+/// decision of 2026-09-19).
+///
+/// 🔴 **A release row outlived its address's definition — measured 31 of 61 concurrent pairs, and
+/// reachable with no race at all**: release, then define. The row changed nothing while the record
+/// stood ([`crate::ipam_audit::read_the_network`] ignores it now), and came back into force in silence
+/// the day the record was removed — forgetting sightings up to an instant nobody remembered. Written in
+/// the definition's own statement sequence, so a definition that commits leaves no release behind.
+///
+/// # Errors
+///
+/// The classified `sqlx::Error`.
+async fn forget_release_of(
+    conn: &mut sqlx::MySqlConnection,
+    addr: Ipv4Addr,
+) -> Result<(), RepositoryError> {
+    sqlx::query(capped!("DELETE FROM address_release WHERE addr = ?"))
+        .bind(canonical(addr))
+        .execute(&mut *conn)
+        .await
+        .map_err(classify)?;
     Ok(())
 }
 
@@ -776,6 +800,8 @@ pub(crate) async fn update_address(
         .execute(&mut *tx)
         .await
         .map_err(classify)?;
+        // An edit that moves the address ONTO a released one defines it — the definition's reason.
+        forget_release_of(&mut tx, addr).await?;
         // The subnet this address REALLY belongs to — the locked read above already had it, so the
         // caller's redirect costs nothing beyond returning it. See [`delete_address`].
         Ok(subnet_id)
@@ -1392,7 +1418,8 @@ fn policy_from_token(token: &str) -> Result<IpPolicy, RepositoryError> {
         })
 }
 
-/// Release one address: the plan forgets what the network showed on it up to `at` (story 14.4b).
+/// Release one address: the plan forgets what the network showed on it up to `at` — the last sighting
+/// the operator was SHOWN, carried by the form, never a clock (story 14.4b's code review).
 ///
 /// 🔑 **A release is a ROW, never a deletion** — `0009`'s header carries the three refused shapes and
 /// what refuted each. Nothing here reads or writes `address_sighting`, which keeps every row it had:
@@ -1403,11 +1430,15 @@ fn policy_from_token(token: &str) -> Result<IpPolicy, RepositoryError> {
 /// because re-releasing an address that answered again means *forget this too*.
 ///
 /// 🔴 **A DEFINED address is refused** (Guy's decision 4, 2026-09-19), read under the same
-/// transaction as the write. ⚠️ **The read takes no lock, and the race it leaves is harmless by
-/// construction rather than by luck**: a concurrent `define_address` landing between the read and
-/// the insert leaves a release row on a defined address, and a defined address is never a verdict
-/// and never offered ([`crate::ipam_audit::Plan`]) — so the row changes nothing the operator can see
-/// until the record is removed, at which point it is exactly the release they asked for.
+/// transaction as the write. ⚠️ **The read takes no lock, and this doc called the race it leaves
+/// *"harmless by construction"* until the code review MEASURED it**: 31 of 61 concurrent
+/// define/release pairs left a release row on a defined address — which hid a « Conflit d'adresse »
+/// meanwhile and came back into force when the record was removed. Two carriers close it now, neither
+/// of them this read (Guy, 2026-09-19): the audit IGNORES a release on a defined address
+/// ([`crate::ipam_audit::read_the_network`]), whatever the order of the two writes; and defining or
+/// correcting an address DELETES its release ([`forget_release_of`]), so none survives the record.
+/// The read stays for the refusal's SENTENCE — the operator pressing on a defined address is told
+/// which gesture applies.
 ///
 /// 🔑 **An address the network has never shown is ACCEPTED**, and silently so: this module may not
 /// read the sightings (the plan's guard), and a release of an unseen address forgets nothing. The

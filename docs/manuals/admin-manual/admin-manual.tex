@@ -481,6 +481,18 @@ shipped with this version: it writes the sighting of the observation it inserts,
 backfill has already run by the time a seed is loaded.
 \end{note}
 
+\section{Undoing an address release}
+Migration \texttt{0009} adds the table that records the addresses an operator \emph{released} on the
+IPAM screen (\texttt{address\_release}). The screen offers no way to undo a release. If one was
+pressed by mistake --- typically on a machine that was only asleep, whose address may then be offered
+until it is seen again --- remove the row by hand. The column holds the zero-padded form of the
+address: \texttt{192.0.2.9} is stored as \texttt{192.000.002.009}.
+\begin{verbatim}
+DELETE FROM address_release WHERE addr = '192.000.002.009';
+\end{verbatim}
+A statement written with the unpadded form matches nothing and reports no error, so check that it
+says one row was affected.
+
 \appendix
 \chapter{Troubleshooting}
 The source-health view is the first place to look once opencmdb is running: a scope that has

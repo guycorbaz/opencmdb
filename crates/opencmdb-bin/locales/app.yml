@@ -1224,6 +1224,9 @@ ipam.refusal.malformed_release:
 ipam.refusal.release_of_defined:
   en: "This address is defined in the plan, so there is nothing to release. To stop the plan holding it, remove the address."
   fr: "Cette adresse est définie dans le plan : il n'y a rien à libérer. Pour que le plan cesse de la retenir, supprimez l'adresse."
+ipam.released_note:
+  en: "%{address} is released: the plan forgets what the network showed on it until then. If something answers on it again, it will be listed again."
+  fr: "%{address} est libérée : le plan oublie ce que le réseau y a montré jusque-là. Si quelque chose y répond à nouveau, elle sera de nouveau listée."
 ipam.done.release:
   en: "The address is released: the plan forgets what the network showed on it until now. If something answers on it again, the audit will say so."
   fr: "L'adresse est libérée : le plan oublie ce que le réseau y a montré jusqu'ici. Si quelque chose y répond à nouveau, l'audit le signalera."

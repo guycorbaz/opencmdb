@@ -278,6 +278,37 @@ pub(crate) struct IpamQuery {
     /// exists. `ip_subnet` has no slug column, so the selector's key had to change meaning, and the
     /// id is what the store actually holds.
     pub(crate) subnet: Option<String>,
+    /// The address a release just went through for, which the route puts in its redirect so the
+    /// confirmation is shown (story 14.4b's code review). ⚠️ Rendered only when it PARSES as an
+    /// address: anything else in the URL shows nothing, so the parameter cannot carry text of its own
+    /// onto the page.
+    pub(crate) released: Option<String>,
+}
+
+/// The confirmation a release earns, shown above the plan it changed.
+#[derive(askama::Template)]
+#[template(
+    source = r#"<p class="gesture-result" role="status">{{ sentence }}</p>"#,
+    ext = "html"
+)]
+struct ReleasedNote {
+    /// The keyed sentence, naming the address.
+    sentence: String,
+}
+
+/// The confirmation for `?released=`, or the empty string when the value is not an address.
+pub(crate) fn released_note(released: Option<&str>) -> String {
+    released
+        .and_then(|value| value.trim().parse::<Ipv4Addr>().ok())
+        .map(|addr| {
+            ReleasedNote {
+                sentence: rust_i18n::t!("ipam.released_note", address = addr.to_string())
+                    .to_string(),
+            }
+            .render()
+            .unwrap_or_default()
+        })
+        .unwrap_or_default()
 }
 
 /// Mount `/ipam` on its own router, with the pool.
@@ -912,6 +943,7 @@ async fn ipam(State(state): State<IpamState>, Query(query): Query<IpamQuery>) ->
         Ok(data) => data,
         Err(response) => return response,
     };
+    let body = released_note(query.released.as_deref()) + &body;
     Html(render_shell(
         Shell::new(Screen::Ipam, state.perimeter.clone()),
         body,
@@ -1032,6 +1064,10 @@ pub(crate) struct FindingRow {
     /// The triage question for it, when triage has one — only for an address no declared record
     /// claims.
     triage_href: Option<String>,
+    /// The LAST instant the network was seen on it, as RFC 3339 to the microsecond — the release
+    /// form's `seen_until`, so a release forgets what the operator was SHOWN and nothing that arrived
+    /// after the page was drawn (story 14.4b's code review).
+    seen_until: String,
 }
 
 /// The audit's part of the page.
@@ -1162,6 +1198,10 @@ fn finding_row(
         // declared VALUES verbatim, so a value stored with whitespace documents the address for the
         // offer and still leaves triage asking (`ipam_audit::AddressFinding::claimed`).
         triage_href: (!claimed).then(|| format!("/triage?sel=nouveau:{}", seen.addr)),
+        seen_until: seen
+            .last_seen()
+            .map(|at| at.to_rfc3339_opts(chrono::SecondsFormat::Micros, true))
+            .unwrap_or_default(),
     }
 }
 
@@ -2610,6 +2650,37 @@ mod tests {
                          `ipam_audit.rs` and nowhere else in the plan (story 14.3b, decision 6)"
                     );
                 }
+            } else {
+                // 🔑 **AC5 of story 14.4b, the half the code review found missing: the audit stays a
+                // READER.** The shape Guy refused — a sighting DELETER reached through the audit —
+                // was admitted by everything above, since the audit may name `sighting_repo` at all.
+                // So each item it names must be one of the two the read needs; a deleter, an upsert
+                // or a re-export under another name reds here.
+                // ⚠️ Over EVERY whole-word `sighting_repo`, not only those followed by `::` — an
+                // alias (`use crate::sighting_repo as s;`) or a braced import names no item here and
+                // is refused, which is the conservative direction.
+                for (at, _) in words.match_indices("sighting_repo") {
+                    let is_ident = |c: char| c.is_alphanumeric() || c == '_';
+                    let after = &words[at + "sighting_repo".len()..];
+                    if words[..at].chars().next_back().is_some_and(is_ident)
+                        || after.chars().next().is_some_and(is_ident)
+                    {
+                        continue;
+                    }
+                    let item: String = after
+                        .strip_prefix("::")
+                        .unwrap_or_default()
+                        .chars()
+                        .take_while(|c| is_ident(*c))
+                        .collect();
+                    let line = words[..at].matches('\n').count() + 1;
+                    assert!(
+                        ["load_sightings", "Sighting"].contains(&item.as_str()),
+                        "{name}:{line} names `sighting_repo::{item}`: the audit may reach the \
+                         sighting summary only to READ it (`load_sightings`, `Sighting`) — a write \
+                         reached through the audit is the shape story 14.4b refused (AC5)"
+                    );
+                }
             }
         }
     }
@@ -2993,6 +3064,27 @@ mod tests {
             ],
             &[v4("192.0.2.9"), v4("192.0.2.90")],
         )
+    }
+
+    /// Story 14.4b's code review, decision 3 — the release's confirmation rides in the URL and is
+    /// shown only for a value that PARSES as an address: the parameter cannot carry text of its own.
+    #[test]
+    fn the_release_confirmation_names_an_address_and_nothing_else() {
+        let shown = released_note(Some("192.0.2.60"));
+        assert!(
+            shown
+                .contains(&rust_i18n::t!("ipam.released_note", address = "192.0.2.60").to_string()),
+            "a released address is confirmed: {shown}"
+        );
+        assert!(shown.contains("role=\"status\""), "in a status region");
+        for hostile in ["<script>alert(1)</script>", "192.0.2.600", "", "yes"] {
+            assert_eq!(
+                released_note(Some(hostile)),
+                "",
+                "{hostile:?} is not an address"
+            );
+        }
+        assert_eq!(released_note(None), "", "no release, no sentence");
     }
 
     /// Story 14.4b, decisions 2 and 4 — the release hangs off a `gap` or an `undeclared` finding, and

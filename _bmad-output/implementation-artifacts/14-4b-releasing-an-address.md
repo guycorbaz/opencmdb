@@ -14,8 +14,9 @@ Everything in §1 is measured, not reasoned.
 🔴 **BLOCKED ON A PLANNING ACT**: the gesture has **no binding word**, and Guy takes the minting
 (decision 4 of 2026-09-16) — see §1(d). This story writes the word; it does not invent it.
 
-Baseline: **980 tests** (690 bin + 191 core + 99 xtask) at `82ff356`. Ten gates, axe 0 over 10 routes
-+ 5 states, kbd 45/45.
+~~Baseline: **980 tests** (690 bin + 191 core + 99 xtask) at `82ff356`. Ten gates, axe 0 over 10 routes
++ 5 states, kbd 45/45.~~ ⚠️ **Struck at the code review**: that was 14.4's VALIDATION baseline, before 14.4
+shipped. The real baseline, `master` at `031e2d7`: **995** (705 + 191 + 99), kbd 53.
 
 ## Story
 
@@ -189,6 +190,60 @@ manuals, both browser gates, documents current before the push.
       new checks; the axe pass.
 - [x] **T7** (AC9, AC10) Measure. Prove-to-red with `cargo xtask mutate --baseline`, predictions
       first; both browser gates; the documents and both twins.
+
+### Review Findings
+
+Three isolated layers, 2026-09-19 (Blind Hunter: code diff only; Edge Case Hunter: own worktree and
+own `mariadb:10.11.11` on :13420, measured; Acceptance Auditor: full diff incl. the register).
+31 raw findings → 21 distinct: 3 decisions, 13 patches, 2 deferrals, 5 dismissed with their check.
+
+- [ ] [Review][Decision] **A live host's address can be offered right after a release** (all THREE
+  layers) — `released_at` is the PRESS instant (`page::now_utc()`), while every observation of a sweep
+  is dated at the sweep's START (`arp_ping.rs:256`). A host answering in a sweep already running when
+  the operator presses is forgotten, and inside `static` its address is offered until the next sweep
+  (~5 min). The same clock choice makes the release depend on clock skew (a clock stepped forward makes
+  it sticky under `GREATEST`) and makes the seed compare the database clock with the app's.
+- [ ] [Review][Decision] **A release row survives on a DEFINED address** (blind + edge, MEASURED 31 of
+  61 concurrent define/release pairs) — also reachable without a race: release, then define; nothing
+  deletes the row, and when the record is later removed the old release silently comes back into
+  force. It hides a « Conflit d'adresse » formed from the forgotten sightings meanwhile.
+  `ipam_repo.rs:release_address`'s *"harmless by construction"* is false.
+- [ ] [Review][Decision] **After a release the operator sees no confirmation** (auditor) — the route
+  answers `HX-Redirect`, so `ipam.done.release` — the only in-product sentence saying the release
+  LAPSES when the network answers — is never displayed; with no undo and no before-the-press warning.
+- [ ] [Review][Patch] kbd-probe: the *"no re-seed branch is owed"* comment gives the wrong reason, and
+  the documenting block's *"the only check here that writes"* is now false [a11y/kbd-probe.mjs]
+- [ ] [Review][Patch] kbd-probe: `waitForNavigation` is armed AFTER the response, a race [a11y/kbd-probe.mjs]
+- [ ] [Review][Patch] a store-test assertion is vacuous: `next_offerable == .10` holds with or without
+  the release [crates/opencmdb-bin/src/ipam_audit.rs]
+- [ ] [Review][Patch] `unknown_record`'s dead `Release` arm pairs 404 with the backend sentence, and
+  `ipam_refusal` maps `Release` to a range sentence [crates/opencmdb-bin/src/ipam_write.rs]
+- [ ] [Review][Patch] kbd-probe's `.61` check proves "not a finding", not "sighted then forgotten" —
+  the comment claims more than the check [a11y/kbd-probe.mjs]
+- [ ] [Review][Patch] the INNERMOST-subnet redirect is carried by no test (edge MEASURED
+  `max_by_key` GREEN) [crates/opencmdb-bin/src/ipam_repo.rs]
+- [ ] [Review][Patch] `0009`'s canonical CHECK and `plan_releases`' skip branch are carried by no test
+  [crates/opencmdb-bin/migrations/0009_address_release.sql]
+- [ ] [Review][Patch] AC5: the guard pins where the write lives, not that `ipam_audit.rs` stays a
+  READER of `sighting_repo` [crates/opencmdb-bin/src/ipam_page.rs]
+- [ ] [Review][Patch] both twins still say *"Epic 14 has SIX stories"* [CLAUDE.md, docs/project-context.md]
+- [ ] [Review][Patch] the story header's *"Baseline: 980"* is neither corrected nor struck
+- [ ] [Review][Patch] the register's recovery SQL uses the unpadded form and deletes nothing; the admin
+  manual does not mention the recovery [deferred-work.md, docs/manuals/admin-manual]
+- [ ] [Review][Patch] the user manual promises a released address is offered again, false for an
+  address DOCUMENTED in the inventory [docs/manuals/user-manual/user-manual.tex]
+- [ ] [Review][Patch] test cleanup deletes observations by `JSON_SEARCH` (LIKE semantics, any string
+  fact) [crates/opencmdb-bin/src/ipam_audit.rs]
+- [x] [Review][Defer] any well-formed IPv4 is accepted and `plan_releases` reads the table whole on
+  every audit read (blind + edge) — deferred, bounded by an authenticated operator like every write
+- [x] [Review][Defer] releasing from an OUTER subnet's view redirects to the INNER subnet (edge,
+  measured) — deferred, the address belongs to the inner one and its finding is shown there too
+- Dismissed with their check: a 4xx not swapped (refuted — `before-swap` sits on `#ipam-form-result`,
+  the swap target of every `/ipam` form); a non-defined conflict-only row (refuted by the auditor —
+  `verdict` is `None` only for defined or pool-only addresses); a reader bypassing the releases
+  (refuted by the edge layer — every IPAM reader goes through `read_the_network`); the release button
+  painting the amber (refuted — `.btn-gesture.live` is neutral, the amber is `.btn-document`'s);
+  AC2's letter (already registered).
 
 ## Dev Notes
 

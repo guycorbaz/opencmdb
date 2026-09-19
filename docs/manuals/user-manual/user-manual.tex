@@ -232,19 +232,24 @@ which the pool may hand to another machine.
 
 \section{Releasing an address}
 Each \textbf{gap} or \textbf{undeclared} entry of the selected subnet carries a \emph{Release}
-control, named after its address. Releasing tells the plan to forget what the network has shown on
-that address \emph{until now}: the entry leaves the list and, inside a \texttt{static} range, the
-address can be offered again. Nothing the scanner recorded is deleted --- the release is kept as a
-record of its own, beside the sightings.
+control, named after its address. Releasing tells the plan to forget what the network had shown on
+that address \emph{when your page was drawn} --- the sightings listed in the entry, and nothing that
+arrived after it. The entry leaves the list, the page says the address was released, and inside a
+\texttt{static} range the address can be offered again --- unless the inventory documents it, since
+a documented address is never offered. Nothing the scanner recorded is deleted --- the release is
+kept as a record of its own, beside the sightings.
 
-A release lapses by itself when the network answers again. A machine seen on the address after you
-released it holds the address once more, and the entry comes back as an ordinary finding --- an
-address something answers on is never offered. A network card replaced after the release counts only
-from the moment it was seen, so it is not reported as a conflict with the card it replaced.
+A release lapses by itself when the network answers again. A machine seen on the address after the
+last sighting your page showed holds the address once more, and the entry comes back as an ordinary
+finding --- an address something answers on is never offered. A network card replaced after the
+release counts only from the moment it was seen, so it is not reported as a conflict with the card it
+replaced.
 
 An address you defined in the plan cannot be released: the plan never offers it anyway, and the
-refusal says to remove the address instead. A release cannot be undone from the screen; if you
-released a machine that was only asleep, its address may be offered until it is seen again.
+refusal says to remove the address instead. Defining an address you had released cancels the
+release. A release cannot be undone from the screen; if you released a machine that was only asleep,
+its address may be offered until it is seen again --- the Administrator Manual says how to remove a
+release by hand.
 
 \section{The next address the plan can offer}
 The panel beside the grid proposes the lowest address that nothing the product knows of speaks for:
@@ -301,8 +306,8 @@ CI run, and the triage queue is reachable by keyboard.
         work opencmdb surfaces.
   \item[Document] Close a gap by adopting an observed value into your declaration.
   \item[Accept-gap] Acknowledge a gap without resolving it; it stays open and keeps counting.
-  \item[Release] Stop the plan holding an address: what the network showed on it until now is
-        forgotten, and the address can be offered again. A release is kept as a record, never a
+  \item[Release] Stop the plan holding an address: what the network had shown on it is forgotten,
+        and the address can be offered again. A release is kept as a record, never a
         deletion. Not a software release --- this is the one term with that second meaning.
   \item[Blind source] A source that currently cannot see; its last-known state is frozen and
         its alerts suppressed.
