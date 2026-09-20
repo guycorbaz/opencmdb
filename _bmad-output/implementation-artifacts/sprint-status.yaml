@@ -5761,7 +5761,10 @@ development_status:
   #   ⚠️ `a11y/seed.sql` carries no release case -- new seed work, unlike 14.4's deletes.
   #   Edit, delete, and RELEASE a held address -- the fourth write route, without which the grid
   #   fills and never empties (constraint 3: a sighting protects an address until released).
-  14-4c-the-record-checks-itself: review
+  14-4c-the-record-checks-itself: done
+  #   ✅ DONE 2026-09-20: PR #190 squash-merged as `4c195f0`, CI green on its head `c12ce37` itself
+  #   (run 35538313634); code-reviewed by three isolated layers and REPAIRED first (1 decision by Guy —
+  #   a register row is its first bold title — 18 patches, 2 deferrals). 1 018 tests.
   #   Created by Epic 14's PARTIAL retrospective (2026-09-19, Guy) -- tooling, sequenced BEFORE 14.5 so
   #   the two remaining stories' reviews benefit from it: (a) a mechanical check of a story's RECORD
   #   (live count against `cargo test`, every "registered" against `deferred-work.md`, the File List
