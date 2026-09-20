@@ -176,6 +176,44 @@ store conditions, `cargo deny`; the browser gates are NOT touched (no product ch
       File List corrected.
 - [x] **T7** (AC9) Both store conditions; ten gates; clippy; `cargo deny`.
 
+### Review Findings — three isolated layers, 2026-09-19/20
+
+39 raw findings → 25 distinct: **1 decision, 18 patches, 2 deferrals, 4 dismissed with their check.**
+(Recounted against the list below before it was written: the first draft of this line said 24 and 17.)
+Two layers MEASURED the same thing independently: **the checker still accepts registers that lie.**
+
+- [x] [Review][Decision] **A register row is identified by its first `**bold title**`** (Guy, 2026-09-20)
+  — a title survives closing, striking and appending, where the row's TEXT does not. A row is NEW when
+  its title is absent at the base; every `registered:` phrase must fall in a new row; every new row must
+  be claimed exactly once; a title that DISAPPEARS is an error, because this register strikes rows and
+  never deletes them. Refused: identity by normalised text with deletions forbidden (closing a row
+  changes its text, so every closure would read as a deletion); and printing without judging.
+- [x] [Review][Patch] the net row count let a DELETED row mask an unclaimed added one (blind + edge, both measured exit 0)
+- [x] [Review][Patch] a `registered:` phrase could claim an EDITED OLD row while the new row went unclaimed (blind + edge + auditor, measured)
+- [x] [Review][Patch] **panic (exit 101) printing a row whose byte 140 falls inside a multibyte character** (blind + edge, measured `é` at 139..141) — the exit contract broken by the listing itself
+- [x] [Review][Patch] duplicate `live-count:` / `base:` lines: the last one wins silently, so the block can carry two counts (blind + auditor + edge, measured exit 0)
+- [x] [Review][Patch] a story file OUTSIDE the repository (absolute path) validated a lying record in it (edge, measured exit 0)
+- [x] [Review][Patch] `git show` failures on the register were swallowed (`unwrap_or_default`), so a moved register checked nothing (blind)
+- [x] [Review][Patch] `git diff --name-only` quotes non-ASCII paths: an honest `file: docs/café.md` could never match (blind + edge, measured)
+- [x] [Review][Patch] `base:` accepted a ref (`master`, `HEAD`), which records no commit (blind + edge)
+- [x] [Review][Patch] two guards of `registration_mismatches` were carried by no test — mutating either left 109/109 green (edge, measured); the one-letter probe reddened through another rule
+- [x] [Review][Patch] `git status --porcelain` honours `status.showUntrackedFiles=no` (blind)
+- [x] [Review][Patch] an inherited `GIT_DIR`/`GIT_WORK_TREE` would retarget every git call (blind)
+- [x] [Review][Patch] the end-to-end plants asserted the exit CODE only, never WHICH rule fired — X4's own lesson (auditor)
+- [x] [Review][Patch] the messages said *"the File List"* for the block's `file:` lines, which is not the prose list (blind)
+- [x] [Review][Patch] `TARGETS` and `from_args` were reached by no test (auditor + blind) — 6.4b's own shape
+- [x] [Review][Patch] a weakened assertion: the `17` test ignored `names` entirely (blind)
+- [x] [Review][Patch] AC9's *"see the final measurement below"* pointed at nothing (auditor)
+- [x] [Review][Patch] 🔴 **the story file itself had lost §2-§3, its ACs, its tasks and its Dev Notes** — an edit anchored on the STRING `## Dev Agent Record` matched the phrase quoted inside §2.1, the very trap §2.1 names; `cargo xtask record` exited **0** over it, which is §3's stated limit made concrete (auditor)
+- [x] [Review][Patch] the block's syntax was documented only in `record.rs` (auditor)
+- [x] [Review][Defer] `red_names` does not qualify a name by its target, so `tests::x` in two crates is ambiguous (blind + edge)
+- [x] [Review][Defer] the mutate end-to-end still sets `CARGO_TARGET_DIR` process-wide (`unsafe set_var`), which no `Command::env` can undo (blind) — pre-existing, story 6.4b's
+- Dismissed with their check: a phantom on REAL cargo output (edge planted four spoofs over a two-crate
+  workspace — `Named` carried none, and a well-formed phantom `test result:` makes `read_run` refuse
+  before naming); the snapshot test's path is the one the code builds (edge read `replace('/', "%")`);
+  CRLF and a `~~~` fence are refusals, never a lie that passes (edge, measured); `--list` counting
+  `#[ignore]` is already stated in §1.
+
 ## Dev Notes
 
 ### Traps this project has paid for, and which apply here
@@ -258,16 +296,24 @@ it; it left no snapshot this time.
   `docs/project-context.md`; `deferred-work.md:5951` closed; 14.4b's File List corrected; two rows
   registered (the `pre-push` tripwire, the baseline-vs-mutated red-set comparison).
 - **AC8 — THE LIVE COUNT is the block's `live-count:`** — checked by `cargo xtask record` on this branch.
-- **AC9**: see the final measurement below.
+- **AC9 — the measurement**, `cargo test --workspace --locked`, wall clock, one warm run first:
+  **1 018 tests** (717 bin + 191 core + 110 xtask) — **24.4 s** against a DROPPED-AND-RECREATED
+  `mariadb:10.11.11` (port 13419) and **5.8 s** with `DATABASE_URL` unset; ten `cargo xtask ci` gates,
+  `cargo fmt --check`, `clippy --workspace --all-targets --locked -D warnings`,
+  `RUSTFLAGS="-D warnings" cargo test`, `cargo deny check` — all green. ⚠️ The browser gates are NOT
+  touched by this story and were not run: it ships no product change, and saying so is AC9's own letter.
+  ⚠️ The figures above are the REVIEW's; at implementation the story measured 1 017 (xtask=109).
 - ⚠️ **What the operator gains: nothing** — tooling; no route, no screen, no migration. The browser gates
   are not touched and were not run, by AC9's own letter.
 
 ## Record
 
-- live-count: bin=717 core=191 xtask=109
+- live-count: bin=717 core=191 xtask=110
 - base: 365931d07fa99062b7f4241adf0cc8c7953d956c
 - registered: A story file without a `## Record` block is checked by nothing
 - registered: names the red tests of each run but does not COMPARE
+- registered: does not qualify a red test by its TARGET
+- registered: still sets `CARGO_TARGET_DIR` process-wide
 - file: CLAUDE.md
 - file: _bmad-output/implementation-artifacts/14-4b-releasing-an-address.md
 - file: _bmad-output/implementation-artifacts/14-4c-the-record-checks-itself.md
@@ -286,3 +332,5 @@ The `## Record` block's `file:` lines are this story's File List (checked by `ca
 
 - 2026-09-19 — Contexted, validated by two fresh-context layers (rewritten from §0), T0 taken with Guy
   (all four (a)), implemented, mutation-passed (9 ids + X4b); status → `review`.
+- 2026-09-20 — Code review (three isolated layers): 1 decision by Guy (a register row is its bold
+  title), 18 patches applied, 2 deferrals, 4 dismissed with their check. Stays `review` until the merge.

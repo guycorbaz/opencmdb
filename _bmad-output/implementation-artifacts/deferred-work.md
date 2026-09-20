@@ -5989,3 +5989,16 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   the mutation cannot reach). Names were enough to diagnose 14.4b's case by reading; the comparison is
   registered (Guy's decision 4, option b). **Owner: the next story that touches `xtask/src/mutate.rs`.**
 
+## Deferred from: code review of 14-4c-the-record-checks-itself.md (2026-09-20)
+
+- ⚠️ **`red_names` does not qualify a red test by its TARGET**, so `tests::x` reddening in two crates
+  reads the same either way — measured by the edge layer on a real two-crate run
+  (`Named(["t::honest", …])`, no crate name). Cargo prints the target on STDERR and the names on
+  STDOUT, and the driver's capture concatenates the two, so pairing them means changing how the run is
+  captured. What ships is honest and ambiguous, not wrong. **Owner: the next story that touches
+  `xtask/src/mutate.rs`.**
+- ⚠️ **The mutate end-to-end still sets `CARGO_TARGET_DIR` process-wide** (`unsafe set_var`), which no
+  `Command::env` elsewhere can undo: a second test spawning a process while it runs is the data race
+  that makes `set_var` unsafe (the blind layer). Pre-existing, story 6.4b's; 14.4c's own tests pass the
+  directory to the child instead. **Owner: the next story that touches that test.**
+

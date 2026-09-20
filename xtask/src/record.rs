@@ -152,7 +152,12 @@ pub(crate) fn parse_block(story: &str) -> std::result::Result<Record, String> {
             return Err(format!("the block line {line:?} is not `key: value`"));
         };
         let value = value.trim().trim_matches('`').trim();
+        // 🔴 **A repeated key is a REFUSAL, never a silent overwrite**: with the last one winning, a
+        // block could carry `live-count: bin=999` above the real line — two counts inside the block
+        // the block exists to make unique, measured exit 0 by three review layers.
         match key.trim() {
+            "live-count" if counts.is_some() => return Err("two `live-count:` lines".into()),
+            "base" if base.is_some() => return Err("two `base:` lines".into()),
             "live-count" => counts = Some(parse_counts(value)?),
             "base" => base = Some(value.to_string()),
             "registered" => registered.push(normalised(value)),
@@ -184,7 +189,9 @@ fn parse_counts(value: &str) -> std::result::Result<BTreeMap<String, usize>, Str
         let count = count
             .parse()
             .map_err(|_| format!("`{pair}` in `live-count:` does not end in a number"))?;
-        counts.insert(name.to_string(), count);
+        if counts.insert(name.to_string(), count).is_some() {
+            return Err(format!("`live-count:` names `{name}` twice"));
+        }
     }
     Ok(counts)
 }
@@ -200,40 +207,80 @@ pub(crate) fn listed_count(stdout: &str) -> Option<usize> {
     found.next().is_none().then_some(first)
 }
 
+/// One register row: its identifying TITLE and its whole normalised text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Row {
+    /// The row's first `**bold span**` — its identity (Guy, 2026-09-20).
+    ///
+    /// 🔑 **A title survives what an edit does to a row**: closing it (`✅ CLOSED …` appended),
+    /// striking it (`~~…~~`), re-owning it. Its TEXT does not — which is why comparing texts, or
+    /// counting rows, let three lies through: a deleted row masking an unclaimed added one, a phrase
+    /// claiming an EDITED old row, and an edit counted as a registration. All three were MEASURED
+    /// passing the first draft, by two review layers independently.
+    ///
+    /// A row with no bold span at all carries its whole text as its title — such a row is not this
+    /// register's shape, and an identity that falls back to the text is the conservative answer.
+    pub(crate) title: String,
+    /// The row entire, normalised — what a `registered:` phrase is searched in.
+    pub(crate) text: String,
+}
+
 /// The register's ROWS: a line starting `- ` at column 0 and its indented continuation lines, each
 /// row normalised. Everything else — headings, prose — is not a row.
-pub(crate) fn register_rows(register: &str) -> Vec<String> {
-    let mut rows: Vec<String> = Vec::new();
+pub(crate) fn register_rows(register: &str) -> Vec<Row> {
+    let mut rows: Vec<Row> = Vec::new();
     let mut current: Option<String> = None;
+    let close = |current: &mut Option<String>, rows: &mut Vec<Row>| {
+        if let Some(row) = current.take() {
+            let text = normalised(&row);
+            rows.push(Row {
+                title: title_of(&text),
+                text,
+            });
+        }
+    };
     for line in register.lines() {
         if let Some(rest) = line.strip_prefix("- ") {
-            if let Some(row) = current.take() {
-                rows.push(normalised(&row));
-            }
+            close(&mut current, &mut rows);
             current = Some(rest.to_string());
         } else if line.starts_with("  ") && current.is_some() {
             if let Some(row) = current.as_mut() {
                 row.push(' ');
                 row.push_str(line.trim());
             }
-        } else if let Some(row) = current.take() {
-            rows.push(normalised(&row));
+        } else {
+            close(&mut current, &mut rows);
         }
     }
-    if let Some(row) = current {
-        rows.push(normalised(&row));
-    }
+    close(&mut current, &mut rows);
     rows
+}
+
+/// The first `n` CHARACTERS of `text` — never a byte slice (see the listing in [`check`]).
+fn clipped(text: &str, n: usize) -> String {
+    text.chars().take(n).collect()
+}
+
+/// A row's identity: its first `**bold span**`, or its whole text when it has none.
+fn title_of(text: &str) -> String {
+    let Some(open) = text.find("**") else {
+        return text.to_string();
+    };
+    let rest = &text[open + 2..];
+    match rest.find("**") {
+        Some(close) if close > 0 => rest[..close].to_string(),
+        _ => text.to_string(),
+    }
 }
 
 /// Compare the `registered:` phrases with the register at the base and at `HEAD`.
 ///
-/// 🔴 **Each rule closes a lie the story's validation BUILT and measured passing the first draft**:
-/// a phrase must be ABSENT from the base register (or it names an OLD row — measured exit 0 before);
-/// present in EXACTLY ONE row at `HEAD`, a row of its own (so a one-letter phrase, which occurs
-/// everywhere, is refused); and the number of phrases must EQUAL the rows the branch added, NET —
-/// counting `+- ` diff lines counted an edited row as a registration (measured: `031e2d7`, three old
-/// rows re-marked ✅ read as three new ones).
+/// 🔴 **Every rule here closes a lie a review layer BUILT and measured passing** (2026-09-19/20):
+/// a phrase naming an OLD row; a phrase naming an old row an edit had CHANGED, while the genuinely new
+/// row went unclaimed; and a DELETED row masking an unclaimed added one under a net count. The row
+/// model is Guy's decision of 2026-09-20: **a row is its first `**bold title**`**, a row is NEW when
+/// its title is absent at the base, and a title that disappears is an error — this register strikes
+/// rows and never deletes them.
 ///
 /// Returns every mismatch as a sentence; empty means the registrations hold.
 pub(crate) fn registration_mismatches(
@@ -241,49 +288,68 @@ pub(crate) fn registration_mismatches(
     base_register: &str,
     head_register: &str,
 ) -> Vec<String> {
-    let base = normalised(base_register);
     let base_rows = register_rows(base_register);
     let head_rows = register_rows(head_register);
-    let mut mismatches = Vec::new();
-    let mut claimed_rows = BTreeSet::new();
+    let base_titles: BTreeSet<&str> = base_rows.iter().map(|row| row.title.as_str()).collect();
+    let head_titles: BTreeSet<&str> = head_rows.iter().map(|row| row.title.as_str()).collect();
+    let new_rows: Vec<&Row> = head_rows
+        .iter()
+        .filter(|row| !base_titles.contains(row.title.as_str()))
+        .collect();
+    let mut mismatches: Vec<String> = base_titles
+        .difference(&head_titles)
+        .map(|title| {
+            format!(
+                "the register row **{}** is GONE at HEAD — a row of this register is struck or \
+                 answered, never deleted",
+                clipped(title, 80)
+            )
+        })
+        .collect();
+    let mut claimed: BTreeSet<&str> = BTreeSet::new();
     for phrase in phrases {
-        if base.contains(phrase.as_str()) {
-            mismatches.push(format!(
-                "`registered: {phrase}` is already in the register at the base — it names a row \
-                 this branch did not add"
-            ));
-            continue;
-        }
-        let holding: Vec<usize> = head_rows
+        let holding: Vec<&&Row> = new_rows
             .iter()
-            .enumerate()
-            .filter(|(_, row)| row.contains(phrase.as_str()))
-            .map(|(at, _)| at)
+            .filter(|row| row.text.contains(phrase.as_str()))
             .collect();
         match holding.as_slice() {
             [one] => {
-                if !claimed_rows.insert(*one) {
+                if !claimed.insert(one.title.as_str()) {
                     mismatches.push(format!(
                         "`registered: {phrase}` names a row another `registered:` line already \
                          claims — two claims, one row"
                     ));
                 }
             }
-            [] => mismatches.push(format!(
-                "`registered: {phrase}` is in no row of the register — a registration with no row"
-            )),
+            [] => {
+                // 🔑 The two cases are told apart, because they are different mistakes: a phrase in
+                // NO row at all, and a phrase in a row this branch did not add (an old one, or one an
+                // edit merely changed).
+                let elsewhere = head_rows
+                    .iter()
+                    .any(|row| row.text.contains(phrase.as_str()));
+                mismatches.push(if elsewhere {
+                    format!(
+                        "`registered: {phrase}` names a row this branch did NOT add — an existing \
+                         row, or one an edit only changed"
+                    )
+                } else {
+                    format!("`registered: {phrase}` is in no row of the register")
+                });
+            }
             many => mismatches.push(format!(
-                "`registered: {phrase}` occurs in {} rows — a phrase must name ONE row",
+                "`registered: {phrase}` occurs in {} new rows — a phrase must name ONE row",
                 many.len()
             )),
         }
     }
-    let added = head_rows.len().saturating_sub(base_rows.len());
-    if phrases.len() != added {
-        mismatches.push(format!(
-            "{} `registered:` line(s) for {added} row(s) the branch added to the register (net)",
-            phrases.len()
-        ));
+    for row in &new_rows {
+        if !claimed.contains(row.title.as_str()) {
+            mismatches.push(format!(
+                "the branch adds the register row **{}** and no `registered:` line claims it",
+                clipped(&row.title, 80)
+            ));
+        }
     }
     mismatches
 }
@@ -295,12 +361,12 @@ pub(crate) fn file_list_mismatches(
 ) -> Vec<String> {
     let mut mismatches: Vec<String> = touched
         .difference(listed)
-        .map(|path| format!("`{path}` is touched by the branch and not in the File List"))
+        .map(|path| format!("`{path}` is touched by the branch and no `file:` line carries it"))
         .collect();
     mismatches.extend(
-        listed
-            .difference(touched)
-            .map(|path| format!("`{path}` is in the File List and not touched by the branch")),
+        listed.difference(touched).map(|path| {
+            format!("a `file:` line carries `{path}`, which the branch does not touch")
+        }),
     );
     mismatches
 }
@@ -324,6 +390,16 @@ pub(crate) struct Checked<'a> {
 fn output(root: &Path, program: &str, args: &[&str], target_dir: Option<&Path>) -> Result<String> {
     let mut command = Command::new(program);
     command.args(args).current_dir(root);
+    // ⚠️ **Inherited `GIT_*` retargets every git call** — run from inside a hook, git exports them and
+    // the checker would read another tree entirely (the blind layer).
+    for stray in [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+    ] {
+        command.env_remove(stray);
+    }
     if let Some(dir) = target_dir {
         command.env("CARGO_TARGET_DIR", dir);
     }
@@ -348,25 +424,69 @@ fn output(root: &Path, program: &str, args: &[&str], target_dir: Option<&Path>) 
 ///
 /// A command that could not run at all — answered by the caller as `2`.
 pub(crate) fn check(story_path: &Path, env: &Checked<'_>) -> Result<u8> {
-    let git = |args: &[&str]| output(env.root, "git", args, None);
+    Ok(reported(story_path, env)?.0)
+}
+
+/// The same, with the mismatches it printed — so a test can assert WHICH rule fired.
+///
+/// 🔴 **The review's own lesson**: every planted defect asserted the exit CODE alone, and mutation X4
+/// had already shown what that costs — a plant reddening through a rule other than the one it names.
+///
+/// # Errors
+///
+/// A command that could not run at all.
+pub(crate) fn reported(story_path: &Path, env: &Checked<'_>) -> Result<(u8, Vec<String>)> {
+    // 🔑 `-c core.quotePath=false`: with the default, `git diff --name-only` renders `docs/café.md` as
+    // an escaped, quoted string, so an HONEST File List could never match (measured by two layers) — a
+    // check that cannot be satisfied by the truth is worse than none.
+    let git = |args: &[&str]| {
+        let mut full = vec!["-c", "core.quotePath=false"];
+        full.extend_from_slice(args);
+        output(env.root, "git", &full, None)
+    };
+    // 🔴 **The story must be a file of THIS repository** — an absolute path outside it validated a
+    // lying record inside it, measured exit 0 by the edge layer, because `join` replaces the root and
+    // the dirty-tree check never saw that file.
+    if story_path.is_absolute() || story_path.components().any(|c| c.as_os_str() == "..") {
+        println!(
+            "🔴 CANNOT CHECK: {} is not a path inside the repository",
+            story_path.display()
+        );
+        return Ok((CANNOT_CHECK, Vec::new()));
+    }
     let story = std::fs::read_to_string(env.root.join(story_path))
         .with_context(|| format!("reading {}", story_path.display()))?;
     let record = match parse_block(&story) {
         Ok(record) => record,
         Err(why) => {
             println!("🔴 CANNOT CHECK: {why}");
-            return Ok(CANNOT_CHECK);
+            return Ok((CANNOT_CHECK, vec![why]));
         }
     };
     // 🔴 A DIRTY TREE makes the three checks read three different trees: `--list` compiles the
     // working tree while `git diff` reads commits (the validation measured the story's own untracked
     // file reddening "listed and not touched").
-    if !git(&["status", "--porcelain"])?.trim().is_empty() {
-        println!("🔴 CANNOT CHECK: the tree is dirty — commit first, so every check reads HEAD");
-        return Ok(CANNOT_CHECK);
+    // `--untracked-files=all`, because `status.showUntrackedFiles=no` in a user's config would hide
+    // exactly the files `-- --list` compiles and `git diff` does not see (the blind layer).
+    if !git(&["status", "--porcelain", "--untracked-files=all"])?
+        .trim()
+        .is_empty()
+    {
+        let why = "the tree is dirty — commit first, so every check reads HEAD".to_string();
+        println!("🔴 CANNOT CHECK: {why}");
+        return Ok((CANNOT_CHECK, vec![why]));
     }
     // 🔴 THE BASE IS COMPUTED, never taken on trust: a `base:` one commit up the branch shrank both
     // diffs and hid a touched file — measured exit 0 on the first draft.
+    // 🔴 **`base:` must be a SHA, not a ref**: `base: master` records no commit — it passes today and
+    // refuses the moment `master` moves (measured by two layers).
+    if record.base.len() < 7 || !record.base.chars().all(|c| c.is_ascii_hexdigit()) {
+        println!(
+            "🔴 CANNOT CHECK: `base: {}` is not a commit SHA — a ref records nothing",
+            record.base
+        );
+        return Ok((CANNOT_CHECK, Vec::new()));
+    }
     let fork = git(&["merge-base", "HEAD", MAIN_BRANCH])?
         .trim()
         .to_string();
@@ -384,7 +504,7 @@ pub(crate) fn check(story_path: &Path, env: &Checked<'_>) -> Result<u8> {
              into itself moved its branch point: rebase, do not merge.)",
             record.base
         );
-        return Ok(CANNOT_CHECK);
+        return Ok((CANNOT_CHECK, Vec::new()));
     }
 
     let mut mismatches = Vec::new();
@@ -402,7 +522,7 @@ pub(crate) fn check(story_path: &Path, env: &Checked<'_>) -> Result<u8> {
                 "🔴 CANNOT CHECK: `cargo {}` printed no single count line",
                 args.join(" ")
             );
-            return Ok(CANNOT_CHECK);
+            return Ok((CANNOT_CHECK, Vec::new()));
         };
         match record.counts.get(*name) {
             Some(claimed) if *claimed == real => {}
@@ -420,18 +540,32 @@ pub(crate) fn check(story_path: &Path, env: &Checked<'_>) -> Result<u8> {
         .collect();
     mismatches.extend(file_list_mismatches(&record.files, &touched));
 
-    let at = |rev: &str| git(&["show", &format!("{rev}:{REGISTER}")]).unwrap_or_default();
-    let (base_register, head_register) = (at(&fork), at("HEAD"));
-    let base_rows: BTreeSet<String> = register_rows(&base_register).into_iter().collect();
-    println!(
-        "rows this branch added OR CHANGED in the register (an edited row reads as new text; the \
-         claims are checked against the NET count of rows added):"
-    );
+    // 🔴 A `git show` failure is a REFUSAL, where `unwrap_or_default` made a moved or renamed register
+    // read as empty — after which a record with no `registered:` line passed over nothing (blind).
+    let at = |rev: &str| git(&["show", &format!("{rev}:{REGISTER}")]);
+    let (base_register, head_register) = match (at(&fork), at("HEAD")) {
+        (Ok(base), Ok(head)) => (base, head),
+        _ => {
+            println!(
+                "🔴 CANNOT CHECK: `{REGISTER}` could not be read at the base or at HEAD — has it \
+                 moved?"
+            );
+            return Ok((CANNOT_CHECK, Vec::new()));
+        }
+    };
+    let base_titles: BTreeSet<String> = register_rows(&base_register)
+        .into_iter()
+        .map(|row| row.title)
+        .collect();
+    println!("register rows this branch ADDS (a row is its first bold title; an edit keeps it):");
     for row in register_rows(&head_register)
         .iter()
-        .filter(|row| !base_rows.contains(*row))
+        .filter(|row| !base_titles.contains(&row.title))
     {
-        println!("   + {}", &row[..row.len().min(140)]);
+        // 🔴 **By CHARACTERS, never bytes**: `&text[..140]` panicked (exit 101, outside the 0/1/2
+        // contract) whenever byte 140 fell inside `é`, `—` or `⚠️` — measured by two review layers,
+        // and this register's rows are full of them.
+        println!("   + {}", clipped(&row.text, 140));
     }
     mismatches.extend(registration_mismatches(
         &record.registered,
@@ -441,12 +575,12 @@ pub(crate) fn check(story_path: &Path, env: &Checked<'_>) -> Result<u8> {
 
     if mismatches.is_empty() {
         println!("✅ the record matches the tree");
-        Ok(MATCHES)
+        Ok((MATCHES, mismatches))
     } else {
         for mismatch in &mismatches {
             println!("🔴 {mismatch}");
         }
-        Ok(MISMATCH)
+        Ok((MISMATCH, mismatches))
     }
 }
 
@@ -559,14 +693,8 @@ mod tests {
         let old =
             registration_mismatches(&[normalised("old row about gadgets")], BASE_REGISTER, &head);
         assert!(
-            old.iter()
-                .any(|m| m.contains("already in the register at the base")),
-            "a phrase naming an OLD row: {old:?}"
-        );
-        let short = registration_mismatches(&["o".to_string()], BASE_REGISTER, &head);
-        assert!(
-            !short.is_empty(),
-            "a one-letter phrase names no single new row: {short:?}"
+            old.iter().any(|m| m.contains("did NOT add")),
+            "a phrase naming an OLD row — and the row it names is not a new one: {old:?}"
         );
         let absent =
             registration_mismatches(&[normalised("a row nobody wrote")], BASE_REGISTER, &head);
@@ -575,22 +703,65 @@ mod tests {
         assert!(
             unclaimed
                 .iter()
-                .any(|m| m.contains("0 `registered:` line(s) for 1 row")),
+                .any(|m| m.contains("no `registered:` line claims it")),
             "an added row nobody claimed: {unclaimed:?}"
+        );
+        // 🔴 **A DELETED row is an error** — under the net count it masked an unclaimed added one
+        // (measured exit 0 by two layers).
+        let deleted = registration_mismatches(
+            &[normalised("brand new row about widgets")],
+            BASE_REGISTER,
+            "## New\n\n- ⚠️ **A brand new row about widgets**, owned by 14.5.\n",
+        );
+        assert!(
+            deleted.iter().any(|m| m.contains("is GONE at HEAD")),
+            "the old row disappeared: {deleted:?}"
+        );
+        // Two phrases, one new row — and one phrase in TWO new rows: both carried, both measured
+        // green before this repair (the edge layer mutated each guard and saw 109/109).
+        let two_rows = head_register(
+            "- ⚠️ **A brand new row about widgets**, owned by 14.5.\n\
+             - ⚠️ **Another new row about widgets**, owned by 14.6.\n",
+        );
+        let twice = registration_mismatches(
+            &[
+                normalised("new row about widgets"),
+                normalised("Another new row"),
+            ],
+            BASE_REGISTER,
+            &two_rows,
+        );
+        assert!(
+            twice.iter().any(|m| m.contains("occurs in 2 new rows")),
+            "a phrase in two new rows names neither: {twice:?}"
+        );
+        let same_row = registration_mismatches(
+            &[normalised("A brand new row"), normalised("owned by 14.5")],
+            BASE_REGISTER,
+            &head,
+        );
+        assert!(
+            same_row.iter().any(|m| m.contains("two claims, one row")),
+            "two phrases in one row: {same_row:?}"
         );
     }
 
     #[test]
     fn an_edited_row_is_not_a_registration() {
-        // The old row re-marked ✅ — an EDIT, which counting `+- ` diff lines read as a new row.
-        let head = BASE_REGISTER.replace("An old row", "✅ CLOSED — An old row");
+        // The old row re-marked ✅ — an EDIT. Its TITLE is unchanged, so it is not a new row, and a
+        // phrase found only in what the edit appended names a row this branch did not add.
+        let head =
+            BASE_REGISTER.replace("someone.", "someone. ✅ CLOSED by 14.4c, re-owned to 14.5.");
         assert!(
-            registration_mismatches(&[normalised("A brand new row")], BASE_REGISTER, &head)
+            registration_mismatches(&[normalised("re-owned to 14.5")], BASE_REGISTER, &head)
                 .iter()
-                .any(|m| m.contains("for 0 row(s)")),
-            "the edit adds no row, so a claim of one reds"
+                .any(|m| m.contains("did NOT add")),
+            "an edit is not a registration, whatever text it adds"
         );
-        assert!(registration_mismatches(&[], BASE_REGISTER, &head).is_empty());
+        assert!(
+            registration_mismatches(&[], BASE_REGISTER, &head).is_empty(),
+            "and an edit alone claims nothing"
+        );
     }
 
     #[test]
@@ -599,7 +770,45 @@ mod tests {
         let mismatches = file_list_mismatches(&set(&["a.rs", "c.rs"]), &set(&["a.rs", "b.rs"]));
         assert_eq!(mismatches.len(), 2);
         assert!(mismatches[0].contains("`b.rs` is touched"));
-        assert!(mismatches[1].contains("`c.rs` is in the File List and not touched"));
+        assert!(mismatches[1].contains("a `file:` line carries `c.rs`"));
+    }
+
+    /// The shipped target table and the entry point, which the end-to-end drives through its OWN
+    /// table — story 6.4b's `from_args` shape, which its review found reached by no test at all.
+    #[test]
+    fn the_shipped_targets_name_the_workspace_and_list_only() {
+        let members = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .expect("the workspace root")
+                .join("Cargo.toml"),
+        )
+        .expect("the workspace manifest");
+        assert_eq!(
+            TARGETS.iter().map(|(name, _)| *name).collect::<Vec<_>>(),
+            vec!["bin", "core", "xtask"],
+            "the live count's three targets"
+        );
+        for (name, args) in TARGETS {
+            let package = args[args.iter().position(|a| *a == "-p").expect("a package") + 1];
+            assert!(
+                members.contains(package) || package == "xtask",
+                "{name}: `{package}` is not a member of the workspace"
+            );
+            assert!(args.contains(&"--locked"), "{name}: `--locked`, always");
+            assert_eq!(
+                &args[args.len() - 2..],
+                ["--", "--list"],
+                "{name}: the run LISTS and never filters — `cargo test -- A B` runs nothing (6.4b)"
+            );
+        }
+        // The entry point refuses an argument list it cannot honour, without touching a tree.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        assert!(from_args(&[], root).is_err(), "no story file is a refusal");
+        assert!(
+            from_args(&["a.md".to_string(), "b.md".to_string()], root).is_err(),
+            "two story files is a refusal"
+        );
     }
 
     /// 🔴 **END TO END through `check`, over a scratch repository and a scratch crate** — story
@@ -685,15 +894,23 @@ mod tests {
             targets,
             target_dir: Some(target.clone()),
         };
-        let run = || check(Path::new("story.md"), &checked).expect("the checker runs");
-        assert_eq!(run(), MATCHES, "the honest record matches the tree");
+        let run = || reported(Path::new("story.md"), &checked).expect("the checker runs");
+        assert_eq!(run().0, MATCHES, "the honest record matches the tree");
 
         // Each plant is committed on its own, measured, then undone by a fresh commit of the honest
         // record — so the tree is never dirty when `check` runs (a dirty tree is its own refusal).
-        let plant = |text: String, expected: u8, why: &str| {
+        // 🔴 Each plant asserts the RULE that fired, not only the code: X4 measured a plant reddening
+        // through a rule other than the one it names, and the review found every plant here doing the
+        // same.
+        let plant = |text: String, expected: u8, rule: &str, why: &str| {
             write("story.md", &text);
             git(&["commit", "-q", "-am", why]);
-            assert_eq!(run(), expected, "{why}");
+            let (code, mismatches) = run();
+            assert_eq!(code, expected, "{why}");
+            assert!(
+                expected != MISMATCH || mismatches.iter().any(|m| m.contains(rule)),
+                "{why}: reddened through another rule — {mismatches:?}"
+            );
             write(
                 "story.md",
                 &story(3, &fork, "brand new row about widgets", &all),
@@ -703,11 +920,13 @@ mod tests {
         plant(
             story(2, &fork, "brand new row about widgets", &all),
             MISMATCH,
+            "the live count says lib=2; the tree lists lib=3",
             "a wrong count",
         );
         plant(
             story(3, &fork, "a row nobody wrote", &all),
             MISMATCH,
+            "is in no row of the register",
             "a registration with no row",
         );
         plant(
@@ -718,6 +937,7 @@ mod tests {
                 &["src/lib.rs", "story.md"],
             ),
             MISMATCH,
+            "no `file:` line carries it",
             "a File List missing a touched file",
         );
         // 🔴 The phrase keeps the row's own CASE: written `an old row …` it matched no row at all, and
@@ -726,18 +946,25 @@ mod tests {
         plant(
             story(3, &fork, "old row about gadgets", &all),
             MISMATCH,
+            "did NOT add",
             "a phrase naming an OLD row",
         );
         let later = git(&["rev-parse", "HEAD"]);
         plant(
             story(3, &later, "brand new row about widgets", &all),
             CANNOT_CHECK,
+            "",
             "base = a later commit",
         );
-        plant("# Story, no block\n".to_string(), CANNOT_CHECK, "no block");
+        plant(
+            "# Story, no block\n".to_string(),
+            CANNOT_CHECK,
+            "",
+            "no block",
+        );
 
         write("src/lib.rs", &lib(4));
-        assert_eq!(run(), CANNOT_CHECK, "a dirty tree cannot be checked");
+        assert_eq!(run().0, CANNOT_CHECK, "a dirty tree cannot be checked");
 
         std::fs::remove_dir_all(&root).ok();
         std::fs::remove_dir_all(&target).ok();

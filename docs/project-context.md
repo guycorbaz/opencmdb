@@ -190,7 +190,7 @@ Live status is `_bmad-output/implementation-artifacts/sprint-status.yaml`, not t
 the rows the branch ADDED to `deferred-work.md`, the `file:` lines against
 `git diff --no-renames --name-only <merge-base>...HEAD` — and answers `0` / `1` / `2` like the mutation
 driver. Run it on the story branch's last commit before the merge, and again after every review
-repair; it refuses a dirty tree and a `base:` that is not the branch point, and never reads prose.
+repair; it refuses a dirty tree and a `base:` that is not the branch point, and never reads prose. Its block is four keys, one entry per line, an optional `- ` prefix: `live-count: bin=717 core=191 xtask=110` · `base: <the branch point's SHA>` · `registered: <a phrase of each row the branch ADDS to `deferred-work.md`>` · `file: <each touched path>`. A row of the register is identified by its first **bold title** (Guy, 2026-09-20), so an edit is not a registration and a title that disappears is an error.
 
 **What exists today:** a three-crate workspace that builds and ships. `cargo xtask ci` runs **ten**
 real gates — dependency frontier (D47), DDL binary collation (D64), retired vocabulary (D65), the

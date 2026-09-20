@@ -1178,6 +1178,8 @@ mod tests {
         let clean = line(503, 0, 0) + &line(161, 0, 0) + &line(77, 0, 0) + &line(0, 0, 0);
         assert_eq!(read_run(&clean, Some(0), 4), Outcome::Green);
         let red = line(495, 8, 0) + &line(152, 9, 0) + &line(77, 0, 0) + &line(0, 0, 0);
+        // ⚠️ `Unnamed`: these synthetic lines carry no `failures:` list, and the review found this
+        // assertion weakened to `..`, which asserted nothing at all about the names.
         assert!(
             matches!(
                 read_run(&red, Some(101), 4),
@@ -1185,7 +1187,7 @@ mod tests {
                     tests: 17,
                     clippy: false,
                     gates: false,
-                    ..
+                    names: Names::Unnamed(_)
                 }
             ),
             "17 — the figure `--no-fail-fast` restores, summed across every target"
