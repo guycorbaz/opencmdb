@@ -426,6 +426,7 @@ The binding rows were checked first: `release` / « libérer » stands at `prd.m
 - `a11y/empty-plan.sql`
 - `a11y/kbd-probe.mjs`
 - `docs/manuals/user-manual/user-manual.tex`
+- `docs/manuals/admin-manual/admin-manual.tex` _(added by story 14.4c: the code review's repair touched it and this list omitted it — found by 14.4c's validation measuring this File List against `c605ac4`)_
 - `docs/project-context.md`
 - `CLAUDE.md`
 - `_bmad-output/implementation-artifacts/deferred-work.md`
