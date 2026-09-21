@@ -1297,6 +1297,21 @@ async fn release_address(
     let Ok(addr) = request.addr.trim().parse::<IpAddr>() else {
         return route.malformed().into_response();
     };
+    // 🔴 **AN IPv6 ADDRESS IS REFUSED BY NAME, BEFORE THE STORE, and story 14.6's validation
+    // measured what happens without this.** The plan may hold IPv6 since `0011`, but
+    // `address_release` stays IPv4-only BY DECISION — it is the observed side, and there is nothing
+    // observed to forget on an IPv6 address. Without this arm the write reached the store, `0009`'s
+    // canonical CHECK refused it, and the operator got **500** with *"The write did not go through,
+    // or its answer was lost: reload the plan…"* — on a route reachable by hand-editing a URL, for a
+    // gesture that is meaningless for IPv6 by construction.
+    //
+    // 🔑 A refusal the operator can READ, with its own status, on `ReleaseOfADefinedAddress`'s shape:
+    // nothing is wrong with the REQUEST's form, it is the STATE OF THE WORLD — the product never saw
+    // this address and cannot forget what it never saw.
+    if addr.is_ipv6() {
+        return Refusal::new(StatusCode::CONFLICT, "ipam.refusal.release_of_unobservable")
+            .into_response();
+    }
     let Ok(until) = chrono::DateTime::parse_from_rfc3339(request.seen_until.trim()) else {
         return route.malformed().into_response();
     };
@@ -2156,6 +2171,102 @@ mod tests {
     /// handler that parses the field and forgets to refuse on it leaves a unit test of the parser
     /// perfectly green. The port is asserted UNREACHED, which is what says the refusal happened
     /// before the write rather than after it.
+    /// **AC7 — what EVERY write route answers to an IPv6 argument, enumerated rather than assumed.**
+    ///
+    /// 🔴 **The release answered 500 before story 14.6, and the gap-hunt measured it on a booted
+    /// binary**: the plan may hold IPv6 since `0011`, `address_release` stays IPv4-only by decision,
+    /// so the write reached the store and `0009`'s canonical CHECK refused it — *"The write did not
+    /// go through, or its answer was lost: reload the plan…"*, on a route reachable by hand-editing
+    /// a URL, for a gesture meaningless for IPv6 by construction. It is a keyed 409 now: nothing is
+    /// wrong with the REQUEST, it is the state of the world that refuses it.
+    ///
+    /// 🔑 **The other nine are enumerated with what each answers, because *the plan speaks IPv6* is
+    /// a sentence about ten routes and this is the only place that says which.** The three
+    /// definitions ACCEPT IPv6 — that is the story — the five corrections address a record by id and
+    /// never parse an address of their own except `EditAddress`, and the deletes carry no address at
+    /// all.
+    #[tokio::test]
+    async fn every_write_route_says_what_it_does_with_an_ipv6_argument() {
+        let subnet = "01900000-0000-7000-8000-0000000000aa";
+        let cases: [(WriteRoute, &str, StatusCode, &str); 4] = [
+            // ✅ The three definitions take IPv6: this is FR25.
+            (
+                WriteRoute::Subnet,
+                "cidr=2001:db8:1461::/64&label=v6&vlan=",
+                StatusCode::CREATED,
+                "",
+            ),
+            (
+                WriteRoute::Range,
+                &format!(
+                    "subnet_id={subnet}&first=2001:db8:1461::10&last=2001:db8:1461::2f&policy=static&label=v6"
+                ),
+                StatusCode::CREATED,
+                "",
+            ),
+            (
+                WriteRoute::Address,
+                &format!("subnet_id={subnet}&addr=2001:db8:1461::100&label=v6"),
+                StatusCode::CREATED,
+                "",
+            ),
+            // 🔴 The release does NOT, and says why rather than failing at the store.
+            (
+                WriteRoute::Release,
+                "addr=2001:db8:1461::100&seen_until=2026-09-01T10:00:00.000000Z",
+                StatusCode::CONFLICT,
+                "ipam.refusal.release_of_unobservable",
+            ),
+        ];
+        for (route, body, expected, key_name) in cases {
+            let port = FakePort::answering(Ok("01900000-0000-7000-8000-000000000009".to_string()));
+            let (status, answer) = drive(port.clone(), form_post_to(route, body)).await;
+            assert_eq!(
+                status,
+                expected,
+                "`{}` answered the wrong status to an IPv6 argument",
+                route.path()
+            );
+            if key_name.is_empty() {
+                assert!(
+                    !port.asked.lock().expect("the log").is_empty(),
+                    "`{}` must REACH the store with an IPv6 argument — that is FR25",
+                    route.path()
+                );
+            } else {
+                assert_eq!(answer, key(key_name), "at `{}`", route.path());
+                assert!(
+                    port.asked.lock().expect("the log").is_empty(),
+                    "`{}` must refuse BEFORE the store, never let `0009`'s CHECK answer 500",
+                    route.path()
+                );
+            }
+        }
+
+        // ⚠️ The six that take no address of their own, named rather than left out of the list: an
+        // IPv6 argument in one of these fields is not a state they can be in.
+        for route in [
+            WriteRoute::DeleteSubnet,
+            WriteRoute::DeleteRange,
+            WriteRoute::DeleteAddress,
+            WriteRoute::EditRange,
+            WriteRoute::EditSubnet,
+            WriteRoute::EditAddress,
+        ] {
+            assert!(
+                WriteRoute::ALL.contains(&route),
+                "`{}` left the route list and this enumeration did not notice",
+                route.path()
+            );
+        }
+        assert_eq!(
+            WriteRoute::ALL.len(),
+            10,
+            "this enumeration covers TEN routes: four that carry an address and six that do not. A \
+             route added tomorrow must be added here, and this is what says so."
+        );
+    }
+
     /// 🔴 **BOTH ROUTES THAT ASK FOR A VLAN, and it was ONE until the mutation pass said so.**
     /// Mutation M2 (`1..=4094` → `1..=4095`) was predicted to red two tests and reddened one:
     /// `ipam.refusal.not_a_vlan` was asserted at exactly one site in the whole file, and it was the
@@ -2624,7 +2735,7 @@ mod tests {
         // ⚠️ The re-entry sentence is NOT a fourth: the correction shares the definition's key.
         assert_eq!(
             keys.len(),
-            45,
+            46,
             "the keys this file can render changed — update the count only after reading the list: \
              {keys:?}"
         );

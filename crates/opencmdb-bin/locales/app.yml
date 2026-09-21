@@ -865,7 +865,7 @@ ipam.unobservable.no_offer:
   en: "No address is offered here: the product cannot see what is in use on an IPv6 network."
   fr: "Aucune adresse n'est proposée ici : le produit ne voit pas ce qui est utilisé sur un réseau IPv6."
 ipam.audit.unobservable:
-  en: "Nothing here was checked: the scanner does not reach IPv6, so the product has no observation to compare this subnet's plan against. What it shows below is what you declared."
+  en: "Nothing here was checked: the scanner does not reach IPv6, so the product has no observation to compare the plan of this subnet against. What it shows below is what you declared."
   fr: "Rien ici n'a été vérifié : le scanner n'atteint pas IPv6, donc le produit n'a aucune observation à comparer au plan de ce sous-réseau. Ce qui suit est ce que vous avez déclaré."
 ipam.findings.none:
   en: "Nothing the network has shown contradicts this subnet's plan."
@@ -1058,18 +1058,30 @@ ipam.vlan_note:
   en: "The VLAN is what you declared: the scanner does not read tags. Nothing below this line uses it — the grid, the counts, the ranges, the findings and the offer are all computed across the whole plan — so two subnets sharing one address space show the same records and share one audit."
   fr: "Le VLAN est ce que vous avez déclaré : le scanner ne lit pas les étiquettes. Rien sous cette ligne ne s'en sert — la grille, les compteurs, les plages, les constats et l'offre se calculent sur tout le plan — si bien que deux sous-réseaux partageant un espace d'adressage montrent chacun les enregistrements de l'autre et partagent un audit."
 
+# 🔴 Story 14.6: the three address fields carry the example of the SUBNET IN FORCE's family. A
+# resolvable key rendering a correct string in the WRONG CONTEXT is story 6b.6's `role_key` defect,
+# and neither a test nor a browser gate can see it — the carrier is `family_examples` and this pair.
 ipam.form.first:
   en: "First address — for example 192.0.2.10"
   fr: "Première adresse — par exemple 192.0.2.10"
 ipam.form.last:
   en: "Last address — for example 192.0.2.20"
   fr: "Dernière adresse — par exemple 192.0.2.20"
+ipam.form.first_v6:
+  en: "First address — for example 2001:db8::10"
+  fr: "Première adresse — par exemple 2001:db8::10"
+ipam.form.last_v6:
+  en: "Last address — for example 2001:db8::20"
+  fr: "Dernière adresse — par exemple 2001:db8::20"
 ipam.form.policy:
   en: "What it is meant for"
   fr: "Ce à quoi elle est destinée"
 ipam.form.addr:
   en: "Address — for example 192.0.2.9"
   fr: "Adresse — par exemple 192.0.2.9"
+ipam.form.addr_v6:
+  en: "Address — for example 2001:db8::9"
+  fr: "Adresse — par exemple 2001:db8::9"
 ipam.form.submit:
   en: "Define"
   fr: "Définir"
@@ -1264,6 +1276,12 @@ ipam.refusal.malformed_edit_subnet:
 ipam.refusal.malformed_release:
   en: "Malformed request: the form must carry the address to release."
   fr: "Requête mal formée : le formulaire doit porter l'adresse à libérer."
+# 🔴 Story 14.6: releasing an IPv6 address is refused BY NAME rather than reaching `0009`'s CHECK and
+# answering 500. A release forgets what the network showed; the product never sees IPv6, so there is
+# nothing to forget — the request's form is fine and the state of the world is what refuses it.
+ipam.refusal.release_of_unobservable:
+  en: "There is nothing to release: the product does not observe IPv6, so it has never seen anything on this address."
+  fr: "Il n'y a rien à libérer : le produit n'observe pas IPv6, il n'a donc jamais rien vu sur cette adresse."
 ipam.refusal.release_of_defined:
   en: "This address is defined in the plan, so there is nothing to release. To stop the plan holding it, remove the address."
   fr: "Cette adresse est définie dans le plan : il n'y a rien à libérer. Pour que le plan cesse de la retenir, supprimez l'adresse."

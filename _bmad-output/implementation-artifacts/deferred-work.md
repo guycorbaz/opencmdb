@@ -6083,6 +6083,16 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   shipped an unreviewed restructure to buy headroom a hundred lines already bought. 🔑 The
   measurement is recorded so the next story choosing where to cut does not re-take it. **Owner: the
   next story that grows `ipam_page.rs`.**
+  ✅ **CLOSED by story 14.6, which grew it past the ceiling — 2015 code lines, the gate RED.** The
+  three checks are `crates/opencmdb-bin/src/ipam_checks.rs` now (596 lines moved), and the cut cost
+  what this row said it would: the constants, the three handlers and the two shared helpers changed
+  visibility, the router still mounts the same three addresses, and nothing else moved. 🔑 *A
+  registered measurement is what let a story cross a ceiling mid-implementation and take the right
+  cut in one gesture rather than the smallest one twice.* ⚠️ And the split immediately produced a
+  finding of its own: `ipam_page`'s key guard reads `include_str!("ipam_page.rs")`, so nineteen keys
+  left its population **without reddening it** — a smaller list is not a failure. *A guard keyed on a
+  file measures the file, not the concept, and a split is exactly when the two come apart.* The new
+  module carries its own.
 - ⚠️ **Two segments of one CIDR: the GRID shows the other segment's records and the RAIL does not,
   and both halves are deliberate.** Measured by story 14.5's code review: with an address defined in
   segment A only, segment B's grid paints a cell named *defined* and its occupancy reads *1

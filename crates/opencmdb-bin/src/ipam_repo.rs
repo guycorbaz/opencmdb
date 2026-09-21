@@ -1858,6 +1858,75 @@ pub(crate) mod tests {
     /// 🔑 **It answers `IpAddr` since story 14.6**, so the same helper writes an IPv4 or an IPv6
     /// literal and a test that means one cannot silently get the other. The name is kept: `v4` is
     /// what four hundred call sites say, and renaming them would bury the story's real diff.
+    /// **AC8 — an IPv6 row is READ BACK, not skipped, and the migration and the reader are ONE
+    /// commit.**
+    ///
+    /// 🔴 **The intermediate state is SILENT, which is why this test exists rather than a sequencing
+    /// note.** `list_subnets`, `plan_ranges` and `plan_addresses` skip a row this build cannot read
+    /// and name it in a `warn` (story 14.2's review, so one poisoned row does not empty the plan).
+    /// The gap-hunt measured what that costs if `0011` lands and the reader does not: the page
+    /// answers **200** with the operator's IPv6 subnet **absent from the selector**, and nothing on
+    /// screen says so. *A skip is the right behaviour for a row nobody can read and the wrong
+    /// behaviour for every row of a family this build was just taught.*
+    ///
+    /// ⚠️ It reads through the three PLAN readers rather than through `from_canonical`, because the
+    /// defect lives in the join between the stored spelling and the reader — a codec test would pass
+    /// over a reader that never calls it.
+    #[tokio::test]
+    async fn an_ipv6_row_is_read_back_rather_than_skipped() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = ipam_fixture().await else {
+            return;
+        };
+        forget_subnet(&pool, "t-v6").await;
+        let cidr = Subnet::new("2001:db8:1460::".parse().expect("a literal address"), 64)
+            .expect("an IPv6 subnet");
+        let mut conn = pool.acquire().await.expect("a connection");
+        insert_subnet(&mut *conn, "t-v6", cidr, "read me back", 0)
+            .await
+            .expect("an IPv6 subnet is storable since `0011`");
+        insert_range(
+            &mut conn,
+            "t-v6-r",
+            "t-v6",
+            v4("2001:db8:1460::10"),
+            v4("2001:db8:1460::2f"),
+            IpPolicy::Static,
+            "servers",
+        )
+        .await
+        .expect("an IPv6 range");
+        insert_address(&mut conn, "t-v6-a", "t-v6", v4("2001:db8:1460::100"), "nas")
+            .await
+            .expect("an IPv6 address");
+        drop(conn);
+
+        let listed = list_subnets(&pool).await.expect("the plan reads back");
+        assert!(
+            listed.iter().any(|planned| planned.subnet == cidr),
+            "the IPv6 subnet was SKIPPED — the operator's plan is missing a row and the page still \
+             answers 200: {:?}",
+            listed.iter().map(|p| p.subnet.cidr()).collect::<Vec<_>>()
+        );
+        let mut conn = pool.acquire().await.expect("a connection");
+        let ranges = plan_ranges(&mut *conn).await.expect("the ranges read back");
+        assert!(
+            ranges
+                .iter()
+                .any(|(first, _, _)| *first == v4("2001:db8:1460::10")),
+            "the IPv6 range was skipped"
+        );
+        let addresses = plan_addresses(&mut *conn)
+            .await
+            .expect("the addresses read back");
+        assert!(
+            addresses.contains(&v4("2001:db8:1460::100")),
+            "the IPv6 address was skipped"
+        );
+        drop(conn);
+        forget_subnet(&pool, "t-v6").await;
+    }
+
     /// **AC5 — `size()` SATURATES and cannot shift by 64 or more.**
     ///
     /// 🔴 **The obvious spelling is a RELEASE-ONLY HANG, and story 14.6's validation measured both
