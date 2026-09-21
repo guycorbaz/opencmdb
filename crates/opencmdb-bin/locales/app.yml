@@ -1135,9 +1135,12 @@ ipam.refusal.label_too_long:
   fr: "Cette étiquette est trop longue : 120 caractères au maximum."
 # 🔴 ONE PER RECORD: a single sentence told a re-entered ADDRESS that the plan already held that
 # SUBNET (story 14.2b's review, measured 409).
+# 🔴 Story 14.5 rewrote this sentence rather than adding one beside it. Since `0010` the key it
+# rides is `(base, prefix_len, vlan)`, so the CIDR alone no longer decides — and an operator who can
+# see that same CIDR under another tab is owed the RULE, not a flat contradiction.
 ipam.refusal.already_defined_subnet:
-  en: "The plan already holds that subnet."
-  fr: "Le plan contient déjà ce sous-réseau."
+  en: "The plan already holds that address space — an address space is declared once per VLAN."
+  fr: "Le plan contient déjà cet espace d'adressage — un espace d'adressage ne se déclare qu'une fois par VLAN."
 ipam.refusal.already_defined_range:
   en: "The plan already holds that range."
   fr: "Le plan contient déjà cette plage."
@@ -1197,6 +1200,9 @@ ipam.done.edit_range:
 ipam.done.edit_address:
   en: "The address now reads as you corrected it."
   fr: "L'adresse correspond maintenant à votre correction."
+ipam.done.edit_subnet:
+  en: "The subnet now reads as you corrected it."
+  fr: "Le sous-réseau correspond maintenant à votre correction."
 # 🔴 Story 14.4 SPLITS what one sentence used to serve. `RepositoryError::NotFound` answered
 # "that subnet is not in the plan" on EVERY route, so an edit of a range the plan no longer holds
 # told the operator their subnet was gone — a sentence that is false and that sends them to look in
@@ -1234,6 +1240,11 @@ ipam.refusal.malformed_edit_range:
 ipam.refusal.malformed_edit_address:
   en: "Malformed request: the form must carry the identifier of the address, the address itself and a label."
   fr: "Requête mal formée : le formulaire doit porter l'identifiant de l'adresse, l'adresse elle-même et une étiquette."
+# Story 14.5 — a subnet correction carries its identifier, a label and a VLAN, and NEVER its CIDR:
+# the request type has no field for one, so the form cannot offer to move a subnet off its children.
+ipam.refusal.malformed_edit_subnet:
+  en: "Malformed request: the form must carry the identifier of the subnet, a label and a VLAN."
+  fr: "Requête mal formée : le formulaire doit porter l'identifiant du sous-réseau, une étiquette et un VLAN."
 # Story 14.4b — the release, the binding gesture `release` / « libérer » (prd.md:1002).
 ipam.refusal.malformed_release:
   en: "Malformed request: the form must carry the address to release."

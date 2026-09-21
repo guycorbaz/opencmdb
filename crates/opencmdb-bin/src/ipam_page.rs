@@ -998,7 +998,7 @@ async fn plan_data(
     let Some(chosen) = chosen else {
         return Ok(unknown_subnet_body(&subnets, &outside_only));
     };
-    let (id, subnet) = (chosen.id, chosen.subnet);
+    let (id, subnet) = (chosen.id.clone(), chosen.subnet);
     let audit = Audit {
         plan: &plan,
         network: &network,
@@ -1013,7 +1013,7 @@ async fn plan_data(
         // DECLARED, so that reason does not carry — and a subnet too large to draw is exactly where
         // an operator most needs the controls that correct it.
         let rail = RailLists::new(
-            id.clone(),
+            &chosen,
             &ipam_repo::correctable_ranges_in(pool, &id).await?,
             &ipam_repo::correctable_addresses_in(pool, &id).await?,
         );
@@ -1031,7 +1031,7 @@ async fn plan_data(
     // subnet actually owns, because a control that edits another subnet's record from this page is
     // a gesture whose effect the operator cannot see.
     let rail = RailLists::new(
-        id.clone(),
+        &chosen,
         &ipam_repo::correctable_ranges_in(pool, &id).await?,
         &ipam_repo::correctable_addresses_in(pool, &id).await?,
     );
@@ -1381,6 +1381,8 @@ pub(crate) struct IpamForms {
     edit_range_route: &'static str,
     /// Where an address row's correction posts.
     edit_address_route: &'static str,
+    /// Where the subnet's own correction posts — its label and its VLAN, never its CIDR (14.5).
+    edit_subnet_route: &'static str,
     /// Where a removal control asks, before it fires, what the deletion would change (decision 3).
     delete_check_route: &'static str,
     /// Where a finding's release posts (story 14.4b).
@@ -1426,6 +1428,7 @@ impl IpamForms {
             delete_address_route: route_of(WriteRoute::DeleteAddress),
             edit_range_route: route_of(WriteRoute::EditRange),
             edit_address_route: route_of(WriteRoute::EditAddress),
+            edit_subnet_route: route_of(WriteRoute::EditSubnet),
             delete_check_route: DELETE_CHECK_PATH,
             release_route: route_of(WriteRoute::Release),
             subnet_id,
@@ -1529,6 +1532,16 @@ pub(crate) struct RailAddressRow {
 pub(crate) struct RailLists {
     /// The subnet in force, whose own removal the rail offers.
     subnet_id: String,
+    /// What the operator calls it, as its correction form pre-fills it.
+    subnet_label: String,
+    /// How the selector names it — the CIDR, its VLAN and its label. 🔑 It is what the subnet's two
+    /// controls say, because *"Correct — Subnet"* is byte-identical across every subnet in the plan
+    /// and the keyboard gate cannot see that: it tests DISTINCTNESS and that name is distinct.
+    subnet_name: String,
+    /// Its VLAN as the form carries it — EMPTY for none, because *none* is what an empty field
+    /// means on the way in (`parse_vlan`) and a `0` pre-filled here would be a number the operator
+    /// never typed and cannot mean.
+    subnet_vlan: String,
     /// Its declared ranges.
     ranges: Vec<RailRangeRow>,
     /// Its defined addresses.
@@ -1538,12 +1551,19 @@ pub(crate) struct RailLists {
 impl RailLists {
     /// Build the rail's lists from what the adapter read.
     pub(crate) fn new(
-        subnet_id: String,
+        chosen: &ipam_repo::PlannedSubnet,
         ranges: &[(String, Ipv4Addr, Ipv4Addr, IpPolicy, String)],
         addresses: &[(String, Ipv4Addr, String)],
     ) -> Self {
         Self {
-            subnet_id,
+            subnet_id: chosen.id.clone(),
+            subnet_label: chosen.label.clone(),
+            subnet_name: tab_label(chosen),
+            subnet_vlan: if chosen.vlan == 0 {
+                String::new()
+            } else {
+                chosen.vlan.to_string()
+            },
             ranges: ranges
                 .iter()
                 .map(|(id, first, last, policy, label)| RailRangeRow {
@@ -1971,7 +1991,7 @@ mod tests {
     /// headings, both *nothing here yet* sentences and the subnet's removal control all render. The
     /// template's `None` arm renders no markup at all, and a comment nearby describes that one.
     fn no_rail() -> RailLists {
-        RailLists::new("s1".to_string(), &[], &[])
+        RailLists::new(&planned("s1", office(), "Office", 0), &[], &[])
     }
 
     /// A rail carrying one of each, which is what makes the FOUR per-row controls RENDER at all.
@@ -1988,7 +2008,10 @@ mod tests {
     /// satisfy a test.
     fn rail_with_rows() -> RailLists {
         RailLists::new(
-            "s1".to_string(),
+            // 🔑 A VLAN the fixture DECLARES, so the correction form's pre-fill is measured rather
+            // than assumed: with 0 here the field would be empty whether the code read the subnet's
+            // VLAN or read nothing at all.
+            &planned("s1", office(), "Office", 10),
             &[(
                 "r-1".to_string(),
                 v4("192.0.2.10"),
@@ -3120,6 +3143,98 @@ mod tests {
             ],
             &[v4("192.0.2.9"), v4("192.0.2.90")],
         )
+    }
+
+    /// 🔴 **AC4 of story 14.5 — the selector's property is DISTINCTNESS, not decoration.** Since the
+    /// plan may hold one CIDR twice, two subnets with the same CIDR and empty labels rendered two
+    /// byte-identical links to different destinations — measured by this story's validation, and no
+    /// gate in this project can see it. The VLAN is what tells them apart.
+    ///
+    /// ⚠️ And a VLAN of **0 renders nothing**: 0 is the sentinel for *none*, so *"VLAN 0"* would state
+    /// something false about the plan.
+    #[test]
+    fn no_two_selector_tabs_share_an_accessible_name() {
+        let both = [
+            planned("t-10", office(), "", 10),
+            planned("t-20", office(), "", 20),
+            planned("t-none", office(), "", 0),
+        ];
+        let names: Vec<String> = both.iter().map(tab_label).collect();
+        assert_eq!(
+            names,
+            vec![
+                format!(
+                    "192.0.2.0/24 · {}",
+                    rust_i18n::t!("ipam.vlan_tab", vlan = 10)
+                ),
+                format!(
+                    "192.0.2.0/24 · {}",
+                    rust_i18n::t!("ipam.vlan_tab", vlan = 20)
+                ),
+                "192.0.2.0/24".to_string(),
+            ],
+            "the VLAN names the segment, and *none* names nothing"
+        );
+        assert_eq!(
+            names
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            names.len(),
+            "no two tabs carry the same accessible name — the property, not the appearance"
+        );
+        assert!(
+            !names.iter().any(|name| name.contains("VLAN 0")),
+            "0 is the sentinel for *none*: rendering it would state something false"
+        );
+        // The label still follows the VLAN, so an operator who names their segments reads both.
+        assert_eq!(
+            tab_label(&planned("t-x", office(), "Office", 30)),
+            format!(
+                "192.0.2.0/24 · {} · Office",
+                rust_i18n::t!("ipam.vlan_tab", vlan = 30)
+            )
+        );
+    }
+
+    /// AC4 — the note that says what the VLAN does NOT reach is rendered when a subnet declares one,
+    /// and never before: until then it would describe a distinction the plan does not make.
+    #[test]
+    fn the_vlan_note_appears_only_once_a_subnet_declares_one() {
+        let whole = offer_of(&[], &[]);
+        let quiet = quiet();
+        let audit = Audit {
+            plan: &whole,
+            network: &quiet,
+            subnet: Some(office()),
+        };
+        let note = rust_i18n::t!("ipam.vlan_note").to_string();
+        let view = PlanView::derive(office(), &[], &[]);
+        let without = render_plan(
+            &[planned("s1", office(), "Office", 0)],
+            "s1",
+            &view,
+            &audit,
+            no_rail(),
+        );
+        assert!(
+            !without.contains(&note),
+            "no subnet declares a VLAN, so the page says nothing about one"
+        );
+        let with = render_plan(
+            &[
+                planned("s1", office(), "Office", 0),
+                planned("s2", office(), "Workshop", 20),
+            ],
+            "s1",
+            &view,
+            &audit,
+            no_rail(),
+        );
+        assert!(
+            with.contains(&note),
+            "one declared VLAN is enough: the note explains what the whole screen does with it"
+        );
     }
 
     /// Story 14.4b's code review, decision 3 — the release's confirmation rides in the URL and is

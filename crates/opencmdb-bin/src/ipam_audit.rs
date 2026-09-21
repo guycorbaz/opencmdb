@@ -81,14 +81,20 @@ impl Seen {
 /// decision 5 buys and nobody had written down.** `192.168.1.10` is the ordinary address of a
 /// machine on every private network there is: two of them, in two separate broadcast domains, are
 /// two hardware addresses on one IPv4 and are reported as « Conflit d'adresse » by
-/// [`Plan::is_conflict`] — *reused private space read as a duplicate*. It is the price of decision 5,
-/// which merges because the PLAN has no VLAN axis (FR21's VLAN half is Epic 14 scope and outside the
-/// arbitrations), so an address is one address here whatever domain saw it.
+/// [`Plan::is_conflict`] — *reused private space read as a duplicate*.
+///
+/// 🔴 **THE DAY NAMED HERE HAS COME AND THE MERGE IS UNCHANGED, which is a DECISION and no longer a
+/// consequence.** This sentence read *"the plan has no VLAN axis"* until story 14.5, which gave it
+/// one (`0010`) — and the audit still merges, because the VLAN the plan now carries is DECLARED by
+/// the operator while an `l2_domain` is OBSERVED by a connector, and nothing in this product relates
+/// the two. Joining them would mean deciding that a subnet's declared VLAN 10 is the domain a
+/// connector calls `…-7000-…`, which is an identity claim no evidence supports. Guy's decision of
+/// 2026-09-21: **the audit is VLAN-blind, and the screen SAYS so** (`ipam.vlan_note`).
 ///
 /// ⚠️ **Not reachable on the shipped product and tested anyway**: the connector reports one
-/// `l2_domain`, the nil UUID, so the second domain needs a second connector. The day FR21 lands, the
-/// plan gains a VLAN and this merge is what must be revisited — registered rather than left to be
-/// rediscovered by whoever meets the finding on a real network.
+/// `l2_domain`, the nil UUID, so the second domain needs a second connector. What would change this
+/// is a connector that reads a tag — then the observed side has a segment of its own and the join
+/// stops being a guess. Registered rather than left to be rediscovered on a real network.
 pub(crate) fn merge_sightings(sightings: &[Sighting]) -> BTreeMap<Ipv4Addr, Seen> {
     let mut seen: BTreeMap<Ipv4Addr, Seen> = BTreeMap::new();
     for sighting in sightings {
@@ -900,10 +906,11 @@ mod tests {
     /// ordinary private address in two separate broadcast domains are two hardware addresses on one
     /// IPv4 here, and the screen calls it « Conflit d'adresse ».
     ///
-    /// ⚠️ It is the PRICE of decision 5 and not a defect to fix in this story: the plan has no VLAN
-    /// axis (FR21's VLAN half is outside Epic 14's arbitrations), so an address is one address
-    /// whatever domain saw it. Registered, and pinned here so the day FR21 lands this test is what
-    /// says the behaviour changed.
+    /// ⚠️ It is the PRICE of decision 5 and it SURVIVED story 14.5, which is the point of rewriting
+    /// this reason rather than deleting the test. The plan HAS a VLAN axis now; it is a DECLARED
+    /// one, and an `l2_domain` is an OBSERVED one, so relating them would be an identity claim no
+    /// evidence supports. The behaviour is unchanged and the reason is not — and this test is what
+    /// would say so the day a connector reads a tag.
     #[test]
     fn one_address_in_two_l2_domains_is_read_as_a_conflict() {
         let plan = plan();
@@ -916,7 +923,8 @@ mod tests {
             kinds(&findings),
             vec![(v4("192.0.2.20"), Some(FindingKind::Gap), true)],
             "two DIFFERENT hardware addresses in two domains read as a conflict — the merge is what \
-             makes it one address, and the plan has no VLAN to tell the two apart"
+             makes it one address, and the plan's VLAN cannot tell them apart because it is declared \
+             where the domain is observed"
         );
     }
 
@@ -1714,6 +1722,68 @@ mod tests {
         assert!(
             !read.keys().any(|addr| *addr == v4("100.64.148.9")),
             "and the unreadable one is skipped — the address stays held"
+        );
+    }
+
+    /// 🔴 **AC5 of story 14.5 — the audit is VLAN-BLIND, and this test MEASURES what that costs.**
+    ///
+    /// The plan may hold one CIDR twice since `0010`, once per segment. The ranges and the defined
+    /// addresses are read PLAN-WIDE (Guy's decision 2 of 2026-09-10), and [`Subnet`] is `{base,
+    /// prefix_len}` with no VLAN — so the second segment's `dhcp-pool` governs the first segment's
+    /// audit. Guy took that cost knowingly on 2026-09-21 (the alternative undid decision 2), and the
+    /// screen carries the sentence; this is the sentence made executable.
+    ///
+    /// 🔑 **The CONTROL is what makes it mean anything**: the same subnet audited ALONE. Without it
+    /// this test would assert that two identical things are identical, which no mutation can red.
+    #[test]
+    fn one_cidr_in_two_segments_shares_one_audit_and_the_second_changes_the_first() {
+        let cidr = office();
+        let seen = seen_at(&["192.0.2.20"]);
+        let claimed = BTreeSet::new();
+
+        // The CONTROL: segment A alone — a `static` range, so its sighting is a `gap` and the offer
+        // starts at .1.
+        let alone = Plan {
+            subnets: vec![cidr],
+            ranges: vec![(v4("192.0.2.1"), v4("192.0.2.40"), IpPolicy::Static)],
+            defined: BTreeSet::new(),
+        };
+        assert_eq!(
+            kinds(&alone.audit(cidr, &seen, &claimed)),
+            vec![(v4("192.0.2.20"), Some(FindingKind::Gap), false)],
+            "the control: alone, the sighting is a gap"
+        );
+        assert_eq!(
+            alone.next_offerable(cidr, &seen, &BTreeSet::new()),
+            Some(v4("192.0.2.1")),
+            "the control: alone, the offer starts at .1"
+        );
+
+        // The SAME subnet, with a twin in another segment whose own `dhcp-pool` covers the span.
+        let with_twin = Plan {
+            subnets: vec![cidr, cidr],
+            ranges: vec![
+                (v4("192.0.2.1"), v4("192.0.2.40"), IpPolicy::Static),
+                (v4("192.0.2.1"), v4("192.0.2.40"), IpPolicy::DhcpPool),
+            ],
+            defined: BTreeSet::new(),
+        };
+        assert_eq!(
+            kinds(&with_twin.audit(cidr, &seen, &claimed)),
+            vec![(v4("192.0.2.20"), Some(FindingKind::Undeclared), false)],
+            "🔴 the twin turned the FIRST segment's `gap` into `undeclared` — the cost Guy took, and \
+             what the screen's sentence warns about"
+        );
+        assert_eq!(
+            with_twin.next_offerable(cidr, &seen, &BTreeSet::new()),
+            None,
+            "and it emptied the first segment's offer"
+        );
+        assert_eq!(
+            kinds(&with_twin.audit(cidr, &seen, &claimed)),
+            kinds(&with_twin.audit(cidr, &seen, &claimed)),
+            "the two segments are ONE audit: the subnet is its CIDR, and nothing in `Plan` carries a \
+             VLAN — which is what `/ipam`'s note says in words"
         );
     }
 }

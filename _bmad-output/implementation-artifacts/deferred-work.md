@@ -5698,11 +5698,14 @@ One row, and v0.3.0 is what made it live.
   a function kept warm for a use it had not got — `ipam_write.rs`'s own rule about `WriteRoute::paths`.
 - ⚠️ **Decision 5's merge across L2 domains reads REUSED PRIVATE SPACE as a conflict.** `192.168.1.10` in
   two separate broadcast domains is two hardware addresses on one IPv4 here, so `/ipam` calls it
-  « Conflit d'adresse ». It is the price of merging, and the plan has no VLAN axis to tell the two apart
-  (FR21's VLAN half is in Epic 14's scope and outside the arbitrations). Not reachable on the shipped
-  product — the connector reports one `l2_domain`, the nil UUID — and pinned by
-  `one_address_in_two_l2_domains_is_read_as_a_conflict` so the day it changes, a test says so.
-  **Owner: the story that adds the VLAN axis (FR21).**
+  « Conflit d'adresse ». Not reachable on the shipped product — the connector reports one `l2_domain`,
+  the nil UUID — and pinned by `one_address_in_two_l2_domains_is_read_as_a_conflict`.
+  🔴 **STORY 14.5 ADDED THE VLAN AXIS AND THE MERGE IS UNCHANGED — this row's owner delivered, and the
+  answer is a DECISION rather than the fix the row anticipated.** The plan's VLAN is DECLARED by the
+  operator; an `l2_domain` is OBSERVED by a connector; nothing in this product relates the two, and
+  joining them would be an identity claim no evidence supports. Guy, 2026-09-21: the audit is
+  VLAN-blind and the screen says so (`ipam.vlan_note`). **Re-owned: the story that gives a connector a
+  segment of its own** — then the observed side has a VLAN and the join stops being a guess.
 - ⚠️ **A finding's triage link is decided from the DECLARED register, not from the triage queue.** The
   queue raises a `nouveau:` row for an observed IPv4 no declared value claims, from `observation_record`;
   the audit reads story 14.3a's summary, which keeps a sighting after its observation is gone. So an
@@ -5877,7 +5880,9 @@ three independently. These are the ones deferred rather than patched — each wi
   is per-subnet, so two subnets may legally carry ranges with identical bounds — and *a property no
   test can tell from its opposite is a property a refactor removes in silence*. What is owed is a
   fixture with two subnets carrying the same bounds. **Owner: the story that next touches the check**,
-  with M-C6 as its entry price.
+  with M-C6 as its entry price. ⚠️ **Story 14.5 made that fixture ORDINARY rather than contrived**: one
+  CIDR may now be declared once per VLAN, so two subnets carrying ranges with identical bounds is what
+  a two-segment plan looks like — the shape this row calls *legal* is now the shape the screen draws.
 - ⚠️ **A correction disclosure announces its record twice**: the `<summary>` and its submit button both
   render *"Correct — 192.0.2.9"*, so a screen reader meets the same name on the disclosure and on the
   control inside it. Deferred rather than patched: the honest fix gives the button its own label —

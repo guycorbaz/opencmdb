@@ -117,6 +117,30 @@
   </ul>
   {%- endif %}
 
+  {#- The subnet's OWN correction (story 14.5) — its label and its VLAN, and NOTHING else.
+
+       🔴 **There is no CIDR field, and its absence is structural rather than an omission.**
+       `EditSubnetRequest` carries no `base` and no `prefix_len`, so a form that offered to move a
+       subnet off the ranges and addresses hanging from it could not be built here without the route
+       refusing it. Story 6b.4b's idiom: close it in the type, where a comment is carried by nobody.
+
+       🔑 The control names the subnet the SELECTOR's way — CIDR, VLAN, label — because *Correct —
+       Subnet* is byte-identical across every subnet in the plan, and the keyboard gate cannot see
+       that: it tests distinctness, and that name is distinct. -#}
+  <details class="ipam-form">
+    <summary>{{ s.rail_edit }} — {{ rail.subnet_name }}</summary>
+    <form hx-post="{{ forms.edit_subnet_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
+      <input type="hidden" name="id" value="{{ rail.subnet_id }}">
+      <label for="ipam-edit-subnet-label">{{ s.form_label }}</label>
+      <input id="ipam-edit-subnet-label" name="label" required maxlength="120" value="{{ rail.subnet_label }}">
+      <label for="ipam-edit-subnet-vlan">{{ s.form_vlan }}</label>
+      {#- ⚠️ EMPTY for *none*, never `0`: an empty field is what the route reads as *no VLAN*, and a
+           pre-filled zero would be a number the operator never typed and cannot mean. -#}
+      <input id="ipam-edit-subnet-vlan" name="vlan" inputmode="numeric" value="{{ rail.subnet_vlan }}">
+      <button type="submit" class="btn-gesture live">{{ s.rail_edit }} — {{ rail.subnet_name }}</button>
+    </form>
+  </details>
+
   {#- The subnet's own removal, last: it is the gesture that takes everything above it with it, and
        the database refuses it by name while anything is still there. -#}
   <form hx-post="{{ forms.delete_subnet_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
