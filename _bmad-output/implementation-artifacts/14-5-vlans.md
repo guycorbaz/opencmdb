@@ -252,10 +252,31 @@ user manual's IPAM chapter gains the VLAN, which no other criterion owns.
 
 ## Record
 
-- live-count: bin=717 core=191 xtask=110
+- live-count: bin=727 core=191 xtask=110
 - base: d192f11e7f6fd356be2207ce5aaed321ac94f107
+- registered: Two tests carry an UNQUALIFIED `DELETE FROM ip_subnet`
+- registered: is a second, now-registered instance of `repo.rs`'s `file-size` blindness
+- registered: press depends on focus left by an EARLIER check
+- file: .github/workflows/ci.yml
 - file: _bmad-output/implementation-artifacts/14-5-vlans.md
+- file: _bmad-output/implementation-artifacts/deferred-work.md
 - file: _bmad-output/implementation-artifacts/sprint-status.yaml
+- file: a11y/axe-gate.mjs
+- file: a11y/kbd-probe.mjs
+- file: a11y/seed.sql
+- file: crates/opencmdb-bin/assets/app.css
+- file: crates/opencmdb-bin/locales/app.yml
+- file: crates/opencmdb-bin/migrations/0010_subnet_vlan.sql
+- file: crates/opencmdb-bin/src/ipam_audit.rs
+- file: crates/opencmdb-bin/src/ipam_page.rs
+- file: crates/opencmdb-bin/src/ipam_repo.rs
+- file: crates/opencmdb-bin/src/ipam_write.rs
+- file: crates/opencmdb-bin/src/main.rs
+- file: crates/opencmdb-bin/templates/_ipam.html
+- file: crates/opencmdb-bin/templates/_ipam_audit.html
+- file: crates/opencmdb-bin/templates/_ipam_forms.html
+- file: crates/opencmdb-bin/templates/_ipam_rail_lists.html
+- file: docs/manuals/user-manual/user-manual.tex
 
 ### File List
 

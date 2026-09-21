@@ -5172,6 +5172,20 @@ it re-derivable.*
   migration must record its pass here too rather than quietly using a script.**
   **Owner: whichever story next
   writes a migration**, or the driver's next revision.
+  🔴 **STORY 14.5 IS THE THIRD, and it recorded its pass here as this row asks.** `0010`'s four
+  mutations were driven by a purpose-built script (virgin database per mutation, a warm-up that
+  migrates once, a REFUSAL when the mutated migration does not apply — story 14.1's finding built
+  in). **D1** (the key back to `(base, prefix_len)`) red · **D2** (`NOT NULL DEFAULT 0` →
+  `NULL DEFAULT NULL`) **GREEN, refuting the migration header**: the adapter's `vlan` is a `u16` at
+  every site, so no code path can bind NULL and the clause is the SECOND carrier of what the TYPE
+  holds · **D3** (the `CHECK` widened to 65535) green by prediction, the adapter refusing 4095
+  first · **D4** (add-after-drop) green by prediction, because what the order protects is a run
+  that fails BETWEEN the two statements, which no green or red can show. ⚠️ **And the script lied
+  on its first run**, in this project's oldest recorded way: `cargo test A B` passes two filters
+  where cargo accepts one, so D3 ran NOTHING and `grep -q "0 failed"` on an EMPTY result answered
+  *red* — a measurement manufactured from an absence. It refuses both now. 🔑 *A debt three stories
+  route around stops being a debt and becomes a practice* — and this is the third, so the sentence
+  above is no longer a warning but a description.
 - 🔴 **A DDL mutation that leaves INVALID SQL measures the parser, not the guard** — and it reports
   a red indistinguishable from a real one. Measured twice in this story's own pass: deleting a
   `CONSTRAINT` line left a trailing comma, the migration failed, and **101 tests reddened** on a
@@ -6007,3 +6021,26 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   that makes `set_var` unsafe (the blind layer). Pre-existing, story 6.4b's; 14.4c's own tests pass the
   directory to the child instead. **Owner: the next story that touches that test.**
 
+
+## Story 14.5 — the VLAN axis
+
+- 🔴 **Two tests carry an UNQUALIFIED `DELETE FROM ip_subnet`, so the suite WIPES the plan.**
+  `ipam_page.rs:3052` and `sighting_repo.rs:1525` clear the table outright, where every other store
+  test deletes by its own id. The consequence is measured rather than supposed: on a store the
+  accessibility seed had run against, a full `cargo test` reproduced action A3's two collisions only
+  for the tests that ran BEFORE the wipe — the pair had to be measured per test on a freshly seeded
+  store to be deterministic at all. ⚠️ It is not a CI hazard today (CI seeds AFTER the tests, and
+  `AXE_REQUIRE_PLAN` turns an empty plan into *the gate could not run* rather than a pass) and it is
+  a hazard for anyone running the gates and the suite on one store, which is how a developer works.
+  **Owner: the next story that touches either test.**
+- ⚠️ **`ipam_write.rs` is a second, now-registered instance of `repo.rs`'s `file-size` blindness.**
+  The gate stops at the first `#[cfg(test)]` at any nesting, and one sits on a helper inside an
+  `impl` at line 302 — so the gate reads **302** production lines where there are over sixteen
+  hundred. Registered by story 14.5's contexting rather than rediscovered, and it belongs with the
+  `repo.rs` row above: whatever closes one closes both. **Owner: the story that raises the ceiling.**
+- ⚠️ **The kbd gate's press depends on focus left by an EARLIER check, and nothing declares it.**
+  `kbd-probe.mjs` sends `Enter` to whatever holds focus; what puts the intended control there is the
+  check immediately above. Measured at story 14.5: a new check inserted after it left another
+  control focused and the gate RELEASED THE WRONG ADDRESS, reddening three downstream checks that
+  had nothing wrong with them. Closed for that one case by ordering, and the coupling stands for
+  every future check. **Owner: the next story that adds a check to that block.**
