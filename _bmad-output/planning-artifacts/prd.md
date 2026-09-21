@@ -1039,6 +1039,7 @@ governs: one term, one translation, one meaning._
 | Addresses a DHCP server hands out | **dhcp-pool** | **pool DHCP** | The occupant changes **by design**. An `undeclared` address here is NORMAL — that is what a pool is for |
 | Addresses set aside, not to be allocated | **reserved** | **réservé** | Held for a use that has not arrived. Nothing should answer here yet, so an `undeclared` address is an anomaly **and** a surprise |
 | Addresses belonging to the network itself | **infrastructure** | **infrastructure** | Gateway, equipment management, and the network and broadcast addresses. Not host space; **never offered as free** |
+| The segment a subnet belongs to | **vlan** | **VLAN** | The 802.1Q id the operator DECLARES for a subnet (1–4094), or none. ⚠️ **Declared, never observed**: no connector produces one, and the identity engine keeps its own `l2_domain`, which is NOT this word — nor is UniFi's `network_id` (D61). Two subnets carrying the same CIDR in two VLANs are two distinct entries of the plan |
 
 🔑 **The audit needs NO state noun of its own, and that is the point of this axis.** Both of its
 outcomes already have a binding pair: *observed with no plan entry* is `undeclared` (widened above),
@@ -1058,8 +1059,19 @@ that grid on the store** — it carries the retirement, and adding `structural` 
 denylist before then would simply red the build. Until 14.2 lands, this row is a decision taken and
 not yet applied, which is what this sentence exists to say.
 
-⚠️ **VLANs (FR21) and IPv6 (FR25) get no row here.** They are in Epic 14's scope and outside the
-2026-09-10 arbitrations, and a term minted before its screen exists is a term minted by accident.
+✅ **`vlan` was minted on 2026-09-21** (Guy's planning act, PR #166's precedent: the word comes BEFORE the
+story that names a column, because epic constraint (5) forbids a story to extend this table). It joins this
+axis because a VLAN says what a stretch of address space BELONGS TO, which is the same question `static` and
+`dhcp-pool` answer about its intent.
+
+🔴 **The row's second sentence is the load-bearing one.** `l2_domain` is the identity engine's key — *the
+MAC's uniqueness space* — and UniFi's `network_id` is a configuration object that merely correlates with one
+(D61, measured: `client.vlan` MISSING on 48 of 48, one distinct `network_id`). Three words for adjacent
+things on one screen is the synonym problem this table exists to prevent, so the row says which is which and
+the other two stay out of the interface.
+
+⚠️ **IPv6 (FR25) still gets no row**, for the reason the withheld sentence gave: it is story 14.6's, and a
+term minted before its screen exists is minted by accident.
 
 
 ⚠️ **A suffix is a rendering detail, not a term** (Guy, 2026-08-19). The mock renders *"Écart · 1
