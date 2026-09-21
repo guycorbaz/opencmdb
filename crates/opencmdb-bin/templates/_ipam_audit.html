@@ -103,6 +103,21 @@
       {%- when None %}
       <span class="ipam-documented">{{ s.documented_no_question }}</span>
       {%- endmatch %}
+      {#- 🔴 **THE OUTSIDE LIST OFFERS THE RELEASE TOO (story 14.5), and it needs its own condition
+           rather than the findings list's.** An outside row carries `kind: None`, so `row.gap` and
+           `row.undeclared` are both false and `{% if row.gap || row.undeclared %}` renders NOTHING
+           here — the control was absent from the one list where the sleeping machine is most likely
+           to sit, since an address outside every declared subnet is exactly what nobody has planned
+           for. ⚠️ **Unconditional here, and the reason is structural**: an address is *outside* when
+           no subnet of the plan contains it, while a DEFINED address lives in a subnet by its own
+           foreign key and its containment check — so decision 4's refusal (*a defined address cannot
+           be released*) names a row this list cannot hold. The route re-checks anyway; nothing here
+           relies on this paragraph being right. -#}
+      <form hx-post="{{ forms.release_route }}" hx-target="#ipam-form-result" hx-swap="innerHTML">
+        <input type="hidden" name="addr" value="{{ row.address }}">
+        <input type="hidden" name="seen_until" value="{{ row.seen_until }}">
+        <button type="submit" class="btn-gesture live">{{ s.finding_release }} — {{ row.address }}</button>
+      </form>
     </li>
     {%- endfor %}
   </ul>

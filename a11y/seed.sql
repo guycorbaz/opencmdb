@@ -227,8 +227,11 @@ INSERT INTO identity_link
 -- virgin store measures the empty-plan sentence and nothing else, and passes. `AXE_REQUIRE_PLAN=1`
 -- turns that into *the gate could not run*; these rows are what let it run.
 --
--- 🔴 **THE PREFIX LENGTHS ARE /25, AND THAT IS NOT COSMETIC.** `ip_subnet_cidr` is UNIQUE on
--- `(base, prefix_len)`, and `ipam_repo.rs`'s store-backed tests own the three RFC 5737 /24s
+-- 🔴 **THE PREFIX LENGTHS ARE /25, AND THAT IS NOT COSMETIC.** `ip_subnet_cidr_vlan` is UNIQUE on
+-- `(base, prefix_len, vlan)` — `(base, prefix_len)` until story 14.5, and the widening changes
+-- NOTHING here, measured: both these rows and the tests they collided with carry VLAN 0, so the
+-- third column refuses exactly what the second pair did. The two collisions were closed on the TEST
+-- side (`the_store_returns_addresses_in_numeric_order`, `two_overlapping_ranges_at_once…`), and `ipam_repo.rs`'s store-backed tests own the three RFC 5737 /24s
 -- (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) — one CIDR per test, which is story 14.1's
 -- own rule after a panicking test poisoned its successor and inflated every mutation count. Seeding
 -- a /24 here took the name a test needs: measured, FOUR tests went red with
@@ -248,9 +251,18 @@ INSERT INTO identity_link
 -- three of four states measures three of four.
 --
 -- Addresses are RFC 5737 documentation blocks, as everything in this file is.
-INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES
-  ('22222222-0000-0000-0000-00000000a001', '192.000.002.000', 25, 'Office'),
-  ('22222222-0000-0000-0000-00000000a002', '198.051.100.128', 25, 'Workshop');
+--
+-- 🔑 **ONE SUBNET DECLARES A VLAN AND THE OTHER DOES NOT** (story 14.5), so the gates walk a page
+-- carrying BOTH halves: a tab whose accessible name includes its segment, a tab that does not, and
+-- the note saying the plan has a VLAN while the ranges, the findings and the offer do not. With a
+-- VLAN on both, *renders nothing when there is none* would be measured by nothing; with one on
+-- neither, the note and the enriched tab would not exist on any page a browser opens.
+-- ⚠️ It is NOT here to dissolve a test collision — that was refused (§0.6): a seed shaped around a
+-- test's namespace is a fixture the next test reshapes again. The two collisions moved on the TEST
+-- side, and `0010` alone was measured to dissolve neither.
+INSERT INTO ip_subnet (id, base, prefix_len, label, vlan) VALUES
+  ('22222222-0000-0000-0000-00000000a001', '192.000.002.000', 25, 'Office', 10),
+  ('22222222-0000-0000-0000-00000000a002', '198.051.100.128', 25, 'Workshop', 0);
 
 INSERT INTO ip_range (id, subnet_id, first_addr, last_addr, policy, label) VALUES
   ('33333333-0000-0000-0000-00000000b001', '22222222-0000-0000-0000-00000000a001',

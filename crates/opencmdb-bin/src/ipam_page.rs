@@ -3307,14 +3307,22 @@ mod tests {
             body.contains("10.0.0.7</span>"),
             "the premise: the outside address IS listed"
         );
+        // 🔴 **THIS ASSERTION WAS ITS OWN OPPOSITE UNTIL STORY 14.5**, and the flip is the
+        // criterion rather than a loosened guard: it read *"the outside list offers no release"*,
+        // which was TRUE of 14.4b's screen and was a hole rather than a decision — an address
+        // outside every declared subnet is precisely where a machine nobody planned for sits, so
+        // the one list the control was missing from is the one that needed it most. ⚠️ It was
+        // missing because the outside rows carry `kind: None`, so the findings list's
+        // `row.gap || row.undeclared` renders nothing for them — *a condition doing duty as a
+        // decision*.
         assert!(
-            !body.contains(&control("10.0.0.7")),
-            "the outside list offers no release (decision 2 puts it on the subnet's findings)"
+            body.contains(&control("10.0.0.7")),
+            "an address outside every subnet carries its release too (AC7)"
         );
         assert_eq!(
             body.matches("hx-post=\"/ipam/release\"").count(),
-            2,
-            "exactly one release per releasable finding"
+            3,
+            "exactly one release per releasable row — two findings and the outside address"
         );
         let name = format!(
             "{} — 192.0.2.20</button>",

@@ -125,6 +125,16 @@ const REQUIRE_PLAN = process.env.AXE_REQUIRE_PLAN === "1";
 // a seeded run with no finding — or without both a `gap` and an `undeclared` to compare — into *the
 // gate could not run*, never a pass.
 const REQUIRE_AUDIT = process.env.AXE_REQUIRE_AUDIT === "1";
+// 🔴 **STORY 14.5's VLAN IS THE SAME SHAPE A THIRD TIME.** The selector tab that names a segment and
+// the note saying the plan carries a VLAN while the ranges, the findings and the offer do not exist
+// only when a subnet DECLARES one — so over a plan with no VLAN anywhere this gate would walk a
+// screen from which the whole story is absent and report a pass. `a11y/seed.sql` gives ONE of its two
+// subnets a VLAN and deliberately leaves the other without, so both halves are on one page;
+// `AXE_REQUIRE_VLAN=1` (CI sets it) turns a run that finds neither into *the gate could not run*.
+const REQUIRE_VLAN = process.env.AXE_REQUIRE_VLAN === "1";
+// The note's own class. A CLASS and not its text, because the text is translated and this gate runs
+// in the default locale — the rule `PLAN_CELL` and `GESTURE` already follow.
+const VLAN_NOTE = "p.ipam-vlan-note";
 // An address the seed shows in use, typed into the address field to reach the warning.
 const SEEN_ADDRESS = "192.0.2.20";
 // 🔴 **THE ONE `/ipam` STATE THE GATE WAS CONFIGURED NEVER TO REACH.** `a11y/seed.sql` always
@@ -317,6 +327,10 @@ async function main() {
   let auditIndistinguishable = null;
   // Decision 8's marker, measured in the browser because no rule and no guard can see it.
   let markerFailure = null;
+  // Story 14.5: two selector tabs carrying one accessible NAME. A product defect, not a harness one
+  // — the page renders two links a keyboard user cannot tell apart — so it joins `failing` rather
+  // than answering 2.
+  let tabNameClash = null;
   // A product regression the warning state reveals: the form is there, the store holds the
   // sighting, and no warning arrives. 🔴 It was `cannotRun` (exit 2) until the code review — *the
   // gate could not run* and *the product stopped warning* are not the same answer, and the second
@@ -378,6 +392,50 @@ async function main() {
           cannotRun(
             `${PLAN_ROUTE} carries no free cell or no uncovered cell, so the pair this check ` +
               `exists to compare is not on the page. The seed must draw both.`,
+          );
+        }
+
+        // ── Story 14.5: the VLAN is on the screen, and the tabs stay distinct ──────────────
+        // 🔑 **The PROPERTY is the criterion, not the appearance** (AC4): no two selector tabs may
+        // carry the same accessible name. A Rust test asserts it over what the page renders; only a
+        // browser can read the name the platform COMPUTES, which is what this measures — and it is
+        // where a label that renders as whitespace, or a VLAN suffix lost to a CSS rule, would show.
+        const vlan = await page.evaluate((noteSelector) => {
+          // 🔑 `nav.filters` is what `/ipam` renders its selector as, in BOTH branches (the drawn
+          // plan and the one too large to draw). Scoped to `main` so a navigation filter elsewhere
+          // on the page could never be mistaken for a subnet tab.
+          const tabs = [...document.querySelectorAll("main nav.filters a.filter")];
+          return {
+            note: document.querySelector(noteSelector) !== null,
+            names: tabs.map((tab) => (tab.textContent ?? "").replace(/\s+/g, " ").trim()),
+          };
+        }, VLAN_NOTE);
+        const duplicates = vlan.names.filter(
+          (name, i) => vlan.names.indexOf(name) !== i,
+        );
+        if (duplicates.length > 0) {
+          tabNameClash =
+            `two selector tabs carry the SAME accessible name ` +
+            `(${[...new Set(duplicates)].join(", ")}), so a keyboard user cannot tell which ` +
+            `segment of the plan a link leads to`;
+          console.log(`🔴 ${PLAN_ROUTE}  ${tabNameClash}`);
+        }
+        if (!vlan.note) {
+          if (REQUIRE_VLAN) {
+            cannotRun(
+              `${PLAN_ROUTE} carries no ${VLAN_NOTE}: no subnet in this store declares a VLAN, so ` +
+                `the tab that names a segment and the sentence saying the audit ignores it are ` +
+                `both absent. Seed a VLAN (a11y/seed.sql) before the gate runs.`,
+            );
+          }
+          console.log(
+            `⚠️  ${PLAN_ROUTE} declares no VLAN: story 14.5's screen was NOT measured. ` +
+              `Set AXE_REQUIRE_VLAN=1 to make that a refusal rather than a gap.`,
+          );
+        } else {
+          console.log(
+            `   ${PLAN_ROUTE}: the VLAN note is on the page and ${vlan.names.length} selector ` +
+              `tab(s) carry distinct names`,
           );
         }
 
@@ -651,6 +709,9 @@ async function main() {
   }
   if (markerFailure !== null) {
     failing.push(`${PLAN_ROUTE} (the seen marker)`);
+  }
+  if (tabNameClash !== null) {
+    failing.push(`${PLAN_ROUTE} (two selector tabs share a name)`);
   }
   if (warningFailure !== null) {
     failing.push(`${PLAN_ROUTE} (the address warning did not appear)`);
