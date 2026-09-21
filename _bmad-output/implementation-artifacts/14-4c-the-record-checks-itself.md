@@ -1,6 +1,6 @@
 # Story 14.4c: The record checks itself
 
-Status: review
+Status: done
 
 🔑 **In NO epic file** — created by Epic 14's PARTIAL retrospective (`epic-14-retro-2026-09-19.md`,
 actions **A1** and **A2**; Guy, 2026-09-19), sequenced BEFORE 14.5 so the two remaining Epic 14 stories'
@@ -334,3 +334,4 @@ The `## Record` block's `file:` lines are this story's File List (checked by `ca
   (all four (a)), implemented, mutation-passed (9 ids + X4b); status → `review`.
 - 2026-09-20 — Code review (three isolated layers): 1 decision by Guy (a register row is its bold
   title), 18 patches applied, 2 deferrals, 4 dismissed with their check. Stays `review` until the merge.
+- 2026-09-20 — Merged: PR #190 squash-merged as `4c195f0`, CI green on the head `c12ce37` itself. Status → `done`.
