@@ -228,6 +228,27 @@ macro_rules! capped {
     };
 }
 
+/// One subnet as the plan holds it: its id, its arithmetic, what the operator calls it, and the
+/// segment it belongs to (story 14.5).
+///
+/// 🔑 **A named type where a 3-tuple stood**, because the VLAN would otherwise be a POSITION: nine
+/// sites destructured that tuple, and `(_, subnet, _, vlan)` is exactly the shape in which a field
+/// gets silently dropped. [`Subnet`] stays pure arithmetic — base and prefix, no identity — because
+/// containment, edges and size are computed from it and a VLAN answers none of those questions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PlannedSubnet {
+    /// The row's id, which is what every route and every link addresses.
+    pub(crate) id: String,
+    /// Its base and prefix.
+    pub(crate) subnet: Subnet,
+    /// What the operator calls it.
+    pub(crate) label: String,
+    /// The 802.1Q id the operator DECLARED, or **0 for none** — the sentinel `0010` chose after the
+    /// NULLable form was measured accepting one CIDR three times. Never observed: no connector
+    /// produces a VLAN (D61), and the audit is blind to this field by Guy's decision of 2026-09-21.
+    pub(crate) vlan: u16,
+}
+
 /// Insert one subnet of the addressing plan.
 ///
 /// # Errors
@@ -239,6 +260,7 @@ pub(crate) async fn insert_subnet<'e, E>(
     id: &str,
     subnet: Subnet,
     label: &str,
+    vlan: u16,
 ) -> Result<(), RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
@@ -253,13 +275,14 @@ where
     // The re-validation below is kept for the caller holding a `Subnet` read back from the store.
     Subnet::new(subnet.base, subnet.prefix_len).map_err(ipam)?;
     sqlx::query(capped!(
-        "INSERT INTO ip_subnet (id, base, prefix_len, label) \
-         VALUES (?, ?, ?, ?)"
+        "INSERT INTO ip_subnet (id, base, prefix_len, label, vlan) \
+         VALUES (?, ?, ?, ?, ?)"
     ))
     .bind(id)
     .bind(canonical(subnet.base))
     .bind(subnet.prefix_len)
     .bind(label)
+    .bind(vlan)
     .execute(executor)
     .await
     .map_err(classify)?;
@@ -702,6 +725,56 @@ pub(crate) async fn delete_address(
     Ok(subnet_id)
 }
 
+/// Correct a subnet's LABEL and its VLAN — never its base, never its prefix (story 14.5).
+///
+/// 🔴 **The scope is carried by the SIGNATURE and not by a sentence** (Guy, 2026-09-21). Story 14.4
+/// measured what the other shape costs: `delete_range` refused while a range held an address, and
+/// `update_range` MOVED the range off it and answered `Ok` — *the product refused the honest gesture
+/// and permitted the discreet one*. A subnet edit that could move `base` would do worse, because
+/// containment is arithmetic in Rust while the foreign key is on `subnet_id`: the children would
+/// follow an id whose address space no longer contains them, and nothing would refuse it.
+///
+/// 🔑 Moving a subnet onto a `(base, prefix_len, vlan)` another row holds is a `unique` violation, and
+/// the route answers it with the SAME sentence as a re-entered definition — because both gestures
+/// collide on the very same key, `ip_subnet_cidr_vlan`. ⚠️ What story 14.5 had to change is the
+/// sentence itself: since `0010` the CIDR alone no longer decides, so *"the plan already holds that
+/// subnet"* was true and under-informative in front of an operator looking at that CIDR under another
+/// tab. It names the rule now.
+///
+/// # Errors
+///
+/// [`RepositoryError::NotFound`] when no subnet carries the id, `Constraint("unique")` when the new
+/// VLAN collides with another row of the same CIDR, otherwise the classified `sqlx::Error`.
+pub(crate) async fn update_subnet(
+    conn: &mut sqlx::MySqlConnection,
+    id: &str,
+    label: &str,
+    vlan: u16,
+) -> Result<(), RepositoryError> {
+    // The locked read replaces a `rows_affected` test for absence and is stronger — ⚠️ *provided the
+    // CALLER is in a transaction*, which `StoreIpamWrite::edit_subnet` is and a bare `pool.acquire()`
+    // is not: under autocommit the `FOR UPDATE` lock is released at the end of the SELECT. The
+    // precondition is named rather than implied, because the store test calls this on a plain
+    // connection and would otherwise read as proving a hold it never takes (`delete_address`'s
+    // reason, with its precondition said).
+    let _: (String,) = sqlx::query_as(capped!("SELECT id FROM ip_subnet WHERE id = ? FOR UPDATE"))
+        .bind(id)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(classify)?
+        .ok_or(RepositoryError::NotFound)?;
+    sqlx::query(capped!(
+        "UPDATE ip_subnet SET label = ?, vlan = ? WHERE id = ?"
+    ))
+    .bind(label)
+    .bind(vlan)
+    .bind(id)
+    .execute(&mut *conn)
+    .await
+    .map_err(classify)?;
+    Ok(())
+}
+
 /// Delete one subnet — refused by the DATABASE while it still holds ranges or addresses.
 ///
 /// 🔴 **THE REFUSAL IS A FOREIGN KEY AND NOT ARITHMETIC, which is what makes this route cheap**
@@ -1132,23 +1205,32 @@ async fn settle_plan_write<T>(
 // per-subnet read for release; writing it then is cheaper than keeping this one warm for a use it
 // had not got (`ipam_write.rs`'s own rule about `WriteRoute::paths`). Registered.
 
-/// Every subnet in the plan, in numeric order of its base address.
+/// Every subnet in the plan, in numeric order of its base address, then of its prefix, then of its
+/// VLAN.
 ///
 /// 🔑 The order is the STORE's: the padded spelling makes lexicographic order numeric, so no caller
 /// sorts and no caller can forget to.
+///
+/// 🔴 **THE VLAN IS THE THIRD KEY SINCE STORY 14.5, and it is not decoration**: one CIDR may now
+/// appear twice, so without it the tie between two segments of one address space is whatever the
+/// engine feels like — and TWO visible things ride on this order, the tab the screen selects when
+/// the operator names none and the subnet a release sends them back to. A test reads the order back.
 ///
 /// # Errors
 ///
 /// The classified `sqlx::Error`, or [`IpamError`] when a stored row is not this store's canonical
 /// spelling or does not describe a subnet — reachable only by a write that went around this module.
-pub(crate) async fn list_subnets<'e, E>(
-    executor: E,
-) -> Result<Vec<(String, Subnet, String)>, RepositoryError>
+pub(crate) async fn list_subnets<'e, E>(executor: E) -> Result<Vec<PlannedSubnet>, RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
 {
-    let rows: Vec<(String, String, u8, String)> = sqlx::query_as(
-        "SELECT id, base, prefix_len, label FROM ip_subnet ORDER BY base, prefix_len",
+    // 🔑 `, vlan` in the ORDER BY, and it is not decoration: once one CIDR may appear twice, `base,
+    // prefix_len` is no longer a TOTAL order, and two visible things ride on the tie — which segment
+    // `/ipam` shows by default (`subnets.first()`), and `release_address`'s innermost-subnet redirect,
+    // which the story's validation measured answering *whichever row came first*. One word removes the
+    // question instead of answering it.
+    let rows: Vec<(String, String, u8, String, u16)> = sqlx::query_as(
+        "SELECT id, base, prefix_len, label, vlan FROM ip_subnet ORDER BY base, prefix_len, vlan",
     )
     .fetch_all(executor)
     .await
@@ -1167,9 +1249,14 @@ where
     // stated: a silent skip would hide a real defect, so it is a `warn` with the id in it, never a
     // `debug`. A row that cannot be read is a row the operator never declared through the product.
     let mut subnets = Vec::with_capacity(rows.len());
-    for (id, base, prefix_len, label) in rows {
+    for (id, base, prefix_len, label, vlan) in rows {
         match from_canonical(&base).and_then(|base| Subnet::new(base, prefix_len)) {
-            Ok(subnet) => subnets.push((id, subnet, label)),
+            Ok(subnet) => subnets.push(PlannedSubnet {
+                id,
+                subnet,
+                label,
+                vlan,
+            }),
             Err(error) => tracing::warn!(
                 subnet_id = %id,
                 stored_base = %base,
@@ -1479,9 +1566,9 @@ pub(crate) async fn release_address(
     let innermost = list_subnets(&mut *conn)
         .await?
         .into_iter()
-        .filter(|(_, subnet, _)| subnet.contains(addr))
-        .min_by_key(|(_, subnet, _)| subnet.size())
-        .map(|(id, _, _)| id);
+        .filter(|planned| planned.subnet.contains(addr))
+        .min_by_key(|planned| planned.subnet.size())
+        .map(|planned| planned.id);
     Ok(innermost)
 }
 
@@ -1997,31 +2084,38 @@ pub(crate) mod tests {
         };
         forget_subnet(&pool, "t-order").await;
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(
-            &mut *conn,
-            "t-order",
-            Subnet::new(v4("198.51.100.0"), 24).unwrap(),
-            "order",
-        )
-        .await
-        .expect("the subnet");
+        // 🔴 **`198.51.100.0/24` UNTIL STORY 14.5, which CONTAINS the accessibility seed's *Workshop*
+        // `198.51.100.128/25`** — so on a store the browser gates had seeded, a plan-wide read
+        // compared for EXACT EQUALITY carried two addresses this test never wrote. Both halves of
+        // the repair are needed and they close different things: the base moves into the `100.66.x`
+        // namespace the rest of this module's store tests already use, which settles TODAY's
+        // collision, and the assertion is SCOPED to this subnet, which is what survives the next
+        // fixture — ⚠️ *no uniqueness key can do either for it*, because `plan_addresses` is
+        // plan-wide BY DESIGN (it is what the grid and the offer read) and the rows it returns are
+        // legitimately someone else's.
+        let mine = Subnet::new(v4("100.66.19.0"), 24).unwrap();
+        insert_subnet(&mut *conn, "t-order", mine, "order", 0)
+            .await
+            .expect("the subnet");
         for (id, addr) in [
-            ("o1", "198.51.100.100"),
-            ("o2", "198.51.100.9"),
-            ("o3", "198.51.100.10"),
+            ("o1", "100.66.19.100"),
+            ("o2", "100.66.19.9"),
+            ("o3", "100.66.19.10"),
         ] {
             insert_address(&mut conn, id, "t-order", v4(addr), "n")
                 .await
                 .expect("the address");
         }
         let read = plan_addresses(&mut *conn).await.expect("read back");
+        // 🔑 The filter PRESERVES the order, so what is asserted is still the store's `ORDER BY` and
+        // not a sort this test performed — which is the whole property.
+        let mine_only: Vec<Ipv4Addr> = read
+            .into_iter()
+            .filter(|addr| mine.contains(*addr))
+            .collect();
         assert_eq!(
-            read,
-            vec![
-                v4("198.51.100.9"),
-                v4("198.51.100.10"),
-                v4("198.51.100.100")
-            ],
+            mine_only,
+            vec![v4("100.66.19.9"), v4("100.66.19.10"), v4("100.66.19.100")],
             "the STORE's own ORDER BY is the numeric order, so no caller has to sort and no caller \
              can forget to"
         );
@@ -2090,6 +2184,7 @@ pub(crate) mod tests {
             "t-adapter",
             Subnet::new(v4("203.0.113.0"), 24).unwrap(),
             "office",
+            0,
         )
         .await
         .expect("the subnet");
@@ -2233,9 +2328,18 @@ pub(crate) mod tests {
                 .await
                 .expect("the probe's own rows are its own to remove");
         }
-        let subnet = Subnet::new(v4("198.51.100.128"), 25).expect("a subnet of its own");
+        // 🔴 **`198.51.100.128/25` UNTIL STORY 14.5, WHICH IS THE ACCESSIBILITY SEED'S *Workshop*
+        // SUBNET BYTE FOR BYTE** — so running `cargo test` on a store the browser gates had seeded
+        // reddened this test with `the parent row: Constraint("unique")`. ⚠️ CI never saw it (its
+        // seed step runs AFTER the tests), which is exactly where this project takes its mutation
+        // measurements. 🔑 **The TEST moves and the fixture does not**, on the reason
+        // `a11y/seed.sql` gives in its own header: a seed shaped around a test's namespace is a
+        // fixture the next test reshapes again. ⚠️ And the VLAN axis this story adds does NOT
+        // dissolve it — measured, `0010` alone leaves the same two failures — because both rows
+        // carry VLAN 0 and the widened key refuses them exactly as the narrow one did.
+        let subnet = Subnet::new(v4("100.66.18.128"), 25).expect("a subnet of its own");
         let mut setup = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *setup, "t-race", subnet, "the race")
+        insert_subnet(&mut *setup, "t-race", subnet, "the race", 0)
             .await
             .expect("the parent row");
         drop(setup);
@@ -2248,8 +2352,8 @@ pub(crate) mod tests {
                 &mut left,
                 "t-race-a",
                 "t-race",
-                v4("198.51.100.130"),
-                v4("198.51.100.140"),
+                v4("100.66.18.130"),
+                v4("100.66.18.140"),
                 IpPolicy::Static,
                 "left",
                 pause(),
@@ -2258,8 +2362,8 @@ pub(crate) mod tests {
                 &mut right,
                 "t-race-b",
                 "t-race",
-                v4("198.51.100.135"),
-                v4("198.51.100.150"),
+                v4("100.66.18.135"),
+                v4("100.66.18.150"),
                 IpPolicy::Static,
                 "right",
                 pause(),
@@ -2322,7 +2426,7 @@ pub(crate) mod tests {
         let mut setup = pool.acquire().await.expect("a connection");
         for (id, base) in [("t-dl-a", "100.64.10.0"), ("t-dl-b", "100.64.20.0")] {
             let subnet = Subnet::new(v4(base), 24).expect("a subnet of its own");
-            insert_subnet(&mut *setup, id, subnet, "deadlock probe")
+            insert_subnet(&mut *setup, id, subnet, "deadlock probe", 0)
                 .await
                 .expect("the parent row");
         }
@@ -2402,7 +2506,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-edit").await;
         let subnet = Subnet::new(v4("100.66.10.0"), 24).expect("a subnet of its own");
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *conn, "t-edit", subnet, "the edit")
+        insert_subnet(&mut *conn, "t-edit", subnet, "the edit", 0)
             .await
             .expect("the parent row");
         for (id, first, last, label) in [
@@ -2492,7 +2596,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-edit2").await;
         let subnet = Subnet::new(v4("100.66.11.0"), 24).expect("a subnet of its own");
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *conn, "t-edit2", subnet, "the refused edit")
+        insert_subnet(&mut *conn, "t-edit2", subnet, "the refused edit", 0)
             .await
             .expect("the parent row");
         for (id, first, last, label) in [
@@ -2621,7 +2725,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-del").await;
         let subnet = Subnet::new(v4("100.66.12.0"), 24).expect("a subnet of its own");
         let mut setup = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *setup, "t-del", subnet, "the raced delete")
+        insert_subnet(&mut *setup, "t-del", subnet, "the raced delete", 0)
             .await
             .expect("the parent row");
         insert_range(
@@ -2710,7 +2814,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-del2").await;
         let subnet = Subnet::new(v4("100.66.13.0"), 24).expect("a subnet of its own");
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *conn, "t-del2", subnet, "the refused delete")
+        insert_subnet(&mut *conn, "t-del2", subnet, "the refused delete", 0)
             .await
             .expect("the parent row");
         for (id, first, last, label) in [
@@ -2801,7 +2905,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-edit3").await;
         let subnet = Subnet::new(v4("100.66.14.0"), 24).expect("a subnet of its own");
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *conn, "t-edit3", subnet, "the abandoning edit")
+        insert_subnet(&mut *conn, "t-edit3", subnet, "the abandoning edit", 0)
             .await
             .expect("the parent row");
         insert_range(
@@ -2915,7 +3019,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-edit4").await;
         let subnet = Subnet::new(v4("100.66.15.0"), 24).expect("a subnet of its own");
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *conn, "t-edit4", subnet, "the address edit")
+        insert_subnet(&mut *conn, "t-edit4", subnet, "the address edit", 0)
             .await
             .expect("the parent row");
         insert_address(
@@ -2981,7 +3085,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-del3").await;
         let subnet = Subnet::new(v4("100.66.17.0"), 24).expect("a subnet of its own");
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *conn, "t-del3", subnet, "the populated subnet")
+        insert_subnet(&mut *conn, "t-del3", subnet, "the populated subnet", 0)
             .await
             .expect("the parent row");
         insert_range(
@@ -3075,7 +3179,7 @@ pub(crate) mod tests {
         let mut setup = pool.acquire().await.expect("a connection");
         for (id, base, _, _) in SUBNETS {
             let subnet = Subnet::new(v4(base), 24).expect("a subnet of its own");
-            insert_subnet(&mut *setup, id, subnet, "four-writer probe")
+            insert_subnet(&mut *setup, id, subnet, "four-writer probe", 0)
                 .await
                 .expect("the parent row");
         }
@@ -3140,7 +3244,7 @@ pub(crate) mod tests {
         };
         forget_subnet(&pool, "t-cap").await;
         let subnet = Subnet::new(v4("100.64.40.0"), 24).expect("a subnet of its own");
-        insert_subnet(&pool, "t-cap", subnet, "the capped wait")
+        insert_subnet(&pool, "t-cap", subnet, "the capped wait", 0)
             .await
             .expect("the parent row");
 
@@ -3252,17 +3356,22 @@ pub(crate) mod tests {
             }
         }
         assert_eq!(
-            checked, 17,
+            checked, 19,
             "the plan's lockable statements changed — a new one must be capped, and this count \
              updated only after READING what it counts. Today: three inserts (subnet, range, \
-             address), three deletes (address, subnet, range), two updates (address, range), and \
-             NINE locking reads — the insert's sibling scan, `load_subnet_locked`, the address \
-             DELETE's parent read, the address EDIT's own, `delete_range`'s two (the range row, \
-             then the subnet's addresses) and `update_range`'s THREE (the range row carrying its \
+             address), three deletes (address, subnet, range), THREE updates (address, range, \
+             subnet), and TEN locking reads — the insert's sibling scan, `load_subnet_locked`, the \
+             address DELETE's parent read, the address EDIT's own, `delete_range`'s two (the range \
+             row, then the subnet's addresses), `update_range`'s THREE (the range row carrying its \
              current bounds, the sibling scan with `id <> ?`, and the address scan the code \
-             review's abandonment rule added). ⚠️ The ninth arrived with the review's decision 1: \
-             `delete_address` reads its parent back instead of accepting one from the form, which \
-             also replaced its `rows_affected` test for absence with a locked read"
+             review's abandonment rule added) and `update_subnet`'s own. ⚠️ The ninth arrived with \
+             the review's decision 1: `delete_address` reads its parent back instead of accepting \
+             one from the form, which also replaced its `rows_affected` test for absence with a \
+             locked read; the tenth is story 14.5's, and its reason is `delete_address`'s rather \
+             than `update_range`'s — the locked read REPLACES a `rows_affected` test for absence, \
+             and the uniqueness is enforced by the index on the `UPDATE` itself. ⚠️ This message \
+             said *under the key check that follows*, and `update_subnet` has no key check \
+             following it: two reasons for one lock, in one commit"
         );
     }
 
@@ -3417,5 +3526,131 @@ pub(crate) mod tests {
         &tail[..tail
             .find("\n}\n")
             .unwrap_or_else(|| panic!("`{head}` has no closing brace at column 0"))]
+    }
+    /// AC2 — the plan holds ONE CIDR TWICE, once per VLAN, and refuses it twice in one VLAN.
+    ///
+    /// 🔑 **The refusal is the same key the plan has always had, widened** — and the two halves are
+    /// asserted together because either alone is satisfiable by the wrong schema: a key on
+    /// `(base, prefix_len)` passes the second and fails the first; no key at all passes the first and
+    /// fails the second.
+    #[tokio::test]
+    async fn one_cidr_lives_in_two_vlans_and_not_twice_in_one() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = tests::ipam_fixture().await else {
+            return;
+        };
+        for id in ["t-vlan-a", "t-vlan-b", "t-vlan-c"] {
+            tests::forget_subnet(&pool, id).await;
+        }
+        let cidr = Subnet::new(v4("100.67.0.0"), 24).expect("a subnet");
+        insert_subnet(&pool, "t-vlan-a", cidr, "office", 10)
+            .await
+            .expect("the first segment");
+        insert_subnet(&pool, "t-vlan-b", cidr, "workshop", 20)
+            .await
+            .expect("the SAME address space in another segment — the case FR21 exists for");
+        let again = insert_subnet(&pool, "t-vlan-c", cidr, "twice", 20).await;
+        assert!(
+            matches!(&again, Err(RepositoryError::Constraint(name)) if *name == "unique"),
+            "one CIDR twice IN ONE SEGMENT is still not a plan: {again:?}"
+        );
+        // And *no VLAN* is a segment of its own, where the NULLable shape let one CIDR in three times.
+        insert_subnet(&pool, "t-vlan-c", cidr, "none", 0)
+            .await
+            .expect("no VLAN is itself a segment");
+        let none_twice = insert_subnet(&pool, "t-vlan-d", cidr, "none again", 0).await;
+        assert!(
+            matches!(&none_twice, Err(RepositoryError::Constraint(name)) if *name == "unique"),
+            "the sentinel makes *none* a value the key can refuse twice: {none_twice:?}"
+        );
+
+        let listed = list_subnets(&pool).await.expect("read back");
+        let here: Vec<(String, u16)> = listed
+            .iter()
+            .filter(|planned| planned.subnet == cidr)
+            .map(|planned| (planned.id.clone(), planned.vlan))
+            .collect();
+        assert_eq!(
+            here,
+            vec![
+                ("t-vlan-c".to_string(), 0),
+                ("t-vlan-a".to_string(), 10),
+                ("t-vlan-b".to_string(), 20),
+            ],
+            "the VLAN is read back, and the ORDER BY carries it — without `, vlan` the tie is \
+             undefined and two visible things ride on it (the default tab, the release redirect)"
+        );
+        for id in ["t-vlan-a", "t-vlan-b", "t-vlan-c"] {
+            tests::forget_subnet(&pool, id).await;
+        }
+    }
+
+    /// **AC3 at the store — the correction writes the label and the VLAN, refuses an id naming no
+    /// row, and refuses a pair another row already holds.**
+    ///
+    /// 🔑 **The last assertion is the one that earns the test**: the correction reaches the SAME key
+    /// the definition rides, so an operator moving a subnet into a VLAN its twin already occupies is
+    /// refused by the database rather than by arithmetic nobody would keep in step. ⚠️ Read back
+    /// through `list_subnets` and not through the affected-row count, which reports 1 for a write
+    /// that changed nothing and 0 for a write that set the values they already had.
+    #[tokio::test]
+    async fn a_subnet_correction_writes_its_label_and_its_vlan_and_refuses_a_taken_pair() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = tests::ipam_fixture().await else {
+            return;
+        };
+        for id in ["t-edit-a", "t-edit-b"] {
+            tests::forget_subnet(&pool, id).await;
+        }
+        let cidr = Subnet::new(v4("100.68.0.0"), 24).expect("a subnet");
+        insert_subnet(&pool, "t-edit-a", cidr, "office", 0)
+            .await
+            .expect("the subnet to correct");
+        insert_subnet(&pool, "t-edit-b", cidr, "workshop", 20)
+            .await
+            .expect("its twin in another segment");
+
+        let mut conn = pool.acquire().await.expect("a connection");
+        update_subnet(&mut conn, "t-edit-a", "atelier", 10)
+            .await
+            .expect("the correction goes through");
+        let read_back = |listed: &[PlannedSubnet], id: &str| {
+            listed
+                .iter()
+                .find(|planned| planned.id == id)
+                .map(|planned| (planned.label.clone(), planned.vlan))
+        };
+        let listed = list_subnets(&pool).await.expect("read back");
+        assert_eq!(
+            read_back(&listed, "t-edit-a"),
+            Some(("atelier".to_string(), 10)),
+            "both fields are written, and they are read back off the row rather than assumed"
+        );
+
+        // 🔴 The twin holds VLAN 20 on this very CIDR, so moving onto it is the definition's own
+        // refusal met through the correction.
+        let taken = update_subnet(&mut conn, "t-edit-a", "atelier", 20).await;
+        assert!(
+            matches!(&taken, Err(RepositoryError::Constraint(name)) if *name == "unique"),
+            "one CIDR twice in one segment is refused however the operator got there: {taken:?}"
+        );
+        // ⚠️ And the refusal leaves the row ALONE — a correction that half-applied would be worse
+        // than one refused, and nothing above this line would have noticed.
+        let listed = list_subnets(&pool).await.expect("read back");
+        assert_eq!(
+            read_back(&listed, "t-edit-a"),
+            Some(("atelier".to_string(), 10)),
+            "the refused correction must not have written the label either"
+        );
+
+        let unknown = update_subnet(&mut conn, "t-edit-nowhere", "x", 1).await;
+        assert!(
+            matches!(unknown, Err(RepositoryError::NotFound)),
+            "an id naming no row is *not found*, never a silent success: {unknown:?}"
+        );
+        drop(conn);
+        for id in ["t-edit-a", "t-edit-b"] {
+            tests::forget_subnet(&pool, id).await;
+        }
     }
 }

@@ -207,6 +207,10 @@ pub(crate) enum WriteRoute {
     EditRange,
     /// `POST /ipam/address/edit` — correct an address or what the operator calls it.
     EditAddress,
+    /// `POST /ipam/subnet/edit` — correct a subnet's LABEL and its VLAN, and nothing else (story
+    /// 14.5). ⚠️ Never its base and never its prefix: the scope is carried by
+    /// [`EditSubnetRequest`]'s fields, not by a sentence — story 14.4's arbitration.
+    EditSubnet,
     /// `POST /ipam/release` — stop the plan holding an address the network was seen on (story
     /// 14.4b, the binding gesture `release` / « libérer »). 🔑 It writes a PLAN row
     /// (`address_release`) and never touches a sighting, which is what keeps the audit a reader.
@@ -225,6 +229,7 @@ impl WriteRoute {
         WriteRoute::EditRange,
         WriteRoute::EditAddress,
         WriteRoute::Release,
+        WriteRoute::EditSubnet,
     ];
 
     /// The status a write that went through earns.
@@ -244,6 +249,7 @@ impl WriteRoute {
             | WriteRoute::DeleteAddress
             | WriteRoute::EditRange
             | WriteRoute::EditAddress
+            | WriteRoute::EditSubnet
             // 🔑 200 and not 201: a second release of one address WIDENS the row it already has
             // (`ipam_repo::release_address`), so the route cannot promise it created anything.
             | WriteRoute::Release => StatusCode::OK,
@@ -275,6 +281,9 @@ impl WriteRoute {
                 | WriteRoute::Address
                 | WriteRoute::DeleteSubnet => "ipam.refusal.unknown_subnet",
                 WriteRoute::DeleteRange | WriteRoute::EditRange => "ipam.refusal.unknown_range",
+                // A correction of a subnet addresses one directly, like its definition and its
+                // delete — so an id naming no row is the same sentence.
+                WriteRoute::EditSubnet => "ipam.refusal.unknown_subnet",
                 WriteRoute::DeleteAddress | WriteRoute::EditAddress => {
                     "ipam.refusal.unknown_address"
                 }
@@ -307,7 +316,8 @@ impl WriteRoute {
             | WriteRoute::Range
             | WriteRoute::Address
             | WriteRoute::EditRange
-            | WriteRoute::EditAddress => true,
+            | WriteRoute::EditAddress
+            | WriteRoute::EditSubnet => true,
             WriteRoute::DeleteSubnet
             | WriteRoute::DeleteRange
             | WriteRoute::DeleteAddress
@@ -347,6 +357,7 @@ impl WriteRoute {
             WriteRoute::EditRange => "/ipam/range/edit",
             WriteRoute::EditAddress => "/ipam/address/edit",
             WriteRoute::Release => "/ipam/release",
+            WriteRoute::EditSubnet => "/ipam/subnet/edit",
         }
     }
 
@@ -367,6 +378,7 @@ impl WriteRoute {
                 WriteRoute::EditRange => "ipam.refusal.malformed_edit_range",
                 WriteRoute::EditAddress => "ipam.refusal.malformed_edit_address",
                 WriteRoute::Release => "ipam.refusal.malformed_release",
+                WriteRoute::EditSubnet => "ipam.refusal.malformed_edit_subnet",
             },
         )
     }
@@ -384,7 +396,19 @@ impl WriteRoute {
                 // 🔑 Grouped by the RECORD rather than by the route, because the sentence names the
                 // record that collided and a `unique` violation knows nothing about which gesture
                 // provoked it.
-                WriteRoute::Subnet => "ipam.refusal.already_defined_subnet",
+                // 🔴 **THE DEFINITION AND THE CORRECTION SHARE THIS ONE, and story 14.4's
+                // arbitration is what settles it rather than being contradicted by it.** That
+                // arbitration says a refusal must name the RECORD the operator addressed; here both
+                // gestures collide on the very same key — `ip_subnet_cidr_vlan`, minted by `0010` —
+                // so a second sentence would not name a second record, it would name the same one
+                // twice. ⚠️ What DID have to change is the sentence itself: since `0010` the CIDR
+                // alone no longer decides, so *"the plan already holds that subnet"* was true and
+                // under-informative in front of an operator looking at that CIDR under another tab.
+                // It names the rule now. **Taken by me on delegation and recorded as mine so it can
+                // be reversed at the right cost.**
+                WriteRoute::Subnet | WriteRoute::EditSubnet => {
+                    "ipam.refusal.already_defined_subnet"
+                }
                 WriteRoute::Range | WriteRoute::EditRange => "ipam.refusal.already_defined_range",
                 WriteRoute::Address | WriteRoute::EditAddress => {
                     "ipam.refusal.already_defined_address"
@@ -419,6 +443,7 @@ impl WriteRoute {
             WriteRoute::EditRange => post(edit_range),
             WriteRoute::EditAddress => post(edit_address),
             WriteRoute::Release => post(release_address),
+            WriteRoute::EditSubnet => post(edit_subnet),
         }
     }
 }
@@ -436,6 +461,13 @@ pub(crate) struct DefineSubnetRequest {
     pub(crate) cidr: String,
     /// What the operator calls this subnet. Required, and bounded by [`MAX_LABEL_CHARS`].
     pub(crate) label: String,
+    /// The 802.1Q id the operator declares for it — OPTIONAL (story 14.5).
+    ///
+    /// 🔑 An absent field and an empty one both mean *none*, which the store holds as the sentinel
+    /// `0`: a form that has never carried a VLAN and a form whose field was left blank are the same
+    /// statement, and serde drops the field when the browser omits it.
+    #[serde(default)]
+    pub(crate) vlan: String,
 }
 
 /// The `POST /ipam/range` request.
@@ -525,6 +557,40 @@ pub(crate) struct EditAddressRequest {
     pub(crate) label: String,
 }
 
+/// The `POST /ipam/subnet/edit` request — the label and the VLAN, and NOTHING else.
+///
+/// 🔑 **The type is the scope**, and the mutation pass measured BOTH halves of what that buys —
+/// where this comment first claimed only a tripwire, on story 5.12's habit of narrowing a promise.
+/// Adding a CIDR field here and leaving it unread reds **clippy** (`field 'cidr' is never read`,
+/// which CI runs with `--all-targets -D warnings`); adding it and READING it reds
+/// `a_subnet_correction_carries_its_vlan_and_no_cidr`. Together they close the ordinary gesture in
+/// both directions, and what stays open is someone editing the test too — which no guard reaches
+/// and which is a decision rather than an accident. Story 6b.4b's idiom: close it in the type,
+/// where a sentence is carried by nobody.
+#[derive(Debug, Deserialize)]
+pub(crate) struct EditSubnetRequest {
+    /// The subnet being corrected.
+    pub(crate) id: String,
+    /// What the operator calls it.
+    pub(crate) label: String,
+    /// Its VLAN, or EMPTY for none — and the field must be PRESENT either way.
+    ///
+    /// 🔴 **NO `#[serde(default)]` HERE, where its sibling on the DEFINITION route has one, and the
+    /// asymmetry is the decision rather than an oversight.** With a default, omitting the field
+    /// answered 200 and set the VLAN to 0 — so a request that says NOTHING about the segment
+    /// silently CLEARED it, while a request explicitly saying `vlan=0` was refused by name. Three
+    /// spellings of one value on one route, measured by the code review's edge layer.
+    ///
+    /// 🔑 On a DEFINITION, absence is a choice: there is no VLAN yet, so *silent* and *none* are the
+    /// same statement. On a CORRECTION, absence is ambiguous between *leave it as it is* and *clear
+    /// it*, and the product must not guess — that is story 14.4's arbitration, where an edit that
+    /// moved a range off its addresses and answered `Ok` was *the discreet gesture the product
+    /// permitted while refusing the honest one*. An emptied field still means *none*; a missing
+    /// field is now a malformed request, which is exactly what this route's keyed sentence says.
+    /// **Taken by me on delegation and recorded as mine so it can be reversed at the right cost.**
+    pub(crate) vlan: String,
+}
+
 /// The `POST /ipam/release` request.
 ///
 /// 🔑 **The address itself, and no id**: a release is keyed on the ADDRESS (`0009`), because the
@@ -601,6 +667,7 @@ pub(crate) trait IpamWritePort: Send + Sync {
         &self,
         subnet: Subnet,
         label: String,
+        vlan: u16,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
     /// Define a range inside a subnet and answer with the id it was given.
@@ -685,6 +752,19 @@ pub(crate) trait IpamWritePort: Send + Sync {
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
+    /// Correct a subnet's label and its VLAN, answering with the subnet itself.
+    ///
+    /// # Errors
+    ///
+    /// [`RepositoryError::NotFound`] when the id names no row, or `Constraint("unique")` when the
+    /// new VLAN is one another row of the same CIDR already holds.
+    fn edit_subnet(
+        &self,
+        id: String,
+        label: String,
+        vlan: u16,
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
+
     /// Release one address — the plan forgets what the network showed on it up to `until`, the last
     /// sighting the operator was shown — answering with the address and **the innermost subnet
     /// containing it**, or none.
@@ -719,6 +799,7 @@ impl IpamWritePort for StoreIpamWrite {
         &self,
         subnet: Subnet,
         label: String,
+        vlan: u16,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
             // 🔑 THE SERVER MINTS THE ID, v7 (Guy, 2026-09-12) — `document.rs:120`'s half of the
@@ -734,7 +815,7 @@ impl IpamWritePort for StoreIpamWrite {
             let mut tx = sqlx::Connection::begin(&mut *conn)
                 .await
                 .map_err(crate::repo::classify)?;
-            let written = ipam_repo::insert_subnet(&mut *tx, &id, subnet, &label).await;
+            let written = ipam_repo::insert_subnet(&mut *tx, &id, subnet, &label, vlan).await;
             settle(tx, written).await?;
             // A subnet IS the plan the operator returns to; there is no parent above it.
             Ok(Written::subnet(id))
@@ -867,6 +948,26 @@ impl IpamWritePort for StoreIpamWrite {
         })
     }
 
+    fn edit_subnet(
+        &self,
+        id: String,
+        label: String,
+        vlan: u16,
+    ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
+        Box::pin(async move {
+            let mut conn = self.pool.acquire().await.map_err(crate::repo::classify)?;
+            // The budget's transaction, for `delete_address`'s reason: the locked read and the
+            // write must commit or roll back together.
+            let mut tx = sqlx::Connection::begin(&mut *conn)
+                .await
+                .map_err(crate::repo::classify)?;
+            let written = ipam_repo::update_subnet(&mut tx, &id, &label, vlan).await;
+            settle(tx, written).await?;
+            // A subnet IS the plan the operator returns to.
+            Ok(Written::subnet(id))
+        })
+    }
+
     fn release_address(
         &self,
         addr: Ipv4Addr,
@@ -975,7 +1076,11 @@ async fn define_subnet(
         Ok(label) => label,
         Err(refusal) => return refusal.into_response(),
     };
-    let work = state.port.define_subnet(subnet, label);
+    let vlan = match parse_vlan(&request.vlan, WriteRoute::Subnet) {
+        Ok(vlan) => vlan,
+        Err(refusal) => return refusal.into_response(),
+    };
+    let work = state.port.define_subnet(subnet, label, vlan);
     answer(
         within_budget(work).await,
         WriteRoute::Subnet,
@@ -1141,6 +1246,35 @@ async fn delete_address(
     };
     let work = state.port.delete_address(id);
     answer(within_budget(work).await, route, "ipam.done.delete_address")
+}
+
+/// `POST /ipam/subnet/edit` — correct a subnet's label and its VLAN (story 14.5).
+async fn edit_subnet(
+    State(state): State<IpamWriteState>,
+    headers: HeaderMap,
+    form: Result<Form<EditSubnetRequest>, FormRejection>,
+) -> Response {
+    if !crate::write_guard::same_origin(&headers) {
+        return cross_origin().into_response();
+    }
+    let route = WriteRoute::EditSubnet;
+    let Ok(Form(request)) = form else {
+        return route.malformed().into_response();
+    };
+    let id = match checked_record_id(&request.id, route) {
+        Ok(id) => id,
+        Err(refusal) => return refusal.into_response(),
+    };
+    let label = match checked_label(&request.label) {
+        Ok(label) => label,
+        Err(refusal) => return refusal.into_response(),
+    };
+    let vlan = match parse_vlan(&request.vlan, route) {
+        Ok(vlan) => vlan,
+        Err(refusal) => return refusal.into_response(),
+    };
+    let work = state.port.edit_subnet(id, label, vlan);
+    answer(within_budget(work).await, route, "ipam.done.edit_subnet")
 }
 
 /// `POST /ipam/release` — stop the plan holding an address (story 14.4b).
@@ -1340,6 +1474,46 @@ fn checked_subnet_id(raw: &str, route: WriteRoute) -> Result<String, Refusal> {
     Ok(parsed.to_string())
 }
 
+/// The VLAN the operator declared, or the refusal that says it is not one (story 14.5).
+///
+/// 🔑 **Empty means NONE, and none is the sentinel `0`** — the store's shape (`0010`), chosen after the
+/// NULLable form was measured letting one CIDR in three times. An operator who leaves the field blank
+/// is saying *this subnet is not on a VLAN*, which is a statement the plan can hold.
+///
+/// 🔴 **0 typed BY HAND is refused**, and that is not pedantry: 802.1Q reserves VID 0 for
+/// *priority-tagged, no VLAN*, so an operator typing it means *none* — and the product must not let two
+/// different gestures (typing 0, leaving it blank) reach the store as the same row through a path that
+/// reads as if 0 were an ordinary VLAN. The refusal names the range, which is where they learn it.
+///
+/// ⚠️ **The whitespace is trimmed for the PARSE as well, and this sentence said the opposite until a
+/// test of this story's own measured it** (`vlan=12 ` answered 200 under a criterion predicting 422).
+/// Kept as it is rather than tightened: `parse_policy` refuses a padded token because a BINDING WORD
+/// compared loosely is a word with two spellings, where a number wrapped in whitespace by a copy or by
+/// a keyboard is a number the operator means. The false sentence was the defect; the behaviour is the
+/// decision, and it is now measured on both sides.
+///
+/// # Errors
+///
+/// The form's 422 when the value is not a whole number in `1..=4094`.
+fn parse_vlan(raw: &str, route: WriteRoute) -> Result<u16, Refusal> {
+    // ⚠️ **The route is carried and answers nothing yet, and the second form ARRIVED IN THIS STORY
+    // and chose the same sentence.** `unknown_record`'s idiom keeps the parameter so a third form
+    // can earn its own refusal without every caller changing; what it buys today is measured at
+    // zero, and saying so beats a comment predicting a split that already did not happen.
+    let _ = route;
+    let typed = raw.trim();
+    if typed.is_empty() {
+        return Ok(0);
+    }
+    match typed.parse::<u16>() {
+        Ok(vlan) if (1..=4094).contains(&vlan) => Ok(vlan),
+        _ => Err(Refusal::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "ipam.refusal.not_a_vlan",
+        )),
+    }
+}
+
 /// The policy the operator chose, or the refusal that says it is not one of the four.
 ///
 /// 🔴 **NO `trim()`, and the first draft had one — its own test caught it.** A label is free text
@@ -1496,6 +1670,7 @@ fn constraint_refusal(name: &str, route: WriteRoute) -> Option<Refusal> {
             | WriteRoute::DeleteAddress
             | WriteRoute::EditRange
             | WriteRoute::EditAddress
+            | WriteRoute::EditSubnet
             | WriteRoute::Release => backend(),
         }),
         // 🔑 OURS, not the operator's, and mapped EXPLICITLY for that reason. Every `CHECK` on the
@@ -1606,9 +1781,10 @@ pub(crate) fn ipam_refusal(error: &IpamError, route: WriteRoute) -> Refusal {
                 | WriteRoute::DeleteRange
                 | WriteRoute::DeleteAddress
                 | WriteRoute::EditAddress => "ipam.refusal.range_still_holds_addresses",
-                // A release touches no range, so this refusal reaching it is a fault here — not a
-                // true sentence about the wrong gesture, which is what the review found mapped.
-                WriteRoute::Release => return backend(),
+                // A release and a subnet correction touch no range, so this refusal reaching either
+                // is a fault here — not a true sentence about the wrong gesture, which is what the
+                // review found mapped.
+                WriteRoute::Release | WriteRoute::EditSubnet => return backend(),
             },
         ),
         // 🔑 **409, for decision 3's reason**: nothing is wrong with the REQUEST — it is the STATE
@@ -1684,13 +1860,36 @@ mod tests {
             &self,
             subnet: Subnet,
             label: String,
+            vlan: u16,
         ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
+            // 🔑 **The VLAN is RECORDED here**, so a handler that parses it and forgets to pass it on
+            // cannot leave every port assertion green — the story's validation named that shape.
             self.asked
                 .lock()
                 .expect("the fake port's log")
-                .push((subnet.cidr(), label));
+                .push((format!("{} vlan={vlan}", subnet.cidr()), label));
             let answer = self.take_answer();
             Box::pin(async move { answer.map(Written::subnet) })
+        }
+
+        fn edit_subnet(
+            &self,
+            id: String,
+            label: String,
+            vlan: u16,
+        ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
+            // The VLAN is recorded for `define_subnet`'s reason: a handler that parses it and drops
+            // it must not leave the port assertions green.
+            self.asked
+                .lock()
+                .expect("the fake port's log")
+                .push((format!("{id} vlan={vlan}"), label.clone()));
+            let answer = self.take_answer();
+            // 🔑 A CORRECTION answers with the record the operator addressed, where a DEFINITION
+            // answers with the id it just minted — so the fake echoes the REQUEST's id here and the
+            // injected one there. Getting this wrong would have made the redirect assertion pass
+            // over a handler that sent the browser somewhere else entirely.
+            Box::pin(async move { answer.map(|_| Written::subnet(id)) })
         }
 
         fn define_range(
@@ -1884,8 +2083,211 @@ mod tests {
         );
         assert_eq!(
             port.asked.lock().expect("the log").as_slice(),
-            [("192.0.2.0/24".to_string(), "Office".to_string())],
-            "the CIDR is parsed and the label is trimmed before the store sees either"
+            [("192.0.2.0/24 vlan=0".to_string(), "Office".to_string())],
+            "the CIDR is parsed, the label trimmed and the VLAN carried — 0 is *none* (story 14.5)"
+        );
+
+        // 🔴 **THE SENTENCE THAT STOOD HERE WAS FALSE AND THE AUDIT LAYER MEASURED IT.** It read
+        // *"the port RECORDS it, so a handler that parses a VLAN and drops it cannot leave this
+        // assertion green"* — but this request carries NO VLAN, so the oracle is `vlan=0` and a
+        // handler passing a hardcoded `0` leaves it green. Measured at HEAD:
+        // `define_subnet(subnet, label, 0)` → **727 / 191 / 110 passed, 0 failed**; what reddens is
+        // clippy's `unused variable: 'vlan'`, which is a LINT and not the assertion the criterion
+        // names. *An oracle written over the default value measures the default, not the path.*
+        let port = FakePort::answering(Ok("01900000-0000-7000-8000-000000000002".to_string()));
+        let response = router_with(port.clone())
+            .oneshot(form_post("cidr=198.51.100.0/24&label=Workshop&vlan=20"))
+            .await
+            .expect("the sub-router answers");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(
+            port.asked.lock().expect("the log").as_slice(),
+            [(
+                "198.51.100.0/24 vlan=20".to_string(),
+                "Workshop".to_string()
+            )],
+            "a DECLARED VLAN reaches the store through the port — the half AC3 names, and the half \
+             the assertion above cannot see"
+        );
+    }
+
+    /// **AC3 — the correction route carries the VLAN to the store, and carries NOTHING ELSE.**
+    ///
+    /// 🔴 **The second assertion is the one that measures the scope, and it is a CONTROL rather than
+    /// a sentence**: the request sends a `cidr` and a `prefix_len` the type has no field for, and
+    /// the port's log shows they reached nothing. Serde drops an unknown field, so this cannot fail
+    /// by accident — what it pins is that nobody LATER adds those fields to
+    /// [`EditSubnetRequest`] and quietly gives the route the power to move a subnet off its own
+    /// children.
+    ///
+    /// ✅ **Measured, not asserted (M10-bis):** a `cidr` field added to the request AND read by the
+    /// handler reds exactly this test, `726 passed; 1 failed`. Its twin M10 — the same field left
+    /// unread — reds clippy instead. *Neither half alone would have said the scope is held.*
+    #[tokio::test]
+    async fn a_subnet_correction_carries_its_vlan_and_no_cidr() {
+        let port = FakePort::answering(Ok("unread".to_string()));
+        let response = router_with(port.clone())
+            .oneshot(form_post_to(
+                WriteRoute::EditSubnet,
+                "id=01900000-0000-7000-8000-0000000000aa&label=Office&vlan=42&cidr=10.0.0.0/8&prefix_len=8",
+            ))
+            .await
+            .expect("the sub-router answers");
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "a correction is not a mint"
+        );
+        let asked = port.asked.lock().expect("the log").clone();
+        assert_eq!(
+            asked.as_slice(),
+            [(
+                "01900000-0000-7000-8000-0000000000aa vlan=42".to_string(),
+                "Office".to_string()
+            )],
+            "the correction must reach the store with its id, its label and its VLAN — and with no \
+             trace of the CIDR the request tried to smuggle past a type that has no field for one"
+        );
+    }
+
+    /// **AC3 — the correction is held to the SAME VLAN rules as the definition.**
+    ///
+    /// ⚠️ Driven through the ROUTE and not through `parse_vlan`, for this file's standing reason: a
+    /// handler that parses the field and forgets to refuse on it leaves a unit test of the parser
+    /// perfectly green. The port is asserted UNREACHED, which is what says the refusal happened
+    /// before the write rather than after it.
+    /// 🔴 **BOTH ROUTES THAT ASK FOR A VLAN, and it was ONE until the mutation pass said so.**
+    /// Mutation M2 (`1..=4094` → `1..=4095`) was predicted to red two tests and reddened one:
+    /// `ipam.refusal.not_a_vlan` was asserted at exactly one site in the whole file, and it was the
+    /// CORRECTION's. The DEFINITION route — AC3's first half, shipped two commits earlier — had no
+    /// test for its VLAN refusal at all. *A divergence between a prediction and a measurement is
+    /// the finding*, and here the measurement was right and the prediction described a test that
+    /// did not exist.
+    #[tokio::test]
+    async fn every_route_that_asks_for_a_vlan_refuses_one_outside_the_domain() {
+        // ⚠️ `+1` is NOT here and was measured rather than reasoned about: Rust's `u16::from_str`
+        // accepts a leading plus, so it answers 200 and writes VLAN 1 — which is the number the
+        // operator typed. Left alone; listing it as a refusal would have pinned a behaviour the
+        // product does not have.
+        let bodies: [(WriteRoute, &str); 2] = [
+            (WriteRoute::Subnet, "cidr=192.0.2.0/24&label=Office"),
+            (
+                WriteRoute::EditSubnet,
+                "id=01900000-0000-7000-8000-0000000000aa&label=Office",
+            ),
+        ];
+        for (route, prefix) in bodies {
+            for raw in ["4095", "0", "-1", "ten", "4 095", "1.0"] {
+                let port = FakePort::answering(Ok("unreached".to_string()));
+                let (status, body) = drive(
+                    port.clone(),
+                    form_post_to(route, &format!("{prefix}&vlan={raw}")),
+                )
+                .await;
+                assert_eq!(
+                    status,
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "`{raw}` is not a VLAN this plan can hold, at `{}`",
+                    route.path()
+                );
+                assert_eq!(
+                    body,
+                    key("ipam.refusal.not_a_vlan"),
+                    "at `{}`",
+                    route.path()
+                );
+                assert!(
+                    port.asked.lock().expect("the log").is_empty(),
+                    "`{raw}` was refused only after the store had been asked to write it, at `{}`",
+                    route.path()
+                );
+            }
+        }
+    }
+
+    /// ⚠️ **The two values that are NOT refused, kept beside the refusals rather than assumed.** An
+    /// EMPTY field is *no VLAN* and must reach the store as the sentinel 0, never be refused as *not
+    /// a number* — which is what an operator clearing the field would meet. And a number WRAPPED IN
+    /// WHITESPACE is accepted, which is where this story found a false sentence of its own: the
+    /// criterion predicted a 422 for `12 `, the route answered 200, and `parse_vlan`'s doc claimed a
+    /// trim it did not describe. The behaviour is kept and the sentence corrected; the control is
+    /// here so neither can drift again in silence.
+    #[tokio::test]
+    async fn an_empty_vlan_field_corrects_a_subnet_to_none() {
+        let port = FakePort::answering(Ok("unread".to_string()));
+        let (status, _) = drive(
+            port.clone(),
+            form_post_to(
+                WriteRoute::EditSubnet,
+                "id=01900000-0000-7000-8000-0000000000aa&label=Office&vlan=",
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            port.asked.lock().expect("the log").as_slice(),
+            [(
+                "01900000-0000-7000-8000-0000000000aa vlan=0".to_string(),
+                "Office".to_string()
+            )],
+            "an emptied field means *none*, which the store spells 0"
+        );
+
+        // 🔴 **AND A MISSING FIELD IS NOT AN EMPTY ONE — the code review's edge layer measured that
+        // it was.** With `#[serde(default)]` on the correction's `vlan`, a request that said nothing
+        // about the segment answered 200 and CLEARED it, while `vlan=0` was refused by name: three
+        // spellings of one value on one route. On a correction, absence is ambiguous between *leave
+        // it* and *clear it*, so it is now malformed — and the keyed sentence says which field.
+        let port = FakePort::answering(Ok("unreached".to_string()));
+        let (status, body) = drive(
+            port.clone(),
+            form_post_to(
+                WriteRoute::EditSubnet,
+                "id=01900000-0000-7000-8000-0000000000aa&label=Office",
+            ),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "a correction that names no VLAN field must not silently clear the segment"
+        );
+        assert_eq!(body, key("ipam.refusal.malformed_edit_subnet"));
+        assert!(
+            port.asked.lock().expect("the log").is_empty(),
+            "and the store must not have been asked to write it"
+        );
+        // ⚠️ THE CONTROL, and it is what stops the repair above from simply forbidding *none*: the
+        // DEFINITION route keeps its default, because there absence and *none* are one statement.
+        let port = FakePort::answering(Ok("01900000-0000-7000-8000-000000000003".to_string()));
+        let (status, _) = drive(port, form_post("cidr=203.0.113.0/24&label=Lab")).await;
+        assert_eq!(
+            status,
+            StatusCode::CREATED,
+            "a definition that names no VLAN is a subnet on no VLAN, which is a thing to say"
+        );
+
+        let port = FakePort::answering(Ok("unread".to_string()));
+        let (status, _) = drive(
+            port.clone(),
+            form_post_to(
+                WriteRoute::EditSubnet,
+                "id=01900000-0000-7000-8000-0000000000aa&label=Office&vlan=%2012%20",
+            ),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "a padded number is still the number typed"
+        );
+        assert_eq!(
+            port.asked.lock().expect("the log").as_slice(),
+            [(
+                "01900000-0000-7000-8000-0000000000aa vlan=12".to_string(),
+                "Office".to_string()
+            )],
+            "the padding is trimmed and the VLAN reaches the store as 12"
         );
     }
 
@@ -2217,9 +2619,12 @@ mod tests {
         }
         // A floor EQUAL to what is there (story 6b.7) — it read `>= 15` over 20-odd keys until the
         // review, which is a floor that tolerates losing a quarter of what it guards.
+        // 🔑 42 → 45 at story 14.5, read off the list this prints: `ipam.refusal.not_a_vlan`, then
+        // the tenth route's two — `ipam.refusal.malformed_edit_subnet` and `ipam.done.edit_subnet`.
+        // ⚠️ The re-entry sentence is NOT a fourth: the correction shares the definition's key.
         assert_eq!(
             keys.len(),
-            42,
+            45,
             "the keys this file can render changed — update the count only after reading the list: \
              {keys:?}"
         );
@@ -2288,7 +2693,10 @@ mod tests {
         // sentence on this file's own reasoning for `check` — a constraint that cannot arise
         // through the adapter is a fault here, not a mistake to explain.
         const BY_RECORD: [&[WriteRoute]; 3] = [
-            &[WriteRoute::Subnet],
+            // 🔑 The correction joins the definition rather than earning a sentence of its own:
+            // story 14.5 gave both the SAME key to collide on, so one record is one sentence here
+            // in the strict sense — see `already_defined`'s own comment.
+            &[WriteRoute::Subnet, WriteRoute::EditSubnet],
             &[WriteRoute::Range, WriteRoute::EditRange],
             &[WriteRoute::Address, WriteRoute::EditAddress],
         ];
@@ -2377,6 +2785,15 @@ mod tests {
                 &self,
                 _subnet: Subnet,
                 _label: String,
+                _vlan: u16,
+            ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
+                Box::pin(std::future::pending())
+            }
+            fn edit_subnet(
+                &self,
+                _id: String,
+                _label: String,
+                _vlan: u16,
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
@@ -2510,6 +2927,9 @@ mod tests {
                 format!("id={record}&first=192.0.2.10&last=192.0.2.20&policy=static&label={label}")
             }
             WriteRoute::EditAddress => format!("id={record}&addr=192.0.2.9&label={label}"),
+            // 🔑 A subnet correction addresses a SUBNET, so its id is the subnet's and its redirect
+            // lands on the plan it just corrected. It carries no CIDR: the request type has none.
+            WriteRoute::EditSubnet => format!("id={subnet}&label={label}&vlan=10"),
             // A release carries an address and no label; the label is sent for the deletes' reason.
             WriteRoute::Release => {
                 format!("addr=192.0.2.9&seen_until=2026-09-01T10:00:00.000000Z&label={label}")
@@ -2663,6 +3083,7 @@ mod tests {
                 | WriteRoute::DeleteAddress
                 | WriteRoute::EditRange
                 | WriteRoute::EditAddress
+                | WriteRoute::EditSubnet
                 | WriteRoute::Release => StatusCode::OK,
             };
             assert_eq!(
@@ -2695,7 +3116,11 @@ mod tests {
                 | WriteRoute::DeleteRange
                 | WriteRoute::DeleteAddress
                 | WriteRoute::EditRange
-                | WriteRoute::EditAddress => {
+                | WriteRoute::EditAddress
+                // 🔑 A corrected subnet IS the plan the operator returns to, and the id it carries
+                // is its own — so this value comes from the REQUEST here, where the four routes
+                // above take it from the port. Said rather than blended into their comment.
+                | WriteRoute::EditSubnet => {
                     "/ipam?subnet=01900000-0000-7000-8000-0000000000aa".to_string()
                 }
                 // A release goes back to the innermost subnet the PORT found for the address, and
@@ -2862,6 +3287,7 @@ mod tests {
             WriteRoute::EditRange,
             WriteRoute::EditAddress,
             WriteRoute::Release,
+            WriteRoute::EditSubnet,
         ];
         for route in written_out {
             assert!(
@@ -2987,7 +3413,7 @@ mod tests {
         };
         cleanup().await;
         let parent = Subnet::new("100.64.30.0".parse().expect("an address"), 24).expect("a subnet");
-        ipam_repo::insert_subnet(&pool, PARENT, parent, "the parent")
+        ipam_repo::insert_subnet(&pool, PARENT, parent, "the parent", 0)
             .await
             .expect("the parent row");
         let port = StoreIpamWrite::new(pool.clone());
@@ -3043,6 +3469,7 @@ mod tests {
             port.define_subnet(
                 Subnet::new("100.64.31.0".parse().expect("an address"), 24).expect("a subnet"),
                 "dropped".to_string(),
+                0,
             ),
         )
         .await;

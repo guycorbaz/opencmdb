@@ -227,12 +227,25 @@ INSERT INTO identity_link
 -- virgin store measures the empty-plan sentence and nothing else, and passes. `AXE_REQUIRE_PLAN=1`
 -- turns that into *the gate could not run*; these rows are what let it run.
 --
--- 🔴 **THE PREFIX LENGTHS ARE /25, AND THAT IS NOT COSMETIC.** `ip_subnet_cidr` is UNIQUE on
--- `(base, prefix_len)`, and `ipam_repo.rs`'s store-backed tests own the three RFC 5737 /24s
--- (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`) — one CIDR per test, which is story 14.1's
--- own rule after a panicking test poisoned its successor and inflated every mutation count. Seeding
--- a /24 here took the name a test needs: measured, FOUR tests went red with
--- `the subnet: Constraint("unique")` the moment this file had run against a developer's store.
+-- 🔴 **THE PREFIX LENGTHS ARE /25, AND THAT IS NOT COSMETIC.** `ip_subnet_cidr_vlan` is UNIQUE on
+-- `(base, prefix_len, vlan)` — `(base, prefix_len)` until story 14.5. The two collisions this
+-- paragraph is about were closed on the TEST side
+-- (`the_store_returns_addresses_in_numeric_order`, `two_overlapping_ranges_at_once…`), because
+-- `ipam_repo.rs`'s store-backed tests own the three RFC 5737 /24s (`192.0.2.0/24`,
+-- `198.51.100.0/24`, `203.0.113.0/24`) — one CIDR per test, which is story 14.1's own rule after a
+-- panicking test poisoned its successor and inflated every mutation count. Seeding a /24 here took
+-- the name a test needs: measured, **TWO** tests went red with `the subnet: Constraint("unique")`
+-- the moment this file had run against a developer's store.
+--
+-- ⚠️ **AND THE WIDENED KEY WOULD HAVE DISSOLVED ONE OF THEM, WHICH THIS COMMENT FIRST DENIED.** It
+-- read *"the widening changes NOTHING here … both these rows and the tests they collided with carry
+-- VLAN 0"* — false of the row below it, which carries VLAN **10**: a test seeding `192.0.2.0/25` at
+-- VLAN 0 no longer collides with *Office*. The sentence was true of *Workshop* alone, and it was
+-- written about both. Measured before the VLAN was seeded (`0010` applied, both rows at VLAN 0):
+-- the same two tests reddened, which is where *"`0010` alone dissolves NEITHER"* comes from — a
+-- statement about the tree AS IT WAS MEASURED, not about the tree this file now creates. The
+-- closures stay on the test side regardless, for the reason this file's own header gives: a seed
+-- shaped around a test's namespace is a fixture the next test reshapes again.
 -- ⚠️ CI never saw it — its seed step runs AFTER the tests — so the failure would have been local
 -- only, which is precisely where this project measures its mutations. *A fixture and a test that
 -- share a namespace are one collision apart, and the store does not forget between them.*
@@ -248,9 +261,18 @@ INSERT INTO identity_link
 -- three of four states measures three of four.
 --
 -- Addresses are RFC 5737 documentation blocks, as everything in this file is.
-INSERT INTO ip_subnet (id, base, prefix_len, label) VALUES
-  ('22222222-0000-0000-0000-00000000a001', '192.000.002.000', 25, 'Office'),
-  ('22222222-0000-0000-0000-00000000a002', '198.051.100.128', 25, 'Workshop');
+--
+-- 🔑 **ONE SUBNET DECLARES A VLAN AND THE OTHER DOES NOT** (story 14.5), so the gates walk a page
+-- carrying BOTH halves: a tab whose accessible name includes its segment, a tab that does not, and
+-- the note saying the plan has a VLAN while the ranges, the findings and the offer do not. With a
+-- VLAN on both, *renders nothing when there is none* would be measured by nothing; with one on
+-- neither, the note and the enriched tab would not exist on any page a browser opens.
+-- ⚠️ It is NOT here to dissolve a test collision — that was refused (§0.6): a seed shaped around a
+-- test's namespace is a fixture the next test reshapes again. The two collisions moved on the TEST
+-- side, and `0010` alone was measured to dissolve neither.
+INSERT INTO ip_subnet (id, base, prefix_len, label, vlan) VALUES
+  ('22222222-0000-0000-0000-00000000a001', '192.000.002.000', 25, 'Office', 10),
+  ('22222222-0000-0000-0000-00000000a002', '198.051.100.128', 25, 'Workshop', 0);
 
 INSERT INTO ip_range (id, subnet_id, first_addr, last_addr, policy, label) VALUES
   ('33333333-0000-0000-0000-00000000b001', '22222222-0000-0000-0000-00000000a001',

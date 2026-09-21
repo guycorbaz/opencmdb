@@ -829,6 +829,14 @@ h2 { font-family: var(--font-heading); font-size: 15px; font-weight: var(--font-
   font-style: italic;
 }
 
+/* The VLAN note (story 14.5): the plan carries a segment, the audit does not. It ships as
+   `class="empty ipam-vlan-note"`, so it DOES inherit `.empty` in full — the italic and the neutral
+   colour are wanted — and only the margin is overridden here, by source order. ⚠️ This comment said
+   *rather than inheriting* until the code review, which is the opposite of what the template does.
+   A class of its own is also what the accessibility gate finds it by, since its TEXT is translated
+   and a gate must not look for a word. */
+.ipam-vlan-note { margin: 8px 0 0; }
+
 .record-back { margin: 0 0 16px; font-size: 0.875rem; }
 .record-head { margin: 0 0 24px; }
 .record-head h2 { margin: 0 0 4px; }

@@ -25,6 +25,7 @@ mod identity_view;
 mod inventory_view;
 mod ipam_audit;
 mod ipam_page;
+mod ipam_rail;
 mod ipam_repo;
 mod ipam_write;
 mod l1_runner;
@@ -1813,9 +1814,9 @@ mod tests {
             .collect();
         assert_eq!(
             declared.len(),
-            10,
-            "the premise: ten write routes today ({declared:?}) — `/document-all` plus the plan's \
-             three definitions, five corrections and one release. A loop that went empty would assert nothing, \
+            11,
+            "the premise: eleven write routes today ({declared:?}) — `/document-all` plus the plan's \
+             three definitions, SIX corrections and one release. A loop that went empty would assert nothing, \
              and a list that shrank silently would assert less" // ⚠️ **This premise is DERIVED from `WriteRoute::ALL`, so it can catch a shrink and
                                                                 // never an omission**: a variant missing from that list is missing from `declared` too,
                                                                 // and 10 stays 10. `ipam_write`'s `every_variant_is_in_the_route_list` is what carries
@@ -2275,6 +2276,7 @@ mod tests {
                 id,
                 crate::ipam_repo::Subnet::new(base.parse().unwrap(), 24).unwrap(),
                 "",
+                0,
             )
             .await
             .expect("the subnet");

@@ -415,7 +415,7 @@ async fn address_check_data(
         subnets: ipam_repo::list_subnets(pool)
             .await?
             .into_iter()
-            .map(|(_, subnet, _)| subnet)
+            .map(|planned| planned.subnet)
             .collect(),
         ranges: ipam_repo::plan_ranges(pool).await?,
         defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
@@ -652,16 +652,21 @@ async fn delete_check_data(
     addr: Option<Ipv4Addr>,
 ) -> Result<String, opencmdb_core::repo::RepositoryError> {
     let subnets = ipam_repo::list_subnets(pool).await?;
-    let Some((_, subnet, _)) = subnets.iter().find(|(id, _, _)| id == subnet_id).cloned() else {
+    let Some(here) = subnets
+        .iter()
+        .find(|planned| planned.id == subnet_id)
+        .cloned()
+    else {
         // An id the plan does not carry warns about nothing: the control that sent it is stale, and
         // a sentence invented for it would describe a record that is not there.
         return Ok(String::new());
     };
     let plan = Plan {
-        subnets: subnets.iter().map(|(_, subnet, _)| *subnet).collect(),
+        subnets: subnets.iter().map(|planned| planned.subnet).collect(),
         ranges: ipam_repo::plan_ranges(pool).await?,
         defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
     };
+    let subnet = here.subnet;
     let network = ipam_audit::read_the_network(pool).await?;
     // 🔑 **THIS SUBNET'S OWN RECORDS, which this function already read for its `held` count.** The
     // check now asks the same questions the WRITE path asks, and asking them needs the same scope:
@@ -970,7 +975,7 @@ async fn plan_data(
     // and decision 11's list is then the only true thing this screen has to say. It costs one read
     // on a fresh install and it is what makes the empty plan an answer rather than a shrug.
     let plan = Plan {
-        subnets: subnets.iter().map(|(_, subnet, _)| *subnet).collect(),
+        subnets: subnets.iter().map(|planned| planned.subnet).collect(),
         ranges: ipam_repo::plan_ranges(pool).await?,
         defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
     };
@@ -987,12 +992,13 @@ async fn plan_data(
     // `inventory_body`'s precedent: silently serving another subnet would tell the operator their
     // selection took when it did not — story 6b.4's `?sort=` finding.
     let chosen = match selected {
-        Some(wanted) => subnets.iter().find(|(id, _, _)| id == wanted).cloned(),
+        Some(wanted) => subnets.iter().find(|planned| planned.id == wanted).cloned(),
         None => subnets.first().cloned(),
     };
-    let Some((id, subnet, _label)) = chosen else {
+    let Some(chosen) = chosen else {
         return Ok(unknown_subnet_body(&subnets, &outside_only));
     };
+    let (id, subnet) = (chosen.id.clone(), chosen.subnet);
     let audit = Audit {
         plan: &plan,
         network: &network,
@@ -1007,7 +1013,7 @@ async fn plan_data(
         // DECLARED, so that reason does not carry — and a subnet too large to draw is exactly where
         // an operator most needs the controls that correct it.
         let rail = RailLists::new(
-            id.clone(),
+            &chosen,
             &ipam_repo::correctable_ranges_in(pool, &id).await?,
             &ipam_repo::correctable_addresses_in(pool, &id).await?,
         );
@@ -1025,7 +1031,7 @@ async fn plan_data(
     // subnet actually owns, because a control that edits another subnet's record from this page is
     // a gesture whose effect the operator cannot see.
     let rail = RailLists::new(
-        id.clone(),
+        &chosen,
         &ipam_repo::correctable_ranges_in(pool, &id).await?,
         &ipam_repo::correctable_addresses_in(pool, &id).await?,
     );
@@ -1312,6 +1318,12 @@ pub(crate) struct IpamStrings {
     form_address_summary: String,
     form_cidr: String,
     form_label: String,
+    /// The subnet form's VLAN field (story 14.5), optional.
+    form_vlan: String,
+    /// The sentence that says both halves of Guy's decision of 2026-09-21 — the plan carries the
+    /// segment, and the ranges, the findings and the offer do not. Rendered only when a subnet
+    /// declares a VLAN, because until then it would describe a distinction the plan does not make.
+    vlan_note: String,
     form_first: String,
     form_last: String,
     form_policy: String,
@@ -1369,6 +1381,8 @@ pub(crate) struct IpamForms {
     edit_range_route: &'static str,
     /// Where an address row's correction posts.
     edit_address_route: &'static str,
+    /// Where the subnet's own correction posts — its label and its VLAN, never its CIDR (14.5).
+    edit_subnet_route: &'static str,
     /// Where a removal control asks, before it fires, what the deletion would change (decision 3).
     delete_check_route: &'static str,
     /// Where a finding's release posts (story 14.4b).
@@ -1414,6 +1428,7 @@ impl IpamForms {
             delete_address_route: route_of(WriteRoute::DeleteAddress),
             edit_range_route: route_of(WriteRoute::EditRange),
             edit_address_route: route_of(WriteRoute::EditAddress),
+            edit_subnet_route: route_of(WriteRoute::EditSubnet),
             delete_check_route: DELETE_CHECK_PATH,
             release_route: route_of(WriteRoute::Release),
             subnet_id,
@@ -1473,88 +1488,7 @@ pub(crate) struct PlanRender {
     cells: Vec<CellView>,
 }
 
-/// One declared range in the rail, with the id its controls name.
-///
-/// 🔑 **The current values travel with the row**, so the correction form is PRE-FILLED: an edit form
-/// an operator must retype from scratch is a delete-and-redefine wearing another word, and it loses
-/// the row's identity — which is exactly what `update_range` exists to keep.
-#[derive(Debug, Clone)]
-pub(crate) struct RailRangeRow {
-    /// The record's id, which its controls name.
-    id: String,
-    /// The bounds as the operator reads them.
-    bounds: String,
-    /// The policy's own word, translated.
-    policy: String,
-    /// The policy's BINDING TOKEN — never translated, because the route compares it without
-    /// trimming or folding.
-    policy_token: &'static str,
-    /// The first address, as the correction form pre-fills it.
-    first: String,
-    /// The last address, likewise.
-    last: String,
-    /// The operator's label.
-    label: String,
-}
-
-/// One defined address in the rail, with the id its controls name.
-#[derive(Debug, Clone)]
-pub(crate) struct RailAddressRow {
-    /// The record's id.
-    id: String,
-    /// The address, as the operator reads and corrects it.
-    addr: String,
-    /// The operator's label.
-    label: String,
-}
-
-/// The rail's two lists — what the operator can correct on the subnet in force.
-///
-/// ⚠️ **Lists in the rail, not controls on the cells** (Guy's decision 3, 2026-09-16). A cell is
-/// 14 px and already carries a state, a policy and an accessible name; two controls hung on it would
-/// put the gesture where there is no room to say what it does.
-#[derive(Debug, Clone)]
-pub(crate) struct RailLists {
-    /// The subnet in force, whose own removal the rail offers.
-    subnet_id: String,
-    /// Its declared ranges.
-    ranges: Vec<RailRangeRow>,
-    /// Its defined addresses.
-    addresses: Vec<RailAddressRow>,
-}
-
-impl RailLists {
-    /// Build the rail's lists from what the adapter read.
-    pub(crate) fn new(
-        subnet_id: String,
-        ranges: &[(String, Ipv4Addr, Ipv4Addr, IpPolicy, String)],
-        addresses: &[(String, Ipv4Addr, String)],
-    ) -> Self {
-        Self {
-            subnet_id,
-            ranges: ranges
-                .iter()
-                .map(|(id, first, last, policy, label)| RailRangeRow {
-                    id: id.clone(),
-                    bounds: format!("{first} – {last}"),
-                    policy: rust_i18n::t!(policy_key(*policy)).to_string(),
-                    policy_token: policy.as_str(),
-                    first: first.to_string(),
-                    last: last.to_string(),
-                    label: label.clone(),
-                })
-                .collect(),
-            addresses: addresses
-                .iter()
-                .map(|(id, addr, label)| RailAddressRow {
-                    id: id.clone(),
-                    addr: addr.to_string(),
-                    label: label.clone(),
-                })
-                .collect(),
-        }
-    }
-}
+use crate::ipam_rail::RailLists;
 
 /// The page.
 #[derive(askama::Template)]
@@ -1566,6 +1500,9 @@ pub(crate) struct IpamBody {
     s: IpamStrings,
     /// The selector.
     tabs: Vec<SubnetTab>,
+    /// Whether ANY subnet of the plan declares a VLAN — which is when the note under the selector is
+    /// owed (story 14.5). Before that it would describe a distinction the plan does not make.
+    any_vlan: bool,
     /// The grid, or `None` when the plan holds no subnet at all, when the identifier names none,
     /// or when the subnet is too large to draw.
     plan: Option<PlanRender>,
@@ -1592,7 +1529,7 @@ fn policy_modifier(policy: IpPolicy) -> &'static str {
 /// 🔴 These four keys ARE the binding table's UI column (PR #166) and
 /// [`IpPolicy::as_str`] is its code column. `the_policy_words_are_the_binding_tables_own` compares
 /// the two as a SET, because *a count is not a set* (story 6.5's M8).
-fn policy_key(policy: IpPolicy) -> &'static str {
+pub(crate) fn policy_key(policy: IpPolicy) -> &'static str {
     match policy {
         IpPolicy::Static => "ipam.policy.static",
         IpPolicy::DhcpPool => "ipam.policy.dhcp_pool",
@@ -1610,6 +1547,8 @@ fn empty_plan_body(audit: &Audit) -> String {
     let body = IpamBody {
         s: strings(None, None, false),
         tabs: Vec::new(),
+        // An empty plan declares no subnet, so it declares no VLAN either.
+        any_vlan: false,
         plan: None,
         too_large: None,
         rail: None,
@@ -1621,17 +1560,18 @@ fn empty_plan_body(audit: &Audit) -> String {
 }
 
 /// Build the body for an identifier no subnet carries.
-fn unknown_subnet_body(subnets: &[(String, Subnet, String)], audit: &Audit) -> String {
+fn unknown_subnet_body(subnets: &[ipam_repo::PlannedSubnet], audit: &Audit) -> String {
     let body = IpamBody {
         s: strings(None, None, false),
         tabs: subnets
             .iter()
-            .map(|(id, subnet, label)| SubnetTab {
-                id: id.clone(),
-                label: tab_label(subnet, label),
+            .map(|planned| SubnetTab {
+                id: planned.id.clone(),
+                label: tab_label(planned),
                 active: false,
             })
             .collect(),
+        any_vlan: declares_a_vlan(subnets),
         plan: None,
         too_large: None,
         rail: None,
@@ -1642,13 +1582,39 @@ fn unknown_subnet_body(subnets: &[(String, Subnet, String)], audit: &Audit) -> S
         .unwrap_or_else(|_| crate::page::render_error_body())
 }
 
-/// What the operator reads on a selector tab.
-fn tab_label(subnet: &Subnet, label: &str) -> String {
-    if label.is_empty() {
-        subnet.cidr()
-    } else {
-        format!("{} · {}", subnet.cidr(), label)
+/// Whether any subnet of the plan declares a VLAN.
+fn declares_a_vlan(subnets: &[ipam_repo::PlannedSubnet]) -> bool {
+    subnets.iter().any(|planned| planned.vlan != 0)
+}
+
+/// The selector tab's accessible name: the CIDR, its VLAN when it declares one, then the label.
+///
+/// 🔴 **A VLAN of 0 renders NOTHING**, because 0 is the sentinel for *none* (`0010`): rendering
+/// *"VLAN 0"* would state something false about the plan.
+///
+/// 🔑 **The property this exists for is DISTINCTNESS, not decoration.** Since story 14.5 the plan may
+/// hold one CIDR twice, and the validation measured what that costs a selector: two subnets with the
+/// same CIDR and empty labels rendered **two byte-identical links to different destinations**, which no
+/// gate in this project can see. The VLAN is what tells them apart.
+///
+/// ⚠️ **AND THE VLAN IS NOT ENOUGH, which two review layers established independently and this doc
+/// denied.** The label is operator free text, so `192.0.2.0/24` at VLAN 10 with an empty label and
+/// the same CIDR at NO VLAN labelled `VLAN 10` both render `192.0.2.0/24 · VLAN 10` — two rows the
+/// widened key admits, reproduced on a booted binary. A name assembled from free text cannot be
+/// distinct by construction, so this function no longer promises it: [`tab_labels`] does, over the
+/// whole selector, and that is where the property is asserted.
+pub(crate) fn tab_label(planned: &ipam_repo::PlannedSubnet) -> String {
+    let mut name = planned.subnet.cidr();
+    if planned.vlan != 0 {
+        name.push_str(&format!(
+            " · {}",
+            rust_i18n::t!("ipam.vlan_tab", vlan = planned.vlan)
+        ));
     }
+    if !planned.label.is_empty() {
+        name.push_str(&format!(" · {}", planned.label));
+    }
+    name
 }
 
 /// Resolve every string, with the occupancy and next-free lines when there is a plan.
@@ -1713,6 +1679,8 @@ fn strings(
         form_address_summary: rust_i18n::t!("ipam.form.address_summary").to_string(),
         form_cidr: rust_i18n::t!("ipam.form.cidr").to_string(),
         form_label: rust_i18n::t!("ipam.form.label").to_string(),
+        form_vlan: rust_i18n::t!("ipam.form.vlan").to_string(),
+        vlan_note: rust_i18n::t!("ipam.vlan_note").to_string(),
         form_first: rust_i18n::t!("ipam.form.first").to_string(),
         form_last: rust_i18n::t!("ipam.form.last").to_string(),
         form_policy: rust_i18n::t!("ipam.form.policy").to_string(),
@@ -1746,7 +1714,7 @@ fn strings(
 /// still a subnet the network can contradict, and its findings are bounded by what was SEEN, not by
 /// its size.
 fn render_too_large(
-    subnets: &[(String, Subnet, String)],
+    subnets: &[ipam_repo::PlannedSubnet],
     selected: &str,
     ranges: &[(Ipv4Addr, Ipv4Addr, IpPolicy, String)],
     audit: &Audit,
@@ -1763,6 +1731,7 @@ fn render_too_large(
     let body = IpamBody {
         s: strings(None, None, false),
         tabs: tabs_for(subnets, selected),
+        any_vlan: declares_a_vlan(subnets),
         plan: None,
         too_large: Some(rows),
         // 🔑 **AC6: the lists render in BOTH branches**, and the first version of this arm shipped
@@ -1779,21 +1748,63 @@ fn render_too_large(
         .unwrap_or_else(|_| crate::page::render_error_body())
 }
 
+/// Every selector tab's accessible name, DISTINCT by construction (story 14.5's code review).
+///
+/// 🔴 **A name assembled from free text cannot be unique, so uniqueness is imposed on the SET rather
+/// than hoped for on each element.** Where two tabs would read alike, each gets the tail of its own
+/// record id appended — the one thing about a subnet that is unique by definition. The suffix is
+/// paid only by the rows that collide, so an ordinary plan reads exactly as before.
+///
+/// ⚠️ **It is not a repair of the NAME, it is a repair of the SELECTOR**: the operator still sees
+/// two rows that look almost alike, and what they gain is the ability to tell which link goes where
+/// — which is what a keyboard and a screen reader need and what byte-identical names deny them.
+/// Making the two visually distinct is the operator's job, by labelling them.
+fn tab_labels(subnets: &[ipam_repo::PlannedSubnet]) -> Vec<String> {
+    let plain: Vec<String> = subnets.iter().map(tab_label).collect();
+    let mut seen: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for name in &plain {
+        *seen.entry(name.as_str()).or_default() += 1;
+    }
+    plain
+        .iter()
+        .zip(subnets)
+        .map(|(name, planned)| {
+            if seen.get(name.as_str()).copied().unwrap_or_default() > 1 {
+                // The TAIL, not the whole id: a v7 UUID's last group is the random half, so six
+                // characters separate two rows of one plan while staying readable aloud.
+                let tail: String = planned
+                    .id
+                    .chars()
+                    .rev()
+                    .take(6)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect();
+                format!("{name} · {tail}")
+            } else {
+                name.clone()
+            }
+        })
+        .collect()
+}
+
 /// The selector, built once for every caller that renders it.
-fn tabs_for(subnets: &[(String, Subnet, String)], selected: &str) -> Vec<SubnetTab> {
+fn tabs_for(subnets: &[ipam_repo::PlannedSubnet], selected: &str) -> Vec<SubnetTab> {
     subnets
         .iter()
-        .map(|(id, subnet, label)| SubnetTab {
-            id: id.clone(),
-            label: tab_label(subnet, label),
-            active: id == selected,
+        .zip(tab_labels(subnets))
+        .map(|(planned, label)| SubnetTab {
+            id: planned.id.clone(),
+            label,
+            active: planned.id == selected,
         })
         .collect()
 }
 
 /// Render one subnet's grid.
 pub(crate) fn render_plan(
-    subnets: &[(String, Subnet, String)],
+    subnets: &[ipam_repo::PlannedSubnet],
     selected: &str,
     plan: &PlanView,
     audit: &Audit,
@@ -1870,6 +1881,7 @@ pub(crate) fn render_plan(
             !audit.plan.has_static_range(subnet),
         ),
         tabs,
+        any_vlan: declares_a_vlan(subnets),
         plan: Some(PlanRender { cells }),
         too_large: None,
         rail: Some(rail),
@@ -1904,6 +1916,17 @@ mod tests {
         }
     }
 
+    /// One subnet as the plan holds it, for the render tests — VLAN 0, *none*, unless a test says
+    /// otherwise (story 14.5).
+    fn planned(id: &str, subnet: Subnet, label: &str, vlan: u16) -> ipam_repo::PlannedSubnet {
+        ipam_repo::PlannedSubnet {
+            id: id.to_string(),
+            subnet,
+            label: label.to_string(),
+            vlan,
+        }
+    }
+
     /// A `/24` for the tests, with its two edges and 254 hosts.
     fn office() -> Subnet {
         Subnet::new("192.0.2.0".parse().unwrap(), 24).expect("a /24")
@@ -1917,7 +1940,7 @@ mod tests {
     /// headings, both *nothing here yet* sentences and the subnet's removal control all render. The
     /// template's `None` arm renders no markup at all, and a comment nearby describes that one.
     fn no_rail() -> RailLists {
-        RailLists::new("s1".to_string(), &[], &[])
+        RailLists::new(&planned("s1", office(), "Office", 0), &[], &[])
     }
 
     /// A rail carrying one of each, which is what makes the FOUR per-row controls RENDER at all.
@@ -1934,7 +1957,10 @@ mod tests {
     /// satisfy a test.
     fn rail_with_rows() -> RailLists {
         RailLists::new(
-            "s1".to_string(),
+            // 🔑 A VLAN the fixture DECLARES, so the correction form's pre-fill is measured rather
+            // than assumed: with 0 here the field would be empty whether the code read the subnet's
+            // VLAN or read nothing at all.
+            &planned("s1", office(), "Office", 10),
             &[(
                 "r-1".to_string(),
                 v4("192.0.2.10"),
@@ -2297,7 +2323,7 @@ mod tests {
         assert_eq!(big.size(), 16_777_216, "a /8 holds 2^24 addresses");
         assert!(big.size() > MAX_DRAWN_ADDRESSES);
 
-        let subnets = vec![("t-big".to_string(), big, "Everything".to_string())];
+        let subnets = vec![planned("t-big", big, "Everything", 0)];
         let ranges = vec![(
             v4("10.0.0.1"),
             v4("10.0.0.50"),
@@ -2532,6 +2558,9 @@ mod tests {
             [
                 "ipam_audit.rs",
                 "ipam_page.rs",
+                // Story 14.5's code review split the rail out, on `CLAUDE.md`'s *split, not grown*
+                // rule: `ipam_page.rs` had reached 1992 code lines of the 2000 the gate allows.
+                "ipam_rail.rs",
                 "ipam_repo.rs",
                 "ipam_write.rs"
             ],
@@ -2713,10 +2742,11 @@ mod tests {
             "the empty plan must not point above at a subnet it does not have"
         );
 
-        let known = [(
-            "01900000-0000-7000-8000-0000000000cc".to_string(),
+        let known = [planned(
+            "01900000-0000-7000-8000-0000000000cc",
             Subnet::new("192.0.2.0".parse().expect("an address"), 24).expect("a subnet"),
-            "Office".to_string(),
+            "Office",
+            0,
         )];
         let unknown = unknown_subnet_body(&known, &no_subnet);
         assert!(
@@ -2797,7 +2827,7 @@ mod tests {
             &[],
         );
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &Audit {
@@ -2820,6 +2850,30 @@ mod tests {
                 route.path()
             );
         }
+
+        // 🔴 **AC3's OWN FIELD WAS CARRIED BY NOTHING, and the code review's edge layer measured
+        // it**: deleting the VLAN input from the definition form left 1 028 tests, clippy, all ten
+        // gates, the axe gate under all five `REQUIRE` flags and the keyboard gate at 61/0 GREEN —
+        // over a page offering no way to declare a VLAN at definition time at all. The WRITE path
+        // was carried three ways over; the field the operator types into was carried by nothing.
+        // ⚠️ The keyboard gate asserts the CORRECTION form's pre-fill and never reads
+        // `ipam-subnet-vlan`, which is why *"the VLAN is on the screen"* looked covered.
+        for (field, why) in [
+            ("ipam-cidr", "the subnet's address space"),
+            ("ipam-subnet-label", "what the operator calls it"),
+            ("ipam-subnet-vlan", "its segment (AC3)"),
+        ] {
+            assert!(
+                body.contains(&format!("id=\"{field}\"")),
+                "the definition form carries no `{field}` — {why} cannot be typed, and the route \
+                 that accepts it is reachable by nothing the product renders"
+            );
+        }
+        assert!(
+            body.contains(r#"<input id="ipam-subnet-vlan" name="vlan""#),
+            "and its NAME is what the route reads: an input whose id is right and whose name is \
+             wrong types into nothing"
+        );
     }
 
     /// Every cell of the rendered grid carries its own accessible name.
@@ -2828,7 +2882,7 @@ mod tests {
     /// died with the example dataset. The property did not die with it.
     #[test]
     fn every_cell_of_the_rendered_grid_carries_its_own_aria_label() {
-        let subnets = vec![("t-1".to_string(), office(), "Office".to_string())];
+        let subnets = vec![planned("t-1", office(), "Office", 0)];
         let plan = PlanView::derive(
             office(),
             &[(v4("192.0.2.1"), v4("192.0.2.254"), IpPolicy::Static)],
@@ -2872,11 +2926,12 @@ mod tests {
     #[test]
     fn the_selector_marks_one_tab_and_never_claims_to_be_the_page() {
         let subnets = vec![
-            ("t-1".to_string(), office(), String::new()),
-            (
-                "t-2".to_string(),
+            planned("t-1", office(), "", 0),
+            planned(
+                "t-2",
                 Subnet::new("198.51.100.0".parse().unwrap(), 24).unwrap(),
-                "Workshop".to_string(),
+                "Workshop",
+                0,
             ),
         ];
         let plan = PlanView::derive(office(), &[], &[]);
@@ -3066,6 +3121,244 @@ mod tests {
         )
     }
 
+    /// 🔴 **AC4 of story 14.5 — the selector's property is DISTINCTNESS, not decoration.** Since the
+    /// plan may hold one CIDR twice, two subnets with the same CIDR and empty labels rendered two
+    /// byte-identical links to different destinations — measured by this story's validation, and no
+    /// gate in this project can see it. The VLAN is what tells them apart.
+    ///
+    /// ⚠️ And a VLAN of **0 renders nothing**: 0 is the sentinel for *none*, so *"VLAN 0"* would state
+    /// something false about the plan.
+    #[test]
+    fn no_two_selector_tabs_share_an_accessible_name() {
+        let both = [
+            planned("t-10", office(), "", 10),
+            planned("t-20", office(), "", 20),
+            planned("t-none", office(), "", 0),
+        ];
+        let names: Vec<String> = both.iter().map(tab_label).collect();
+        assert_eq!(
+            names,
+            vec![
+                format!(
+                    "192.0.2.0/24 · {}",
+                    rust_i18n::t!("ipam.vlan_tab", vlan = 10)
+                ),
+                format!(
+                    "192.0.2.0/24 · {}",
+                    rust_i18n::t!("ipam.vlan_tab", vlan = 20)
+                ),
+                "192.0.2.0/24".to_string(),
+            ],
+            "the VLAN names the segment, and *none* names nothing"
+        );
+        assert!(
+            !names.iter().any(|name| name.contains("VLAN 0")),
+            "0 is the sentinel for *none*: rendering it would state something false"
+        );
+        // The label still follows the VLAN, so an operator who names their segments reads both.
+        assert_eq!(
+            tab_label(&planned("t-x", office(), "Office", 30)),
+            format!(
+                "192.0.2.0/24 · {} · Office",
+                rust_i18n::t!("ipam.vlan_tab", vlan = 30)
+            )
+        );
+    }
+
+    /// 🔴 **THE PROPERTY, where the test above holds only the APPEARANCE — and two review layers
+    /// established independently that the two are not the same claim.**
+    ///
+    /// Its sibling pins three exact strings and THEN asserts they are distinct, which after an
+    /// exact-equality assertion cannot fail; and the property it announced was FALSE of the product,
+    /// reproduced on a booted binary. The label is operator free text, so a subnet at VLAN 10 with
+    /// no label and the same CIDR at NO VLAN labelled *"VLAN 10"* rendered byte-identical links to
+    /// different destinations — the defect `tab_label`'s own doc says no gate here can see.
+    ///
+    /// 🔑 What this asserts is a property over ADVERSARIAL inputs rather than over three chosen
+    /// ones: names built to collide, names that forge the VLAN segment, names that forge a whole
+    /// neighbour. [`tab_labels`] imposes distinctness on the SET, so each of these passes for a
+    /// reason no enumeration could have supplied.
+    #[test]
+    fn the_selector_is_distinct_however_the_operator_labels_it() {
+        let vlan_ten = rust_i18n::t!("ipam.vlan_tab", vlan = 10).to_string();
+        let adversarial: Vec<Vec<ipam_repo::PlannedSubnet>> = vec![
+            // The shape the review reproduced: a label that forges the other row's VLAN segment.
+            vec![
+                planned("01900000-0000-7000-8000-00000000aaaa", office(), "", 10),
+                planned(
+                    "01900000-0000-7000-8000-00000000bbbb",
+                    office(),
+                    &vlan_ten,
+                    0,
+                ),
+            ],
+            // Two segments an operator left unnamed — the shape §1 measured before the VLAN existed.
+            vec![
+                planned("01900000-0000-7000-8000-00000000cccc", office(), "", 10),
+                planned("01900000-0000-7000-8000-00000000dddd", office(), "", 10),
+            ],
+            // A label forging a whole neighbour, VLAN segment and all.
+            vec![
+                planned("01900000-0000-7000-8000-00000000eeee", office(), "", 20),
+                planned(
+                    "01900000-0000-7000-8000-00000000ffff",
+                    office(),
+                    &format!("{vlan_ten} · x"),
+                    0,
+                ),
+                planned("01900000-0000-7000-8000-000000009999", office(), "x", 10),
+            ],
+        ];
+        for plan in adversarial {
+            let names = tab_labels(&plan);
+            assert_eq!(
+                names.len(),
+                plan.len(),
+                "one name per tab, whatever the labels say"
+            );
+            assert_eq!(
+                names
+                    .iter()
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len(),
+                names.len(),
+                "two tabs carry ONE accessible name, so a keyboard user cannot tell which link \
+                 leads where: {names:?}"
+            );
+        }
+        // ⚠️ THE CONTROL, without which the assertion above is satisfied by suffixing everything:
+        // an ordinary plan pays nothing, and its names are exactly what `tab_label` builds.
+        let ordinary = [
+            planned(
+                "01900000-0000-7000-8000-000000001111",
+                office(),
+                "Office",
+                10,
+            ),
+            planned(
+                "01900000-0000-7000-8000-000000002222",
+                office(),
+                "Workshop",
+                20,
+            ),
+        ];
+        assert_eq!(
+            tab_labels(&ordinary),
+            ordinary.iter().map(tab_label).collect::<Vec<_>>(),
+            "a plan whose tabs already differ must read exactly as it did before"
+        );
+    }
+
+    /// 🔴 **THE CORRECTION FORM'S VLAN PRE-FILL, AND IT WAS CARRIED BY NO RUST TEST AT ALL.**
+    /// Mutation M8 — `subnet_vlan` forced to the empty string whatever the subnet holds — left the
+    /// WHOLE suite green; its only carrier was a check in `a11y/kbd-probe.mjs`, which can measure
+    /// one half because the accessibility seed declares one VLAN and the page opens on it.
+    ///
+    /// 🔑 **The absent half is the one that matters and only a Rust test can build it**: the store
+    /// spells *no VLAN* as the sentinel 0, and the form must spell it as an EMPTY field — because an
+    /// empty field is what `parse_vlan` reads back as *none*, and a pre-filled `0` would be a number
+    /// the operator never typed and which the route then REFUSES by name. A browser gate cannot
+    /// reach it without a second seeded page.
+    ///
+    /// ⚠️ Story 6b.11's AC5 says a source guard does not SUFFICE where the defect lives in the DOM;
+    /// it does not say the browser should carry a property the render already shows. Both here.
+    #[test]
+    fn the_subnets_correction_form_spells_no_vlan_as_an_empty_field() {
+        let whole = offer_of(&[], &[]);
+        let quiet = quiet();
+        let audit = Audit {
+            plan: &whole,
+            network: &quiet,
+            subnet: Some(office()),
+        };
+        let view = PlanView::derive(office(), &[], &[]);
+        let rail_of = |vlan: u16| {
+            render_plan(
+                &[planned("s1", office(), "Office", vlan)],
+                "s1",
+                &view,
+                &audit,
+                RailLists::new(&planned("s1", office(), "Office", vlan), &[], &[]),
+            )
+        };
+        let declared = rail_of(10);
+        assert!(
+            declared.contains(
+                r#"<input id="ipam-edit-subnet-vlan" name="vlan" inputmode="numeric" maxlength="4" value="10">"#
+            ),
+            "a subnet that declares a VLAN arrives with it in the field: {declared}"
+        );
+        let none = rail_of(0);
+        assert!(
+            none.contains(
+                r#"<input id="ipam-edit-subnet-vlan" name="vlan" inputmode="numeric" maxlength="4" value="">"#
+            ),
+            "and *no VLAN* arrives as an EMPTY field, never as the sentinel the store writes — a \
+             `0` here is the one value the route refuses by name: {none}"
+        );
+    }
+
+    /// AC4 — the note that says what the VLAN does NOT reach is rendered when a subnet declares one,
+    /// and never before: until then it would describe a distinction the plan does not make.
+    #[test]
+    fn the_vlan_note_appears_only_once_a_subnet_declares_one() {
+        let whole = offer_of(&[], &[]);
+        let quiet = quiet();
+        let audit = Audit {
+            plan: &whole,
+            network: &quiet,
+            subnet: Some(office()),
+        };
+        let note = rust_i18n::t!("ipam.vlan_note").to_string();
+        let view = PlanView::derive(office(), &[], &[]);
+        let without = render_plan(
+            &[planned("s1", office(), "Office", 0)],
+            "s1",
+            &view,
+            &audit,
+            no_rail(),
+        );
+        assert!(
+            !without.contains(&note),
+            "no subnet declares a VLAN, so the page says nothing about one"
+        );
+        let with = render_plan(
+            &[
+                planned("s1", office(), "Office", 0),
+                planned("s2", office(), "Workshop", 20),
+            ],
+            "s1",
+            &view,
+            &audit,
+            no_rail(),
+        );
+        assert!(
+            with.contains(&note),
+            "one declared VLAN is enough: the note explains what the whole screen does with it"
+        );
+
+        // 🔴 **THE OTHER TWO BODIES THAT CAN RENDER IT, and until the code review this test drove
+        // the drawn plan alone.** `any_vlan` is set in four builders and the note is in BOTH
+        // `_ipam.html` branches — the code was already right — but story 14.4's AC6 was found HALF
+        // met three times on exactly this shape: a criterion satisfied in the branch the test walks
+        // and missing from the branch it does not. The *too large to draw* body is where an
+        // operator with a `/8` lives, and it is the branch that renders no grid to explain itself.
+        let declared = [
+            planned("s1", office(), "Office", 0),
+            planned("s2", office(), "Workshop", 20),
+        ];
+        let too_large = render_too_large(&declared, "s1", &[], &audit, no_rail());
+        assert!(
+            too_large.contains(&note),
+            "a subnet too large to draw still declares a VLAN, and still owes the sentence"
+        );
+        let unknown = unknown_subnet_body(&declared, &audit);
+        assert!(
+            unknown.contains(&note),
+            "and so does the body served for an identifier no subnet carries"
+        );
+    }
+
     /// Story 14.4b's code review, decision 3 — the release's confirmation rides in the URL and is
     /// shown only for a value that PARSES as an address: the parameter cannot carry text of its own.
     #[test]
@@ -3104,7 +3397,7 @@ mod tests {
         ]);
         let network = network_of(seen, &[]);
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &Audit {
@@ -3136,14 +3429,22 @@ mod tests {
             body.contains("10.0.0.7</span>"),
             "the premise: the outside address IS listed"
         );
+        // 🔴 **THIS ASSERTION WAS ITS OWN OPPOSITE UNTIL STORY 14.5**, and the flip is the
+        // criterion rather than a loosened guard: it read *"the outside list offers no release"*,
+        // which was TRUE of 14.4b's screen and was a hole rather than a decision — an address
+        // outside every declared subnet is precisely where a machine nobody planned for sits, so
+        // the one list the control was missing from is the one that needed it most. ⚠️ It was
+        // missing because the outside rows carry `kind: None`, so the findings list's
+        // `row.gap || row.undeclared` renders nothing for them — *a condition doing duty as a
+        // decision*.
         assert!(
-            !body.contains(&control("10.0.0.7")),
-            "the outside list offers no release (decision 2 puts it on the subnet's findings)"
+            body.contains(&control("10.0.0.7")),
+            "an address outside every subnet carries its release too (AC7)"
         );
         assert_eq!(
             body.matches("hx-post=\"/ipam/release\"").count(),
-            2,
-            "exactly one release per releasable finding"
+            3,
+            "exactly one release per releasable row — two findings and the outside address"
         );
         let name = format!(
             "{} — 192.0.2.20</button>",
@@ -3219,7 +3520,7 @@ mod tests {
         let whole = offer_of(&[], &[]);
         let quiet = quiet();
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &Audit {
@@ -3262,7 +3563,7 @@ mod tests {
             subnet: Some(office()),
         };
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &audit,
@@ -3333,7 +3634,7 @@ mod tests {
             subnet: Some(office()),
         };
         let view = PlanView::derive(office(), &[], &[v4("192.0.2.9")]);
-        let subnets = [("s1".to_string(), office(), "Office".to_string())];
+        let subnets = [planned("s1", office(), "Office", 0)];
         let body = render_plan(&subnets, "s1", &view, &audit, no_rail());
         let cell = body
             .split("aria-label=\"192.0.2.9 ·")
@@ -3379,7 +3680,7 @@ mod tests {
             &[v4("192.0.2.1")],
         );
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &view,
             &audit,
@@ -3423,7 +3724,7 @@ mod tests {
             subnet: Some(big),
         };
         let body = render_too_large(
-            &[("t-big".to_string(), big, "Everything".to_string())],
+            &[planned("t-big", big, "Everything", 0)],
             "t-big",
             &[(
                 v4("10.0.0.1"),
@@ -3502,7 +3803,7 @@ mod tests {
             "the most protective covering range decides what the cell IS, on every page"
         );
         let body = render_plan(
-            &[("nested".to_string(), nested, "Nested".to_string())],
+            &[planned("nested", nested, "Nested", 0)],
             "nested",
             &view,
             &audit,
@@ -3547,7 +3848,7 @@ mod tests {
         };
         let view = PlanView::derive(office(), &[], &[]);
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &view,
             &audit,
@@ -3610,7 +3911,7 @@ mod tests {
         let never_offered = rust_i18n::t!("ipam.next_free_no_static").to_string();
         assert_ne!(exhausted, never_offered, "two states, two sentences");
 
-        let subnets = [("s1".to_string(), office(), "Office".to_string())];
+        let subnets = [planned("s1", office(), "Office", 0)];
         let quiet = quiet();
         // (a) No static range reaches this subnet at all.
         let reserved_only = offer_of(
@@ -3805,6 +4106,122 @@ mod tests {
         }
     }
 
+    /// **AC5 — one CIDR in TWO SEGMENTS serves ONE audit, ONE grid and ONE offer, measured against
+    /// a real store.**
+    ///
+    /// 🔴 **This is the cost of Guy's decision of 2026-09-21 made executable, not a property being
+    /// celebrated.** The plan may hold one address space twice since `0010`; the ranges and the
+    /// defined addresses are read PLAN-WIDE (decision 2 of 2026-09-10 — the most protective range
+    /// decides, across nested subnets); and [`Subnet`] is `{base, prefix_len}`. So the two tabs
+    /// differ only by the row id in their href, and everything under them is the same page. The
+    /// screen SAYS so (`ipam.vlan_note`); this is the sentence made falsifiable.
+    ///
+    /// 🔑 **The CONTROL is the second half**: a range declared in segment B is measured CHANGING
+    /// segment A's answer. Without it this test would assert that two identical things are
+    /// identical — the shape `ipam_audit`'s own twin had, where a third assertion compared a value
+    /// with itself and could not fail.
+    #[tokio::test]
+    async fn two_segments_of_one_cidr_serve_one_audit_and_one_grid() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        for id in ["t-seg-a", "t-seg-b"] {
+            crate::ipam_repo::tests::forget_subnet(&pool, id).await;
+        }
+        let cidr = crate::ipam_repo::Subnet::new("100.69.0.0".parse().unwrap(), 24)
+            .expect("a subnet of its own");
+        let mut conn = pool.acquire().await.expect("a connection");
+        crate::ipam_repo::insert_subnet(&mut *conn, "t-seg-a", cidr, "segment A", 10)
+            .await
+            .expect("the first segment");
+        crate::ipam_repo::insert_subnet(&mut *conn, "t-seg-b", cidr, "segment B", 20)
+            .await
+            .expect("the SAME address space in another segment");
+        drop(conn);
+
+        // 🔴 **WHAT IS COMPARED IS THE GRID, THE FINDINGS AND THE OFFER — never the whole page,
+        // and the first draft of this test compared the whole page and reddened correctly.** The
+        // SELECTOR legitimately differs between the two tabs: each names its own row id, each
+        // carries its own VLAN in its label, and `aria-current` moves. That difference is the
+        // feature; comparing it away would have meant deleting the very thing story 14.5 adds.
+        // What must not differ is everything DOWNSTREAM of the selector.
+        let between = |html: &str, from: &str, to: &str| {
+            let start = html
+                .find(from)
+                .unwrap_or_else(|| panic!("no `{from}` in the page"));
+            let rest = &html[start..];
+            let end = rest
+                .find(to)
+                .unwrap_or_else(|| panic!("no `{to}` after `{from}`"));
+            rest[..end + to.len()].to_string()
+        };
+        let parts_of = |html: &str| {
+            (
+                between(html, "<ul class=\"ipam-grid\"", "</ul>"),
+                between(html, "<section class=\"ipam-audit\"", "</section>"),
+                between(html, "<span class=\"ipam-occupancy\"", "</span>"),
+            )
+        };
+        let a = plan_data(&pool, Some("t-seg-a"))
+            .await
+            .expect("the plan draws");
+        let b = plan_data(&pool, Some("t-seg-b"))
+            .await
+            .expect("the plan draws");
+        assert_eq!(
+            parts_of(&a),
+            parts_of(&b),
+            "the two segments of one address space serve the same grid, the same findings and the \
+             same occupancy: everything below the selector reads a plan that carries no VLAN"
+        );
+        // ⚠️ And the premise, asserted rather than assumed: the two pages are NOT byte-identical.
+        // Without this the comparison above could be passing over two renders of one tab.
+        assert_ne!(
+            a, b,
+            "the premise: the selector does tell the two segments apart"
+        );
+
+        // The CONTROL: a `dhcp-pool` declared in segment B changes segment A's own offer, which is
+        // what the note on the screen warns about in words.
+        let mut conn = pool.acquire().await.expect("a connection");
+        let before = parts_of(
+            &plan_data(&pool, Some("t-seg-a"))
+                .await
+                .expect("the plan draws"),
+        );
+        crate::ipam_repo::insert_range(
+            &mut conn,
+            "t-seg-r1",
+            "t-seg-b",
+            "100.69.0.1".parse().unwrap(),
+            "100.69.0.40".parse().unwrap(),
+            opencmdb_core::ipam::IpPolicy::DhcpPool,
+            "B's pool",
+        )
+        .await
+        .expect("the twin's range");
+        drop(conn);
+        let after = parts_of(
+            &plan_data(&pool, Some("t-seg-a"))
+                .await
+                .expect("the plan draws"),
+        );
+        assert_ne!(
+            before, after,
+            "🔴 a range declared in the OTHER segment changed this one's page — the cost Guy took \
+             knowingly, and the reason `/ipam` carries a sentence about it"
+        );
+        for id in ["t-seg-a", "t-seg-b"] {
+            crate::ipam_repo::tests::forget_subnet(&pool, id).await;
+        }
+    }
+
     /// **A query the extractor refuses answers the product's own sentence, never the framework's.**
     ///
     /// 🔴 With `Query<…>` extracted directly, `?subnet=a&subnet=b` served
@@ -3873,7 +4290,7 @@ mod tests {
             "the findings section belongs to ONE subnet and no subnet is in force: {empty}"
         );
 
-        let known = [("s1".to_string(), office(), "Office".to_string())];
+        let known = [planned("s1", office(), "Office", 0)];
         let unknown = unknown_subnet_body(&known, &audit);
         assert!(
             unknown.contains("10.9.9.9"),
@@ -3896,7 +4313,7 @@ mod tests {
             &[],
         );
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &Audit {
@@ -4187,10 +4604,11 @@ mod tests {
         // range delete's own refusal is announced before it is met.
         // 🔑 75 → 76 at story 14.4b, read off the printed list: `ipam.finding.release`, the binding
         // gesture's word on a finding's control; 76 → 77 at its code review: `ipam.released_note`, the
-        // confirmation that rides in the URL.
+        // confirmation that rides in the URL; **77 → 80 at story 14.5**, read off the list this
+        // assertion prints: `ipam.form.vlan`, `ipam.vlan_tab` and `ipam.vlan_note`.
         assert_eq!(
             keys.len(),
-            77,
+            80,
             "the keys this file can render changed — update the count only after reading the list: \
              {keys:?}"
         );

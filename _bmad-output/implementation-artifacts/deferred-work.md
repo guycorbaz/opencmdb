@@ -5172,6 +5172,20 @@ it re-derivable.*
   migration must record its pass here too rather than quietly using a script.**
   **Owner: whichever story next
   writes a migration**, or the driver's next revision.
+  🔴 **STORY 14.5 IS THE THIRD, and it recorded its pass here as this row asks.** `0010`'s four
+  mutations were driven by a purpose-built script (virgin database per mutation, a warm-up that
+  migrates once, a REFUSAL when the mutated migration does not apply — story 14.1's finding built
+  in). **D1** (the key back to `(base, prefix_len)`) red · **D2** (`NOT NULL DEFAULT 0` →
+  `NULL DEFAULT NULL`) **GREEN, refuting the migration header**: the adapter's `vlan` is a `u16` at
+  every site, so no code path can bind NULL and the clause is the SECOND carrier of what the TYPE
+  holds · **D3** (the `CHECK` widened to 65535) green by prediction, the adapter refusing 4095
+  first · **D4** (add-after-drop) green by prediction, because what the order protects is a run
+  that fails BETWEEN the two statements, which no green or red can show. ⚠️ **And the script lied
+  on its first run**, in this project's oldest recorded way: `cargo test A B` passes two filters
+  where cargo accepts one, so D3 ran NOTHING and `grep -q "0 failed"` on an EMPTY result answered
+  *red* — a measurement manufactured from an absence. It refuses both now. 🔑 *A debt three stories
+  route around stops being a debt and becomes a practice* — and this is the third, so the sentence
+  above is no longer a warning but a description.
 - 🔴 **A DDL mutation that leaves INVALID SQL measures the parser, not the guard** — and it reports
   a red indistinguishable from a real one. Measured twice in this story's own pass: deleting a
   `CONSTRAINT` line left a trailing comma, the migration failed, and **101 tests reddened** on a
@@ -5698,11 +5712,14 @@ One row, and v0.3.0 is what made it live.
   a function kept warm for a use it had not got — `ipam_write.rs`'s own rule about `WriteRoute::paths`.
 - ⚠️ **Decision 5's merge across L2 domains reads REUSED PRIVATE SPACE as a conflict.** `192.168.1.10` in
   two separate broadcast domains is two hardware addresses on one IPv4 here, so `/ipam` calls it
-  « Conflit d'adresse ». It is the price of merging, and the plan has no VLAN axis to tell the two apart
-  (FR21's VLAN half is in Epic 14's scope and outside the arbitrations). Not reachable on the shipped
-  product — the connector reports one `l2_domain`, the nil UUID — and pinned by
-  `one_address_in_two_l2_domains_is_read_as_a_conflict` so the day it changes, a test says so.
-  **Owner: the story that adds the VLAN axis (FR21).**
+  « Conflit d'adresse ». Not reachable on the shipped product — the connector reports one `l2_domain`,
+  the nil UUID — and pinned by `one_address_in_two_l2_domains_is_read_as_a_conflict`.
+  🔴 **STORY 14.5 ADDED THE VLAN AXIS AND THE MERGE IS UNCHANGED — this row's owner delivered, and the
+  answer is a DECISION rather than the fix the row anticipated.** The plan's VLAN is DECLARED by the
+  operator; an `l2_domain` is OBSERVED by a connector; nothing in this product relates the two, and
+  joining them would be an identity claim no evidence supports. Guy, 2026-09-21: the audit is
+  VLAN-blind and the screen says so (`ipam.vlan_note`). **Re-owned: the story that gives a connector a
+  segment of its own** — then the observed side has a VLAN and the join stops being a guess.
 - ⚠️ **A finding's triage link is decided from the DECLARED register, not from the triage queue.** The
   queue raises a `nouveau:` row for an observed IPv4 no declared value claims, from `observation_record`;
   the audit reads story 14.3a's summary, which keeps a sighting after its observation is gone. So an
@@ -5877,7 +5894,9 @@ three independently. These are the ones deferred rather than patched — each wi
   is per-subnet, so two subnets may legally carry ranges with identical bounds — and *a property no
   test can tell from its opposite is a property a refactor removes in silence*. What is owed is a
   fixture with two subnets carrying the same bounds. **Owner: the story that next touches the check**,
-  with M-C6 as its entry price.
+  with M-C6 as its entry price. ⚠️ **Story 14.5 made that fixture ORDINARY rather than contrived**: one
+  CIDR may now be declared once per VLAN, so two subnets carrying ranges with identical bounds is what
+  a two-segment plan looks like — the shape this row calls *legal* is now the shape the screen draws.
 - ⚠️ **A correction disclosure announces its record twice**: the `<summary>` and its submit button both
   render *"Correct — 192.0.2.9"*, so a screen reader meets the same name on the disclosure and on the
   control inside it. Deferred rather than patched: the honest fix gives the button its own label —
@@ -6002,3 +6021,77 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   that makes `set_var` unsafe (the blind layer). Pre-existing, story 6.4b's; 14.4c's own tests pass the
   directory to the child instead. **Owner: the next story that touches that test.**
 
+
+## Story 14.5 — the VLAN axis
+
+- 🔴 **Two tests carry an UNQUALIFIED `DELETE FROM ip_subnet`, so the suite WIPES the plan.**
+  `ipam_page.rs:3052` and `sighting_repo.rs:1525` clear the table outright, where every other store
+  test deletes by its own id. The consequence is measured rather than supposed: on a store the
+  accessibility seed had run against, a full `cargo test` reproduced action A3's two collisions only
+  for the tests that ran BEFORE the wipe — the pair had to be measured per test on a freshly seeded
+  store to be deterministic at all. ⚠️ It is not a CI hazard today (CI seeds AFTER the tests, and
+  `AXE_REQUIRE_PLAN` turns an empty plan into *the gate could not run* rather than a pass) and it is
+  a hazard for anyone running the gates and the suite on one store, which is how a developer works.
+  **Owner: the next story that touches either test.**
+- ⚠️ **`ipam_write.rs` is a second, now-registered instance of `repo.rs`'s `file-size` blindness.**
+  The gate stops at the first `#[cfg(test)]` at any nesting, and one sits on a helper inside an
+  `impl` at line **307** on the shipped tree — so the gate reads that many production lines where
+  there are over sixteen hundred. ⚠️ The row first said 302, a contexting figure carried forward and
+  never re-read; the number is the point of the row, so it is the one thing it had to get right. Registered by story 14.5's contexting rather than rediscovered, and it belongs with the
+  `repo.rs` row above: whatever closes one closes both. **Owner: the story that raises the ceiling.**
+- ⚠️ **The kbd gate's press depends on focus left by an EARLIER check, and nothing declares it.**
+  `kbd-probe.mjs` sends `Enter` to whatever holds focus; what puts the intended control there is the
+  check immediately above. Measured at story 14.5: a new check inserted after it left another
+  control focused and the gate RELEASED THE WRONG ADDRESS, reddening three downstream checks that
+  had nothing wrong with them. Closed for that one case by ordering, and the coupling stands for
+  every future check. **Owner: the next story that adds a check to that block.**
+- ⚠️ **`0007:100` says *"A plan that holds one subnet twice is not a plan"* over a key that no longer
+  exists, and it CANNOT be corrected.** `sqlx` checksums an applied migration, so editing one byte of
+  `0007` makes every store that already ran it refuse to boot — story 14.1 met that as
+  `VersionMismatch(7)`. Story 14.5 records the correction in `0010`'s header instead, where the
+  version order brings a reader who has just read the false line. 🔑 **The transferable half is the
+  rule, not this instance**: *a shipped migration's prose is as immutable as its SQL*, so a sentence
+  in a migration must be written to survive the schema changing under it, or accept that its
+  correction will live somewhere else. **Owner: the next story that writes a migration**, which
+  should read this before writing a sentence in the present tense.
+- 🔴 **AC2's 409 names the RULE where the criterion asked it to name the VLAN, and AC3's *"its own
+  refusal sentence"* is NOT met — both by decision, and neither was registered until the code
+  review.** `constraint_refusal` receives a constraint name and a route and never the value the
+  operator typed, so naming the number would mean threading it through every refusal; the sentence
+  shipped — *an address space is declared once per VLAN* — is true in the VLAN and the no-VLAN case
+  alike, which *"in that VLAN"* would not have been. And the correction SHARES the definition's
+  sentence because both gestures collide on the very same key, so a second sentence would name one
+  record twice (story 14.4's arbitration, applied). ⚠️ What the review found is that the story
+  announced the first divergence as *registered* while the register held no such row, and announced
+  the second nowhere at all — story 6b.9's class: *a section that says "registered" is not a
+  registration*. **Owner: Epic 14's final retrospective**, which should decide whether a refusal may
+  quote the value it refuses.
+- ⚠️ **A release from the second segment's tab sends the operator to the FIRST segment's plan.**
+  `release_address` picks the containing subnet with `min_by_key(size)`; with two segments of one
+  CIDR the sizes tie, and `list_subnets`' `ORDER BY base, prefix_len, vlan` makes the LOWEST VLAN win
+  — so releasing while looking at VLAN 20 lands on VLAN 10 under a success sentence, which is the
+  shape story 14.4's review called a defect. ⚠️ `ipam.vlan_note` names three things the VLAN does not
+  reach (ranges, findings, offer) and this redirect is a fourth, said in neither the note nor the
+  manual. 🔑 The honest remedy is for the request to carry the subnet the operator was LOOKING at —
+  which is the field story 14.4's arbitration REMOVED from four forms for a different reason, so it
+  is a decision and not a patch. **Owner: the story that next touches the release route.**
+- ⚠️ **The three `GET` checks are `ipam_page.rs`'s next split, measured rather than guessed.**
+  `address_check`, `range_check` and `delete_check` with their `_data` and `render_*` halves are
+  ~550 production lines and a sharp concept of their own — *routes that warn before a write and
+  refuse nothing*. Story 14.5's code review split the RAIL instead (99 lines, taking the file from
+  1992 to **1894**), because moving 550 lines after three layers had read the file would have
+  shipped an unreviewed restructure to buy headroom a hundred lines already bought. 🔑 The
+  measurement is recorded so the next story choosing where to cut does not re-take it. **Owner: the
+  next story that grows `ipam_page.rs`.**
+- ⚠️ **Two segments of one CIDR: the GRID shows the other segment's records and the RAIL does not,
+  and both halves are deliberate.** Measured by story 14.5's code review: with an address defined in
+  segment A only, segment B's grid paints a cell named *defined* and its occupancy reads *1
+  defined*, while B's rail lists nothing defined and offers no correction or removal for it. The
+  grid is plan-wide by Guy's decision 2 of 2026-09-10 (the most protective range decides, across
+  nested subnets); the rail is per-subnet because *a control that edits another subnet's record from
+  this page is a gesture whose effect the operator cannot see*. 🔑 So the screen is right twice and
+  reads as inconsistent once, and `ipam.vlan_note` now says *nothing below this line uses it* rather
+  than naming three readers of five. ⚠️ Also measured: the same IPv4 can then be defined a SECOND
+  time in the other segment — two `ip_address` rows under two labels for one address in one
+  broadcast domain — and the product reports no conflict. **Owner: Epic 14's final retrospective**,
+  which should decide whether a per-segment rail over a plan-wide grid is the shape it wants.

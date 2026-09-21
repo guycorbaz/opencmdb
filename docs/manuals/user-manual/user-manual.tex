@@ -163,7 +163,10 @@ plan is empty; the screen says so and links to the form that fills it. From the
 \emph{Change the plan} panel you can:
 \begin{itemize}
   \item define a \textbf{subnet}, in CIDR notation (for example \texttt{192.0.2.0/24}), with a
-        label;
+        label and, optionally, a \textbf{VLAN} --- a number from 1 to 4094, or nothing at all.
+        The same address space may be declared once per VLAN, so \texttt{192.0.2.0/24} on VLAN~10
+        and the same CIDR on VLAN~20 are two entries of the plan; declaring it twice in one VLAN is
+        refused;
   \item inside the selected subnet, define a \textbf{range}: a first and a last address, a label,
         and what the range is meant for --- \texttt{static}, \texttt{dhcp-pool},
         \texttt{reserved} or \texttt{infrastructure};
@@ -263,9 +266,27 @@ overlapping ranges, or a subnet nested in another --- the most protective one de
 large to draw proposes nothing and still lists what the network shows. The occupancy line counts as
 free only what the offer would propose.
 
+\section{What the VLAN does, and what it does not}
+The VLAN is part of what \emph{you declare}. The scanner does not read 802.1Q tags, and nothing in
+the product relates a VLAN you wrote down to a broadcast domain it observed --- so the audit ignores
+it entirely. Ranges, findings and the free-address offer are computed across the whole plan, and two
+subnets sharing one address space share one audit: a \texttt{dhcp-pool} you declare in one of them
+changes what the other reports. The screen carries that sentence under the subnet selector, so you
+meet it where it matters rather than here. What the VLAN buys you today is the ability to write down
+a plan that reuses one address space in several segments, and a selector that tells those segments
+apart.
+
+\section{Correcting a subnet}
+A subnet's own \emph{Correct} control, at the foot of the panel beside the grid, changes its label
+and its VLAN --- and nothing else. There is deliberately no field for its address space: moving a
+subnet's CIDR would leave the ranges and addresses hanging from it outside their own parent, so the
+way to change an address space is to define the subnet you want and remove the one you do not.
+Clearing the VLAN field means \emph{no VLAN}; a subnet cannot be moved onto a VLAN another entry of
+the same address space already holds.
+
 \begin{planned}
-VLANs and IPv6 are not implemented yet. Editing, deleting and releasing are described above and ship
-with this release.
+IPv6 is not implemented yet. Editing, deleting and releasing are described above and ship with this
+release.
 \end{planned}
 
 \chapter{Applications and hosted software}

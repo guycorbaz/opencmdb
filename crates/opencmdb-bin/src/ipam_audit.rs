@@ -81,14 +81,20 @@ impl Seen {
 /// decision 5 buys and nobody had written down.** `192.168.1.10` is the ordinary address of a
 /// machine on every private network there is: two of them, in two separate broadcast domains, are
 /// two hardware addresses on one IPv4 and are reported as « Conflit d'adresse » by
-/// [`Plan::is_conflict`] — *reused private space read as a duplicate*. It is the price of decision 5,
-/// which merges because the PLAN has no VLAN axis (FR21's VLAN half is Epic 14 scope and outside the
-/// arbitrations), so an address is one address here whatever domain saw it.
+/// [`Plan::is_conflict`] — *reused private space read as a duplicate*.
+///
+/// 🔴 **THE DAY NAMED HERE HAS COME AND THE MERGE IS UNCHANGED, which is a DECISION and no longer a
+/// consequence.** This sentence read *"the plan has no VLAN axis"* until story 14.5, which gave it
+/// one (`0010`) — and the audit still merges, because the VLAN the plan now carries is DECLARED by
+/// the operator while an `l2_domain` is OBSERVED by a connector, and nothing in this product relates
+/// the two. Joining them would mean deciding that a subnet's declared VLAN 10 is the domain a
+/// connector calls `…-7000-…`, which is an identity claim no evidence supports. Guy's decision of
+/// 2026-09-21: **the audit is VLAN-blind, and the screen SAYS so** (`ipam.vlan_note`).
 ///
 /// ⚠️ **Not reachable on the shipped product and tested anyway**: the connector reports one
-/// `l2_domain`, the nil UUID, so the second domain needs a second connector. The day FR21 lands, the
-/// plan gains a VLAN and this merge is what must be revisited — registered rather than left to be
-/// rediscovered by whoever meets the finding on a real network.
+/// `l2_domain`, the nil UUID, so the second domain needs a second connector. What would change this
+/// is a connector that reads a tag — then the observed side has a segment of its own and the join
+/// stops being a guess. Registered rather than left to be rediscovered on a real network.
 pub(crate) fn merge_sightings(sightings: &[Sighting]) -> BTreeMap<Ipv4Addr, Seen> {
     let mut seen: BTreeMap<Ipv4Addr, Seen> = BTreeMap::new();
     for sighting in sightings {
@@ -900,10 +906,11 @@ mod tests {
     /// ordinary private address in two separate broadcast domains are two hardware addresses on one
     /// IPv4 here, and the screen calls it « Conflit d'adresse ».
     ///
-    /// ⚠️ It is the PRICE of decision 5 and not a defect to fix in this story: the plan has no VLAN
-    /// axis (FR21's VLAN half is outside Epic 14's arbitrations), so an address is one address
-    /// whatever domain saw it. Registered, and pinned here so the day FR21 lands this test is what
-    /// says the behaviour changed.
+    /// ⚠️ It is the PRICE of decision 5 and it SURVIVED story 14.5, which is the point of rewriting
+    /// this reason rather than deleting the test. The plan HAS a VLAN axis now; it is a DECLARED
+    /// one, and an `l2_domain` is an OBSERVED one, so relating them would be an identity claim no
+    /// evidence supports. The behaviour is unchanged and the reason is not — and this test is what
+    /// would say so the day a connector reads a tag.
     #[test]
     fn one_address_in_two_l2_domains_is_read_as_a_conflict() {
         let plan = plan();
@@ -916,7 +923,8 @@ mod tests {
             kinds(&findings),
             vec![(v4("192.0.2.20"), Some(FindingKind::Gap), true)],
             "two DIFFERENT hardware addresses in two domains read as a conflict — the merge is what \
-             makes it one address, and the plan has no VLAN to tell the two apart"
+             makes it one address, and the plan's VLAN cannot tell them apart because it is declared \
+             where the domain is observed"
         );
     }
 
@@ -1146,6 +1154,7 @@ mod tests {
                 subnet_id,
                 subnet("100.64.141.0", 24),
                 "release",
+                0,
             )
             .await
             .expect("subnet");
@@ -1283,6 +1292,7 @@ mod tests {
                 subnet_id,
                 subnet("100.64.142.0", 24),
                 "release",
+                0,
             )
             .await
             .expect("subnet");
@@ -1366,6 +1376,7 @@ mod tests {
                 subnet_id,
                 subnet("100.64.143.0", 24),
                 "release",
+                0,
             )
             .await
             .expect("subnet");
@@ -1538,7 +1549,7 @@ mod tests {
             forget_release_fixture(&pool, subnet_id, addr).await;
         }
         cleaned_up(&pool, subnet_id, &[later_defined, edited_onto, planted], async {
-            crate::ipam_repo::insert_subnet(&pool, subnet_id, subnet("100.64.145.0", 24), "release")
+            crate::ipam_repo::insert_subnet(&pool, subnet_id, subnet("100.64.145.0", 24), "release", 0)
                 .await
                 .expect("subnet");
 
@@ -1623,10 +1634,10 @@ mod tests {
         crate::ipam_repo::tests::forget_subnet(&pool, inner).await;
         crate::ipam_repo::tests::forget_subnet(&pool, outer).await;
         let outcome = futures_util::FutureExt::catch_unwind(std::panic::AssertUnwindSafe(async {
-            crate::ipam_repo::insert_subnet(&pool, outer, subnet("100.66.0.0", 16), "outer")
+            crate::ipam_repo::insert_subnet(&pool, outer, subnet("100.66.0.0", 16), "outer", 0)
                 .await
                 .expect("outer");
-            crate::ipam_repo::insert_subnet(&pool, inner, subnet("100.66.5.0", 24), "inner")
+            crate::ipam_repo::insert_subnet(&pool, inner, subnet("100.66.5.0", 24), "inner", 0)
                 .await
                 .expect("inner");
             assert_eq!(
@@ -1712,5 +1723,101 @@ mod tests {
             !read.keys().any(|addr| *addr == v4("100.64.148.9")),
             "and the unreadable one is skipped — the address stays held"
         );
+    }
+
+    /// 🔴 **AC5 of story 14.5 — the audit is VLAN-BLIND, and this test MEASURES what that costs.**
+    ///
+    /// The plan may hold one CIDR twice since `0010`, once per segment. The ranges and the defined
+    /// addresses are read PLAN-WIDE (Guy's decision 2 of 2026-09-10), and [`Subnet`] is `{base,
+    /// prefix_len}` with no VLAN — so the second segment's `dhcp-pool` governs the first segment's
+    /// audit. Guy took that cost knowingly on 2026-09-21 (the alternative undid decision 2), and the
+    /// screen carries the sentence; this is the sentence made executable.
+    ///
+    /// 🔑 **The CONTROL is what makes it mean anything**: the same subnet audited ALONE.
+    ///
+    /// 🔴 **AND THE TWIN IS INERT AT THIS LEVEL, which the code review measured and this doc denied.**
+    /// `Plan` reads `subnets` only through `iter().any(…)`, so `vec![cidr, cidr]` is observationally
+    /// `vec![cidr]`: what turns the `gap` into an `undeclared` below is the added `dhcp-pool` RANGE,
+    /// which would do it with one subnet and with no VLAN anywhere. Attributing that red to the twin
+    /// would be *a mutation named for one thing and applied to another*, one level down.
+    ///
+    /// 🔑 **So the inertness is asserted rather than papered over — it IS the VLAN-blindness**: at
+    /// the pure level the two plan entries are ONE value, and no runtime check can tell them apart
+    /// because `Subnet` is `{base, prefix_len}`. What a test can measure at the STORE level, where
+    /// the two rows really are distinct and a range hangs off one of them by foreign key, is
+    /// `ipam_page`'s `two_segments_of_one_cidr_serve_one_audit_and_one_grid`.
+    #[test]
+    fn one_cidr_in_two_segments_shares_one_audit_and_the_second_changes_the_first() {
+        let cidr = office();
+        let seen = seen_at(&["192.0.2.20"]);
+        let claimed = BTreeSet::new();
+
+        // The CONTROL: segment A alone — a `static` range, so its sighting is a `gap` and the offer
+        // starts at .1.
+        let alone = Plan {
+            subnets: vec![cidr],
+            ranges: vec![(v4("192.0.2.1"), v4("192.0.2.40"), IpPolicy::Static)],
+            defined: BTreeSet::new(),
+        };
+        assert_eq!(
+            kinds(&alone.audit(cidr, &seen, &claimed)),
+            vec![(v4("192.0.2.20"), Some(FindingKind::Gap), false)],
+            "the control: alone, the sighting is a gap"
+        );
+        assert_eq!(
+            alone.next_offerable(cidr, &seen, &BTreeSet::new()),
+            Some(v4("192.0.2.1")),
+            "the control: alone, the offer starts at .1"
+        );
+
+        // 🔑 **THE INERTNESS, asserted first**: adding the duplicate entry and NOTHING else leaves
+        // every answer identical. That is the VLAN-blindness at this level, and it is what makes the
+        // next block's change attributable to the RANGE rather than to the twin.
+        let twin_only = Plan {
+            subnets: vec![cidr, cidr],
+            ranges: vec![(v4("192.0.2.1"), v4("192.0.2.40"), IpPolicy::Static)],
+            defined: BTreeSet::new(),
+        };
+        assert_eq!(
+            kinds(&twin_only.audit(cidr, &seen, &claimed)),
+            kinds(&alone.audit(cidr, &seen, &claimed)),
+            "a second entry for the SAME address space changes no finding: `Subnet` is \
+             `{{base, prefix_len}}` and the audit reads `subnets` only through `any`"
+        );
+        assert_eq!(
+            twin_only.next_offerable(cidr, &seen, &BTreeSet::new()),
+            alone.next_offerable(cidr, &seen, &BTreeSet::new()),
+            "and it changes no offer either"
+        );
+
+        // The SAME subnet, with a twin in another segment whose own `dhcp-pool` covers the span.
+        let with_twin = Plan {
+            subnets: vec![cidr, cidr],
+            ranges: vec![
+                (v4("192.0.2.1"), v4("192.0.2.40"), IpPolicy::Static),
+                (v4("192.0.2.1"), v4("192.0.2.40"), IpPolicy::DhcpPool),
+            ],
+            defined: BTreeSet::new(),
+        };
+        assert_eq!(
+            kinds(&with_twin.audit(cidr, &seen, &claimed)),
+            vec![(v4("192.0.2.20"), Some(FindingKind::Undeclared), false)],
+            "🔴 a `dhcp-pool` DECLARED IN THE OTHER SEGMENT turned the first segment's `gap` into \
+             `undeclared` — the cost Guy took, and what the screen's sentence warns about. ⚠️ The \
+             ranges are what carry it; the duplicate subnet entry is inert, asserted above"
+        );
+        assert_eq!(
+            with_twin.next_offerable(cidr, &seen, &BTreeSet::new()),
+            None,
+            "and the other segment's range emptied this one's offer"
+        );
+        // 🔴 **A THIRD ASSERTION STOOD HERE AND COULD NOT FAIL**: it compared
+        // `with_twin.audit(cidr, …)` with ITSELF, under a message about two segments carrying one
+        // audit. There is nothing to compare — `Subnet` is `{base, prefix_len}`, so the two plan
+        // entries ARE one value and no runtime check can tell them apart. That is the proof, and
+        // it belongs to the type rather than to a `assert_eq!`. What a test CAN measure is that
+        // the two SELECTOR TABS, which do differ (they carry different row ids), serve the same
+        // audit — and that is `ipam_page`'s
+        // `two_segments_of_one_cidr_serve_one_audit_and_one_grid`, against a real store.
     }
 }

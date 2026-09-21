@@ -32,20 +32,22 @@ const CHROME = process.env.AXE_CHROME ?? "/usr/bin/google-chrome";
 const QUEUE = ".queue .queue-row > a";
 // The settle in `app.js` is 250 ms; everything here waits past it with room for a document.
 const SETTLE_WAIT_MS = 900;
-// 🔑 The floor, and it EQUALS what is there rather than sitting under it: **fifty-nine** checks run
+// 🔑 The floor, and it EQUALS what is there rather than sitting under it: **sixty-one** checks run
 // on a queue of two, which is the shortest queue this gate accepts. ⚠️ This sentence said *twenty*
 // until story 14.4's slice-D review — story 6b.11's figure, left behind by every floor move since —
 // so the ONE place a reader verifies *the floor equals what is there* asserted a number 33 short of
 // the constant beneath it. ⚠️ And the repair's first version said *fifty-two*: the same review added
 // a check in the same breath, so the corrected sentence was stale before it was saved. **A floor is
 // a MINIMUM, so that drift reds nothing** — it just quietly stops equalling what is there, which is
-// the whole property. The number below is now read off a live run (`59 check(s) run`, story 14.4b's
-// six release checks — five, then its code review's confirmation — added to 14.4's fifty-three) rather than
-// counted by hand. A floor under what exists tolerates losing a check while still reading as a pass
+// the whole property. 🔴 **AND IT DRIFTED A THIRD TIME, in the story that moved the constant**: story
+// 14.5 took it 59 → 61 (the subnet correction's pre-fill and the outside list's release) and left
+// every sentence here saying fifty-nine — caught by the code review's edge layer on a live run, not
+// by this comment, which narrates the same defect twice above. The number below is read off
+// `kbd gate: 61 check(s) run` rather than counted by hand. A floor under what exists tolerates losing a check while still reading as a pass
 // — this project has caught that twice, once in a privacy floor and once in a word count. If a
 // check is added this number moves deliberately; if one is skipped, the gate says so instead of
 // printing a green.
-const MIN_CHECKS = 59;
+const MIN_CHECKS = 61;
 const MIN_ROWS = 2;
 // 🔑 The seed's own two-hardware-address sighting, in ONE place. It was written twice — typed into
 // the field at one site and spelled out inside the expected triage href at another — so a seed that
@@ -998,6 +1000,8 @@ async function main() {
         deleteSubnet: posts("/ipam/subnet/delete"),
         editRange: posts("/ipam/range/edit"),
         editAddress: posts("/ipam/address/edit"),
+        // Story 14.5's tenth route: the subnet's own correction, one per page like its removal.
+        editSubnet: posts("/ipam/subnet/edit"),
         names: [...document.querySelectorAll(".ipam-rail-lists button")].map((b) =>
           (b.textContent ?? "").trim(),
         ),
@@ -1015,8 +1019,9 @@ async function main() {
         controls.deleteAddress === 2 &&
         controls.deleteSubnet === 1 &&
         controls.editRange === 3 &&
-        controls.editAddress === 2,
-      "the rail carries a control for each of the five corrections, at the seed's own counts",
+        controls.editAddress === 2 &&
+        controls.editSubnet === 1,
+      "the rail carries a control for each of the six corrections, at the seed's own counts",
       JSON.stringify(controls),
     );
     // 🔑 A page of buttons all reading *Remove* is a page a screen reader cannot navigate: the
@@ -1097,6 +1102,48 @@ async function main() {
       "and it arrives carrying the record's current bounds, policy and id",
       JSON.stringify(prefilled),
     );
+    // 🔑 **STORY 14.5's TENTH ROUTE, measured in a browser because its pre-fill is where the VLAN
+    // sentinel becomes visible.** The store spells *no VLAN* as 0; the form must spell it as an
+    // EMPTY field, because an empty field is what the route reads back as *none* and a pre-filled
+    // `0` would be a number the operator never typed and cannot mean. Only the rendered value can
+    // say which of the two shipped — a Rust assertion over the struct measures the struct.
+    // ⚠️ The seed gives Office VLAN 10 and Workshop none, and `/ipam` opens on Office, so what is
+    // asserted here is the PRESENT half; the absent half is asserted by the Rust render test, which
+    // can build both. Saying which gate carries which half beats implying one carries both.
+    // 🔴 **ITS OWN DISCLOSURE IS OPENED FIRST, and the first draft of this check did not** —
+    // measured `reached:false` over a product behaving correctly, because the disclosure the block
+    // above opens is a RANGE correction and content inside a CLOSED `<details>` is properly
+    // unfocusable. Story 14.4's review recorded exactly this (*a check of mine aimed at a control
+    // inside a collapsed `<details>`*) and this file's own comment sixty lines up narrates it; it
+    // recurred anyway, one story later, in the block that comment sits in.
+    await rail.evaluate(() => {
+      document
+        .querySelector('.ipam-rail-lists form[hx-post="/ipam/subnet/edit"]')
+        ?.closest("details")
+        ?.setAttribute("open", "");
+    });
+    const subnetEdit = await rail.evaluate(() => {
+      const form = document.querySelector('.ipam-rail-lists form[hx-post="/ipam/subnet/edit"]');
+      const button = form?.querySelector("button");
+      button?.focus();
+      return {
+        id: form?.querySelector("input[name=id]")?.value ?? "",
+        label: form?.querySelector("input[name=label]")?.value ?? "",
+        vlan: form?.querySelector("input[name=vlan]")?.value ?? "",
+        cidrFields: form?.querySelectorAll("[name=cidr], [name=base], [name=prefix_len]").length,
+        reached: button != null && document.activeElement === button,
+      };
+    });
+    check(
+      subnetEdit.id !== "" &&
+        subnetEdit.label !== "" &&
+        subnetEdit.vlan === "10" &&
+        subnetEdit.cidrFields === 0 &&
+        subnetEdit.reached,
+      "the subnet's own correction is reachable, pre-filled with its label and its VLAN, and " +
+        "offers NO field that could move its address space",
+      JSON.stringify(subnetEdit),
+    );
     // 🔴 **THE REMOVAL WARNS BEFORE IT FIRES (decision 3), and it is reached only by a GESTURE** —
     // so a source guard cannot see it and this gate must press it. The control asks on focus, the
     // answer lands in that row's own polite region, and the write is untouched: it warns, it does
@@ -1143,6 +1190,13 @@ async function main() {
   // no finding. That it IS sighted is not visible in a browser once released — the release hides it
   // everywhere — and is carried by `sighting_repo`'s seed test, which counts its row among fifteen.
   {
+    // 🔴 **`10.9.9.9` IS STORY 14.5's AC7 AND IT IS LAST BECAUSE IT IS OUTSIDE.** The seven above
+    // are the Office subnet's own findings; this one is an observed address no subnet of the plan
+    // contains, and until 14.5 it carried NO release — the outside rows hold `kind: None`, so the
+    // findings list's `row.gap || row.undeclared` rendered nothing for them. ⚠️ That was a hole
+    // rather than a decision: an address outside every declared subnet is exactly where a machine
+    // nobody planned for sits, which is the case the release exists for. Measured here before the
+    // repair: this list read seven and the gate reported the eighth as a regression.
     const RELEASABLE = [
       "192.0.2.11",
       "192.0.2.12",
@@ -1151,6 +1205,7 @@ async function main() {
       "192.0.2.42",
       "192.0.2.50",
       "192.0.2.60",
+      "10.9.9.9",
     ];
     const read = (p) =>
       p.evaluate(() => {
@@ -1170,8 +1225,8 @@ async function main() {
       JSON.stringify(before.released) === JSON.stringify(RELEASABLE) &&
         before.findings.includes("192.0.2.9") &&
         !before.findings.includes("192.0.2.61"),
-      "every releasable finding carries a release — not the DEFINED .9, and the already-released " +
-        ".61 is no finding at all",
+      "every releasable finding carries a release, the OUTSIDE address included — not the " +
+        "DEFINED .9, and the already-released .61 is no finding at all",
       JSON.stringify({ released: before.released, findings: before.findings }),
     );
     check(
@@ -1180,6 +1235,35 @@ async function main() {
         before.names.every((name, i) => name.includes(before.released[i])),
       "and each release names its address in its accessible name",
       JSON.stringify(before.names),
+    );
+    // 🔑 **AC7 in its own words: the OUTSIDE list's release, reached by the keyboard.** Asserted
+    // separately from the one below because they are different lists rendered by different branches
+    // of the same partial — the findings list's condition renders nothing for an outside row, which
+    // is exactly how the control came to be missing there. ⚠️ Focused rather than Tabbed to, like
+    // its neighbour: what is at stake is whether the element ACCEPTS focus, which is what story
+    // 6b.4b's five unreachable `<span role="button">`s failed.
+    //
+    // 🔴 **IT RUNS BEFORE ITS NEIGHBOUR, AND THE ORDER IS LOAD-BEARING.** The press below sends
+    // `Enter` to whatever holds focus, and what puts `.60` there is the check that follows this
+    // one — an implicit coupling nothing declares. Placed after, this check left `10.9.9.9`
+    // focused and the gate RELEASED THE WRONG ADDRESS, reddening three downstream checks that had
+    // nothing wrong with them. Measured, not reasoned about.
+    const outsideRelease = await held.evaluate(() => {
+      const button = [...document.querySelectorAll('.ipam-outside form[hx-post="/ipam/release"]')]
+        .find((f) => f.querySelector("input[name=addr]")?.value === "10.9.9.9")
+        ?.querySelector("button");
+      button?.focus();
+      return {
+        found: button != null,
+        reached: button != null && document.activeElement === button,
+        tabIndex: button?.tabIndex ?? null,
+      };
+    });
+    check(
+      outsideRelease.found && outsideRelease.reached && outsideRelease.tabIndex >= 0,
+      "and so is the release on an address OUTSIDE every subnet of the plan, which carried none " +
+        "at all until story 14.5",
+      JSON.stringify(outsideRelease),
     );
     const focusable = await held.evaluate(() => {
       const button = [...document.querySelectorAll('.ipam-audit form[hx-post="/ipam/release"]')]
