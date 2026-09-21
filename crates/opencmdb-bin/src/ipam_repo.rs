@@ -2029,19 +2029,91 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-spell").await;
     }
 
-    /// ⚠️ **`ip_range_same_family` is VACUOUS TODAY, and this test is what says so out loud.**
+    /// 🔴 **THE OBSERVED SIDE STAYS NARROW, and this is Guy's decision of 2026-09-21 written into
+    /// the schema rather than into a comment.**
     ///
-    /// All three review layers reached it: the canonical pattern admits exactly ONE width, so every
-    /// row the two canonical CHECKs accept already satisfies the family check, and **no mutation can
-    /// be built that reds it**. *A guard placed where the defect cannot occur reads as coverage and
-    /// is none.*
+    /// `0011` widens the FOUR plan-side canonical CHECKs and leaves `address_sighting.addr`
+    /// (`0008:72`) and `address_release.addr` (`0009:59`) IPv4-only. The reason is not economy: the
+    /// connector emits IPv4 only, and **`Fact` — the domain type — has no IPv6 variant at all**, so
+    /// an IPv6 row on the observed side is a state nothing in this product can produce. Widening
+    /// those two would build a path for a case that cannot occur, which is this project's dominant
+    /// defect class written into the migration.
     ///
-    /// 🔑 It is kept rather than deleted because the rule becomes real the day FR25 adds a
-    /// 39-character alternative — and THIS test is what will red on that day, so the constraint
-    /// stops being decoration at the moment it stops being vacuous, rather than when someone
-    /// remembers.
+    /// 🔑 **It is the SECOND carrier of decision §0.3.** The first is the Rust type — the plan speaks
+    /// `IpAddr` and the sightings speak `Ipv4Addr` — and story 5.12's lesson is that a promise held
+    /// in one place only is a promise a refactor removes in silence. This test is what reds if a
+    /// later tidy-up widens all six for symmetry.
     #[tokio::test]
-    async fn the_family_check_is_implied_until_a_second_width_exists() {
+    async fn the_observed_side_stays_narrow() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Some(pool) = ipam_fixture().await else {
+            return;
+        };
+        for name in [
+            "address_sighting_addr_canonical",
+            "address_release_addr_canonical",
+        ] {
+            let (clause,): (String,) = sqlx::query_as(
+                "SELECT CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS \
+                 WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = ?",
+            )
+            .bind(name)
+            .fetch_one(&pool)
+            .await
+            .unwrap_or_else(|error| panic!("`{name}` exists and is readable: {error}"));
+            assert!(
+                !clause.contains("[0-9a-f]") && !clause.contains(':'),
+                "`{name}` has been widened to admit IPv6. The observed side has no IPv6 to admit — \
+                 `Fact` carries no IPv6 variant — so this builds a path nothing can produce, and it \
+                 removes the schema-side half of the decision that the PLAN speaks `IpAddr` while \
+                 the SIGHTINGS do not. Clause: {clause}"
+            );
+        }
+
+        // ⚠️ THE CONTROL, without which the assertion above passes over a schema where the PLAN was
+        // never widened either: the four plan-side checks must admit both families.
+        for name in [
+            "ip_subnet_base_canonical",
+            "ip_range_first_canonical",
+            "ip_range_last_canonical",
+            "ip_address_canonical",
+        ] {
+            let (clause,): (String,) = sqlx::query_as(
+                "SELECT CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS \
+                 WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = ?",
+            )
+            .bind(name)
+            .fetch_one(&pool)
+            .await
+            .unwrap_or_else(|error| panic!("`{name}` exists and is readable: {error}"));
+            assert!(
+                clause.contains("[0-9a-f]") && clause.contains(':'),
+                "`{name}` is on the PLAN side and must admit IPv6 (`0011`): {clause}"
+            );
+        }
+    }
+
+    /// 🔴 **THE DAY THIS TEST WAS WRITTEN FOR HAS COME, and it reddened on its own assertion.**
+    ///
+    /// Story 14.1 shipped `ip_range_same_family` VACUOUS — the canonical pattern admitted exactly
+    /// one width, so every row the two canonical CHECKs accepted already satisfied the family check,
+    /// and all three of its review layers agreed no mutation could red it. It was kept, with this
+    /// test saying so out loud, *"because the rule becomes real the day FR25 adds a 39-character
+    /// alternative — and THIS test is what will red on that day, so the constraint stops being
+    /// decoration at the moment it stops being vacuous, rather than when someone remembers."*
+    ///
+    /// 🔑 Migration `0011` is that day. The guard reddened on its own second assertion, printing the
+    /// widened clause and the instruction it had carried for five stories — *it now needs a test of
+    /// its own and a row in the refusal array*. Both exist now, and this test is INVERTED rather
+    /// than deleted: it asserts the pattern admits TWO families and that the family check is
+    /// therefore live, so the day anyone narrows the pattern back it reds again from the other side.
+    ///
+    /// ⚠️ **And it is the SECOND carrier, which the story records rather than letting a reader
+    /// assume it is the only one.** A straddling pair is refused FIRST by the adapter's containment
+    /// check — measured through the route, `422 "That range falls outside its subnet."` — so the DDL
+    /// CHECK never sees one through the product. It guards a write that went around the adapter.
+    #[tokio::test]
+    async fn the_family_check_is_live_now_that_a_second_width_exists() {
         let _guard = crate::DB_TEST_LOCK.lock().await;
         let Some(pool) = ipam_fixture().await else {
             return;
@@ -2054,20 +2126,49 @@ pub(crate) mod tests {
         .await
         .expect("the canonical CHECK exists and is readable");
 
-        // One alternation group per octet and no second width: every accepted value is 15 long.
+        // The IPv4 half survives the widening: one octet alternation reused for the tail.
         assert_eq!(
             clause.matches("25[0-5]").count(),
             2,
-            "the canonical pattern is expected to hold ONE octet alternation reused for the tail \
-             ({clause}). If this changed, read the next assertion — the family check may have just \
-             become load-bearing."
+            "the widening must KEEP the IPv4 grammar, not replace it ({clause})"
         );
         assert!(
-            !clause.contains("[0-9a-f]") && !clause.contains(':'),
-            "the canonical pattern admits a SECOND address family, so `ip_range_same_family` is no \
-             longer implied by it — it has become a real guard, and it now needs a test of its own \
-             and a row in the refusal array. Clause: {clause}"
+            clause.contains("[0-9a-f]") && clause.contains(':'),
+            "the canonical pattern must admit the SECOND address family — without it \
+             `ip_range_same_family` goes back to being implied, and story 14.1's finding returns. \
+             Clause: {clause}"
         );
+
+        // 🔴 **And the check itself, measured rather than read off the pattern.** Two widths exist
+        // now, so a straddling pair is representable in the schema and must be refused BY THIS
+        // CONSTRAINT — a raw insert, because the adapter refuses it earlier and would hide it.
+        forget_subnet(&pool, "t-family").await;
+        let mut conn = pool.acquire().await.expect("a connection");
+        insert_subnet(
+            &mut *conn,
+            "t-family",
+            Subnet::new(v4("100.66.20.0"), 24).expect("a subnet of its own"),
+            "the family check",
+            0,
+        )
+        .await
+        .expect("the parent row");
+        let straddling = sqlx::query(
+            "INSERT INTO ip_range (id, subnet_id, first_addr, last_addr, policy, label) \
+             VALUES ('t-family-r', 't-family', '100.066.020.001', \
+             '2001:0db8:0000:0000:0000:0000:0000:0001', 'static', 'straddles')",
+        )
+        .execute(&mut *conn)
+        .await;
+        let refusal = format!("{straddling:?}");
+        assert!(
+            straddling.is_err() && refusal.contains("ip_range_same_family"),
+            "a range whose two ends are in DIFFERENT families must be refused by \
+             `ip_range_same_family` and by name — it is the constraint's whole reason, live since \
+             `0011`: {refusal}"
+        );
+        drop(conn);
+        forget_subnet(&pool, "t-family").await;
     }
 
     /// AC4 — the ORDER the store itself returns, which is the padding's whole purpose.
