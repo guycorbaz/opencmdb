@@ -31,6 +31,10 @@
       <input id="ipam-cidr" name="cidr" required>
       <label for="ipam-subnet-label">{{ s.form_label }}</label>
       <input id="ipam-subnet-label" name="label" required maxlength="120">
+      {#- 🔑 Optional, and NOT `type="number"`: the refusal is keyed and says the range, where a browser
+           widget would silently swallow what the operator typed. Empty means *not on a VLAN*. -#}
+      <label for="ipam-subnet-vlan">{{ s.form_vlan }}</label>
+      <input id="ipam-subnet-vlan" name="vlan" inputmode="numeric" maxlength="4">
       <button type="submit" class="btn-gesture live btn-document">{{ s.form_submit }}</button>
     </form>
   </details>

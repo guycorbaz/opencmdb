@@ -415,7 +415,7 @@ async fn address_check_data(
         subnets: ipam_repo::list_subnets(pool)
             .await?
             .into_iter()
-            .map(|(_, subnet, _)| subnet)
+            .map(|planned| planned.subnet)
             .collect(),
         ranges: ipam_repo::plan_ranges(pool).await?,
         defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
@@ -652,16 +652,21 @@ async fn delete_check_data(
     addr: Option<Ipv4Addr>,
 ) -> Result<String, opencmdb_core::repo::RepositoryError> {
     let subnets = ipam_repo::list_subnets(pool).await?;
-    let Some((_, subnet, _)) = subnets.iter().find(|(id, _, _)| id == subnet_id).cloned() else {
+    let Some(here) = subnets
+        .iter()
+        .find(|planned| planned.id == subnet_id)
+        .cloned()
+    else {
         // An id the plan does not carry warns about nothing: the control that sent it is stale, and
         // a sentence invented for it would describe a record that is not there.
         return Ok(String::new());
     };
     let plan = Plan {
-        subnets: subnets.iter().map(|(_, subnet, _)| *subnet).collect(),
+        subnets: subnets.iter().map(|planned| planned.subnet).collect(),
         ranges: ipam_repo::plan_ranges(pool).await?,
         defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
     };
+    let subnet = here.subnet;
     let network = ipam_audit::read_the_network(pool).await?;
     // 🔑 **THIS SUBNET'S OWN RECORDS, which this function already read for its `held` count.** The
     // check now asks the same questions the WRITE path asks, and asking them needs the same scope:
@@ -970,7 +975,7 @@ async fn plan_data(
     // and decision 11's list is then the only true thing this screen has to say. It costs one read
     // on a fresh install and it is what makes the empty plan an answer rather than a shrug.
     let plan = Plan {
-        subnets: subnets.iter().map(|(_, subnet, _)| *subnet).collect(),
+        subnets: subnets.iter().map(|planned| planned.subnet).collect(),
         ranges: ipam_repo::plan_ranges(pool).await?,
         defined: ipam_repo::plan_addresses(pool).await?.into_iter().collect(),
     };
@@ -987,12 +992,13 @@ async fn plan_data(
     // `inventory_body`'s precedent: silently serving another subnet would tell the operator their
     // selection took when it did not — story 6b.4's `?sort=` finding.
     let chosen = match selected {
-        Some(wanted) => subnets.iter().find(|(id, _, _)| id == wanted).cloned(),
+        Some(wanted) => subnets.iter().find(|planned| planned.id == wanted).cloned(),
         None => subnets.first().cloned(),
     };
-    let Some((id, subnet, _label)) = chosen else {
+    let Some(chosen) = chosen else {
         return Ok(unknown_subnet_body(&subnets, &outside_only));
     };
+    let (id, subnet) = (chosen.id, chosen.subnet);
     let audit = Audit {
         plan: &plan,
         network: &network,
@@ -1312,6 +1318,12 @@ pub(crate) struct IpamStrings {
     form_address_summary: String,
     form_cidr: String,
     form_label: String,
+    /// The subnet form's VLAN field (story 14.5), optional.
+    form_vlan: String,
+    /// The sentence that says both halves of Guy's decision of 2026-09-21 — the plan carries the
+    /// segment, and the ranges, the findings and the offer do not. Rendered only when a subnet
+    /// declares a VLAN, because until then it would describe a distinction the plan does not make.
+    vlan_note: String,
     form_first: String,
     form_last: String,
     form_policy: String,
@@ -1566,6 +1578,9 @@ pub(crate) struct IpamBody {
     s: IpamStrings,
     /// The selector.
     tabs: Vec<SubnetTab>,
+    /// Whether ANY subnet of the plan declares a VLAN — which is when the note under the selector is
+    /// owed (story 14.5). Before that it would describe a distinction the plan does not make.
+    any_vlan: bool,
     /// The grid, or `None` when the plan holds no subnet at all, when the identifier names none,
     /// or when the subnet is too large to draw.
     plan: Option<PlanRender>,
@@ -1610,6 +1625,8 @@ fn empty_plan_body(audit: &Audit) -> String {
     let body = IpamBody {
         s: strings(None, None, false),
         tabs: Vec::new(),
+        // An empty plan declares no subnet, so it declares no VLAN either.
+        any_vlan: false,
         plan: None,
         too_large: None,
         rail: None,
@@ -1621,17 +1638,18 @@ fn empty_plan_body(audit: &Audit) -> String {
 }
 
 /// Build the body for an identifier no subnet carries.
-fn unknown_subnet_body(subnets: &[(String, Subnet, String)], audit: &Audit) -> String {
+fn unknown_subnet_body(subnets: &[ipam_repo::PlannedSubnet], audit: &Audit) -> String {
     let body = IpamBody {
         s: strings(None, None, false),
         tabs: subnets
             .iter()
-            .map(|(id, subnet, label)| SubnetTab {
-                id: id.clone(),
-                label: tab_label(subnet, label),
+            .map(|planned| SubnetTab {
+                id: planned.id.clone(),
+                label: tab_label(planned),
                 active: false,
             })
             .collect(),
+        any_vlan: declares_a_vlan(subnets),
         plan: None,
         too_large: None,
         rail: None,
@@ -1643,12 +1661,33 @@ fn unknown_subnet_body(subnets: &[(String, Subnet, String)], audit: &Audit) -> S
 }
 
 /// What the operator reads on a selector tab.
-fn tab_label(subnet: &Subnet, label: &str) -> String {
-    if label.is_empty() {
-        subnet.cidr()
-    } else {
-        format!("{} · {}", subnet.cidr(), label)
+/// Whether any subnet of the plan declares a VLAN.
+fn declares_a_vlan(subnets: &[ipam_repo::PlannedSubnet]) -> bool {
+    subnets.iter().any(|planned| planned.vlan != 0)
+}
+
+/// The selector tab's accessible name: the CIDR, its VLAN when it declares one, then the label.
+///
+/// 🔴 **A VLAN of 0 renders NOTHING**, because 0 is the sentinel for *none* (`0010`): rendering
+/// *"VLAN 0"* would state something false about the plan.
+///
+/// 🔑 **The property this exists for is DISTINCTNESS, not decoration.** Since story 14.5 the plan may
+/// hold one CIDR twice, and the validation measured what that costs a selector: two subnets with the
+/// same CIDR and empty labels rendered **two byte-identical links to different destinations**, which no
+/// gate in this project can see. The VLAN is what tells them apart, and
+/// `no_two_selector_tabs_share_an_accessible_name` asserts the property rather than the appearance.
+fn tab_label(planned: &ipam_repo::PlannedSubnet) -> String {
+    let mut name = planned.subnet.cidr();
+    if planned.vlan != 0 {
+        name.push_str(&format!(
+            " · {}",
+            rust_i18n::t!("ipam.vlan_tab", vlan = planned.vlan)
+        ));
     }
+    if !planned.label.is_empty() {
+        name.push_str(&format!(" · {}", planned.label));
+    }
+    name
 }
 
 /// Resolve every string, with the occupancy and next-free lines when there is a plan.
@@ -1713,6 +1752,8 @@ fn strings(
         form_address_summary: rust_i18n::t!("ipam.form.address_summary").to_string(),
         form_cidr: rust_i18n::t!("ipam.form.cidr").to_string(),
         form_label: rust_i18n::t!("ipam.form.label").to_string(),
+        form_vlan: rust_i18n::t!("ipam.form.vlan").to_string(),
+        vlan_note: rust_i18n::t!("ipam.vlan_note").to_string(),
         form_first: rust_i18n::t!("ipam.form.first").to_string(),
         form_last: rust_i18n::t!("ipam.form.last").to_string(),
         form_policy: rust_i18n::t!("ipam.form.policy").to_string(),
@@ -1746,7 +1787,7 @@ fn strings(
 /// still a subnet the network can contradict, and its findings are bounded by what was SEEN, not by
 /// its size.
 fn render_too_large(
-    subnets: &[(String, Subnet, String)],
+    subnets: &[ipam_repo::PlannedSubnet],
     selected: &str,
     ranges: &[(Ipv4Addr, Ipv4Addr, IpPolicy, String)],
     audit: &Audit,
@@ -1763,6 +1804,7 @@ fn render_too_large(
     let body = IpamBody {
         s: strings(None, None, false),
         tabs: tabs_for(subnets, selected),
+        any_vlan: declares_a_vlan(subnets),
         plan: None,
         too_large: Some(rows),
         // 🔑 **AC6: the lists render in BOTH branches**, and the first version of this arm shipped
@@ -1780,20 +1822,20 @@ fn render_too_large(
 }
 
 /// The selector, built once for every caller that renders it.
-fn tabs_for(subnets: &[(String, Subnet, String)], selected: &str) -> Vec<SubnetTab> {
+fn tabs_for(subnets: &[ipam_repo::PlannedSubnet], selected: &str) -> Vec<SubnetTab> {
     subnets
         .iter()
-        .map(|(id, subnet, label)| SubnetTab {
-            id: id.clone(),
-            label: tab_label(subnet, label),
-            active: id == selected,
+        .map(|planned| SubnetTab {
+            id: planned.id.clone(),
+            label: tab_label(planned),
+            active: planned.id == selected,
         })
         .collect()
 }
 
 /// Render one subnet's grid.
 pub(crate) fn render_plan(
-    subnets: &[(String, Subnet, String)],
+    subnets: &[ipam_repo::PlannedSubnet],
     selected: &str,
     plan: &PlanView,
     audit: &Audit,
@@ -1870,6 +1912,7 @@ pub(crate) fn render_plan(
             !audit.plan.has_static_range(subnet),
         ),
         tabs,
+        any_vlan: declares_a_vlan(subnets),
         plan: Some(PlanRender { cells }),
         too_large: None,
         rail: Some(rail),
@@ -1905,6 +1948,17 @@ mod tests {
     }
 
     /// A `/24` for the tests, with its two edges and 254 hosts.
+    /// One subnet as the plan holds it, for the render tests — VLAN 0, *none*, unless a test says
+    /// otherwise (story 14.5).
+    fn planned(id: &str, subnet: Subnet, label: &str, vlan: u16) -> ipam_repo::PlannedSubnet {
+        ipam_repo::PlannedSubnet {
+            id: id.to_string(),
+            subnet,
+            label: label.to_string(),
+            vlan,
+        }
+    }
+
     fn office() -> Subnet {
         Subnet::new("192.0.2.0".parse().unwrap(), 24).expect("a /24")
     }
@@ -2297,7 +2351,7 @@ mod tests {
         assert_eq!(big.size(), 16_777_216, "a /8 holds 2^24 addresses");
         assert!(big.size() > MAX_DRAWN_ADDRESSES);
 
-        let subnets = vec![("t-big".to_string(), big, "Everything".to_string())];
+        let subnets = vec![planned("t-big", big, "Everything", 0)];
         let ranges = vec![(
             v4("10.0.0.1"),
             v4("10.0.0.50"),
@@ -2713,10 +2767,11 @@ mod tests {
             "the empty plan must not point above at a subnet it does not have"
         );
 
-        let known = [(
-            "01900000-0000-7000-8000-0000000000cc".to_string(),
+        let known = [planned(
+            "01900000-0000-7000-8000-0000000000cc",
             Subnet::new("192.0.2.0".parse().expect("an address"), 24).expect("a subnet"),
-            "Office".to_string(),
+            "Office",
+            0,
         )];
         let unknown = unknown_subnet_body(&known, &no_subnet);
         assert!(
@@ -2797,7 +2852,7 @@ mod tests {
             &[],
         );
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &Audit {
@@ -2828,7 +2883,7 @@ mod tests {
     /// died with the example dataset. The property did not die with it.
     #[test]
     fn every_cell_of_the_rendered_grid_carries_its_own_aria_label() {
-        let subnets = vec![("t-1".to_string(), office(), "Office".to_string())];
+        let subnets = vec![planned("t-1", office(), "Office", 0)];
         let plan = PlanView::derive(
             office(),
             &[(v4("192.0.2.1"), v4("192.0.2.254"), IpPolicy::Static)],
@@ -2872,11 +2927,12 @@ mod tests {
     #[test]
     fn the_selector_marks_one_tab_and_never_claims_to_be_the_page() {
         let subnets = vec![
-            ("t-1".to_string(), office(), String::new()),
-            (
-                "t-2".to_string(),
+            planned("t-1", office(), "", 0),
+            planned(
+                "t-2",
                 Subnet::new("198.51.100.0".parse().unwrap(), 24).unwrap(),
-                "Workshop".to_string(),
+                "Workshop",
+                0,
             ),
         ];
         let plan = PlanView::derive(office(), &[], &[]);
@@ -3104,7 +3160,7 @@ mod tests {
         ]);
         let network = network_of(seen, &[]);
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &Audit {
@@ -3219,7 +3275,7 @@ mod tests {
         let whole = offer_of(&[], &[]);
         let quiet = quiet();
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &Audit {
@@ -3262,7 +3318,7 @@ mod tests {
             subnet: Some(office()),
         };
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &audit,
@@ -3333,7 +3389,7 @@ mod tests {
             subnet: Some(office()),
         };
         let view = PlanView::derive(office(), &[], &[v4("192.0.2.9")]);
-        let subnets = [("s1".to_string(), office(), "Office".to_string())];
+        let subnets = [planned("s1", office(), "Office", 0)];
         let body = render_plan(&subnets, "s1", &view, &audit, no_rail());
         let cell = body
             .split("aria-label=\"192.0.2.9 ·")
@@ -3379,7 +3435,7 @@ mod tests {
             &[v4("192.0.2.1")],
         );
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &view,
             &audit,
@@ -3423,7 +3479,7 @@ mod tests {
             subnet: Some(big),
         };
         let body = render_too_large(
-            &[("t-big".to_string(), big, "Everything".to_string())],
+            &[planned("t-big", big, "Everything", 0)],
             "t-big",
             &[(
                 v4("10.0.0.1"),
@@ -3502,7 +3558,7 @@ mod tests {
             "the most protective covering range decides what the cell IS, on every page"
         );
         let body = render_plan(
-            &[("nested".to_string(), nested, "Nested".to_string())],
+            &[planned("nested", nested, "Nested", 0)],
             "nested",
             &view,
             &audit,
@@ -3547,7 +3603,7 @@ mod tests {
         };
         let view = PlanView::derive(office(), &[], &[]);
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &view,
             &audit,
@@ -3610,7 +3666,7 @@ mod tests {
         let never_offered = rust_i18n::t!("ipam.next_free_no_static").to_string();
         assert_ne!(exhausted, never_offered, "two states, two sentences");
 
-        let subnets = [("s1".to_string(), office(), "Office".to_string())];
+        let subnets = [planned("s1", office(), "Office", 0)];
         let quiet = quiet();
         // (a) No static range reaches this subnet at all.
         let reserved_only = offer_of(
@@ -3873,7 +3929,7 @@ mod tests {
             "the findings section belongs to ONE subnet and no subnet is in force: {empty}"
         );
 
-        let known = [("s1".to_string(), office(), "Office".to_string())];
+        let known = [planned("s1", office(), "Office", 0)];
         let unknown = unknown_subnet_body(&known, &audit);
         assert!(
             unknown.contains("10.9.9.9"),
@@ -3896,7 +3952,7 @@ mod tests {
             &[],
         );
         let body = render_plan(
-            &[("s1".to_string(), office(), "Office".to_string())],
+            &[planned("s1", office(), "Office", 0)],
             "s1",
             &PlanView::derive(office(), &[], &[]),
             &Audit {
@@ -4187,10 +4243,11 @@ mod tests {
         // range delete's own refusal is announced before it is met.
         // 🔑 75 → 76 at story 14.4b, read off the printed list: `ipam.finding.release`, the binding
         // gesture's word on a finding's control; 76 → 77 at its code review: `ipam.released_note`, the
-        // confirmation that rides in the URL.
+        // confirmation that rides in the URL; **77 → 80 at story 14.5**, read off the list this
+        // assertion prints: `ipam.form.vlan`, `ipam.vlan_tab` and `ipam.vlan_note`.
         assert_eq!(
             keys.len(),
-            77,
+            80,
             "the keys this file can render changed — update the count only after reading the list: \
              {keys:?}"
         );

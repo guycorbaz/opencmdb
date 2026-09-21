@@ -5771,7 +5771,7 @@ development_status:
   #   against `git diff --name-only`), replacing review rounds that found only record defects (14.4's
   #   round D); (b) `cargo xtask mutate` NAMES the tests that redden (registered since 14.2b, no owner;
   #   it hid 14.4b's collateral). Precedent: 6.4b, created by Epic 6b's retrospective.
-  14-5-vlans: ready-for-dev
+  14-5-vlans: in-progress
   #   FR21's VLAN half (Guy, 2026-09-19: deliver before closing). Inherits: 14.3b's merge across L2
   #   domains reading reused private space as a conflict (pinned by
   #   `one_address_in_two_l2_domains_is_read_as_a_conflict`, owner "the story that adds the VLAN axis");

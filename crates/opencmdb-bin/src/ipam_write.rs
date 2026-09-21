@@ -436,6 +436,13 @@ pub(crate) struct DefineSubnetRequest {
     pub(crate) cidr: String,
     /// What the operator calls this subnet. Required, and bounded by [`MAX_LABEL_CHARS`].
     pub(crate) label: String,
+    /// The 802.1Q id the operator declares for it — OPTIONAL (story 14.5).
+    ///
+    /// 🔑 An absent field and an empty one both mean *none*, which the store holds as the sentinel
+    /// `0`: a form that has never carried a VLAN and a form whose field was left blank are the same
+    /// statement, and serde drops the field when the browser omits it.
+    #[serde(default)]
+    pub(crate) vlan: String,
 }
 
 /// The `POST /ipam/range` request.
@@ -601,6 +608,7 @@ pub(crate) trait IpamWritePort: Send + Sync {
         &self,
         subnet: Subnet,
         label: String,
+        vlan: u16,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
     /// Define a range inside a subnet and answer with the id it was given.
@@ -719,6 +727,7 @@ impl IpamWritePort for StoreIpamWrite {
         &self,
         subnet: Subnet,
         label: String,
+        vlan: u16,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
             // 🔑 THE SERVER MINTS THE ID, v7 (Guy, 2026-09-12) — `document.rs:120`'s half of the
@@ -734,7 +743,7 @@ impl IpamWritePort for StoreIpamWrite {
             let mut tx = sqlx::Connection::begin(&mut *conn)
                 .await
                 .map_err(crate::repo::classify)?;
-            let written = ipam_repo::insert_subnet(&mut *tx, &id, subnet, &label).await;
+            let written = ipam_repo::insert_subnet(&mut *tx, &id, subnet, &label, vlan).await;
             settle(tx, written).await?;
             // A subnet IS the plan the operator returns to; there is no parent above it.
             Ok(Written::subnet(id))
@@ -975,7 +984,11 @@ async fn define_subnet(
         Ok(label) => label,
         Err(refusal) => return refusal.into_response(),
     };
-    let work = state.port.define_subnet(subnet, label);
+    let vlan = match parse_vlan(&request.vlan, WriteRoute::Subnet) {
+        Ok(vlan) => vlan,
+        Err(refusal) => return refusal.into_response(),
+    };
+    let work = state.port.define_subnet(subnet, label, vlan);
     answer(
         within_budget(work).await,
         WriteRoute::Subnet,
@@ -1340,6 +1353,43 @@ fn checked_subnet_id(raw: &str, route: WriteRoute) -> Result<String, Refusal> {
     Ok(parsed.to_string())
 }
 
+/// The VLAN the operator declared, or the refusal that says it is not one (story 14.5).
+///
+/// 🔑 **Empty means NONE, and none is the sentinel `0`** — the store's shape (`0010`), chosen after the
+/// NULLable form was measured letting one CIDR in three times. An operator who leaves the field blank
+/// is saying *this subnet is not on a VLAN*, which is a statement the plan can hold.
+///
+/// 🔴 **0 typed BY HAND is refused**, and that is not pedantry: 802.1Q reserves VID 0 for
+/// *priority-tagged, no VLAN*, so an operator typing it means *none* — and the product must not let two
+/// different gestures (typing 0, leaving it blank) reach the store as the same row through a path that
+/// reads as if 0 were an ordinary VLAN. The refusal names the range, which is where they learn it.
+///
+/// ⚠️ No `trim()` beyond the emptiness test, on `parse_policy`'s precedent: a VLAN is a NUMBER from a
+/// control, not free text.
+///
+/// # Errors
+///
+/// The form's 422 when the value is not a whole number in `1..=4094`.
+fn parse_vlan(raw: &str, route: WriteRoute) -> Result<u16, Refusal> {
+    let typed = raw.trim();
+    if typed.is_empty() {
+        return Ok(0);
+    }
+    match typed.parse::<u16>() {
+        Ok(vlan) if (1..=4094).contains(&vlan) => Ok(vlan),
+        _ => Err(Refusal::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "ipam.refusal.not_a_vlan",
+        )),
+    }
+    .map_err(|refusal: Refusal| {
+        // The route is carried so a second form asking for a VLAN can earn its own sentence without
+        // this one changing — `unknown_record`'s idiom.
+        let _ = route;
+        refusal
+    })
+}
+
 /// The policy the operator chose, or the refusal that says it is not one of the four.
 ///
 /// 🔴 **NO `trim()`, and the first draft had one — its own test caught it.** A label is free text
@@ -1684,11 +1734,14 @@ mod tests {
             &self,
             subnet: Subnet,
             label: String,
+            vlan: u16,
         ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
+            // 🔑 **The VLAN is RECORDED here**, so a handler that parses it and forgets to pass it on
+            // cannot leave every port assertion green — the story's validation named that shape.
             self.asked
                 .lock()
                 .expect("the fake port's log")
-                .push((subnet.cidr(), label));
+                .push((format!("{} vlan={vlan}", subnet.cidr()), label));
             let answer = self.take_answer();
             Box::pin(async move { answer.map(Written::subnet) })
         }
@@ -1884,8 +1937,10 @@ mod tests {
         );
         assert_eq!(
             port.asked.lock().expect("the log").as_slice(),
-            [("192.0.2.0/24".to_string(), "Office".to_string())],
-            "the CIDR is parsed and the label is trimmed before the store sees either"
+            [("192.0.2.0/24 vlan=0".to_string(), "Office".to_string())],
+            "the CIDR is parsed, the label trimmed and the VLAN carried — 0 is *none* (story 14.5), \
+             and the port RECORDS it, so a handler that parses a VLAN and drops it cannot leave this \
+             assertion green"
         );
     }
 
@@ -2217,9 +2272,10 @@ mod tests {
         }
         // A floor EQUAL to what is there (story 6b.7) — it read `>= 15` over 20-odd keys until the
         // review, which is a floor that tolerates losing a quarter of what it guards.
+        // 🔑 42 → 43 at story 14.5: `ipam.refusal.not_a_vlan`, read off the list this prints.
         assert_eq!(
             keys.len(),
-            42,
+            43,
             "the keys this file can render changed — update the count only after reading the list: \
              {keys:?}"
         );
@@ -2377,6 +2433,7 @@ mod tests {
                 &self,
                 _subnet: Subnet,
                 _label: String,
+                _vlan: u16,
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
@@ -2987,7 +3044,7 @@ mod tests {
         };
         cleanup().await;
         let parent = Subnet::new("100.64.30.0".parse().expect("an address"), 24).expect("a subnet");
-        ipam_repo::insert_subnet(&pool, PARENT, parent, "the parent")
+        ipam_repo::insert_subnet(&pool, PARENT, parent, "the parent", 0)
             .await
             .expect("the parent row");
         let port = StoreIpamWrite::new(pool.clone());
@@ -3043,6 +3100,7 @@ mod tests {
             port.define_subnet(
                 Subnet::new("100.64.31.0".parse().expect("an address"), 24).expect("a subnet"),
                 "dropped".to_string(),
+                0,
             ),
         )
         .await;

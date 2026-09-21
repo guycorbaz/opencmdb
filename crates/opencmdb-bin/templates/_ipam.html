@@ -59,6 +59,15 @@
     <a class="filter" href="/ipam?subnet={{ tab.id }}">{{ tab.label }}</a>
     {%- endfor %}
   </nav>
+  {#- 🔴 **The two halves of Guy's decision of 2026-09-21 in ONE sentence**, and it is rendered only
+       when a subnet declares a VLAN: the plan carries the segment, and the ranges, the findings and
+       the offer do not — so two subnets sharing one address space share ONE audit. The story's
+       validation MEASURED that cost with a control (a twin in another VLAN turned the first subnet's
+       `gap` into `undeclared` and emptied its offer), which is why the sentence warns rather than
+       merely informs. -#}
+  {%- if any_vlan %}
+  <p class="empty">{{ s.vlan_note }}</p>
+  {%- endif %}
   {%- match too_large %}
   {%- when None %}
   <p class="empty">{{ s.unknown_subnet }}</p>
@@ -107,6 +116,15 @@
        href="/ipam?subnet={{ tab.id }}">{{ tab.label }}</a>
     {%- endfor %}
   </nav>
+  {#- 🔴 **The two halves of Guy's decision of 2026-09-21 in ONE sentence**, and it is rendered only
+       when a subnet declares a VLAN: the plan carries the segment, and the ranges, the findings and
+       the offer do not — so two subnets sharing one address space share ONE audit. The story's
+       validation MEASURED that cost with a control (a twin in another VLAN turned the first subnet's
+       `gap` into `undeclared` and emptied its offer), which is why the sentence warns rather than
+       merely informs. -#}
+  {%- if any_vlan %}
+  <p class="empty">{{ s.vlan_note }}</p>
+  {%- endif %}
 
   <div class="ipam-layout">
     <div>

@@ -228,6 +228,27 @@ macro_rules! capped {
     };
 }
 
+/// One subnet as the plan holds it: its id, its arithmetic, what the operator calls it, and the
+/// segment it belongs to (story 14.5).
+///
+/// 🔑 **A named type where a 3-tuple stood**, because the VLAN would otherwise be a POSITION: nine
+/// sites destructured that tuple, and `(_, subnet, _, vlan)` is exactly the shape in which a field
+/// gets silently dropped. [`Subnet`] stays pure arithmetic — base and prefix, no identity — because
+/// containment, edges and size are computed from it and a VLAN answers none of those questions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PlannedSubnet {
+    /// The row's id, which is what every route and every link addresses.
+    pub(crate) id: String,
+    /// Its base and prefix.
+    pub(crate) subnet: Subnet,
+    /// What the operator calls it.
+    pub(crate) label: String,
+    /// The 802.1Q id the operator DECLARED, or **0 for none** — the sentinel `0010` chose after the
+    /// NULLable form was measured accepting one CIDR three times. Never observed: no connector
+    /// produces a VLAN (D61), and the audit is blind to this field by Guy's decision of 2026-09-21.
+    pub(crate) vlan: u16,
+}
+
 /// Insert one subnet of the addressing plan.
 ///
 /// # Errors
@@ -239,6 +260,7 @@ pub(crate) async fn insert_subnet<'e, E>(
     id: &str,
     subnet: Subnet,
     label: &str,
+    vlan: u16,
 ) -> Result<(), RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
@@ -253,13 +275,14 @@ where
     // The re-validation below is kept for the caller holding a `Subnet` read back from the store.
     Subnet::new(subnet.base, subnet.prefix_len).map_err(ipam)?;
     sqlx::query(capped!(
-        "INSERT INTO ip_subnet (id, base, prefix_len, label) \
-         VALUES (?, ?, ?, ?)"
+        "INSERT INTO ip_subnet (id, base, prefix_len, label, vlan) \
+         VALUES (?, ?, ?, ?, ?)"
     ))
     .bind(id)
     .bind(canonical(subnet.base))
     .bind(subnet.prefix_len)
     .bind(label)
+    .bind(vlan)
     .execute(executor)
     .await
     .map_err(classify)?;
@@ -1141,14 +1164,17 @@ async fn settle_plan_write<T>(
 ///
 /// The classified `sqlx::Error`, or [`IpamError`] when a stored row is not this store's canonical
 /// spelling or does not describe a subnet — reachable only by a write that went around this module.
-pub(crate) async fn list_subnets<'e, E>(
-    executor: E,
-) -> Result<Vec<(String, Subnet, String)>, RepositoryError>
+pub(crate) async fn list_subnets<'e, E>(executor: E) -> Result<Vec<PlannedSubnet>, RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
 {
-    let rows: Vec<(String, String, u8, String)> = sqlx::query_as(
-        "SELECT id, base, prefix_len, label FROM ip_subnet ORDER BY base, prefix_len",
+    // 🔑 `, vlan` in the ORDER BY, and it is not decoration: once one CIDR may appear twice, `base,
+    // prefix_len` is no longer a TOTAL order, and two visible things ride on the tie — which segment
+    // `/ipam` shows by default (`subnets.first()`), and `release_address`'s innermost-subnet redirect,
+    // which the story's validation measured answering *whichever row came first*. One word removes the
+    // question instead of answering it.
+    let rows: Vec<(String, String, u8, String, u16)> = sqlx::query_as(
+        "SELECT id, base, prefix_len, label, vlan FROM ip_subnet ORDER BY base, prefix_len, vlan",
     )
     .fetch_all(executor)
     .await
@@ -1167,9 +1193,14 @@ where
     // stated: a silent skip would hide a real defect, so it is a `warn` with the id in it, never a
     // `debug`. A row that cannot be read is a row the operator never declared through the product.
     let mut subnets = Vec::with_capacity(rows.len());
-    for (id, base, prefix_len, label) in rows {
+    for (id, base, prefix_len, label, vlan) in rows {
         match from_canonical(&base).and_then(|base| Subnet::new(base, prefix_len)) {
-            Ok(subnet) => subnets.push((id, subnet, label)),
+            Ok(subnet) => subnets.push(PlannedSubnet {
+                id,
+                subnet,
+                label,
+                vlan,
+            }),
             Err(error) => tracing::warn!(
                 subnet_id = %id,
                 stored_base = %base,
@@ -1479,9 +1510,9 @@ pub(crate) async fn release_address(
     let innermost = list_subnets(&mut *conn)
         .await?
         .into_iter()
-        .filter(|(_, subnet, _)| subnet.contains(addr))
-        .min_by_key(|(_, subnet, _)| subnet.size())
-        .map(|(id, _, _)| id);
+        .filter(|planned| planned.subnet.contains(addr))
+        .min_by_key(|planned| planned.subnet.size())
+        .map(|planned| planned.id);
     Ok(innermost)
 }
 
@@ -2002,6 +2033,7 @@ pub(crate) mod tests {
             "t-order",
             Subnet::new(v4("198.51.100.0"), 24).unwrap(),
             "order",
+            0,
         )
         .await
         .expect("the subnet");
@@ -2090,6 +2122,7 @@ pub(crate) mod tests {
             "t-adapter",
             Subnet::new(v4("203.0.113.0"), 24).unwrap(),
             "office",
+            0,
         )
         .await
         .expect("the subnet");
@@ -2235,7 +2268,7 @@ pub(crate) mod tests {
         }
         let subnet = Subnet::new(v4("198.51.100.128"), 25).expect("a subnet of its own");
         let mut setup = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *setup, "t-race", subnet, "the race")
+        insert_subnet(&mut *setup, "t-race", subnet, "the race", 0)
             .await
             .expect("the parent row");
         drop(setup);
@@ -2322,7 +2355,7 @@ pub(crate) mod tests {
         let mut setup = pool.acquire().await.expect("a connection");
         for (id, base) in [("t-dl-a", "100.64.10.0"), ("t-dl-b", "100.64.20.0")] {
             let subnet = Subnet::new(v4(base), 24).expect("a subnet of its own");
-            insert_subnet(&mut *setup, id, subnet, "deadlock probe")
+            insert_subnet(&mut *setup, id, subnet, "deadlock probe", 0)
                 .await
                 .expect("the parent row");
         }
@@ -2402,7 +2435,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-edit").await;
         let subnet = Subnet::new(v4("100.66.10.0"), 24).expect("a subnet of its own");
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *conn, "t-edit", subnet, "the edit")
+        insert_subnet(&mut *conn, "t-edit", subnet, "the edit", 0)
             .await
             .expect("the parent row");
         for (id, first, last, label) in [
@@ -2492,7 +2525,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-edit2").await;
         let subnet = Subnet::new(v4("100.66.11.0"), 24).expect("a subnet of its own");
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *conn, "t-edit2", subnet, "the refused edit")
+        insert_subnet(&mut *conn, "t-edit2", subnet, "the refused edit", 0)
             .await
             .expect("the parent row");
         for (id, first, last, label) in [
@@ -2621,7 +2654,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-del").await;
         let subnet = Subnet::new(v4("100.66.12.0"), 24).expect("a subnet of its own");
         let mut setup = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *setup, "t-del", subnet, "the raced delete")
+        insert_subnet(&mut *setup, "t-del", subnet, "the raced delete", 0)
             .await
             .expect("the parent row");
         insert_range(
@@ -2710,7 +2743,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-del2").await;
         let subnet = Subnet::new(v4("100.66.13.0"), 24).expect("a subnet of its own");
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *conn, "t-del2", subnet, "the refused delete")
+        insert_subnet(&mut *conn, "t-del2", subnet, "the refused delete", 0)
             .await
             .expect("the parent row");
         for (id, first, last, label) in [
@@ -2801,7 +2834,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-edit3").await;
         let subnet = Subnet::new(v4("100.66.14.0"), 24).expect("a subnet of its own");
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *conn, "t-edit3", subnet, "the abandoning edit")
+        insert_subnet(&mut *conn, "t-edit3", subnet, "the abandoning edit", 0)
             .await
             .expect("the parent row");
         insert_range(
@@ -2915,7 +2948,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-edit4").await;
         let subnet = Subnet::new(v4("100.66.15.0"), 24).expect("a subnet of its own");
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *conn, "t-edit4", subnet, "the address edit")
+        insert_subnet(&mut *conn, "t-edit4", subnet, "the address edit", 0)
             .await
             .expect("the parent row");
         insert_address(
@@ -2981,7 +3014,7 @@ pub(crate) mod tests {
         forget_subnet(&pool, "t-del3").await;
         let subnet = Subnet::new(v4("100.66.17.0"), 24).expect("a subnet of its own");
         let mut conn = pool.acquire().await.expect("a connection");
-        insert_subnet(&mut *conn, "t-del3", subnet, "the populated subnet")
+        insert_subnet(&mut *conn, "t-del3", subnet, "the populated subnet", 0)
             .await
             .expect("the parent row");
         insert_range(
@@ -3075,7 +3108,7 @@ pub(crate) mod tests {
         let mut setup = pool.acquire().await.expect("a connection");
         for (id, base, _, _) in SUBNETS {
             let subnet = Subnet::new(v4(base), 24).expect("a subnet of its own");
-            insert_subnet(&mut *setup, id, subnet, "four-writer probe")
+            insert_subnet(&mut *setup, id, subnet, "four-writer probe", 0)
                 .await
                 .expect("the parent row");
         }
@@ -3140,7 +3173,7 @@ pub(crate) mod tests {
         };
         forget_subnet(&pool, "t-cap").await;
         let subnet = Subnet::new(v4("100.64.40.0"), 24).expect("a subnet of its own");
-        insert_subnet(&pool, "t-cap", subnet, "the capped wait")
+        insert_subnet(&pool, "t-cap", subnet, "the capped wait", 0)
             .await
             .expect("the parent row");
 

@@ -1030,6 +1030,19 @@ ipam.form.cidr:
 ipam.form.label:
   en: "Label"
   fr: "Étiquette"
+# Story 14.5 — the VLAN axis, minted in the binding vocabulary on 2026-09-21 (PR #192).
+ipam.form.vlan:
+  en: "VLAN (optional) — a number from 1 to 4094, or leave it empty"
+  fr: "VLAN (facultatif) — un nombre de 1 à 4094, ou laissez vide"
+ipam.vlan_tab:
+  en: "VLAN %{vlan}"
+  fr: "VLAN %{vlan}"
+# 🔴 The two halves of Guy's decision of 2026-09-21, in ONE sentence: the plan carries the segment, and
+# nothing else does. The second half is what stops an operator reading two tabs as two audits.
+ipam.vlan_note:
+  en: "The VLAN is what you declared: the scanner does not read tags. The ranges, the findings and the offer do not use it, so two subnets sharing one address space share one audit."
+  fr: "Le VLAN est ce que vous avez déclaré : le scanner ne lit pas les étiquettes. Les plages, les constats et l'offre ne s'en servent pas, si bien que deux sous-réseaux partageant un espace d'adressage partagent un audit."
+
 ipam.form.first:
   en: "First address — for example 192.0.2.10"
   fr: "Première adresse — par exemple 192.0.2.10"
@@ -1089,8 +1102,12 @@ ipam.refusal.range_edit_would_abandon:
   en: "The bounds you asked for would leave addresses you defined outside this range. Widen it, or remove or move those addresses first."
   fr: "Les bornes demandées laisseraient hors de cette plage des adresses que vous y avez définies. Élargissez-la, ou supprimez ou déplacez ces adresses d'abord."
 ipam.refusal.malformed_subnet:
-  en: "Malformed request: the form must carry a subnet in CIDR notation, such as 192.0.2.0/24, and a label."
-  fr: "Requête mal formée : le formulaire doit porter un sous-réseau en notation CIDR, par exemple 192.0.2.0/24, et une étiquette."
+  en: "Malformed request: the form must carry a subnet in CIDR notation, such as 192.0.2.0/24, a label, and optionally a VLAN."
+  fr: "Requête mal formée : le formulaire doit porter un sous-réseau en notation CIDR, par exemple 192.0.2.0/24, une étiquette et, facultativement, un VLAN."
+ipam.refusal.not_a_vlan:
+  en: "A VLAN is a whole number from 1 to 4094. Leave the field empty if this subnet is not on one."
+  fr: "Un VLAN est un nombre entier de 1 à 4094. Laissez le champ vide si ce sous-réseau n'est sur aucun VLAN."
+
 ipam.refusal.malformed_range:
   en: "Malformed request: the form must carry a subnet, a first and a last address, a policy and a label."
   fr: "Requête mal formée : le formulaire doit porter un sous-réseau, une première et une dernière adresse, une politique et une étiquette."

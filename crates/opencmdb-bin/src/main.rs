@@ -2275,6 +2275,7 @@ mod tests {
                 id,
                 crate::ipam_repo::Subnet::new(base.parse().unwrap(), 24).unwrap(),
                 "",
+                0,
             )
             .await
             .expect("the subnet");

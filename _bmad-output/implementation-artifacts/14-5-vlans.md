@@ -1,6 +1,6 @@
 # Story 14.5: VLANs — the segment a subnet belongs to
 
-Status: ready-for-dev
+Status: in-progress
 
 🔑 **In NO epic file.** `epics.md`'s Epic 14 body stops at story 14.4; the Epic List entry (`:474-476`)
 names 14.5 and 14.6, added by the partial retrospective. So this story inherits **FR21's one sentence**

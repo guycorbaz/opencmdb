@@ -1146,6 +1146,7 @@ mod tests {
                 subnet_id,
                 subnet("100.64.141.0", 24),
                 "release",
+                0,
             )
             .await
             .expect("subnet");
@@ -1283,6 +1284,7 @@ mod tests {
                 subnet_id,
                 subnet("100.64.142.0", 24),
                 "release",
+                0,
             )
             .await
             .expect("subnet");
@@ -1366,6 +1368,7 @@ mod tests {
                 subnet_id,
                 subnet("100.64.143.0", 24),
                 "release",
+                0,
             )
             .await
             .expect("subnet");
@@ -1538,7 +1541,7 @@ mod tests {
             forget_release_fixture(&pool, subnet_id, addr).await;
         }
         cleaned_up(&pool, subnet_id, &[later_defined, edited_onto, planted], async {
-            crate::ipam_repo::insert_subnet(&pool, subnet_id, subnet("100.64.145.0", 24), "release")
+            crate::ipam_repo::insert_subnet(&pool, subnet_id, subnet("100.64.145.0", 24), "release", 0)
                 .await
                 .expect("subnet");
 
@@ -1623,10 +1626,10 @@ mod tests {
         crate::ipam_repo::tests::forget_subnet(&pool, inner).await;
         crate::ipam_repo::tests::forget_subnet(&pool, outer).await;
         let outcome = futures_util::FutureExt::catch_unwind(std::panic::AssertUnwindSafe(async {
-            crate::ipam_repo::insert_subnet(&pool, outer, subnet("100.66.0.0", 16), "outer")
+            crate::ipam_repo::insert_subnet(&pool, outer, subnet("100.66.0.0", 16), "outer", 0)
                 .await
                 .expect("outer");
-            crate::ipam_repo::insert_subnet(&pool, inner, subnet("100.66.5.0", 24), "inner")
+            crate::ipam_repo::insert_subnet(&pool, inner, subnet("100.66.5.0", 24), "inner", 0)
                 .await
                 .expect("inner");
             assert_eq!(
