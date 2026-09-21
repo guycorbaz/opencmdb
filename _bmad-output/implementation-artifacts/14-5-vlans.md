@@ -186,15 +186,15 @@ user manual's IPAM chapter gains the VLAN, which no other criterion owns.
 
 - [x] **T0** Decisions taken with Guy (§0.4, §0.5, §0.6 on 2026-09-21; the sentinel settled by the
       gap-hunt's measurement).
-- [ ] **T1** (AC1, AC2) Migration `0010` applied twice; the adapter, the widened key, `ORDER BY … , vlan`;
+- [x] **T1** (AC1, AC2) Migration `0010` applied twice; the adapter, the widened key, `ORDER BY … , vlan`;
       the two store tests and the 409 that names the VLAN.
-- [ ] **T2** (AC3) The form field, the port, the correction route and its refusals.
-- [ ] **T3** (AC4) The tab, the two sentences, `AXE_REQUIRE_VLAN`, the seed's VLAN; the distinct-name
+- [x] **T2** (AC3) The form field, the port, the correction route and its refusals.
+- [x] **T3** (AC4) The tab, the two sentences, `AXE_REQUIRE_VLAN`, the seed's VLAN; the distinct-name
       property.
-- [ ] **T4** (AC5) The audit tests with their control; the rewritten reasons.
-- [ ] **T5** (AC6) Both collisions, measured after the gates on one store.
-- [ ] **T6** (AC7) The outside list's release control; both browser gates.
-- [ ] **T7** (AC8, AC9, AC10) Measure; prove-to-red — ⚠️ **`cargo xtask mutate` cannot drive the DDL
+- [x] **T4** (AC5) The audit tests with their control; the rewritten reasons.
+- [x] **T5** (AC6) Both collisions, measured after the gates on one store.
+- [x] **T6** (AC7) The outside list's release control; both browser gates.
+- [x] **T7** (AC8, AC9, AC10) Measure; prove-to-red — ⚠️ **`cargo xtask mutate` cannot drive the DDL
       half** (`deferred-work.md:5164`, owner this story): drive it with a purpose-built script and
       **record the pass back into that register row**. `cargo xtask record`; the manuals; both twins.
 
@@ -246,9 +246,85 @@ user manual's IPAM chapter gains the VLAN, which no other criterion owns.
 
 ### Agent Model Used
 
+Claude Opus 5 (1M context), 2026-09-21.
+
 ### Debug Log References
 
+Predictions written to a file before the first mutation ran; the runs' own logs are in the session
+scratchpad, and every figure below was read from one of them rather than recalled.
+
 ### Completion Notes List
+
+**What shipped.** Migration `0010` gives `ip_subnet` a VLAN on the sentinel 0 (*none*), widens the
+uniqueness key to `(base, prefix_len, vlan)` — the new key ADDED before the old is dropped — and is
+re-runnable through four `IF NOT EXISTS` spellings, one of which is written nowhere else here. The
+subnet form carries the VLAN, a TENTH write route corrects a subnet's label and its VLAN and nothing
+else, the selector names each segment, one keyed sentence says what the VLAN does not reach, and the
+outside list gained the release it never had. **717 → 727** bin tests (191 core, 110 xtask), ten
+gates, clippy `--all-targets`, `RUSTFLAGS="-D warnings"`, fmt, `cargo deny`, axe **0 violation
+nodes** over three passes under all five `REQUIRE` flags, kbd **61 checks, 0 failed**.
+
+🔴 **Three of my own sentences were refuted by measurements taken to check them, and each correction
+is the deliverable rather than the patch.** `parse_vlan`'s doc claimed no trim beyond the emptiness
+test and `vlan=12 ` answered 200 where the criterion predicted 422 — the behaviour is right and the
+sentence was wrong, and both sides are pinned now. `0010`'s header implied `NOT NULL` holds the
+sentinel; mutation **D2** relaxed the column to `NULL DEFAULT NULL` and the store tests stayed
+GREEN, because the adapter's `vlan` is a `u16` at every site — the clause is the SECOND carrier and
+the TYPE is the first. And `EditSubnetRequest`'s doc narrowed its own promise to a tripwire, where
+the **M10 / M10-bis** pair measures a barrier against the ordinary gesture: a CIDR field left unread
+reds clippy, a CIDR field read reds the test.
+
+🔴 **Mutation M8 came back GREEN and that is the pass's own finding.** Forcing the correction form's
+VLAN to the empty string whatever the subnet holds left the whole Rust suite green: the pre-fill's
+only carrier was a browser check, which can measure one half because the seed declares one VLAN. The
+half that matters is the ABSENT one — the store spells *none* as 0 and the form must spell it as an
+EMPTY field, because a pre-filled `0` is the one value the route refuses by name.
+
+🔴 **M2 predicted two reds and gave one, and the divergence was a hole**: `ipam.refusal.not_a_vlan`
+was asserted at exactly one site in the file and it was the CORRECTION's — the DEFINITION route's
+VLAN refusal, AC3's first half, had no test at all. It is a property over both routes now.
+
+🔴 **ACTION A3 IS DISCHARGED, and it is two collisions closed at two causes**, both REPRODUCED first
+on a store the accessibility seed had run against: `two_overlapping_ranges_at_once…` took
+`198.51.100.128/25`, the seed's *Workshop* byte for byte, and its CIDR moves — never the fixture's;
+and `the_store_returns_addresses_in_numeric_order` compared a PLAN-WIDE read for exact equality,
+which no uniqueness key can dissolve, so the assertion is scoped to its own subnet. ⚠️ `0010` alone
+dissolves NEITHER, measured. ⚠️ And the suite WIPES the plan (two unqualified `DELETE FROM
+ip_subnet`), so a seeded full run measures the collision only for the tests that ran before the
+wipe — the pair is therefore measured PER TEST on a freshly seeded store, which is deterministic
+where the full run is not. Registered.
+
+⚠️ **A vacuous assertion of mine was deleted rather than left standing**: `ipam_audit`'s twin
+compared `with_twin.audit(…)` with ITSELF under a message about two segments carrying one audit.
+There is nothing there to compare — `Subnet` is `{base, prefix_len}`, so the two plan entries ARE
+one value and the proof belongs to the type. What a test CAN measure is that the two SELECTOR TABS
+serve the same page below the selector, and that is `two_segments_of_one_cidr_serve_one_audit_and_one_grid`
+against a real store, with the control (a `dhcp-pool` in segment B changing segment A's page) and
+the premise (the two pages are NOT byte-identical) both asserted.
+
+⚠️ **AC2's letter asks for a 409 *whose sentence names the VLAN*; what ships names the RULE**, and
+the divergence is registered rather than quietly satisfied. `constraint_refusal` receives a
+constraint name and a route and has no access to the value the operator typed, so naming the number
+would mean plumbing it through every refusal. The sentence — *an address space is declared once per
+VLAN* — is true in both the VLAN and the no-VLAN case, which *"in that VLAN"* would not have been,
+and it teaches the rule the operator has just met. 🔑 The DEFINITION and the CORRECTION share it,
+because both collide on the very same key: story 14.4's arbitration says a refusal must name the
+right RECORD, and here a second sentence would have named the same record twice.
+
+⚠️ **Four instrument defects of mine, every one caught by disbelieving a result rather than by
+reading.** My DDL script passed TWO filters to `cargo test`, which accepts one, so D3 ran nothing
+and `grep -q "0 failed"` over an EMPTY result answered *red* — a measurement manufactured from an
+absence; it refuses both now. A browser-mutation run reported both gates green because a STALE
+SERVER still held port 8080 and answered from another database. An M8 re-reading gave 162 reds,
+taken without `--baseline` over a poisoned store. And a new keyboard check inserted after its
+neighbour left the wrong control focused, so the gate RELEASED THE WRONG ADDRESS — the press depends
+on focus left by an earlier check, which nothing declared.
+
+🔴 **And `git checkout --` destroyed uncommitted work for the FIFTH time in this project**, in the
+story whose own notes carry the rule, discarding the very test M8 had just earned. Rewritten from
+the transcript and re-verified red. ⚠️ An insertion of mine also landed between an existing
+`#[test]` and its function, silently disabling a test — story 6b.2's recorded defect, caught by
+clippy inside a mutation run and by nothing I did.
 
 ## Record
 
