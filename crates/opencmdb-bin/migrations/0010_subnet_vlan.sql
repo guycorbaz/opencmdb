@@ -12,6 +12,13 @@
 -- NULL for *none* the same CIDR was accepted THREE times (SELECT COUNT(*) → 3) and
 -- `ip_subnet_cidr_vlan` stopped being a key at all. A sentinel is what makes the key hold.
 --
+-- ⚠️ **AND `NOT NULL` IS THE SECOND CARRIER, NOT THE FIRST — measured, where this header first
+-- implied otherwise.** Mutation D2 relaxed this column to `NULL DEFAULT NULL` and the store tests
+-- stayed GREEN: the adapter's `vlan` is a `u16` at every site, so no code path in this product can
+-- bind NULL at all, and the trap the validation reproduced needed raw SQL to reach. The property is
+-- held by the TYPE; this clause is what stops a future writer going round it, and stating which is
+-- which is the difference between a guard and a habit.
+--
 -- 🔑 WHAT THE WIDENED KEY BUYS: one address space in TWO segments. `192.0.2.0/24` in VLAN 10 and the
 -- same CIDR in VLAN 20 are two entries of the plan — the canonical VLAN case, and the reason
 -- `0007`'s *"A plan that holds one subnet twice is not a plan"* is rewritten rather than deleted: a
@@ -34,6 +41,11 @@
 -- 🔴 THE NEW KEY IS ADDED BEFORE THE OLD ONE IS DROPPED, and the order is the whole point: MySQL DDL
 -- is not transactional, so a failure between the two statements must never leave `ip_subnet` with no
 -- uniqueness key. Keeping the old NAME would force drop-then-add and open exactly that window.
+--
+-- ⚠️ **NO MUTATION CAN CARRY THIS, and it is recorded rather than guarded.** D4 swapped the two
+-- statements and every test stayed green — correctly: a run that SUCCEEDS is indistinguishable
+-- either way, and what the order protects is a run that fails BETWEEN them. Green was the
+-- prediction and green is the measurement; the property lives in this sentence and in review.
 --
 -- D64: MariaDB 10.11+ only. ⚠️ `vlan` is NUMERIC and carries no collation — `ddl-collation` matches
 -- `VARCHAR`/`TEXT`/`CHAR`/`CLOB` and is silent here, which is measured rather than assumed (planting

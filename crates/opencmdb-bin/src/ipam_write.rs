@@ -559,9 +559,14 @@ pub(crate) struct EditAddressRequest {
 
 /// The `POST /ipam/subnet/edit` request — the label and the VLAN, and NOTHING else.
 ///
-/// 🔑 **The type is the scope.** `base` and `prefix_len` are absent, so a route that moved a subnet
-/// off its own children is unrepresentable rather than forbidden by a comment (story 6b.4b's idiom:
-/// close it in the type, where a sentence is carried by nobody).
+/// 🔑 **The type is the scope**, and the mutation pass measured BOTH halves of what that buys —
+/// where this comment first claimed only a tripwire, on story 5.12's habit of narrowing a promise.
+/// Adding a CIDR field here and leaving it unread reds **clippy** (`field 'cidr' is never read`,
+/// which CI runs with `--all-targets -D warnings`); adding it and READING it reds
+/// `a_subnet_correction_carries_its_vlan_and_no_cidr`. Together they close the ordinary gesture in
+/// both directions, and what stays open is someone editing the test too — which no guard reaches
+/// and which is a decision rather than an accident. Story 6b.4b's idiom: close it in the type,
+/// where a sentence is carried by nobody.
 #[derive(Debug, Deserialize)]
 pub(crate) struct EditSubnetRequest {
     /// The subnet being corrected.
@@ -2079,7 +2084,11 @@ mod tests {
     /// the port's log shows they reached nothing. Serde drops an unknown field, so this cannot fail
     /// by accident — what it pins is that nobody LATER adds those fields to
     /// [`EditSubnetRequest`] and quietly gives the route the power to move a subnet off its own
-    /// children. The day someone does, the log carries a CIDR and this reds.
+    /// children.
+    ///
+    /// ✅ **Measured, not asserted (M10-bis):** a `cidr` field added to the request AND read by the
+    /// handler reds exactly this test, `726 passed; 1 failed`. Its twin M10 — the same field left
+    /// unread — reds clippy instead. *Neither half alone would have said the scope is held.*
     #[tokio::test]
     async fn a_subnet_correction_carries_its_vlan_and_no_cidr() {
         let port = FakePort::answering(Ok("unread".to_string()));
@@ -2113,32 +2122,52 @@ mod tests {
     /// handler that parses the field and forgets to refuse on it leaves a unit test of the parser
     /// perfectly green. The port is asserted UNREACHED, which is what says the refusal happened
     /// before the write rather than after it.
+    /// 🔴 **BOTH ROUTES THAT ASK FOR A VLAN, and it was ONE until the mutation pass said so.**
+    /// Mutation M2 (`1..=4094` → `1..=4095`) was predicted to red two tests and reddened one:
+    /// `ipam.refusal.not_a_vlan` was asserted at exactly one site in the whole file, and it was the
+    /// CORRECTION's. The DEFINITION route — AC3's first half, shipped two commits earlier — had no
+    /// test for its VLAN refusal at all. *A divergence between a prediction and a measurement is
+    /// the finding*, and here the measurement was right and the prediction described a test that
+    /// did not exist.
     #[tokio::test]
-    async fn a_subnet_correction_refuses_a_vlan_outside_the_domain() {
+    async fn every_route_that_asks_for_a_vlan_refuses_one_outside_the_domain() {
         // ⚠️ `+1` is NOT here and was measured rather than reasoned about: Rust's `u16::from_str`
         // accepts a leading plus, so it answers 200 and writes VLAN 1 — which is the number the
         // operator typed. Left alone; listing it as a refusal would have pinned a behaviour the
         // product does not have.
-        for raw in ["4095", "0", "-1", "ten", "4 095", "1.0"] {
-            let port = FakePort::answering(Ok("unreached".to_string()));
-            let (status, body) = drive(
-                port.clone(),
-                form_post_to(
-                    WriteRoute::EditSubnet,
-                    &format!("id=01900000-0000-7000-8000-0000000000aa&label=Office&vlan={raw}"),
-                ),
-            )
-            .await;
-            assert_eq!(
-                status,
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "`{raw}` is not a VLAN this plan can hold"
-            );
-            assert_eq!(body, key("ipam.refusal.not_a_vlan"));
-            assert!(
-                port.asked.lock().expect("the log").is_empty(),
-                "`{raw}` was refused only after the store had been asked to write it"
-            );
+        let bodies: [(WriteRoute, &str); 2] = [
+            (WriteRoute::Subnet, "cidr=192.0.2.0/24&label=Office"),
+            (
+                WriteRoute::EditSubnet,
+                "id=01900000-0000-7000-8000-0000000000aa&label=Office",
+            ),
+        ];
+        for (route, prefix) in bodies {
+            for raw in ["4095", "0", "-1", "ten", "4 095", "1.0"] {
+                let port = FakePort::answering(Ok("unreached".to_string()));
+                let (status, body) = drive(
+                    port.clone(),
+                    form_post_to(route, &format!("{prefix}&vlan={raw}")),
+                )
+                .await;
+                assert_eq!(
+                    status,
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "`{raw}` is not a VLAN this plan can hold, at `{}`",
+                    route.path()
+                );
+                assert_eq!(
+                    body,
+                    key("ipam.refusal.not_a_vlan"),
+                    "at `{}`",
+                    route.path()
+                );
+                assert!(
+                    port.asked.lock().expect("the log").is_empty(),
+                    "`{raw}` was refused only after the store had been asked to write it, at `{}`",
+                    route.path()
+                );
+            }
         }
     }
 

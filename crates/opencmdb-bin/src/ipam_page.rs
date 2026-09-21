@@ -3197,6 +3197,55 @@ mod tests {
         );
     }
 
+    /// 🔴 **THE CORRECTION FORM'S VLAN PRE-FILL, AND IT WAS CARRIED BY NO RUST TEST AT ALL.**
+    /// Mutation M8 — `subnet_vlan` forced to the empty string whatever the subnet holds — left the
+    /// WHOLE suite green; its only carrier was a check in `a11y/kbd-probe.mjs`, which can measure
+    /// one half because the accessibility seed declares one VLAN and the page opens on it.
+    ///
+    /// 🔑 **The absent half is the one that matters and only a Rust test can build it**: the store
+    /// spells *no VLAN* as the sentinel 0, and the form must spell it as an EMPTY field — because an
+    /// empty field is what `parse_vlan` reads back as *none*, and a pre-filled `0` would be a number
+    /// the operator never typed and which the route then REFUSES by name. A browser gate cannot
+    /// reach it without a second seeded page.
+    ///
+    /// ⚠️ Story 6b.11's AC5 says a source guard does not SUFFICE where the defect lives in the DOM;
+    /// it does not say the browser should carry a property the render already shows. Both here.
+    #[test]
+    fn the_subnets_correction_form_spells_no_vlan_as_an_empty_field() {
+        let whole = offer_of(&[], &[]);
+        let quiet = quiet();
+        let audit = Audit {
+            plan: &whole,
+            network: &quiet,
+            subnet: Some(office()),
+        };
+        let view = PlanView::derive(office(), &[], &[]);
+        let rail_of = |vlan: u16| {
+            render_plan(
+                &[planned("s1", office(), "Office", vlan)],
+                "s1",
+                &view,
+                &audit,
+                RailLists::new(&planned("s1", office(), "Office", vlan), &[], &[]),
+            )
+        };
+        let declared = rail_of(10);
+        assert!(
+            declared.contains(
+                r#"<input id="ipam-edit-subnet-vlan" name="vlan" inputmode="numeric" value="10">"#
+            ),
+            "a subnet that declares a VLAN arrives with it in the field: {declared}"
+        );
+        let none = rail_of(0);
+        assert!(
+            none.contains(
+                r#"<input id="ipam-edit-subnet-vlan" name="vlan" inputmode="numeric" value="">"#
+            ),
+            "and *no VLAN* arrives as an EMPTY field, never as the sentinel the store writes — a \
+             `0` here is the one value the route refuses by name: {none}"
+        );
+    }
+
     /// AC4 — the note that says what the VLAN does NOT reach is rendered when a subnet declares one,
     /// and never before: until then it would describe a distinction the plan does not make.
     #[test]
