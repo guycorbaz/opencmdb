@@ -3984,6 +3984,122 @@ mod tests {
         }
     }
 
+    /// **AC5 — one CIDR in TWO SEGMENTS serves ONE audit, ONE grid and ONE offer, measured against
+    /// a real store.**
+    ///
+    /// 🔴 **This is the cost of Guy's decision of 2026-09-21 made executable, not a property being
+    /// celebrated.** The plan may hold one address space twice since `0010`; the ranges and the
+    /// defined addresses are read PLAN-WIDE (decision 2 of 2026-09-10 — the most protective range
+    /// decides, across nested subnets); and [`Subnet`] is `{base, prefix_len}`. So the two tabs
+    /// differ only by the row id in their href, and everything under them is the same page. The
+    /// screen SAYS so (`ipam.vlan_note`); this is the sentence made falsifiable.
+    ///
+    /// 🔑 **The CONTROL is the second half**: a range declared in segment B is measured CHANGING
+    /// segment A's answer. Without it this test would assert that two identical things are
+    /// identical — the shape `ipam_audit`'s own twin had, where a third assertion compared a value
+    /// with itself and could not fail.
+    #[tokio::test]
+    async fn two_segments_of_one_cidr_serve_one_audit_and_one_grid() {
+        let _guard = crate::DB_TEST_LOCK.lock().await;
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        let pool = MySqlPool::connect(&url).await.expect("connect");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
+        for id in ["t-seg-a", "t-seg-b"] {
+            crate::ipam_repo::tests::forget_subnet(&pool, id).await;
+        }
+        let cidr = crate::ipam_repo::Subnet::new("100.69.0.0".parse().unwrap(), 24)
+            .expect("a subnet of its own");
+        let mut conn = pool.acquire().await.expect("a connection");
+        crate::ipam_repo::insert_subnet(&mut *conn, "t-seg-a", cidr, "segment A", 10)
+            .await
+            .expect("the first segment");
+        crate::ipam_repo::insert_subnet(&mut *conn, "t-seg-b", cidr, "segment B", 20)
+            .await
+            .expect("the SAME address space in another segment");
+        drop(conn);
+
+        // 🔴 **WHAT IS COMPARED IS THE GRID, THE FINDINGS AND THE OFFER — never the whole page,
+        // and the first draft of this test compared the whole page and reddened correctly.** The
+        // SELECTOR legitimately differs between the two tabs: each names its own row id, each
+        // carries its own VLAN in its label, and `aria-current` moves. That difference is the
+        // feature; comparing it away would have meant deleting the very thing story 14.5 adds.
+        // What must not differ is everything DOWNSTREAM of the selector.
+        let between = |html: &str, from: &str, to: &str| {
+            let start = html
+                .find(from)
+                .unwrap_or_else(|| panic!("no `{from}` in the page"));
+            let rest = &html[start..];
+            let end = rest
+                .find(to)
+                .unwrap_or_else(|| panic!("no `{to}` after `{from}`"));
+            rest[..end + to.len()].to_string()
+        };
+        let parts_of = |html: &str| {
+            (
+                between(html, "<ul class=\"ipam-grid\"", "</ul>"),
+                between(html, "<section class=\"ipam-audit\"", "</section>"),
+                between(html, "<span class=\"ipam-occupancy\"", "</span>"),
+            )
+        };
+        let a = plan_data(&pool, Some("t-seg-a"))
+            .await
+            .expect("the plan draws");
+        let b = plan_data(&pool, Some("t-seg-b"))
+            .await
+            .expect("the plan draws");
+        assert_eq!(
+            parts_of(&a),
+            parts_of(&b),
+            "the two segments of one address space serve the same grid, the same findings and the \
+             same occupancy: everything below the selector reads a plan that carries no VLAN"
+        );
+        // ⚠️ And the premise, asserted rather than assumed: the two pages are NOT byte-identical.
+        // Without this the comparison above could be passing over two renders of one tab.
+        assert_ne!(
+            a, b,
+            "the premise: the selector does tell the two segments apart"
+        );
+
+        // The CONTROL: a `dhcp-pool` declared in segment B changes segment A's own offer, which is
+        // what the note on the screen warns about in words.
+        let mut conn = pool.acquire().await.expect("a connection");
+        let before = parts_of(
+            &plan_data(&pool, Some("t-seg-a"))
+                .await
+                .expect("the plan draws"),
+        );
+        crate::ipam_repo::insert_range(
+            &mut conn,
+            "t-seg-r1",
+            "t-seg-b",
+            "100.69.0.1".parse().unwrap(),
+            "100.69.0.40".parse().unwrap(),
+            opencmdb_core::ipam::IpPolicy::DhcpPool,
+            "B's pool",
+        )
+        .await
+        .expect("the twin's range");
+        drop(conn);
+        let after = parts_of(
+            &plan_data(&pool, Some("t-seg-a"))
+                .await
+                .expect("the plan draws"),
+        );
+        assert_ne!(
+            before, after,
+            "🔴 a range declared in the OTHER segment changed this one's page — the cost Guy took \
+             knowingly, and the reason `/ipam` carries a sentence about it"
+        );
+        for id in ["t-seg-a", "t-seg-b"] {
+            crate::ipam_repo::tests::forget_subnet(&pool, id).await;
+        }
+    }
+
     /// **A query the extractor refuses answers the product's own sentence, never the framework's.**
     ///
     /// 🔴 With `Query<…>` extracted directly, `?subnet=a&subnet=b` served

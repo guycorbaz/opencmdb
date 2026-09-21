@@ -1779,11 +1779,13 @@ mod tests {
             None,
             "and it emptied the first segment's offer"
         );
-        assert_eq!(
-            kinds(&with_twin.audit(cidr, &seen, &claimed)),
-            kinds(&with_twin.audit(cidr, &seen, &claimed)),
-            "the two segments are ONE audit: the subnet is its CIDR, and nothing in `Plan` carries a \
-             VLAN — which is what `/ipam`'s note says in words"
-        );
+        // 🔴 **A THIRD ASSERTION STOOD HERE AND COULD NOT FAIL**: it compared
+        // `with_twin.audit(cidr, …)` with ITSELF, under a message about two segments carrying one
+        // audit. There is nothing to compare — `Subnet` is `{base, prefix_len}`, so the two plan
+        // entries ARE one value and no runtime check can tell them apart. That is the proof, and
+        // it belongs to the type rather than to a `assert_eq!`. What a test CAN measure is that
+        // the two SELECTOR TABS, which do differ (they carry different row ids), serve the same
+        // audit — and that is `ipam_page`'s
+        // `two_segments_of_one_cidr_serve_one_audit_and_one_grid`, against a real store.
     }
 }
