@@ -5771,12 +5771,20 @@ development_status:
   #   against `git diff --name-only`), replacing review rounds that found only record defects (14.4's
   #   round D); (b) `cargo xtask mutate` NAMES the tests that redden (registered since 14.2b, no owner;
   #   it hid 14.4b's collateral). Precedent: 6.4b, created by Epic 6b's retrospective.
-  14-5-vlans: in-progress
-  #   FR21's VLAN half (Guy, 2026-09-19: deliver before closing). Inherits: 14.3b's merge across L2
-  #   domains reading reused private space as a conflict (pinned by
-  #   `one_address_in_two_l2_domains_is_read_as_a_conflict`, owner "the story that adds the VLAN axis");
-  #   the seed/test CIDR collision (`a11y/seed.sql` Workshop = `t-race`); the outside list's missing
-  #   release control.
+  14-5-vlans: review
+  #   FR21's VLAN half (Guy, 2026-09-19: deliver before closing). DONE and code-reviewed by three
+  #   isolated layers; `review` because `done` is the MERGE's business. Migration `0010` on the
+  #   sentinel 0 = none, the key widened to (base, prefix_len, vlan), `WriteRoute` 9 -> 10 with
+  #   `POST /ipam/subnet/edit` (label and VLAN only), the selector naming each segment, and one
+  #   sentence saying the audit IGNORES the VLAN — which is Guy's decision of 2026-09-21, the plan's
+  #   VLAN being declared where an `l2_domain` is observed.
+  #   Inherited and DISCHARGED: 14.3b's L2 merge (the row is re-owned to the story that gives a
+  #   connector a segment of its own, since the merge is unchanged BY DECISION); action A3's
+  #   seed/test CIDR collision, closed at two causes on the TEST side; the outside list's release.
+  #   Registered by this story: the suite's unqualified `DELETE FROM ip_subnet`; `ipam_write.rs`'s
+  #   file-size blindness; the kbd gate's focus coupling; `0007`'s uncorrectable prose; AC2/AC3's
+  #   refusal-sentence divergences; the release redirect picking the lowest VLAN on a tie; the
+  #   grid/rail asymmetry across two segments; and the three GET checks as the next split.
   14-6-ipv6-observation: backlog
   #   FR25, IPv6 observation-only. The schema already reserves the width (`VARCHAR(39)`, `prefix_len`
   #   <= 128) and `ip_range_same_family` is dormant until now. Inherits: `/ipam/release` accepting any

@@ -1040,8 +1040,8 @@ ipam.vlan_tab:
 # 🔴 The two halves of Guy's decision of 2026-09-21, in ONE sentence: the plan carries the segment, and
 # nothing else does. The second half is what stops an operator reading two tabs as two audits.
 ipam.vlan_note:
-  en: "The VLAN is what you declared: the scanner does not read tags. The ranges, the findings and the offer do not use it, so two subnets sharing one address space share one audit."
-  fr: "Le VLAN est ce que vous avez déclaré : le scanner ne lit pas les étiquettes. Les plages, les constats et l'offre ne s'en servent pas, si bien que deux sous-réseaux partageant un espace d'adressage partagent un audit."
+  en: "The VLAN is what you declared: the scanner does not read tags. Nothing below this line uses it — the grid, the counts, the ranges, the findings and the offer are all computed across the whole plan — so two subnets sharing one address space show the same records and share one audit."
+  fr: "Le VLAN est ce que vous avez déclaré : le scanner ne lit pas les étiquettes. Rien sous cette ligne ne s'en sert — la grille, les compteurs, les plages, les constats et l'offre se calculent sur tout le plan — si bien que deux sous-réseaux partageant un espace d'adressage montrent chacun les enregistrements de l'autre et partagent un audit."
 
 ipam.form.first:
   en: "First address — for example 192.0.2.10"
@@ -1243,8 +1243,8 @@ ipam.refusal.malformed_edit_address:
 # Story 14.5 — a subnet correction carries its identifier, a label and a VLAN, and NEVER its CIDR:
 # the request type has no field for one, so the form cannot offer to move a subnet off its children.
 ipam.refusal.malformed_edit_subnet:
-  en: "Malformed request: the form must carry the identifier of the subnet, a label and a VLAN."
-  fr: "Requête mal formée : le formulaire doit porter l'identifiant du sous-réseau, une étiquette et un VLAN."
+  en: "Malformed request: the form must carry the identifier of the subnet, a label, and a VLAN field — which may be left empty for none."
+  fr: "Requête mal formée : le formulaire doit porter l'identifiant du sous-réseau, une étiquette et un champ VLAN — qui peut rester vide pour aucun."
 # Story 14.4b — the release, the binding gesture `release` / « libérer » (prd.md:1002).
 ipam.refusal.malformed_release:
   en: "Malformed request: the form must carry the address to release."

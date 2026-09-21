@@ -42,6 +42,14 @@
 -- offer. `/ipam` carries that sentence; this header carries it too, because a schema that admits a
 -- shape the readers cannot tell apart owes the reason in writing.
 --
+-- ⚠️ **AND IT REACHES THE GRID AND THE COUNTS, which the first version of both sentences left out.**
+-- The code review's edge layer measured a page that contradicts itself: with an address defined in
+-- segment A only, segment B's grid paints a cell named *defined* and its occupancy line reads
+-- *1 defined*, while B's own RAIL lists nothing defined and offers no control for it — because the
+-- grid is plan-wide by decision and the rail is per-subnet by decision. Both halves are deliberate
+-- and their MEETING was described by nothing. The note now says *nothing below this line uses it*
+-- rather than naming three readers of five.
+--
 -- 🔴 THE FIRST MIGRATION IN THIS REPOSITORY THAT ALTERS AN EXISTING TABLE RE-RUNNABLY, and the
 -- spelling is not `0007`'s. `CREATE TABLE IF NOT EXISTS` cannot widen a key; `0003`/`0004`'s ALTERs
 -- are not re-runnable at all. Measured: the naive form applied twice answers

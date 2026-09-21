@@ -2850,6 +2850,30 @@ mod tests {
                 route.path()
             );
         }
+
+        // 🔴 **AC3's OWN FIELD WAS CARRIED BY NOTHING, and the code review's edge layer measured
+        // it**: deleting the VLAN input from the definition form left 1 028 tests, clippy, all ten
+        // gates, the axe gate under all five `REQUIRE` flags and the keyboard gate at 61/0 GREEN —
+        // over a page offering no way to declare a VLAN at definition time at all. The WRITE path
+        // was carried three ways over; the field the operator types into was carried by nothing.
+        // ⚠️ The keyboard gate asserts the CORRECTION form's pre-fill and never reads
+        // `ipam-subnet-vlan`, which is why *"the VLAN is on the screen"* looked covered.
+        for (field, why) in [
+            ("ipam-cidr", "the subnet's address space"),
+            ("ipam-subnet-label", "what the operator calls it"),
+            ("ipam-subnet-vlan", "its segment (AC3)"),
+        ] {
+            assert!(
+                body.contains(&format!("id=\"{field}\"")),
+                "the definition form carries no `{field}` — {why} cannot be typed, and the route \
+                 that accepts it is reachable by nothing the product renders"
+            );
+        }
+        assert!(
+            body.contains(r#"<input id="ipam-subnet-vlan" name="vlan""#),
+            "and its NAME is what the route reads: an input whose id is right and whose name is \
+             wrong types into nothing"
+        );
     }
 
     /// Every cell of the rendered grid carries its own accessible name.

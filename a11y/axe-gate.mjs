@@ -441,9 +441,17 @@ async function main() {
               `Set AXE_REQUIRE_VLAN=1 to make that a refusal rather than a gap.`,
           );
         } else {
+          // 🔴 **THE SUCCESS LINE WAS UNCONDITIONAL, so one run printed the clash and then announced
+          // distinctness — the second sentence asserting as fact what the first had just disproved.**
+          // Measured by the code review's edge layer on a colliding store, and it is story 14.4's
+          // *"will be refused" / "not a refusal"* in one `aria-live` region, one file over. A report
+          // that contradicts itself is worse than a silent one: the reader believes the last line.
           console.log(
-            `   ${PLAN_ROUTE}: the VLAN note is on the page and ${vlan.names.length} selector ` +
-              `tab(s) carry distinct names`,
+            tabNameClash === null
+              ? `   ${PLAN_ROUTE}: the VLAN note is on the page and ${vlan.names.length} selector ` +
+                  `tab(s) carry distinct names`
+              : `   ${PLAN_ROUTE}: the VLAN note is on the page; the tab names are NOT distinct — ` +
+                  `see the line above`,
           );
         }
 

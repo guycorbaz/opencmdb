@@ -573,8 +573,21 @@ pub(crate) struct EditSubnetRequest {
     pub(crate) id: String,
     /// What the operator calls it.
     pub(crate) label: String,
-    /// Its VLAN, or empty for none.
-    #[serde(default)]
+    /// Its VLAN, or EMPTY for none — and the field must be PRESENT either way.
+    ///
+    /// 🔴 **NO `#[serde(default)]` HERE, where its sibling on the DEFINITION route has one, and the
+    /// asymmetry is the decision rather than an oversight.** With a default, omitting the field
+    /// answered 200 and set the VLAN to 0 — so a request that says NOTHING about the segment
+    /// silently CLEARED it, while a request explicitly saying `vlan=0` was refused by name. Three
+    /// spellings of one value on one route, measured by the code review's edge layer.
+    ///
+    /// 🔑 On a DEFINITION, absence is a choice: there is no VLAN yet, so *silent* and *none* are the
+    /// same statement. On a CORRECTION, absence is ambiguous between *leave it as it is* and *clear
+    /// it*, and the product must not guess — that is story 14.4's arbitration, where an edit that
+    /// moved a range off its addresses and answered `Ok` was *the discreet gesture the product
+    /// permitted while refusing the honest one*. An emptied field still means *none*; a missing
+    /// field is now a malformed request, which is exactly what this route's keyed sentence says.
+    /// **Taken by me on delegation and recorded as mine so it can be reversed at the right cost.**
     pub(crate) vlan: String,
 }
 
@@ -2218,6 +2231,40 @@ mod tests {
                 "Office".to_string()
             )],
             "an emptied field means *none*, which the store spells 0"
+        );
+
+        // 🔴 **AND A MISSING FIELD IS NOT AN EMPTY ONE — the code review's edge layer measured that
+        // it was.** With `#[serde(default)]` on the correction's `vlan`, a request that said nothing
+        // about the segment answered 200 and CLEARED it, while `vlan=0` was refused by name: three
+        // spellings of one value on one route. On a correction, absence is ambiguous between *leave
+        // it* and *clear it*, so it is now malformed — and the keyed sentence says which field.
+        let port = FakePort::answering(Ok("unreached".to_string()));
+        let (status, body) = drive(
+            port.clone(),
+            form_post_to(
+                WriteRoute::EditSubnet,
+                "id=01900000-0000-7000-8000-0000000000aa&label=Office",
+            ),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "a correction that names no VLAN field must not silently clear the segment"
+        );
+        assert_eq!(body, key("ipam.refusal.malformed_edit_subnet"));
+        assert!(
+            port.asked.lock().expect("the log").is_empty(),
+            "and the store must not have been asked to write it"
+        );
+        // ⚠️ THE CONTROL, and it is what stops the repair above from simply forbidding *none*: the
+        // DEFINITION route keeps its default, because there absence and *none* are one statement.
+        let port = FakePort::answering(Ok("01900000-0000-7000-8000-000000000003".to_string()));
+        let (status, _) = drive(port, form_post("cidr=203.0.113.0/24&label=Lab")).await;
+        assert_eq!(
+            status,
+            StatusCode::CREATED,
+            "a definition that names no VLAN is a subnet on no VLAN, which is a thing to say"
         );
 
         let port = FakePort::answering(Ok("unread".to_string()));

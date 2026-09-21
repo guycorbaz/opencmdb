@@ -6083,3 +6083,15 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   shipped an unreviewed restructure to buy headroom a hundred lines already bought. 🔑 The
   measurement is recorded so the next story choosing where to cut does not re-take it. **Owner: the
   next story that grows `ipam_page.rs`.**
+- ⚠️ **Two segments of one CIDR: the GRID shows the other segment's records and the RAIL does not,
+  and both halves are deliberate.** Measured by story 14.5's code review: with an address defined in
+  segment A only, segment B's grid paints a cell named *defined* and its occupancy reads *1
+  defined*, while B's rail lists nothing defined and offers no correction or removal for it. The
+  grid is plan-wide by Guy's decision 2 of 2026-09-10 (the most protective range decides, across
+  nested subnets); the rail is per-subnet because *a control that edits another subnet's record from
+  this page is a gesture whose effect the operator cannot see*. 🔑 So the screen is right twice and
+  reads as inconsistent once, and `ipam.vlan_note` now says *nothing below this line uses it* rather
+  than naming three readers of five. ⚠️ Also measured: the same IPv4 can then be defined a SECOND
+  time in the other segment — two `ip_address` rows under two labels for one address in one
+  broadcast domain — and the product reports no conflict. **Owner: Epic 14's final retrospective**,
+  which should decide whether a per-segment rail over a plan-wide grid is the shape it wants.

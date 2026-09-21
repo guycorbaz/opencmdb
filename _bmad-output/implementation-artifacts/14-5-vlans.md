@@ -306,6 +306,55 @@ inherit `.empty` where it does; AC4's note was driven through one of the three b
 IF EXISTS` among them; a register row's line number was a contexting figure carried forward; and one
 VLAN field carried a `maxlength` its twin did not.
 
+🔴 **AND THE LAYER THAT MEASURES FOUND WHAT NEITHER READER COULD: AC3's OWN FIELD WAS CARRIED BY
+NOTHING.** Deleting the VLAN input from the DEFINITION form left **1 028 tests, clippy, all ten
+gates, the axe gate under all five `REQUIRE` flags and the keyboard gate at 61/0 green** — over a
+served page offering no way to declare a VLAN at definition time at all. The write path was carried
+three ways over; the field the operator types into was carried by nothing, because the keyboard gate
+asserts the CORRECTION form's pre-fill and reads `ipam-subnet-vlan` nowhere. R4 reds it now.
+
+🔴 **AND THE SELECTOR COLLISION IS REACHABLE THROUGH THE ORDINARY ROUTES**, which sharpens the
+HIGH above rather than repeating it: the edge layer produced it with *define, then correct* — a
+label beginning `VLAN 10 · ` beside a real VLAN-10 sibling — where the auditor had produced it by
+raw SQL. ⚠️ **And the guard's fixture was the one population the product CANNOT produce**: three
+subnets with EMPTY labels, which `label=` refuses with 422. *The guard's population was exactly the
+one the routes cannot make, and the routes' population was exactly the one that collides.* ✅ The
+repair was verified against their reproduction on a booted binary: the two links now read
+`… · 00c002` and `… · 00c001`.
+
+🔴 **OMITTING THE VLAN FIELD CLEARED THE SEGMENT AND ANSWERED 200, while `vlan=0` was refused by
+name** — three spellings of one value on one route, and the shipped sentence said the field was
+mandatory while `#[serde(default)]` made it optional. ✅ **Decision, mine on delegation**: the
+correction's `vlan` loses its default and a missing field is malformed, because on a CORRECTION
+absence is ambiguous between *leave it* and *clear it* and the product must not guess — story 14.4's
+arbitration, where the discreet gesture was permitted and the honest one refused. The DEFINITION
+keeps its default with a CONTROL asserting it, because there absence and *none* are one statement.
+
+⚠️ **The axe gate contradicted itself in ONE RUN** — it printed the clash and then announced
+distinctness, the second sentence asserting as fact what the first had just disproved. Story 14.4's
+*"will be refused" / "not a refusal"* in one `aria-live` region, one file over, in code this story
+wrote.
+
+⚠️ **The blindness reaches the GRID and the COUNTS, and the note named three readers of five.** With
+an address defined in segment A only, segment B paints a cell named *defined* and reads *1 defined*
+while B's own rail lists nothing defined and offers no control for it — the grid is plan-wide by
+decision, the rail per-subnet by decision, and their MEETING was described by nothing. The note says
+*nothing below this line uses it* now.
+
+⚠️ **`MIN_CHECKS` moved 59 → 61 and every sentence about it stayed at fifty-nine — THIRD recurrence,
+in the comment that narrates the same defect twice above it.** *A floor is a minimum, so that drift
+reds nothing*; it just quietly stops equalling what is there. Both twins carried it too, and
+**neither twin was in the File List** — which is this project's own rule about what a review slice
+can reach.
+
+✅ **The edge layer refuted TWELVE of its own suspicions by running them**, and two are worth keeping:
+`0010` upgrades a POPULATED `0009` store with both rows intact and no keyless window (regressed to
+the old shape, rebooted, `SHOW INDEX` read back); and **`update_subnet`'s `FOR UPDATE` is
+load-bearing, established with a control** — with a 600 ms pause injected, a concurrent delete waits
+(`0.412 s`) with the lock and goes straight through (`0.009 s`) without it, **the HTTP answers being
+identical in both runs**. *Only the latency separates them*, which is why a mutation of the lock
+alone would have measured nothing.
+
 ✅ **Refuted or already correct, so nobody re-chases them**: every number in the `## Record` block
 (both terms of `717 → 727` verified from a worktree at the branch point); the File List, twenty paths
 matching the diff exactly; the three registrations, each with a named owner; `0010`'s re-runnability,
@@ -462,6 +511,7 @@ driver reports a store's red as a mutation's.*
 - registered: AC2's 409 names the RULE where the criterion asked it to name the VLAN
 - registered: A release from the second segment's tab sends the operator to the FIRST segment's plan
 - registered: The three `GET` checks are `ipam_page.rs`'s next split
+- registered: the GRID shows the other segment's records and the RAIL does not
 - file: .github/workflows/ci.yml
 - file: _bmad-output/implementation-artifacts/14-5-vlans.md
 - file: _bmad-output/implementation-artifacts/deferred-work.md
@@ -482,7 +532,9 @@ driver reports a store's red as a mutation's.*
 - file: crates/opencmdb-bin/templates/_ipam_audit.html
 - file: crates/opencmdb-bin/templates/_ipam_forms.html
 - file: crates/opencmdb-bin/templates/_ipam_rail_lists.html
+- file: CLAUDE.md
 - file: docs/manuals/user-manual/user-manual.tex
+- file: docs/project-context.md
 
 ### File List
 

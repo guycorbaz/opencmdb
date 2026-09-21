@@ -32,16 +32,18 @@ const CHROME = process.env.AXE_CHROME ?? "/usr/bin/google-chrome";
 const QUEUE = ".queue .queue-row > a";
 // The settle in `app.js` is 250 ms; everything here waits past it with room for a document.
 const SETTLE_WAIT_MS = 900;
-// 🔑 The floor, and it EQUALS what is there rather than sitting under it: **fifty-nine** checks run
+// 🔑 The floor, and it EQUALS what is there rather than sitting under it: **sixty-one** checks run
 // on a queue of two, which is the shortest queue this gate accepts. ⚠️ This sentence said *twenty*
 // until story 14.4's slice-D review — story 6b.11's figure, left behind by every floor move since —
 // so the ONE place a reader verifies *the floor equals what is there* asserted a number 33 short of
 // the constant beneath it. ⚠️ And the repair's first version said *fifty-two*: the same review added
 // a check in the same breath, so the corrected sentence was stale before it was saved. **A floor is
 // a MINIMUM, so that drift reds nothing** — it just quietly stops equalling what is there, which is
-// the whole property. The number below is now read off a live run (`59 check(s) run`, story 14.4b's
-// six release checks — five, then its code review's confirmation — added to 14.4's fifty-three) rather than
-// counted by hand. A floor under what exists tolerates losing a check while still reading as a pass
+// the whole property. 🔴 **AND IT DRIFTED A THIRD TIME, in the story that moved the constant**: story
+// 14.5 took it 59 → 61 (the subnet correction's pre-fill and the outside list's release) and left
+// every sentence here saying fifty-nine — caught by the code review's edge layer on a live run, not
+// by this comment, which narrates the same defect twice above. The number below is read off
+// `kbd gate: 61 check(s) run` rather than counted by hand. A floor under what exists tolerates losing a check while still reading as a pass
 // — this project has caught that twice, once in a privacy floor and once in a word count. If a
 // check is added this number moves deliberately; if one is skipped, the gate says so instead of
 // printing a green.
