@@ -41,7 +41,7 @@
 //! sentence said *seven*, inside the paragraph correcting two other wrong counts of the same
 //! figure. *A unit-sensitive sentence is where an unqualified number does the most damage.*
 
-use std::net::Ipv4Addr;
+use std::net::{IpAddr, Ipv4Addr};
 
 use opencmdb_core::ipam::{IpPolicy, IpamError};
 use sqlx::{Executor, MySql};
@@ -60,10 +60,28 @@ pub(crate) const IPV4_CANONICAL_LEN: usize = 15;
 /// it is D10's precedent applied to addresses. The registered defect at `inventory_view.rs:261` —
 /// *"the address compares as a STRING, so `192.0.2.9` follows `192.0.2.10`"* — is caused by the
 /// ABSENCE of padding, not by text.
-pub(crate) fn canonical(addr: Ipv4Addr) -> String {
-    let [a, b, c, d] = addr.octets();
-    format!("{a:03}.{b:03}.{c:03}.{d:03}")
+pub(crate) fn canonical(addr: IpAddr) -> String {
+    match addr {
+        IpAddr::V4(addr) => {
+            let [a, b, c, d] = addr.octets();
+            format!("{a:03}.{b:03}.{c:03}.{d:03}")
+        }
+        // The expanded, zero-padded, LOWER-CASE form — 39 characters, which is exactly the width
+        // `0007` reserved. `{:04x}` is what imposes both the padding and the case; the column's
+        // `ascii_bin` collation refuses the upper-case twin, measured by INSERT rather than by a
+        // literal probe (`0011`'s header says why that distinction cost a near-miss).
+        IpAddr::V6(addr) => addr
+            .segments()
+            .iter()
+            .map(|group| format!("{group:04x}"))
+            .collect::<Vec<_>>()
+            .join(":"),
+    }
 }
+
+/// How many characters the canonical IPv6 form occupies — the second width `ip_range_same_family`
+/// compares against since `0011` (story 14.6).
+pub(crate) const IPV6_CANONICAL_LEN: usize = 39;
 
 /// Read an address back out of its canonical form.
 ///
@@ -73,7 +91,10 @@ pub(crate) fn canonical(addr: Ipv4Addr) -> String {
 /// unpadded quad, a short octet, a trailing space. The DDL refuses those too (`0007`'s anchored
 /// `RLIKE`); this is the second carrier, because a value can reach here from a backfill that went
 /// around the adapter.
-pub(crate) fn from_canonical(text: &str) -> Result<Ipv4Addr, IpamError> {
+pub(crate) fn from_canonical(text: &str) -> Result<IpAddr, IpamError> {
+    if text.len() == IPV6_CANONICAL_LEN {
+        return from_canonical_v6(text);
+    }
     if text.len() != IPV4_CANONICAL_LEN {
         return Err(IpamError::MalformedAddress);
     }
@@ -91,14 +112,55 @@ pub(crate) fn from_canonical(text: &str) -> Result<Ipv4Addr, IpamError> {
     if parts.next().is_some() {
         return Err(IpamError::MalformedAddress);
     }
-    Ok(Ipv4Addr::from(octets))
+    Ok(IpAddr::V4(Ipv4Addr::from(octets)))
+}
+
+/// Read the expanded, zero-padded, lower-case IPv6 form back (story 14.6).
+///
+/// # Errors
+///
+/// [`IpamError::MalformedAddress`] when the value is not exactly this store's spelling — a
+/// compressed form, an upper-case digit, a group of other than four characters. ⚠️ **Upper case is
+/// refused HERE as well as by the column**, because the two carriers answer different questions: the
+/// column refuses a write, this refuses a value that reached the row another way.
+fn from_canonical_v6(text: &str) -> Result<IpAddr, IpamError> {
+    let mut groups = [0_u16; 8];
+    let mut parts = text.split(':');
+    for group in &mut groups {
+        let part = parts.next().ok_or(IpamError::MalformedAddress)?;
+        if part.len() != 4
+            || !part
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            return Err(IpamError::MalformedAddress);
+        }
+        *group = u16::from_str_radix(part, 16).map_err(|_| IpamError::MalformedAddress)?;
+    }
+    if parts.next().is_some() {
+        return Err(IpamError::MalformedAddress);
+    }
+    Ok(IpAddr::V6(std::net::Ipv6Addr::from(groups)))
 }
 
 /// A subnet as the plan declares it: a base address and a prefix length.
+///
+/// 🔑 **`IpAddr`, not `IpAddr`, since story 14.6 — and the SIGHTINGS deliberately did not follow**
+/// (Guy, 2026-09-21). The PLAN may hold IPv6; the observed side may not, because the connector emits
+/// IPv4 only and `Fact` — the domain type — has no IPv6 variant at all. The audit therefore joins the
+/// two only where both are IPv4, which is *observation-only expressed in the TYPES rather than in a
+/// comment*.
+///
+/// ⚠️ **That promise is carried on ONE HALF and it is said rather than implied** (story 5.12's
+/// precedent). `Plan.defined: BTreeSet<IpAddr>` refuses a mixed lookup at the type, because `Borrow`
+/// will not hand a `&IpAddr` to a set of `IpAddr`. `Plan.ranges` does NOT: `IpAddr` and `IpAddr`
+/// are cross-comparable in std, so an interval test spanning two families COMPILES. It answers
+/// correctly today only because `IpAddr`'s total order puts every V4 below every V6 — *luck rather
+/// than design*. A tripwire on one half, never a compiler guarantee.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Subnet {
     /// The NETWORK address — not any address inside the subnet.
-    base: Ipv4Addr,
+    base: IpAddr,
     /// How many leading bits the prefix fixes.
     prefix_len: u8,
 }
@@ -108,7 +170,8 @@ impl Subnet {
     ///
     /// # Errors
     ///
-    /// - [`IpamError::PrefixLengthNotInFamily`] when the prefix cannot belong to IPv4.
+    /// - [`IpamError::PrefixLengthNotInFamily`] when the prefix cannot belong to the base's family —
+    ///   32 for IPv4, 128 for IPv6.
     ///   🔴 The validation measured why this is a refusal rather than a lint: a `/64` accepted on an
     ///   IPv4 base makes [`Subnet::last`] compute `32 - 64` and **panic on subtract-with-overflow**.
     ///   *A schema that admits an impossible pair hands the arithmetic an impossible input* — and
@@ -116,8 +179,8 @@ impl Subnet {
     /// - [`IpamError::BaseIsNotTheNetworkAddress`] when the base carries host bits. `192.0.2.5/24`
     ///   is refused: containment is arithmetic on the base, and a base that is not the network
     ///   address makes every answer wrong in a way nothing downstream can detect.
-    pub(crate) fn new(base: Ipv4Addr, prefix_len: u8) -> Result<Self, IpamError> {
-        if prefix_len > 32 {
+    pub(crate) fn new(base: IpAddr, prefix_len: u8) -> Result<Self, IpamError> {
+        if prefix_len > Self::width_of(base) {
             return Err(IpamError::PrefixLengthNotInFamily);
         }
         let candidate = Subnet { base, prefix_len };
@@ -127,24 +190,80 @@ impl Subnet {
         Ok(candidate)
     }
 
-    /// The mask this prefix fixes. `prefix_len` is `<= 32` by construction ([`Subnet::new`]).
-    fn mask(&self) -> u32 {
-        if self.prefix_len == 0 {
-            0
-        } else {
-            u32::MAX << (32 - self.prefix_len)
+    /// How many bits the family carries: 32 or 128.
+    const fn width_of(addr: IpAddr) -> u8 {
+        match addr {
+            IpAddr::V4(_) => 32,
+            IpAddr::V6(_) => 128,
         }
     }
 
-    /// The network address the base ought to be.
-    fn network(&self) -> Ipv4Addr {
-        Ipv4Addr::from(u32::from(self.base) & self.mask())
+    /// How many bits THIS subnet's family carries.
+    pub(crate) const fn width(&self) -> u8 {
+        Self::width_of(self.base)
     }
 
-    /// The last address the subnet covers — broadcast included, because the PLAN covers it and
-    /// `infrastructure` is what names it.
-    fn last(&self) -> Ipv4Addr {
-        Ipv4Addr::from(u32::from(self.base) | !self.mask())
+    /// Whether this subnet is IPv6 — the axis the SCREEN keys its refusal on (story 14.6).
+    ///
+    /// 🔴 **The family, never the size**, and the validation is why: the gap-hunt built the widening
+    /// and `/ipam` drew a 256-cell grid, an occupancy line and an OFFER on a `2001:db8:0:43::/120`,
+    /// which is under `ipam_page::MAX_DRAWN_ADDRESSES`. *Every IPv6 subnet an operator really has is
+    /// larger than a /118* is a claim about deployments, not a property of this product.
+    pub(crate) const fn is_v6(&self) -> bool {
+        matches!(self.base, IpAddr::V6(_))
+    }
+
+    /// The base as a number, so the arithmetic below is one family-free expression.
+    fn base_bits(&self) -> u128 {
+        match self.base {
+            IpAddr::V4(addr) => u128::from(u32::from(addr)),
+            IpAddr::V6(addr) => u128::from(addr),
+        }
+    }
+
+    /// Re-assemble an address of THIS subnet's family from its bits.
+    fn address_at(&self, bits: u128) -> IpAddr {
+        match self.base {
+            // The mask keeps the value inside the family, so the narrowing cannot lose a bit.
+            IpAddr::V4(_) => IpAddr::V4(Ipv4Addr::from(u32::try_from(bits).unwrap_or(u32::MAX))),
+            IpAddr::V6(_) => IpAddr::V6(std::net::Ipv6Addr::from(bits)),
+        }
+    }
+
+    /// The mask this prefix fixes, on the family's own width.
+    ///
+    /// ⚠️ **The shift is on `u128` and the zero-prefix arm is explicit**, because `u128::MAX << 128`
+    /// is undefined behaviour Rust turns into a panic in debug and a wrap in release — the same trap
+    /// [`Subnet::size`] records.
+    fn mask(&self) -> u128 {
+        let width = u32::from(self.width());
+        if self.prefix_len == 0 {
+            0
+        } else {
+            u128::MAX << (width - u32::from(self.prefix_len))
+        }
+    }
+
+    /// The host part's mask, within the family's width — never wider.
+    fn host_mask(&self) -> u128 {
+        let width = u32::from(self.width());
+        let family = if width == 128 {
+            u128::MAX
+        } else {
+            (1u128 << width) - 1
+        };
+        !self.mask() & family
+    }
+
+    /// The network address the base ought to be.
+    fn network(&self) -> IpAddr {
+        self.address_at(self.base_bits() & self.mask())
+    }
+
+    /// The last address the subnet covers — broadcast included for IPv4, because the PLAN covers it
+    /// and `infrastructure` is what names it. ⚠️ IPv6 has no broadcast; see [`Subnet::is_edge`].
+    fn last(&self) -> IpAddr {
+        self.address_at(self.base_bits() | self.host_mask())
     }
 
     /// Whether an address falls inside this subnet.
@@ -152,7 +271,15 @@ impl Subnet {
     /// 🔑 **In Rust, never in SQL** (D10: *"all value comparison and normalization happens in
     /// Rust"*). `architecture.md:4847` (F57) asks that SQL-side comparison be costed before any
     /// epic reintroduces it; this story does not reintroduce it.
-    pub(crate) fn contains(&self, addr: Ipv4Addr) -> bool {
+    ///
+    /// 🔴 **A different family is never contained, and that is an EXPLICIT arm rather than a
+    /// consequence of the ordering.** `IpAddr`'s total order puts every V4 below every V6, so the
+    /// bare interval test would answer correctly today — and would go on compiling if that order
+    /// ever changed. *An answer that is right by luck is one nobody can rely on.*
+    pub(crate) fn contains(&self, addr: IpAddr) -> bool {
+        if self.is_v6() != matches!(addr, IpAddr::V6(_)) {
+            return false;
+        }
         addr >= self.base && addr <= self.last()
     }
 
@@ -163,26 +290,48 @@ impl Subnet {
     /// cells, and its *next free address* panel then named the NETWORK address. The grid draws
     /// every address because the PLAN covers every address; what may be OFFERED is a separate
     /// question, answered by `CellState::offerable`.
-    pub(crate) fn addresses(&self) -> impl Iterator<Item = Ipv4Addr> + use<> {
-        let first = u32::from(self.network());
-        let last = u32::from(self.last());
-        (first..=last).map(Ipv4Addr::from)
-    }
-
-    /// How many addresses the subnet holds, network and broadcast included.
     ///
-    /// 🔑 It is a `u64` because a `/0` holds 2³² addresses and a `u32` cannot say so. The count is
-    /// what lets a caller refuse to DRAW a subnet before it has paid for drawing it — see
-    /// `ipam_page::MAX_DRAWN_ADDRESSES`.
-    pub(crate) fn size(&self) -> u64 {
-        u64::from(u32::from(self.last()) - u32::from(self.network())) + 1
+    /// ⚠️ **The caller is responsible for not asking this of an IPv6 subnet**, and since story 14.6
+    /// the one production caller refuses by FAMILY before it gets here. This iterator would happily
+    /// walk 2¹²⁸ addresses.
+    pub(crate) fn addresses(&self) -> impl Iterator<Item = IpAddr> + use<> {
+        let first = self.base_bits() & self.mask();
+        let last = self.base_bits() | self.host_mask();
+        let me = *self;
+        (first..=last).map(move |bits| me.address_at(bits))
     }
 
-    /// The subnet in CIDR notation, as an operator writes it — `192.0.2.0/24`.
+    /// How many addresses the subnet holds, network and broadcast included — **SATURATING**.
+    ///
+    /// 🔑 It is a `u64` because a `/0` IPv4 holds 2³² addresses and a `u32` cannot say so. The count
+    /// is what lets a caller refuse to DRAW a subnet before it has paid for drawing it — see
+    /// `ipam_page::MAX_DRAWN_ADDRESSES`, which is this function's ONLY production caller.
+    ///
+    /// 🔴 **THE OBVIOUS SPELLING IS A RELEASE-ONLY HANG, and story 14.6's validation measured both
+    /// halves.** `1_u64 << (128 - 64)` is `1 << 64`: it **panics in debug** (`attempt to shift left
+    /// with overflow`) and **returns 1 in release**, and this workspace declares no `[profile]`, so
+    /// the shipped image runs with `overflow-checks = false`. An IPv6 `/64` would therefore report
+    /// `1`, sail under the ceiling, and send `PlanView::derive` looping over 2⁶⁴ addresses — story
+    /// 14.2's 2.08 GB denial of service, unbounded, and INVISIBLE in the debug suite where the same
+    /// code panics instead. *The debug build turns this defect into a crash and the release build
+    /// into a hang; a suite that runs debug measures the crash and ships the hang.*
+    ///
+    /// 🔑 So the arithmetic is on `u128`, which cannot overflow for either family, and the narrowing
+    /// SATURATES. ⚠️ A saturated value is a lie as a COUNT and the truth as a CEILING COMPARISON;
+    /// nothing renders it (`PlanView::counts` walks the cells), and story 14.6's AC5 pins `/0`,
+    /// `/64`, `/120` and `/128` so the two cannot be confused again.
+    pub(crate) fn size(&self) -> u64 {
+        let span = self.host_mask();
+        u64::try_from(span).map_or(u64::MAX, |span| span.saturating_add(1))
+    }
+
+    /// The subnet in CIDR notation, as an operator writes it — `192.0.2.0/24`, `2001:db8::/64`.
     ///
     /// ⚠️ NOT the stored spelling: the store holds `192.000.002.000` so that lexicographic order is
     /// numeric order, and that padding is an implementation of ordering, never something to show.
-    /// *A canonical form imposed for the machine is not a form to render.*
+    /// *A canonical form imposed for the machine is not a form to render.* Since story 14.6 the same
+    /// sentence covers IPv6, whose stored form is the expanded 39-character one and whose rendered
+    /// form is RFC 5952's.
     pub(crate) fn cidr(&self) -> String {
         format!("{}/{}", self.base, self.prefix_len)
     }
@@ -198,8 +347,16 @@ impl Subnet {
     ///
     /// 🔑 The prefix length is what settles it, so the arm is explicit rather than implied: there is
     /// no network/broadcast pair to reserve when the subnet is too small to hold one.
-    pub(crate) fn is_edge(&self, addr: Ipv4Addr) -> bool {
-        if self.prefix_len >= 31 {
+    ///
+    /// 🔴 **AND IPv6 HAS NO EDGES AT ALL** (Guy, 2026-09-21). IPv6 has no broadcast address: RFC 4291
+    /// §2.6.1 reserves the all-zeros interface identifier as the *Subnet-Router anycast* and the last
+    /// address is an ordinary host. ⚠️ The mechanical transposition — `prefix_len >= width - 1` —
+    /// **compiles, looks right, and paints two cells `infrastructure` on every IPv6 subnet**, which
+    /// states something about the network that nothing supports. The two readings were measured on a
+    /// `/120` and give two different occupancy lines (`0 infrastructure` against `2`); nothing in the
+    /// code decided between them, so a decision was taken rather than a translation made.
+    pub(crate) fn is_edge(&self, addr: IpAddr) -> bool {
+        if self.is_v6() || self.prefix_len >= 31 {
             return false;
         }
         addr == self.network() || addr == self.last()
@@ -209,7 +366,15 @@ impl Subnet {
     ///
     /// 🔑 An INTERVAL comparison and never a walk: a `/8` holds 16 777 216 addresses, and the one
     /// caller asks this question while rendering a page the ceiling refuses to draw.
-    pub(crate) fn overlaps(&self, first: Ipv4Addr, last: Ipv4Addr) -> bool {
+    pub(crate) fn overlaps(&self, first: IpAddr, last: IpAddr) -> bool {
+        // 🔴 A bound of ANOTHER family overlaps nothing, said explicitly for `contains`'s reason:
+        // the bare interval test answers correctly only because `IpAddr`'s order puts every V4 below
+        // every V6, and an answer that is right by luck is one nobody can rely on.
+        if self.is_v6() != matches!(first, IpAddr::V6(_))
+            || self.is_v6() != matches!(last, IpAddr::V6(_))
+        {
+            return false;
+        }
         last >= self.network() && first <= self.last()
     }
 }
@@ -324,8 +489,8 @@ pub(crate) async fn insert_range(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
     subnet_id: &str,
-    first: Ipv4Addr,
-    last: Ipv4Addr,
+    first: IpAddr,
+    last: IpAddr,
     policy: IpPolicy,
     label: &str,
 ) -> Result<(), RepositoryError> {
@@ -356,8 +521,8 @@ async fn insert_range_pausing(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
     subnet_id: &str,
-    first: Ipv4Addr,
-    last: Ipv4Addr,
+    first: IpAddr,
+    last: IpAddr,
     policy: IpPolicy,
     label: &str,
     after_the_deciding_read: impl std::future::Future<Output = ()>,
@@ -477,8 +642,8 @@ async fn range_attempt(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
     subnet_id: &str,
-    first: Ipv4Addr,
-    last: Ipv4Addr,
+    first: IpAddr,
+    last: IpAddr,
     policy: IpPolicy,
     label: &str,
     after_the_deciding_read: impl std::future::Future<Output = ()>,
@@ -622,7 +787,7 @@ pub(crate) async fn insert_address(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
     subnet_id: &str,
-    addr: Ipv4Addr,
+    addr: IpAddr,
     label: &str,
 ) -> Result<(), RepositoryError> {
     let subnet = load_subnet(&mut *conn, subnet_id).await?;
@@ -656,7 +821,7 @@ pub(crate) async fn insert_address(
 /// The classified `sqlx::Error`.
 async fn forget_release_of(
     conn: &mut sqlx::MySqlConnection,
-    addr: Ipv4Addr,
+    addr: IpAddr,
 ) -> Result<(), RepositoryError> {
     sqlx::query(capped!("DELETE FROM address_release WHERE addr = ?"))
         .bind(canonical(addr))
@@ -841,7 +1006,7 @@ pub(crate) async fn delete_subnet(
 pub(crate) async fn update_address(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
-    addr: Ipv4Addr,
+    addr: IpAddr,
     label: &str,
 ) -> Result<String, RepositoryError> {
     let mut tx = sqlx::Connection::begin(&mut *conn)
@@ -1073,8 +1238,8 @@ async fn delete_range_pausing(
 pub(crate) async fn update_range(
     conn: &mut sqlx::MySqlConnection,
     id: &str,
-    first: Ipv4Addr,
-    last: Ipv4Addr,
+    first: IpAddr,
+    last: IpAddr,
     policy: IpPolicy,
     label: &str,
 ) -> Result<String, RepositoryError> {
@@ -1280,7 +1445,7 @@ where
 /// [`ranges_in`].
 pub(crate) async fn plan_ranges<'e, E>(
     executor: E,
-) -> Result<Vec<(Ipv4Addr, Ipv4Addr, IpPolicy)>, RepositoryError>
+) -> Result<Vec<(IpAddr, IpAddr, IpPolicy)>, RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
 {
@@ -1326,7 +1491,7 @@ fn read_range_row(
     first: &str,
     last: &str,
     policy: &str,
-) -> Result<(Ipv4Addr, Ipv4Addr, IpPolicy), RepositoryError> {
+) -> Result<(IpAddr, IpAddr, IpPolicy), RepositoryError> {
     Ok((
         from_canonical(first).map_err(ipam)?,
         from_canonical(last).map_err(ipam)?,
@@ -1339,7 +1504,7 @@ fn read_range_row(
 /// # Errors
 ///
 /// [`RepositoryError`] on a backend failure or a row this build cannot read.
-pub(crate) async fn plan_addresses<'e, E>(executor: E) -> Result<Vec<Ipv4Addr>, RepositoryError>
+pub(crate) async fn plan_addresses<'e, E>(executor: E) -> Result<Vec<IpAddr>, RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
 {
@@ -1375,7 +1540,7 @@ where
 pub(crate) async fn ranges_in<'e, E>(
     executor: E,
     subnet_id: &str,
-) -> Result<Vec<(Ipv4Addr, Ipv4Addr, IpPolicy, String)>, RepositoryError>
+) -> Result<Vec<(IpAddr, IpAddr, IpPolicy, String)>, RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
 {
@@ -1421,7 +1586,7 @@ where
 pub(crate) async fn correctable_ranges_in<'e, E>(
     executor: E,
     subnet_id: &str,
-) -> Result<Vec<(String, Ipv4Addr, Ipv4Addr, IpPolicy, String)>, RepositoryError>
+) -> Result<Vec<(String, IpAddr, IpAddr, IpPolicy, String)>, RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
 {
@@ -1466,7 +1631,7 @@ where
 pub(crate) async fn correctable_addresses_in<'e, E>(
     executor: E,
     subnet_id: &str,
-) -> Result<Vec<(String, Ipv4Addr, String)>, RepositoryError>
+) -> Result<Vec<(String, IpAddr, String)>, RepositoryError>
 where
     E: Executor<'e, Database = MySql>,
 {
@@ -1542,7 +1707,7 @@ fn policy_from_token(token: &str) -> Result<IpPolicy, RepositoryError> {
 /// `sqlx::Error`.
 pub(crate) async fn release_address(
     conn: &mut sqlx::MySqlConnection,
-    addr: Ipv4Addr,
+    addr: IpAddr,
     at: opencmdb_core::observation::Timestamp,
 ) -> Result<Option<String>, RepositoryError> {
     let defined: Option<(String,)> =
@@ -1587,7 +1752,7 @@ pub(crate) async fn release_address(
 pub(crate) async fn plan_releases<'e, E>(
     executor: E,
 ) -> Result<
-    std::collections::BTreeMap<Ipv4Addr, opencmdb_core::observation::Timestamp>,
+    std::collections::BTreeMap<IpAddr, opencmdb_core::observation::Timestamp>,
     RepositoryError,
 >
 where
@@ -1688,7 +1853,160 @@ pub(crate) mod tests {
     /// depending on run order — which is what makes it read as flakiness.
     /// ⚠️ Not claimed as the cause of issue #38 or of Epic 6's registered non-determinism: it is a
     /// named, reproducible cause of non-determinism in THIS story's tests, and nothing more.
-    fn v4(text: &str) -> Ipv4Addr {
+    /// A literal address for the tests.
+    ///
+    /// 🔑 **It answers `IpAddr` since story 14.6**, so the same helper writes an IPv4 or an IPv6
+    /// literal and a test that means one cannot silently get the other. The name is kept: `v4` is
+    /// what four hundred call sites say, and renaming them would bury the story's real diff.
+    /// **AC5 — `size()` SATURATES and cannot shift by 64 or more.**
+    ///
+    /// 🔴 **The obvious spelling is a RELEASE-ONLY HANG, and story 14.6's validation measured both
+    /// halves.** `1_u64 << (128 - 64)` is `1 << 64`: it panics in debug (`attempt to shift left with
+    /// overflow`) and returns **1** in release. This workspace declares no `[profile]`, so the
+    /// shipped image runs with `overflow-checks = false` — an IPv6 `/64` would report `1`, sail
+    /// under `ipam_page::MAX_DRAWN_ADDRESSES` and send the grid looping over 2⁶⁴ addresses, which is
+    /// story 14.2's 2.08 GB denial of service, unbounded. ⚠️ *The debug build turns it into a crash
+    /// and the release build into a hang; a suite that runs debug measures the crash and ships the
+    /// hang*, which is why the arithmetic is on `u128` and the narrowing saturates rather than
+    /// shifting at all.
+    #[test]
+    fn a_subnets_size_saturates_and_never_shifts_out_of_range() {
+        let of = |text: &str, prefix: u8| {
+            Subnet::new(text.parse().expect("a literal address"), prefix)
+                .expect("a subnet")
+                .size()
+        };
+        assert_eq!(of("192.0.2.0", 24), 256, "a /24 holds 256 addresses");
+        assert_eq!(of("192.0.2.0", 32), 1, "a /32 is one host");
+        assert_eq!(
+            of("0.0.0.0", 0),
+            1 << 32,
+            "an IPv4 /0 needs more than a u32"
+        );
+        assert_eq!(of("2001:db8::", 128), 1, "an IPv6 /128 is one host");
+        assert_eq!(
+            of("2001:db8:0:43::", 120),
+            256,
+            "a /120 holds 256, like a /24"
+        );
+        assert_eq!(
+            of("2001:db8:0:42::", 118),
+            1024,
+            "a /118 is exactly the ceiling — the boundary the size heuristic used to be trusted with"
+        );
+        // 🔑 The two that would have shifted: a /64 and a /0. Under `1 << (128 - prefix)` the first
+        // answers 1 in release and the second panics in debug; both saturate here.
+        assert_eq!(
+            of("2001:db8:0:42::", 64),
+            u64::MAX,
+            "2⁶⁴ does not fit a u64 and must SATURATE — never wrap to 1, which would put a /64 \
+             under the ceiling and loop the grid over eighteen quintillion addresses"
+        );
+        assert_eq!(of("::", 0), u64::MAX, "and 2¹²⁸ saturates too");
+    }
+
+    /// **AC6 — IPv6 has NO EDGES, and the mechanical transposition is what this pins out.**
+    ///
+    /// 🔴 Guy's decision of 2026-09-21. IPv6 has no broadcast address: RFC 4291 §2.6.1 reserves the
+    /// all-zeros interface identifier as the *Subnet-Router anycast* and the last address is an
+    /// ordinary host. ⚠️ The mechanical reading — `prefix_len >= width - 1` — **compiles, looks right
+    /// and paints two cells `infrastructure` on every IPv6 subnet**; measured on a `/120` the two
+    /// readings give two different occupancy lines and nothing in the code decided between them.
+    #[test]
+    fn an_ipv6_subnet_has_no_edges_at_any_prefix_length() {
+        for (base, prefix) in [
+            ("2001:db8:0:43::", 120_u8),
+            ("2001:db8:0:42::", 64),
+            ("2001:db8::", 127),
+            ("2001:db8::", 128),
+            ("::", 0),
+        ] {
+            let subnet = Subnet::new(base.parse().expect("a literal address"), prefix)
+                .expect("an IPv6 subnet");
+            for probe in [base, "2001:db8:0:43::ff", "2001:db8::1"] {
+                let addr: IpAddr = probe.parse().expect("a literal address");
+                assert!(
+                    !subnet.is_edge(addr),
+                    "`{base}/{prefix}` called `{probe}` an edge — IPv6 has no broadcast address, so \
+                     painting it `infrastructure` states something about the network that nothing \
+                     supports"
+                );
+            }
+        }
+        // ⚠️ THE CONTROL, without which the assertion above passes over an `is_edge` that answers
+        // false for everything: IPv4 keeps its pair, and keeps not having one below a /31.
+        let quad = Subnet::new("192.0.2.0".parse().expect("a literal"), 24).expect("a /24");
+        assert!(quad.is_edge(v4("192.0.2.0")) && quad.is_edge(v4("192.0.2.255")));
+        assert!(!quad.is_edge(v4("192.0.2.9")));
+        let slash31 = Subnet::new("192.0.2.0".parse().expect("a literal"), 31).expect("a /31");
+        assert!(
+            !slash31.is_edge(v4("192.0.2.0")),
+            "RFC 3021: both are usable"
+        );
+    }
+
+    /// **A different family is never contained, and it is an EXPLICIT arm.**
+    ///
+    /// 🔑 `IpAddr`'s total order puts every V4 below every V6, so the bare interval test would
+    /// answer correctly today — and would go on compiling if that order ever changed. *An answer
+    /// that is right by luck is one nobody can rely on.*
+    #[test]
+    fn a_subnet_never_contains_an_address_of_another_family() {
+        let v4net = Subnet::new("192.0.2.0".parse().expect("a literal"), 24).expect("a /24");
+        let v6net = Subnet::new("2001:db8:0:42::".parse().expect("a literal"), 64).expect("a /64");
+        assert!(!v4net.contains(v4("2001:db8:0:42::10")));
+        assert!(!v6net.contains(v4("192.0.2.9")));
+        assert!(v4net.contains(v4("192.0.2.9")) && v6net.contains(v4("2001:db8:0:42::10")));
+        // The same for the interval form the ranges use.
+        assert!(!v6net.overlaps(v4("192.0.2.1"), v4("192.0.2.40")));
+        assert!(!v4net.overlaps(v4("2001:db8:0:42::1"), v4("2001:db8:0:42::40")));
+        assert!(v4net.overlaps(v4("192.0.2.1"), v4("192.0.2.40")));
+    }
+
+    /// The canonical codec round-trips BOTH families, and refuses every other spelling.
+    #[test]
+    fn the_canonical_codec_round_trips_both_families() {
+        for text in [
+            "192.0.2.9",
+            "0.0.0.0",
+            "255.255.255.255",
+            "2001:db8:0:42::10",
+            "::",
+            "::1",
+            "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+        ] {
+            let addr: IpAddr = text.parse().expect("a literal address");
+            let stored = canonical(addr);
+            assert_eq!(
+                from_canonical(&stored).expect("the store's own spelling reads back"),
+                addr,
+                "`{text}` did not survive `{stored}`"
+            );
+        }
+        assert_eq!(canonical(v4("192.0.2.9")), "192.000.002.009");
+        assert_eq!(
+            canonical(v4("2001:db8::1")),
+            "2001:0db8:0000:0000:0000:0000:0000:0001",
+            "expanded, zero-padded and LOWER-CASE — 39 characters, which is the reserved width"
+        );
+        assert_eq!(canonical(v4("2001:db8::1")).len(), IPV6_CANONICAL_LEN);
+        // ⚠️ Upper case is refused HERE as well as by the column, because the two answer different
+        // questions: the column refuses a WRITE, this refuses a value that reached the row otherwise.
+        for wrong in [
+            "2001:0DB8:0000:0000:0000:0000:0000:0001",
+            "2001:db8::1",
+            "2001:0db8:0:0:0:0:0:1",
+            "192.0.2.9",
+            "2001:0db8:0000:0000:0000:0000:0000:0001 ",
+        ] {
+            assert!(
+                from_canonical(wrong).is_err(),
+                "`{wrong}` is not this store's spelling and must be refused"
+            );
+        }
+    }
+
+    fn v4(text: &str) -> IpAddr {
         text.parse().expect("a literal address")
     }
 
@@ -2040,7 +2358,7 @@ pub(crate) mod tests {
     /// defect class written into the migration.
     ///
     /// 🔑 **It is the SECOND carrier of decision §0.3.** The first is the Rust type — the plan speaks
-    /// `IpAddr` and the sightings speak `Ipv4Addr` — and story 5.12's lesson is that a promise held
+    /// `IpAddr` and the sightings speak `IpAddr` — and story 5.12's lesson is that a promise held
     /// in one place only is a promise a refactor removes in silence. This test is what reds if a
     /// later tidy-up widens all six for symmetry.
     #[tokio::test]
@@ -2210,7 +2528,7 @@ pub(crate) mod tests {
         let read = plan_addresses(&mut *conn).await.expect("read back");
         // 🔑 The filter PRESERVES the order, so what is asserted is still the store's `ORDER BY` and
         // not a sort this test performed — which is the whole property.
-        let mine_only: Vec<Ipv4Addr> = read
+        let mine_only: Vec<IpAddr> = read
             .into_iter()
             .filter(|addr| mine.contains(*addr))
             .collect();

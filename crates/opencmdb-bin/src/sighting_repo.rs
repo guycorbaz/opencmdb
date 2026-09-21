@@ -44,6 +44,31 @@ use sqlx::{Acquire, Executor, MySql, MySqlConnection, MySqlPool};
 use crate::ipam_repo::{canonical, from_canonical};
 use crate::repo::{datetime_literal, is_deadlock};
 
+/// Read an OBSERVED address back, and refuse an IPv6 one BY NAME.
+///
+/// 🔴 **This is Guy's decision §0.8 of story 14.6 made local: the plan speaks `IpAddr`, the sightings
+/// do not.** The canonical codec became family-generic because the plan needed it; this narrows its
+/// answer back at the one place the observed side reads a stored address, rather than giving the
+/// observed side a second codec and duplicating the padding logic.
+///
+/// 🔑 **The refused state is NAMED rather than assumed impossible.** An IPv6 row in
+/// `address_sighting` cannot be produced by this product — the connector emits IPv4 only, `Fact`
+/// carries no IPv6 variant at all, and `0008`'s CHECK stays IPv4-only by decision (`0011`'s header).
+/// It is reachable by a write that went around all three, and this project's rule is that a state
+/// the code cannot rule out is a state the code says something about. ⚠️ The caller SKIPS the row and
+/// names it in a `warn` (story 14.2's review), so one hostile row does not empty the summary.
+///
+/// # Errors
+///
+/// [`opencmdb_core::ipam::IpamError::MalformedAddress`] for a value that is not this store's
+/// spelling, and for a well-formed IPv6 one — which is malformed *for this table*.
+fn observed_v4(text: &str) -> Result<Ipv4Addr, opencmdb_core::ipam::IpamError> {
+    match from_canonical(text)? {
+        std::net::IpAddr::V4(addr) => Ok(addr),
+        std::net::IpAddr::V6(_) => Err(opencmdb_core::ipam::IpamError::MalformedAddress),
+    }
+}
+
 /// The `mac` of a sighting that carried no hardware address.
 ///
 /// A sentinel and not `NULL`, because the column is in the primary key and MariaDB holds NULLs
@@ -103,7 +128,9 @@ pub(crate) fn sighting_keys(l2_domain: L2DomainId, facts: &[Fact]) -> Vec<Sighti
     let mut keys: Vec<SightingKey> = addrs
         .iter()
         .flat_map(|addr| {
-            let addr = canonical(*addr);
+            // 🔑 The codec is family-generic since story 14.6; the OBSERVED side widens it back to
+            // IPv4 here, which is decision §0.8's narrowing made local rather than global.
+            let addr = canonical(std::net::IpAddr::V4(*addr));
             let domain = &domain;
             macs.iter().map(move |mac| SightingKey {
                 addr: addr.clone(),
@@ -328,7 +355,7 @@ where
         .map(|(addr, l2_domain, mac, first, last)| {
             let decode = |e: Box<dyn std::error::Error + Send + Sync>| sqlx::Error::Decode(e);
             Ok(Sighting {
-                addr: from_canonical(&addr).map_err(|e| decode(Box::new(e)))?,
+                addr: observed_v4(&addr).map_err(|e| decode(Box::new(e)))?,
                 l2_domain: L2DomainId::from_uuid(
                     l2_domain
                         .parse::<uuid::Uuid>()
@@ -613,7 +640,12 @@ mod tests {
     /// in Rust be compared with rows read back from the store.
     fn decoded(key: &SightingKey, first: Timestamp, last: Timestamp) -> Sighting {
         Sighting {
-            addr: from_canonical(&key.addr).expect("a canonical address"),
+            // ⚠️ The OBSERVED side narrows, exactly as `observed_v4` does in production: the
+            // codec is family-generic since story 14.6 and this table is IPv4-only by decision.
+            addr: match from_canonical(&key.addr).expect("a canonical address") {
+                std::net::IpAddr::V4(addr) => addr,
+                std::net::IpAddr::V6(addr) => panic!("an IPv6 row in address_sighting: {addr}"),
+            },
             l2_domain: L2DomainId::from_uuid(key.l2_domain.parse().expect("a uuid")),
             mac: (key.mac != MAC_ABSENT).then(|| key.mac.parse().expect("a mac")),
             first_seen_at: first,

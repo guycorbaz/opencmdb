@@ -852,6 +852,21 @@ ipam.cell_label_seen:
 ipam.findings.heading:
   en: "What the network shows"
   fr: "Ce que montre le réseau"
+# 🔴 Story 14.6: the sentence that REPLACES the all-clear for a subnet the product cannot observe.
+# `ipam.findings.none` would assert concordance about a plan the only connector never looks at; this
+# says what is true — nothing was checked — and it names THIS SUBNET, because the plan-wide *outside*
+# list keeps rendering beside it and the two must not contradict each other in one viewport.
+# The *no offer* line for an unobservable subnet: the shipped one names the SIZE, which is a true
+# sentence about the wrong reason for an IPv6 subnet of any prefix length.
+ipam.unobservable.heading:
+  en: "No grid is drawn for an IPv6 subnet: the product cannot observe IPv6, so a grid would show what you declared and nothing about the network. The ranges you declared are below."
+  fr: "Aucune grille n'est dessinée pour un sous-réseau IPv6 : le produit n'observe pas IPv6, donc une grille montrerait ce que vous avez déclaré et rien du réseau. Les plages que vous avez déclarées figurent ci-dessous."
+ipam.unobservable.no_offer:
+  en: "No address is offered here: the product cannot see what is in use on an IPv6 network."
+  fr: "Aucune adresse n'est proposée ici : le produit ne voit pas ce qui est utilisé sur un réseau IPv6."
+ipam.audit.unobservable:
+  en: "Nothing here was checked: the scanner does not reach IPv6, so the product has no observation to compare this subnet's plan against. What it shows below is what you declared."
+  fr: "Rien ici n'a été vérifié : le scanner n'atteint pas IPv6, donc le produit n'a aucune observation à comparer au plan de ce sous-réseau. Ce qui suit est ce que vous avez déclaré."
 ipam.findings.none:
   en: "Nothing the network has shown contradicts this subnet's plan."
   fr: "Rien de ce que le réseau a montré ne contredit le plan de ce sous-réseau."

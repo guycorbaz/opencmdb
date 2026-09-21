@@ -48,7 +48,7 @@
 //! `auth_deny` like every other non-public path. ⚠️ A fresh install therefore gains a live write
 //! surface with no opt-in, which the release notes owe a sentence.
 
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 use std::sync::Arc;
 
 use axum::extract::State;
@@ -679,8 +679,8 @@ pub(crate) trait IpamWritePort: Send + Sync {
     fn define_range(
         &self,
         subnet_id: String,
-        first: Ipv4Addr,
-        last: Ipv4Addr,
+        first: IpAddr,
+        last: IpAddr,
         policy: opencmdb_core::ipam::IpPolicy,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
@@ -694,7 +694,7 @@ pub(crate) trait IpamWritePort: Send + Sync {
     fn define_address(
         &self,
         subnet_id: String,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
@@ -733,8 +733,8 @@ pub(crate) trait IpamWritePort: Send + Sync {
     fn edit_range(
         &self,
         id: String,
-        first: Ipv4Addr,
-        last: Ipv4Addr,
+        first: IpAddr,
+        last: IpAddr,
         policy: opencmdb_core::ipam::IpPolicy,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
@@ -748,7 +748,7 @@ pub(crate) trait IpamWritePort: Send + Sync {
     fn edit_address(
         &self,
         id: String,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 
@@ -775,7 +775,7 @@ pub(crate) trait IpamWritePort: Send + Sync {
     /// decision 4, 2026-09-19), or a backend failure.
     fn release_address(
         &self,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         until: opencmdb_core::observation::Timestamp,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>>;
 }
@@ -825,8 +825,8 @@ impl IpamWritePort for StoreIpamWrite {
     fn define_range(
         &self,
         subnet_id: String,
-        first: Ipv4Addr,
-        last: Ipv4Addr,
+        first: IpAddr,
+        last: IpAddr,
         policy: opencmdb_core::ipam::IpPolicy,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
@@ -851,7 +851,7 @@ impl IpamWritePort for StoreIpamWrite {
     fn define_address(
         &self,
         subnet_id: String,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
@@ -920,8 +920,8 @@ impl IpamWritePort for StoreIpamWrite {
     fn edit_range(
         &self,
         id: String,
-        first: Ipv4Addr,
-        last: Ipv4Addr,
+        first: IpAddr,
+        last: IpAddr,
         policy: opencmdb_core::ipam::IpPolicy,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
@@ -937,7 +937,7 @@ impl IpamWritePort for StoreIpamWrite {
     fn edit_address(
         &self,
         id: String,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         label: String,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
@@ -970,7 +970,7 @@ impl IpamWritePort for StoreIpamWrite {
 
     fn release_address(
         &self,
-        addr: Ipv4Addr,
+        addr: IpAddr,
         until: opencmdb_core::observation::Timestamp,
     ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
         Box::pin(async move {
@@ -1111,8 +1111,8 @@ async fn define_range(
         Err(refusal) => return refusal.into_response(),
     };
     let (first, last) = match (
-        request.first.trim().parse::<Ipv4Addr>(),
-        request.last.trim().parse::<Ipv4Addr>(),
+        request.first.trim().parse::<IpAddr>(),
+        request.last.trim().parse::<IpAddr>(),
     ) {
         (Ok(first), Ok(last)) => (first, last),
         _ => return route.malformed().into_response(),
@@ -1150,7 +1150,7 @@ async fn define_address(
         Ok(id) => id,
         Err(refusal) => return refusal.into_response(),
     };
-    let Ok(addr) = request.addr.trim().parse::<Ipv4Addr>() else {
+    let Ok(addr) = request.addr.trim().parse::<IpAddr>() else {
         return route.malformed().into_response();
     };
     let label = match checked_label(&request.label) {
@@ -1294,7 +1294,7 @@ async fn release_address(
     let Ok(Form(request)) = form else {
         return route.malformed().into_response();
     };
-    let Ok(addr) = request.addr.trim().parse::<Ipv4Addr>() else {
+    let Ok(addr) = request.addr.trim().parse::<IpAddr>() else {
         return route.malformed().into_response();
     };
     let Ok(until) = chrono::DateTime::parse_from_rfc3339(request.seen_until.trim()) else {
@@ -1333,8 +1333,8 @@ async fn edit_range(
         Err(refusal) => return refusal.into_response(),
     };
     let (first, last) = match (
-        request.first.trim().parse::<Ipv4Addr>(),
-        request.last.trim().parse::<Ipv4Addr>(),
+        request.first.trim().parse::<IpAddr>(),
+        request.last.trim().parse::<IpAddr>(),
     ) {
         (Ok(first), Ok(last)) => (first, last),
         _ => return route.malformed().into_response(),
@@ -1368,7 +1368,7 @@ async fn edit_address(
         Ok(id) => id,
         Err(refusal) => return refusal.into_response(),
     };
-    let Ok(addr) = request.addr.trim().parse::<Ipv4Addr>() else {
+    let Ok(addr) = request.addr.trim().parse::<IpAddr>() else {
         return route.malformed().into_response();
     };
     let label = match checked_label(&request.label) {
@@ -1604,7 +1604,7 @@ const fn breaks_the_line_or_its_direction(glyph: char) -> bool {
 fn parse_cidr(raw: &str) -> Result<Subnet, Refusal> {
     let malformed = || WriteRoute::Subnet.malformed();
     let (base, prefix) = raw.trim().split_once('/').ok_or_else(malformed)?;
-    let base: Ipv4Addr = base.parse().map_err(|_| malformed())?;
+    let base: IpAddr = base.parse().map_err(|_| malformed())?;
     // ⚠️ A prefix that does not fit a `u8` — `/999` — is MALFORMED, while one that fits and cannot
     // belong to IPv4 — `/64` — gets `PrefixLengthNotInFamily`, which names the real rule. Two
     // sentences for what looks like one mistake, and the distinction is the honest one: the product
@@ -1895,8 +1895,8 @@ mod tests {
         fn define_range(
             &self,
             subnet_id: String,
-            first: Ipv4Addr,
-            last: Ipv4Addr,
+            first: IpAddr,
+            last: IpAddr,
             _policy: opencmdb_core::ipam::IpPolicy,
             label: String,
         ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
@@ -1911,7 +1911,7 @@ mod tests {
         fn define_address(
             &self,
             subnet_id: String,
-            addr: Ipv4Addr,
+            addr: IpAddr,
             label: String,
         ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
@@ -1957,8 +1957,8 @@ mod tests {
         fn edit_range(
             &self,
             id: String,
-            first: Ipv4Addr,
-            last: Ipv4Addr,
+            first: IpAddr,
+            last: IpAddr,
             _policy: opencmdb_core::ipam::IpPolicy,
             label: String,
         ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
@@ -1973,7 +1973,7 @@ mod tests {
         fn edit_address(
             &self,
             id: String,
-            addr: Ipv4Addr,
+            addr: IpAddr,
             label: String,
         ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
@@ -1986,7 +1986,7 @@ mod tests {
 
         fn release_address(
             &self,
-            addr: Ipv4Addr,
+            addr: IpAddr,
             until: opencmdb_core::observation::Timestamp,
         ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
             self.asked
@@ -2800,8 +2800,8 @@ mod tests {
             fn define_range(
                 &self,
                 _subnet_id: String,
-                _first: Ipv4Addr,
-                _last: Ipv4Addr,
+                _first: IpAddr,
+                _last: IpAddr,
                 _policy: opencmdb_core::ipam::IpPolicy,
                 _label: String,
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
@@ -2810,7 +2810,7 @@ mod tests {
             fn define_address(
                 &self,
                 _subnet_id: String,
-                _addr: Ipv4Addr,
+                _addr: IpAddr,
                 _label: String,
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
@@ -2833,8 +2833,8 @@ mod tests {
             fn edit_range(
                 &self,
                 _id: String,
-                _first: Ipv4Addr,
-                _last: Ipv4Addr,
+                _first: IpAddr,
+                _last: IpAddr,
                 _policy: opencmdb_core::ipam::IpPolicy,
                 _label: String,
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
@@ -2843,14 +2843,14 @@ mod tests {
             fn edit_address(
                 &self,
                 _id: String,
-                _addr: Ipv4Addr,
+                _addr: IpAddr,
                 _label: String,
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())
             }
             fn release_address(
                 &self,
-                _addr: Ipv4Addr,
+                _addr: IpAddr,
                 _until: opencmdb_core::observation::Timestamp,
             ) -> BoxFuture<'_, Result<Written, RepositoryError>> {
                 Box::pin(std::future::pending())

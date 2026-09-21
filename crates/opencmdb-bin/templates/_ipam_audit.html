@@ -30,7 +30,17 @@
        the only true thing this screen has to say. -#}
   {%- if audit.subnet_in_force %}
   <h3 id="ipam-findings-heading" class="panel-label">{{ s.findings_heading }}</h3>
-  {%- if audit.findings.is_empty() %}
+  {#- 🔴 **STORY 14.6: THIS SENTENCE REPLACES THE ALL-CLEAR, it does not sit beside it.** With no
+       findings the arm below renders `ipam.findings.none` — *"Nothing the network has shown
+       contradicts this subnet's plan"* — which on a subnet the product cannot observe is the product
+       ASSERTING CONCORDANCE about a plan its only connector will never look at. *An empty list reads
+       as **nothing is wrong** where the truth is **nothing was checked**.*
+       ⚠️ It says *this subnet* on purpose: the OUTSIDE list below belongs to the PLAN and keeps
+       rendering here, so without that scope the two would contradict each other in one viewport —
+       the class story 14.4's third round paid for. -#}
+  {%- if !audit.unobservable.is_empty() %}
+  <p class="empty ipam-unobservable">{{ audit.unobservable }}</p>
+  {%- else if audit.findings.is_empty() %}
   <p class="empty">{{ s.no_findings }}</p>
   {%- else %}
   <ul class="ipam-findings">
