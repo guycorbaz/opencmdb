@@ -5771,9 +5771,10 @@ development_status:
   #   against `git diff --name-only`), replacing review rounds that found only record defects (14.4's
   #   round D); (b) `cargo xtask mutate` NAMES the tests that redden (registered since 14.2b, no owner;
   #   it hid 14.4b's collateral). Precedent: 6.4b, created by Epic 6b's retrospective.
-  14-5-vlans: review
+  14-5-vlans: done
   #   FR21's VLAN half (Guy, 2026-09-19: deliver before closing). DONE and code-reviewed by three
-  #   isolated layers; `review` because `done` is the MERGE's business. Migration `0010` on the
+  #   isolated layers; squash-merged 2026-09-21 as `bf4b71e` (PR #193), CI green on the head commit
+  #   `03623e4` ITSELF (run 35595682317, 3m21), read from `gh run view` rather than from a watcher. Migration `0010` on the
   #   sentinel 0 = none, the key widened to (base, prefix_len, vlan), `WriteRoute` 9 -> 10 with
   #   `POST /ipam/subnet/edit` (label and VLAN only), the selector naming each segment, and one
   #   sentence saying the audit IGNORES the VLAN — which is Guy's decision of 2026-09-21, the plan's
