@@ -1,7 +1,7 @@
 # Story 14.6: IPv6, observation-only — the plan holds what the scanner will never see
 
-Status: drafting — **NOT validated. `bmad-create-story validate` by two fresh-context agents is
-mandatory here and has not run.**
+Status: **ready-for-dev** — contexted and VALIDATED 2026-09-21 by two fresh-context layers, with
+nine decisions taken by Guy and each recorded with the option refused.
 
 🔑 **In NO epic file.** `epics.md`'s Epic 14 body stops at story 14.4; `:474` carries the epic's FR scope and **`:476`** is
 what names 14.5 and 14.6, added by the partial retrospective of 2026-09-19. So this story inherits
@@ -24,7 +24,7 @@ violation nodes over the two passes, kbd-probe 61 checks.
 measurements taken first, which is why they are recorded with what they refused rather than as
 preferences that happened to win.
 
-### 0.1 — ✅ (a) THE PLAN HOLDS IT, AND NOTHING ELSE CHANGES
+### 0.1 — ✅ (a) THE PLAN HOLDS IT, AND THE REFUSAL IS KEYED ON THE **FAMILY**
 
 FR25 says *document*, observation-only. Two readings, and the difference is most of the story:
 
@@ -121,13 +121,36 @@ Vec<(Ipv4Addr, Ipv4Addr, IpPolicy)>`, both read by the audit and by the grid.
 in its body and in its return type. An IPv6 /0 has 2^128 addresses, which no `u64` holds, and
 `MAX_DRAWN_ADDRESSES` is compared against it — the comparison that decides whether the grid is drawn
 at all. ⚠️ A saturating `u64` answer is enough for the COMPARISON and is a lie as a COUNT, and the
-occupancy line renders a count. ✅ **TAKEN: saturate**, which is enough for the COMPARISON that decides whether the grid is drawn —
-the only use that decides anything. ⚠️ **And the cost is carried rather than hidden**: a saturated
-value is a lie as a COUNT, and the occupancy line renders a count, so that line must be SILENT for
-IPv6 rather than show a saturated number. **REFUSED**: `u128` throughout, honest everywhere and
-paid at the ceiling comparison, the occupancy and their tests.
+occupancy line renders a count. ✅ **TAKEN: saturate**, which is enough for the COMPARISON that decides whether the grid is drawn.
+**REFUSED**: `u128` throughout, honest everywhere and paid at the ceiling comparison, the occupancy
+and their tests.
 
-### 0.5 — A migration is owed, and the schema's reservation is narrower than it reads
+🔴 **THE DECISION STANDS AND ITS STATED MECHANISM WAS WRONG — the gap-hunt measured both halves.**
+*(a)* **The occupancy line does not read `size()` at all**: `PlanView::counts()` walks `self.cells`,
+and `size()` has exactly ONE production caller — `ipam_page.rs:1009`, the ceiling comparison. So the
+danger this decision named, *a saturated number in the occupancy line*, cannot occur; the danger that
+DOES occur is §0.1's — a **true** count over a subnet the product should not be auditing at all.
+*Right conclusion, wrong reason*, and the reason is corrected rather than the conclusion.
+
+🔴 **(b) THE OBVIOUS SPELLING IS A RELEASE-ONLY HANG, and this is the sharpest thing the validation
+found.** `1_u64 << (128 - 64)` is `1 << 64`. Reproduced by me on this machine:
+
+```
+$ rustc -O shift.rs && ./shift_rel      $ rustc shift.rs && ./shift_dbg
+v4 /24  -> 256                          v4 /24  -> 256
+v6 /120 -> 256                          v6 /120 -> 256
+v6 /64  -> 1                            panicked: attempt to shift left with overflow  (exit 101)
+```
+
+The workspace declares **no `[profile]` section**, so the shipped image runs with
+`overflow-checks = false`. An IPv6 `/64` would therefore report `size() == 1`, sail under
+`MAX_DRAWN_ADDRESSES`, and send `PlanView::derive` looping over 2^64 addresses — **story 14.2's
+2.08 GB denial of service, unbounded, and INVISIBLE in the debug suite, where the same code panics
+instead.** 🔑 *The debug build turns this defect into a crash and the release build turns it into a
+hang; a test suite that only runs debug measures the crash and ships the hang.* `size()` must be
+family-aware and written so it cannot shift by 64 or more, with `/0`, `/64` and `/128` pinned.
+
+### 0.5 — ✅ EXPANDED, ZERO-PADDED, **LOWER-CASE**, 39 CHARACTERS · and `0011` WIDENS IN PLACE, KEEPING THE FOUR NAMES
 
 ⚠️ **`VARCHAR(39)` and `prefix_len <= 128` are reserved and the CHECKS REFUSE IPv6 anyway** — verified
 live on a migrated store, three refusals each naming its own constraint. **SIX** address columns carry
@@ -149,14 +172,84 @@ the FOUR plan-side checks and `0008`/`0009` stay IPv4, said here in writing** so
 §0.5 alone cannot get it wrong. And 14.5's lesson applies: **a shipped migration cannot be corrected
 in place** (sqlx checksums it), so `0007`'s prose stays and `0011` carries the correction.
 
-🔴 **And the canonical-spelling decision must be RE-TAKEN for IPv6.** D-14.1(b) stores IPv4
-zero-padded so that lexicographic order is numeric order. The IPv6 equivalent is the fully expanded,
-zero-padded, lower-case form (`2001:0db8:0000:…`) — 39 characters, which is exactly why the column is
-39 wide. ⚠️ But `ip_range_same_family`'s `LENGTH(first) = LENGTH(last)` then stops being vacuous and
-becomes the family check it was written to be — **the day 14.1 predicted in writing**, and the test
-pinning its vacuity must flip.
+✅ **TAKEN (Guy, 2026-09-21), and it was BUILT before it was taken — the gap-hunt applied both
+variants to a store already at `0010` and pressed them.**
 
-### 0.6 — Two registered rows are this story's by name
+**The spelling: fully expanded, zero-padded, LOWER-CASE, 39 characters.** Within a family
+lexicographic order IS numeric order (`::1 < ::a < ::10 < ::ff < ::1:0`, read back from an
+`ascii_bin` column), so D-14.1(b)'s whole reason survives verbatim and 39 is exactly the width
+`0007` reserved. ⚠️ **Across families the order INTERLEAVES** — `0000:…` sorts before `009.0.0.1`
+sorts before `2001:db8:…` sorts before `255.255.255.255` — so the plan-wide order is per-family and
+not global. Nothing depends on a global one today; saying so beats letting someone find it.
+
+**`0011` widens the FOUR plan-side checks IN PLACE, keeping their names** (drop-then-add).
+⚠️ **That is the order story 14.5 refused, and it is taken here on a measurement rather than in
+forgetfulness**: the window is real at the SQL level (`192.0.2.9` and `999.999.999.999` both insert
+between the DROP and the ADD) and **unreachable through the product** — an interrupted `0011` leaves
+`_sqlx_migrations` at `success = 0` and the binary refuses to boot, naming its own remedy
+(`migration 11 is partially applied; fix and remove row from _sqlx_migrations`). **REFUSED**: a new
+name then dropping the old, which is safe at the SQL level and costs §0.9's inherited prove-to-red
+outright — the guard reads the constraint BY NAME and would panic on `RowNotFound` at `.expect()`,
+never reaching either of the two sentences written to guide this story. *A guard first seen red by an
+absent row has not been seen red.*
+
+🔴 **AND AN INSTRUMENT FINDING THAT NEARLY BECAME A FALSE HIGH, which is the transferable half.**
+`SELECT 'literal' RLIKE pattern` over two utf8mb4 literals is **case-insensitive**; the same pattern
+on an `ascii_bin` COLUMN takes the column's collation and refuses the upper-case twin. The gap-hunt
+measured `1` for `2001:0DB8:…` with literals and was a minute from reporting *"the case is not
+imposed"* — against the column it is `ERROR 4025`. ⚠️ **`0007`'s own header records its probe results
+in the literal form**, which is sound for IPv4 (no letters) and WRONG for IPv6. *Every probe of the
+canonical pattern runs THROUGH THE COLUMN, and `0011`'s header must say why.*
+
+### 0.6 — ✅ NO EDGES AT ALL FOR IPv6
+
+`is_edge`'s shipped arm is `prefix_len >= 31`. Measured on a `2001:db8:0:43::/120` with a control,
+**both plausible readings compile, both look right, and they give two different occupancy lines** —
+`0 infrastructure` under the shipped rule, `2` under a family-aware `>= width - 1`. Nothing in the
+code decides between them.
+
+✅ **TAKEN: `is_edge` is FALSE for every IPv6 address.** IPv6 has no broadcast address; RFC 4291
+§2.6.1 reserves the all-zeros interface identifier as the *Subnet-Router anycast* and the last
+address is an ordinary host — so painting two cells `infrastructure` would state something about the
+network that nothing supports, which is what `0010`'s sentinel decision refused one story ago.
+**REFUSED**: the mechanical `/127`-`/128` transposition, which compiles and is a translation where a
+decision was owed. ⚠️ A `/120`'s occupancy figures are PINNED so the two readings cannot both pass.
+
+### 0.7 — ✅ THE *OUTSIDE* LIST STAYS, AND THE SENTENCE BOUNDS ITS SCOPE
+
+🔴 **Measured on the running prototype**: `Plan::outside` is plan-wide and `audit_render` renders it
+in BOTH branches, so an IPv6 subnet's page carried **observed IPv4 addresses with a LIVE release
+control on each**, immediately under a heading and the all-clear sentence of §0.2. *Claim and
+refutation in one viewport* — story 14.4's third round paid for that class.
+
+✅ **TAKEN: the list keeps rendering**, because it belongs to the PLAN and not to the subnet, and
+hiding it would cost the operator a true finding for having selected another tab. **REFUSED**:
+dropping it on an IPv6 page, which is simpler to state and makes the product quieter than it needs
+to be. ⚠️ **The cost is carried by the SENTENCE**: §0.2's text must say it speaks of THIS SUBNET
+only, or the two contradict each other on one screen.
+
+### 0.8 — ✅ THE CANONICAL CODEC BECOMES FAMILY-GENERIC, AND THE OBSERVED SIDE NARROWS
+
+🔑 **The seam §0.3 creates is FOUR LINES in TWO places, and only two of them are the audit** — the
+gap-hunt built the widening until the production build stopped: `ipam_audit.rs:101-102`
+(`merge_sightings`, one honest `IpAddr::V4`) and **`sighting_repo.rs:106`, `:331`, which are not
+comparisons at all but the SHARED canonical codec** `ipam_repo::{canonical, from_canonical}`.
+
+✅ **TAKEN: one codec that knows both families; `sighting_repo` narrows its result back to
+`Ipv4Addr` with an EXPLICIT arm for *an IPv6 row in `address_sighting`*** — a state only a write that
+went around the connector can produce, which the product therefore NAMES rather than assumes
+impossible. **REFUSED**: a second IPv4-only codec for the observed side, which needs no arm for an
+impossible case and duplicates the padding logic, where this project's DRY rule tolerates duplication
+only when a test pins it and a comment names it as deliberate.
+
+⚠️ **And `ip_range_same_family`'s `LENGTH(first) = LENGTH(last)` stops being vacuous the moment two
+widths exist** — the day story 14.1 predicted in writing. It becomes the family check it was written
+to be, and the test pinning its vacuity must flip. ⚠️ It is the **SECOND** carrier and not the only
+one: the gap-hunt measured that a straddling pair is refused FIRST by the adapter's containment check
+(`POST /ipam/range first=192.0.2.1 last=2001:db8:0:42::ffff` → **422 "That range falls outside its
+subnet."**), so the DDL CHECK never sees it through the product.
+
+### 0.9 — Registered rows, and what they are really worth
 
 - ⚠️ **`/ipam/release` accepts any well-formed IPv4** and `plan_releases` reads the whole table per
   audit read. An IPv6 plan makes the first question live. ⚠️ **The row itself names Epic 14's
@@ -196,17 +289,109 @@ pinning its vacuity must flip.
 
 ## Acceptance Criteria
 
-⚠️ **STILL NOT WRITTEN, and the reason has changed.** §0 is settled; **§0.5 is not** — the canonical
-IPv6 spelling and migration `0011`'s shape are a schema decision this story may not take alone, and
-the mandatory validation has not run. Criteria written now would be criteria written against an
-unvalidated design, which is the one thing this project's process refuses.
+⚠️ **Every criterion below is DERIVED from §0 and from what the two validation layers measured, not
+from FR25's one sentence.** Where a criterion exists because a layer refuted something, it says so.
+
+**AC1 — migration `0011` widens the FOUR PLAN-SIDE checks, in place, keeping their names.**
+`ip_subnet.base`, `ip_range.first_addr`, `ip_range.last_addr`, `ip_address.addr`. 🔴
+**`address_sighting.addr` (`0008:72`) and `address_release.addr` (`0009:59`) STAY NARROW, and a guard
+REDS if either is ever widened** — that is §0.3 written into the schema and its second carrier. The
+pattern accepts the expanded, zero-padded, lower-case form and refuses the upper-case twin, the
+compressed form, nine groups, a trailing newline (`\z`, never `$` — story 14.1's trap) and
+`::ffff:192.000.002.009`. Re-runnable, applied twice; the header carries the `success = 0` recovery
+recipe and **states drop-then-add as a DECISION with the boot refusal as its reason**, so the next
+migration story does not read it as 14.5's lesson forgotten.
+
+**AC2 — every probe of the canonical pattern runs THROUGH THE COLUMN**, never against a literal, and
+`0011`'s header says why: `RLIKE` over two utf8mb4 literals is case-insensitive and reports `1` for
+the upper-case IPv6 twin the column refuses with `ERROR 4025`. ⚠️ `0007`'s header records its probes
+in the literal form — sound for IPv4, wrong here — and that is named rather than inherited.
+
+**AC3 — the refusal is keyed on the FAMILY, never on the size.** An IPv6 subnet gets **no grid, no
+occupancy line, no offer and no audit of its own**, *whatever its prefix length* — with tests on a
+`/120`, a `/124` and a `/128`. 🔴 The size ceiling delivers none of the three: the gap-hunt built the
+widening and `/ipam` drew a 256-cell grid, an occupancy line and **an offer** (`Next address the plan
+can offer 2001:db8:0:43::10`) on a `2001:db8:0:43::/120`. ⚠️ And the *too large to draw* branch's own
+sentence is about SIZE, which is a true sentence about the wrong reason for a `/64`.
+
+**AC4 — §0.2's sentence REPLACES `ipam.findings.none` for an IPv6 subnet**, in both locales, and
+**governs the whole audit region**. 🔴 Not *beside* it: measured on the running prototype, an IPv6
+page asserted *"Nothing the network has shown contradicts this subnet's plan."* — the product
+claiming concordance about a plan its only connector will never look at. ⚠️ Per §0.7 the plan-wide
+*outside* list keeps rendering, so the sentence must say it speaks of THIS SUBNET only, or the two
+contradict each other in one viewport.
+
+**AC5 — `Subnet::size()` is family-aware and CANNOT shift by 64 or more**, with `/0`, `/64`, `/120`
+and `/128` pinned in both families. 🔴 The obvious spelling `1_u64 << (128 - prefix)` **panics in
+debug and returns 1 in release** — reproduced — and the workspace declares no `[profile]`, so the
+shipped image has `overflow-checks = false`: an IPv6 `/64` would report `1`, sail under the ceiling
+and loop over 2^64 addresses. *The debug build turns it into a crash and the release build into a
+hang; a suite that runs debug measures the crash and ships the hang.*
+
+**AC6 — `is_edge` is FALSE for every IPv6 address** (§0.6), and a `/120`'s occupancy figures are
+PINNED so the mechanical `/127`-`/128` reading cannot also pass. The reason — IPv6 has no broadcast
+address — is written at the site.
+
+**AC7 — every write route answers an IPv6 argument BY NAME, before the store.** 🔴
+`POST /ipam/release` answered **500** with *"The write did not go through, or its answer was lost"*
+under the naive widening, because `0009`'s check (which AC1 keeps narrow) refuses it — on a route
+reachable by hand-editing a URL, for a gesture §0 makes meaningless for IPv6. A keyed refusal with
+its own status, on `ReleaseOfADefinedAddress`'s shape; and the other nine routes are enumerated with
+what each answers.
+
+**AC8 — the migration and the widened READER are ONE commit**, with a test pinning that an IPv6 row
+is read back rather than skipped. 🔴 Measured: with `0011` applied and the reader not widened,
+`list_subnets`, `plan_ranges` and `plan_addresses` SKIP the rows and NAME them in a `warn` — the page
+answers **200** with the operator's IPv6 subnet silently absent from the selector.
+
+**AC9 — §0.3's promise is NARROWED in writing, because it is carried on one half only.**
+`Plan.defined: BTreeSet<IpAddr>` refuses a mixed lookup at the type (`Borrow`); `Plan.ranges` does
+NOT — `Ipv4Addr` and `IpAddr` are cross-comparable, so `covering`'s interval test compiles silently
+and answers correctly only because `IpAddr`'s order puts every V4 below every V6. **A tripwire on one
+half**, on story 5.12's precedent, never *observation-only expressed in the types* without that
+qualifier.
+
+**AC10 — `ip_range_same_family` gets the test and the refusal row its own message demands**, and the
+story records that it is the **SECOND** carrier: a straddling pair is refused first by the adapter's
+containment check (measured, 422). ⚠️ Its inherited prove-to-red is free only under three conditions
+it does not advertise — it reads ONE constraint by name, it returns early without `DATABASE_URL`, and
+a rename turns its red `.expect()`-carried. AC1's name-keeping is what buys it.
+
+**AC11 — the screen speaks the right family.** The forms' example placeholders on an IPv6 subnet's
+page are IPv6 (measured: *"First address — for example 192.0.2.10"* renders there today), and the
+selector tab names remain distinct per story 14.5's `tab_labels`. ⚠️ No test and neither browser gate
+can see a resolvable key rendering a correct string in the WRONG CONTEXT — story 6b.6's `role_key`
+family — so the carrier is named rather than assumed.
+
+**AC12 — both browser gates REACH an IPv6 page.** `a11y/seed.sql` is IPv4-only, so an unseeded IPv6
+surface is *the gate could not run* rather than a pass — this project's own `AXE_REQUIRE_*`
+distinction. Any new key joins `ipam_page.rs`'s non-blank guard, and **a `.rs` is touched** because
+`app.yml` is invisible to Cargo's incremental build.
+
+**AC13 — THE LIVE COUNT lives in this story's `## Record` block**, checked by `cargo xtask record`,
+with the DDL pass recorded into `deferred-work.md:5164`'s row as that row asks of the next migration
+story — story 14.5 was the third to route around the driver.
+
+**AC14 — no regression**: ten gates, `clippy --all-targets`, `RUSTFLAGS="-D warnings"`, fmt,
+`cargo deny`, both store conditions, both browser gates, both manuals — and the user manual's IPAM
+chapter gains IPv6 with `IPv6` leaving its `\planned` block, which no other criterion owns.
+⚠️ **And this story cannot be verified against real IPv6**: measured on the developer machine, ten
+link-local addresses, **no global address and no default IPv6 route**. Every IPv6 behaviour is
+exercised by fixtures, exactly as story 14.5's VLAN was, and saying so is honest rather than a gap
+to hide.
 
 ## Tasks / Subtasks
 
-- [x] **T0** §0.1–§0.4 settled with Guy on 2026-09-21, each recorded with the option refused.
-- [ ] **T0b** §0.5: the canonical IPv6 spelling, and whether `0011` widens the CHECKS or replaces them.
-- [ ] **T1** Run `bmad-create-story validate` — two fresh-context layers, MANDATORY here.
-- [ ] **T2..** Written after T0b and T1, from the answers.
+- [x] **T0** §0.1–§0.4 settled with Guy 2026-09-21; **§0.5–§0.8 settled the same day** after the
+      validation, each recorded with the option refused.
+- [x] **T1** `bmad-create-story validate` — two fresh-context layers. **The fact-check refuted seven
+      claims and the gap-hunt BUILT the design and refuted its central premise on a running product.**
+- [ ] **T2** (AC1, AC2) `0011`, its probes through the column, and the guard keeping `0008`/`0009` narrow.
+- [ ] **T3** (AC5, AC6, AC9) `Subnet` and `Plan` widened; `size()`, `is_edge`, and the narrowed promise.
+- [ ] **T4** (AC8, AC10) The reader in the same commit; `ip_range_same_family`'s own test.
+- [ ] **T5** (AC3, AC4, AC11) The family refusal, the sentence that replaces the all-clear, the copy.
+- [ ] **T6** (AC7) Every write route's answer to an IPv6 argument, enumerated.
+- [ ] **T7** (AC12–AC14) The gates, the record, the manuals, the twins; the DDL pass recorded in the register.
 
 ## Dev Notes
 
@@ -223,5 +408,18 @@ unvalidated design, which is the one thing this project's process refuses.
   drop the database and pass `--baseline`, or a store's red is read as a mutation's.
 - ⚠️ **`ipam_page.rs` has ~106 lines of headroom** and the next split is MEASURED and registered: the
   three `GET` checks, ~550 lines.
-- ⚠️ **This story cannot be verified on the reference LAN** unless it has IPv6 — to be measured, not
-  assumed, before a criterion claims a browser pass over real data.
+- ✅ **This story cannot be verified against real IPv6, MEASURED rather than assumed**: the developer
+  machine carries ten link-local addresses, **no global address and no default IPv6 route**
+  (`ip -6 addr show scope global` empty, `ip -6 route show default` empty). Fixtures throughout, as
+  story 14.5's VLAN was — and AC14 says so rather than leaving a browser criterion to imply otherwise.
+- 🔴 **A probe against a LITERAL is not a probe of the column** — §0.5's near-miss: `RLIKE` over two
+  utf8mb4 literals is case-insensitive and reports `1` for a value the `ascii_bin` column refuses.
+- 🔴 **The debug build and the release build disagree about `<<`** — §0.4(b): overflow panics in one
+  and wraps in the other, and this workspace declares no `[profile]`, so the suite measures the panic
+  and the image ships the wrap.
+- 🔴 **`git checkout -- crates/` restores from the INDEX, not from HEAD** — the gap-hunt hit it and
+  was saved only by having committed its prototype first. That gesture has destroyed uncommitted work
+  five times in this project; this would have been the sixth.
+- 🔴 **`ipam_repo.rs`'s first `#[cfg(test)]` is on LINE 7**, inside the module doc explaining that the
+  `file-size` gate stops at the first one — a script cutting the file there replaces nothing and the
+  unchanged build reads as a result. The gap-hunt hit it; story 14.2's review hit it in the same file.
