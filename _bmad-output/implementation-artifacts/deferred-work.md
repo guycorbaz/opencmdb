@@ -6095,3 +6095,14 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   time in the other segment — two `ip_address` rows under two labels for one address in one
   broadcast domain — and the product reports no conflict. **Owner: Epic 14's final retrospective**,
   which should decide whether a per-segment rail over a plan-wide grid is the shape it wants.
+
+## Found while validating story 14.6
+
+- ⚠️ **`page.rs` is the tightest file in the tree at 1954 code lines — 46 of headroom — and it is
+  registered by nothing.** Surfaced by story 14.6's fact-check layer while checking a claim about
+  `ipam_page.rs`, whose 106 lines the story does record. 🔑 *The file everyone watches is not the file
+  closest to the ceiling*: `ipam_page.rs` has twice the room and all the attention, because story
+  14.5 nearly hit its ceiling and said so. `page.rs` holds the shell, the triage screen and the
+  budget, so any screen story touches it. **Owner: the next story that grows `page.rs`**, which
+  should split before it writes rather than after the gate says so — `CLAUDE.md`'s *split, not
+  grown*, applied before the growth as story 14.5 finally did.
