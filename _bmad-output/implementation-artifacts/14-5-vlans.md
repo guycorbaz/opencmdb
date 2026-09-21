@@ -242,6 +242,77 @@ user manual's IPAM chapter gains the VLAN, which no other criterion owns.
 - `epic-14-retro-2026-09-19.md` §5 decision 1, §6 A3, §7.
 - Precedents: 14.1 (a schema whose criterion is *no producer*), 14.2b (the write machinery, constraint 1).
 
+## Code review — three isolated layers, 2026-09-21
+
+🔴 **THE CODE CAME THROUGH ALMOST INTACT AND THE RECORD DID NOT.** Twenty-one distinct findings over
+three layers; **four were reached by two layers independently** (the AC2 divergence announced as
+registered and absent from the register, the selector property, the missing mutation table, the
+`ipam_page.rs` ceiling). Not one defect was found in the write path: the route, the parser, the port,
+the migration and the widened key were re-measured by the auditor — who applied `0010` **twice** to a
+virgin store and read `SHOW CREATE TABLE` — and hold.
+
+🔴 **THE HIGH IS A PROPERTY THIS STORY PUBLISHED AS HELD AND THE PRODUCT DID NOT HOLD.** AC4 says
+*"no two selector tabs carry the same accessible name"* and `tab_label`'s doc said the test asserts
+*"the property rather than the appearance"*. Both layers refuted it, and the auditor **reproduced it
+on a booted binary**: `192.0.2.0/24` at VLAN 10 with no label, beside the same CIDR at NO VLAN
+labelled `VLAN 10`, served two byte-identical links to different destinations. The Rust guard could
+never have caught it — its distinctness assertion sits after an exact-equality assertion over three
+hand-made names, so it cannot fail — and the axe gate sees only the seeded plan, which by
+construction cannot hold the collision. 🔑 **Closed in the code rather than in a sentence**: a name
+assembled from free text cannot be unique, so `tab_labels` imposes uniqueness on the SET and appends
+each colliding row's id tail. The new test is a property over adversarial labels **with a control**
+(an ordinary plan pays nothing), and R1 reds it.
+
+🔴 **THE DEFINITION ROUTE'S VLAN REACHED THE STORE BY NO TEST, and the assertion that claimed
+otherwise said so in words.** Its only port oracle was `vlan=0` — the default — so
+`define_subnet(subnet, label, 0)` left **727 / 191 / 110 green**; what reddened was clippy's
+`unused variable`, a LINT and not the criterion's carrier. *An oracle written over the default value
+measures the default, not the path.* A non-zero half was added and R2 reds it.
+
+🔴 **A SENTENCE IN `0010` CLAIMED A CORRECTION THAT CANNOT BE MADE.** It said `0007`'s *"A plan that
+holds one subnet twice is not a plan"* *"is rewritten"*; `0007` is byte-identical, and it must be —
+`sqlx` checksums an applied migration, so editing one byte makes every store that ran it refuse to
+boot (story 14.1 met that as `VersionMismatch(7)`). 🔑 The transferable half is the rule: **a shipped
+migration's prose is as immutable as its SQL**, so the correction lives in the migration that changed
+it, where the version order brings the reader. Registered.
+
+🔴 **THE SEED CONTRADICTED ITSELF INSIDE ONE HUNK** — *"the widening changes NOTHING here … both
+these rows carry VLAN 0"*, eight lines above an `INSERT` giving *Office* VLAN **10**, and twenty
+above a comment stating the opposite in capitals. The sentence was true of *Workshop* and written
+about both; it is now dated to the tree it was measured on.
+
+🔴 **TWO INSERTIONS DETACHED A DOC FROM ITS FUNCTION, one in production code** — `declares_a_vlan`
+carried *"What the operator reads on a selector tab."* as its first sentence. It is the class this
+project names and that **nothing can catch**, a doc comment always compiling; it reached the blind
+layer and no gate.
+
+🔴 **AND THE PURE `ipam_audit` TWIN ATTRIBUTED ITS RED TO THE WRONG FACTOR.** `Plan` reads `subnets`
+only through `any()`, so `vec![cidr, cidr]` is observationally `vec![cidr]` and what changed the
+verdict was the added `dhcp-pool` RANGE — which would change it with one subnet and no VLAN
+anywhere. The inertness is now ASSERTED first, which is what makes the next block's change
+attributable at all, and which is the VLAN-blindness expressed where it actually lives.
+
+⚠️ **`ipam_page.rs` had EIGHT lines of headroom** where §1 recorded 118 and the Completion Notes
+recorded no new figure. The rail is split into `crates/opencmdb-bin/src/ipam_rail.rs` (99 production
+lines, with three tests it owed), taking the file to **1894** — and the larger candidate is measured
+and registered rather than taken after the review had run.
+
+⚠️ **Also repaired**: the `capped!` guard's message gave `update_subnet` `update_range`'s reason;
+`update_subnet`'s doc asserted a lock hold its store test's call site does not supply; the axe gate's
+comment claimed the COMPUTED accessible name where it reads `textContent`, and claimed an
+enforcement `AXE_REQUIRE_VLAN` does not make; the stylesheet's comment claimed the note does **not**
+inherit `.empty` where it does; AC4's note was driven through one of the three bodies that render it
+(story 14.4's AC6 recurrence, pre-empted); *"four `IF NOT EXISTS` spellings"* counted a `DROP INDEX
+IF EXISTS` among them; a register row's line number was a contexting figure carried forward; and one
+VLAN field carried a `maxlength` its twin did not.
+
+✅ **Refuted or already correct, so nobody re-chases them**: every number in the `## Record` block
+(both terms of `717 → 727` verified from a worktree at the branch point); the File List, twenty paths
+matching the diff exactly; the three registrations, each with a named owner; `0010`'s re-runnability,
+applied twice to a virgin store; AC6's criterion reproduced end to end (both browser gates, then the
+suite, against ONE store — `727 / 191 / 110`, 0 failed); and register row 1 reproduced **by
+accident**, the auditor finding the seed's subnets gone after that run.
+
 ## Dev Agent Record
 
 ### Agent Model Used
@@ -260,9 +331,12 @@ uniqueness key to `(base, prefix_len, vlan)` — the new key ADDED before the ol
 re-runnable through four `IF NOT EXISTS` spellings, one of which is written nowhere else here. The
 subnet form carries the VLAN, a TENTH write route corrects a subnet's label and its VLAN and nothing
 else, the selector names each segment, one keyed sentence says what the VLAN does not reach, and the
-outside list gained the release it never had. **717 → 727** bin tests (191 core, 110 xtask), ten
-gates, clippy `--all-targets`, `RUSTFLAGS="-D warnings"`, fmt, `cargo deny`, axe **0 violation
-nodes** over three passes under all five `REQUIRE` flags, kbd **61 checks, 0 failed**.
+outside list gained the release it never had. **717 → 731** bin tests (191 core, 110 xtask), ten
+gates, clippy `--all-targets`, `RUSTFLAGS="-D warnings"`, fmt, `cargo deny`, kbd **61 checks, 0
+failed**, and axe **0 violation nodes** over the **two** passes `ci.yml` runs — the empty-plan pass
+and the seeded one, the five `REQUIRE` flags all belonging to the second. ⚠️ This read *"three
+passes … under all five flags"*, a shape the recipe does not have; the third was the keyboard gate,
+whose result the sentence was quietly attributing to axe.
 
 🔴 **Three of my own sentences were refuted by measurements taken to check them, and each correction
 is the deliverable rather than the patch.** `parse_vlan`'s doc claimed no trim beyond the emptiness
@@ -326,13 +400,68 @@ the transcript and re-verified red. ⚠️ An insertion of mine also landed betw
 `#[test]` and its function, silently disabling a test — story 6b.2's recorded defect, caught by
 clippy inside a mutation run and by nothing I did.
 
+## Mutation table
+
+🔴 **THIS TABLE DID NOT EXIST UNTIL THE CODE REVIEW, AND TWO LAYERS FOUND IT SEPARATELY.** T7 was
+ticked over a pass that lived in three commit messages and a scratchpad directory that does not
+survive the session; the story file named five ids in prose and carried no row-per-mutation record.
+This project's own rule runs the other way — *the table is the record, and a summary that can drift
+from it is the defect* (story 6b.10) — so it is reconstructed here from the driver's own logs.
+
+⚠️ **Every cargo-side row was driven by `cargo xtask mutate`**, which prints the prediction beside the
+measurement and exits 1 when they disagree.
+
+| id | mutation | predicted | measured | carrier |
+|---|---|---|---|---|
+| M1 | `list_subnets`: `ORDER BY base, prefix_len, vlan` → drop `, vlan` | red | 🔴 red 1 | `one_cidr_lives_in_two_vlans_and_not_twice_in_one` |
+| M2 | `parse_vlan`: `1..=4094` → `1..=4095` | red ≥2 | 🔴 red **1** — **CONTRADICTED** | the DEFINITION route had no VLAN-refusal test at all |
+| M2-bis | the same, after the refusal became a property over both routes | red:1 | 🔴 red 1 | `every_route_that_asks_for_a_vlan_refuses_one_outside_the_domain` |
+| M3 | `parse_vlan`: delete the emptiness test | red | 🔴 red 8 | eight route tests; an emptied field would answer 422 |
+| M4 | `tab_label`: render the VLAN unconditionally | red | 🔴 red 2 | the two selector tests |
+| M5 | `declares_a_vlan` renamed | compile-fail | 🔴 `E0425` | the compiler |
+| M6 | `update_subnet`: drop the locked read | red:1 | ⚠️ **driver REFUSED** — `E0308`, the mutation left invalid Rust | the driver, doing its job |
+| M6b | the same, typed correctly (`unwrap_or_else`) | red:1 | 🔴 red 1 | `a_subnet_correction_writes_its_label_and_its_vlan_and_refuses_a_taken_pair` |
+| M7 | `update_subnet`: `SET vlan = vlan` | red:1 | 🔴 red 1 | the same test, reading both fields back |
+| M8 | `RailLists`: `subnet_vlan` always empty | red | ✅ **GREEN — the pass's own finding** | nothing in Rust; one browser check, and only its present half |
+| M8-ter | the same, after the render test was written | red:1 | 🔴 red 1 | `the_subnets_correction_form_spells_no_vlan_as_an_empty_field` |
+| M9 | `_ipam_audit.html`: remove the outside list's release form | red | 🔴 red 1 | `the_release_is_offered_on_a_gap_or_an_undeclared_finding_and_nowhere_else` |
+| M10 | `EditSubnetRequest`: add a `cidr` field, unread | **green** | 🔴 **CONTRADICTED — clippy red** (`field 'cidr' is never read`) | clippy `--all-targets`, which CI runs |
+| M10-bis | the same field, READ by the handler | red | 🔴 red 1 (`726 passed; 1 failed`) | `a_subnet_correction_carries_its_vlan_and_no_cidr` |
+| M11 | drop `WriteRoute::EditSubnet` from `ALL` | red | 🔴 red 6 | the route list, the eleven-routes premise, four route tests |
+| **D1** | `0010`: key back to `(base, prefix_len)` | red | 🔴 red | `one_cidr_lives_in_two_vlans…` cannot insert the second segment |
+| **D2** | `0010`: `NOT NULL DEFAULT 0` → `NULL DEFAULT NULL` | red | ✅ **GREEN — refutes the migration header** | nothing: the adapter's `vlan` is a `u16`, so no path can bind NULL |
+| **D3** | `0010`: `CHECK (vlan <= 4094)` → `<= 65535` | green | ✅ green | the adapter refuses 4095 first; the CHECK is the second carrier |
+| **D4** | `0010`: add the new key AFTER dropping the old | green | ✅ green by prediction | none, and none is possible — the order protects a run that fails BETWEEN the two statements |
+| **B1** | `a11y/seed.sql`: Office's VLAN 10 → 0 | axe 2, kbd 1 | 🔴 axe **2** (*the gate could not run*), kbd **1** | `AXE_REQUIRE_VLAN`; the kbd pre-fill check |
+| **B2** | a two-segment plan + `tab_label` forgetting the VLAN | axe 1 | 🔴 axe **1**, naming the duplicate name | the axe gate's `tabNameClash` |
+| **R1** | the review's repair: `tab_labels` never disambiguates | red:1 | 🔴 red 1 | `the_selector_is_distinct_however_the_operator_labels_it` |
+| **R2** | `define_subnet(subnet, label, vlan)` → `…, 0)` | red:1 | 🔴 red 1 | `a_well_formed_definition…`, after the review added its non-zero half |
+
+**Twenty-three rows: nineteen reds, three greens (one of them a refutation), one driver refusal.**
+Carriers are MIXED and named per row; no *"every red assertion-carried"* headline is claimed, and one
+row is carried by a LINT rather than by a test, which is said rather than blended in.
+
+⚠️ **Three instrument defects, every one caught by disbelieving a result rather than by reading.**
+The DDL script passed TWO filters to `cargo test`, which accepts one, so D3's first run executed
+nothing and `grep -q "0 failed"` over an EMPTY result answered *red* — a measurement manufactured
+from an absence; it refuses both now. A browser-mutation run reported both gates green because a
+STALE SERVER still held port 8080 and answered from another database. And **two runs against a
+REUSED mutation database reported 162 reds** — story 6.6's registered row (*the `opencmdb-bin` suite
+is non-deterministic against a reused MariaDB database*) met twice in one session; both were
+re-measured on a virgin store with `--baseline` and both then conformed. *Without `--baseline` the
+driver reports a store's red as a mutation's.*
+
 ## Record
 
-- live-count: bin=727 core=191 xtask=110
+- live-count: bin=731 core=191 xtask=110
 - base: d192f11e7f6fd356be2207ce5aaed321ac94f107
 - registered: Two tests carry an UNQUALIFIED `DELETE FROM ip_subnet`
 - registered: is a second, now-registered instance of `repo.rs`'s `file-size` blindness
 - registered: press depends on focus left by an EARLIER check
+- registered: says *"A plan that holds one subnet twice is not a plan"* over a key that no longer
+- registered: AC2's 409 names the RULE where the criterion asked it to name the VLAN
+- registered: A release from the second segment's tab sends the operator to the FIRST segment's plan
+- registered: The three `GET` checks are `ipam_page.rs`'s next split
 - file: .github/workflows/ci.yml
 - file: _bmad-output/implementation-artifacts/14-5-vlans.md
 - file: _bmad-output/implementation-artifacts/deferred-work.md
@@ -345,9 +474,10 @@ clippy inside a mutation run and by nothing I did.
 - file: crates/opencmdb-bin/migrations/0010_subnet_vlan.sql
 - file: crates/opencmdb-bin/src/ipam_audit.rs
 - file: crates/opencmdb-bin/src/ipam_page.rs
+- file: crates/opencmdb-bin/src/ipam_rail.rs
+- file: crates/opencmdb-bin/src/main.rs
 - file: crates/opencmdb-bin/src/ipam_repo.rs
 - file: crates/opencmdb-bin/src/ipam_write.rs
-- file: crates/opencmdb-bin/src/main.rs
 - file: crates/opencmdb-bin/templates/_ipam.html
 - file: crates/opencmdb-bin/templates/_ipam_audit.html
 - file: crates/opencmdb-bin/templates/_ipam_forms.html

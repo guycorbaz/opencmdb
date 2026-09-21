@@ -2071,9 +2071,30 @@ mod tests {
         assert_eq!(
             port.asked.lock().expect("the log").as_slice(),
             [("192.0.2.0/24 vlan=0".to_string(), "Office".to_string())],
-            "the CIDR is parsed, the label trimmed and the VLAN carried — 0 is *none* (story 14.5), \
-             and the port RECORDS it, so a handler that parses a VLAN and drops it cannot leave this \
-             assertion green"
+            "the CIDR is parsed, the label trimmed and the VLAN carried — 0 is *none* (story 14.5)"
+        );
+
+        // 🔴 **THE SENTENCE THAT STOOD HERE WAS FALSE AND THE AUDIT LAYER MEASURED IT.** It read
+        // *"the port RECORDS it, so a handler that parses a VLAN and drops it cannot leave this
+        // assertion green"* — but this request carries NO VLAN, so the oracle is `vlan=0` and a
+        // handler passing a hardcoded `0` leaves it green. Measured at HEAD:
+        // `define_subnet(subnet, label, 0)` → **727 / 191 / 110 passed, 0 failed**; what reddens is
+        // clippy's `unused variable: 'vlan'`, which is a LINT and not the assertion the criterion
+        // names. *An oracle written over the default value measures the default, not the path.*
+        let port = FakePort::answering(Ok("01900000-0000-7000-8000-000000000002".to_string()));
+        let response = router_with(port.clone())
+            .oneshot(form_post("cidr=198.51.100.0/24&label=Workshop&vlan=20"))
+            .await
+            .expect("the sub-router answers");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(
+            port.asked.lock().expect("the log").as_slice(),
+            [(
+                "198.51.100.0/24 vlan=20".to_string(),
+                "Workshop".to_string()
+            )],
+            "a DECLARED VLAN reaches the store through the port — the half AC3 names, and the half \
+             the assertion above cannot see"
         );
     }
 

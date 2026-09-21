@@ -1733,8 +1733,19 @@ mod tests {
     /// audit. Guy took that cost knowingly on 2026-09-21 (the alternative undid decision 2), and the
     /// screen carries the sentence; this is the sentence made executable.
     ///
-    /// 🔑 **The CONTROL is what makes it mean anything**: the same subnet audited ALONE. Without it
-    /// this test would assert that two identical things are identical, which no mutation can red.
+    /// 🔑 **The CONTROL is what makes it mean anything**: the same subnet audited ALONE.
+    ///
+    /// 🔴 **AND THE TWIN IS INERT AT THIS LEVEL, which the code review measured and this doc denied.**
+    /// `Plan` reads `subnets` only through `iter().any(…)`, so `vec![cidr, cidr]` is observationally
+    /// `vec![cidr]`: what turns the `gap` into an `undeclared` below is the added `dhcp-pool` RANGE,
+    /// which would do it with one subnet and with no VLAN anywhere. Attributing that red to the twin
+    /// would be *a mutation named for one thing and applied to another*, one level down.
+    ///
+    /// 🔑 **So the inertness is asserted rather than papered over — it IS the VLAN-blindness**: at
+    /// the pure level the two plan entries are ONE value, and no runtime check can tell them apart
+    /// because `Subnet` is `{base, prefix_len}`. What a test can measure at the STORE level, where
+    /// the two rows really are distinct and a range hangs off one of them by foreign key, is
+    /// `ipam_page`'s `two_segments_of_one_cidr_serve_one_audit_and_one_grid`.
     #[test]
     fn one_cidr_in_two_segments_shares_one_audit_and_the_second_changes_the_first() {
         let cidr = office();
@@ -1759,6 +1770,26 @@ mod tests {
             "the control: alone, the offer starts at .1"
         );
 
+        // 🔑 **THE INERTNESS, asserted first**: adding the duplicate entry and NOTHING else leaves
+        // every answer identical. That is the VLAN-blindness at this level, and it is what makes the
+        // next block's change attributable to the RANGE rather than to the twin.
+        let twin_only = Plan {
+            subnets: vec![cidr, cidr],
+            ranges: vec![(v4("192.0.2.1"), v4("192.0.2.40"), IpPolicy::Static)],
+            defined: BTreeSet::new(),
+        };
+        assert_eq!(
+            kinds(&twin_only.audit(cidr, &seen, &claimed)),
+            kinds(&alone.audit(cidr, &seen, &claimed)),
+            "a second entry for the SAME address space changes no finding: `Subnet` is \
+             `{{base, prefix_len}}` and the audit reads `subnets` only through `any`"
+        );
+        assert_eq!(
+            twin_only.next_offerable(cidr, &seen, &BTreeSet::new()),
+            alone.next_offerable(cidr, &seen, &BTreeSet::new()),
+            "and it changes no offer either"
+        );
+
         // The SAME subnet, with a twin in another segment whose own `dhcp-pool` covers the span.
         let with_twin = Plan {
             subnets: vec![cidr, cidr],
@@ -1771,13 +1802,14 @@ mod tests {
         assert_eq!(
             kinds(&with_twin.audit(cidr, &seen, &claimed)),
             vec![(v4("192.0.2.20"), Some(FindingKind::Undeclared), false)],
-            "🔴 the twin turned the FIRST segment's `gap` into `undeclared` — the cost Guy took, and \
-             what the screen's sentence warns about"
+            "🔴 a `dhcp-pool` DECLARED IN THE OTHER SEGMENT turned the first segment's `gap` into \
+             `undeclared` — the cost Guy took, and what the screen's sentence warns about. ⚠️ The \
+             ranges are what carry it; the duplicate subnet entry is inert, asserted above"
         );
         assert_eq!(
             with_twin.next_offerable(cidr, &seen, &BTreeSet::new()),
             None,
-            "and it emptied the first segment's offer"
+            "and the other segment's range emptied this one's offer"
         );
         // 🔴 **A THIRD ASSERTION STOOD HERE AND COULD NOT FAIL**: it compared
         // `with_twin.audit(cidr, …)` with ITSELF, under a message about two segments carrying one

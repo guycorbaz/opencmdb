@@ -25,6 +25,7 @@ mod identity_view;
 mod inventory_view;
 mod ipam_audit;
 mod ipam_page;
+mod ipam_rail;
 mod ipam_repo;
 mod ipam_write;
 mod l1_runner;

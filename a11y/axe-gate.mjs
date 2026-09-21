@@ -128,9 +128,13 @@ const REQUIRE_AUDIT = process.env.AXE_REQUIRE_AUDIT === "1";
 // 🔴 **STORY 14.5's VLAN IS THE SAME SHAPE A THIRD TIME.** The selector tab that names a segment and
 // the note saying the plan carries a VLAN while the ranges, the findings and the offer do not exist
 // only when a subnet DECLARES one — so over a plan with no VLAN anywhere this gate would walk a
-// screen from which the whole story is absent and report a pass. `a11y/seed.sql` gives ONE of its two
-// subnets a VLAN and deliberately leaves the other without, so both halves are on one page;
-// `AXE_REQUIRE_VLAN=1` (CI sets it) turns a run that finds neither into *the gate could not run*.
+// screen from which the whole story is absent and report a pass. `AXE_REQUIRE_VLAN=1` (CI sets it)
+// turns a run that finds NO note into *the gate could not run*.
+// ⚠️ **That is ONE half, and this comment claimed both until the code review.** The check asks
+// whether `p.ipam-vlan-note` exists; it cannot tell a plan where EVERY subnet declares a VLAN from
+// the seeded one. That the other subnet deliberately declares none — so a tab that names no segment
+// is on the same page — is a property of `a11y/seed.sql` that this gate does not defend, and the
+// Rust render test is what carries it.
 const REQUIRE_VLAN = process.env.AXE_REQUIRE_VLAN === "1";
 // The note's own class. A CLASS and not its text, because the text is translated and this gate runs
 // in the default locale — the rule `PLAN_CELL` and `GESTURE` already follow.
@@ -397,9 +401,13 @@ async function main() {
 
         // ── Story 14.5: the VLAN is on the screen, and the tabs stay distinct ──────────────
         // 🔑 **The PROPERTY is the criterion, not the appearance** (AC4): no two selector tabs may
-        // carry the same accessible name. A Rust test asserts it over what the page renders; only a
-        // browser can read the name the platform COMPUTES, which is what this measures — and it is
-        // where a label that renders as whitespace, or a VLAN suffix lost to a CSS rule, would show.
+        // carry the same accessible name. `tab_labels` imposes it on the SET and a Rust property test
+        // asserts it over adversarial labels; what this adds is the SERVED page, over a store whose
+        // rows nobody wrote for a test.
+        // ⚠️ **It reads `textContent`, and this comment claimed the COMPUTED accessible name until
+        // the code review** — so `aria-label` is invisible to it, and so is any CSS that hides a
+        // segment (`display:none` leaves the text in place). What it does measure, and what the
+        // defect actually is, is two links reading alike.
         const vlan = await page.evaluate((noteSelector) => {
           // 🔑 `nav.filters` is what `/ipam` renders its selector as, in BOTH branches (the drawn
           // plan and the one too large to draw). Scoped to `main` so a navigation filter elsewhere

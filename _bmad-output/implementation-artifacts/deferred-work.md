@@ -6035,8 +6035,9 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   **Owner: the next story that touches either test.**
 - ⚠️ **`ipam_write.rs` is a second, now-registered instance of `repo.rs`'s `file-size` blindness.**
   The gate stops at the first `#[cfg(test)]` at any nesting, and one sits on a helper inside an
-  `impl` at line 302 — so the gate reads **302** production lines where there are over sixteen
-  hundred. Registered by story 14.5's contexting rather than rediscovered, and it belongs with the
+  `impl` at line **307** on the shipped tree — so the gate reads that many production lines where
+  there are over sixteen hundred. ⚠️ The row first said 302, a contexting figure carried forward and
+  never re-read; the number is the point of the row, so it is the one thing it had to get right. Registered by story 14.5's contexting rather than rediscovered, and it belongs with the
   `repo.rs` row above: whatever closes one closes both. **Owner: the story that raises the ceiling.**
 - ⚠️ **The kbd gate's press depends on focus left by an EARLIER check, and nothing declares it.**
   `kbd-probe.mjs` sends `Enter` to whatever holds focus; what puts the intended control there is the
@@ -6044,3 +6045,41 @@ rewritten one by one: the triage is dated, and a row read after it is read with 
   control focused and the gate RELEASED THE WRONG ADDRESS, reddening three downstream checks that
   had nothing wrong with them. Closed for that one case by ordering, and the coupling stands for
   every future check. **Owner: the next story that adds a check to that block.**
+- ⚠️ **`0007:100` says *"A plan that holds one subnet twice is not a plan"* over a key that no longer
+  exists, and it CANNOT be corrected.** `sqlx` checksums an applied migration, so editing one byte of
+  `0007` makes every store that already ran it refuse to boot — story 14.1 met that as
+  `VersionMismatch(7)`. Story 14.5 records the correction in `0010`'s header instead, where the
+  version order brings a reader who has just read the false line. 🔑 **The transferable half is the
+  rule, not this instance**: *a shipped migration's prose is as immutable as its SQL*, so a sentence
+  in a migration must be written to survive the schema changing under it, or accept that its
+  correction will live somewhere else. **Owner: the next story that writes a migration**, which
+  should read this before writing a sentence in the present tense.
+- 🔴 **AC2's 409 names the RULE where the criterion asked it to name the VLAN, and AC3's *"its own
+  refusal sentence"* is NOT met — both by decision, and neither was registered until the code
+  review.** `constraint_refusal` receives a constraint name and a route and never the value the
+  operator typed, so naming the number would mean threading it through every refusal; the sentence
+  shipped — *an address space is declared once per VLAN* — is true in the VLAN and the no-VLAN case
+  alike, which *"in that VLAN"* would not have been. And the correction SHARES the definition's
+  sentence because both gestures collide on the very same key, so a second sentence would name one
+  record twice (story 14.4's arbitration, applied). ⚠️ What the review found is that the story
+  announced the first divergence as *registered* while the register held no such row, and announced
+  the second nowhere at all — story 6b.9's class: *a section that says "registered" is not a
+  registration*. **Owner: Epic 14's final retrospective**, which should decide whether a refusal may
+  quote the value it refuses.
+- ⚠️ **A release from the second segment's tab sends the operator to the FIRST segment's plan.**
+  `release_address` picks the containing subnet with `min_by_key(size)`; with two segments of one
+  CIDR the sizes tie, and `list_subnets`' `ORDER BY base, prefix_len, vlan` makes the LOWEST VLAN win
+  — so releasing while looking at VLAN 20 lands on VLAN 10 under a success sentence, which is the
+  shape story 14.4's review called a defect. ⚠️ `ipam.vlan_note` names three things the VLAN does not
+  reach (ranges, findings, offer) and this redirect is a fourth, said in neither the note nor the
+  manual. 🔑 The honest remedy is for the request to carry the subnet the operator was LOOKING at —
+  which is the field story 14.4's arbitration REMOVED from four forms for a different reason, so it
+  is a decision and not a patch. **Owner: the story that next touches the release route.**
+- ⚠️ **The three `GET` checks are `ipam_page.rs`'s next split, measured rather than guessed.**
+  `address_check`, `range_check` and `delete_check` with their `_data` and `render_*` halves are
+  ~550 production lines and a sharp concept of their own — *routes that warn before a write and
+  refuse nothing*. Story 14.5's code review split the RAIL instead (99 lines, taking the file from
+  1992 to **1894**), because moving 550 lines after three layers had read the file would have
+  shipped an unreviewed restructure to buy headroom a hundred lines already bought. 🔑 The
+  measurement is recorded so the next story choosing where to cut does not re-take it. **Owner: the
+  next story that grows `ipam_page.rs`.**

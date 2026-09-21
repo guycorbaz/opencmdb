@@ -136,7 +136,7 @@
       <label for="ipam-edit-subnet-vlan">{{ s.form_vlan }}</label>
       {#- ⚠️ EMPTY for *none*, never `0`: an empty field is what the route reads as *no VLAN*, and a
            pre-filled zero would be a number the operator never typed and cannot mean. -#}
-      <input id="ipam-edit-subnet-vlan" name="vlan" inputmode="numeric" value="{{ rail.subnet_vlan }}">
+      <input id="ipam-edit-subnet-vlan" name="vlan" inputmode="numeric" maxlength="4" value="{{ rail.subnet_vlan }}">
       <button type="submit" class="btn-gesture live">{{ s.rail_edit }} — {{ rail.subnet_name }}</button>
     </form>
   </details>

@@ -20,9 +20,19 @@
 -- which is the difference between a guard and a habit.
 --
 -- 🔑 WHAT THE WIDENED KEY BUYS: one address space in TWO segments. `192.0.2.0/24` in VLAN 10 and the
--- same CIDR in VLAN 20 are two entries of the plan — the canonical VLAN case, and the reason
--- `0007`'s *"A plan that holds one subnet twice is not a plan"* is rewritten rather than deleted: a
--- plan may hold one CIDR twice, it may not hold one CIDR twice IN ONE SEGMENT.
+-- same CIDR in VLAN 20 are two entries of the plan — the canonical VLAN case. It supersedes
+-- `0007:100`'s *"A plan that holds one subnet twice is not a plan"*: a plan MAY hold one CIDR twice,
+-- and may not hold one CIDR twice IN ONE SEGMENT.
+--
+-- 🔴 **AND `0007` IS NOT CORRECTED IN PLACE, WHICH IS A CONSTRAINT RATHER THAN AN OVERSIGHT.** This
+-- header first said that sentence *"is rewritten"*, and the code review measured that it is not —
+-- `0007` is byte-identical on this branch. It cannot be otherwise: `sqlx` CHECKSUMS an applied
+-- migration, so editing one byte of `0007` makes every store that already ran it refuse to boot
+-- (story 14.1 met exactly that as `VersionMismatch(7)`). **A shipped migration's prose is as
+-- immutable as its SQL**, and the correction therefore lives HERE, in the migration that changed
+-- the rule, where a reader of `0007` arrives by following the version order. The story's own
+-- *"rewrite the sentences a changed world falsified"* sweep has this one exception, and it is the
+-- only file in that list that could not be touched.
 --
 -- ⚠️ WHAT IT DOES NOT BUY, measured by this story's validation with a control, and said here because
 -- the operator meets it: the AUDIT is blind to the VLAN. Ranges and defined addresses are read
@@ -35,8 +45,12 @@
 -- 🔴 THE FIRST MIGRATION IN THIS REPOSITORY THAT ALTERS AN EXISTING TABLE RE-RUNNABLY, and the
 -- spelling is not `0007`'s. `CREATE TABLE IF NOT EXISTS` cannot widen a key; `0003`/`0004`'s ALTERs
 -- are not re-runnable at all. Measured: the naive form applied twice answers
--- `ERROR 1826 (HY000) Duplicate CHECK constraint name`. Four `IF NOT EXISTS` spellings are needed,
--- and `ADD CONSTRAINT IF NOT EXISTS` is written nowhere else here.
+-- `ERROR 1826 (HY000) Duplicate CHECK constraint name`. Four CONDITIONAL spellings are needed — and
+-- they are not all the same word: `ADD COLUMN IF NOT EXISTS`, `ADD UNIQUE KEY IF NOT EXISTS`,
+-- `ADD CONSTRAINT IF NOT EXISTS` and `DROP INDEX **IF EXISTS**`, the last being a removal and taking
+-- the other form. ⚠️ This header said *"four `IF NOT EXISTS` spellings"* until the code review, which
+-- is one word wrong about the one statement that differs. `ADD CONSTRAINT IF NOT EXISTS` is written
+-- nowhere else in this repository.
 --
 -- 🔴 THE NEW KEY IS ADDED BEFORE THE OLD ONE IS DROPPED, and the order is the whole point: MySQL DDL
 -- is not transactional, so a failure between the two statements must never leave `ip_subnet` with no

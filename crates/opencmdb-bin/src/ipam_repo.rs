@@ -751,8 +751,12 @@ pub(crate) async fn update_subnet(
     label: &str,
     vlan: u16,
 ) -> Result<(), RepositoryError> {
-    // The locked read replaces a `rows_affected` test for absence and is stronger: it holds the row
-    // between deciding it exists and writing it (`delete_address`'s reason).
+    // The locked read replaces a `rows_affected` test for absence and is stronger — ⚠️ *provided the
+    // CALLER is in a transaction*, which `StoreIpamWrite::edit_subnet` is and a bare `pool.acquire()`
+    // is not: under autocommit the `FOR UPDATE` lock is released at the end of the SELECT. The
+    // precondition is named rather than implied, because the store test calls this on a plain
+    // connection and would otherwise read as proving a hold it never takes (`delete_address`'s
+    // reason, with its precondition said).
     let _: (String,) = sqlx::query_as(capped!("SELECT id FROM ip_subnet WHERE id = ? FOR UPDATE"))
         .bind(id)
         .fetch_optional(&mut *conn)
@@ -3363,8 +3367,11 @@ pub(crate) mod tests {
              review's abandonment rule added) and `update_subnet`'s own. ⚠️ The ninth arrived with \
              the review's decision 1: `delete_address` reads its parent back instead of accepting \
              one from the form, which also replaced its `rows_affected` test for absence with a \
-             locked read; the tenth is story 14.5's, LOCKED for `update_range`'s reason — the row \
-             must not move under the key check that follows"
+             locked read; the tenth is story 14.5's, and its reason is `delete_address`'s rather \
+             than `update_range`'s — the locked read REPLACES a `rows_affected` test for absence, \
+             and the uniqueness is enforced by the index on the `UPDATE` itself. ⚠️ This message \
+             said *under the key check that follows*, and `update_subnet` has no key check \
+             following it: two reasons for one lock, in one commit"
         );
     }
 
